@@ -1,0 +1,597 @@
+<template>
+  <div class="en-editor-layer">
+    <section class="en-editor-panel">
+      <note-editor-header
+        :title="noteTitle"
+        :is-pinned="isPinned"
+        @update-title="updateTitle"
+        @toggle-pin="togglePin"
+        @close="store.closeNote"
+      />
+
+      <note-editor-meta
+        v-model:tag-draft.trim="tagDraft"
+        :note-date="noteDate"
+        :tags="tags"
+        :is-adding-tag="isAddingTag"
+        :is-editing-tag="isEditingTag"
+        @start-tag-creation="startTagCreation"
+        @edit-tag="beginEditTag"
+        @delete-tag="deleteTag"
+        @submit-tag="submitTag"
+        @cancel-tag="cancelTag"
+      />
+
+      <div class="en-note-editor-shell">
+        <note-editor-toolbar
+          @format="runFormat"
+          @paragraph="runParagraph"
+          @insert-image="insertImage"
+          @insert-excalidraw="openExcalidraw"
+          @insert-horizontal-rule="insertHorizontalRule"
+        />
+        <div class="en-editor-host">
+          <editor-with-tabs
+            :markdown="visibleMarkdown"
+            :cursor="cursor"
+            :muya-index-cursor="muyaIndexCursor"
+            :source-code="sourceCode"
+            :show-tab-bar="false"
+            :text-direction="textDirection"
+            :platform="platform"
+            :to-editor-markdown="documentToEditorMarkdown"
+            :from-editor-markdown="editorToDocumentMarkdown"
+          />
+        </div>
+      </div>
+
+      <note-editor-footer
+        :word-count="wordCount"
+        :character-count="characterCount"
+        :is-typography-open="isTypographyOpen"
+        :theme-icon="themeIcon"
+        @toggle-typography="isTypographyOpen = !isTypographyOpen"
+        @set-text-scale="setTextScale"
+        @toggle-theme="toggleTheme"
+      />
+    </section>
+
+    <excalidraw-dialog
+      v-if="isExcalidrawOpen"
+      :title="excalidrawTitle"
+      :file-name="excalidrawFileName"
+      :theme="shellTheme"
+      :initial-blob="excalidrawInitialBlob"
+      @close="closeExcalidraw"
+      @save="saveExcalidraw"
+    />
+  </div>
+</template>
+
+<script setup>
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  Moon,
+  SunMedium
+} from '@lucide/vue'
+import { storeToRefs } from 'pinia'
+import EditorWithTabs from '@/components/editorWithTabs'
+import { useMainStore } from '@/store'
+import { usePreferencesStore } from '@/store/preferences'
+import { useEditorStore } from '@/store/editor'
+import { getOptionsFromState } from '@/store/help'
+import bus from '@/bus'
+import { useVaultStore } from '../stores/vaultStore'
+import ExcalidrawDialog from './ExcalidrawDialog.vue'
+import NoteEditorFooter from './NoteEditorFooter.vue'
+import NoteEditorHeader from './NoteEditorHeader.vue'
+import NoteEditorMeta from './NoteEditorMeta.vue'
+import NoteEditorToolbar from './NoteEditorToolbar.vue'
+import { formatShortDate } from '../services/markdownMetaService'
+import {
+  ensureNoteDocument,
+  getDocumentCreatedAt,
+  getDocumentTitle,
+  mergeEditorMarkdown,
+  renameDocumentTitle,
+  toEditorMarkdown
+} from '../utils/noteDocument'
+import {
+  deleteMarkdownTag,
+  parseMarkdownTags,
+  updateMarkdownTags
+} from '../utils/markdownTags'
+
+const mainStore = useMainStore()
+const editorStore = useEditorStore()
+const preferencesStore = usePreferencesStore()
+const store = useVaultStore()
+
+const { platform } = storeToRefs(mainStore)
+const { sourceCode, textDirection } = storeToRefs(preferencesStore)
+const { currentFile } = storeToRefs(editorStore)
+
+const isAddingTag = ref(false)
+const isEditingTag = ref(false)
+const editingTagIndex = ref(-1)
+const tagDraft = ref('')
+const isTypographyOpen = ref(false)
+const isExcalidrawOpen = ref(false)
+const excalidrawInitialBlob = ref(null)
+const excalidrawTargetPath = ref('')
+const excalidrawInsertOnSave = ref(false)
+const excalidrawFileName = ref('excalidraw.png')
+const excalidrawTitle = ref('Excalidraw')
+const textScale = ref(window.localStorage.getItem('elephantnote:editorTextScale') || 'normal')
+const shellTheme = inject('elephantnoteTheme', ref(window.localStorage.getItem('elephantnote:theme') || 'light'))
+const setShellTheme = inject('setElephantnoteTheme', (value) => {
+  window.localStorage.setItem('elephantnote:theme', value)
+})
+const markdown = computed(() => currentFile.value?.markdown || '')
+const cursor = computed(() => currentFile.value?.cursor)
+const muyaIndexCursor = computed(() => currentFile.value?.muyaIndexCursor)
+const fallbackTitle = computed(() => currentFile.value?.filename?.replace(/\.md$/i, '') || 'Untitled')
+const noteTitle = computed(() => getDocumentTitle(markdown.value, fallbackTitle.value))
+const documentToEditorMarkdown = (documentMarkdown) => toEditorMarkdown(documentMarkdown, fallbackTitle.value)
+const editorToDocumentMarkdown = (editorMarkdown) =>
+  mergeEditorMarkdown(markdown.value, editorMarkdown, fallbackTitle.value)
+const visibleMarkdown = computed(() => documentToEditorMarkdown(markdown.value))
+const tags = computed(() => {
+  return parseMarkdownTags(markdown.value || '')
+})
+const noteDate = computed(() => {
+  const createdAt = getDocumentCreatedAt(markdown.value)
+  return createdAt ? formatShortDate(createdAt) : formatShortDate(new Date())
+})
+const wordCount = computed(() => currentFile.value?.wordCount?.word || 0)
+const characterCount = computed(() => currentFile.value?.wordCount?.character || markdown.value?.length || 0)
+const themeIcon = computed(() => shellTheme.value === 'dark' ? SunMedium : Moon)
+const isPinned = computed(() => {
+  const pathname = currentFile.value?.pathname
+  return !!pathname && store.pinnedNotePaths.includes(pathname)
+})
+const currentNoteDirectory = computed(() => {
+  const pathname = currentFile.value?.pathname
+  if (pathname) return window.path.dirname(pathname)
+  if (store.activeVault?.path) {
+    return window.path.join(store.activeVault.path, store.currentPath || '')
+  }
+  return ''
+})
+
+const scheduleSave = () => {
+  const file = currentFile.value
+  if (!file?.id || !file.pathname) return
+  editorStore.HANDLE_AUTO_SAVE({
+    id: file.id,
+    filename: file.filename,
+    pathname: file.pathname,
+    markdown: file.markdown,
+    options: getOptionsFromState(file)
+  })
+}
+
+const togglePin = () => {
+  const pathname = currentFile.value?.pathname
+  if (!pathname) return
+  store.togglePinnedNote(pathname)
+}
+
+const updateMarkdown = (nextMarkdown) => {
+  if (!currentFile.value) return
+  currentFile.value.markdown = nextMarkdown
+  currentFile.value.isSaved = false
+  scheduleSave()
+}
+
+const updateTitle = (value) => {
+  const title = String(value || '').trim() || 'Untitled'
+  updateMarkdown(renameDocumentTitle(markdown.value || '', title))
+}
+
+const addTag = () => {
+  isAddingTag.value = true
+  isEditingTag.value = false
+  editingTagIndex.value = -1
+  tagDraft.value = ''
+}
+
+const startTagCreation = () => {
+  addTag()
+}
+
+const beginEditTag = (index) => {
+  const tag = tags.value[index]
+  if (!tag) return
+  isAddingTag.value = true
+  isEditingTag.value = true
+  editingTagIndex.value = index
+  tagDraft.value = tag
+}
+
+const cancelTag = () => {
+  isAddingTag.value = false
+  isEditingTag.value = false
+  editingTagIndex.value = -1
+  tagDraft.value = ''
+}
+
+const submitTag = () => {
+  const nextTag = String(tagDraft.value || '').replace(/^#/, '').trim()
+  if (!nextTag) {
+    cancelTag()
+    return
+  }
+
+  const nextTags = [...tags.value]
+  if (isEditingTag.value && editingTagIndex.value >= 0) {
+    nextTags[editingTagIndex.value] = nextTag
+  } else {
+    nextTags.push(nextTag)
+  }
+
+  updateMarkdown(updateMarkdownTags(markdown.value || '', nextTags, noteTitle.value))
+  cancelTag()
+}
+
+const deleteTag = (index) => {
+  const tag = tags.value[index]
+  if (!tag) return
+  const nextMarkdown = deleteMarkdownTag(markdown.value || '', tag, noteTitle.value)
+  updateMarkdown(nextMarkdown)
+  if (isEditingTag.value && editingTagIndex.value === index) {
+    cancelTag()
+  }
+}
+
+const runFormat = (type) => {
+  bus.emit('editor-focus')
+  bus.emit('format', type)
+}
+
+const runParagraph = (type) => {
+  bus.emit('editor-focus')
+  bus.emit('paragraph', type)
+}
+
+const insertImage = async () => {
+  const imagePath = await editorStore.ASK_FOR_IMAGE_PATH()
+  if (imagePath) {
+    bus.emit('editor-focus')
+    bus.emit('insert-image', imagePath)
+  }
+}
+
+const insertHorizontalRule = () => {
+  bus.emit('editor-focus')
+  bus.emit('insert-horizontal-rule')
+}
+
+const getMimeTypeFromPath = (pathname) => {
+  const ext = String(window.path.extname(pathname || '')).toLowerCase()
+  switch (ext) {
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg'
+    case '.webp':
+      return 'image/webp'
+    case '.gif':
+      return 'image/gif'
+    case '.svg':
+      return 'image/svg+xml'
+    default:
+      return 'image/png'
+  }
+}
+
+const blobFromFilePath = async (pathname) => {
+  const data = await window.fileUtils.readFile(pathname)
+  return new Blob([data], { type: getMimeTypeFromPath(pathname) })
+}
+
+const openExcalidraw = async () => {
+  bus.emit('editor-focus')
+  let selectedImagePath = await editorStore.ASK_FOR_IMAGE_PATH()
+  const noteDirectory = currentNoteDirectory.value
+  let initialBlob = null
+
+  if (selectedImagePath) {
+    try {
+      initialBlob = await blobFromFilePath(selectedImagePath)
+    } catch (error) {
+      console.warn('Unable to load image for Excalidraw:', error)
+      selectedImagePath = ''
+    }
+  }
+
+  excalidrawInsertOnSave.value = !selectedImagePath
+  excalidrawTargetPath.value = selectedImagePath || window.path.join(
+    noteDirectory || '',
+    `excalidraw-${Date.now()}.png`
+  )
+  excalidrawFileName.value = window.path.basename(excalidrawTargetPath.value)
+  excalidrawTitle.value = selectedImagePath
+    ? window.path.basename(selectedImagePath, window.path.extname(selectedImagePath))
+    : noteTitle.value
+  excalidrawInitialBlob.value = initialBlob
+  isExcalidrawOpen.value = true
+}
+
+const closeExcalidraw = () => {
+  isExcalidrawOpen.value = false
+  excalidrawInitialBlob.value = null
+}
+
+const saveExcalidraw = async ({ blob, fileName }) => {
+  const targetPath = excalidrawTargetPath.value || window.path.join(currentNoteDirectory.value || '', fileName)
+  if (!targetPath || !blob) {
+    closeExcalidraw()
+    return
+  }
+
+  try {
+    const buffer = new Uint8Array(await blob.arrayBuffer())
+    await window.fileUtils.writeFile(targetPath, buffer)
+
+    if (excalidrawInsertOnSave.value) {
+      bus.emit('editor-focus')
+      bus.emit('insert-image', targetPath)
+    }
+
+    closeExcalidraw()
+  } catch (error) {
+    console.error('Failed to save Excalidraw drawing:', error)
+  }
+}
+
+const setTextScale = (value) => {
+  textScale.value = value
+  window.localStorage.setItem('elephantnote:editorTextScale', value)
+  document.documentElement.style.setProperty(
+    '--en-editor-text-scale',
+    value === 'compact' ? '15px' : value === 'large' ? '18px' : '16px'
+  )
+  isTypographyOpen.value = false
+}
+
+const toggleTheme = () => {
+  setShellTheme(shellTheme.value === 'dark' ? 'light' : 'dark')
+}
+
+const closeTransientMenus = (event) => {
+  if (isTypographyOpen.value && !event?.target?.closest?.('.en-note-menu-wrap')) {
+    isTypographyOpen.value = false
+  }
+  if (
+    isAddingTag.value &&
+    !event?.target?.closest?.('.en-inline-tag-form') &&
+    !event?.target?.closest?.('.en-note-tag') &&
+    !event?.target?.closest?.('.en-note-meta')
+  ) {
+    cancelTag()
+  }
+}
+
+setTextScale(textScale.value)
+
+onMounted(() => {
+  window.addEventListener('click', closeTransientMenus)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', closeTransientMenus)
+})
+
+watch(markdown, (content) => {
+  if (!currentFile.value || !content || content.startsWith('---\n')) return
+  updateMarkdown(ensureNoteDocument(content, noteTitle.value))
+}, { flush: 'post' })
+
+</script>
+
+<style scoped>
+.en-editor-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--en-bg);
+}
+
+.en-editor-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--en-text);
+  background: var(--en-bg);
+}
+
+.en-note-header {
+  min-height: 74px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--en-border);
+}
+
+.en-note-title-row {
+  min-width: 0;
+  flex: 1;
+}
+
+.en-note-title-input {
+  width: 100%;
+  border: 0;
+  color: var(--en-text);
+  background: transparent;
+  font: inherit;
+  font-size: 28px;
+  font-weight: 800;
+  outline: none;
+}
+
+.en-note-state,
+.en-note-footer-actions,
+.en-note-counts,
+.en-note-meta {
+  display: flex;
+  align-items: center;
+}
+
+.en-note-state,
+.en-note-footer-actions {
+  gap: 8px;
+}
+
+.en-note-pin-button,
+.en-note-exit-zone,
+.en-note-footer-actions > button,
+.en-note-menu-wrap > button,
+.en-note-tag-icon,
+.en-note-tag-label,
+.en-note-meta > button {
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  color: var(--en-text);
+  background: transparent;
+  font: inherit;
+}
+
+.en-note-pin-button,
+.en-note-exit-zone,
+.en-note-footer-actions > button,
+.en-note-menu-wrap > button,
+.en-note-tag-icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.en-note-meta {
+  min-height: 48px;
+  gap: 8px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--en-border);
+  color: var(--en-muted);
+}
+
+.en-note-meta > button,
+.en-note-tag-label {
+  height: 30px;
+  padding: 0 10px;
+}
+
+.en-note-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.en-inline-tag-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.en-inline-tag-form input,
+.en-inline-tag-form button {
+  height: 30px;
+  border: 1px solid var(--en-border);
+  border-radius: 6px;
+  color: var(--en-text);
+  background: transparent;
+  font: inherit;
+}
+
+.en-note-editor-shell {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--en-bg);
+}
+
+.en-note-pin-button:hover,
+.en-note-exit-zone:hover,
+.en-note-footer-actions button:hover {
+  background: var(--en-soft);
+}
+
+.en-editor-host {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  background: var(--en-bg);
+  --editorBgColor: var(--en-bg);
+  --editorColor: color-mix(in srgb, var(--en-text) 86%, transparent);
+  --editorColor80: color-mix(in srgb, var(--en-text) 80%, transparent);
+  --editorColor60: color-mix(in srgb, var(--en-text) 60%, transparent);
+  --editorColor50: color-mix(in srgb, var(--en-text) 50%, transparent);
+  --editorColor40: color-mix(in srgb, var(--en-text) 40%, transparent);
+  --editorColor30: color-mix(in srgb, var(--en-text) 30%, transparent);
+  --editorColor10: color-mix(in srgb, var(--en-text) 12%, transparent);
+  --editorColor04: color-mix(in srgb, var(--en-text) 5%, transparent);
+  --floatBgColor: var(--en-surface);
+  --floatHoverColor: var(--en-soft);
+  --floatBorderColor: var(--en-border);
+  --iconColor: var(--en-muted);
+  --codeBlockBgColor: var(--en-surface);
+}
+
+.en-note-footer {
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 24px;
+  border-top: 1px solid var(--en-border);
+  color: var(--en-muted);
+}
+
+.en-note-counts {
+  gap: 12px;
+}
+
+.en-note-menu-wrap {
+  position: relative;
+}
+
+.en-note-popover {
+  position: absolute;
+  right: 0;
+  bottom: 42px;
+  z-index: 30;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--en-surface);
+}
+
+.en-note-popover button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--en-text);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.en-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.en-icon-small {
+  width: 14px;
+  height: 14px;
+}
+</style>

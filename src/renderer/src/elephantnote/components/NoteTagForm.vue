@@ -1,6 +1,7 @@
 <template>
   <form
     class="en-inline-tag-form"
+    @click.stop
     @submit.prevent="$emit('submit')"
   >
     <input
@@ -8,7 +9,7 @@
       autofocus
       type="text"
       :placeholder="isEditing ? 'Edit tag' : 'Tag'"
-      @input="$emit('update:modelValue', $event.target.value)"
+      @input="updateValue($event.target.value)"
       @keydown.esc="$emit('cancel')"
       @keydown.enter.prevent="$emit('submit')"
     >
@@ -36,7 +37,12 @@ defineProps({
   }
 })
 
-defineEmits(['update:modelValue', 'submit', 'cancel'])
+const emit = defineEmits(['update:modelValue', 'update:model-value', 'submit', 'cancel'])
+
+const updateValue = (value) => {
+  emit('update:modelValue', value)
+  emit('update:model-value', value)
+}
 </script>
 
 <style scoped>

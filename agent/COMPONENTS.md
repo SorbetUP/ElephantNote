@@ -2,9 +2,9 @@
 
 ## Shell principal
 
-- `AppShell.vue`: layout global, theme, largeur sidebar, raccourci recherche.
-- `TopVaultBar.vue`: barre superieure, vault actif, recherche, reglages.
-- `SidebarNav.vue`: navigation laterale et notes recentes.
+- `AppShell.vue`: layout global, theme, largeur sidebar, raccourci recherche. Garde la topbar horizontale et la sidebar verticale visibles hors mode focus.
+- `TopVaultBar.vue`: barre superieure, vault actif, recherche, reglages. La zone vide de la topbar sert aussi de zone de drag Electron; les boutons et champs doivent rester en `no-drag`.
+- `SidebarNav.vue`: navigation laterale et notes recentes. `Recently edited` reste ancre en bas de la sidebar quand la hauteur le permet.
 - `MainContent.vue`: zone centrale qui choisit grille ou editeur.
 - `EmptyVaultPicker.vue`: etat initial sans vault.
 
@@ -12,8 +12,8 @@
 
 - `LibraryToolbar.vue`: filtres, tri, mode d'affichage, actions.
 - `LibraryGrid.vue`: liste des entrees.
-- `NoteCard.vue`: carte note.
-- `FolderCard.vue`: carte dossier.
+- `NoteCard.vue`: carte note. Le clic sur la carte ou son titre doit ouvrir la note en un seul clic; garder le double-clic pour renommer.
+- `FolderCard.vue`: carte dossier. Le clic sur la carte ou son titre doit ouvrir le dossier; garder une icone compacte pour ne pas dominer la grille.
 - `SidebarTreeEntry.vue`: entree de sidebar recursive.
 
 ## Editeur de note
@@ -32,6 +32,7 @@ Regle: si une modification concerne seulement le visuel ou les boutons du header
 
 Separation attendue:
 
+- `MainContent.vue`: affiche soit la bibliotheque, soit l'editeur dans le panneau central; ne doit pas masquer la topbar ou la sidebar.
 - `NoteEditorHost.vue`: coordination avec stores, sauvegarde, events bus, Excalidraw.
 - `NoteEditorHeader.vue`: aucune logique markdown, seulement titre/pin/close.
 - `NoteEditorMeta.vue`: assemble date, tags et formulaire, sans parser le markdown.
@@ -58,3 +59,10 @@ Separation attendue:
 
 - `stores/vaultStore.js`: vault actif, entrees, notes ouvertes, pins, CRUD notes/dossiers.
 - `stores/searchStore.js`: recherche exacte/semantique, index, preferences.
+
+## Points de vigilance performance
+
+- `MainContent.vue` doit afficher l'editeur des que `openedNotePath` existe, sans attendre que tout le contenu soit relu, afin de donner un feedback immediat.
+- `stores/vaultStore.js` doit ignorer une ouverture si la note demandee est deja ouverte; cela evite les rechargements et les doubles clics ressentis.
+- `NoteTagForm.vue` doit emettre les deux variantes Vue `update:modelValue` et `update:model-value`, car les parents peuvent ecouter l'une ou l'autre selon la convention du template.
+- `src/muya/lib/contentState/paragraphCtrl.js` doit tolerer une selection dont le bloc source n'existe plus apres une frappe ou une re-renderisation; ne pas relancer une erreur renderer pour un bloc `null`.

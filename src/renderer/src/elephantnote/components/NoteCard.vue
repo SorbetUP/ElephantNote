@@ -56,6 +56,7 @@
     </div>
     <div class="en-note-card-head">
       <div class="en-note-card-title-row">
+        <FileText class="en-note-document-icon" />
         <h3
           @dblclick.stop.prevent="renameEntry"
         >
@@ -81,7 +82,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Eye, EyeOff, MoreHorizontal, Pin } from '@lucide/vue'
+import { Eye, EyeOff, FileText, MoreHorizontal, Pin } from '@lucide/vue'
 import { useVaultStore } from '../stores/vaultStore'
 import {
   getNoteCardExcerpt,
@@ -199,6 +200,23 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
+.en-card-pin-button.visible,
+.en-card-menu {
+  opacity: 1;
+}
+
+.en-card-pin-button:not(.visible) {
+  opacity: 0;
+}
+
+.en-card.is-pinned .en-card-pin-button {
+  color: #facc15;
+}
+
+.en-card.is-pinned .en-card-pin-button :deep(svg) {
+  fill: currentColor;
+}
+
 .en-card-popover {
   position: absolute;
   top: 52px;
@@ -228,6 +246,20 @@ onBeforeUnmount(() => {
   font-size: 30px;
   line-height: 1.1;
   overflow-wrap: anywhere;
+}
+
+.en-note-card-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.en-note-document-icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  margin-top: 4px;
+  color: var(--en-primary);
 }
 
 .en-note-card p {

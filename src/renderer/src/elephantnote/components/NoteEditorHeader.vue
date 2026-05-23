@@ -12,13 +12,14 @@
     <div class="en-note-state">
       <button
         class="en-note-pin-button"
+        :class="{ active: isPinned }"
         type="button"
         :title="isPinned ? 'Unpin note' : 'Pin note'"
         :aria-label="isPinned ? 'Unpin note' : 'Pin note'"
         @click="$emit('toggle-pin')"
       >
         <component
-          :is="pinIcon"
+          :is="Pin"
           class="en-icon"
         />
       </button>
@@ -36,10 +37,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { Pin, PinOff, X } from '@lucide/vue'
+import { Pin, X } from '@lucide/vue'
 
-const props = defineProps({
+defineProps({
   title: {
     type: String,
     required: true
@@ -51,8 +51,6 @@ const props = defineProps({
 })
 
 defineEmits(['update-title', 'toggle-pin', 'close'])
-
-const pinIcon = computed(() => (props.isPinned ? PinOff : Pin))
 </script>
 
 <style scoped>
@@ -105,6 +103,16 @@ const pinIcon = computed(() => (props.isPinned ? PinOff : Pin))
 .en-note-pin-button:hover,
 .en-note-exit-zone:hover {
   background: var(--en-soft);
+}
+
+.en-note-pin-button.active {
+  border-color: color-mix(in srgb, #facc15 54%, var(--en-border));
+  color: #facc15;
+  background: color-mix(in srgb, #facc15 16%, transparent);
+}
+
+.en-note-pin-button.active :deep(svg) {
+  fill: currentColor;
 }
 
 .en-icon {

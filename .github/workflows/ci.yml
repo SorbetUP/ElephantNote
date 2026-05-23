@@ -1,81 +1,139 @@
-name: C Editor Core CI
+name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
+      - develop
+      - 'nsb/**'
+    tags:
+      - 'v*'
   pull_request:
-    branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
 
 jobs:
-  build-test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        compiler: [gcc, clang]
-
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y valgrind clang-format
-    
-    - name: Install dependencies (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install clang-format
-    
-    - name: Build with ${{ matrix.compiler }}
-      run: |
-        make clean
-        CC=${{ matrix.compiler }} CFLAGS="-std=c11 -Wall -Wextra -Werror -O2" make -j
-    
-    - name: Run tests
-      run: make test
-    
-    - name: Build with sanitizers
-      run: |
-        make clean
-        CC=${{ matrix.compiler }} CFLAGS="-std=c11 -fsanitize=address,undefined -fno-omit-frame-pointer -g -O1 -Wall -Wextra -Werror" make -j
-        mkdir -p bin
-        ${{ matrix.compiler }} -std=c11 -fsanitize=address,undefined -fno-omit-frame-pointer -g -O1 -Wall -Wextra -Werror -I./src tests/prop_roundtrip.c libeditor.a -o bin/prop_roundtrip -lm
-        ASAN_OPTIONS=halt_on_error=1:strict_string_checks=1 ./bin/prop_roundtrip 12345 100
-    
-    - name: Run Valgrind (Ubuntu only)
-      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
-      run: |
-        make clean
-        make 
-        gcc -std=c11 -g -Isrc tests/test_inline_loop.c libeditor.a -o test_valgrind -lm
-        valgrind --leak-check=full --errors-for-leak-kinds=all --show-leak-kinds=all --error-exitcode=1 ./test_valgrind
-    
-    - name: Check code formatting
-      if: matrix.compiler == 'clang'
-      run: |
-        clang-format --version
-        find src tests -name "*.c" -o -name "*.h" | xargs clang-format --dry-run --Werror
-
-  property-fuzz-tests:
+  quality:
+    name: Quality gate
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 25
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Build library with sanitizers
-      run: |
-        make clean
-        CC=clang CFLAGS="-std=c11 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer" make -j
-    
-    - name: Build fuzz tests with sanitizers
-      run: |
-        mkdir -p bin
-        clang -std=c11 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I./src tests/prop_roundtrip.c libeditor.a -o bin/prop_roundtrip -lm
-        clang -std=c11 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I./src tests/fuzz_markdown.c libeditor.a -o bin/fuzz_markdown -lm
-    
-    - name: Run property tests (fast)
-      run: |
-        ASAN_OPTIONS=halt_on_error=1:strict_string_checks=1 ./bin/prop_roundtrip 12345 300
-        ASAN_OPTIONS=halt_on_error=1:strict_string_checks=1 ./bin/fuzz_markdown  98765 800
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+
+      - name: Run postinstall
+        run: node scripts/postinstall.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_user_agent: pnpm
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: ElephantNote contract tests
+        run: pnpm exec vitest run test/unit/specs/elephantnote
+
+      - name: Unit tests
+        run: pnpm test -- --coverage
+
+      - name: Build Electron/Vite bundles
+        run: pnpm run build
+
+      - name: Validate licenses
+        run: pnpm run validate-licenses
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  package-smoke:
+    name: Package smoke (${{ matrix.platform }})
+    needs: quality
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-latest
+            command: pnpm run build:linux
+          - platform: macos
+            os: macos-15
+            command: pnpm run build:mac -- --arm64
+          - platform: windows
+            os: windows-latest
+            command: pnpm run build:win
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y icnsutils graphicsmagick xz-utils libx11-dev libxkbfile-dev gnome-keyring libsecret-1-dev libfontconfig-dev rpm
+
+      - uses: ./.github/actions/setup
+
+      - name: Set C++20 for macOS native rebuilds
+        if: matrix.platform == 'macos'
+        run: echo "CXXFLAGS=-std=gnu++20 -stdlib=libc++" >> $GITHUB_ENV
+
+      - name: Run postinstall
+        run: node scripts/postinstall.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_user_agent: pnpm
+          USE_ELECTRON_CLANG: ${{ matrix.platform == 'linux' && '0' || '' }}
+
+      - name: Package
+        run: ${{ matrix.command }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.platform }}
+          retention-days: 14
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.snap
+            dist/*.deb
+            dist/*.rpm
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish release artifacts
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: gh release create "$TAG_NAME" release-artifacts/* --title "$TAG_NAME" --notes "Automated ElephantNote release for $TAG_NAME."

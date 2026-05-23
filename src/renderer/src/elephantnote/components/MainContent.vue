@@ -10,7 +10,7 @@
       <library-toolbar />
       <library-grid />
     </section>
-    <site-preview-panel />
+    <site-preview-panel v-if="!hasOpenNote" />
     <note-editor-host
       v-if="hasOpenNote"
       class="en-main-editor"
@@ -32,6 +32,7 @@ const hasOpenNote = computed(() => !!store.openedNotePath)
 
 <style scoped>
 .en-main {
+  position: relative;
   min-width: 0;
   min-height: 0;
   display: flex;

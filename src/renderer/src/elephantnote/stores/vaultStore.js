@@ -1,4 +1,8 @@
 import { defineStore } from 'pinia'
+import {
+  elephantnoteClient,
+  isElephantNoteApiAvailable
+} from '../services/elephantnoteClient'
 
 const getPinnedNotesStorageKey = (vault) => {
   const scope = vault?.id || vault?.path || 'default'
@@ -161,14 +165,14 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         title: entry.title || entry.filename?.replace(/\.md$/i, '') || entry.path.split('/').pop(),
         type: entry.kind || entry.type
       }
-      const result = await window.elephantnote.attachSidebarEntry(payload)
+      const result = await elephantnoteClient.sidebar.attach(payload)
       this.workspace = result.workspace
       return true
     },
 
     async detachEntryFromSidebar(pathname) {
       if (!pathname) return false
-      const result = await window.elephantnote.detachSidebarEntry({ relativePath: pathname })
+      const result = await elephantnoteClient.sidebar.detach(pathname)
       this.workspace = result.workspace
       return true
     },
@@ -194,8 +198,8 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.openedNotes = []
       this.currentPath = ''
       this.loadPinnedNotes()
-      if (this.activeVault?.path && window.elephantnote?.search?.initVault) {
-        window.elephantnote.search.initVault(this.activeVault.path).catch((err) => {
+      if (this.activeVault?.path && isElephantNoteApiAvailable()) {
+        elephantnoteClient.search.initVault(this.activeVault.path).catch((err) => {
           console.warn('Unable to initialize search:', err)
         })
       }
@@ -205,7 +209,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.loading = true
       this.error = ''
       try {
-        this.applyPayload(await window.elephantnote.getVaults())
+        this.applyPayload(await elephantnoteClient.vaults.get())
       } catch (err) {
         this.error = err.message || 'Unable to load vaults.'
       } finally {
@@ -217,7 +221,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.loading = true
       this.error = ''
       try {
-        this.applyPayload(await window.elephantnote.selectVault())
+        this.applyPayload(await elephantnoteClient.vaults.select())
         this.currentPath = ''
       } catch (err) {
         this.error = err.message || 'Unable to choose vault.'
@@ -230,7 +234,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.loading = true
       this.error = ''
       try {
-        this.applyPayload(await window.elephantnote.setActiveVault(vaultId))
+        this.applyPayload(await elephantnoteClient.vaults.setActive(vaultId))
         this.currentPath = ''
       } catch (err) {
         this.error = err.message || 'Unable to switch vault.'
@@ -242,7 +246,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     async openDirectory(relativePath = '') {
       this.currentPath = relativePath
       this.openedNotePath = ''
-      this.entries = await window.elephantnote.listDirectory(relativePath)
+      this.entries = await elephantnoteClient.directory.list(relativePath)
     },
 
     async refreshSavedNote(pathname) {
@@ -253,7 +257,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
 
       const parentPath = window.path.dirname(relativePath)
       const directoryPath = parentPath === '.' ? '' : parentPath
-      const entries = await window.elephantnote.listDirectory(directoryPath)
+      const entries = await elephantnoteClient.directory.list(directoryPath)
       const savedEntry = entries.find((entry) => entry.path === relativePath)
 
       if (directoryPath === this.currentPath) {
@@ -290,7 +294,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     },
 
     async createNote() {
-      const result = await window.elephantnote.createNote({ relativePath: this.currentPath })
+      const result = await elephantnoteClient.notes.create(this.currentPath)
       this.entries = result.entries
       this.openedNotePath = result.note.path
       this.rememberNote(result.note)
@@ -298,13 +302,13 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     },
 
     async createFolder() {
-      const result = await window.elephantnote.createFolder({ relativePath: this.currentPath })
+      const result = await elephantnoteClient.folders.create(this.currentPath)
       this.entries = result.entries
     },
 
     async renameEntry(entry, title) {
       const oldPath = entry?.path
-      const result = await window.elephantnote.renameEntry({
+      const result = await elephantnoteClient.entries.rename({
         relativePath: entry.path,
         title
       })
@@ -322,7 +326,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
 
     async deleteEntry(entry) {
       const oldPath = entry?.path
-      const result = await window.elephantnote.deleteEntry({ relativePath: entry.path })
+      const result = await elephantnoteClient.entries.delete(entry.path)
       this.workspace = result.workspace
       this.entries = result.entries
       if (oldPath) {

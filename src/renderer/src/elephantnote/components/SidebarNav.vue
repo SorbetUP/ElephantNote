@@ -18,6 +18,7 @@
           :load-directory="loadDirectory"
           :open-directory="store.openDirectory"
           :open-note="store.openNote"
+          :detach-entry="store.detachEntryFromSidebar"
         />
       </div>
 
@@ -25,24 +26,48 @@
         <button
           class="en-recent-heading"
           type="button"
+          @click="isRecentCollapsed = !isRecentCollapsed"
         >
+          <CalendarClock />
           <span>Recently edited</span>
+          <ChevronDown
+            class="en-recent-chevron"
+            :class="{ collapsed: isRecentCollapsed }"
+          />
         </button>
-        <button
-          v-for="note in recentNotes"
-          :key="note.path"
-          class="en-recent-note"
-          type="button"
-          @click="store.openNote(note)"
+        <div
+          v-if="!isRecentCollapsed"
+          class="en-recent-list"
         >
-          {{ note.title }}
-        </button>
-        <p
-          v-if="!recentNotes.length"
-          class="en-recent-empty"
-        >
-          No recent notes
-        </p>
+          <button
+            v-for="note in visibleRecentNotes"
+            :key="note.path"
+            class="en-recent-note"
+            :class="{ active: note.path === store.openedNotePath }"
+            type="button"
+            @click="store.openNote(note)"
+          >
+            {{ note.title }}
+          </button>
+          <p
+            v-if="!recentNotes.length"
+            class="en-recent-empty"
+          >
+            No recent notes
+          </p>
+          <button
+            v-if="recentNotes.length > recentLimit"
+            class="en-recent-more"
+            type="button"
+            @click="showAllRecent = !showAllRecent"
+          >
+            <span>{{ showAllRecent ? 'Show less' : 'Show more' }}</span>
+            <ChevronDown
+              class="en-recent-more-icon"
+              :class="{ expanded: showAllRecent }"
+            />
+          </button>
+        </div>
       </section>
     </div>
   </aside>
@@ -51,14 +76,19 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { CalendarClock, ChevronDown } from '@lucide/vue'
 import { useVaultStore } from '../stores/vaultStore'
 import { useEditorStore } from '@/store/editor'
 import SidebarTreeEntry from './SidebarTreeEntry.vue'
+import { elephantnoteClient } from '../services/elephantnoteClient'
 
 const store = useVaultStore()
 const editorStore = useEditorStore()
 const { currentFile } = storeToRefs(editorStore)
 const isDragOver = ref(false)
+const isRecentCollapsed = ref(false)
+const showAllRecent = ref(false)
+const recentLimit = 5
 
 const sidebarEntries = computed(() => store.sidebarAttachedItems)
 const recentNotes = computed(() => {
@@ -78,10 +108,13 @@ const recentNotes = computed(() => {
   }
   return notes.slice(0, 8)
 })
+const visibleRecentNotes = computed(() => {
+  return showAllRecent.value ? recentNotes.value : recentNotes.value.slice(0, recentLimit)
+})
 
 const loadDirectory = async (relativePath = '') => {
   if (!store.activeVault?.path) return []
-  return window.elephantnote.listDirectory(relativePath)
+  return elephantnoteClient.directory.list(relativePath)
 }
 
 const attachDroppedEntry = async (event) => {
@@ -108,8 +141,8 @@ const attachDroppedEntry = async (event) => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 24px 14px;
+  gap: 18px;
+  padding: 24px 8px 8px;
   overflow-y: auto;
 }
 
@@ -122,21 +155,29 @@ const attachDroppedEntry = async (event) => {
 
 .en-sidebar-main {
   min-height: 0;
+  padding: 0 6px;
 }
 
 .en-recent-notes {
   margin-top: auto;
-  border-top: 1px solid var(--en-border);
-  padding-top: 12px;
+  border: 1px solid color-mix(in srgb, var(--en-border-strong) 72%, transparent);
+  border-radius: 12px;
+  padding: 6px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--en-soft) 84%, transparent), color-mix(in srgb, var(--en-bg) 90%, transparent));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 6%, transparent),
+    0 16px 38px color-mix(in srgb, #020617 22%, transparent);
 }
 
 .en-recent-heading,
-.en-recent-note {
+.en-recent-note,
+.en-recent-more {
   width: 100%;
-  min-height: 36px;
+  min-height: 34px;
   border: 0;
   border-radius: 8px;
-  padding: 0 10px;
+  padding: 0 9px;
   color: var(--en-muted);
   background: transparent;
   font: inherit;
@@ -144,27 +185,73 @@ const attachDroppedEntry = async (event) => {
 }
 
 .en-recent-heading {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 7px;
   color: var(--en-text);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0;
-  text-transform: uppercase;
+}
+
+.en-recent-heading svg {
+  width: 15px;
+  height: 15px;
+  color: var(--en-muted);
+}
+
+.en-recent-chevron,
+.en-recent-more-icon {
+  transition: transform 0.16s ease;
+}
+
+.en-recent-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+.en-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 4px;
 }
 
 .en-recent-note {
+  display: block;
+  min-height: 34px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 14px;
 }
 
-.en-recent-note:hover {
+.en-recent-note:hover,
+.en-recent-note.active {
   color: var(--en-text);
-  background: var(--en-soft);
+  background: color-mix(in srgb, var(--en-soft-strong, var(--en-soft)) 72%, transparent);
+}
+
+.en-recent-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--en-muted);
+  font-size: 12px;
+}
+
+.en-recent-more-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.en-recent-more-icon.expanded {
+  transform: rotate(180deg);
 }
 
 .en-recent-empty {
   margin: 0;
-  padding: 0 10px;
+  padding: 8px 9px;
   color: var(--en-muted);
   font-size: 13px;
 }

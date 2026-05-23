@@ -93,7 +93,9 @@ export const parseMarkdownMeta = (markdown = '', fallbackName = 'Untitled') => {
   const meta = {}
   const frontmatterMatch = markdown.match(/^---\n([\s\S]*?)\n---\n?/)
   if (frontmatterMatch) {
-    for (const line of frontmatterMatch[1].split(/\r?\n/)) {
+    const lines = frontmatterMatch[1].split(/\r?\n/)
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index]
       const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
       if (!match) continue
       const [, key, rawValue] = match
@@ -104,6 +106,16 @@ export const parseMarkdownMeta = (markdown = '', fallbackName = 'Untitled') => {
           .split(',')
           .map((item) => item.trim().replace(/^"|"$/g, ''))
           .filter(Boolean)
+      } else if (key === 'tags' && !value) {
+        const tags = []
+        for (let tagIndex = index + 1; tagIndex < lines.length; tagIndex += 1) {
+          if (/^[A-Za-z0-9_-]+:\s*/.test(lines[tagIndex])) break
+          const tagMatch = lines[tagIndex].match(/^\s*-\s*(.+?)\s*$/)
+          if (tagMatch) {
+            tags.push(tagMatch[1].trim().replace(/^["']|["']$/g, '').replace(/^#+/, ''))
+          }
+        }
+        meta[key] = tags.filter(Boolean)
       } else {
         meta[key] = value.replace(/^"|"$/g, '')
       }

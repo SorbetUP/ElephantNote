@@ -61,13 +61,6 @@
       </button>
       <button
         type="button"
-        @click="buildStaticWebsite"
-      >
-        <PackageOpen class="en-icon" />
-        Build static website
-      </button>
-      <button
-        type="button"
         class="danger"
         @click="deleteFolder"
       >
@@ -89,7 +82,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Eye, EyeOff, Globe, MoreHorizontal, PackageOpen, Pin, PencilLine } from '@lucide/vue'
+import { Eye, EyeOff, Globe, MoreHorizontal, Pin, PencilLine } from '@lucide/vue'
 import { useVaultStore } from '../stores/vaultStore'
 import { useSitePreviewStore } from '../sitePreview/sitePreviewStore'
 import { formatShortDate } from '../services/markdownMetaService'
@@ -146,11 +139,6 @@ const viewAsWebsite = async () => {
   await sitePreviewStore.previewFolder(props.entry)
 }
 
-const buildStaticWebsite = async () => {
-  isMenuOpen.value = false
-  await sitePreviewStore.buildFolder(props.entry)
-}
-
 const deleteFolder = () => {
   isMenuOpen.value = false
   emit('delete', props.entry)
@@ -205,6 +193,24 @@ onBeforeUnmount(() => {
   border: 0;
   color: var(--en-muted);
   background: transparent;
+}
+
+.en-card-pin-button.visible,
+.en-card-menu.visible {
+  opacity: 1;
+}
+
+.en-card-pin-button:not(.visible),
+.en-card-menu:not(.visible) {
+  opacity: 0;
+}
+
+.en-card.is-pinned .en-card-pin-button {
+  color: #facc15;
+}
+
+.en-card.is-pinned .en-card-pin-button :deep(svg) {
+  fill: currentColor;
 }
 
 .en-card-popover {

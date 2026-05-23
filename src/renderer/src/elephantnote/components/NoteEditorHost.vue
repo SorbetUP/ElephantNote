@@ -29,6 +29,8 @@
           @insert-image="insertImage"
           @insert-excalidraw="openExcalidraw"
           @insert-horizontal-rule="insertHorizontalRule"
+          @ask-ai="store.notifyAiUnavailable"
+          @open-agents="store.notifyAiUnavailable"
         />
         <div class="en-editor-host">
           <editor-with-tabs
@@ -131,24 +133,36 @@ const markdown = computed(() => currentFile.value?.markdown || '')
 const cursor = computed(() => currentFile.value?.cursor)
 const muyaIndexCursor = computed(() => currentFile.value?.muyaIndexCursor)
 const fallbackTitle = computed(() => currentFile.value?.filename?.replace(/\.md$/i, '') || 'Untitled')
-const noteTitle = computed(() => getDocumentTitle(markdown.value, fallbackTitle.value))
 const documentToEditorMarkdown = (documentMarkdown) => toEditorMarkdown(documentMarkdown, fallbackTitle.value)
 const editorToDocumentMarkdown = (editorMarkdown) =>
   mergeEditorMarkdown(markdown.value, editorMarkdown, fallbackTitle.value)
 const visibleMarkdown = computed(() => documentToEditorMarkdown(markdown.value))
-const tags = computed(() => {
-  return parseMarkdownTags(markdown.value || '')
+const documentMeta = computed(() => {
+  const content = markdown.value || ''
+  const createdAt = getDocumentCreatedAt(content)
+  return {
+    title: getDocumentTitle(content, fallbackTitle.value),
+    tags: parseMarkdownTags(content),
+    date: createdAt ? formatShortDate(createdAt) : formatShortDate(new Date())
+  }
 })
-const noteDate = computed(() => {
-  const createdAt = getDocumentCreatedAt(markdown.value)
-  return createdAt ? formatShortDate(createdAt) : formatShortDate(new Date())
-})
+const noteTitle = computed(() => documentMeta.value.title)
+const tags = computed(() => documentMeta.value.tags)
+const noteDate = computed(() => documentMeta.value.date)
 const wordCount = computed(() => currentFile.value?.wordCount?.word || 0)
 const characterCount = computed(() => currentFile.value?.wordCount?.character || markdown.value?.length || 0)
 const themeIcon = computed(() => shellTheme.value === 'dark' ? SunMedium : Moon)
 const isPinned = computed(() => {
-  const pathname = currentFile.value?.pathname
+  const pathname = currentNoteRelativePath.value
   return !!pathname && store.pinnedNotePaths.includes(pathname)
+})
+const currentNoteRelativePath = computed(() => {
+  const pathname = currentFile.value?.pathname
+  const vaultPath = store.activeVault?.path
+  if (!pathname || !vaultPath) return ''
+  const relativePath = window.path.relative(vaultPath, pathname)
+  if (!relativePath || relativePath.startsWith('..') || window.path.isAbsolute(relativePath)) return ''
+  return relativePath
 })
 const currentNoteDirectory = computed(() => {
   const pathname = currentFile.value?.pathname
@@ -172,7 +186,7 @@ const scheduleSave = () => {
 }
 
 const togglePin = () => {
-  const pathname = currentFile.value?.pathname
+  const pathname = currentNoteRelativePath.value
   if (!pathname) return
   store.togglePinnedNote(pathname)
 }
@@ -264,7 +278,7 @@ const insertImage = async () => {
 
 const insertHorizontalRule = () => {
   bus.emit('editor-focus')
-  bus.emit('insert-horizontal-rule')
+  bus.emit('paragraph', 'hr')
 }
 
 const getMimeTypeFromPath = (pathname) => {
@@ -391,14 +405,19 @@ watch(markdown, (content) => {
 
 <style scoped>
 .en-editor-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
   background: var(--en-bg);
+  overflow: hidden;
 }
 
 .en-editor-panel {
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   color: var(--en-text);

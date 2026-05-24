@@ -46,6 +46,7 @@
       <kbd>Ctrl K</kbd>
     </button>
     <button
+      v-if="featureFlags.ai && featureFlags.askAi"
       class="en-ghost-button en-ai-button"
       type="button"
       @click="store.notifyAiUnavailable"
@@ -57,12 +58,18 @@
 </template>
 
 <script setup>
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { Plus, Search, Sparkles } from '@lucide/vue'
 import { useVaultStore } from '../stores/vaultStore'
+import { elephantnoteClient } from '../services/elephantnoteClient'
 import logoUrl from '../assets/ElephantLogo.png'
 
 const emit = defineEmits(['open-settings', 'search'])
 const store = useVaultStore()
+const featureFlags = ref({
+  ai: true,
+  askAi: true
+})
 
 const openSettings = () => {
   emit('open-settings')
@@ -71,6 +78,26 @@ const openSettings = () => {
 const openSearch = () => {
   emit('search')
 }
+
+onMounted(async () => {
+  try {
+    featureFlags.value = await elephantnoteClient.features.get()
+  } catch {
+    featureFlags.value = { ai: true, askAi: true }
+  }
+  window.addEventListener('elephantnote:feature-flags-changed', handleFeatureFlagsChanged)
+})
+
+const handleFeatureFlagsChanged = (event) => {
+  featureFlags.value = {
+    ...featureFlags.value,
+    ...(event.detail || {})
+  }
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('elephantnote:feature-flags-changed', handleFeatureFlagsChanged)
+})
 </script>
 
 <style scoped>

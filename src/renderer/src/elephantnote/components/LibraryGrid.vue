@@ -89,16 +89,30 @@ const deleteEntry = async (entry) => {
 <style scoped>
 .en-library-grid {
   min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 28px;
+  column-width: 360px;
+  column-gap: 18px;
   padding: 0 28px 32px;
   overflow-y: auto;
 }
 
+.en-library-grid :deep(.en-card) {
+  width: 100%;
+  display: inline-flex;
+  margin: 0 0 18px;
+  break-inside: avoid;
+}
+
 .en-library-grid.list {
+  display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
+  column-width: auto;
+  column-gap: 0;
+}
+
+.en-library-grid.list :deep(.en-card) {
+  display: flex;
+  margin: 0;
 }
 
 .en-library-rename-form {

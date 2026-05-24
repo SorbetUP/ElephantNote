@@ -57,13 +57,24 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
   }),
 
   actions: {
+    async ensureActiveVault() {
+      const vaultStore = useVaultStore()
+      const vaultPath = vaultStore.activeVault?.path || this.vaultPath
+      if (!vaultPath) return this.status
+      this.vaultPath = vaultPath
+      if (this.status.vaultPath !== vaultPath && this.status.status !== 'disabled') {
+        this.status = await elephantnoteClient.search.initVault(vaultPath)
+      }
+      return this.status
+    },
+
     open() {
       const vaultStore = useVaultStore()
       this.vaultPath = vaultStore.activeVault?.path || ''
       this.isOpen = true
       this.error = ''
       this.mode = this.defaultMode
-      this.refreshStatus()
+      this.ensureActiveVault().then(() => this.refreshStatus())
     },
 
     close() {
@@ -83,6 +94,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
 
     async refreshStatus() {
       try {
+        await this.ensureActiveVault()
         this.status = await elephantnoteClient.search.status()
       } catch (error) {
         this.status = {
@@ -97,6 +109,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
 
     async inspect() {
       try {
+        await this.ensureActiveVault()
         this.indexInspection = await elephantnoteClient.search.inspect()
       } catch (error) {
         this.indexInspection = {
@@ -177,13 +190,28 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     },
 
     async rebuild() {
+      await this.ensureActiveVault()
       this.busy = true
       try {
         this.status = await elephantnoteClient.search.rebuild()
-        await this.refreshStatus()
-        await this.inspect()
+        this.pollIndexBuild()
       } finally {
         this.busy = false
+      }
+    },
+
+    async pollIndexBuild() {
+      if (this.polling) return
+      this.polling = true
+      try {
+        for (let attempt = 0; attempt < 240; attempt += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1000))
+          await this.refreshStatus()
+          await this.inspect()
+          if (this.status.status !== 'indexing') break
+        }
+      } finally {
+        this.polling = false
       }
     },
 

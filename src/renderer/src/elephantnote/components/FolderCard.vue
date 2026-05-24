@@ -162,10 +162,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .en-card {
   position: relative;
-  min-height: 190px;
+  min-height: 168px;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--en-border);
   border-radius: 8px;
-  padding: 28px;
+  padding: 18px;
   color: var(--en-text);
   background: var(--en-bg);
   overflow: hidden;
@@ -265,9 +267,13 @@ onBeforeUnmount(() => {
 
 .en-folder-card h3 {
   margin: 0 0 8px;
-  font-size: 30px;
+  font-size: clamp(18px, 1.8vw, 28px);
   line-height: 1.1;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .en-folder-card p {
@@ -278,9 +284,13 @@ onBeforeUnmount(() => {
 
 .en-updated {
   display: block;
-  margin-top: 12px;
+  margin-top: auto;
+  padding-top: 14px;
   color: var(--en-muted);
   font-weight: 700;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .en-icon {

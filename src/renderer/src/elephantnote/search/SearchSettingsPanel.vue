@@ -32,7 +32,7 @@
           </button>
           <button
             type="button"
-            :disabled="store.busy"
+            :disabled="store.busy || store.status.status === 'indexing'"
             @click="store.rebuild"
           >
             <RotateCcw class="en-icon" />
@@ -367,6 +367,7 @@ onBeforeUnmount(() => {
 
 .en-search-settings-row.stacked {
   display: grid;
+  gap: 16px;
 }
 
 .en-search-settings-row h3 {
@@ -389,7 +390,14 @@ onBeforeUnmount(() => {
 }
 
 .en-search-settings-head {
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  justify-content: initial;
+}
+
+.en-search-settings-actions {
+  justify-content: flex-end;
 }
 
 .en-search-settings-toggle,
@@ -422,7 +430,10 @@ onBeforeUnmount(() => {
 }
 
 .en-index-visualization {
-  height: 330px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 300px;
+  max-height: 430px;
   border: 1px solid var(--en-border);
   border-radius: 12px;
   background:
@@ -480,6 +491,17 @@ onBeforeUnmount(() => {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .en-search-settings-head {
+    grid-template-columns: 1fr;
+  }
+
+  .en-search-settings-actions,
+  .en-search-view-switch {
+    flex-wrap: wrap;
+  }
 }
 
 .en-index-document-list button:hover {

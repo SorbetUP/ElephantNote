@@ -1,7 +1,7 @@
 const { expect, test } = require('@playwright/test')
 const { launchElectron } = require('./helpers')
 
-test.describe('Check Launch MarkText', () => {
+test.describe('Check Launch ElephantNote', () => {
   let app = null
   let page = null
 
@@ -15,8 +15,8 @@ test.describe('Check Launch MarkText', () => {
     await app.close()
   })
 
-  test('Empty MarkText', async() => {
+  test('Empty ElephantNote', async() => {
     const title = await page.title()
-    expect(/^MarkText|Untitled-1 - MarkText$/.test(title)).toBeTruthy()
+    expect(/^ElephantNote|Untitled-1 - ElephantNote$/.test(title)).toBeTruthy()
   })
 })

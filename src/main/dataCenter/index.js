@@ -204,6 +204,48 @@ class DataCenter extends EventEmitter {
         return ''
       }
     })
+
+    ipcMain.handle('mt::ask-for-excalidraw-source-path', async(e) => {
+      const win = BrowserWindow.fromWebContents(e.sender)
+      const choice = await dialog.showMessageBox(win, {
+        type: 'question',
+        buttons: ['Blank drawing', 'Open image or .excalidraw', 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+        title: 'Open Excalidraw',
+        message: 'Start a new drawing or open an existing source.'
+      })
+
+      if (choice.response === 2) {
+        return { canceled: true, sourcePath: '', mode: 'cancel' }
+      }
+      if (choice.response === 0) {
+        return { canceled: false, sourcePath: '', mode: 'blank' }
+      }
+
+      const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+        properties: ['openFile'],
+        filters: [
+          {
+            name: 'Images and Excalidraw',
+            extensions: [...IMAGE_EXTENSIONS, 'excalidraw']
+          },
+          {
+            name: 'Excalidraw',
+            extensions: ['excalidraw']
+          },
+          {
+            name: 'Images',
+            extensions: IMAGE_EXTENSIONS
+          }
+        ]
+      })
+
+      if (canceled || !filePaths?.[0]) {
+        return { canceled: true, sourcePath: '', mode: 'cancel' }
+      }
+      return { canceled: false, sourcePath: filePaths[0], mode: 'file' }
+    })
   }
 }
 

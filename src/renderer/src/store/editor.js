@@ -1429,6 +1429,10 @@ export const useEditorStore = defineStore('editor', {
       return window.electron.ipcRenderer.invoke('mt::ask-for-image-path')
     },
 
+    ASK_FOR_EXCALIDRAW_SOURCE_PATH() {
+      return window.electron.ipcRenderer.invoke('mt::ask-for-excalidraw-source-path')
+    },
+
     EDIT_ZOOM(zoomFactor) {
       const preferencesStore = usePreferencesStore()
       zoomFactor = Number.parseFloat(zoomFactor.toFixed(3))

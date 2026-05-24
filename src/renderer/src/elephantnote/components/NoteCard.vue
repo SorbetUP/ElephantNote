@@ -167,13 +167,19 @@ onBeforeUnmount(() => {
 <style scoped>
 .en-card {
   position: relative;
-  min-height: 190px;
+  min-height: 168px;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--en-border);
   border-radius: 8px;
-  padding: 28px;
+  padding: 18px;
   color: var(--en-text);
   background: var(--en-bg);
   overflow: hidden;
+}
+
+.en-card.is-featured {
+  min-height: 230px;
 }
 
 .en-card:hover {
@@ -241,11 +247,16 @@ onBeforeUnmount(() => {
 }
 
 .en-note-card h3 {
-  max-width: calc(100% - 88px);
-  margin: 0 0 8px;
-  font-size: 30px;
-  line-height: 1.1;
+  min-width: 0;
+  max-width: calc(100% - 42px);
+  margin: 0;
+  font-size: clamp(18px, 1.8vw, 28px);
+  line-height: 1.12;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .en-note-card-title-row {
@@ -263,10 +274,15 @@ onBeforeUnmount(() => {
 }
 
 .en-note-card p {
-  margin: 0;
+  margin: 14px 0 0;
   color: color-mix(in srgb, var(--en-text) 90%, transparent);
-  font-size: 18px;
-  line-height: 1.35;
+  font-size: 15px;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .en-tags {
@@ -282,15 +298,22 @@ onBeforeUnmount(() => {
 }
 
 .en-note-card footer {
-  position: absolute;
-  left: 28px;
-  bottom: 24px;
+  margin-top: auto;
+  padding-top: 16px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   color: var(--en-muted);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
+  min-width: 0;
+}
+
+.en-note-card footer span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .en-dot {

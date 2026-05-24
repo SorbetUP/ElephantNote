@@ -40,7 +40,7 @@ const collectHtmlPages = async(outputDir) => {
         await walk(fullPath)
       } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.html')) {
         const relativePath = path.relative(outputDir, fullPath).split(path.sep).join('/')
-        if (relativePath !== 'index.html') pages.push(relativePath)
+        if (relativePath !== 'index.html' && relativePath !== '404.html') pages.push(relativePath)
       }
     }
   }

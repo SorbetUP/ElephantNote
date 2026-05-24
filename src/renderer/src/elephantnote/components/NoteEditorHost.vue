@@ -64,6 +64,7 @@
       :file-name="excalidrawFileName"
       :theme="shellTheme"
       :initial-blob="excalidrawInitialBlob"
+      :save-mode="excalidrawSaveMode"
       @close="closeExcalidraw"
       @save="saveExcalidraw"
     />
@@ -124,6 +125,7 @@ const excalidrawTargetPath = ref('')
 const excalidrawInsertOnSave = ref(false)
 const excalidrawFileName = ref('excalidraw.png')
 const excalidrawTitle = ref('Excalidraw')
+const excalidrawSaveMode = ref('png')
 const textScale = ref(window.localStorage.getItem('elephantnote:editorTextScale') || 'normal')
 const shellTheme = inject('elephantnoteTheme', ref(window.localStorage.getItem('elephantnote:theme') || 'light'))
 const setShellTheme = inject('setElephantnoteTheme', (value) => {
@@ -284,6 +286,8 @@ const insertHorizontalRule = () => {
 const getMimeTypeFromPath = (pathname) => {
   const ext = String(window.path.extname(pathname || '')).toLowerCase()
   switch (ext) {
+    case '.excalidraw':
+      return 'application/vnd.excalidraw+json'
     case '.jpg':
     case '.jpeg':
       return 'image/jpeg'
@@ -305,27 +309,41 @@ const blobFromFilePath = async (pathname) => {
 
 const openExcalidraw = async () => {
   bus.emit('editor-focus')
-  let selectedImagePath = await editorStore.ASK_FOR_IMAGE_PATH()
+  const source = await editorStore.ASK_FOR_EXCALIDRAW_SOURCE_PATH()
+  if (source?.canceled) return
+  let selectedPath = source?.sourcePath || ''
   const noteDirectory = currentNoteDirectory.value
   let initialBlob = null
+  const extension = String(window.path.extname(selectedPath || '')).toLowerCase()
+  const isSceneFile = extension === '.excalidraw'
 
-  if (selectedImagePath) {
+  if (selectedPath) {
     try {
-      initialBlob = await blobFromFilePath(selectedImagePath)
+      initialBlob = await blobFromFilePath(selectedPath)
     } catch (error) {
-      console.warn('Unable to load image for Excalidraw:', error)
-      selectedImagePath = ''
+      console.warn('Unable to load Excalidraw source:', error)
+      selectedPath = ''
     }
   }
 
-  excalidrawInsertOnSave.value = !selectedImagePath
-  excalidrawTargetPath.value = selectedImagePath || window.path.join(
-    noteDirectory || '',
+  const imageTargetPath = selectedPath
+    ? window.path.join(
+      window.path.dirname(selectedPath),
+      `${window.path.basename(selectedPath, window.path.extname(selectedPath))}.png`
+    )
+    : ''
+
+  excalidrawSaveMode.value = isSceneFile ? 'scene' : 'png'
+  excalidrawInsertOnSave.value = !selectedPath && excalidrawSaveMode.value === 'png'
+  excalidrawTargetPath.value = isSceneFile
+    ? selectedPath
+    : imageTargetPath || window.path.join(
+      noteDirectory || '',
     `excalidraw-${Date.now()}.png`
-  )
+    )
   excalidrawFileName.value = window.path.basename(excalidrawTargetPath.value)
-  excalidrawTitle.value = selectedImagePath
-    ? window.path.basename(selectedImagePath, window.path.extname(selectedImagePath))
+  excalidrawTitle.value = selectedPath
+    ? window.path.basename(selectedPath, window.path.extname(selectedPath))
     : noteTitle.value
   excalidrawInitialBlob.value = initialBlob
   isExcalidrawOpen.value = true

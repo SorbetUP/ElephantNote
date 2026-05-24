@@ -1,8 +1,26 @@
 let excalidrawModulePromise = null
 
+export const resolveExcalidrawModule = (mod) => {
+  const resolved = mod?.Excalidraw
+    ? mod
+    : mod?.default?.Excalidraw
+      ? mod.default
+      : mod?.default || mod
+
+  if (!resolved?.Excalidraw) {
+    throw new Error('Excalidraw could not be loaded from the installed package.')
+  }
+  return resolved
+}
+
 export const ensurePngName = (name) => {
   const base = (name || 'excalidraw').trim() || 'excalidraw'
   return base.toLowerCase().endsWith('.png') ? base : `${base}.png`
+}
+
+export const ensureExcalidrawName = (name) => {
+  const base = (name || 'drawing').trim() || 'drawing'
+  return base.toLowerCase().endsWith('.excalidraw') ? base : `${base}.excalidraw`
 }
 
 export const loadExcalidrawModule = async() => {
@@ -14,7 +32,7 @@ export const loadExcalidrawModule = async() => {
     }
   }
 
-  excalidrawModulePromise ??= import('@excalidraw/excalidraw')
+  excalidrawModulePromise ??= import('@excalidraw/excalidraw').then(resolveExcalidrawModule)
   return excalidrawModulePromise
 }
 
@@ -47,7 +65,7 @@ const isEmptyScene = (data) => {
 const createSceneFromImageBlob = async(blob, theme) => {
   const { getDataURL, MIME_TYPES } = await loadExcalidrawModule()
   const now = Date.now()
-  const fileId = crypto?.randomUUID?.() || `${now}-${Math.random()}`
+  const fileId = globalThis.crypto?.randomUUID?.() || `${now}-${Math.random()}`
   const dataURL = await getDataURL(blob)
   const { width: naturalWidth, height: naturalHeight } = await blobToImageSize(blob)
   const maxW = 1200
@@ -61,7 +79,7 @@ const createSceneFromImageBlob = async(blob, theme) => {
   return {
     elements: [
       {
-        id: crypto?.randomUUID?.() || `${now}-${Math.random()}`,
+        id: globalThis.crypto?.randomUUID?.() || `${now}-${Math.random()}`,
         type: 'image',
         x: 0,
         y: 0,
@@ -149,4 +167,20 @@ export const exportExcalidrawBlob = async({ api, theme }) => {
     mimeType: MIME_TYPES.png,
     embedScene: true
   })
+}
+
+export const exportExcalidrawSceneBlob = async({ api, theme }) => {
+  const { serializeAsJSON } = await loadExcalidrawModule()
+  const json = serializeAsJSON(
+    api.getSceneElements(),
+    {
+      ...api.getAppState(),
+      exportBackground: true,
+      exportEmbedScene: true,
+      viewBackgroundColor: theme === 'dark' ? '#121212' : '#ffffff'
+    },
+    api.getFiles(),
+    'local'
+  )
+  return new Blob([json], { type: 'application/vnd.excalidraw+json' })
 }

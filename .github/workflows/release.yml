@@ -1,0 +1,123 @@
+name: Build/release Marktext
+
+on:
+  push:
+    tags:
+      - v*.*.*
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-22.04
+            platform: linux
+          - name: windows
+            os: windows-latest
+            platform: windows
+          - name: macos-x64
+            os: macos-15-intel
+            platform: macos
+            arch: x64
+          - name: macos-arm64
+            os: macos-15
+            platform: macos
+            arch: arm64
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.1
+          cache: 'pnpm'
+
+      - name: Install Linux Build Dependencies
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y icnsutils graphicsmagick xz-utils libx11-dev libxkbfile-dev gnome-keyring libsecret-1-dev libfontconfig-dev rpm
+
+      # --ignore-scripts so we can set env vars before postinstall runs electron-rebuild
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Must be set before postinstall runs electron-rebuild
+      - name: Set C++20 for MacOS
+        if: matrix.platform == 'macos'
+        run: |
+          echo "CXXFLAGS=-std=gnu++20 -stdlib=libc++" >> $GITHUB_ENV
+
+      # Run the full postinstall: Electron binary download, patch-package,
+      # electron-rebuild, and minify-locales.
+      - name: Run postinstall
+        run: node scripts/postinstall.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_user_agent: 'pnpm'
+          USE_ELECTRON_CLANG: ${{ matrix.platform == 'linux' && '0' || '' }}
+
+      - name: build-linux
+        if: matrix.platform == 'linux'
+        run: pnpm run build:linux
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Mac builds have been disabled due to a lack of a Developer ID to sign it
+      # All builds by default will give a "this app is damaged and can't be opened" error
+      - name: build-mac
+        if: matrix.platform == 'macos'
+        run: pnpm run build:mac -- --${{ matrix.arch }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: build-win
+        if: matrix.platform == 'windows'
+        run: pnpm run build:win
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: false
+          prerelease: true
+          generate_release_notes: true
+          name: 'Pre-release ${{ github.ref_name }}'
+          body: |
+            ## ❗This is a Pre-release
+            - This is a pre-release build of MarkText, it will most likely contain bugs and unfinished features.
+
+            ## ⚠️ Note for MacOS Users
+            - MacOS releases will show a "`Apple couldn't verify MarkText is free of viruses...`" due to a **lack of notorisation**.
+            - Please run the following commands [based off this fix here](https://github.com/marktext/marktext/issues/3004#issuecomment-1038207300) after you have dragged MarkText into the "Applications" folder
+            ```
+            sudo find /Applications/marktext.app -exec xattr -c {} \; # <-- Note this change on newer MacOS versions
+            sudo codesign --force --deep --sign - /Applications/marktext.app
+            ```
+
+            ## Changes
+          files: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.snap
+            dist/*.deb
+            dist/*.rpm
+            dist/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

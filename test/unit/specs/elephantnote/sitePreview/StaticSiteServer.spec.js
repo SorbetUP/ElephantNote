@@ -70,6 +70,7 @@ describe('StaticSiteServer', () => {
     await fs.remove(path.join(root, 'index.html'))
     await fs.ensureDir(path.join(root, 'untitled'))
     await fs.writeFile(path.join(root, 'untitled', 'index.html'), '<h1>Untitled</h1>', 'utf8')
+    await fs.writeFile(path.join(root, '404.html'), '<h1>404</h1>', 'utf8')
 
     const { url } = await server.start(root)
     const response = await get(url)
@@ -77,5 +78,6 @@ describe('StaticSiteServer', () => {
     expect(response.statusCode).to.equal(200)
     expect(response.body).to.contain('Preview home')
     expect(response.body).to.contain('/untitled/index.html')
+    expect(response.body).not.to.contain('/404.html')
   })
 })

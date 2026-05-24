@@ -99,6 +99,7 @@ export class ElephantSearchService {
     this._activeVaultRootByWindow = new Map()
     this._statusByVault = new Map()
     this._initPromises = new Map()
+    this._rebuildPromises = new Map()
     this._enabled = true
   }
 
@@ -206,6 +207,7 @@ export class ElephantSearchService {
           totalDocuments,
           message: 'Indexing notes...'
         })
+        await new Promise((resolve) => setImmediate(resolve))
       }
 
       this._setStatus(vaultRoot, {
@@ -271,14 +273,31 @@ export class ElephantSearchService {
     const root = this._resolveRootFromWindow(windowId)
     if (!root) return createStatus()
 
-    this._setStatus(root, {
+    if (this._rebuildPromises.has(root)) {
+      return this._getStatus(root)
+    }
+
+    const status = this._setStatus(root, {
       status: SEARCH_STATUSES.INDEXING,
+      indexedDocuments: 0,
+      totalDocuments: 0,
       message: 'Rebuilding search index...',
       error: ''
     })
-    await this._getManager(root).rebuild(root)
-    await this._bootstrapVault(root)
-    return this._getStatus(root)
+
+    const rebuildPromise = (async() => {
+      try {
+        await this._getManager(root).rebuild(root)
+        await this._bootstrapVault(root)
+      } catch (error) {
+        log.error('Failed to rebuild search index:', error)
+      } finally {
+        this._rebuildPromises.delete(root)
+      }
+    })()
+
+    this._rebuildPromises.set(root, rebuildPromise)
+    return status
   }
 
   async clearIndex(windowId = null) {

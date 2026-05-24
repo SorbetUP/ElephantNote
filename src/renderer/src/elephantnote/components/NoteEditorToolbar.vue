@@ -1,7 +1,7 @@
 <template>
   <div class="en-note-toolbar">
     <button
-      v-for="item in toolbarItems"
+      v-for="item in visibleToolbarItems"
       :key="item.key"
       type="button"
       class="en-note-toolbar-button"
@@ -19,11 +19,11 @@
 </template>
 
 <script setup>
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   Bold,
   Bot,
   Code2,
-  DraftingCompass,
   Heading2,
   Image,
   Italic,
@@ -31,12 +31,14 @@ import {
   List,
   ListOrdered,
   Minus,
+  PenLine,
   Quote,
   SquareCheckBig,
   Sparkles,
   Strikethrough,
   Table2
 } from '@lucide/vue'
+import { elephantnoteClient } from '../services/elephantnoteClient'
 
 defineEmits([
   'format',
@@ -61,11 +63,43 @@ const toolbarItems = [
   { key: 'quote', title: 'Quote', icon: Quote, event: 'paragraph', payload: 'blockquote' },
   { key: 'table', title: 'Table', icon: Table2, event: 'paragraph', payload: 'table' },
   { key: 'image', title: 'Image', icon: Image, event: 'insert-image' },
-  { key: 'excalidraw', title: 'Excalidraw', icon: DraftingCompass, event: 'insert-excalidraw' },
+  { key: 'excalidraw', title: 'Excalidraw', icon: PenLine, event: 'insert-excalidraw' },
   { key: 'rule', title: 'Horizontal rule', icon: Minus, event: 'insert-horizontal-rule' },
   { key: 'ask-ai', title: 'Ask AI', icon: Sparkles, event: 'ask-ai' },
   { key: 'agents', title: 'Agents', icon: Bot, event: 'open-agents' }
 ]
+
+const featureFlags = ref({
+  ai: true,
+  askAi: true,
+  agents: true
+})
+
+const visibleToolbarItems = computed(() => toolbarItems.filter((item) => {
+  if (item.key === 'ask-ai') return featureFlags.value.ai && featureFlags.value.askAi
+  if (item.key === 'agents') return featureFlags.value.agents
+  return true
+}))
+
+onMounted(async () => {
+  try {
+    featureFlags.value = await elephantnoteClient.features.get()
+  } catch {
+    featureFlags.value = { ai: true, askAi: true, agents: true }
+  }
+  window.addEventListener('elephantnote:feature-flags-changed', handleFeatureFlagsChanged)
+})
+
+const handleFeatureFlagsChanged = (event) => {
+  featureFlags.value = {
+    ...featureFlags.value,
+    ...(event.detail || {})
+  }
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('elephantnote:feature-flags-changed', handleFeatureFlagsChanged)
+})
 </script>
 
 <style scoped>
@@ -99,3 +133,4 @@ const toolbarItems = [
   height: 20px;
 }
 </style>
+  PenLine,

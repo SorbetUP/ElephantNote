@@ -1,12 +1,12 @@
 import { shell } from 'electron'
 import fs from 'fs-extra'
 import path from 'path'
-import { DocmdSiteManager } from './DocmdSiteManager'
+import { ElephantSiteManager } from './ElephantSiteManager'
 import { StaticSiteServer } from './StaticSiteServer'
 import { SITE_PREVIEW_STATUS } from './siteTypes'
 
 export class SitePreviewService {
-  constructor({ siteManager = new DocmdSiteManager() } = {}) {
+  constructor({ siteManager = new ElephantSiteManager() } = {}) {
     this.siteManager = siteManager
     this.previews = new Map()
   }

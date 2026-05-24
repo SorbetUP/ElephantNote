@@ -70,6 +70,13 @@
           </button>
           <button
             type="button"
+            :class="{ active: activeSection === 'sync' }"
+            @click="activeSection = 'sync'"
+          >
+            Sync
+          </button>
+          <button
+            type="button"
             :class="{ active: activeSection === 'ai' }"
             @click="activeSection = 'ai'"
           >
@@ -210,14 +217,15 @@
             </div>
             <div class="en-trigger-options">
               <button
-                v-for="trigger in quickInsertTriggers"
-                :key="trigger"
-                class="en-trigger-option"
+                ref="quickTriggerButton"
+                class="en-trigger-capture"
                 type="button"
-                :class="{ active: preferences.quickInsertTrigger === trigger }"
-                @click="setQuickInsertTrigger(trigger)"
+                :class="{ capturing: isCapturingQuickTrigger }"
+                @click="startQuickTriggerCapture"
+                @keydown.prevent.stop="captureQuickTrigger"
               >
-                {{ trigger }}
+                <span>{{ preferences.quickInsertTrigger }}</span>
+                <small>{{ isCapturingQuickTrigger ? 'Press a key' : 'Click to change' }}</small>
               </button>
             </div>
           </section>
@@ -286,6 +294,25 @@
           </section>
 
           <section
+            v-if="activeSection === 'sync'"
+            class="en-settings-section stacked"
+          >
+            <div>
+              <h3>Git sync</h3>
+              <p>Synchronize vault changes through Git without mixing sync controls into AI settings.</p>
+            </div>
+            <div class="en-settings-actions-row">
+              <button
+                type="button"
+                :class="{ active: featureFlags.gitSync }"
+                @click="toggleFeature('gitSync')"
+              >
+                Git sync {{ featureFlags.gitSync ? 'enabled' : 'disabled' }}
+              </button>
+            </div>
+          </section>
+
+          <section
             v-if="activeSection === 'ai'"
             class="en-settings-section stacked"
           >
@@ -315,13 +342,6 @@
               >
                 Agents {{ featureFlags.agents ? 'enabled' : 'disabled' }}
               </button>
-              <button
-                type="button"
-                :class="{ active: featureFlags.gitSync }"
-                @click="toggleFeature('gitSync')"
-              >
-                Git sync {{ featureFlags.gitSync ? 'enabled' : 'disabled' }}
-              </button>
             </div>
           </section>
         </div>
@@ -331,7 +351,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Download, Moon, SunMedium, X } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import SearchSettingsPanel from '../search/SearchSettingsPanel.vue'
@@ -364,6 +384,8 @@ const vaults = computed(() => props.vaults)
 const theme = computed(() => props.theme)
 const isImporting = ref(false)
 const importMessage = ref('')
+const isCapturingQuickTrigger = ref(false)
+const quickTriggerButton = ref(null)
 const preferences = usePreferencesStore()
 const sitePreviewStore = useSitePreviewStore()
 const featureFlags = ref({
@@ -374,7 +396,6 @@ const featureFlags = ref({
   agents: true,
   semanticSearch: true
 })
-const quickInsertTriggers = ['/', '@']
 const siteStatusLabel = computed(() => {
   if (sitePreviewStore.previewUrl) return 'Preview running'
   if (sitePreviewStore.lastBuild?.outputDir) return 'Static build ready'
@@ -396,10 +417,33 @@ const setPinnedCardHalo = (value) => {
 }
 
 const setQuickInsertTrigger = (value) => {
+  if (!value || value.length !== 1 || /\s/.test(value)) return
   preferences.SET_SINGLE_PREFERENCE({
     type: 'quickInsertTrigger',
     value
   })
+}
+
+const stopQuickTriggerCapture = () => {
+  isCapturingQuickTrigger.value = false
+}
+
+const startQuickTriggerCapture = async () => {
+  isCapturingQuickTrigger.value = true
+  await nextTick()
+  quickTriggerButton.value?.focus?.()
+}
+
+const captureQuickTrigger = (event) => {
+  if (!isCapturingQuickTrigger.value) return
+  if (event.key === 'Escape') {
+    stopQuickTriggerCapture()
+    return
+  }
+  if (event.key && event.key.length === 1 && !/\s/.test(event.key)) {
+    setQuickInsertTrigger(event.key)
+    stopQuickTriggerCapture()
+  }
 }
 
 const settingsStyle = computed(() => {
@@ -468,12 +512,17 @@ const loadFeatureFlags = async () => {
 const toggleFeature = async (key) => {
   try {
     featureFlags.value = await elephantnoteClient.features.set(key, !featureFlags.value[key])
+    window.dispatchEvent(new CustomEvent('elephantnote:feature-flags-changed', {
+      detail: featureFlags.value
+    }))
   } catch (error) {
     console.warn('Unable to update ElephantNote feature flag:', error)
   }
 }
 
 onMounted(loadFeatureFlags)
+
+onBeforeUnmount(stopQuickTriggerCapture)
 </script>
 
 <style scoped>
@@ -749,27 +798,48 @@ onMounted(loadFeatureFlags)
 
 .en-trigger-options {
   display: inline-flex;
-  gap: 8px;
-  padding: 4px;
+  padding: 0;
   border: 1px solid var(--en-border);
   border-radius: 8px;
   background: var(--en-soft);
 }
 
-.en-trigger-option {
-  min-width: 42px;
-  height: 34px;
+.en-trigger-capture {
+  min-width: 168px;
+  height: 46px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
   border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--en-muted);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--en-text);
   background: transparent;
-  font: 700 18px/1 var(--en-code-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font: inherit;
   cursor: pointer;
 }
 
-.en-trigger-option:hover,
-.en-trigger-option.active {
-  color: var(--en-text);
+.en-trigger-capture span {
+  width: 36px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--en-border);
+  border-radius: 7px;
+  background: var(--en-soft-strong);
+  font: 800 20px/1 var(--en-code-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.en-trigger-capture small {
+  color: var(--en-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.en-trigger-capture:hover,
+.en-trigger-capture.capturing {
   border-color: var(--en-border-strong);
   background: var(--en-soft-strong);
 }

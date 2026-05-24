@@ -3,6 +3,7 @@ import {
   createInitialExcalidrawData,
   ensureExcalidrawName,
   ensurePngName,
+  getExcalidrawSidecarPath,
   resolveExcalidrawModule
 } from '@/elephantnote/services/excalidraw'
 
@@ -12,6 +13,18 @@ describe('ElephantNote Excalidraw helpers', () => {
     expect(ensurePngName('sketch.png')).toBe('sketch.png')
     expect(ensureExcalidrawName('scene')).toBe('scene.excalidraw')
     expect(ensureExcalidrawName('scene.excalidraw')).toBe('scene.excalidraw')
+  })
+
+  it('derives the editable sidecar path from generated previews', () => {
+    const originalPath = window.path
+    window.path = {
+      extname: (pathname) => pathname.match(/\.[^/.]+$/)?.[0] || ''
+    }
+
+    expect(getExcalidrawSidecarPath('/vault/note/sketch.png')).toBe('/vault/note/sketch.excalidraw')
+    expect(getExcalidrawSidecarPath('/vault/note/sketch')).toBe('/vault/note/sketch.excalidraw')
+
+    window.path = originalPath
   })
 
   it('starts with an empty scene when no source file is selected', async() => {

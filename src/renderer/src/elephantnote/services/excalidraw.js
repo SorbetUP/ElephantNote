@@ -23,6 +23,13 @@ export const ensureExcalidrawName = (name) => {
   return base.toLowerCase().endsWith('.excalidraw') ? base : `${base}.excalidraw`
 }
 
+export const getExcalidrawSidecarPath = (pathname) => {
+  if (!pathname || typeof window === 'undefined' || !window.path) return ''
+  const extension = window.path.extname(pathname)
+  const base = extension ? pathname.slice(0, -extension.length) : pathname
+  return `${base}.excalidraw`
+}
+
 export const loadExcalidrawModule = async() => {
   if (typeof window !== 'undefined' && typeof window.EXCALIDRAW_ASSET_PATH !== 'string') {
     try {
@@ -165,6 +172,7 @@ export const exportExcalidrawBlob = async({ api, theme }) => {
     },
     files: api.getFiles(),
     mimeType: MIME_TYPES.png,
+    maxWidthOrHeight: 2400,
     embedScene: true
   })
 }

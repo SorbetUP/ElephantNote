@@ -90,9 +90,11 @@ import NoteEditorFooter from './NoteEditorFooter.vue'
 import NoteEditorHeader from './NoteEditorHeader.vue'
 import NoteEditorMeta from './NoteEditorMeta.vue'
 import NoteEditorToolbar from './NoteEditorToolbar.vue'
+import { getExcalidrawSidecarPath } from '../services/excalidraw'
 import { formatShortDate } from '../services/markdownMetaService'
 import {
   ensureNoteDocument,
+  getEditorMarkdownStats,
   getDocumentCreatedAt,
   getDocumentTitle,
   mergeEditorMarkdown,
@@ -151,8 +153,9 @@ const documentMeta = computed(() => {
 const noteTitle = computed(() => documentMeta.value.title)
 const tags = computed(() => documentMeta.value.tags)
 const noteDate = computed(() => documentMeta.value.date)
-const wordCount = computed(() => currentFile.value?.wordCount?.word || 0)
-const characterCount = computed(() => currentFile.value?.wordCount?.character || markdown.value?.length || 0)
+const editorMarkdownStats = computed(() => getEditorMarkdownStats(visibleMarkdown.value))
+const wordCount = computed(() => editorMarkdownStats.value.word)
+const characterCount = computed(() => editorMarkdownStats.value.character)
 const themeIcon = computed(() => shellTheme.value === 'dark' ? SunMedium : Moon)
 const isPinned = computed(() => {
   const pathname = currentNoteRelativePath.value
@@ -197,6 +200,11 @@ const updateMarkdown = (nextMarkdown) => {
   if (!currentFile.value) return
   currentFile.value.markdown = nextMarkdown
   currentFile.value.isSaved = false
+  store.updateNoteMetadata(currentNoteRelativePath.value, {
+    title: getDocumentTitle(nextMarkdown, fallbackTitle.value),
+    tags: parseMarkdownTags(nextMarkdown),
+    updatedAt: new Date().toISOString()
+  })
   scheduleSave()
 }
 
@@ -307,19 +315,40 @@ const blobFromFilePath = async (pathname) => {
   return new Blob([data], { type: getMimeTypeFromPath(pathname) })
 }
 
-const openExcalidraw = async () => {
-  bus.emit('editor-focus')
-  const source = await editorStore.ASK_FOR_EXCALIDRAW_SOURCE_PATH()
-  if (source?.canceled) return
-  let selectedPath = source?.sourcePath || ''
+const resolveLocalImagePath = (source) => {
+  const value = String(source || '').trim()
+  if (!value) return ''
+  const withoutQuery = value.split(/[?#]/)[0]
+  let decoded = withoutQuery
+  try {
+    decoded = decodeURI(withoutQuery)
+  } catch {
+    decoded = withoutQuery
+  }
+
+  if (decoded.startsWith('file://')) {
+    return decoded
+      .replace(/^file:\/\//, '')
+      .replace(/^\/([A-Za-z]:\/)/, '$1')
+  }
+
+  if (window.path.isAbsolute(decoded)) return decoded
+  return window.path.resolve(currentNoteDirectory.value || store.activeVault?.path || '', decoded)
+}
+
+const openExcalidrawFromPath = async (sourcePath = '', { insertOnSave = false } = {}) => {
+  let selectedPath = sourcePath || ''
   const noteDirectory = currentNoteDirectory.value
   let initialBlob = null
   const extension = String(window.path.extname(selectedPath || '')).toLowerCase()
   const isSceneFile = extension === '.excalidraw'
+  const sidecarPath = selectedPath && !isSceneFile ? getExcalidrawSidecarPath(selectedPath) : ''
 
   if (selectedPath) {
     try {
-      initialBlob = await blobFromFilePath(selectedPath)
+      initialBlob = sidecarPath && window.fileUtils.pathExistsSync(sidecarPath)
+        ? await blobFromFilePath(sidecarPath)
+        : await blobFromFilePath(selectedPath)
     } catch (error) {
       console.warn('Unable to load Excalidraw source:', error)
       selectedPath = ''
@@ -334,7 +363,7 @@ const openExcalidraw = async () => {
     : ''
 
   excalidrawSaveMode.value = isSceneFile ? 'scene' : 'png'
-  excalidrawInsertOnSave.value = !selectedPath && excalidrawSaveMode.value === 'png'
+  excalidrawInsertOnSave.value = insertOnSave && excalidrawSaveMode.value === 'png'
   excalidrawTargetPath.value = isSceneFile
     ? selectedPath
     : imageTargetPath || window.path.join(
@@ -349,12 +378,27 @@ const openExcalidraw = async () => {
   isExcalidrawOpen.value = true
 }
 
+const openExcalidraw = async () => {
+  bus.emit('editor-focus')
+  const source = await editorStore.ASK_FOR_EXCALIDRAW_SOURCE_PATH()
+  if (source?.canceled) return
+  const extension = String(window.path.extname(source?.sourcePath || '')).toLowerCase()
+  await openExcalidrawFromPath(source?.sourcePath || '', { insertOnSave: extension !== '.excalidraw' })
+}
+
+const openExcalidrawFromImage = async (imageSource) => {
+  const imagePath = resolveLocalImagePath(imageSource)
+  if (!imagePath) return
+  bus.emit('editor-focus')
+  await openExcalidrawFromPath(imagePath, { insertOnSave: true })
+}
+
 const closeExcalidraw = () => {
   isExcalidrawOpen.value = false
   excalidrawInitialBlob.value = null
 }
 
-const saveExcalidraw = async ({ blob, fileName }) => {
+const saveExcalidraw = async ({ blob, fileName, sceneBlob }) => {
   const targetPath = excalidrawTargetPath.value || window.path.join(currentNoteDirectory.value || '', fileName)
   if (!targetPath || !blob) {
     closeExcalidraw()
@@ -364,6 +408,10 @@ const saveExcalidraw = async ({ blob, fileName }) => {
   try {
     const buffer = new Uint8Array(await blob.arrayBuffer())
     await window.fileUtils.writeFile(targetPath, buffer)
+    if (sceneBlob && excalidrawSaveMode.value === 'png') {
+      const sidecarBuffer = new Uint8Array(await sceneBlob.arrayBuffer())
+      await window.fileUtils.writeFile(getExcalidrawSidecarPath(targetPath), sidecarBuffer)
+    }
 
     if (excalidrawInsertOnSave.value) {
       bus.emit('editor-focus')
@@ -408,10 +456,12 @@ setTextScale(textScale.value)
 
 onMounted(() => {
   window.addEventListener('click', closeTransientMenus)
+  bus.on('open-excalidraw-from-image', openExcalidrawFromImage)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('click', closeTransientMenus)
+  bus.off('open-excalidraw-from-image', openExcalidrawFromImage)
 })
 
 watch(markdown, (content) => {

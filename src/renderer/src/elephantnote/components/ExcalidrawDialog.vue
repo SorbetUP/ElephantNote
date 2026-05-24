@@ -127,17 +127,18 @@ const handleSave = async () => {
   isSaving.value = true
   errorMessage.value = ''
   try {
+    const sceneBlob = await exportExcalidrawSceneBlob({
+      api: apiRef.value,
+      theme: props.theme
+    })
     const blob = props.saveMode === 'scene'
-      ? await exportExcalidrawSceneBlob({
-        api: apiRef.value,
-        theme: props.theme
-      })
+      ? sceneBlob
       : await exportExcalidrawBlob({
         api: apiRef.value,
         theme: props.theme
       })
     const fileName = resolvedFileName.value
-    emit('save', { blob, fileName })
+    emit('save', { blob, fileName, sceneBlob })
   } catch (error) {
     console.error('Failed to save Excalidraw:', error)
     errorMessage.value = error?.message || 'The drawing could not be saved.'

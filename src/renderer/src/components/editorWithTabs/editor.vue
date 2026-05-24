@@ -1256,11 +1256,7 @@ onMounted(() => {
     if (formatType === 'link' && ctrlOrMeta) {
       editorStore.FORMAT_LINK_CLICK({ data, dirname: window.DIRNAME })
     } else if (formatType === 'image' && ctrlOrMeta) {
-      if (imageViewer) {
-        imageViewer.destroy()
-      }
-      imageViewer = new SimpleImageViewer(imageViewerRef.value, { url: data })
-      setImageViewerVisible(true)
+      bus.emit('open-excalidraw-from-image', data)
     }
   })
 

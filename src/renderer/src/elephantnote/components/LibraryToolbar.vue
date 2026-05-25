@@ -5,22 +5,6 @@
     </div>
 
     <div class="en-library-actions">
-      <button
-        class="en-primary-button compact"
-        type="button"
-        @click="store.createNote"
-      >
-        <FilePlus2 class="en-icon" />
-        New note
-      </button>
-      <button
-        class="en-ghost-button"
-        type="button"
-        @click="store.createFolder"
-      >
-        <FolderPlus class="en-icon" />
-        New folder
-      </button>
       <select
         v-model="store.sort"
         class="en-select"
@@ -58,7 +42,7 @@
 </template>
 
 <script setup>
-import { FilePlus2, FolderPlus, Grid3x3, List } from '@lucide/vue'
+import { Grid3x3, List } from '@lucide/vue'
 import { useVaultStore } from '../stores/vaultStore'
 
 const store = useVaultStore()
@@ -84,8 +68,6 @@ const store = useVaultStore()
   gap: 12px;
 }
 
-.en-primary-button,
-.en-ghost-button,
 .en-select,
 .en-view-toggle {
   height: 44px;
@@ -94,22 +76,6 @@ const store = useVaultStore()
   color: var(--en-text);
   background: transparent;
   font: inherit;
-}
-
-.en-primary-button,
-.en-ghost-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  padding: 0 18px;
-  font-weight: 700;
-}
-
-.en-primary-button {
-  border-color: var(--en-primary);
-  background: var(--en-primary);
-  color: white;
 }
 
 .en-select {

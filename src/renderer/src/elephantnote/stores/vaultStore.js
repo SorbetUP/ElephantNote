@@ -56,6 +56,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     activeVault: null,
     workspace: null,
     entries: [],
+    rootEntries: [],
     currentPath: '',
     filter: 'all',
     sort: 'updated-newest',
@@ -85,6 +86,21 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         return new Date(b.updatedAt) - new Date(a.updatedAt)
       })
       return entries
+    },
+    activeNoteEntries() {
+      return this.activeEntries.filter((entry) => entry.kind === 'note' || entry.type === 'note')
+    },
+    rootSidebarEntries(state) {
+      const pinned = new Set(state.pinnedNotePaths)
+      return [...state.rootEntries].sort((a, b) => {
+        const aPinned = pinned.has(a.path)
+        const bPinned = pinned.has(b.path)
+        if (aPinned !== bPinned) return aPinned ? -1 : 1
+        if ((a.kind || a.type) !== (b.kind || b.type)) {
+          return (a.kind || a.type) === 'folder' ? -1 : 1
+        }
+        return String(a.title || '').localeCompare(String(b.title || ''))
+      })
     },
     recentNoteEntries(state) {
       const opened = state.openedNotes.filter((note) => note?.path)
@@ -194,6 +210,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.activeVault = payload.activeVault || null
       this.workspace = payload.workspace || null
       this.entries = payload.entries || []
+      this.rootEntries = payload.entries || []
       this.openedNotePath = ''
       this.openedNotes = []
       this.currentPath = ''
@@ -246,7 +263,11 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     async openDirectory(relativePath = '') {
       this.currentPath = relativePath
       this.openedNotePath = ''
-      this.entries = await elephantnoteClient.directory.list(relativePath)
+      const entries = await elephantnoteClient.directory.list(relativePath)
+      this.entries = entries
+      if (!relativePath) {
+        this.rootEntries = entries
+      }
     },
 
     async refreshSavedNote(pathname) {
@@ -311,6 +332,9 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     async createNote() {
       const result = await elephantnoteClient.notes.create(this.currentPath)
       this.entries = result.entries
+      if (!this.currentPath) {
+        this.rootEntries = result.entries
+      }
       this.openedNotePath = result.note.path
       this.rememberNote(result.note)
       window.electron.ipcRenderer.send('mt::open-file', result.note.fullPath, {})
@@ -319,6 +343,9 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     async createFolder() {
       const result = await elephantnoteClient.folders.create(this.currentPath)
       this.entries = result.entries
+      if (!this.currentPath) {
+        this.rootEntries = result.entries
+      }
     },
 
     async renameEntry(entry, title) {
@@ -329,6 +356,9 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       })
       this.workspace = result.workspace
       this.entries = result.entries
+      if (!this.currentPath) {
+        this.rootEntries = result.entries
+      }
       if (oldPath) {
         const nextPath = getRenamedRelativePath(oldPath, title)
         this.pinnedNotePaths = this.pinnedNotePaths.map((pathname) => replacePathPrefix(pathname, oldPath, nextPath))
@@ -344,6 +374,9 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       const result = await elephantnoteClient.entries.delete(entry.path)
       this.workspace = result.workspace
       this.entries = result.entries
+      if (!this.currentPath) {
+        this.rootEntries = result.entries
+      }
       if (oldPath) {
         this.pinnedNotePaths = removePathsByPrefix(this.pinnedNotePaths, oldPath)
         this.currentPath = removePathsByPrefix([this.currentPath], oldPath)[0] || ''
@@ -356,6 +389,13 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     notifyAiUnavailable() {
       window.electron.ipcRenderer.send('mt::show-notification', {
         title: 'AI features are not available yet.',
+        type: 'info'
+      })
+    },
+
+    notifyFeatureUnavailable(featureName) {
+      window.electron.ipcRenderer.send('mt::show-notification', {
+        title: `${featureName} is planned in the Atomic workspace roadmap.`,
         type: 'info'
       })
     },

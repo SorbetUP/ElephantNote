@@ -3,12 +3,11 @@
     class="en-library-grid"
     :class="{ list: store.viewMode === 'list' }"
   >
-    <component
-      :is="entry.kind === 'folder' ? FolderCard : NoteCard"
-      v-for="(entry, index) in store.activeEntries"
+    <NoteCard
+      v-for="(entry, index) in store.activeNoteEntries"
       :key="entry.path"
       :entry="entry"
-      :featured="entry.kind === 'note' && index === 0 && store.activeEntries.length > 3"
+      :featured="index === 0 && store.activeNoteEntries.length > 3"
       @open="openEntry"
       @rename="renameEntry"
       @delete="deleteEntry"
@@ -42,7 +41,6 @@
 <script setup>
 import { nextTick, ref } from 'vue'
 import { useVaultStore } from '../stores/vaultStore'
-import FolderCard from './FolderCard.vue'
 import NoteCard from './NoteCard.vue'
 
 const store = useVaultStore()

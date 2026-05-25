@@ -1,28 +1,27 @@
 <template>
   <header class="en-topbar">
-    <button
-      class="en-topbar-logo"
-      type="button"
-      title="Settings"
-      @click.stop.prevent="openSettings"
-    >
+    <div class="en-topbar-logo">
       <img
         :src="logoUrl"
         alt="ElephantNote"
       >
-    </button>
+    </div>
 
-    <nav class="en-vault-tabs">
-      <button
-        v-for="vault in store.vaults"
-        :key="vault.id"
-        class="en-vault-tab"
-        :class="{ active: vault.id === store.activeVaultId }"
-        type="button"
-        @click="store.setActiveVault(vault.id)"
+    <div class="en-vault-switcher">
+      <select
+        class="en-vault-select"
+        :value="store.activeVaultId"
+        aria-label="Active vault"
+        @change="store.setActiveVault($event.target.value)"
       >
-        {{ vault.name }}
-      </button>
+        <option
+          v-for="vault in store.vaults"
+          :key="vault.id"
+          :value="vault.id"
+        >
+          {{ vault.name }}
+        </option>
+      </select>
       <button
         class="en-add-vault"
         type="button"
@@ -31,7 +30,7 @@
       >
         <Plus class="en-icon" />
       </button>
-    </nav>
+    </div>
 
     <div class="en-topbar-spacer" />
 
@@ -42,8 +41,30 @@
       @click="openSearch"
     >
       <Search class="en-icon" />
-      <span>Search notes, tags, ideas...</span>
-      <kbd>Ctrl K</kbd>
+    </button>
+    <button
+      class="en-icon-button"
+      type="button"
+      title="Graph"
+      @click="store.notifyFeatureUnavailable('Graph')"
+    >
+      <GitFork class="en-icon" />
+    </button>
+    <button
+      class="en-icon-button"
+      type="button"
+      title="Calendar"
+      @click="store.notifyFeatureUnavailable('Calendar')"
+    >
+      <CalendarDays class="en-icon" />
+    </button>
+    <button
+      class="en-icon-button"
+      type="button"
+      title="Settings"
+      @click.stop.prevent="openSettings"
+    >
+      <Settings class="en-icon" />
     </button>
     <button
       v-if="featureFlags.ai && featureFlags.askAi"
@@ -59,7 +80,7 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Plus, Search, Sparkles } from '@lucide/vue'
+import { CalendarDays, GitFork, Plus, Search, Settings, Sparkles } from '@lucide/vue'
 import { useVaultStore } from '../stores/vaultStore'
 import { elephantnoteClient } from '../services/elephantnoteClient'
 import logoUrl from '../assets/ElephantLogo.png'
@@ -133,20 +154,21 @@ onBeforeUnmount(() => {
   object-fit: contain;
 }
 
-.en-vault-tabs {
+.en-vault-switcher {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
-.en-vault-tab,
+.en-vault-select,
 .en-add-vault,
 .en-search,
+.en-icon-button,
 .en-ghost-button {
-  height: 44px;
+  height: 34px;
   border: 1px solid var(--en-border);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--en-text);
   background: transparent;
   font: inherit;
@@ -154,27 +176,23 @@ onBeforeUnmount(() => {
 }
 
 .en-topbar-logo,
-.en-vault-tabs,
+.en-vault-switcher,
 .en-search,
+.en-icon-button,
 .en-ghost-button {
   -webkit-app-region: no-drag;
 }
 
-.en-vault-tab {
-  max-width: 180px;
-  padding: 0 16px;
+.en-vault-select {
+  width: 150px;
+  padding: 0 28px 0 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.en-vault-tab.active {
-  border-color: var(--en-border-strong);
-  background: var(--en-soft);
-}
-
 .en-add-vault {
-  width: 44px;
+  width: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -185,26 +203,20 @@ onBeforeUnmount(() => {
 }
 
 .en-search {
-  width: min(420px, 30vw);
-  min-width: 260px;
+  width: 34px;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
+  justify-content: center;
+  padding: 0;
   color: var(--en-muted);
 }
 
-.en-search span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.en-search kbd {
-  margin-left: auto;
+.en-icon-button {
+  width: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--en-muted);
-  font-size: 12px;
 }
 
 .en-ghost-button {
@@ -212,12 +224,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 9px;
-  padding: 0 16px;
+  padding: 0 12px;
   font-weight: 700;
 }
 
 .en-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 </style>

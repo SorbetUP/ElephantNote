@@ -29,6 +29,7 @@
         {{ entry.title }}
       </button>
       <button
+        v-if="detachable"
         class="en-sidebar-tree-remove"
         type="button"
         :aria-label="`Remove ${entry.title} from sidebar`"
@@ -52,6 +53,7 @@
         {{ entry.title }}
       </button>
       <button
+        v-if="detachable"
         class="en-sidebar-tree-remove"
         type="button"
         :aria-label="`Remove ${entry.title} from sidebar`"
@@ -76,6 +78,7 @@
         :open-directory="openDirectory"
         :open-note="openNote"
         :detach-entry="detachEntry"
+        :detachable="detachable"
       />
     </div>
   </div>
@@ -119,6 +122,10 @@ const props = defineProps({
   detachEntry: {
     type: Function,
     required: true
+  },
+  detachable: {
+    type: Boolean,
+    default: false
   }
 })
 

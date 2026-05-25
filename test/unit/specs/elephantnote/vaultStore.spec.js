@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useVaultStore } from '@/elephantnote/stores/vaultStore'
 
@@ -26,6 +26,11 @@ describe('ElephantNote vault store pinned notes', () => {
       workspace: { sidebar: [] },
       entries: []
     })
+    window.electron = {
+      ipcRenderer: {
+        send: vi.fn()
+      }
+    }
   })
 
   it('loads pinned notes for the active vault when payloads are applied', () => {
@@ -137,6 +142,89 @@ describe('ElephantNote vault store pinned notes', () => {
       'notes/a.md',
       'folder-a'
     ])
+  })
+
+  it('keeps folders in the sidebar tree while hiding them from the central note list', () => {
+    const store = useVaultStore()
+    store.applyPayload({
+      vaults: [createVault()],
+      activeVaultId: 'vault-1',
+      activeVault: createVault(),
+      workspace: { sidebar: [] },
+      entries: [
+        { kind: 'note', path: 'notes/a.md', title: 'A', updatedAt: '2026-05-18T10:00:00.000Z' },
+        { kind: 'folder', path: 'folder-a', title: 'Folder A', updatedAt: '2026-05-17T10:00:00.000Z' }
+      ]
+    })
+
+    expect(store.activeNoteEntries.map((entry) => entry.path)).toEqual(['notes/a.md'])
+    expect(store.rootSidebarEntries.map((entry) => entry.path)).toEqual([
+      'folder-a',
+      'notes/a.md'
+    ])
+  })
+
+  it('keeps the root sidebar stable when opening a nested directory', async() => {
+    window.elephantnote.listDirectory = async(relativePath) => {
+      if (relativePath === 'folder-a') {
+        return [
+          { kind: 'note', path: 'folder-a/nested.md', title: 'Nested', updatedAt: '2026-05-19T10:00:00.000Z' }
+        ]
+      }
+      return []
+    }
+
+    const store = useVaultStore()
+    store.applyPayload({
+      vaults: [createVault()],
+      activeVaultId: 'vault-1',
+      activeVault: createVault(),
+      workspace: { sidebar: [] },
+      entries: [
+        { kind: 'folder', path: 'folder-a', title: 'Folder A', updatedAt: '2026-05-17T10:00:00.000Z' },
+        { kind: 'note', path: 'root.md', title: 'Root', updatedAt: '2026-05-18T10:00:00.000Z' }
+      ]
+    })
+
+    await store.openDirectory('folder-a')
+
+    expect(store.activeNoteEntries.map((entry) => entry.path)).toEqual(['folder-a/nested.md'])
+    expect(store.rootSidebarEntries.map((entry) => entry.path)).toEqual([
+      'folder-a',
+      'root.md'
+    ])
+  })
+
+  it('refreshes the root sidebar after creating a root folder', async() => {
+    window.elephantnote.createFolder = async() => ({
+      entries: [
+        { kind: 'folder', path: 'new-folder', title: 'New Folder', updatedAt: '2026-05-20T10:00:00.000Z' }
+      ]
+    })
+
+    const store = useVaultStore()
+    store.applyPayload({
+      vaults: [createVault()],
+      activeVaultId: 'vault-1',
+      activeVault: createVault(),
+      workspace: { sidebar: [] },
+      entries: []
+    })
+
+    await store.createFolder()
+
+    expect(store.rootSidebarEntries.map((entry) => entry.path)).toEqual(['new-folder'])
+  })
+
+  it('notifies when a planned Atomic workspace feature is selected', () => {
+    const store = useVaultStore()
+
+    store.notifyFeatureUnavailable('Graph')
+
+    expect(window.electron.ipcRenderer.send).toHaveBeenCalledWith('mt::show-notification', {
+      title: 'Graph is planned in the Atomic workspace roadmap.',
+      type: 'info'
+    })
   })
 
   it('persists folder sidebar visibility in the workspace', async() => {

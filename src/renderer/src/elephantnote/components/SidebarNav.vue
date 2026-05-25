@@ -7,6 +7,35 @@
     @drop.prevent="attachDroppedEntry"
   >
     <div class="en-sidebar-scroll">
+      <div class="en-sidebar-create">
+        <button
+          class="en-sidebar-create-button"
+          type="button"
+          title="New note"
+          @click="createNote"
+        >
+          <FilePlus2 />
+        </button>
+        <button
+          class="en-sidebar-create-button"
+          type="button"
+          title="New folder"
+          @click="createFolder"
+        >
+          <FolderPlus />
+        </button>
+      </div>
+
+      <button
+        class="en-all-notes"
+        :class="{ active: store.currentPath === '' && !store.openedNotePath }"
+        type="button"
+        @click="store.openDirectory('')"
+      >
+        <Files />
+        <span>All notes</span>
+      </button>
+
       <div class="en-sidebar-main">
         <SidebarTreeEntry
           v-for="item in sidebarEntries"
@@ -76,7 +105,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { CalendarClock, ChevronDown } from '@lucide/vue'
+import { CalendarClock, ChevronDown, FilePlus2, Files, FolderPlus } from '@lucide/vue'
 import { useVaultStore } from '../stores/vaultStore'
 import { useEditorStore } from '@/store/editor'
 import SidebarTreeEntry from './SidebarTreeEntry.vue'
@@ -90,7 +119,7 @@ const isRecentCollapsed = ref(false)
 const showAllRecent = ref(false)
 const recentLimit = 5
 
-const sidebarEntries = computed(() => store.sidebarAttachedItems)
+const sidebarEntries = computed(() => store.rootSidebarEntries)
 const recentNotes = computed(() => {
   const notes = [...store.recentNoteEntries]
   const file = currentFile.value
@@ -127,6 +156,14 @@ const attachDroppedEntry = async (event) => {
     console.warn('Unable to attach dropped entry:', err)
   }
 }
+
+const createNote = async () => {
+  await store.createNote()
+}
+
+const createFolder = async () => {
+  await store.createFolder()
+}
 </script>
 
 <style scoped>
@@ -141,9 +178,58 @@ const attachDroppedEntry = async (event) => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 24px 8px 8px;
+  gap: 10px;
+  padding: 12px 8px 8px;
   overflow-y: auto;
+}
+
+.en-sidebar-create {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0 6px;
+}
+
+.en-sidebar-create-button,
+.en-all-notes {
+  border: 0;
+  border-radius: 8px;
+  color: var(--en-muted);
+  background: transparent;
+}
+
+.en-sidebar-create-button {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.en-sidebar-create-button:hover,
+.en-all-notes:hover,
+.en-all-notes.active {
+  color: var(--en-text);
+  background: var(--en-soft);
+}
+
+.en-sidebar-create-button svg,
+.en-all-notes svg {
+  width: 17px;
+  height: 17px;
+}
+
+.en-all-notes {
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 2px 6px 10px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
 }
 
 .en-sidebar-main,
@@ -155,7 +241,8 @@ const attachDroppedEntry = async (event) => {
 
 .en-sidebar-main {
   min-height: 0;
-  padding: 0 6px;
+  padding: 10px 6px 0;
+  border-top: 1px solid color-mix(in srgb, var(--en-border) 78%, transparent);
 }
 
 .en-recent-notes {

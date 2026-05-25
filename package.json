@@ -51,6 +51,7 @@
     "test": "vitest run",
     "test:unit": "vitest run test/unit",
     "test:e2e": "playwright test test/e2e",
+    "prod:check": "pnpm lint && pnpm test:unit && pnpm test:e2e && pnpm validate-licenses && pnpm run build:unpack",
     "gen-third-party": "node scripts/generateThirdPartyLicense.js",
     "validate-licenses": "node scripts/validateLicenses.js"
   },

@@ -15,6 +15,8 @@ export default [
       '**/node_modules/**',
       '**/dist/**',
       '**/build/**',
+      '**/test-results/**',
+      '**/playwright-report/**',
       '**/*.min.json',
       'out/**',
       'blinko-offline/**',

@@ -51,8 +51,13 @@ import {
 import { updateMarkdownTitle } from './markdown'
 import { migrateWorkspace } from './workspaceMigrations'
 import { GitSyncEngine } from './sync/GitSyncEngine'
+import { ModelRuntime } from './modelRuntime'
 import { normalizeFeatureFlags, setFeatureFlag } from 'common/elephantnote/featureFlags'
-import { normalizeAiConfig } from 'common/elephantnote/aiProviders'
+import {
+  createAiRequestBody,
+  extractAiResponseText,
+  normalizeAiConfig
+} from 'common/elephantnote/aiProviders'
 import {
   ATOMIC_MODEL_CATALOG,
   ATOMIC_PLUGIN_MANIFESTS,
@@ -81,6 +86,7 @@ const store = new Store({
 })
 
 const syncEngine = new GitSyncEngine()
+const modelRuntime = new ModelRuntime()
 
 const getConfig = () => ({
   vaults: store.get('vaults') || [],
@@ -880,6 +886,165 @@ const acceptWikiRecord = async({ id } = {}) => {
 
 const dismissWikiRecord = async({ id } = {}) => updateWikiRecordStatus(id, 'dismissed')
 
+const callConfiguredAi = async(messages = []) => {
+  const config = normalizeAiConfig(getConfig().aiConfig)
+  if (!config.enabled || !config.endpoint || !config.model) {
+    return ''
+  }
+  const response = await fetch(config.endpoint, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {})
+    },
+    body: JSON.stringify(createAiRequestBody({
+      transport: config.transport,
+      model: config.model,
+      messages
+    }))
+  })
+  const text = await response.text()
+  const data = text ? JSON.parse(text) : {}
+  if (!response.ok) {
+    throw new Error(data?.error?.message || data?.message || `AI endpoint returned HTTP ${response.status}.`)
+  }
+  return extractAiResponseText(data)
+}
+
+const readCitedSearchResults = async({ query, limit, context }) => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  const results = await getSearchService().search({
+    query,
+    mode: 'smart',
+    limit
+  }, getApiWindowId(context))
+  const citations = []
+  for (const result of results) {
+    const relativePath = normalizeRelativePath(result.relativePath)
+    if (!relativePath) continue
+    const fullPath = resolveInsideVault(vault.path, relativePath)
+    const markdown = await fs.readFile(fullPath, 'utf8').catch(() => '')
+    citations.push({
+      title: result.title || path.basename(relativePath, path.extname(relativePath)),
+      path: relativePath,
+      score: result.score || 0,
+      snippet: result.snippets?.[0]?.text || markdown.slice(0, 280).replace(/\s+/g, ' ').trim()
+    })
+  }
+  return citations
+}
+
+const chatWithRag = async({ message, limit = 6 } = {}, context = {}) => {
+  const citations = await readCitedSearchResults({ query: message, limit, context })
+  const contextBlock = citations
+    .map((citation, index) => `[${index + 1}] ${citation.title} (${citation.path})\n${citation.snippet}`)
+    .join('\n\n')
+  const prompt = `Answer using only the cited local notes. Include citation markers like [1] when relevant.\n\nQuestion: ${message}\n\nLocal context:\n${contextBlock || 'No local notes matched.'}`
+  let answer = ''
+  try {
+    answer = await callConfiguredAi([
+      {
+        role: 'system',
+        content: 'You are a private local notes assistant. Ground every factual claim in the provided citations.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ])
+  } catch (error) {
+    answer = ''
+  }
+  if (!answer) {
+    answer = citations.length
+      ? `I found ${citations.length} relevant local note${citations.length === 1 ? '' : 's'}: ${citations.map((citation, index) => `[${index + 1}] ${citation.title}`).join(', ')}.`
+      : 'I did not find matching local notes for this question.'
+  }
+  return {
+    answer,
+    citations
+  }
+}
+
+const extractTagsFromText = (text = '') => {
+  const stop = new Set(['the', 'and', 'avec', 'pour', 'dans', 'note', 'notes', 'this', 'that', 'from', 'local'])
+  return [...new Set(String(text || '')
+    .toLowerCase()
+    .replace(/[`*_>#()[\]{}.,;:!?/\\-]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length > 3 && !stop.has(word))
+    .slice(0, 8))]
+}
+
+const replaceMarkdownTags = (markdown, tags) => {
+  const serialized = `tags: [${tags.map((tag) => `"${tag.replace(/"/g, '\\"')}"`).join(', ')}]`
+  if (/^---\r?\n[\s\S]*?\r?\n---/.test(markdown)) {
+    if (/^---\r?\n[\s\S]*?^\s*tags:\s*(?:\[.*?\]|$)/m.test(markdown)) {
+      return markdown.replace(/^\s*tags:\s*(?:\[.*?\]|$)/m, serialized)
+    }
+    return markdown.replace(/^---\r?\n/, `---\n${serialized}\n`)
+  }
+  return `---\n${serialized}\n---\n\n${markdown}`
+}
+
+const autotagNote = async({ relativePath } = {}) => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  const normalizedPath = normalizeRelativePath(relativePath)
+  const fullPath = resolveInsideVault(vault.path, normalizedPath)
+  const markdown = await fs.readFile(fullPath, 'utf8')
+  let tags = []
+  try {
+    const response = await callConfiguredAi([
+      {
+        role: 'system',
+        content: 'Return only a JSON array of 3 to 8 lowercase tags for this markdown note.'
+      },
+      {
+        role: 'user',
+        content: markdown.slice(0, 12000)
+      }
+    ])
+    tags = JSON.parse(response).map((tag) => String(tag).trim().replace(/^#/, '')).filter(Boolean)
+  } catch {
+    tags = extractTagsFromText(markdown)
+  }
+  tags = [...new Set(tags)].slice(0, 8)
+  const nextMarkdown = replaceMarkdownTags(markdown, tags)
+  await fs.writeFile(fullPath, nextMarkdown, 'utf8')
+  getSearchService().indexFile(fullPath).catch(() => {})
+  return {
+    relativePath: normalizedPath,
+    tags
+  }
+}
+
+const listMcpTools = () => [
+  { name: 'search.query', description: 'Search local vault notes by keyword or meaning.' },
+  { name: 'notes.create', description: 'Create a note in the active vault.' },
+  { name: 'notes.autotag', description: 'Generate tags for a markdown note.' },
+  { name: 'sources.ingestUrl', description: 'Import a URL as a local source note.' },
+  { name: 'wiki.propose', description: 'Generate cited wiki proposals.' },
+  { name: 'rag.chat', description: 'Ask a cited RAG question over local notes.' }
+]
+
+const callMcpTool = async({ name, arguments: args = {} } = {}, context = {}) => {
+  if (name === 'search.query') {
+    return getSearchService().search({
+      query: args.query,
+      mode: args.mode || 'smart',
+      limit: args.limit || 10
+    }, getApiWindowId(context))
+  }
+  if (name === 'notes.create') return createNote(args)
+  if (name === 'notes.autotag') return autotagNote(args)
+  if (name === 'sources.ingestUrl') return ingestSourceUrl(args)
+  if (name === 'wiki.propose') return proposeWikiRecords()
+  if (name === 'rag.chat') return chatWithRag(args, context)
+  throw new Error(`Unknown MCP tool: ${name}.`)
+}
+
 const runProgrammaticTask = async({ id } = {}) => {
   const vault = getActiveVault()
   if (!vault) throw new Error('No active ElephantNote vault.')
@@ -1002,6 +1167,10 @@ const createElephantNoteMainApi = () => {
       [ELEPHANTNOTE_API_ACTIONS.AGENTS_REGISTER]: async(payload) => registerAgent(payload),
       [ELEPHANTNOTE_API_ACTIONS.AGENTS_UNREGISTER]: async({ id }) => unregisterAgent(id),
       [ELEPHANTNOTE_API_ACTIONS.AGENTS_SEND]: async(payload) => sendAgentMessage(payload),
+      [ELEPHANTNOTE_API_ACTIONS.RAG_CHAT]: async(payload, context) => chatWithRag(payload, context),
+      [ELEPHANTNOTE_API_ACTIONS.NOTES_AUTOTAG]: async(payload) => autotagNote(payload),
+      [ELEPHANTNOTE_API_ACTIONS.MCP_TOOLS_LIST]: async() => listMcpTools(),
+      [ELEPHANTNOTE_API_ACTIONS.MCP_TOOLS_CALL]: async(payload, context) => callMcpTool(payload, context),
       [ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_GET]: async() => getConfig().aiConfig,
       [ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_SET]: async(payload) => {
         const config = getConfig()
@@ -1041,6 +1210,12 @@ const createElephantNoteMainApi = () => {
         }
         setConfig(config)
         return getConfig().atomicModelSelection
+      },
+      [ELEPHANTNOTE_API_ACTIONS.MODELS_LOCAL_LIST]: async() => modelRuntime.listLocalModels(),
+      [ELEPHANTNOTE_API_ACTIONS.MODELS_DOWNLOAD]: async({ id }) => {
+        const model = ATOMIC_MODEL_CATALOG.find((item) => item.id === id)
+        if (!model) throw new Error('Unknown model.')
+        return modelRuntime.downloadModel(model)
       },
       [ELEPHANTNOTE_API_ACTIONS.PLUGINS_LIST]: async() =>
         mergePluginState(ATOMIC_PLUGIN_MANIFESTS, getConfig().atomicPluginState),

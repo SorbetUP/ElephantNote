@@ -463,7 +463,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     },
 
     setWorkspaceView(view) {
-      this.activeWorkspaceView = ['notes', 'dashboard', 'wiki', 'graph', 'calendar'].includes(view)
+      this.activeWorkspaceView = ['notes', 'dashboard', 'wiki', 'chat', 'graph', 'calendar'].includes(view)
         ? view
         : 'notes'
       this.openedNotePath = ''

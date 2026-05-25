@@ -122,6 +122,18 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze({
     id: requiredString,
     message: requiredString
   }),
+  'rag.chat': objectSchema({
+    message: requiredString,
+    limit: optionalNumber
+  }),
+  'notes.autotag': objectSchema({
+    relativePath: requiredString
+  }),
+  'mcp.tools.list': emptySchema,
+  'mcp.tools.call': objectSchema({
+    name: requiredString,
+    arguments: optionalObject
+  }),
   'ai.config.get': emptySchema,
   'ai.config.set': objectSchema({
     enabled: optionalBoolean,
@@ -147,6 +159,10 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze({
     wiki: optionalString,
     'speech-to-text': optionalString,
     'text-to-speech': optionalString
+  }),
+  'models.local.list': emptySchema,
+  'models.download': objectSchema({
+    id: requiredString
   }),
   'plugins.list': emptySchema,
   'plugins.set': objectSchema({

@@ -209,4 +209,30 @@ describe('ElephantNote API contract', () => {
     expect(response.ok).to.equal(false)
     expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
   })
+
+  it('validates RAG, MCP and model runtime payloads', async() => {
+    const api = createElephantNoteApi({
+      handlers: {
+        [ELEPHANTNOTE_API_ACTIONS.RAG_CHAT]: async(payload) => payload,
+        [ELEPHANTNOTE_API_ACTIONS.MCP_TOOLS_CALL]: async(payload) => payload,
+        [ELEPHANTNOTE_API_ACTIONS.MODELS_DOWNLOAD]: async(payload) => payload
+      }
+    })
+
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.RAG_CHAT, {
+      message: 'What changed?',
+      limit: 4
+    })).resolves.toMatchObject({ message: 'What changed?', limit: 4 })
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.MCP_TOOLS_CALL, {
+      name: 'rag.chat',
+      arguments: { message: 'Hello' }
+    })).resolves.toMatchObject({ name: 'rag.chat' })
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.MODELS_DOWNLOAD, {
+      id: 'llama-3.2'
+    })).resolves.toEqual({ id: 'llama-3.2' })
+
+    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.RAG_CHAT, {})
+    expect(response.ok).to.equal(false)
+    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
+  })
 })

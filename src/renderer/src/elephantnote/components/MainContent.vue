@@ -12,6 +12,7 @@
     </section>
     <dashboard-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'dashboard'" />
     <wiki-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'wiki'" />
+    <chat-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'chat'" />
     <graph-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'graph'" />
     <calendar-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'calendar'" />
     <site-preview-panel v-if="!hasOpenNote && store.activeWorkspaceView === 'notes'" />
@@ -31,6 +32,7 @@ import NoteEditorHost from './NoteEditorHost.vue'
 import SitePreviewPanel from '../sitePreview/SitePreviewPanel.vue'
 import DashboardView from './DashboardView.vue'
 import WikiView from './WikiView.vue'
+import ChatView from './ChatView.vue'
 import GraphView from './GraphView.vue'
 import CalendarView from './CalendarView.vue'
 

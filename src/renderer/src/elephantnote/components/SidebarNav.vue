@@ -53,6 +53,14 @@
           <BookOpenText />
           <span>Wiki</span>
         </button>
+        <button
+          type="button"
+          :class="{ active: store.activeWorkspaceView === 'chat' }"
+          @click="store.setWorkspaceView('chat')"
+        >
+          <MessageSquareText />
+          <span>Chat</span>
+        </button>
       </div>
 
       <div class="en-sidebar-main">
@@ -131,7 +139,8 @@ import {
   FilePlus2,
   Files,
   FolderPlus,
-  LayoutDashboard
+  LayoutDashboard,
+  MessageSquareText
 } from '@lucide/vue'
 import { useVaultStore } from '../stores/vaultStore'
 import { useEditorStore } from '@/store/editor'

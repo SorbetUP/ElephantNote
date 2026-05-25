@@ -551,13 +551,31 @@
               >
                 Save model choices
               </button>
+              <button
+                type="button"
+                @click="downloadSelectedChatModel"
+              >
+                Download chat model
+              </button>
+              <button
+                type="button"
+                @click="loadLocalModels"
+              >
+                Scan local models
+              </button>
               <span
-                v-if="modelSelectionMessage"
+                v-if="modelSelectionMessage || modelRuntimeMessage"
                 class="en-settings-message"
               >
-                {{ modelSelectionMessage }}
+                {{ modelRuntimeMessage || modelSelectionMessage }}
               </span>
             </div>
+            <p
+              v-if="localModels.length"
+              class="en-settings-path"
+            >
+              Local: {{ localModels.map((model) => model.name).join(', ') }}
+            </p>
           </section>
 
           <section
@@ -729,6 +747,8 @@ const pluginManifests = ref(ATOMIC_PLUGIN_MANIFESTS)
 const taskTemplates = ref(PROGRAMMATIC_TASK_TEMPLATES)
 const modelSelection = ref(createDefaultModelSelection())
 const modelSelectionMessage = ref('')
+const modelRuntimeMessage = ref('')
+const localModels = ref([])
 const pluginMessage = ref('')
 const taskMessage = ref('')
 const featureFlags = ref({
@@ -1004,6 +1024,29 @@ const loadModelSelection = async () => {
     }
   } catch {
     modelSelection.value = createDefaultModelSelection()
+  }
+}
+
+const loadLocalModels = async () => {
+  try {
+    const result = await elephantnoteClient.models.listLocal()
+    localModels.value = result.models || []
+    modelRuntimeMessage.value = result.available
+      ? `${localModels.value.length} local model${localModels.value.length === 1 ? '' : 's'} found.`
+      : result.error || 'Local model runtime not available.'
+  } catch (error) {
+    modelRuntimeMessage.value = error instanceof Error ? error.message : 'Unable to scan local models.'
+  }
+}
+
+const downloadSelectedChatModel = async () => {
+  modelRuntimeMessage.value = 'Downloading model...'
+  try {
+    const result = await elephantnoteClient.models.download(modelSelection.value.chat)
+    modelRuntimeMessage.value = result.message || 'Model download finished.'
+    await loadLocalModels()
+  } catch (error) {
+    modelRuntimeMessage.value = error instanceof Error ? error.message : 'Model download failed.'
   }
 }
 

@@ -53,7 +53,13 @@ const LEGACY_CALLS = {
   'agents.list': () => window.elephantnote?.agents?.list?.(),
   'agents.register': (payload) => window.elephantnote?.agents?.register?.(payload),
   'agents.unregister': ({ id }) => window.elephantnote?.agents?.unregister?.(id),
-  'agents.send': (payload) => window.elephantnote?.agents?.send?.(payload)
+  'agents.send': (payload) => window.elephantnote?.agents?.send?.(payload),
+  'rag.chat': (payload) => window.elephantnote?.rag?.chat?.(payload),
+  'notes.autotag': (payload) => window.elephantnote?.notes?.autotag?.(payload),
+  'mcp.tools.list': () => window.elephantnote?.mcp?.listTools?.(),
+  'mcp.tools.call': (payload) => window.elephantnote?.mcp?.callTool?.(payload),
+  'models.local.list': () => window.elephantnote?.models?.listLocal?.(),
+  'models.download': (payload) => window.elephantnote?.models?.download?.(payload)
 }
 
 const unwrap = async(promise) => {
@@ -87,7 +93,8 @@ export const elephantnoteClient = {
     list: (relativePath = '') => elephantnoteClient.call('directory.list', { relativePath })
   },
   notes: {
-    create: (relativePath = '') => elephantnoteClient.call('notes.create', { relativePath })
+    create: (relativePath = '') => elephantnoteClient.call('notes.create', { relativePath }),
+    autotag: (relativePath) => elephantnoteClient.call('notes.autotag', { relativePath })
   },
   folders: {
     create: (relativePath = '') => elephantnoteClient.call('folders.create', { relativePath })
@@ -151,7 +158,9 @@ export const elephantnoteClient = {
   },
   models: {
     getSelection: () => elephantnoteClient.call('models.selection.get'),
-    setSelection: (selection) => elephantnoteClient.call('models.selection.set', selection)
+    setSelection: (selection) => elephantnoteClient.call('models.selection.set', selection),
+    listLocal: () => elephantnoteClient.call('models.local.list'),
+    download: (id) => elephantnoteClient.call('models.download', { id })
   },
   plugins: {
     list: () => elephantnoteClient.call('plugins.list'),
@@ -167,6 +176,13 @@ export const elephantnoteClient = {
     register: (payload) => elephantnoteClient.call('agents.register', payload),
     unregister: (id) => elephantnoteClient.call('agents.unregister', { id }),
     send: (id, message) => elephantnoteClient.call('agents.send', { id, message })
+  },
+  rag: {
+    chat: (message, limit = 6) => elephantnoteClient.call('rag.chat', { message, limit })
+  },
+  mcp: {
+    listTools: () => elephantnoteClient.call('mcp.tools.list'),
+    callTool: (name, args = {}) => elephantnoteClient.call('mcp.tools.call', { name, arguments: args })
   },
   sync: {
     status: () => elephantnoteClient.call('sync.status'),

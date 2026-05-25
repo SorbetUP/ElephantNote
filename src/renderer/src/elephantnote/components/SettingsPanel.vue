@@ -82,6 +82,34 @@
           >
             AI
           </button>
+          <button
+            type="button"
+            :class="{ active: activeSection === 'models' }"
+            @click="activeSection = 'models'"
+          >
+            Models
+          </button>
+          <button
+            type="button"
+            :class="{ active: activeSection === 'audio' }"
+            @click="activeSection = 'audio'"
+          >
+            Audio
+          </button>
+          <button
+            type="button"
+            :class="{ active: activeSection === 'plugins' }"
+            @click="activeSection = 'plugins'"
+          >
+            Plugins
+          </button>
+          <button
+            type="button"
+            :class="{ active: activeSection === 'tasks' }"
+            @click="activeSection = 'tasks'"
+          >
+            Tasks
+          </button>
         </aside>
 
         <div class="en-settings-content">
@@ -440,6 +468,114 @@
               </span>
             </div>
           </section>
+
+          <section
+            v-if="activeSection === 'models'"
+            class="en-settings-section stacked"
+          >
+            <div>
+              <h3>Model slots</h3>
+              <p>Choose separate models for embeddings, chat, tagging, wiki generation, speech-to-text, and text-to-speech.</p>
+            </div>
+            <div class="en-model-grid">
+              <label
+                v-for="purpose in modelPurposes"
+                :key="purpose"
+              >
+                <span>{{ formatPurpose(purpose) }}</span>
+                <select v-model="modelSelection[purpose]">
+                  <option
+                    v-for="model in getModelsForPurpose(purpose)"
+                    :key="model.id"
+                    :value="model.id"
+                  >
+                    {{ model.name }} · {{ model.provider }} · {{ model.size }}
+                  </option>
+                </select>
+              </label>
+            </div>
+            <div class="en-settings-actions-row">
+              <button
+                type="button"
+                @click="saveModelSelection"
+              >
+                Save model choices
+              </button>
+              <span
+                v-if="modelSelectionMessage"
+                class="en-settings-message"
+              >
+                {{ modelSelectionMessage }}
+              </span>
+            </div>
+          </section>
+
+          <section
+            v-if="activeSection === 'audio'"
+            class="en-settings-section stacked"
+          >
+            <div>
+              <h3>Voice workflow</h3>
+              <p>Audio controls use the same model slots as the future editor microphone and read-aloud toolbar.</p>
+            </div>
+            <div class="en-audio-grid">
+              <article>
+                <Mic class="en-icon" />
+                <strong>Speech to text</strong>
+                <span>{{ selectedModelName('speech-to-text') }}</span>
+              </article>
+              <article>
+                <Volume2 class="en-icon" />
+                <strong>Text to speech</strong>
+                <span>{{ selectedModelName('text-to-speech') }}</span>
+              </article>
+            </div>
+          </section>
+
+          <section
+            v-if="activeSection === 'plugins'"
+            class="en-settings-section stacked"
+          >
+            <div>
+              <h3>Plugin registry</h3>
+              <p>Plugins declare permissions and UI surfaces before they can run inside the vault.</p>
+            </div>
+            <div class="en-plugin-list">
+              <article
+                v-for="plugin in pluginManifests"
+                :key="plugin.id"
+              >
+                <header>
+                  <strong>{{ plugin.name }}</strong>
+                  <span>{{ plugin.status }}</span>
+                </header>
+                <p>{{ plugin.permissions.join(', ') }}</p>
+                <small>{{ plugin.surfaces.join(' · ') }}</small>
+              </article>
+            </div>
+          </section>
+
+          <section
+            v-if="activeSection === 'tasks'"
+            class="en-settings-section stacked"
+          >
+            <div>
+              <h3>Programmatic tasks</h3>
+              <p>Task manifests define repeatable automations for imports, wiki proposals, scans, and tagging.</p>
+            </div>
+            <div class="en-task-list">
+              <article
+                v-for="task in taskTemplates"
+                :key="task.id"
+              >
+                <header>
+                  <strong>{{ task.name }}</strong>
+                  <span>{{ task.cadence }}</span>
+                </header>
+                <p>{{ task.actions.join(' -> ') }}</p>
+              </article>
+            </div>
+          </section>
         </div>
       </div>
     </section>
@@ -448,9 +584,17 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Download, Moon, SunMedium, X } from '@lucide/vue'
+import { Download, Mic, Moon, SunMedium, Volume2, X } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import { ELEPHANTNOTE_AI_PRESETS, normalizeAiConfig } from 'common/elephantnote/aiProviders'
+import {
+  ATOMIC_MODEL_CATALOG,
+  ATOMIC_PLUGIN_MANIFESTS,
+  MODEL_PURPOSES,
+  PROGRAMMATIC_TASK_TEMPLATES,
+  createDefaultModelSelection,
+  getModelsByPurpose
+} from 'common/elephantnote/atomicWorkspace'
 import SearchSettingsPanel from '../search/SearchSettingsPanel.vue'
 import { useSitePreviewStore } from '../sitePreview/sitePreviewStore'
 import { elephantnoteClient } from '../services/elephantnoteClient'
@@ -489,6 +633,12 @@ const preferences = usePreferencesStore()
 const sitePreviewStore = useSitePreviewStore()
 const aiPresets = Object.values(ELEPHANTNOTE_AI_PRESETS)
 const aiConfig = ref(normalizeAiConfig())
+const modelPurposes = MODEL_PURPOSES
+const modelCatalog = ATOMIC_MODEL_CATALOG
+const pluginManifests = ATOMIC_PLUGIN_MANIFESTS
+const taskTemplates = PROGRAMMATIC_TASK_TEMPLATES
+const modelSelection = ref(createDefaultModelSelection())
+const modelSelectionMessage = ref('')
 const featureFlags = ref({
   ai: true,
   askAi: true,
@@ -636,6 +786,23 @@ const applyAiPreset = (preset) => {
   aiConfigMessage.value = ''
 }
 
+const formatPurpose = (purpose) => purpose
+  .split('-')
+  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+  .join(' ')
+
+const getModelsForPurpose = (purpose) => getModelsByPurpose(purpose, modelCatalog)
+
+const selectedModelName = (purpose) => {
+  const model = modelCatalog.find((item) => item.id === modelSelection.value[purpose])
+  return model?.name || 'Not selected'
+}
+
+const saveModelSelection = () => {
+  window.localStorage.setItem('elephantnote:atomicModelSelection', JSON.stringify(modelSelection.value))
+  modelSelectionMessage.value = 'Model choices saved locally.'
+}
+
 const saveAiConfig = async () => {
   isSavingAiConfig.value = true
   aiConfigMessage.value = ''
@@ -665,6 +832,15 @@ const toggleFeature = async (key) => {
 onMounted(() => {
   loadFeatureFlags()
   loadAiConfig()
+  try {
+    const stored = JSON.parse(window.localStorage.getItem('elephantnote:atomicModelSelection') || '{}')
+    modelSelection.value = {
+      ...createDefaultModelSelection(),
+      ...stored
+    }
+  } catch {
+    modelSelection.value = createDefaultModelSelection()
+  }
 })
 
 onBeforeUnmount(stopQuickTriggerCapture)
@@ -978,6 +1154,88 @@ onBeforeUnmount(stopQuickTriggerCapture)
   gap: 12px;
 }
 
+.en-model-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.en-model-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.en-model-grid span {
+  color: var(--en-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.en-model-grid select {
+  min-width: 0;
+  height: 36px;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--en-text);
+  background: var(--en-surface);
+  font: inherit;
+}
+
+.en-audio-grid,
+.en-plugin-list,
+.en-task-list {
+  display: grid;
+  gap: 10px;
+}
+
+.en-audio-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.en-audio-grid article,
+.en-plugin-list article,
+.en-task-list article {
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--en-surface);
+}
+
+.en-audio-grid article {
+  display: grid;
+  gap: 8px;
+}
+
+.en-audio-grid strong,
+.en-plugin-list strong,
+.en-task-list strong {
+  color: var(--en-text);
+}
+
+.en-audio-grid span,
+.en-plugin-list p,
+.en-plugin-list small,
+.en-task-list p,
+.en-plugin-list span,
+.en-task-list span {
+  color: var(--en-muted);
+}
+
+.en-plugin-list header,
+.en-task-list header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.en-plugin-list p,
+.en-task-list p {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+
 .en-ai-form label {
   display: grid;
   gap: 6px;
@@ -1101,6 +1359,11 @@ onBeforeUnmount(stopQuickTriggerCapture)
   }
 
   .en-ai-form {
+    grid-template-columns: 1fr;
+  }
+
+  .en-model-grid,
+  .en-audio-grid {
     grid-template-columns: 1fr;
   }
 }

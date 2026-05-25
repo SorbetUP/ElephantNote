@@ -25,6 +25,10 @@ const LEGACY_CALLS = {
   'sources.list': () => window.elephantnote?.sources?.list?.(),
   'sources.ingestUrl': (payload) => window.elephantnote?.sources?.ingestUrl?.(payload),
   'sources.importRss': (payload) => window.elephantnote?.sources?.importRss?.(payload),
+  'wiki.list': () => window.elephantnote?.wiki?.list?.(),
+  'wiki.propose': () => window.elephantnote?.wiki?.propose?.(),
+  'wiki.accept': (payload) => window.elephantnote?.wiki?.accept?.(payload),
+  'wiki.dismiss': (payload) => window.elephantnote?.wiki?.dismiss?.(payload),
   'search.initVault': ({ vaultPath }) => window.elephantnote?.search?.initVault?.(vaultPath),
   'search.query': (payload) => window.elephantnote?.search?.query?.(payload),
   'search.status': () => window.elephantnote?.search?.status?.(),
@@ -107,6 +111,12 @@ export const elephantnoteClient = {
       elephantnoteClient.call('sources.ingestUrl', { url, destinationRelativePath }),
     importRss: (url, destinationRelativePath = 'Sources', limit = 20) =>
       elephantnoteClient.call('sources.importRss', { url, destinationRelativePath, limit })
+  },
+  wiki: {
+    list: () => elephantnoteClient.call('wiki.list'),
+    propose: () => elephantnoteClient.call('wiki.propose'),
+    accept: (id) => elephantnoteClient.call('wiki.accept', { id }),
+    dismiss: (id) => elephantnoteClient.call('wiki.dismiss', { id })
   },
   search: {
     initVault: (vaultPath) => elephantnoteClient.call('search.initVault', { vaultPath }),

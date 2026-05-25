@@ -81,6 +81,10 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze({
     destinationRelativePath: optionalString,
     limit: optionalNumber
   }),
+  'wiki.list': emptySchema,
+  'wiki.propose': emptySchema,
+  'wiki.accept': objectSchema({ id: requiredString }),
+  'wiki.dismiss': objectSchema({ id: requiredString }),
   'search.initVault': objectSchema({ vaultPath: requiredString }),
   'search.query': objectSchema({
     query: requiredString,

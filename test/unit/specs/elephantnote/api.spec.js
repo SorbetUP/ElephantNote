@@ -143,4 +143,24 @@ describe('ElephantNote API contract', () => {
     expect(response.ok).to.equal(false)
     expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
   })
+
+  it('validates wiki proposal workflow payloads', async() => {
+    const handler = vi.fn(async(payload) => payload)
+    const api = createElephantNoteApi({
+      handlers: {
+        [ELEPHANTNOTE_API_ACTIONS.WIKI_ACCEPT]: handler
+      }
+    })
+
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.WIKI_ACCEPT, {
+      id: 'wiki-work'
+    })).resolves.to.deep.equal({
+      id: 'wiki-work'
+    })
+
+    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.WIKI_ACCEPT, {})
+
+    expect(response.ok).to.equal(false)
+    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
+  })
 })

@@ -8,6 +8,7 @@ import {
   INDEX_FILE,
   CALENDAR_FILE,
   SOURCES_FILE,
+  WIKI_FILE,
   createId,
   createWorkspace,
   createWelcomeMarkdown,
@@ -27,6 +28,12 @@ import {
   normalizeSourceUrl,
   parseRssFeed
 } from 'common/elephantnote/sources'
+import {
+  createWikiMarkdown,
+  generateWikiProposals,
+  mergeWikiProposals,
+  normalizeWikiRecord
+} from 'common/elephantnote/wiki'
 import { getSearchService, registerSearchIpc } from './search/searchIpc'
 import { getSitePreviewService, registerSitePreviewIpc } from './sitePreview/sitePreviewIpc'
 import {
@@ -115,6 +122,10 @@ export const initializeVault = async(vaultRoot, now = new Date()) => {
   if (!(await fs.pathExists(sourcesPath))) {
     await fs.writeJson(sourcesPath, { version: 1, updatedAt: now.toISOString(), sources: [] }, { spaces: 2 })
   }
+  const wikiPath = path.join(metaDir, WIKI_FILE)
+  if (!(await fs.pathExists(wikiPath))) {
+    await fs.writeJson(wikiPath, { version: 1, updatedAt: now.toISOString(), records: [] }, { spaces: 2 })
+  }
   if (!(await fs.pathExists(welcomePath))) {
     if (await fs.pathExists(legacyWelcomePath)) {
       await fs.move(legacyWelcomePath, welcomePath)
@@ -202,6 +213,29 @@ const writeSources = async(vaultRoot, sources) => {
     version: 1,
     updatedAt: new Date().toISOString(),
     sources: sources.map(normalizeSourceRecord)
+  }, { spaces: 2 })
+}
+
+const readWiki = async(vaultRoot) => {
+  const wikiPath = path.join(vaultRoot, WORKSPACE_DIR, WIKI_FILE)
+  if (!(await fs.pathExists(wikiPath))) {
+    return { version: 1, updatedAt: new Date().toISOString(), records: [] }
+  }
+  const data = await fs.readJson(wikiPath)
+  return {
+    version: 1,
+    updatedAt: data.updatedAt || '',
+    records: Array.isArray(data.records) ? data.records.map(normalizeWikiRecord) : []
+  }
+}
+
+const writeWiki = async(vaultRoot, records) => {
+  const wikiPath = path.join(vaultRoot, WORKSPACE_DIR, WIKI_FILE)
+  await fs.ensureDir(path.dirname(wikiPath))
+  await fs.writeJson(wikiPath, {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    records: records.map(normalizeWikiRecord)
   }, { spaces: 2 })
 }
 
@@ -314,6 +348,33 @@ const listDirectoryForVault = async(vault, relativePath = '') => {
   }
 
   return entries.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+}
+
+const listMarkdownNotesRecursive = async(vault, relativePath = '') => {
+  const directory = resolveInsideVault(vault.path, relativePath)
+  const dirents = await fs.readdir(directory, { withFileTypes: true })
+  const notes = []
+
+  for (const dirent of dirents) {
+    if (isIgnoredVaultEntry(dirent.name)) continue
+    const fullPath = path.join(directory, dirent.name)
+    const relative = path.relative(vault.path, fullPath)
+    if (dirent.isDirectory()) {
+      notes.push(...await listMarkdownNotesRecursive(vault, relative))
+    } else if (dirent.isFile() && dirent.name.toLowerCase().endsWith('.md')) {
+      const stats = await fs.stat(fullPath)
+      const markdown = await fs.readFile(fullPath, 'utf8')
+      notes.push({
+        kind: 'note',
+        path: relative,
+        filename: dirent.name,
+        updatedAt: stats.mtime.toISOString(),
+        ...parseMarkdownMeta(markdown, dirent.name)
+      })
+    }
+  }
+
+  return notes.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
 }
 
 const createNote = async({ relativePath = '' } = {}) => {
@@ -718,6 +779,83 @@ const importRssSource = async({ url, destinationRelativePath = 'Sources', limit 
   }
 }
 
+const proposeWikiRecords = async() => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  await initializeVault(vault.path)
+  const wiki = await readWiki(vault.path)
+  const notes = await listMarkdownNotesRecursive(vault)
+  const records = mergeWikiProposals(wiki.records, generateWikiProposals(notes))
+  await writeWiki(vault.path, records)
+  return readWiki(vault.path)
+}
+
+const listWikiRecords = async() => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  await initializeVault(vault.path)
+  const wiki = await readWiki(vault.path)
+  if (wiki.records.some((record) => record.status === 'proposed' || record.status === 'accepted')) {
+    return wiki
+  }
+  return proposeWikiRecords()
+}
+
+const updateWikiRecordStatus = async(id, status) => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  await initializeVault(vault.path)
+  const wiki = await readWiki(vault.path)
+  const target = wiki.records.find((record) => record.id === id)
+  if (!target) throw new Error('Wiki proposal not found.')
+  const now = new Date()
+  const records = wiki.records.map((record) =>
+    record.id === id
+      ? normalizeWikiRecord({ ...record, status, updatedAt: now.toISOString() })
+      : record)
+  await writeWiki(vault.path, records)
+  return readWiki(vault.path)
+}
+
+const acceptWikiRecord = async({ id } = {}) => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  await initializeVault(vault.path)
+  const wiki = await readWiki(vault.path)
+  const target = wiki.records.find((record) => record.id === id)
+  if (!target) throw new Error('Wiki proposal not found.')
+
+  const destination = resolveInsideVault(vault.path, 'Wiki')
+  await fs.ensureDir(destination)
+  const filename = nextAvailableName(`${target.title.replace(/[\\/]/g, '-').slice(0, 80) || 'Topic'}.md`, (name) =>
+    fs.existsSync(path.join(destination, name)))
+  const fullPath = path.join(destination, filename)
+  await fs.writeFile(fullPath, createWikiMarkdown(target), 'utf8')
+  getSearchService().indexFile(fullPath).catch(() => {})
+
+  const notePath = path.relative(vault.path, fullPath)
+  const records = wiki.records.map((record) =>
+    record.id === id
+      ? normalizeWikiRecord({
+        ...record,
+        status: 'accepted',
+        notePath,
+        updatedAt: new Date().toISOString()
+      })
+      : record)
+  await writeWiki(vault.path, records)
+  return {
+    wiki: await readWiki(vault.path),
+    note: {
+      path: notePath,
+      fullPath
+    },
+    entries: await listDirectoryForVault(vault, 'Wiki')
+  }
+}
+
+const dismissWikiRecord = async({ id } = {}) => updateWikiRecordStatus(id, 'dismissed')
+
 const getApiWindowId = (context = {}) => {
   if (context.windowId !== undefined && context.windowId !== null) return context.windowId
   const webContents = context.event?.sender
@@ -770,6 +908,10 @@ const createElephantNoteMainApi = () => {
       [ELEPHANTNOTE_API_ACTIONS.SOURCES_LIST]: async() => listSources(),
       [ELEPHANTNOTE_API_ACTIONS.SOURCES_INGEST_URL]: async(payload) => ingestSourceUrl(payload),
       [ELEPHANTNOTE_API_ACTIONS.SOURCES_IMPORT_RSS]: async(payload) => importRssSource(payload),
+      [ELEPHANTNOTE_API_ACTIONS.WIKI_LIST]: async() => listWikiRecords(),
+      [ELEPHANTNOTE_API_ACTIONS.WIKI_PROPOSE]: async() => proposeWikiRecords(),
+      [ELEPHANTNOTE_API_ACTIONS.WIKI_ACCEPT]: async(payload) => acceptWikiRecord(payload),
+      [ELEPHANTNOTE_API_ACTIONS.WIKI_DISMISS]: async(payload) => dismissWikiRecord(payload),
       [ELEPHANTNOTE_API_ACTIONS.SEARCH_INIT_VAULT]: async({ vaultPath }, context) =>
         searchService.registerWindowVault(getApiWindowId(context), vaultPath),
       [ELEPHANTNOTE_API_ACTIONS.SEARCH_QUERY]: async(payload, context) =>

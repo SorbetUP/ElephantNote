@@ -2,28 +2,34 @@
   <section class="en-workspace-view">
     <header class="en-workspace-header">
       <h1>Wiki</h1>
-      <p>Local synthesis from tags and note metadata.</p>
+      <p>Local synthesis proposals grounded in cited notes.</p>
+      <button
+        type="button"
+        :disabled="store.wikiLoading"
+        @click="store.loadWiki({ regenerate: true })"
+      >
+        {{ store.wikiLoading ? 'Synthesizing...' : 'Propose wiki pages' }}
+      </button>
     </header>
 
     <div
-      v-if="topics.length"
+      v-if="records.length"
       class="en-wiki-list"
     >
       <article
-        v-for="topic in topics"
-        :key="topic.tag"
+        v-for="record in records"
+        :key="record.id"
       >
         <header>
-          <h2>#{{ topic.tag }}</h2>
-          <span>{{ topic.notes.length }} notes</span>
+          <h2>#{{ record.topic }}</h2>
+          <span>{{ record.citations.length }} citations</span>
         </header>
         <p>
-          This topic is currently grounded in {{ topic.notes.length }} local note{{ topic.notes.length > 1 ? 's' : '' }}.
-          The future Atomic synthesis layer will replace this deterministic summary with a cited LLM proposal flow.
+          {{ record.summary }}
         </p>
         <div class="en-wiki-citations">
           <button
-            v-for="note in topic.notes.slice(0, 6)"
+            v-for="note in record.citations.slice(0, 6)"
             :key="note.path"
             type="button"
             @click="store.openNote(note)"
@@ -31,6 +37,30 @@
             {{ note.title }}
           </button>
         </div>
+        <footer class="en-wiki-actions">
+          <span>{{ record.status }}</span>
+          <button
+            v-if="record.status === 'proposed'"
+            type="button"
+            @click="store.acceptWikiProposal(record.id)"
+          >
+            Accept
+          </button>
+          <button
+            v-if="record.status === 'proposed'"
+            type="button"
+            @click="store.dismissWikiProposal(record.id)"
+          >
+            Dismiss
+          </button>
+          <button
+            v-if="record.notePath"
+            type="button"
+            @click="store.openNote({ kind: 'note', path: record.notePath, title: record.title })"
+          >
+            Open page
+          </button>
+        </footer>
       </article>
     </div>
 
@@ -44,11 +74,28 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useVaultStore } from '../stores/vaultStore'
 
 const store = useVaultStore()
-const topics = computed(() => store.tagTopics)
+const records = computed(() => store.wikiProposals.length
+  ? store.wikiProposals
+  : store.tagTopics.map((topic) => ({
+    id: `local-${topic.tag}`,
+    topic: topic.tag,
+    title: topic.tag,
+    summary: `This local topic is grounded in ${topic.notes.length} note${topic.notes.length > 1 ? 's' : ''}.`,
+    citations: topic.notes,
+    status: 'local'
+  })))
+
+onMounted(() => {
+  store.loadWiki().catch(() => {})
+})
+
+watch(() => store.activeVaultId, () => {
+  store.loadWiki().catch(() => {})
+})
 </script>
 
 <style scoped>
@@ -69,6 +116,36 @@ const topics = computed(() => store.tagTopics)
 .en-empty-view {
   margin: 6px 0 0;
   color: var(--en-muted);
+}
+
+.en-workspace-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.en-workspace-header p {
+  grid-column: 1;
+}
+
+.en-workspace-header button,
+.en-wiki-actions button {
+  min-height: 34px;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--en-text);
+  background: var(--en-bg);
+}
+
+.en-workspace-header button:hover,
+.en-wiki-actions button:hover {
+  background: var(--en-soft);
+}
+
+.en-workspace-header button:disabled {
+  opacity: 0.6;
 }
 
 .en-wiki-list {
@@ -125,5 +202,26 @@ const topics = computed(() => store.tagTopics)
 
 .en-wiki-citations button:hover {
   background: var(--en-soft);
+}
+
+.en-wiki-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.en-wiki-actions span {
+  margin-right: auto;
+  color: var(--en-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+@media (max-width: 720px) {
+  .en-workspace-header {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

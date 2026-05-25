@@ -64,6 +64,8 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     viewMode: 'grid',
     loading: false,
     error: '',
+    wikiRecords: [],
+    wikiLoading: false,
     openedNotePath: '',
     openedNotes: [],
     pinnedNotePaths: []
@@ -216,6 +218,9 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     },
     sidebarAttachedItems() {
       return this.sidebarItems.filter(isAttachedSidebarEntry)
+    },
+    wikiProposals(state) {
+      return state.wikiRecords.filter((record) => record.status !== 'dismissed')
     }
   },
 
@@ -303,6 +308,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.rootEntries = payload.entries || []
       this.openedNotePath = ''
       this.openedNotes = []
+      this.wikiRecords = []
       this.currentPath = ''
       this.activeWorkspaceView = 'notes'
       this.loadPinnedNotes()
@@ -360,6 +366,41 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       if (!relativePath) {
         this.rootEntries = entries
       }
+    },
+
+    async loadWiki({ regenerate = false } = {}) {
+      if (!this.activeVault?.path) return
+      this.wikiLoading = true
+      try {
+        const wiki = regenerate
+          ? await elephantnoteClient.wiki.propose()
+          : await elephantnoteClient.wiki.list()
+        this.wikiRecords = wiki.records || []
+      } finally {
+        this.wikiLoading = false
+      }
+    },
+
+    async acceptWikiProposal(id) {
+      const result = await elephantnoteClient.wiki.accept(id)
+      this.wikiRecords = result.wiki?.records || []
+      if (result.note?.path) {
+        this.currentPath = 'Wiki'
+        this.entries = result.entries || this.entries
+        this.openedNotePath = result.note.path
+        this.rememberNote({
+          kind: 'note',
+          path: result.note.path,
+          title: result.note.path.split('/').pop()?.replace(/\.md$/i, '') || 'Wiki',
+          updatedAt: new Date().toISOString()
+        })
+        window.electron.ipcRenderer.send('mt::open-file', result.note.fullPath, {})
+      }
+    },
+
+    async dismissWikiProposal(id) {
+      const wiki = await elephantnoteClient.wiki.dismiss(id)
+      this.wikiRecords = wiki.records || []
     },
 
     async refreshSavedNote(pathname) {

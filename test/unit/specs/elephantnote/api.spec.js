@@ -75,4 +75,30 @@ describe('ElephantNote API contract', () => {
     expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
     expect(handler).not.toHaveBeenCalled()
   })
+
+  it('validates Atomic model selection payloads', async() => {
+    const handler = vi.fn(async(payload) => payload)
+    const api = createElephantNoteApi({
+      handlers: {
+        [ELEPHANTNOTE_API_ACTIONS.MODEL_SELECTION_SET]: handler
+      }
+    })
+
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.MODEL_SELECTION_SET, {
+      embedding: 'nomic-embed-text',
+      chat: 'llama-3.2',
+      'speech-to-text': 'whisper-large-v3-turbo'
+    })).resolves.toMatchObject({
+      embedding: 'nomic-embed-text',
+      chat: 'llama-3.2',
+      'speech-to-text': 'whisper-large-v3-turbo'
+    })
+
+    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.MODEL_SELECTION_SET, {
+      embedding: 42
+    })
+
+    expect(response.ok).to.equal(false)
+    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
+  })
 })

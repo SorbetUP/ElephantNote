@@ -35,6 +35,12 @@ import { migrateWorkspace } from './workspaceMigrations'
 import { GitSyncEngine } from './sync/GitSyncEngine'
 import { normalizeFeatureFlags, setFeatureFlag } from 'common/elephantnote/featureFlags'
 import { normalizeAiConfig } from 'common/elephantnote/aiProviders'
+import {
+  ATOMIC_MODEL_CATALOG,
+  ATOMIC_PLUGIN_MANIFESTS,
+  PROGRAMMATIC_TASK_TEMPLATES,
+  createDefaultModelSelection
+} from 'common/elephantnote/atomicWorkspace'
 
 const store = new Store({
   name: 'elephantnote',
@@ -43,7 +49,8 @@ const store = new Store({
     vaults: [],
     activeVaultId: null,
     featureFlags: normalizeFeatureFlags(),
-    aiConfig: normalizeAiConfig()
+    aiConfig: normalizeAiConfig(),
+    atomicModelSelection: createDefaultModelSelection()
   }
 })
 
@@ -53,7 +60,11 @@ const getConfig = () => ({
   vaults: store.get('vaults') || [],
   activeVaultId: store.get('activeVaultId') || null,
   featureFlags: normalizeFeatureFlags(store.get('featureFlags') || {}),
-  aiConfig: normalizeAiConfig(store.get('aiConfig') || {})
+  aiConfig: normalizeAiConfig(store.get('aiConfig') || {}),
+  atomicModelSelection: {
+    ...createDefaultModelSelection(),
+    ...(store.get('atomicModelSelection') || {})
+  }
 })
 
 const setConfig = (config) => {
@@ -61,6 +72,10 @@ const setConfig = (config) => {
   store.set('activeVaultId', config.activeVaultId)
   store.set('featureFlags', normalizeFeatureFlags(config.featureFlags || {}))
   store.set('aiConfig', normalizeAiConfig(config.aiConfig || {}))
+  store.set('atomicModelSelection', {
+    ...createDefaultModelSelection(),
+    ...(config.atomicModelSelection || {})
+  })
 }
 
 export const initializeVault = async(vaultRoot, now = new Date()) => {
@@ -585,6 +600,23 @@ const createElephantNoteMainApi = () => {
         setConfig(config)
         return config.featureFlags
       },
+      [ELEPHANTNOTE_API_ACTIONS.ATOMIC_CATALOG_GET]: async() => ({
+        models: ATOMIC_MODEL_CATALOG,
+        plugins: ATOMIC_PLUGIN_MANIFESTS,
+        tasks: PROGRAMMATIC_TASK_TEMPLATES
+      }),
+      [ELEPHANTNOTE_API_ACTIONS.MODEL_SELECTION_GET]: async() => getConfig().atomicModelSelection,
+      [ELEPHANTNOTE_API_ACTIONS.MODEL_SELECTION_SET]: async(payload) => {
+        const config = getConfig()
+        config.atomicModelSelection = {
+          ...createDefaultModelSelection(),
+          ...payload
+        }
+        setConfig(config)
+        return getConfig().atomicModelSelection
+      },
+      [ELEPHANTNOTE_API_ACTIONS.PLUGINS_LIST]: async() => ATOMIC_PLUGIN_MANIFESTS,
+      [ELEPHANTNOTE_API_ACTIONS.TASKS_LIST]: async() => PROGRAMMATIC_TASK_TEMPLATES,
       [ELEPHANTNOTE_API_ACTIONS.SYNC_STATUS]: async() => syncEngine.status(),
       [ELEPHANTNOTE_API_ACTIONS.SYNC_ENQUEUE]: async({ operation, payload = {} }) =>
         syncEngine.enqueue({ operation, payload }),

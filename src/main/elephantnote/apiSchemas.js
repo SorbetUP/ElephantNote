@@ -119,6 +119,18 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze({
     key: requiredString,
     enabled: optionalBoolean
   }),
+  'atomic.catalog.get': emptySchema,
+  'models.selection.get': emptySchema,
+  'models.selection.set': objectSchema({
+    embedding: optionalString,
+    chat: optionalString,
+    tagging: optionalString,
+    wiki: optionalString,
+    'speech-to-text': optionalString,
+    'text-to-speech': optionalString
+  }),
+  'plugins.list': emptySchema,
+  'tasks.list': emptySchema,
   'sync.status': emptySchema,
   'sync.enqueue': objectSchema({
     operation: requiredString,

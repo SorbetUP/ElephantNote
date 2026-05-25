@@ -37,6 +37,11 @@ export const ELEPHANTNOTE_API_ACTIONS = Object.freeze({
   AI_CONFIG_SET: 'ai.config.set',
   FEATURES_GET: 'features.get',
   FEATURES_SET: 'features.set',
+  ATOMIC_CATALOG_GET: 'atomic.catalog.get',
+  MODEL_SELECTION_GET: 'models.selection.get',
+  MODEL_SELECTION_SET: 'models.selection.set',
+  PLUGINS_LIST: 'plugins.list',
+  TASKS_LIST: 'tasks.list',
   SYNC_STATUS: 'sync.status',
   SYNC_ENQUEUE: 'sync.enqueue',
   SYNC_RUN: 'sync.run'

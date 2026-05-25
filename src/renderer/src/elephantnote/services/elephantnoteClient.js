@@ -32,6 +32,11 @@ const LEGACY_CALLS = {
   'sites.stop': ({ siteId }) => window.elephantnote?.sitePreview?.stop?.(siteId),
   'sites.status': ({ siteId }) => window.elephantnote?.sitePreview?.status?.(siteId),
   'sites.openExternal': ({ url }) => window.elephantnote?.sitePreview?.openExternal?.(url),
+  'atomic.catalog.get': () => window.elephantnote?.atomic?.getCatalog?.(),
+  'models.selection.get': () => window.elephantnote?.models?.getSelection?.(),
+  'models.selection.set': (payload) => window.elephantnote?.models?.setSelection?.(payload),
+  'plugins.list': () => window.elephantnote?.plugins?.list?.(),
+  'tasks.list': () => window.elephantnote?.tasks?.list?.(),
   'agents.list': () => window.elephantnote?.agents?.list?.(),
   'agents.register': (payload) => window.elephantnote?.agents?.register?.(payload),
   'agents.unregister': ({ id }) => window.elephantnote?.agents?.unregister?.(id),
@@ -109,6 +114,19 @@ export const elephantnoteClient = {
   ai: {
     getConfig: () => elephantnoteClient.call('ai.config.get'),
     setConfig: (config) => elephantnoteClient.call('ai.config.set', config)
+  },
+  atomic: {
+    getCatalog: () => elephantnoteClient.call('atomic.catalog.get')
+  },
+  models: {
+    getSelection: () => elephantnoteClient.call('models.selection.get'),
+    setSelection: (selection) => elephantnoteClient.call('models.selection.set', selection)
+  },
+  plugins: {
+    list: () => elephantnoteClient.call('plugins.list')
+  },
+  tasks: {
+    list: () => elephantnoteClient.call('tasks.list')
   },
   agents: {
     list: () => elephantnoteClient.call('agents.list'),

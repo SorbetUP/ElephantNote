@@ -799,8 +799,41 @@ const selectedModelName = (purpose) => {
 }
 
 const saveModelSelection = () => {
-  window.localStorage.setItem('elephantnote:atomicModelSelection', JSON.stringify(modelSelection.value))
-  modelSelectionMessage.value = 'Model choices saved locally.'
+  elephantnoteClient.models.setSelection(modelSelection.value)
+    .then((selection) => {
+      modelSelection.value = {
+        ...createDefaultModelSelection(),
+        ...selection
+      }
+      modelSelectionMessage.value = 'Model choices saved.'
+    })
+    .catch((error) => {
+      window.localStorage.setItem('elephantnote:atomicModelSelection', JSON.stringify(modelSelection.value))
+      modelSelectionMessage.value = error instanceof Error
+        ? `${error.message} Saved locally.`
+        : 'Model choices saved locally.'
+    })
+}
+
+const loadModelSelection = async () => {
+  try {
+    modelSelection.value = {
+      ...createDefaultModelSelection(),
+      ...(await elephantnoteClient.models.getSelection())
+    }
+    return
+  } catch {
+    // Fall back to local storage for legacy preload contexts.
+  }
+  try {
+    const stored = JSON.parse(window.localStorage.getItem('elephantnote:atomicModelSelection') || '{}')
+    modelSelection.value = {
+      ...createDefaultModelSelection(),
+      ...stored
+    }
+  } catch {
+    modelSelection.value = createDefaultModelSelection()
+  }
 }
 
 const saveAiConfig = async () => {
@@ -832,15 +865,7 @@ const toggleFeature = async (key) => {
 onMounted(() => {
   loadFeatureFlags()
   loadAiConfig()
-  try {
-    const stored = JSON.parse(window.localStorage.getItem('elephantnote:atomicModelSelection') || '{}')
-    modelSelection.value = {
-      ...createDefaultModelSelection(),
-      ...stored
-    }
-  } catch {
-    modelSelection.value = createDefaultModelSelection()
-  }
+  loadModelSelection()
 })
 
 onBeforeUnmount(stopQuickTriggerCapture)

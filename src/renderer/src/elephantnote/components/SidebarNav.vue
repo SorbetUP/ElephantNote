@@ -61,6 +61,14 @@
           <MessageSquareText />
           <span>Chat</span>
         </button>
+        <button
+          type="button"
+          :class="{ active: store.activeWorkspaceView === 'canvas' }"
+          @click="store.setWorkspaceView('canvas')"
+        >
+          <ComponentIcon />
+          <span>Canvas</span>
+        </button>
       </div>
 
       <div class="en-sidebar-main">
@@ -136,6 +144,7 @@ import {
   BookOpenText,
   CalendarClock,
   ChevronDown,
+  Component as ComponentIcon,
   FilePlus2,
   Files,
   FolderPlus,

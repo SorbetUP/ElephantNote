@@ -92,6 +92,46 @@ const exactSearchMarkdownFiles = async({ vaultRoot, query, limit }) => {
   return matches
 }
 
+const inspectMarkdownFiles = async(vaultRoot) => {
+  const files = await listMarkdownFiles(vaultRoot)
+  const inspected = []
+
+  for (const absolutePath of files) {
+    const relativePath = path.relative(vaultRoot, absolutePath).split(path.sep).join('/')
+    const stats = await fs.stat(absolutePath).catch(() => null)
+    const folder = path.dirname(relativePath)
+    inspected.push({
+      id: `file:${relativePath}`,
+      uri: `elephantnote://vault/${encodeURI(relativePath)}`,
+      title: path.basename(relativePath, path.extname(relativePath)),
+      relativePath,
+      folder: folder === '.' ? '' : folder,
+      type: 'md',
+      mtime: stats?.mtime?.toISOString?.() || '',
+      indexed: false
+    })
+  }
+
+  return inspected.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+}
+
+const mergeInspectedDocuments = (indexedDocuments, localDocuments) => {
+  const byPath = new Map()
+
+  for (const document of localDocuments) {
+    byPath.set(document.relativePath, document)
+  }
+
+  for (const document of indexedDocuments) {
+    byPath.set(document.relativePath, {
+      ...document,
+      indexed: true
+    })
+  }
+
+  return [...byPath.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+}
+
 export class ElephantSearchService {
   constructor() {
     this._managers = new Map()
@@ -334,12 +374,15 @@ export class ElephantSearchService {
         indexPath: '',
         documents: [],
         folders: [],
+        semanticLinks: [],
         generatedAt: new Date().toISOString()
       }
     }
 
     const manager = this._getManager(root)
-    const documents = await manager.inspectDocuments()
+    const indexedDocuments = await manager.inspectDocuments()
+    const localDocuments = await inspectMarkdownFiles(root)
+    const documents = mergeInspectedDocuments(indexedDocuments, localDocuments)
     const folderCounts = new Map()
 
     for (const document of documents) {
@@ -351,6 +394,7 @@ export class ElephantSearchService {
       status: this._getStatus(root),
       indexPath: manager.getSearchIndexPath(root),
       documents,
+      semanticLinks: await manager.inspectSemanticLinks(),
       folders: [...folderCounts.entries()]
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),

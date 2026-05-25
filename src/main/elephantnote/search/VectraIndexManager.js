@@ -66,6 +66,32 @@ const queryOptionsForMode = (mode, useBm25 = true, maxDocuments = 20) => {
   }
 }
 
+const averageVectors = (vectors) => {
+  if (!vectors.length) return []
+  const size = vectors[0].length
+  const average = new Array(size).fill(0)
+  for (const vector of vectors) {
+    for (let index = 0; index < size; index += 1) {
+      average[index] += Number(vector[index]) || 0
+    }
+  }
+  return average.map((value) => value / vectors.length)
+}
+
+const cosineSimilarity = (first, second) => {
+  if (!first.length || first.length !== second.length) return 0
+  let dot = 0
+  let firstMagnitude = 0
+  let secondMagnitude = 0
+  for (let index = 0; index < first.length; index += 1) {
+    dot += first[index] * second[index]
+    firstMagnitude += first[index] * first[index]
+    secondMagnitude += second[index] * second[index]
+  }
+  if (!firstMagnitude || !secondMagnitude) return 0
+  return dot / (Math.sqrt(firstMagnitude) * Math.sqrt(secondMagnitude))
+}
+
 export class VectraIndexManager {
   constructor() {
     this._vaultRoot = ''
@@ -278,11 +304,14 @@ export class VectraIndexManager {
 
     const documents = await this._index.listDocuments()
     const inspected = []
+    const inspectedPaths = new Set()
 
     for (const document of documents) {
       const metadata = await document.loadMetadata().catch(() => ({}))
       const relativePath = metadata.relativePath || fromElephantNoteUri(document.uri)
+      if (!relativePath) continue
       const folder = path.dirname(relativePath || '')
+      inspectedPaths.add(relativePath)
       inspected.push({
         id: document.id,
         uri: document.uri,
@@ -294,7 +323,100 @@ export class VectraIndexManager {
       })
     }
 
+    const items = await this._index.listItems().catch(() => [])
+    for (const item of items) {
+      const metadata = item?.metadata || {}
+      const relativePath = metadata.relativePath
+      if (!relativePath || inspectedPaths.has(relativePath)) continue
+      const folder = path.dirname(relativePath)
+      inspectedPaths.add(relativePath)
+      inspected.push({
+        id: metadata.documentId || item.id,
+        uri: toElephantNoteUri(relativePath),
+        title: metadata.title || path.basename(relativePath, path.extname(relativePath)),
+        relativePath,
+        folder: folder === '.' ? '' : folder,
+        type: metadata.type || 'md',
+        mtime: metadata.mtime || ''
+      })
+    }
+
     return inspected.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+  }
+
+  async inspectSemanticLinks({ threshold = 0.35, maxLinksPerDocument = 4, maxTotalLinks = 300 } = {}) {
+    if (!this._index || !this._ready) return []
+
+    const items = await this._index.listItems().catch(() => [])
+    const documents = new Map()
+
+    for (const item of items) {
+      const metadata = item?.metadata || {}
+      const relativePath = metadata.relativePath
+      if (!relativePath || !Array.isArray(item.vector) || !item.vector.length) continue
+      const current = documents.get(relativePath) || {
+        id: metadata.documentId || relativePath,
+        relativePath,
+        title: metadata.title || path.basename(relativePath, path.extname(relativePath)),
+        vectors: []
+      }
+      current.vectors.push(item.vector)
+      documents.set(relativePath, current)
+    }
+
+    const centroids = [...documents.values()]
+      .map((document) => ({
+        id: document.id,
+        relativePath: document.relativePath,
+        title: document.title,
+        vector: averageVectors(document.vectors)
+      }))
+      .filter((document) => document.vector.length)
+
+    const bySource = new Map()
+    for (let leftIndex = 0; leftIndex < centroids.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < centroids.length; rightIndex += 1) {
+        const source = centroids[leftIndex]
+        const target = centroids[rightIndex]
+        const score = cosineSimilarity(source.vector, target.vector)
+        if (score < threshold) continue
+        for (const [from, to] of [[source, target], [target, source]]) {
+          if (!bySource.has(from.relativePath)) bySource.set(from.relativePath, [])
+          bySource.get(from.relativePath).push({
+            id: `${from.relativePath}::${to.relativePath}`,
+            source: from.relativePath,
+            target: to.relativePath,
+            score,
+            type: 'semantic'
+          })
+        }
+      }
+    }
+
+    const links = []
+    for (const sourceLinks of bySource.values()) {
+      links.push(
+        ...sourceLinks
+          .sort((a, b) => b.score - a.score)
+          .slice(0, maxLinksPerDocument)
+      )
+    }
+
+    const deduped = new Map()
+    for (const link of links) {
+      const key = [link.source, link.target].sort().join('::')
+      const existing = deduped.get(key)
+      if (!existing || link.score > existing.score) {
+        deduped.set(key, {
+          ...link,
+          id: key
+        })
+      }
+    }
+
+    return [...deduped.values()]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxTotalLinks)
   }
 
   getSearchIndexPath(vaultRoot = this._vaultRoot) {

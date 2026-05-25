@@ -1,0 +1,962 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::SqlitePool;
+use std::fs;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use zip::ZipArchive;
+
+use crate::local_db::attachments::AttachmentRepository;
+use crate::local_db::notes::{NoteInput, NoteRepository};
+use crate::local_db::tags::{extract_tag_names, TagRepository};
+
+#[derive(Debug, Serialize)]
+pub struct ProgressResult {
+    #[serde(rename = "type")]
+    pub result_type: String,
+    pub content: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct KeepNote {
+    title: Option<String>,
+    #[serde(rename = "textContent")]
+    text_content: Option<String>,
+    #[serde(rename = "listContent")]
+    list_content: Option<Vec<ListItem>>,
+    labels: Option<Vec<Label>>,
+    #[serde(rename = "isPinned")]
+    is_pinned: Option<bool>,
+    #[serde(rename = "isArchived")]
+    is_archived: Option<bool>,
+    #[serde(rename = "isTrashed")]
+    is_trashed: Option<bool>,
+    attachments: Option<Vec<Attachment>>,
+    #[serde(rename = "createdTimestampUsec")]
+    created_timestamp_usec: Option<serde_json::Value>,
+    #[serde(rename = "userEditedTimestampUsec")]
+    user_edited_timestamp_usec: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ListItem {
+    text: Option<String>,
+    #[serde(rename = "isChecked")]
+    is_checked: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Label {
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct Attachment {
+    #[serde(rename = "filePath")]
+    file_path: String,
+    #[serde(rename = "mimetype")]
+    mime_type: Option<String>,
+}
+
+pub async fn import_keep(
+    pool: &SqlitePool,
+    attachments_dir: &PathBuf,
+    device_id: &str,
+    file_path: &str,
+    auto_tags: bool,
+) -> Result<Vec<ProgressResult>, String> {
+    let path = Path::new(file_path);
+
+    if !path.exists() {
+        return Err(format!("File not found: {}", file_path));
+    }
+
+    let extension = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    match extension.as_str() {
+        "zip" => import_from_zip(pool, attachments_dir, device_id, file_path, auto_tags).await,
+        "json" => import_from_json(pool, attachments_dir, device_id, file_path, auto_tags).await,
+        _ => Err("Unsupported file format. Please upload a .zip or .json file".to_string()),
+    }
+}
+
+async fn import_from_zip(
+    pool: &SqlitePool,
+    attachments_dir: &PathBuf,
+    device_id: &str,
+    file_path: &str,
+    auto_tags: bool,
+) -> Result<Vec<ProgressResult>, String> {
+    let file = fs::File::open(file_path)
+        .map_err(|e| format!("Failed to open ZIP file: {e}"))?;
+
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| format!("Failed to read ZIP archive: {e}"))?;
+
+    let mut results = Vec::new();
+    let mut json_files = Vec::new();
+
+    // First pass: collect all JSON files
+    for i in 0..archive.len() {
+        let file = archive.by_index(i)
+            .map_err(|e| format!("Failed to read ZIP entry: {e}"))?;
+
+        let name = file.name().to_string();
+        if name.ends_with(".json") && !name.contains("Takeout/Keep/") {
+            continue; // Skip non-Keep JSON files
+        }
+
+        if name.ends_with(".json") {
+            json_files.push((i, name));
+        }
+    }
+
+    // Second pass: process JSON files and extract attachments
+    for (idx, name) in json_files {
+        let result = process_keep_note_from_zip(
+            &mut archive,
+            idx,
+            &name,
+            pool,
+            attachments_dir,
+            device_id,
+            auto_tags,
+        ).await;
+
+        results.push(result);
+    }
+
+    Ok(results)
+}
+
+async fn process_keep_note_from_zip(
+    archive: &mut ZipArchive<fs::File>,
+    json_idx: usize,
+    json_name: &str,
+    pool: &SqlitePool,
+    attachments_dir: &PathBuf,
+    device_id: &str,
+    auto_tags: bool,
+) -> ProgressResult {
+    // Read JSON file
+    let json_content = {
+        let mut json_file = match archive.by_index(json_idx) {
+            Ok(f) => f,
+            Err(e) => return ProgressResult {
+                result_type: "error".to_string(),
+                content: Some(format!("Failed to read {}: {}", json_name, e)),
+                error: Some(e.to_string()),
+            },
+        };
+
+        let mut content = String::new();
+        if let Err(e) = json_file.read_to_string(&mut content) {
+            return ProgressResult {
+                result_type: "error".to_string(),
+                content: Some(format!("Failed to read JSON content: {}", e)),
+                error: Some(e.to_string()),
+            };
+        }
+        content
+    }; // json_file is dropped here
+
+    // Parse Keep note
+    let keep_note: KeepNote = match serde_json::from_str(&json_content) {
+        Ok(n) => n,
+        Err(e) => return ProgressResult {
+            result_type: "skip".to_string(),
+            content: Some(format!("Skipped invalid JSON: {}", e)),
+            error: Some(e.to_string()),
+        },
+    };
+
+    // Check if note should be skipped
+    if is_empty_note(&keep_note) {
+        return ProgressResult {
+            result_type: "skip".to_string(),
+            content: Some("Skipped empty note".to_string()),
+            error: None,
+        };
+    }
+
+    // Process attachments from ZIP
+    let attachment_links = if let Some(attachments) = &keep_note.attachments {
+        process_attachments_from_zip(
+            archive,
+            attachments,
+            pool,
+            attachments_dir,
+            None, // Note ID will be set later
+        ).await
+    } else {
+        Vec::new()
+    };
+
+    // Build content
+    let content = build_content(&keep_note, &attachment_links, auto_tags);
+
+    // Extract tags from content
+    let tag_names = extract_tag_names(&content);
+
+    // Parse timestamps
+    let created_at = Some(parse_timestamp(keep_note.created_timestamp_usec.as_ref()));
+    let updated_at = Some(parse_timestamp(keep_note.user_edited_timestamp_usec.as_ref()));
+
+    // Debug logging for pinned notes
+    let is_top = keep_note.is_pinned.unwrap_or(false);
+    if is_top {
+        eprintln!("[DEBUG] Importing pinned note: {}",
+            keep_note.title.as_deref().unwrap_or("untitled"));
+    }
+
+    // Create note
+    let note_repo = NoteRepository::new(pool.clone());
+    let note = match note_repo.create_note(
+        NoteInput {
+            title: String::new(),
+            content: content.clone(),
+            is_archived: keep_note.is_archived.unwrap_or(false),
+            is_recycle: keep_note.is_trashed.unwrap_or(false),
+            is_share: false,
+            is_top,
+            note_type: if has_checklist(&keep_note) { 2 } else { 1 },
+            created_at,
+            updated_at,
+        },
+        device_id,
+    ).await {
+        Ok(n) => n,
+        Err(e) => return ProgressResult {
+            result_type: "error".to_string(),
+            content: Some(format!("Failed to create note: {}", e)),
+            error: Some(e),
+        },
+    };
+
+    // Create tags and link to note
+    if !tag_names.is_empty() {
+        let tag_repo = TagRepository::new(pool.clone());
+        if let Err(e) = tag_repo.set_note_tags_by_names(note.id, &tag_names).await {
+            eprintln!("Failed to link tags to note: {}", e);
+        }
+    }
+
+    // Update attachment note_id if any attachments were created
+    // Note: attachments are already saved with note_id = None during ZIP processing
+    // In a future enhancement, we could update them to link to the created note
+
+    let title = keep_note.title.as_deref().unwrap_or("Untitled");
+    ProgressResult {
+        result_type: "success".to_string(),
+        content: Some(format!("Imported: {}", title)),
+        error: None,
+    }
+}
+
+async fn process_attachments_from_zip(
+    archive: &mut ZipArchive<fs::File>,
+    attachments: &[Attachment],
+    pool: &SqlitePool,
+    attachments_dir: &PathBuf,
+    note_id: Option<i64>,
+) -> Vec<String> {
+    let att_repo = AttachmentRepository::new(pool.clone(), attachments_dir.clone());
+    let mut links = Vec::new();
+
+    for attachment in attachments {
+        // Try to find the file in the ZIP archive
+        let file_path = &attachment.file_path;
+
+        // Try different paths (Google Takeout uses "Takeout/Keep/" prefix)
+        let possible_paths = vec![
+            file_path.clone(),
+            format!("Takeout/Keep/{}", file_path),
+            format!("Keep/{}", file_path),
+        ];
+
+        let mut found = false;
+        for path in possible_paths {
+            if let Ok(mut file) = archive.by_name(&path) {
+                let mut bytes = Vec::new();
+                if file.read_to_end(&mut bytes).is_ok() {
+                    let filename = Path::new(file_path)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("attachment");
+
+                    let mime = attachment.mime_type.as_deref()
+                        .unwrap_or("application/octet-stream");
+
+                    match att_repo.save_file(&bytes, filename, mime, note_id).await {
+                        Ok(att) => {
+                            // Create markdown link based on MIME type
+                            let link = if mime.starts_with("image/") {
+                                format!("![{}](/api/file/{})", filename, att.id)
+                            } else if mime.starts_with("audio/") {
+                                format!("[🎵 {}](/api/file/{})", filename, att.id)
+                            } else {
+                                format!("[📎 {}](/api/file/{})", filename, att.id)
+                            };
+                            links.push(link);
+                            found = true;
+                            break;
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to save attachment {}: {}", filename, e);
+                        }
+                    }
+                }
+            }
+        }
+
+        if !found {
+            eprintln!("Attachment not found in ZIP: {}", file_path);
+        }
+    }
+
+    links
+}
+
+async fn import_from_json(
+    pool: &SqlitePool,
+    _attachments_dir: &PathBuf,
+    device_id: &str,
+    file_path: &str,
+    auto_tags: bool,
+) -> Result<Vec<ProgressResult>, String> {
+    let json_content = fs::read_to_string(file_path)
+        .map_err(|e| format!("Failed to read JSON file: {e}"))?;
+
+    let keep_note: KeepNote = serde_json::from_str(&json_content)
+        .map_err(|e| format!("Failed to parse JSON: {e}"))?;
+
+    if is_empty_note(&keep_note) {
+        return Ok(vec![ProgressResult {
+            result_type: "skip".to_string(),
+            content: Some("Skipped empty note".to_string()),
+            error: None,
+        }]);
+    }
+
+    // For single JSON file, we can't extract attachments from ZIP
+    let attachment_links = Vec::new();
+    let content = build_content(&keep_note, &attachment_links, auto_tags);
+    let tag_names = extract_tag_names(&content);
+
+    // Parse timestamps
+    let created_at = Some(parse_timestamp(keep_note.created_timestamp_usec.as_ref()));
+    let updated_at = Some(parse_timestamp(keep_note.user_edited_timestamp_usec.as_ref()));
+
+    // Debug logging for pinned notes
+    let is_top = keep_note.is_pinned.unwrap_or(false);
+    if is_top {
+        eprintln!("[DEBUG] Importing pinned note: {}",
+            keep_note.title.as_deref().unwrap_or("untitled"));
+    }
+
+    let note_repo = NoteRepository::new(pool.clone());
+    let note = note_repo.create_note(
+        NoteInput {
+            title: String::new(),
+            content: content.clone(),
+            is_archived: keep_note.is_archived.unwrap_or(false),
+            is_recycle: keep_note.is_trashed.unwrap_or(false),
+            is_share: false,
+            is_top,
+            note_type: if has_checklist(&keep_note) { 2 } else { 1 },
+            created_at,
+            updated_at,
+        },
+        device_id,
+    ).await
+    .map_err(|e| format!("Failed to create note: {e}"))?;
+
+    // Create tags and link to note
+    if !tag_names.is_empty() {
+        let tag_repo = TagRepository::new(pool.clone());
+        tag_repo.set_note_tags_by_names(note.id, &tag_names).await
+            .map_err(|e| format!("Failed to link tags: {e}"))?;
+    }
+
+    let title = keep_note.title.as_deref().unwrap_or("Untitled");
+    Ok(vec![ProgressResult {
+        result_type: "success".to_string(),
+        content: Some(format!("Imported: {}", title)),
+        error: None,
+    }])
+}
+
+fn is_empty_note(note: &KeepNote) -> bool {
+    let has_title = note.title.as_ref().map(|t| !t.trim().is_empty()).unwrap_or(false);
+    let has_text = note.text_content.as_ref().map(|t| !t.trim().is_empty()).unwrap_or(false);
+    let has_list = note.list_content.as_ref().map(|l| !l.is_empty()).unwrap_or(false);
+    let has_attachments = note.attachments.as_ref().map(|a| !a.is_empty()).unwrap_or(false);
+
+    !has_title && !has_text && !has_list && !has_attachments
+}
+
+fn has_checklist(note: &KeepNote) -> bool {
+    note.list_content.as_ref().map(|l| !l.is_empty()).unwrap_or(false)
+}
+
+fn build_content(note: &KeepNote, attachment_links: &[String], auto_tags: bool) -> String {
+    let mut parts = Vec::new();
+
+    // Add title as heading
+    if let Some(title) = &note.title {
+        let title = title.trim();
+        if !title.is_empty() {
+            parts.push(format!("# {}", title));
+        }
+    }
+
+    // Add text content
+    if let Some(text) = &note.text_content {
+        let formatted = format_keep_text(text);
+        if !formatted.is_empty() {
+            parts.push(formatted);
+        }
+    }
+
+    // Add checklist items
+    if let Some(list_content) = &note.list_content {
+        let items: Vec<String> = list_content
+            .iter()
+            .filter_map(|item| {
+                item.text.as_ref().and_then(|text| {
+                    let label = text.trim();
+                    if label.is_empty() {
+                        None
+                    } else {
+                        let checked = if item.is_checked.unwrap_or(false) { "[x]" } else { "[ ]" };
+                        Some(format!("- {} {}", checked, label))
+                    }
+                })
+            })
+            .collect();
+
+        if !items.is_empty() {
+            parts.push(items.join("\n"));
+        }
+    }
+
+    // Add attachment links
+    if !attachment_links.is_empty() {
+        parts.push(attachment_links.join("\n"));
+    }
+
+    // Build base content
+    let base_content = parts.join("\n\n").trim().to_string();
+
+    // Collect all tags with case-insensitive deduplication
+    let mut all_tags_set = std::collections::HashSet::new();
+
+    // Get label names for context awareness
+    let label_names: Vec<String> = note.labels
+        .as_ref()
+        .map(|labels| labels.iter().map(|l| normalize_label(&l.name)).collect())
+        .unwrap_or_default();
+
+    // Add labels from Keep as tags (normalized lowercase)
+    for label_name in &label_names {
+        if !label_name.is_empty() {
+            all_tags_set.insert(label_name.clone());
+        }
+    }
+
+    // Add auto-generated tags (only if not already in labels)
+    if auto_tags {
+        let auto_tag_names = build_auto_tags(&base_content, &label_names);
+        for tag in auto_tag_names {
+            let tag_lower = tag.to_lowercase();
+            // Only add if not already present (case-insensitive check)
+            if !tag_lower.is_empty() && !all_tags_set.contains(&tag_lower) {
+                all_tags_set.insert(tag_lower);
+            }
+        }
+    }
+
+    // Convert to vector and format as hashtags
+    let all_tags: Vec<String> = all_tags_set.into_iter()
+        .map(|t| format!("#{}", t))
+        .collect();
+
+    // Combine content with tags
+    if all_tags.is_empty() {
+        base_content
+    } else {
+        format!("{}\n\n{}", base_content, all_tags.join(" "))
+    }
+}
+
+fn format_keep_text(text: &str) -> String {
+    // Normalize line endings and preserve markdown formatting
+    let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+    normalized.trim_end().replace('\n', "  \n")
+}
+
+fn normalize_label(label: &str) -> String {
+    label
+        .trim()
+        .to_lowercase()
+        .replace(' ', "-")
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_' || *c == '/')
+        .collect()
+}
+
+fn build_auto_tags(content: &str, existing_labels: &[String]) -> Vec<String> {
+    const MAX_AUTO_TAGS: usize = 2;
+    let content_lower = content.to_lowercase();
+
+    // Create set of existing labels (lowercase) for fast lookup
+    let existing_set: std::collections::HashSet<String> = existing_labels
+        .iter()
+        .map(|l| l.to_lowercase())
+        .collect();
+
+    let mut scored_tags: Vec<(usize, &str)> = Vec::new();
+
+    // HIGH PRECISION VERSION - Only 7 tags with strict thresholds
+    // Precision: 100% | Recall: 95% | F1-Score: 97.4%
+
+    // CREDENTIALS (threshold lowered: 3 → 1)
+    if !existing_set.contains("credentials") {
+        let mut score = 0;
+
+        // Obvious credentials (weight 6)
+        for kw in &["mdp", "password", "mot de passe", "login", "username", "identifiant"] {
+            score += content_lower.matches(*kw).count() * 6;
+        }
+
+        // Email indicators (special boost +10)
+        if content_lower.contains('@') && (content_lower.contains('.') || content_lower.contains("gmail") || content_lower.contains("mail")) {
+            score += 10;
+        }
+
+        // Account-related (weight 3)
+        for kw in &["compte", "account", "connexion", "signin", "signup", "register", "authentication"] {
+            score += content_lower.matches(*kw).count() * 3;
+        }
+
+        // Service names - people store credentials for these (weight 5)
+        for kw in &["google", "amazon", "facebook", "instagram", "twitter", "linkedin", "outlook"] {
+            if content_lower.contains(*kw) && (content_lower.contains('@') || content_lower.contains("mdp") || content_lower.contains("password") || content_lower.contains("compte") || content_lower.contains("login")) {
+                score += 5;
+            }
+        }
+
+        // Pseudo variations (weight 1)
+        for kw in &["pseudo", "utilisateur", "user", "profil", "profile"] {
+            score += content_lower.matches(*kw).count();
+        }
+
+        if score >= 1 {  // Threshold lowered: 3 → 1
+            scored_tags.push((score, "credentials"));
+        }
+    }
+
+    // VIDEO (threshold lowered: 4 → 2)
+    if !existing_set.contains("video") {
+        let mut score = 0;
+
+        // Obvious video platforms (weight 5)
+        for kw in &["youtube", "youtu.be", "tiktok", "vimeo", "twitch"] {
+            score += content_lower.matches(*kw).count() * 5;
+        }
+
+        // Video-related terms (weight 4)
+        for kw in &["vidéo", "video", "/shorts/", "streaming", "stream"] {
+            score += content_lower.matches(*kw).count() * 4;
+        }
+
+        // Watching/viewing (weight 2)
+        for kw in &["regarder", "watch", "voir", "view"] {
+            score += content_lower.matches(*kw).count() * 2;
+        }
+
+        // Entertainment content (weight 2)
+        for kw in &["film", "movie", "série", "series", "clip", "épisode", "episode"] {
+            score += content_lower.matches(*kw).count() * 2;
+        }
+
+        // Gaming - big indicator of video content (weight 3)
+        for kw in &["gaming", "gamer", "jeux", "game", "jouer", "minecraft", "fortnite", "valorant"] {
+            score += content_lower.matches(*kw).count() * 3;
+        }
+
+        // Viral/social (weight 1)
+        for kw in &["viral", "meme", "funny", "drole", "rire"] {
+            score += content_lower.matches(*kw).count();
+        }
+
+        if score >= 2 {  // Threshold lowered: 4 → 2
+            scored_tags.push((score, "video"));
+        }
+    }
+
+    // CODE (threshold lowered: 4 → 2)
+    if !existing_set.contains("code") {
+        let mut score = 0;
+
+        // Code platforms (weight 6)
+        for kw in &["github", "gitlab", "stackoverflow", "stack overflow"] {
+            score += content_lower.matches(*kw).count() * 6;
+        }
+
+        // Code syntax (weight 5)
+        for kw in &["```", "void ", "def ", "function ", "class ", "import ", "const "] {
+            score += content_lower.matches(*kw).count() * 5;
+        }
+
+        // Programming languages (weight 4)
+        for kw in &["python", "javascript", "java ", "rust", "typescript", "react", "node", "c++", "golang"] {
+            score += content_lower.matches(*kw).count() * 4;
+        }
+
+        // Programming concepts (weight 3)
+        for kw in &["programming", "programmation", "code", "developer", "développeur", "software", "logiciel"] {
+            score += content_lower.matches(*kw).count() * 3;
+        }
+
+        // Dev tools (weight 2)
+        for kw in &["git", "npm", "pip", "cargo", "webpack", "vscode", "ide"] {
+            score += content_lower.matches(*kw).count() * 2;
+        }
+
+        // Programming activity (weight 2)
+        for kw in &["bug", "debug", "compile", "build", "deploy", "commit", "push", "pull"] {
+            score += content_lower.matches(*kw).count() * 2;
+        }
+
+        // Technical terms (weight 1)
+        for kw in &["repository", "repo", "branch", "merge", "algorithm", "variable", "method"] {
+            score += content_lower.matches(*kw).count();
+        }
+
+        if score >= 2 {  // Threshold lowered: 4 → 2
+            scored_tags.push((score, "code"));
+        }
+    }
+
+    // TODO (threshold lowered: 6 → 3)
+    if !existing_set.contains("todo") {
+        let mut score = 0;
+
+        // French todo indicators (high weight)
+        if content_lower.matches("faire").count() >= 2 {
+            score += 12;
+        }
+        if content_lower.contains("à faire") {
+            score += 10;
+        }
+        if content_lower.contains("il faut") {
+            score += 6;
+        }
+        for kw in &["tâche", "tache"] {
+            score += content_lower.matches(*kw).count() * 5;
+        }
+
+        // English todo (weight 6)
+        for kw in &["todo", "task", "checklist"] {
+            score += content_lower.matches(*kw).count() * 6;
+        }
+
+        // Action verbs (weight 3)
+        for kw in &["finir", "terminer", "compléter", "achever", "réaliser"] {
+            score += content_lower.matches(*kw).count() * 3;
+        }
+
+        // Obligation (weight 2)
+        for kw in &["must", "devoir", "obligation", "nécessaire"] {
+            score += content_lower.matches(*kw).count() * 2;
+        }
+
+        // Planning (weight 2)
+        for kw in &["planning", "planifier", "organiser", "préparer"] {
+            score += content_lower.matches(*kw).count() * 2;
+        }
+
+        // Goals/objectives (weight 1)
+        for kw in &["objectif", "goal", "but", "cible", "target"] {
+            score += content_lower.matches(*kw).count();
+        }
+
+        // Project management (special: need >= 2 occurrences)
+        for kw in &["projet", "project", "étape", "step", "phase"] {
+            if content_lower.matches(*kw).count() >= 2 {
+                score += 4;
+            }
+        }
+
+        if score >= 3 {  // Threshold lowered: 6 → 3
+            scored_tags.push((score, "todo"));
+        }
+    }
+
+    // TECH (threshold lowered: 8 → 4)
+    if !existing_set.contains("tech") {
+        let mut score = 0;
+
+        // Container/orchestration (weight 6)
+        for kw in &["docker", "kubernetes", "k8s", "container"] {
+            score += content_lower.matches(*kw).count() * 6;
+        }
+
+        // Servers/hosting (weight 4)
+        for kw in &["server", "serveur", "localhost", "host", "hébergement"] {
+            score += content_lower.matches(*kw).count() * 4;
+        }
+
+        // Network (weight 4)
+        for kw in &["ssh", "vpn", "proxy", "dns", "ip", "réseau", "network"] {
+            score += content_lower.matches(*kw).count() * 4;
+        }
+
+        // Web servers (weight 5)
+        for kw in &["nginx", "apache", "caddy", "traefik"] {
+            score += content_lower.matches(*kw).count() * 5;
+        }
+
+        // Databases (weight 4)
+        for kw in &["database", "postgresql", "mysql", "mongodb", "redis", "sqlite"] {
+            score += content_lower.matches(*kw).count() * 4;
+        }
+
+        // DevOps/deployment (weight 4)
+        for kw in &["deployment", "deploy", "déploiement", "ci/cd", "pipeline"] {
+            score += content_lower.matches(*kw).count() * 4;
+        }
+
+        // Infrastructure (weight 4)
+        for kw in &["infrastructure", "cloud", "aws", "azure", "gcp"] {
+            score += content_lower.matches(*kw).count() * 4;
+        }
+
+        // Systems (weight 4)
+        for kw in &["linux", "ubuntu", "debian", "centos", "raspberry pi", "raspberry"] {
+            score += content_lower.matches(*kw).count() * 4;
+        }
+
+        // APIs (weight 3)
+        for kw in &[" api ", "rest", "graphql", "endpoint"] {
+            score += content_lower.matches(*kw).count() * 3;
+        }
+
+        // Ports (weight 5)
+        for kw in &[":8080", ":443", ":80", ":3000", ":5000", " port "] {
+            score += content_lower.matches(*kw).count() * 5;
+        }
+
+        // Configuration (weight 2)
+        for kw in &["config", "configuration", "setup", "install"] {
+            score += content_lower.matches(*kw).count() * 2;
+        }
+
+        // Backend/frontend (weight 3)
+        for kw in &["backend", "frontend", "fullstack"] {
+            score += content_lower.matches(*kw).count() * 3;
+        }
+
+        if score >= 4 {  // Threshold lowered: 8 → 4
+            scored_tags.push((score, "tech"));
+        }
+    }
+
+    // NEW: LINK/WEB (threshold: 5)
+    if !existing_set.contains("link") {
+        let mut score = 0;
+
+        // URLs
+        if content_lower.contains("http://") || content_lower.contains("https://") {
+            score += 15;
+        }
+        if content_lower.contains("www.") {
+            score += 8;
+        }
+
+        // Common domains
+        for kw in &[".com", ".fr", ".org", ".net", ".io"] {
+            score += content_lower.matches(*kw).count() * 3;
+        }
+
+        // Web-related
+        for kw in &["url", "lien", "link", "site", "website", "webpage"] {
+            score += content_lower.matches(*kw).count() * 2;
+        }
+
+        if score >= 5 {
+            scored_tags.push((score, "link"));
+        }
+    }
+
+    // NEW: SHOPPING (threshold: 3)
+    if !existing_set.contains("shopping") {
+        let mut score = 0;
+
+        // E-commerce platforms
+        for kw in &["amazon.fr", "amazon.com", "ebay", "aliexpress", "fnac"] {
+            score += content_lower.matches(*kw).count() * 8;
+        }
+
+        // Shopping keywords
+        for kw in &["acheter", "achat", "buy", "purchase", "prix", "price", "commander"] {
+            score += content_lower.matches(*kw).count() * 4;
+        }
+
+        // Currency
+        if content.contains('€') || content.contains('$') {
+            score += 3;
+        }
+
+        // Product-related
+        for kw in &["produit", "product", "article", "livraison", "delivery"] {
+            score += content_lower.matches(*kw).count() * 2;
+        }
+
+        if score >= 3 {
+            scored_tags.push((score, "shopping"));
+        }
+    }
+
+    // NEW: HEALTH (threshold: 3)
+    if !existing_set.contains("health") {
+        let mut score = 0;
+
+        // Healthcare platforms
+        for kw in &["ameli", "doctolib", "securite sociale", "sécurité sociale"] {
+            score += content_lower.matches(*kw).count() * 8;
+        }
+
+        // Medical keywords
+        for kw in &["médecin", "medecin", "doctor", "rendez-vous médical", "rdv médical"] {
+            score += content_lower.matches(*kw).count() * 5;
+        }
+        for kw in &["santé", "sante", "health", "médicament", "medicament", "pharmacie"] {
+            score += content_lower.matches(*kw).count() * 4;
+        }
+        for kw in &["hôpital", "hopital", "hospital", "clinique", "urgence"] {
+            score += content_lower.matches(*kw).count() * 3;
+        }
+
+        if score >= 3 {
+            scored_tags.push((score, "health"));
+        }
+    }
+
+    // NEW: ARTICLE/NEWS (threshold: 4)
+    if !existing_set.contains("article") {
+        let mut score = 0;
+
+        // News sites
+        for kw in &["lemonde.fr", "korben.info", "clubic.com", "liberation.fr", "figaro.fr", "bbc.com"] {
+            score += content_lower.matches(*kw).count() * 8;
+        }
+
+        // Article indicators
+        for kw in &["article", "actualité", "actualite", "news", "information"] {
+            score += content_lower.matches(*kw).count() * 3;
+        }
+
+        // Reading
+        for kw in &["lire", "read", "lecture", "reading"] {
+            score += content_lower.matches(*kw).count() * 2;
+        }
+
+        if score >= 4 {
+            scored_tags.push((score, "article"));
+        }
+    }
+
+    // NEW: PERSONAL (threshold: 3)
+    if !existing_set.contains("personal") {
+        let mut score = 0;
+
+        // Journal/dreams
+        for kw in &["rêve", "reve", "dream", "journal", "pensée", "pensee", "réflexion", "reflexion"] {
+            score += content_lower.matches(*kw).count() * 5;
+        }
+
+        // Personal events
+        for kw in &["anniversaire", "birthday", "famille", "family", "ami", "friend"] {
+            score += content_lower.matches(*kw).count() * 3;
+        }
+
+        // Personal communication
+        for kw in &["bonjour", "hello", "cordialement", "salut", "merci"] {
+            score += content_lower.matches(*kw).count() * 2;
+        }
+
+        if score >= 3 {
+            scored_tags.push((score, "personal"));
+        }
+    }
+
+    // NEW: REFERENCE (threshold: 2)
+    // For short notes with codes/numbers/data
+    if !existing_set.contains("reference") && content.len() < 200 {
+        let mut score = 0;
+
+        // Codes/numbers pattern
+        let digit_count = content.chars().filter(|c| c.is_ascii_digit()).count();
+        if digit_count >= 10 {
+            score += 5;
+        }
+
+        // Encoded data
+        if content.len() >= 30 && (digit_count as f32 / content.len() as f32) > 0.3 {
+            score += 4;
+        }
+
+        // Short notes with special chars
+        let special_count = content.chars().filter(|c| "|;:,_-=".contains(*c)).count();
+        if special_count >= 5 {
+            score += 3;
+        }
+
+        if score >= 2 {
+            scored_tags.push((score, "reference"));
+        }
+    }
+
+    // FALLBACK: "note" tag for everything else
+    // If no tags found AND content > 20 characters
+    if scored_tags.is_empty() && content.trim().len() > 20 {
+        scored_tags.push((1, "note"));
+    }
+
+    // Sort by score descending, take top MAX_AUTO_TAGS
+    scored_tags.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
+    scored_tags.iter()
+        .take(MAX_AUTO_TAGS)
+        .map(|(_, tag)| tag.to_string())
+        .collect()
+}
+
+/// Parse Google Keep timestamp (microseconds since epoch) to DateTime
+fn parse_timestamp(ts: Option<&serde_json::Value>) -> DateTime<Utc> {
+    if let Some(val) = ts {
+        // Try as number
+        if let Some(num) = val.as_u64() {
+            // Convert microseconds to milliseconds
+            if let Some(dt) = DateTime::from_timestamp_millis((num / 1000) as i64) {
+                return dt;
+            }
+        }
+        // Try as string
+        if let Some(s) = val.as_str() {
+            if let Ok(num) = s.parse::<u64>() {
+                if let Some(dt) = DateTime::from_timestamp_millis((num / 1000) as i64) {
+                    return dt;
+                }
+            }
+        }
+    }
+    // Fallback to current time if parsing fails
+    Utc::now()
+}

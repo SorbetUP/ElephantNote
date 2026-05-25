@@ -42,6 +42,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       indexPath: '',
       documents: [],
       folders: [],
+      semanticLinks: [],
       generatedAt: ''
     },
     busy: false,
@@ -116,6 +117,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
           indexPath: '',
           documents: [],
           folders: [],
+          semanticLinks: [],
           generatedAt: '',
           error: error?.message || 'Unable to inspect search index.'
         }
@@ -224,6 +226,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
           indexPath: '',
           documents: [],
           folders: [],
+          semanticLinks: [],
           generatedAt: ''
         }
         await this.refreshStatus()

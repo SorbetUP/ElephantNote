@@ -53,4 +53,37 @@ tags:
 
     expect(parseMarkdownTags(markdown)).toEqual(['ideas', 'needs, review'])
   })
+
+  it('replaces YAML block tags without leaving stale list items', () => {
+    const markdown = `---
+title: "Research"
+tags:
+  - "#ideas"
+  - "needs, review"
+createdAt: "2026-05-17T23:43:04.008Z"
+---
+
+# Research
+`
+
+    const next = updateMarkdownTags(markdown, ['done'], 'Research')
+
+    expect(parseMarkdownTags(next)).toEqual(['done'])
+    expect(next).toContain('tags: ["done"]')
+    expect(next).not.toContain('  - "#ideas"')
+    expect(next).toContain('createdAt: "2026-05-17T23:43:04.008Z"')
+  })
+
+  it('parses tags from CRLF frontmatter', () => {
+    const markdown = [
+      '---',
+      'title: "Windows note"',
+      'tags: ["work", "urgent"]',
+      '---',
+      '',
+      '# Windows note'
+    ].join('\r\n')
+
+    expect(parseMarkdownTags(markdown)).toEqual(['work', 'urgent'])
+  })
 })

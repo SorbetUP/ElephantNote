@@ -2,16 +2,16 @@
   <form
     class="en-inline-tag-form"
     @click.stop
-    @submit.prevent="$emit('submit')"
+    @submit.prevent="submit"
   >
     <input
-      :value="modelValue"
+      :value="localValue"
       autofocus
       type="text"
       :placeholder="isEditing ? 'Edit tag' : 'Tag'"
       @input="updateValue($event.target.value)"
       @keydown.esc="$emit('cancel')"
-      @keydown.enter.prevent="$emit('submit')"
+      @keydown.enter.prevent="submit"
     >
     <button type="submit">
       Save
@@ -26,7 +26,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { ref, watch } from 'vue'
+
+const props = defineProps({
   modelValue: {
     type: String,
     default: ''
@@ -38,10 +40,23 @@ defineProps({
 })
 
 const emit = defineEmits(['update:modelValue', 'update:model-value', 'submit', 'cancel'])
+const localValue = ref(props.modelValue)
+
+watch(
+  () => props.modelValue,
+  (value) => {
+    if (value !== localValue.value) localValue.value = value
+  }
+)
 
 const updateValue = (value) => {
+  localValue.value = value
   emit('update:modelValue', value)
   emit('update:model-value', value)
+}
+
+const submit = () => {
+  emit('submit', localValue.value)
 }
 </script>
 

@@ -1,10 +1,9 @@
 #import <Cocoa/Cocoa.h>
 
-@class SimpleViewController;
+@class MarkdownEditorWindowCoordinator;
 
 @interface AppDelegate : NSObject <NSApplicationDelegate>
 
-@property (strong, nonatomic) NSWindow *window;
-@property (strong, nonatomic) SimpleViewController *editorViewController;
+@property (strong, nonatomic) MarkdownEditorWindowCoordinator *windowCoordinator;
 
 @end

@@ -34,6 +34,7 @@ import { updateMarkdownTitle } from './markdown'
 import { migrateWorkspace } from './workspaceMigrations'
 import { GitSyncEngine } from './sync/GitSyncEngine'
 import { normalizeFeatureFlags, setFeatureFlag } from 'common/elephantnote/featureFlags'
+import { normalizeAiConfig } from 'common/elephantnote/aiProviders'
 
 const store = new Store({
   name: 'elephantnote',
@@ -41,7 +42,8 @@ const store = new Store({
   defaults: {
     vaults: [],
     activeVaultId: null,
-    featureFlags: normalizeFeatureFlags()
+    featureFlags: normalizeFeatureFlags(),
+    aiConfig: normalizeAiConfig()
   }
 })
 
@@ -50,13 +52,15 @@ const syncEngine = new GitSyncEngine()
 const getConfig = () => ({
   vaults: store.get('vaults') || [],
   activeVaultId: store.get('activeVaultId') || null,
-  featureFlags: normalizeFeatureFlags(store.get('featureFlags') || {})
+  featureFlags: normalizeFeatureFlags(store.get('featureFlags') || {}),
+  aiConfig: normalizeAiConfig(store.get('aiConfig') || {})
 })
 
 const setConfig = (config) => {
   store.set('vaults', config.vaults)
   store.set('activeVaultId', config.activeVaultId)
   store.set('featureFlags', normalizeFeatureFlags(config.featureFlags || {}))
+  store.set('aiConfig', normalizeAiConfig(config.aiConfig || {}))
 }
 
 export const initializeVault = async(vaultRoot, now = new Date()) => {
@@ -556,6 +560,24 @@ const createElephantNoteMainApi = () => {
       [ELEPHANTNOTE_API_ACTIONS.AGENTS_REGISTER]: async(payload) => registerAgent(payload),
       [ELEPHANTNOTE_API_ACTIONS.AGENTS_UNREGISTER]: async({ id }) => unregisterAgent(id),
       [ELEPHANTNOTE_API_ACTIONS.AGENTS_SEND]: async(payload) => sendAgentMessage(payload),
+      [ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_GET]: async() => getConfig().aiConfig,
+      [ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_SET]: async(payload) => {
+        const config = getConfig()
+        config.aiConfig = normalizeAiConfig(payload)
+        setConfig(config)
+        if (config.aiConfig.codexLinkEnabled && config.aiConfig.preset === 'codex') {
+          registerAgent({
+            id: 'codex',
+            name: 'Codex',
+            transport: config.aiConfig.transport,
+            endpoint: config.aiConfig.endpoint,
+            model: config.aiConfig.model,
+            apiKey: config.aiConfig.apiKey,
+            capabilities: ['chat', 'code']
+          })
+        }
+        return config.aiConfig
+      },
       [ELEPHANTNOTE_API_ACTIONS.FEATURES_GET]: async() => getConfig().featureFlags,
       [ELEPHANTNOTE_API_ACTIONS.FEATURES_SET]: async({ key, enabled }) => {
         const config = getConfig()

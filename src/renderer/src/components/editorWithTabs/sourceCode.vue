@@ -22,6 +22,14 @@ const props = defineProps({
   textDirection: {
     type: String,
     required: true
+  },
+  toEditorMarkdown: {
+    type: Function,
+    default: (markdown) => markdown
+  },
+  fromEditorMarkdown: {
+    type: Function,
+    default: (markdown) => markdown
   }
 })
 
@@ -95,7 +103,7 @@ const prepareTabSwitch = () => {
     const { cursor, markdown: newMarkdown } = getMarkdownAndCursor(editor.value)
     editorStore.LISTEN_FOR_CONTENT_CHANGE({
       id: tabId.value,
-      markdown: newMarkdown,
+      markdown: props.fromEditorMarkdown(newMarkdown),
       muyaIndexCursor: cursor
     })
     tabId.value = null
@@ -108,7 +116,7 @@ const handleFileChange = ({ id, markdown: newMarkdown, muyaIndexCursor }) => {
   prepareTabSwitch()
 
   if (typeof newMarkdown === 'string') {
-    editor.value.setValue(newMarkdown)
+    editor.value.setValue(props.toEditorMarkdown(newMarkdown))
   }
 
   // t('editor.sourceCode.cursorNullComment')
@@ -203,7 +211,7 @@ const saveContent = (cm) => {
     if (tabId.value) {
       editorStore.LISTEN_FOR_CONTENT_CHANGE({
         id: tabId.value,
-        markdown: newMarkdown,
+        markdown: props.fromEditorMarkdown(newMarkdown),
         wordCount,
         muyaIndexCursor: cursor
       })
@@ -232,7 +240,7 @@ onMounted(() => {
   const { markdown, muyaIndexCursor, textDirection } = props
   const container = sourceCodeContainer.value
   const codeMirrorConfig = {
-    value: markdown,
+    value: props.toEditorMarkdown(markdown),
     lineNumbers: true,
     autofocus: true,
     lineWrapping: true,
@@ -297,7 +305,7 @@ onBeforeUnmount(() => {
   const { cursor, markdown: newMarkdown } = getMarkdownAndCursor(editor.value)
   bus.emit('file-changed', {
     id: tabId.value,
-    markdown: newMarkdown,
+    markdown: props.fromEditorMarkdown(newMarkdown),
     muyaIndexCursor: cursor,
     renderCursor: true
   })

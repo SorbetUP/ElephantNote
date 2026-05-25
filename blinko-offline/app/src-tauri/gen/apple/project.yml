@@ -1,0 +1,159 @@
+name: Blinko
+options:
+  bundleIdPrefix: com.blinko.app
+  deploymentTarget:
+    iOS: 13.0
+fileGroups: [../../src]
+configs:
+  debug: debug
+  release: release
+settingGroups:
+  app:
+    base:
+      PRODUCT_NAME: Blinko
+      PRODUCT_BUNDLE_IDENTIFIER: com.blinko.app
+targetTemplates:
+  app:
+    type: application
+    sources:
+      - path: Sources
+    scheme:
+      environmentVariables:
+        RUST_BACKTRACE: full
+        RUST_LOG: info
+    settings:
+      groups: [app]
+targets:
+  Blinko_iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+        excludes:
+          - BlinkoShareExtension/**
+      - path: Assets.xcassets
+      - path: Externals
+      - path: Blinko_iOS
+      - path: assets
+        buildPhase: resources
+        type: folder
+      - path: LaunchScreen.storyboard
+    info:
+      path: Blinko_iOS/Info.plist
+      properties:
+        LSRequiresIPhoneOS: true
+        NSMicrophoneUsageDescription: "Microphone access is required to record audio notes."
+        NSAppTransportSecurity:
+          NSExceptionDomains:
+            localhost:
+              NSIncludesSubdomains: true
+              NSTemporaryExceptionAllowsInsecureHTTPLoads: true
+            127.0.0.1:
+              NSIncludesSubdomains: true
+              NSTemporaryExceptionAllowsInsecureHTTPLoads: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.blinko.app
+            CFBundleURLSchemes: [blinko]
+        UILaunchStoryboardName: LaunchScreen
+        UIRequiredDeviceCapabilities: [arm64, metal]
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        CFBundleShortVersionString: 1.8.4
+        CFBundleVersion: 1.8.4
+    entitlements:
+      path: Blinko_iOS/Blinko_iOS.entitlements
+    scheme:
+      environmentVariables:
+        RUST_BACKTRACE: full
+        RUST_LOG: info
+    settings:
+      base:
+        ENABLE_BITCODE: false
+        ARCHS: [arm64]
+        VALID_ARCHS: arm64 
+        LIBRARY_SEARCH_PATHS[arch=x86_64]: $(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)
+        LIBRARY_SEARCH_PATHS[arch=arm64]: $(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)
+        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: true
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
+      groups: [app]
+    dependencies:
+      - framework: libapp.a
+        embed: false
+      - sdk: CoreGraphics.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: QuartzCore.framework
+      - sdk: Security.framework
+      - sdk: UIKit.framework
+      - sdk: WebKit.framework
+      - target: BlinkoShareExtension
+        embed: true
+    preBuildScripts:
+      - name: Ensure App Group Entitlements
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          cat > "${SRCROOT}/Blinko_iOS/Blinko_iOS.entitlements" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.security.application-groups</key>
+            <array>
+              <string>group.com.blinko.app</string>
+            </array>
+          </dict>
+          </plist>
+          EOF
+      - script: bun tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
+        name: Build Rust Code
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
+          - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a
+
+  BlinkoShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/BlinkoShareExtension
+      - path: BlinkoShareExtension
+    info:
+      path: BlinkoShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: "Share to Blinko"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule: TRUEPREDICATE
+    entitlements:
+      path: BlinkoShareExtension/BlinkoShareExtension.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.blinko.app.share
+      groups: [app]
+    preBuildScripts:
+      - name: Ensure App Group Entitlements
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          cat > "${SRCROOT}/BlinkoShareExtension/BlinkoShareExtension.entitlements" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.security.application-groups</key>
+            <array>
+              <string>group.com.blinko.app</string>
+            </array>
+          </dict>
+          </plist>
+          EOF

@@ -33,4 +33,31 @@ describe('ElephantSearchService exact local search', () => {
       await fs.remove(root)
     }
   })
+
+  it('inspects markdown files before the semantic index is built', async() => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'elephantnote-search-inspect-'))
+    try {
+      await fs.ensureDir(path.join(root, 'Project'))
+      await fs.writeFile(path.join(root, 'Project', 'Plan.md'), '# Plan\n\nLocal search notes', 'utf8')
+      const service = new ElephantSearchService()
+      await service.registerWindowVault(2, root)
+
+      const inspection = await service.inspectIndex(2)
+
+      expect(inspection.indexPath).toBe(path.join(root, '.elephantnote/search/vectra'))
+      expect(inspection.documents).toHaveLength(1)
+      expect(inspection.documents[0]).toMatchObject({
+        uri: 'elephantnote://vault/Project/Plan.md',
+        title: 'Plan',
+        relativePath: 'Project/Plan.md',
+        folder: 'Project',
+        type: 'md',
+        indexed: false
+      })
+      expect(inspection.folders).toEqual([{ name: 'Project', count: 1 }])
+      expect(createEmbeddings).not.toHaveBeenCalled()
+    } finally {
+      await fs.remove(root)
+    }
+  })
 })

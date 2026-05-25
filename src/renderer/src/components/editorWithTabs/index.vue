@@ -18,6 +18,8 @@
         :markdown="markdown"
         :muya-index-cursor="muyaIndexCursor"
         :text-direction="textDirection"
+        :to-editor-markdown="toEditorMarkdown"
+        :from-editor-markdown="fromEditorMarkdown"
       />
     </div>
     <tab-notifications />

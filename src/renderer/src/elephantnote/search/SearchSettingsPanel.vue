@@ -65,44 +65,106 @@
         </button>
       </div>
 
+      <div
+        v-if="store.visualizationMode !== 'list'"
+        class="en-semantic-map-toolbar"
+      >
+        <div class="en-semantic-topic-strip">
+          <button
+            type="button"
+            :class="{ active: selectedTopicId === '' }"
+            @click="selectedTopicId = ''"
+          >
+            All
+          </button>
+          <button
+            v-for="topic in topicNodes"
+            :key="topic.id"
+            type="button"
+            :class="{ active: selectedTopicId === topic.id }"
+            @click="selectedTopicId = selectedTopicId === topic.id ? '' : topic.id"
+          >
+            {{ topic.label }}
+          </button>
+        </div>
+        <div class="en-semantic-map-actions">
+          <span>{{ semanticLinkCountLabel }}</span>
+          <button
+            type="button"
+            @click="resetGraphView"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
       <div class="en-index-visualization">
         <svg
           v-if="store.visualizationMode !== 'list'"
           viewBox="0 0 720 320"
           role="img"
           aria-label="Search index visualization"
+          @wheel.prevent="zoomGraph"
+          @pointerdown="startGraphPan"
+          @pointermove="moveGraphPan"
+          @pointerup="stopGraphPan"
+          @pointerleave="stopGraphPan"
         >
-          <g v-if="store.visualizationMode === 'graph'">
+          <g :transform="graphTransform">
+            <g
+              v-for="topic in visibleTopicNodes"
+              :key="topic.id"
+            >
+              <circle
+                :cx="topic.x"
+                :cy="topic.y"
+                :r="topic.radius"
+                class="en-topic-node"
+                :style="{ '--node-accent': topic.color }"
+                @click.stop="selectedTopicId = selectedTopicId === topic.id ? '' : topic.id"
+              />
+              <text
+                :x="topic.x"
+                :y="topic.y + 4"
+                text-anchor="middle"
+                class="en-topic-label"
+              >
+                {{ topic.label }}
+              </text>
+            </g>
+
             <line
-              v-for="link in graphLinks"
+              v-for="link in visibleGraphLinks"
               :key="link.id"
               :x1="link.source.x"
               :y1="link.source.y"
               :x2="link.target.x"
               :y2="link.target.y"
-              class="en-index-link"
+              :class="['en-index-link', `type-${link.type}`]"
+              :style="{ '--link-strength': link.opacity, '--link-width': link.width }"
             />
-          </g>
-          <g
-            v-for="node in visualNodes"
-            :key="node.id"
-          >
-            <circle
-              :cx="node.x"
-              :cy="node.y"
-              :r="node.radius"
-              class="en-index-node"
-              :style="{ '--node-accent': node.color }"
-              @click="openDocument(node.document)"
-            />
-            <text
-              v-if="store.showVisualizationLabels"
-              :x="node.x + node.radius + 5"
-              :y="node.y + 4"
-              class="en-index-label"
+
+            <g
+              v-for="node in visibleDocumentNodes"
+              :key="node.id"
             >
-              {{ node.label }}
-            </text>
+              <circle
+                :cx="node.x"
+                :cy="node.y"
+                :r="node.radius"
+                :class="['en-index-node', { dimmed: selectedTopicId && !node.topicIds.includes(selectedTopicId) }]"
+                :style="{ '--node-accent': node.color }"
+                @click.stop="openDocument(node.document)"
+              />
+              <text
+                v-if="store.showVisualizationLabels"
+                :x="node.x + node.radius + 6"
+                :y="node.y + 4"
+                class="en-index-label"
+              >
+                {{ node.label }}
+              </text>
+            </g>
           </g>
         </svg>
 
@@ -111,7 +173,7 @@
           class="en-index-document-list"
         >
           <button
-            v-for="document in documents"
+            v-for="document in filteredDocuments"
             :key="document.uri"
             type="button"
             @click="openDocument(document)"
@@ -205,7 +267,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   FileText,
   GitBranch,
@@ -222,6 +284,9 @@ import { useVaultStore } from '../stores/vaultStore'
 const store = useSearchStore()
 const vaultStore = useVaultStore()
 let refreshTimer = null
+const selectedTopicId = ref('')
+const graphViewport = ref({ x: 0, y: 0, scale: 1 })
+const graphPan = ref(null)
 
 const visualizationModes = [
   { id: 'space', label: 'Space', icon: Orbit },
@@ -230,6 +295,7 @@ const visualizationModes = [
 ]
 
 const documents = computed(() => store.indexInspection.documents || [])
+const semanticLinks = computed(() => store.indexInspection.semanticLinks || [])
 const folderCountLabel = computed(() => {
   const count = store.indexInspection.folders?.length || 0
   return `${count} folder${count === 1 ? '' : 's'}`
@@ -256,69 +322,268 @@ const hashString = (value) => {
 }
 
 const folderColor = (folder) => {
-  const palette = ['#1264ff', '#0f9f6e', '#d97706', '#dc2626', '#0891b2', '#4f46e5', '#64748b']
+  const palette = ['#1264ff', '#0f9f6e', '#d97706', '#dc2626', '#0891b2', '#4f46e5', '#64748b', '#be185d']
   return palette[hashString(folder || 'root') % palette.length]
 }
 
-const visualNodes = computed(() => {
-  const byFolder = new Map()
+const normalizeTopicId = (value) => `topic:${String(value || 'Vault root').toLowerCase()}`
+
+const keywordsForDocument = (document) => {
+  const source = `${document.title || ''} ${document.relativePath || ''}`
+    .toLowerCase()
+    .replace(/\.md\b/g, ' ')
+    .replace(/[^a-z0-9\u00c0-\u024f#]+/gi, ' ')
+  return source
+    .split(/\s+/)
+    .map((word) => word.replace(/^#+/, ''))
+    .filter((word) => word.length >= 4 && !['note', 'notes', 'untitled', 'getting', 'started'].includes(word))
+    .slice(0, 4)
+}
+
+const topicNodes = computed(() => {
+  const topics = new Map()
   for (const document of documents.value) {
-    const key = store.showFolderClusters ? document.folder || 'Vault root' : 'All notes'
-    if (!byFolder.has(key)) byFolder.set(key, [])
-    byFolder.get(key).push(document)
+    const folder = store.showFolderClusters ? document.folder || 'Vault root' : 'All notes'
+    const folderId = normalizeTopicId(folder)
+    if (!topics.has(folderId)) {
+      topics.set(folderId, {
+        id: folderId,
+        kind: 'topic',
+        label: folder.split('/').pop() || folder,
+        source: folder,
+        count: 0,
+        color: folderColor(folder)
+      })
+    }
+    topics.get(folderId).count += 1
+
+    for (const keyword of keywordsForDocument(document).slice(0, 2)) {
+      const keywordId = normalizeTopicId(keyword)
+      if (!topics.has(keywordId)) {
+        topics.set(keywordId, {
+          id: keywordId,
+          kind: 'topic',
+          label: keyword,
+          source: keyword,
+          count: 0,
+          color: folderColor(keyword)
+        })
+      }
+      topics.get(keywordId).count += 1
+    }
   }
 
-  const folders = [...byFolder.keys()]
-  return documents.value.map((document, index) => {
+  return [...topics.values()]
+    .filter((topic) => topic.count > 0)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, 18)
+})
+
+const documentTopicIds = (document) => {
+  const ids = new Set()
+  const folder = store.showFolderClusters ? document.folder || 'Vault root' : 'All notes'
+  ids.add(normalizeTopicId(folder))
+  for (const keyword of keywordsForDocument(document).slice(0, 2)) {
+    ids.add(normalizeTopicId(keyword))
+  }
+  return [...ids]
+}
+
+const filteredDocuments = computed(() => {
+  if (!selectedTopicId.value) return documents.value
+  return documents.value.filter((document) => documentTopicIds(document).includes(selectedTopicId.value))
+})
+
+const graphTransform = computed(() => {
+  const viewport = graphViewport.value
+  return `translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`
+})
+
+const semanticLinkCountLabel = computed(() => {
+  const count = semanticLinks.value.length
+  if (count) return `${count} semantic link${count === 1 ? '' : 's'}`
+  return 'Build the index to reveal semantic links'
+})
+
+const topicLayout = computed(() => {
+  const layout = new Map()
+  const topics = topicNodes.value
+  const radius = store.visualizationMode === 'space' ? 104 : 118
+  topics.forEach((topic, index) => {
+    const angle = (index / Math.max(1, topics.length)) * Math.PI * 2 - Math.PI / 2
+    layout.set(topic.id, {
+      ...topic,
+      x: 360 + Math.cos(angle) * radius,
+      y: 160 + Math.sin(angle) * Math.min(radius, 84),
+      radius: 18 + Math.min(18, topic.count * 1.7)
+    })
+  })
+  return layout
+})
+
+const visibleTopicNodes = computed(() => {
+  return [...topicLayout.value.values()]
+})
+
+const visualNodes = computed(() => {
+  const linksByDocument = new Map()
+  for (const link of semanticLinks.value) {
+    linksByDocument.set(link.source, (linksByDocument.get(link.source) || 0) + 1)
+    linksByDocument.set(link.target, (linksByDocument.get(link.target) || 0) + 1)
+  }
+
+  const byFolder = new Map()
+  for (const document of documents.value) {
     const folder = store.showFolderClusters ? document.folder || 'Vault root' : 'All notes'
-    const folderIndex = Math.max(0, folders.indexOf(folder))
-    const localIndex = byFolder.get(folder).indexOf(document)
+    if (!byFolder.has(folder)) byFolder.set(folder, [])
+    byFolder.get(folder).push(document)
+  }
+
+  const topics = topicLayout.value
+  return documents.value.map((document, index) => {
+    const topicIds = documentTopicIds(document)
+    const primaryTopic = topics.get(topicIds[0])
+    const localGroup = byFolder.get(store.showFolderClusters ? document.folder || 'Vault root' : 'All notes') || []
+    const localIndex = Math.max(0, localGroup.indexOf(document))
     const ring = 36 + (localIndex % 7) * 13
-    const angle = ((hashString(document.relativePath) % 360) * Math.PI) / 180
-    const clusterX = 120 + (folderIndex % 4) * 160
-    const clusterY = 88 + Math.floor(folderIndex / 4) * 96
+    const angle = (((hashString(document.relativePath) % 360) + localIndex * 23) * Math.PI) / 180
+    const baseX = primaryTopic?.x || 360
+    const baseY = primaryTopic?.y || 160
+    const linkPull = Math.min(30, (linksByDocument.get(document.relativePath) || 0) * 4)
     const graphX = 80 + (index % 8) * 82
     const graphY = 64 + Math.floor(index / 8) * 54
 
     return {
       id: document.uri,
       document,
+      topicIds,
       label: document.title,
-      radius: 6 + Math.min(5, (document.title || '').length / 18),
-      color: folderColor(folder),
-      x: store.visualizationMode === 'graph' ? graphX : clusterX + Math.cos(angle) * ring,
-      y: store.visualizationMode === 'graph' ? graphY : clusterY + Math.sin(angle) * ring
+      radius: 5 + Math.min(7, (linksByDocument.get(document.relativePath) || 0) + (document.indexed ? 2 : 0)),
+      color: folderColor(document.folder || 'Vault root'),
+      x: store.visualizationMode === 'graph' ? graphX : baseX + Math.cos(angle) * (ring - linkPull),
+      y: store.visualizationMode === 'graph' ? graphY : baseY + Math.sin(angle) * Math.max(24, ring - linkPull)
     }
   })
 })
 
 const graphLinks = computed(() => {
   const links = []
-  const groups = new Map()
+  const nodeByPath = new Map(visualNodes.value.map((node) => [node.document.relativePath, node]))
+  const topicById = topicLayout.value
 
   for (const node of visualNodes.value) {
-    const folder = node.document.folder || 'Vault root'
-    if (!groups.has(folder)) groups.set(folder, [])
-    groups.get(folder).push(node)
+    const topic = topicById.get(node.topicIds[0])
+    if (topic) {
+      links.push({
+        id: `${topic.id}:${node.id}`,
+        source: topic,
+        target: node,
+        type: 'topic',
+        opacity: 0.22,
+        width: 0.8
+      })
+    }
   }
 
-  for (const group of groups.values()) {
-    const maxLinks = Math.min(store.graphDensity, group.length - 1)
-    for (let index = 0; index < group.length; index += 1) {
-      for (let offset = 1; offset <= maxLinks; offset += 1) {
-        const target = group[index + offset]
-        if (!target) continue
-        links.push({
-          id: `${group[index].id}:${target.id}`,
-          source: group[index],
-          target
-        })
+  for (const link of semanticLinks.value) {
+    const source = nodeByPath.get(link.source)
+    const target = nodeByPath.get(link.target)
+    if (!source || !target) continue
+    links.push({
+      id: link.id,
+      source,
+      target,
+      type: 'semantic',
+      score: link.score,
+      opacity: 0.26 + Math.max(0, Math.min(0.62, link.score * 0.62)),
+      width: 0.9 + Math.max(0, Math.min(2.8, link.score * 2.8))
+    })
+  }
+
+  if (!semanticLinks.value.length) {
+    const groups = new Map()
+    for (const node of visualNodes.value) {
+      const folder = node.document.folder || 'Vault root'
+      if (!groups.has(folder)) groups.set(folder, [])
+      groups.get(folder).push(node)
+    }
+    for (const group of groups.values()) {
+      const maxLinks = Math.min(store.graphDensity, group.length - 1)
+      for (let index = 0; index < group.length; index += 1) {
+        for (let offset = 1; offset <= maxLinks; offset += 1) {
+          const target = group[index + offset]
+          if (!target) continue
+          links.push({
+            id: `${group[index].id}:${target.id}`,
+            source: group[index],
+            target,
+            type: 'folder',
+            opacity: 0.28,
+            width: 1
+          })
+        }
       }
     }
   }
 
   return links
 })
+
+const visibleDocumentNodes = computed(() => {
+  if (!selectedTopicId.value) return visualNodes.value
+  return visualNodes.value.filter((node) => node.topicIds.includes(selectedTopicId.value))
+})
+
+const visibleGraphLinks = computed(() => {
+  if (!selectedTopicId.value) return graphLinks.value
+  const visibleIds = new Set([
+    selectedTopicId.value,
+    ...visibleDocumentNodes.value.map((node) => node.id)
+  ])
+  return graphLinks.value.filter((link) => visibleIds.has(link.source.id) && visibleIds.has(link.target.id))
+})
+
+const resetGraphView = () => {
+  graphViewport.value = { x: 0, y: 0, scale: 1 }
+}
+
+const zoomGraph = (event) => {
+  const delta = event.deltaY > 0 ? -0.1 : 0.1
+  const nextScale = Math.max(0.55, Math.min(2.8, graphViewport.value.scale + delta))
+  graphViewport.value = {
+    ...graphViewport.value,
+    scale: nextScale
+  }
+}
+
+const startGraphPan = (event) => {
+  if (
+    event.button !== 0 ||
+    event.target?.classList?.contains('en-index-node') ||
+    event.target?.classList?.contains('en-topic-node')
+  ) return
+  graphPan.value = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    x: graphViewport.value.x,
+    y: graphViewport.value.y
+  }
+  event.currentTarget?.setPointerCapture?.(event.pointerId)
+}
+
+const moveGraphPan = (event) => {
+  if (!graphPan.value || graphPan.value.pointerId !== event.pointerId) return
+  graphViewport.value = {
+    ...graphViewport.value,
+    x: graphPan.value.x + event.clientX - graphPan.value.startX,
+    y: graphPan.value.y + event.clientY - graphPan.value.startY
+  }
+}
+
+const stopGraphPan = () => {
+  graphPan.value = null
+}
 
 const refresh = async () => {
   await store.refreshStatus()
@@ -400,6 +665,52 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
+.en-semantic-map-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.en-semantic-topic-strip {
+  display: flex;
+  gap: 7px;
+  overflow: auto;
+  padding-bottom: 2px;
+}
+
+.en-semantic-topic-strip button,
+.en-semantic-map-actions button {
+  height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--en-muted);
+  background: var(--en-surface);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.en-semantic-topic-strip button.active,
+.en-semantic-map-actions button:hover {
+  border-color: color-mix(in srgb, var(--en-primary) 34%, var(--en-border));
+  color: var(--en-primary);
+  background: color-mix(in srgb, var(--en-primary) 12%, var(--en-surface));
+}
+
+.en-semantic-map-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--en-muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .en-search-settings-toggle,
 .en-search-settings-actions button,
 .en-search-view-switch button {
@@ -447,12 +758,24 @@ onBeforeUnmount(() => {
 .en-index-visualization svg {
   width: 100%;
   height: 100%;
+  cursor: grab;
+  touch-action: none;
 }
 
 .en-index-link {
   stroke: var(--en-border-strong);
-  stroke-width: 1.3;
-  opacity: 0.72;
+  stroke-width: calc(var(--link-width, 1) * 1px);
+  opacity: var(--link-strength, 0.45);
+  vector-effect: non-scaling-stroke;
+}
+
+.en-index-link.type-semantic {
+  stroke: var(--en-primary);
+}
+
+.en-index-link.type-topic {
+  stroke-dasharray: 4 5;
+  opacity: 0.24;
 }
 
 .en-index-node {
@@ -460,6 +783,27 @@ onBeforeUnmount(() => {
   stroke: var(--en-surface);
   stroke-width: 2;
   cursor: pointer;
+}
+
+.en-index-node.dimmed {
+  opacity: 0.28;
+}
+
+.en-topic-node {
+  fill: color-mix(in srgb, var(--node-accent) 22%, var(--en-surface));
+  stroke: var(--node-accent);
+  stroke-width: 2;
+  cursor: pointer;
+}
+
+.en-topic-label {
+  fill: var(--en-text);
+  font-size: 10px;
+  font-weight: 900;
+  paint-order: stroke;
+  stroke: var(--en-surface);
+  stroke-width: 4px;
+  pointer-events: none;
 }
 
 .en-index-label {
@@ -501,6 +845,14 @@ onBeforeUnmount(() => {
   .en-search-settings-actions,
   .en-search-view-switch {
     flex-wrap: wrap;
+  }
+
+  .en-semantic-map-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .en-semantic-map-actions {
+    justify-content: space-between;
   }
 }
 

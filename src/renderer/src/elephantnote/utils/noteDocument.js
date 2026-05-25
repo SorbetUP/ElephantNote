@@ -1,4 +1,4 @@
-const frontmatterPattern = /^---\n([\s\S]*?)\n---\n?/
+const frontmatterPattern = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
 
 const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -52,6 +52,15 @@ export const toEditorMarkdown = (markdown = '', fallbackTitle = 'Untitled') => {
   const title = getDocumentTitle(markdown, fallbackTitle)
   const { body } = parseFrontmatter(markdown)
   return stripDisplayedTitle(body, title)
+}
+
+export const getEditorMarkdownStats = (markdown = '') => {
+  const content = String(markdown || '').trim()
+  const words = content.length === 0 ? [] : content.split(/\s+/).filter(Boolean)
+  return {
+    word: words.length,
+    character: Array.from(String(markdown || '')).length
+  }
 }
 
 const composeNoteDocument = (rawFrontmatter, title, body = '') => {

@@ -1,4 +1,4 @@
-const frontmatterPattern = /^---\n([\s\S]*?)\n---\n?/
+const frontmatterPattern = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
 
 const normalizeTag = (tag) =>
   String(tag || '')
@@ -65,16 +65,16 @@ export const parseMarkdownTags = (markdown = '') => {
   if (!frontmatterMatch) return []
 
   const lines = frontmatterMatch[1].split(/\r?\n/)
-  const tagsIndex = lines.findIndex((line) => /^tags:\s*/.test(line))
+  const tagsIndex = lines.findIndex((line) => /^\s*tags:\s*/.test(line))
   if (tagsIndex < 0) return []
 
-  const inlineValue = lines[tagsIndex].replace(/^tags:\s*/, '')
+  const inlineValue = lines[tagsIndex].replace(/^\s*tags:\s*/, '')
   if (inlineValue.trim()) return parseTagList(inlineValue)
 
   const blockTags = []
   for (let index = tagsIndex + 1; index < lines.length; index += 1) {
     const line = lines[index]
-    if (/^[A-Za-z0-9_-]+:\s*/.test(line)) break
+    if (/^\s*[A-Za-z0-9_-]+:\s*/.test(line)) break
     const match = line.match(/^\s*-\s*(.+?)\s*$/)
     if (!match) continue
     const tag = normalizeTag(match[1])
@@ -107,10 +107,20 @@ export const updateMarkdownTags = (markdown = '', nextTags = [], title = 'Untitl
 
   const frontmatterBody = frontmatterMatch[1]
   const lines = frontmatterBody.split(/\r?\n/)
-  const tagsIndex = lines.findIndex((line) => /^tags:\s*/.test(line))
+  const tagsIndex = lines.findIndex((line) => /^\s*tags:\s*/.test(line))
 
   if (tagsIndex >= 0) {
+    const hadBlockTags = !lines[tagsIndex].replace(/^\s*tags:\s*/, '').trim()
     lines[tagsIndex] = tagsLine
+    if (hadBlockTags) {
+      let deleteCount = 0
+      for (let index = tagsIndex + 1; index < lines.length; index += 1) {
+        if (/^\s*[A-Za-z0-9_-]+:\s*/.test(lines[index])) break
+        if (!/^\s*-\s*/.test(lines[index]) && lines[index].trim()) break
+        deleteCount += 1
+      }
+      if (deleteCount) lines.splice(tagsIndex + 1, deleteCount)
+    }
   } else {
     const insertAfter = lines.findIndex((line) => /^(title|type|createdAt|updatedAt):\s*/.test(line))
     if (insertAfter >= 0) {

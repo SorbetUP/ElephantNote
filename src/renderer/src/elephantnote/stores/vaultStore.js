@@ -282,6 +282,21 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       ].slice(0, 8)
     },
 
+    updateNoteMetadata(pathname, metadata = {}) {
+      if (!pathname) return
+      const applyMetadata = (entry) => {
+        if (!entry || entry.path !== pathname) return entry
+        return {
+          ...entry,
+          title: metadata.title || entry.title,
+          tags: Array.isArray(metadata.tags) ? metadata.tags : entry.tags,
+          updatedAt: metadata.updatedAt || entry.updatedAt
+        }
+      }
+      this.entries = this.entries.map(applyMetadata)
+      this.openedNotes = this.openedNotes.map(applyMetadata)
+    },
+
     openNote(entry) {
       if (this.openedNotePath === entry.path) return
       this.openedNotePath = entry.path

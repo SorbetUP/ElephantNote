@@ -7,6 +7,8 @@ const upsertCalls = []
 const deleteCalls = []
 const queryCalls = []
 let queryShouldFallback = false
+let includeDocumentWithoutPath = false
+let listDocumentsAsEmpty = false
 
 vi.mock('vectra', () => {
   class FakeLocalDocumentIndex {
@@ -52,10 +54,30 @@ vi.mock('vectra', () => {
     }
 
     async listDocuments() {
-      return upsertCalls.map((call, index) => ({
+      if (listDocumentsAsEmpty) return []
+      const documents = upsertCalls.map((call, index) => ({
         id: `doc-${index + 1}`,
         uri: call.uri,
         loadMetadata: async() => call.metadata
+      }))
+      if (includeDocumentWithoutPath) {
+        documents.push({
+          id: 'doc-without-path',
+          uri: '',
+          loadMetadata: async() => ({})
+        })
+      }
+      return documents
+    }
+
+    async listItems() {
+      return upsertCalls.map((call, index) => ({
+        id: `chunk-${index + 1}`,
+        metadata: {
+          documentId: `doc-${index + 1}`,
+          ...call.metadata
+        },
+        vector: index % 2 === 0 ? [1, 0, 0] : [0.92, 0.08, 0]
       }))
     }
   }
@@ -87,6 +109,8 @@ describe('VectraIndexManager', () => {
     deleteCalls.length = 0
     queryCalls.length = 0
     queryShouldFallback = false
+    includeDocumentWithoutPath = false
+    listDocumentsAsEmpty = false
     await fs.remove(root)
     await fs.ensureDir(path.dirname(notePath))
     await fs.writeFile(notePath, '# World Model\n\nlatent memory and semantic retrieval', 'utf8')
@@ -132,6 +156,56 @@ describe('VectraIndexManager', () => {
       folder: 'Research',
       type: 'md'
     })
+  })
+
+  it('skips malformed indexed documents during inspection', async() => {
+    includeDocumentWithoutPath = true
+    const manager = new VectraIndexManager()
+    await manager.init(root)
+    await manager.upsertMarkdownFile({ vaultRoot: root, absolutePath: notePath })
+
+    const documents = await manager.inspectDocuments()
+
+    expect(documents).to.have.length(1)
+    expect(documents[0].relativePath).to.equal('Research/world-model.md')
+  })
+
+  it('falls back to indexed chunk metadata during inspection', async() => {
+    listDocumentsAsEmpty = true
+    const manager = new VectraIndexManager()
+    await manager.init(root)
+    await manager.upsertMarkdownFile({ vaultRoot: root, absolutePath: notePath })
+
+    const documents = await manager.inspectDocuments()
+
+    expect(documents).to.have.length(1)
+    expect(documents[0]).to.include({
+      uri: 'elephantnote://vault/Research/world-model.md',
+      title: 'world-model',
+      relativePath: 'Research/world-model.md',
+      folder: 'Research',
+      type: 'md'
+    })
+  })
+
+  it('builds semantic links from indexed chunk vectors', async() => {
+    const secondNotePath = path.join(root, 'Research', 'retrieval.md')
+    await fs.writeFile(secondNotePath, '# Retrieval\n\nembeddings and related memory', 'utf8')
+
+    const manager = new VectraIndexManager()
+    await manager.init(root)
+    await manager.upsertMarkdownFile({ vaultRoot: root, absolutePath: notePath })
+    await manager.upsertMarkdownFile({ vaultRoot: root, absolutePath: secondNotePath })
+
+    const links = await manager.inspectSemanticLinks({ threshold: 0.5 })
+
+    expect(links).to.have.length(1)
+    expect(links[0]).to.include({
+      source: 'Research/world-model.md',
+      target: 'Research/retrieval.md',
+      type: 'semantic'
+    })
+    expect(links[0].score).to.be.greaterThan(0.9)
   })
 
   it('falls back to semantic-only search when bm25 cannot consolidate a tiny collection', async() => {

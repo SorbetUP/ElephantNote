@@ -1,4 +1,3 @@
-import path from 'path'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { enable as remoteEnable } from '@electron/remote/main'
 import log from 'electron-log'
@@ -6,10 +5,11 @@ import windowStateKeeper from 'electron-window-state'
 import { isChildOfDirectory, isSamePathSync } from 'common/filesystem/paths'
 import BaseWindow, { WindowLifecycle, WindowType } from './base'
 import { ensureWindowPosition, zoomIn, zoomOut } from './utils'
-import { TITLE_BAR_HEIGHT, editorWinOptions, isLinux, isOsx } from '../config'
+import { TITLE_BAR_HEIGHT, editorWinOptions, isOsx } from '../config'
 import { showEditorContextMenu } from '../contextMenu/editor'
 import { loadMarkdownFile } from '../filesystem/markdown'
 import { switchLanguage } from '../spellchecker'
+import { getAppIconPath } from '../app/icon'
 import fs from 'fs'
 
 class EditorWindow extends BaseWindow {
@@ -60,8 +60,8 @@ class EditorWindow extends BaseWindow {
 
     const { x, y, width, height } = ensureWindowPosition(mainWindowState)
     const winOptions = Object.assign({ x, y, width, height }, editorWinOptions, options)
-    if (isLinux) {
-      winOptions.icon = path.join(process.cwd(), 'static', 'logo-96px.png')
+    if (!isOsx) {
+      winOptions.icon = getAppIconPath()
     }
 
     const {

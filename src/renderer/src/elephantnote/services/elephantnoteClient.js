@@ -31,7 +31,11 @@ const LEGACY_CALLS = {
   'sites.buildFolder': (payload) => window.elephantnote?.sitePreview?.buildFolder?.(payload),
   'sites.stop': ({ siteId }) => window.elephantnote?.sitePreview?.stop?.(siteId),
   'sites.status': ({ siteId }) => window.elephantnote?.sitePreview?.status?.(siteId),
-  'sites.openExternal': ({ url }) => window.elephantnote?.sitePreview?.openExternal?.(url)
+  'sites.openExternal': ({ url }) => window.elephantnote?.sitePreview?.openExternal?.(url),
+  'agents.list': () => window.elephantnote?.agents?.list?.(),
+  'agents.register': (payload) => window.elephantnote?.agents?.register?.(payload),
+  'agents.unregister': ({ id }) => window.elephantnote?.agents?.unregister?.(id),
+  'agents.send': (payload) => window.elephantnote?.agents?.send?.(payload)
 }
 
 const unwrap = async(promise) => {
@@ -101,6 +105,16 @@ export const elephantnoteClient = {
   features: {
     get: () => elephantnoteClient.call('features.get'),
     set: (key, enabled) => elephantnoteClient.call('features.set', { key, enabled })
+  },
+  ai: {
+    getConfig: () => elephantnoteClient.call('ai.config.get'),
+    setConfig: (config) => elephantnoteClient.call('ai.config.set', config)
+  },
+  agents: {
+    list: () => elephantnoteClient.call('agents.list'),
+    register: (payload) => elephantnoteClient.call('agents.register', payload),
+    unregister: (id) => elephantnoteClient.call('agents.unregister', { id }),
+    send: (id, message) => elephantnoteClient.call('agents.send', { id, message })
   },
   sync: {
     status: () => elephantnoteClient.call('sync.status'),

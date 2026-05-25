@@ -1,0 +1,50 @@
+[
+  {
+    "id": 1,
+    "sync_id": "sync-note-001",
+    "title": "Simple note",
+    "content": "hello",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z",
+    "deleted_at": null,
+    "rev": 1,
+    "device_id": "fixture-device",
+    "is_archived": false,
+    "is_recycle": false,
+    "is_share": false,
+    "is_top": false,
+    "note_type": 0
+  },
+  {
+    "id": 2,
+    "sync_id": "sync-note-002",
+    "title": "Note with attachment",
+    "content": "see attachment",
+    "created_at": "2024-01-02T00:00:00Z",
+    "updated_at": "2024-01-02T00:00:00Z",
+    "deleted_at": null,
+    "rev": 1,
+    "device_id": "fixture-device",
+    "is_archived": false,
+    "is_recycle": false,
+    "is_share": false,
+    "is_top": false,
+    "note_type": 0
+  },
+  {
+    "id": 3,
+    "sync_id": "sync-note-003",
+    "title": "Deleted note",
+    "content": "tombstone",
+    "created_at": "2024-01-03T00:00:00Z",
+    "updated_at": "2024-01-04T00:00:00Z",
+    "deleted_at": "2024-01-04T00:00:00Z",
+    "rev": 2,
+    "device_id": "fixture-device",
+    "is_archived": false,
+    "is_recycle": true,
+    "is_share": false,
+    "is_top": false,
+    "note_type": 0
+  }
+]

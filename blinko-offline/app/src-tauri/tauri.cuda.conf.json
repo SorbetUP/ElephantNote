@@ -1,0 +1,112 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Blinko(CUDA)",
+  "version": "1.6.3",
+  "identifier": "com.blinko.app",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:1111",
+    "beforeBuildCommand": "bun run build:no-pwa",
+    "frontendDist": "../../dist/public"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "title": "Blinko",
+        "width": 1920,
+        "height": 1080,
+        "minWidth": 600,
+        "minHeight": 300,
+        "fullscreen": false,
+        "resizable": true,
+        "focus": true,
+        "hiddenTitle": true,
+        "decorations": true,
+        "visible": false
+      },
+      {
+        "label": "quicknote",
+        "title": "Quick Note",
+        "width": 600,
+        "height": 125,
+        "maxHeight": 600,
+        "fullscreen": false,
+        "resizable": false,
+        "focus": true,
+        "center": true,
+        "visible": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "titleBarStyle": "Overlay",
+        "transparent": true,
+        "hiddenTitle": true,
+        "decorations": false,
+        "shadow": true,
+        "url": "/quicknote"
+      },
+      {
+        "label": "quickai",
+        "title": "Quick AI",
+        "width": 600,
+        "height": 125,
+        "maxHeight": 600,
+        "fullscreen": false,
+        "resizable": false,
+        "focus": true,
+        "center": true,
+        "visible": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "titleBarStyle": "Overlay",
+        "transparent": true,
+        "hiddenTitle": true,
+        "decorations": false,
+        "shadow": true,
+        "url": "/quickai"
+      },
+      {
+        "label": "quicktool",
+        "title": "Quick Tool",
+        "width": 190,
+        "height": 34,
+        "fullscreen": false,
+        "resizable": false,
+        "focus": false,
+        "center": false,
+        "visible": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "titleBarStyle": "Overlay",
+        "transparent": true,
+        "hiddenTitle": true,
+        "decorations": false,
+        "shadow": true,
+        "url": "/quicktool"
+      }
+    ]
+  },
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENBNzZBMzZDRTUxQUM4RjcKUldUM3lCcmxiS04yeXYyOGZ0RVVBbE42WDMxUXFiQTI0R3RqT0ZBbkZEcFFRNlZTWVhwZzlwRmkK",
+      "endpoints": [
+        "https://github.com/blinkospace/blinko/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

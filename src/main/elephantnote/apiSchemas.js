@@ -94,12 +94,25 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze({
     id: optionalString,
     name: requiredString,
     transport: optionalString,
-    endpoint: optionalString
+    endpoint: optionalString,
+    model: optionalString,
+    apiKey: optionalString
   }),
   'agents.unregister': objectSchema({ id: requiredString }),
   'agents.send': objectSchema({
     id: requiredString,
     message: requiredString
+  }),
+  'ai.config.get': emptySchema,
+  'ai.config.set': objectSchema({
+    enabled: optionalBoolean,
+    preset: optionalString,
+    name: optionalString,
+    transport: optionalString,
+    endpoint: optionalString,
+    model: optionalString,
+    apiKey: optionalString,
+    codexLinkEnabled: optionalBoolean
   }),
   'features.get': emptySchema,
   'features.set': objectSchema({

@@ -19,6 +19,7 @@ import EditorWindow from '../windows/editor'
 import SettingWindow from '../windows/setting'
 import { setLanguage } from '../i18n'
 import { getNativeThemeSource, isDarkApplicationTheme } from './nativeTheme'
+import { getAppDockIcon } from './icon'
 
 class App {
   /**
@@ -335,6 +336,10 @@ class App {
     }
 
     if (isOsx) {
+      const dockIcon = getAppDockIcon()
+      if (dockIcon) {
+        app.dock.setIcon(dockIcon)
+      }
       app.dock.setMenu(dockMenu)
     } else if (isWindows) {
       app.setJumpList([

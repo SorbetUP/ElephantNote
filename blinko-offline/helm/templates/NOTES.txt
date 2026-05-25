@@ -1,0 +1,53 @@
+1. Get the application URL by running these commands:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "blinko.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "blinko.fullname" . }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "blinko.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.service.port }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "blinko.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:1111 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 1111:$CONTAINER_PORT
+{{- end }}
+
+{{- if .Values.postgresql.enabled }}
+
+2. Your PostgreSQL database is running with the following details:
+   Host: {{ include "blinko.fullname" . }}-postgresql
+   Port: {{ .Values.postgresql.primary.service.ports.postgresql }}
+   Database: {{ .Values.postgresql.auth.database }}
+   Username: {{ .Values.postgresql.auth.username }}
+
+   To connect to your database directly:
+   export POSTGRES_PASSWORD=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ include "blinko.fullname" . }}-postgresql -o jsonpath="{.data.postgres-password}" | base64 -d)
+   kubectl run {{ include "blinko.fullname" . }}-postgresql-client --rm --tty -i --restart='Never' --namespace {{ .Release.Namespace }} --image docker.io/bitnami/postgresql:15 --env="PGPASSWORD=$POSTGRES_PASSWORD" --command -- psql --host {{ include "blinko.fullname" . }}-postgresql -U {{ .Values.postgresql.auth.username }} -d {{ .Values.postgresql.auth.database }} -p {{ .Values.postgresql.primary.service.ports.postgresql }}
+{{- else if .Values.externalDatabase.enabled }}
+
+2. You are using an external database:
+   Host: {{ .Values.externalDatabase.host }}
+   Port: {{ .Values.externalDatabase.port }}
+   Database: {{ .Values.externalDatabase.database }}
+   Username: {{ .Values.externalDatabase.username }}
+{{- end }}
+
+3. Configuration:
+   - Base URL: {{ .Values.config.baseUrl }}
+   - Environment: {{ .Values.config.nodeEnv }}
+
+{{- if not .Values.ingress.enabled }}
+
+4. To expose Blinko externally, consider enabling ingress or changing the service type.
+{{- end }}
+
+For more information about Blinko, visit: https://github.com/blinko-space/blinko 

@@ -33,6 +33,8 @@ export const ELEPHANTNOTE_API_ACTIONS = Object.freeze({
   AGENTS_REGISTER: 'agents.register',
   AGENTS_UNREGISTER: 'agents.unregister',
   AGENTS_SEND: 'agents.send',
+  AI_CONFIG_GET: 'ai.config.get',
+  AI_CONFIG_SET: 'ai.config.set',
   FEATURES_GET: 'features.get',
   FEATURES_SET: 'features.set',
   SYNC_STATUS: 'sync.status',

@@ -10,9 +10,21 @@
 		7A000001000000000000001 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A000002000000000000001 /* AppDelegate.m */; };
 		7A000003000000000000001 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A000004000000000000001 /* main.m */; };
 		7A000005000000000000001 /* MarkdownEditorViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A000006000000000000001 /* MarkdownEditorViewController.m */; };
+		7A000013000000000000001 /* MarkdownDocumentIO.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A000014000000000000001 /* MarkdownDocumentIO.m */; };
+		7A000015000000000000001 /* MarkdownEditorChromeView.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A000016000000000000001 /* MarkdownEditorChromeView.m */; };
+		7A000017000000000000001 /* MarkdownEditorDocument.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A000018000000000000001 /* MarkdownEditorDocument.m */; };
+		7A000019000000000000001 /* MarkdownPreviewRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A00001A000000000000001 /* MarkdownPreviewRenderer.m */; };
+		7A00001C000000000000001 /* MarkdownEditorHeaderView.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A00001D000000000000001 /* MarkdownEditorHeaderView.m */; };
+		7A00001E000000000000001 /* MarkdownEditorMenuBuilder.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A00001F000000000000001 /* MarkdownEditorMenuBuilder.m */; };
+		7A000020000000000000001 /* MarkdownEditorWindowCoordinator.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A000021000000000000001 /* MarkdownEditorWindowCoordinator.m */; };
+		7A000022000000000000001 /* MarkdownEditorWorkspaceView.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A000023000000000000001 /* MarkdownEditorWorkspaceView.m */; };
+		7A000026000000000000001 /* MarkdownEditorDocumentController.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A000027000000000000001 /* MarkdownEditorDocumentController.m */; };
+		7A000029000000000000001 /* NoteEmbeddingSearch.c in Sources */ = {isa = PBXBuildFile; fileRef = 7A00002A000000000000001 /* NoteEmbeddingSearch.c */; };
 		7A000007000000000000001 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A000008000000000000001 /* Cocoa.framework */; };
 		7A000009000000000000001 /* libeditor.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A00000A000000000000001 /* libeditor.a */; };
 		7A00000B000000000000001 /* librender_engine.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A00000C000000000000001 /* librender_engine.a */; };
+		7A00000D000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7A00000E000000000000001 /* Assets.xcassets */; };
+		7A000011000000000000001 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A000012000000000000001 /* WebKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,10 +34,32 @@
 		7A000004000000000000001 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		7A000005000000000000001 /* MarkdownEditorViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MarkdownEditorViewController.h; sourceTree = "<group>"; };
 		7A000006000000000000001 /* MarkdownEditorViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MarkdownEditorViewController.m; sourceTree = "<group>"; };
+		7A000014000000000000001 /* MarkdownDocumentIO.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Components/MarkdownDocumentIO.m; sourceTree = "<group>"; };
+		7A000015000000000000001 /* MarkdownDocumentIO.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Components/MarkdownDocumentIO.h; sourceTree = "<group>"; };
+		7A000016000000000000001 /* MarkdownEditorChromeView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Components/MarkdownEditorChromeView.m; sourceTree = "<group>"; };
+		7A000017000000000000001 /* MarkdownEditorChromeView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Components/MarkdownEditorChromeView.h; sourceTree = "<group>"; };
+		7A000018000000000000001 /* MarkdownEditorDocument.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Components/MarkdownEditorDocument.m; sourceTree = "<group>"; };
+		7A000019000000000000001 /* MarkdownEditorDocument.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Components/MarkdownEditorDocument.h; sourceTree = "<group>"; };
+		7A00001A000000000000001 /* MarkdownPreviewRenderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Components/MarkdownPreviewRenderer.m; sourceTree = "<group>"; };
+		7A00001B000000000000001 /* MarkdownPreviewRenderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Components/MarkdownPreviewRenderer.h; sourceTree = "<group>"; };
+		7A00001D000000000000001 /* MarkdownEditorHeaderView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Components/MarkdownEditorHeaderView.m; sourceTree = "<group>"; };
+		7A00001E000000000000001 /* MarkdownEditorHeaderView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Components/MarkdownEditorHeaderView.h; sourceTree = "<group>"; };
+		7A00001F000000000000001 /* MarkdownEditorMenuBuilder.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Components/MarkdownEditorMenuBuilder.m; sourceTree = "<group>"; };
+		7A000020000000000000001 /* MarkdownEditorMenuBuilder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Components/MarkdownEditorMenuBuilder.h; sourceTree = "<group>"; };
+		7A000021000000000000001 /* MarkdownEditorWindowCoordinator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Components/MarkdownEditorWindowCoordinator.m; sourceTree = "<group>"; };
+		7A000022000000000000001 /* MarkdownEditorWindowCoordinator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Components/MarkdownEditorWindowCoordinator.h; sourceTree = "<group>"; };
+		7A000023000000000000001 /* MarkdownEditorWorkspaceView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Components/MarkdownEditorWorkspaceView.m; sourceTree = "<group>"; };
+		7A000024000000000000001 /* MarkdownEditorWorkspaceView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Components/MarkdownEditorWorkspaceView.h; sourceTree = "<group>"; };
+		7A000027000000000000001 /* MarkdownEditorDocumentController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Components/MarkdownEditorDocumentController.m; sourceTree = "<group>"; };
+		7A000028000000000000001 /* MarkdownEditorDocumentController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Components/MarkdownEditorDocumentController.h; sourceTree = "<group>"; };
+		7A00002A000000000000001 /* NoteEmbeddingSearch.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Components/NoteEmbeddingSearch.c; sourceTree = "<group>"; };
+		7A00002B000000000000001 /* NoteEmbeddingSearch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Components/NoteEmbeddingSearch.h; sourceTree = "<group>"; };
 		7A000007000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7A000008000000000000001 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
 		7A00000A000000000000001 /* libeditor.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libeditor.a; path = ../libeditor.a; sourceTree = "<group>"; };
 		7A00000C000000000000001 /* librender_engine.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = librender_engine.a; path = ../render_engine/librender_engine.a; sourceTree = "<group>"; };
+		7A00000E000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		7A000012000000000000001 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -34,6 +68,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7A000007000000000000001 /* Cocoa.framework in Frameworks */,
+				7A000011000000000000001 /* WebKit.framework in Frameworks */,
 				7A000009000000000000001 /* libeditor.a in Frameworks */,
 				7A00000B000000000000001 /* librender_engine.a in Frameworks */,
 			);
@@ -58,16 +93,46 @@
 				7A000002000000000000001 /* AppDelegate.m */,
 				7A000005000000000000001 /* MarkdownEditorViewController.h */,
 				7A000006000000000000001 /* MarkdownEditorViewController.m */,
+				7A000025000000000000001 /* Components */,
 				7A000004000000000000001 /* main.m */,
 				7A000007000000000000001 /* Info.plist */,
+				7A00000E000000000000001 /* Assets.xcassets */,
 			);
 			path = MarkdownEditorApp;
 			sourceTree = "<group>";
 		};
-		7A000022000000000000001 /* Frameworks */ = {
+		7A000025000000000000001 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				7A000015000000000000001 /* MarkdownDocumentIO.h */,
+				7A000014000000000000001 /* MarkdownDocumentIO.m */,
+				7A000017000000000000001 /* MarkdownEditorChromeView.h */,
+				7A000016000000000000001 /* MarkdownEditorChromeView.m */,
+				7A00001E000000000000001 /* MarkdownEditorHeaderView.h */,
+				7A00001D000000000000001 /* MarkdownEditorHeaderView.m */,
+				7A000020000000000000001 /* MarkdownEditorMenuBuilder.h */,
+				7A00001F000000000000001 /* MarkdownEditorMenuBuilder.m */,
+				7A000019000000000000001 /* MarkdownEditorDocument.h */,
+				7A000018000000000000001 /* MarkdownEditorDocument.m */,
+				7A00001B000000000000001 /* MarkdownPreviewRenderer.h */,
+				7A00001A000000000000001 /* MarkdownPreviewRenderer.m */,
+				7A000022000000000000001 /* MarkdownEditorWindowCoordinator.h */,
+				7A000021000000000000001 /* MarkdownEditorWindowCoordinator.m */,
+				7A000024000000000000001 /* MarkdownEditorWorkspaceView.h */,
+				7A000023000000000000001 /* MarkdownEditorWorkspaceView.m */,
+				7A000028000000000000001 /* MarkdownEditorDocumentController.h */,
+				7A000027000000000000001 /* MarkdownEditorDocumentController.m */,
+				7A00002B000000000000001 /* NoteEmbeddingSearch.h */,
+				7A00002A000000000000001 /* NoteEmbeddingSearch.c */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		7A000022000000000000001 /* Frameworks */ = {
+			isa = PBXGroup;
+				children = (
 				7A000008000000000000001 /* Cocoa.framework */,
+				7A000012000000000000001 /* WebKit.framework */,
 				7A00000A000000000000001 /* libeditor.a */,
 				7A00000C000000000000001 /* librender_engine.a */,
 			);
@@ -91,6 +156,7 @@
 			buildPhases = (
 				7A000032000000000000001 /* Sources */,
 				7A000010000000000000001 /* Frameworks */,
+				7A000033000000000000001 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -140,6 +206,24 @@
 				7A000001000000000000001 /* AppDelegate.m in Sources */,
 				7A000003000000000000001 /* main.m in Sources */,
 				7A000005000000000000001 /* MarkdownEditorViewController.m in Sources */,
+				7A000013000000000000001 /* MarkdownDocumentIO.m in Sources */,
+				7A000015000000000000001 /* MarkdownEditorChromeView.m in Sources */,
+				7A000017000000000000001 /* MarkdownEditorDocument.m in Sources */,
+				7A000019000000000000001 /* MarkdownPreviewRenderer.m in Sources */,
+				7A00001C000000000000001 /* MarkdownEditorHeaderView.m in Sources */,
+				7A00001E000000000000001 /* MarkdownEditorMenuBuilder.m in Sources */,
+				7A000020000000000000001 /* MarkdownEditorWindowCoordinator.m in Sources */,
+				7A000022000000000000001 /* MarkdownEditorWorkspaceView.m in Sources */,
+				7A000026000000000000001 /* MarkdownEditorDocumentController.m in Sources */,
+				7A000029000000000000001 /* NoteEmbeddingSearch.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7A000033000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A00000D000000000000001 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -285,8 +369,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourcompany.MarkdownEditorApp";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ceditor.Elephant";
+				PRODUCT_NAME = Elephant;
 			};
 			name = Debug;
 		};
@@ -300,8 +384,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yourcompany.MarkdownEditorApp";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ceditor.Elephant";
+				PRODUCT_NAME = Elephant;
 			};
 			name = Release;
 		};

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "blinko.fullname" . }}-config
+  labels:
+    {{- include "blinko.labels" . | nindent 4 }}
+data:
+  NODE_ENV: {{ .Values.config.nodeEnv | quote }}
+  NEXTAUTH_URL: {{ .Values.config.nextauth.url | quote }}
+  NEXT_PUBLIC_BASE_URL: {{ .Values.config.baseUrl | quote }} 

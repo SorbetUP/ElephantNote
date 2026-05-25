@@ -1,0 +1,558 @@
+name: App Release
+
+run-name: >-
+  ${{
+    github.event_name == 'workflow_dispatch' && format('App Released - v{0}', github.event.inputs.tag) ||
+    github.event_name == 'repository_dispatch' && format('App Released - v{0}', github.event.client_payload.version || github.event.client_payload.tag) ||
+    format('App Released - {0}', github.ref_name)
+  }}
+
+on:
+  push:
+    tags:
+      - '*' # Match all tags, not limited to v prefix
+  repository_dispatch:
+    types: [trigger-app-release]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag Version (e.g. 1.0.0)'
+        required: true
+        type: string
+      is-test:
+        description: 'Test Mode (draft release only, no notifications)'
+        required: false
+        type: boolean
+        default: false
+      disable-all-cache:
+        description: 'Disable all caches (force clean build)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  # Set version first
+  set-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set_version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set Version Variable
+        id: set_version
+        run: |
+          # Print debug info
+          echo "Event name: ${{ github.event_name }}"
+          
+          # Always use version number without v prefix
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          elif [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            if [[ "${{ github.event.client_payload.version }}" != "" ]]; then
+              VERSION="${{ github.event.client_payload.version }}"
+            else
+              VERSION="${{ github.event.client_payload.tag }}"
+            fi
+          else
+            # Get version from tag (remove v prefix if present)
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+          fi
+          
+          # Ensure VERSION is not empty, default to 1.0.0
+          if [ -z "$VERSION" ]; then
+            echo "WARNING: Empty version, using default 1.0.0"
+            VERSION="1.0.0"
+          fi
+          
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Set version: $VERSION"
+
+  # Update Tauri Config Version
+  update-version:
+    if: github.event.inputs.is-test != 'true'
+    runs-on: ubuntu-latest
+    needs: set-version
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Update Tauri Config Version
+        run: |
+          echo "Current version: ${{ needs.set-version.outputs.version }}"
+          # Update version using jq
+          jq '.version = "${{ needs.set-version.outputs.version }}"' app/src-tauri/tauri.conf.json > tmp.json && mv tmp.json app/src-tauri/tauri.conf.json
+          echo "Updated tauri.conf.json:"
+          cat app/src-tauri/tauri.conf.json
+      
+      - name: Commit and Push Updated Version
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add app/src-tauri/tauri.conf.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "[ci skip] Update version to ${{ needs.set-version.outputs.version }}"
+            git push
+            echo "Pushed version update to repository"
+          fi
+      
+      - name: Upload tauri.conf.json as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-config
+          path: app/src-tauri/tauri.conf.json
+
+  # Desktop Platform Build Task
+  publish-desktop:
+    needs: [set-version, update-version]
+    if: always() && !cancelled() && needs.set-version.result == 'success' && (needs.update-version.result == 'success' || needs.update-version.result == 'skipped')
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest' # Apple Silicon (M-series chip)
+            args: '--target aarch64-apple-darwin'
+          - platform: 'ubuntu-22.04' # Linux Platform
+            args: ''
+          - platform: 'windows-latest' # Windows Platform
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Show build info (Test Mode)
+        if: github.event.inputs.is-test == 'true'
+        shell: bash
+        run: |
+          echo "=== TEST MODE BUILD ==="
+          echo "Branch: $(git branch --show-current)"
+          echo "Commit: $(git rev-parse --short HEAD)"
+          echo "Test version: ${{ github.event.inputs.tag }}"
+          echo "======================"
+
+      - name: Update version in tauri.conf.json (Test Mode)
+        if: github.event.inputs.is-test == 'true'
+        shell: bash
+        run: |
+          # Test mode: update version locally without committing
+          jq '.version = "${{ needs.set-version.outputs.version }}"' app/src-tauri/tauri.conf.json > tmp.json && mv tmp.json app/src-tauri/tauri.conf.json
+          echo "Updated version to ${{ needs.set-version.outputs.version }} (test mode, not committed)"
+          cat app/src-tauri/tauri.conf.json
+
+      - name: Download tauri.conf.json (Release Mode)
+        if: github.event.inputs.is-test != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: tauri-config
+          path: app/src-tauri/
+
+      - name: Fix version format for Windows MSI
+        if: matrix.platform == 'windows-latest'
+        run: |
+          $versionJson = Get-Content -Path app/src-tauri/tauri.conf.json | ConvertFrom-Json
+          $currentVersion = $versionJson.version
+          
+          if ($currentVersion -match '-(.+)$') {
+            $newVersion = $currentVersion -replace '-(.+)$', ''
+            
+            $versionJson.version = $newVersion
+            
+            $jsonContent = Get-Content -Path app/src-tauri/tauri.conf.json -Raw
+            $jsonContent = $jsonContent -replace '"version": "([^"]+)"', "`"version`": `"$newVersion`""
+            $jsonContent | Set-Content -Path app/src-tauri/tauri.conf.json -NoNewline
+            
+            echo "Windows version $currentVersion changed to $newVersion"
+          } else {
+            echo "Version $currentVersion does not need to be modified"
+          }
+
+      - name: Install Ubuntu Dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev
+
+      - name: Setup Node Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Increase Node.js memory limit
+        run: |
+          echo "NODE_OPTIONS=--max-old-space-size=4096" >> $GITHUB_ENV
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: 1.2.8
+
+      - name: Install Rust Stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust Cache
+        if: github.event.inputs.disable-all-cache != 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+          cache-on-failure: true
+
+      - name: Install Dependencies
+        run: |
+          bun install --frozen-lockfile
+
+      - name: Build frontend with Bun (ensure consistent build environment)
+        shell: bash
+        run: |
+          cd app
+          echo "Building frontend with Bun to ensure consistent minification..."
+          bun run build:no-pwa
+          echo "Frontend build completed"
+          ls -la ../dist/public/ || echo "Build output directory check"
+
+      # Using official Tauri Action to build and publish
+      - name: Build and Publish Desktop App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: 'app'
+          beforeBuildCommand: ''
+          tauriScript: 'bun run tauri'
+          args: ${{ matrix.args }}
+          tagName: ${{ github.event.inputs.is-test == 'true' && '' || needs.set-version.outputs.version }}
+          releaseName: ${{ github.event.inputs.is-test == 'true' && '' || format('Blinko {0}', needs.set-version.outputs.version) }}
+          releaseBody: ${{ github.event.inputs.is-test == 'true' && '' || 'Under construction, full changelog will be updated after build completion...' }}
+          releaseDraft: ${{ github.event.inputs.is-test == 'true' }}
+          prerelease: ${{ github.event.inputs.is-test == 'true' }}
+          includeUpdaterJson: ${{ github.event.inputs.is-test != 'true' }}
+
+      - name: Upload test artifacts
+        if: github.event.inputs.is-test == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: blinko-test-${{ matrix.platform }}-${{ github.event.inputs.tag }}
+          path: |
+            app/src-tauri/target/release/bundle/**/*
+            !app/src-tauri/target/release/bundle/**/*.dSYM/**
+          retention-days: 7
+
+  # Android Platform Build Task
+  publish-android:
+    needs: [set-version, update-version]
+    if: always() && !cancelled() && needs.set-version.result == 'success' && (needs.update-version.result == 'success' || needs.update-version.result == 'skipped')
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update version in tauri.conf.json (Test Mode)
+        if: github.event.inputs.is-test == 'true'
+        run: |
+          # Test mode: update version locally without committing
+          jq '.version = "${{ needs.set-version.outputs.version }}"' app/src-tauri/tauri.conf.json > tmp.json && mv tmp.json app/src-tauri/tauri.conf.json
+          echo "Updated version to ${{ needs.set-version.outputs.version }} (test mode, not committed)"
+          cat app/src-tauri/tauri.conf.json
+
+      - name: Download tauri.conf.json (Release Mode)
+        if: github.event.inputs.is-test != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: tauri-config
+          path: app/src-tauri/
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: sdkmanager "ndk;27.0.11902837"
+
+      - name: Setup Node Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Increase Node.js memory limit for Android build
+        run: |
+          echo "NODE_OPTIONS=--max-old-space-size=4096" >> $GITHUB_ENV
+
+      - name: Install Rust Stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Rust Cache
+        if: github.event.inputs.disable-all-cache != 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+          cache-on-failure: true
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: 1.2.8
+
+      - name: Install Dependencies
+        run: |
+          bun install --frozen-lockfile
+
+      - name: Run Prisma Generate
+        run: bun run prisma:generate
+
+      - name: Configure Gradle Cache
+        if: github.event.inputs.disable-all-cache != 'true'
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2.0.0-alpha"
+
+      - name: Upload Keystore File
+        run: |
+          # Create keystore directory
+          mkdir -p ~/.android
+          # Create keystore file
+          echo "${{ secrets.UPLOAD_KEYSTORE }}" | base64 --decode > ~/.android/upload-keystore.jks
+          # Create keystore.properties
+          mkdir -p app/src-tauri/gen/android
+          cat > app/src-tauri/gen/android/keystore.properties << EOF
+          password=106111
+          keyAlias=upload
+          storeFile=$HOME/.android/upload-keystore.jks
+          EOF
+
+      - name: Build Android App
+        run: |
+          cd app
+          bun run tauri:android:build
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.11902837
+
+      - name: Rename Android App File
+        run: |
+          cd app/src-tauri/gen/android/app/build/outputs/apk/universal/release
+          VERSION="${{ needs.set-version.outputs.version }}"
+          echo "Original APK file:"
+          ls -la
+          # Rename APK file
+          mv app-universal-release.apk Blinko_${VERSION}_universal.apk
+          echo "Renamed APK file:"
+          ls -la
+
+      - name: Upload Android App to Release
+        if: github.event.inputs.is-test != 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: app/src-tauri/gen/android/app/build/outputs/apk/universal/release/Blinko_${{ needs.set-version.outputs.version }}_universal.apk
+          tag_name: ${{ needs.set-version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Android APK as artifact (Test Mode)
+        if: github.event.inputs.is-test == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: blinko-test-android-${{ needs.set-version.outputs.version }}
+          path: app/src-tauri/gen/android/app/build/outputs/apk/universal/release/Blinko_${{ needs.set-version.outputs.version }}_universal.apk
+          retention-days: 7
+
+  # Generate changelog after all builds are complete
+  generate-changelog:
+    if: github.event.inputs.is-test != 'true' && always() && !cancelled() && (needs.publish-desktop.result == 'success' || needs.publish-android.result == 'success')
+    runs-on: ubuntu-latest
+    needs: [set-version, publish-desktop, publish-android]
+    outputs:
+      changelog: ${{ steps.changelog.outputs.changes }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Fetch all tags
+        run: git fetch --tags
+      
+      - name: Create Changelog
+        id: changelog
+        uses: loopwerk/tag-changelog@v1.3.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config_file: .github/changelog/changelog.js
+
+  # Update release with final changelog
+  update-release:
+    if: github.event.inputs.is-test != 'true' && !cancelled() && needs.generate-changelog.result == 'success'
+    runs-on: ubuntu-latest
+    needs: [set-version, generate-changelog]
+    permissions:
+      contents: write
+    steps:
+      - name: Update GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.set-version.outputs.version }}
+          body: ${{ needs.generate-changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+
+  # Process notification content with AI
+  process-notification:
+    if: github.event.inputs.is-test != 'true' && !cancelled() && needs.generate-changelog.result == 'success'
+    runs-on: ubuntu-latest
+    needs: [set-version, generate-changelog]
+    outputs:
+      chinese_message: ${{ steps.generate_chinese.outputs.message }}
+      english_message: ${{ steps.generate_english.outputs.message }}
+    steps:
+      - name: Generate Chinese message using OpenRouter AI
+        id: generate_chinese
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': 'Bearer ${{ secrets.OPENROUTER_API_KEY }}',
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  model: 'qwen/qwen-2.5-72b-instruct',
+                  messages: [
+                    {
+                      role: 'user',
+                      content: `请将以下发布通知翻译成简体中文，并格式化为Telegram纯文本消息（不要使用Markdown）：
+                      
+                      版本: ${{ needs.set-version.outputs.version }}
+                      
+                      更新日志:
+                      ${{ needs.generate-changelog.outputs.changelog }}
+                      
+                      下载链接: https://github.com/${{ github.repository }}/releases/tag/${{ needs.set-version.outputs.version }}
+                      
+                      请保持简洁，使用纯文本格式，不要使用Markdown语法，使用emoji表情符号增加可读性。
+                      重要：除了下载链接外，不要包含任何其他链接。如果更新日志中包含其他链接，请将它们移除。`
+                    }
+                  ]
+                })
+              });
+              
+              const data = await response.json();
+              const message = data.choices[0].message.content.trim();
+              core.setOutput('message', message);
+              console.log('Generated Chinese message');
+            } catch (error) {
+              console.error('Error calling OpenRouter API:', error.message);
+              // 如果API调用失败，使用默认消息
+              const defaultMessage = `🚀 Blinko ${{ needs.set-version.outputs.version }} 已发布！\n\n📝 更新日志：\n${{ needs.generate-changelog.outputs.changelog }}\n\n📥 下载链接：\nhttps://github.com/${{ github.repository }}/releases/tag/${{ needs.set-version.outputs.version }}`;
+              core.setOutput('message', defaultMessage);
+            }
+      
+      - name: Generate English message using OpenRouter AI
+        id: generate_english
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': 'Bearer ${{ secrets.OPENROUTER_API_KEY }}',
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  model: 'qwen/qwen-2.5-72b-instruct',
+                  messages: [
+                    {
+                      role: 'user',
+                      content: `Format the following release notification as a plain text Telegram message (no Markdown):
+                      
+                      Version: ${{ needs.set-version.outputs.version }}
+                      
+                      Changelog:
+                      ${{ needs.generate-changelog.outputs.changelog }}
+                      
+                      Download: https://github.com/${{ github.repository }}/releases/tag/${{ needs.set-version.outputs.version }}
+                      
+                      Keep it concise, use plain text format, no Markdown syntax, and use emoji for better readability.
+                      IMPORTANT: Only include the download link, remove all other links. If the changelog contains other links, remove them.`
+                    }
+                  ]
+                })
+              });
+              
+              const data = await response.json();
+              const message = data.choices[0].message.content.trim();
+              core.setOutput('message', message);
+              console.log('Generated English message');
+            } catch (error) {
+              console.error('Error calling OpenRouter API:', error.message);
+              // 如果API调用失败，使用默认消息
+              const defaultMessage = `🚀 Blinko ${{ needs.set-version.outputs.version }} has been released!\n\n📝 Changelog:\n${{ needs.generate-changelog.outputs.changelog }}\n\n📥 Download:\nhttps://github.com/${{ github.repository }}/releases/tag/${{ needs.set-version.outputs.version }}`;
+              core.setOutput('message', defaultMessage);
+            }
+
+  # Send notification to Telegram groups
+  notify-telegram:
+    if: github.event.inputs.is-test != 'true' && !cancelled() && needs.update-release.result == 'success' && needs.process-notification.result == 'success'
+    runs-on: ubuntu-latest
+    needs: [set-version, update-release, generate-changelog, process-notification]
+    steps:
+      - name: Send notification to Telegram group 1 (Chinese)
+        uses: appleboy/telegram-action@v0.1.1
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_GROUP_ID_1 }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: html
+          debug: true
+          message: |
+            ${{ needs.process-notification.outputs.chinese_message }}
+
+      - name: Send notification to Telegram group 2 (English)
+        uses: appleboy/telegram-action@v0.1.1
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_GROUP_ID_2 }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: html
+          debug: true
+          message: |
+            ${{ needs.process-notification.outputs.english_message }} 

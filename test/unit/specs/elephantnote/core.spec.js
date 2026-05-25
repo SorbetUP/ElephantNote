@@ -34,6 +34,36 @@ Useful body text.
     expect(meta.excerpt).toContain('Useful body text')
   })
 
+  it('extracts tags from CRLF frontmatter and quoted comma values', () => {
+    const meta = parseMarkdownMeta([
+      '---',
+      'title: "Research"',
+      'tags: ["ideas", "needs, review"]',
+      '---',
+      '',
+      '# Ignored title',
+      'Useful body text.'
+    ].join('\r\n'))
+
+    expect(meta.tags).toEqual(['ideas', 'needs, review'])
+  })
+
+  it('extracts tags from YAML block frontmatter', () => {
+    const meta = parseMarkdownMeta(`---
+title: "Research"
+tags:
+  - "#ideas"
+  - "needs, review"
+createdAt: "2026-05-17T23:43:04.008Z"
+---
+
+# Ignored title
+Useful body text.
+`)
+
+    expect(meta.tags).toEqual(['ideas', 'needs, review'])
+  })
+
   it('falls back to the first H1 when frontmatter has no title', () => {
     const meta = parseMarkdownMeta('# Hello\n\nBody', 'Fallback.md')
 

@@ -1,0 +1,12 @@
+{
+    "app": {
+      "windows": [
+        {
+          "title": "Blinko",
+          "fullscreen": true,
+          "focus": true,
+          "resizable": false
+        }
+      ]
+    }
+  }

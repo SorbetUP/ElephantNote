@@ -91,28 +91,26 @@ export const isIgnoredVaultEntry = (name) => {
 
 export const parseMarkdownMeta = (markdown = '', fallbackName = 'Untitled') => {
   const meta = {}
-  const frontmatterMatch = markdown.match(/^---\n([\s\S]*?)\n---\n?/)
+  const frontmatterMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
   if (frontmatterMatch) {
     const lines = frontmatterMatch[1].split(/\r?\n/)
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index]
-      const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
+      const match = line.match(/^\s*([A-Za-z0-9_-]+):\s*(.*)$/)
       if (!match) continue
       const [, key, rawValue] = match
       const value = rawValue.trim()
       if (value.startsWith('[') && value.endsWith(']')) {
-        meta[key] = value
-          .slice(1, -1)
-          .split(',')
-          .map((item) => item.trim().replace(/^"|"$/g, ''))
+        meta[key] = splitInlineFrontmatterList(value.slice(1, -1))
+          .map(normalizeFrontmatterListItem)
           .filter(Boolean)
       } else if (key === 'tags' && !value) {
         const tags = []
         for (let tagIndex = index + 1; tagIndex < lines.length; tagIndex += 1) {
-          if (/^[A-Za-z0-9_-]+:\s*/.test(lines[tagIndex])) break
+          if (/^\s*[A-Za-z0-9_-]+:\s*/.test(lines[tagIndex])) break
           const tagMatch = lines[tagIndex].match(/^\s*-\s*(.+?)\s*$/)
           if (tagMatch) {
-            tags.push(tagMatch[1].trim().replace(/^["']|["']$/g, '').replace(/^#+/, ''))
+            tags.push(normalizeFrontmatterListItem(tagMatch[1]))
           }
         }
         meta[key] = tags.filter(Boolean)
@@ -146,6 +144,52 @@ export const parseMarkdownMeta = (markdown = '', fallbackName = 'Untitled') => {
     excerpt,
     coverImage: imageMatch?.[1] || ''
   }
+}
+
+const normalizeFrontmatterListItem = (value = '') =>
+  String(value || '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/^#+/, '')
+    .replace(/\s+/g, ' ')
+
+const splitInlineFrontmatterList = (value = '') => {
+  const items = []
+  let current = ''
+  let quote = ''
+  let escaped = false
+
+  for (const char of String(value || '')) {
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      current += char
+      escaped = true
+      continue
+    }
+    if ((char === '"' || char === "'") && !quote) {
+      quote = char
+      current += char
+      continue
+    }
+    if (char === quote) {
+      quote = ''
+      current += char
+      continue
+    }
+    if (char === ',' && !quote) {
+      items.push(current)
+      current = ''
+      continue
+    }
+    current += char
+  }
+
+  items.push(current)
+  return items
 }
 
 export const nextAvailableName = (baseName, exists) => {

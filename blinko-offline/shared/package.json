@@ -1,0 +1,11 @@
+{
+  "name": "@blinko/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "dependencies": {
+    "zod": "^4.1.12",
+    "superjson": "^2.2.3"
+  }
+}

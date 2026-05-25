@@ -1,0 +1,89 @@
+networks:
+  blinko-sync-net:
+    driver: bridge
+
+services:
+  blinko-a:
+    container_name: blinko-sync-a
+    image: blinko-sync:test
+    build:
+      context: ..
+      args:
+        USE_MIRROR: "true"
+      dockerfile: dockerfile
+    environment:
+      NODE_ENV: production
+      NEXTAUTH_URL: http://localhost:1111
+      NEXT_PUBLIC_BASE_URL: http://localhost:1111
+      NEXTAUTH_SECRET: blinko_sync_test_secret_a
+      DATABASE_URL: postgresql://postgres:mysecretpassword@postgres-a:5432/postgres
+    depends_on:
+      postgres-a:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "1111:1111"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://blinko-a:1111/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - blinko-sync-net
+
+  postgres-a:
+    image: postgres:14
+    container_name: blinko-sync-postgres-a
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+    networks:
+      - blinko-sync-net
+
+  blinko-b:
+    container_name: blinko-sync-b
+    image: blinko-sync:test
+    environment:
+      NODE_ENV: production
+      NEXTAUTH_URL: http://localhost:1112
+      NEXT_PUBLIC_BASE_URL: http://localhost:1112
+      NEXTAUTH_SECRET: blinko_sync_test_secret_b
+      DATABASE_URL: postgresql://postgres:mysecretpassword@postgres-b:5432/postgres
+    depends_on:
+      postgres-b:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "1112:1111"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://blinko-b:1111/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - blinko-sync-net
+
+  postgres-b:
+    image: postgres:14
+    container_name: blinko-sync-postgres-b
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+    networks:
+      - blinko-sync-net

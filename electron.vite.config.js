@@ -49,6 +49,10 @@ export default defineConfig({
   renderer: {
     // --> Bundled as ES Modules
     assetsInclude: ['**/*.md'],
+    define: {
+      'process.env.IS_PREACT': JSON.stringify('false'),
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
+    },
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src/renderer/src'),

@@ -11,8 +11,15 @@ import setupEnvironment from './app/env'
 import { getLogLevel } from './utils'
 import Accessor from './app/accessor'
 import App from './app'
+import { APP_NAME } from './app/metadata'
 import { t } from './i18n'
 import { registerElephantNoteIpc } from './elephantnote/vaults'
+
+process.title = APP_NAME
+app.setName(APP_NAME)
+app.setAboutPanelOptions({
+  applicationName: APP_NAME
+})
 
 // Set version strings into global and process.versions
 process.env.MARKTEXT_VERSION = MARKTEXT_VERSION
@@ -70,7 +77,7 @@ initializeLogger(appEnvironment)
 // Handles native level crashes
 crashReporter.start({
   companyName: '',
-  productName: 'ElephantNote',
+  productName: APP_NAME,
   uploadToServer: false, // collect locally
   compress: true
 })
@@ -105,6 +112,13 @@ electronApp.setAppUserModelId('com.elephantnote.app')
 // Dev shortcuts and reload suppression
 app.on('browser-window-created', (_, window) => {
   optimizer.watchWindowShortcuts(window)
+})
+app.whenReady().then(() => {
+  process.title = APP_NAME
+  app.setName(APP_NAME)
+  app.setAboutPanelOptions({
+    applicationName: APP_NAME
+  })
 })
 
 // Instantiate and start the main App controller

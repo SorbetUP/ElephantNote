@@ -10,14 +10,16 @@
       />
 
       <note-editor-meta
-        v-model:tag-draft.trim="tagDraft"
         :note-date="noteDate"
         :tags="tags"
+        :show-tag-hash="preferencesStore.showTagHashInEditor"
         :is-adding-tag="isAddingTag"
         :is-editing-tag="isEditingTag"
+        :tag-draft="tagDraft"
         @start-tag-creation="startTagCreation"
         @edit-tag="beginEditTag"
         @delete-tag="deleteTag"
+        @update-tag-draft="tagDraft = $event"
         @submit-tag="submitTag"
         @cancel-tag="cancelTag"
       />
@@ -133,10 +135,22 @@ const shellTheme = inject('elephantnoteTheme', ref(window.localStorage.getItem('
 const setShellTheme = inject('setElephantnoteTheme', (value) => {
   window.localStorage.setItem('elephantnote:theme', value)
 })
-const markdown = computed(() => currentFile.value?.markdown || '')
-const cursor = computed(() => currentFile.value?.cursor)
-const muyaIndexCursor = computed(() => currentFile.value?.muyaIndexCursor)
-const fallbackTitle = computed(() => currentFile.value?.filename?.replace(/\.md$/i, '') || 'Untitled')
+const openedNoteAbsolutePath = computed(() => {
+  if (!store.activeVault?.path || !store.openedNotePath) return ''
+  return window.path.join(store.activeVault.path, store.openedNotePath)
+})
+const getActiveNoteFile = () => {
+  const pathname = openedNoteAbsolutePath.value
+  if (!pathname) return currentFile.value
+  return editorStore.tabs.find((tab) => (
+    tab?.pathname && window.fileUtils.isSamePathSync(tab.pathname, pathname)
+  )) || null
+}
+const activeNoteFile = computed(() => getActiveNoteFile() || (openedNoteAbsolutePath.value ? null : currentFile.value))
+const markdown = computed(() => activeNoteFile.value?.markdown || '')
+const cursor = computed(() => activeNoteFile.value?.cursor)
+const muyaIndexCursor = computed(() => activeNoteFile.value?.muyaIndexCursor)
+const fallbackTitle = computed(() => activeNoteFile.value?.filename?.replace(/\.md$/i, '') || 'Untitled')
 const documentToEditorMarkdown = (documentMarkdown) => toEditorMarkdown(documentMarkdown, fallbackTitle.value)
 const editorToDocumentMarkdown = (editorMarkdown) =>
   mergeEditorMarkdown(markdown.value, editorMarkdown, fallbackTitle.value)
@@ -162,6 +176,7 @@ const isPinned = computed(() => {
   return !!pathname && store.pinnedNotePaths.includes(pathname)
 })
 const currentNoteRelativePath = computed(() => {
+  if (store.openedNotePath) return store.openedNotePath
   const pathname = currentFile.value?.pathname
   const vaultPath = store.activeVault?.path
   if (!pathname || !vaultPath) return ''
@@ -170,7 +185,7 @@ const currentNoteRelativePath = computed(() => {
   return relativePath
 })
 const currentNoteDirectory = computed(() => {
-  const pathname = currentFile.value?.pathname
+  const pathname = currentFile.value?.pathname || openedNoteAbsolutePath.value
   if (pathname) return window.path.dirname(pathname)
   if (store.activeVault?.path) {
     return window.path.join(store.activeVault.path, store.currentPath || '')
@@ -178,8 +193,16 @@ const currentNoteDirectory = computed(() => {
   return ''
 })
 
+const selectOpenedNoteTab = () => {
+  const pathname = openedNoteAbsolutePath.value
+  if (!pathname || !editorStore.tabs?.length) return
+  if (currentFile.value?.pathname && window.fileUtils.isSamePathSync(currentFile.value.pathname, pathname)) return
+  const hasTab = editorStore.tabs.some((tab) => tab.pathname && window.fileUtils.isSamePathSync(tab.pathname, pathname))
+  if (hasTab) editorStore.SWITCH_TAB_BY_FILEPATH(pathname)
+}
+
 const scheduleSave = () => {
-  const file = currentFile.value
+  const file = getActiveNoteFile()
   if (!file?.id || !file.pathname) return
   editorStore.HANDLE_AUTO_SAVE({
     id: file.id,
@@ -197,9 +220,13 @@ const togglePin = () => {
 }
 
 const updateMarkdown = (nextMarkdown) => {
-  if (!currentFile.value) return
-  currentFile.value.markdown = nextMarkdown
-  currentFile.value.isSaved = false
+  const file = getActiveNoteFile()
+  if (!file) return
+  file.markdown = nextMarkdown
+  file.isSaved = false
+  if (file.id && file.id !== currentFile.value?.id) {
+    editorStore.UPDATE_CURRENT_FILE(file)
+  }
   store.updateNoteMetadata(currentNoteRelativePath.value, {
     title: getDocumentTitle(nextMarkdown, fallbackTitle.value),
     tags: parseMarkdownTags(nextMarkdown),
@@ -240,8 +267,8 @@ const cancelTag = () => {
   tagDraft.value = ''
 }
 
-const submitTag = () => {
-  const nextTag = String(tagDraft.value || '').replace(/^#/, '').trim()
+const submitTag = (submittedValue = tagDraft.value) => {
+  const nextTag = String(submittedValue || '').replace(/^#+/, '').trim()
   if (!nextTag) {
     cancelTag()
     return
@@ -455,6 +482,7 @@ const closeTransientMenus = (event) => {
 setTextScale(textScale.value)
 
 onMounted(() => {
+  selectOpenedNoteTab()
   window.addEventListener('click', closeTransientMenus)
   bus.on('open-excalidraw-from-image', openExcalidrawFromImage)
 })
@@ -468,6 +496,18 @@ watch(markdown, (content) => {
   if (!currentFile.value || !content || content.startsWith('---\n')) return
   updateMarkdown(ensureNoteDocument(content, noteTitle.value))
 }, { flush: 'post' })
+
+watch(openedNoteAbsolutePath, () => {
+  selectOpenedNoteTab()
+}, { flush: 'post' })
+
+watch(
+  () => editorStore.tabs.length,
+  () => {
+    selectOpenedNoteTab()
+  },
+  { flush: 'post' }
+)
 
 </script>
 

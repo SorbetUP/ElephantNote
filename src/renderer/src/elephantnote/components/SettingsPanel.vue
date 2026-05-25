@@ -185,6 +185,26 @@
 
           <section
             v-if="activeSection === 'editor'"
+            class="en-settings-section"
+          >
+            <div>
+              <h3>Tag prefix</h3>
+              <p>Show or hide the # prefix before tag names in the note editor.</p>
+            </div>
+            <button
+              class="en-settings-toggle-pill"
+              type="button"
+              :class="{ active: preferences.showTagHashInEditor }"
+              role="switch"
+              :aria-checked="preferences.showTagHashInEditor"
+              @click="setShowTagHashInEditor(!preferences.showTagHashInEditor)"
+            >
+              {{ preferences.showTagHashInEditor ? 'Show #' : 'Hide #' }}
+            </button>
+          </section>
+
+          <section
+            v-if="activeSection === 'editor'"
             class="en-settings-section stacked"
           >
             <div>
@@ -318,7 +338,7 @@
           >
             <div>
               <h3>AI and agents</h3>
-              <p>Local agent transport is exposed for integrations; Ask AI stays disabled until a provider is configured.</p>
+              <p>Use a local HTTP endpoint such as Ollama, LM Studio, or a Codex-compatible bridge.</p>
             </div>
             <div class="en-settings-actions-row">
               <button
@@ -344,6 +364,82 @@
               </button>
             </div>
           </section>
+
+          <section
+            v-if="activeSection === 'ai'"
+            class="en-settings-section stacked"
+          >
+            <div>
+              <h3>Local endpoint</h3>
+              <p>IP and port values are accepted directly, for example 192.168.1.25:11434.</p>
+            </div>
+            <div class="en-ai-provider-grid">
+              <button
+                v-for="preset in aiPresets"
+                :key="preset.id"
+                type="button"
+                :class="{ active: aiConfig.preset === preset.id }"
+                @click="applyAiPreset(preset)"
+              >
+                {{ preset.label }}
+              </button>
+            </div>
+            <div class="en-ai-form">
+              <label>
+                <span>Endpoint</span>
+                <input
+                  v-model.trim="aiConfig.endpoint"
+                  type="text"
+                  placeholder="http://127.0.0.1:11434/api/chat"
+                >
+              </label>
+              <label>
+                <span>Model</span>
+                <input
+                  v-model.trim="aiConfig.model"
+                  type="text"
+                  placeholder="llama3.2"
+                >
+              </label>
+              <label>
+                <span>Transport</span>
+                <select v-model="aiConfig.transport">
+                  <option value="openai-compatible">OpenAI compatible</option>
+                  <option value="ollama">Ollama</option>
+                </select>
+              </label>
+              <label>
+                <span>API key</span>
+                <input
+                  v-model.trim="aiConfig.apiKey"
+                  type="password"
+                  placeholder="Optional"
+                >
+              </label>
+              <label class="en-ai-check">
+                <input
+                  v-model="aiConfig.codexLinkEnabled"
+                  type="checkbox"
+                >
+                <span>Link Codex as an agent when the Codex preset is selected</span>
+              </label>
+            </div>
+            <div class="en-settings-actions-row">
+              <button
+                type="button"
+                :disabled="isSavingAiConfig"
+                @click="saveAiConfig"
+              >
+                {{ isSavingAiConfig ? 'Saving...' : 'Save endpoint' }}
+              </button>
+              <span
+                v-if="aiConfigMessage"
+                class="en-settings-message"
+              >
+                {{ aiConfigMessage }}
+              </span>
+            </div>
+          </section>
         </div>
       </div>
     </section>
@@ -354,6 +450,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Download, Moon, SunMedium, X } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
+import { ELEPHANTNOTE_AI_PRESETS, normalizeAiConfig } from 'common/elephantnote/aiProviders'
 import SearchSettingsPanel from '../search/SearchSettingsPanel.vue'
 import { useSitePreviewStore } from '../sitePreview/sitePreviewStore'
 import { elephantnoteClient } from '../services/elephantnoteClient'
@@ -384,10 +481,14 @@ const vaults = computed(() => props.vaults)
 const theme = computed(() => props.theme)
 const isImporting = ref(false)
 const importMessage = ref('')
+const aiConfigMessage = ref('')
+const isSavingAiConfig = ref(false)
 const isCapturingQuickTrigger = ref(false)
 const quickTriggerButton = ref(null)
 const preferences = usePreferencesStore()
 const sitePreviewStore = useSitePreviewStore()
+const aiPresets = Object.values(ELEPHANTNOTE_AI_PRESETS)
+const aiConfig = ref(normalizeAiConfig())
 const featureFlags = ref({
   ai: true,
   askAi: true,
@@ -412,6 +513,13 @@ const setAutoSaveDelay = (value) => {
 const setPinnedCardHalo = (value) => {
   preferences.SET_SINGLE_PREFERENCE({
     type: 'pinnedCardHalo',
+    value
+  })
+}
+
+const setShowTagHashInEditor = (value) => {
+  preferences.SET_SINGLE_PREFERENCE({
+    type: 'showTagHashInEditor',
     value
   })
 }
@@ -509,6 +617,40 @@ const loadFeatureFlags = async () => {
   }
 }
 
+const loadAiConfig = async () => {
+  try {
+    aiConfig.value = normalizeAiConfig(await elephantnoteClient.ai.getConfig())
+  } catch (error) {
+    console.warn('Unable to load ElephantNote AI config:', error)
+  }
+}
+
+const applyAiPreset = (preset) => {
+  aiConfig.value = normalizeAiConfig({
+    ...aiConfig.value,
+    ...preset,
+    preset: preset.id,
+    name: preset.label,
+    apiKey: aiConfig.value.apiKey
+  })
+  aiConfigMessage.value = ''
+}
+
+const saveAiConfig = async () => {
+  isSavingAiConfig.value = true
+  aiConfigMessage.value = ''
+  try {
+    aiConfig.value = normalizeAiConfig(await elephantnoteClient.ai.setConfig(aiConfig.value))
+    aiConfigMessage.value = aiConfig.value.preset === 'codex'
+      ? 'Saved and Codex agent link updated.'
+      : 'Endpoint saved.'
+  } catch (error) {
+    aiConfigMessage.value = error instanceof Error ? error.message : 'AI endpoint save failed.'
+  } finally {
+    isSavingAiConfig.value = false
+  }
+}
+
 const toggleFeature = async (key) => {
   try {
     featureFlags.value = await elephantnoteClient.features.set(key, !featureFlags.value[key])
@@ -520,7 +662,10 @@ const toggleFeature = async (key) => {
   }
 }
 
-onMounted(loadFeatureFlags)
+onMounted(() => {
+  loadFeatureFlags()
+  loadAiConfig()
+})
 
 onBeforeUnmount(stopQuickTriggerCapture)
 </script>
@@ -796,6 +941,78 @@ onBeforeUnmount(stopQuickTriggerCapture)
   background: color-mix(in srgb, var(--en-primary) 12%, var(--en-surface));
 }
 
+.en-settings-message {
+  color: var(--en-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.en-ai-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+}
+
+.en-ai-provider-grid button {
+  min-height: 36px;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--en-text);
+  background: var(--en-surface);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.en-ai-provider-grid button.active {
+  border-color: color-mix(in srgb, var(--en-primary) 44%, var(--en-border));
+  color: var(--en-primary);
+  background: color-mix(in srgb, var(--en-primary) 12%, var(--en-surface));
+}
+
+.en-ai-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.en-ai-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.en-ai-form span {
+  color: var(--en-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.en-ai-form input,
+.en-ai-form select {
+  min-width: 0;
+  height: 36px;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--en-text);
+  background: var(--en-surface);
+  font: inherit;
+}
+
+.en-ai-check {
+  grid-column: 1 / -1;
+  display: flex !important;
+  grid-template-columns: none;
+  align-items: center;
+}
+
+.en-ai-check input {
+  width: 16px;
+  height: 16px;
+}
+
 .en-trigger-options {
   display: inline-flex;
   padding: 0;
@@ -881,6 +1098,10 @@ onBeforeUnmount(stopQuickTriggerCapture)
 
   .en-settings-range input[type="range"] {
     width: 100%;
+  }
+
+  .en-ai-form {
+    grid-template-columns: 1fr;
   }
 }
 </style>

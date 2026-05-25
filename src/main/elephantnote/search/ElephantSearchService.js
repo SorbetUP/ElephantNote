@@ -9,6 +9,7 @@ import { VectraIndexManager } from './VectraIndexManager'
 import { VaultSearchWatcher } from './VaultSearchWatcher'
 import { isIgnoredPath, isMarkdownFile } from './pathSafety'
 import { markdownToSearchText } from './markdownToSearchText'
+import { localMeaningSearchMarkdownFiles } from './localMeaningSearch'
 
 const normalizeVaultRoot = (vaultRoot) => {
   return path.resolve(vaultRoot || '')
@@ -90,6 +91,31 @@ const exactSearchMarkdownFiles = async({ vaultRoot, query, limit }) => {
   }
 
   return matches
+}
+
+const localSearchMarkdownFiles = async({ vaultRoot, query, mode, limit }) => {
+  if (mode === SEARCH_MODES.EXACT) {
+    return exactSearchMarkdownFiles({ vaultRoot, query, limit })
+  }
+
+  const files = await listMarkdownFiles(vaultRoot)
+  const meaningMatches = await localMeaningSearchMarkdownFiles({ vaultRoot, files, query, limit })
+  if (mode === SEARCH_MODES.SEMANTIC) return meaningMatches
+
+  const exactMatches = await exactSearchMarkdownFiles({ vaultRoot, query, limit })
+  const byPath = new Map()
+  for (const match of [...meaningMatches, ...exactMatches]) {
+    const current = byPath.get(match.relativePath)
+    if (!current || match.score > current.score) {
+      byPath.set(match.relativePath, {
+        ...match,
+        matchType: current ? 'hybrid' : match.matchType
+      })
+    }
+  }
+  return [...byPath.values()]
+    .sort((a, b) => b.score - a.score || a.relativePath.localeCompare(b.relativePath))
+    .slice(0, Math.max(1, Math.min(50, Number(limit) || 20)))
 }
 
 const inspectMarkdownFiles = async(vaultRoot) => {
@@ -279,9 +305,10 @@ export class ElephantSearchService {
 
     const manager = this._getManager(root)
     if (!(await manager.isReady())) {
-      return exactSearchMarkdownFiles({
+      return localSearchMarkdownFiles({
         vaultRoot: root,
         query: normalizedQuery,
+        mode,
         limit: Math.max(1, Math.min(50, Number(limit) || 20))
       })
     }

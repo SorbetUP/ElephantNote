@@ -60,4 +60,28 @@ describe('ElephantSearchService exact local search', () => {
       await fs.remove(root)
     }
   })
+
+  it('uses local meaning search before the semantic model is built', async() => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'elephantnote-meaning-search-'))
+    try {
+      await fs.writeFile(
+        path.join(root, 'Agents.md'),
+        '---\ntitle: "Agents"\ntags: ["ai"]\n---\n\n# Agents\n\nConnect notes to local models and tool calls.',
+        'utf8'
+      )
+      const service = new ElephantSearchService()
+      await service.registerWindowVault(3, root)
+
+      const results = await service.search({ query: 'llm', mode: 'semantic', limit: 5 }, 3)
+
+      expect(results).toHaveLength(1)
+      expect(results[0]).toMatchObject({
+        relativePath: 'Agents.md',
+        matchType: 'semantic'
+      })
+      expect(createEmbeddings).not.toHaveBeenCalled()
+    } finally {
+      await fs.remove(root)
+    }
+  })
 })

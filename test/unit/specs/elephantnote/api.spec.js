@@ -189,4 +189,24 @@ describe('ElephantNote API contract', () => {
     expect(response.ok).to.equal(false)
     expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
   })
+
+  it('validates task run payloads', async() => {
+    const handler = vi.fn(async(payload) => payload)
+    const api = createElephantNoteApi({
+      handlers: {
+        [ELEPHANTNOTE_API_ACTIONS.TASKS_RUN]: handler
+      }
+    })
+
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.TASKS_RUN, {
+      id: 'daily-briefing'
+    })).resolves.to.deep.equal({
+      id: 'daily-briefing'
+    })
+
+    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.TASKS_RUN, {})
+
+    expect(response.ok).to.equal(false)
+    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
+  })
 })

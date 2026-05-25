@@ -155,6 +155,11 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze({
     config: optionalObject
   }),
   'tasks.list': emptySchema,
+  'tasks.set': objectSchema({
+    id: requiredString,
+    enabled: optionalBoolean
+  }),
+  'tasks.run': objectSchema({ id: requiredString }),
   'sync.status': emptySchema,
   'sync.enqueue': objectSchema({
     operation: requiredString,

@@ -53,6 +53,8 @@ export const ELEPHANTNOTE_API_ACTIONS = Object.freeze({
   PLUGINS_LIST: 'plugins.list',
   PLUGINS_SET: 'plugins.set',
   TASKS_LIST: 'tasks.list',
+  TASKS_SET: 'tasks.set',
+  TASKS_RUN: 'tasks.run',
   SYNC_STATUS: 'sync.status',
   SYNC_ENQUEUE: 'sync.enqueue',
   SYNC_RUN: 'sync.run'

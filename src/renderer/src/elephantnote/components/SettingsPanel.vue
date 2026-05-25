@@ -632,11 +632,35 @@
               >
                 <header>
                   <strong>{{ task.name }}</strong>
-                  <span>{{ task.cadence }}</span>
+                  <div class="en-task-actions">
+                    <span>{{ task.cadence }}</span>
+                    <button
+                      type="button"
+                      :class="{ active: task.enabled }"
+                      @click="toggleTask(task)"
+                    >
+                      {{ task.enabled ? 'On' : 'Off' }}
+                    </button>
+                    <button
+                      type="button"
+                      @click="runTask(task)"
+                    >
+                      Run
+                    </button>
+                  </div>
                 </header>
                 <p>{{ task.actions.join(' -> ') }}</p>
+                <small v-if="task.lastRunAt">
+                  Last run {{ task.lastRunAt }} · {{ task.lastResult?.ok ? 'ok' : 'needs attention' }}
+                </small>
               </article>
             </div>
+            <span
+              v-if="taskMessage"
+              class="en-settings-message"
+            >
+              {{ taskMessage }}
+            </span>
           </section>
         </div>
       </div>
@@ -702,10 +726,11 @@ const aiConfig = ref(normalizeAiConfig())
 const modelPurposes = MODEL_PURPOSES
 const modelCatalog = ATOMIC_MODEL_CATALOG
 const pluginManifests = ref(ATOMIC_PLUGIN_MANIFESTS)
-const taskTemplates = PROGRAMMATIC_TASK_TEMPLATES
+const taskTemplates = ref(PROGRAMMATIC_TASK_TEMPLATES)
 const modelSelection = ref(createDefaultModelSelection())
 const modelSelectionMessage = ref('')
 const pluginMessage = ref('')
+const taskMessage = ref('')
 const featureFlags = ref({
   ai: true,
   askAi: true,
@@ -930,6 +955,37 @@ const togglePlugin = async (plugin) => {
   }
 }
 
+const loadTasks = async () => {
+  try {
+    taskTemplates.value = await elephantnoteClient.tasks.list()
+  } catch (error) {
+    console.warn('Unable to load ElephantNote tasks:', error)
+  }
+}
+
+const toggleTask = async (task) => {
+  taskMessage.value = ''
+  try {
+    taskTemplates.value = await elephantnoteClient.tasks.set({
+      id: task.id,
+      enabled: !task.enabled
+    })
+    taskMessage.value = `${task.name} ${task.enabled ? 'disabled' : 'enabled'}.`
+  } catch (error) {
+    taskMessage.value = error instanceof Error ? error.message : 'Task update failed.'
+  }
+}
+
+const runTask = async (task) => {
+  taskMessage.value = ''
+  try {
+    taskTemplates.value = await elephantnoteClient.tasks.run(task.id)
+    taskMessage.value = `${task.name} finished.`
+  } catch (error) {
+    taskMessage.value = error instanceof Error ? error.message : 'Task run failed.'
+  }
+}
+
 const loadModelSelection = async () => {
   try {
     modelSelection.value = {
@@ -982,6 +1038,7 @@ onMounted(() => {
   loadAiConfig()
   loadModelSelection()
   loadPlugins()
+  loadTasks()
 })
 
 onBeforeUnmount(stopQuickTriggerCapture)
@@ -1420,6 +1477,31 @@ onBeforeUnmount(stopQuickTriggerCapture)
 .en-task-list p {
   margin: 8px 0 0;
   overflow-wrap: anywhere;
+}
+
+.en-task-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.en-task-actions button {
+  min-height: 30px;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--en-muted);
+  background: var(--en-surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+.en-task-actions button.active {
+  border-color: color-mix(in srgb, var(--en-primary) 44%, var(--en-border));
+  color: var(--en-primary);
+  background: color-mix(in srgb, var(--en-primary) 12%, var(--en-surface));
 }
 
 .en-ai-form label {

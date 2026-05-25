@@ -59,8 +59,11 @@ import {
   PROGRAMMATIC_TASK_TEMPLATES,
   createDefaultModelSelection,
   createDefaultPluginState,
+  createDefaultTaskState,
   mergePluginState,
-  updatePluginState
+  mergeTaskState,
+  updatePluginState,
+  updateTaskState
 } from 'common/elephantnote/atomicWorkspace'
 
 const store = new Store({
@@ -72,7 +75,8 @@ const store = new Store({
     featureFlags: normalizeFeatureFlags(),
     aiConfig: normalizeAiConfig(),
     atomicModelSelection: createDefaultModelSelection(),
-    atomicPluginState: createDefaultPluginState()
+    atomicPluginState: createDefaultPluginState(),
+    atomicTaskState: createDefaultTaskState()
   }
 })
 
@@ -90,6 +94,10 @@ const getConfig = () => ({
   atomicPluginState: {
     ...createDefaultPluginState(),
     ...(store.get('atomicPluginState') || {})
+  },
+  atomicTaskState: {
+    ...createDefaultTaskState(),
+    ...(store.get('atomicTaskState') || {})
   }
 })
 
@@ -105,6 +113,10 @@ const setConfig = (config) => {
   store.set('atomicPluginState', {
     ...createDefaultPluginState(),
     ...(config.atomicPluginState || {})
+  })
+  store.set('atomicTaskState', {
+    ...createDefaultTaskState(),
+    ...(config.atomicTaskState || {})
   })
 }
 
@@ -868,6 +880,44 @@ const acceptWikiRecord = async({ id } = {}) => {
 
 const dismissWikiRecord = async({ id } = {}) => updateWikiRecordStatus(id, 'dismissed')
 
+const runProgrammaticTask = async({ id } = {}) => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  const task = mergeTaskState(PROGRAMMATIC_TASK_TEMPLATES, getConfig().atomicTaskState)
+    .find((item) => item.id === id)
+  if (!task) throw new Error('Unknown task.')
+
+  const steps = []
+  for (const action of task.actions) {
+    if (action === 'wiki:propose' || action === 'wiki:proposal') {
+      const wiki = await proposeWikiRecords()
+      steps.push({ action, ok: true, summary: `${wiki.records.length} wiki record${wiki.records.length === 1 ? '' : 's'}` })
+    } else if (action === 'calendar:summary') {
+      const calendar = await readCalendar(vault.path)
+      steps.push({ action, ok: true, summary: `${calendar.events.length} calendar event${calendar.events.length === 1 ? '' : 's'}` })
+    } else if (action === 'search:recent') {
+      const notes = await listMarkdownNotesRecursive(vault)
+      steps.push({ action, ok: true, summary: `${notes.slice(0, 8).length} recent note${notes.length === 1 ? '' : 's'}` })
+    } else {
+      steps.push({ action, ok: false, summary: 'Action is defined but not executable locally yet.' })
+    }
+  }
+
+  const result = {
+    ok: steps.every((step) => step.ok),
+    steps
+  }
+  const config = getConfig()
+  config.atomicTaskState = updateTaskState(PROGRAMMATIC_TASK_TEMPLATES, config.atomicTaskState, {
+    id,
+    enabled: task.enabled,
+    lastRunAt: new Date().toISOString(),
+    lastResult: result
+  })
+  setConfig(config)
+  return mergeTaskState(PROGRAMMATIC_TASK_TEMPLATES, getConfig().atomicTaskState)
+}
+
 const getApiWindowId = (context = {}) => {
   if (context.windowId !== undefined && context.windowId !== null) return context.windowId
   const webContents = context.event?.sender
@@ -1004,7 +1054,19 @@ const createElephantNoteMainApi = () => {
         setConfig(config)
         return mergePluginState(ATOMIC_PLUGIN_MANIFESTS, getConfig().atomicPluginState)
       },
-      [ELEPHANTNOTE_API_ACTIONS.TASKS_LIST]: async() => PROGRAMMATIC_TASK_TEMPLATES,
+      [ELEPHANTNOTE_API_ACTIONS.TASKS_LIST]: async() =>
+        mergeTaskState(PROGRAMMATIC_TASK_TEMPLATES, getConfig().atomicTaskState),
+      [ELEPHANTNOTE_API_ACTIONS.TASKS_SET]: async(payload) => {
+        const config = getConfig()
+        config.atomicTaskState = updateTaskState(
+          PROGRAMMATIC_TASK_TEMPLATES,
+          config.atomicTaskState,
+          payload
+        )
+        setConfig(config)
+        return mergeTaskState(PROGRAMMATIC_TASK_TEMPLATES, getConfig().atomicTaskState)
+      },
+      [ELEPHANTNOTE_API_ACTIONS.TASKS_RUN]: async(payload) => runProgrammaticTask(payload),
       [ELEPHANTNOTE_API_ACTIONS.SYNC_STATUS]: async() => syncEngine.status(),
       [ELEPHANTNOTE_API_ACTIONS.SYNC_ENQUEUE]: async({ operation, payload = {} }) =>
         syncEngine.enqueue({ operation, payload }),

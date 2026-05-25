@@ -2,13 +2,17 @@ import { describe, expect, it } from 'vitest'
 import {
   ATOMIC_MODEL_CATALOG,
   ATOMIC_PLUGIN_MANIFESTS,
+  PROGRAMMATIC_TASK_TEMPLATES,
   createDefaultPluginState,
+  createDefaultTaskState,
   createDefaultModelSelection,
   getModelsByPurpose,
   mergePluginState,
+  mergeTaskState,
   normalizePluginManifest,
   normalizeProgrammaticTask,
-  updatePluginState
+  updatePluginState,
+  updateTaskState
 } from 'common/elephantnote/atomicWorkspace'
 
 describe('Atomic workspace catalog', () => {
@@ -76,5 +80,26 @@ describe('Atomic workspace catalog', () => {
       enabled: true,
       actions: ['search:recent', 'wiki:propose', 'calendar:summary']
     })
+  })
+
+  it('merges persistent task state into task templates', () => {
+    const defaults = createDefaultTaskState(PROGRAMMATIC_TASK_TEMPLATES)
+    expect(defaults['daily-briefing']).toMatchObject({ enabled: false, lastRunAt: '' })
+
+    const state = updateTaskState(PROGRAMMATIC_TASK_TEMPLATES, defaults, {
+      id: 'daily-briefing',
+      enabled: true,
+      lastRunAt: '2026-05-25T06:00:00.000Z',
+      lastResult: { ok: true }
+    })
+    const tasks = mergeTaskState(PROGRAMMATIC_TASK_TEMPLATES, state)
+
+    expect(tasks.find((task) => task.id === 'daily-briefing')).toMatchObject({
+      enabled: true,
+      lastRunAt: '2026-05-25T06:00:00.000Z',
+      lastResult: { ok: true }
+    })
+    expect(() => updateTaskState(PROGRAMMATIC_TASK_TEMPLATES, state, { id: 'missing' }))
+      .toThrow('Unknown task.')
   })
 })

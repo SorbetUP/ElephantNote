@@ -48,6 +48,8 @@ const LEGACY_CALLS = {
   'plugins.list': () => window.elephantnote?.plugins?.list?.(),
   'plugins.set': (payload) => window.elephantnote?.plugins?.set?.(payload),
   'tasks.list': () => window.elephantnote?.tasks?.list?.(),
+  'tasks.set': (payload) => window.elephantnote?.tasks?.set?.(payload),
+  'tasks.run': (payload) => window.elephantnote?.tasks?.run?.(payload),
   'agents.list': () => window.elephantnote?.agents?.list?.(),
   'agents.register': (payload) => window.elephantnote?.agents?.register?.(payload),
   'agents.unregister': ({ id }) => window.elephantnote?.agents?.unregister?.(id),
@@ -156,7 +158,9 @@ export const elephantnoteClient = {
     set: (payload) => elephantnoteClient.call('plugins.set', payload)
   },
   tasks: {
-    list: () => elephantnoteClient.call('tasks.list')
+    list: () => elephantnoteClient.call('tasks.list'),
+    set: (payload) => elephantnoteClient.call('tasks.set', payload),
+    run: (id) => elephantnoteClient.call('tasks.run', { id })
   },
   agents: {
     list: () => elephantnoteClient.call('agents.list'),

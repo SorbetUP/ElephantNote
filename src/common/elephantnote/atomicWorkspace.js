@@ -216,3 +216,43 @@ export const normalizeProgrammaticTask = (task = {}) => {
       : [...(template?.actions || [])]
   }
 }
+
+export const createDefaultTaskState = (templates = PROGRAMMATIC_TASK_TEMPLATES) => {
+  return templates.reduce((state, template) => {
+    state[template.id] = {
+      enabled: false,
+      lastRunAt: '',
+      lastResult: null
+    }
+    return state
+  }, {})
+}
+
+export const mergeTaskState = (templates = PROGRAMMATIC_TASK_TEMPLATES, state = {}) => {
+  return templates.map((template) => {
+    const task = normalizeProgrammaticTask({ template: template.id })
+    const saved = state?.[task.id] || {}
+    return {
+      ...task,
+      enabled: typeof saved.enabled === 'boolean' ? saved.enabled : false,
+      lastRunAt: String(saved.lastRunAt || ''),
+      lastResult: saved.lastResult || null
+    }
+  })
+}
+
+export const updateTaskState = (templates = PROGRAMMATIC_TASK_TEMPLATES, state = {}, patch = {}) => {
+  const template = templates.find((item) => item.id === patch.id)
+  if (!template) throw new Error('Unknown task.')
+  const defaults = createDefaultTaskState(templates)
+  const current = state?.[template.id] || defaults[template.id] || {}
+  return {
+    ...defaults,
+    ...state,
+    [template.id]: {
+      enabled: typeof patch.enabled === 'boolean' ? patch.enabled : Boolean(current.enabled),
+      lastRunAt: String(patch.lastRunAt || current.lastRunAt || ''),
+      lastResult: patch.lastResult === undefined ? current.lastResult || null : patch.lastResult
+    }
+  }
+}

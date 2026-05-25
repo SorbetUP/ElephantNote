@@ -159,6 +159,51 @@ export const normalizePluginManifest = (manifest = {}) => ({
     : []
 })
 
+export const createDefaultPluginState = (manifests = ATOMIC_PLUGIN_MANIFESTS) => {
+  return manifests.reduce((state, manifest) => {
+    state[manifest.id] = {
+      enabled: manifest.status === 'enabled',
+      config: {}
+    }
+    return state
+  }, {})
+}
+
+export const mergePluginState = (manifests = ATOMIC_PLUGIN_MANIFESTS, state = {}) => {
+  const defaults = createDefaultPluginState(manifests)
+  return manifests.map((manifest) => {
+    const normalizedManifest = normalizePluginManifest(manifest)
+    const saved = state?.[normalizedManifest.id] || {}
+    const enabled = typeof saved.enabled === 'boolean'
+      ? saved.enabled
+      : defaults[normalizedManifest.id]?.enabled || false
+    return {
+      ...normalizedManifest,
+      status: enabled ? 'enabled' : 'disabled',
+      enabled,
+      config: saved.config && typeof saved.config === 'object' && !Array.isArray(saved.config)
+        ? saved.config
+        : {}
+    }
+  })
+}
+
+export const updatePluginState = (manifests = ATOMIC_PLUGIN_MANIFESTS, state = {}, patch = {}) => {
+  const plugin = manifests.find((manifest) => manifest.id === patch.id)
+  if (!plugin) throw new Error('Unknown plugin.')
+  const current = state?.[plugin.id] || createDefaultPluginState(manifests)[plugin.id] || {}
+  return {
+    ...createDefaultPluginState(manifests),
+    ...state,
+    [plugin.id]: {
+      enabled: typeof patch.enabled === 'boolean' ? patch.enabled : Boolean(current.enabled),
+      config: patch.config && typeof patch.config === 'object' && !Array.isArray(patch.config)
+        ? patch.config
+        : current.config || {}
+    }
+  }
+}
+
 export const normalizeProgrammaticTask = (task = {}) => {
   const template = PROGRAMMATIC_TASK_TEMPLATES.find((item) => item.id === task.template)
   return {

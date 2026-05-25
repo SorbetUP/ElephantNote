@@ -149,6 +149,11 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze({
     'text-to-speech': optionalString
   }),
   'plugins.list': emptySchema,
+  'plugins.set': objectSchema({
+    id: requiredString,
+    enabled: optionalBoolean,
+    config: optionalObject
+  }),
   'tasks.list': emptySchema,
   'sync.status': emptySchema,
   'sync.enqueue': objectSchema({

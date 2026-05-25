@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   ATOMIC_MODEL_CATALOG,
   ATOMIC_PLUGIN_MANIFESTS,
+  createDefaultPluginState,
   createDefaultModelSelection,
   getModelsByPurpose,
+  mergePluginState,
   normalizePluginManifest,
-  normalizeProgrammaticTask
+  normalizeProgrammaticTask,
+  updatePluginState
 } from 'common/elephantnote/atomicWorkspace'
 
 describe('Atomic workspace catalog', () => {
@@ -43,6 +46,26 @@ describe('Atomic workspace catalog', () => {
       surfaces: ['settings', 'calendar']
     })
     expect(ATOMIC_PLUGIN_MANIFESTS.map((plugin) => plugin.id)).toContain('mcp-memory')
+  })
+
+  it('merges persistent plugin state into plugin manifests', () => {
+    const defaults = createDefaultPluginState(ATOMIC_PLUGIN_MANIFESTS)
+    expect(defaults['google-calendar']).toEqual({ enabled: false, config: {} })
+
+    const state = updatePluginState(ATOMIC_PLUGIN_MANIFESTS, defaults, {
+      id: 'google-calendar',
+      enabled: true,
+      config: { calendarId: 'primary' }
+    })
+    const plugins = mergePluginState(ATOMIC_PLUGIN_MANIFESTS, state)
+
+    expect(plugins.find((plugin) => plugin.id === 'google-calendar')).toMatchObject({
+      enabled: true,
+      status: 'enabled',
+      config: { calendarId: 'primary' }
+    })
+    expect(() => updatePluginState(ATOMIC_PLUGIN_MANIFESTS, state, { id: 'missing' }))
+      .toThrow('Unknown plugin.')
   })
 
   it('normalizes task templates into executable task manifests', () => {

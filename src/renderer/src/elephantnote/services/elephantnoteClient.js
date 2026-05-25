@@ -46,6 +46,7 @@ const LEGACY_CALLS = {
   'models.selection.get': () => window.elephantnote?.models?.getSelection?.(),
   'models.selection.set': (payload) => window.elephantnote?.models?.setSelection?.(payload),
   'plugins.list': () => window.elephantnote?.plugins?.list?.(),
+  'plugins.set': (payload) => window.elephantnote?.plugins?.set?.(payload),
   'tasks.list': () => window.elephantnote?.tasks?.list?.(),
   'agents.list': () => window.elephantnote?.agents?.list?.(),
   'agents.register': (payload) => window.elephantnote?.agents?.register?.(payload),
@@ -151,7 +152,8 @@ export const elephantnoteClient = {
     setSelection: (selection) => elephantnoteClient.call('models.selection.set', selection)
   },
   plugins: {
-    list: () => elephantnoteClient.call('plugins.list')
+    list: () => elephantnoteClient.call('plugins.list'),
+    set: (payload) => elephantnoteClient.call('plugins.set', payload)
   },
   tasks: {
     list: () => elephantnoteClient.call('tasks.list')

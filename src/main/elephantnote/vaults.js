@@ -57,7 +57,10 @@ import {
   ATOMIC_MODEL_CATALOG,
   ATOMIC_PLUGIN_MANIFESTS,
   PROGRAMMATIC_TASK_TEMPLATES,
-  createDefaultModelSelection
+  createDefaultModelSelection,
+  createDefaultPluginState,
+  mergePluginState,
+  updatePluginState
 } from 'common/elephantnote/atomicWorkspace'
 
 const store = new Store({
@@ -68,7 +71,8 @@ const store = new Store({
     activeVaultId: null,
     featureFlags: normalizeFeatureFlags(),
     aiConfig: normalizeAiConfig(),
-    atomicModelSelection: createDefaultModelSelection()
+    atomicModelSelection: createDefaultModelSelection(),
+    atomicPluginState: createDefaultPluginState()
   }
 })
 
@@ -82,6 +86,10 @@ const getConfig = () => ({
   atomicModelSelection: {
     ...createDefaultModelSelection(),
     ...(store.get('atomicModelSelection') || {})
+  },
+  atomicPluginState: {
+    ...createDefaultPluginState(),
+    ...(store.get('atomicPluginState') || {})
   }
 })
 
@@ -93,6 +101,10 @@ const setConfig = (config) => {
   store.set('atomicModelSelection', {
     ...createDefaultModelSelection(),
     ...(config.atomicModelSelection || {})
+  })
+  store.set('atomicPluginState', {
+    ...createDefaultPluginState(),
+    ...(config.atomicPluginState || {})
   })
 }
 
@@ -980,7 +992,18 @@ const createElephantNoteMainApi = () => {
         setConfig(config)
         return getConfig().atomicModelSelection
       },
-      [ELEPHANTNOTE_API_ACTIONS.PLUGINS_LIST]: async() => ATOMIC_PLUGIN_MANIFESTS,
+      [ELEPHANTNOTE_API_ACTIONS.PLUGINS_LIST]: async() =>
+        mergePluginState(ATOMIC_PLUGIN_MANIFESTS, getConfig().atomicPluginState),
+      [ELEPHANTNOTE_API_ACTIONS.PLUGINS_SET]: async(payload) => {
+        const config = getConfig()
+        config.atomicPluginState = updatePluginState(
+          ATOMIC_PLUGIN_MANIFESTS,
+          config.atomicPluginState,
+          payload
+        )
+        setConfig(config)
+        return mergePluginState(ATOMIC_PLUGIN_MANIFESTS, getConfig().atomicPluginState)
+      },
       [ELEPHANTNOTE_API_ACTIONS.TASKS_LIST]: async() => PROGRAMMATIC_TASK_TEMPLATES,
       [ELEPHANTNOTE_API_ACTIONS.SYNC_STATUS]: async() => syncEngine.status(),
       [ELEPHANTNOTE_API_ACTIONS.SYNC_ENQUEUE]: async({ operation, payload = {} }) =>

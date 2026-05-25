@@ -597,12 +597,24 @@
               >
                 <header>
                   <strong>{{ plugin.name }}</strong>
-                  <span>{{ plugin.status }}</span>
+                  <button
+                    type="button"
+                    :class="{ active: plugin.enabled }"
+                    @click="togglePlugin(plugin)"
+                  >
+                    {{ plugin.enabled ? 'Enabled' : 'Disabled' }}
+                  </button>
                 </header>
                 <p>{{ plugin.permissions.join(', ') }}</p>
                 <small>{{ plugin.surfaces.join(' · ') }}</small>
               </article>
             </div>
+            <span
+              v-if="pluginMessage"
+              class="en-settings-message"
+            >
+              {{ pluginMessage }}
+            </span>
           </section>
 
           <section
@@ -689,10 +701,11 @@ const aiPresets = Object.values(ELEPHANTNOTE_AI_PRESETS)
 const aiConfig = ref(normalizeAiConfig())
 const modelPurposes = MODEL_PURPOSES
 const modelCatalog = ATOMIC_MODEL_CATALOG
-const pluginManifests = ATOMIC_PLUGIN_MANIFESTS
+const pluginManifests = ref(ATOMIC_PLUGIN_MANIFESTS)
 const taskTemplates = PROGRAMMATIC_TASK_TEMPLATES
 const modelSelection = ref(createDefaultModelSelection())
 const modelSelectionMessage = ref('')
+const pluginMessage = ref('')
 const featureFlags = ref({
   ai: true,
   askAi: true,
@@ -895,6 +908,28 @@ const saveModelSelection = () => {
     })
 }
 
+const loadPlugins = async () => {
+  try {
+    pluginManifests.value = await elephantnoteClient.plugins.list()
+  } catch (error) {
+    console.warn('Unable to load ElephantNote plugins:', error)
+  }
+}
+
+const togglePlugin = async (plugin) => {
+  pluginMessage.value = ''
+  try {
+    pluginManifests.value = await elephantnoteClient.plugins.set({
+      id: plugin.id,
+      enabled: !plugin.enabled,
+      config: plugin.config || {}
+    })
+    pluginMessage.value = `${plugin.name} ${plugin.enabled ? 'disabled' : 'enabled'}.`
+  } catch (error) {
+    pluginMessage.value = error instanceof Error ? error.message : 'Plugin update failed.'
+  }
+}
+
 const loadModelSelection = async () => {
   try {
     modelSelection.value = {
@@ -946,6 +981,7 @@ onMounted(() => {
   loadFeatureFlags()
   loadAiConfig()
   loadModelSelection()
+  loadPlugins()
 })
 
 onBeforeUnmount(stopQuickTriggerCapture)
@@ -1361,6 +1397,23 @@ onBeforeUnmount(stopQuickTriggerCapture)
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.en-plugin-list header button {
+  min-height: 30px;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--en-muted);
+  background: var(--en-surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+.en-plugin-list header button.active {
+  border-color: color-mix(in srgb, var(--en-primary) 44%, var(--en-border));
+  color: var(--en-primary);
+  background: color-mix(in srgb, var(--en-primary) 12%, var(--en-surface));
 }
 
 .en-plugin-list p,

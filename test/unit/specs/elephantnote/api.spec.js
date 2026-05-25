@@ -163,4 +163,30 @@ describe('ElephantNote API contract', () => {
     expect(response.ok).to.equal(false)
     expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
   })
+
+  it('validates plugin state payloads', async() => {
+    const handler = vi.fn(async(payload) => payload)
+    const api = createElephantNoteApi({
+      handlers: {
+        [ELEPHANTNOTE_API_ACTIONS.PLUGINS_SET]: handler
+      }
+    })
+
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.PLUGINS_SET, {
+      id: 'google-calendar',
+      enabled: true,
+      config: { calendarId: 'primary' }
+    })).resolves.to.deep.equal({
+      id: 'google-calendar',
+      enabled: true,
+      config: { calendarId: 'primary' }
+    })
+
+    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.PLUGINS_SET, {
+      enabled: true
+    })
+
+    expect(response.ok).to.equal(false)
+    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
+  })
 })

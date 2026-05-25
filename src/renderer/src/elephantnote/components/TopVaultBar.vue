@@ -46,7 +46,8 @@
       class="en-icon-button"
       type="button"
       title="Graph"
-      @click="store.notifyFeatureUnavailable('Graph')"
+      :class="{ active: store.activeWorkspaceView === 'graph' }"
+      @click="store.setWorkspaceView('graph')"
     >
       <GitFork class="en-icon" />
     </button>
@@ -54,7 +55,8 @@
       class="en-icon-button"
       type="button"
       title="Calendar"
-      @click="store.notifyFeatureUnavailable('Calendar')"
+      :class="{ active: store.activeWorkspaceView === 'calendar' }"
+      @click="store.setWorkspaceView('calendar')"
     >
       <CalendarDays class="en-icon" />
     </button>
@@ -217,6 +219,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   color: var(--en-muted);
+}
+
+.en-icon-button:hover,
+.en-icon-button.active {
+  color: var(--en-text);
+  background: var(--en-soft);
 }
 
 .en-ghost-button {

@@ -216,15 +216,60 @@ describe('ElephantNote vault store pinned notes', () => {
     expect(store.rootSidebarEntries.map((entry) => entry.path)).toEqual(['new-folder'])
   })
 
-  it('notifies when a planned Atomic workspace feature is selected', () => {
+  it('derives local Atomic dashboard, wiki, calendar, and graph data', () => {
     const store = useVaultStore()
-
-    store.notifyFeatureUnavailable('Graph')
-
-    expect(window.electron.ipcRenderer.send).toHaveBeenCalledWith('mt::show-notification', {
-      title: 'Graph is planned in the Atomic workspace roadmap.',
-      type: 'info'
+    store.applyPayload({
+      vaults: [createVault()],
+      activeVaultId: 'vault-1',
+      activeVault: createVault(),
+      workspace: { sidebar: [] },
+      entries: [
+        { kind: 'folder', path: 'Projects', title: 'Projects', updatedAt: '2026-05-17T10:00:00.000Z' },
+        {
+          kind: 'note',
+          path: 'Projects/a.md',
+          title: 'A',
+          tags: ['work', 'atomic'],
+          updatedAt: '2026-05-19T10:00:00.000Z'
+        },
+        {
+          kind: 'note',
+          path: 'Projects/b.md',
+          title: 'B',
+          tags: ['work'],
+          updatedAt: '2026-05-18T10:00:00.000Z'
+        }
+      ]
     })
+
+    expect(store.workspaceStats).toMatchObject({ notes: 2, folders: 1, tags: 2 })
+    expect(store.tagTopics.map((topic) => [topic.tag, topic.notes.length])).toEqual([
+      ['work', 2],
+      ['atomic', 1]
+    ])
+    expect(store.calendarBuckets.map((bucket) => bucket.date)).toEqual([
+      '2026-05-19',
+      '2026-05-18'
+    ])
+    expect(store.graphModel.edges).toEqual([
+      { source: 'Projects', target: 'Projects/a.md', reason: 'folder' },
+      { source: 'Projects', target: 'Projects/b.md', reason: 'folder' },
+      { source: 'Projects/a.md', target: 'Projects/b.md', reason: '#work' }
+    ])
+  })
+
+  it('switches workspace views and closes the open note', () => {
+    const store = useVaultStore()
+    store.openedNotePath = 'note.md'
+
+    store.setWorkspaceView('graph')
+
+    expect(store.activeWorkspaceView).toBe('graph')
+    expect(store.openedNotePath).toBe('')
+
+    store.setWorkspaceView('unknown')
+
+    expect(store.activeWorkspaceView).toBe('notes')
   })
 
   it('persists folder sidebar visibility in the workspace', async() => {

@@ -28,13 +28,32 @@
 
       <button
         class="en-all-notes"
-        :class="{ active: store.currentPath === '' && !store.openedNotePath }"
+        :class="{ active: store.activeWorkspaceView === 'notes' && store.currentPath === '' && !store.openedNotePath }"
         type="button"
         @click="store.openDirectory('')"
       >
         <Files />
         <span>All notes</span>
       </button>
+
+      <div class="en-sidebar-views">
+        <button
+          type="button"
+          :class="{ active: store.activeWorkspaceView === 'dashboard' }"
+          @click="store.setWorkspaceView('dashboard')"
+        >
+          <LayoutDashboard />
+          <span>Dashboard</span>
+        </button>
+        <button
+          type="button"
+          :class="{ active: store.activeWorkspaceView === 'wiki' }"
+          @click="store.setWorkspaceView('wiki')"
+        >
+          <BookOpenText />
+          <span>Wiki</span>
+        </button>
+      </div>
 
       <div class="en-sidebar-main">
         <SidebarTreeEntry
@@ -105,7 +124,15 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { CalendarClock, ChevronDown, FilePlus2, Files, FolderPlus } from '@lucide/vue'
+import {
+  BookOpenText,
+  CalendarClock,
+  ChevronDown,
+  FilePlus2,
+  Files,
+  FolderPlus,
+  LayoutDashboard
+} from '@lucide/vue'
 import { useVaultStore } from '../stores/vaultStore'
 import { useEditorStore } from '@/store/editor'
 import SidebarTreeEntry from './SidebarTreeEntry.vue'
@@ -191,7 +218,8 @@ const createFolder = async () => {
 }
 
 .en-sidebar-create-button,
-.en-all-notes {
+.en-all-notes,
+.en-sidebar-views button {
   border: 0;
   border-radius: 8px;
   color: var(--en-muted);
@@ -213,12 +241,14 @@ const createFolder = async () => {
 }
 
 .en-sidebar-create-button svg,
-.en-all-notes svg {
+.en-all-notes svg,
+.en-sidebar-views svg {
   width: 17px;
   height: 17px;
 }
 
-.en-all-notes {
+.en-all-notes,
+.en-sidebar-views button {
   min-height: 36px;
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
@@ -230,6 +260,24 @@ const createFolder = async () => {
   font-size: 14px;
   font-weight: 700;
   text-align: left;
+}
+
+.en-sidebar-views {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -4px 6px 10px;
+}
+
+.en-sidebar-views button {
+  width: 100%;
+  margin: 0;
+}
+
+.en-sidebar-views button:hover,
+.en-sidebar-views button.active {
+  color: var(--en-text);
+  background: var(--en-soft);
 }
 
 .en-sidebar-main,

@@ -58,6 +58,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     entries: [],
     rootEntries: [],
     currentPath: '',
+    activeWorkspaceView: 'notes',
     filter: 'all',
     sort: 'updated-newest',
     viewMode: 'grid',
@@ -101,6 +102,95 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         }
         return String(a.title || '').localeCompare(String(b.title || ''))
       })
+    },
+    workspaceStats(state) {
+      const notes = state.rootEntries.filter((entry) => entry.kind === 'note' || entry.type === 'note')
+      const folders = state.rootEntries.filter((entry) => entry.kind === 'folder' || entry.type === 'folder')
+      const tags = new Set()
+      for (const note of notes) {
+        for (const tag of note.tags || []) {
+          if (tag) tags.add(tag)
+        }
+      }
+      return {
+        notes: notes.length,
+        folders: folders.length,
+        tags: tags.size,
+        recent: this.recentNoteEntries.length
+      }
+    },
+    tagTopics(state) {
+      const byTag = new Map()
+      const notes = state.rootEntries.filter((entry) => entry.kind === 'note' || entry.type === 'note')
+      for (const note of notes) {
+        for (const tag of note.tags || []) {
+          if (!tag) continue
+          const topic = byTag.get(tag) || {
+            tag,
+            notes: [],
+            updatedAt: note.updatedAt || ''
+          }
+          topic.notes.push(note)
+          if (new Date(note.updatedAt || 0) > new Date(topic.updatedAt || 0)) {
+            topic.updatedAt = note.updatedAt
+          }
+          byTag.set(tag, topic)
+        }
+      }
+      return [...byTag.values()].sort((a, b) => {
+        if (b.notes.length !== a.notes.length) return b.notes.length - a.notes.length
+        return a.tag.localeCompare(b.tag)
+      })
+    },
+    calendarBuckets(state) {
+      const buckets = new Map()
+      const notes = state.rootEntries.filter((entry) => entry.kind === 'note' || entry.type === 'note')
+      for (const note of notes) {
+        const day = String(note.updatedAt || '').slice(0, 10) || 'No date'
+        const bucket = buckets.get(day) || []
+        bucket.push(note)
+        buckets.set(day, bucket)
+      }
+      return [...buckets.entries()]
+        .sort(([a], [b]) => b.localeCompare(a))
+        .map(([date, notes]) => ({
+          date,
+          notes: notes.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
+        }))
+    },
+    graphModel(state) {
+      const notes = state.rootEntries.filter((entry) => entry.kind === 'note' || entry.type === 'note')
+      const folders = state.rootEntries.filter((entry) => entry.kind === 'folder' || entry.type === 'folder')
+      const nodes = [
+        ...folders.map((folder) => ({
+          id: folder.path,
+          title: folder.title,
+          kind: 'folder'
+        })),
+        ...notes.map((note) => ({
+          id: note.path,
+          title: note.title,
+          kind: 'note'
+        }))
+      ]
+      const edges = []
+      for (const note of notes) {
+        const folderPath = note.path?.includes('/') ? note.path.split('/').slice(0, -1).join('/') : ''
+        if (folderPath && folders.some((folder) => folder.path === folderPath)) {
+          edges.push({ source: folderPath, target: note.path, reason: 'folder' })
+        }
+      }
+      for (const topic of this.tagTopics) {
+        const taggedNotes = topic.notes
+        for (let index = 1; index < taggedNotes.length; index += 1) {
+          edges.push({
+            source: taggedNotes[0].path,
+            target: taggedNotes[index].path,
+            reason: `#${topic.tag}`
+          })
+        }
+      }
+      return { nodes, edges }
     },
     recentNoteEntries(state) {
       const opened = state.openedNotes.filter((note) => note?.path)
@@ -214,6 +304,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.openedNotePath = ''
       this.openedNotes = []
       this.currentPath = ''
+      this.activeWorkspaceView = 'notes'
       this.loadPinnedNotes()
       if (this.activeVault?.path && isElephantNoteApiAvailable()) {
         elephantnoteClient.search.initVault(this.activeVault.path).catch((err) => {
@@ -263,6 +354,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     async openDirectory(relativePath = '') {
       this.currentPath = relativePath
       this.openedNotePath = ''
+      this.activeWorkspaceView = 'notes'
       const entries = await elephantnoteClient.directory.list(relativePath)
       this.entries = entries
       if (!relativePath) {
@@ -329,6 +421,13 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.openedNotePath = ''
     },
 
+    setWorkspaceView(view) {
+      this.activeWorkspaceView = ['notes', 'dashboard', 'wiki', 'graph', 'calendar'].includes(view)
+        ? view
+        : 'notes'
+      this.openedNotePath = ''
+    },
+
     async createNote() {
       const result = await elephantnoteClient.notes.create(this.currentPath)
       this.entries = result.entries
@@ -389,13 +488,6 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     notifyAiUnavailable() {
       window.electron.ipcRenderer.send('mt::show-notification', {
         title: 'AI features are not available yet.',
-        type: 'info'
-      })
-    },
-
-    notifyFeatureUnavailable(featureName) {
-      window.electron.ipcRenderer.send('mt::show-notification', {
-        title: `${featureName} is planned in the Atomic workspace roadmap.`,
         type: 'info'
       })
     },

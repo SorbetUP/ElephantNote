@@ -4,13 +4,17 @@
     :class="{ 'has-editor-open': hasOpenNote }"
   >
     <section
-      v-if="!hasOpenNote"
+      v-if="!hasOpenNote && store.activeWorkspaceView === 'notes'"
       class="en-library"
     >
       <library-toolbar />
       <library-grid />
     </section>
-    <site-preview-panel v-if="!hasOpenNote" />
+    <dashboard-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'dashboard'" />
+    <wiki-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'wiki'" />
+    <graph-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'graph'" />
+    <calendar-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'calendar'" />
+    <site-preview-panel v-if="!hasOpenNote && store.activeWorkspaceView === 'notes'" />
     <note-editor-host
       v-if="hasOpenNote"
       class="en-main-editor"
@@ -25,6 +29,10 @@ import LibraryToolbar from './LibraryToolbar.vue'
 import LibraryGrid from './LibraryGrid.vue'
 import NoteEditorHost from './NoteEditorHost.vue'
 import SitePreviewPanel from '../sitePreview/SitePreviewPanel.vue'
+import DashboardView from './DashboardView.vue'
+import WikiView from './WikiView.vue'
+import GraphView from './GraphView.vue'
+import CalendarView from './CalendarView.vue'
 
 const store = useVaultStore()
 const hasOpenNote = computed(() => !!store.openedNotePath)

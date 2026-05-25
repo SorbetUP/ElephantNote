@@ -7,6 +7,7 @@ import {
   WORKSPACE_FILE,
   INDEX_FILE,
   CALENDAR_FILE,
+  SOURCES_FILE,
   createId,
   createWorkspace,
   createWelcomeMarkdown,
@@ -18,6 +19,14 @@ import {
 } from './core'
 import { importGoogleKeepExport } from './googleKeepImport'
 import { mergeCalendarEvents, parseIcsCalendar } from 'common/elephantnote/calendar'
+import {
+  createSourceId,
+  extractHtmlTitle,
+  htmlToReadableText,
+  normalizeSourceRecord,
+  normalizeSourceUrl,
+  parseRssFeed
+} from 'common/elephantnote/sources'
 import { getSearchService, registerSearchIpc } from './search/searchIpc'
 import { getSitePreviewService, registerSitePreviewIpc } from './sitePreview/sitePreviewIpc'
 import {
@@ -102,6 +111,10 @@ export const initializeVault = async(vaultRoot, now = new Date()) => {
   if (!(await fs.pathExists(calendarPath))) {
     await fs.writeJson(calendarPath, { version: 1, updatedAt: now.toISOString(), events: [] }, { spaces: 2 })
   }
+  const sourcesPath = path.join(metaDir, SOURCES_FILE)
+  if (!(await fs.pathExists(sourcesPath))) {
+    await fs.writeJson(sourcesPath, { version: 1, updatedAt: now.toISOString(), sources: [] }, { spaces: 2 })
+  }
   if (!(await fs.pathExists(welcomePath))) {
     if (await fs.pathExists(legacyWelcomePath)) {
       await fs.move(legacyWelcomePath, welcomePath)
@@ -166,6 +179,29 @@ const writeCalendar = async(vaultRoot, calendar) => {
     version: 1,
     updatedAt: new Date().toISOString(),
     events: calendar.events || []
+  }, { spaces: 2 })
+}
+
+const readSources = async(vaultRoot) => {
+  const sourcesPath = path.join(vaultRoot, WORKSPACE_DIR, SOURCES_FILE)
+  if (!(await fs.pathExists(sourcesPath))) {
+    return { version: 1, updatedAt: new Date().toISOString(), sources: [] }
+  }
+  const data = await fs.readJson(sourcesPath)
+  return {
+    version: 1,
+    updatedAt: data.updatedAt || '',
+    sources: Array.isArray(data.sources) ? data.sources.map(normalizeSourceRecord) : []
+  }
+}
+
+const writeSources = async(vaultRoot, sources) => {
+  const sourcesPath = path.join(vaultRoot, WORKSPACE_DIR, SOURCES_FILE)
+  await fs.ensureDir(path.dirname(sourcesPath))
+  await fs.writeJson(sourcesPath, {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    sources: sources.map(normalizeSourceRecord)
   }, { spaces: 2 })
 }
 
@@ -579,6 +615,109 @@ const importGoogleCalendar = async(event) => {
   }
 }
 
+const createMarkdownFromSource = ({ title, url, body, importedAt = new Date().toISOString() }) => `---
+title: "${String(title || 'Imported source').replace(/"/g, '\\"')}"
+type: "source"
+tags: ["source"]
+sourceUrl: "${url}"
+createdAt: "${importedAt}"
+updatedAt: "${importedAt}"
+---
+
+# ${title || 'Imported source'}
+
+Source: ${url}
+
+${body || ''}
+`
+
+const safeSourceFilename = (title, url) => {
+  const stem = String(title || createSourceId(url) || 'Imported source')
+    .replace(/[\\/]/g, '-')
+    .replace(/[<>:"|?*]/g, '')
+    .trim()
+    .slice(0, 80) || 'Imported source'
+  return `${stem}.md`
+}
+
+const listSources = async() => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  await initializeVault(vault.path)
+  return readSources(vault.path)
+}
+
+const writeSourceNote = async({ url, title, body, destinationRelativePath = 'Sources', type = 'url', metadata = {} }) => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  const destination = resolveInsideVault(vault.path, destinationRelativePath)
+  await fs.ensureDir(destination)
+  const filename = nextAvailableName(safeSourceFilename(title, url), (name) => fs.existsSync(path.join(destination, name)))
+  const fullPath = path.join(destination, filename)
+  await fs.writeFile(fullPath, createMarkdownFromSource({ title, url, body }), 'utf8')
+  getSearchService().indexFile(fullPath).catch(() => {})
+
+  const sourceRecord = normalizeSourceRecord({
+    url,
+    title,
+    type,
+    notePath: path.relative(vault.path, fullPath),
+    metadata
+  })
+  const sourceData = await readSources(vault.path)
+  await writeSources(vault.path, [
+    ...sourceData.sources.filter((source) => source.id !== sourceRecord.id),
+    sourceRecord
+  ])
+  return sourceRecord
+}
+
+const ingestSourceUrl = async({ url, destinationRelativePath = 'Sources' } = {}) => {
+  const normalizedUrl = normalizeSourceUrl(url)
+  const response = await fetch(normalizedUrl)
+  if (!response.ok) throw new Error(`Source returned HTTP ${response.status}.`)
+  const html = await response.text()
+  const title = extractHtmlTitle(html, normalizedUrl)
+  const body = htmlToReadableText(html)
+  const source = await writeSourceNote({
+    url: normalizedUrl,
+    title,
+    body,
+    destinationRelativePath,
+    type: 'url'
+  })
+  return {
+    source,
+    sources: await listSources()
+  }
+}
+
+const importRssSource = async({ url, destinationRelativePath = 'Sources', limit = 20 } = {}) => {
+  const normalizedUrl = normalizeSourceUrl(url)
+  const response = await fetch(normalizedUrl)
+  if (!response.ok) throw new Error(`RSS source returned HTTP ${response.status}.`)
+  const xml = await response.text()
+  const items = parseRssFeed(xml).slice(0, Number(limit) || 20)
+  const sources = []
+  for (const item of items) {
+    sources.push(await writeSourceNote({
+      url: item.url,
+      title: item.title,
+      body: item.description,
+      destinationRelativePath,
+      type: 'rss',
+      metadata: {
+        feedUrl: normalizedUrl,
+        publishedAt: item.publishedAt
+      }
+    }))
+  }
+  return {
+    imported: sources.length,
+    sources: await listSources()
+  }
+}
+
 const getApiWindowId = (context = {}) => {
   if (context.windowId !== undefined && context.windowId !== null) return context.windowId
   const webContents = context.event?.sender
@@ -628,6 +767,9 @@ const createElephantNoteMainApi = () => {
       [ELEPHANTNOTE_API_ACTIONS.CALENDAR_LIST]: async() => listCalendarEvents(),
       [ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE]: async(_payload, { event }) => importGoogleCalendar(event),
       [ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE_FROM_PATH]: async(payload) => importGoogleCalendarFromPath(payload),
+      [ELEPHANTNOTE_API_ACTIONS.SOURCES_LIST]: async() => listSources(),
+      [ELEPHANTNOTE_API_ACTIONS.SOURCES_INGEST_URL]: async(payload) => ingestSourceUrl(payload),
+      [ELEPHANTNOTE_API_ACTIONS.SOURCES_IMPORT_RSS]: async(payload) => importRssSource(payload),
       [ELEPHANTNOTE_API_ACTIONS.SEARCH_INIT_VAULT]: async({ vaultPath }, context) =>
         searchService.registerWindowVault(getApiWindowId(context), vaultPath),
       [ELEPHANTNOTE_API_ACTIONS.SEARCH_QUERY]: async(payload, context) =>

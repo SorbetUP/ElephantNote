@@ -308,6 +308,56 @@
           </section>
 
           <section
+            v-if="activeSection === 'import'"
+            class="en-settings-section stacked"
+          >
+            <div>
+              <h3>Sources</h3>
+              <p>Ingest a web page or RSS feed into local markdown notes with source tracking.</p>
+            </div>
+            <div class="en-source-import-grid">
+              <label>
+                <span>URL</span>
+                <input
+                  v-model.trim="sourceUrl"
+                  type="text"
+                  placeholder="https://example.com/article"
+                >
+              </label>
+              <label>
+                <span>Destination folder</span>
+                <input
+                  v-model.trim="sourceDestination"
+                  type="text"
+                  placeholder="Sources"
+                >
+              </label>
+            </div>
+            <div class="en-settings-actions-row">
+              <button
+                type="button"
+                :disabled="isImportingSource || !sourceUrl"
+                @click="ingestSourceUrl"
+              >
+                Import URL
+              </button>
+              <button
+                type="button"
+                :disabled="isImportingSource || !sourceUrl"
+                @click="importRssSource"
+              >
+                Import RSS
+              </button>
+              <span
+                v-if="sourceImportMessage"
+                class="en-settings-message"
+              >
+                {{ sourceImportMessage }}
+              </span>
+            </div>
+          </section>
+
+          <section
             v-if="activeSection === 'sites'"
             class="en-settings-section stacked"
           >
@@ -625,6 +675,10 @@ const vaults = computed(() => props.vaults)
 const theme = computed(() => props.theme)
 const isImporting = ref(false)
 const importMessage = ref('')
+const sourceUrl = ref('')
+const sourceDestination = ref('Sources')
+const sourceImportMessage = ref('')
+const isImportingSource = ref(false)
 const aiConfigMessage = ref('')
 const isSavingAiConfig = ref(false)
 const isCapturingQuickTrigger = ref(false)
@@ -751,6 +805,32 @@ const importGoogleKeep = async () => {
     importMessage.value = error instanceof Error ? error.message : 'Import failed.'
   } finally {
     isImporting.value = false
+  }
+}
+
+const ingestSourceUrl = async () => {
+  isImportingSource.value = true
+  sourceImportMessage.value = ''
+  try {
+    const result = await elephantnoteClient.sources.ingestUrl(sourceUrl.value, sourceDestination.value || 'Sources')
+    sourceImportMessage.value = `Imported ${result.source?.title || 'source'}.`
+  } catch (error) {
+    sourceImportMessage.value = error instanceof Error ? error.message : 'Source import failed.'
+  } finally {
+    isImportingSource.value = false
+  }
+}
+
+const importRssSource = async () => {
+  isImportingSource.value = true
+  sourceImportMessage.value = ''
+  try {
+    const result = await elephantnoteClient.sources.importRss(sourceUrl.value, sourceDestination.value || 'Sources')
+    sourceImportMessage.value = `Imported ${result.imported || 0} feed item${result.imported === 1 ? '' : 's'}.`
+  } catch (error) {
+    sourceImportMessage.value = error instanceof Error ? error.message : 'RSS import failed.'
+  } finally {
+    isImportingSource.value = false
   }
 }
 
@@ -1179,6 +1259,34 @@ onBeforeUnmount(stopQuickTriggerCapture)
   gap: 12px;
 }
 
+.en-source-import-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+}
+
+.en-source-import-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.en-source-import-grid span {
+  color: var(--en-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.en-source-import-grid input {
+  min-width: 0;
+  height: 36px;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--en-text);
+  background: var(--en-surface);
+  font: inherit;
+}
+
 .en-model-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1388,7 +1496,8 @@ onBeforeUnmount(stopQuickTriggerCapture)
   }
 
   .en-model-grid,
-  .en-audio-grid {
+  .en-audio-grid,
+  .en-source-import-grid {
     grid-template-columns: 1fr;
   }
 }

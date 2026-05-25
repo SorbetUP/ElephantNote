@@ -22,6 +22,9 @@ const LEGACY_CALLS = {
   'calendar.list': () => window.elephantnote?.calendar?.list?.(),
   'calendar.importGoogle': () => window.elephantnote?.calendar?.importGoogle?.(),
   'calendar.importGoogleFromPath': (payload) => window.elephantnote?.calendar?.importGoogleFromPath?.(payload),
+  'sources.list': () => window.elephantnote?.sources?.list?.(),
+  'sources.ingestUrl': (payload) => window.elephantnote?.sources?.ingestUrl?.(payload),
+  'sources.importRss': (payload) => window.elephantnote?.sources?.importRss?.(payload),
   'search.initVault': ({ vaultPath }) => window.elephantnote?.search?.initVault?.(vaultPath),
   'search.query': (payload) => window.elephantnote?.search?.query?.(payload),
   'search.status': () => window.elephantnote?.search?.status?.(),
@@ -97,6 +100,13 @@ export const elephantnoteClient = {
     list: () => elephantnoteClient.call('calendar.list'),
     importGoogle: () => elephantnoteClient.call('calendar.importGoogle'),
     importGoogleFromPath: (sourcePath) => elephantnoteClient.call('calendar.importGoogleFromPath', { sourcePath })
+  },
+  sources: {
+    list: () => elephantnoteClient.call('sources.list'),
+    ingestUrl: (url, destinationRelativePath = 'Sources') =>
+      elephantnoteClient.call('sources.ingestUrl', { url, destinationRelativePath }),
+    importRss: (url, destinationRelativePath = 'Sources', limit = 20) =>
+      elephantnoteClient.call('sources.importRss', { url, destinationRelativePath, limit })
   },
   search: {
     initVault: (vaultPath) => elephantnoteClient.call('search.initVault', { vaultPath }),

@@ -30,13 +30,16 @@ import {
   Link2,
   List,
   ListOrdered,
+  Mic,
   Minus,
   PenLine,
   Quote,
   SquareCheckBig,
   Sparkles,
   Strikethrough,
-  Table2
+  Table2,
+  Tags,
+  Volume2
 } from '@lucide/vue'
 import { elephantnoteClient } from '../services/elephantnoteClient'
 
@@ -47,7 +50,10 @@ defineEmits([
   'insert-excalidraw',
   'insert-horizontal-rule',
   'ask-ai',
-  'open-agents'
+  'open-agents',
+  'speech-to-text',
+  'text-to-speech',
+  'auto-tag'
 ])
 
 const toolbarItems = [
@@ -65,6 +71,9 @@ const toolbarItems = [
   { key: 'image', title: 'Image', icon: Image, event: 'insert-image' },
   { key: 'excalidraw', title: 'Excalidraw', icon: PenLine, event: 'insert-excalidraw' },
   { key: 'rule', title: 'Horizontal rule', icon: Minus, event: 'insert-horizontal-rule' },
+  { key: 'speech-to-text', title: 'Dictate', icon: Mic, event: 'speech-to-text' },
+  { key: 'text-to-speech', title: 'Read aloud', icon: Volume2, event: 'text-to-speech' },
+  { key: 'auto-tag', title: 'Auto tag', icon: Tags, event: 'auto-tag' },
   { key: 'ask-ai', title: 'Ask AI', icon: Sparkles, event: 'ask-ai' },
   { key: 'agents', title: 'Agents', icon: Bot, event: 'open-agents' }
 ]

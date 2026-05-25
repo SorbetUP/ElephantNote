@@ -33,6 +33,9 @@
           @insert-horizontal-rule="insertHorizontalRule"
           @ask-ai="store.notifyAiUnavailable"
           @open-agents="store.notifyAiUnavailable"
+          @speech-to-text="startSpeechToText"
+          @text-to-speech="speakNote"
+          @auto-tag="autoTagNote"
         />
         <div class="en-editor-host">
           <editor-with-tabs
@@ -88,6 +91,7 @@ import { getOptionsFromState } from '@/store/help'
 import bus from '@/bus'
 import { useVaultStore } from '../stores/vaultStore'
 import ExcalidrawDialog from './ExcalidrawDialog.vue'
+import { elephantnoteClient } from '../services/elephantnoteClient'
 import NoteEditorFooter from './NoteEditorFooter.vue'
 import NoteEditorHeader from './NoteEditorHeader.vue'
 import NoteEditorMeta from './NoteEditorMeta.vue'
@@ -316,6 +320,62 @@ const insertImage = async () => {
 const insertHorizontalRule = () => {
   bus.emit('editor-focus')
   bus.emit('paragraph', 'hr')
+}
+
+const startSpeechToText = () => {
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!Recognition) {
+    window.electron.ipcRenderer.send('mt::show-notification', {
+      title: 'Speech to text is not available in this runtime.',
+      type: 'warning'
+    })
+    return
+  }
+  const recognition = new Recognition()
+  recognition.lang = navigator.language || 'en-US'
+  recognition.interimResults = false
+  recognition.maxAlternatives = 1
+  recognition.onresult = (event) => {
+    const transcript = event.results?.[0]?.[0]?.transcript || ''
+    if (!transcript) return
+    const separator = markdown.value.trim() ? '\n\n' : ''
+    updateMarkdown(`${markdown.value || ''}${separator}${transcript}`)
+  }
+  recognition.start()
+}
+
+const speakNote = () => {
+  if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
+    window.electron.ipcRenderer.send('mt::show-notification', {
+      title: 'Text to speech is not available in this runtime.',
+      type: 'warning'
+    })
+    return
+  }
+  window.speechSynthesis.cancel()
+  const utterance = new SpeechSynthesisUtterance(
+    visibleMarkdown.value
+      .replace(/^---[\s\S]*?---/, '')
+      .replace(/[#*_`>\-[\]()]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  )
+  utterance.lang = navigator.language || 'en-US'
+  window.speechSynthesis.speak(utterance)
+}
+
+const autoTagNote = async () => {
+  const relativePath = currentNoteRelativePath.value
+  if (!relativePath) return
+  try {
+    const result = await elephantnoteClient.notes.autotag(relativePath)
+    updateMarkdown(updateMarkdownTags(markdown.value || '', result.tags || [], noteTitle.value))
+  } catch (error) {
+    window.electron.ipcRenderer.send('mt::show-notification', {
+      title: error instanceof Error ? error.message : 'Auto tagging failed.',
+      type: 'warning'
+    })
+  }
 }
 
 const getMimeTypeFromPath = (pathname) => {

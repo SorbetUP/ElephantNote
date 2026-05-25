@@ -180,12 +180,25 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze({
     enabled: optionalBoolean,
     config: optionalObject
   }),
+  'plugins.run': objectSchema({
+    id: requiredString,
+    input: optionalObject
+  }),
   'tasks.list': emptySchema,
   'tasks.set': objectSchema({
     id: requiredString,
     enabled: optionalBoolean
   }),
   'tasks.run': objectSchema({ id: requiredString }),
+  'programs.list': emptySchema,
+  'programs.set': objectSchema({
+    environments: optionalObject
+  }),
+  'programs.run': objectSchema({
+    id: requiredString,
+    command: requiredString,
+    cwd: optionalString
+  }),
   'sync.status': emptySchema,
   'sync.enqueue': objectSchema({
     operation: requiredString,

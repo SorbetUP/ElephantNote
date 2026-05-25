@@ -215,6 +215,31 @@ describe('ElephantNote API contract', () => {
     expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
   })
 
+  it('validates plugin runtime and program run payloads', async() => {
+    const api = createElephantNoteApi({
+      handlers: {
+        [ELEPHANTNOTE_API_ACTIONS.PLUGINS_RUN]: async(payload) => payload,
+        [ELEPHANTNOTE_API_ACTIONS.PROGRAMS_RUN]: async(payload) => payload
+      }
+    })
+
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.PLUGINS_RUN, {
+      id: 'mcp-memory',
+      input: { name: 'rag.chat' }
+    })).resolves.toMatchObject({ id: 'mcp-memory' })
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.PROGRAMS_RUN, {
+      id: 'python',
+      command: 'pytest',
+      cwd: '/tmp'
+    })).resolves.toMatchObject({ id: 'python', command: 'pytest' })
+
+    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.PROGRAMS_RUN, {
+      id: 'python'
+    })
+    expect(response.ok).to.equal(false)
+    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
+  })
+
   it('validates task run payloads', async() => {
     const handler = vi.fn(async(payload) => payload)
     const api = createElephantNoteApi({

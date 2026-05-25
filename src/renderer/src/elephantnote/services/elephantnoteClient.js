@@ -50,6 +50,7 @@ const LEGACY_CALLS = {
   'models.selection.set': (payload) => window.elephantnote?.models?.setSelection?.(payload),
   'plugins.list': () => window.elephantnote?.plugins?.list?.(),
   'plugins.set': (payload) => window.elephantnote?.plugins?.set?.(payload),
+  'plugins.run': (payload) => window.elephantnote?.plugins?.run?.(payload),
   'tasks.list': () => window.elephantnote?.tasks?.list?.(),
   'tasks.set': (payload) => window.elephantnote?.tasks?.set?.(payload),
   'tasks.run': (payload) => window.elephantnote?.tasks?.run?.(payload),
@@ -62,7 +63,10 @@ const LEGACY_CALLS = {
   'mcp.tools.list': () => window.elephantnote?.mcp?.listTools?.(),
   'mcp.tools.call': (payload) => window.elephantnote?.mcp?.callTool?.(payload),
   'models.local.list': () => window.elephantnote?.models?.listLocal?.(),
-  'models.download': (payload) => window.elephantnote?.models?.download?.(payload)
+  'models.download': (payload) => window.elephantnote?.models?.download?.(payload),
+  'programs.list': () => window.elephantnote?.programs?.list?.(),
+  'programs.set': (payload) => window.elephantnote?.programs?.set?.(payload),
+  'programs.run': (payload) => window.elephantnote?.programs?.run?.(payload)
 }
 
 const unwrap = async(promise) => {
@@ -170,7 +174,8 @@ export const elephantnoteClient = {
   },
   plugins: {
     list: () => elephantnoteClient.call('plugins.list'),
-    set: (payload) => elephantnoteClient.call('plugins.set', payload)
+    set: (payload) => elephantnoteClient.call('plugins.set', payload),
+    run: (id, input = {}) => elephantnoteClient.call('plugins.run', { id, input })
   },
   tasks: {
     list: () => elephantnoteClient.call('tasks.list'),
@@ -189,6 +194,11 @@ export const elephantnoteClient = {
   mcp: {
     listTools: () => elephantnoteClient.call('mcp.tools.list'),
     callTool: (name, args = {}) => elephantnoteClient.call('mcp.tools.call', { name, arguments: args })
+  },
+  programs: {
+    list: () => elephantnoteClient.call('programs.list'),
+    set: (environments) => elephantnoteClient.call('programs.set', { environments }),
+    run: (id, command, cwd = '') => elephantnoteClient.call('programs.run', { id, command, cwd })
   },
   sync: {
     status: () => elephantnoteClient.call('sync.status'),

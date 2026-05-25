@@ -57,6 +57,10 @@ import { updateMarkdownTitle } from './markdown'
 import { migrateWorkspace } from './workspaceMigrations'
 import { GitSyncEngine } from './sync/GitSyncEngine'
 import { ModelRuntime } from './modelRuntime'
+import {
+  ProgramRuntime,
+  normalizeProgramEnvironments
+} from './programRuntime'
 import { normalizeFeatureFlags, setFeatureFlag } from 'common/elephantnote/featureFlags'
 import {
   createAiRequestBody,
@@ -87,12 +91,14 @@ const store = new Store({
     atomicModelSelection: createDefaultModelSelection(),
     atomicPluginState: createDefaultPluginState(),
     atomicTaskState: createDefaultTaskState(),
-    googleCalendarConfig: normalizeGoogleCalendarConfig()
+    googleCalendarConfig: normalizeGoogleCalendarConfig(),
+    programEnvironments: normalizeProgramEnvironments()
   }
 })
 
 const syncEngine = new GitSyncEngine()
 const modelRuntime = new ModelRuntime()
+const programRuntime = new ProgramRuntime()
 
 const getConfig = () => ({
   vaults: store.get('vaults') || [],
@@ -111,7 +117,8 @@ const getConfig = () => ({
     ...createDefaultTaskState(),
     ...(store.get('atomicTaskState') || {})
   },
-  googleCalendarConfig: normalizeGoogleCalendarConfig(store.get('googleCalendarConfig') || {})
+  googleCalendarConfig: normalizeGoogleCalendarConfig(store.get('googleCalendarConfig') || {}),
+  programEnvironments: normalizeProgramEnvironments(store.get('programEnvironments') || {})
 })
 
 const setConfig = (config) => {
@@ -132,6 +139,7 @@ const setConfig = (config) => {
     ...(config.atomicTaskState || {})
   })
   store.set('googleCalendarConfig', normalizeGoogleCalendarConfig(config.googleCalendarConfig || {}))
+  store.set('programEnvironments', normalizeProgramEnvironments(config.programEnvironments || {}))
 }
 
 export const initializeVault = async(vaultRoot, now = new Date()) => {
@@ -1108,6 +1116,29 @@ const callMcpTool = async({ name, arguments: args = {} } = {}, context = {}) => 
   throw new Error(`Unknown MCP tool: ${name}.`)
 }
 
+const runPlugin = async({ id, input = {} } = {}, context = {}) => {
+  const plugin = mergePluginState(ATOMIC_PLUGIN_MANIFESTS, getConfig().atomicPluginState)
+    .find((item) => item.id === id)
+  if (!plugin) throw new Error('Unknown plugin.')
+  if (!plugin.enabled) throw new Error('Plugin is disabled.')
+  if (id === 'google-calendar') return syncGoogleCalendar()
+  if (id === 'web-clipper') return ingestSourceUrl(input)
+  if (id === 'mcp-memory') return callMcpTool(input, context)
+  throw new Error(`Plugin has no runtime: ${id}.`)
+}
+
+const runProgram = async({ id, command, cwd = '' } = {}) => {
+  const environments = normalizeProgramEnvironments(getConfig().programEnvironments)
+  const environment = environments[id]
+  if (!environment) throw new Error('Unknown program environment.')
+  const vault = getActiveVault()
+  return programRuntime.run({
+    environment,
+    command,
+    cwd: cwd || vault?.path || process.cwd()
+  })
+}
+
 const runProgrammaticTask = async({ id } = {}) => {
   const vault = getActiveVault()
   if (!vault) throw new Error('No active ElephantNote vault.')
@@ -1303,6 +1334,7 @@ const createElephantNoteMainApi = () => {
         setConfig(config)
         return mergePluginState(ATOMIC_PLUGIN_MANIFESTS, getConfig().atomicPluginState)
       },
+      [ELEPHANTNOTE_API_ACTIONS.PLUGINS_RUN]: async(payload, context) => runPlugin(payload, context),
       [ELEPHANTNOTE_API_ACTIONS.TASKS_LIST]: async() =>
         mergeTaskState(PROGRAMMATIC_TASK_TEMPLATES, getConfig().atomicTaskState),
       [ELEPHANTNOTE_API_ACTIONS.TASKS_SET]: async(payload) => {
@@ -1316,6 +1348,14 @@ const createElephantNoteMainApi = () => {
         return mergeTaskState(PROGRAMMATIC_TASK_TEMPLATES, getConfig().atomicTaskState)
       },
       [ELEPHANTNOTE_API_ACTIONS.TASKS_RUN]: async(payload) => runProgrammaticTask(payload),
+      [ELEPHANTNOTE_API_ACTIONS.PROGRAMS_LIST]: async() => getConfig().programEnvironments,
+      [ELEPHANTNOTE_API_ACTIONS.PROGRAMS_SET]: async({ environments = {} }) => {
+        const config = getConfig()
+        config.programEnvironments = normalizeProgramEnvironments(environments)
+        setConfig(config)
+        return getConfig().programEnvironments
+      },
+      [ELEPHANTNOTE_API_ACTIONS.PROGRAMS_RUN]: async(payload) => runProgram(payload),
       [ELEPHANTNOTE_API_ACTIONS.SYNC_STATUS]: async() => syncEngine.status(),
       [ELEPHANTNOTE_API_ACTIONS.SYNC_ENQUEUE]: async({ operation, payload = {} }) =>
         syncEngine.enqueue({ operation, payload }),

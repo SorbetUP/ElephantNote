@@ -21,6 +21,11 @@ import {
 import { importGoogleKeepExport } from './googleKeepImport'
 import { mergeCalendarEvents, parseIcsCalendar } from 'common/elephantnote/calendar'
 import {
+  calendarEventToGoogleEvent,
+  googleEventToCalendarEvent,
+  normalizeGoogleCalendarConfig
+} from 'common/elephantnote/googleCalendar'
+import {
   createSourceId,
   extractHtmlTitle,
   htmlToReadableText,
@@ -81,7 +86,8 @@ const store = new Store({
     aiConfig: normalizeAiConfig(),
     atomicModelSelection: createDefaultModelSelection(),
     atomicPluginState: createDefaultPluginState(),
-    atomicTaskState: createDefaultTaskState()
+    atomicTaskState: createDefaultTaskState(),
+    googleCalendarConfig: normalizeGoogleCalendarConfig()
   }
 })
 
@@ -104,7 +110,8 @@ const getConfig = () => ({
   atomicTaskState: {
     ...createDefaultTaskState(),
     ...(store.get('atomicTaskState') || {})
-  }
+  },
+  googleCalendarConfig: normalizeGoogleCalendarConfig(store.get('googleCalendarConfig') || {})
 })
 
 const setConfig = (config) => {
@@ -124,6 +131,7 @@ const setConfig = (config) => {
     ...createDefaultTaskState(),
     ...(config.atomicTaskState || {})
   })
+  store.set('googleCalendarConfig', normalizeGoogleCalendarConfig(config.googleCalendarConfig || {}))
 }
 
 export const initializeVault = async(vaultRoot, now = new Date()) => {
@@ -706,6 +714,61 @@ const importGoogleCalendar = async(event) => {
   }
 }
 
+const refreshGoogleAccessToken = async(config) => {
+  if (config.accessToken) return config.accessToken
+  if (!config.clientId || !config.clientSecret || !config.refreshToken) {
+    throw new Error('Google Calendar OAuth config requires client id, client secret, and refresh token.')
+  }
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      refresh_token: config.refreshToken,
+      grant_type: 'refresh_token'
+    }).toString()
+  })
+  const data = await response.json()
+  if (!response.ok) throw new Error(data?.error_description || data?.error || 'Google OAuth token refresh failed.')
+  return data.access_token
+}
+
+const syncGoogleCalendar = async() => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  const config = normalizeGoogleCalendarConfig(getConfig().googleCalendarConfig)
+  if (!config.enabled) throw new Error('Google Calendar sync is not enabled.')
+  const accessToken = await refreshGoogleAccessToken(config)
+  const calendarId = encodeURIComponent(config.calendarId)
+  const headers = { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' }
+  const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?singleEvents=true&orderBy=startTime`, {
+    headers
+  })
+  const data = await response.json()
+  if (!response.ok) throw new Error(data?.error?.message || 'Google Calendar pull failed.')
+
+  const calendar = await readCalendar(vault.path)
+  const incoming = (data.items || []).map((event) => googleEventToCalendarEvent(event, config.calendarId))
+  const merged = mergeCalendarEvents(calendar.events, incoming)
+  const localOnly = merged.filter((event) => event.source !== 'google-calendar')
+  let pushed = 0
+  for (const event of localOnly) {
+    const pushResponse = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(calendarEventToGoogleEvent(event))
+    })
+    if (pushResponse.ok) pushed += 1
+  }
+  await writeCalendar(vault.path, { events: merged })
+  return {
+    pulled: incoming.length,
+    pushed,
+    calendar: await readCalendar(vault.path)
+  }
+}
+
 const createMarkdownFromSource = ({ title, url, body, importedAt = new Date().toISOString() }) => `---
 title: "${String(title || 'Imported source').replace(/"/g, '\\"')}"
 type: "source"
@@ -1132,6 +1195,17 @@ const createElephantNoteMainApi = () => {
       [ELEPHANTNOTE_API_ACTIONS.CALENDAR_LIST]: async() => listCalendarEvents(),
       [ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE]: async(_payload, { event }) => importGoogleCalendar(event),
       [ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE_FROM_PATH]: async(payload) => importGoogleCalendarFromPath(payload),
+      [ELEPHANTNOTE_API_ACTIONS.CALENDAR_GOOGLE_CONFIG_GET]: async() => getConfig().googleCalendarConfig,
+      [ELEPHANTNOTE_API_ACTIONS.CALENDAR_GOOGLE_CONFIG_SET]: async(payload) => {
+        const config = getConfig()
+        config.googleCalendarConfig = normalizeGoogleCalendarConfig({
+          ...config.googleCalendarConfig,
+          ...payload
+        })
+        setConfig(config)
+        return getConfig().googleCalendarConfig
+      },
+      [ELEPHANTNOTE_API_ACTIONS.CALENDAR_GOOGLE_SYNC]: async() => syncGoogleCalendar(),
       [ELEPHANTNOTE_API_ACTIONS.SOURCES_LIST]: async() => listSources(),
       [ELEPHANTNOTE_API_ACTIONS.SOURCES_INGEST_URL]: async(payload) => ingestSourceUrl(payload),
       [ELEPHANTNOTE_API_ACTIONS.SOURCES_IMPORT_RSS]: async(payload) => importRssSource(payload),

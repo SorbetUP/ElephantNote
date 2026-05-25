@@ -122,6 +122,31 @@ describe('ElephantNote API contract', () => {
     expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
   })
 
+  it('validates Google Calendar OAuth config payloads', async() => {
+    const handler = vi.fn(async(payload) => payload)
+    const api = createElephantNoteApi({
+      handlers: {
+        [ELEPHANTNOTE_API_ACTIONS.CALENDAR_GOOGLE_CONFIG_SET]: handler
+      }
+    })
+
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.CALENDAR_GOOGLE_CONFIG_SET, {
+      enabled: true,
+      clientId: 'client',
+      refreshToken: 'refresh',
+      calendarId: 'primary'
+    })).resolves.toMatchObject({
+      enabled: true,
+      calendarId: 'primary'
+    })
+
+    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.CALENDAR_GOOGLE_CONFIG_SET, {
+      enabled: 'yes'
+    })
+    expect(response.ok).to.equal(false)
+    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
+  })
+
   it('validates source ingestion payloads', async() => {
     const handler = vi.fn(async(payload) => payload)
     const api = createElephantNoteApi({

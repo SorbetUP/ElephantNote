@@ -358,6 +358,77 @@
           </section>
 
           <section
+            v-if="activeSection === 'import'"
+            class="en-settings-section stacked"
+          >
+            <div>
+              <h3>Google Calendar sync</h3>
+              <p>Configure OAuth credentials for bidirectional Google Calendar sync.</p>
+            </div>
+            <div class="en-source-import-grid">
+              <label>
+                <span>Client ID</span>
+                <input
+                  v-model.trim="googleCalendarConfig.clientId"
+                  type="text"
+                  placeholder="OAuth client id"
+                >
+              </label>
+              <label>
+                <span>Calendar ID</span>
+                <input
+                  v-model.trim="googleCalendarConfig.calendarId"
+                  type="text"
+                  placeholder="primary"
+                >
+              </label>
+              <label>
+                <span>Client secret</span>
+                <input
+                  v-model.trim="googleCalendarConfig.clientSecret"
+                  type="password"
+                  placeholder="OAuth client secret"
+                >
+              </label>
+              <label>
+                <span>Refresh token</span>
+                <input
+                  v-model.trim="googleCalendarConfig.refreshToken"
+                  type="password"
+                  placeholder="OAuth refresh token"
+                >
+              </label>
+            </div>
+            <div class="en-settings-actions-row">
+              <button
+                type="button"
+                :class="{ active: googleCalendarConfig.enabled }"
+                @click="googleCalendarConfig.enabled = !googleCalendarConfig.enabled"
+              >
+                {{ googleCalendarConfig.enabled ? 'Enabled' : 'Disabled' }}
+              </button>
+              <button
+                type="button"
+                @click="saveGoogleCalendarConfig"
+              >
+                Save sync config
+              </button>
+              <button
+                type="button"
+                @click="syncGoogleCalendar"
+              >
+                Sync now
+              </button>
+              <span
+                v-if="googleCalendarMessage"
+                class="en-settings-message"
+              >
+                {{ googleCalendarMessage }}
+              </span>
+            </div>
+          </section>
+
+          <section
             v-if="activeSection === 'sites'"
             class="en-settings-section stacked"
           >
@@ -733,6 +804,15 @@ const sourceUrl = ref('')
 const sourceDestination = ref('Sources')
 const sourceImportMessage = ref('')
 const isImportingSource = ref(false)
+const googleCalendarConfig = ref({
+  enabled: false,
+  clientId: '',
+  clientSecret: '',
+  refreshToken: '',
+  accessToken: '',
+  calendarId: 'primary'
+})
+const googleCalendarMessage = ref('')
 const aiConfigMessage = ref('')
 const isSavingAiConfig = ref(false)
 const isCapturingQuickTrigger = ref(false)
@@ -889,6 +969,33 @@ const importRssSource = async () => {
     sourceImportMessage.value = error instanceof Error ? error.message : 'RSS import failed.'
   } finally {
     isImportingSource.value = false
+  }
+}
+
+const loadGoogleCalendarConfig = async () => {
+  try {
+    googleCalendarConfig.value = await elephantnoteClient.calendar.getGoogleConfig()
+  } catch (error) {
+    console.warn('Unable to load Google Calendar config:', error)
+  }
+}
+
+const saveGoogleCalendarConfig = async () => {
+  try {
+    googleCalendarConfig.value = await elephantnoteClient.calendar.setGoogleConfig(googleCalendarConfig.value)
+    googleCalendarMessage.value = 'Google Calendar sync config saved.'
+  } catch (error) {
+    googleCalendarMessage.value = error instanceof Error ? error.message : 'Google Calendar config save failed.'
+  }
+}
+
+const syncGoogleCalendar = async () => {
+  googleCalendarMessage.value = 'Syncing...'
+  try {
+    const result = await elephantnoteClient.calendar.syncGoogle()
+    googleCalendarMessage.value = `Pulled ${result.pulled || 0}, pushed ${result.pushed || 0}.`
+  } catch (error) {
+    googleCalendarMessage.value = error instanceof Error ? error.message : 'Google Calendar sync failed.'
   }
 }
 
@@ -1082,6 +1189,7 @@ onMounted(() => {
   loadModelSelection()
   loadPlugins()
   loadTasks()
+  loadGoogleCalendarConfig()
 })
 
 onBeforeUnmount(stopQuickTriggerCapture)

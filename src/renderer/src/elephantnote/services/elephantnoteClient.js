@@ -22,6 +22,9 @@ const LEGACY_CALLS = {
   'calendar.list': () => window.elephantnote?.calendar?.list?.(),
   'calendar.importGoogle': () => window.elephantnote?.calendar?.importGoogle?.(),
   'calendar.importGoogleFromPath': (payload) => window.elephantnote?.calendar?.importGoogleFromPath?.(payload),
+  'calendar.google.config.get': () => window.elephantnote?.calendar?.googleConfigGet?.(),
+  'calendar.google.config.set': (payload) => window.elephantnote?.calendar?.googleConfigSet?.(payload),
+  'calendar.google.sync': () => window.elephantnote?.calendar?.googleSync?.(),
   'sources.list': () => window.elephantnote?.sources?.list?.(),
   'sources.ingestUrl': (payload) => window.elephantnote?.sources?.ingestUrl?.(payload),
   'sources.importRss': (payload) => window.elephantnote?.sources?.importRss?.(payload),
@@ -113,7 +116,10 @@ export const elephantnoteClient = {
   calendar: {
     list: () => elephantnoteClient.call('calendar.list'),
     importGoogle: () => elephantnoteClient.call('calendar.importGoogle'),
-    importGoogleFromPath: (sourcePath) => elephantnoteClient.call('calendar.importGoogleFromPath', { sourcePath })
+    importGoogleFromPath: (sourcePath) => elephantnoteClient.call('calendar.importGoogleFromPath', { sourcePath }),
+    getGoogleConfig: () => elephantnoteClient.call('calendar.google.config.get'),
+    setGoogleConfig: (config) => elephantnoteClient.call('calendar.google.config.set', config),
+    syncGoogle: () => elephantnoteClient.call('calendar.google.sync')
   },
   sources: {
     list: () => elephantnoteClient.call('sources.list'),

@@ -71,6 +71,16 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze({
   'calendar.importGoogleFromPath': objectSchema({
     sourcePath: requiredString
   }),
+  'calendar.google.config.get': emptySchema,
+  'calendar.google.config.set': objectSchema({
+    enabled: optionalBoolean,
+    clientId: optionalString,
+    clientSecret: optionalString,
+    refreshToken: optionalString,
+    accessToken: optionalString,
+    calendarId: optionalString
+  }),
+  'calendar.google.sync': emptySchema,
   'sources.list': emptySchema,
   'sources.ingestUrl': objectSchema({
     url: requiredString,

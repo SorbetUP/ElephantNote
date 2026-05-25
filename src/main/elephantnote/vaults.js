@@ -6,6 +6,7 @@ import {
   WORKSPACE_DIR,
   WORKSPACE_FILE,
   INDEX_FILE,
+  CALENDAR_FILE,
   createId,
   createWorkspace,
   createWelcomeMarkdown,
@@ -16,6 +17,7 @@ import {
   resolveInsideVault
 } from './core'
 import { importGoogleKeepExport } from './googleKeepImport'
+import { mergeCalendarEvents, parseIcsCalendar } from 'common/elephantnote/calendar'
 import { getSearchService, registerSearchIpc } from './search/searchIpc'
 import { getSitePreviewService, registerSitePreviewIpc } from './sitePreview/sitePreviewIpc'
 import {
@@ -96,6 +98,10 @@ export const initializeVault = async(vaultRoot, now = new Date()) => {
   if (!(await fs.pathExists(indexPath))) {
     await fs.writeJson(indexPath, { version: 1, updatedAt: now.toISOString(), entries: [] }, { spaces: 2 })
   }
+  const calendarPath = path.join(metaDir, CALENDAR_FILE)
+  if (!(await fs.pathExists(calendarPath))) {
+    await fs.writeJson(calendarPath, { version: 1, updatedAt: now.toISOString(), events: [] }, { spaces: 2 })
+  }
   if (!(await fs.pathExists(welcomePath))) {
     if (await fs.pathExists(legacyWelcomePath)) {
       await fs.move(legacyWelcomePath, welcomePath)
@@ -138,6 +144,29 @@ const readWorkspace = async(vaultRoot) => {
 const writeWorkspace = async(vaultRoot, workspace) => {
   const workspacePath = path.join(vaultRoot, WORKSPACE_DIR, WORKSPACE_FILE)
   await fs.writeJson(workspacePath, workspace, { spaces: 2 })
+}
+
+const readCalendar = async(vaultRoot) => {
+  const calendarPath = path.join(vaultRoot, WORKSPACE_DIR, CALENDAR_FILE)
+  if (!(await fs.pathExists(calendarPath))) {
+    return { version: 1, updatedAt: new Date().toISOString(), events: [] }
+  }
+  const calendar = await fs.readJson(calendarPath)
+  return {
+    version: 1,
+    updatedAt: calendar.updatedAt || '',
+    events: Array.isArray(calendar.events) ? calendar.events : []
+  }
+}
+
+const writeCalendar = async(vaultRoot, calendar) => {
+  const calendarPath = path.join(vaultRoot, WORKSPACE_DIR, CALENDAR_FILE)
+  await fs.ensureDir(path.dirname(calendarPath))
+  await fs.writeJson(calendarPath, {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    events: calendar.events || []
+  }, { spaces: 2 })
 }
 
 const normalizeWorkspaceSidebar = (workspace = {}) => {
@@ -501,6 +530,55 @@ const importGoogleKeepFromPaths = async({ sourcePath, destinationRelativePath = 
   }
 }
 
+const listCalendarEvents = async() => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  await initializeVault(vault.path)
+  return readCalendar(vault.path)
+}
+
+const importGoogleCalendarFromPath = async({ sourcePath } = {}) => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+  const ics = await fs.readFile(sourcePath, 'utf8')
+  const importedEvents = parseIcsCalendar(ics, { source: 'google-calendar' })
+  const calendar = await readCalendar(vault.path)
+  const events = mergeCalendarEvents(calendar.events, importedEvents)
+  await writeCalendar(vault.path, { events })
+  return {
+    imported: importedEvents.length,
+    calendar: await readCalendar(vault.path)
+  }
+}
+
+const importGoogleCalendar = async(event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+
+  const selection = await dialog.showOpenDialog(win, {
+    title: 'Select Google Calendar ICS export',
+    properties: ['openFile'],
+    filters: [{ name: 'Calendar export', extensions: ['ics'] }]
+  })
+
+  if (selection.canceled || !selection.filePaths?.[0]) {
+    return { canceled: true }
+  }
+
+  const result = await importGoogleCalendarFromPath({ sourcePath: selection.filePaths[0] })
+  win.webContents.send('mt::show-notification', {
+    title: 'Google Calendar import complete',
+    message: `Imported ${result.imported} event${result.imported === 1 ? '' : 's'}.`,
+    type: 'info',
+    time: 8000
+  })
+  return {
+    canceled: false,
+    ...result
+  }
+}
+
 const getApiWindowId = (context = {}) => {
   if (context.windowId !== undefined && context.windowId !== null) return context.windowId
   const webContents = context.event?.sender
@@ -547,6 +625,9 @@ const createElephantNoteMainApi = () => {
       [ELEPHANTNOTE_API_ACTIONS.ENTRIES_DELETE]: async(payload) => deleteEntry(payload),
       [ELEPHANTNOTE_API_ACTIONS.IMPORT_GOOGLE_KEEP]: async(_payload, { event }) => importGoogleKeep(event),
       [ELEPHANTNOTE_API_ACTIONS.IMPORT_GOOGLE_KEEP_FROM_PATHS]: async(payload) => importGoogleKeepFromPaths(payload),
+      [ELEPHANTNOTE_API_ACTIONS.CALENDAR_LIST]: async() => listCalendarEvents(),
+      [ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE]: async(_payload, { event }) => importGoogleCalendar(event),
+      [ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE_FROM_PATH]: async(payload) => importGoogleCalendarFromPath(payload),
       [ELEPHANTNOTE_API_ACTIONS.SEARCH_INIT_VAULT]: async({ vaultPath }, context) =>
         searchService.registerWindowVault(getApiWindowId(context), vaultPath),
       [ELEPHANTNOTE_API_ACTIONS.SEARCH_QUERY]: async(payload, context) =>

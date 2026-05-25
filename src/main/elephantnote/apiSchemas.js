@@ -66,6 +66,11 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze({
     sourcePath: requiredString,
     destinationRelativePath: optionalString
   }),
+  'calendar.list': emptySchema,
+  'calendar.importGoogle': emptySchema,
+  'calendar.importGoogleFromPath': objectSchema({
+    sourcePath: requiredString
+  }),
   'search.initVault': objectSchema({ vaultPath: requiredString }),
   'search.query': objectSchema({
     query: requiredString,

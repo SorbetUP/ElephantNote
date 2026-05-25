@@ -101,4 +101,24 @@ describe('ElephantNote API contract', () => {
     expect(response.ok).to.equal(false)
     expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
   })
+
+  it('validates Google Calendar import payloads', async() => {
+    const handler = vi.fn(async(payload) => payload)
+    const api = createElephantNoteApi({
+      handlers: {
+        [ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE_FROM_PATH]: handler
+      }
+    })
+
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE_FROM_PATH, {
+      sourcePath: '/tmp/calendar.ics'
+    })).resolves.to.deep.equal({
+      sourcePath: '/tmp/calendar.ics'
+    })
+
+    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE_FROM_PATH, {})
+
+    expect(response.ok).to.equal(false)
+    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
+  })
 })

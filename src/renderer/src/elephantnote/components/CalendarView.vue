@@ -1,17 +1,48 @@
 <template>
   <section class="en-workspace-view">
     <header class="en-workspace-header">
-      <h1>Calendar</h1>
-      <p>Notes grouped by last edit date.</p>
+      <div>
+        <h1>Calendar</h1>
+        <p>Offline events plus notes grouped by last edit date.</p>
+      </div>
+      <button
+        type="button"
+        :disabled="isImporting"
+        @click="importGoogleCalendar"
+      >
+        {{ isImporting ? 'Importing...' : 'Import Google Calendar' }}
+      </button>
     </header>
 
     <div
-      v-if="buckets.length"
+      v-if="eventBuckets.length"
       class="en-calendar-list"
     >
       <article
-        v-for="bucket in buckets"
-        :key="bucket.date"
+        v-for="bucket in eventBuckets"
+        :key="`event-${bucket.date}`"
+      >
+        <time>{{ bucket.date }}</time>
+        <div>
+          <section
+            v-for="event in bucket.events"
+            :key="event.id"
+            class="en-calendar-event"
+          >
+            <span>{{ event.title }}</span>
+            <small>{{ formatEventTime(event) }}{{ event.location ? ` · ${event.location}` : '' }}</small>
+          </section>
+        </div>
+      </article>
+    </div>
+
+    <div
+      v-if="noteBuckets.length"
+      class="en-calendar-list"
+    >
+      <article
+        v-for="bucket in noteBuckets"
+        :key="`note-${bucket.date}`"
       >
         <time>{{ bucket.date }}</time>
         <div>
@@ -29,20 +60,57 @@
     </div>
 
     <p
-      v-else
+      v-if="!hasCalendarItems"
       class="en-empty-view"
     >
-      Edit or import notes to populate the local calendar.
+      Import events or edit notes to populate the local calendar.
     </p>
   </section>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useVaultStore } from '../stores/vaultStore'
+import { elephantnoteClient } from '../services/elephantnoteClient'
+import { bucketCalendarEvents } from 'common/elephantnote/calendar'
 
 const store = useVaultStore()
-const buckets = computed(() => store.calendarBuckets)
+const calendarEvents = ref([])
+const isImporting = ref(false)
+const noteBuckets = computed(() => store.calendarBuckets)
+const eventBuckets = computed(() => bucketCalendarEvents(calendarEvents.value))
+const hasCalendarItems = computed(() => noteBuckets.value.length || eventBuckets.value.length)
+
+const loadCalendar = async () => {
+  try {
+    const calendar = await elephantnoteClient.calendar.list()
+    calendarEvents.value = calendar.events || []
+  } catch (error) {
+    console.warn('Unable to load ElephantNote calendar:', error)
+  }
+}
+
+const importGoogleCalendar = async () => {
+  isImporting.value = true
+  try {
+    const result = await elephantnoteClient.calendar.importGoogle()
+    if (!result?.canceled) {
+      calendarEvents.value = result.calendar?.events || []
+    }
+  } catch (error) {
+    console.warn('Unable to import Google Calendar:', error)
+  } finally {
+    isImporting.value = false
+  }
+}
+
+const formatEventTime = (event) => {
+  if (!event.startsAt) return 'No time'
+  if (event.startsAt.length <= 10) return 'All day'
+  return event.startsAt.slice(11, 16)
+}
+
+onMounted(loadCalendar)
 </script>
 
 <style scoped>
@@ -53,10 +121,28 @@ const buckets = computed(() => store.calendarBuckets)
   overflow: auto;
 }
 
+.en-workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .en-workspace-header h1 {
   margin: 0;
   font-size: 28px;
   line-height: 1.15;
+}
+
+.en-workspace-header button {
+  min-height: 36px;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--en-text);
+  background: var(--en-bg);
+  font: inherit;
+  font-weight: 700;
 }
 
 .en-workspace-header p,
@@ -93,7 +179,8 @@ const buckets = computed(() => store.calendarBuckets)
   gap: 6px;
 }
 
-.en-calendar-list button {
+.en-calendar-list button,
+.en-calendar-event {
   min-height: 42px;
   display: flex;
   flex-direction: column;
@@ -111,7 +198,8 @@ const buckets = computed(() => store.calendarBuckets)
   background: var(--en-soft);
 }
 
-.en-calendar-list small {
+.en-calendar-list small,
+.en-calendar-event small {
   color: var(--en-muted);
 }
 </style>

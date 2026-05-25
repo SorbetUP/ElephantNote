@@ -19,6 +19,9 @@ const LEGACY_CALLS = {
   'entries.rename': (payload) => window.elephantnote?.renameEntry?.(payload),
   'entries.delete': ({ relativePath }) => window.elephantnote?.deleteEntry?.({ relativePath }),
   'import.googleKeep': () => window.elephantnote?.importGoogleKeep?.(),
+  'calendar.list': () => window.elephantnote?.calendar?.list?.(),
+  'calendar.importGoogle': () => window.elephantnote?.calendar?.importGoogle?.(),
+  'calendar.importGoogleFromPath': (payload) => window.elephantnote?.calendar?.importGoogleFromPath?.(payload),
   'search.initVault': ({ vaultPath }) => window.elephantnote?.search?.initVault?.(vaultPath),
   'search.query': (payload) => window.elephantnote?.search?.query?.(payload),
   'search.status': () => window.elephantnote?.search?.status?.(),
@@ -89,6 +92,11 @@ export const elephantnoteClient = {
   },
   imports: {
     googleKeep: () => elephantnoteClient.call('import.googleKeep')
+  },
+  calendar: {
+    list: () => elephantnoteClient.call('calendar.list'),
+    importGoogle: () => elephantnoteClient.call('calendar.importGoogle'),
+    importGoogleFromPath: (sourcePath) => elephantnoteClient.call('calendar.importGoogleFromPath', { sourcePath })
   },
   search: {
     initVault: (vaultPath) => elephantnoteClient.call('search.initVault', { vaultPath }),

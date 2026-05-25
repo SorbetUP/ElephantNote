@@ -3,6 +3,7 @@ import path from 'path'
 export const WORKSPACE_DIR = '.elephantnote'
 export const WORKSPACE_FILE = 'workspace.json'
 export const INDEX_FILE = 'index.json'
+export const CALENDAR_FILE = 'calendar.json'
 
 export const createId = (value) => {
   const id = String(value || '')

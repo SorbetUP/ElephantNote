@@ -3,6 +3,17 @@ import { ElephantSearchService } from './ElephantSearchService'
 import { SEARCH_MODES } from './searchTypes'
 
 const searchService = new ElephantSearchService()
+let atomicIpcImportPromise = null
+
+const ensureAtomicIpc = () => {
+  if (!atomicIpcImportPromise) {
+    atomicIpcImportPromise = import('../atomic/atomicIpc').catch((error) => {
+      atomicIpcImportPromise = null
+      console.warn('Unable to register Atomic IPC:', error)
+    })
+  }
+  return atomicIpcImportPromise
+}
 
 export const normalizeSearchMode = (mode) => {
   if (mode === SEARCH_MODES.EXACT || mode === SEARCH_MODES.SEMANTIC || mode === SEARCH_MODES.SMART) {
@@ -39,6 +50,8 @@ const getSenderWindowId = (event) => {
 }
 
 export const registerSearchIpc = () => {
+  ensureAtomicIpc()
+
   ipcMain.handle('en:search:init-vault', async(event, vaultPath) => {
     if (typeof vaultPath !== 'string' || !vaultPath.trim()) {
       throw new Error('A vault path is required.')

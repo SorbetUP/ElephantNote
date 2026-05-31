@@ -20,25 +20,115 @@ import sequenceIcon from '../../assets/pngicon/sequence/2.png'
 import plantumlIcon from '../../assets/pngicon/plantuml/2.png'
 import mermaidIcon from '../../assets/pngicon/mermaid/2.png'
 import vegaIcon from '../../assets/pngicon/chart/2.png'
+import excalidrawIcon from '../../assets/icons/excalidraw.svg'
 import { isOsx } from '../../config'
 
 const COMMAND_KEY = isOsx ? '⌘' : 'Ctrl'
 const OPTION_KEY = isOsx ? '⌥' : 'Alt'
 const SHIFT_KEY = isOsx ? '⇧' : 'Shift'
 
-// Command (or Cmd) ⌘
-// Shift ⇧
-// Option (or Alt) ⌥
-// Control (or Ctrl) ⌃
-// Caps Lock ⇪
-// Fn
-
 // Creates a function to generate the config object, accepting a translation function as a parameter
 export const createQuickInsertObj = (t) => {
-  // If no translation function is provided, return the key name directly
   const translate = t || ((key) => key)
 
   return {
+    'Writing tools': [{
+      title: 'Heading 2',
+      subTitle: '## Heading',
+      label: 'elephant-command heading-2',
+      shortCut: '',
+      icon: header2Icon
+    }, {
+      title: 'Bold',
+      subTitle: '**bold**',
+      label: 'elephant-command bold',
+      shortCut: '',
+      icon: paragraphIcon
+    }, {
+      title: 'Italic',
+      subTitle: '*italic*',
+      label: 'elephant-command italic',
+      shortCut: '',
+      icon: paragraphIcon
+    }, {
+      title: 'Strikethrough',
+      subTitle: '~~text~~',
+      label: 'elephant-command strike',
+      shortCut: '',
+      icon: paragraphIcon
+    }, {
+      title: 'Link',
+      subTitle: '[text](url)',
+      label: 'elephant-command link',
+      shortCut: '',
+      icon: paragraphIcon
+    }, {
+      title: 'Bullet List',
+      subTitle: '- item',
+      label: 'elephant-command bullets',
+      shortCut: '',
+      icon: bulletListIcon
+    }, {
+      title: 'Numbered List',
+      subTitle: '1. item',
+      label: 'elephant-command numbers',
+      shortCut: '',
+      icon: orderListIcon
+    }, {
+      title: 'Task List',
+      subTitle: '- [ ] task',
+      label: 'elephant-command tasks',
+      shortCut: '',
+      icon: todoListIcon
+    }, {
+      title: 'Inline Code',
+      subTitle: '`code`',
+      label: 'elephant-command code',
+      shortCut: '',
+      icon: codeIcon
+    }, {
+      title: 'Quote',
+      subTitle: '> quote',
+      label: 'elephant-command quote',
+      shortCut: '',
+      icon: quoteIcon
+    }, {
+      title: 'Table',
+      subTitle: '| column |',
+      label: 'elephant-command table',
+      shortCut: '',
+      icon: newTableIcon
+    }, {
+      title: 'Image',
+      subTitle: 'Insert image',
+      label: 'elephant-command image',
+      shortCut: '',
+      icon: paragraphIcon
+    }, {
+      title: 'Excalidraw',
+      subTitle: 'Insert drawing',
+      label: 'elephant-command excalidraw',
+      shortCut: '',
+      icon: excalidrawIcon
+    }, {
+      title: 'Horizontal Rule',
+      subTitle: '---',
+      label: 'elephant-command horizontal-rule',
+      shortCut: '',
+      icon: hrIcon
+    }, {
+      title: 'Dictate',
+      subTitle: 'Speech to text',
+      label: 'elephant-command speech-to-text',
+      shortCut: '',
+      icon: paragraphIcon
+    }, {
+      title: 'Read aloud',
+      subTitle: 'Text to speech',
+      label: 'elephant-command text-to-speech',
+      shortCut: '',
+      icon: paragraphIcon
+    }],
     [translate('quickInsert.basicBlock')]: [{
       title: translate('quickInsert.paragraph.title'),
       subTitle: translate('quickInsert.paragraph.subtitle'),

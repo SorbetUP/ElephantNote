@@ -3,9 +3,14 @@
  * Used to dynamically set text content in CSS content properties
  */
 
+const normalizeQuickInsertTrigger = (trigger) => {
+  return typeof trigger === 'string' && trigger.trim() ? trigger.trim().charAt(0) : '/'
+}
+
 class I18nCSS {
-  constructor(t) {
+  constructor(t, quickInsertTrigger = '/') {
     this.t = t || ((key) => key) // Translation function; returns the raw key if none is provided
+    this.quickInsertTrigger = normalizeQuickInsertTrigger(quickInsertTrigger)
     // Initialize CSS variables
     this.updateCSSVariables()
   }
@@ -34,7 +39,7 @@ class I18nCSS {
     )
     root.style.setProperty(
       '--i18n-type-at-to-insert',
-      `"${getTranslation('editor.type-at-to-insert', 'Type @ to insert')}"`
+      `"Type ${this.quickInsertTrigger} to insert"`
     )
     root.style.setProperty(
       '--i18n-input-footnote-definition',
@@ -114,6 +119,11 @@ class I18nCSS {
    */
   setTranslationFunction(t) {
     this.t = t || ((key) => key)
+    this.updateCSSVariables()
+  }
+
+  setQuickInsertTrigger(trigger) {
+    this.quickInsertTrigger = normalizeQuickInsertTrigger(trigger)
     this.updateCSSVariables()
   }
 }

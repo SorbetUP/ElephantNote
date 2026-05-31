@@ -59,8 +59,12 @@ class ImageToolbar extends BaseFloat {
     if (this.isLocalFile(imageInfo)) {
       isLocalImage = true
     }
+    const canEditWithExcalidraw = this.canEditWithExcalidraw(imageInfo)
     const children = icons
-      .filter((i) => !i.localOnly || isLocalImage)
+      .filter((i) => {
+        if (i.type === 'edit-excalidraw') return canEditWithExcalidraw
+        return !i.localOnly || isLocalImage
+      })
       .map((i) => {
       let icon
       let iconWrapperSelector
@@ -159,7 +163,7 @@ class ImageToolbar extends BaseFloat {
         return this.hide()
       }
       case 'edit-excalidraw': {
-        if (!isLocalImage) break
+        if (!this.canEditWithExcalidraw(imageInfo)) break
         const src = imageInfo.token?.attrs?.src || imageInfo.token?.src || ''
         if (typeof this.muya.options.elephantnoteCommandHandler === 'function') {
           this.muya.options.elephantnoteCommandHandler('edit-excalidraw-image', { src, imageInfo })
@@ -188,6 +192,15 @@ class ImageToolbar extends BaseFloat {
         break
       }
     }
+  }
+
+  canEditWithExcalidraw(imageInfo) {
+    if (!this.isLocalFile(imageInfo)) return false
+    const src = imageInfo.token?.attrs?.src || imageInfo.token?.src || ''
+    if (typeof this.muya.options.canEditExcalidrawImage === 'function') {
+      return this.muya.options.canEditExcalidrawImage(src, imageInfo) === true
+    }
+    return true
   }
 
   isLocalFile(imageInfo) {

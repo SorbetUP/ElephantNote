@@ -424,6 +424,7 @@ export const MUYA_DEFAULT_OPTION = Object.freeze({
   hideQuickInsertHint: false,
   quickInsertTrigger: '/',
   elephantnoteCommandHandler: null,
+  canEditExcalidrawImage: null,
   hideLinkPopup: false,
   autoCheck: false,
   // Whether we should set spellcheck attribute on our container to highlight misspelled words.

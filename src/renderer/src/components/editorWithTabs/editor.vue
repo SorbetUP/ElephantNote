@@ -572,6 +572,44 @@ const normalizeQuickInsertTrigger = (value) => {
   return typeof value === 'string' && value.trim() ? value.trim().charAt(0) : '/'
 }
 
+const resolveLocalImageSource = (src) => {
+  const value = String(src || '').trim()
+  if (!value) return ''
+
+  const withoutQuery = value.split(/[?#]/)[0]
+  let decoded = withoutQuery
+  try {
+    decoded = decodeURI(withoutQuery)
+  } catch {
+    decoded = withoutQuery
+  }
+
+  if (decoded.startsWith('file://')) {
+    return decoded
+      .replace(/^file:\/\//, '')
+      .replace(/^\/([A-Za-z]:\/)/, '$1')
+  }
+
+  if (window.path.isAbsolute(decoded)) return decoded
+
+  const currentPathname = currentFile.value?.pathname || ''
+  const baseDirectory = currentPathname ? window.path.dirname(currentPathname) : window.DIRNAME
+  return window.path.resolve(baseDirectory || '', decoded)
+}
+
+const getExcalidrawScenePathForImage = (imagePath) => {
+  if (!imagePath) return ''
+  const extension = window.path.extname(imagePath)
+  const base = extension ? imagePath.slice(0, -extension.length) : imagePath
+  return `${base}.excalidraw`
+}
+
+const canEditExcalidrawImage = (src) => {
+  const imagePath = resolveLocalImageSource(src)
+  const scenePath = getExcalidrawScenePathForImage(imagePath)
+  return !!scenePath && window.fileUtils?.pathExistsSync?.(scenePath) === true
+}
+
 const imageAction = async (image, id, alt = '') => {
   // TODO(Refactor): Refactor this method.
   const { filename, pathname: currentPathname } = currentFile.value
@@ -1157,9 +1195,14 @@ onMounted(() => {
     isGitlabCompatibilityEnabled: isGitlabCompatibilityEnabled.value,
     hideQuickInsertHint: hideQuickInsertHint.value,
     quickInsertTrigger: normalizeQuickInsertTrigger(quickInsertTrigger.value),
-    elephantnoteCommandHandler: (command) => {
+    elephantnoteCommandHandler: (command, payload = {}) => {
+      if (command === 'edit-excalidraw-image') {
+        bus.emit('open-excalidraw-from-image', payload.src)
+        return
+      }
       bus.emit('elephantnote-writing-command', command)
     },
+    canEditExcalidrawImage,
     hideLinkPopup: hideLinkPopup.value,
     autoCheck: autoCheck.value,
     sequenceTheme: sequenceTheme.value,

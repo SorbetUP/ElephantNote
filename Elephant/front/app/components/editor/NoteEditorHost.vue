@@ -56,6 +56,7 @@
       :theme="shellTheme"
       :initial-blob="excalidrawInitialBlob"
       :save-mode="excalidrawSaveMode"
+      :insert-on-save="excalidrawInsertOnSave"
       @close="closeExcalidraw"
       @save="saveExcalidraw"
     />
@@ -79,7 +80,11 @@ import { useVaultStore } from '../../stores/vaultStore'
 import ExcalidrawDialog from './ExcalidrawDialog.vue'
 import NoteEditorFooter from './NoteEditorFooter.vue'
 import NoteEditorTopBar from './NoteEditorTopBar.vue'
-import { getExcalidrawSidecarPath } from '../../services/excalidraw'
+import {
+  findExcalidrawSceneForImage,
+  getExcalidrawPreviewPath,
+  getExcalidrawScenePath
+} from '../../services/excalidraw'
 import { formatShortDate } from '../../services/markdownMetaService'
 import {
   ensureNoteDocument,
@@ -113,7 +118,10 @@ const isTypographyOpen = ref(false)
 const isExcalidrawOpen = ref(false)
 const excalidrawInitialBlob = ref(null)
 const excalidrawTargetPath = ref('')
+const excalidrawScenePath = ref('')
+const excalidrawPreviewPath = ref('')
 const excalidrawInsertOnSave = ref(false)
+const excalidrawRefreshOnSave = ref(false)
 const excalidrawFileName = ref('excalidraw.png')
 const excalidrawTitle = ref('Excalidraw')
 const excalidrawSaveMode = ref('png')
@@ -448,41 +456,33 @@ const resolveLocalImagePath = (source) => {
   return window.path.resolve(currentNoteDirectory.value || store.activeVault?.path || '', decoded)
 }
 
-const openExcalidrawFromPath = async (sourcePath = '', { insertOnSave = false } = {}) => {
+const openExcalidrawFromPath = async (sourcePath = '', { insertOnSave = false, refreshOnSave = false } = {}) => {
   let selectedPath = sourcePath || ''
   const noteDirectory = currentNoteDirectory.value
   let initialBlob = null
   const extension = String(window.path.extname(selectedPath || '')).toLowerCase()
   const isSceneFile = extension === '.excalidraw'
-  const sidecarPath = selectedPath && !isSceneFile ? getExcalidrawSidecarPath(selectedPath) : ''
+  const scenePath = selectedPath
+    ? (isSceneFile ? selectedPath : findExcalidrawSceneForImage(selectedPath) || getExcalidrawScenePath(selectedPath))
+    : window.path.join(noteDirectory || '', `excalidraw-${Date.now()}.excalidraw`)
+  const previewPath = getExcalidrawPreviewPath(scenePath)
 
-  if (selectedPath) {
+  if (scenePath && window.fileUtils.pathExistsSync(scenePath)) {
     try {
-      initialBlob = sidecarPath && window.fileUtils.pathExistsSync(sidecarPath)
-        ? await blobFromFilePath(sidecarPath)
-        : await blobFromFilePath(selectedPath)
+      initialBlob = await blobFromFilePath(scenePath)
     } catch (error) {
       console.warn('Unable to load Excalidraw source:', error)
       selectedPath = ''
     }
   }
 
-  const imageTargetPath = selectedPath
-    ? window.path.join(
-      window.path.dirname(selectedPath),
-      `${window.path.basename(selectedPath, window.path.extname(selectedPath))}.png`
-    )
-    : ''
-
-  excalidrawSaveMode.value = isSceneFile ? 'scene' : 'png'
-  excalidrawInsertOnSave.value = insertOnSave && excalidrawSaveMode.value === 'png'
-  excalidrawTargetPath.value = isSceneFile
-    ? selectedPath
-    : imageTargetPath || window.path.join(
-      noteDirectory || '',
-    `excalidraw-${Date.now()}.png`
-    )
-  excalidrawFileName.value = window.path.basename(excalidrawTargetPath.value)
+  excalidrawSaveMode.value = 'png'
+  excalidrawInsertOnSave.value = insertOnSave
+  excalidrawRefreshOnSave.value = refreshOnSave
+  excalidrawScenePath.value = scenePath
+  excalidrawPreviewPath.value = previewPath
+  excalidrawTargetPath.value = previewPath
+  excalidrawFileName.value = window.path.basename(previewPath)
   excalidrawTitle.value = selectedPath
     ? window.path.basename(selectedPath, window.path.extname(selectedPath))
     : noteTitle.value
@@ -492,42 +492,41 @@ const openExcalidrawFromPath = async (sourcePath = '', { insertOnSave = false } 
 
 const openExcalidraw = async () => {
   bus.emit('editor-focus')
-  const source = await editorStore.ASK_FOR_EXCALIDRAW_SOURCE_PATH()
-  if (source?.canceled) return
-  const extension = String(window.path.extname(source?.sourcePath || '')).toLowerCase()
-  await openExcalidrawFromPath(source?.sourcePath || '', { insertOnSave: extension !== '.excalidraw' })
+  await openExcalidrawFromPath('', { insertOnSave: true })
 }
 
 const openExcalidrawFromImage = async (imageSource) => {
   const imagePath = resolveLocalImagePath(imageSource)
   if (!imagePath) return
   bus.emit('editor-focus')
-  await openExcalidrawFromPath(imagePath, { insertOnSave: true })
+  await openExcalidrawFromPath(imagePath, { insertOnSave: false, refreshOnSave: true })
 }
 
 const closeExcalidraw = () => {
   isExcalidrawOpen.value = false
   excalidrawInitialBlob.value = null
+  excalidrawRefreshOnSave.value = false
 }
 
 const saveExcalidraw = async ({ blob, fileName, sceneBlob }) => {
-  const targetPath = excalidrawTargetPath.value || window.path.join(currentNoteDirectory.value || '', fileName)
-  if (!targetPath || !blob) {
+  const targetPath = excalidrawPreviewPath.value || excalidrawTargetPath.value || window.path.join(currentNoteDirectory.value || '', fileName)
+  const scenePath = excalidrawScenePath.value
+  if (!targetPath || !scenePath || !blob || !sceneBlob) {
     closeExcalidraw()
     return
   }
 
   try {
-    const buffer = new Uint8Array(await blob.arrayBuffer())
-    await window.fileUtils.writeFile(targetPath, buffer)
-    if (sceneBlob && excalidrawSaveMode.value === 'png') {
-      const sidecarBuffer = new Uint8Array(await sceneBlob.arrayBuffer())
-      await window.fileUtils.writeFile(getExcalidrawSidecarPath(targetPath), sidecarBuffer)
-    }
+    const pngBuffer = new Uint8Array(await blob.arrayBuffer())
+    const sceneBuffer = new Uint8Array(await sceneBlob.arrayBuffer())
+    await window.fileUtils.writeFile(targetPath, pngBuffer)
+    await window.fileUtils.writeFile(scenePath, sceneBuffer)
 
     if (excalidrawInsertOnSave.value) {
       bus.emit('editor-focus')
       bus.emit('insert-image', targetPath)
+    } else if (excalidrawRefreshOnSave.value) {
+      bus.emit('invalidate-image-cache')
     }
 
     closeExcalidraw()

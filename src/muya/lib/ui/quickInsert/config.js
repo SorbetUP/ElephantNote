@@ -20,12 +20,12 @@ import sequenceIcon from '../../assets/pngicon/sequence/2.png'
 import plantumlIcon from '../../assets/pngicon/plantuml/2.png'
 import mermaidIcon from '../../assets/pngicon/mermaid/2.png'
 import vegaIcon from '../../assets/pngicon/chart/2.png'
-import excalidrawIcon from '../../assets/icons/excalidraw.svg'
 import { isOsx } from '../../config'
 
 const COMMAND_KEY = isOsx ? '⌘' : 'Ctrl'
 const OPTION_KEY = isOsx ? '⌥' : 'Alt'
 const SHIFT_KEY = isOsx ? '⇧' : 'Shift'
+const excalidrawIcon = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTgiIGZpbGw9IiM2QzYzRkYiLz48cGF0aCBkPSJNMjAgNDRjNy41LTE1LjUgMTUuNS0yMy41IDI0LTI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PHBhdGggZD0iTTE4IDQ2bDgtMi02LTYtMiA4eiIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik00MiAxOGw0IDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSI0IiBmaWxsPSIjZmZmIiBvcGFjaXR5PSIuODUiLz48cGF0aCBkPSJNNDIgNDJoNyIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgb3BhY2l0eT0iLjg1Ii8+PC9zdmc+'
 
 // Creates a function to generate the config object, accepting a translation function as a parameter
 export const createQuickInsertObj = (t) => {

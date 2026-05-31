@@ -2,12 +2,13 @@
   <section class="en-atomic-graph">
     <header class="en-atomic-header">
       <div>
-        <h1>Atomic Graph</h1>
+        <h1>Note Graph</h1>
         <p v-if="graphData">
-          {{ graphData.nodes.length }} notes, {{ visibleEdges.length }} links, {{ graphData.clusters.length }} clusters
+          {{ graphData.nodes.length }} notes, {{ visibleEdges.length }} rendered links, {{ graphData.clusters.length }} clusters
+          <span v-if="graphData.stats"> · {{ graphData.stats.totalCandidateEdges }} candidate links</span>
         </p>
         <p v-else>
-          Semantic graph from tags, folders, markdown links, keywords and embeddings.
+          Scalable graph from tags, folders, markdown links, keywords and embeddings.
         </p>
       </div>
       <div class="en-atomic-actions">
@@ -67,6 +68,12 @@
           >
             Structure
           </button>
+          <button
+            type="button"
+            @click="autoNameSelectedNode"
+          >
+            Auto-name
+          </button>
         </div>
         <p
           v-if="analysis"
@@ -98,7 +105,7 @@ const containerRef = ref(null)
 const graphData = ref(null)
 const loading = ref(false)
 const error = ref('')
-const minWeight = ref(0.18)
+const minWeight = ref(0.24)
 const selectedNode = ref(null)
 const analysis = ref('')
 let renderer = null
@@ -135,14 +142,15 @@ const renderGraph = () => {
   destroyGraph()
   graph = new Graph()
   const nodes = graphData.value.nodes || []
-  const radius = Math.max(80, nodes.length * 8)
+  const radius = Math.max(120, Math.sqrt(Math.max(1, nodes.length)) * 72)
 
   nodes.forEach((node, index) => {
     const angle = index * 2.399963229728653
+    const ring = 1 + (index % 7) * 0.11
     graph.addNode(node.id, {
-      x: Math.cos(angle) * radius,
-      y: Math.sin(angle) * radius,
-      size: 5 + Math.min(7, (node.tags?.length || 0) * 1.2),
+      x: Math.cos(angle) * radius * ring,
+      y: Math.sin(angle) * radius * ring,
+      size: 4 + Math.min(7, (node.tags?.length || 0) * 1.1) + (node.weakTitle ? 1 : 0),
       label: node.title,
       color: clusterColor(node.cluster),
       data: node
@@ -153,7 +161,7 @@ const renderGraph = () => {
     if (!graph.hasNode(edge.source) || !graph.hasNode(edge.target)) return
     if (graph.hasEdge(edge.source, edge.target) || graph.hasEdge(edge.target, edge.source)) return
     graph.addEdge(edge.source, edge.target, {
-      size: 1 + Number(edge.weight || 0) * 3,
+      size: 0.7 + Number(edge.weight || 0) * 2.5,
       color: edgeColor(edge.type)
     })
   })
@@ -161,7 +169,9 @@ const renderGraph = () => {
   renderer = new Sigma(graph, containerRef.value, {
     defaultNodeColor: '#2563eb',
     defaultEdgeColor: '#94a3b8',
-    renderEdgeLabels: false
+    renderEdgeLabels: false,
+    labelDensity: 0.08,
+    labelGridCellSize: 80
   })
   renderer.on('clickNode', ({ node }) => {
     selectedNode.value = graph.getNodeAttribute(node, 'data')
@@ -175,13 +185,16 @@ const loadGraph = async () => {
   error.value = ''
   try {
     graphData.value = await elephantnoteClient.atomicFeatures.graph(store.activeVault.path, {
-      semanticThreshold: 0.24,
-      lexicalThreshold: 0.16
+      semanticThreshold: 0.28,
+      lexicalThreshold: 0.24,
+      maxNotes: 5000,
+      maxLinksPerNote: 8,
+      maxEdges: 12000
     })
     await nextTick()
     renderGraph()
   } catch (err) {
-    error.value = err?.message || 'Unable to build the Atomic graph.'
+    error.value = err?.message || 'Unable to build the Note Graph.'
   } finally {
     loading.value = false
   }
@@ -212,6 +225,17 @@ const structureSelectedNode = async () => {
   analysis.value = result.restructuring
 }
 
+const autoNameSelectedNode = async () => {
+  if (!selectedNode.value || !store.activeVault?.path) return
+  analysis.value = 'Renaming note...'
+  const result = await elephantnoteClient.atomicFeatures.autoNameNote(store.activeVault.path, selectedNode.value.path, { apply: true })
+  analysis.value = result.changed
+    ? `Renamed: ${result.oldPath} -> ${result.newPath}`
+    : `Name already good: ${result.newPath}`
+  await store.openDirectory(store.currentPath || '', { record: false })
+  await loadGraph()
+}
+
 watch(minWeight, renderGraph)
 watch(() => store.activeVault?.path, loadGraph)
 
@@ -238,7 +262,7 @@ onBeforeUnmount(destroyGraph)
 }
 .en-atomic-header h1 { margin: 0; font-size: 22px; }
 .en-atomic-header p { margin: 3px 0 0; color: var(--en-muted); }
-.en-atomic-actions, .en-atomic-panel-actions { display: flex; gap: 10px; align-items: center; }
+.en-atomic-actions, .en-atomic-panel-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .en-atomic-actions button, .en-atomic-panel button {
   border: 1px solid var(--en-border);
   border-radius: 8px;
@@ -253,7 +277,7 @@ onBeforeUnmount(destroyGraph)
   position: absolute;
   right: 18px;
   top: 18px;
-  width: min(360px, calc(100vw - 48px));
+  width: min(380px, calc(100vw - 48px));
   max-height: calc(100% - 36px);
   overflow: auto;
   border: 1px solid var(--en-border);

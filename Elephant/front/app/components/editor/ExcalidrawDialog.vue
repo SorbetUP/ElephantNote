@@ -12,7 +12,9 @@
               placeholder="drawing"
               aria-label="Drawing name"
               @pointerdown.stop
+              @pointerup.stop
               @mousedown.stop
+              @mouseup.stop
               @click.stop
               @keydown.stop
             >
@@ -25,7 +27,9 @@
               aria-label="Cancel"
               title="Cancel"
               @pointerdown.stop
+              @pointerup.stop.prevent="handleClose"
               @mousedown.stop
+              @mouseup.stop.prevent="handleClose"
               @click.stop.prevent="handleClose"
             >
               ✕
@@ -37,7 +41,9 @@
               aria-label="Save"
               title="Save"
               @pointerdown.stop
+              @pointerup.stop.prevent="handleSave"
               @mousedown.stop
+              @mouseup.stop.prevent="handleSave"
               @click.stop.prevent="handleSave"
             >
               {{ isSaving ? '…' : '✓' }}
@@ -205,6 +211,7 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 5000;
   background: var(--en-bg, #0f172a);
+  -webkit-app-region: no-drag;
 }
 
 .en-excalidraw-shell {
@@ -216,48 +223,52 @@ onBeforeUnmount(() => {
   background: var(--en-bg, #0f172a);
   color: var(--en-text, #eef2ff);
   position: relative;
+  -webkit-app-region: no-drag;
 }
 
 .en-excalidraw-header {
   position: absolute;
-  top: 0;
+  top: 28px;
   left: 0;
   right: 0;
-  height: 38px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 10px 0 86px;
+  padding: 0 10px 0 12px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  background: rgba(15, 23, 42, 0.68);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   z-index: 2147483000;
   pointer-events: auto;
   user-select: none;
+  -webkit-app-region: no-drag;
 }
 
 .en-excalidraw-name-wrap {
   min-width: 0;
   flex: 1 1 auto;
+  -webkit-app-region: no-drag;
 }
 
 .en-excalidraw-name-input {
   width: 100%;
-  height: 24px;
+  height: 22px;
   border: 0;
   outline: none;
   padding: 0;
   background: transparent;
   color: #e5e7eb;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 24px;
+  line-height: 22px;
   letter-spacing: 0;
   pointer-events: auto;
   user-select: text;
+  -webkit-app-region: no-drag;
 }
 
 .en-excalidraw-name-input::placeholder {
@@ -267,24 +278,26 @@ onBeforeUnmount(() => {
 .en-excalidraw-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: 0 0 auto;
   pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 
 .en-excalidraw-button {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   padding: 0;
   color: var(--en-text, #eef2ff);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   pointer-events: auto;
+  -webkit-app-region: no-drag;
   transition:
     background 140ms ease,
     transform 140ms ease,
@@ -319,7 +332,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   background: #f8f8f8;
-  padding-top: 38px;
+  padding-top: 58px;
 }
 
 .en-excalidraw-canvas :deep(.excalidraw) {
@@ -329,8 +342,9 @@ onBeforeUnmount(() => {
 
 @media (max-width: 640px) {
   .en-excalidraw-header {
-    height: 36px;
-    padding: 0 8px 0 76px;
+    top: 28px;
+    height: 30px;
+    padding: 0 8px 0 10px;
   }
 
   .en-excalidraw-name-input {
@@ -338,7 +352,7 @@ onBeforeUnmount(() => {
   }
 
   .en-excalidraw-canvas {
-    padding-top: 36px;
+    padding-top: 58px;
   }
 }
 

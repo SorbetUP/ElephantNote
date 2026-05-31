@@ -1,5 +1,7 @@
 let excalidrawModulePromise = null
 
+const EXCALIDRAW_MIME = 'application/vnd.excalidraw+json'
+
 export const resolveExcalidrawModule = (mod) => {
   const resolved = mod?.Excalidraw
     ? mod
@@ -23,12 +25,32 @@ export const ensureExcalidrawName = (name) => {
   return base.toLowerCase().endsWith('.excalidraw') ? base : `${base}.excalidraw`
 }
 
-export const getExcalidrawSidecarPath = (pathname) => {
+export const getExcalidrawScenePath = (pathname) => {
   if (!pathname || typeof window === 'undefined' || !window.path) return ''
   const extension = window.path.extname(pathname)
+  if (extension.toLowerCase() === '.excalidraw') return pathname
   const base = extension ? pathname.slice(0, -extension.length) : pathname
   return `${base}.excalidraw`
 }
+
+export const getExcalidrawPreviewPath = (pathname) => {
+  const scenePath = getExcalidrawScenePath(pathname)
+  if (!scenePath || typeof window === 'undefined' || !window.path) return ''
+  return window.path.join(
+    window.path.dirname(scenePath),
+    `${window.path.basename(scenePath, '.excalidraw')}.png`
+  )
+}
+
+export const getExcalidrawSidecarPath = getExcalidrawScenePath
+
+export const findExcalidrawSceneForImage = (imagePath) => {
+  const scenePath = getExcalidrawScenePath(imagePath)
+  if (scenePath && window.fileUtils?.pathExistsSync?.(scenePath)) return scenePath
+  return ''
+}
+
+export const isImageBackedByExcalidraw = (imagePath) => !!findExcalidrawSceneForImage(imagePath)
 
 export const loadExcalidrawModule = async() => {
   if (typeof window !== 'undefined' && typeof window.EXCALIDRAW_ASSET_PATH !== 'string') {
@@ -190,5 +212,5 @@ export const exportExcalidrawSceneBlob = async({ api, theme }) => {
     api.getFiles(),
     'local'
   )
-  return new Blob([json], { type: 'application/vnd.excalidraw+json' })
+  return new Blob([json], { type: EXCALIDRAW_MIME })
 }

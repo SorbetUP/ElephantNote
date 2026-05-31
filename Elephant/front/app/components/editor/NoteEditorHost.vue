@@ -462,9 +462,11 @@ const openExcalidrawFromPath = async (sourcePath = '', { insertOnSave = false, r
   let initialBlob = null
   const extension = String(window.path.extname(selectedPath || '')).toLowerCase()
   const isSceneFile = extension === '.excalidraw'
+
   const scenePath = selectedPath
     ? (isSceneFile ? selectedPath : findExcalidrawSceneForImage(selectedPath) || getExcalidrawScenePath(selectedPath))
     : window.path.join(noteDirectory || '', `excalidraw-${Date.now()}.excalidraw`)
+
   const previewPath = getExcalidrawPreviewPath(scenePath)
 
   if (scenePath && window.fileUtils.pathExistsSync(scenePath)) {
@@ -482,7 +484,7 @@ const openExcalidrawFromPath = async (sourcePath = '', { insertOnSave = false, r
   excalidrawScenePath.value = scenePath
   excalidrawPreviewPath.value = previewPath
   excalidrawTargetPath.value = previewPath
-  excalidrawFileName.value = window.path.basename(previewPath)
+  excalidrawFileName.value = window.path.basename(scenePath)
   excalidrawTitle.value = selectedPath
     ? window.path.basename(selectedPath, window.path.extname(selectedPath))
     : noteTitle.value
@@ -498,8 +500,18 @@ const openExcalidraw = async () => {
 const openExcalidrawFromImage = async (imageSource) => {
   const imagePath = resolveLocalImagePath(imageSource)
   if (!imagePath) return
+
+  const scenePath = findExcalidrawSceneForImage(imagePath)
+  if (!scenePath) {
+    window.electron.ipcRenderer.send('mt::show-notification', {
+      title: 'No Excalidraw source file found for this image.',
+      type: 'warning'
+    })
+    return
+  }
+
   bus.emit('editor-focus')
-  await openExcalidrawFromPath(imagePath, { insertOnSave: false, refreshOnSave: true })
+  await openExcalidrawFromPath(scenePath, { insertOnSave: false, refreshOnSave: true })
 }
 
 const closeExcalidraw = () => {
@@ -519,6 +531,10 @@ const saveExcalidraw = async ({ blob, fileName, sceneBlob }) => {
   try {
     const pngBuffer = new Uint8Array(await blob.arrayBuffer())
     const sceneBuffer = new Uint8Array(await sceneBlob.arrayBuffer())
+
+    // Always save both files:
+    // - scenePath: editable Excalidraw source
+    // - targetPath: PNG preview rendered inside the markdown note
     await window.fileUtils.writeFile(targetPath, pngBuffer)
     await window.fileUtils.writeFile(scenePath, sceneBuffer)
 

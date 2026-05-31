@@ -11,7 +11,7 @@ export const getIcons = (translateFn) => {
   const t = typeof translateFn === 'function' ? translateFn : (k) => k
   return [
     { type: 'edit', tooltip: t('editor.image.toolbar.edit'), icon: editIcon },
-    { type: 'edit-excalidraw', tooltip: 'Edit with Excalidraw', icon: excalidrawIcon, localOnly: true },
+    { type: 'edit-excalidraw', tooltip: 'Excalidraw', icon: excalidrawIcon, localOnly: true },
     { type: 'inline', tooltip: t('editor.image.toolbar.inline'), icon: inlineIcon },
     { type: 'left', tooltip: t('editor.image.toolbar.alignLeft'), icon: leftIcon },
     { type: 'center', tooltip: t('editor.image.toolbar.alignCenter'), icon: middleIcon },

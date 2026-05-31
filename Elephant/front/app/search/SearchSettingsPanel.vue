@@ -2,7 +2,7 @@
   <div class="en-search-settings">
     <section class="en-search-settings-row">
       <div>
-        <h3>Semantic search</h3>
+        <h3>Atomic search</h3>
         <p>{{ statusLabel }}</p>
       </div>
       <button
@@ -19,7 +19,7 @@
     <section class="en-search-settings-row stacked">
       <div class="en-search-settings-head">
         <div>
-          <h3>Index visualization</h3>
+          <h3>Atomic metadata</h3>
           <p>{{ documentCountLabel }} · {{ folderCountLabel }}</p>
         </div>
         <div class="en-search-settings-actions">
@@ -36,7 +36,7 @@
             @click="store.rebuild"
           >
             <RotateCcw class="en-icon" />
-            Rebuild
+            Refresh metadata
           </button>
           <button
             type="button"
@@ -44,7 +44,7 @@
             @click="store.clear"
           >
             <Trash2 class="en-icon" />
-            Clear
+            Reset metadata
           </button>
         </div>
       </div>
@@ -103,7 +103,7 @@
           v-if="store.visualizationMode !== 'list'"
           viewBox="0 0 720 320"
           role="img"
-          aria-label="Search index visualization"
+          aria-label="Atomic search metadata visualization"
           @wheel.prevent="zoomGraph"
           @pointerdown="startGraphPan"
           @pointermove="moveGraphPan"
@@ -189,14 +189,14 @@
         v-if="!documents.length"
         class="en-search-settings-empty"
       >
-        No indexed documents yet.
+        No markdown documents detected yet.
       </p>
     </section>
 
     <section class="en-search-settings-row stacked">
       <div>
         <h3>Search options</h3>
-        <p>{{ store.indexInspection.indexPath || 'Index path unavailable' }}</p>
+        <p>{{ store.indexInspection.indexPath || 'Atomic metadata path unavailable' }}</p>
       </div>
       <div class="en-search-options-grid">
         <label>
@@ -306,11 +306,11 @@ const documentCountLabel = computed(() => {
 })
 const statusLabel = computed(() => {
   const status = store.status.status || 'not_initialized'
-  if (status === 'ready') return 'Search index ready.'
-  if (status === 'indexing') return `${store.status.indexedDocuments}/${store.status.totalDocuments} indexed.`
-  if (status === 'disabled') return 'Semantic search disabled.'
-  if (status === 'error') return store.status.error || 'Search index error.'
-  return store.status.message || 'Search index not initialized.'
+  if (status === 'ready') return 'Atomic local search ready.'
+  if (status === 'indexing') return `${store.status.indexedDocuments}/${store.status.totalDocuments} inspected.`
+  if (status === 'disabled') return 'Atomic local search disabled.'
+  if (status === 'error') return store.status.error || 'Atomic search error.'
+  return store.status.message || 'Atomic search metadata not initialized.'
 })
 
 const hashString = (value) => {
@@ -329,6 +329,8 @@ const folderColor = (folder) => {
 const normalizeTopicId = (value) => `topic:${String(value || 'Vault root').toLowerCase()}`
 
 const keywordsForDocument = (document) => {
+  const explicitTerms = Array.isArray(document.keyTerms) ? document.keyTerms : []
+  if (explicitTerms.length) return explicitTerms.slice(0, 4)
   const source = `${document.title || ''} ${document.relativePath || ''}`
     .toLowerCase()
     .replace(/\.md\b/g, ' ')
@@ -383,9 +385,7 @@ const documentTopicIds = (document) => {
   const ids = new Set()
   const folder = store.showFolderClusters ? document.folder || 'Vault root' : 'All notes'
   ids.add(normalizeTopicId(folder))
-  for (const keyword of keywordsForDocument(document).slice(0, 2)) {
-    ids.add(normalizeTopicId(keyword))
-  }
+  for (const keyword of keywordsForDocument(document).slice(0, 2)) ids.add(normalizeTopicId(keyword))
   return [...ids]
 }
 
@@ -401,8 +401,8 @@ const graphTransform = computed(() => {
 
 const semanticLinkCountLabel = computed(() => {
   const count = semanticLinks.value.length
-  if (count) return `${count} semantic link${count === 1 ? '' : 's'}`
-  return 'Build the index to reveal semantic links'
+  if (count) return `${count} atomic link${count === 1 ? '' : 's'}`
+  return 'Atomic metadata can still search without a separate vector index'
 })
 
 const topicLayout = computed(() => {
@@ -421,9 +421,7 @@ const topicLayout = computed(() => {
   return layout
 })
 
-const visibleTopicNodes = computed(() => {
-  return [...topicLayout.value.values()]
-})
+const visibleTopicNodes = computed(() => [...topicLayout.value.values()])
 
 const visualNodes = computed(() => {
   const linksByDocument = new Map()
@@ -493,37 +491,11 @@ const graphLinks = computed(() => {
       id: link.id,
       source,
       target,
-      type: 'semantic',
+      type: link.type || 'semantic',
       score: link.score,
       opacity: 0.26 + Math.max(0, Math.min(0.62, link.score * 0.62)),
       width: 0.9 + Math.max(0, Math.min(2.8, link.score * 2.8))
     })
-  }
-
-  if (!semanticLinks.value.length) {
-    const groups = new Map()
-    for (const node of visualNodes.value) {
-      const folder = node.document.folder || 'Vault root'
-      if (!groups.has(folder)) groups.set(folder, [])
-      groups.get(folder).push(node)
-    }
-    for (const group of groups.values()) {
-      const maxLinks = Math.min(store.graphDensity, group.length - 1)
-      for (let index = 0; index < group.length; index += 1) {
-        for (let offset = 1; offset <= maxLinks; offset += 1) {
-          const target = group[index + offset]
-          if (!target) continue
-          links.push({
-            id: `${group[index].id}:${target.id}`,
-            source: group[index],
-            target,
-            type: 'folder',
-            opacity: 0.28,
-            width: 1
-          })
-        }
-      }
-    }
   }
 
   return links
@@ -550,34 +522,20 @@ const resetGraphView = () => {
 const zoomGraph = (event) => {
   const delta = event.deltaY > 0 ? -0.1 : 0.1
   const nextScale = Math.max(0.55, Math.min(2.8, graphViewport.value.scale + delta))
-  graphViewport.value = {
-    ...graphViewport.value,
-    scale: nextScale
-  }
+  graphViewport.value = { ...graphViewport.value, scale: nextScale }
 }
 
 const startGraphPan = (event) => {
-  if (
-    event.button !== 0 ||
-    event.target?.classList?.contains('en-index-node') ||
-    event.target?.classList?.contains('en-topic-node')
-  ) return
-  graphPan.value = {
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    x: graphViewport.value.x,
-    y: graphViewport.value.y
-  }
-  event.currentTarget?.setPointerCapture?.(event.pointerId)
+  if (event.button !== 0) return
+  graphPan.value = { startX: event.clientX, startY: event.clientY, origin: { ...graphViewport.value } }
 }
 
 const moveGraphPan = (event) => {
-  if (!graphPan.value || graphPan.value.pointerId !== event.pointerId) return
+  if (!graphPan.value) return
   graphViewport.value = {
     ...graphViewport.value,
-    x: graphPan.value.x + event.clientX - graphPan.value.startX,
-    y: graphPan.value.y + event.clientY - graphPan.value.startY
+    x: graphPan.value.origin.x + event.clientX - graphPan.value.startX,
+    y: graphPan.value.origin.y + event.clientY - graphPan.value.startY
   }
 }
 
@@ -585,30 +543,36 @@ const stopGraphPan = () => {
   graphPan.value = null
 }
 
-const refresh = async () => {
+const openDocument = (document) => {
+  if (!document?.relativePath) return
+  vaultStore.openNote({
+    kind: 'note',
+    type: 'note',
+    path: document.relativePath,
+    title: document.title || document.relativePath
+  })
+}
+
+const refresh = async() => {
   await store.refreshStatus()
   await store.inspect()
 }
 
-const toggleSearch = async () => {
-  if (store.status.status === 'disabled') {
-    await store.enable()
-  } else {
-    await store.disable()
-  }
+const toggleSearch = async() => {
+  if (store.status.status === 'disabled') await store.enable()
+  else await store.disable()
   await refresh()
 }
 
-const openDocument = (document) => {
-  store.vaultPath = vaultStore.activeVault?.path || store.vaultPath
-  store.openResult(document)
-}
-
-onMounted(() => {
-  refresh()
-  refreshTimer = window.setInterval(() => {
-    if (store.autoRefreshInspection) refresh()
-  }, 5000)
+onMounted(async() => {
+  await store.ensureActiveVault()
+  await refresh()
+  if (store.autoRefreshInspection) {
+    refreshTimer = window.setInterval(() => {
+      store.refreshStatus()
+      store.inspect()
+    }, 8000)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -619,298 +583,188 @@ onBeforeUnmount(() => {
 <style scoped>
 .en-search-settings {
   display: grid;
-  gap: 0;
-}
-
-.en-search-settings-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 18px 0;
-  border-bottom: 1px solid var(--en-border);
-}
-
-.en-search-settings-row.stacked {
-  display: grid;
-  gap: 16px;
-}
-
-.en-search-settings-row h3 {
-  margin: 0 0 5px;
-  font-size: 16px;
-}
-
-.en-search-settings-row p {
-  margin: 0;
-  color: var(--en-muted);
-  overflow-wrap: anywhere;
-}
-
-.en-search-settings-head,
-.en-search-settings-actions,
-.en-search-view-switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.en-search-settings-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  justify-content: initial;
-}
-
-.en-search-settings-actions {
-  justify-content: flex-end;
-}
-
-.en-semantic-map-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
   gap: 12px;
 }
 
-.en-semantic-topic-strip {
-  display: flex;
-  gap: 7px;
-  overflow: auto;
-  padding-bottom: 2px;
-}
-
-.en-semantic-topic-strip button,
-.en-semantic-map-actions button {
-  height: 30px;
-  flex: 0 0 auto;
+.en-search-settings-row {
   border: 1px solid var(--en-border);
-  border-radius: 8px;
-  padding: 0 10px;
-  color: var(--en-muted);
-  background: var(--en-surface);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.en-semantic-topic-strip button.active,
-.en-semantic-map-actions button:hover {
-  border-color: color-mix(in srgb, var(--en-primary) 34%, var(--en-border));
-  color: var(--en-primary);
-  background: color-mix(in srgb, var(--en-primary) 12%, var(--en-surface));
-}
-
-.en-semantic-map-actions {
-  display: inline-flex;
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--en-bg);
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.en-search-settings-row.stacked {
+  display: block;
+}
+
+.en-search-settings-row h3 {
+  margin: 0;
+  color: var(--en-text);
+  font-size: 17px;
+}
+
+.en-search-settings-row p {
+  margin: 5px 0 0;
   color: var(--en-muted);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
 }
 
 .en-search-settings-toggle,
 .en-search-settings-actions button,
-.en-search-view-switch button {
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+.en-search-view-switch button,
+.en-semantic-topic-strip button,
+.en-semantic-map-actions button,
+.en-index-document-list button {
   border: 1px solid var(--en-border);
-  border-radius: 10px;
-  background: var(--en-surface);
+  border-radius: 8px;
+  min-height: 34px;
+  padding: 0 10px;
   color: var(--en-text);
-  font: inherit;
-  font-weight: 700;
+  background: var(--en-surface);
   cursor: pointer;
 }
 
 .en-search-settings-toggle.active,
-.en-search-view-switch button.active {
-  border-color: color-mix(in srgb, var(--en-primary) 34%, var(--en-border));
-  background: color-mix(in srgb, var(--en-primary) 12%, var(--en-surface));
-  color: var(--en-primary);
+.en-search-view-switch button.active,
+.en-semantic-topic-strip button.active {
+  border-color: var(--en-border-strong);
+  background: var(--en-soft-strong);
 }
 
-.en-search-settings-actions button:disabled {
-  opacity: 0.55;
-  cursor: progress;
+.en-search-settings-head,
+.en-semantic-map-toolbar,
+.en-semantic-map-actions,
+.en-search-settings-actions,
+.en-search-view-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.en-search-view-switch,
+.en-semantic-map-toolbar {
+  margin-top: 12px;
+}
+
+.en-semantic-topic-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.en-semantic-map-actions span {
+  color: var(--en-muted);
+  font-size: 12px;
 }
 
 .en-index-visualization {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  min-height: 300px;
-  max-height: 430px;
+  margin-top: 12px;
   border: 1px solid var(--en-border);
   border-radius: 12px;
-  background:
-    linear-gradient(var(--en-soft) 1px, transparent 1px),
-    linear-gradient(90deg, var(--en-soft) 1px, transparent 1px),
-    var(--en-surface);
-  background-size: 42px 42px;
+  background: var(--en-surface);
+  min-height: 340px;
   overflow: hidden;
 }
 
 .en-index-visualization svg {
   width: 100%;
-  height: 100%;
-  cursor: grab;
-  touch-action: none;
+  min-height: 340px;
+}
+
+.en-topic-node,
+.en-index-node {
+  fill: var(--node-accent);
+  stroke: color-mix(in srgb, var(--node-accent) 70%, white);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+.en-topic-node {
+  opacity: 0.18;
+}
+
+.en-index-node.dimmed {
+  opacity: 0.18;
 }
 
 .en-index-link {
   stroke: var(--en-border-strong);
-  stroke-width: calc(var(--link-width, 1) * 1px);
-  opacity: var(--link-strength, 0.45);
-  vector-effect: non-scaling-stroke;
+  opacity: var(--link-strength);
+  stroke-width: var(--link-width);
 }
 
-.en-index-link.type-semantic {
+.en-index-link.type-semantic,
+.en-index-link.type-tag,
+.en-index-link.type-term {
   stroke: var(--en-primary);
 }
 
+.en-index-link.type-folder,
 .en-index-link.type-topic {
-  stroke-dasharray: 4 5;
-  opacity: 0.24;
+  stroke: var(--en-border-strong);
 }
 
-.en-index-node {
-  fill: var(--node-accent);
-  stroke: var(--en-surface);
-  stroke-width: 2;
-  cursor: pointer;
-}
-
-.en-index-node.dimmed {
-  opacity: 0.28;
-}
-
-.en-topic-node {
-  fill: color-mix(in srgb, var(--node-accent) 22%, var(--en-surface));
-  stroke: var(--node-accent);
-  stroke-width: 2;
-  cursor: pointer;
-}
-
-.en-topic-label {
-  fill: var(--en-text);
-  font-size: 10px;
-  font-weight: 900;
-  paint-order: stroke;
-  stroke: var(--en-surface);
-  stroke-width: 4px;
+.en-topic-label,
+.en-index-label {
+  fill: var(--en-muted);
+  font-size: 11px;
   pointer-events: none;
 }
 
-.en-index-label {
-  fill: var(--en-text);
-  font-size: 11px;
-  font-weight: 700;
-  paint-order: stroke;
-  stroke: var(--en-surface);
-  stroke-width: 3px;
-}
-
 .en-index-document-list {
-  height: 100%;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  max-height: 360px;
   overflow: auto;
-  padding: 8px;
 }
 
 .en-index-document-list button {
-  width: 100%;
   display: grid;
-  grid-template-columns: 20px minmax(120px, 1fr) minmax(120px, 1.4fr);
-  gap: 10px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
   align-items: center;
-  min-height: 36px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--en-text);
-  font: inherit;
   text-align: left;
-  cursor: pointer;
-}
-
-@media (max-width: 760px) {
-  .en-search-settings-head {
-    grid-template-columns: 1fr;
-  }
-
-  .en-search-settings-actions,
-  .en-search-view-switch {
-    flex-wrap: wrap;
-  }
-
-  .en-semantic-map-toolbar {
-    grid-template-columns: 1fr;
-  }
-
-  .en-semantic-map-actions {
-    justify-content: space-between;
-  }
-}
-
-.en-index-document-list button:hover {
-  background: var(--en-soft);
-}
-
-.en-index-document-list span,
-.en-index-document-list small {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .en-index-document-list small {
+  grid-column: 2;
   color: var(--en-muted);
 }
 
 .en-search-options-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
+  margin-top: 12px;
 }
 
 .en-search-options-grid label {
   display: grid;
-  gap: 7px;
+  gap: 5px;
   color: var(--en-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.en-search-options-grid select,
-.en-search-options-grid input[type="range"] {
-  width: 100%;
-}
-
-.en-search-options-grid select {
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--en-border);
-  border-radius: 9px;
-  background: var(--en-surface);
-  color: var(--en-text);
-}
-
-.en-search-options-grid output {
-  color: var(--en-text);
 }
 
 .en-search-check {
-  grid-template-columns: 18px 1fr;
+  display: flex !important;
+  grid-template-columns: auto 1fr;
   align-items: center;
+}
+
+select,
+input[type="range"] {
   min-height: 34px;
 }
 
-.en-search-check input {
-  accent-color: var(--en-primary);
+.en-icon {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
 }
 
 .en-search-settings-empty {

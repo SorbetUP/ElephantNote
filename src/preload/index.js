@@ -14,15 +14,8 @@ import path from 'path'
 import commandExists from 'command-exists'
 import { loadTranslations } from 'common/i18n'
 
-const i18nUtils = {
-  loadTranslations
-}
-
-const customElectronAPI = {
-  shell,
-  clipboard,
-  webUtils
-}
+const i18nUtils = { loadTranslations }
+const customElectronAPI = { shell, clipboard, webUtils }
 
 const fileUtilsAPI = {
   isFile: (path) => isFile(path),
@@ -47,29 +40,13 @@ const fileUtilsAPI = {
 const commandAPI = {
   exists: (command) => {
     try {
-      // First attempt to check using command-exists
-      if (commandExists.sync(command)) {
-        return true
-      }
-
-      // For picgo, additionally check common installation paths
+      if (commandExists.sync(command)) return true
       if (command === 'picgo' && process.platform === 'darwin') {
-        const commonPaths = [
-          '/usr/local/bin/picgo',
-          '/opt/homebrew/bin/picgo',
-          `${process.env.HOME}/.npm-global/bin/picgo`,
-          `${process.env.HOME}/.npm/bin/picgo`,
-          '/usr/local/lib/node_modules/.bin/picgo'
-        ]
-
+        const commonPaths = ['/usr/local/bin/picgo', '/opt/homebrew/bin/picgo', `${process.env.HOME}/.npm-global/bin/picgo`, `${process.env.HOME}/.npm/bin/picgo`, '/usr/local/lib/node_modules/.bin/picgo']
         for (const picgoPath of commonPaths) {
-          if (fs.pathExistsSync(picgoPath)) {
-            console.log(`Found picgo at: ${picgoPath}`)
-            return true
-          }
+          if (fs.pathExistsSync(picgoPath)) return true
         }
       }
-
       return false
     } catch (error) {
       console.error('Error checking command existence:', error)
@@ -81,8 +58,7 @@ const commandAPI = {
 const elephantNoteAPI = {
   api: {
     describe: () => electronAPI.ipcRenderer.invoke('elephantnote:api:describe'),
-    call: (action, payload = {}) =>
-      electronAPI.ipcRenderer.invoke('elephantnote:api:call', { action, payload })
+    call: (action, payload = {}) => electronAPI.ipcRenderer.invoke('elephantnote:api:call', { action, payload })
   },
   getVaults: () => electronAPI.ipcRenderer.invoke('elephantnote:getVaults'),
   selectVault: () => electronAPI.ipcRenderer.invoke('elephantnote:selectVault'),
@@ -90,14 +66,11 @@ const elephantNoteAPI = {
   setVaultIcon: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:setVaultIcon', payload),
   setVaultName: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:setVaultName', payload),
   removeVault: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:removeVault', payload),
-  listDirectory: (relativePath) =>
-    electronAPI.ipcRenderer.invoke('elephantnote:listDirectory', relativePath),
+  listDirectory: (relativePath) => electronAPI.ipcRenderer.invoke('elephantnote:listDirectory', relativePath),
   createNote: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:createNote', payload),
   createFolder: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:createFolder', payload),
-  attachSidebarEntry: (payload) =>
-    electronAPI.ipcRenderer.invoke('elephantnote:attachSidebarEntry', payload),
-  detachSidebarEntry: (payload) =>
-    electronAPI.ipcRenderer.invoke('elephantnote:detachSidebarEntry', payload),
+  attachSidebarEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:attachSidebarEntry', payload),
+  detachSidebarEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:detachSidebarEntry', payload),
   importGoogleKeep: () => electronAPI.ipcRenderer.invoke('elephantnote:importGoogleKeep'),
   renameEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:renameEntry', payload),
   moveEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:moveEntry', payload),
@@ -113,6 +86,8 @@ const elephantNoteAPI = {
     enable: () => electronAPI.ipcRenderer.invoke('en:search:enable')
   },
   atomicFeatures: {
+    describeApi: () => electronAPI.ipcRenderer.invoke('en:atomic:api:describe'),
+    callApi: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:api:call', payload),
     providers: () => electronAPI.ipcRenderer.invoke('en:atomic:providers'),
     overview: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:overview', payload),
     graph: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:graph', payload),
@@ -120,6 +95,7 @@ const elephantNoteAPI = {
     createWikiPage: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:wiki:create-page', payload),
     summarize: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:summarize', payload),
     structure: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:structure', payload),
+    autoNameNote: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:notes:auto-name', payload),
     listLocalModels: () => electronAPI.ipcRenderer.invoke('en:atomic:models:list-local'),
     pullModel: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:models:pull', payload)
   },
@@ -138,15 +114,9 @@ const elephantNoteAPI = {
   }
 }
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', {
-      ...electronAPI,
-      ...customElectronAPI
-    })
+    contextBridge.exposeInMainWorld('electron', { ...electronAPI, ...customElectronAPI })
     contextBridge.exposeInMainWorld('rgPath', rgPath)
     contextBridge.exposeInMainWorld('fileUtils', fileUtilsAPI)
     contextBridge.exposeInMainWorld('path', path)

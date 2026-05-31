@@ -6,10 +6,26 @@ const requireElephantNoteApi = () => {
 }
 
 const requireAtomicFeatureApi = () => {
-  if (!window.elephantnote?.atomicFeatures) {
-    throw new Error('Atomic feature bridge is not available in this renderer context.')
+  if (window.elephantnote?.atomicFeatures) {
+    return window.elephantnote.atomicFeatures
   }
-  return window.elephantnote.atomicFeatures
+
+  const ipcRenderer = window.electron?.ipcRenderer
+  if (!ipcRenderer?.invoke) {
+    throw new Error('Atomic feature IPC is not available in this renderer context.')
+  }
+
+  return {
+    providers: () => ipcRenderer.invoke('en:atomic:providers'),
+    overview: (payload = {}) => ipcRenderer.invoke('en:atomic:overview', payload),
+    graph: (payload = {}) => ipcRenderer.invoke('en:atomic:graph', payload),
+    wiki: (payload = {}) => ipcRenderer.invoke('en:atomic:wiki', payload),
+    createWikiPage: (payload = {}) => ipcRenderer.invoke('en:atomic:wiki:create-page', payload),
+    summarize: (payload = {}) => ipcRenderer.invoke('en:atomic:summarize', payload),
+    structure: (payload = {}) => ipcRenderer.invoke('en:atomic:structure', payload),
+    listLocalModels: () => ipcRenderer.invoke('en:atomic:models:list-local'),
+    pullModel: (payload = {}) => ipcRenderer.invoke('en:atomic:models:pull', payload)
+  }
 }
 
 export const isElephantNoteApiAvailable = () => !!window.elephantnote?.api?.call

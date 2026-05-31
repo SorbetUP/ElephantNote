@@ -174,6 +174,25 @@ class QuickInsert extends BaseScrollFloat {
       start: { key, offset },
       end: { key, offset }
     }
+
+    if (item.label.startsWith('elephant-command ')) {
+      contentState.partialRender()
+      const command = item.label.replace('elephant-command ', '')
+
+      if (typeof this.muya.options.elephantnoteCommandHandler === 'function') {
+        setTimeout(() => {
+          this.muya.options.elephantnoteCommandHandler(command)
+        })
+      } else {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('elephantnote-writing-command', { detail: command }))
+        })
+      }
+
+      setTimeout(this.hide.bind(this))
+      return
+    }
+
     switch (item.label) {
       case 'paragraph':
         contentState.partialRender()

@@ -112,6 +112,17 @@ const elephantNoteAPI = {
     disable: () => electronAPI.ipcRenderer.invoke('en:search:disable'),
     enable: () => electronAPI.ipcRenderer.invoke('en:search:enable')
   },
+  atomicFeatures: {
+    providers: () => electronAPI.ipcRenderer.invoke('en:atomic:providers'),
+    overview: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:overview', payload),
+    graph: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:graph', payload),
+    wiki: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:wiki', payload),
+    createWikiPage: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:wiki:create-page', payload),
+    summarize: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:summarize', payload),
+    structure: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:structure', payload),
+    listLocalModels: () => electronAPI.ipcRenderer.invoke('en:atomic:models:list-local'),
+    pullModel: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:models:pull', payload)
+  },
   sitePreview: {
     previewFolder: (params) => electronAPI.ipcRenderer.invoke('en:site-preview:preview-folder', params),
     buildFolder: (params) => electronAPI.ipcRenderer.invoke('en:site-preview:build-folder', params),

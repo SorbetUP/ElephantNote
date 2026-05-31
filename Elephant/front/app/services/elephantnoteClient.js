@@ -16,6 +16,8 @@ const requireAtomicFeatureApi = () => {
   }
 
   return {
+    describeApi: () => ipcRenderer.invoke('en:atomic:api:describe'),
+    callApi: (payload = {}) => ipcRenderer.invoke('en:atomic:api:call', payload),
     providers: () => ipcRenderer.invoke('en:atomic:providers'),
     overview: (payload = {}) => ipcRenderer.invoke('en:atomic:overview', payload),
     graph: (payload = {}) => ipcRenderer.invoke('en:atomic:graph', payload),
@@ -23,6 +25,7 @@ const requireAtomicFeatureApi = () => {
     createWikiPage: (payload = {}) => ipcRenderer.invoke('en:atomic:wiki:create-page', payload),
     summarize: (payload = {}) => ipcRenderer.invoke('en:atomic:summarize', payload),
     structure: (payload = {}) => ipcRenderer.invoke('en:atomic:structure', payload),
+    autoNameNote: (payload = {}) => ipcRenderer.invoke('en:atomic:notes:auto-name', payload),
     listLocalModels: () => ipcRenderer.invoke('en:atomic:models:list-local'),
     pullModel: (payload = {}) => ipcRenderer.invoke('en:atomic:models:pull', payload)
   }
@@ -109,144 +112,46 @@ const unwrap = async(promise) => {
 export const elephantnoteClient = {
   describe: () => requireElephantNoteApi().describe(),
   call: (action, payload = {}) => {
-    if (isElephantNoteApiAvailable()) {
-      return unwrap(requireElephantNoteApi().call(action, payload))
-    }
+    if (isElephantNoteApiAvailable()) return unwrap(requireElephantNoteApi().call(action, payload))
     const legacyCall = LEGACY_CALLS[action]
-    if (!legacyCall) {
-      throw new Error('ElephantNote API is not available in this renderer context.')
-    }
+    if (!legacyCall) throw new Error('ElephantNote API is not available in this renderer context.')
     return legacyCall(payload)
   },
-  vaults: {
-    get: () => elephantnoteClient.call('vaults.get'),
-    select: () => elephantnoteClient.call('vaults.select'),
-    setActive: (vaultId) => elephantnoteClient.call('vaults.setActive', { vaultId }),
-    setIcon: (vaultId, icon) => elephantnoteClient.call('vaults.setIcon', { vaultId, icon }),
-    setName: (vaultId, name) => elephantnoteClient.call('vaults.setName', { vaultId, name }),
-    remove: (vaultId) => elephantnoteClient.call('vaults.remove', { vaultId })
-  },
-  directory: {
-    list: (relativePath = '') => elephantnoteClient.call('directory.list', { relativePath })
-  },
-  notes: {
-    create: (relativePath = '') => elephantnoteClient.call('notes.create', { relativePath }),
-    autotag: (relativePath) => elephantnoteClient.call('notes.autotag', { relativePath })
-  },
-  folders: {
-    create: (relativePath = '') => elephantnoteClient.call('folders.create', { relativePath })
-  },
-  sidebar: {
-    attach: (payload) => elephantnoteClient.call('sidebar.attach', payload),
-    detach: (relativePath) => elephantnoteClient.call('sidebar.detach', { relativePath })
-  },
-  entries: {
-    rename: (payload) => elephantnoteClient.call('entries.rename', payload),
-    move: (payload) => elephantnoteClient.call('entries.move', payload),
-    delete: (relativePath) => elephantnoteClient.call('entries.delete', { relativePath })
-  },
-  imports: {
-    googleKeep: () => elephantnoteClient.call('import.googleKeep')
-  },
-  calendar: {
-    list: () => elephantnoteClient.call('calendar.list'),
-    importGoogle: () => elephantnoteClient.call('calendar.importGoogle'),
-    importGoogleFromPath: (sourcePath) => elephantnoteClient.call('calendar.importGoogleFromPath', { sourcePath }),
-    getGoogleConfig: () => elephantnoteClient.call('calendar.google.config.get'),
-    setGoogleConfig: (config) => elephantnoteClient.call('calendar.google.config.set', config),
-    syncGoogle: () => elephantnoteClient.call('calendar.google.sync')
-  },
-  sources: {
-    list: () => elephantnoteClient.call('sources.list'),
-    ingestUrl: (url, destinationRelativePath = 'Sources') =>
-      elephantnoteClient.call('sources.ingestUrl', { url, destinationRelativePath }),
-    importRss: (url, destinationRelativePath = 'Sources', limit = 20) =>
-      elephantnoteClient.call('sources.importRss', { url, destinationRelativePath, limit })
-  },
-  wiki: {
-    list: () => elephantnoteClient.call('wiki.list'),
-    propose: () => elephantnoteClient.call('wiki.propose'),
-    accept: (id) => elephantnoteClient.call('wiki.accept', { id }),
-    dismiss: (id) => elephantnoteClient.call('wiki.dismiss', { id })
-  },
-  search: {
-    initVault: (vaultPath) => elephantnoteClient.call('search.initVault', { vaultPath }),
-    query: (params) => elephantnoteClient.call('search.query', params),
-    status: () => elephantnoteClient.call('search.status'),
-    inspect: () => elephantnoteClient.call('search.inspect'),
-    rebuild: () => elephantnoteClient.call('search.rebuild'),
-    clear: () => elephantnoteClient.call('search.clear'),
-    disable: () => elephantnoteClient.call('search.disable'),
-    enable: () => elephantnoteClient.call('search.enable')
-  },
-  sitePreview: {
-    previewFolder: (params) => elephantnoteClient.call('sites.previewFolder', params),
-    buildFolder: (params) => elephantnoteClient.call('sites.buildFolder', params),
-    stop: (siteId) => elephantnoteClient.call('sites.stop', { siteId }),
-    status: (siteId) => elephantnoteClient.call('sites.status', { siteId }),
-    openExternal: (url) => elephantnoteClient.call('sites.openExternal', { url })
-  },
-  features: {
-    get: () => elephantnoteClient.call('features.get'),
-    set: (key, enabled) => elephantnoteClient.call('features.set', { key, enabled })
-  },
-  ai: {
-    getConfig: () => elephantnoteClient.call('ai.config.get'),
-    setConfig: (config) => elephantnoteClient.call('ai.config.set', config)
-  },
-  atomic: {
-    getCatalog: () => elephantnoteClient.call('atomic.catalog.get')
-  },
+  vaults: { get: () => elephantnoteClient.call('vaults.get'), select: () => elephantnoteClient.call('vaults.select'), setActive: (vaultId) => elephantnoteClient.call('vaults.setActive', { vaultId }), setIcon: (vaultId, icon) => elephantnoteClient.call('vaults.setIcon', { vaultId, icon }), setName: (vaultId, name) => elephantnoteClient.call('vaults.setName', { vaultId, name }), remove: (vaultId) => elephantnoteClient.call('vaults.remove', { vaultId }) },
+  directory: { list: (relativePath = '') => elephantnoteClient.call('directory.list', { relativePath }) },
+  notes: { create: (relativePath = '') => elephantnoteClient.call('notes.create', { relativePath }), autotag: (relativePath) => elephantnoteClient.call('notes.autotag', { relativePath }) },
+  folders: { create: (relativePath = '') => elephantnoteClient.call('folders.create', { relativePath }) },
+  sidebar: { attach: (payload) => elephantnoteClient.call('sidebar.attach', payload), detach: (relativePath) => elephantnoteClient.call('sidebar.detach', { relativePath }) },
+  entries: { rename: (payload) => elephantnoteClient.call('entries.rename', payload), move: (payload) => elephantnoteClient.call('entries.move', payload), delete: (relativePath) => elephantnoteClient.call('entries.delete', { relativePath }) },
+  imports: { googleKeep: () => elephantnoteClient.call('import.googleKeep') },
+  calendar: { list: () => elephantnoteClient.call('calendar.list'), importGoogle: () => elephantnoteClient.call('calendar.importGoogle'), importGoogleFromPath: (sourcePath) => elephantnoteClient.call('calendar.importGoogleFromPath', { sourcePath }), getGoogleConfig: () => elephantnoteClient.call('calendar.google.config.get'), setGoogleConfig: (config) => elephantnoteClient.call('calendar.google.config.set', config), syncGoogle: () => elephantnoteClient.call('calendar.google.sync') },
+  sources: { list: () => elephantnoteClient.call('sources.list'), ingestUrl: (url, destinationRelativePath = 'Sources') => elephantnoteClient.call('sources.ingestUrl', { url, destinationRelativePath }), importRss: (url, destinationRelativePath = 'Sources', limit = 20) => elephantnoteClient.call('sources.importRss', { url, destinationRelativePath, limit }) },
+  wiki: { list: () => elephantnoteClient.call('wiki.list'), propose: () => elephantnoteClient.call('wiki.propose'), accept: (id) => elephantnoteClient.call('wiki.accept', { id }), dismiss: (id) => elephantnoteClient.call('wiki.dismiss', { id }) },
+  search: { initVault: (vaultPath) => elephantnoteClient.call('search.initVault', { vaultPath }), query: (params) => elephantnoteClient.call('search.query', params), status: () => elephantnoteClient.call('search.status'), inspect: () => elephantnoteClient.call('search.inspect'), rebuild: () => elephantnoteClient.call('search.rebuild'), clear: () => elephantnoteClient.call('search.clear'), disable: () => elephantnoteClient.call('search.disable'), enable: () => elephantnoteClient.call('search.enable') },
+  sitePreview: { previewFolder: (params) => elephantnoteClient.call('sites.previewFolder', params), buildFolder: (params) => elephantnoteClient.call('sites.buildFolder', params), stop: (siteId) => elephantnoteClient.call('sites.stop', { siteId }), status: (siteId) => elephantnoteClient.call('sites.status', { siteId }), openExternal: (url) => elephantnoteClient.call('sites.openExternal', { url }) },
+  features: { get: () => elephantnoteClient.call('features.get'), set: (key, enabled) => elephantnoteClient.call('features.set', { key, enabled }) },
+  ai: { getConfig: () => elephantnoteClient.call('ai.config.get'), setConfig: (config) => elephantnoteClient.call('ai.config.set', config) },
+  atomic: { getCatalog: () => elephantnoteClient.call('atomic.catalog.get') },
   atomicFeatures: {
+    describeApi: () => requireAtomicFeatureApi().describeApi(),
+    callApi: (action, args = {}) => requireAtomicFeatureApi().callApi({ action, arguments: args }),
     providers: () => requireAtomicFeatureApi().providers(),
     overview: (vaultRoot, options = {}) => requireAtomicFeatureApi().overview({ vaultRoot, ...options }),
     graph: (vaultRoot, options = {}) => requireAtomicFeatureApi().graph({ vaultRoot, ...options }),
     wiki: (vaultRoot, options = {}) => requireAtomicFeatureApi().wiki({ vaultRoot, ...options }),
     createWikiPage: (vaultRoot, record) => requireAtomicFeatureApi().createWikiPage({ vaultRoot, record }),
-    summarize: (vaultRoot, relativePath, providerConfig = {}) =>
-      requireAtomicFeatureApi().summarize({ vaultRoot, relativePath, providerConfig }),
-    structure: (vaultRoot, relativePath, providerConfig = {}) =>
-      requireAtomicFeatureApi().structure({ vaultRoot, relativePath, providerConfig }),
+    summarize: (vaultRoot, relativePath, providerConfig = {}) => requireAtomicFeatureApi().summarize({ vaultRoot, relativePath, providerConfig }),
+    structure: (vaultRoot, relativePath, providerConfig = {}) => requireAtomicFeatureApi().structure({ vaultRoot, relativePath, providerConfig }),
+    autoNameNote: (vaultRoot, relativePath, options = {}) => requireAtomicFeatureApi().autoNameNote({ vaultRoot, relativePath, ...options }),
     listLocalModels: () => requireAtomicFeatureApi().listLocalModels(),
     pullModel: (id, provider = 'ollama') => requireAtomicFeatureApi().pullModel({ id, provider })
   },
-  models: {
-    getSelection: () => elephantnoteClient.call('models.selection.get'),
-    setSelection: (selection) => elephantnoteClient.call('models.selection.set', selection),
-    listLocal: () => elephantnoteClient.call('models.local.list'),
-    download: (id) => elephantnoteClient.call('models.download', { id })
-  },
-  plugins: {
-    list: () => elephantnoteClient.call('plugins.list'),
-    set: (payload) => elephantnoteClient.call('plugins.set', payload),
-    run: (id, input = {}) => elephantnoteClient.call('plugins.run', { id, input })
-  },
-  tasks: {
-    list: () => elephantnoteClient.call('tasks.list'),
-    set: (payload) => elephantnoteClient.call('tasks.set', payload),
-    run: (id) => elephantnoteClient.call('tasks.run', { id })
-  },
-  agents: {
-    list: () => elephantnoteClient.call('agents.list'),
-    register: (payload) => elephantnoteClient.call('agents.register', payload),
-    unregister: (id) => elephantnoteClient.call('agents.unregister', { id }),
-    send: (id, message) => elephantnoteClient.call('agents.send', { id, message })
-  },
-  rag: {
-    chat: (message, limit = 6) => elephantnoteClient.call('rag.chat', { message, limit })
-  },
-  mcp: {
-    listTools: () => elephantnoteClient.call('mcp.tools.list'),
-    callTool: (name, args = {}) => elephantnoteClient.call('mcp.tools.call', { name, arguments: args })
-  },
-  programs: {
-    list: () => elephantnoteClient.call('programs.list'),
-    set: (environments) => elephantnoteClient.call('programs.set', { environments }),
-    run: (id, command, cwd = '') => elephantnoteClient.call('programs.run', { id, command, cwd })
-  },
-  sync: {
-    status: () => elephantnoteClient.call('sync.status'),
-    enqueue: (operation, payload = {}) => elephantnoteClient.call('sync.enqueue', { operation, payload }),
-    run: () => elephantnoteClient.call('sync.run')
-  }
+  models: { getSelection: () => elephantnoteClient.call('models.selection.get'), setSelection: (selection) => elephantnoteClient.call('models.selection.set', selection), listLocal: () => elephantnoteClient.call('models.local.list'), download: (id) => elephantnoteClient.call('models.download', { id }) },
+  plugins: { list: () => elephantnoteClient.call('plugins.list'), set: (payload) => elephantnoteClient.call('plugins.set', payload), run: (id, input = {}) => elephantnoteClient.call('plugins.run', { id, input }) },
+  tasks: { list: () => elephantnoteClient.call('tasks.list'), set: (payload) => elephantnoteClient.call('tasks.set', payload), run: (id) => elephantnoteClient.call('tasks.run', { id }) },
+  agents: { list: () => elephantnoteClient.call('agents.list'), register: (payload) => elephantnoteClient.call('agents.register', payload), unregister: (id) => elephantnoteClient.call('agents.unregister', { id }), send: (id, message) => elephantnoteClient.call('agents.send', { id, message }) },
+  rag: { chat: (message, limit = 6) => elephantnoteClient.call('rag.chat', { message, limit }) },
+  mcp: { listTools: () => elephantnoteClient.call('mcp.tools.list'), callTool: (name, args = {}) => elephantnoteClient.call('mcp.tools.call', { name, arguments: args }) },
+  programs: { list: () => elephantnoteClient.call('programs.list'), set: (environments) => elephantnoteClient.call('programs.set', { environments }), run: (id, command, cwd = '') => elephantnoteClient.call('programs.run', { id, command, cwd }) },
+  sync: { status: () => elephantnoteClient.call('sync.status'), enqueue: (operation, payload = {}) => elephantnoteClient.call('sync.enqueue', { operation, payload }), run: () => elephantnoteClient.call('sync.run') }
 }

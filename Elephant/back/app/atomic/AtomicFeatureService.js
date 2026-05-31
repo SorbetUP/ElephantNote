@@ -6,6 +6,7 @@ import { promisify } from 'util'
 import { getSearchService } from '../search/searchIpc'
 import { markdownToSearchText } from '../search/markdownToSearchText'
 import { isIgnoredPath, isMarkdownFile } from '../search/pathSafety'
+import { ATOMIC_MODEL_CATALOG, MODEL_GROUPS } from 'common/elephantnote/atomicWorkspace'
 
 const execFileAsync = promisify(execFile)
 
@@ -25,14 +26,7 @@ const PROVIDERS = Object.freeze([
   { id: 'codex-compatible', name: 'Codex-compatible bridge', type: 'remote', defaultEndpoint: 'http://127.0.0.1:1455/v1/chat/completions', supportsModelPull: false, notes: 'Use an OpenAI-compatible bridge or endpoint.' }
 ])
 
-const RECOMMENDED_MODELS = Object.freeze([
-  { id: 'nomic-embed-text', name: 'Nomic Embed Text', provider: 'ollama', purpose: 'embedding', pull: 'nomic-embed-text', size: '274 MB', recommended: true },
-  { id: 'mxbai-embed-large', name: 'MxBAI Embed Large', provider: 'ollama', purpose: 'embedding', pull: 'mxbai-embed-large', size: '669 MB', recommended: true },
-  { id: 'llama3.2:3b', name: 'Llama 3.2 3B', provider: 'ollama', purpose: 'chat', pull: 'llama3.2:3b', size: '2 GB', recommended: true },
-  { id: 'qwen2.5:7b', name: 'Qwen2.5 7B', provider: 'ollama', purpose: 'wiki', pull: 'qwen2.5:7b', size: '4.7 GB', recommended: true },
-  { id: 'qwen2.5-coder:7b', name: 'Qwen2.5 Coder 7B', provider: 'ollama', purpose: 'code', pull: 'qwen2.5-coder:7b', size: '4.7 GB', recommended: false },
-  { id: 'llama3.1:8b', name: 'Llama 3.1 8B', provider: 'ollama', purpose: 'summary', pull: 'llama3.1:8b', size: '4.9 GB', recommended: true }
-])
+const RECOMMENDED_MODELS = ATOMIC_MODEL_CATALOG
 
 const normalizeSlashPath = (value = '') => String(value || '').split(path.sep).join('/')
 const normalizeVaultRoot = (vaultRoot = '') => path.resolve(String(vaultRoot || ''))
@@ -53,6 +47,13 @@ const assertRelativeNotePath = (vaultRoot, relativePath) => {
   if (!fullPath.startsWith(root + path.sep)) throw new Error('Note path is outside the active vault.')
   if (!isMarkdownFile(fullPath)) throw new Error('Only markdown notes can be processed.')
   return { root, normalized, fullPath }
+}
+
+const getVaultModelDir = async(vaultRoot) => {
+  const root = assertVaultRoot(vaultRoot)
+  const modelDir = path.join(root, '.elephantnote', 'models')
+  await fs.ensureDir(modelDir)
+  return modelDir
 }
 
 const slugify = (value = '') => String(value || 'topic')
@@ -289,6 +290,12 @@ export class AtomicFeatureService {
     return {
       version: '2026-05-31',
       namespace: 'atomic.features',
+      database: {
+        kind: 'vault-local-files',
+        root: '<vault>/.elephantnote',
+        readableByAgents: true,
+        writableByAgents: 'through approved API actions only'
+      },
       actions: [
         { name: 'providers', description: 'List supported AI providers and recommended local models.' },
         { name: 'overview', description: 'Inspect local Atomic/AI capabilities for the active vault.' },
@@ -298,8 +305,8 @@ export class AtomicFeatureService {
         { name: 'summarize', description: 'Summarize one note with local fallback.' },
         { name: 'structure', description: 'Suggest headings, tags and actions for one note.' },
         { name: 'notes.autoName', description: 'Infer and optionally apply a better filename for a note.' },
-        { name: 'models.listLocal', description: 'List installed Ollama models.' },
-        { name: 'models.pull', description: 'Pull one recommended Ollama model.' }
+        { name: 'models.listLocal', description: 'List installed Ollama models and vault model directory metadata.' },
+        { name: 'models.pull', description: 'Pull one recommended Ollama model and mirror metadata into the vault model directory.' }
       ]
     }
   }
@@ -319,14 +326,14 @@ export class AtomicFeatureService {
   }
 
   providers() {
-    return { providers: PROVIDERS, recommendedModels: RECOMMENDED_MODELS, graphDefaults: DEFAULT_GRAPH_OPTIONS }
+    return { providers: PROVIDERS, recommendedModels: RECOMMENDED_MODELS, modelGroups: MODEL_GROUPS, graphDefaults: DEFAULT_GRAPH_OPTIONS }
   }
 
   async overview({ vaultRoot, windowId = null } = {}) {
     const root = assertVaultRoot(vaultRoot)
     const notes = await this.listNotes(root)
     const status = await getSearchService().getStatus(windowId).catch(() => null)
-    return { vaultRoot: root, notes: notes.length, providers: PROVIDERS, recommendedModels: RECOMMENDED_MODELS, api: this.describeApi(), capabilities: ['semantic-search', 'hybrid-search', 'cited-rag', 'automatic-wiki', 'automatic-summaries', 'automatic-structure', 'automatic-note-naming', 'note-graph', 'model-downloads', 'extension-api'], searchStatus: status }
+    return { vaultRoot: root, modelDir: await getVaultModelDir(root), notes: notes.length, providers: PROVIDERS, recommendedModels: RECOMMENDED_MODELS, modelGroups: MODEL_GROUPS, api: this.describeApi(), capabilities: ['semantic-search', 'hybrid-search', 'cited-rag', 'automatic-wiki', 'automatic-summaries', 'automatic-structure', 'automatic-note-naming', 'note-graph', 'vault-model-directory', 'extension-api', 'agent-database-access'], searchStatus: status }
   }
 
   async listNotes(vaultRoot, { maxNotes = DEFAULT_GRAPH_OPTIONS.maxNotes } = {}) {
@@ -534,20 +541,41 @@ export class AtomicFeatureService {
     return { oldPath: normalized, newPath: targetRelativePath, title: path.basename(targetName, '.md'), changed: apply ? changed : false, suggested: !apply, weakTitle: isWeakTitle(note) }
   }
 
-  async pullModel({ id, provider = 'ollama' } = {}) {
+  async pullModel({ id, provider = 'ollama', vaultRoot = '' } = {}) {
     const model = RECOMMENDED_MODELS.find((item) => item.id === id || item.pull === id) || { id, pull: id, provider }
     if (!model.id && !model.pull) throw new Error('Model id is required.')
-    if ((model.provider || provider) !== 'ollama') return { id: model.id, provider: model.provider || provider, downloaded: false, message: 'Automatic download is only available for Ollama models. Configure this provider manually in Settings > AI.' }
-    await this.executor('ollama', ['pull', model.pull || model.id], { timeout: 30 * 60 * 1000 })
-    return { id: model.id, provider: 'ollama', downloaded: true, message: `${model.name || model.id} downloaded with Ollama.` }
+    const modelDir = vaultRoot ? await getVaultModelDir(vaultRoot) : ''
+    if ((model.provider || provider) !== 'ollama' || !model.pull) {
+      if (modelDir) {
+        await fs.writeJson(path.join(modelDir, `${slugify(model.id)}.json`), { ...model, installed: false, managedBy: 'external', updatedAt: new Date().toISOString() }, { spaces: 2 })
+      }
+      return { id: model.id, provider: model.provider || provider, downloaded: false, modelDir, message: 'This model is external or not pullable by Ollama. Metadata was saved in the vault model directory.' }
+    }
+    const env = modelDir ? { ...process.env, OLLAMA_MODELS: modelDir } : process.env
+    await this.executor('ollama', ['pull', model.pull || model.id], { timeout: 30 * 60 * 1000, env })
+    if (modelDir) {
+      await fs.writeJson(path.join(modelDir, `${slugify(model.id)}.json`), { ...model, installed: true, modelDir, managedBy: 'ollama', updatedAt: new Date().toISOString() }, { spaces: 2 })
+    }
+    return { id: model.id, provider: 'ollama', downloaded: true, modelDir, message: `${model.name || model.id} downloaded into the vault model directory.` }
   }
 
-  async listLocalModels() {
+  async listLocalModels({ vaultRoot = '' } = {}) {
+    const modelDir = vaultRoot ? await getVaultModelDir(vaultRoot) : ''
+    const vaultModels = modelDir
+      ? (await fs.readdir(modelDir).catch(() => []))
+        .filter((file) => file.endsWith('.json'))
+        .map((file) => path.join(modelDir, file))
+      : []
+    const vaultModelMetadata = []
+    for (const file of vaultModels) {
+      const item = await fs.readJson(file).catch(() => null)
+      if (item) vaultModelMetadata.push(item)
+    }
     try {
-      const result = await this.executor('ollama', ['list'])
-      return { provider: 'ollama', available: true, raw: result.stdout || '', models: String(result.stdout || '').split(/\r?\n/).slice(1).map((line) => line.trim()).filter(Boolean).map((line) => { const [name, id, size, ...modifiedParts] = line.split(/\s{2,}/); return { name: name || '', id: id || '', size: size || '', modified: modifiedParts.join(' ') } }).filter((model) => model.name) }
+      const result = await this.executor('ollama', ['list'], { env: modelDir ? { ...process.env, OLLAMA_MODELS: modelDir } : process.env })
+      return { provider: 'ollama', available: true, modelDir, vaultModels: vaultModelMetadata, raw: result.stdout || '', models: String(result.stdout || '').split(/\r?\n/).slice(1).map((line) => line.trim()).filter(Boolean).map((line) => { const [name, id, size, ...modifiedParts] = line.split(/\s{2,}/); return { name: name || '', id: id || '', size: size || '', modified: modifiedParts.join(' ') } }).filter((model) => model.name) }
     } catch (error) {
-      return { provider: 'ollama', available: false, models: [], raw: '', error: error?.message || 'Ollama is not available.' }
+      return { provider: 'ollama', available: false, modelDir, vaultModels: vaultModelMetadata, models: [], raw: '', error: error?.message || 'Ollama is not available.' }
     }
   }
 }

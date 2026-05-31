@@ -4,11 +4,13 @@ import leftIcon from '../../assets/pngicon/algin_left/2.png'
 import middleIcon from '../../assets/pngicon/algin_center/2.png'
 import rightIcon from '../../assets/pngicon/algin_right/2.png'
 import deleteIcon from '../../assets/pngicon/image_delete/2.png'
+import excalidrawIcon from '../../assets/icons/excalidraw.svg'
 
 export const getIcons = (translateFn) => {
   const t = typeof translateFn === 'function' ? translateFn : (k) => k
   return [
     { type: 'edit', tooltip: t('editor.image.toolbar.edit'), icon: editIcon },
+    { type: 'edit-excalidraw', tooltip: 'Edit with Excalidraw', icon: excalidrawIcon, localOnly: true },
     { type: 'inline', tooltip: t('editor.image.toolbar.inline'), icon: inlineIcon },
     { type: 'left', tooltip: t('editor.image.toolbar.alignLeft'), icon: leftIcon },
     { type: 'center', tooltip: t('editor.image.toolbar.alignCenter'), icon: middleIcon },

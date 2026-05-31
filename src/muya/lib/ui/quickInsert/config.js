@@ -116,18 +116,6 @@ export const createQuickInsertObj = (t) => {
       label: 'elephant-command horizontal-rule',
       shortCut: '',
       icon: hrIcon
-    }, {
-      title: 'Dictate',
-      subTitle: 'Speech to text',
-      label: 'elephant-command speech-to-text',
-      shortCut: '',
-      icon: paragraphIcon
-    }, {
-      title: 'Read aloud',
-      subTitle: 'Text to speech',
-      label: 'elephant-command text-to-speech',
-      shortCut: '',
-      icon: paragraphIcon
     }],
     [translate('quickInsert.basicBlock')]: [{
       title: translate('quickInsert.paragraph.title'),

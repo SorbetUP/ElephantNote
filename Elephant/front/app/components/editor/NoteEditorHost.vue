@@ -306,6 +306,61 @@ const insertHorizontalRule = () => {
   bus.emit('paragraph', 'hr')
 }
 
+const runWritingCommand = (command) => {
+  switch (command) {
+    case 'heading-2':
+      runParagraph('heading 2')
+      break
+    case 'bold':
+      runFormat('strong')
+      break
+    case 'italic':
+      runFormat('em')
+      break
+    case 'strike':
+      runFormat('del')
+      break
+    case 'link':
+      runFormat('link')
+      break
+    case 'bullets':
+      runParagraph('ul-bullet')
+      break
+    case 'numbers':
+      runParagraph('ol-order')
+      break
+    case 'tasks':
+      runParagraph('ul-task')
+      break
+    case 'code':
+      runFormat('inline_code')
+      break
+    case 'quote':
+      runParagraph('blockquote')
+      break
+    case 'table':
+      runParagraph('table')
+      break
+    case 'image':
+      insertImage()
+      break
+    case 'excalidraw':
+      openExcalidraw()
+      break
+    case 'horizontal-rule':
+      insertHorizontalRule()
+      break
+    case 'speech-to-text':
+      startSpeechToText()
+      break
+    case 'text-to-speech':
+      speakNote()
+      break
+    default:
+      console.warn(`Unknown writing command: ${command}`)
+  }
+}
+
 const startSpeechToText = () => {
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
   if (!Recognition) {
@@ -514,11 +569,13 @@ onMounted(() => {
   selectOpenedNoteTab()
   window.addEventListener('click', closeTransientMenus)
   bus.on('open-excalidraw-from-image', openExcalidrawFromImage)
+  bus.on('elephantnote-writing-command', runWritingCommand)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('click', closeTransientMenus)
   bus.off('open-excalidraw-from-image', openExcalidrawFromImage)
+  bus.off('elephantnote-writing-command', runWritingCommand)
 })
 
 watch(markdown, (content) => {

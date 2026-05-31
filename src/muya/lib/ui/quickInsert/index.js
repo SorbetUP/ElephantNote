@@ -183,10 +183,6 @@ class QuickInsert extends BaseScrollFloat {
         setTimeout(() => {
           this.muya.options.elephantnoteCommandHandler(command)
         })
-      } else {
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('elephantnote-writing-command', { detail: command }))
-        })
       }
 
       setTimeout(this.hide.bind(this))

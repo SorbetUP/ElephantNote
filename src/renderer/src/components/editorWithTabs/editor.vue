@@ -1157,6 +1157,9 @@ onMounted(() => {
     isGitlabCompatibilityEnabled: isGitlabCompatibilityEnabled.value,
     hideQuickInsertHint: hideQuickInsertHint.value,
     quickInsertTrigger: normalizeQuickInsertTrigger(quickInsertTrigger.value),
+    elephantnoteCommandHandler: (command) => {
+      bus.emit('elephantnote-writing-command', command)
+    },
     hideLinkPopup: hideLinkPopup.value,
     autoCheck: autoCheck.value,
     sequenceTheme: sequenceTheme.value,

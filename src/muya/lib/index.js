@@ -46,7 +46,7 @@ class Muya {
     this.dragdrop = new DragDrop(this)
     this.resize = new Resize(this)
     this.mouseEvent = new MouseEvent(this)
-    this.i18nCSS = new I18nCSS(this.options.t)
+    this.i18nCSS = new I18nCSS(this.options.t, this.options.quickInsertTrigger)
     this.init()
   }
 
@@ -530,8 +530,14 @@ class Muya {
     }
 
     // Update I18n CSS variables
-    if (options.t && this.i18nCSS) {
-      this.i18nCSS.setTranslationFunction(options.t)
+    if (this.i18nCSS) {
+      if (options.t) {
+        this.i18nCSS.setTranslationFunction(options.t)
+      }
+
+      if (typeof options.quickInsertTrigger !== 'undefined') {
+        this.i18nCSS.setQuickInsertTrigger(options.quickInsertTrigger)
+      }
     }
   }
 

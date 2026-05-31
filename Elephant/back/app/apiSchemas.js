@@ -69,6 +69,10 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze({
     relativePath: requiredString,
     title: requiredString
   }),
+  'entries.move': objectSchema({
+    relativePath: requiredString,
+    targetDirectoryPath: optionalString
+  }),
   'entries.delete': objectSchema({ relativePath: requiredString }),
   'import.googleKeep': emptySchema,
   'import.googleKeepFromPaths': objectSchema({

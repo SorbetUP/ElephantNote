@@ -574,6 +574,18 @@ const removeWorkspacePathPrefix = (workspace, relativePath) => {
   return workspace
 }
 
+const getRelativeParentPath = (relativePath) => {
+  const parent = path.dirname(normalizeRelativePath(relativePath))
+  return parent === '.' ? '' : normalizeRelativePath(parent)
+}
+
+const isTargetInsideSource = (sourcePath, targetDirectoryPath) => {
+  const source = normalizeRelativePath(sourcePath)
+  const target = normalizeRelativePath(targetDirectoryPath)
+  if (!source || !target) return false
+  return target === source || target.startsWith(`${source}/`)
+}
+
 const renameEntry = async({ relativePath, title } = {}) => {
   const vault = getActiveVault()
   if (!vault) throw new Error('No active ElephantNote vault.')
@@ -613,6 +625,72 @@ const renameEntry = async({ relativePath, title } = {}) => {
   return {
     workspace,
     entries: await listDirectoryForVault(vault, parentPath)
+  }
+}
+
+const moveEntry = async({ relativePath, targetDirectoryPath = '' } = {}) => {
+  const vault = getActiveVault()
+  if (!vault) throw new Error('No active ElephantNote vault.')
+
+  const normalizedPath = normalizeRelativePath(relativePath)
+  const normalizedTargetDirectory = normalizeRelativePath(targetDirectoryPath || '')
+  if (!normalizedPath) throw new Error('A source path is required.')
+  if (isTargetInsideSource(normalizedPath, normalizedTargetDirectory)) {
+    throw new Error('Cannot move a folder into itself or one of its subfolders.')
+  }
+
+  const source = resolveInsideVault(vault.path, normalizedPath)
+  if (!(await fs.pathExists(source))) throw new Error('Entry not found.')
+
+  const sourceStats = await fs.stat(source)
+  const targetDirectory = resolveInsideVault(vault.path, normalizedTargetDirectory)
+  if (!(await fs.pathExists(targetDirectory))) throw new Error('Destination folder not found.')
+  const targetStats = await fs.stat(targetDirectory)
+  if (!targetStats.isDirectory()) throw new Error('Destination is not a folder.')
+
+  const oldParentPath = getRelativeParentPath(normalizedPath)
+  if (oldParentPath === normalizedTargetDirectory) {
+    return {
+      workspace: await readWorkspace(vault.path),
+      entries: await listDirectoryForVault(vault, oldParentPath)
+    }
+  }
+
+  const nextRelativePath = normalizeRelativePath(path.join(normalizedTargetDirectory, path.basename(normalizedPath)))
+  const target = resolveInsideVault(vault.path, nextRelativePath)
+  if (await fs.pathExists(target)) throw new Error('An item with this name already exists in the destination folder.')
+
+  await fs.move(source, target)
+
+  if (sourceStats.isDirectory()) {
+    const walkAndRefresh = async(currentSourcePath, currentTargetPath) => {
+      const entries = await fs.readdir(currentTargetPath, { withFileTypes: true })
+      for (const entry of entries) {
+        const nextTargetPath = path.join(currentTargetPath, entry.name)
+        const nextSourcePath = path.join(currentSourcePath, entry.name)
+        if (entry.isDirectory()) {
+          await walkAndRefresh(nextSourcePath, nextTargetPath)
+        } else if (entry.isFile() && nextTargetPath.toLowerCase().endsWith('.md')) {
+          getSearchService().deleteFile(nextSourcePath).catch(() => {})
+          getSearchService().indexFile(nextTargetPath).catch(() => {})
+        }
+      }
+    }
+
+    await walkAndRefresh(source, target)
+  } else {
+    getSearchService().deleteFile(source).catch(() => {})
+    if (path.extname(target).toLowerCase() === '.md') {
+      getSearchService().indexFile(target).catch(() => {})
+    }
+  }
+
+  const workspace = replaceWorkspacePathPrefix(await readWorkspace(vault.path), normalizedPath, nextRelativePath)
+  await writeWorkspace(vault.path, workspace)
+
+  return {
+    workspace,
+    entries: await listDirectoryForVault(vault, normalizedTargetDirectory)
   }
 }
 
@@ -1255,6 +1333,7 @@ const createElephantNoteMainApi = () => {
       [ELEPHANTNOTE_API_ACTIONS.SIDEBAR_ATTACH]: async(payload) => attachSidebarEntry(payload),
       [ELEPHANTNOTE_API_ACTIONS.SIDEBAR_DETACH]: async(payload) => detachSidebarEntry(payload),
       [ELEPHANTNOTE_API_ACTIONS.ENTRIES_RENAME]: async(payload) => renameEntry(payload),
+      [ELEPHANTNOTE_API_ACTIONS.ENTRIES_MOVE]: async(payload) => moveEntry(payload),
       [ELEPHANTNOTE_API_ACTIONS.ENTRIES_DELETE]: async(payload) => deleteEntry(payload),
       [ELEPHANTNOTE_API_ACTIONS.IMPORT_GOOGLE_KEEP]: async(_payload, { event }) => importGoogleKeep(event),
       [ELEPHANTNOTE_API_ACTIONS.IMPORT_GOOGLE_KEEP_FROM_PATHS]: async(payload) => importGoogleKeepFromPaths(payload),
@@ -1431,6 +1510,8 @@ export const registerElephantNoteIpc = () => {
     api.call(ELEPHANTNOTE_API_ACTIONS.IMPORT_GOOGLE_KEEP, {}, { event }))
   ipcMain.handle('elephantnote:renameEntry', async(_event, payload) =>
     api.call(ELEPHANTNOTE_API_ACTIONS.ENTRIES_RENAME, payload))
+  ipcMain.handle('elephantnote:moveEntry', async(_event, payload) =>
+    api.call(ELEPHANTNOTE_API_ACTIONS.ENTRIES_MOVE, payload))
   ipcMain.handle('elephantnote:deleteEntry', async(_event, payload) =>
     api.call(ELEPHANTNOTE_API_ACTIONS.ENTRIES_DELETE, payload))
 }

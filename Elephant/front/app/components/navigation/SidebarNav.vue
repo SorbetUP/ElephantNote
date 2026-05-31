@@ -1,16 +1,19 @@
 <template>
   <aside
     class="en-sidebar"
-    :class="{ 'is-drop-target': isDragOver }"
-    @dragover.prevent="isDragOver = true"
-    @dragleave="isDragOver = false"
-    @drop.prevent="attachDroppedEntry"
   >
     <div class="en-sidebar-scroll">
       <button
         class="en-all-notes"
-        :class="{ active: store.activeWorkspaceView === 'notes' && store.currentPath === '' && !store.openedNotePath }"
+        :class="{
+          active: store.activeWorkspaceView === 'notes' && store.currentPath === '' && !store.openedNotePath,
+          'is-drop-target': isRootDropTarget,
+          'is-drop-disabled': isRootDropDisabled
+        }"
         type="button"
+        @dragover.prevent="handleRootDragOver"
+        @dragleave="handleRootDragLeave"
+        @drop.prevent="handleRootDrop"
         @click="store.openDirectory('')"
       >
         <Inbox class="en-all-notes-icon" />
@@ -108,12 +111,17 @@ import { useVaultStore } from '../../stores/vaultStore'
 import { useEditorStore } from '@/store/editor'
 import SidebarTreeEntry from './SidebarTreeEntry.vue'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
+import {
+  canDropEntryOnDirectory,
+  parseDraggedEntry
+} from '../../utils/entryDragDrop'
 
 const emit = defineEmits(['search'])
 const store = useVaultStore()
 const editorStore = useEditorStore()
 const { currentFile } = storeToRefs(editorStore)
-const isDragOver = ref(false)
+const isRootDropTarget = ref(false)
+const isRootDropDisabled = ref(false)
 const isRecentCollapsed = ref(false)
 const showAllRecent = ref(false)
 const recentLimit = 5
@@ -145,15 +153,28 @@ const loadDirectory = async (relativePath = '') => {
   return elephantnoteClient.directory.list(relativePath)
 }
 
-const attachDroppedEntry = async (event) => {
-  isDragOver.value = false
-  const raw = event.dataTransfer?.getData('application/x-elephantnote-entry')
-  if (!raw) return
-  try {
-    await store.attachEntryToSidebar(JSON.parse(raw))
-  } catch (err) {
-    console.warn('Unable to attach dropped entry:', err)
+const handleRootDragOver = (event) => {
+  const entry = parseDraggedEntry(event)
+  const canDrop = canDropEntryOnDirectory(entry, '')
+  isRootDropTarget.value = canDrop
+  isRootDropDisabled.value = !!entry && !canDrop
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = canDrop ? 'move' : 'none'
   }
+}
+
+const handleRootDragLeave = () => {
+  isRootDropTarget.value = false
+  isRootDropDisabled.value = false
+}
+
+const handleRootDrop = async (event) => {
+  const entry = parseDraggedEntry(event)
+  const canDrop = canDropEntryOnDirectory(entry, '')
+  isRootDropTarget.value = false
+  isRootDropDisabled.value = false
+  if (!canDrop) return
+  await store.moveEntry(entry, '')
 }
 </script>
 
@@ -199,6 +220,15 @@ const attachDroppedEntry = async (event) => {
 .en-all-notes.active {
   background: color-mix(in srgb, var(--en-primary, #7c3aed) 20%, var(--en-soft));
   color: var(--en-text);
+}
+
+.en-all-notes.is-drop-target {
+  outline: 1px solid var(--en-primary);
+  background: color-mix(in srgb, var(--en-primary) 16%, var(--en-soft));
+}
+
+.en-all-notes.is-drop-disabled {
+  outline: 1px solid var(--en-danger);
 }
 
 .en-all-notes-icon {

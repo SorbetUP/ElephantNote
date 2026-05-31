@@ -100,6 +100,7 @@ const elephantNoteAPI = {
     electronAPI.ipcRenderer.invoke('elephantnote:detachSidebarEntry', payload),
   importGoogleKeep: () => electronAPI.ipcRenderer.invoke('elephantnote:importGoogleKeep'),
   renameEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:renameEntry', payload),
+  moveEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:moveEntry', payload),
   deleteEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:deleteEntry', payload),
   search: {
     initVault: (vaultPath) => electronAPI.ipcRenderer.invoke('en:search:init-vault', vaultPath),

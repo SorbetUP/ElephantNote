@@ -1,11 +1,22 @@
 <template>
   <article
     class="en-card en-note-card"
-    :class="{ 'is-featured': featured, 'is-pinned': isPinned }"
+    :class="{
+      'is-featured': featured,
+      'is-pinned': isPinned,
+      'is-folder': isFolder,
+      'is-dragging': isDragging,
+      'is-drop-target': isDropTarget,
+      'is-drop-disabled': isDropDisabled
+    }"
     draggable="true"
     @mouseenter="isHovering = true"
     @mouseleave="isHovering = false"
     @dragstart="handleDragStart"
+    @dragend="handleDragEnd"
+    @dragover.prevent.stop="handleDragOver"
+    @dragleave.stop="handleDragLeave"
+    @drop.prevent.stop="handleDrop"
     @click="$emit('open', entry)"
   >
     <div class="en-card-actions">
@@ -38,16 +49,6 @@
     >
       <button
         type="button"
-        @click="toggleSidebarVisibility"
-      >
-        <component
-          :is="isSidebarVisible ? EyeOff : Eye"
-          class="en-icon"
-        />
-        {{ isSidebarVisible ? 'Remove from sidebar' : 'Show in sidebar' }}
-      </button>
-      <button
-        type="button"
         class="danger"
         @click="deleteEntry"
       >
@@ -56,7 +57,10 @@
     </div>
     <div class="en-note-card-head">
       <div class="en-note-card-title-row">
-        <FileText class="en-note-document-icon" />
+        <component
+          :is="isFolder ? Folder : FileText"
+          class="en-note-document-icon"
+        />
         <h3
           @dblclick.stop.prevent="renameEntry"
         >
@@ -82,8 +86,14 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Eye, EyeOff, FileText, MoreHorizontal, Pin } from '@lucide/vue'
+import { FileText, Folder, MoreHorizontal, Pin } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
+import {
+  canDropEntryOnDirectory,
+  getEntryKind,
+  parseDraggedEntry,
+  writeDraggedEntry
+} from '../../utils/entryDragDrop'
 import {
   getNoteCardExcerpt,
   getNoteCardTitle,
@@ -105,12 +115,17 @@ const emit = defineEmits(['open', 'rename', 'delete'])
 const store = useVaultStore()
 const isMenuOpen = ref(false)
 const isHovering = ref(false)
+const isDragging = ref(false)
+const isDropTarget = ref(false)
+const isDropDisabled = ref(false)
 
 const title = computed(() => getNoteCardTitle(props.entry))
 const updated = computed(() => getNoteCardUpdatedLabel(props.entry))
-const excerpt = computed(() => getNoteCardExcerpt(props.entry))
+const isFolder = computed(() => getEntryKind(props.entry) === 'folder')
+const excerpt = computed(() => isFolder.value
+  ? `${props.entry.noteCount || 0} note${props.entry.noteCount === 1 ? '' : 's'}`
+  : getNoteCardExcerpt(props.entry))
 const isPinned = computed(() => !!props.entry?.path && store.isEntryPinned(props.entry.path))
-const isSidebarVisible = computed(() => !!props.entry?.path && store.isEntryVisibleInSidebar(props.entry.path))
 
 const toggleMenu = () => {
   isMenuOpen.value = !isMenuOpen.value
@@ -128,21 +143,45 @@ const togglePin = () => {
   isMenuOpen.value = false
 }
 
-const toggleSidebarVisibility = async () => {
-  if (!props.entry?.path) return
-  await store.toggleEntrySidebarVisibility(props.entry)
-  isMenuOpen.value = false
+const handleDragStart = (event) => {
+  isDragging.value = true
+  writeDraggedEntry(event, {
+    ...props.entry,
+    kind: getEntryKind(props.entry),
+    title: title.value
+  })
 }
 
-const handleDragStart = (event) => {
+const handleDragEnd = () => {
+  isDragging.value = false
+  isDropTarget.value = false
+  isDropDisabled.value = false
+}
+
+const handleDragOver = (event) => {
+  if (!isFolder.value) return
+  const draggedEntry = parseDraggedEntry(event)
+  const canDrop = canDropEntryOnDirectory(draggedEntry, props.entry.path)
+  isDropTarget.value = canDrop
+  isDropDisabled.value = !!draggedEntry && !canDrop
   if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'copy'
+    event.dataTransfer.dropEffect = canDrop ? 'move' : 'none'
   }
-  event.dataTransfer?.setData('application/x-elephantnote-entry', JSON.stringify({
-    kind: 'note',
-    path: props.entry.path,
-    title: title.value
-  }))
+}
+
+const handleDragLeave = () => {
+  isDropTarget.value = false
+  isDropDisabled.value = false
+}
+
+const handleDrop = async (event) => {
+  if (!isFolder.value) return
+  const draggedEntry = parseDraggedEntry(event)
+  const canDrop = canDropEntryOnDirectory(draggedEntry, props.entry.path)
+  isDropTarget.value = false
+  isDropDisabled.value = false
+  if (!canDrop) return
+  await store.moveEntry(draggedEntry, props.entry.path)
 }
 
 const renameEntry = () => {
@@ -184,6 +223,23 @@ onBeforeUnmount(() => {
 
 .en-card:hover {
   border-color: var(--en-border-strong);
+}
+
+.en-card.is-dragging {
+  opacity: 0.42;
+}
+
+.en-card.is-folder {
+  cursor: pointer;
+}
+
+.en-card.is-drop-target {
+  border-color: var(--en-primary);
+  background: color-mix(in srgb, var(--en-primary) 10%, var(--en-bg));
+}
+
+.en-card.is-drop-disabled {
+  border-color: var(--en-danger);
 }
 
 .en-card-actions {

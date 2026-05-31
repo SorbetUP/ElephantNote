@@ -20,6 +20,7 @@ const LEGACY_CALLS = {
   'sidebar.attach': (payload) => window.elephantnote?.attachSidebarEntry?.(payload),
   'sidebar.detach': ({ relativePath }) => window.elephantnote?.detachSidebarEntry?.({ relativePath }),
   'entries.rename': (payload) => window.elephantnote?.renameEntry?.(payload),
+  'entries.move': (payload) => window.elephantnote?.moveEntry?.(payload),
   'entries.delete': ({ relativePath }) => window.elephantnote?.deleteEntry?.({ relativePath }),
   'import.googleKeep': () => window.elephantnote?.importGoogleKeep?.(),
   'calendar.list': () => window.elephantnote?.calendar?.list?.(),
@@ -118,6 +119,7 @@ export const elephantnoteClient = {
   },
   entries: {
     rename: (payload) => elephantnoteClient.call('entries.rename', payload),
+    move: (payload) => elephantnoteClient.call('entries.move', payload),
     delete: (relativePath) => elephantnoteClient.call('entries.delete', { relativePath })
   },
   imports: {

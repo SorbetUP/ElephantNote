@@ -1,13 +1,16 @@
 <template>
   <div
     class="en-library-grid"
-    :class="{ list: store.viewMode === 'list' }"
+    :class="{ list: store.viewMode === 'list', 'is-drop-target': isRootDropTarget }"
+    @dragover.prevent="handleRootDragOver"
+    @dragleave="handleRootDragLeave"
+    @drop.prevent="handleRootDrop"
   >
     <NoteCard
-      v-for="(entry, index) in store.activeNoteEntries"
+      v-for="(entry, index) in store.activeEntries"
       :key="entry.path"
       :entry="entry"
-      :featured="index === 0 && store.activeNoteEntries.length > 3"
+      :featured="index === 0 && store.activeEntries.length > 3"
       @open="openEntry"
       @rename="renameEntry"
       @delete="deleteEntry"
@@ -42,11 +45,16 @@
 import { nextTick, ref } from 'vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import NoteCard from './NoteCard.vue'
+import {
+  canDropEntryOnDirectory,
+  parseDraggedEntry
+} from '../../utils/entryDragDrop'
 
 const store = useVaultStore()
 const renamingEntry = ref(null)
 const renameEntryTitle = ref('')
 const renameEntryInput = ref(null)
+const isRootDropTarget = ref(false)
 
 const openEntry = (entry) => {
   if (entry.kind === 'folder') {
@@ -82,6 +90,25 @@ const deleteEntry = async (entry) => {
   if (!window.confirm(`Delete "${entry.title}"? This cannot be undone.`)) return
   await store.deleteEntry(entry)
 }
+
+const handleRootDragOver = (event) => {
+  if (event.target?.closest?.('.en-card')) return
+  const entry = parseDraggedEntry(event)
+  isRootDropTarget.value = !!entry && canDropEntryOnDirectory(entry, store.currentPath)
+}
+
+const handleRootDragLeave = (event) => {
+  if (event.currentTarget?.contains?.(event.relatedTarget)) return
+  isRootDropTarget.value = false
+}
+
+const handleRootDrop = async (event) => {
+  if (event.target?.closest?.('.en-card')) return
+  const entry = parseDraggedEntry(event)
+  isRootDropTarget.value = false
+  if (!entry || !canDropEntryOnDirectory(entry, store.currentPath)) return
+  await store.moveEntry(entry, store.currentPath)
+}
 </script>
 
 <style scoped>
@@ -91,6 +118,15 @@ const deleteEntry = async (entry) => {
   column-gap: 18px;
   padding: 0 28px 32px;
   overflow-y: auto;
+}
+
+.en-library-grid.is-drop-target {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--en-primary) 9%, transparent),
+      transparent 160px
+    );
 }
 
 .en-library-grid :deep(.en-card) {

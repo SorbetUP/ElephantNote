@@ -16,6 +16,7 @@ export const ELEPHANTNOTE_API_ACTIONS = Object.freeze({
   SIDEBAR_ATTACH: 'sidebar.attach',
   SIDEBAR_DETACH: 'sidebar.detach',
   ENTRIES_RENAME: 'entries.rename',
+  ENTRIES_MOVE: 'entries.move',
   ENTRIES_DELETE: 'entries.delete',
   IMPORT_GOOGLE_KEEP: 'import.googleKeep',
   IMPORT_GOOGLE_KEEP_FROM_PATHS: 'import.googleKeepFromPaths',

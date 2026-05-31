@@ -6,7 +6,18 @@
     <div
       v-if="entry.kind === 'folder' || entry.type === 'folder'"
       class="en-sidebar-tree-row"
-      :class="{ active: isFolderActive }"
+      :class="{
+        active: isFolderActive,
+        'is-dragging': isDragging,
+        'is-drop-target': isDropTarget,
+        'is-drop-disabled': isDropDisabled
+      }"
+      draggable="true"
+      @dragstart="handleDragStart"
+      @dragend="handleDragEnd"
+      @dragover.prevent.stop="handleFolderDragOver"
+      @dragleave.stop="handleDragLeave"
+      @drop.prevent.stop="handleFolderDrop"
     >
       <button
         class="en-sidebar-tree-toggle"
@@ -48,8 +59,11 @@
     <div
       v-else
       class="en-sidebar-tree-note"
-      :class="{ active: activeNotePath === entry.path }"
+      :class="{ active: activeNotePath === entry.path, 'is-dragging': isDragging }"
       :title="entry.title"
+      draggable="true"
+      @dragstart="handleDragStart"
+      @dragend="handleDragEnd"
     >
       <button
         class="en-sidebar-tree-label"
@@ -99,6 +113,13 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { ChevronDown, ChevronRight, X } from '@lucide/vue'
+import { useVaultStore } from '../../stores/vaultStore'
+import {
+  canDropEntryOnDirectory,
+  getEntryKind,
+  parseDraggedEntry,
+  writeDraggedEntry
+} from '../../utils/entryDragDrop'
 
 defineOptions({ name: 'SidebarTreeEntry' })
 
@@ -141,10 +162,14 @@ const props = defineProps({
   }
 })
 
+const store = useVaultStore()
 const expanded = ref(false)
 const loaded = ref(false)
 const loading = ref(false)
 const children = ref([])
+const isDragging = ref(false)
+const isDropTarget = ref(false)
+const isDropDisabled = ref(false)
 
 const isFolderActive = computed(() => {
   const entryPath = props.entry?.path || ''
@@ -174,6 +199,48 @@ const openFolder = async () => {
   await props.openDirectory(props.entry.path)
   expanded.value = true
   loaded.value = false
+  await ensureChildren()
+}
+
+const handleDragStart = (event) => {
+  isDragging.value = true
+  writeDraggedEntry(event, {
+    ...props.entry,
+    kind: getEntryKind(props.entry),
+    title: props.entry.title
+  })
+}
+
+const handleDragEnd = () => {
+  isDragging.value = false
+  isDropTarget.value = false
+  isDropDisabled.value = false
+}
+
+const handleFolderDragOver = (event) => {
+  const draggedEntry = parseDraggedEntry(event)
+  const canDrop = canDropEntryOnDirectory(draggedEntry, props.entry.path)
+  isDropTarget.value = canDrop
+  isDropDisabled.value = !!draggedEntry && !canDrop
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = canDrop ? 'move' : 'none'
+  }
+}
+
+const handleDragLeave = () => {
+  isDropTarget.value = false
+  isDropDisabled.value = false
+}
+
+const handleFolderDrop = async (event) => {
+  const draggedEntry = parseDraggedEntry(event)
+  const canDrop = canDropEntryOnDirectory(draggedEntry, props.entry.path)
+  isDropTarget.value = false
+  isDropDisabled.value = false
+  if (!canDrop) return
+  await store.moveEntry(draggedEntry, props.entry.path)
+  loaded.value = false
+  expanded.value = true
   await ensureChildren()
 }
 
@@ -217,6 +284,21 @@ watch(isFolderActive, async (active) => {
 .en-sidebar-tree-note:hover {
   color: var(--en-text);
   background: var(--en-soft);
+}
+
+.en-sidebar-tree-row.is-dragging,
+.en-sidebar-tree-note.is-dragging {
+  opacity: 0.45;
+}
+
+.en-sidebar-tree-row.is-drop-target {
+  color: var(--en-text);
+  background: color-mix(in srgb, var(--en-primary) 18%, var(--en-soft));
+  outline: 1px solid var(--en-primary);
+}
+
+.en-sidebar-tree-row.is-drop-disabled {
+  outline: 1px solid var(--en-danger);
 }
 
 .en-sidebar-tree-toggle {

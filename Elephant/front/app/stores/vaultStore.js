@@ -49,6 +49,27 @@ const getRenamedRelativePath = (oldPath, title) => {
   return [...parts.slice(0, -1), title].join('/')
 }
 
+const joinRelativePath = (...parts) => parts
+  .flatMap((part) => String(part || '').split('/'))
+  .filter(Boolean)
+  .join('/')
+
+const getMovedRelativePath = (oldPath, targetDirectoryPath = '') => {
+  if (!oldPath) return ''
+  return joinRelativePath(targetDirectoryPath, oldPath.split('/').pop())
+}
+
+const getParentRelativePath = (pathname = '') => {
+  const parts = String(pathname || '').split('/').filter(Boolean)
+  if (parts.length <= 1) return ''
+  return parts.slice(0, -1).join('/')
+}
+
+const isMovingIntoSelf = (sourcePath, targetDirectoryPath) => {
+  if (!sourcePath || !targetDirectoryPath) return false
+  return targetDirectoryPath === sourcePath || targetDirectoryPath.startsWith(`${sourcePath}/`)
+}
+
 const getSidebarItems = (workspace) => workspace?.sidebar || []
 
 const isAttachedSidebarEntry = (item) => item?.type === 'note' || item?.type === 'folder'
@@ -618,6 +639,48 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         this.persistPinnedNotes()
       }
       if (this.openedNotePath === entry.path) this.closeNote()
+    },
+
+    async moveEntry(entry, targetDirectoryPath = '') {
+      const oldPath = entry?.path
+      if (!oldPath) return false
+
+      const normalizedTargetDirectory = joinRelativePath(targetDirectoryPath)
+      if (isMovingIntoSelf(oldPath, normalizedTargetDirectory)) return false
+      if (getParentRelativePath(oldPath) === normalizedTargetDirectory) return false
+
+      const nextPath = getMovedRelativePath(oldPath, normalizedTargetDirectory)
+      if (!nextPath || nextPath === oldPath) return false
+
+      const oldOpenedNotePath = this.openedNotePath
+      const result = await elephantnoteClient.entries.move({
+        relativePath: oldPath,
+        targetDirectoryPath: normalizedTargetDirectory
+      })
+
+      this.workspace = result.workspace
+      this.pinnedNotePaths = this.pinnedNotePaths.map((pathname) =>
+        replacePathPrefix(pathname, oldPath, nextPath)
+      )
+      this.currentPath = replacePathPrefix(this.currentPath, oldPath, nextPath)
+      this.openedNotePath = replacePathPrefix(this.openedNotePath, oldPath, nextPath)
+      this.openedNotes = this.openedNotes.map((note) => ({
+        ...note,
+        path: replacePathPrefix(note.path, oldPath, nextPath),
+        title: note.path === oldPath
+          ? nextPath.split('/').pop()?.replace(/\.md$/i, '') || note.title
+          : note.title
+      }))
+      this.persistPinnedNotes()
+
+      this.entries = await elephantnoteClient.directory.list(this.currentPath)
+      this.rootEntries = await elephantnoteClient.directory.list('')
+
+      if (oldOpenedNotePath && oldOpenedNotePath !== this.openedNotePath && this.openedNotePath) {
+        window.electron.ipcRenderer.send('mt::open-file', `${this.activeVault.path}/${this.openedNotePath}`, {})
+      }
+
+      return true
     },
 
     async deleteEntry(entry) {

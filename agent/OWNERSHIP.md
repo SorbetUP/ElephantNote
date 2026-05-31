@@ -7,6 +7,10 @@ UI ElephantNote:
 - `src/renderer/src/elephantnote/components`
 - `src/renderer/src/elephantnote/styles`
 
+Vues workspace:
+
+- `src/renderer/src/elephantnote/components/{Dashboard,Chat,Wiki,Calendar,Graph,Canvas}View.vue`
+
 Etat ElephantNote:
 
 - `src/renderer/src/elephantnote/stores`
@@ -15,9 +19,33 @@ Logique locale:
 
 - `src/main/elephantnote`
 
+API unifiee:
+
+- `src/main/elephantnote/api.js` (registre d'actions)
+- `src/main/elephantnote/apiSchemas.js` (validation)
+
 Contrat renderer/main:
 
 - `src/preload/index.js`
+- `src/renderer/src/elephantnote/services/elephantnoteClient.js`
+
+AI (agents, RAG, MCP, modeles):
+
+- `src/main/elephantnote/agents.js`
+- `src/main/elephantnote/modelRuntime.js`
+- `src/common/elephantnote/aiProviders.js`
+
+Plugins/Taches/Programmes:
+
+- `src/main/elephantnote/programRuntime.js`
+
+Sync Git:
+
+- `src/main/elephantnote/sync/GitSyncEngine.js`
+
+Modules partages:
+
+- `src/common/elephantnote/`
 
 Markdown engine:
 
@@ -54,5 +82,6 @@ Ne pas toucher Muya pour:
 - ajouter un bouton toolbar;
 - changer une carte;
 - changer la sidebar;
-- ajouter un panneau settings.
+- ajouter un panneau settings;
+- ajouter une vue workspace.
 

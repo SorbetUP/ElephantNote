@@ -3,7 +3,7 @@
 ## Avant de modifier
 
 1. Lire `agent/README.md`.
-2. Identifier la zone: renderer, main process, preload, Muya ou doc.
+2. Identifier la zone: renderer, main process, preload, Muya, API unifiee ou doc.
 3. Verifier l'etat Git avec `rtk git status -sb`.
 4. Ne pas toucher aux changements non lies deja presents dans le workspace.
 
@@ -22,7 +22,7 @@ Bug d'etat UI:
 Bug fichier/vault/import:
 
 - Commencer dans `src/main/elephantnote`.
-- Verifier le contrat dans `src/preload/index.js`.
+- Verifier le contrat dans `src/preload/index.js` ou `src/main/elephantnote/api.js`.
 
 Bug editeur Markdown:
 
@@ -33,6 +33,32 @@ Bug recherche:
 
 - Renderer: `src/renderer/src/elephantnote/search` et `stores/searchStore.js`.
 - Main/API: chercher les handlers `en:search:*`.
+
+Bug AI/agents/RAG/MCP:
+
+- Agents: `src/main/elephantnote/agents.js` et `src/common/elephantnote/aiProviders.js`.
+- RAG: chercher l'action `rag.chat` dans `src/main/elephantnote/api.js` et les handlers.
+- MCP: chercher `mcp.tools.*` dans l'API.
+- Modeles locaux: `src/main/elephantnote/modelRuntime.js`.
+
+Bug workspace views (Dashboard, Chat, Wiki, Calendar, Graph, Canvas):
+
+- Commencer dans `src/renderer/src/elephantnote/components/{view}View.vue`.
+- Verifier `stores/vaultStore.js` pour l'etat partage.
+
+Bug sync Git:
+
+- `src/main/elephantnote/sync/GitSyncEngine.js`.
+
+Bug plugins/taches/programmes:
+
+- Programmes: `src/main/elephantnote/programRuntime.js`.
+- Plugins/taches: chercher les actions `plugins.*`, `tasks.*`, `programs.*` dans `api.js`.
+
+Bug sources/wiki/calendar:
+
+- Modules partages: `src/common/elephantnote/{sources,wiki,calendar}.js`.
+- Handlers API: actions `sources.*`, `wiki.*`, `calendar.*` dans `api.js`.
 
 ## Regles de composants
 

@@ -5,8 +5,18 @@
 - `AppShell.vue`: layout global, theme, largeur sidebar, raccourci recherche. Garde la topbar horizontale et la sidebar verticale visibles hors mode focus.
 - `TopVaultBar.vue`: barre superieure, vault actif, recherche, reglages. La zone vide de la topbar sert aussi de zone de drag Electron; les boutons et champs doivent rester en `no-drag`.
 - `SidebarNav.vue`: navigation laterale et notes recentes. `Recently edited` reste ancre en bas de la sidebar quand la hauteur le permet.
-- `MainContent.vue`: zone centrale qui choisit grille ou editeur.
+- `MainContent.vue`: zone centrale qui choisit grille, editeur ou vue workspace (Dashboard, Chat, Wiki, Calendar, Graph, Canvas).
 - `EmptyVaultPicker.vue`: etat initial sans vault.
+- `SettingsPanel.vue`: panneau de reglages complet (1790 lignes). Sections: vault, recherche, site preview, agents AI, RAG, MCP, modeles locaux, plugins, taches, programmes, sync Git, fonctionnalites, config AI, atomic notes, import Google Keep/Calendar, sources, wiki.
+
+## Vues workspace
+
+- `DashboardView.vue`: vue d'ensemble du vault (stats notes/dossiers/tags, recentes, populaires).
+- `ChatView.vue`: chat RAG avec citations de notes locales. Reponses ancreees dans le vault actif.
+- `WikiView.vue`: propositions de pages wiki synthetisees a partir de notes citees. Actions: proposer, accepter, rejeter.
+- `CalendarView.vue`: evenements offline + notes groupees par date de derniere edition. Import Google Calendar.
+- `GraphView.vue`: graphe de connaissances (noeuds = notes/dossiers, aretes = dossiers partagés/tags).
+- `CanvasView.vue`: canvas libre avec zoom et noeuds deconnectes.
 
 ## Bibliotheque
 
@@ -55,9 +65,23 @@ Separation attendue:
 - `SitePreviewToolbar.vue`: actions preview/build/open.
 - `sitePreviewStore.js`: etat preview.
 
+## Services renderer
+
+- `services/elephantnoteClient.js`: client unifie pour toutes les API ElephantNote. Utilise `window.elephantnote.api.call` avec fallback legacy. Expose des namespaces: `vaults`, `directory`, `notes`, `folders`, `sidebar`, `entries`, `imports`, `calendar`, `sources`, `wiki`, `search`, `sitePreview`, `features`, `ai`, `atomic`, `models`, `plugins`, `tasks`, `agents`, `rag`, `mcp`, `programs`, `sync`.
+- `services/excalidraw.js`: integration Excalidraw.
+- `services/markdownMetaService.js`: extraction et gestion des metadonnees Markdown.
+
+## Utils
+
+- `utils/markdownTags.js`: gestion des tags.
+- `utils/noteDocument.js`: transformation document <-> editeur.
+- `utils/noteCardView.js`: helpers de cartes.
+- `utils/dom.js`: helpers DOM.
+- `utils/categoryActions.js`: actions par categorie de vue.
+
 ## Stores
 
-- `stores/vaultStore.js`: vault actif, entrees, notes ouvertes, pins, CRUD notes/dossiers.
+- `stores/vaultStore.js`: vault actif, entrees, notes ouvertes, pins, CRUD notes/dossiers. Gere aussi l'etat des vues workspace (wiki, calendar, graph, dashboard).
 - `stores/searchStore.js`: recherche exacte/semantique, index, preferences.
 
 ## Points de vigilance performance

@@ -87,6 +87,9 @@ const elephantNoteAPI = {
   getVaults: () => electronAPI.ipcRenderer.invoke('elephantnote:getVaults'),
   selectVault: () => electronAPI.ipcRenderer.invoke('elephantnote:selectVault'),
   setActiveVault: (vaultId) => electronAPI.ipcRenderer.invoke('elephantnote:setActiveVault', vaultId),
+  setVaultIcon: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:setVaultIcon', payload),
+  setVaultName: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:setVaultName', payload),
+  removeVault: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:removeVault', payload),
   listDirectory: (relativePath) =>
     electronAPI.ipcRenderer.invoke('elephantnote:listDirectory', relativePath),
   createNote: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:createNote', payload),

@@ -28,6 +28,11 @@ export default defineConfig({
     },
     resolve: {
       alias: {
+        'elephant-back': resolve(__dirname, 'Elephant/back/app'),
+        'elephant-front': resolve(__dirname, 'Elephant/front/app'),
+        'elephant-shared': resolve(__dirname, 'Elephant/shared'),
+        'common/elephantnote': resolve(__dirname, 'Elephant/shared'),
+        '@/elephantnote': resolve(__dirname, 'Elephant/front/app'),
         '@': resolve(__dirname, 'src/renderer/src'),
         common: resolve(__dirname, 'src/common'),
         muya: resolve(__dirname, 'src/muya')
@@ -39,6 +44,11 @@ export default defineConfig({
     // --> Bundled as CommonJS
     resolve: {
       alias: {
+        'elephant-back': resolve(__dirname, 'Elephant/back/app'),
+        'elephant-front': resolve(__dirname, 'Elephant/front/app'),
+        'elephant-shared': resolve(__dirname, 'Elephant/shared'),
+        'common/elephantnote': resolve(__dirname, 'Elephant/shared'),
+        '@/elephantnote': resolve(__dirname, 'Elephant/front/app'),
         '@': resolve(__dirname, 'src/renderer/src'),
         common: resolve(__dirname, 'src/common'),
         muya: resolve(__dirname, 'src/muya')
@@ -55,6 +65,11 @@ export default defineConfig({
     },
     resolve: {
       alias: {
+        'elephant-back': resolve(__dirname, 'Elephant/back/app'),
+        'elephant-front': resolve(__dirname, 'Elephant/front/app'),
+        'elephant-shared': resolve(__dirname, 'Elephant/shared'),
+        'common/elephantnote': resolve(__dirname, 'Elephant/shared'),
+        '@/elephantnote': resolve(__dirname, 'Elephant/front/app'),
         '@': resolve(__dirname, 'src/renderer/src'),
         common: resolve(__dirname, 'src/common'),
         muya: resolve(__dirname, 'src/muya')

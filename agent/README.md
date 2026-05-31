@@ -7,13 +7,14 @@ Objectif: un agent leger doit pouvoir trouver rapidement ou faire une modificati
 ## Lire dans cet ordre
 
 1. `PROJECT_MAP.md`: structure du repo et responsabilites des dossiers.
-2. `COMPONENTS.md`: composants ElephantNote et points d'extension UI.
-3. `ARCHITECTURE.md`: architecture runtime, flux renderer/main et frontmatter.
-4. `IPC_CONTRACTS.md`: contrats `window.elephantnote` et zones main process.
+2. `COMPONENTS.md`: composants ElephantNote, vues workspace et points d'extension UI.
+3. `ARCHITECTURE.md`: architecture runtime, API unifiee, flux renderer/main et frontmatter.
+4. `IPC_CONTRACTS.md`: contrats `window.elephantnote`, API unifiee et zones main process.
 5. `CHANGE_GUIDE.md`: recettes pour ajout de feature, correction de bug, refactor et validation.
 6. `TESTING.md`: commandes de verification et interpretation des warnings.
 7. `AGENT_PLAYBOOK.md`: checklist d'intervention pour un agent.
-8. `blinko-portage/README.md`: cahier de portage des idees venant de Blinko Offline.
+8. `OWNERSHIP.md`: zones a modifier en priorite et zones a eviter.
+9. `blinko-portage/README.md`: cahier de portage des idees venant de Blinko Offline.
 
 ## Regles locales
 
@@ -23,7 +24,8 @@ Objectif: un agent leger doit pouvoir trouver rapidement ou faire une modificati
 - Les commandes shell doivent etre prefixees par `rtk`.
 - Ne pas modifier `node_modules/`, `out/`, `dist/`, `build/` ou les fichiers generes.
 - Pour l'UI ElephantNote, commencer par `src/renderer/src/elephantnote`.
-- Pour les IPC/API exposees au renderer, verifier `src/preload/index.js` et `src/main/elephantnote`.
+- Pour les IPC/API exposees au renderer, verifier `src/preload/index.js`, `src/main/elephantnote/api.js` et `src/main/elephantnote`.
+- Preferer l'API unifiee `window.elephantnote.api.call(action, payload)` aux appels legacy.
 
 ## Commandes utiles
 

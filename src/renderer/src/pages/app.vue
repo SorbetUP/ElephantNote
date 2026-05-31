@@ -38,7 +38,7 @@ import { useCommandCenterStore } from '@/store/commandCenter'
 import { useProjectStore } from '@/store/project'
 import { useAutoUpdatesStore } from '@/store/autoUpdates'
 import { useNotificationStore } from '@/store/notification'
-import AppShell from '@/elephantnote/components/AppShell.vue'
+import AppShell from 'elephant-front/components/shell/AppShell.vue'
 
 const mainStore = useMainStore()
 const editorStore = useEditorStore()

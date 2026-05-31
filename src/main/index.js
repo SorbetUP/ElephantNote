@@ -13,7 +13,7 @@ import Accessor from './app/accessor'
 import App from './app'
 import { APP_NAME } from './app/metadata'
 import { t } from './i18n'
-import { registerElephantNoteIpc } from './elephantnote/vaults'
+import { registerElephantNoteIpc } from 'elephant-back/vaults'
 
 process.title = APP_NAME
 app.setName(APP_NAME)

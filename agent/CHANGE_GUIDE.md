@@ -5,12 +5,12 @@
 1. Trouver le composant dans `COMPONENTS.md`.
 2. Ajouter l'etat local seulement si la feature est purement visuelle.
 3. Si l'etat doit survivre ou etre partage, utiliser un store dans `src/renderer/src/elephantnote/stores`.
-4. Si la feature touche le disque ou le systeme, ajouter une API dans `src/preload/index.js` puis la logique cote main process.
+4. Si la feature touche le disque ou le systeme, ajouter une API dans `src/main/elephantnote/api.js` (ou utiliser l'API unifiee existante).
 5. Ajouter ou ajuster un test si la logique peut regresser.
 
 ## Corriger un bug
 
-1. Reproduire mentalement le flux: composant -> store -> preload -> main process.
+1. Reproduire mentalement le flux: composant -> store -> elephantnoteClient -> API unifiee -> main process.
 2. Chercher d'abord dans `src/renderer/src/elephantnote` pour les bugs UI.
 3. Chercher dans `src/main/elephantnote` pour les bugs de fichiers, vaults, imports ou indexation.
 4. Garder la correction proche du fichier responsable.
@@ -20,7 +20,7 @@
 
 1. UI: bouton ou menu dans `NoteCard.vue`, `FolderCard.vue`, `LibraryToolbar.vue` ou `NoteEditorToolbar.vue`.
 2. Etat: action dans `stores/vaultStore.js`.
-3. API renderer-main: `window.elephantnote.*` dans `src/preload/index.js`.
+3. API renderer-main: utiliser l'API unifiee `window.elephantnote.api.call('notes.*', payload)` ou ajouter une action dans `src/main/elephantnote/api.js` + `apiSchemas.js`.
 4. Main process: handler dans `src/main/elephantnote`.
 5. Rafraichir `entries`, `workspace`, `openedNotes` ou `pinnedNotePaths` selon l'impact.
 
@@ -30,6 +30,22 @@
 2. Enveloppe: `src/renderer/src/elephantnote/components/NoteEditor*.vue`.
 3. Moteur: `src/renderer/src/components/editorWithTabs` ou `src/renderer/src/muya`.
 4. Ne pas changer Muya pour un simple bouton ou une mise en page.
+
+## Ajouter une fonctionnalite AI (agent, RAG, MCP, modeles)
+
+1. Verifier si l'action existe deja dans `src/main/elephantnote/api.js`.
+2. Pour un nouvel agent: utiliser `agents.js` avec transport `openai-compatible`.
+3. Pour RAG: utiliser l'action `rag.chat` avec citations de notes.
+4. Pour MCP: utiliser `mcp.tools.list` et `mcp.tools.call`.
+5. Pour les modeles locaux: utiliser `modelRuntime.js` (Ollama).
+6. Config AI globale: `ai.config.get/set`.
+
+## Ajouter une vue workspace
+
+1. Creer le composant dans `src/renderer/src/elephantnote/components/{Name}View.vue`.
+2. Ajouter l'etat dans `stores/vaultStore.js` si partage.
+3. Utiliser `elephantnoteClient` pour les appels API.
+4. Integrer dans `MainContent.vue` pour l'affichage.
 
 ## Porter une idee depuis Blinko
 

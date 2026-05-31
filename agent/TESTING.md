@@ -26,6 +26,20 @@ rtk pnpm exec eslint src/main/elephantnote src/preload/index.js
 rtk pnpm test
 ```
 
+Pour un changement API unifiee:
+
+```bash
+rtk pnpm exec eslint src/main/elephantnote/api.js src/main/elephantnote/apiSchemas.js
+rtk pnpm test
+```
+
+Pour un changement AI (agents, RAG, modeles):
+
+```bash
+rtk pnpm exec eslint src/main/elephantnote/agents.js src/main/elephantnote/modelRuntime.js src/common/elephantnote/aiProviders.js
+rtk pnpm test
+```
+
 ## Warnings connus
 
 ESLint peut afficher un warning Node sur `eslint.config.js` parce que le package ne declare pas `"type": "module"`. Ce warning n'est pas bloquant si la commande sort avec code 0.
@@ -46,6 +60,8 @@ Ajouter un test quand:
 - Un helper pur est ajoute.
 - Une operation de chemin ou de vault est modifiee.
 - Un bug corrige risque de revenir.
+- Une nouvelle action API est ajoutée.
+- Un agent AI ou un modele local est manipule.
 
 Eviter les tests lourds pour un simple changement de layout CSS.
 

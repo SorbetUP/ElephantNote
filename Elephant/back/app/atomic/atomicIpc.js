@@ -20,6 +20,8 @@ const handleOnce = (channel, handler) => {
 export const registerAtomicFeatureIpc = () => {
   if (registered) return
   registered = true
+  handleOnce('en:atomic:api:describe', async() => service.describeApi())
+  handleOnce('en:atomic:api:call', async(event, payload = {}) => service.callApi(withWindow(event, payload)))
   handleOnce('en:atomic:providers', async() => service.providers())
   handleOnce('en:atomic:overview', async(event, payload = {}) => service.overview(withWindow(event, payload)))
   handleOnce('en:atomic:graph', async(event, payload = {}) => service.graph(withWindow(event, payload)))
@@ -27,6 +29,7 @@ export const registerAtomicFeatureIpc = () => {
   handleOnce('en:atomic:wiki:create-page', async(event, payload = {}) => service.createWikiPage(withWindow(event, payload)))
   handleOnce('en:atomic:summarize', async(event, payload = {}) => service.summarize(withWindow(event, payload)))
   handleOnce('en:atomic:structure', async(event, payload = {}) => service.structure(withWindow(event, payload)))
+  handleOnce('en:atomic:notes:auto-name', async(event, payload = {}) => service.autoNameNote(withWindow(event, payload)))
   handleOnce('en:atomic:models:list-local', async() => service.listLocalModels())
   handleOnce('en:atomic:models:pull', async(_event, payload = {}) => service.pullModel(payload))
 }

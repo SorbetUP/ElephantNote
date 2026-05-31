@@ -520,9 +520,22 @@ const closeExcalidraw = () => {
   excalidrawRefreshOnSave.value = false
 }
 
-const saveExcalidraw = async ({ blob, fileName, sceneBlob }) => {
-  const targetPath = excalidrawPreviewPath.value || excalidrawTargetPath.value || window.path.join(currentNoteDirectory.value || '', fileName)
-  const scenePath = excalidrawScenePath.value
+const normalizeExcalidrawBaseName = (value) => {
+  return String(value || '')
+    .replace(/\.excalidraw\.png$/i, '')
+    .replace(/\.excalidraw$/i, '')
+    .replace(/\.png$/i, '')
+    .trim() || `excalidraw-${Date.now()}`
+}
+
+const saveExcalidraw = async ({ blob, fileName, baseName, sceneBlob }) => {
+  const currentScenePath = excalidrawScenePath.value
+  const currentPreviewPath = excalidrawTargetPath.value || excalidrawPreviewPath.value
+  const targetDirectory = window.path.dirname(currentScenePath || currentPreviewPath || currentNoteDirectory.value || '')
+  const finalBaseName = normalizeExcalidrawBaseName(baseName || fileName)
+  const targetPath = window.path.join(targetDirectory, `${finalBaseName}.png`)
+  const scenePath = window.path.join(targetDirectory, `${finalBaseName}.excalidraw`)
+
   if (!targetPath || !scenePath || !blob || !sceneBlob) {
     closeExcalidraw()
     return
@@ -531,12 +544,13 @@ const saveExcalidraw = async ({ blob, fileName, sceneBlob }) => {
   try {
     const pngBuffer = new Uint8Array(await blob.arrayBuffer())
     const sceneBuffer = new Uint8Array(await sceneBlob.arrayBuffer())
-
-    // Always save both files:
-    // - scenePath: editable Excalidraw source
-    // - targetPath: PNG preview rendered inside the markdown note
     await window.fileUtils.writeFile(targetPath, pngBuffer)
     await window.fileUtils.writeFile(scenePath, sceneBuffer)
+
+    excalidrawScenePath.value = scenePath
+    excalidrawPreviewPath.value = targetPath
+    excalidrawTargetPath.value = targetPath
+    excalidrawFileName.value = window.path.basename(scenePath)
 
     if (excalidrawInsertOnSave.value) {
       bus.emit('editor-focus')

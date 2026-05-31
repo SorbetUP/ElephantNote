@@ -3,29 +3,44 @@
     <div class="en-excalidraw-overlay">
       <section class="en-excalidraw-shell">
         <header class="en-excalidraw-header">
-          <div class="en-excalidraw-title">
-            <div class="en-excalidraw-badge">Excalidraw</div>
-            <div>
-              <h2>{{ title }}</h2>
-              <p>{{ resolvedFileName }}</p>
-            </div>
+          <div class="en-excalidraw-name-wrap">
+            <input
+              v-model="editableBaseName"
+              type="text"
+              class="en-excalidraw-name-input"
+              spellcheck="false"
+              placeholder="drawing"
+              aria-label="Drawing name"
+              @pointerdown.stop
+              @mousedown.stop
+              @click.stop
+              @keydown.stop
+            >
           </div>
 
           <div class="en-excalidraw-actions">
             <button
               type="button"
               class="en-excalidraw-button secondary"
-              @click="$emit('close')"
+              aria-label="Cancel"
+              title="Cancel"
+              @pointerdown.stop
+              @mousedown.stop
+              @click.stop.prevent="handleClose"
             >
-              Close
+              ✕
             </button>
             <button
               type="button"
               class="en-excalidraw-button primary"
               :disabled="isSaving || !apiRef || !!errorMessage"
-              @click="handleSave"
+              aria-label="Save"
+              title="Save"
+              @pointerdown.stop
+              @mousedown.stop
+              @click.stop.prevent="handleSave"
             >
-              {{ isSaving ? 'Saving…' : saveLabel }}
+              {{ isSaving ? '…' : '✓' }}
             </button>
           </div>
         </header>
@@ -57,8 +72,7 @@ import {
   createInitialExcalidrawData,
   exportExcalidrawBlob,
   exportExcalidrawSceneBlob,
-  ensureExcalidrawName,
-  ensurePngName
+  ensureExcalidrawName
 } from '../../services/excalidraw'
 
 const props = defineProps({
@@ -96,10 +110,24 @@ const root = ref(null)
 const isSaving = ref(false)
 const initialData = ref(null)
 const errorMessage = ref('')
-const resolvedFileName = computed(() => props.saveMode === 'scene'
-  ? ensureExcalidrawName(props.fileName)
-  : ensurePngName(props.fileName))
-const saveLabel = computed(() => props.insertOnSave ? 'Save & insert image' : 'Save drawing')
+
+const stripKnownExtensions = (value) => {
+  return String(value || '')
+    .replace(/\.excalidraw\.png$/i, '')
+    .replace(/\.excalidraw$/i, '')
+    .replace(/\.png$/i, '')
+}
+
+const editableBaseName = ref(stripKnownExtensions(props.fileName) || 'drawing')
+const normalizedBaseName = computed(() => {
+  const cleaned = stripKnownExtensions(editableBaseName.value).trim()
+  return cleaned || 'drawing'
+})
+const resolvedFileName = computed(() => ensureExcalidrawName(normalizedBaseName.value))
+
+const handleClose = () => {
+  emit('close')
+}
 
 const renderCanvas = async () => {
   const mod = await loadExcalidrawModule()
@@ -143,8 +171,12 @@ const handleSave = async () => {
       api: apiRef.value,
       theme: props.theme
     })
-    const fileName = resolvedFileName.value
-    emit('save', { blob, fileName, sceneBlob })
+    emit('save', {
+      blob,
+      fileName: resolvedFileName.value,
+      baseName: normalizedBaseName.value,
+      sceneBlob
+    })
   } catch (error) {
     console.error('Failed to save Excalidraw:', error)
     errorMessage.value = error?.message || 'The drawing could not be saved.'
@@ -183,89 +215,99 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: var(--en-bg, #0f172a);
   color: var(--en-text, #eef2ff);
+  position: relative;
 }
 
 .en-excalidraw-header {
-  min-height: 86px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 0 26px;
-  border-bottom: 1px solid var(--en-border, #263449);
-  background: color-mix(in srgb, var(--en-surface, #111827) 92%, transparent);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
-  z-index: 2;
+  gap: 10px;
+  padding: 0 10px 0 86px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.68);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 2147483000;
+  pointer-events: auto;
+  user-select: none;
 }
 
-.en-excalidraw-title {
+.en-excalidraw-name-wrap {
   min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  flex: 1 1 auto;
 }
 
-.en-excalidraw-badge {
-  width: 46px;
-  height: 46px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  background: #6c63ff;
-  color: #fff;
-  font-size: 0;
-  font-weight: 900;
-}
-
-.en-excalidraw-badge::before {
-  content: '✎';
-  font-size: 24px;
-  line-height: 1;
-}
-
-.en-excalidraw-title h2 {
-  margin: 0;
-  font-size: 20px;
-  line-height: 1.2;
-}
-
-.en-excalidraw-title p {
-  margin: 5px 0 0;
-  color: var(--en-muted, #9ca3af);
+.en-excalidraw-name-input {
+  width: 100%;
+  height: 24px;
+  border: 0;
+  outline: none;
+  padding: 0;
+  background: transparent;
+  color: #e5e7eb;
+  font: inherit;
   font-size: 13px;
-  word-break: break-all;
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: 0;
+  pointer-events: auto;
+  user-select: text;
+}
+
+.en-excalidraw-name-input::placeholder {
+  color: #94a3b8;
 }
 
 .en-excalidraw-actions {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  pointer-events: auto;
 }
 
 .en-excalidraw-button {
-  min-width: 108px;
-  height: 42px;
-  border: 1px solid var(--en-border, #263449);
-  border-radius: 10px;
-  padding: 0 16px;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0;
   color: var(--en-text, #eef2ff);
   font: inherit;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
+  pointer-events: auto;
+  transition:
+    background 140ms ease,
+    transform 140ms ease,
+    opacity 140ms ease;
 }
 
 .en-excalidraw-button.secondary {
   background: transparent;
+  color: #cbd5e1;
 }
 
 .en-excalidraw-button.secondary:hover {
-  background: rgba(148, 163, 184, 0.14);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .en-excalidraw-button.primary {
-  border-color: #60a5fa;
-  background: #2563eb;
-  color: #fff;
+  background: transparent;
+  color: #86efac;
+}
+
+.en-excalidraw-button.primary:hover:not(:disabled),
+.en-excalidraw-button.secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .en-excalidraw-button:disabled {
@@ -277,11 +319,27 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   background: #f8f8f8;
+  padding-top: 38px;
 }
 
 .en-excalidraw-canvas :deep(.excalidraw) {
   width: 100%;
   height: 100%;
+}
+
+@media (max-width: 640px) {
+  .en-excalidraw-header {
+    height: 36px;
+    padding: 0 8px 0 76px;
+  }
+
+  .en-excalidraw-name-input {
+    font-size: 12px;
+  }
+
+  .en-excalidraw-canvas {
+    padding-top: 36px;
+  }
 }
 
 .en-excalidraw-error {

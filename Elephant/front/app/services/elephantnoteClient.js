@@ -26,7 +26,7 @@ const requireAtomicFeatureApi = () => {
     summarize: (payload = {}) => ipcRenderer.invoke('en:atomic:summarize', payload),
     structure: (payload = {}) => ipcRenderer.invoke('en:atomic:structure', payload),
     autoNameNote: (payload = {}) => ipcRenderer.invoke('en:atomic:notes:auto-name', payload),
-    listLocalModels: () => ipcRenderer.invoke('en:atomic:models:list-local'),
+    listLocalModels: (payload = {}) => ipcRenderer.invoke('en:atomic:models:list-local', payload),
     pullModel: (payload = {}) => ipcRenderer.invoke('en:atomic:models:pull', payload)
   }
 }
@@ -143,8 +143,8 @@ export const elephantnoteClient = {
     summarize: (vaultRoot, relativePath, providerConfig = {}) => requireAtomicFeatureApi().summarize({ vaultRoot, relativePath, providerConfig }),
     structure: (vaultRoot, relativePath, providerConfig = {}) => requireAtomicFeatureApi().structure({ vaultRoot, relativePath, providerConfig }),
     autoNameNote: (vaultRoot, relativePath, options = {}) => requireAtomicFeatureApi().autoNameNote({ vaultRoot, relativePath, ...options }),
-    listLocalModels: () => requireAtomicFeatureApi().listLocalModels(),
-    pullModel: (id, provider = 'ollama') => requireAtomicFeatureApi().pullModel({ id, provider })
+    listLocalModels: (vaultRoot = '') => requireAtomicFeatureApi().listLocalModels({ vaultRoot }),
+    pullModel: (id, provider = 'ollama', vaultRoot = '') => requireAtomicFeatureApi().pullModel({ id, provider, vaultRoot })
   },
   models: { getSelection: () => elephantnoteClient.call('models.selection.get'), setSelection: (selection) => elephantnoteClient.call('models.selection.set', selection), listLocal: () => elephantnoteClient.call('models.local.list'), download: (id) => elephantnoteClient.call('models.download', { id }) },
   plugins: { list: () => elephantnoteClient.call('plugins.list'), set: (payload) => elephantnoteClient.call('plugins.set', payload), run: (id, input = {}) => elephantnoteClient.call('plugins.run', { id, input }) },

@@ -228,43 +228,45 @@ onBeforeUnmount(() => {
 
 .en-excalidraw-header {
   position: absolute;
-  top: 28px;
+  top: 0;
   left: 0;
   right: 0;
-  height: 30px;
+  height: 28px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 0 10px 0 12px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  background: rgba(15, 23, 42, 0.52);
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 8px 0 86px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  background: rgba(15, 23, 42, 0.78);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 2147483000;
   pointer-events: auto;
   user-select: none;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
 
 .en-excalidraw-name-wrap {
   min-width: 0;
-  flex: 1 1 auto;
+  width: min(320px, 34vw);
+  max-width: 320px;
+  flex: 0 1 auto;
   -webkit-app-region: no-drag;
 }
 
 .en-excalidraw-name-input {
   width: 100%;
-  height: 22px;
+  height: 20px;
   border: 0;
   outline: none;
   padding: 0;
   background: transparent;
   color: #e5e7eb;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 22px;
+  line-height: 20px;
   letter-spacing: 0;
   pointer-events: auto;
   user-select: text;
@@ -276,6 +278,7 @@ onBeforeUnmount(() => {
 }
 
 .en-excalidraw-actions {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -285,15 +288,15 @@ onBeforeUnmount(() => {
 }
 
 .en-excalidraw-button {
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 5px;
   padding: 0;
   color: var(--en-text, #eef2ff);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   cursor: pointer;
   pointer-events: auto;
@@ -332,7 +335,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   background: #f8f8f8;
-  padding-top: 58px;
+  padding-top: 28px;
 }
 
 .en-excalidraw-canvas :deep(.excalidraw) {
@@ -342,9 +345,14 @@ onBeforeUnmount(() => {
 
 @media (max-width: 640px) {
   .en-excalidraw-header {
-    top: 28px;
-    height: 30px;
+    top: 0;
+    height: 28px;
     padding: 0 8px 0 10px;
+  }
+
+  .en-excalidraw-name-wrap {
+    width: min(220px, 42vw);
+    max-width: 220px;
   }
 
   .en-excalidraw-name-input {
@@ -352,7 +360,7 @@ onBeforeUnmount(() => {
   }
 
   .en-excalidraw-canvas {
-    padding-top: 58px;
+    padding-top: 28px;
   }
 }
 

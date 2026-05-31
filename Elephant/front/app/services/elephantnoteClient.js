@@ -5,6 +5,13 @@ const requireElephantNoteApi = () => {
   return window.elephantnote.api
 }
 
+const requireAtomicFeatureApi = () => {
+  if (!window.elephantnote?.atomicFeatures) {
+    throw new Error('Atomic feature bridge is not available in this renderer context.')
+  }
+  return window.elephantnote.atomicFeatures
+}
+
 export const isElephantNoteApiAvailable = () => !!window.elephantnote?.api?.call
 
 const LEGACY_CALLS = {
@@ -173,6 +180,19 @@ export const elephantnoteClient = {
   },
   atomic: {
     getCatalog: () => elephantnoteClient.call('atomic.catalog.get')
+  },
+  atomicFeatures: {
+    providers: () => requireAtomicFeatureApi().providers(),
+    overview: (vaultRoot, options = {}) => requireAtomicFeatureApi().overview({ vaultRoot, ...options }),
+    graph: (vaultRoot, options = {}) => requireAtomicFeatureApi().graph({ vaultRoot, ...options }),
+    wiki: (vaultRoot, options = {}) => requireAtomicFeatureApi().wiki({ vaultRoot, ...options }),
+    createWikiPage: (vaultRoot, record) => requireAtomicFeatureApi().createWikiPage({ vaultRoot, record }),
+    summarize: (vaultRoot, relativePath, providerConfig = {}) =>
+      requireAtomicFeatureApi().summarize({ vaultRoot, relativePath, providerConfig }),
+    structure: (vaultRoot, relativePath, providerConfig = {}) =>
+      requireAtomicFeatureApi().structure({ vaultRoot, relativePath, providerConfig }),
+    listLocalModels: () => requireAtomicFeatureApi().listLocalModels(),
+    pullModel: (id, provider = 'ollama') => requireAtomicFeatureApi().pullModel({ id, provider })
   },
   models: {
     getSelection: () => elephantnoteClient.call('models.selection.get'),

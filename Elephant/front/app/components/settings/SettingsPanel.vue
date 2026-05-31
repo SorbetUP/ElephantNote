@@ -244,7 +244,7 @@
               <header class="en-ai-header">
                 <div>
                   <h3>AI</h3>
-                  <p>Models, providers, audio, tasks and semantic search in one place.</p>
+                  <p>Models, providers, audio, tasks, agent access and semantic search in one place.</p>
                 </div>
                 <button
                   type="button"
@@ -329,42 +329,57 @@
               >
                 <div>
                   <h3>Model management</h3>
-                  <p>Pick a model per capability, scan installed Ollama models, or pull recommended models.</p>
+                  <p>Default is No model. Installable Ollama models are stored per vault in <code>.elephantnote/models</code>.</p>
                 </div>
-                <div class="en-model-slot-grid">
-                  <label
-                    v-for="purpose in modelPurposes"
-                    :key="purpose"
-                  >
-                    <span>{{ formatPurpose(purpose) }}</span>
-                    <select v-model="modelSelection[purpose]">
-                      <option value="">No model</option>
-                      <option
-                        v-for="model in getModelsForPurpose(purpose)"
-                        :key="model.id"
-                        :value="model.id"
-                      >
-                        {{ model.name }} · {{ model.provider }} · {{ model.size }}
-                      </option>
-                    </select>
-                  </label>
-                </div>
-                <div class="en-model-catalog">
-                  <article
-                    v-for="model in recommendedModels"
-                    :key="model.id"
-                  >
-                    <header>
-                      <strong>{{ model.name }}</strong>
-                      <span>{{ model.purpose }} · {{ model.size }}</span>
-                    </header>
-                    <p>{{ model.provider }}{{ model.recommended ? ' · recommended' : '' }}</p>
-                    <button
-                      type="button"
-                      @click="pullAtomicModel(model.id)"
-                    >Install</button>
-                  </article>
-                </div>
+
+                <article
+                  v-for="group in modelGroups"
+                  :key="group.id"
+                  class="en-model-category"
+                >
+                  <header>
+                    <div>
+                      <h4>{{ group.label }}</h4>
+                      <p>{{ group.description }}</p>
+                    </div>
+                  </header>
+                  <div class="en-model-slot-grid">
+                    <label
+                      v-for="purpose in group.purposes"
+                      :key="purpose"
+                    >
+                      <span>{{ formatPurpose(purpose) }}</span>
+                      <select v-model="modelSelection[purpose]">
+                        <option value="">No model</option>
+                        <option
+                          v-for="model in getModelsForPurpose(purpose)"
+                          :key="model.id"
+                          :value="model.id"
+                        >
+                          {{ model.name }} · {{ model.provider }} · {{ model.size }}
+                        </option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="en-model-catalog compact">
+                    <article
+                      v-for="model in getModelsForCategory(group.id)"
+                      :key="model.id"
+                    >
+                      <header>
+                        <strong>{{ model.name }}</strong>
+                        <span>{{ model.purpose }} · {{ model.size }}</span>
+                      </header>
+                      <p>{{ model.notes }}</p>
+                      <button
+                        type="button"
+                        :disabled="!model.pull"
+                        @click="pullAtomicModel(model.id)"
+                      >{{ model.pull ? 'Install in vault' : 'External' }}</button>
+                    </article>
+                  </div>
+                </article>
+
                 <div class="en-settings-actions-row">
                   <button
                     type="button"
@@ -373,9 +388,13 @@
                   <button
                     type="button"
                     @click="loadLocalModels"
-                  >Scan local models</button>
+                  >Scan vault models</button>
                   <span class="en-settings-message">{{ modelRuntimeMessage || modelSelectionMessage }}</span>
                 </div>
+                <p
+                  v-if="modelDir"
+                  class="en-settings-path"
+                >Vault model directory: {{ modelDir }}</p>
                 <p
                   v-if="localModels.length"
                   class="en-settings-path"
@@ -386,6 +405,29 @@
                 v-else-if="activeAiTab === 'search'"
                 class="en-ai-search"
               >
+                <div class="en-settings-section stacked">
+                  <div>
+                    <h3>Search model slot</h3>
+                    <p>Semantic search uses the Embedding / Search slot. Keep it on No model to use the current built-in indexer.</p>
+                  </div>
+                  <label>
+                    <span>Embedding model</span>
+                    <select v-model="modelSelection.embedding">
+                      <option value="">No model / built-in</option>
+                      <option
+                        v-for="model in getModelsForPurpose('embedding')"
+                        :key="model.id"
+                        :value="model.id"
+                      >{{ model.name }} · {{ model.size }}</option>
+                    </select>
+                  </label>
+                  <div class="en-settings-actions-row">
+                    <button
+                      type="button"
+                      @click="saveModelSelection"
+                    >Save search model</button>
+                  </div>
+                </div>
                 <search-settings-panel />
               </section>
 
@@ -417,7 +459,42 @@
               >
                 <div>
                   <h3>Tasks</h3>
-                  <p>Manual and scheduled AI-assisted workflows.</p>
+                  <p>Create simple task definitions now. Runtime execution is intentionally still limited.</p>
+                </div>
+                <div class="en-form-grid">
+                  <label>
+                    <span>Name</span>
+                    <input
+                      v-model.trim="newTask.name"
+                      type="text"
+                      placeholder="Auto clean inbox"
+                    >
+                  </label>
+                  <label>
+                    <span>Cadence</span>
+                    <select v-model="newTask.cadence">
+                      <option value="manual">Manual</option>
+                      <option value="on-import">On import</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                    </select>
+                  </label>
+                </div>
+                <label class="en-full-label">
+                  <span>Description / prompt</span>
+                  <textarea
+                    v-model.trim="newTask.prompt"
+                    rows="4"
+                    placeholder="Describe what the LLM should do with notes, search, tags or wiki pages."
+                  />
+                </label>
+                <div class="en-settings-actions-row">
+                  <button
+                    type="button"
+                    :disabled="!newTask.name || !newTask.prompt"
+                    @click="createTask"
+                  >Add task</button>
+                  <span class="en-settings-message">{{ taskMessage }}</span>
                 </div>
                 <div class="en-task-list">
                   <article
@@ -432,14 +509,14 @@
                         @click="toggleTask(task)"
                       >{{ task.enabled ? 'Enabled' : 'Disabled' }}</button>
                     </header>
-                    <p>{{ task.actions.join(' -> ') }}</p>
+                    <p>{{ task.description || task.prompt || task.actions.join(' -> ') }}</p>
+                    <small>{{ task.cadence }} · {{ task.actions.join(' -> ') || 'llm:prompt' }}</small>
                     <button
                       type="button"
                       @click="runTask(task)"
                     >Run now</button>
                   </article>
                 </div>
-                <span class="en-settings-message">{{ taskMessage }}</span>
               </section>
 
               <section
@@ -447,13 +524,27 @@
                 class="en-settings-section stacked"
               >
                 <div>
-                  <h3>Extension API</h3>
-                  <p>Stable entry point for future features without adding new preload bridges each time.</p>
+                  <h3>Agent and database access</h3>
+                  <p>This is the bridge for future agents such as Codex: they should access vault data through approved API actions instead of reading arbitrary files.</p>
+                </div>
+                <div class="en-api-summary">
+                  <article>
+                    <strong>Database</strong>
+                    <span>Vault-local files and indexes under <code>.elephantnote</code></span>
+                  </article>
+                  <article>
+                    <strong>Agent access</strong>
+                    <span>Search, notes, wiki, summaries, model metadata and graph actions</span>
+                  </article>
+                  <article>
+                    <strong>Safety boundary</strong>
+                    <span>Writes go through explicit API actions; direct uncontrolled DB writes are avoided.</span>
+                  </article>
                 </div>
                 <button
                   type="button"
                   @click="loadAtomicApi"
-                >Inspect API</button>
+                >Inspect available actions</button>
                 <pre v-if="atomicApiText">{{ atomicApiText }}</pre>
               </section>
             </section>
@@ -471,9 +562,11 @@ import { usePreferencesStore } from '@/store/preferences'
 import { ELEPHANTNOTE_AI_PRESETS, normalizeAiConfig } from 'common/elephantnote/aiProviders'
 import {
   ATOMIC_MODEL_CATALOG,
+  MODEL_GROUPS,
   MODEL_PURPOSES,
   PROGRAMMATIC_TASK_TEMPLATES,
   createDefaultModelSelection,
+  getModelsByCategory,
   getModelsByPurpose
 } from 'common/elephantnote/atomicWorkspace'
 import SearchSettingsPanel from '../../search/SearchSettingsPanel.vue'
@@ -484,7 +577,8 @@ const props = defineProps({
   theme: { type: String, required: true },
   sidebarWidth: { type: Number, required: true },
   vaults: { type: Array, default: () => [] },
-  activeVaultName: { type: String, default: 'No vault' }
+  activeVaultName: { type: String, default: 'No vault' },
+  activeVaultPath: { type: String, default: '' }
 })
 
 defineEmits(['close', 'update-theme', 'update-sidebar-width'])
@@ -505,13 +599,14 @@ const aiTabs = [
   { id: 'search', label: 'Search' },
   { id: 'audio', label: 'Audio' },
   { id: 'tasks', label: 'Tasks' },
-  { id: 'api', label: 'API' }
+  { id: 'api', label: 'Agent API' }
 ]
 
 const activeSection = ref('appearance')
 const activeAiTab = ref('providers')
 const vaults = computed(() => props.vaults)
 const theme = computed(() => props.theme)
+const activeVaultPath = computed(() => props.activeVaultPath)
 const preferences = usePreferencesStore()
 const sitePreviewStore = useSitePreviewStore()
 const aiPresets = Object.values(ELEPHANTNOTE_AI_PRESETS)
@@ -526,15 +621,18 @@ const isImportingSource = ref(false)
 const aiConfigMessage = ref('')
 const isSavingAiConfig = ref(false)
 const modelPurposes = MODEL_PURPOSES
-const modelCatalog = ATOMIC_MODEL_CATALOG
+const modelGroups = ref(MODEL_GROUPS)
+const modelCatalog = ref(ATOMIC_MODEL_CATALOG)
 const recommendedModels = ref([])
 const modelSelection = ref(createDefaultModelSelection())
 const modelSelectionMessage = ref('')
 const modelRuntimeMessage = ref('')
+const modelDir = ref('')
 const localModels = ref([])
 const taskTemplates = ref(PROGRAMMATIC_TASK_TEMPLATES)
 const taskMessage = ref('')
 const atomicApiText = ref('')
+const newTask = ref({ name: '', cadence: 'manual', prompt: '' })
 
 const siteStatusLabel = computed(() => {
   if (sitePreviewStore.previewUrl) return 'Preview running'
@@ -543,12 +641,8 @@ const siteStatusLabel = computed(() => {
 })
 
 const settingsStyle = computed(() => theme.value === 'dark'
-  ? {
-      '--en-bg': '#0f141d', '--en-surface': '#141a24', '--en-sidebar-bg': '#101722', '--en-soft': '#1b2432', '--en-soft-strong': '#202b3b', '--en-border': '#283244', '--en-border-strong': '#3a465a', '--en-text': '#eef3fb', '--en-muted': '#98a3b6', '--en-subtle': '#7f8aa0', '--en-primary': '#5ea1ff', '--en-card-shadow': '0 18px 44px rgba(0, 0, 0, 0.28)'
-    }
-  : {
-      '--en-bg': '#f7f9fc', '--en-surface': '#ffffff', '--en-sidebar-bg': '#edf2f7', '--en-soft': '#e9eff7', '--en-soft-strong': '#dfe7f1', '--en-border': '#c5cfdd', '--en-border-strong': '#aebacd', '--en-text': '#101828', '--en-muted': '#475467', '--en-subtle': '#667085', '--en-primary': '#2563eb', '--en-card-shadow': '0 30px 90px rgba(15, 23, 42, 0.22)'
-    })
+  ? { '--en-bg': '#0f141d', '--en-surface': '#141a24', '--en-sidebar-bg': '#101722', '--en-soft': '#1b2432', '--en-soft-strong': '#202b3b', '--en-border': '#283244', '--en-border-strong': '#3a465a', '--en-text': '#eef3fb', '--en-muted': '#98a3b6', '--en-subtle': '#7f8aa0', '--en-primary': '#5ea1ff', '--en-card-shadow': '0 18px 44px rgba(0, 0, 0, 0.28)' }
+  : { '--en-bg': '#f7f9fc', '--en-surface': '#ffffff', '--en-sidebar-bg': '#edf2f7', '--en-soft': '#e9eff7', '--en-soft-strong': '#dfe7f1', '--en-border': '#c5cfdd', '--en-border-strong': '#aebacd', '--en-text': '#101828', '--en-muted': '#475467', '--en-subtle': '#667085', '--en-primary': '#2563eb', '--en-card-shadow': '0 30px 90px rgba(15, 23, 42, 0.22)' })
 
 const setAutoSaveDelay = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'autoSaveDelay', value })
 const setShowEditorFooter = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'showEditorFooter', value })
@@ -622,8 +716,9 @@ const saveAiConfig = async () => {
 }
 
 const formatPurpose = (purpose) => purpose.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
-const getModelsForPurpose = (purpose) => getModelsByPurpose(purpose, modelCatalog)
-const selectedModelName = (purpose) => modelCatalog.find((item) => item.id === modelSelection.value[purpose])?.name || 'Not selected'
+const getModelsForPurpose = (purpose) => getModelsByPurpose(purpose, modelCatalog.value)
+const getModelsForCategory = (category) => getModelsByCategory(category, modelCatalog.value)
+const selectedModelName = (purpose) => modelCatalog.value.find((item) => item.id === modelSelection.value[purpose])?.name || 'Not selected'
 
 const saveModelSelection = async () => {
   try {
@@ -637,19 +732,21 @@ const saveModelSelection = async () => {
 
 const loadLocalModels = async () => {
   try {
-    const result = await elephantnoteClient.atomicFeatures.listLocalModels()
+    const result = await elephantnoteClient.atomicFeatures.listLocalModels(activeVaultPath.value)
     localModels.value = result.models || []
-    modelRuntimeMessage.value = result.available ? `${localModels.value.length} local model${localModels.value.length === 1 ? '' : 's'} found.` : result.error || 'Local model runtime not available.'
+    modelDir.value = result.modelDir || ''
+    modelRuntimeMessage.value = result.available ? `${localModels.value.length} vault model${localModels.value.length === 1 ? '' : 's'} found.` : result.error || 'Local model runtime not available.'
   } catch (error) {
     modelRuntimeMessage.value = error instanceof Error ? error.message : 'Unable to scan local models.'
   }
 }
 
 const pullAtomicModel = async (id) => {
-  modelRuntimeMessage.value = 'Downloading model...'
+  modelRuntimeMessage.value = 'Downloading model into vault...'
   try {
-    const result = await elephantnoteClient.atomicFeatures.pullModel(id)
+    const result = await elephantnoteClient.atomicFeatures.pullModel(id, 'ollama', activeVaultPath.value)
     modelRuntimeMessage.value = result.message || 'Model download finished.'
+    modelDir.value = result.modelDir || modelDir.value
     await loadLocalModels()
   } catch (error) {
     modelRuntimeMessage.value = error instanceof Error ? error.message : 'Model download failed.'
@@ -660,8 +757,10 @@ const loadAtomicCatalog = async () => {
   try {
     const catalog = await elephantnoteClient.atomicFeatures.providers()
     recommendedModels.value = catalog.recommendedModels || []
+    modelCatalog.value = catalog.recommendedModels?.length ? catalog.recommendedModels : ATOMIC_MODEL_CATALOG
+    modelGroups.value = catalog.modelGroups?.length ? catalog.modelGroups : MODEL_GROUPS
   } catch {
-    recommendedModels.value = modelCatalog
+    recommendedModels.value = ATOMIC_MODEL_CATALOG
   }
 }
 
@@ -681,9 +780,28 @@ const loadTasks = async () => {
   }
 }
 
+const createTask = async () => {
+  const id = newTask.value.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `task-${Date.now()}`
+  try {
+    taskTemplates.value = await elephantnoteClient.tasks.set({
+      id,
+      name: newTask.value.name,
+      description: newTask.value.prompt,
+      prompt: newTask.value.prompt,
+      cadence: newTask.value.cadence,
+      enabled: true,
+      actions: ['llm:prompt']
+    })
+    newTask.value = { name: '', cadence: 'manual', prompt: '' }
+    taskMessage.value = 'Task added.'
+  } catch (error) {
+    taskMessage.value = error instanceof Error ? error.message : 'Task creation failed.'
+  }
+}
+
 const toggleTask = async (task) => {
   try {
-    taskTemplates.value = await elephantnoteClient.tasks.set({ id: task.id, enabled: !task.enabled })
+    taskTemplates.value = await elephantnoteClient.tasks.set({ ...task, enabled: !task.enabled })
   } catch (error) {
     taskMessage.value = error instanceof Error ? error.message : 'Task update failed.'
   }
@@ -730,26 +848,32 @@ onMounted(async () => {
 .en-settings-section { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 18px; align-items: center; padding: 16px; border: 1px solid var(--en-border); border-radius: 12px; background: var(--en-bg); margin-bottom: 12px; }
 .en-settings-section.stacked { display: block; }
 .en-settings-section h3, .en-ai-header h3 { margin: 0; color: var(--en-text); font-size: 17px; }
+.en-settings-section h4 { margin: 0; color: var(--en-text); font-size: 15px; }
 .en-settings-section p, .en-ai-header p { margin: 5px 0 0; color: var(--en-muted); line-height: 1.45; }
 button { cursor: pointer; }
 .en-settings-section button, .en-settings-actions-row button, .en-theme-switch, .en-ai-provider-grid button, .en-model-catalog button, .en-task-list button, .en-ai-header button { min-height: 34px; border: 1px solid var(--en-border); border-radius: 8px; padding: 0 12px; color: var(--en-text); background: var(--en-bg); }
 button.active { background: var(--en-soft-strong); border-color: var(--en-border-strong); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
 .en-settings-range { display: flex; gap: 10px; align-items: center; }
 .en-settings-pill, .en-settings-message, .en-settings-path { color: var(--en-muted); }
 .en-form-grid, .en-model-slot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
-.en-form-grid label, .en-model-slot-grid label { display: grid; gap: 5px; color: var(--en-muted); }
-input, select { min-height: 34px; border: 1px solid var(--en-border); border-radius: 8px; padding: 0 10px; color: var(--en-text); background: var(--en-surface); }
+.en-form-grid label, .en-model-slot-grid label, .en-full-label { display: grid; gap: 5px; color: var(--en-muted); }
+input, select, textarea { min-height: 34px; border: 1px solid var(--en-border); border-radius: 8px; padding: 0 10px; color: var(--en-text); background: var(--en-surface); }
+textarea { padding: 10px; resize: vertical; }
 .en-settings-actions-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
 .en-ai-shell { display: grid; gap: 12px; }
 .en-ai-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 16px; border: 1px solid var(--en-border); border-radius: 12px; background: var(--en-bg); }
 .en-ai-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid var(--en-border); border-radius: 12px; background: var(--en-bg); }
 .en-ai-provider-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.en-model-catalog, .en-task-list, .en-audio-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
-.en-model-catalog article, .en-task-list article, .en-audio-grid article { border: 1px solid var(--en-border); border-radius: 12px; padding: 12px; background: var(--en-surface); }
+.en-model-category { border: 1px solid var(--en-border); border-radius: 12px; padding: 14px; background: var(--en-surface); margin-top: 12px; }
+.en-model-catalog, .en-task-list, .en-audio-grid, .en-api-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
+.en-model-catalog.compact { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.en-model-catalog article, .en-task-list article, .en-audio-grid article, .en-api-summary article { border: 1px solid var(--en-border); border-radius: 12px; padding: 12px; background: var(--en-bg); }
 .en-model-catalog header, .en-task-list header { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-.en-model-catalog span, .en-model-catalog p, .en-task-list p, .en-audio-grid span { color: var(--en-muted); }
+.en-model-catalog span, .en-model-catalog p, .en-task-list p, .en-task-list small, .en-audio-grid span, .en-api-summary span { color: var(--en-muted); }
 .en-icon { width: 17px; height: 17px; vertical-align: middle; }
 .en-ai-search :deep(.en-search-settings) { margin: 0; }
 pre { white-space: pre-wrap; max-height: 320px; overflow: auto; padding: 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); color: var(--en-text); }
+code { color: var(--en-primary); }
 @media (max-width: 760px) { .en-settings-grid { grid-template-columns: 1fr; } .en-settings-nav { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--en-border); } .en-settings-section { grid-template-columns: 1fr; } }
 </style>

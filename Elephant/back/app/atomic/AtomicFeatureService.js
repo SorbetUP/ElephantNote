@@ -20,7 +20,8 @@ const DEFAULT_GRAPH_OPTIONS = Object.freeze({
 })
 
 const PROVIDERS = Object.freeze([
-  { id: 'ollama', name: 'Ollama', type: 'local', defaultEndpoint: 'http://127.0.0.1:11434', chatPath: '/api/chat', embeddingPath: '/api/embeddings', supportsModelPull: true, notes: 'Local default for private notes.' },
+  { id: 'browser', name: 'Browser WebGPU/CPU', type: 'local-renderer', defaultEndpoint: 'browser://local', supportsModelPull: true, notes: 'Default local runtime. Runs in Electron renderer with Transformers.js, WebGPU when available and WebCPU/WASM fallback.' },
+  { id: 'ollama', name: 'Ollama legacy', type: 'local', defaultEndpoint: 'http://127.0.0.1:11434', chatPath: '/api/chat', embeddingPath: '/api/embeddings', supportsModelPull: false, notes: 'Legacy external runtime. Kept only for compatibility.' },
   { id: 'lm-studio', name: 'LM Studio', type: 'local', defaultEndpoint: 'http://127.0.0.1:1234/v1/chat/completions', supportsModelPull: false, notes: 'OpenAI-compatible local server from LM Studio.' },
   { id: 'openai-compatible', name: 'OpenAI-compatible API', type: 'remote-or-local', defaultEndpoint: 'https://api.openai.com/v1/chat/completions', supportsModelPull: false, notes: 'OpenRouter, OpenAI-compatible gateways, self-hosted vLLM, llama.cpp server, etc.' },
   { id: 'codex-compatible', name: 'Codex-compatible bridge', type: 'remote', defaultEndpoint: 'http://127.0.0.1:1455/v1/chat/completions', supportsModelPull: false, notes: 'Use an OpenAI-compatible bridge or endpoint.' }
@@ -541,22 +542,33 @@ export class AtomicFeatureService {
     return { oldPath: normalized, newPath: targetRelativePath, title: path.basename(targetName, '.md'), changed: apply ? changed : false, suggested: !apply, weakTitle: isWeakTitle(note) }
   }
 
-  async pullModel({ id, provider = 'ollama', vaultRoot = '' } = {}) {
-    const model = RECOMMENDED_MODELS.find((item) => item.id === id || item.pull === id) || { id, pull: id, provider }
-    if (!model.id && !model.pull) throw new Error('Model id is required.')
+  async pullModel({ id, provider = 'browser', vaultRoot = '', onProgress = null } = {}) {
+    const model = RECOMMENDED_MODELS.find((item) => item.id === id || item.browserModel === id || item.pull === id) || { id, provider }
+    if (!model.id) throw new Error('Model id is required.')
     const modelDir = vaultRoot ? await getVaultModelDir(vaultRoot) : ''
-    if ((model.provider || provider) !== 'ollama' || !model.pull) {
-      if (modelDir) {
-        await fs.writeJson(path.join(modelDir, `${slugify(model.id)}.json`), { ...model, installed: false, managedBy: 'external', updatedAt: new Date().toISOString() }, { spaces: 2 })
-      }
-      return { id: model.id, provider: model.provider || provider, downloaded: false, modelDir, message: 'This model is external or not pullable by Ollama. Metadata was saved in the vault model directory.' }
-    }
-    const env = modelDir ? { ...process.env, OLLAMA_MODELS: modelDir } : process.env
-    await this.executor('ollama', ['pull', model.pull || model.id], { timeout: 30 * 60 * 1000, env })
     if (modelDir) {
-      await fs.writeJson(path.join(modelDir, `${slugify(model.id)}.json`), { ...model, installed: true, modelDir, managedBy: 'ollama', updatedAt: new Date().toISOString() }, { spaces: 2 })
+      await fs.writeJson(path.join(modelDir, `${slugify(model.id)}.json`), {
+        ...model,
+        installed: false,
+        managedBy: 'browser-cache',
+        updatedAt: new Date().toISOString()
+      }, { spaces: 2 })
     }
-    return { id: model.id, provider: 'ollama', downloaded: true, modelDir, message: `${model.name || model.id} downloaded into the vault model directory.` }
+    onProgress?.({
+      id: model.id,
+      modelId: model.id,
+      name: model.name || model.id,
+      phase: 'ready',
+      percent: 100,
+      message: 'Browser models are loaded and cached by the Electron renderer.'
+    })
+    return {
+      id: model.id,
+      provider: model.provider || provider,
+      downloaded: false,
+      modelDir,
+      message: 'Browser model metadata saved. Load the model from Settings > AI > Models to download it into the browser cache.'
+    }
   }
 
   async listLocalModels({ vaultRoot = '' } = {}) {
@@ -571,11 +583,14 @@ export class AtomicFeatureService {
       const item = await fs.readJson(file).catch(() => null)
       if (item) vaultModelMetadata.push(item)
     }
-    try {
-      const result = await this.executor('ollama', ['list'], { env: modelDir ? { ...process.env, OLLAMA_MODELS: modelDir } : process.env })
-      return { provider: 'ollama', available: true, modelDir, vaultModels: vaultModelMetadata, raw: result.stdout || '', models: String(result.stdout || '').split(/\r?\n/).slice(1).map((line) => line.trim()).filter(Boolean).map((line) => { const [name, id, size, ...modifiedParts] = line.split(/\s{2,}/); return { name: name || '', id: id || '', size: size || '', modified: modifiedParts.join(' ') } }).filter((model) => model.name) }
-    } catch (error) {
-      return { provider: 'ollama', available: false, modelDir, vaultModels: vaultModelMetadata, models: [], raw: '', error: error?.message || 'Ollama is not available.' }
+    return {
+      provider: 'browser',
+      available: true,
+      modelDir,
+      vaultModels: vaultModelMetadata,
+      models: [],
+      raw: '',
+      message: 'Browser models are inspected in the Electron renderer.'
     }
   }
 }

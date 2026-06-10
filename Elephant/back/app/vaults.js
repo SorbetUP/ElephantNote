@@ -1,7 +1,6 @@
 import fs from 'fs-extra'
 import path from 'path'
-import Store from 'electron-store'
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { BrowserWindow, dialog, ipcMain } from 'electron'
 import {
   WORKSPACE_DIR,
   WORKSPACE_FILE,
@@ -53,94 +52,29 @@ import {
   ELEPHANTNOTE_API_ACTIONS,
   registerElephantNoteApiIpc
 } from './api'
+import { registerLegacyElephantNoteIpc } from './ipc/legacyElephantNoteIpc'
 import { updateMarkdownTitle } from './markdown'
 import { migrateWorkspace } from './workspaceMigrations'
-import { GitSyncEngine } from './sync/GitSyncEngine'
-import { ModelRuntime } from './modelRuntime'
-import {
-  ProgramRuntime,
-  normalizeProgramEnvironments
-} from './programRuntime'
-import { normalizeFeatureFlags, setFeatureFlag } from 'common/elephantnote/featureFlags'
+import { normalizeProgramEnvironments } from './programRuntime'
+import { setFeatureFlag } from 'common/elephantnote/featureFlags'
 import {
   createAiRequestBody,
   extractAiResponseText,
-  normalizeAiConfig
+  normalizeAiConfig,
+  resolveAiEndpoint
 } from 'common/elephantnote/aiProviders'
 import {
   ATOMIC_MODEL_CATALOG,
   ATOMIC_PLUGIN_MANIFESTS,
   PROGRAMMATIC_TASK_TEMPLATES,
   createDefaultModelSelection,
-  createDefaultPluginState,
-  createDefaultTaskState,
   mergePluginState,
   mergeTaskState,
   updatePluginState,
   updateTaskState
 } from 'common/elephantnote/atomicWorkspace'
-
-const store = new Store({
-  name: 'elephantnote',
-  cwd: path.join(app.getPath('appData'), 'ElephantNote'),
-  defaults: {
-    vaults: [],
-    activeVaultId: null,
-    featureFlags: normalizeFeatureFlags(),
-    aiConfig: normalizeAiConfig(),
-    atomicModelSelection: createDefaultModelSelection(),
-    atomicPluginState: createDefaultPluginState(),
-    atomicTaskState: createDefaultTaskState(),
-    googleCalendarConfig: normalizeGoogleCalendarConfig(),
-    programEnvironments: normalizeProgramEnvironments()
-  }
-})
-
-const syncEngine = new GitSyncEngine()
-const modelRuntime = new ModelRuntime()
-const programRuntime = new ProgramRuntime()
-
-const getConfig = () => ({
-  vaults: store.get('vaults') || [],
-  activeVaultId: store.get('activeVaultId') || null,
-  featureFlags: normalizeFeatureFlags(store.get('featureFlags') || {}),
-  aiConfig: normalizeAiConfig(store.get('aiConfig') || {}),
-  atomicModelSelection: {
-    ...createDefaultModelSelection(),
-    ...(store.get('atomicModelSelection') || {})
-  },
-  atomicPluginState: {
-    ...createDefaultPluginState(),
-    ...(store.get('atomicPluginState') || {})
-  },
-  atomicTaskState: {
-    ...createDefaultTaskState(),
-    ...(store.get('atomicTaskState') || {})
-  },
-  googleCalendarConfig: normalizeGoogleCalendarConfig(store.get('googleCalendarConfig') || {}),
-  programEnvironments: normalizeProgramEnvironments(store.get('programEnvironments') || {})
-})
-
-const setConfig = (config) => {
-  store.set('vaults', config.vaults)
-  store.set('activeVaultId', config.activeVaultId)
-  store.set('featureFlags', normalizeFeatureFlags(config.featureFlags || {}))
-  store.set('aiConfig', normalizeAiConfig(config.aiConfig || {}))
-  store.set('atomicModelSelection', {
-    ...createDefaultModelSelection(),
-    ...(config.atomicModelSelection || {})
-  })
-  store.set('atomicPluginState', {
-    ...createDefaultPluginState(),
-    ...(config.atomicPluginState || {})
-  })
-  store.set('atomicTaskState', {
-    ...createDefaultTaskState(),
-    ...(config.atomicTaskState || {})
-  })
-  store.set('googleCalendarConfig', normalizeGoogleCalendarConfig(config.googleCalendarConfig || {}))
-  store.set('programEnvironments', normalizeProgramEnvironments(config.programEnvironments || {}))
-}
+import { getConfig, setConfig } from './config/elephantConfigStore'
+import { modelRuntime, programRuntime, syncEngine } from './runtime/elephantRuntime'
 
 export const initializeVault = async(vaultRoot, now = new Date()) => {
   const root = path.resolve(vaultRoot)
@@ -1067,8 +1001,46 @@ const acceptWikiRecord = async({ id } = {}) => {
 
 const dismissWikiRecord = async({ id } = {}) => updateWikiRecordStatus(id, 'dismissed')
 
-const callConfiguredAi = async(messages = []) => {
-  const config = normalizeAiConfig(getConfig().aiConfig)
+const MODEL_PURPOSE_TO_SELECTION_SLOT = Object.freeze({
+  chat: 'chat',
+  rag: 'chat',
+  tagging: 'tagging',
+  naming: 'naming',
+  wiki: 'wiki',
+  summary: 'summary',
+  agent: 'agent'
+})
+
+const getSelectedModelForPurpose = (purpose = 'chat') => {
+  const selection = {
+    ...createDefaultModelSelection(),
+    ...(getConfig().atomicModelSelection || {})
+  }
+  const slot = MODEL_PURPOSE_TO_SELECTION_SLOT[purpose] || purpose
+  return String(selection[slot] || '').trim()
+}
+
+const createConfiguredAiRuntime = ({ purpose = 'chat', override = {} } = {}) => {
+  const baseConfig = normalizeAiConfig({
+    ...getConfig().aiConfig,
+    ...override
+  })
+  const selectedModel = getSelectedModelForPurpose(purpose)
+  const model = String(override.model || selectedModel || baseConfig.model || '').trim()
+  const endpoint = resolveAiEndpoint({ endpoint: override.endpoint || baseConfig.endpoint, transport: baseConfig.transport })
+  return {
+    ...baseConfig,
+    endpoint,
+    model,
+    purpose
+  }
+}
+
+const callConfiguredAi = async(messages = [], options = {}) => {
+  const config = createConfiguredAiRuntime(options)
+  if (config.transport === 'browser') {
+    throw new Error('Browser WebGPU/WebCPU models run in the Electron renderer, not in the main process. Use the browser model runtime from the UI.')
+  }
   if (!config.enabled || !config.endpoint || !config.model) {
     return ''
   }
@@ -1090,6 +1062,30 @@ const callConfiguredAi = async(messages = []) => {
     throw new Error(data?.error?.message || data?.message || `AI endpoint returned HTTP ${response.status}.`)
   }
   return extractAiResponseText(data)
+}
+
+const testConfiguredAi = async(payload = {}) => {
+  const config = createConfiguredAiRuntime({ purpose: 'chat', override: payload })
+  if (config.transport === 'browser') {
+    throw new Error('Browser WebGPU/WebCPU models run in the Electron renderer, not in the main process. Use the browser model runtime from the UI.')
+  }
+  if (!config.enabled) throw new Error('AI is disabled in ElephantNote settings.')
+  if (!config.endpoint) throw new Error('AI endpoint is missing.')
+  if (!config.model) throw new Error('AI model is missing.')
+  const startedAt = Date.now()
+  const response = await callConfiguredAi([
+    { role: 'system', content: 'You are a health-check endpoint. Reply with OK only.' },
+    { role: 'user', content: 'Return OK.' }
+  ], { purpose: 'chat', override: config })
+  return {
+    ok: true,
+    provider: config.preset,
+    transport: config.transport,
+    endpoint: config.endpoint,
+    model: config.model,
+    latencyMs: Date.now() - startedAt,
+    response: response || ''
+  }
 }
 
 const readCitedSearchResults = async({ query, limit, context }) => {
@@ -1133,7 +1129,7 @@ const chatWithRag = async({ message, limit = 6 } = {}, context = {}) => {
         role: 'user',
         content: prompt
       }
-    ])
+    ], { purpose: 'chat' })
   } catch (error) {
     answer = ''
   }
@@ -1186,7 +1182,7 @@ const autotagNote = async({ relativePath } = {}) => {
         role: 'user',
         content: markdown.slice(0, 12000)
       }
-    ])
+    ], { purpose: 'tagging' })
     tags = JSON.parse(response).map((tag) => String(tag).trim().replace(/^#/, '')).filter(Boolean)
   } catch {
     tags = extractTagsFromText(markdown)
@@ -1391,6 +1387,7 @@ const createElephantNoteMainApi = () => {
       [ELEPHANTNOTE_API_ACTIONS.MCP_TOOLS_LIST]: async() => listMcpTools(),
       [ELEPHANTNOTE_API_ACTIONS.MCP_TOOLS_CALL]: async(payload, context) => callMcpTool(payload, context),
       [ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_GET]: async() => getConfig().aiConfig,
+      [ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_TEST]: async(payload) => testConfiguredAi(payload),
       [ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_SET]: async(payload) => {
         const config = getConfig()
         config.aiConfig = normalizeAiConfig(payload)
@@ -1485,33 +1482,5 @@ export const registerElephantNoteIpc = () => {
   registerSitePreviewIpc()
   registerElephantNoteAgentIpc()
 
-  ipcMain.handle('elephantnote:getVaults', async() => api.call(ELEPHANTNOTE_API_ACTIONS.VAULTS_GET))
-  ipcMain.handle('elephantnote:selectVault', async(event) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.VAULTS_SELECT, {}, { event }))
-  ipcMain.handle('elephantnote:setActiveVault', async(_event, vaultId) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.VAULTS_SET_ACTIVE, { vaultId }))
-  ipcMain.handle('elephantnote:setVaultIcon', async(_event, payload) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.VAULTS_SET_ICON, payload))
-  ipcMain.handle('elephantnote:setVaultName', async(_event, payload) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.VAULTS_SET_NAME, payload))
-  ipcMain.handle('elephantnote:removeVault', async(_event, payload) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.VAULTS_REMOVE, payload))
-  ipcMain.handle('elephantnote:listDirectory', async(_event, relativePath = '') =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.DIRECTORY_LIST, { relativePath }))
-  ipcMain.handle('elephantnote:createNote', async(_event, payload) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.NOTES_CREATE, payload))
-  ipcMain.handle('elephantnote:createFolder', async(_event, payload) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.FOLDERS_CREATE, payload))
-  ipcMain.handle('elephantnote:attachSidebarEntry', async(_event, payload) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.SIDEBAR_ATTACH, payload))
-  ipcMain.handle('elephantnote:detachSidebarEntry', async(_event, payload) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.SIDEBAR_DETACH, payload))
-  ipcMain.handle('elephantnote:importGoogleKeep', async(event) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.IMPORT_GOOGLE_KEEP, {}, { event }))
-  ipcMain.handle('elephantnote:renameEntry', async(_event, payload) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.ENTRIES_RENAME, payload))
-  ipcMain.handle('elephantnote:moveEntry', async(_event, payload) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.ENTRIES_MOVE, payload))
-  ipcMain.handle('elephantnote:deleteEntry', async(_event, payload) =>
-    api.call(ELEPHANTNOTE_API_ACTIONS.ENTRIES_DELETE, payload))
+  registerLegacyElephantNoteIpc({ ipcMain, api })
 }

@@ -6,9 +6,16 @@ export const ELEPHANTNOTE_AI_PRESETS = Object.freeze({
     endpoint: '',
     model: ''
   },
+  browser: {
+    id: 'browser',
+    label: 'Browser WebGPU/CPU',
+    transport: 'browser',
+    endpoint: 'browser://local',
+    model: 'onnx-community/Qwen2.5-0.5B-Instruct'
+  },
   ollama: {
     id: 'ollama',
-    label: 'Ollama',
+    label: 'Ollama (legacy)',
     transport: 'ollama',
     endpoint: 'http://127.0.0.1:11434/api/chat',
     model: 'llama3.2'
@@ -29,7 +36,7 @@ export const ELEPHANTNOTE_AI_PRESETS = Object.freeze({
   }
 })
 
-const LOCALHOST_PATTERN = /^(localhost|\d{1,3}(?:\.\d{1,3}){3}|\[[^\]]+\]):\d+(?:\/.*)?$/i
+const LOCALHOST_PATTERN = /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\d{1,3}(?:\.\d{1,3}){3}|\[[^\]]+\]):\d+(?:\/.*)?$/i
 
 export const normalizeAiEndpoint = (endpoint = '') => {
   const value = String(endpoint || '').trim()
@@ -39,15 +46,29 @@ export const normalizeAiEndpoint = (endpoint = '') => {
   return value
 }
 
+export const normalizeAiEndpointForTransport = (endpoint = '', transport = 'openai-compatible') => {
+  const normalized = normalizeAiEndpoint(endpoint)
+  if (transport === 'browser') return normalized || 'browser://local'
+  if (transport !== 'ollama' || !normalized) return normalized
+  const value = normalized.replace(/\/+$/, '')
+  if (/\/api\/(chat|generate)$/i.test(value)) return value.replace(/\/api\/generate$/i, '/api/chat')
+  return `${value}/api/chat`
+}
+
+export const resolveAiEndpoint = ({ endpoint = '', transport = 'openai-compatible' } = {}) => {
+  return normalizeAiEndpointForTransport(endpoint, transport)
+}
+
 export const normalizeAiConfig = (config = {}) => {
-  const presetId = String(config.preset || config.provider || 'custom')
+  const presetId = String(config.preset || config.provider || 'browser')
   const preset = ELEPHANTNOTE_AI_PRESETS[presetId] || ELEPHANTNOTE_AI_PRESETS.custom
+  const transport = String(config.transport || preset.transport)
   return {
     enabled: config.enabled !== false,
     preset: preset.id,
     name: String(config.name || preset.label),
-    transport: String(config.transport || preset.transport),
-    endpoint: normalizeAiEndpoint(config.endpoint || preset.endpoint),
+    transport,
+    endpoint: normalizeAiEndpointForTransport(config.endpoint || preset.endpoint, transport),
     model: String(config.model || preset.model || ''),
     apiKey: String(config.apiKey || ''),
     codexLinkEnabled: config.codexLinkEnabled !== false

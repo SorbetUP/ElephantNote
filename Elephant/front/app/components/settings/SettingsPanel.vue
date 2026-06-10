@@ -269,7 +269,7 @@
               >
                 <div>
                   <h3>Provider endpoint</h3>
-                  <p>Use Ollama, LM Studio, a local OpenAI-compatible server, or a Codex-compatible bridge.</p>
+                  <p>Use the built-in browser runtime first, or keep an external OpenAI-compatible endpoint when needed.</p>
                 </div>
                 <div class="en-ai-provider-grid">
                   <button
@@ -286,7 +286,7 @@
                     <input
                       v-model.trim="aiConfig.endpoint"
                       type="text"
-                      placeholder="http://127.0.0.1:11434/api/chat"
+                      placeholder="browser://local"
                     >
                   </label>
                   <label>
@@ -300,8 +300,9 @@
                   <label>
                     <span>Transport</span>
                     <select v-model="aiConfig.transport">
+                      <option value="browser">Browser WebGPU/CPU</option>
                       <option value="openai-compatible">OpenAI compatible</option>
-                      <option value="ollama">Ollama</option>
+                      <option value="ollama">Ollama legacy</option>
                     </select>
                   </label>
                   <label>
@@ -319,6 +320,11 @@
                     :disabled="isSavingAiConfig"
                     @click="saveAiConfig"
                   >{{ isSavingAiConfig ? 'Saving...' : 'Save endpoint' }}</button>
+                  <button
+                    type="button"
+                    :disabled="isTestingAiConfig || !aiConfig.endpoint || !aiConfig.model"
+                    @click="testAiConfig"
+                  >{{ isTestingAiConfig ? 'Testing…' : 'Test model' }}</button>
                   <span class="en-settings-message">{{ aiConfigMessage }}</span>
                 </div>
               </section>
@@ -329,7 +335,21 @@
               >
                 <div>
                   <h3>Model management</h3>
-                  <p>Default is No model. Installable Ollama models are stored per vault in <code>.elephantnote/models</code>.</p>
+                  <p>ElephantNote now loads models inside Electron with Transformers.js. Downloads are handled by the browser cache and run on WebGPU when available, otherwise WebCPU/WASM.</p>
+                </div>
+
+                <div
+                  class="en-model-runtime-card"
+                  :class="{ error: !localModelRuntime.available && modelRuntimeMessage }"
+                >
+                  <div>
+                    <strong>{{ localModelRuntime.available ? 'Browser runtime ready' : 'Browser runtime not ready' }}</strong>
+                    <span>{{ modelRuntimeMessage || 'Check WebGPU/WebCPU and model dependency status.' }}</span>
+                  </div>
+                  <button
+                    type="button"
+                    @click="loadLocalModels"
+                  >Check runtime</button>
                 </div>
 
                 <article
@@ -352,7 +372,7 @@
                       <select v-model="modelSelection[purpose]">
                         <option value="">No model</option>
                         <option
-                          v-for="model in getModelsForPurpose(purpose)"
+                      v-for="model in getModelsForPurpose(purpose)"
                           :key="model.id"
                           :value="model.id"
                         >
@@ -365,17 +385,32 @@
                     <article
                       v-for="model in getModelsForCategory(group.id)"
                       :key="model.id"
+                      class="en-model-card"
+                      :class="{ installed: isModelInstalled(model), downloading: isModelDownloading(model.id), failed: getModelMessage(model.id)?.includes('Missing browser') || getModelMessage(model.id)?.includes('failed') }"
                     >
                       <header>
-                        <strong>{{ model.name }}</strong>
-                        <span>{{ model.purpose }} · {{ model.size }}</span>
+                        <div>
+                          <strong>{{ model.name }}</strong>
+                          <span>{{ model.purpose }} · {{ model.size }} · {{ model.browserModel || model.provider }}</span>
+                        </div>
+                        <small>{{ isModelInstalled(model) ? 'Loaded/cached' : model.provider === 'browser' ? 'Browser' : 'External' }}</small>
                       </header>
                       <p>{{ model.notes }}</p>
+                      <div
+                        v-if="isModelDownloading(model.id)"
+                        class="en-model-progress"
+                      >
+                        <div :style="{ width: `${getModelProgress(model.id)}%` }" />
+                      </div>
+                      <p
+                        v-if="getModelMessage(model.id)"
+                        class="en-model-message"
+                      >{{ getModelMessage(model.id) }}</p>
                       <button
                         type="button"
-                        :disabled="!model.pull"
+                        :disabled="!isModelLoadable(model) || modelDownload.active"
                         @click="pullAtomicModel(model.id)"
-                      >{{ model.pull ? 'Install in vault' : 'External' }}</button>
+                      >{{ getModelButtonLabel(model) }}</button>
                     </article>
                   </div>
                 </article>
@@ -385,20 +420,16 @@
                     type="button"
                     @click="saveModelSelection"
                   >Save model slots</button>
-                  <button
-                    type="button"
-                    @click="loadLocalModels"
-                  >Scan vault models</button>
-                  <span class="en-settings-message">{{ modelRuntimeMessage || modelSelectionMessage }}</span>
+                  <span class="en-settings-message">{{ modelSelectionMessage }}</span>
                 </div>
                 <p
                   v-if="modelDir"
                   class="en-settings-path"
-                >Vault model directory: {{ modelDir }}</p>
+                >Vault metadata directory: {{ modelDir }}</p>
                 <p
                   v-if="localModels.length"
                   class="en-settings-path"
-                >Local: {{ localModels.map((model) => model.name).join(', ') }}</p>
+                >Browser cached/loaded: {{ localModels.map((model) => model.name).join(', ') }}</p>
               </section>
 
               <section
@@ -556,14 +587,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Download, Mic, Moon, SunMedium, Volume2, X } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import { ELEPHANTNOTE_AI_PRESETS, normalizeAiConfig } from 'common/elephantnote/aiProviders'
 import {
   ATOMIC_MODEL_CATALOG,
   MODEL_GROUPS,
-  MODEL_PURPOSES,
   PROGRAMMATIC_TASK_TEMPLATES,
   createDefaultModelSelection,
   getModelsByCategory,
@@ -572,6 +602,13 @@ import {
 import SearchSettingsPanel from '../../search/SearchSettingsPanel.vue'
 import { useSitePreviewStore } from '../../sitePreview/sitePreviewStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
+import {
+  getBrowserModelRuntimeStatus,
+  listBrowserModels,
+  loadBrowserTextModel,
+  onBrowserModelRuntimeProgress,
+  testBrowserModel
+} from '../../services/browserModelRuntime'
 
 const props = defineProps({
   theme: { type: String, required: true },
@@ -606,7 +643,6 @@ const activeSection = ref('appearance')
 const activeAiTab = ref('providers')
 const vaults = computed(() => props.vaults)
 const theme = computed(() => props.theme)
-const activeVaultPath = computed(() => props.activeVaultPath)
 const preferences = usePreferencesStore()
 const sitePreviewStore = useSitePreviewStore()
 const aiPresets = Object.values(ELEPHANTNOTE_AI_PRESETS)
@@ -620,7 +656,7 @@ const isImporting = ref(false)
 const isImportingSource = ref(false)
 const aiConfigMessage = ref('')
 const isSavingAiConfig = ref(false)
-const modelPurposes = MODEL_PURPOSES
+const isTestingAiConfig = ref(false)
 const modelGroups = ref(MODEL_GROUPS)
 const modelCatalog = ref(ATOMIC_MODEL_CATALOG)
 const recommendedModels = ref([])
@@ -629,6 +665,9 @@ const modelSelectionMessage = ref('')
 const modelRuntimeMessage = ref('')
 const modelDir = ref('')
 const localModels = ref([])
+const localModelRuntime = ref({ available: false, webgpuAvailable: false, webcpuAvailable: true, transformersAvailable: false, dependencyError: '' })
+const modelDownload = ref({ active: false, modelId: '', percent: 0, phase: 'idle', message: '', error: '' })
+const modelDownloadMessages = ref({})
 const taskTemplates = ref(PROGRAMMATIC_TASK_TEMPLATES)
 const taskMessage = ref('')
 const atomicApiText = ref('')
@@ -715,10 +754,67 @@ const saveAiConfig = async () => {
   }
 }
 
+const testAiConfig = async () => {
+  isTestingAiConfig.value = true
+  aiConfigMessage.value = aiConfig.value.transport === 'browser' ? 'Testing browser model…' : 'Testing model endpoint…'
+  try {
+    if (aiConfig.value.transport === 'browser') {
+      const model = getModelById(modelSelection.value.chat) ||
+        modelCatalog.value.find((item) => item.browserModel === aiConfig.value.model && item.task === 'text-generation') ||
+        modelCatalog.value.find((item) => item.id === 'qwen25-05b-chat-browser')
+      const result = await testBrowserModel(model || { id: 'qwen25-05b-chat-browser', browserModel: aiConfig.value.model, name: aiConfig.value.model })
+      aiConfigMessage.value = `Browser model OK · ${result.model} · ${Math.round(result.latencyMs || 0)} ms · ${result.response || 'response received'}`
+    } else {
+      const result = await elephantnoteClient.ai.testConfig(aiConfig.value)
+      aiConfig.value = normalizeAiConfig(aiConfig.value)
+      aiConfigMessage.value = `Model OK · ${result.model} · ${Math.round(result.latencyMs || 0)} ms · ${result.response || 'response received'}`
+    }
+  } catch (error) {
+    aiConfigMessage.value = error instanceof Error ? error.message : 'AI endpoint test failed.'
+  } finally {
+    isTestingAiConfig.value = false
+  }
+}
+
 const formatPurpose = (purpose) => purpose.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
 const getModelsForPurpose = (purpose) => getModelsByPurpose(purpose, modelCatalog.value)
 const getModelsForCategory = (category) => getModelsByCategory(category, modelCatalog.value)
+const getModelById = (id) => modelCatalog.value.find((item) => item.id === id || item.pull === id)
 const selectedModelName = (purpose) => modelCatalog.value.find((item) => item.id === modelSelection.value[purpose])?.name || 'Not selected'
+const isModelInstalled = (model) => {
+  const expected = model?.id
+  if (!expected) return false
+  return localModels.value.some((item) => item.id === expected || item.browserModel === model.browserModel)
+}
+const isModelLoadable = (model) => model?.provider === 'browser' && model.task === 'text-generation'
+const isModelDownloading = (id) => modelDownload.value.active && modelDownload.value.modelId === id
+const getModelProgress = (id) => isModelDownloading(id) ? Math.max(4, Math.min(100, Number(modelDownload.value.percent) || 4)) : 0
+const getModelMessage = (id) => isModelDownloading(id) ? modelDownload.value.message : modelDownloadMessages.value[id]
+const getModelButtonLabel = (model) => {
+  if (!isModelLoadable(model)) return model.provider === 'browser-webllm' ? 'WebLLM later' : 'External'
+  if (isModelDownloading(model.id)) return 'Loading…'
+  if (isModelInstalled(model)) return 'Load / test again'
+  return 'Load in browser'
+}
+const handleModelPullProgress = (progress = {}) => {
+  const modelId = progress.modelId || progress.id
+  if (!modelId) return
+  const phase = progress.phase || 'running'
+  const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0))
+  const message = progress.message || progress.line || 'Downloading model…'
+  modelDownload.value = {
+    active: !['done', 'error'].includes(phase),
+    modelId,
+    percent,
+    phase,
+    message,
+    error: progress.error || ''
+  }
+  modelDownloadMessages.value = {
+    ...modelDownloadMessages.value,
+    [modelId]: progress.error || message
+  }
+}
 
 const saveModelSelection = async () => {
   try {
@@ -732,24 +828,65 @@ const saveModelSelection = async () => {
 
 const loadLocalModels = async () => {
   try {
-    const result = await elephantnoteClient.atomicFeatures.listLocalModels(activeVaultPath.value)
-    localModels.value = result.models || []
-    modelDir.value = result.modelDir || ''
-    modelRuntimeMessage.value = result.available ? `${localModels.value.length} vault model${localModels.value.length === 1 ? '' : 's'} found.` : result.error || 'Local model runtime not available.'
+    const result = await getBrowserModelRuntimeStatus()
+    localModels.value = result.models || listBrowserModels()
+    modelDir.value = 'Browser cache / IndexedDB'
+    localModelRuntime.value = {
+      available: Boolean(result.webcpuAvailable && result.transformersAvailable),
+      webgpuAvailable: Boolean(result.webgpuAvailable),
+      webcpuAvailable: Boolean(result.webcpuAvailable),
+      transformersAvailable: Boolean(result.transformersAvailable),
+      dependencyError: result.dependencyError || ''
+    }
+    if (!result.transformersAvailable) {
+      modelRuntimeMessage.value = result.dependencyError || 'Install @huggingface/transformers, then restart Electron.'
+    } else {
+      const device = result.webgpuAvailable ? 'WebGPU' : 'WebCPU/WASM'
+      modelRuntimeMessage.value = `${device} ready · ${localModels.value.length} cached/loaded model${localModels.value.length === 1 ? '' : 's'}.`
+    }
   } catch (error) {
-    modelRuntimeMessage.value = error instanceof Error ? error.message : 'Unable to scan local models.'
+    localModelRuntime.value = { available: false, webgpuAvailable: false, webcpuAvailable: true, transformersAvailable: false, dependencyError: '' }
+    modelRuntimeMessage.value = error instanceof Error ? error.message : 'Unable to inspect browser model runtime.'
   }
 }
 
 const pullAtomicModel = async (id) => {
-  modelRuntimeMessage.value = 'Downloading model into vault...'
+  if (modelDownload.value.active) return
+  const model = getModelById(id)
+  if (!isModelLoadable(model)) return
+  modelRuntimeMessage.value = `Loading ${model?.name || id} in Electron…`
+  modelDownloadMessages.value = { ...modelDownloadMessages.value, [id]: 'Preparing browser model runtime…' }
+  modelDownload.value = { active: true, modelId: id, percent: 2, phase: 'starting', message: 'Preparing browser model runtime…', error: '' }
   try {
-    const result = await elephantnoteClient.atomicFeatures.pullModel(id, 'ollama', activeVaultPath.value)
-    modelRuntimeMessage.value = result.message || 'Model download finished.'
-    modelDir.value = result.modelDir || modelDir.value
+    const result = await loadBrowserTextModel(model, { backend: model.backend || 'auto' })
+    const test = await testBrowserModel(model, { backend: result.device === 'webgpu' ? 'webgpu' : 'webcpu' })
+    const runtimeModel = result.browserModel || model?.browserModel || id
+    if (model?.purpose) {
+      modelSelection.value = {
+        ...modelSelection.value,
+        [model.purpose]: runtimeModel
+      }
+      await saveModelSelection()
+    }
+    aiConfig.value = normalizeAiConfig({
+      ...aiConfig.value,
+      enabled: true,
+      preset: 'browser',
+      transport: 'browser',
+      endpoint: 'browser://local',
+      model: runtimeModel
+    })
+    await elephantnoteClient.ai.setConfig(aiConfig.value)
+    const message = `${model.name} ready on ${result.device === 'webgpu' ? 'WebGPU' : 'WebCPU/WASM'} · ${Math.round(test.latencyMs || 0)} ms test.`
+    modelRuntimeMessage.value = message
+    modelDownload.value = { active: false, modelId: id, percent: 100, phase: 'done', message, error: '' }
+    modelDownloadMessages.value = { ...modelDownloadMessages.value, [id]: message }
     await loadLocalModels()
   } catch (error) {
-    modelRuntimeMessage.value = error instanceof Error ? error.message : 'Model download failed.'
+    const message = error instanceof Error ? error.message : 'Browser model load failed.'
+    modelRuntimeMessage.value = message
+    modelDownload.value = { active: false, modelId: id, percent: 0, phase: 'error', message, error: message }
+    modelDownloadMessages.value = { ...modelDownloadMessages.value, [id]: message }
   }
 }
 
@@ -824,10 +961,17 @@ const loadAtomicApi = async () => {
   }
 }
 
+let removeModelPullProgressListener = null
+
 onMounted(async () => {
+  removeModelPullProgressListener = onBrowserModelRuntimeProgress(handleModelPullProgress)
   try { featureFlags.value = await elephantnoteClient.features.get() } catch {}
   try { aiConfig.value = normalizeAiConfig(await elephantnoteClient.ai.getConfig()) } catch {}
   await Promise.allSettled([loadAtomicCatalog(), loadModelSelection(), loadTasks(), loadLocalModels()])
+})
+
+onUnmounted(() => {
+  removeModelPullProgressListener?.()
 })
 </script>
 
@@ -871,6 +1015,19 @@ textarea { padding: 10px; resize: vertical; }
 .en-model-catalog article, .en-task-list article, .en-audio-grid article, .en-api-summary article { border: 1px solid var(--en-border); border-radius: 12px; padding: 12px; background: var(--en-bg); }
 .en-model-catalog header, .en-task-list header { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 .en-model-catalog span, .en-model-catalog p, .en-task-list p, .en-task-list small, .en-audio-grid span, .en-api-summary span { color: var(--en-muted); }
+.en-model-runtime-card { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-top: 12px; padding: 12px; border: 1px solid var(--en-border); border-radius: 12px; background: var(--en-surface); }
+.en-model-runtime-card.error { border-color: color-mix(in srgb, #ef4444 40%, var(--en-border)); background: color-mix(in srgb, #ef4444 8%, var(--en-bg)); }
+.en-model-runtime-card div { display: grid; gap: 3px; min-width: 0; }
+.en-model-runtime-card strong { color: var(--en-text); }
+.en-model-runtime-card span { color: var(--en-muted); overflow-wrap: anywhere; }
+.en-model-card { display: grid; gap: 10px; }
+.en-model-card.installed { border-color: color-mix(in srgb, var(--en-primary) 48%, var(--en-border)); }
+.en-model-card.failed { border-color: color-mix(in srgb, #ef4444 48%, var(--en-border)); }
+.en-model-card header div { display: grid; gap: 4px; min-width: 0; }
+.en-model-card small { flex: 0 0 auto; padding: 4px 8px; border: 1px solid var(--en-border); border-radius: 999px; color: var(--en-muted); background: var(--en-surface); }
+.en-model-progress { height: 8px; overflow: hidden; border-radius: 999px; background: var(--en-soft-strong); }
+.en-model-progress div { height: 100%; min-width: 4%; border-radius: inherit; background: var(--en-primary); transition: width 180ms ease; }
+.en-model-message { max-height: 76px; overflow: auto; padding: 8px; border-radius: 8px; background: var(--en-soft); overflow-wrap: anywhere; font-size: 12px; }
 .en-icon { width: 17px; height: 17px; vertical-align: middle; }
 .en-ai-search :deep(.en-search-settings) { margin: 0; }
 pre { white-space: pre-wrap; max-height: 320px; overflow: auto; padding: 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); color: var(--en-text); }

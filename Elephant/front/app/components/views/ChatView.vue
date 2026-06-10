@@ -3,6 +3,10 @@
     <header class="en-chat-header">
       <h1>Chat</h1>
       <p>Grounded answers from the active vault with local note citations.</p>
+      <p
+        v-if="runtimeMessage"
+        class="en-chat-runtime"
+      >{{ runtimeMessage }}</p>
     </header>
 
     <div class="en-chat-log">
@@ -48,20 +52,77 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  ATOMIC_MODEL_CATALOG,
+  createDefaultModelSelection
+} from 'common/elephantnote/atomicWorkspace'
 import { useVaultStore } from '../../stores/vaultStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
+import {
+  generateBrowserChatCompletion,
+  getDefaultBrowserChatModelId,
+  onBrowserModelRuntimeProgress
+} from '../../services/browserModelRuntime'
 
 const store = useVaultStore()
 const draft = ref('')
 const isSending = ref(false)
+const runtimeMessage = ref('')
 const messages = ref([])
+let removeProgressListener = null
 
 const pushMessage = (message) => {
   messages.value.push({
     id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     ...message
   })
+}
+
+const readSavedSelection = async () => {
+  try {
+    return { ...createDefaultModelSelection(), ...(await elephantnoteClient.models.getSelection()) }
+  } catch {
+    try {
+      return { ...createDefaultModelSelection(), ...JSON.parse(window.localStorage.getItem('elephantnote:atomicModelSelection') || '{}') }
+    } catch {
+      return createDefaultModelSelection()
+    }
+  }
+}
+
+const resolveChatModel = async () => {
+  const selection = await readSavedSelection()
+  const selectedId = selection.chat || selection.summary || getDefaultBrowserChatModelId()
+  return ATOMIC_MODEL_CATALOG.find((model) => model.id === selectedId) ||
+    ATOMIC_MODEL_CATALOG.find((model) => model.id === getDefaultBrowserChatModelId())
+}
+
+const searchCitations = async (question) => {
+  const results = await elephantnoteClient.search.query({ query: question, mode: 'smart', limit: 8 })
+  return (results || []).map((result, index) => ({
+    index: index + 1,
+    title: result.title || result.relativePath,
+    path: result.relativePath,
+    score: result.score || 0,
+    snippet: result.snippets?.[0]?.text || result.relativePath
+  }))
+}
+
+const buildRagMessages = (question, citations) => {
+  const context = citations.length
+    ? citations.map((citation) => `[${citation.index}] ${citation.title} (${citation.path})\n${citation.snippet}`).join('\n\n')
+    : 'No local notes matched.'
+  return [
+    {
+      role: 'system',
+      content: 'You are ElephantNote, a private local notes assistant. Answer from the provided local citations. Be concise. Include citation markers like [1] when useful. Do not invent note content.'
+    },
+    {
+      role: 'user',
+      content: `Question: ${question}\n\nLocal notes:\n${context}`
+    }
+  ]
 }
 
 const send = async () => {
@@ -71,21 +132,43 @@ const send = async () => {
   pushMessage({ role: 'user', content: question })
   isSending.value = true
   try {
-    const response = await elephantnoteClient.rag.chat(question, 8)
+    runtimeMessage.value = 'Searching notes…'
+    const citations = await searchCitations(question)
+    const model = await resolveChatModel()
+    runtimeMessage.value = `Loading ${model?.name || 'browser model'}…`
+    const answer = await generateBrowserChatCompletion({
+      model,
+      messages: buildRagMessages(question, citations),
+      backend: model?.backend || 'auto',
+      maxNewTokens: 360,
+      temperature: 0.2
+    })
+    runtimeMessage.value = `Answered with ${model?.name || 'browser model'}.`
     pushMessage({
       role: 'assistant',
-      content: response.answer,
-      citations: response.citations || []
+      content: answer || (citations.length ? `I found ${citations.length} matching notes.` : 'I did not find matching local notes.'),
+      citations
     })
   } catch (error) {
+    runtimeMessage.value = error instanceof Error ? error.message : 'Browser model failed.'
     pushMessage({
       role: 'assistant',
-      content: error instanceof Error ? error.message : 'Unable to answer.'
+      content: runtimeMessage.value
     })
   } finally {
     isSending.value = false
   }
 }
+
+onMounted(() => {
+  removeProgressListener = onBrowserModelRuntimeProgress((progress) => {
+    if (progress.message) runtimeMessage.value = progress.message
+  })
+})
+
+onBeforeUnmount(() => {
+  removeProgressListener?.()
+})
 </script>
 
 <style scoped>
@@ -113,6 +196,11 @@ const send = async () => {
 .en-chat-header p {
   margin-top: 6px;
   color: var(--en-muted);
+}
+
+.en-chat-runtime {
+  overflow-wrap: anywhere;
+  font-size: 12px;
 }
 
 .en-chat-log {

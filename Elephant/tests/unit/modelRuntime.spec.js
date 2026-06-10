@@ -1,38 +1,42 @@
 /* @vitest-environment node */
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { ModelRuntime } from 'main_renderer/elephantnote/modelRuntime'
 
 describe('ModelRuntime', () => {
-  it('parses local Ollama models', async() => {
-    const runtime = new ModelRuntime({
-      executor: vi.fn(async() => ({
-        stdout: 'NAME            ID              SIZE      MODIFIED\nllama3.2:latest  abc123          2.0 GB    1 hour ago\n'
-      }))
-    })
+  it('reports browser runtime availability without probing Ollama', async() => {
+    const runtime = new ModelRuntime()
 
     await expect(runtime.listLocalModels()).resolves.toMatchObject({
+      provider: 'browser',
       available: true,
-      models: [
-        {
-          name: 'llama3.2:latest',
-          id: 'abc123',
-          size: '2.0 GB'
-        }
-      ]
+      models: []
     })
   })
 
-  it('reports non-Ollama model downloads as manual', async() => {
+  it('treats browser model downloads as renderer-managed metadata', async() => {
     const runtime = new ModelRuntime()
 
     await expect(runtime.downloadModel({
-      id: 'bge-m3',
-      name: 'BGE-M3',
-      provider: 'local'
+      id: 'qwen25-05b-chat-browser',
+      name: 'Qwen2.5 0.5B Browser Chat',
+      provider: 'browser'
     })).resolves.toMatchObject({
       downloaded: false,
-      provider: 'local'
+      provider: 'browser'
+    })
+  })
+
+  it('keeps external downloads manual', async() => {
+    const runtime = new ModelRuntime()
+
+    await expect(runtime.downloadModel({
+      id: 'codex-compatible',
+      name: 'Codex-compatible Agent',
+      provider: 'openai-compatible'
+    })).resolves.toMatchObject({
+      downloaded: false,
+      provider: 'openai-compatible'
     })
   })
 })

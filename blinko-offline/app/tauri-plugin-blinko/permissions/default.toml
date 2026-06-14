@@ -1,9 +1,0 @@
-[default]
-description = "Default permissions for the plugin"
-permissions = [
-  "allow-setcolor",
-  "allow-open-app-settings",
-  "allow-present-share-sheet",
-  "allow-get-pending-share-payload",
-  "allow-clear-pending-share-payload",
-]

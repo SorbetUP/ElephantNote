@@ -1,0 +1,9 @@
+node_modules
+dist
+out
+.git
+.DS_Store
+*.log
+test-results
+playwright-report
+android/.gradle

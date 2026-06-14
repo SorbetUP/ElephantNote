@@ -86,7 +86,7 @@ export default [
 
   // 3c. Test file globals
   {
-    files: ['test/**/*.js'],
+    files: ['test/**/*.js', 'Elephant/tests/**/*.js'],
     languageOptions: {
       globals: { ...globals.vitest }
     }

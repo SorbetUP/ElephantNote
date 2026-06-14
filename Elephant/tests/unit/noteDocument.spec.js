@@ -7,6 +7,9 @@ import {
   renameDocumentTitle,
   toEditorMarkdown
 } from 'elephant-front/utils/noteDocument'
+import {
+  toEditorMarkdown as toPortableEditorMarkdown
+} from 'common/elephantnote/markdownDocument'
 
 const documentMarkdown = [
   '---',
@@ -25,6 +28,7 @@ const documentMarkdown = [
 describe('ElephantNote noteDocument', () => {
   it('keeps frontmatter out of the editor markdown', () => {
     expect(toEditorMarkdown(documentMarkdown)).toBe('Body text')
+    expect(toPortableEditorMarkdown(documentMarkdown)).toBe('Body text')
   })
 
   it('rehydrates editor markdown before saving', () => {

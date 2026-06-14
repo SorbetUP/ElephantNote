@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ElephantNote Web</title>
+  <style>
+    :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; background: #f7f7f4; color: #20211f; }
+    main { max-width: 920px; margin: 0 auto; padding: 32px 18px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+    h1 { font-size: 28px; margin: 0; }
+    button { border: 1px solid #2d6356; background: #2d6356; color: white; border-radius: 6px; padding: 10px 14px; font: inherit; cursor: pointer; }
+    input, textarea { width: 100%; box-sizing: border-box; border: 1px solid #c9c8c0; border-radius: 6px; padding: 10px; font: inherit; background: white; color: #20211f; }
+    textarea { min-height: 120px; resize: vertical; }
+    form { display: grid; gap: 10px; margin-bottom: 22px; }
+    .status, .note { border: 1px solid #deddd5; border-radius: 8px; background: white; padding: 14px; }
+    .status { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 18px; }
+    .label { color: #696a63; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .value { font-weight: 650; overflow-wrap: anywhere; }
+    .notes { display: grid; gap: 10px; }
+    .note { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .path { color: #696a63; font-size: 13px; overflow-wrap: anywhere; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #171817; color: #ededeb; }
+      input, textarea, .status, .note { background: #20211f; color: #ededeb; border-color: #383a35; }
+      .label, .path { color: #a9aaa3; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>ElephantNote</h1>
+      <button id="sync">Sync</button>
+    </header>
+    <section class="status" id="status"></section>
+    <form id="create">
+      <input id="title" placeholder="Title" autocomplete="off">
+      <textarea id="body" placeholder="Markdown note"></textarea>
+      <button type="submit">Create note</button>
+    </form>
+    <section class="notes" id="notes"></section>
+  </main>
+  <script>
+    const statusEl = document.querySelector('#status')
+    const notesEl = document.querySelector('#notes')
+    const request = (url, options = {}) => fetch(url, {
+      headers: { 'content-type': 'application/json' },
+      ...options,
+      body: options.body ? JSON.stringify(options.body) : undefined
+    }).then((response) => response.json())
+
+    const renderStatus = (status) => {
+      statusEl.innerHTML = ['deviceId', 'folderId', 'branch', 'ahead', 'behind', 'dirty', 'queued']
+        .map((key) => `<div><div class="label">${key}</div><div class="value">${status[key] ?? ''}</div></div>`)
+        .join('')
+    }
+
+    const refresh = async() => {
+      renderStatus(await request('/api/sync/status'))
+      const notes = await request('/api/notes')
+      notesEl.innerHTML = notes.length ? notes.map((note) => `
+        <article class="note">
+          <div><strong>${note.title}</strong><div class="path">${note.path}</div></div>
+          <div class="path">${new Date(note.updatedAt).toLocaleString()}</div>
+        </article>
+      `).join('') : '<p class="path">No notes yet.</p>'
+    }
+
+    document.querySelector('#create').addEventListener('submit', async(event) => {
+      event.preventDefault()
+      await request('/api/notes', { method: 'POST', body: { title: title.value, body: body.value } })
+      event.target.reset()
+      await refresh()
+    })
+    document.querySelector('#sync').addEventListener('click', async() => {
+      renderStatus(await request('/api/sync/run', { method: 'POST' }))
+      await refresh()
+    })
+    refresh()
+  </script>
+</body>
+</html>

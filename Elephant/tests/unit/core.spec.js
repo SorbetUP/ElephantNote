@@ -6,6 +6,10 @@ import {
   parseMarkdownMeta,
   resolveInsideVault
 } from 'main_renderer/elephantnote/core'
+import {
+  normalizeRelativePath,
+  normalizeWorkspaceSidebar
+} from 'common/elephantnote/workspace'
 
 describe('ElephantNote core', () => {
   it('creates the default workspace sidebar', () => {
@@ -75,6 +79,41 @@ Useful body text.
 
     expect(() => resolveInsideVault(root, '../outside.md')).not.toThrow()
     expect(resolveInsideVault(root, '../outside.md')).toBe(path.join(root, 'outside.md'))
+  })
+
+  it('normalizes workspace paths and legacy nested sidebar structures without platform APIs', () => {
+    expect(normalizeRelativePath('\\Inbox/../Ideas//Note.md')).toBe('Inbox/Ideas/Note.md')
+
+    const workspace = normalizeWorkspaceSidebar({
+      version: 1,
+      sidebar: [
+        {
+          id: 'legacy',
+          title: 'Legacy',
+          items: [
+            { type: 'note', path: 'Folder/Note.md' },
+            { type: 'folder', path: 'Folder' }
+          ]
+        }
+      ]
+    })
+
+    expect(workspace.sidebar).toEqual([
+      {
+        id: 'note-folder-note-md',
+        title: 'Note',
+        type: 'note',
+        path: 'Folder/Note.md',
+        collapsed: false
+      },
+      {
+        id: 'folder-folder',
+        title: 'Folder',
+        type: 'folder',
+        path: 'Folder',
+        collapsed: false
+      }
+    ])
   })
 
   it('generates the next available note or folder name', () => {

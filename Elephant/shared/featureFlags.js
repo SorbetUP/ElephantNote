@@ -1,5 +1,4 @@
 export const ELEPHANTNOTE_FEATURE_FLAGS = Object.freeze({
-  ai: true,
   askAi: true,
   sitePreview: true,
   gitSync: false,

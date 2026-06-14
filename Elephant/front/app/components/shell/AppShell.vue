@@ -6,7 +6,11 @@
   <div
     v-else
     class="en-shell"
-    :class="[`en-theme-${theme}`, { 'en-pinned-card-halo': preferences.pinnedCardHalo }]"
+    :class="[
+      `en-theme-${themeMode}`,
+      `en-theme-${themeClassId}`,
+      { 'en-pinned-card-halo': preferences.pinnedCardHalo }
+    ]"
     :style="shellStyle"
   >
     <top-vault-bar :sidebar-visible="sidebarVisible" />
@@ -57,6 +61,12 @@ import { usePreferencesStore } from '@/store/preferences'
 import { useEditorStore } from '@/store/editor'
 import { useSearchStore } from '../../stores/searchStore'
 import { useCanvasStore } from '../../stores/canvasStore'
+import {
+  ELEPHANTNOTE_THEME_STORAGE_KEY,
+  getThemeMode,
+  getThemeTokens,
+  normalizeThemeId
+} from 'common/elephantnote/appearance'
 import EmptyVaultPicker from './EmptyVaultPicker.vue'
 import TopVaultBar from './TopVaultBar.vue'
 import IconRail from '../navigation/IconRail.vue'
@@ -73,82 +83,13 @@ const searchStore = useSearchStore()
 const navigationStore = useNavigationStore()
 const canvasStore = useCanvasStore()
 const isSettingsOpen = ref(false)
-const theme = ref(window.localStorage.getItem('elephantnote:theme') || 'light')
+const theme = ref(normalizeThemeId(window.localStorage.getItem(ELEPHANTNOTE_THEME_STORAGE_KEY)))
 const sidebarWidth = ref(232)
 const sidebarVisible = ref(true)
 
-const THEME_TOKENS = {
-  dark: {
-    '--en-bg': '#0f141d',
-    '--en-surface': '#141a24',
-    '--en-sidebar-bg': '#101722',
-    '--en-soft': '#1b2432',
-    '--en-soft-strong': '#202b3b',
-    '--en-border': '#283244',
-    '--en-border-strong': '#3a465a',
-    '--en-text': '#eef3fb',
-    '--en-muted': '#98a3b6',
-    '--en-subtle': '#7f8aa0',
-    '--en-primary': '#5ea1ff',
-    '--en-danger': '#ff6b7a',
-    '--en-card-shadow': '0 18px 44px rgba(0, 0, 0, 0.28)',
-    '--themeColor': '#5ea1ff',
-    '--selectionColor': 'rgba(94, 161, 255, 0.24)',
-    '--deleteColor': '#ff6b7a',
-    '--itemBgColor': '#1b2432',
-    '--floatBgColor': '#141a24',
-    '--floatHoverColor': '#202b3b',
-    '--floatBorderColor': '#3a465a',
-    '--floatShadow': '0 18px 44px rgba(0, 0, 0, 0.36)',
-    '--editorBgColor': '#0f141d',
-    '--editorColor': 'rgba(238, 243, 251, 0.88)',
-    '--editorColor80': 'rgba(238, 243, 251, 0.8)',
-    '--editorColor60': 'rgba(238, 243, 251, 0.62)',
-    '--editorColor50': 'rgba(238, 243, 251, 0.52)',
-    '--editorColor40': 'rgba(238, 243, 251, 0.42)',
-    '--editorColor30': 'rgba(238, 243, 251, 0.32)',
-    '--editorColor10': 'rgba(238, 243, 251, 0.12)',
-    '--editorColor04': 'rgba(238, 243, 251, 0.05)',
-    '--iconColor': '#98a3b6',
-    '--codeBlockBgColor': '#141a24'
-  },
-  light: {
-    '--en-bg': '#f7f9fc',
-    '--en-surface': '#ffffff',
-    '--en-sidebar-bg': '#edf2f7',
-    '--en-soft': '#e9eff7',
-    '--en-soft-strong': '#dfe7f1',
-    '--en-border': '#c5cfdd',
-    '--en-border-strong': '#aebacd',
-    '--en-text': '#101828',
-    '--en-muted': '#475467',
-    '--en-subtle': '#667085',
-    '--en-primary': '#2563eb',
-    '--en-danger': '#dc2626',
-    '--en-card-shadow': '0 30px 90px rgba(15, 23, 42, 0.16)',
-    '--themeColor': '#2563eb',
-    '--selectionColor': 'rgba(37, 99, 235, 0.16)',
-    '--deleteColor': '#dc2626',
-    '--itemBgColor': '#e9eff7',
-    '--floatBgColor': '#ffffff',
-    '--floatHoverColor': '#e9eff7',
-    '--floatBorderColor': '#c5cfdd',
-    '--floatShadow': '0 18px 44px rgba(15, 23, 42, 0.16)',
-    '--editorBgColor': '#f7f9fc',
-    '--editorColor': 'rgba(16, 24, 40, 0.88)',
-    '--editorColor80': 'rgba(16, 24, 40, 0.8)',
-    '--editorColor60': 'rgba(16, 24, 40, 0.62)',
-    '--editorColor50': 'rgba(16, 24, 40, 0.52)',
-    '--editorColor40': 'rgba(16, 24, 40, 0.42)',
-    '--editorColor30': 'rgba(16, 24, 40, 0.32)',
-    '--editorColor10': 'rgba(16, 24, 40, 0.12)',
-    '--editorColor04': 'rgba(16, 24, 40, 0.05)',
-    '--iconColor': '#667085',
-    '--codeBlockBgColor': '#e9eff7'
-  }
-}
-
-const activeThemeTokens = computed(() => THEME_TOKENS[theme.value] || THEME_TOKENS.light)
+const activeThemeTokens = computed(() => getThemeTokens(theme.value))
+const themeMode = computed(() => getThemeMode(theme.value))
+const themeClassId = computed(() => theme.value.replace(/[^a-z0-9-]/gi, '-'))
 const shellStyle = computed(() => ({
   ...activeThemeTokens.value,
   '--en-sidebar-width': `${sidebarWidth.value}px`
@@ -175,14 +116,14 @@ const toggleSidebar = () => {
 }
 
 const setTheme = (value) => {
-  const nextTheme = value === 'dark' ? 'dark' : 'light'
+  const nextTheme = normalizeThemeId(value)
   theme.value = nextTheme
-  window.localStorage.setItem('elephantnote:theme', nextTheme)
+  window.localStorage.setItem(ELEPHANTNOTE_THEME_STORAGE_KEY, nextTheme)
   applyThemeVariables()
 }
 
 watch(theme, (mode) => {
-  canvasStore.setAppMode(mode)
+  canvasStore.setAppMode(getThemeMode(mode))
 }, { immediate: true })
 
 provide('elephantnoteTheme', theme)

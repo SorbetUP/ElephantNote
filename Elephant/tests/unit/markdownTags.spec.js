@@ -5,6 +5,9 @@ import {
   renameMarkdownTag,
   updateMarkdownTags
 } from 'elephant-front/utils/markdownTags'
+import {
+  parseMarkdownTags as parsePortableMarkdownTags
+} from 'common/elephantnote/markdownDocument'
 
 describe('markdownTags', () => {
   const baseMarkdown = `---
@@ -22,6 +25,7 @@ Body text.
 
   it('parses tags from frontmatter', () => {
     expect(parseMarkdownTags(baseMarkdown)).toEqual(['getting-started', 'draft'])
+    expect(parsePortableMarkdownTags(baseMarkdown)).toEqual(['getting-started', 'draft'])
   })
 
   it('creates and updates the tags list', () => {

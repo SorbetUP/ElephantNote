@@ -1,0 +1,3 @@
+module ElephantNoteMobile {
+    header "/Users/sorbet/Desktop/Dev/c-editor/ios/.build/arm64-apple-macosx/debug/ElephantNoteMobile.build/include/ElephantNoteMobile-Swift.h"
+}

@@ -49,11 +49,11 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     error: '',
     queryLimit: clampQueryLimit(loadSearchPreference('queryLimit', 20)),
     defaultMode: loadSearchPreference('defaultMode', 'exact'),
-    visualizationMode: loadSearchPreference('visualizationMode', 'space'),
-    graphDensity: Number(loadSearchPreference('graphDensity', 4)) || 4,
-    showVisualizationLabels: loadSearchPreference('showVisualizationLabels', 'true') !== 'false',
-    showFolderClusters: loadSearchPreference('showFolderClusters', 'true') !== 'false',
-    autoRefreshInspection: loadSearchPreference('autoRefreshInspection', 'true') !== 'false',
+    visualizationMode: loadSearchPreference('visualizationMode', 'list'),
+    graphDensity: Number(loadSearchPreference('graphDensity', 1)) || 1,
+    showVisualizationLabels: false,
+    showFolderClusters: false,
+    autoRefreshInspection: false,
     polling: false
   }),
 
@@ -109,18 +109,14 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     },
 
     async inspect() {
-      try {
-        await this.ensureActiveVault()
-        this.indexInspection = await elephantnoteClient.search.inspect()
-      } catch (error) {
-        this.indexInspection = {
-          indexPath: '',
-          documents: [],
-          folders: [],
-          semanticLinks: [],
-          generatedAt: '',
-          error: error?.message || 'Unable to inspect search index.'
-        }
+      // Keep this method for API compatibility, but make it intentionally
+      // lightweight: no vault scan, no generated graph edges.
+      this.indexInspection = {
+        indexPath: '',
+        documents: [],
+        folders: [],
+        semanticLinks: [],
+        generatedAt: new Date().toISOString()
       }
       return this.indexInspection
     },
@@ -209,7 +205,6 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
         for (let attempt = 0; attempt < 240; attempt += 1) {
           await new Promise((resolve) => window.setTimeout(resolve, 1000))
           await this.refreshStatus()
-          await this.inspect()
           if (this.status.status !== 'indexing') break
         }
       } finally {

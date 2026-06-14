@@ -98,7 +98,7 @@
                   {{ vaultInitial(vault) }}
                 </button>
                 <button
-                  v-for="icon in VAULT_ICON_OPTIONS"
+                  v-for="icon in vaultIconOptions"
                   :key="icon.name"
                   class="en-vault-icon-choice"
                   :class="{ active: normalizeVaultIcon(vault.icon) === icon.name }"
@@ -193,7 +193,7 @@
 
     <div class="en-rail-bottom">
       <button
-        v-if="featureFlags.ai && featureFlags.askAi"
+        v-if="featureFlags.askAi"
         class="en-rail-icon"
         type="button"
         title="Chat"
@@ -239,27 +239,36 @@ import {
 } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
+import {
+  VAULT_ICON_OPTIONS,
+  normalizeVaultIcon
+} from 'common/elephantnote/appearance'
 
 const emit = defineEmits(['open-settings', 'search', 'toggle-sidebar'])
 const store = useVaultStore()
 
-const featureFlags = ref({ ai: true, askAi: true })
+const featureFlags = ref({ askAi: true })
 const editingVaultId = ref('')
 
-const VAULT_ICON_OPTIONS = [
-  { name: 'home', label: 'Home', component: Home },
-  { name: 'file-text', label: 'Files', component: FileText },
-  { name: 'database', label: 'Database', component: Database },
-  { name: 'graduation-cap', label: 'Learning', component: GraduationCap },
-  { name: 'landmark', label: 'Archive', component: Landmark },
-  { name: 'rocket', label: 'Project', component: Rocket },
-  { name: 'star', label: 'Favorite', component: Star },
-  { name: 'terminal', label: 'Code', component: Terminal },
-  { name: 'workflow', label: 'Workflow', component: Workflow }
-]
+const VAULT_ICON_COMPONENTS = {
+  Database,
+  FileText,
+  GraduationCap,
+  Home,
+  Landmark,
+  Rocket,
+  Star,
+  Terminal,
+  Workflow
+}
 
-const VAULT_ICON_COMPONENTS = Object.fromEntries(
-  VAULT_ICON_OPTIONS.map((option) => [option.name, option.component])
+const vaultIconOptions = VAULT_ICON_OPTIONS.map((option) => ({
+  ...option,
+  component: VAULT_ICON_COMPONENTS[option.lucide]
+})).filter((option) => option.component)
+
+const vaultIconComponentsByName = Object.fromEntries(
+  vaultIconOptions.map((option) => [option.name, option.component])
 )
 
 const isMac = navigator.platform
@@ -268,13 +277,7 @@ const isMac = navigator.platform
 
 const showVaultMenu = ref(false)
 
-const normalizeVaultIcon = (icon = '') => {
-  const normalized = String(icon || '').trim()
-  if (normalized === 'book') return 'file-text'
-  return normalized
-}
-
-const getVaultIconComponent = (vault) => VAULT_ICON_COMPONENTS[normalizeVaultIcon(vault?.icon)] || null
+const getVaultIconComponent = (vault) => vaultIconComponentsByName[normalizeVaultIcon(vault?.icon)] || null
 
 const activeVaultIconComponent = computed(() => getVaultIconComponent(store.activeVault))
 
@@ -328,7 +331,7 @@ onMounted(async () => {
   try {
     featureFlags.value = await elephantnoteClient.features.get()
   } catch {
-    featureFlags.value = { ai: true, askAi: true }
+    featureFlags.value = { askAi: true }
   }
   window.addEventListener('elephantnote:feature-flags-changed', handleFeatureFlagsChanged)
 })

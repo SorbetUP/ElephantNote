@@ -19,29 +19,43 @@ describe('ElephantNote AI providers', () => {
     expect(resolveAiEndpoint({ transport: 'ollama', endpoint: '127.0.0.1:11434/api/chat' })).toBe('http://127.0.0.1:11434/api/chat')
   })
 
-  it('uses the browser preset and browser transport by default', () => {
+  it('uses the node-llama-cpp preset and local transport by default', () => {
     expect(normalizeAiConfig({})).toMatchObject({
-      preset: 'browser',
-      transport: 'browser',
-      endpoint: ELEPHANTNOTE_AI_PRESETS.browser.endpoint
+      preset: 'nodeLlamaCpp',
+      transport: 'node-llama-cpp',
+      endpoint: ELEPHANTNOTE_AI_PRESETS.nodeLlamaCpp.endpoint
     })
-    expect(resolveAiEndpoint({ transport: 'browser', endpoint: '' })).toBe('browser://local')
+    expect(resolveAiEndpoint({ transport: 'node-llama-cpp', endpoint: '' })).toBe('')
   })
 
-  it('normalizes known local presets', () => {
-    expect(normalizeAiConfig({ preset: 'ollama' })).toMatchObject({
-      preset: 'ollama',
-      transport: 'ollama',
-      endpoint: ELEPHANTNOTE_AI_PRESETS.ollama.endpoint
+  it('normalizes known local and remote presets without a global enabled flag', () => {
+    expect(normalizeAiConfig({ preset: 'nodeLlamaCpp' })).toMatchObject({
+      preset: 'nodeLlamaCpp',
+      transport: 'node-llama-cpp',
+      endpoint: ELEPHANTNOTE_AI_PRESETS.nodeLlamaCpp.endpoint
+    })
+    expect(normalizeAiConfig({ preset: 'mlx' })).toMatchObject({
+      preset: 'mlx',
+      transport: 'openai-compatible'
+    })
+    expect(normalizeAiConfig({ preset: 'openrouter' })).toMatchObject({
+      preset: 'openrouter',
+      transport: 'openai-compatible'
     })
     expect(normalizeAiConfig({ preset: 'codex' })).toMatchObject({
       preset: 'codex',
       transport: 'openai-compatible'
     })
+    expect(normalizeAiConfig({ enabled: false })).not.toHaveProperty('enabled')
   })
 
   it('creates provider request bodies and extracts common response shapes', () => {
     const messages = [{ role: 'user', content: 'Hello' }]
+    expect(createAiRequestBody({ transport: 'node-llama-cpp', model: 'local.gguf', messages })).toEqual({
+      model: 'local.gguf',
+      messages,
+      stream: false
+    })
     expect(createAiRequestBody({ transport: 'ollama', model: 'llama3.2', messages })).toEqual({
       model: 'llama3.2',
       messages,

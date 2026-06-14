@@ -1,6 +1,19 @@
 let excalidrawModulePromise = null
 
-const EXCALIDRAW_MIME = 'application/vnd.excalidraw+json'
+import {
+  EXCALIDRAW_MIME,
+  createEmptyExcalidrawScene,
+  getExcalidrawBackgroundColor,
+  getExcalidrawPreviewPath as getPortableExcalidrawPreviewPath,
+  getExcalidrawScenePath as getPortableExcalidrawScenePath
+} from 'common/elephantnote/excalidrawAssets'
+
+export {
+  EXCALIDRAW_MIME,
+  ensureExcalidrawName,
+  ensurePngName,
+  getExcalidrawSidecarPath
+} from 'common/elephantnote/excalidrawAssets'
 
 export const resolveExcalidrawModule = (mod) => {
   const resolved = mod?.Excalidraw
@@ -15,34 +28,33 @@ export const resolveExcalidrawModule = (mod) => {
   return resolved
 }
 
-export const ensurePngName = (name) => {
-  const base = (name || 'excalidraw').trim() || 'excalidraw'
-  return base.toLowerCase().endsWith('.png') ? base : `${base}.png`
-}
-
-export const ensureExcalidrawName = (name) => {
-  const base = (name || 'drawing').trim() || 'drawing'
-  return base.toLowerCase().endsWith('.excalidraw') ? base : `${base}.excalidraw`
-}
-
 export const getExcalidrawScenePath = (pathname) => {
-  if (!pathname || typeof window === 'undefined' || !window.path) return ''
-  const extension = window.path.extname(pathname)
-  if (extension.toLowerCase() === '.excalidraw') return pathname
-  const base = extension ? pathname.slice(0, -extension.length) : pathname
-  return `${base}.excalidraw`
+  if (!pathname) return ''
+  if (typeof window !== 'undefined' && window.path) {
+    const extension = window.path.extname(pathname)
+    if (extension.toLowerCase() === '.excalidraw') return pathname
+    const base = extension ? pathname.slice(0, -extension.length) : pathname
+    return `${base}.excalidraw`
+  }
+  return getPortableExcalidrawScenePath(pathname)
 }
 
 export const getExcalidrawPreviewPath = (pathname) => {
   const scenePath = getExcalidrawScenePath(pathname)
-  if (!scenePath || typeof window === 'undefined' || !window.path) return ''
-  return window.path.join(
-    window.path.dirname(scenePath),
-    `${window.path.basename(scenePath, '.excalidraw')}.png`
-  )
+  if (!scenePath) return ''
+  if (
+    typeof window !== 'undefined' &&
+    window.path?.join &&
+    window.path?.dirname &&
+    window.path?.basename
+  ) {
+    return window.path.join(
+      window.path.dirname(scenePath),
+      `${window.path.basename(scenePath, '.excalidraw')}.png`
+    )
+  }
+  return getPortableExcalidrawPreviewPath(scenePath)
 }
-
-export const getExcalidrawSidecarPath = getExcalidrawScenePath
 
 export const findExcalidrawSceneForImage = (imagePath) => {
   const scenePath = getExcalidrawScenePath(imagePath)
@@ -150,7 +162,7 @@ const createSceneFromImageBlob = async(blob, theme) => {
       }
     },
     appState: {
-      viewBackgroundColor: theme === 'dark' ? '#121212' : '#ffffff',
+      viewBackgroundColor: getExcalidrawBackgroundColor(theme),
       exportBackground: true,
       exportEmbedScene: true
     }
@@ -159,15 +171,7 @@ const createSceneFromImageBlob = async(blob, theme) => {
 
 export const createInitialExcalidrawData = async({ blob, theme }) => {
   if (!blob) {
-    return {
-      elements: [],
-      files: {},
-      appState: {
-        viewBackgroundColor: theme === 'dark' ? '#121212' : '#ffffff',
-        exportBackground: true,
-        exportEmbedScene: true
-      }
-    }
+    return createEmptyExcalidrawScene(theme)
   }
 
   const { loadFromBlob } = await loadExcalidrawModule()
@@ -190,7 +194,7 @@ export const exportExcalidrawBlob = async({ api, theme }) => {
       ...api.getAppState(),
       exportBackground: true,
       exportEmbedScene: true,
-      viewBackgroundColor: theme === 'dark' ? '#121212' : '#ffffff'
+      viewBackgroundColor: getExcalidrawBackgroundColor(theme)
     },
     files: api.getFiles(),
     mimeType: MIME_TYPES.png,
@@ -207,7 +211,7 @@ export const exportExcalidrawSceneBlob = async({ api, theme }) => {
       ...api.getAppState(),
       exportBackground: true,
       exportEmbedScene: true,
-      viewBackgroundColor: theme === 'dark' ? '#121212' : '#ffffff'
+      viewBackgroundColor: getExcalidrawBackgroundColor(theme)
     },
     api.getFiles(),
     'local'

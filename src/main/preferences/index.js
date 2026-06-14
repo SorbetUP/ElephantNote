@@ -8,6 +8,7 @@ import { isWindows } from '../config'
 import { hasSameKeys } from '../utils'
 import { getSupportedLanguages, isLanguageSupported } from 'common/i18n'
 import schema from './schema'
+import { createDefaultPreferences } from './defaults'
 
 const PREFERENCES_FILE_NAME = 'preferences'
 
@@ -47,9 +48,14 @@ class Preference extends EventEmitter {
   }
 
   init = () => {
-    let defaultSettings = null
+    let defaultSettings = createDefaultPreferences()
     try {
-      defaultSettings = JSON.parse(fs.readFileSync(this.staticPath, { encoding: 'utf8' }) || '{}')
+      if (fs.existsSync(this.staticPath)) {
+        defaultSettings = {
+          ...defaultSettings,
+          ...JSON.parse(fs.readFileSync(this.staticPath, { encoding: 'utf8' }) || '{}')
+        }
+      }
 
       // Set best theme on first application start.
       if (nativeTheme.shouldUseDarkColors) {
@@ -64,11 +70,8 @@ class Preference extends EventEmitter {
         }
       }
     } catch (err) {
-      log.error(err)
-    }
-
-    if (!defaultSettings) {
-      throw new Error('Can not load static preference.json file')
+      log.warn('Unable to load static preference.json. Falling back to bundled defaults.', err)
+      defaultSettings = createDefaultPreferences()
     }
 
     // I don't know why `this.store.size` is 3 when first load, so I just check file existed.

@@ -1,0 +1,456 @@
+diff -ruN elephant_orig/Elephant/front/app/components/settings/SettingsPanel.vue elephant_inspect/Elephant/front/app/components/settings/SettingsPanel.vue
+--- elephant_orig/Elephant/front/app/components/settings/SettingsPanel.vue	2026-06-14 09:46:43.000000000 +0000
++++ elephant_inspect/Elephant/front/app/components/settings/SettingsPanel.vue	2026-06-14 09:58:12.864479895 +0000
+@@ -289,59 +289,75 @@
+ 
+               <section
+                 v-if="activeAiTab === 'setup'"
+-                class="en-settings-section stacked"
++                class="en-ai-setup-page"
+               >
+-                <div>
+-                  <h3>Runtime</h3>
+-                  <p>{{ setupRuntimeMessage }}</p>
++                <div class="en-ai-hero">
++                  <div>
++                    <small>Local first</small>
++                    <h3>AI runtime</h3>
++                    <p>{{ setupRuntimeMessage }}</p>
++                  </div>
++                  <div class="en-ai-hero-actions">
++                    <button
++                      type="button"
++                      :disabled="modelDownload.active || isTestingAiConfig"
++                      @click="runAiSetupTest"
++                    >{{ isTestingAiConfig || modelDownload.active ? 'Testing…' : 'Run setup test' }}</button>
++                    <button
++                      type="button"
++                      @click="loadLocalModels"
++                    >Refresh status</button>
++                  </div>
+                 </div>
+-                <div class="en-ai-runtime-grid">
++
++                <div class="en-ai-runtime-grid compact">
+                   <button
+                     type="button"
+                     :class="{ active: setupRuntime === 'browser' }"
+                     @click="setSetupRuntime('browser')"
+                   >
+-                    <strong>Browser</strong>
+-                    <span>WebGPU / WebCPU</span>
++                    <strong>Browser runtime</strong>
++                    <span>Transformers.js · WebGPU with WebCPU fallback</span>
+                   </button>
+                   <button
+                     type="button"
+                     :class="{ active: setupRuntime === 'ollama' }"
+                     @click="setSetupRuntime('ollama')"
+                   >
+-                    <strong>Ollama</strong>
+-                    <span>Local server</span>
++                    <strong>Ollama runtime</strong>
++                    <span>System models through http://127.0.0.1:11434</span>
+                   </button>
+                 </div>
+ 
+-                <div
+-                  class="en-model-runtime-card"
+-                  :class="{ error: !localModelRuntime.available && modelRuntimeMessage }"
+-                >
+-                  <div>
+-                    <strong>{{ localModelRuntime.available ? 'Runtime ready' : 'Runtime not ready' }}</strong>
+-                    <span>{{ modelRuntimeMessage || 'Check local runtime status.' }}</span>
+-                  </div>
+-                  <button
+-                    type="button"
+-                    @click="loadLocalModels"
+-                  >Check</button>
++                <div class="en-ai-status-grid">
++                  <article :class="['en-ai-status-card', localModelRuntime.available ? 'ok' : 'warn']">
++                    <strong>{{ localModelRuntime.available ? 'Runtime ready' : 'Runtime needs attention' }}</strong>
++                    <span>{{ modelRuntimeMessage || 'Run a status check before loading models.' }}</span>
++                  </article>
++                  <article class="en-ai-status-card">
++                    <strong>{{ setupRuntime === 'browser' ? 'Device' : 'Provider' }}</strong>
++                    <span>{{ setupRuntime === 'browser' ? browserRuntimeDeviceLabel : 'Ollama local server' }}</span>
++                  </article>
++                  <article class="en-ai-status-card">
++                    <strong>Cached models</strong>
++                    <span>{{ localModels.length }} detected</span>
++                  </article>
+                 </div>
+ 
+-                <div class="en-ai-setup-grid">
++                <div class="en-ai-primary-grid">
+                   <article
+                     v-for="step in aiSetupSteps"
+                     :key="step.purpose"
+-                    class="en-ai-setup-card"
+-                    :class="{ installed: step.installed }"
++                    class="en-ai-primary-card"
++                    :class="{ installed: step.installed, downloading: step.model && isModelDownloading(step.model.id) }"
+                   >
+                     <header>
+                       <div>
+                         <small>{{ step.label }}</small>
+-                        <strong>{{ step.model?.name || 'No model available' }}</strong>
++                        <h4>{{ step.model?.name || 'No model available' }}</h4>
+                         <span>{{ step.model?.provider || setupRuntime }} · {{ step.model?.size || 'unknown size' }}</span>
+                       </div>
+-                      <span>{{ step.installed ? 'Ready' : 'Needed' }}</span>
++                      <strong>{{ step.installed ? 'Ready' : 'Missing' }}</strong>
+                     </header>
+                     <p>{{ step.model?.notes || 'No recommended model exists for this runtime yet.' }}</p>
+                     <div
+@@ -358,26 +374,41 @@
+                       type="button"
+                       :disabled="!step.model || !isModelLoadable(step.model) || modelDownload.active"
+                       @click="pullAtomicModel(step.model.id)"
+-                    >{{ step.installed ? 'Test again' : 'Install and test' }}</button>
++                    >{{ step.installed ? 'Test again' : 'Load and test' }}</button>
+                   </article>
+                 </div>
+ 
+-                <div class="en-settings-actions-row">
+-                  <button
+-                    type="button"
+-                    :disabled="modelDownload.active || isTestingAiConfig"
+-                    @click="runAiSetupTest"
+-                  >{{ isTestingAiConfig ? 'Testing…' : 'Test complete AI setup' }}</button>
+-                  <button
+-                    type="button"
+-                    @click="activeAiTab = 'search'"
+-                  >Semantic search</button>
+-                  <button
+-                    type="button"
+-                    @click="activeAiTab = 'providers'"
+-                  >Advanced</button>
+-                  <span class="en-settings-message">{{ aiConfigMessage || modelSelectionMessage }}</span>
+-                </div>
++                <section class="en-ai-quick-settings">
++                  <div>
++                    <h4>Active slots</h4>
++                    <p>Keep only the two mandatory slots here. Advanced model choices stay in Models.</p>
++                  </div>
++                  <div class="en-ai-slot-summary">
++                    <article>
++                      <small>Embedding</small>
++                      <strong>{{ selectedModelName('embedding') }}</strong>
++                    </article>
++                    <article>
++                      <small>Chat</small>
++                      <strong>{{ selectedModelName('chat') }}</strong>
++                    </article>
++                  </div>
++                  <div class="en-settings-actions-row">
++                    <button
++                      type="button"
++                      @click="activeAiTab = 'models'"
++                    >Manage models</button>
++                    <button
++                      type="button"
++                      @click="activeAiTab = 'search'"
++                    >Search settings</button>
++                    <button
++                      type="button"
++                      @click="activeAiTab = 'providers'"
++                    >Provider endpoint</button>
++                    <span class="en-settings-message">{{ aiConfigMessage || modelSelectionMessage }}</span>
++                  </div>
++                </section>
+               </section>
+ 
+               <section
+@@ -766,12 +797,11 @@
+ 
+ const aiTabs = [
+   { id: 'setup', label: 'Setup' },
+-  { id: 'search', label: 'Search' },
+-  { id: 'providers', label: 'Providers' },
+   { id: 'models', label: 'Models' },
+-  { id: 'audio', label: 'Audio' },
++  { id: 'search', label: 'Search' },
++  { id: 'providers', label: 'Endpoint' },
+   { id: 'tasks', label: 'Tasks' },
+-  { id: 'api', label: 'Agent API' }
++  { id: 'api', label: 'API' }
+ ]
+ 
+ const activeSection = ref('appearance')
+@@ -956,6 +986,12 @@
+   if (localModelRuntime.value.webgpuAvailable) return 'Browser runtime will use WebGPU when possible and WebCPU/WASM as fallback.'
+   return 'Browser runtime will use WebCPU/WASM. WebGPU is optional.'
+ })
++const browserRuntimeDeviceLabel = computed(() => {
++  if (!localModelRuntime.value.transformersAvailable) return 'Transformers.js not loaded yet'
++  if (localModelRuntime.value.webgpuAvailable) return 'WebGPU available, WebCPU/WASM fallback enabled'
++  if (localModelRuntime.value.webcpuAvailable) return 'WebCPU/WASM available'
++  return 'No browser ML backend detected'
++})
+ const setSetupRuntime = (runtime) => {
+   setupRuntime.value = runtime
+   if (runtime === 'browser') {
+@@ -1117,10 +1153,13 @@
+ }
+ 
+ const runAiSetupTest = async () => {
++  if (isTestingAiConfig.value || modelDownload.value.active) return
++  isTestingAiConfig.value = true
+   aiConfigMessage.value = ''
+   const models = [recommendedSetupModels.value.embedding, recommendedSetupModels.value.chat].filter(Boolean)
+   if (!models.length) {
+     aiConfigMessage.value = 'No runnable model is available for this runtime.'
++    isTestingAiConfig.value = false
+     return
+   }
+   try {
+@@ -1133,6 +1172,8 @@
+     aiConfigMessage.value = 'AI setup test passed: embedding and chat slots are ready.'
+   } catch (error) {
+     aiConfigMessage.value = error instanceof Error ? error.message : 'AI setup test failed.'
++  } finally {
++    isTestingAiConfig.value = false
+   }
+ }
+ 
+@@ -1261,6 +1302,34 @@
+ .en-settings-actions-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+ .en-ai-shell { display: grid; gap: 12px; }
+ .en-ai-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 16px; border: 1px solid var(--en-border); border-radius: 12px; background: var(--en-bg); }
++.en-ai-setup-page { display: grid; gap: 12px; }
++.en-ai-hero { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding: 18px; border: 1px solid var(--en-border); border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--en-primary) 9%, var(--en-bg)), var(--en-bg)); }
++.en-ai-hero small { color: var(--en-primary); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }
++.en-ai-hero h3, .en-ai-hero p, .en-ai-quick-settings h4, .en-ai-quick-settings p { margin: 0; }
++.en-ai-hero h3 { margin-top: 4px; color: var(--en-text); font-size: 22px; }
++.en-ai-hero p { margin-top: 6px; color: var(--en-muted); line-height: 1.45; }
++.en-ai-hero-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
++.en-ai-hero-actions button, .en-ai-quick-settings button, .en-ai-primary-card button { min-height: 34px; border: 1px solid var(--en-border); border-radius: 8px; padding: 0 12px; color: var(--en-text); background: var(--en-bg); }
++.en-ai-runtime-grid.compact { margin-top: 0; }
++.en-ai-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
++.en-ai-status-card { display: grid; gap: 5px; min-height: 76px; padding: 12px; border: 1px solid var(--en-border); border-radius: 12px; background: var(--en-bg); }
++.en-ai-status-card.ok { border-color: color-mix(in srgb, var(--en-primary) 42%, var(--en-border)); background: color-mix(in srgb, var(--en-primary) 7%, var(--en-bg)); }
++.en-ai-status-card.warn { border-color: color-mix(in srgb, #f59e0b 45%, var(--en-border)); background: color-mix(in srgb, #f59e0b 8%, var(--en-bg)); }
++.en-ai-status-card strong, .en-ai-primary-card h4, .en-ai-slot-summary strong { color: var(--en-text); }
++.en-ai-status-card span, .en-ai-primary-card span, .en-ai-primary-card p, .en-ai-primary-card small, .en-ai-slot-summary small { color: var(--en-muted); overflow-wrap: anywhere; }
++.en-ai-primary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
++.en-ai-primary-card { display: grid; gap: 12px; align-content: start; min-height: 242px; padding: 14px; border: 1px solid var(--en-border); border-radius: 14px; background: var(--en-bg); }
++.en-ai-primary-card.installed { border-color: color-mix(in srgb, var(--en-primary) 48%, var(--en-border)); background: color-mix(in srgb, var(--en-primary) 7%, var(--en-bg)); }
++.en-ai-primary-card header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
++.en-ai-primary-card header div { min-width: 0; display: grid; gap: 4px; }
++.en-ai-primary-card h4 { margin: 0; font-size: 16px; }
++.en-ai-primary-card header > strong { flex: 0 0 auto; padding: 4px 8px; border: 1px solid var(--en-border); border-radius: 999px; background: var(--en-surface); font-size: 12px; }
++.en-ai-primary-card button { align-self: end; }
++.en-ai-quick-settings { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--en-border); border-radius: 14px; background: var(--en-bg); }
++.en-ai-quick-settings h4 { color: var(--en-text); font-size: 15px; }
++.en-ai-quick-settings p { margin-top: 4px; color: var(--en-muted); }
++.en-ai-slot-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
++.en-ai-slot-summary article { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-surface); }
+ .en-ai-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid var(--en-border); border-radius: 12px; background: var(--en-bg); }
+ .en-ai-provider-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+ .en-ai-runtime-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 12px; }
+diff -ruN elephant_orig/Elephant/front/app/services/browserModelRuntime.js elephant_inspect/Elephant/front/app/services/browserModelRuntime.js
+--- elephant_orig/Elephant/front/app/services/browserModelRuntime.js	2026-06-14 09:17:16.000000000 +0000
++++ elephant_inspect/Elephant/front/app/services/browserModelRuntime.js	2026-06-14 09:58:24.682137040 +0000
+@@ -2,9 +2,9 @@
+ const DEFAULT_CHAT_MODEL_ID = 'onnx-community/Qwen2.5-0.5B-Instruct'
+ 
+ const pipelines = new Map()
++const loadingPromises = new Map()
+ let loadedModelId = ''
+ let loadedDevice = ''
+-let loadingPromise = null
+ const listeners = new Set()
+ 
+ const nowIso = () => new Date().toISOString()
+@@ -65,9 +65,32 @@
+   return message || 'Unable to load browser model runtime.'
+ }
+ 
++const formatLoadError = (error, { device = '', browserModel = '' } = {}) => {
++  const message = error instanceof Error ? error.message : String(error || '')
++  if (/fetch|network|load failed|failed to fetch|ERR_/i.test(message)) {
++    return `Model download failed${browserModel ? ` for ${browserModel}` : ''}. Check internet access to Hugging Face, Electron CSP/network permissions, and retry.`
++  }
++  if (/webgpu|adapter|device|shader|gpu/i.test(message) && device === 'webgpu') {
++    return `WebGPU load failed for ${browserModel || 'this model'}. ElephantNote can retry with WebCPU/WASM when backend is Auto.`
++  }
++  return message || 'Browser model load failed.'
++}
++
++const configureTransformersRuntime = (transformers = {}) => {
++  const env = transformers.env
++  if (!env) return transformers
++  env.allowRemoteModels = true
++  env.allowLocalModels = false
++  env.useBrowserCache = true
++  if (env.backends?.onnx?.wasm) {
++    env.backends.onnx.wasm.proxy = false
++  }
++  return transformers
++}
++
+ const importTransformers = async() => {
+   try {
+-    return await import('@huggingface/transformers')
++    return configureTransformersRuntime(await import('@huggingface/transformers'))
+   } catch (error) {
+     throw new Error(formatImportError(error))
+   }
+@@ -79,9 +102,16 @@
+   return globalThis.navigator?.gpu ? 'webgpu' : 'wasm'
+ }
+ 
++const resolveCandidateDevices = (backend = 'auto') => {
++  if (backend === 'webcpu' || backend === 'wasm') return ['wasm']
++  if (backend === 'webgpu') return ['webgpu']
++  return globalThis.navigator?.gpu ? ['webgpu', 'wasm'] : ['wasm']
++}
++
+ const normalizeProgress = (progress = {}, model) => {
+   const rawPercent = Number(progress.progress ?? progress.percent ?? 0)
+-  const percent = Number.isFinite(rawPercent) ? Math.max(0, Math.min(100, rawPercent)) : 0
++  const normalizedRawPercent = rawPercent > 0 && rawPercent <= 1 ? rawPercent * 100 : rawPercent
++  const percent = Number.isFinite(normalizedRawPercent) ? Math.max(0, Math.min(100, normalizedRawPercent)) : 0
+   const file = progress.file || progress.name || progress.model || ''
+   const status = progress.status || 'loading'
+   return {
+@@ -140,45 +170,75 @@
+   }
+ }
+ 
++const createPipeline = async({ pipeline, task, browserModel, model, id, device, dtype }) => {
++  emit({
++    id,
++    modelId: id,
++    phase: 'starting',
++    percent: device === 'webgpu' ? 2 : 4,
++    message: `Preparing ${model.name || id} on ${device === 'webgpu' ? 'WebGPU' : 'WebCPU/WASM'}…`
++  })
++  return pipeline(task, browserModel, {
++    device,
++    dtype,
++    progress_callback: (progress) => emit(normalizeProgress(progress, { ...model, id }))
++  })
++}
++
+ const loadBrowserPipeline = async(model = {}, options = {}) => {
+   const task = options.task || model.task || 'text-generation'
+   const browserModel = model.browserModel || model.model || model.id || DEFAULT_CHAT_MODEL_ID
+   const id = model.id || browserModel
+   const backend = options.backend || model.backend || 'auto'
+-  const device = resolveDevice(backend)
+-  const dtype = options.dtype || model.dtype || 'q4'
+-  const pipelineKey = `${task}:${browserModel}:${device}`
+-
+-  if (pipelines.has(pipelineKey)) {
+-    emit({ id, modelId: id, phase: 'ready', percent: 100, message: `${model.name || id} already loaded.` })
+-    return { id, browserModel, device, task, loaded: true, reused: true, runner: pipelines.get(pipelineKey) }
++  const dtype = options.dtype || model.dtype || (task === 'feature-extraction' ? 'q8' : 'q4')
++  const devices = resolveCandidateDevices(backend)
++  const cacheKey = `${task}:${browserModel}:${backend}:${dtype}`
++
++  for (const device of devices) {
++    const pipelineKey = `${task}:${browserModel}:${device}:${dtype}`
++    if (pipelines.has(pipelineKey)) {
++      emit({ id, modelId: id, phase: 'ready', percent: 100, message: `${model.name || id} already loaded on ${device === 'webgpu' ? 'WebGPU' : 'WebCPU/WASM'}.` })
++      return { id, browserModel, device, task, loaded: true, reused: true, runner: pipelines.get(pipelineKey) }
++    }
+   }
+ 
+-  if (loadingPromise) return loadingPromise
++  if (loadingPromises.has(cacheKey)) return loadingPromises.get(cacheKey)
+ 
+-  loadingPromise = (async() => {
+-    emit({ id, modelId: id, phase: 'starting', percent: 1, message: `Preparing ${model.name || id} on ${device === 'webgpu' ? 'WebGPU' : 'WebCPU/WASM'}…` })
++  const promise = (async() => {
+     const { pipeline } = await importTransformers()
+-    const runner = await pipeline(task, browserModel, {
+-      device,
+-      dtype,
+-      progress_callback: (progress) => emit(normalizeProgress(progress, { ...model, id }))
+-    })
+-    pipelines.set(pipelineKey, runner)
+-    loadedModelId = browserModel
+-    loadedDevice = device
+-    rememberModel({ id, name: model.name || id, browserModel, device })
+-    emit({ id, modelId: id, phase: 'ready', percent: 100, message: `${model.name || id} loaded on ${device === 'webgpu' ? 'WebGPU' : 'WebCPU/WASM'}.` })
+-    return { id, browserModel, device, task, loaded: true, reused: false, runner }
++    let lastError = null
++
++    for (const device of devices) {
++      const pipelineKey = `${task}:${browserModel}:${device}:${dtype}`
++      try {
++        const runner = await createPipeline({ pipeline, task, browserModel, model, id, device, dtype })
++        pipelines.set(pipelineKey, runner)
++        loadedModelId = browserModel
++        loadedDevice = device
++        rememberModel({ id, name: model.name || id, browserModel, device })
++        emit({ id, modelId: id, phase: 'ready', percent: 100, message: `${model.name || id} loaded on ${device === 'webgpu' ? 'WebGPU' : 'WebCPU/WASM'}.` })
++        return { id, browserModel, device, task, loaded: true, reused: false, runner }
++      } catch (error) {
++        lastError = error
++        const message = formatLoadError(error, { device, browserModel })
++        emit({ id, modelId: id, phase: 'warning', percent: device === 'webgpu' && devices.length > 1 ? 8 : 0, message, error: message })
++        if (device === 'webgpu' && devices.includes('wasm')) {
++          emit({ id, modelId: id, phase: 'fallback', percent: 10, message: 'Retrying with WebCPU/WASM…' })
++          continue
++        }
++      }
++    }
++
++    const message = formatLoadError(lastError, { device: devices.at(-1), browserModel })
++    emit({ id, modelId: id, phase: 'error', percent: 0, error: message, message })
++    throw new Error(message)
+   })()
+ 
++  loadingPromises.set(cacheKey, promise)
+   try {
+-    return await loadingPromise
+-  } catch (error) {
+-    emit({ id, modelId: id, phase: 'error', percent: 0, error: error instanceof Error ? error.message : String(error || ''), message: error instanceof Error ? error.message : 'Browser model load failed.' })
+-    throw error
++    return await promise
+   } finally {
+-    loadingPromise = null
++    loadingPromises.delete(cacheKey)
+   }
+ }
+ 
+diff -ruN elephant_orig/Elephant/tests/unit/browserModelRuntime.spec.js elephant_inspect/Elephant/tests/unit/browserModelRuntime.spec.js
+--- elephant_orig/Elephant/tests/unit/browserModelRuntime.spec.js	2026-06-14 09:46:43.000000000 +0000
++++ elephant_inspect/Elephant/tests/unit/browserModelRuntime.spec.js	2026-06-14 09:58:44.025992719 +0000
+@@ -74,4 +74,33 @@
+     expect(loaded).toMatchObject({ id: 'qwen25-05b-chat-browser', device: 'wasm', task: 'text-generation' })
+     expect(test).toMatchObject({ ok: true, runtime: 'browser', response: 'ElephantNote browser model test OK.' })
+   })
++
++  it('falls back from WebGPU to WebCPU when automatic browser loading fails on WebGPU', async() => {
++    Object.defineProperty(globalThis.navigator, 'gpu', {
++      configurable: true,
++      value: {}
++    })
++    pipeline
++      .mockRejectedValueOnce(new Error('WebGPU adapter failed'))
++      .mockResolvedValueOnce(async() => [{ generated_text: [{ role: 'assistant', content: 'fallback OK' }] }])
++    const runtime = await import('elephant-front/services/browserModelRuntime')
++    const model = {
++      id: 'qwen25-05b-chat-browser',
++      name: 'Qwen2.5 0.5B Browser Chat',
++      task: 'text-generation',
++      browserModel: 'onnx-community/Qwen2.5-0.5B-Instruct',
++      dtype: 'q4'
++    }
++
++    const loaded = await runtime.loadBrowserTextModel(model, { backend: 'auto' })
++
++    expect(pipeline).toHaveBeenNthCalledWith(1, 'text-generation', 'onnx-community/Qwen2.5-0.5B-Instruct', expect.objectContaining({
++      device: 'webgpu'
++    }))
++    expect(pipeline).toHaveBeenNthCalledWith(2, 'text-generation', 'onnx-community/Qwen2.5-0.5B-Instruct', expect.objectContaining({
++      device: 'cpu'
++    }))
++    expect(loaded).toMatchObject({ device: 'cpu', loaded: true })
++  })
++
+ })

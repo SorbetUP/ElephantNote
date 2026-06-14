@@ -47,3 +47,18 @@ Compatibility aliases are still kept for existing imports:
 The root `src` folder still contains the Electron/Vite entry points and the
 legacy MarkText/Muya editor scaffold required by `pnpm dev`. Move those only
 after replacing the entry points and validating Electron packaging.
+
+## Refactor note
+
+This version keeps the public aliases stable while extracting the preload bridge,
+renderer API client, main-process config store, runtime singletons, legacy IPC
+registration, and API action constants into smaller files. See
+`../REFACTORING_REPORT.md` for details and for the list of root project files
+that were not present in the uploaded archives.
+
+## Architecture contract
+
+The portable Elephant architecture is documented in
+`../docs/dev/ELEPHANT_ARCHITECTURE.md`. New cross-process features should use the
+shared API domain contract in `shared/apiContracts.js` before adding Electron
+handlers or renderer UI.

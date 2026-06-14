@@ -79,13 +79,12 @@ const toolbarItems = [
 ]
 
 const featureFlags = ref({
-  ai: true,
   askAi: true,
   agents: true
 })
 
 const visibleToolbarItems = computed(() => toolbarItems.filter((item) => {
-  if (item.key === 'ask-ai') return featureFlags.value.ai && featureFlags.value.askAi
+  if (item.key === 'ask-ai') return featureFlags.value.askAi
   if (item.key === 'agents') return featureFlags.value.agents
   return true
 }))
@@ -94,7 +93,7 @@ onMounted(async () => {
   try {
     featureFlags.value = await elephantnoteClient.features.get()
   } catch {
-    featureFlags.value = { ai: true, askAi: true, agents: true }
+    featureFlags.value = { askAi: true, agents: true }
   }
   window.addEventListener('elephantnote:feature-flags-changed', handleFeatureFlagsChanged)
 })

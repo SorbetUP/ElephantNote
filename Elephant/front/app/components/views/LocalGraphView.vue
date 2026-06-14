@@ -191,7 +191,7 @@ function mountSigma () {
       size = atom.depth === 1 ? 11 : 7
       const idx = paletteIndex.get(atom.id) ?? 0
       const factor = atom.depth === 1 ? 0.95 : 0.55
-      const base = theme.palette[idx]
+      const base = t.palette[idx]
       color = `rgb(${Math.round(base[0] * factor)},${Math.round(base[1] * factor)},${Math.round(base[2] * factor)})`
     }
     graph.addNode(atom.id, {
@@ -343,7 +343,7 @@ function mountSigma () {
       if (!isCenter && collides(rect, 6)) continue
       placed.push(rect)
 
-      ctx.fillStyle = theme.labelBg
+      ctx.fillStyle = t.labelBg
       ctx.beginPath()
       ctx.roundRect(rect.x, rect.y, pillW, pillH, pillH / 2)
       ctx.fill()
@@ -357,7 +357,7 @@ function mountSigma () {
         ctx.font = '500 9px system-ui, -apple-system, sans-serif'
         const display = c.extra > 0 ? `${c.tag.toUpperCase()}  +${c.extra}` : c.tag.toUpperCase()
         ctx.globalAlpha = 0.65
-        ctx.fillStyle = theme.nodeLabelColor
+        ctx.fillStyle = t.nodeLabelColor
         ctx.fillText(display, c.vx, labelY + pillH / 2 + 8 + 4.5)
         ctx.globalAlpha = 1
       }

@@ -13,12 +13,14 @@ import java.util.Date;
 
 public final class MainActivity extends Activity {
     private NoteStore store;
+    private SyncState syncState;
     private LinearLayout list;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         store = new NoteStore(this);
+        syncState = SyncState.load(this);
         render();
     }
 
@@ -32,6 +34,11 @@ public final class MainActivity extends Activity {
         title.setTextSize(24);
         title.setGravity(Gravity.START);
         root.addView(title);
+
+        TextView syncLabel = new TextView(this);
+        syncLabel.setText("Sync " + syncState.deviceId + " / " + syncState.folderId);
+        syncLabel.setPadding(0, 0, 0, 16);
+        root.addView(syncLabel);
 
         EditText quickNote = new EditText(this);
         quickNote.setHint("Take a note");

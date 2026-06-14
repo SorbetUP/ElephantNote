@@ -66,53 +66,53 @@ class ImageToolbar extends BaseFloat {
         return !i.localOnly || isLocalImage
       })
       .map((i) => {
-      let icon
-      let iconWrapperSelector
-      if (i.icon) {
+        let icon
+        let iconWrapperSelector
+        if (i.icon) {
         // SVG icon Asset
-        iconWrapperSelector = 'div.icon-wrapper'
-        icon = h(
-          'i.icon',
-          h(
-            'i.icon-inner',
-            {
-              style: {
-                background: `url(${i.icon}) no-repeat`,
-                'background-size': '100%'
-              }
-            },
-            ''
+          iconWrapperSelector = 'div.icon-wrapper'
+          icon = h(
+            'i.icon',
+            h(
+              'i.icon-inner',
+              {
+                style: {
+                  background: `url(${i.icon}) no-repeat`,
+                  'background-size': '100%'
+                }
+              },
+              ''
+            )
           )
-        )
-      }
-      const iconWrapper = h(iconWrapperSelector, icon)
-      let itemSelector = `li.item.${i.type}`
-
-      if (i.type === 'open' || i.type === 'edit-excalidraw') {
-        if (isLocalImage) {
-          itemSelector += '.enable'
-        } else {
-          itemSelector += '.disable'
         }
-      }
-      if (i.type === dataAlign || (!dataAlign && i.type === 'inline')) {
-        itemSelector += '.active'
-      }
-      return h(
-        itemSelector,
-        {
-          dataset: {
-            tip: i.tooltip
-          },
-          on: {
-            click: (event) => {
-              this.selectItem(event, i)
-            }
+        const iconWrapper = h(iconWrapperSelector, icon)
+        let itemSelector = `li.item.${i.type}`
+
+        if (i.type === 'open' || i.type === 'edit-excalidraw') {
+          if (isLocalImage) {
+            itemSelector += '.enable'
+          } else {
+            itemSelector += '.disable'
           }
-        },
-        [h('div.tooltip', i.tooltip), iconWrapper]
-      )
-    })
+        }
+        if (i.type === dataAlign || (!dataAlign && i.type === 'inline')) {
+          itemSelector += '.active'
+        }
+        return h(
+          itemSelector,
+          {
+            dataset: {
+              tip: i.tooltip
+            },
+            on: {
+              click: (event) => {
+                this.selectItem(event, i)
+              }
+            }
+          },
+          [h('div.tooltip', i.tooltip), iconWrapper]
+        )
+      })
 
     const vnode = h('ul', children)
 

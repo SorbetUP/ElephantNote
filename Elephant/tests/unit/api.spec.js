@@ -2,10 +2,15 @@
 
 import {
   createElephantNoteApi,
+  ELEPHANTNOTE_API_DOMAINS,
   ELEPHANTNOTE_API_ACTIONS,
   ELEPHANTNOTE_API_VERSION
 } from 'main_renderer/elephantnote/api'
-import { vi } from 'vitest'
+import {
+  API_PAYLOAD_SCHEMAS,
+  listApiContracts
+} from 'common/elephantnote/apiContracts'
+import { describe, expect, it, vi } from 'vitest'
 
 describe('ElephantNote API contract', () => {
   it('describes versioned actions', async() => {
@@ -23,6 +28,26 @@ describe('ElephantNote API contract', () => {
         ELEPHANTNOTE_API_ACTIONS.NOTES_CREATE
       ].sort()
     })
+  })
+
+  it('keeps shared domain contracts, action constants and payload schemas in sync', () => {
+    const contracts = listApiContracts()
+    const actionNames = new Set(Object.values(ELEPHANTNOTE_API_ACTIONS))
+
+    expect(ELEPHANTNOTE_API_DOMAINS).to.have.keys([
+      'system',
+      'vaults',
+      'documents',
+      'imports',
+      'knowledge',
+      'publishing',
+      'automation',
+      'aiRuntime',
+      'plugins',
+      'sync'
+    ])
+    expect(contracts.length).to.equal(actionNames.size)
+    expect(Object.keys(API_PAYLOAD_SCHEMAS).sort()).to.deep.equal([...actionNames].sort())
   })
 
   it('calls registered handlers with payload and context', async() => {
@@ -85,17 +110,77 @@ describe('ElephantNote API contract', () => {
     })
 
     await expect(api.call(ELEPHANTNOTE_API_ACTIONS.MODEL_SELECTION_SET, {
-      embedding: 'nomic-embed-text',
-      chat: 'llama-3.2',
+      embedding: 'smollm2-node-llama-cpp',
+      chat: 'smollm2-node-llama-cpp-chat',
+      ocr: 'local-tesseract-ocr',
+      naming: 'local-naming',
+      summary: 'local-summary',
+      agent: 'codex-compatible',
       'speech-to-text': 'whisper-large-v3-turbo'
     })).resolves.toMatchObject({
-      embedding: 'nomic-embed-text',
-      chat: 'llama-3.2',
+      embedding: 'smollm2-node-llama-cpp',
+      chat: 'smollm2-node-llama-cpp-chat',
+      ocr: 'local-tesseract-ocr',
+      naming: 'local-naming',
+      summary: 'local-summary',
+      agent: 'codex-compatible',
       'speech-to-text': 'whisper-large-v3-turbo'
     })
 
     const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.MODEL_SELECTION_SET, {
       embedding: 42
+    })
+
+    expect(response.ok).to.equal(false)
+    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
+  })
+
+  it('validates OCR extraction payloads', async() => {
+    const handler = vi.fn(async(payload) => payload)
+    const api = createElephantNoteApi({
+      handlers: {
+        [ELEPHANTNOTE_API_ACTIONS.OCR_EXTRACT]: handler
+      }
+    })
+
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.OCR_EXTRACT, {
+      imagePath: '/tmp/screenshot.png',
+      language: 'eng',
+      pageSegmentationMode: '6'
+    })).resolves.to.deep.equal({
+      imagePath: '/tmp/screenshot.png',
+      language: 'eng',
+      pageSegmentationMode: '6'
+    })
+
+    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.OCR_EXTRACT, {
+      language: 'eng'
+    })
+
+    expect(response.ok).to.equal(false)
+    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
+  })
+
+  it('rejects the removed global AI enabled setting from provider config payloads', async() => {
+    const api = createElephantNoteApi({
+      handlers: {
+        [ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_SET]: async(payload) => payload,
+        [ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_TEST]: async(payload) => payload
+      }
+    })
+
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_SET, {
+      preset: 'nodeLlamaCpp',
+      transport: 'node-llama-cpp',
+      endpoint: 'node-llama-cpp://local',
+      model: 'smollm2-node-llama-cpp-chat'
+    })).resolves.toMatchObject({
+      preset: 'nodeLlamaCpp',
+      transport: 'node-llama-cpp'
+    })
+
+    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_SET, {
+      enabled: false
     })
 
     expect(response.ok).to.equal(false)

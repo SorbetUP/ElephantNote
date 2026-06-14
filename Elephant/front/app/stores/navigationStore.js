@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { createDefaultSyncPlan } from 'common/elephantnote/sync'
 
 const isSameEntry = (a, b) => {
   if (!a || !b) return false
@@ -66,9 +67,9 @@ export const useNavigationStore = defineStore('elephantnoteNavigation', {
       this.syncError = ''
       try {
         const { elephantnoteClient } = await import('../services/elephantnoteClient')
-        await elephantnoteClient.sync.enqueue('snapshot')
-        await elephantnoteClient.sync.enqueue('pull')
-        await elephantnoteClient.sync.enqueue('push')
+        for (const { operation, payload } of createDefaultSyncPlan()) {
+          await elephantnoteClient.sync.enqueue(operation, payload)
+        }
         await elephantnoteClient.sync.run()
         if (vaultPath) {
           await elephantnoteClient.search.initVault(vaultPath)

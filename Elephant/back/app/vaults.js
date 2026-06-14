@@ -14,6 +14,7 @@ import {
   isIgnoredVaultEntry,
   nextAvailableName,
   normalizeRelativePath,
+  normalizeWorkspaceSidebar,
   parseMarkdownMeta,
   resolveInsideVault
 } from './core'
@@ -57,6 +58,7 @@ import { updateMarkdownTitle } from './markdown'
 import { migrateWorkspace } from './workspaceMigrations'
 import { normalizeProgramEnvironments } from './programRuntime'
 import { setFeatureFlag } from 'common/elephantnote/featureFlags'
+import { normalizeVaultIcon } from 'common/elephantnote/appearance'
 import {
   createAiRequestBody,
   extractAiResponseText,
@@ -64,15 +66,25 @@ import {
   resolveAiEndpoint
 } from 'common/elephantnote/aiProviders'
 import {
+  ATOMIC_AI_FEATURES,
   ATOMIC_MODEL_CATALOG,
   ATOMIC_PLUGIN_MANIFESTS,
   PROGRAMMATIC_TASK_TEMPLATES,
+  EXTENSION_TASK_ACTIONS,
+  EXTENSION_PLUGIN_RUNTIMES,
+  createTaskRunResult,
+  createTaskStepResult,
   createDefaultModelSelection,
   mergePluginState,
   mergeTaskState,
+  resolvePluginRuntime,
   updatePluginState,
   updateTaskState
 } from 'common/elephantnote/atomicWorkspace'
+import {
+  ensureAtomicSourcesSection,
+  suggestAtomicTags
+} from 'common/elephantnote/atomicAiEngine'
 import { getConfig, setConfig } from './config/elephantConfigStore'
 import { modelRuntime, programRuntime, syncEngine } from './runtime/elephantRuntime'
 
@@ -219,36 +231,6 @@ const writeWiki = async(vaultRoot, records) => {
   }, { spaces: 2 })
 }
 
-const normalizeWorkspaceSidebar = (workspace = {}) => {
-  const sidebar = []
-  for (const item of workspace.sidebar || []) {
-    if ((item.type === 'note' || item.type === 'folder') && item.path) {
-      sidebar.push({
-        ...item,
-        id: item.id || createId(`${item.type}-${item.path}`),
-        title: item.title || path.basename(item.path).replace(/\.md$/i, ''),
-        collapsed: Boolean(item.collapsed)
-      })
-      continue
-    }
-    for (const child of item.items || []) {
-      if (!child?.path) continue
-      const type = child.type === 'note' ? 'note' : 'folder'
-      sidebar.push({
-        id: child.id || createId(`${type}-${child.path}`),
-        title: child.title || path.basename(child.path).replace(/\.md$/i, ''),
-        type,
-        path: normalizeRelativePath(child.path),
-        collapsed: false
-      })
-    }
-  }
-  return {
-    ...workspace,
-    sidebar
-  }
-}
-
 const getActiveVault = () => {
   const config = getConfig()
   const vault = config.vaults.find((vault) => vault.id === config.activeVaultId) || null
@@ -299,7 +281,7 @@ const setVaultIcon = (vaultId, icon = '') => {
   const config = getConfig()
   const vault = config.vaults.find((item) => item.id === vaultId)
   if (!vault) throw new Error('Unknown ElephantNote vault.')
-  vault.icon = String(icon || '').trim()
+  vault.icon = normalizeVaultIcon(icon)
   setConfig(config)
   return loadVaultPayload(vault)
 }
@@ -1036,12 +1018,37 @@ const createConfiguredAiRuntime = ({ purpose = 'chat', override = {} } = {}) => 
   }
 }
 
+const resolveConfiguredLocalModel = (config = {}) => {
+  return ATOMIC_MODEL_CATALOG.find((item) =>
+    item.id === config.model ||
+    item.model === config.model ||
+    item.uri === config.model ||
+    item.pull === config.model
+  ) || {
+    id: config.model,
+    name: config.model,
+    provider: 'node-llama-cpp',
+    task: config.purpose === 'embedding' ? 'embedding' : 'chat-completion',
+    model: config.model,
+    uri: config.model,
+    pull: config.model
+  }
+}
+
 const callConfiguredAi = async(messages = [], options = {}) => {
   const config = createConfiguredAiRuntime(options)
-  if (config.transport === 'browser') {
-    throw new Error('Browser WebGPU/WebCPU models run in the Electron renderer, not in the main process. Use the browser model runtime from the UI.')
+  if (config.transport === 'node-llama-cpp') {
+    return modelRuntime.nodeLlamaCppRuntime.generateChat({
+      model: resolveConfiguredLocalModel(config),
+      messages,
+      maxTokens: 180,
+      temperature: 0.2
+    })
   }
-  if (!config.enabled || !config.endpoint || !config.model) {
+  if (config.transport === 'browser') {
+    throw new Error('Browser model runtime is no longer the local AI path. Use node-llama-cpp for local chat and embeddings.')
+  }
+  if (!config.endpoint || !config.model) {
     return ''
   }
   const response = await fetch(config.endpoint, {
@@ -1066,10 +1073,18 @@ const callConfiguredAi = async(messages = [], options = {}) => {
 
 const testConfiguredAi = async(payload = {}) => {
   const config = createConfiguredAiRuntime({ purpose: 'chat', override: payload })
-  if (config.transport === 'browser') {
-    throw new Error('Browser WebGPU/WebCPU models run in the Electron renderer, not in the main process. Use the browser model runtime from the UI.')
+  if (config.transport === 'node-llama-cpp') {
+    const result = await modelRuntime.testNodeLlamaCppModel(resolveConfiguredLocalModel(config))
+    return {
+      ...result,
+      transport: config.transport,
+      endpoint: config.endpoint,
+      model: config.model
+    }
   }
-  if (!config.enabled) throw new Error('AI is disabled in ElephantNote settings.')
+  if (config.transport === 'browser') {
+    throw new Error('Browser model runtime is no longer the local AI path. Use node-llama-cpp for local chat and embeddings.')
+  }
   if (!config.endpoint) throw new Error('AI endpoint is missing.')
   if (!config.model) throw new Error('AI model is missing.')
   const startedAt = Date.now()
@@ -1145,13 +1160,7 @@ const chatWithRag = async({ message, limit = 6 } = {}, context = {}) => {
 }
 
 const extractTagsFromText = (text = '') => {
-  const stop = new Set(['the', 'and', 'avec', 'pour', 'dans', 'note', 'notes', 'this', 'that', 'from', 'local'])
-  return [...new Set(String(text || '')
-    .toLowerCase()
-    .replace(/[`*_>#()[\]{}.,;:!?/\\-]/g, ' ')
-    .split(/\s+/)
-    .filter((word) => word.length > 3 && !stop.has(word))
-    .slice(0, 8))]
+  return suggestAtomicTags(text, 8)
 }
 
 const replaceMarkdownTags = (markdown, tags) => {
@@ -1188,7 +1197,7 @@ const autotagNote = async({ relativePath } = {}) => {
     tags = extractTagsFromText(markdown)
   }
   tags = [...new Set(tags)].slice(0, 8)
-  const nextMarkdown = replaceMarkdownTags(markdown, tags)
+  const nextMarkdown = ensureAtomicSourcesSection(replaceMarkdownTags(markdown, tags))
   await fs.writeFile(fullPath, nextMarkdown, 'utf8')
   getSearchService().indexFile(fullPath).catch(() => {})
   return {
@@ -1227,9 +1236,10 @@ const runPlugin = async({ id, input = {} } = {}, context = {}) => {
     .find((item) => item.id === id)
   if (!plugin) throw new Error('Unknown plugin.')
   if (!plugin.enabled) throw new Error('Plugin is disabled.')
-  if (id === 'google-calendar') return syncGoogleCalendar()
-  if (id === 'web-clipper') return ingestSourceUrl(input)
-  if (id === 'mcp-memory') return callMcpTool(input, context)
+  const runtime = resolvePluginRuntime(plugin)
+  if (runtime === EXTENSION_PLUGIN_RUNTIMES.GOOGLE_CALENDAR_SYNC) return syncGoogleCalendar()
+  if (runtime === EXTENSION_PLUGIN_RUNTIMES.SOURCE_INGEST_URL) return ingestSourceUrl(input)
+  if (runtime === EXTENSION_PLUGIN_RUNTIMES.MCP_TOOL_CALL) return callMcpTool(input, context)
   throw new Error(`Plugin has no runtime: ${id}.`)
 }
 
@@ -1254,24 +1264,40 @@ const runProgrammaticTask = async({ id } = {}) => {
 
   const steps = []
   for (const action of task.actions) {
-    if (action === 'wiki:propose' || action === 'wiki:proposal') {
+    if (
+      action === EXTENSION_TASK_ACTIONS.WIKI_PROPOSE ||
+      action === EXTENSION_TASK_ACTIONS.WIKI_PROPOSAL
+    ) {
       const wiki = await proposeWikiRecords()
-      steps.push({ action, ok: true, summary: `${wiki.records.length} wiki record${wiki.records.length === 1 ? '' : 's'}` })
-    } else if (action === 'calendar:summary') {
+      steps.push(createTaskStepResult({
+        action,
+        ok: true,
+        summary: `${wiki.records.length} wiki record${wiki.records.length === 1 ? '' : 's'}`
+      }))
+    } else if (action === EXTENSION_TASK_ACTIONS.CALENDAR_SUMMARY) {
       const calendar = await readCalendar(vault.path)
-      steps.push({ action, ok: true, summary: `${calendar.events.length} calendar event${calendar.events.length === 1 ? '' : 's'}` })
-    } else if (action === 'search:recent') {
+      steps.push(createTaskStepResult({
+        action,
+        ok: true,
+        summary: `${calendar.events.length} calendar event${calendar.events.length === 1 ? '' : 's'}`
+      }))
+    } else if (action === EXTENSION_TASK_ACTIONS.SEARCH_RECENT) {
       const notes = await listMarkdownNotesRecursive(vault)
-      steps.push({ action, ok: true, summary: `${notes.slice(0, 8).length} recent note${notes.length === 1 ? '' : 's'}` })
+      steps.push(createTaskStepResult({
+        action,
+        ok: true,
+        summary: `${notes.slice(0, 8).length} recent note${notes.length === 1 ? '' : 's'}`
+      }))
     } else {
-      steps.push({ action, ok: false, summary: 'Action is defined but not executable locally yet.' })
+      steps.push(createTaskStepResult({
+        action,
+        ok: false,
+        summary: 'Action is defined but not executable locally yet.'
+      }))
     }
   }
 
-  const result = {
-    ok: steps.every((step) => step.ok),
-    steps
-  }
+  const result = createTaskRunResult(steps)
   const config = getConfig()
   config.atomicTaskState = updateTaskState(PROGRAMMATIC_TASK_TEMPLATES, config.atomicTaskState, {
     id,
@@ -1292,6 +1318,17 @@ const getApiWindowId = (context = {}) => {
 
 const createElephantNoteMainApi = () => {
   const searchService = getSearchService()
+  searchService.setEmbeddingProvider({
+    source: 'node-llama-cpp',
+    embedText: async(text) => {
+      const selectedModel = getSelectedModelForPurpose('embedding') || 'smollm2-node-llama-cpp'
+      const model = resolveConfiguredLocalModel({
+        purpose: 'embedding',
+        model: selectedModel
+      })
+      return modelRuntime.nodeLlamaCppRuntime.embedText({ model, text })
+    }
+  })
   const sitePreviewService = getSitePreviewService()
   return createElephantNoteApi({
     handlers: {
@@ -1414,6 +1451,7 @@ const createElephantNoteMainApi = () => {
       },
       [ELEPHANTNOTE_API_ACTIONS.ATOMIC_CATALOG_GET]: async() => ({
         models: ATOMIC_MODEL_CATALOG,
+        features: ATOMIC_AI_FEATURES,
         plugins: ATOMIC_PLUGIN_MANIFESTS,
         tasks: PROGRAMMATIC_TASK_TEMPLATES
       }),
@@ -1433,6 +1471,7 @@ const createElephantNoteMainApi = () => {
         if (!model) throw new Error('Unknown model.')
         return modelRuntime.downloadModel(model)
       },
+      [ELEPHANTNOTE_API_ACTIONS.OCR_EXTRACT]: async(payload) => modelRuntime.extractImageText(payload),
       [ELEPHANTNOTE_API_ACTIONS.PLUGINS_LIST]: async() =>
         mergePluginState(ATOMIC_PLUGIN_MANIFESTS, getConfig().atomicPluginState),
       [ELEPHANTNOTE_API_ACTIONS.PLUGINS_SET]: async(payload) => {
@@ -1470,7 +1509,10 @@ const createElephantNoteMainApi = () => {
       [ELEPHANTNOTE_API_ACTIONS.SYNC_STATUS]: async() => syncEngine.status(),
       [ELEPHANTNOTE_API_ACTIONS.SYNC_ENQUEUE]: async({ operation, payload = {} }) =>
         syncEngine.enqueue({ operation, payload }),
-      [ELEPHANTNOTE_API_ACTIONS.SYNC_RUN]: async() => syncEngine.run()
+      [ELEPHANTNOTE_API_ACTIONS.SYNC_RUN]: async(payload = {}) => {
+        syncEngine.enqueuePlan(payload)
+        return syncEngine.run()
+      }
     }
   })
 }

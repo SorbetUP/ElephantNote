@@ -6,19 +6,19 @@ export const ELEPHANTNOTE_AI_PRESETS = Object.freeze({
     endpoint: '',
     model: ''
   },
-  browser: {
-    id: 'browser',
-    label: 'Browser WebGPU/CPU',
-    transport: 'browser',
-    endpoint: 'browser://local',
-    model: 'onnx-community/Qwen2.5-0.5B-Instruct'
+  nodeLlamaCpp: {
+    id: 'nodeLlamaCpp',
+    label: 'node-llama-cpp',
+    transport: 'node-llama-cpp',
+    endpoint: 'node-llama-cpp://local',
+    model: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M'
   },
-  ollama: {
-    id: 'ollama',
-    label: 'Ollama (legacy)',
-    transport: 'ollama',
-    endpoint: 'http://127.0.0.1:11434/api/chat',
-    model: 'llama3.2'
+  mlx: {
+    id: 'mlx',
+    label: 'MLX local server',
+    transport: 'openai-compatible',
+    endpoint: 'http://127.0.0.1:8080/v1/chat/completions',
+    model: 'mlx-community/Qwen2.5-7B-Instruct-4bit'
   },
   lmstudio: {
     id: 'lmstudio',
@@ -26,6 +26,13 @@ export const ELEPHANTNOTE_AI_PRESETS = Object.freeze({
     transport: 'openai-compatible',
     endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
     model: 'local-model'
+  },
+  openrouter: {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    transport: 'openai-compatible',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+    model: 'anthropic/claude-3.5-sonnet'
   },
   codex: {
     id: 'codex',
@@ -60,11 +67,10 @@ export const resolveAiEndpoint = ({ endpoint = '', transport = 'openai-compatibl
 }
 
 export const normalizeAiConfig = (config = {}) => {
-  const presetId = String(config.preset || config.provider || 'browser')
+  const presetId = String(config.preset || config.provider || 'nodeLlamaCpp')
   const preset = ELEPHANTNOTE_AI_PRESETS[presetId] || ELEPHANTNOTE_AI_PRESETS.custom
   const transport = String(config.transport || preset.transport)
   return {
-    enabled: config.enabled !== false,
     preset: preset.id,
     name: String(config.name || preset.label),
     transport,

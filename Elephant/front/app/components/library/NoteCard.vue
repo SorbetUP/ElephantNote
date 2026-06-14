@@ -14,9 +14,9 @@
     @mouseleave="isHovering = false"
     @dragstart="handleDragStart"
     @dragend="handleDragEnd"
-    @dragover.prevent.stop="handleDragOver"
-    @dragleave.stop="handleDragLeave"
-    @drop.prevent.stop="handleDrop"
+    @dragover="handleDragOver"
+    @dragleave="handleDragLeave"
+    @drop="handleDrop"
     @click="$emit('open', entry)"
   >
     <div class="en-card-actions">
@@ -90,6 +90,7 @@ import { FileText, Folder, MoreHorizontal, Pin } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import {
   canDropEntryOnDirectory,
+  clearDraggedEntry,
   getEntryKind,
   parseDraggedEntry,
   writeDraggedEntry
@@ -153,6 +154,7 @@ const handleDragStart = (event) => {
 }
 
 const handleDragEnd = () => {
+  clearDraggedEntry()
   isDragging.value = false
   isDropTarget.value = false
   isDropDisabled.value = false
@@ -160,6 +162,8 @@ const handleDragEnd = () => {
 
 const handleDragOver = (event) => {
   if (!isFolder.value) return
+  event.preventDefault()
+  event.stopPropagation()
   const draggedEntry = parseDraggedEntry(event)
   const canDrop = canDropEntryOnDirectory(draggedEntry, props.entry.path)
   isDropTarget.value = canDrop
@@ -169,13 +173,17 @@ const handleDragOver = (event) => {
   }
 }
 
-const handleDragLeave = () => {
+const handleDragLeave = (event) => {
+  if (!isFolder.value) return
+  event.stopPropagation()
   isDropTarget.value = false
   isDropDisabled.value = false
 }
 
 const handleDrop = async (event) => {
   if (!isFolder.value) return
+  event.preventDefault()
+  event.stopPropagation()
   const draggedEntry = parseDraggedEntry(event)
   const canDrop = canDropEntryOnDirectory(draggedEntry, props.entry.path)
   isDropTarget.value = false

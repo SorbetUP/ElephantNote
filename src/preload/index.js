@@ -2,6 +2,7 @@ import { contextBridge, shell, clipboard, webUtils } from 'electron'
 import fs from 'fs-extra'
 import { isFile, isDirectory, ensureDirSync } from 'common/filesystem'
 import { electronAPI } from '@electron-toolkit/preload'
+import { createElephantNoteAPI } from './elephantnoteApi'
 import {
   isChildOfDirectory,
   hasMarkdownExtension,
@@ -55,64 +56,7 @@ const commandAPI = {
   }
 }
 
-const elephantNoteAPI = {
-  api: {
-    describe: () => electronAPI.ipcRenderer.invoke('elephantnote:api:describe'),
-    call: (action, payload = {}) => electronAPI.ipcRenderer.invoke('elephantnote:api:call', { action, payload })
-  },
-  getVaults: () => electronAPI.ipcRenderer.invoke('elephantnote:getVaults'),
-  selectVault: () => electronAPI.ipcRenderer.invoke('elephantnote:selectVault'),
-  setActiveVault: (vaultId) => electronAPI.ipcRenderer.invoke('elephantnote:setActiveVault', vaultId),
-  setVaultIcon: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:setVaultIcon', payload),
-  setVaultName: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:setVaultName', payload),
-  removeVault: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:removeVault', payload),
-  listDirectory: (relativePath) => electronAPI.ipcRenderer.invoke('elephantnote:listDirectory', relativePath),
-  createNote: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:createNote', payload),
-  createFolder: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:createFolder', payload),
-  attachSidebarEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:attachSidebarEntry', payload),
-  detachSidebarEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:detachSidebarEntry', payload),
-  importGoogleKeep: () => electronAPI.ipcRenderer.invoke('elephantnote:importGoogleKeep'),
-  renameEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:renameEntry', payload),
-  moveEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:moveEntry', payload),
-  deleteEntry: (payload) => electronAPI.ipcRenderer.invoke('elephantnote:deleteEntry', payload),
-  search: {
-    initVault: (vaultPath) => electronAPI.ipcRenderer.invoke('en:search:init-vault', vaultPath),
-    query: (params) => electronAPI.ipcRenderer.invoke('en:search:query', params),
-    status: () => electronAPI.ipcRenderer.invoke('en:search:status'),
-    inspect: () => electronAPI.ipcRenderer.invoke('en:search:inspect'),
-    rebuild: () => electronAPI.ipcRenderer.invoke('en:search:rebuild'),
-    clear: () => electronAPI.ipcRenderer.invoke('en:search:clear'),
-    disable: () => electronAPI.ipcRenderer.invoke('en:search:disable'),
-    enable: () => electronAPI.ipcRenderer.invoke('en:search:enable')
-  },
-  atomicFeatures: {
-    describeApi: () => electronAPI.ipcRenderer.invoke('en:atomic:api:describe'),
-    callApi: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:api:call', payload),
-    providers: () => electronAPI.ipcRenderer.invoke('en:atomic:providers'),
-    overview: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:overview', payload),
-    graph: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:graph', payload),
-    wiki: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:wiki', payload),
-    createWikiPage: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:wiki:create-page', payload),
-    summarize: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:summarize', payload),
-    structure: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:structure', payload),
-    autoNameNote: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:notes:auto-name', payload),
-    listLocalModels: () => electronAPI.ipcRenderer.invoke('en:atomic:models:list-local'),
-    pullModel: (payload = {}) => electronAPI.ipcRenderer.invoke('en:atomic:models:pull', payload)
-  },
-  sitePreview: {
-    previewFolder: (params) => electronAPI.ipcRenderer.invoke('en:site-preview:preview-folder', params),
-    buildFolder: (params) => electronAPI.ipcRenderer.invoke('en:site-preview:build-folder', params),
-    stop: (siteId) => electronAPI.ipcRenderer.invoke('en:site-preview:stop', siteId),
-    status: (siteId) => electronAPI.ipcRenderer.invoke('en:site-preview:status', siteId),
-    openExternal: (url) => electronAPI.ipcRenderer.invoke('en:site-preview:open-external', url)
-  },
-  agents: {
-    list: () => electronAPI.ipcRenderer.invoke('en:agents:list'),
-    register: (payload) => electronAPI.ipcRenderer.invoke('en:agents:register', payload),
-    unregister: (id) => electronAPI.ipcRenderer.invoke('en:agents:unregister', id),
-    send: (payload) => electronAPI.ipcRenderer.invoke('en:agents:send', payload)
-  }
-}
+const elephantNoteAPI = createElephantNoteAPI()
 
 if (process.contextIsolated) {
   try {

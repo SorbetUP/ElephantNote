@@ -1,7 +1,7 @@
 <template>
   <div
     class="en-settings-backdrop"
-    :class="`en-theme-${theme}`"
+    :class="[`en-theme-${themeMode}`, `en-theme-${themeClassId}`]"
     :style="settingsStyle"
     @click.self="$emit('close')"
   >
@@ -42,18 +42,47 @@
             <section class="en-settings-section">
               <div>
                 <h3>Theme</h3>
-                <p>Switch the shell and editor surface between light and dark.</p>
+                <p>{{ activeThemeLabel }}</p>
               </div>
               <button
                 class="en-theme-switch"
                 type="button"
-                :class="{ dark: theme === 'dark' }"
-                @click="$emit('update-theme', theme === 'dark' ? 'light' : 'dark')"
+                :class="{ dark: themeMode === 'dark' }"
+                @click="emit('update-theme', oppositeTheme)"
               >
                 <SunMedium class="en-theme-icon light" />
                 <Moon class="en-theme-icon dark" />
-                {{ theme === 'dark' ? 'Dark' : 'Light' }}
+                {{ themeMode === 'dark' ? 'Dark' : 'Light' }}
               </button>
+            </section>
+
+            <section class="en-settings-section stacked">
+              <div>
+                <h3>Graphic themes</h3>
+                <p>Choose a visual family. Each family keeps matching light and dark variants.</p>
+              </div>
+              <div class="en-theme-grid">
+                <button
+                  v-for="family in themeFamilies"
+                  :key="family.id"
+                  type="button"
+                  class="en-theme-card"
+                  :class="{ active: activeThemeFamily.id === family.id }"
+                  @click="emit('update-theme', getThemeVariant(family.id, themeMode))"
+                >
+                  <span class="en-theme-card-preview">
+                    <i
+                      v-for="swatch in family.swatches"
+                      :key="swatch"
+                      :style="{ backgroundColor: swatch }"
+                    />
+                  </span>
+                  <span class="en-theme-card-copy">
+                    <strong>{{ family.name }}</strong>
+                    <small>{{ family.description }}</small>
+                  </span>
+                </button>
+              </div>
             </section>
 
             <section class="en-settings-section">
@@ -228,14 +257,148 @@
           <template v-else-if="activeSection === 'sync'">
             <section class="en-settings-section stacked">
               <div>
-                <h3>Git sync</h3>
-                <p>Synchronize vault changes through Git.</p>
+                <h3>Synchronization</h3>
+                <p>Pair devices with Syncthing over the local network. Git is only used locally to order snapshots.</p>
               </div>
-              <button
-                type="button"
-                :class="{ active: featureFlags.gitSync }"
-                @click="toggleFeature('gitSync')"
-              >Git sync {{ featureFlags.gitSync ? 'enabled' : 'disabled' }}</button>
+
+              <div class="en-sync-status-grid">
+                <article
+                  class="en-sync-status-card"
+                  :class="{ ok: syncStatus.deviceId }"
+                >
+                  <GitBranch class="en-icon" />
+                  <div>
+                    <strong>Local Git history</strong>
+                    <span>{{ syncStatus.branch || 'No branch yet' }}</span>
+                  </div>
+                </article>
+                <article
+                  class="en-sync-status-card"
+                  :class="{ ok: syncStatus.syncthing?.connected, warn: syncStatus.syncthing?.configured && !syncStatus.syncthing?.connected }"
+                >
+                  <Wifi class="en-icon" />
+                  <div>
+                    <strong>{{ syncStatus.syncthing?.connected ? 'Syncthing connected' : 'Syncthing offline' }}</strong>
+                    <span>{{ syncStatus.syncthing?.folderState || syncStatus.syncthing?.lastError || 'Waiting for configuration' }}</span>
+                  </div>
+                </article>
+                <article
+                  class="en-sync-status-card"
+                  :class="{ warn: syncStatus.dirty || syncStatus.queued }"
+                >
+                  <RefreshCw class="en-icon" />
+                  <div>
+                    <strong>{{ syncStatus.dirty ? 'Local changes' : 'Vault clean' }}</strong>
+                    <span>{{ syncStatus.queued || 0 }} queued · Git history local</span>
+                  </div>
+                </article>
+              </div>
+
+              <div class="en-form-grid">
+                <label>
+                  <span>Backend</span>
+                  <select v-model="syncForm.backend">
+                    <option value="git">Local Git only</option>
+                    <option value="syncthing-git">Syncthing LAN + local Git</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Branch</span>
+                  <input
+                    v-model.trim="syncForm.branch"
+                    type="text"
+                    placeholder="main"
+                  >
+                </label>
+                <label>
+                  <span>Peer device ID</span>
+                  <input
+                    v-model.trim="syncForm.peerDeviceId"
+                    type="text"
+                    placeholder="Syncthing device ID"
+                  >
+                </label>
+                <label>
+                  <span>Peer address / IP</span>
+                  <input
+                    v-model.trim="syncForm.peerAddress"
+                    type="text"
+                    placeholder="tcp://192.168.1.42:22000 or dynamic"
+                  >
+                </label>
+                <label>
+                  <span>Syncthing REST endpoint</span>
+                  <input
+                    v-model.trim="syncForm.syncthingEndpoint"
+                    type="text"
+                    placeholder="http://127.0.0.1:8384"
+                  >
+                </label>
+                <label>
+                  <span>Syncthing API key</span>
+                  <input
+                    v-model.trim="syncForm.syncthingApiKey"
+                    type="password"
+                    autocomplete="off"
+                    placeholder="Optional"
+                  >
+                </label>
+              </div>
+
+              <div class="en-settings-actions-row">
+                <button
+                  type="button"
+                  :class="{ active: featureFlags.gitSync }"
+                  @click="toggleFeature('gitSync')"
+                >{{ featureFlags.gitSync ? 'Sync enabled' : 'Sync disabled' }}</button>
+                <button
+                  type="button"
+                  :disabled="isSyncRunning"
+                  @click="configureSync"
+                >
+                  <Server class="en-icon" />
+                  {{ isSyncRunning ? 'Configuring...' : 'Configure' }}
+                </button>
+                <button
+                  type="button"
+                  :disabled="isSyncRunning"
+                  @click="runSync"
+                >
+                  <RefreshCw class="en-icon" />
+                  {{ isSyncRunning ? 'Synchronizing...' : 'Sync now' }}
+                </button>
+                <button
+                  type="button"
+                  :disabled="isSyncRunning"
+                  @click="loadSyncStatus"
+                >Refresh status</button>
+                <span class="en-settings-message">{{ syncMessage }}</span>
+              </div>
+            </section>
+
+            <section class="en-settings-section stacked">
+              <div>
+                <h3>Connection details</h3>
+                <p class="en-settings-path">Vault: {{ activeVaultPath || 'No active vault' }}</p>
+                <p class="en-settings-path">Device: {{ syncStatus.deviceId || 'Not initialized' }} · Folder: {{ syncStatus.folderId || 'Not initialized' }}</p>
+                <p class="en-settings-path">Local Syncthing ID: {{ syncStatus.syncthing?.localDeviceId || 'Start Syncthing to reveal it' }}</p>
+                <p class="en-settings-path">Peer: {{ syncPeerLabel }}</p>
+              </div>
+              <div class="en-sync-history">
+                <article
+                  v-for="item in syncStatus.history || []"
+                  :key="item.id"
+                  :class="{ error: item.status === 'error' }"
+                >
+                  <strong>{{ item.operation }}</strong>
+                  <span>{{ item.status }} · {{ formatSyncTime(item.updatedAt) }}</span>
+                  <small v-if="item.error">{{ item.error }}</small>
+                </article>
+                <p
+                  v-if="!syncStatus.history?.length"
+                  class="en-settings-path"
+                >No synchronization run has been recorded yet.</p>
+              </div>
             </section>
           </template>
 
@@ -243,14 +406,9 @@
             <section class="en-ai-shell">
               <header class="en-ai-header">
                 <div>
-                  <h3>AI</h3>
-                  <p>Models, providers, audio, tasks, agent access and semantic search in one place.</p>
+                  <h3>AI providers</h3>
+                  <p>Choose the provider for search, chat and OCR. Local chat and embeddings use node-llama-cpp; OCR uses local Tesseract.</p>
                 </div>
-                <button
-                  type="button"
-                  :class="{ active: featureFlags.ai }"
-                  @click="toggleFeature('ai')"
-                >AI {{ featureFlags.ai ? 'enabled' : 'disabled' }}</button>
               </header>
 
               <nav class="en-ai-tabs">
@@ -264,68 +422,160 @@
               </nav>
 
               <section
-                v-if="activeAiTab === 'providers'"
+                v-if="activeAiTab === 'setup'"
                 class="en-settings-section stacked"
               >
                 <div>
-                  <h3>Provider endpoint</h3>
-                  <p>Use the built-in browser runtime first, or keep an external OpenAI-compatible endpoint when needed.</p>
+                  <h3>Runtime</h3>
+                  <p>{{ setupRuntimeMessage }}</p>
                 </div>
-                <div class="en-ai-provider-grid">
+                <div class="en-ai-runtime-grid">
                   <button
-                    v-for="preset in aiPresets"
-                    :key="preset.id"
                     type="button"
-                    :class="{ active: aiConfig.preset === preset.id }"
-                    @click="applyAiPreset(preset)"
-                  >{{ preset.label }}</button>
+                    :class="{ active: setupRuntime === 'node-llama-cpp' }"
+                    @click="setSetupRuntime('node-llama-cpp')"
+                  >
+                    <strong>node-llama-cpp</strong>
+                    <span>Local GGUF runtime</span>
+                  </button>
                 </div>
-                <div class="en-form-grid">
-                  <label>
-                    <span>Endpoint</span>
-                    <input
-                      v-model.trim="aiConfig.endpoint"
-                      type="text"
-                      placeholder="browser://local"
+
+                <div
+                  class="en-model-runtime-card"
+                  :class="{ error: !localModelRuntime.available && modelRuntimeMessage }"
+                >
+                  <div>
+                    <strong>{{ localModelRuntime.available ? 'Runtime ready' : 'Runtime not ready' }}</strong>
+                    <span>{{ modelRuntimeMessage || 'Check local runtime status.' }}</span>
+                  </div>
+                  <button
+                    type="button"
+                    @click="loadLocalModels"
+                  >Check</button>
+                </div>
+
+                <div class="en-ai-setup-grid">
+                  <article
+                    v-for="step in aiSetupSteps"
+                    :key="step.purpose"
+                    class="en-ai-setup-card"
+                    :class="{ installed: step.installed }"
+                  >
+                    <header>
+                      <div>
+                        <small>{{ step.label }}</small>
+                        <strong>{{ step.model?.name || 'No model available' }}</strong>
+                        <span>{{ step.model?.provider || setupRuntime }} · {{ step.model?.size || 'unknown size' }}</span>
+                      </div>
+                      <span>{{ step.installed ? 'Ready' : 'Needed' }}</span>
+                    </header>
+                    <p>{{ step.model?.notes || 'No recommended model exists for this runtime yet.' }}</p>
+                    <div
+                      v-if="step.model && isModelDownloading(step.model.id)"
+                      class="en-model-progress"
                     >
-                  </label>
-                  <label>
-                    <span>Model</span>
-                    <input
-                      v-model.trim="aiConfig.model"
-                      type="text"
-                      placeholder="llama3.2"
+                      <div :style="{ width: `${getModelProgress(step.model.id)}%` }" />
+                    </div>
+                    <p
+                      v-if="step.model && getModelMessage(step.model.id)"
+                      class="en-model-message"
+                    >{{ getModelMessage(step.model.id) }}</p>
+                    <button
+                      type="button"
+                      :disabled="!step.model || !isModelLoadable(step.model) || modelDownload.active"
+                      @click="pullAtomicModel(step.model.id)"
+                    >{{ step.installed ? 'Test again' : 'Install and test' }}</button>
+                  </article>
+                </div>
+
+                <div class="en-settings-actions-row">
+                  <button
+                    type="button"
+                    :disabled="modelDownload.active || isTestingAiConfig"
+                    @click="runAiSetupTest"
+                  >{{ isTestingAiConfig ? 'Testing…' : 'Test complete AI setup' }}</button>
+                  <button
+                    type="button"
+                    @click="activeAiTab = 'search'"
+                  >Semantic search</button>
+                  <button
+                    type="button"
+                    @click="activeAiTab = 'providers'"
+                  >Advanced</button>
+                  <span class="en-settings-message">{{ aiConfigMessage || modelSelectionMessage }}</span>
+                </div>
+              </section>
+
+              <section
+                v-else-if="activeAiTab === 'providers'"
+                class="en-ai-provider-panel"
+              >
+                <div class="en-ai-panel-copy">
+                  <h3>Select the provider for each AI feature.</h3>
+                  <p>Each feature can use a different provider. Search and chat share a local GGUF model through node-llama-cpp; OCR uses a local image-to-text engine.</p>
+                </div>
+                <div class="en-ai-feature-list">
+                  <article
+                    v-for="feature in aiFeatureRows"
+                    :key="feature.id"
+                    class="en-ai-feature-row"
+                  >
+                    <div class="en-ai-feature-main">
+                      <span class="en-ai-feature-icon">
+                        <component :is="feature.icon" class="en-icon" />
+                      </span>
+                      <div>
+                        <h4>{{ feature.title }}</h4>
+                        <p>{{ feature.description }}</p>
+                      </div>
+                    </div>
+                    <label class="en-ai-feature-provider">
+                      <span>Provider</span>
+                      <select
+                        :value="feature.id === 'ocr' ? 'local-ocr' : 'node-llama-cpp'"
+                        @change="setSetupRuntime('node-llama-cpp')"
+                      >
+                        <option value="node-llama-cpp">node-llama-cpp</option>
+                        <option value="local-ocr">Local OCR</option>
+                        <option value="openai-compatible">API</option>
+                        <option value="codex">Codex</option>
+                      </select>
+                    </label>
+                    <div class="en-ai-feature-status">
+                      <span
+                        class="en-ai-status-pill"
+                        :class="feature.statusTone"
+                      >
+                        {{ feature.status }}
+                        <CheckCircle2
+                          v-if="feature.statusTone === 'ok'"
+                          class="en-icon"
+                        />
+                      </span>
+                      <p>{{ feature.model?.name || feature.message }}</p>
+                      <small>{{ feature.message }}</small>
+                    </div>
+                    <button
+                      type="button"
+                      :disabled="!feature.model || feature.model.provider === 'local-ocr' || !isModelLoadable(feature.model) || modelDownload.active"
+                      @click="pullAtomicModel(feature.model.id)"
                     >
-                  </label>
-                  <label>
-                    <span>Transport</span>
-                    <select v-model="aiConfig.transport">
-                      <option value="browser">Browser WebGPU/CPU</option>
-                      <option value="openai-compatible">OpenAI compatible</option>
-                      <option value="ollama">Ollama legacy</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>API key</span>
-                    <input
-                      v-model.trim="aiConfig.apiKey"
-                      type="password"
-                      placeholder="Optional"
-                    >
-                  </label>
+                      Manage models
+                      <Layers class="en-icon" />
+                    </button>
+                  </article>
                 </div>
                 <div class="en-settings-actions-row">
                   <button
                     type="button"
-                    :disabled="isSavingAiConfig"
-                    @click="saveAiConfig"
-                  >{{ isSavingAiConfig ? 'Saving...' : 'Save endpoint' }}</button>
+                    @click="loadLocalModels"
+                  >Check runtime</button>
                   <button
                     type="button"
-                    :disabled="isTestingAiConfig || !aiConfig.endpoint || !aiConfig.model"
+                    :disabled="isTestingAiConfig"
                     @click="testAiConfig"
-                  >{{ isTestingAiConfig ? 'Testing…' : 'Test model' }}</button>
-                  <span class="en-settings-message">{{ aiConfigMessage }}</span>
+                  >{{ isTestingAiConfig ? 'Testing...' : 'Test chat + embeddings' }}</button>
+                  <span class="en-settings-message">{{ aiConfigMessage || modelRuntimeMessage }}</span>
                 </div>
               </section>
 
@@ -335,7 +585,7 @@
               >
                 <div>
                   <h3>Model management</h3>
-                  <p>ElephantNote now loads models inside Electron with Transformers.js. Downloads are handled by the browser cache and run on WebGPU when available, otherwise WebCPU/WASM.</p>
+                  <p>ElephantNote downloads GGUF files and loads them in the Electron main process with node-llama-cpp.</p>
                 </div>
 
                 <div
@@ -343,8 +593,8 @@
                   :class="{ error: !localModelRuntime.available && modelRuntimeMessage }"
                 >
                   <div>
-                    <strong>{{ localModelRuntime.available ? 'Browser runtime ready' : 'Browser runtime not ready' }}</strong>
-                    <span>{{ modelRuntimeMessage || 'Check WebGPU/WebCPU and model dependency status.' }}</span>
+                    <strong>{{ localModelRuntime.available ? 'node-llama-cpp ready' : 'node-llama-cpp not ready' }}</strong>
+                    <span>{{ modelRuntimeMessage || 'Check the node-llama-cpp runtime and local GGUF model directory.' }}</span>
                   </div>
                   <button
                     type="button"
@@ -460,6 +710,53 @@
                   </div>
                 </div>
                 <search-settings-panel />
+              </section>
+
+              <section
+                v-else-if="activeAiTab === 'chat'"
+                class="en-settings-section stacked"
+              >
+                <div>
+                  <h3>Chat</h3>
+                  <p>Local chat answers use the selected node-llama-cpp GGUF model.</p>
+                </div>
+                <div class="en-settings-actions-row">
+                  <button
+                    type="button"
+                    :disabled="isTestingAiConfig"
+                    @click="testAiConfig"
+                  >{{ isTestingAiConfig ? 'Testing...' : 'Test local answer' }}</button>
+                  <span class="en-settings-message">{{ aiConfigMessage }}</span>
+                </div>
+              </section>
+
+              <section
+                v-else-if="activeAiTab === 'ocr'"
+                class="en-settings-section stacked"
+              >
+                <div>
+                  <h3>OCR</h3>
+                  <p>OCR extracts text content from images through the local Tesseract runtime.</p>
+                </div>
+                <div class="en-form-grid">
+                  <label class="en-full-label">
+                    <span>Image path</span>
+                    <input
+                      v-model.trim="ocrImagePath"
+                      type="text"
+                      placeholder="/path/to/image.png"
+                    >
+                  </label>
+                </div>
+                <div class="en-settings-actions-row">
+                  <button
+                    type="button"
+                    :disabled="isRunningOcr || !ocrImagePath"
+                    @click="runOcr"
+                  >{{ isRunningOcr ? 'Extracting...' : 'Extract text' }}</button>
+                  <span class="en-settings-message">{{ ocrMessage }}</span>
+                </div>
+                <pre v-if="ocrText">{{ ocrText }}</pre>
               </section>
 
               <section
@@ -587,10 +884,19 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Download, Mic, Moon, SunMedium, Volume2, X } from '@lucide/vue'
+import { computed, onMounted, ref } from 'vue'
+import { CheckCircle2, Download, GitBranch, Layers, MessageCircle, Mic, Moon, RefreshCw, ScanText, Search, Server, SunMedium, Volume2, Wifi, X } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import { ELEPHANTNOTE_AI_PRESETS, normalizeAiConfig } from 'common/elephantnote/aiProviders'
+import {
+  ELEPHANTNOTE_THEME_FAMILIES,
+  getOppositeThemeVariant,
+  getThemeFamily,
+  getThemeLabel,
+  getThemeMode,
+  getThemeTokens,
+  getThemeVariant
+} from 'common/elephantnote/appearance'
 import {
   ATOMIC_MODEL_CATALOG,
   MODEL_GROUPS,
@@ -599,16 +905,16 @@ import {
   getModelsByCategory,
   getModelsByPurpose
 } from 'common/elephantnote/atomicWorkspace'
+import {
+  createSelectionPatchForModel,
+  getModelRuntimeName,
+  getRecommendedSetupModels,
+  isRunnableSetupModel,
+  isSetupModelInstalled
+} from 'common/elephantnote/aiSetup'
 import SearchSettingsPanel from '../../search/SearchSettingsPanel.vue'
 import { useSitePreviewStore } from '../../sitePreview/sitePreviewStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
-import {
-  getBrowserModelRuntimeStatus,
-  listBrowserModels,
-  loadBrowserTextModel,
-  onBrowserModelRuntimeProgress,
-  testBrowserModel
-} from '../../services/browserModelRuntime'
 
 const props = defineProps({
   theme: { type: String, required: true },
@@ -618,7 +924,7 @@ const props = defineProps({
   activeVaultPath: { type: String, default: '' }
 })
 
-defineEmits(['close', 'update-theme', 'update-sidebar-width'])
+const emit = defineEmits(['close', 'update-theme', 'update-sidebar-width'])
 
 const sections = [
   { id: 'appearance', label: 'Appearance' },
@@ -631,31 +937,49 @@ const sections = [
 ]
 
 const aiTabs = [
-  { id: 'providers', label: 'Providers' },
-  { id: 'models', label: 'Models' },
+  { id: 'providers', label: 'Provider' },
   { id: 'search', label: 'Search' },
-  { id: 'audio', label: 'Audio' },
-  { id: 'tasks', label: 'Tasks' },
-  { id: 'api', label: 'Agent API' }
+  { id: 'chat', label: 'Chat' },
+  { id: 'ocr', label: 'OCR' }
 ]
 
 const activeSection = ref('appearance')
 const activeAiTab = ref('providers')
 const vaults = computed(() => props.vaults)
 const theme = computed(() => props.theme)
+const themeFamilies = ELEPHANTNOTE_THEME_FAMILIES
+const themeMode = computed(() => getThemeMode(theme.value))
+const themeClassId = computed(() => theme.value.replace(/[^a-z0-9-]/gi, '-'))
+const activeThemeFamily = computed(() => getThemeFamily(theme.value))
+const activeThemeLabel = computed(() => getThemeLabel(theme.value))
+const oppositeTheme = computed(() => getOppositeThemeVariant(theme.value))
 const preferences = usePreferencesStore()
 const sitePreviewStore = useSitePreviewStore()
-const aiPresets = Object.values(ELEPHANTNOTE_AI_PRESETS)
 const aiConfig = ref(normalizeAiConfig())
-const featureFlags = ref({ ai: true, askAi: true, sitePreview: true, gitSync: false, agents: true, semanticSearch: true })
+const featureFlags = ref({ askAi: true, sitePreview: true, gitSync: false, agents: true, semanticSearch: true })
+const setupRuntime = ref('node-llama-cpp')
 const sourceUrl = ref('')
 const sourceDestination = ref('Sources')
 const sourceImportMessage = ref('')
 const importMessage = ref('')
 const isImporting = ref(false)
 const isImportingSource = ref(false)
+const isSyncRunning = ref(false)
+const syncMessage = ref('')
+const syncStatus = ref({
+  backend: 'git',
+  syncthing: {},
+  history: []
+})
+const syncForm = ref({
+  backend: 'syncthing-git',
+  branch: 'main',
+  peerDeviceId: '',
+  peerAddress: 'dynamic',
+  syncthingEndpoint: 'http://127.0.0.1:8384',
+  syncthingApiKey: ''
+})
 const aiConfigMessage = ref('')
-const isSavingAiConfig = ref(false)
 const isTestingAiConfig = ref(false)
 const modelGroups = ref(MODEL_GROUPS)
 const modelCatalog = ref(ATOMIC_MODEL_CATALOG)
@@ -672,6 +996,10 @@ const taskTemplates = ref(PROGRAMMATIC_TASK_TEMPLATES)
 const taskMessage = ref('')
 const atomicApiText = ref('')
 const newTask = ref({ name: '', cadence: 'manual', prompt: '' })
+const ocrImagePath = ref('')
+const ocrText = ref('')
+const ocrMessage = ref('')
+const isRunningOcr = ref(false)
 
 const siteStatusLabel = computed(() => {
   if (sitePreviewStore.previewUrl) return 'Preview running'
@@ -679,9 +1007,13 @@ const siteStatusLabel = computed(() => {
   return 'No generated site active'
 })
 
-const settingsStyle = computed(() => theme.value === 'dark'
-  ? { '--en-bg': '#0f141d', '--en-surface': '#141a24', '--en-sidebar-bg': '#101722', '--en-soft': '#1b2432', '--en-soft-strong': '#202b3b', '--en-border': '#283244', '--en-border-strong': '#3a465a', '--en-text': '#eef3fb', '--en-muted': '#98a3b6', '--en-subtle': '#7f8aa0', '--en-primary': '#5ea1ff', '--en-card-shadow': '0 18px 44px rgba(0, 0, 0, 0.28)' }
-  : { '--en-bg': '#f7f9fc', '--en-surface': '#ffffff', '--en-sidebar-bg': '#edf2f7', '--en-soft': '#e9eff7', '--en-soft-strong': '#dfe7f1', '--en-border': '#c5cfdd', '--en-border-strong': '#aebacd', '--en-text': '#101828', '--en-muted': '#475467', '--en-subtle': '#667085', '--en-primary': '#2563eb', '--en-card-shadow': '0 30px 90px rgba(15, 23, 42, 0.22)' })
+const syncPeerLabel = computed(() => {
+  const peer = syncStatus.value.peers?.[0] || syncForm.value
+  if (!peer?.deviceId && !syncForm.value.peerDeviceId) return 'No peer device configured'
+  return `${peer.deviceId || syncForm.value.peerDeviceId} · ${peer.address || syncForm.value.peerAddress || 'dynamic'}`
+})
+
+const settingsStyle = computed(() => getThemeTokens(theme.value))
 
 const setAutoSaveDelay = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'autoSaveDelay', value })
 const setShowEditorFooter = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'showEditorFooter', value })
@@ -737,38 +1069,98 @@ const toggleFeature = async (key) => {
   }
 }
 
-const applyAiPreset = (preset) => {
-  aiConfig.value = normalizeAiConfig({ ...aiConfig.value, ...preset, preset: preset.id, name: preset.label, apiKey: aiConfig.value.apiKey })
-  aiConfigMessage.value = ''
+const syncInitPayload = () => ({
+  backend: syncForm.value.backend,
+  branch: syncForm.value.branch,
+  syncthingEndpoint: syncForm.value.syncthingEndpoint,
+  syncthingApiKey: syncForm.value.syncthingApiKey,
+  peerDeviceId: syncForm.value.peerDeviceId,
+  peerAddress: syncForm.value.peerAddress || 'dynamic'
+})
+
+const hydrateSyncForm = (status = {}) => {
+  syncStatus.value = { syncthing: {}, history: [], ...status }
+  syncForm.value = {
+    ...syncForm.value,
+    backend: status.backend || syncForm.value.backend,
+    branch: status.branch || syncForm.value.branch,
+    peerDeviceId: status.peers?.[0]?.deviceId || syncForm.value.peerDeviceId,
+    peerAddress: status.peers?.[0]?.address || syncForm.value.peerAddress,
+    syncthingEndpoint: status.syncthing?.endpoint || syncForm.value.syncthingEndpoint
+  }
 }
 
-const saveAiConfig = async () => {
-  isSavingAiConfig.value = true
+const loadSyncStatus = async () => {
   try {
-    aiConfig.value = normalizeAiConfig(await elephantnoteClient.ai.setConfig(aiConfig.value))
-    aiConfigMessage.value = 'Endpoint saved.'
+    hydrateSyncForm(await elephantnoteClient.sync.status())
+    syncMessage.value = syncStatus.value.lastError || ''
   } catch (error) {
-    aiConfigMessage.value = error instanceof Error ? error.message : 'AI endpoint save failed.'
+    syncMessage.value = error instanceof Error ? error.message : 'Unable to load sync status.'
+  }
+}
+
+const configureSync = async () => {
+  if (isSyncRunning.value) return
+  isSyncRunning.value = true
+  syncMessage.value = 'Configuring synchronization...'
+  try {
+    hydrateSyncForm(await elephantnoteClient.sync.run({
+      init: syncInitPayload()
+    }))
+    syncMessage.value = syncStatus.value.syncthing?.lastError || 'Synchronization configured.'
+  } catch (error) {
+    syncMessage.value = error instanceof Error ? error.message : 'Synchronization configuration failed.'
   } finally {
-    isSavingAiConfig.value = false
+    isSyncRunning.value = false
+  }
+}
+
+const runSync = async () => {
+  if (isSyncRunning.value) return
+  isSyncRunning.value = true
+  syncMessage.value = 'Synchronizing vault...'
+  try {
+    hydrateSyncForm(await elephantnoteClient.sync.run({
+      init: syncInitPayload(),
+      snapshot: { message: `ElephantNote manual sync ${new Date().toISOString()}` }
+    }))
+    syncMessage.value = syncStatus.value.lastError || syncStatus.value.syncthing?.lastError || 'Synchronization finished.'
+  } catch (error) {
+    syncMessage.value = error instanceof Error ? error.message : 'Synchronization failed.'
+  } finally {
+    isSyncRunning.value = false
+  }
+}
+
+const formatSyncTime = (value = '') => {
+  if (!value) return 'unknown time'
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date(value))
+  } catch {
+    return value
   }
 }
 
 const testAiConfig = async () => {
   isTestingAiConfig.value = true
-  aiConfigMessage.value = aiConfig.value.transport === 'browser' ? 'Testing browser model…' : 'Testing model endpoint…'
+  aiConfig.value = normalizeAiConfig({
+    ...aiConfig.value,
+    preset: 'nodeLlamaCpp',
+    transport: 'node-llama-cpp',
+    endpoint: 'node-llama-cpp://local',
+    model: modelSelection.value.chat || recommendedSetupModels.value.chat?.id || aiConfig.value.model
+  })
+  aiConfigMessage.value = 'Testing node-llama-cpp model...'
   try {
-    if (aiConfig.value.transport === 'browser') {
-      const model = getModelById(modelSelection.value.chat) ||
-        modelCatalog.value.find((item) => item.browserModel === aiConfig.value.model && item.task === 'text-generation') ||
-        modelCatalog.value.find((item) => item.id === 'qwen25-05b-chat-browser')
-      const result = await testBrowserModel(model || { id: 'qwen25-05b-chat-browser', browserModel: aiConfig.value.model, name: aiConfig.value.model })
-      aiConfigMessage.value = `Browser model OK · ${result.model} · ${Math.round(result.latencyMs || 0)} ms · ${result.response || 'response received'}`
-    } else {
-      const result = await elephantnoteClient.ai.testConfig(aiConfig.value)
-      aiConfig.value = normalizeAiConfig(aiConfig.value)
-      aiConfigMessage.value = `Model OK · ${result.model} · ${Math.round(result.latencyMs || 0)} ms · ${result.response || 'response received'}`
-    }
+    await elephantnoteClient.ai.setConfig(aiConfig.value)
+    const result = await elephantnoteClient.ai.testConfig(aiConfig.value)
+    aiConfig.value = normalizeAiConfig(aiConfig.value)
+    aiConfigMessage.value = `node-llama-cpp OK · ${Math.round(result.latencyMs || 0)} ms · ${result.embeddingDimensions || 0} dims · ${result.response || 'response received'}`
   } catch (error) {
     aiConfigMessage.value = error instanceof Error ? error.message : 'AI endpoint test failed.'
   } finally {
@@ -782,40 +1174,91 @@ const getModelsForCategory = (category) => getModelsByCategory(category, modelCa
 const getModelById = (id) => modelCatalog.value.find((item) => item.id === id || item.pull === id)
 const selectedModelName = (purpose) => modelCatalog.value.find((item) => item.id === modelSelection.value[purpose])?.name || 'Not selected'
 const isModelInstalled = (model) => {
-  const expected = model?.id
-  if (!expected) return false
-  return localModels.value.some((item) => item.id === expected || item.browserModel === model.browserModel)
+  if (!model?.id) return false
+  return isSetupModelInstalled(model, localModels.value)
 }
-const isModelLoadable = (model) => model?.provider === 'browser' && model.task === 'text-generation'
+const isModelLoadable = (model) => isRunnableSetupModel(model)
 const isModelDownloading = (id) => modelDownload.value.active && modelDownload.value.modelId === id
 const getModelProgress = (id) => isModelDownloading(id) ? Math.max(4, Math.min(100, Number(modelDownload.value.percent) || 4)) : 0
 const getModelMessage = (id) => isModelDownloading(id) ? modelDownload.value.message : modelDownloadMessages.value[id]
 const getModelButtonLabel = (model) => {
-  if (!isModelLoadable(model)) return model.provider === 'browser-webllm' ? 'WebLLM later' : 'External'
+  if (model.provider === 'local-ocr') return 'System OCR'
+  if (!isModelLoadable(model)) return 'External'
   if (isModelDownloading(model.id)) return 'Loading…'
   if (isModelInstalled(model)) return 'Load / test again'
-  return 'Load in browser'
+  return 'Download GGUF'
 }
-const handleModelPullProgress = (progress = {}) => {
-  const modelId = progress.modelId || progress.id
-  if (!modelId) return
-  const phase = progress.phase || 'running'
-  const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0))
-  const message = progress.message || progress.line || 'Downloading model…'
-  modelDownload.value = {
-    active: !['done', 'error'].includes(phase),
-    modelId,
-    percent,
-    phase,
-    message,
-    error: progress.error || ''
+const recommendedSetupModels = computed(() => getRecommendedSetupModels(modelCatalog.value, setupRuntime.value))
+const aiSetupSteps = computed(() => [
+  {
+    purpose: 'embedding',
+    label: '1. Semantic search',
+    model: recommendedSetupModels.value.embedding,
+    installed: recommendedSetupModels.value.embedding ? isModelInstalled(recommendedSetupModels.value.embedding) : false
+  },
+  {
+    purpose: 'chat',
+    label: '2. Chat',
+    model: recommendedSetupModels.value.chat,
+    installed: recommendedSetupModels.value.chat ? isModelInstalled(recommendedSetupModels.value.chat) : false
+  },
+  {
+    purpose: 'ocr',
+    label: '3. OCR',
+    model: recommendedSetupModels.value.ocr,
+    installed: Boolean(recommendedSetupModels.value.ocr)
   }
-  modelDownloadMessages.value = {
-    ...modelDownloadMessages.value,
-    [modelId]: progress.error || message
+])
+const aiFeatureRows = computed(() => [
+  {
+    id: 'search',
+    title: 'Search',
+    description: 'Embeddings de notes pour la recherche semantique.',
+    icon: Search,
+    model: recommendedSetupModels.value.embedding,
+    status: isModelInstalled(recommendedSetupModels.value.embedding) ? 'Installed' : 'Needs model',
+    statusTone: isModelInstalled(recommendedSetupModels.value.embedding) ? 'ok' : 'pending',
+    message: isModelInstalled(recommendedSetupModels.value.embedding)
+      ? 'Local embeddings model is ready.'
+      : 'Download the GGUF model to embed notes.'
+  },
+  {
+    id: 'chat',
+    title: 'Chat',
+    description: 'Reponse locale depuis un modele GGUF.',
+    icon: MessageCircle,
+    model: recommendedSetupModels.value.chat,
+    status: isModelInstalled(recommendedSetupModels.value.chat) ? 'Ready' : 'Needs model',
+    statusTone: isModelInstalled(recommendedSetupModels.value.chat) ? 'ok' : 'pending',
+    message: isModelInstalled(recommendedSetupModels.value.chat)
+      ? 'Local chat model is ready.'
+      : 'Download the GGUF model to generate answers.'
+  },
+  {
+    id: 'ocr',
+    title: 'OCR',
+    description: 'Image vers contenu texte.',
+    icon: ScanText,
+    model: recommendedSetupModels.value.ocr,
+    status: 'Ready',
+    statusTone: 'ok',
+    message: 'Local Tesseract OCR extracts text from images.'
   }
-}
+])
+const setupRuntimeMessage = computed(() => {
+  return 'node-llama-cpp downloads GGUF models and runs local chat and embeddings inside the Electron main process. OCR uses local Tesseract.'
+})
 
+const setSetupRuntime = (runtime) => {
+  setupRuntime.value = runtime
+  const preset = ELEPHANTNOTE_AI_PRESETS.nodeLlamaCpp
+  aiConfig.value = normalizeAiConfig({
+    ...aiConfig.value,
+    ...preset,
+    preset: 'nodeLlamaCpp'
+  })
+  loadLocalModels()
+}
 const saveModelSelection = async () => {
   try {
     modelSelection.value = { ...createDefaultModelSelection(), ...(await elephantnoteClient.models.setSelection(modelSelection.value)) }
@@ -828,25 +1271,20 @@ const saveModelSelection = async () => {
 
 const loadLocalModels = async () => {
   try {
-    const result = await getBrowserModelRuntimeStatus()
-    localModels.value = result.models || listBrowserModels()
-    modelDir.value = 'Browser cache / IndexedDB'
+    const result = await elephantnoteClient.models.listLocal()
+    localModels.value = result.models || []
+    modelDir.value = result.modelDir || ''
     localModelRuntime.value = {
-      available: Boolean(result.webcpuAvailable && result.transformersAvailable),
-      webgpuAvailable: Boolean(result.webgpuAvailable),
-      webcpuAvailable: Boolean(result.webcpuAvailable),
-      transformersAvailable: Boolean(result.transformersAvailable),
-      dependencyError: result.dependencyError || ''
+      available: Boolean(result.available),
+      webgpuAvailable: false,
+      webcpuAvailable: false,
+      transformersAvailable: false,
+      dependencyError: result.available ? '' : result.message
     }
-    if (!result.transformersAvailable) {
-      modelRuntimeMessage.value = result.dependencyError || 'Install @huggingface/transformers, then restart Electron.'
-    } else {
-      const device = result.webgpuAvailable ? 'WebGPU' : 'WebCPU/WASM'
-      modelRuntimeMessage.value = `${device} ready · ${localModels.value.length} cached/loaded model${localModels.value.length === 1 ? '' : 's'}.`
-    }
+    modelRuntimeMessage.value = result.message || `${localModels.value.length} node-llama-cpp model${localModels.value.length === 1 ? '' : 's'} discovered.`
   } catch (error) {
     localModelRuntime.value = { available: false, webgpuAvailable: false, webcpuAvailable: true, transformersAvailable: false, dependencyError: '' }
-    modelRuntimeMessage.value = error instanceof Error ? error.message : 'Unable to inspect browser model runtime.'
+    modelRuntimeMessage.value = error instanceof Error ? error.message : 'Unable to inspect node-llama-cpp runtime.'
   }
 }
 
@@ -854,39 +1292,66 @@ const pullAtomicModel = async (id) => {
   if (modelDownload.value.active) return
   const model = getModelById(id)
   if (!isModelLoadable(model)) return
-  modelRuntimeMessage.value = `Loading ${model?.name || id} in Electron…`
-  modelDownloadMessages.value = { ...modelDownloadMessages.value, [id]: 'Preparing browser model runtime…' }
-  modelDownload.value = { active: true, modelId: id, percent: 2, phase: 'starting', message: 'Preparing browser model runtime…', error: '' }
+  const startMessage = 'Downloading model with node-llama-cpp...'
+  modelRuntimeMessage.value = `Downloading ${model?.name || id}...`
+  modelDownloadMessages.value = { ...modelDownloadMessages.value, [id]: startMessage }
+  modelDownload.value = { active: true, modelId: id, percent: 2, phase: 'starting', message: startMessage, error: '' }
   try {
-    const result = await loadBrowserTextModel(model, { backend: model.backend || 'auto' })
-    const test = await testBrowserModel(model, { backend: result.device === 'webgpu' ? 'webgpu' : 'webcpu' })
-    const runtimeModel = result.browserModel || model?.browserModel || id
+    const result = await elephantnoteClient.models.download(model.id)
+    const runtimeModel = getModelRuntimeName(model)
+    if (model.task === 'chat-completion') {
+      aiConfig.value = normalizeAiConfig({
+        ...aiConfig.value,
+        preset: 'nodeLlamaCpp',
+        transport: 'node-llama-cpp',
+        endpoint: 'node-llama-cpp://local',
+        model: runtimeModel
+      })
+      await elephantnoteClient.ai.setConfig(aiConfig.value)
+    }
+    const message = result?.message || `${model.name} ready through node-llama-cpp.`
     if (model?.purpose) {
       modelSelection.value = {
         ...modelSelection.value,
-        [model.purpose]: runtimeModel
+        ...createSelectionPatchForModel(model)
       }
       await saveModelSelection()
     }
-    aiConfig.value = normalizeAiConfig({
-      ...aiConfig.value,
-      enabled: true,
-      preset: 'browser',
-      transport: 'browser',
-      endpoint: 'browser://local',
-      model: runtimeModel
-    })
-    await elephantnoteClient.ai.setConfig(aiConfig.value)
-    const message = `${model.name} ready on ${result.device === 'webgpu' ? 'WebGPU' : 'WebCPU/WASM'} · ${Math.round(test.latencyMs || 0)} ms test.`
     modelRuntimeMessage.value = message
     modelDownload.value = { active: false, modelId: id, percent: 100, phase: 'done', message, error: '' }
     modelDownloadMessages.value = { ...modelDownloadMessages.value, [id]: message }
     await loadLocalModels()
+    return true
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Browser model load failed.'
+    const message = error instanceof Error ? error.message : 'node-llama-cpp model download failed.'
     modelRuntimeMessage.value = message
     modelDownload.value = { active: false, modelId: id, percent: 0, phase: 'error', message, error: message }
     modelDownloadMessages.value = { ...modelDownloadMessages.value, [id]: message }
+    return false
+  }
+}
+
+const runAiSetupTest = async () => {
+  if (isTestingAiConfig.value || modelDownload.value.active) return
+  isTestingAiConfig.value = true
+  aiConfigMessage.value = ''
+  const models = [recommendedSetupModels.value.embedding, recommendedSetupModels.value.chat].filter(Boolean)
+  if (!models.length) {
+    aiConfigMessage.value = 'No runnable model is available for this runtime.'
+    isTestingAiConfig.value = false
+    return
+  }
+  try {
+    for (const model of models) {
+      if (!model.installed) {
+        await pullAtomicModel(model.id)
+      }
+    }
+    aiConfigMessage.value = 'AI setup test passed: embedding and chat slots are ready.'
+  } catch (error) {
+    aiConfigMessage.value = error instanceof Error ? error.message : 'AI setup test failed.'
+  } finally {
+    isTestingAiConfig.value = false
   }
 }
 
@@ -961,17 +1426,29 @@ const loadAtomicApi = async () => {
   }
 }
 
-let removeModelPullProgressListener = null
+const runOcr = async () => {
+  if (!ocrImagePath.value || isRunningOcr.value) return
+  isRunningOcr.value = true
+  ocrMessage.value = 'Extracting text with local OCR...'
+  ocrText.value = ''
+  try {
+    const result = await elephantnoteClient.ocr.extract(ocrImagePath.value, {
+      language: 'eng',
+      pageSegmentationMode: '11'
+    })
+    ocrText.value = result?.text || ''
+    ocrMessage.value = result?.text ? 'OCR extraction complete.' : 'OCR completed without readable text.'
+  } catch (error) {
+    ocrMessage.value = error instanceof Error ? error.message : 'OCR extraction failed.'
+  } finally {
+    isRunningOcr.value = false
+  }
+}
 
 onMounted(async () => {
-  removeModelPullProgressListener = onBrowserModelRuntimeProgress(handleModelPullProgress)
   try { featureFlags.value = await elephantnoteClient.features.get() } catch {}
   try { aiConfig.value = normalizeAiConfig(await elephantnoteClient.ai.getConfig()) } catch {}
-  await Promise.allSettled([loadAtomicCatalog(), loadModelSelection(), loadTasks(), loadLocalModels()])
-})
-
-onUnmounted(() => {
-  removeModelPullProgressListener?.()
+  await Promise.allSettled([loadAtomicCatalog(), loadModelSelection(), loadTasks(), loadLocalModels(), loadSyncStatus()])
 })
 </script>
 
@@ -998,6 +1475,14 @@ button { cursor: pointer; }
 .en-settings-section button, .en-settings-actions-row button, .en-theme-switch, .en-ai-provider-grid button, .en-model-catalog button, .en-task-list button, .en-ai-header button { min-height: 34px; border: 1px solid var(--en-border); border-radius: 8px; padding: 0 12px; color: var(--en-text); background: var(--en-bg); }
 button.active { background: var(--en-soft-strong); border-color: var(--en-border-strong); }
 button:disabled { opacity: 0.55; cursor: not-allowed; }
+.en-theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin-top: 12px; }
+.en-theme-card { min-height: 86px; display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 12px; align-items: center; text-align: left; }
+.en-theme-card.active { border-color: color-mix(in srgb, var(--en-primary) 58%, var(--en-border)); background: color-mix(in srgb, var(--en-primary) 12%, var(--en-bg)); }
+.en-theme-card-preview { width: 54px; height: 54px; display: grid; grid-template-columns: repeat(3, 1fr); overflow: hidden; border: 1px solid var(--en-border); border-radius: 8px; }
+.en-theme-card-preview i { min-width: 0; min-height: 0; }
+.en-theme-card-copy { min-width: 0; display: grid; gap: 4px; }
+.en-theme-card-copy strong { color: var(--en-text); }
+.en-theme-card-copy small { color: var(--en-muted); line-height: 1.35; }
 .en-settings-range { display: flex; gap: 10px; align-items: center; }
 .en-settings-pill, .en-settings-message, .en-settings-path { color: var(--en-muted); }
 .en-form-grid, .en-model-slot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
@@ -1005,10 +1490,87 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 input, select, textarea { min-height: 34px; border: 1px solid var(--en-border); border-radius: 8px; padding: 0 10px; color: var(--en-text); background: var(--en-surface); }
 textarea { padding: 10px; resize: vertical; }
 .en-settings-actions-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+.en-sync-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-top: 14px; }
+.en-sync-status-card { min-height: 76px; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-surface); }
+.en-sync-status-card.ok { border-color: color-mix(in srgb, var(--en-primary) 44%, var(--en-border)); background: color-mix(in srgb, var(--en-primary) 7%, var(--en-bg)); }
+.en-sync-status-card.warn { border-color: color-mix(in srgb, #f59e0b 45%, var(--en-border)); background: color-mix(in srgb, #f59e0b 8%, var(--en-bg)); }
+.en-sync-status-card > .en-icon { width: 24px; height: 24px; color: var(--en-primary); }
+.en-sync-status-card div { min-width: 0; display: grid; gap: 4px; }
+.en-sync-status-card strong { color: var(--en-text); overflow-wrap: anywhere; text-transform: capitalize; }
+.en-sync-status-card span { color: var(--en-muted); overflow-wrap: anywhere; line-height: 1.35; }
+.en-sync-history { display: grid; gap: 8px; margin-top: 12px; }
+.en-sync-history article { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--en-border); border-radius: 8px; background: var(--en-surface); }
+.en-sync-history article.error { border-color: color-mix(in srgb, #ef4444 50%, var(--en-border)); background: color-mix(in srgb, #ef4444 8%, var(--en-bg)); }
+.en-sync-history strong { color: var(--en-text); text-transform: capitalize; }
+.en-sync-history span, .en-sync-history small { color: var(--en-muted); overflow-wrap: anywhere; }
+.en-sync-history small { grid-column: 2; }
 .en-ai-shell { display: grid; gap: 12px; }
 .en-ai-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 16px; border: 1px solid var(--en-border); border-radius: 12px; background: var(--en-bg); }
-.en-ai-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid var(--en-border); border-radius: 12px; background: var(--en-bg); }
+.en-ai-setup-page { display: grid; gap: 12px; }
+.en-ai-hero { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding: 18px; border: 1px solid var(--en-border); border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--en-primary) 9%, var(--en-bg)), var(--en-bg)); }
+.en-ai-hero small { color: var(--en-primary); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }
+.en-ai-hero h3, .en-ai-hero p, .en-ai-quick-settings h4, .en-ai-quick-settings p { margin: 0; }
+.en-ai-hero h3 { margin-top: 4px; color: var(--en-text); font-size: 22px; }
+.en-ai-hero p { margin-top: 6px; color: var(--en-muted); line-height: 1.45; }
+.en-ai-hero-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.en-ai-hero-actions button, .en-ai-quick-settings button, .en-ai-primary-card button { min-height: 34px; border: 1px solid var(--en-border); border-radius: 8px; padding: 0 12px; color: var(--en-text); background: var(--en-bg); }
+.en-ai-runtime-grid.compact { margin-top: 0; }
+.en-ai-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.en-ai-status-card { display: grid; gap: 5px; min-height: 76px; padding: 12px; border: 1px solid var(--en-border); border-radius: 12px; background: var(--en-bg); }
+.en-ai-status-card.ok { border-color: color-mix(in srgb, var(--en-primary) 42%, var(--en-border)); background: color-mix(in srgb, var(--en-primary) 7%, var(--en-bg)); }
+.en-ai-status-card.warn { border-color: color-mix(in srgb, #f59e0b 45%, var(--en-border)); background: color-mix(in srgb, #f59e0b 8%, var(--en-bg)); }
+.en-ai-status-card strong, .en-ai-primary-card h4, .en-ai-slot-summary strong { color: var(--en-text); }
+.en-ai-status-card span, .en-ai-primary-card span, .en-ai-primary-card p, .en-ai-primary-card small, .en-ai-slot-summary small { color: var(--en-muted); overflow-wrap: anywhere; }
+.en-ai-primary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.en-ai-primary-card { display: grid; gap: 12px; align-content: start; min-height: 242px; padding: 14px; border: 1px solid var(--en-border); border-radius: 14px; background: var(--en-bg); }
+.en-ai-primary-card.installed { border-color: color-mix(in srgb, var(--en-primary) 48%, var(--en-border)); background: color-mix(in srgb, var(--en-primary) 7%, var(--en-bg)); }
+.en-ai-primary-card header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.en-ai-primary-card header div { min-width: 0; display: grid; gap: 4px; }
+.en-ai-primary-card h4 { margin: 0; font-size: 16px; }
+.en-ai-primary-card header > strong { flex: 0 0 auto; padding: 4px 8px; border: 1px solid var(--en-border); border-radius: 999px; background: var(--en-surface); font-size: 12px; }
+.en-ai-primary-card button { align-self: end; }
+.en-ai-quick-settings { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--en-border); border-radius: 14px; background: var(--en-bg); }
+.en-ai-quick-settings h4 { color: var(--en-text); font-size: 15px; }
+.en-ai-quick-settings p { margin-top: 4px; color: var(--en-muted); }
+.en-ai-slot-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.en-ai-slot-summary article { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-surface); }
+.en-ai-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; padding: 0; border: 1px solid var(--en-border); border-radius: 12px 12px 0 0; background: var(--en-bg); overflow: hidden; }
+.en-ai-tabs button { min-height: 44px; border-radius: 0; text-align: center; border-right-color: var(--en-border); }
+.en-ai-tabs button:last-child { border-right-color: transparent; }
+.en-ai-tabs button.active { border-color: transparent; border-bottom: 2px solid var(--en-primary); background: color-mix(in srgb, var(--en-surface) 82%, var(--en-bg)); }
+.en-ai-provider-panel { display: grid; gap: 14px; padding: 18px; border: 1px solid var(--en-border); border-top: 0; border-radius: 0 0 12px 12px; background: color-mix(in srgb, var(--en-bg) 94%, #05070b); }
+.en-ai-panel-copy h3, .en-ai-panel-copy p { margin: 0; }
+.en-ai-panel-copy h3 { color: var(--en-text); font-size: 18px; }
+.en-ai-panel-copy p { margin-top: 5px; color: var(--en-muted); }
+.en-ai-feature-list { min-width: 0; display: grid; gap: 8px; padding: 10px; border: 1px solid var(--en-border); border-radius: 12px; background: color-mix(in srgb, var(--en-surface) 72%, var(--en-bg)); overflow: hidden; }
+.en-ai-feature-row { min-width: 0; display: grid; grid-template-columns: minmax(210px, 1.1fr) minmax(150px, 0.7fr) minmax(185px, 0.95fr) minmax(132px, auto); gap: 12px; align-items: center; min-height: 110px; padding: 14px; border: 1px solid var(--en-border); border-radius: 8px; background: color-mix(in srgb, var(--en-bg) 88%, var(--en-surface)); }
+.en-ai-feature-main { min-width: 0; display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 14px; align-items: center; }
+.en-ai-feature-icon { width: 46px; height: 46px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--en-primary) 30%, var(--en-border)); border-radius: 8px; color: var(--en-primary); background: color-mix(in srgb, var(--en-primary) 22%, transparent); }
+.en-ai-feature-main h4, .en-ai-feature-main p, .en-ai-feature-status p, .en-ai-feature-status small { margin: 0; }
+.en-ai-feature-main h4 { color: var(--en-text); font-size: 16px; }
+.en-ai-feature-main p, .en-ai-feature-status p, .en-ai-feature-status small, .en-ai-feature-provider span { color: var(--en-muted); line-height: 1.35; }
+.en-ai-feature-provider { min-width: 0; display: grid; gap: 6px; }
+.en-ai-feature-provider select { min-width: 0; width: 100%; }
+.en-ai-feature-status { display: grid; gap: 5px; min-width: 0; }
+.en-ai-status-pill { width: fit-content; display: inline-flex; gap: 6px; align-items: center; min-height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; color: var(--en-muted); background: var(--en-soft); }
+.en-ai-status-pill.ok { color: #9be46f; background: rgba(34, 197, 94, 0.16); }
+.en-ai-status-pill.pending { color: #f7c76a; background: rgba(245, 158, 11, 0.14); }
+.en-ai-status-pill.blocked { color: #fca5a5; background: rgba(239, 68, 68, 0.14); }
+.en-ai-feature-row > button { min-width: 0; min-height: 36px; display: inline-flex; gap: 6px; align-items: center; justify-content: center; border: 1px solid var(--en-border); border-radius: 8px; padding: 0 10px; color: var(--en-text); background: var(--en-bg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .en-ai-provider-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.en-ai-runtime-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 12px; }
+.en-ai-runtime-grid button { min-height: 64px; display: grid; gap: 4px; align-content: center; text-align: left; }
+.en-ai-runtime-grid strong { color: var(--en-text); }
+.en-ai-runtime-grid span { color: var(--en-muted); }
+.en-ai-setup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+.en-ai-setup-card { display: grid; gap: 10px; min-height: 230px; border: 1px solid var(--en-border); border-radius: 12px; padding: 12px; background: var(--en-bg); }
+.en-ai-setup-card.installed { border-color: color-mix(in srgb, var(--en-primary) 48%, var(--en-border)); background: color-mix(in srgb, var(--en-primary) 7%, var(--en-bg)); }
+.en-ai-setup-card header { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.en-ai-setup-card header div { min-width: 0; display: grid; gap: 4px; }
+.en-ai-setup-card small, .en-ai-setup-card span, .en-ai-setup-card p { color: var(--en-muted); }
+.en-ai-setup-card strong { color: var(--en-text); }
+.en-ai-setup-card header > span { flex: 0 0 auto; padding: 4px 8px; border: 1px solid var(--en-border); border-radius: 999px; background: var(--en-surface); font-size: 12px; }
+.en-ai-setup-card button { align-self: end; min-height: 34px; border: 1px solid var(--en-border); border-radius: 8px; padding: 0 12px; color: var(--en-text); background: var(--en-bg); }
 .en-model-category { border: 1px solid var(--en-border); border-radius: 12px; padding: 14px; background: var(--en-surface); margin-top: 12px; }
 .en-model-catalog, .en-task-list, .en-audio-grid, .en-api-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
 .en-model-catalog.compact { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
@@ -1032,5 +1594,6 @@ textarea { padding: 10px; resize: vertical; }
 .en-ai-search :deep(.en-search-settings) { margin: 0; }
 pre { white-space: pre-wrap; max-height: 320px; overflow: auto; padding: 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); color: var(--en-text); }
 code { color: var(--en-primary); }
-@media (max-width: 760px) { .en-settings-grid { grid-template-columns: 1fr; } .en-settings-nav { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--en-border); } .en-settings-section { grid-template-columns: 1fr; } }
+@media (max-width: 980px) { .en-ai-feature-row { grid-template-columns: 1fr; } .en-ai-feature-row > button { width: 100%; } }
+@media (max-width: 760px) { .en-settings-grid { grid-template-columns: 1fr; } .en-settings-nav { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--en-border); } .en-settings-section { grid-template-columns: 1fr; } .en-ai-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

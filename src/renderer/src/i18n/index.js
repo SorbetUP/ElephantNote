@@ -1,8 +1,7 @@
 import { createI18n } from 'vue-i18n'
 import bus from '../bus'
 
-// Directly import translation files
-import enTranslations from '../../../../static/locales/en.json'
+const enTranslations = {}
 
 // Create the Vue i18n instance
 const i18n = createI18n({

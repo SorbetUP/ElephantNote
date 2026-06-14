@@ -30,8 +30,11 @@ export const registerAtomicFeatureIpc = () => {
   handleOnce('en:atomic:summarize', async(event, payload = {}) => service.summarize(withWindow(event, payload)))
   handleOnce('en:atomic:structure', async(event, payload = {}) => service.structure(withWindow(event, payload)))
   handleOnce('en:atomic:notes:auto-name', async(event, payload = {}) => service.autoNameNote(withWindow(event, payload)))
-  handleOnce('en:atomic:models:list-local', async() => service.listLocalModels())
-  handleOnce('en:atomic:models:pull', async(_event, payload = {}) => service.pullModel(payload))
+  handleOnce('en:atomic:models:list-local', async(_event, payload = {}) => service.listLocalModels(payload))
+  handleOnce('en:atomic:models:pull', async(event, payload = {}) => service.pullModel({
+    ...payload,
+    onProgress: (progress) => event.sender.send('en:atomic:models:pull:progress', progress)
+  }))
 }
 
 registerAtomicFeatureIpc()

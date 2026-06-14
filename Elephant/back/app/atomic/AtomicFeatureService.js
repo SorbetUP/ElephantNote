@@ -20,8 +20,8 @@ const DEFAULT_GRAPH_OPTIONS = Object.freeze({
 })
 
 const PROVIDERS = Object.freeze([
-  { id: 'browser', name: 'Browser WebGPU/CPU', type: 'local-renderer', defaultEndpoint: 'browser://local', supportsModelPull: true, notes: 'Default local runtime. Runs in Electron renderer with Transformers.js, WebGPU when available and WebCPU/WASM fallback.' },
-  { id: 'ollama', name: 'Ollama legacy', type: 'local', defaultEndpoint: 'http://127.0.0.1:11434', chatPath: '/api/chat', embeddingPath: '/api/embeddings', supportsModelPull: false, notes: 'Legacy external runtime. Kept only for compatibility.' },
+  { id: 'node-llama-cpp', name: 'node-llama-cpp', type: 'local-main-process', defaultEndpoint: 'node-llama-cpp://local', supportsModelPull: true, notes: 'Default local text runtime. Downloads GGUF files and runs chat plus embeddings in the Electron main process.' },
+  { id: 'local-ocr', name: 'Local OCR', type: 'local-main-process', defaultEndpoint: 'tesseract://local', supportsModelPull: false, notes: 'Default local image-to-text runtime backed by Tesseract.' },
   { id: 'lm-studio', name: 'LM Studio', type: 'local', defaultEndpoint: 'http://127.0.0.1:1234/v1/chat/completions', supportsModelPull: false, notes: 'OpenAI-compatible local server from LM Studio.' },
   { id: 'openai-compatible', name: 'OpenAI-compatible API', type: 'remote-or-local', defaultEndpoint: 'https://api.openai.com/v1/chat/completions', supportsModelPull: false, notes: 'OpenRouter, OpenAI-compatible gateways, self-hosted vLLM, llama.cpp server, etc.' },
   { id: 'codex-compatible', name: 'Codex-compatible bridge', type: 'remote', defaultEndpoint: 'http://127.0.0.1:1455/v1/chat/completions', supportsModelPull: false, notes: 'Use an OpenAI-compatible bridge or endpoint.' }
@@ -226,7 +226,7 @@ const addLimitedCliqueEdges = ({ notes, getter, type, reasonPrefix, baseWeight, 
 
 const normalizeProviderConfig = (config = {}) => ({
   enabled: Boolean(config.enabled),
-  provider: String(config.provider || config.preset || 'ollama').trim(),
+  provider: String(config.provider || config.preset || 'node-llama-cpp').trim(),
   endpoint: String(config.endpoint || '').trim(),
   model: String(config.model || '').trim(),
   apiKey: String(config.apiKey || '').trim(),
@@ -243,7 +243,7 @@ const callChatProvider = async(messages = [], rawConfig = {}) => {
     const url = base.endsWith('/api/chat') ? base : `${base}/api/chat`
     const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: config.model, messages, stream: false, options: { temperature: config.temperature } }) })
     const data = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(data?.error || `Ollama returned HTTP ${response.status}.`)
+    if (!response.ok) throw new Error(data?.error || `Local chat endpoint returned HTTP ${response.status}.`)
     return data?.message?.content || data?.response || ''
   }
   const endpoint = config.endpoint || getProviderDefaultEndpoint(config.provider) || getProviderDefaultEndpoint('openai-compatible')
@@ -306,8 +306,8 @@ export class AtomicFeatureService {
         { name: 'summarize', description: 'Summarize one note with local fallback.' },
         { name: 'structure', description: 'Suggest headings, tags and actions for one note.' },
         { name: 'notes.autoName', description: 'Infer and optionally apply a better filename for a note.' },
-        { name: 'models.listLocal', description: 'List installed Ollama models and vault model directory metadata.' },
-        { name: 'models.pull', description: 'Pull one recommended Ollama model and mirror metadata into the vault model directory.' }
+        { name: 'models.listLocal', description: 'List installed node-llama-cpp models and vault model directory metadata.' },
+        { name: 'models.pull', description: 'Prepare one recommended node-llama-cpp model and mirror metadata into the vault model directory.' }
       ]
     }
   }
@@ -542,7 +542,7 @@ export class AtomicFeatureService {
     return { oldPath: normalized, newPath: targetRelativePath, title: path.basename(targetName, '.md'), changed: apply ? changed : false, suggested: !apply, weakTitle: isWeakTitle(note) }
   }
 
-  async pullModel({ id, provider = 'browser', vaultRoot = '', onProgress = null } = {}) {
+  async pullModel({ id, provider = 'node-llama-cpp', vaultRoot = '', onProgress = null } = {}) {
     const model = RECOMMENDED_MODELS.find((item) => item.id === id || item.browserModel === id || item.pull === id) || { id, provider }
     if (!model.id) throw new Error('Model id is required.')
     const modelDir = vaultRoot ? await getVaultModelDir(vaultRoot) : ''
@@ -550,7 +550,7 @@ export class AtomicFeatureService {
       await fs.writeJson(path.join(modelDir, `${slugify(model.id)}.json`), {
         ...model,
         installed: false,
-        managedBy: 'browser-cache',
+        managedBy: 'node-llama-cpp',
         updatedAt: new Date().toISOString()
       }, { spaces: 2 })
     }
@@ -560,14 +560,14 @@ export class AtomicFeatureService {
       name: model.name || model.id,
       phase: 'ready',
       percent: 100,
-      message: 'Browser models are loaded and cached by the Electron renderer.'
+      message: 'Model metadata is ready for node-llama-cpp.'
     })
     return {
       id: model.id,
       provider: model.provider || provider,
       downloaded: false,
       modelDir,
-      message: 'Browser model metadata saved. Load the model from Settings > AI > Models to download it into the browser cache.'
+      message: 'Model metadata saved. Download the GGUF from Settings > AI with node-llama-cpp.'
     }
   }
 
@@ -584,13 +584,13 @@ export class AtomicFeatureService {
       if (item) vaultModelMetadata.push(item)
     }
     return {
-      provider: 'browser',
+      provider: 'node-llama-cpp',
       available: true,
       modelDir,
       vaultModels: vaultModelMetadata,
       models: [],
       raw: '',
-      message: 'Browser models are inspected in the Electron renderer.'
+      message: 'node-llama-cpp models are inspected in the Electron main process.'
     }
   }
 }

@@ -3,6 +3,14 @@ import {
   elephantnoteClient,
   isElephantNoteApiAvailable
 } from '../services/elephantnoteClient'
+import {
+  createCalendarBuckets,
+  createGraphModel,
+  createRecentNoteEntries,
+  createTagTopics,
+  createWorkspaceStats,
+  isNoteEntry
+} from 'common/elephantnote/workspaceInsights'
 
 import { useNavigationStore } from './navigationStore'
 
@@ -116,7 +124,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       return entries
     },
     activeNoteEntries() {
-      return this.activeEntries.filter((entry) => entry.kind === 'note' || entry.type === 'note')
+      return this.activeEntries.filter(isNoteEntry)
     },
     rootSidebarEntries(state) {
       const pinned = new Set(state.pinnedNotePaths)
@@ -131,112 +139,29 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       })
     },
     workspaceStats(state) {
-      const notes = state.rootEntries.filter((entry) => entry.kind === 'note' || entry.type === 'note')
-      const folders = state.rootEntries.filter((entry) => entry.kind === 'folder' || entry.type === 'folder')
-      const tags = new Set()
-      for (const note of notes) {
-        for (const tag of note.tags || []) {
-          if (tag) tags.add(tag)
-        }
-      }
-      return {
-        notes: notes.length,
-        folders: folders.length,
-        tags: tags.size,
-        recent: this.recentNoteEntries.length
-      }
-    },
-    tagTopics(state) {
-      const byTag = new Map()
-      const notes = state.rootEntries.filter((entry) => entry.kind === 'note' || entry.type === 'note')
-      for (const note of notes) {
-        for (const tag of note.tags || []) {
-          if (!tag) continue
-          const topic = byTag.get(tag) || {
-            tag,
-            notes: [],
-            updatedAt: note.updatedAt || ''
-          }
-          topic.notes.push(note)
-          if (new Date(note.updatedAt || 0) > new Date(topic.updatedAt || 0)) {
-            topic.updatedAt = note.updatedAt
-          }
-          byTag.set(tag, topic)
-        }
-      }
-      return [...byTag.values()].sort((a, b) => {
-        if (b.notes.length !== a.notes.length) return b.notes.length - a.notes.length
-        return a.tag.localeCompare(b.tag)
+      return createWorkspaceStats({
+        entries: state.rootEntries,
+        recentNoteEntries: this.recentNoteEntries
       })
     },
+    tagTopics(state) {
+      return createTagTopics(state.rootEntries)
+    },
     calendarBuckets(state) {
-      const buckets = new Map()
-      const notes = state.rootEntries.filter((entry) => entry.kind === 'note' || entry.type === 'note')
-      for (const note of notes) {
-        const day = String(note.updatedAt || '').slice(0, 10) || 'No date'
-        const bucket = buckets.get(day) || []
-        bucket.push(note)
-        buckets.set(day, bucket)
-      }
-      return [...buckets.entries()]
-        .sort(([a], [b]) => b.localeCompare(a))
-        .map(([date, notes]) => ({
-          date,
-          notes: notes.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
-        }))
+      return createCalendarBuckets(state.rootEntries)
     },
     graphModel(state) {
-      const notes = state.rootEntries.filter((entry) => entry.kind === 'note' || entry.type === 'note')
-      const folders = state.rootEntries.filter((entry) => entry.kind === 'folder' || entry.type === 'folder')
-      const nodes = [
-        ...folders.map((folder) => ({
-          id: folder.path,
-          title: folder.title,
-          kind: 'folder'
-        })),
-        ...notes.map((note) => ({
-          id: note.path,
-          title: note.title,
-          kind: 'note'
-        }))
-      ]
-      const edges = []
-      for (const note of notes) {
-        const folderPath = note.path?.includes('/') ? note.path.split('/').slice(0, -1).join('/') : ''
-        if (folderPath && folders.some((folder) => folder.path === folderPath)) {
-          edges.push({ source: folderPath, target: note.path, reason: 'folder' })
-        }
-      }
-      for (const topic of this.tagTopics) {
-        const taggedNotes = topic.notes
-        for (let index = 1; index < taggedNotes.length; index += 1) {
-          edges.push({
-            source: taggedNotes[0].path,
-            target: taggedNotes[index].path,
-            reason: `#${topic.tag}`
-          })
-        }
-      }
-      return { nodes, edges }
+      return createGraphModel({
+        entries: state.rootEntries,
+        tagTopics: this.tagTopics
+      })
     },
     recentNoteEntries(state) {
-      const opened = state.openedNotes.filter((note) => note?.path)
-      const modified = state.entries
-        .filter((entry) => entry.kind === 'note')
-        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-      const byPath = new Map()
-      for (const note of [...opened, ...modified]) {
-        if (!byPath.has(note.path)) byPath.set(note.path, note)
-      }
-      const pinned = new Set(state.pinnedNotePaths)
-      return [...byPath.values()]
-        .sort((a, b) => {
-          const aPinned = pinned.has(a.path)
-          const bPinned = pinned.has(b.path)
-          if (aPinned !== bPinned) return aPinned ? -1 : 1
-          return new Date(b.updatedAt) - new Date(a.updatedAt)
-        })
-        .slice(0, 8)
+      return createRecentNoteEntries({
+        entries: state.entries,
+        openedNotes: state.openedNotes,
+        pinnedNotePaths: state.pinnedNotePaths
+      })
     },
     sidebarItems(state) {
       return getSidebarItems(state.workspace)

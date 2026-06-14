@@ -3,6 +3,7 @@ import {
   createInitialExcalidrawData,
   ensureExcalidrawName,
   ensurePngName,
+  getExcalidrawPreviewPath,
   getExcalidrawSidecarPath,
   resolveExcalidrawModule
 } from '@/elephantnote/services/excalidraw'
@@ -23,6 +24,7 @@ describe('ElephantNote Excalidraw helpers', () => {
 
     expect(getExcalidrawSidecarPath('/vault/note/sketch.png')).toBe('/vault/note/sketch.excalidraw')
     expect(getExcalidrawSidecarPath('/vault/note/sketch')).toBe('/vault/note/sketch.excalidraw')
+    expect(getExcalidrawPreviewPath('/vault/note/sketch.excalidraw')).toBe('/vault/note/sketch.png')
 
     window.path = originalPath
   })

@@ -44,15 +44,6 @@
             {{ v.label }}
           </button>
         </div>
-        <button
-          type="button"
-          class="en-cal-btn en-cal-btn-import"
-          :disabled="isImporting"
-          @click="importGoogleCalendar"
-        >
-          <Download class="en-cal-import-icon" />
-          {{ isImporting ? 'Importing...' : 'Import Google' }}
-        </button>
       </div>
     </header>
 
@@ -62,14 +53,17 @@
         :custom-components="customComponents"
       >
         <template #timeGridEvent="{ calendarEvent }">
-          <div class="en-cal-event en-cal-event--timed">
+          <div
+            class="en-cal-event en-cal-event--timed"
+            :class="eventClass(calendarEvent)"
+          >
             <span class="en-cal-event-title">{{ calendarEvent.title }}</span>
           </div>
         </template>
         <template #dateGridEvent="{ calendarEvent }">
           <div
             class="en-cal-event en-cal-event--allday"
-            :class="{ 'en-cal-event--note': calendarEvent._isNote }"
+            :class="eventClass(calendarEvent)"
           >
             <span class="en-cal-event-title">{{ calendarEvent.title }}</span>
           </div>
@@ -77,7 +71,7 @@
         <template #monthGridEvent="{ calendarEvent }">
           <div
             class="en-cal-event en-cal-event--month"
-            :class="{ 'en-cal-event--note': calendarEvent._isNote }"
+            :class="eventClass(calendarEvent)"
           >
             <span class="en-cal-event-dot" />
             <span class="en-cal-event-title">{{ calendarEvent.title }}</span>
@@ -90,7 +84,7 @@
 
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { CalendarClock, ChevronLeft, ChevronRight, Download } from '@lucide/vue'
+import { CalendarClock, ChevronLeft, ChevronRight } from '@lucide/vue'
 import { ScheduleXCalendar } from '@schedule-x/vue'
 import {
   createCalendar,
@@ -105,7 +99,6 @@ import { useVaultStore } from '../../stores/vaultStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
 
 const store = useVaultStore()
-const isImporting = ref(false)
 const currentView = ref('month-grid')
 const selectedDate = ref(null)
 const rangeLabel = ref('')
@@ -137,6 +130,18 @@ const formatRange = (start, end) => {
   return `${formatDate(start, { month: 'short', day: 'numeric', year: 'numeric' })} - ${formatDate(end, { month: 'short', day: 'numeric', year: 'numeric' })}`
 }
 
+const getSourceType = (event) => {
+  if (event._isNote) return 'notes'
+  if (event.source === 'google-calendar') return 'google'
+  return 'local'
+}
+
+const eventClass = (event) => ({
+  'en-cal-event--note': event._sourceType === 'notes',
+  'en-cal-event--google': event._sourceType === 'google',
+  'en-cal-event--local': event._sourceType === 'local'
+})
+
 const updateRangeLabel = () => {
   const date = selectedDate.value
   if (!date) return
@@ -161,6 +166,7 @@ const toSxEvent = (event) => {
   const isAllday = !event.startsAt || event.startsAt.length <= 10
   const startStr = event.startsAt || todayStr
   const endStr = event.endsAt || startStr
+  const sourceType = getSourceType(event)
 
   if (isAllday) {
     const startDate = Temporal.PlainDate.from(startStr.slice(0, 10))
@@ -175,7 +181,9 @@ const toSxEvent = (event) => {
       start: startDate,
       end: endDate,
       calendarId: 'en-events',
-      _isNote: false
+      _isNote: false,
+      _sourceType: sourceType,
+      _rawEvent: event
     }
   }
 
@@ -187,7 +195,9 @@ const toSxEvent = (event) => {
     start: startDateTime,
     end: endDateTime,
     calendarId: 'en-events',
-    _isNote: false
+    _isNote: false,
+    _sourceType: sourceType,
+    _rawEvent: event
   }
 }
 
@@ -204,7 +214,9 @@ const toNoteEvent = (note) => {
       start: date,
       end: date,
       calendarId: 'en-notes',
-      _isNote: true
+      _isNote: true,
+      _sourceType: 'notes',
+      _rawEvent: note
     }
   } catch {
     return null
@@ -319,20 +331,6 @@ const switchView = (view) => {
   updateRangeLabel()
 }
 
-const importGoogleCalendar = async () => {
-  isImporting.value = true
-  try {
-    const result = await elephantnoteClient.calendar.importGoogle()
-    if (!result?.canceled) {
-      await loadEvents()
-    }
-  } catch (error) {
-    console.warn('Unable to import Google Calendar:', error)
-  } finally {
-    isImporting.value = false
-  }
-}
-
 const applyTheme = () => {
   const root = document.documentElement
   const enTheme = root.dataset.elephantnoteTheme
@@ -386,6 +384,7 @@ const applyTheme = () => {
 }
 
 let themeObserver = null
+let stopRecentNotesWatch = null
 
 onMounted(async () => {
   await nextTick()
@@ -400,7 +399,7 @@ onMounted(async () => {
     attributeFilter: ['style', 'data-elephantnote-theme']
   })
 
-  watch(
+  stopRecentNotesWatch = watch(
     () => store.recentNoteEntries,
     () => loadEvents(),
     { deep: true }
@@ -411,6 +410,10 @@ onBeforeUnmount(() => {
   if (themeObserver) {
     themeObserver.disconnect()
     themeObserver = null
+  }
+  if (stopRecentNotesWatch) {
+    stopRecentNotesWatch()
+    stopRecentNotesWatch = null
   }
 })
 </script>
@@ -523,25 +526,6 @@ onBeforeUnmount(() => {
   background: var(--en-primary) !important;
 }
 
-.en-cal-btn-import {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--en-border);
-  border-radius: 8px;
-  font-weight: 700;
-}
-
-.en-cal-import-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.en-cal-btn-import:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .en-calendar-container {
   flex: 1;
   min-height: 400px;
@@ -580,6 +564,15 @@ onBeforeUnmount(() => {
 .en-cal-event--note .en-cal-event-title {
   font-style: italic;
 }
+
+.en-cal-event--google {
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.en-cal-event--local {
+  box-shadow: inset 3px 0 0 #059669;
+}
+
 </style>
 
 <style>

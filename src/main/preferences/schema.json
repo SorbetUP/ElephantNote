@@ -56,6 +56,14 @@
     "description": "General--The last folder that was opened in MarkText.--internal",
     "type": "string"
   },
+  "treePathExcludePatterns": {
+    "description": "General--List of project tree paths excluded from the sidebar watcher.--internal",
+    "type": "array",
+    "items": {
+      "type": "string"
+    },
+    "default": []
+  },
   "startUpAction": {
     "description": "General--The action after MarkText startup, open the last opened folder, open the specified folder or blank page",
     "enum": ["folder", "openLastFolder", "blank", "restoreAll"],

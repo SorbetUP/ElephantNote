@@ -28,6 +28,12 @@ export const MODEL_GROUPS = Object.freeze([
     label: 'Audio',
     description: 'Speech-to-text and text-to-speech engines.',
     purposes: ['speech-to-text', 'text-to-speech']
+  },
+  {
+    id: 'ocr',
+    label: 'OCR',
+    description: 'Extract text from images and scanned documents.',
+    purposes: ['ocr']
   }
 ])
 
@@ -39,129 +45,60 @@ export const MODEL_PURPOSES = Object.freeze([
   'summary',
   'chat',
   'agent',
+  'ocr',
   'speech-to-text',
   'text-to-speech'
 ])
 
+export { ATOMIC_AI_FEATURES } from './atomicAiEngine'
+
 export const ATOMIC_MODEL_CATALOG = Object.freeze([
   {
-    id: 'minilm-embedding-browser',
-    name: 'MiniLM Embeddings Browser',
+    id: 'smollm2-node-llama-cpp',
+    name: 'SmolLM2 135M GGUF',
     purpose: 'embedding',
     category: 'embedding',
-    provider: 'browser',
-    engine: 'transformersjs',
-    task: 'feature-extraction',
-    browserModel: 'Xenova/all-MiniLM-L6-v2',
-    backend: 'auto',
-    dtype: 'q8',
+    provider: 'node-llama-cpp',
+    engine: 'node-llama-cpp',
+    task: 'embedding',
+    model: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
+    uri: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
+    fileName: 'hf_bartowski_SmolLM2-135M-Instruct.Q4_K_M.gguf',
     local: true,
-    pull: '',
-    size: '~90 MB',
-    quality: 'fast',
-    notes: 'Browser-cached embedding model. WebGPU when available, WebCPU/WASM fallback otherwise.'
+    pull: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
+    size: '~100 MB',
+    quality: 'smoke',
+    notes: 'Local GGUF model downloaded and loaded through node-llama-cpp. Used to prove note embedding search end-to-end.'
   },
   {
-    id: 'qwen25-05b-tagging-browser',
-    name: 'Qwen2.5 0.5B Browser',
-    purpose: 'tagging',
-    category: 'tagging',
-    provider: 'browser',
-    engine: 'transformersjs',
-    task: 'text-generation',
-    browserModel: 'onnx-community/Qwen2.5-0.5B-Instruct',
-    backend: 'auto',
-    dtype: 'q4',
-    local: true,
-    pull: '',
-    size: '~750 MB',
-    quality: 'tiny',
-    notes: 'Default browser model for tags, titles and short structured outputs.'
-  },
-  {
-    id: 'qwen25-05b-naming-browser',
-    name: 'Qwen2.5 0.5B Browser',
-    purpose: 'naming',
-    category: 'tagging',
-    provider: 'browser',
-    engine: 'transformersjs',
-    task: 'text-generation',
-    browserModel: 'onnx-community/Qwen2.5-0.5B-Instruct',
-    backend: 'auto',
-    dtype: 'q4',
-    local: true,
-    pull: '',
-    size: '~750 MB',
-    quality: 'tiny',
-    notes: 'Same cached model reused for automatic note naming.'
-  },
-  {
-    id: 'qwen25-05b-summary-browser',
-    name: 'Qwen2.5 0.5B Browser',
-    purpose: 'summary',
-    category: 'wiki',
-    provider: 'browser',
-    engine: 'transformersjs',
-    task: 'text-generation',
-    browserModel: 'onnx-community/Qwen2.5-0.5B-Instruct',
-    backend: 'auto',
-    dtype: 'q4',
-    local: true,
-    pull: '',
-    size: '~750 MB',
-    quality: 'small',
-    notes: 'MVP summary model. Not perfect, but it runs inside Electron without Ollama.'
-  },
-  {
-    id: 'qwen25-05b-wiki-browser',
-    name: 'Qwen2.5 0.5B Browser',
-    purpose: 'wiki',
-    category: 'wiki',
-    provider: 'browser',
-    engine: 'transformersjs',
-    task: 'text-generation',
-    browserModel: 'onnx-community/Qwen2.5-0.5B-Instruct',
-    backend: 'auto',
-    dtype: 'q4',
-    local: true,
-    pull: '',
-    size: '~750 MB',
-    quality: 'small',
-    notes: 'Small cited synthesis model for the first working browser AI path.'
-  },
-  {
-    id: 'qwen25-05b-chat-browser',
-    name: 'Qwen2.5 0.5B Browser Chat',
+    id: 'smollm2-node-llama-cpp-chat',
+    name: 'SmolLM2 135M GGUF Chat',
     purpose: 'chat',
     category: 'chat',
-    provider: 'browser',
-    engine: 'transformersjs',
-    task: 'text-generation',
-    browserModel: 'onnx-community/Qwen2.5-0.5B-Instruct',
-    backend: 'auto',
-    dtype: 'q4',
+    provider: 'node-llama-cpp',
+    engine: 'node-llama-cpp',
+    task: 'chat-completion',
+    model: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
+    uri: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
+    fileName: 'hf_bartowski_SmolLM2-135M-Instruct.Q4_K_M.gguf',
     local: true,
-    pull: '',
-    size: '~750 MB',
-    quality: 'small',
-    notes: 'Recommended MVP chat model. Downloads through the browser cache with progress.'
+    pull: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
+    size: '~100 MB',
+    quality: 'local',
+    notes: 'Local chat response through node-llama-cpp. Small model selected for fast install and validation.'
   },
   {
-    id: 'qwen25-coder-05b-agent-browser',
-    name: 'Qwen2.5 Coder 0.5B Browser',
-    purpose: 'agent',
-    category: 'chat',
-    provider: 'browser',
-    engine: 'transformersjs',
-    task: 'text-generation',
-    browserModel: 'onnx-community/Qwen2.5-Coder-0.5B-Instruct',
-    backend: 'auto',
-    dtype: 'q4',
+    id: 'local-tesseract-ocr',
+    name: 'Tesseract Local OCR',
+    purpose: 'ocr',
+    category: 'ocr',
+    provider: 'local-ocr',
+    engine: 'tesseract',
+    task: 'ocr',
     local: true,
-    pull: '',
-    size: '~750 MB',
-    quality: 'code-small',
-    notes: 'Small browser-side code/agent model. Useful for testing workflows before larger models.'
+    size: 'system binary',
+    quality: 'local',
+    notes: 'Local image-to-text OCR through the Tesseract command line runtime.'
   },
   {
     id: 'codex-compatible',
@@ -190,7 +127,7 @@ export const ATOMIC_MODEL_CATALOG = Object.freeze([
     pull: '',
     size: '~879 MB VRAM',
     quality: 'webgpu',
-    notes: 'Kept as a future WebLLM target. Current MVP uses Transformers.js first for WebGPU/WebCPU fallback.'
+    notes: 'Reference-only browser target kept out of the default local AI setup. Current local text runtime is node-llama-cpp.'
   },
   {
     id: 'whisper-tiny-browser',
@@ -228,56 +165,26 @@ export const ATOMIC_MODEL_CATALOG = Object.freeze([
   }
 ])
 
-export const ATOMIC_PLUGIN_MANIFESTS = Object.freeze([
-  {
-    id: 'google-calendar',
-    name: 'Google Calendar',
-    status: 'planned',
-    permissions: ['oauth:google-calendar', 'calendar:read', 'calendar:write', 'notes:create'],
-    surfaces: ['settings', 'calendar', 'import']
-  },
-  {
-    id: 'mcp-memory',
-    name: 'MCP Memory',
-    status: 'planned',
-    permissions: ['notes:read', 'notes:write', 'search:semantic', 'sources:ingest'],
-    surfaces: ['settings', 'agents']
-  },
-  {
-    id: 'web-clipper',
-    name: 'Web Clipper',
-    status: 'planned',
-    permissions: ['sources:ingest', 'notes:create', 'attachments:write'],
-    surfaces: ['settings', 'import']
-  }
-])
-
-export const PROGRAMMATIC_TASK_TEMPLATES = Object.freeze([
-  {
-    id: 'daily-briefing',
-    name: 'Daily briefing',
-    description: 'Summarize recent vault activity and suggest wiki updates.',
-    cadence: 'daily',
-    prompt: 'Create a short daily briefing from recent notes and calendar context.',
-    actions: ['search:recent', 'wiki:propose', 'calendar:summary']
-  },
-  {
-    id: 'contradiction-scan',
-    name: 'Contradiction scan',
-    description: 'Search semantically for notes that may disagree with each other.',
-    cadence: 'weekly',
-    prompt: 'Find possible contradictions or outdated statements across related notes.',
-    actions: ['search:semantic', 'wiki:proposal']
-  },
-  {
-    id: 'inbox-autotag',
-    name: 'Inbox auto-tag',
-    description: 'Add frontmatter tags to imported or inbox notes.',
-    cadence: 'on-import',
-    prompt: 'Generate concise tags for new inbox notes.',
-    actions: ['model:tagging', 'notes:update-frontmatter']
-  }
-])
+export {
+  ATOMIC_PLUGIN_MANIFESTS,
+  EXTENSION_ACTION_STATUS,
+  EXTENSION_PLUGIN_IDS,
+  EXTENSION_PLUGIN_RUNTIMES,
+  EXTENSION_TASK_ACTIONS,
+  PROGRAMMATIC_TASK_TEMPLATES,
+  createDefaultPluginState,
+  createDefaultTaskState,
+  createTaskRunResult,
+  createTaskStepResult,
+  isExecutableTaskAction,
+  mergePluginState,
+  mergeTaskState,
+  normalizePluginManifest,
+  normalizeProgrammaticTask,
+  resolvePluginRuntime,
+  updatePluginState,
+  updateTaskState
+} from './extensions'
 
 export const getModelGroups = () => MODEL_GROUPS
 
@@ -294,136 +201,3 @@ export const createDefaultModelSelection = () => MODEL_PURPOSES.reduce((selectio
   selection[purpose] = ''
   return selection
 }, {})
-
-export const normalizePluginManifest = (manifest = {}) => ({
-  id: String(manifest.id || '').trim(),
-  name: String(manifest.name || manifest.id || '').trim(),
-  status: ['planned', 'enabled', 'disabled'].includes(manifest.status) ? manifest.status : 'planned',
-  permissions: Array.isArray(manifest.permissions)
-    ? manifest.permissions.filter(Boolean).map((permission) => String(permission)).filter(Boolean)
-    : [],
-  surfaces: Array.isArray(manifest.surfaces)
-    ? manifest.surfaces.filter(Boolean).map((surface) => String(surface)).filter(Boolean)
-    : []
-})
-
-export const createDefaultPluginState = (manifests = ATOMIC_PLUGIN_MANIFESTS) => {
-  return manifests.reduce((state, manifest) => {
-    state[manifest.id] = {
-      enabled: manifest.status === 'enabled',
-      config: {}
-    }
-    return state
-  }, {})
-}
-
-export const mergePluginState = (manifests = ATOMIC_PLUGIN_MANIFESTS, state = {}) => {
-  const defaults = createDefaultPluginState(manifests)
-  return manifests.map((manifest) => {
-    const normalizedManifest = normalizePluginManifest(manifest)
-    const saved = state?.[normalizedManifest.id] || {}
-    const enabled = typeof saved.enabled === 'boolean'
-      ? saved.enabled
-      : defaults[normalizedManifest.id]?.enabled || false
-    return {
-      ...normalizedManifest,
-      status: enabled ? 'enabled' : 'disabled',
-      enabled,
-      config: saved.config && typeof saved.config === 'object' && !Array.isArray(saved.config)
-        ? saved.config
-        : {}
-    }
-  })
-}
-
-export const updatePluginState = (manifests = ATOMIC_PLUGIN_MANIFESTS, state = {}, patch = {}) => {
-  const plugin = manifests.find((manifest) => manifest.id === patch.id)
-  if (!plugin) throw new Error('Unknown plugin.')
-  const current = state?.[plugin.id] || createDefaultPluginState(manifests)[plugin.id] || {}
-  return {
-    ...createDefaultPluginState(manifests),
-    ...state,
-    [plugin.id]: {
-      enabled: typeof patch.enabled === 'boolean' ? patch.enabled : Boolean(current.enabled),
-      config: patch.config && typeof patch.config === 'object' && !Array.isArray(patch.config)
-        ? patch.config
-        : current.config || {}
-    }
-  }
-}
-
-export const normalizeProgrammaticTask = (task = {}) => {
-  const template = PROGRAMMATIC_TASK_TEMPLATES.find((item) => item.id === task.template || item.id === task.id)
-  const id = String(task.id || task.template || template?.id || `task-${Date.now()}`).trim()
-  return {
-    id,
-    name: String(task.name || template?.name || 'Untitled task').trim(),
-    description: String(task.description || template?.description || '').trim(),
-    cadence: String(task.cadence || template?.cadence || 'manual'),
-    enabled: task.enabled !== false,
-    prompt: String(task.prompt || template?.prompt || '').trim(),
-    actions: Array.isArray(task.actions)
-      ? task.actions.filter(Boolean).map((action) => String(action)).filter(Boolean)
-      : [...(template?.actions || [])],
-    createdAt: String(task.createdAt || new Date().toISOString()),
-    updatedAt: String(task.updatedAt || new Date().toISOString())
-  }
-}
-
-export const createDefaultTaskState = (templates = PROGRAMMATIC_TASK_TEMPLATES) => {
-  return templates.reduce((state, template) => {
-    state[template.id] = {
-      ...normalizeProgrammaticTask({ template: template.id }),
-      enabled: false,
-      lastRunAt: '',
-      lastResult: null
-    }
-    return state
-  }, {})
-}
-
-export const mergeTaskState = (templates = PROGRAMMATIC_TASK_TEMPLATES, state = {}) => {
-  const merged = new Map()
-  for (const template of templates) {
-    const saved = state?.[template.id] || {}
-    merged.set(template.id, {
-      ...normalizeProgrammaticTask({ template: template.id, ...saved, id: template.id }),
-      enabled: typeof saved.enabled === 'boolean' ? saved.enabled : false,
-      lastRunAt: String(saved.lastRunAt || ''),
-      lastResult: saved.lastResult || null
-    })
-  }
-  for (const [id, value] of Object.entries(state || {})) {
-    if (merged.has(id)) continue
-    merged.set(id, {
-      ...normalizeProgrammaticTask({ id, ...value }),
-      enabled: value.enabled !== false,
-      lastRunAt: String(value.lastRunAt || ''),
-      lastResult: value.lastResult || null
-    })
-  }
-  return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name))
-}
-
-export const updateTaskState = (templates = PROGRAMMATIC_TASK_TEMPLATES, state = {}, patch = {}) => {
-  const defaults = createDefaultTaskState(templates)
-  const id = String(patch.id || patch.name || '').trim()
-  if (!id) throw new Error('Task id is required.')
-  const current = state?.[id] || defaults[id] || {}
-  const task = normalizeProgrammaticTask({
-    ...current,
-    ...patch,
-    id,
-    updatedAt: new Date().toISOString()
-  })
-  return {
-    ...defaults,
-    ...state,
-    [id]: {
-      ...task,
-      enabled: typeof patch.enabled === 'boolean' ? patch.enabled : task.enabled,
-      lastRunAt: String(patch.lastRunAt || current.lastRunAt || ''),
-      lastResult: patch.lastResult === undefined ? current.lastResult || null : patch.lastResult
-    }
-  }
-}

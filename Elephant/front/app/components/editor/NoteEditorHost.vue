@@ -100,6 +100,10 @@ import {
   parseMarkdownTags,
   updateMarkdownTags
 } from '../../utils/markdownTags'
+import {
+  getOppositeThemeVariant,
+  getThemeMode
+} from 'common/elephantnote/appearance'
 
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
@@ -166,7 +170,7 @@ const editorMarkdownStats = computed(() => getEditorMarkdownStats(visibleMarkdow
 const wordCount = computed(() => editorMarkdownStats.value.word)
 const characterCount = computed(() => editorMarkdownStats.value.character)
 const showEditorFooter = computed(() => preferencesStore.showEditorFooter === true)
-const themeIcon = computed(() => shellTheme.value === 'dark' ? SunMedium : Moon)
+const themeIcon = computed(() => getThemeMode(shellTheme.value) === 'dark' ? SunMedium : Moon)
 const isPinned = computed(() => {
   const pathname = currentNoteRelativePath.value
   return !!pathname && store.pinnedNotePaths.includes(pathname)
@@ -576,7 +580,7 @@ const setTextScale = (value) => {
 }
 
 const toggleTheme = () => {
-  setShellTheme(shellTheme.value === 'dark' ? 'light' : 'dark')
+  setShellTheme(getOppositeThemeVariant(shellTheme.value))
 }
 
 const closeTransientMenus = (event) => {

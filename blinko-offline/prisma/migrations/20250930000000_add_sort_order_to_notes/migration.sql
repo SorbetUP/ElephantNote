@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE "notes" ADD COLUMN "sortOrder" INTEGER NOT NULL DEFAULT 0;

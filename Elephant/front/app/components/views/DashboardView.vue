@@ -44,7 +44,7 @@
           <li>Local markdown vault: active</li>
           <li>Muya editor: active</li>
           <li>Graph and wiki: local MVP</li>
-          <li>Semantic AI layer: planned</li>
+          <li>Semantic AI layer: local model MVP</li>
           <li>Mobile and plugin runtime: planned</li>
         </ul>
       </section>

@@ -116,6 +116,7 @@ import { ChevronDown, ChevronRight, X } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import {
   canDropEntryOnDirectory,
+  clearDraggedEntry,
   getEntryKind,
   parseDraggedEntry,
   writeDraggedEntry
@@ -212,6 +213,7 @@ const handleDragStart = (event) => {
 }
 
 const handleDragEnd = () => {
+  clearDraggedEntry()
   isDragging.value = false
   isDropTarget.value = false
   isDropDisabled.value = false

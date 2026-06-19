@@ -1,6 +1,11 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import {
+  deriveLlamaBackendsFromCapabilities,
+  normalizeLlamaBackend,
+  selectPreferredLlamaBackend
+} from '../../../shared/ai/llamaBackend.js'
 
 const DEFAULT_MODEL_DIR = path.join(os.homedir(), '.elephantnote', 'models', 'node-llama-cpp')
 
@@ -19,26 +24,72 @@ const normalizeProgress = ({ totalSize = 0, downloadedSize = 0 } = {}) => {
 export class NodeLlamaCppRuntime {
   constructor({
     modelDir = DEFAULT_MODEL_DIR,
-    moduleLoader = loadNodeLlamaCpp
+    moduleLoader = loadNodeLlamaCpp,
+    llamaOptions = {},
+    preferredBackends = ['cpu', 'gpu', 'mpu', 'npu', 'openvino', 'tpu']
   } = {}) {
     this.modelDir = modelDir
     this.moduleLoader = moduleLoader
+    this.llamaOptions = { ...llamaOptions }
+    this.preferredBackends = [...preferredBackends]
     this.loaded = new Map()
+  }
+
+  async _resolveCapabilities() {
+    try {
+      const mod = await this.moduleLoader()
+      const gpuTypes = typeof mod.getLlamaGpuTypes === 'function'
+        ? await mod.getLlamaGpuTypes().catch(() => [])
+        : []
+      const hasOpenVino = String(this.llamaOptions?.cmakeOptions?.GGML_OPENVINO || '').toUpperCase() === 'ON'
+      const requestedOpenVinoDevice = String(
+        this.llamaOptions?.openvinoDevice ||
+        this.llamaOptions?.cmakeOptions?.GGML_OPENVINO_DEVICE ||
+        ''
+      ).trim().toUpperCase()
+      const hasNpu = hasOpenVino && requestedOpenVinoDevice === 'NPU'
+      const supportedBackends = deriveLlamaBackendsFromCapabilities({
+        gpuTypes,
+        hasOpenVino,
+        hasNpu,
+        runtime: 'node'
+      })
+      return {
+        mod,
+        gpuTypes,
+        supportedBackends,
+        selectedBackend: selectPreferredLlamaBackend({
+          availableBackends: supportedBackends,
+          preferredOrder: this.preferredBackends
+        }) || 'cpu'
+      }
+    } catch (error) {
+      return {
+        mod: null,
+        gpuTypes: [],
+        supportedBackends: ['cpu'],
+        selectedBackend: 'cpu',
+        error
+      }
+    }
   }
 
   async status() {
     try {
-      const mod = await this.moduleLoader()
-      const llama = await mod.getLlama()
+      const { mod, gpuTypes, supportedBackends, selectedBackend } = await this._resolveCapabilities()
+      const llama = mod ? await mod.getLlama(this.llamaOptions) : null
       const models = await this.listModels()
       return {
         provider: 'node-llama-cpp',
         available: true,
         modelDir: this.modelDir,
-        gpuTypes: typeof mod.getLlamaGpuTypes === 'function' ? await mod.getLlamaGpuTypes().catch(() => []) : [],
+        gpuTypes,
+        supportedBackends,
+        selectedBackend,
+        preferredBackends: [...this.preferredBackends],
         version: typeof mod.getModuleVersion === 'function' ? mod.getModuleVersion() : '',
         models,
-        message: `node-llama-cpp ready${llama?.gpu ? ` (${llama.gpu})` : ''}.`
+        message: `node-llama-cpp ready${llama?.gpu ? ` (${llama.gpu})` : ''} on ${selectedBackend}.`
       }
     } catch (error) {
       return {
@@ -102,10 +153,11 @@ export class NodeLlamaCppRuntime {
     const modelPath = model.path || await this.resolveModel(model)
     if (this.loaded.has(modelPath)) return this.loaded.get(modelPath)
     const mod = await this.moduleLoader()
-    const llama = await mod.getLlama()
+    const llama = await mod.getLlama(this.llamaOptions)
+    const backend = normalizeLlamaBackend(model.backend || 'auto')
     const loadedModel = await llama.loadModel({
       modelPath,
-      gpuLayers: model.gpuLayers ?? 'auto'
+      gpuLayers: backend === 'cpu' ? 0 : model.gpuLayers ?? 'auto'
     })
     const record = { mod, model: loadedModel, modelPath }
     this.loaded.set(modelPath, record)

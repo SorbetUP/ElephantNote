@@ -1,0 +1,12 @@
+import { toPlainObject } from '../../../../shared/plainObject.js'
+import { ELEPHANTNOTE_API_ACTIONS as API } from 'common/elephantnote/apiActions'
+
+const getBridge = () => globalThis.window?.elephantnote
+
+const callModelBridge = (method, payload) => {
+  const bridgeMethod = getBridge()?.models?.[method]
+  if (typeof bridgeMethod !== 'function') return undefined
+  return bridgeMethod(toPlainObject(payload))
+}
+
+export const x = 1

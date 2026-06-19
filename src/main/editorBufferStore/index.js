@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import EventEmitter from 'events'
 import { BrowserWindow, ipcMain } from 'electron'
+import log from 'electron-log'
 class EditorBufferStore extends EventEmitter {
   constructor(paths) {
     super()
@@ -45,7 +46,7 @@ class EditorBufferStore extends EventEmitter {
         try {
           fs.unlinkSync(this.bufferStores[id].filePath)
         } catch (e) {
-          console.error('Failed to delete buffer store file during clear', e)
+          log.error('[buffer-store] failed to delete buffer store file during clear', e)
         }
       }
     }
@@ -56,7 +57,7 @@ class EditorBufferStore extends EventEmitter {
     // This allows the case where we want to actually close an extra window
 
     if (!restoreBufferId) {
-      console.warn('No restoreBufferId found for window, skipping buffer cleanup')
+      log.warn('[buffer-store] missing restoreBufferId, skipping cleanup')
       return
     }
 
@@ -65,7 +66,7 @@ class EditorBufferStore extends EventEmitter {
     }
 
     if (!(restoreBufferId in this.bufferStores)) {
-      console.warn('No buffer store found for restoreBufferId, skipping buffer cleanup')
+      log.warn('[buffer-store] no buffer store found for restoreBufferId, skipping cleanup')
       return
     }
 
@@ -82,7 +83,7 @@ class EditorBufferStore extends EventEmitter {
           delete this.bufferStores[restoreBufferId]
         }
       } catch (e) {
-        console.error('Failed to read or parse buffer store file during cleanup', e)
+        log.error('[buffer-store] failed to read or parse buffer store file during cleanup', e)
       }
     }
   }
@@ -158,7 +159,7 @@ class EditorBufferStore extends EventEmitter {
           fs.unlinkSync(tempPath)
         }
       } catch (cleanupErr) {
-        console.error('Failed to clean up temporary buffer store file', cleanupErr)
+        log.error('[buffer-store] failed to clean up temporary buffer store file', cleanupErr)
       }
       throw err
     }
@@ -169,7 +170,7 @@ class EditorBufferStore extends EventEmitter {
     const restoreBufferId = win?.restoreBufferId
 
     if (!restoreBufferId) {
-      console.warn('No restoreBufferId found for window, skipping buffer state update')
+      log.warn('[buffer-store] missing restoreBufferId, skipping buffer state update')
       return false
     }
 

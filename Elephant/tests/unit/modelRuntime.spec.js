@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { ModelRuntime } from 'main_renderer/elephantnote/modelRuntime'
 
 describe('ModelRuntime', () => {
-  it('reports node-llama-cpp runtime availability by default', async() => {
+  it('reports node-llama-cpp runtime availability through the model library', async() => {
     const runtime = new ModelRuntime({
-      nodeLlamaCppRuntime: {
-        status: async() => ({
+      modelLibrary: {
+        listLocalModels: async() => ({
           provider: 'node-llama-cpp',
           available: true,
           models: [{ id: 'local.gguf' }]
@@ -142,5 +142,59 @@ describe('ModelRuntime', () => {
       imagePath: '/tmp/settings.png',
       text: 'ElephantNote Settings'
     })
+  })
+
+  it('skips embedding smoke checks for chat-oriented smoke tests', async() => {
+    const calls = []
+    const runtime = new ModelRuntime({
+      nodeLlamaCppRuntime: {
+        generateChat: async(payload) => {
+          calls.push({ type: 'chat', payload })
+          return 'ElephantNote local chat OK'
+        },
+        embedText: async(payload) => {
+          calls.push({ type: 'embed', payload })
+          return [1, 2, 3]
+        }
+      }
+    })
+
+    await expect(runtime.testNodeLlamaCppModel({
+      id: 'smollm2-node-llama-cpp-chat',
+      task: 'chat-completion'
+    })).resolves.toMatchObject({
+      provider: 'node-llama-cpp',
+      embeddingDimensions: 0,
+      embeddingTested: false
+    })
+    expect(calls.map((entry) => entry.type)).toEqual(['chat'])
+  })
+
+  it('can still run the embedding smoke check when requested', async() => {
+    const calls = []
+    const runtime = new ModelRuntime({
+      nodeLlamaCppRuntime: {
+        generateChat: async(payload) => {
+          calls.push({ type: 'chat', payload })
+          return 'ElephantNote local chat OK'
+        },
+        embedText: async(payload) => {
+          calls.push({ type: 'embed', payload })
+          return [1, 2, 3, 4]
+        }
+      }
+    })
+
+    await expect(runtime.testNodeLlamaCppModel({
+      id: 'nomic-embed-text',
+      task: 'embedding'
+    }, {
+      includeEmbeddings: true
+    })).resolves.toMatchObject({
+      provider: 'node-llama-cpp',
+      embeddingDimensions: 4,
+      embeddingTested: true
+    })
+    expect(calls.map((entry) => entry.type)).toEqual(['chat', 'embed'])
   })
 })

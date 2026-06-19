@@ -11,6 +11,7 @@ import os from 'os'
 import log from 'electron-log'
 import { createAndOpenGitHubIssueUrl } from './utils/createGitHubIssue'
 import { t } from './i18n'
+import { formatLogArgs } from '../common/logging'
 
 const EXIT_ON_ERROR = !!process.env.MARKTEXT_EXIT_ON_ERROR
 const SHOW_ERROR_DIALOG = !process.env.MARKTEXT_ERROR_INTERACTION
@@ -44,7 +45,7 @@ const handleError = async(title, error, type) => {
   }
 
   if (EXIT_ON_ERROR) {
-    console.log(t('error.terminatedDueToError'))
+    log.info(t('error.terminatedDueToError'))
     process.exit(1)
     // eslint, don't lie to me, the return statement is important!
     return
@@ -119,6 +120,13 @@ const setupExceptionHandler = () => {
   // renderer process error handler
   ipcMain.on('mt::handle-renderer-error', (e, error) => {
     handleError(ERROR_MSG_RENDERER(), error, 'renderer')
+  })
+
+  ipcMain.on('mt::renderer-log', (_event, entry = {}) => {
+    const level = ['debug', 'info', 'warn', 'error'].includes(entry.level) ? entry.level : 'info'
+    const message = entry.message || formatLogArgs(entry.args || [])
+    if (!message) return
+    log[level](`[renderer] ${message}`)
   })
 
   // start crashReporter to save core dumps to temporary folder

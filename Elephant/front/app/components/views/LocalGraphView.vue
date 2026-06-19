@@ -9,7 +9,9 @@
         ✕
       </button>
       <h3>{{ centerTitle }}</h3>
-      <span class="en-local-count">{{ neighborhood.atoms.length }} nodes</span>
+      <span class="en-local-count">
+        {{ neighborhood.atoms.length }} nodes · {{ semanticEdgeCount }} semantic links
+      </span>
     </div>
     <div
       ref="containerRef"
@@ -17,9 +19,9 @@
     />
     <div class="en-local-legend">
       <span class="en-local-legend-item en-local-legend-center">Center</span>
-      <span class="en-local-legend-item en-local-legend-tag">Tag connection</span>
       <span class="en-local-legend-item en-local-legend-semantic">Semantic</span>
-      <span class="en-local-legend-item en-local-legend-both">Both</span>
+      <span class="en-local-legend-item en-local-legend-explicit">Explicit link</span>
+      <span class="en-local-legend-item en-local-legend-folder">Structure</span>
     </div>
   </div>
 </template>
@@ -31,10 +33,13 @@ import Sigma from 'sigma'
 import EdgeCurveProgram from '@sigma/edge-curve'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useCanvasStore } from '../../stores/canvasStore'
+import { useSearchStore } from '../../stores/searchStore'
 import { lerpRgb, rgbString } from '../../graph/graphThemes'
+import { buildSemanticNeighborhood } from './semanticGraphViewHelpers'
 
 const store = useVaultStore()
 const canvasStore = useCanvasStore()
+const searchStore = useSearchStore()
 
 const containerRef = ref(null)
 const sigmaRef = ref(null)
@@ -52,6 +57,10 @@ const centerNoteId = computed(() => canvasStore.localGraphCenter)
 
 const centerNote = computed(() => {
   if (!centerNoteId.value) return null
+  const semanticNode = searchStore.indexInspection?.graph?.nodes?.find((node) => {
+    return String(node.relativePath || node.path || node.id || '') === centerNoteId.value
+  })
+  if (semanticNode) return semanticNode
   return store.rootEntries.find(e => e.path === centerNoteId.value)
 })
 
@@ -59,72 +68,38 @@ const centerTitle = computed(() => {
   return centerNote.value?.title || 'Neighborhood'
 })
 
+const semanticEdgeCount = computed(() => {
+  return neighborhood.value.edges.filter((edge) => edge.edge_type === 'semantic').length
+})
+
 const neighborhood = computed(() => {
   const centerId = centerNoteId.value
   if (!centerId) return { atoms: [], edges: [] }
-
-  const notes = store.rootEntries.filter(e => (e.kind || e.type) === 'note')
-  const noteMap = new Map(notes.map(n => [n.path, n]))
-  const centerNote = noteMap.get(centerId)
-  if (!centerNote) return { atoms: [], edges: [] }
-
-  const atoms = [{ id: centerId, title: centerNote.title || 'Untitled', tags: centerNote.tags || [], depth: 0 }]
-  const edges = []
-  const seen = new Set([centerId])
-
-  const centerTags = new Set(centerNote.tags || [])
-  const directlyConnected = new Map()
-
-  for (const note of notes) {
-    if (note.path === centerId) continue
-    const sharedTags = (note.tags || []).filter(t => centerTags.has(t))
-    if (sharedTags.length > 0) {
-      directlyConnected.set(note.path, { note, sharedTags, depth: 1 })
-    }
-  }
-
-  for (const note of notes) {
-    if (note.path === centerId) continue
-    const folder = note.path?.includes('/') ? note.path.split('/').slice(0, -1).join('/') : ''
-    const centerFolder = centerNote.path?.includes('/') ? centerNote.path.split('/').slice(0, -1).join('/') : ''
-    if (folder && folder === centerFolder && centerFolder) {
-      if (!directlyConnected.has(note.path)) {
-        directlyConnected.set(note.path, { note, sharedTags: [], depth: 1 })
-      }
-    }
-  }
-
-  for (const [id, { note, sharedTags }] of directlyConnected) {
-    if (seen.has(id)) continue
-    seen.add(id)
-    const edgeType = sharedTags.length > 0 ? 'tag' : 'folder'
-    const strength = Math.min(1, sharedTags.length * 0.15 + 0.3)
-    atoms.push({ id: note.path, title: note.title || 'Untitled', tags: note.tags || [], depth: 1 })
-    edges.push({ source_id: centerId, target_id: id, edge_type: edgeType, strength, shared_tag_count: sharedTags.length, similarity_score: null })
-  }
-
-  for (const [id1] of directlyConnected) {
-    const n1 = noteMap.get(id1)
-    if (!n1) continue
-    const n1Tags = new Set(n1.tags || [])
-    for (const [id2] of directlyConnected) {
-      if (id1 >= id2) continue
-      const n2 = noteMap.get(id2)
-      if (!n2) continue
-      const shared = (n2.tags || []).filter(t => n1Tags.has(t))
-      if (shared.length > 0) {
-        edges.push({
-          source_id: id1,
-          target_id: id2,
-          edge_type: 'tag',
-          strength: Math.min(1, shared.length * 0.15 + 0.2),
-          shared_tag_count: shared.length,
-          similarity_score: null,
-        })
-      }
-    }
-  }
-
+  const semantic = buildSemanticNeighborhood({
+    graph: searchStore.indexInspection?.graph,
+    centerId,
+    depth: Math.max(1, Number(canvasStore.localGraphDepth) || 1),
+    maxNodes: 32
+  })
+  const atoms = semantic.nodes.map((node) => ({
+    id: node.id,
+    title: node.title || 'Untitled',
+    summary: node.summary || '',
+    tags: node.tags || [],
+    kind: node.kind || 'note',
+    depth: node.id === centerId ? 0 : 1,
+    sourceCount: node.sourceCount || 0,
+    chunkCount: node.chunkCount || 0
+  }))
+  const edges = semantic.edges.map((edge) => ({
+    source_id: edge.source,
+    target_id: edge.target,
+    edge_type: edge.type || 'semantic',
+    strength: Number(edge.weight || 0),
+    reason: edge.reason || edge.type || 'semantic',
+    shared_tag_count: edge.shared_tag_count || 0,
+    similarity_score: edge.weight || 0
+  }))
   return { atoms, edges }
 })
 
@@ -158,9 +133,14 @@ function neighborhoodEdgeStyle (edge) {
   const t = theme.value
   const s = edge.strength
   switch (edge.edge_type) {
-    case 'semantic': return { color: rgbString(t.edgeMax), size: 0.9 + s * 1.4 }
-    case 'both': return { color: lerpRgb(t.edgeMax, isLight.value ? [40, 40, 40] : [255, 255, 255], 0.45), size: 1.5 + s * 1.8 }
-    case 'tag':
+    case 'semantic':
+      return { color: rgbString(t.edgeMax), size: 0.95 + s * 1.4 }
+    case 'explicit-link':
+      return { color: lerpRgb(t.edgeMax, isLight.value ? [20, 120, 110] : [150, 220, 210], 0.42), size: 1.3 + s * 1.3 }
+    case 'folder':
+      return { color: lerpRgb(t.edgeMin, isLight.value ? [180, 110, 40] : [220, 170, 90], 0.6), size: 0.8 + s * 0.85 }
+    case 'lexical':
+      return { color: lerpRgb(t.edgeMax, isLight.value ? [125, 70, 220] : [186, 146, 255], 0.22), size: 0.7 + s * 1.05 }
     default: return { color: lerpRgb(t.edgeMin, isLight.value ? [100, 100, 110] : [110, 110, 120], 0.7), size: 0.5 + s * 0.9 }
   }
 }
@@ -440,7 +420,12 @@ watch(neighborhood, () => {
 })
 
 onMounted(() => {
+  searchStore.inspect().catch(() => {})
   mountSigma()
+})
+
+watch(() => store.activeVault?.path, () => {
+  searchStore.inspect().catch(() => {})
 })
 
 onBeforeUnmount(() => {
@@ -532,10 +517,10 @@ onBeforeUnmount(() => {
 }
 
 .en-local-legend-center::before { background: var(--en-primary, rgb(100, 140, 255)); }
-.en-local-legend-tag { display: flex; align-items: center; gap: 0; }
-.en-local-legend-tag::before { content: ''; width: 16px; height: 1px; background: var(--en-border, rgb(110, 110, 120)); }
 .en-local-legend-semantic { display: flex; align-items: center; gap: 0; }
 .en-local-legend-semantic::before { content: ''; width: 16px; height: 2px; background: var(--en-muted, rgb(80, 65, 160)); }
-.en-local-legend-both { display: flex; align-items: center; gap: 0; }
-.en-local-legend-both::before { content: ''; width: 16px; height: 3px; background: var(--en-primary, rgb(170, 130, 210)); }
+.en-local-legend-explicit { display: flex; align-items: center; gap: 0; }
+.en-local-legend-explicit::before { content: ''; width: 16px; height: 2px; background: color-mix(in srgb, var(--en-primary) 55%, #14b8a6); }
+.en-local-legend-folder { display: flex; align-items: center; gap: 0; }
+.en-local-legend-folder::before { content: ''; width: 16px; height: 1.5px; border-top: 1.5px dashed color-mix(in srgb, var(--en-muted) 70%, #f59e0b); }
 </style>

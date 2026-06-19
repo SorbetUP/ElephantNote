@@ -607,7 +607,7 @@ export const openFileOrFolder = (win, pathname) => {
   } else if (isDirectory(resolvedPath)) {
     ipcMain.emit('app-open-directory-by-id', win.id, resolvedPath)
   } else {
-    console.error(`[ERROR] Cannot open unknown file: "${resolvedPath}"`)
+    log.error(`[file] openFileOrFolder: cannot open unknown file "${resolvedPath}"`)
   }
 }
 

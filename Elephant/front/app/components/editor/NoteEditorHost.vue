@@ -21,6 +21,83 @@
         @cancel-tag="cancelTag"
       />
 
+      <section
+        v-if="noteGraphPreview"
+        class="en-note-graph-preview"
+      >
+        <div class="en-note-graph-preview-head">
+          <div>
+            <strong>Semantic graph</strong>
+            <p>
+              {{ noteGraphPreview.stats.totalNodes }} nodes ·
+              {{ noteGraphPreview.stats.semanticLinks }} semantic links ·
+              {{ noteGraphPreview.stats.incidentLinks }} local links
+              <span v-if="noteGraphPreview.cluster">· {{ noteGraphPreview.cluster.label }}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            class="en-note-graph-open"
+            @click="openGraphView"
+          >
+            Open graph
+          </button>
+        </div>
+
+        <div class="en-note-graph-chip-row">
+          <span class="en-note-graph-chip en-note-graph-chip-primary">
+            {{ noteGraphPreview.node.title || noteTitle }}
+          </span>
+          <span class="en-note-graph-chip">
+            {{ noteGraphPreview.node.sourceCount || 0 }} sources
+          </span>
+          <span class="en-note-graph-chip">
+            {{ noteGraphPreview.node.chunkCount || 0 }} chunks
+          </span>
+          <span
+            v-for="tag in noteGraphPreview.node.tags || []"
+            :key="tag"
+            class="en-note-graph-chip"
+          >
+            #{{ tag }}
+          </span>
+        </div>
+
+        <div
+          v-if="noteGraphPreview.sources?.length"
+          class="en-note-graph-sources"
+        >
+          <button
+            v-for="source in noteGraphPreview.sources.slice(0, 4)"
+            :key="source.path || source.title"
+            type="button"
+            class="en-note-graph-source"
+            @click="openGraphSource(source)"
+          >
+            <strong>{{ source.title }}</strong>
+            <span>{{ source.excerpt || source.type || source.path }}</span>
+          </button>
+        </div>
+
+        <div
+          v-if="noteGraphPreview.relatedNodes.length"
+          class="en-note-graph-related"
+        >
+          <button
+            v-for="related in noteGraphPreview.relatedNodes"
+            :key="related.id"
+            type="button"
+            class="en-note-graph-related-item"
+            @click="openRelatedGraphNode(related.id)"
+          >
+            <strong>{{ related.title }}</strong>
+            <span>
+              {{ related.summary || 'Related semantic note' }}
+            </span>
+          </button>
+        </div>
+      </section>
+
       <div class="en-note-editor-shell">
         <div class="en-editor-host">
           <editor-with-tabs
@@ -46,6 +123,7 @@
         @toggle-typography="isTypographyOpen = !isTypographyOpen"
         @set-text-scale="setTextScale"
         @toggle-theme="toggleTheme"
+        @open-graph="openGraphView"
       />
     </section>
 
@@ -104,11 +182,16 @@ import {
   getOppositeThemeVariant,
   getThemeMode
 } from 'common/elephantnote/appearance'
+import { elephantnoteClient } from '../../services/elephantnoteClient'
+import { useSearchStore } from '../../stores/searchStore'
+import { buildNoteGraphPreview } from './noteGraphHelpers'
+import { resolveLocalImageSource } from '../../../../shared/imageSource.js'
 
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
 const preferencesStore = usePreferencesStore()
 const store = useVaultStore()
+const searchStore = useSearchStore()
 
 const { platform } = storeToRefs(mainStore)
 const { sourceCode, textDirection } = storeToRefs(preferencesStore)
@@ -170,6 +253,12 @@ const editorMarkdownStats = computed(() => getEditorMarkdownStats(visibleMarkdow
 const wordCount = computed(() => editorMarkdownStats.value.word)
 const characterCount = computed(() => editorMarkdownStats.value.character)
 const showEditorFooter = computed(() => preferencesStore.showEditorFooter === true)
+const noteGraphPreview = computed(() => buildNoteGraphPreview({
+  graph: searchStore.indexInspection?.graph,
+  notePath: currentNoteRelativePath.value,
+  limit: 4,
+  includeStructure: false
+}))
 const themeIcon = computed(() => getThemeMode(shellTheme.value) === 'dark' ? SunMedium : Moon)
 const isPinned = computed(() => {
   const pathname = currentNoteRelativePath.value
@@ -439,26 +528,8 @@ const blobFromFilePath = async (pathname) => {
   return new Blob([data], { type: getMimeTypeFromPath(pathname) })
 }
 
-const resolveLocalImagePath = (source) => {
-  const value = String(source || '').trim()
-  if (!value) return ''
-  const withoutQuery = value.split(/[?#]/)[0]
-  let decoded = withoutQuery
-  try {
-    decoded = decodeURI(withoutQuery)
-  } catch {
-    decoded = withoutQuery
-  }
-
-  if (decoded.startsWith('file://')) {
-    return decoded
-      .replace(/^file:\/\//, '')
-      .replace(/^\/([A-Za-z]:\/)/, '$1')
-  }
-
-  if (window.path.isAbsolute(decoded)) return decoded
-  return window.path.resolve(currentNoteDirectory.value || store.activeVault?.path || '', decoded)
-}
+const resolveLocalImagePath = (source) =>
+  resolveLocalImageSource(source, currentNoteDirectory.value || store.activeVault?.path || '')
 
 const openExcalidrawFromPath = async (sourcePath = '', { insertOnSave = false, refreshOnSave = false } = {}) => {
   let selectedPath = sourcePath || ''
@@ -504,6 +575,13 @@ const openExcalidraw = async () => {
 const openExcalidrawFromImage = async (imageSource) => {
   const imagePath = resolveLocalImagePath(imageSource)
   if (!imagePath) return
+  if (/^(?:https?:|data:|blob:)/i.test(String(imagePath))) {
+    window.electron.ipcRenderer.send('mt::show-notification', {
+      title: 'Only local images can be opened in Excalidraw.',
+      type: 'warning'
+    })
+    return
+  }
 
   const scenePath = findExcalidrawSceneForImage(imagePath)
   if (!scenePath) {
@@ -583,6 +661,36 @@ const toggleTheme = () => {
   setShellTheme(getOppositeThemeVariant(shellTheme.value))
 }
 
+const openGraphView = () => {
+  store.setWorkspaceView('graph')
+}
+
+const openRelatedGraphNode = (notePath) => {
+  if (!notePath) return
+  const note = [...store.entries, ...store.rootEntries, ...store.openedNotes]
+    .find((entry) => entry?.path === notePath)
+  if (note) {
+    store.openNote(note)
+  } else {
+    store.openNote({
+      kind: 'note',
+      type: 'note',
+      path: notePath,
+      title: notePath.split('/').pop()?.replace(/\.md$/i, '') || notePath
+    })
+  }
+}
+
+const openGraphSource = async (source = {}) => {
+  if (source.url) {
+    await elephantnoteClient.sitePreview.openExternal(source.url)
+    return
+  }
+  if (source.path) {
+    openRelatedGraphNode(source.path)
+  }
+}
+
 const closeTransientMenus = (event) => {
   if (isTypographyOpen.value && !event?.target?.closest?.('.en-note-menu-wrap')) {
     isTypographyOpen.value = false
@@ -600,6 +708,7 @@ setTextScale(textScale.value)
 
 onMounted(() => {
   selectOpenedNoteTab()
+  searchStore.inspect().catch(() => {})
   window.addEventListener('click', closeTransientMenus)
   bus.on('open-excalidraw-from-image', openExcalidrawFromImage)
   bus.on('elephantnote-writing-command', runWritingCommand)
@@ -619,6 +728,10 @@ watch(markdown, (content) => {
 watch(openedNoteAbsolutePath, () => {
   selectOpenedNoteTab()
 }, { flush: 'post' })
+
+watch(() => store.activeVault?.path, () => {
+  searchStore.inspect().catch(() => {})
+})
 
 watch(showEditorFooter, (visible) => {
   if (!visible) isTypographyOpen.value = false
@@ -762,6 +875,113 @@ watch(
   display: flex;
   flex-direction: column;
   background: var(--en-bg);
+}
+
+.en-note-graph-preview {
+  margin: 0 24px 12px;
+  border: 1px solid var(--en-border);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--en-primary) 10%, transparent), transparent 40%),
+    color-mix(in srgb, var(--en-surface) 94%, transparent);
+}
+
+.en-note-graph-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.en-note-graph-preview-head strong {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.en-note-graph-preview-head p {
+  margin: 4px 0 0;
+  color: var(--en-muted);
+  font-size: 12px;
+}
+
+.en-note-graph-open {
+  border: 1px solid var(--en-border);
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 12px;
+  color: var(--en-text);
+  background: var(--en-bg);
+}
+
+.en-note-graph-chip-row,
+.en-note-graph-sources,
+.en-note-graph-related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.en-note-graph-sources {
+  display: grid;
+  gap: 8px;
+}
+
+.en-note-graph-chip,
+.en-note-graph-related-item {
+  border: 1px solid var(--en-border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--en-text);
+  background: var(--en-bg);
+}
+
+.en-note-graph-chip-primary {
+  background: color-mix(in srgb, var(--en-primary) 12%, var(--en-bg));
+}
+
+.en-note-graph-related-item {
+  display: grid;
+  gap: 3px;
+  border-radius: 14px;
+  min-width: min(220px, 100%);
+  max-width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.en-note-graph-related-item strong {
+  font-size: 13px;
+}
+
+.en-note-graph-related-item span {
+  color: var(--en-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.en-note-graph-source {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--en-border);
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: var(--en-text);
+  background: var(--en-bg);
+  text-align: left;
+}
+
+.en-note-graph-source strong {
+  font-size: 13px;
+}
+
+.en-note-graph-source span {
+  color: var(--en-muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .en-note-pin-button:hover,

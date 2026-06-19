@@ -14,6 +14,9 @@ import App from './app'
 import { APP_NAME } from './app/metadata'
 import { t } from './i18n'
 import { registerElephantNoteIpc } from 'elephant-back/vaults'
+import { installLlamaWarningFilter } from './llamaWarningFilter'
+
+installLlamaWarningFilter()
 
 process.title = APP_NAME
 app.setName(APP_NAME)
@@ -34,6 +37,7 @@ const appEnvironment = setupEnvironment(args)
 const initializeLogger = (env) => {
   log.initialize() // allows listening for logs from the renderer process
   log.transports.console.level = process.env.NODE_ENV === 'development' ? 'info' : 'error'
+  log.transports.file.level = process.env.NODE_ENV === 'development' ? 'info' : getLogLevel()
   let isQuitting = false
   const defaultConsoleWriteFn = log.transports.console.writeFn.bind(log.transports.console)
   const isClosedStdioError = err => ['EPIPE', 'EIO', 'ERR_STREAM_DESTROYED'].includes(err?.code)
@@ -73,6 +77,12 @@ const initializeLogger = (env) => {
 }
 
 initializeLogger(appEnvironment)
+log.info(`[boot] ${APP_NAME} starting`, {
+  version: process.env.MARKTEXT_VERSION_STRING,
+  node: process.version,
+  platform: process.platform
+})
+log.info('[boot] logger initialized')
 
 // Handles native level crashes
 crashReporter.start({
@@ -140,7 +150,9 @@ try {
 }
 const appController = new App(accessor, args)
 registerElephantNoteIpc()
+log.info('[boot] IPC handlers registered')
 appController.init()
+log.info('[boot] app controller initialized')
 
 // Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {

@@ -1,7 +1,13 @@
 <template>
   <section class="en-canvas-view">
     <header class="en-canvas-header">
-      <h1>Canvas</h1>
+      <div>
+        <h1>Semantic Canvas</h1>
+        <p>
+          {{ graphData.nodes.length }} nodes, {{ graphData.edges.length }} links
+          <span v-if="graphData.clusters.length">, {{ graphData.clusters.length }} clusters</span>
+        </p>
+      </div>
       <div class="en-canvas-controls">
         <button
           type="button"
@@ -27,6 +33,7 @@
           :y1="edge.y1"
           :x2="edge.x2"
           :y2="edge.y2"
+          :data-type="edge.type"
         />
       </svg>
       <div
@@ -37,13 +44,14 @@
           v-for="node in positionedNodes"
           :key="node.id"
           class="en-canvas-node"
+          :class="node.kind"
           type="button"
           :style="{ left: `${node.x}px`, top: `${node.y}px` }"
           @pointerdown="startDrag($event, node)"
-          @dblclick="store.openNote(node)"
+          @dblclick="openNode(node)"
         >
           <strong>{{ node.title }}</strong>
-          <span>{{ node.tags?.slice(0, 3).map((tag) => `#${tag}`).join(' ') }}</span>
+          <span>{{ node.summary || semanticLabel(node) }}</span>
         </button>
       </div>
     </div>
@@ -53,37 +61,50 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useVaultStore } from '../../stores/vaultStore'
+import { useSearchStore } from '../../stores/searchStore'
+import { buildSemanticViewModel, selectSemanticGraphSource } from './semanticGraphViewHelpers'
 
 const store = useVaultStore()
+const searchStore = useSearchStore()
 const scale = ref(1)
 const positions = ref({})
 const dragging = ref(null)
 
 const storageKey = computed(() => `elephantnote:canvas:${store.activeVaultId || 'default'}`)
-const notes = computed(() => store.rootEntries.filter((entry) => (entry.kind || entry.type) === 'note'))
-const positionedNodes = computed(() => notes.value.map((note, index) => ({
-  ...note,
-  id: note.path,
-  x: positions.value[note.path]?.x ?? 80 + (index % 4) * 240,
-  y: positions.value[note.path]?.y ?? 80 + Math.floor(index / 4) * 150
-})))
+const graphData = computed(() => buildSemanticViewModel({
+  graph: selectSemanticGraphSource({
+    inspectionGraph: searchStore.indexInspection?.graph
+  }),
+  savedPositions: positions.value,
+  width: 1800,
+  height: 1200
+}))
+const positionedNodes = computed(() => graphData.value.nodes)
 const positionedEdges = computed(() => {
-  const byPath = new Map(positionedNodes.value.map((node) => [node.path, node]))
-  return store.graphModel.edges
+  const byId = new Map(positionedNodes.value.map((node) => [node.id, node]))
+  return graphData.value.edges
     .map((edge) => {
-      const source = byPath.get(edge.source)
-      const target = byPath.get(edge.target)
+      const source = byId.get(edge.source)
+      const target = byId.get(edge.target)
       if (!source || !target) return null
       return {
         id: `${edge.source}->${edge.target}`,
-        x1: source.x + 90,
-        y1: source.y + 42,
-        x2: target.x + 90,
-        y2: target.y + 42
+        x1: source.x + 88,
+        y1: source.y + 40,
+        x2: target.x + 88,
+        y2: target.y + 40,
+        type: edge.type || 'semantic'
       }
     })
     .filter(Boolean)
 })
+
+const semanticLabel = (node) => {
+  const tags = Array.isArray(node.tags) ? node.tags : []
+  if (tags.length) return tags.slice(0, 3).map((tag) => `#${tag}`).join(' ')
+  if ((node.kind || node.type) === 'folder') return 'Cluster node'
+  return 'Semantic note'
+}
 
 const persist = () => {
   window.localStorage.setItem(storageKey.value, JSON.stringify(positions.value))
@@ -100,7 +121,7 @@ const loadPositions = () => {
 const startDrag = (event, node) => {
   event.currentTarget.setPointerCapture?.(event.pointerId)
   dragging.value = {
-    id: node.path,
+    id: node.id,
     startX: event.clientX,
     startY: event.clientY,
     x: node.x,
@@ -126,12 +147,24 @@ const stopDrag = () => {
   persist()
 }
 
+const openNode = (node) => {
+  if ((node.kind || node.type) !== 'note') return
+  const note = [...store.rootEntries, ...store.entries, ...store.openedNotes].find((entry) => entry.path === node.id)
+  if (note) store.openNote(note)
+}
+
 watch(storageKey, loadPositions)
+watch(() => store.activeVault?.path, () => {
+  searchStore.inspect().catch(() => {})
+})
+
 onMounted(() => {
+  searchStore.inspect().catch(() => {})
   loadPositions()
   window.addEventListener('pointermove', moveDrag)
   window.addEventListener('pointerup', stopDrag)
 })
+
 onBeforeUnmount(() => {
   window.removeEventListener('pointermove', moveDrag)
   window.removeEventListener('pointerup', stopDrag)
@@ -149,15 +182,21 @@ onBeforeUnmount(() => {
 
 .en-canvas-header {
   display: flex;
-  align-items: center;
+  align-items: end;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   padding: 6px 28px 12px;
 }
 
 .en-canvas-header h1 {
   margin: 0;
   font-size: 28px;
+}
+
+.en-canvas-header p {
+  margin: 4px 0 0;
+  color: var(--en-muted);
+  font-size: 13px;
 }
 
 .en-canvas-controls {
@@ -180,11 +219,12 @@ onBeforeUnmount(() => {
   min-height: 0;
   margin: 0 28px 28px;
   border: 1px solid var(--en-border);
-  border-radius: 8px;
+  border-radius: 14px;
   background:
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--en-primary) 10%, transparent), transparent 34%),
     linear-gradient(var(--en-border) 1px, transparent 1px),
     linear-gradient(90deg, var(--en-border) 1px, transparent 1px);
-  background-size: 32px 32px;
+  background-size: auto, 32px 32px, 32px 32px;
   overflow: auto;
 }
 
@@ -202,28 +242,49 @@ onBeforeUnmount(() => {
 }
 
 .en-canvas-edges line {
-  stroke: color-mix(in srgb, var(--en-muted) 42%, transparent);
+  stroke: color-mix(in srgb, var(--en-muted) 45%, transparent);
   stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.en-canvas-edges line[data-type="folder"] {
+  stroke-width: 1.5;
+  stroke-dasharray: 4 7;
+}
+
+.en-canvas-edges line[data-type="semantic"] {
+  stroke-width: 2.5;
+  stroke-opacity: 0.85;
 }
 
 .en-canvas-node {
   position: absolute;
-  width: 180px;
-  min-height: 84px;
+  width: 200px;
+  min-height: 88px;
   display: grid;
   gap: 8px;
   border: 1px solid var(--en-border);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 14px;
+  padding: 14px 15px;
   color: var(--en-text);
-  background: var(--en-bg);
+  background: color-mix(in srgb, var(--en-bg) 88%, transparent);
   text-align: left;
-  box-shadow: 0 12px 30px color-mix(in srgb, #020617 18%, transparent);
+  box-shadow: 0 16px 36px color-mix(in srgb, #020617 16%, transparent);
+  backdrop-filter: blur(14px);
   touch-action: none;
+}
+
+.en-canvas-node.folder {
+  background: color-mix(in srgb, var(--en-primary) 10%, var(--en-bg));
+}
+
+.en-canvas-node strong {
+  font-size: 14px;
 }
 
 .en-canvas-node span {
   color: var(--en-muted);
   font-size: 12px;
+  line-height: 1.4;
 }
 </style>

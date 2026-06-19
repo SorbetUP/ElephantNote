@@ -85,7 +85,11 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   ]),
   documents: Object.freeze([
     action('DIRECTORY_LIST', 'directory.list', schema.object({ relativePath: optionalString })),
-    action('NOTES_CREATE', 'notes.create', schema.object({ relativePath: optionalString })),
+    action('NOTES_CREATE', 'notes.create', schema.object({
+      relativePath: optionalString,
+      filename: optionalString,
+      title: optionalString
+    })),
     action('FOLDERS_CREATE', 'folders.create', schema.object({ relativePath: optionalString })),
     action('SIDEBAR_ATTACH', 'sidebar.attach', schema.object({
       relativePath: requiredString,
@@ -138,6 +142,8 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
     action('WIKI_PROPOSE', 'wiki.propose'),
     action('WIKI_ACCEPT', 'wiki.accept', schema.object({ id: requiredString })),
     action('WIKI_DISMISS', 'wiki.dismiss', schema.object({ id: requiredString })),
+    action('WIKI_SOURCE_INFO', 'wiki.sourceInfo', schema.object({ path: requiredString })),
+    action('WIKI_CONTEXT', 'wiki.context', schema.object({ path: requiredString, limit: optionalNumber })),
     action('SEARCH_INIT_VAULT', 'search.initVault', schema.object({ vaultPath: requiredString })),
     action('SEARCH_QUERY', 'search.query', schema.object({
       query: requiredString,

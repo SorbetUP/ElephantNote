@@ -1,4 +1,13 @@
+import { toPlainObject } from '../../../../shared/plainObject.js'
 import { ELEPHANTNOTE_API_ACTIONS as API } from 'common/elephantnote/apiActions'
+
+const getBridge = () => globalThis.window?.elephantnote
+
+const callModelBridge = (method, payload) => {
+  const bridgeMethod = getBridge()?.models?.[method]
+  if (typeof bridgeMethod !== 'function') return undefined
+  return bridgeMethod(toPlainObject(payload))
+}
 
 export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   vaults: {
@@ -13,7 +22,12 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     list: (relativePath = '') => call(API.DIRECTORY_LIST, { relativePath })
   },
   notes: {
-    create: (relativePath = '') => call(API.NOTES_CREATE, { relativePath }),
+    create: (payload = '') => {
+      if (typeof payload === 'string') {
+        return call(API.NOTES_CREATE, { relativePath: payload })
+      }
+      return call(API.NOTES_CREATE, payload)
+    },
     autotag: (relativePath) => call(API.NOTES_AUTOTAG, { relativePath })
   },
   folders: {
@@ -34,21 +48,26 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   calendar: {
     list: () => call(API.CALENDAR_LIST),
     importGoogle: () => call(API.CALENDAR_IMPORT_GOOGLE),
-    importGoogleFromPath: (sourcePath) => call(API.CALENDAR_IMPORT_GOOGLE_FROM_PATH, { sourcePath }),
+    importGoogleFromPath: (sourcePath) =>
+      call(API.CALENDAR_IMPORT_GOOGLE_FROM_PATH, { sourcePath }),
     getGoogleConfig: () => call(API.CALENDAR_GOOGLE_CONFIG_GET),
     setGoogleConfig: (config) => call(API.CALENDAR_GOOGLE_CONFIG_SET, config),
     syncGoogle: () => call(API.CALENDAR_GOOGLE_SYNC)
   },
   sources: {
     list: () => call(API.SOURCES_LIST),
-    ingestUrl: (url, destinationRelativePath = 'Sources') => call(API.SOURCES_INGEST_URL, { url, destinationRelativePath }),
-    importRss: (url, destinationRelativePath = 'Sources', limit = 20) => call(API.SOURCES_IMPORT_RSS, { url, destinationRelativePath, limit })
+    ingestUrl: (url, destinationRelativePath = 'Sources') =>
+      call(API.SOURCES_INGEST_URL, { url, destinationRelativePath }),
+    importRss: (url, destinationRelativePath = 'Sources', limit = 20) =>
+      call(API.SOURCES_IMPORT_RSS, { url, destinationRelativePath, limit })
   },
   wiki: {
     list: () => call(API.WIKI_LIST),
     propose: () => call(API.WIKI_PROPOSE),
     accept: (id) => call(API.WIKI_ACCEPT, { id }),
-    dismiss: (id) => call(API.WIKI_DISMISS, { id })
+    dismiss: (id) => call(API.WIKI_DISMISS, { id }),
+    sourceInfo: (path) => call(API.WIKI_SOURCE_INFO, { path }),
+    context: (path, limit = 12) => call(API.WIKI_CONTEXT, { path, limit })
   },
   search: {
     initVault: (vaultPath) => call(API.SEARCH_INIT_VAULT, { vaultPath }),
@@ -73,8 +92,8 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   },
   ai: {
     getConfig: () => call(API.AI_CONFIG_GET),
-    setConfig: (config) => call(API.AI_CONFIG_SET, config),
-    testConfig: (config = {}) => call(API.AI_CONFIG_TEST, config)
+    setConfig: (config) => call(API.AI_CONFIG_SET, toPlainObject(config)),
+    testConfig: (config = {}) => call(API.AI_CONFIG_TEST, toPlainObject(config))
   },
   atomic: {
     getCatalog: () => call(API.ATOMIC_CATALOG_GET)
@@ -83,22 +102,55 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     describeApi: () => requireAtomicFeatureApi().describeApi(),
     callApi: (action, args = {}) => requireAtomicFeatureApi().callApi({ action, arguments: args }),
     providers: () => requireAtomicFeatureApi().providers(),
-    overview: (vaultRoot, options = {}) => requireAtomicFeatureApi().overview({ vaultRoot, ...options }),
+    overview: (vaultRoot, options = {}) =>
+      requireAtomicFeatureApi().overview({ vaultRoot, ...options }),
     graph: (vaultRoot, options = {}) => requireAtomicFeatureApi().graph({ vaultRoot, ...options }),
     wiki: (vaultRoot, options = {}) => requireAtomicFeatureApi().wiki({ vaultRoot, ...options }),
-    createWikiPage: (vaultRoot, record) => requireAtomicFeatureApi().createWikiPage({ vaultRoot, record }),
-    summarize: (vaultRoot, relativePath, providerConfig = {}) => requireAtomicFeatureApi().summarize({ vaultRoot, relativePath, providerConfig }),
-    structure: (vaultRoot, relativePath, providerConfig = {}) => requireAtomicFeatureApi().structure({ vaultRoot, relativePath, providerConfig }),
-    autoNameNote: (vaultRoot, relativePath, options = {}) => requireAtomicFeatureApi().autoNameNote({ vaultRoot, relativePath, ...options }),
+    createWikiPage: (vaultRoot, record) =>
+      requireAtomicFeatureApi().createWikiPage({ vaultRoot, record }),
+    summarize: (vaultRoot, relativePath, providerConfig = {}) =>
+      requireAtomicFeatureApi().summarize({ vaultRoot, relativePath, providerConfig }),
+    structure: (vaultRoot, relativePath, providerConfig = {}) =>
+      requireAtomicFeatureApi().structure({ vaultRoot, relativePath, providerConfig }),
+    autoNameNote: (vaultRoot, relativePath, options = {}) =>
+      requireAtomicFeatureApi().autoNameNote({ vaultRoot, relativePath, ...options }),
     listLocalModels: (vaultRoot = '') => requireAtomicFeatureApi().listLocalModels({ vaultRoot }),
-    pullModel: (id, provider = 'ollama', vaultRoot = '') => requireAtomicFeatureApi().pullModel({ id, provider, vaultRoot }),
-    onModelPullProgress: (listener) => requireAtomicFeatureApi().onModelPullProgress?.(listener) || (() => {})
+    pullModel: (id, provider = 'ollama', vaultRoot = '') =>
+      requireAtomicFeatureApi().pullModel({ id, provider, vaultRoot }),
+    onModelPullProgress: (listener) =>
+      requireAtomicFeatureApi().onModelPullProgress?.(listener) || (() => {})
   },
   models: {
     getSelection: () => call(API.MODEL_SELECTION_GET),
     setSelection: (selection) => call(API.MODEL_SELECTION_SET, selection),
     listLocal: () => call(API.MODELS_LOCAL_LIST),
-    download: (id) => call(API.MODELS_DOWNLOAD, { id })
+    download: (payload) =>
+      callModelBridge('download', payload) ||
+      call(API.MODELS_DOWNLOAD, {
+        id:
+          typeof payload === 'string'
+            ? payload
+            : payload?.id ||
+              payload?.repoId ||
+              payload?.uri ||
+              payload?.pull ||
+              payload?.model ||
+              ''
+      }),
+    list: () => callModelBridge('list') || call(API.MODELS_LOCAL_LIST),
+    searchHuggingFace: (payload = {}) => callModelBridge('searchHuggingFace', payload),
+    info: (payload = {}) => callModelBridge('info', payload),
+    activate: (payload = {}) => callModelBridge('activate', payload),
+    deactivate: (payload = {}) => callModelBridge('deactivate', payload),
+    remove: (payload = {}) => callModelBridge('remove', payload),
+    active: () => callModelBridge('active'),
+    cancelDownload: (payload = {}) => callModelBridge('cancelDownload', payload),
+    downloadStatus: (payload = {}) => callModelBridge('downloadStatus', payload),
+    refreshIndex: () => callModelBridge('refreshIndex'),
+    onDownloadProgress: (listener) =>
+      getBridge()?.models?.onDownloadProgress?.(listener) ||
+      requireAtomicFeatureApi().onModelPullProgress?.(listener) ||
+      (() => {})
   },
   ocr: {
     extract: (imagePath, options = {}) => call(API.OCR_EXTRACT, { imagePath, ...options })

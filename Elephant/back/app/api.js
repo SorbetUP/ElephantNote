@@ -1,5 +1,7 @@
+import log from 'electron-log'
 import { validateApiPayload } from './apiSchemas'
 import { ELEPHANTNOTE_API_ACTIONS, ELEPHANTNOTE_API_VERSION } from 'common/elephantnote/apiActions'
+import { toPlainObject } from '../../shared/plainObject.js'
 export {
   ELEPHANTNOTE_API_ACTIONS,
   ELEPHANTNOTE_API_DOMAINS,
@@ -47,13 +49,26 @@ export const createElephantNoteApi = ({ handlers = {} } = {}) => {
 
   const callEnvelope = async(actionName, payload = {}, context = {}) => {
     const action = normalizeAction(actionName)
+    log.info('[api] callEnvelope:start', {
+      action,
+      payloadType: Array.isArray(payload) ? 'array' : typeof payload
+    })
     try {
+      const data = await call(action, payload, context)
+      log.info('[api] callEnvelope:done', {
+        action,
+        dataType: Array.isArray(data) ? 'array' : typeof data
+      })
       return createApiResponse({
         ok: true,
         action,
-        data: await call(action, payload, context)
+        data: toPlainObject(data)
       })
     } catch (error) {
+      log.error('[api] callEnvelope:error', {
+        action,
+        error: error instanceof Error ? error.message : String(error || '')
+      })
       return createApiResponse({ ok: false, action, error })
     }
   }

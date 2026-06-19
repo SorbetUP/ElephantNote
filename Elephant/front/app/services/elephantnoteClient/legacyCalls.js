@@ -8,7 +8,10 @@ export const LEGACY_CALLS = {
   'vaults.setName': (payload) => getBridge()?.setVaultName?.(payload),
   'vaults.remove': (payload) => getBridge()?.removeVault?.(payload),
   'directory.list': ({ relativePath = '' }) => getBridge()?.listDirectory?.(relativePath),
-  'notes.create': ({ relativePath = '' }) => getBridge()?.createNote?.({ relativePath }),
+  'notes.create': (payload = {}) => {
+    const normalizedPayload = typeof payload === 'string' ? { relativePath: payload } : payload
+    return getBridge()?.createNote?.(normalizedPayload)
+  },
   'folders.create': ({ relativePath = '' }) => getBridge()?.createFolder?.({ relativePath }),
   'sidebar.attach': (payload) => getBridge()?.attachSidebarEntry?.(payload),
   'sidebar.detach': ({ relativePath }) => getBridge()?.detachSidebarEntry?.({ relativePath }),
@@ -29,6 +32,8 @@ export const LEGACY_CALLS = {
   'wiki.propose': () => getBridge()?.wiki?.propose?.(),
   'wiki.accept': (payload) => getBridge()?.wiki?.accept?.(payload),
   'wiki.dismiss': (payload) => getBridge()?.wiki?.dismiss?.(payload),
+  'wiki.sourceInfo': (payload) => getBridge()?.wiki?.sourceInfo?.(payload),
+  'wiki.context': (payload) => getBridge()?.wiki?.context?.(payload),
   'search.initVault': ({ vaultPath }) => getBridge()?.search?.initVault?.(vaultPath),
   'search.query': (payload) => getBridge()?.search?.query?.(payload),
   'search.status': () => getBridge()?.search?.status?.(),
@@ -61,6 +66,16 @@ export const LEGACY_CALLS = {
   'mcp.tools.call': (payload) => getBridge()?.mcp?.callTool?.(payload),
   'models.local.list': () => getBridge()?.models?.listLocal?.(),
   'models.download': (payload) => getBridge()?.models?.download?.(payload),
+  'models.list': () => getBridge()?.models?.list?.(),
+  'models.searchHuggingFace': (payload) => getBridge()?.models?.searchHuggingFace?.(payload),
+  'models.info': (payload) => getBridge()?.models?.info?.(payload),
+  'models.activate': (payload) => getBridge()?.models?.activate?.(payload),
+  'models.deactivate': (payload) => getBridge()?.models?.deactivate?.(payload),
+  'models.remove': (payload) => getBridge()?.models?.remove?.(payload),
+  'models.active': () => getBridge()?.models?.active?.(),
+  'models.cancelDownload': (payload) => getBridge()?.models?.cancelDownload?.(payload),
+  'models.downloadStatus': (payload) => getBridge()?.models?.downloadStatus?.(payload),
+  'models.refreshIndex': () => getBridge()?.models?.refreshIndex?.(),
   'programs.list': () => getBridge()?.programs?.list?.(),
   'programs.set': (payload) => getBridge()?.programs?.set?.(payload),
   'programs.run': (payload) => getBridge()?.programs?.run?.(payload)

@@ -17,30 +17,26 @@ function loadTranslations(language) {
     return translationsCache[language]
   }
 
+  const localePath =
+    process.env.NODE_ENV === 'development' || process.env.PERF_TESTING === 'true'
+      ? path.join(process.cwd(), 'static', 'locales', `${language}.min.json`)
+      : path.join(process.resourcesPath, 'static', 'locales', `${language}.min.json`)
+
+  if (!fs.existsSync(localePath)) {
+    translationsCache[language] = language === 'en' ? {} : loadTranslations('en') || {}
+    return translationsCache[language]
+  }
+
   try {
-    // Since this script is used in both main and preload processes, we can't use global.__static directly here since it is only for the main process
-    const localePath =
-      process.env.NODE_ENV === 'development' || process.env.PERF_TESTING === 'true'
-        ? path.join(process.cwd(), 'static', 'locales', `${language}.min.json`)
-        : path.join(process.resourcesPath, 'static', 'locales', `${language}.min.json`)
-
-    if (!fs.existsSync(localePath)) {
-      throw new Error(`Translation file not found for language: ${language}`)
-    }
-
     const content = fs.readFileSync(localePath, 'utf8')
-
     const translationData = JSON.parse(content)
 
     translationsCache[language] = translationData
     return translationData
   } catch (error) {
-    // Fallback to English
-    console.error('Error loading translation:', error)
-    if (language !== 'en') {
-      return loadTranslations('en')
-    }
-    return null
+    console.error(`Error loading translation for ${language}:`, error)
+    translationsCache[language] = language === 'en' ? {} : loadTranslations('en') || {}
+    return translationsCache[language]
   }
 }
 

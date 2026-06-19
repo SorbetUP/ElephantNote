@@ -46,6 +46,10 @@ class App {
    * The entry point into the application.
    */
   init() {
+    log.info('[app] init', {
+      platform: process.platform,
+      windows: this._windowManager.windowCount
+    })
     // Enable these features to use `backdrop-filter` css rules!
     if (isOsx) {
       app.commandLine.appendSwitch('enable-experimental-web-platform-features', 'true')
@@ -203,6 +207,10 @@ class App {
   ready = () => {
     const { _args: args, _openFilesCache } = this
     const { preferences, editorBufferStore } = this._accessor
+    log.info('[app] ready', {
+      argvFiles: args._.length,
+      cachedOpenRequests: _openFilesCache.length
+    })
 
     // Initialize language settings
     const {
@@ -364,6 +372,10 @@ class App {
     }
 
     const createWindow = () => {
+      log.info('[app] createWindow', {
+        restore: isRestorePathway,
+        queuedPaths: _openFilesCache.length
+      })
       if (isRestorePathway) {
         // We will restore based off the previous buffer, one window per buffer store file
         const bufferStores = editorBufferStore.getAll()
@@ -431,6 +443,10 @@ class App {
     event.preventDefault()
     const info = normalizeMarkdownPath(pathname)
     if (info) {
+      log.info('[app] openFile', {
+        pathname,
+        isDir: info.isDir
+      })
       this._openFilesCache.push(info)
 
       if (app.isReady()) {
@@ -465,6 +481,12 @@ class App {
     options = {},
     bufferStoreInfo = null
   ) {
+    log.info('[app] createEditorWindow', {
+      rootDirectory,
+      fileCount: fileList.length,
+      markdownCount: markdownList.length,
+      restore: Boolean(bufferStoreInfo)
+    })
     const editor = new EditorWindow(this._accessor)
     if (rootDirectory) {
       this._accessor.preferences.setItems({ lastOpenedFolder: rootDirectory })
@@ -481,6 +503,7 @@ class App {
    * Create a new setting window.
    */
   _createSettingWindow(category) {
+    log.info('[app] createSettingWindow', { category })
     const setting = new SettingWindow(this._accessor)
     setting.createWindow(category)
     this._windowManager.add(setting)
@@ -501,6 +524,11 @@ class App {
    * the first directory and discard other directories.
    */
   _openPathList(pathsToOpen, openFilesInSameWindow = false) {
+    log.info('[app] openPathList', {
+      count: pathsToOpen.length,
+      sameWindow: openFilesInSameWindow,
+      openFilesInNewWindow: this._accessor.preferences.getItem('openFilesInNewWindow')
+    })
     const { _windowManager } = this
     const openFilesInNewWindow = this._accessor.preferences.getItem('openFilesInNewWindow')
 
@@ -638,6 +666,7 @@ class App {
   }
 
   _listenForIpcMain() {
+    log.info('[app] registering IPC listeners')
     registerKeyboardListeners()
     registerSpellcheckerListeners()
 

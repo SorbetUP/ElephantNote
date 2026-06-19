@@ -76,11 +76,14 @@ import Sigma from 'sigma'
 import EdgeCurveProgram from '@sigma/edge-curve'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useCanvasStore } from '../../stores/canvasStore'
+import { useSearchStore } from '../../stores/searchStore'
 import { CANVAS_THEME_DEFS, nodeColor, edgeColor } from '../../graph/graphThemes'
 import LocalGraphView from './LocalGraphView.vue'
+import { buildSemanticViewModel, selectSemanticGraphSource } from './semanticGraphViewHelpers'
 
 const store = useVaultStore()
 const canvasStore = useCanvasStore()
+const searchStore = useSearchStore()
 
 const containerRef = ref(null)
 const hoverPillRef = ref(null)
@@ -98,6 +101,14 @@ const localGraphOpen = computed(() => canvasStore.localGraphOpen)
 const isLight = computed(() => theme.value?.isLight)
 
 const canvasData = computed(() => buildCanvasData())
+const semanticGraphData = computed(() => buildSemanticViewModel({
+  graph: selectSemanticGraphSource({
+    inspectionGraph: searchStore.indexInspection?.graph
+  }),
+  savedPositions: canvasStore.canvasPositions,
+  width: 1800,
+  height: 1200
+}))
 
 function truncLabel (str, max) {
   return str && str.length > max ? str.substring(0, max - 1) + '\u2026' : (str || '')
@@ -110,93 +121,37 @@ function parseRgbColor (s) {
 }
 
 function buildCanvasData () {
-  const notes = store.rootEntries.filter(e => (e.kind || e.type) === 'note')
-  const model = store.graphModel
-
-  const atoms = []
-  const edgeCounts = new Map()
-  const atomCluster = new Map()
-  const tagClusterMap = new Map()
-  let clusterIndex = 0
-
-  for (const tag of store.tagTopics || []) {
-    tagClusterMap.set(tag.tag, clusterIndex++)
+  const semantic = semanticGraphData.value
+  const atoms = semantic.nodes.map((node) => ({
+    atom_id: node.id,
+    id: node.id,
+    x: node.x,
+    y: node.y,
+    title: node.title || 'Untitled',
+    summary: node.summary || '',
+    kind: node.kind || 'note',
+    primary_tag: (node.tags || [])[0] || null,
+    tag_count: (node.tags || []).length,
+    tag_ids: node.tags || [],
+    clusterIndex: node.clusterIndex || 0,
+    clusterId: node.clusterId || ''
+  }))
+  const edges = semantic.edges.map((edge) => ({
+    source: edge.source,
+    target: edge.target,
+    weight: Number(edge.weight || 0),
+    reason: edge.reason,
+    type: edge.type
+  }))
+  return {
+    atoms,
+    edges,
+    clusters: semantic.clusters,
+    edgeCounts: semantic.edgeCounts,
+    maxEdges: semantic.maxEdges,
+    atomCluster: semantic.atomCluster,
+    clusterIndexMap: semantic.clusterIndexMap
   }
-
-  for (const note of notes) {
-    const tags = (note.tags || []).slice()
-    const primaryTag = tags[0] || null
-    const clusterIdx = primaryTag ? (tagClusterMap.get(primaryTag) ?? 0) : 0
-    atomCluster.set(note.path, clusterIdx)
-
-    const saved = canvasStore.canvasPositions[note.path]
-    const angle = (atoms.length * 2.399) % (Math.PI * 2)
-    const radius = 100 + (clusterIdx || 0) * 60
-    atoms.push({
-      atom_id: note.path,
-      x: saved ? saved.x : Math.cos(angle) * radius,
-      y: saved ? saved.y : Math.sin(angle) * radius,
-      title: note.title || 'Untitled',
-      primary_tag: primaryTag,
-      tag_count: tags.length,
-      tag_ids: tags,
-    })
-  }
-
-  const edges = []
-  for (const edge of model.edges) {
-    const srcNote = notes.find(n => n.path === edge.source)
-    const tgtNote = notes.find(n => n.path === edge.target)
-    if (!srcNote || !tgtNote) continue
-
-    let weight = 0.3
-    if (edge.reason === 'folder') weight = 0.5
-    else if (edge.reason?.startsWith('#')) {
-      const sharedTags = (srcNote.tags || []).filter(t => (tgtNote.tags || []).includes(t)).length
-      weight = Math.min(1, 0.3 + sharedTags * 0.15)
-    }
-
-    edgeCounts.set(edge.source, (edgeCounts.get(edge.source) || 0) + 1)
-    edgeCounts.set(edge.target, (edgeCounts.get(edge.target) || 0) + 1)
-
-    edges.push({
-      source: edge.source,
-      target: edge.target,
-      weight,
-      reason: edge.reason,
-    })
-  }
-
-  const clusters = []
-  const clusterTagMap = new Map()
-  for (const note of notes) {
-    const primaryTag = (note.tags || [])[0] || 'untagged'
-    if (!clusterTagMap.has(primaryTag)) {
-      clusterTagMap.set(primaryTag, { id: `cluster-${clusterTagMap.size}`, label: primaryTag, atom_ids: [], atom_count: 0 })
-    }
-    const cluster = clusterTagMap.get(primaryTag)
-    cluster.atom_ids.push(note.path)
-    cluster.atom_count++
-  }
-  for (const cluster of clusterTagMap.values()) {
-    let cx = 0; let cy = 0; let count = 0
-    for (const atom of atoms) {
-      if (cluster.atom_ids.includes(atom.atom_id)) {
-        cx += atom.x
-        cy += atom.y
-        count++
-      }
-    }
-    if (count > 0) {
-      cluster.x = cx / count
-      cluster.y = cy / count
-    }
-    clusters.push(cluster)
-  }
-
-  const maxEdges = Math.max(1, ...edgeCounts.values())
-
-  return { atoms, edges, clusters, edgeCounts, maxEdges, atomCluster }
 }
 
 function selectTheme (t) {
@@ -207,11 +162,11 @@ function selectTheme (t) {
 function buildGraph (data) {
   const graph = new Graph()
   const t = theme.value
-  const { atoms, edges, edgeCounts, maxEdges, atomCluster } = data
+  const { atoms, edges, edgeCounts, maxEdges } = data
 
   for (const atom of atoms) {
     const connectivity = (edgeCounts.get(atom.atom_id) || 0) / maxEdges
-    const clusterIdx = atomCluster.get(atom.atom_id)
+    const clusterIdx = atom.clusterIndex || 0
     graph.addNode(atom.atom_id, {
       x: atom.x,
       y: atom.y,
@@ -609,6 +564,7 @@ function unmountSigma () {
 }
 
 onMounted(() => {
+  searchStore.inspect().catch(() => {})
   canvasStore.loadPositions(store.activeVaultId || 'default')
   mountSigma()
 })
@@ -655,6 +611,7 @@ watch(edgeThreshold, (to) => {
 })
 
 watch(() => store.activeVaultId, () => {
+  searchStore.inspect().catch(() => {})
   canvasStore.loadPositions(store.activeVaultId || 'default')
   nextTick(() => mountSigma())
 })

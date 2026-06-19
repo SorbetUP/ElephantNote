@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia'
-import {
-  elephantnoteClient,
-  isElephantNoteApiAvailable
-} from '../services/elephantnoteClient'
+import log from 'electron-log'
+import { elephantnoteClient } from '../services/elephantnoteClient'
+import { useSearchStore } from './searchStore'
 import {
   createCalendarBuckets,
   createGraphModel,
@@ -13,8 +12,13 @@ import {
 } from 'common/elephantnote/workspaceInsights'
 
 import { useNavigationStore } from './navigationStore'
+import {
+  buildDashboardNoteCreatePayload,
+  DASHBOARD_NOTE_RELATIVE_PATH,
+  isDashboardNotePath
+} from '../components/views/dashboardNoteHelpers'
 
-const WORKSPACE_VIEWS = ['notes', 'dashboard', 'wiki', 'chat', 'canvas', 'graph', 'calendar']
+const WORKSPACE_VIEWS = ['notes', 'dashboard', 'wiki', 'chat', 'canvas', 'graph', 'calendar', 'models']
 
 const getPinnedNotesStorageKey = (vault) => {
   const scope = vault?.id || vault?.path || 'default'
@@ -92,6 +96,8 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     rootEntries: [],
     currentPath: '',
     activeWorkspaceView: 'notes',
+    chatSidebarOpen: false,
+    chatSidebarWidth: 420,
     filter: 'all',
     sort: 'updated-newest',
     viewMode: 'grid',
@@ -151,6 +157,9 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       return createCalendarBuckets(state.rootEntries)
     },
     graphModel(state) {
+      const searchStore = useSearchStore()
+      const semanticGraph = searchStore.indexInspection?.graph
+      if (semanticGraph?.nodes?.length) return semanticGraph
       return createGraphModel({
         entries: state.rootEntries,
         tagTopics: this.tagTopics
@@ -250,6 +259,11 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
 
     applyPayload(payload) {
       if (!payload || payload.canceled) return
+      log.info('[vault] applyPayload', {
+        vaultCount: Array.isArray(payload.vaults) ? payload.vaults.length : 0,
+        entryCount: Array.isArray(payload.entries) ? payload.entries.length : 0,
+        activeVaultId: payload.activeVaultId || null
+      })
       this.vaults = payload.vaults || []
       this.activeVaultId = payload.activeVaultId || null
       this.activeVault = payload.activeVault || null
@@ -262,20 +276,21 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.currentPath = ''
       this.activeWorkspaceView = 'notes'
       this.loadPinnedNotes()
-      if (this.activeVault?.path && isElephantNoteApiAvailable()) {
-        elephantnoteClient.search.initVault(this.activeVault.path).catch((err) => {
-          console.warn('Unable to initialize search:', err)
-        })
-      }
     },
 
     async load() {
       this.loading = true
       this.error = ''
       try {
+        log.info('[vault] load:start')
         this.applyPayload(await elephantnoteClient.vaults.get())
         useNavigationStore().reset({ type: 'all_notes' })
+        log.info('[vault] load:done', {
+          activeVaultId: this.activeVaultId || null,
+          entryCount: Array.isArray(this.entries) ? this.entries.length : 0
+        })
       } catch (err) {
+        log.error('[vault] load failed', err)
         this.error = err.message || 'Unable to load vaults.'
       } finally {
         this.loading = false
@@ -286,6 +301,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.loading = true
       this.error = ''
       try {
+        log.info('[vault] chooseVault:start')
         const payload = await elephantnoteClient.vaults.select()
         if (payload?.canceled) return false
         this.applyPayload(payload)
@@ -295,8 +311,12 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
           id: this.activeVaultId,
           title: this.activeVault?.name
         })
+        log.info('[vault] chooseVault:done', {
+          activeVaultId: this.activeVaultId || null
+        })
         return true
       } catch (err) {
+        log.error('[vault] chooseVault failed', err)
         this.error = err.message || 'Unable to choose vault.'
         return false
       } finally {
@@ -308,6 +328,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.loading = true
       this.error = ''
       try {
+        log.info('[vault] setActiveVault:start', { vaultId })
         this.applyPayload(await elephantnoteClient.vaults.setActive(vaultId))
         this.currentPath = ''
         if (options.record !== false) {
@@ -317,7 +338,12 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
             title: this.activeVault?.name
           })
         }
+        log.info('[vault] setActiveVault:done', {
+          vaultId,
+          activeVaultId: this.activeVaultId || null
+        })
       } catch (err) {
+        log.error('[vault] setActiveVault failed', err)
         this.error = err.message || 'Unable to switch vault.'
       } finally {
         this.loading = false
@@ -488,6 +514,23 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       }
     },
 
+    openChatSidebar() {
+      this.chatSidebarOpen = true
+    },
+
+    closeChatSidebar() {
+      this.chatSidebarOpen = false
+    },
+
+    toggleChatSidebar() {
+      this.chatSidebarOpen = !this.chatSidebarOpen
+    },
+
+    setChatSidebarWidth(width) {
+      const parsed = Number(width)
+      this.chatSidebarWidth = Math.min(560, Math.max(320, Number.isFinite(parsed) ? parsed : 420))
+    },
+
     async navigateTo(entry) {
       if (!entry?.type) return
       if (entry.type === 'all_notes') {
@@ -535,6 +578,37 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         path: result.note.path,
         title: result.note.title
       })
+    },
+
+    async ensureDashboardNote() {
+      if (this.openedNotePath && isDashboardNotePath(this.openedNotePath)) {
+        return {
+          path: this.openedNotePath,
+          title: 'Dashboard'
+        }
+      }
+
+      const existing = [...this.entries, ...this.rootEntries, ...this.openedNotes]
+        .find((entry) => isDashboardNotePath(entry?.path))
+      if (existing) {
+        this.openNote(existing, { record: false })
+        return existing
+      }
+
+      const result = await elephantnoteClient.notes.create(buildDashboardNoteCreatePayload())
+      this.entries = result.entries
+      if (!this.currentPath) {
+        this.rootEntries = result.entries
+      }
+      const dashboardNote = {
+        path: result.note.path || DASHBOARD_NOTE_RELATIVE_PATH,
+        title: result.note.title || 'Dashboard',
+        kind: 'note',
+        type: 'note',
+        updatedAt: new Date().toISOString()
+      }
+      this.openNote(dashboardNote, { record: false })
+      return dashboardNote
     },
 
     async createFolder() {

@@ -13,6 +13,7 @@ import {
 import { rgPath } from '@vscode/ripgrep'
 import path from 'path'
 import commandExists from 'command-exists'
+import log from 'electron-log/renderer'
 import { loadTranslations } from 'common/i18n'
 
 const i18nUtils = { loadTranslations }
@@ -43,14 +44,20 @@ const commandAPI = {
     try {
       if (commandExists.sync(command)) return true
       if (command === 'picgo' && process.platform === 'darwin') {
-        const commonPaths = ['/usr/local/bin/picgo', '/opt/homebrew/bin/picgo', `${process.env.HOME}/.npm-global/bin/picgo`, `${process.env.HOME}/.npm/bin/picgo`, '/usr/local/lib/node_modules/.bin/picgo']
+        const commonPaths = [
+          '/usr/local/bin/picgo',
+          '/opt/homebrew/bin/picgo',
+          `${process.env.HOME}/.npm-global/bin/picgo`,
+          `${process.env.HOME}/.npm/bin/picgo`,
+          '/usr/local/lib/node_modules/.bin/picgo'
+        ]
         for (const picgoPath of commonPaths) {
           if (fs.pathExistsSync(picgoPath)) return true
         }
       }
       return false
     } catch (error) {
-      console.error('Error checking command existence:', error)
+      log.error('[preload] error checking command existence', error)
       return false
     }
   }
@@ -68,7 +75,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld('i18nUtils', i18nUtils)
     contextBridge.exposeInMainWorld('elephantnote', elephantNoteAPI)
   } catch (error) {
-    console.error(error)
+    log.error('[preload] failed to expose preload APIs', error)
   }
 } else {
   window.electron = { ...electronAPI, ...customElectronAPI }

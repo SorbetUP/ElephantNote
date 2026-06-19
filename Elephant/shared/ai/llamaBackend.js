@@ -3,8 +3,7 @@ export const LLAMA_BACKEND_PRIORITY = Object.freeze([
   'gpu',
   'mpu',
   'npu',
-  'openvino',
-  'tpu'
+  'openvino'
 ])
 
 const BACKEND_ALIASES = Object.freeze({

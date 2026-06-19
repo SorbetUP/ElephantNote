@@ -1,3 +1,5 @@
+import { toPlainObject } from '../../../../shared/plainObject.js'
+
 const getBridge = () => globalThis.window?.elephantnote
 const getElectronIpc = () => globalThis.window?.electron?.ipcRenderer
 
@@ -12,17 +14,21 @@ export const requireAtomicFeatureApi = () => {
 
   return {
     describeApi: () => ipcRenderer.invoke('en:atomic:api:describe'),
-    callApi: (payload = {}) => ipcRenderer.invoke('en:atomic:api:call', payload),
+    callApi: (payload = {}) => ipcRenderer.invoke('en:atomic:api:call', toPlainObject(payload)),
     providers: () => ipcRenderer.invoke('en:atomic:providers'),
-    overview: (payload = {}) => ipcRenderer.invoke('en:atomic:overview', payload),
-    graph: (payload = {}) => ipcRenderer.invoke('en:atomic:graph', payload),
-    wiki: (payload = {}) => ipcRenderer.invoke('en:atomic:wiki', payload),
-    createWikiPage: (payload = {}) => ipcRenderer.invoke('en:atomic:wiki:create-page', payload),
-    summarize: (payload = {}) => ipcRenderer.invoke('en:atomic:summarize', payload),
-    structure: (payload = {}) => ipcRenderer.invoke('en:atomic:structure', payload),
-    autoNameNote: (payload = {}) => ipcRenderer.invoke('en:atomic:notes:auto-name', payload),
-    listLocalModels: (payload = {}) => ipcRenderer.invoke('en:atomic:models:list-local', payload),
-    pullModel: (payload = {}) => ipcRenderer.invoke('en:atomic:models:pull', payload),
+    overview: (payload = {}) => ipcRenderer.invoke('en:atomic:overview', toPlainObject(payload)),
+    graph: (payload = {}) => ipcRenderer.invoke('en:atomic:graph', toPlainObject(payload)),
+    wiki: (payload = {}) => ipcRenderer.invoke('en:atomic:wiki', toPlainObject(payload)),
+    createWikiPage: (payload = {}) =>
+      ipcRenderer.invoke('en:atomic:wiki:create-page', toPlainObject(payload)),
+    summarize: (payload = {}) => ipcRenderer.invoke('en:atomic:summarize', toPlainObject(payload)),
+    structure: (payload = {}) => ipcRenderer.invoke('en:atomic:structure', toPlainObject(payload)),
+    autoNameNote: (payload = {}) =>
+      ipcRenderer.invoke('en:atomic:notes:auto-name', toPlainObject(payload)),
+    listLocalModels: (payload = {}) =>
+      ipcRenderer.invoke('en:atomic:models:list-local', toPlainObject(payload)),
+    pullModel: (payload = {}) =>
+      ipcRenderer.invoke('en:atomic:models:pull', toPlainObject(payload)),
     onModelPullProgress: (listener) => {
       const handler = (_event, progress) => listener?.(progress)
       ipcRenderer.on?.('en:atomic:models:pull:progress', handler)

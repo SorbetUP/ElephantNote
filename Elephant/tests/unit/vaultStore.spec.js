@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useVaultStore } from '@/elephantnote/stores/vaultStore'
 import { useNavigationStore } from '@/elephantnote/stores/navigationStore'
+import { useSearchStore } from '@/elephantnote/stores/searchStore'
+import { DASHBOARD_NOTE_RELATIVE_PATH } from '../../front/app/components/views/dashboardNoteHelpers.js'
 
 const createVault = (id = 'vault-1', path = '/tmp/vault-1') => ({ id, path, name: 'Vault 1' })
 
@@ -223,6 +225,21 @@ describe('ElephantNote vault store pinned notes', () => {
         { kind: 'folder', path: 'new-folder', title: 'New Folder', updatedAt: '2026-05-20T10:00:00.000Z' }
       ]
     })
+    window.elephantnote.createNote = async(payload = {}) => ({
+      note: {
+        path: `${payload.relativePath || ''}/${payload.filename || 'Untitled.md'}`.replace(/^\/+/, ''),
+        fullPath: `/tmp/vault-1/${payload.relativePath || ''}/${payload.filename || 'Untitled.md'}`.replace(/\/+/g, '/'),
+        title: payload.title || 'Untitled'
+      },
+      entries: [
+        {
+          kind: 'note',
+          path: DASHBOARD_NOTE_RELATIVE_PATH,
+          title: payload.title || 'Dashboard',
+          updatedAt: '2026-05-21T10:00:00.000Z'
+        }
+      ]
+    })
 
     const store = useVaultStore()
     store.applyPayload({
@@ -238,8 +255,30 @@ describe('ElephantNote vault store pinned notes', () => {
     expect(store.rootSidebarEntries.map((entry) => entry.path)).toEqual(['new-folder'])
   })
 
+  it('creates and opens a dashboard note backed by a hidden vault file', async() => {
+    const store = useVaultStore()
+    store.applyPayload({
+      vaults: [createVault()],
+      activeVaultId: 'vault-1',
+      activeVault: createVault(),
+      workspace: { sidebar: [] },
+      entries: []
+    })
+
+    const dashboard = await store.ensureDashboardNote()
+
+    expect(dashboard.path).toBe(DASHBOARD_NOTE_RELATIVE_PATH)
+    expect(store.openedNotePath).toBe(DASHBOARD_NOTE_RELATIVE_PATH)
+    expect(window.electron.ipcRenderer.send).toHaveBeenCalledWith(
+      'mt::open-file',
+      '/tmp/vault-1/.elephantnote/Dashboard.md',
+      {}
+    )
+  })
+
   it('derives local Atomic dashboard, wiki, calendar, and graph data', () => {
     const store = useVaultStore()
+    const searchStore = useSearchStore()
     store.applyPayload({
       vaults: [createVault()],
       activeVaultId: 'vault-1',
@@ -264,6 +303,16 @@ describe('ElephantNote vault store pinned notes', () => {
       ]
     })
 
+    searchStore.indexInspection = {
+      graph: {
+        nodes: [
+          { id: 'Projects/a.md', kind: 'note', title: 'A', summary: 'Semantic note' }
+        ],
+        edges: [],
+        clusters: []
+      }
+    }
+
     expect(store.workspaceStats).toMatchObject({ notes: 2, folders: 1, tags: 2 })
     expect(store.tagTopics.map((topic) => [topic.tag, topic.notes.length])).toEqual([
       ['work', 2],
@@ -273,11 +322,9 @@ describe('ElephantNote vault store pinned notes', () => {
       '2026-05-19',
       '2026-05-18'
     ])
-    expect(store.graphModel.edges).toEqual([
-      { source: 'Projects', target: 'Projects/a.md', reason: 'folder' },
-      { source: 'Projects', target: 'Projects/b.md', reason: 'folder' },
-      { source: 'Projects/a.md', target: 'Projects/b.md', reason: '#work' }
-    ])
+    expect(store.graphModel.nodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'Projects/a.md', kind: 'note', title: 'A', summary: 'Semantic note' })
+    ]))
   })
 
   it('switches workspace views and closes the open note', () => {

@@ -18,7 +18,7 @@ const EVENT_NAME = {
   file: 'mt::update-file'
 }
 
-const add = async(
+const add = async (
   win,
   pathname,
   type,
@@ -75,7 +75,7 @@ const unlink = (win, pathname, type) => {
   })
 }
 
-const change = async(
+const change = async (
   win,
   pathname,
   type,
@@ -211,7 +211,7 @@ class Watcher {
     let renameTimer = null
 
     watcher
-      .on('add', async(pathname) => {
+      .on('add', async (pathname) => {
         if (!(await this._shouldIgnoreEvent(win.id, pathname, type, usePolling))) {
           const { _preferences } = this
           const eol = _preferences.getPreferredEol()
@@ -228,7 +228,7 @@ class Watcher {
           )
         }
       })
-      .on('change', async(pathname) => {
+      .on('change', async (pathname) => {
         if (!(await this._shouldIgnoreEvent(win.id, pathname, type, usePolling))) {
           const { _preferences } = this
           const eol = _preferences.getPreferredEol()
@@ -250,7 +250,7 @@ class Watcher {
       .on('unlinkDir', (pathname) => unlinkDir(win, pathname, type))
       .on('raw', (event, subpath, details) => {
         if (global.MARKTEXT_DEBUG_VERBOSE >= 3) {
-          console.log('watcher: ', event, subpath, details)
+          log.debug('watcher:', event, subpath, details)
         }
 
         // Fix atomic rename on Linux (chokidar#591).
@@ -260,7 +260,7 @@ class Watcher {
           if (renameTimer) {
             clearTimeout(renameTimer)
           }
-          renameTimer = setTimeout(async() => {
+          renameTimer = setTimeout(async () => {
             renameTimer = null
             if (disposed) {
               return
@@ -400,14 +400,14 @@ class Watcher {
               const fileInfo = await fsPromises.stat(pathname)
               if (fileInfo.mtime - start < duration) {
                 if (global.MARKTEXT_DEBUG_VERBOSE >= 3) {
-                  console.log(
+                  log.debug(
                     `Ignoring file event after "stat": current="${currentTime}", start="${start}", file="${fileInfo.mtime}".`
                   )
                 }
                 return true
               }
             } catch (error) {
-              console.error('Failed to "stat" file to determine modification time:', error)
+              log.error('Failed to "stat" file to determine modification time:', error)
             }
           }
         }

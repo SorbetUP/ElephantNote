@@ -29,7 +29,9 @@ class Keybindings {
     if (appEnvironment.isDevMode) {
       for (const [id, accelerator] of this.keys) {
         if (!commandManager.has(id)) {
-          console.error(`[DEBUG] Command with id="${id}" isn't available for accelerator="${accelerator}".`)
+          log.warn(
+            `[keyboard] Command with id="${id}" isn't available for accelerator="${accelerator}".`
+          )
         }
       }
     }
@@ -80,8 +82,7 @@ class Keybindings {
     if (!isFile2(configPath)) {
       fs.writeFileSync(configPath, '{\n\n\n}\n', 'utf-8')
     }
-    shell.openPath(configPath)
-      .catch(err => console.error(err))
+    shell.openPath(configPath).catch((err) => log.error(err))
   }
 
   getDefaultKeybindings() {
@@ -123,7 +124,7 @@ class Keybindings {
     // Notify key mapper when the keyboard layout was changed.
     keyboardLayoutMonitor.addListener(({ layout, keymap }) => {
       if (global.MARKTEXT_DEBUG && process.env.MARKTEXT_DEBUG_KEYBOARD) {
-        console.log('[DEBUG] Keyboard layout changed:\n', layout)
+        log.debug('[keyboard] layout changed', layout)
       }
       electronLocalshortcut.setKeyboardLayout(layout, keymap)
     })
@@ -168,7 +169,7 @@ class Keybindings {
           } else if (isValidElectronAccelerator(value)) {
             userAccelerators.set(key, value)
           } else {
-            console.error(`[WARNING] "${value}" is not a valid accelerator.`)
+            log.warn(`[keyboard] "${value}" is not a valid accelerator.`)
           }
         }
       }
@@ -179,7 +180,6 @@ class Keybindings {
       for (const [keyB, valueB] of userAccelerators) {
         if (valueA !== '' && keyA !== keyB && isEqualAccelerator(valueA, valueB)) {
           const err = `Invalid keybindings.json configuration: Duplicate value for "${keyA}" and "${keyB}"!`
-          console.log(err)
           log.error(err)
           return
         }

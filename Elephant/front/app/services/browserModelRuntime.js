@@ -1,3 +1,5 @@
+import log from 'electron-log/renderer'
+
 const STORAGE_KEY = 'elephantnote:browserModelRuntime'
 const DEFAULT_CHAT_MODEL_ID = 'onnx-community/Qwen2.5-0.5B-Instruct'
 
@@ -53,7 +55,9 @@ const getErrorDetails = (error) => {
 const formatLoadError = (error, { device = '', browserModel = '' } = {}) => {
   const message = getErrorDetails(error)
 
-  if (/Cannot read properties of undefined.*create|reading 'create'|reading "create"/i.test(message)) {
+  if (
+    /Cannot read properties of undefined.*create|reading 'create'|reading "create"/i.test(message)
+  ) {
     return `ONNX Runtime CPU backend failed while creating the inference session. This is usually a bundling/runtime issue in Electron/Vite. Browser runtime now uses WebGPU only; use Ollama for CPU/local models. Detail: ${message}`
   }
 
@@ -86,16 +90,21 @@ const configureTransformersRuntime = (transformers = {}) => {
 
   const baseFetch = env.fetch || globalThis.fetch?.bind(globalThis)
   if (baseFetch && !env.__elephantnoteFetchWrapped) {
-    env.fetch = async(input, init) => {
+    env.fetch = async (input, init) => {
       const url = typeof input === 'string' ? input : input?.url || ''
       try {
         const response = await baseFetch(input, init)
         if (!response.ok) {
-          console.warn('[ElephantNote][Transformers.js] fetch returned HTTP error', response.status, response.statusText, url)
+          log.warn(
+            '[ElephantNote][Transformers.js] fetch returned HTTP error',
+            response.status,
+            response.statusText,
+            url
+          )
         }
         return response
       } catch (error) {
-        console.error('[ElephantNote][Transformers.js] fetch failed', url, error)
+        log.error('[ElephantNote][Transformers.js] fetch failed', url, error)
         throw error
       }
     }
@@ -150,21 +159,28 @@ const emit = (event = {}) => {
     ...event
   }
   for (const listener of listeners) {
-    try { listener(payload) } catch { /* keep UI listeners isolated */ }
+    try {
+      listener(payload)
+    } catch {
+      /* keep UI listeners isolated */
+    }
   }
   return payload
 }
 
 const formatImportError = (error) => {
   const message = error instanceof Error ? error.message : String(error || '')
-  if (/Failed to resolve module specifier|Cannot find package|Failed to fetch dynamically imported module|ERR_MODULE_NOT_FOUND/i.test(message)) {
+  if (
+    /Failed to resolve module specifier|Cannot find package|Failed to fetch dynamically imported module|ERR_MODULE_NOT_FOUND/i.test(
+      message
+    )
+  ) {
     return 'Missing browser model dependency: install @huggingface/transformers in the Electron app, then restart Vite/Electron.'
   }
   return message || 'Unable to load browser model runtime.'
 }
 
-
-const testBrowserNetworkAccess = async() => {
+const testBrowserNetworkAccess = async () => {
   if (!globalThis.fetch) return { ok: false, message: 'fetch is not available in this renderer.' }
 
   const targets = [
@@ -192,8 +208,7 @@ const testBrowserNetworkAccess = async() => {
   return { ok: true, message: 'Renderer can fetch Hugging Face model files.' }
 }
 
-
-const importTransformers = async() => {
+const importTransformers = async () => {
   try {
     return configureTransformersRuntime(await import('@huggingface/transformers'))
   } catch (error) {
@@ -201,10 +216,16 @@ const importTransformers = async() => {
   }
 }
 
-const resolveDevice = (backend = 'auto') => {
-  if (backend === 'webcpu' || backend === 'wasm') return 'wasm'
-  if (backend === 'webgpu') return 'webgpu'
-  return globalThis.navigator?.gpu ? 'webgpu' : 'wasm'
+let runtimeDependencies = {
+  importTransformers,
+  testBrowserNetworkAccess
+}
+
+export const setBrowserModelRuntimeDependencies = (deps = {}) => {
+  runtimeDependencies = {
+    ...runtimeDependencies,
+    ...deps
+  }
 }
 
 const resolveCandidateDevices = (backend = 'auto') => {
@@ -245,7 +266,7 @@ const normalizeProgress = (progress = {}, model = {}, trackerKey = model.id || '
     const previous = tracker.files.get(file) || { percent: 0, status: '' }
     tracker.files.set(file, {
       status,
-      percent: status === 'done' ? 100 : currentFilePercent ?? previous.percent ?? 0
+      percent: status === 'done' ? 100 : (currentFilePercent ?? previous.percent ?? 0)
     })
   }
 
@@ -298,7 +319,9 @@ const normalizeGeneratedText = (output, messages = []) => {
   const first = Array.isArray(output) ? output[0] : output
   const generated = first?.generated_text ?? first?.text ?? output
   if (Array.isArray(generated)) {
-    const lastAssistant = [...generated].reverse().find((item) => item?.role === 'assistant' && item.content)
+    const lastAssistant = [...generated]
+      .reverse()
+      .find((item) => item?.role === 'assistant' && item.content)
     if (lastAssistant) return String(lastAssistant.content).trim()
     const last = generated.at(-1)
     if (last?.content) return String(last.content).trim()
@@ -308,28 +331,29 @@ const normalizeGeneratedText = (output, messages = []) => {
   return text.replace(lastUser, '').trim()
 }
 
-const toPipelineMessages = (messages = []) => messages.map((message) => ({
-  role: message.role === 'assistant' || message.role === 'system' ? message.role : 'user',
-  content: String(message.content || '')
-}))
+const toPipelineMessages = (messages = []) =>
+  messages.map((message) => ({
+    role: message.role === 'assistant' || message.role === 'system' ? message.role : 'user',
+    content: String(message.content || '')
+  }))
 
 export const onBrowserModelRuntimeProgress = (listener) => {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
 
-export const getBrowserModelRuntimeStatus = async() => {
+export const getBrowserModelRuntimeStatus = async () => {
   const state = readState()
   let transformersAvailable = false
   let dependencyError = ''
   try {
-    await importTransformers()
+    await runtimeDependencies.importTransformers()
     transformersAvailable = true
   } catch (error) {
     dependencyError = error instanceof Error ? error.message : String(error || '')
   }
   const network = transformersAvailable
-    ? await testBrowserNetworkAccess()
+    ? await runtimeDependencies.testBrowserNetworkAccess()
     : { ok: false, message: dependencyError }
 
   return {
@@ -348,7 +372,7 @@ export const getBrowserModelRuntimeStatus = async() => {
 const withTimeout = (promise, timeoutMs, onTimeout) => {
   let timeoutId = null
 
-  const timeoutPromise = new Promise((_, reject) => {
+  const timeoutPromise = new Promise((_resolve, reject) => {
     timeoutId = globalThis.setTimeout(() => {
       try {
         onTimeout?.()
@@ -364,9 +388,15 @@ const withTimeout = (promise, timeoutMs, onTimeout) => {
   })
 }
 
-const createPipeline = async({ pipeline, task, browserModel, model, id, device, dtype }) => {
+const createPipeline = async ({ pipeline, task, browserModel, model, id, device, dtype }) => {
   const trackerKey = `${task}:${browserModel}:${device}:${dtype || 'auto'}`
   resetProgressTracker(trackerKey)
+  log.info('[ElephantNote][BrowserModelRuntime] createPipeline', {
+    task,
+    browserModel,
+    device,
+    dtype
+  })
 
   const deviceLabel = formatDeviceLabel(device)
   const dtypeLabel = dtype && dtype !== 'auto' ? ` with ${dtype}` : ''
@@ -432,7 +462,7 @@ const createPipeline = async({ pipeline, task, browserModel, model, id, device, 
   }
 }
 
-const loadBrowserPipeline = async(model = {}, options = {}) => {
+const loadBrowserPipeline = async (model = {}, options = {}) => {
   const task = options.task || model.task || 'text-generation'
   const browserModel = model.browserModel || model.model || model.id || DEFAULT_CHAT_MODEL_ID
   const id = model.id || browserModel
@@ -442,7 +472,13 @@ const loadBrowserPipeline = async(model = {}, options = {}) => {
   const cacheKey = `${task}:${browserModel}:${backend}:${requestedDtype}`
 
   if (!devices.length) {
-    const message = 'Browser AI requires WebGPU in this build. CPU/WASM fallback is disabled because the Electron/Vite ONNX backend fails during session creation. Use the Ollama runtime for CPU/local models.'
+    const message =
+      'Browser AI requires WebGPU in this build. CPU/WASM fallback is disabled because the Electron/Vite ONNX backend fails during session creation. Use the Ollama runtime for CPU/local models.'
+    log.warn('[ElephantNote][BrowserModelRuntime] no candidate devices', {
+      model: id,
+      backend,
+      message
+    })
     emit({
       id,
       modelId: id,
@@ -465,14 +501,23 @@ const loadBrowserPipeline = async(model = {}, options = {}) => {
         percent: 100,
         message: `${model.name || id} already loaded on ${formatDeviceLabel(device)} with ${dtype}.`
       })
-      return { id, browserModel, device, dtype, task, loaded: true, reused: true, runner: pipelines.get(pipelineKey) }
+      return {
+        id,
+        browserModel,
+        device,
+        dtype,
+        task,
+        loaded: true,
+        reused: true,
+        runner: pipelines.get(pipelineKey)
+      }
     }
   }
 
   if (loadingPromises.has(cacheKey)) return loadingPromises.get(cacheKey)
 
-  const promise = (async() => {
-    const { pipeline } = await importTransformers()
+  const promise = (async () => {
+    const { pipeline } = await runtimeDependencies.importTransformers()
 
     let lastError = null
 
@@ -481,7 +526,21 @@ const loadBrowserPipeline = async(model = {}, options = {}) => {
       const pipelineKey = `${task}:${browserModel}:${device}:${dtype}`
 
       try {
-        const runner = await createPipeline({ pipeline, task, browserModel, model, id, device, dtype })
+        const runner = await createPipeline({
+          pipeline,
+          task,
+          browserModel,
+          model,
+          id,
+          device,
+          dtype
+        })
+        log.info('[ElephantNote][BrowserModelRuntime] pipeline ready', {
+          id,
+          browserModel,
+          device,
+          dtype
+        })
         pipelines.set(pipelineKey, runner)
         loadedModelId = browserModel
         loadedDevice = device
@@ -499,6 +558,13 @@ const loadBrowserPipeline = async(model = {}, options = {}) => {
       } catch (error) {
         lastError = error
         const message = formatLoadError(error, { device, browserModel })
+        log.warn('[ElephantNote][BrowserModelRuntime] pipeline load failed', {
+          id,
+          browserModel,
+          device,
+          dtype,
+          message
+        })
 
         emit({
           id,
@@ -528,13 +594,23 @@ const loadBrowserPipeline = async(model = {}, options = {}) => {
   }
 }
 
-export const loadBrowserTextModel = async(model = {}, options = {}) =>
+export const loadBrowserTextModel = async (model = {}, options = {}) =>
   loadBrowserPipeline(model, { ...options, task: 'text-generation' })
 
-export const loadBrowserEmbeddingModel = async(model = {}, options = {}) =>
-  loadBrowserPipeline(model, { ...options, task: 'feature-extraction', dtype: options.dtype || model.dtype || 'auto' })
+export const loadBrowserEmbeddingModel = async (model = {}, options = {}) =>
+  loadBrowserPipeline(model, {
+    ...options,
+    task: 'feature-extraction',
+    dtype: options.dtype || model.dtype || 'auto'
+  })
 
-export const generateBrowserChatCompletion = async({ model = {}, messages = [], backend = 'auto', maxNewTokens = 320, temperature = 0.2 } = {}) => {
+export const generateBrowserChatCompletion = async ({
+  model = {},
+  messages = [],
+  backend = 'auto',
+  maxNewTokens = 320,
+  temperature = 0.2
+} = {}) => {
   const loaded = await loadBrowserTextModel(model, { backend })
   const pipelineMessages = toPipelineMessages(messages)
   const output = await loaded.runner(pipelineMessages, {
@@ -546,7 +622,11 @@ export const generateBrowserChatCompletion = async({ model = {}, messages = [], 
   return normalizeGeneratedText(output, pipelineMessages)
 }
 
-export const generateBrowserEmbedding = async({ model = {}, text = '', backend = 'auto' } = {}) => {
+export const generateBrowserEmbedding = async ({
+  model = {},
+  text = '',
+  backend = 'auto'
+} = {}) => {
   const loaded = await loadBrowserEmbeddingModel(model, { backend })
   const output = await loaded.runner(String(text || ''), {
     pooling: 'mean',
@@ -559,7 +639,7 @@ export const generateBrowserEmbedding = async({ model = {}, text = '', backend =
   return []
 }
 
-export const testBrowserModel = async(model = {}, options = {}) => {
+export const testBrowserModel = async (model = {}, options = {}) => {
   if (model.task === 'feature-extraction') {
     const startedAt = Date.now()
     const embedding = await generateBrowserEmbedding({
@@ -577,13 +657,20 @@ export const testBrowserModel = async(model = {}, options = {}) => {
     }
   }
   const startedAt = Date.now()
+  log.info('[ElephantNote][BrowserModelRuntime] testBrowserModel', {
+    id: model.id || model.browserModel,
+    task: model.task || 'text-generation'
+  })
   const response = await generateBrowserChatCompletion({
     model,
     backend: options.backend || model.backend || 'auto',
     maxNewTokens: 40,
     temperature: 0,
     messages: [
-      { role: 'system', content: 'You are a local model health check. Answer with one short sentence.' },
+      {
+        role: 'system',
+        content: 'You are a local model health check. Answer with one short sentence.'
+      },
       { role: 'user', content: 'Say: ElephantNote browser model test OK.' }
     ]
   })

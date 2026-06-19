@@ -38,6 +38,7 @@
         <main-content class="en-body-main" />
       </div>
     </div>
+    <ChatSidebar v-if="store.chatSidebarOpen" />
     <search-modal />
     <settings-panel
       v-if="isSettingsOpen"
@@ -72,6 +73,7 @@ import TopVaultBar from './TopVaultBar.vue'
 import IconRail from '../navigation/IconRail.vue'
 import SidebarNav from '../navigation/SidebarNav.vue'
 import MainContent from './MainContent.vue'
+import ChatSidebar from './ChatSidebar.vue'
 import SettingsPanel from '../settings/SettingsPanel.vue'
 import SearchModal from '../../search/SearchModal.vue'
 import '../../styles/app-shell.css'
@@ -249,6 +251,7 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   overflow: hidden;
+  position: relative;
 }
 
 .en-body {

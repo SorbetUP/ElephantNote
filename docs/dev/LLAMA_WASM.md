@@ -15,22 +15,21 @@ The runtime resolves backends in this order:
 3. `mpu`
 4. `npu`
 5. `openvino`
-6. `tpu`
 
 ## Current behavior
 
 - In the WASM runtime, only `cpu` and `gpu` are executable today.
 - `gpu` is exposed through WebGPU when the browser runtime has `navigator.gpu`.
 - `mpu` is normalized as a Metal/MPS-style alias, but remains unsupported in the WASM runtime.
-- `npu`, `openvino`, and `tpu` are reported as unsupported in the WASM runtime and are skipped by the selector.
-- If `tpu` is requested, the auto runtime falls back to `cpu` and exposes a fallback notice in the returned session.
+- `npu` and `openvino` are reported as unsupported in the WASM runtime and are skipped by the selector.
+- `tpu` is excluded from the active backend order for now; if it is requested explicitly, the auto runtime falls back to `cpu` and exposes a fallback notice in the returned session.
 
 ## Node runtime
 
 - The Electron/Node runtime reuses `node-llama-cpp`.
 - Its backend report is derived from the installed `llama.cpp` build and `getLlamaGpuTypes()`.
 - `GGML_OPENVINO=ON` in `cmakeOptions` enables the OpenVINO path when the local build supports it.
-- The runtime still preserves the same backend preference order: `cpu`, `gpu`, `mpu`, `npu`, `openvino`, `tpu`.
+- The runtime still preserves the same backend preference order: `cpu`, `gpu`, `mpu`, `npu`, `openvino`.
 
 ## Auto runtime
 

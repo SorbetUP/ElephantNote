@@ -1,11 +1,25 @@
 import log from 'electron-log/renderer'
 import RendererPaths from './node/paths'
+import { createConsoleMirror } from '../../common/logging'
 
 let exceptionLogger = (s) => console.error(s)
+let consoleMirror = null
 
 const configureLogger = () => {
-  log.transports.console.level = process.env.NODE_ENV === 'development' ? 'info' : false // mirror to window console
+  log.transports.console.level = process.env.NODE_ENV === 'development' ? 'info' : false
   exceptionLogger = log.error
+  consoleMirror = createConsoleMirror({
+    enabled: process.env.NODE_ENV === 'development',
+    emit: (entry) => {
+      window.electron?.ipcRenderer?.send('mt::renderer-log', entry)
+    }
+  })
+
+  console.log = consoleMirror.log
+  console.info = consoleMirror.info
+  console.warn = consoleMirror.warn
+  console.error = consoleMirror.error
+  console.debug = consoleMirror.debug
 }
 
 const parseUrlArgs = () => {
@@ -66,7 +80,9 @@ const handleRendererError = (event) => {
     // Suppress known non-fatal CodeMirror race conditions
     // These occur during rapid clicking/editing and don't affect functionality
     if (isCodeMirrorRaceCondition(event.error)) {
-      console.warn('Suppressed non-fatal CodeMirror race condition:', event.error.message)
+      log.warn('[renderer] suppressed non-fatal CodeMirror race condition', {
+        message: event.error.message
+      })
       return
     }
 
@@ -82,7 +98,7 @@ const handleRendererError = (event) => {
     // Pass exception to main process exception handler to show a error dialog.
     window.electron.ipcRenderer.send('mt::handle-renderer-error', copy)
   } else {
-    console.error(event)
+    log.error('[renderer] uncaught non-error event', event)
   }
 }
 

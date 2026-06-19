@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import log from 'electron-log/renderer'
 import { addFile, unlinkFile, addDirectory, unlinkDirectory } from './treeCtrl'
 import bus from '../bus'
 import { create, paste, rename } from '../util/fileSystem'
@@ -141,7 +142,7 @@ export const useProjectStore = defineStore('project', {
           break
         default:
           if (process.env.NODE_ENV === 'development') {
-            console.log(`Unknown directory watch type: "${type}"`)
+            log.warn(`Unknown directory watch type: "${type}"`)
           }
           break
       }

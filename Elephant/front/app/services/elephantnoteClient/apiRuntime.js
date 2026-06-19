@@ -1,3 +1,5 @@
+import { toPlainObject } from '../../../../shared/plainObject.js'
+
 const getBridge = () => globalThis.window?.elephantnote
 
 export const requireElephantNoteApi = () => {
@@ -22,12 +24,12 @@ export const unwrapApiEnvelope = async(promise) => {
 
 export const createApiCaller = (legacyCalls = {}) => (action, payload = {}) => {
   if (isElephantNoteApiAvailable()) {
-    return unwrapApiEnvelope(requireElephantNoteApi().call(action, payload))
+    return unwrapApiEnvelope(requireElephantNoteApi().call(action, toPlainObject(payload)))
   }
 
   const legacyCall = legacyCalls[action]
   if (!legacyCall) {
     throw new Error(`ElephantNote API is not available for action: ${action}`)
   }
-  return legacyCall(payload)
+  return legacyCall(toPlainObject(payload))
 }

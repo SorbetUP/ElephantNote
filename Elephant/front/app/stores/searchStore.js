@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import log from 'electron-log'
 import { useVaultStore } from './vaultStore'
 import { elephantnoteClient } from '../services/elephantnoteClient'
 
@@ -43,6 +44,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       documents: [],
       folders: [],
       semanticLinks: [],
+      graph: null,
       generatedAt: ''
     },
     busy: false,
@@ -109,14 +111,23 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     },
 
     async inspect() {
-      // Keep this method for API compatibility, but make it intentionally
-      // lightweight: no vault scan, no generated graph edges.
-      this.indexInspection = {
-        indexPath: '',
-        documents: [],
-        folders: [],
-        semanticLinks: [],
-        generatedAt: new Date().toISOString()
+      try {
+        await this.ensureActiveVault()
+        log.info('[search] inspect:start', { vaultPath: this.vaultPath || '' })
+        this.indexInspection = await elephantnoteClient.search.inspect()
+        log.info('[search] inspect:done', {
+          documents: Array.isArray(this.indexInspection?.documents) ? this.indexInspection.documents.length : 0,
+          semanticLinks: Array.isArray(this.indexInspection?.semanticLinks) ? this.indexInspection.semanticLinks.length : 0
+        })
+      } catch (error) {
+        log.error('[search] inspect failed', error)
+        this.indexInspection = {
+          indexPath: '',
+          documents: [],
+          folders: [],
+          semanticLinks: [],
+          generatedAt: new Date().toISOString()
+        }
       }
       return this.indexInspection
     },
@@ -222,6 +233,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
           documents: [],
           folders: [],
           semanticLinks: [],
+          graph: null,
           generatedAt: ''
         }
         await this.refreshStatus()

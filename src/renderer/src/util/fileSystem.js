@@ -48,7 +48,8 @@ export const moveImageToFolder = async(
       if (noHashPath === imagePath) {
         return imagePath
       }
-      const hash = getContentHash(imagePath)
+      const content = await window.fileUtils.readFile(imagePath)
+      const hash = getContentHash(content)
       const hashFilePath = window.path.join(outputDir, `${hash}${ext}`)
       await window.fileUtils.copy(imagePath, hashFilePath)
       return hashFilePath

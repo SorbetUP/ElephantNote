@@ -112,6 +112,7 @@ import { SpellChecker } from '@/spellchecker'
 import { isOsx, animatedScrollTo } from '@/util'
 import { moveImageToFolder, uploadImage } from '@/util/fileSystem'
 import { guessClipboardFilePath } from '@/util/clipboard'
+import { getImageBaseDirectory, normalizeInsertedImageSource, resolveLocalImageSource } from '@/util/imageSource'
 import { getCssForOptions, getHtmlToc } from '@/util/pdf'
 import { addCommonStyle, setEditorWidth, setWrapCodeBlocks } from '@/util/theme'
 import { usePreferencesStore } from '@/store/preferences'
@@ -572,31 +573,6 @@ const normalizeQuickInsertTrigger = (value) => {
   return typeof value === 'string' && value.trim() ? value.trim().charAt(0) : '/'
 }
 
-const resolveLocalImageSource = (src) => {
-  const value = String(src || '').trim()
-  if (!value) return ''
-
-  const withoutQuery = value.split(/[?#]/)[0]
-  let decoded = withoutQuery
-  try {
-    decoded = decodeURI(withoutQuery)
-  } catch {
-    decoded = withoutQuery
-  }
-
-  if (decoded.startsWith('file://')) {
-    return decoded
-      .replace(/^file:\/\//, '')
-      .replace(/^\/([A-Za-z]:\/)/, '$1')
-  }
-
-  if (window.path.isAbsolute(decoded)) return decoded
-
-  const currentPathname = currentFile.value?.pathname || ''
-  const baseDirectory = currentPathname ? window.path.dirname(currentPathname) : window.DIRNAME
-  return window.path.resolve(baseDirectory || '', decoded)
-}
-
 const getExcalidrawScenePathForImage = (imagePath) => {
   if (!imagePath) return ''
   const extension = window.path.extname(imagePath)
@@ -605,7 +581,7 @@ const getExcalidrawScenePathForImage = (imagePath) => {
 }
 
 const canEditExcalidrawImage = (src) => {
-  const imagePath = resolveLocalImageSource(src)
+  const imagePath = resolveLocalImageSource(src, currentFile.value?.pathname ? window.path.dirname(currentFile.value.pathname) : window.DIRNAME)
   const scenePath = getExcalidrawScenePathForImage(imagePath)
   return !!scenePath && window.fileUtils?.pathExistsSync?.(scenePath) === true
 }
@@ -712,9 +688,13 @@ const imageAction = async (image, id, alt = '') => {
   }
 
   if (id && sourceCode.value) {
+    const resolvedBaseDirectory = isTabSavedOnDisk
+      ? window.path.dirname(currentPathname)
+      : window.DIRNAME
+    const normalizedResult = normalizeInsertedImageSource(destImagePath, resolvedBaseDirectory)
     bus.emit('image-action', {
       id,
-      result: destImagePath,
+      result: normalizedResult || destImagePath,
       alt
     })
   }
@@ -828,7 +808,10 @@ const handleCopyPaste = (type) => {
 
 const insertImage = (src) => {
   if (!sourceCode.value) {
-    editor.value && editor.value.insertImage({ src })
+    const baseDirectory = getImageBaseDirectory(currentFile.value?.pathname, window.DIRNAME)
+    editor.value && editor.value.insertImage({
+      src: normalizeInsertedImageSource(src, baseDirectory)
+    })
   }
 }
 
@@ -1310,7 +1293,9 @@ onMounted(() => {
     if (imageViewer) {
       imageViewer.destroy()
     }
-    imageViewer = new SimpleImageViewer(imageViewerRef.value, { url: data })
+    const baseDirectory = getImageBaseDirectory(currentFile.value?.pathname, window.DIRNAME)
+    const url = normalizeInsertedImageSource(data, baseDirectory)
+    imageViewer = new SimpleImageViewer(imageViewerRef.value, { url })
     setImageViewerVisible(true)
   })
 

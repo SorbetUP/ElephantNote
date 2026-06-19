@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import log from 'electron-log'
 import {
   deriveLlamaBackendsFromCapabilities,
   normalizeLlamaBackend,
@@ -10,6 +11,21 @@ import {
 const DEFAULT_MODEL_DIR = path.join(os.homedir(), '.elephantnote', 'models', 'node-llama-cpp')
 
 const loadNodeLlamaCpp = async() => import('node-llama-cpp')
+
+const DEFAULT_EMBEDDING_CONTEXT_SIZE = 8192
+const DEFAULT_CHAT_CONTEXT_SIZE = 4096
+const DEFAULT_LOAD_CONTEXT_SIZE = 8192
+const BENIGN_NATIVE_WARNING_PREFIXES = [
+  'llama_context: n_ctx_seq (',
+  'init: embeddings required but some input tokens were not marked as outputs -> overriding'
+]
+
+const normalizeLogText = (value = '') => {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeLogText(item)).filter(Boolean).join(' ')
+  }
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
 
 const normalizeProgress = ({ totalSize = 0, downloadedSize = 0 } = {}) => {
   const total = Number(totalSize) || 0
@@ -21,6 +37,58 @@ const normalizeProgress = ({ totalSize = 0, downloadedSize = 0 } = {}) => {
   }
 }
 
+const resolveChatContextSize = (requestedSize = 0, trainContextSize = 0) => {
+  const requested = Number(requestedSize) || 0
+  const train = Number(trainContextSize) || 0
+  const cap = train > 0 ? train : DEFAULT_CHAT_CONTEXT_SIZE
+  if (requested > 0) return Math.max(1, Math.max(requested, cap))
+  return Math.max(1, cap)
+}
+
+const isBenignNativeWarning = (message = '') => {
+  const text = normalizeLogText(message)
+  return BENIGN_NATIVE_WARNING_PREFIXES.some((prefix) => text.includes(prefix))
+}
+
+export const shouldSuppressLlamaLog = (...args) => {
+  const text = normalizeLogText(args)
+  return isBenignNativeWarning(text)
+}
+
+export const createLlamaLogger = (logger = log) => ({
+  log: (...args) => {
+    if (shouldSuppressLlamaLog(...args)) return
+    logger.info(...args)
+  },
+  info: (...args) => {
+    if (shouldSuppressLlamaLog(...args)) return
+    logger.info(...args)
+  },
+  warn: (...args) => {
+    if (shouldSuppressLlamaLog(...args)) return
+    logger.warn(...args)
+  },
+  error: (...args) => {
+    logger.error(...args)
+  }
+})
+
+const resolveEmbeddingContextSize = (requestedSize = 0, trainContextSize = 0) => {
+  const requested = Number(requestedSize) || 0
+  const train = Number(trainContextSize) || 0
+  const cap = train > 0 ? train : DEFAULT_EMBEDDING_CONTEXT_SIZE
+  if (requested > 0) return Math.max(1, Math.max(requested, cap))
+  return Math.max(1, cap)
+}
+
+const resolveLoadContextSize = (model = {}) => {
+  const requested = Number(model.contextSize || model.embeddingContextSize) || 0
+  if (requested > 0) {
+    return Math.max(requested, DEFAULT_LOAD_CONTEXT_SIZE)
+  }
+  return DEFAULT_LOAD_CONTEXT_SIZE
+}
+
 export class NodeLlamaCppRuntime {
   constructor({
     modelDir = DEFAULT_MODEL_DIR,
@@ -30,7 +98,11 @@ export class NodeLlamaCppRuntime {
   } = {}) {
     this.modelDir = modelDir
     this.moduleLoader = moduleLoader
-    this.llamaOptions = { ...llamaOptions }
+    this.llamaOptions = {
+      logLevel: 'warn',
+      logger: createLlamaLogger(),
+      ...llamaOptions
+    }
     this.preferredBackends = [...preferredBackends]
     this.loaded = new Map()
   }
@@ -77,7 +149,6 @@ export class NodeLlamaCppRuntime {
   async status() {
     try {
       const { mod, gpuTypes, supportedBackends, selectedBackend } = await this._resolveCapabilities()
-      const llama = mod ? await mod.getLlama(this.llamaOptions) : null
       const models = await this.listModels()
       return {
         provider: 'node-llama-cpp',
@@ -89,7 +160,7 @@ export class NodeLlamaCppRuntime {
         preferredBackends: [...this.preferredBackends],
         version: typeof mod.getModuleVersion === 'function' ? mod.getModuleVersion() : '',
         models,
-        message: `node-llama-cpp ready${llama?.gpu ? ` (${llama.gpu})` : ''} on ${selectedBackend}.`
+        message: `node-llama-cpp ready on ${selectedBackend}.`
       }
     } catch (error) {
       return {
@@ -124,6 +195,14 @@ export class NodeLlamaCppRuntime {
     if (!uri) throw new Error('node-llama-cpp model URI is required.')
     const modelPath = await mod.resolveModelFile(uri, {
       directory: this.modelDir,
+      fileName: model.fileName || model.filename || undefined,
+      download: model.download ?? 'auto',
+      verify: model.verify ?? false,
+      headers: model.headers || undefined,
+      endpoints: model.endpoints || undefined,
+      tokens: model.tokens || undefined,
+      parallel: model.parallel || undefined,
+      signal: model.signal || undefined,
       cli: false,
       onProgress: (status) => onProgress?.({
         id: model.id,
@@ -157,6 +236,7 @@ export class NodeLlamaCppRuntime {
     const backend = normalizeLlamaBackend(model.backend || 'auto')
     const loadedModel = await llama.loadModel({
       modelPath,
+      contextSize: resolveLoadContextSize(model),
       gpuLayers: backend === 'cpu' ? 0 : model.gpuLayers ?? 'auto'
     })
     const record = { mod, model: loadedModel, modelPath }
@@ -164,9 +244,58 @@ export class NodeLlamaCppRuntime {
     return record
   }
 
+  async unloadModel(model = {}) {
+    const modelPath = typeof model === 'string'
+      ? model
+      : model.path || model.modelPath || model.id || ''
+    if (!modelPath) {
+      return {
+        provider: 'node-llama-cpp',
+        unloaded: false,
+        message: 'Model path is required to unload a node-llama-cpp model.'
+      }
+    }
+
+    const record = this.loaded.get(modelPath)
+    if (!record) {
+      return {
+        provider: 'node-llama-cpp',
+        unloaded: false,
+        modelPath,
+        message: 'Model is not currently loaded.'
+      }
+    }
+
+    const cleanupTargets = [
+      record.model,
+      record.context,
+      record.session
+    ]
+    for (const target of cleanupTargets) {
+      if (target?.dispose) {
+        await target.dispose().catch(() => {})
+      }
+      if (target?.unload) {
+        await target.unload().catch(() => {})
+      }
+    }
+
+    this.loaded.delete(modelPath)
+    return {
+      provider: 'node-llama-cpp',
+      unloaded: true,
+      modelPath,
+      message: 'Model unloaded.'
+    }
+  }
+
   async generateChat({ model = {}, messages = [], prompt = '', maxTokens = 80, temperature = 0 } = {}) {
     const { mod, model: loadedModel } = await this.loadModel(model)
-    const context = await loadedModel.createContext({ contextSize: model.contextSize || 1024 })
+    const contextSize = resolveChatContextSize(
+      model.contextSize,
+      loadedModel.trainContextSize,
+    )
+    const context = await loadedModel.createContext({ contextSize })
     try {
       const session = new mod.LlamaChatSession({ contextSequence: context.getSequence() })
       const lastUser = prompt || [...messages].reverse().find((message) => message.role === 'user')?.content || ''
@@ -179,7 +308,11 @@ export class NodeLlamaCppRuntime {
 
   async embedText({ model = {}, text = '' } = {}) {
     const { model: loadedModel } = await this.loadModel(model)
-    const context = await loadedModel.createEmbeddingContext({ contextSize: model.embeddingContextSize || 512 })
+    const contextSize = resolveEmbeddingContextSize(
+      model.embeddingContextSize || model.contextSize,
+      loadedModel.trainContextSize,
+    )
+    const context = await loadedModel.createEmbeddingContext({ contextSize })
     try {
       const embedding = await context.getEmbeddingFor(String(text || ''))
       return Array.from(embedding.vector || [])

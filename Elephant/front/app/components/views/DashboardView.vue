@@ -1,166 +1,152 @@
 <template>
-  <section class="en-workspace-view">
-    <header class="en-workspace-header">
-      <h1>Dashboard</h1>
-      <p>{{ store.activeVault?.name || 'Vault' }}</p>
+  <section class="en-dashboard-shell">
+    <header class="en-dashboard-hero">
+      <p class="en-dashboard-kicker">Workspace dashboard</p>
+      <h1>Opening a real dashboard note</h1>
+      <p>
+        This dashboard is persisted as <code>{{ dashboardPath }}</code> inside the vault, so it can
+        be edited like any other note.
+      </p>
     </header>
 
-    <div class="en-dashboard-stats">
-      <article>
-        <strong>{{ stats.notes }}</strong>
-        <span>Notes</span>
-      </article>
-      <article>
-        <strong>{{ stats.folders }}</strong>
-        <span>Folders</span>
-      </article>
-      <article>
-        <strong>{{ stats.tags }}</strong>
-        <span>Tags</span>
-      </article>
-      <article>
-        <strong>{{ stats.recent }}</strong>
-        <span>Recent</span>
-      </article>
+    <div class="en-dashboard-status">
+      <span>{{ statusMessage }}</span>
+      <button
+        type="button"
+        @click="openDashboardNote"
+      >
+        Open dashboard note
+      </button>
     </div>
 
-    <div class="en-dashboard-grid">
-      <section>
-        <h2>Recently edited</h2>
-        <button
-          v-for="note in store.recentNoteEntries"
-          :key="note.path"
-          type="button"
-          @click="store.openNote(note)"
-        >
-          <span>{{ note.title }}</span>
-          <small>{{ note.path }}</small>
-        </button>
-      </section>
-
-      <section>
-        <h2>Atomic readiness</h2>
-        <ul>
-          <li>Local markdown vault: active</li>
-          <li>Muya editor: active</li>
-          <li>Graph and wiki: local MVP</li>
-          <li>Semantic AI layer: local model MVP</li>
-          <li>Mobile and plugin runtime: planned</li>
-        </ul>
-      </section>
-    </div>
+    <section class="en-dashboard-guide">
+      <h2>What changed</h2>
+      <ul>
+        <li>The dashboard is no longer a local-only draft.</li>
+        <li>It lives as a note under <code>.elephantnote</code>, hidden from the main note list.</li>
+        <li>Once opened, the normal note editor handles editing and saving.</li>
+      </ul>
+    </section>
   </section>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useVaultStore } from '../../stores/vaultStore'
+import { DASHBOARD_NOTE_RELATIVE_PATH } from './dashboardNoteHelpers'
 
 const store = useVaultStore()
-const stats = computed(() => store.workspaceStats)
+const statusMessage = ref('Preparing dashboard note...')
+const dashboardPath = computed(() => DASHBOARD_NOTE_RELATIVE_PATH)
+
+const openDashboardNote = async () => {
+  try {
+    statusMessage.value = 'Opening dashboard note...'
+    await store.ensureDashboardNote()
+    statusMessage.value = 'Dashboard note opened.'
+  } catch (error) {
+    statusMessage.value = error instanceof Error ? error.message : 'Failed to open the dashboard note.'
+  }
+}
+
+onMounted(() => {
+  void openDashboardNote()
+})
 </script>
 
 <style scoped>
-.en-workspace-view {
+.en-dashboard-shell {
   min-height: 0;
   flex: 1;
-  padding: 6px 28px 28px;
-  overflow: auto;
-}
-
-.en-workspace-header h1 {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1.15;
-}
-
-.en-workspace-header p {
-  margin: 6px 0 0;
-  color: var(--en-muted);
-}
-
-.en-dashboard-stats,
-.en-dashboard-grid {
   display: grid;
-  gap: 14px;
+  align-content: start;
+  gap: 16px;
+  padding: 32px 28px;
+  overflow: auto;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--en-primary) 10%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--en-bg) 86%, black), var(--en-bg));
 }
 
-.en-dashboard-stats {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-top: 24px;
+.en-dashboard-hero,
+.en-dashboard-guide,
+.en-dashboard-status {
+  border: 1px solid var(--en-border);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--en-surface) 96%, transparent);
+  box-shadow: 0 18px 42px color-mix(in srgb, #020617 8%, transparent);
 }
 
-.en-dashboard-stats article,
-.en-dashboard-grid section {
+.en-dashboard-hero {
+  padding: 22px;
+}
+
+.en-dashboard-kicker {
+  margin: 0 0 8px;
+  color: var(--en-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+}
+
+.en-dashboard-hero h1 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.02;
+}
+
+.en-dashboard-hero p {
+  margin: 12px 0 0;
+  max-width: 60ch;
+  color: var(--en-muted);
+  line-height: 1.6;
+}
+
+.en-dashboard-hero code {
+  padding: 0 6px;
   border: 1px solid var(--en-border);
   border-radius: 8px;
+  color: var(--en-text);
   background: var(--en-bg);
 }
 
-.en-dashboard-stats article {
-  padding: 18px;
-}
-
-.en-dashboard-stats strong {
-  display: block;
-  color: var(--en-text);
-  font-size: 30px;
-  line-height: 1;
-}
-
-.en-dashboard-stats span {
-  display: block;
-  margin-top: 8px;
-  color: var(--en-muted);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.en-dashboard-grid {
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
-  margin-top: 18px;
-}
-
-.en-dashboard-grid section {
-  padding: 16px;
-}
-
-.en-dashboard-grid h2 {
-  margin: 0 0 12px;
-  font-size: 15px;
-}
-
-.en-dashboard-grid button {
-  width: 100%;
-  min-height: 46px;
+.en-dashboard-status {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  border: 0;
-  border-radius: 8px;
-  padding: 0 10px;
-  color: var(--en-text);
-  background: transparent;
-  text-align: left;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
 }
 
-.en-dashboard-grid button:hover {
-  background: var(--en-soft);
-}
-
-.en-dashboard-grid small,
-.en-dashboard-grid li {
+.en-dashboard-status span {
   color: var(--en-muted);
-  font-size: 13px;
 }
 
-.en-dashboard-grid ul {
+.en-dashboard-status button {
+  min-height: 38px;
+  border: 1px solid var(--en-border);
+  border-radius: 12px;
+  padding: 0 14px;
+  color: var(--en-text);
+  background: var(--en-bg);
+}
+
+.en-dashboard-guide {
+  padding: 18px 20px;
+}
+
+.en-dashboard-guide h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.en-dashboard-guide ul {
   margin: 0;
   padding-left: 18px;
+  color: var(--en-muted);
 }
 
-.en-dashboard-grid li + li {
+.en-dashboard-guide li + li {
   margin-top: 8px;
 }
 </style>

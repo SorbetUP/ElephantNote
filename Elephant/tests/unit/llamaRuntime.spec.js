@@ -27,7 +27,7 @@ describe('llama backend selection', () => {
   it('reports the missing backends in priority order', () => {
     expect(getMissingLlamaBackends({
       availableBackends: ['cpu', 'gpu']
-    })).toEqual(['mpu', 'npu', 'openvino', 'tpu'])
+    })).toEqual(['mpu', 'npu', 'openvino'])
   })
 })
 
@@ -35,7 +35,7 @@ describe('WasmLlamaRuntime', () => {
   it('reports a CPU-only fallback when WebGPU is unavailable', async() => {
     const runtime = new WasmLlamaRuntime({
       moduleLoader: async() => ({ Wllama: class FakeWllama {} }),
-      preferredBackends: ['cpu', 'gpu', 'mpu', 'npu', 'openvino', 'tpu']
+      preferredBackends: ['cpu', 'gpu', 'mpu', 'npu', 'openvino']
     })
 
     const status = await runtime.status()

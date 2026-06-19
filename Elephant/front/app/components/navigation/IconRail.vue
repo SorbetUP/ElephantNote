@@ -184,6 +184,15 @@
       <button
         class="en-rail-icon"
         type="button"
+        title="Models"
+        :class="{ active: store.activeWorkspaceView === 'models' }"
+        @click="store.setWorkspaceView('models')"
+      >
+        <Database class="en-rail-icon-svg" />
+      </button>
+      <button
+        class="en-rail-icon"
+        type="button"
         title="Search"
         @click="emit('search')"
       >
@@ -320,11 +329,7 @@ const setVaultIcon = async (vaultId, icon) => {
 }
 
 const handleAiClick = () => {
-  if (store.activeWorkspaceView === 'chat') {
-    store.setWorkspaceView('notes')
-  } else {
-    store.setWorkspaceView('chat')
-  }
+  store.toggleChatSidebar()
 }
 
 onMounted(async () => {

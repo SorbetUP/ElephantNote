@@ -5,6 +5,13 @@
       <span>{{ characterCount }} characters</span>
     </div>
     <div class="en-note-footer-actions">
+      <button
+        type="button"
+        title="Open graph"
+        @click="$emit('open-graph')"
+      >
+        Graph
+      </button>
       <note-typography-menu
         :is-open="isTypographyOpen"
         @toggle="$emit('toggle-typography')"
@@ -46,7 +53,7 @@ defineProps({
   }
 })
 
-defineEmits(['toggle-typography', 'set-text-scale', 'toggle-theme'])
+defineEmits(['toggle-typography', 'set-text-scale', 'toggle-theme', 'open-graph'])
 </script>
 
 <style scoped>
@@ -76,17 +83,18 @@ defineEmits(['toggle-typography', 'set-text-scale', 'toggle-theme'])
 }
 
 .en-note-footer-actions > button {
-  width: 36px;
+  min-width: 36px;
   height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--en-border);
   border-radius: 8px;
-  padding: 0;
+  padding: 0 10px;
   color: var(--en-text);
   background: transparent;
   font: inherit;
+  font-size: 13px;
 }
 
 .en-note-footer-actions button:hover {

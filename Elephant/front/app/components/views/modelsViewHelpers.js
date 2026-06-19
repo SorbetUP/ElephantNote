@@ -1,497 +1,55 @@
 import { ATOMIC_MODEL_CATALOG, createDefaultModelSelection } from 'common/elephantnote/atomicWorkspace'
 import { AI_SETUP_RECOMMENDED_IDS, isRunnableSetupModel } from 'common/elephantnote/aiSetup'
-
-export const MODEL_ROLES = Object.freeze([
-  { id: 'embedding', label: 'Embedding', hint: 'Semantic search and note graph retrieval' },
-  { id: 'chat', label: 'Chat', hint: 'Assistant, RAG chat and agent bridging' },
-  { id: 'ocr', label: 'OCR', hint: 'Extract text from images and scans' }
-])
-
-export const ROLE_IDS = Object.freeze(MODEL_ROLES.map((role) => role.id))
-
-export const USE_NONE = 'none'
-
-export const formatBytes = (value) => {
-  const bytes = Number(value) || 0
-  if (!bytes) return ''
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let size = bytes
-  let unit = 0
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024
-    unit += 1
-  }
-  const isWhole = Math.abs(size - Math.round(size)) < 0.05
-  const digits = unit === 0 || size >= 100 || isWhole ? 0 : 1
-  return `${size.toFixed(digits)} ${units[unit]}`
-}
-
-export const formatCompactCount = (value) => {
-  const count = Number(value) || 0
-  if (count >= 1000000) return `${(count / 1000000).toFixed(count >= 10000000 ? 0 : 1)}M`
-  if (count >= 1000) return `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}K`
-  return `${count}`
-}
-
-export const resolveModelId = (model) => {
-  model = model || {}
-  return String(
-    model?.id ||
-    model?.repoId ||
-    model?.modelId ||
-    model?.modelPath ||
-    model?.path ||
-    model?.name ||
-    ''
-  ).trim()
-}
-
-export const resolveModelName = (model) => {
-  model = model || {}
-  return String(model.name || model.id || model.repoId || model.modelId || 'Untitled model').trim()
-}
-
-export const resolveModelAuthor = (model) => {
-  model = model || {}
-  const fromAuthor = String(model.author || '').trim()
-  if (fromAuthor) return fromAuthor
-  const repoId = String(model.repoId || model.id || '').trim()
-  if (repoId.includes('/')) return repoId.split('/')[0]
-  return ''
-}
-
-export const isLocalModel = (model) => {
-  model = model || {}
-  if (model.provider === 'huggingface' && !model.path && !model.modelPath) return false
-  return Boolean(model.path || model.modelPath || model.local || model.provider === 'local-ocr')
-}
-
-export const isRemoteModel = (model) => {
-  model = model || {}
-  if (isLocalModel(model)) return false
-  return Boolean(
-    model.provider === 'huggingface' ||
-    model.repoId ||
-    model.source === 'huggingface' ||
-    model.pull ||
-    model.uri
-  )
-}
-
-export const isRunnableModel = (model) => isRunnableSetupModel(model)
-
-export const isDownloading = (model = {}, downloads = new Map()) => {
-  model = model || {}
-  const id = resolveModelId(model)
-  if (!id) return false
-  return downloads.has(id)
-}
-
-export const downloadProgress = (model = {}, downloads = new Map()) => {
-  model = model || {}
-  const id = resolveModelId(model)
-  if (!id) return 0
-  return Number(downloads.get(id)?.percent || 0)
-}
-
-export const downloadMessage = (model = {}, downloads = new Map()) => {
-  model = model || {}
-  const id = resolveModelId(model)
-  if (!id) return ''
-  return String(downloads.get(id)?.message || '')
-}
-
-export const getRoleAssignments = (model = {}, selection = {}) => {
-  model = model || {}
-  const id = resolveModelId(model)
-  if (!id) return []
-  return ROLE_IDS.filter((role) => selection[role] === id)
-}
-
-export const isAssignedToRole = (model = {}, role = '', selection = {}) => {
-  model = model || {}
-  const id = resolveModelId(model)
-  if (!id || !role) return false
-  return selection[role] === id
-}
-
-export const assignRole = (selection = {}, role = '', model = {}) => {
-  model = model || {}
-  if (!ROLE_IDS.includes(role)) return { ...selection }
-  const id = resolveModelId(model)
-  if (!id) return { ...selection }
-  return { ...selection, [role]: id }
-}
-
-export const clearRoleAssignment = (selection = {}, model = {}) => {
-  model = model || {}
-  const id = resolveModelId(model)
-  if (!id) return { ...selection }
-  const next = { ...selection }
-  for (const role of ROLE_IDS) {
-    if (next[role] === id) next[role] = ''
-  }
-  return next
-}
-
-export const clearSpecificRole = (selection = {}, role = '') => {
-  if (!ROLE_IDS.includes(role)) return { ...selection }
-  return { ...selection, [role]: '' }
-}
-
-export const applyRoleChoice = (selection = {}, role = '', model = {}, choice = '') => {
-  model = model || {}
-  if (choice === USE_NONE) return clearRoleAssignment(selection, model)
-  if (!role || !ROLE_IDS.includes(role)) return { ...selection }
-  if (!model || !resolveModelId(model)) return { ...selection }
-  return assignRole(selection, role, model)
-}
-
-export const countAssignedRoles = (selection = {}) =>
-  ROLE_IDS.reduce((count, role) => count + (selection[role] ? 1 : 0), 0)
-
-export const getAssignedModelForRole = (role = '', catalog = [], selection = {}) => {
-  const id = selection[role]
-  if (!id) return null
-  return catalog.find((model) => resolveModelId(model) === id) || null
-}
-
-export const normalizeSelection = (selection = {}) => ({
-  ...createDefaultModelSelection(),
-  ...(selection && typeof selection === 'object' ? selection : {})
-})
-
-export const getModelSummary = (model) => {
-  model = model || {}
-  return String(
-    model.summary ||
-    model.notes ||
-    model.pipelineTag ||
-    model.message ||
-    model.repoId ||
-    'No description available.'
-  ).trim()
-}
-
-export const getModelSizeLabel = (model) => {
-  model = model || {}
-  const fromBytes = formatBytes(model.sizeBytes || model.size)
-  if (fromBytes) return fromBytes
-  return String(model.size || '').trim()
-}
-
-export const getModelTags = (model) => {
-  model = model || {}
-  const tags = Array.isArray(model.tags) ? model.tags : []
-  const pipeline = model.pipelineTag ? [model.pipelineTag] : []
-  const purpose = model.purpose && model.purpose !== 'chat' ? [model.purpose] : []
-  return Array.from(new Set([...pipeline, ...purpose, ...tags]))
-    .filter(Boolean)
-    .slice(0, 4)
-}
-
-export const filterModelsByName = (models = [], query = '') => {
-  const term = String(query || '').trim().toLowerCase()
-  if (!term) return [...models]
-  return models.filter((model) => {
-    const haystack = [
-      model.name,
-      model.id,
-      model.repoId,
-      model.modelId,
-      model.author,
-      model.pipelineTag,
-      ...(Array.isArray(model.tags) ? model.tags : [])
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-    return haystack.includes(term)
-  })
-}
-
-export const sortByPopularity = (models = []) =>
-  [...models].sort((a, b) => {
-    const aDownloads = Number(a.downloads || 0)
-    const bDownloads = Number(b.downloads || 0)
-    if (bDownloads !== aDownloads) return bDownloads - aDownloads
-    const aLikes = Number(a.likes || 0)
-    const bLikes = Number(b.likes || 0)
-    if (bLikes !== aLikes) return bLikes - aLikes
-    return String(a.name || '').localeCompare(String(b.name || ''))
-  })
-
-export const dedupeModelsById = (models = []) => {
-  const seen = new Set()
-  const result = []
-  for (const model of models) {
-    const id = resolveModelId(model)
-    if (!id || seen.has(id)) continue
-    seen.add(id)
-    result.push(model)
-  }
-  return result
-}
-
-export const mergeLocalAndRemote = (local = [], remote = []) => {
-  const merged = [...(Array.isArray(local) ? local : []), ...(Array.isArray(remote) ? remote : [])]
-  return dedupeModelsById(merged)
-}
-
-export const getPopularModels = ({
-  catalog = ATOMIC_MODEL_CATALOG,
-  remote = [],
-  limit = 12
-} = {}) => {
-  const runnable = catalog.filter(isRunnableModel)
-  const merged = mergeLocalAndRemote(runnable, remote)
-  return sortByPopularity(merged).slice(0, Number(limit) || 12)
-}
-
-export const getRecommendedModelId = (role = '') => {
-  const ids = AI_SETUP_RECOMMENDED_IDS['node-llama-cpp'] || {}
-  return ids[role] || ''
-}
-
-export const getRecommendedModel = (role = '', catalog = ATOMIC_MODEL_CATALOG) => {
-  const id = getRecommendedModelId(role)
-  if (!id) return null
-  return catalog.find((model) => model.id === id) || null
-}
-
-export const buildStateBadge = (model = {}, selection = {}, downloads = new Map()) => {
-  model = model || {}
-  if (isDownloading(model, downloads)) return { tone: 'downloading', label: 'Downloading' }
-  const roles = getRoleAssignments(model, selection)
-  if (roles.length > 0) {
-    return {
-      tone: 'active',
-      label: roles.length === 1 ? `Active · ${roles[0]}` : `Active · ${roles.length} roles`
-    }
-  }
-  if (isLocalModel(model)) return { tone: 'installed', label: 'Installed' }
-  if (isRemoteModel(model)) return { tone: 'available', label: 'Available' }
-  return { tone: 'idle', label: 'Available' }
-}
-
-export const createInitialSelection = () => normalizeSelection({})
-
-export const getUseMenuOptions = (model = {}, selection = {}) => {
-  model = model || {}
-  const assignedRoles = getRoleAssignments(model, selection)
-  const options = MODEL_ROLES.map((role) => ({
-    ...role,
-    selected: assignedRoles.includes(role.id),
-    recommended: getRecommendedModelId(role.id) === resolveModelId(model)
-  }))
-  return [
-    ...options,
-    {
-      id: USE_NONE,
-      label: 'None',
-      hint: assignedRoles.length ? 'Unassign from every role' : 'Not in use',
-      selected: assignedRoles.length === 0
-    }
-  ]
-}
-
-export const FORMAT_FILTERS = Object.freeze([
-  { id: 'all', label: 'All' },
-  { id: 'gguf', label: 'GGUF' },
-  { id: 'mlx', label: 'MLX' },
-  { id: 'onnx', label: 'ONNX' }
-])
-
-export const SOURCE_FILTERS = Object.freeze([
-  { id: 'all', label: 'All' },
-  { id: 'installed', label: 'Installed' },
-  { id: 'local', label: 'Local' },
-  { id: 'remote', label: 'Remote' }
-])
-
-export const SORT_OPTIONS = Object.freeze([
-  { id: 'best', label: 'Best Match' },
-  { id: 'downloads', label: 'Downloads' },
-  { id: 'updated', label: 'Recently Updated' },
-  { id: 'likes', label: 'Likes' },
-  { id: 'name', label: 'Name' }
-])
-
-export const getModelFormat = (model) => {
-  model = model || {}
-  const name = String(model.fileName || model.filename || model.name || model.id || '').toLowerCase()
-  if (/\.gguf$/i.test(name) || /gguf/i.test(name)) return 'GGUF'
-  if (/\.mlx/i.test(name) || /\bmlx\b/i.test(name)) return 'MLX'
-  if (/\.onnx/i.test(name) || /\bonnx\b/i.test(name)) return 'ONNX'
-  if (model.provider === 'local-ocr' || model.task === 'ocr') return 'OCR'
-  return 'GGUF'
-}
-
-export const getModelQuantization = (model) => {
-  model = model || {}
-  const name = String(model.fileName || model.filename || model.name || model.id || '')
-  const match = name.match(/q([0-9]+(?:_[a-z0-9_]+)*)/i)
-  if (match) return `Q${match[1].toUpperCase()}`
-  const dtype = String(model.dtype || '').toLowerCase()
-  if (dtype) return dtype.toUpperCase()
-  if (/f16|fp16/i.test(name)) return 'F16'
-  if (/q8/i.test(name)) return 'Q8'
-  return ''
-}
-
-export const getModelCapabilities = (model) => {
-  model = model || {}
-  const caps = new Set()
-  const purpose = String(model.purpose || '').toLowerCase()
-  const task = String(model.task || '').toLowerCase()
-  const pipeline = String(model.pipelineTag || '').toLowerCase()
-  const tags = Array.isArray(model.tags) ? model.tags.map((t) => String(t).toLowerCase()) : []
-
-  if (purpose === 'chat' || task.includes('chat') || task.includes('text-generation') || pipeline.includes('text-generation')) caps.add('Chat')
-  if (purpose === 'embedding' || task.includes('embedding')) caps.add('Embedding')
-  if (purpose === 'ocr' || task.includes('ocr')) caps.add('OCR')
-  if (purpose === 'speech-to-text' || task.includes('speech')) caps.add('Speech')
-  if (purpose === 'text-to-speech') caps.add('TTS')
-  if (tags.includes('vision') || tags.includes('vlm') || tags.includes('image')) caps.add('Vision')
-  if (tags.includes('tool-use') || tags.includes('tools') || tags.includes('function-calling')) caps.add('Tool Use')
-  if (purpose === 'agent') caps.add('Agent')
-
-  if (caps.size === 0 && isRunnableModel(model)) caps.add('Chat')
-  return Array.from(caps)
-}
-
-export const getModelUpdatedDate = (model) => {
-  model = model || {}
-  const raw = model.updatedAt || model.modifiedAt || model.lastModified || model.created_at || model.createdAt
-  if (!raw) return ''
-  const date = new Date(raw)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toISOString().slice(0, 10)
-}
-
-export const formatRelativeDate = (value = '', now = new Date()) => {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000))
-  if (diffDays < 0) return 'upcoming'
-  if (diffDays === 0) return 'today'
-  if (diffDays === 1) return '1 day ago'
-  if (diffDays < 30) return `${diffDays} days ago`
-  const diffMonths = Math.floor(diffDays / 30)
-  if (diffMonths < 12) return diffMonths === 1 ? '1 month ago' : `${diffMonths} months ago`
-  const diffYears = Math.floor(diffDays / 365)
-  return diffYears === 1 ? '1 year ago' : `${diffYears} years ago`
-}
-
-export const getModelSource = (model) => {
-  model = model || {}
-  if (isLocalModel(model)) return 'Local'
-  if (isRemoteModel(model)) return 'Hugging Face'
-  return model.provider || 'Unknown'
-}
-
-export const getModelLicense = (model) => {
-  model = model || {}
-  const card = model.cardData || {}
-  return String(card.license || model.license || '').trim() || 'unknown'
-}
-
-export const getModelRuntime = (model) => {
-  model = model || {}
-  if (model.provider === 'node-llama-cpp') return 'llama.cpp'
-  if (model.provider === 'browser-webllm' || model.engine === 'webllm') return 'WebLLM'
-  if (model.provider === 'browser' || model.engine === 'transformersjs') return 'Transformers.js'
-  if (model.provider === 'local-ocr' || model.engine === 'tesseract') return 'Tesseract'
-  return model.engine || model.provider || 'llama.cpp'
-}
-
-export const getModelReadme = (model) => {
-  model = model || {}
-  const card = model.cardData || {}
-  const description = String(
-    card.description ||
-    model.summary ||
-    model.notes ||
-    model.message ||
-    ''
-  ).trim()
-  return {
-    creator: resolveModelAuthor(model) || 'unknown',
-    original: String(model.repoId || model.id || '').trim() || 'unknown',
-    format: getModelFormat(model),
-    runtime: getModelRuntime(model),
-    license: getModelLicense(model),
-    description: description || 'No description available for this model.'
-  }
-}
-
-export const filterByFormat = (models = [], format = 'all') => {
-  if (!format || format === 'all') return [...models]
-  const target = format.toLowerCase()
-  return models.filter((model) => getModelFormat(model).toLowerCase() === target)
-}
-
-export const filterBySource = (models = [], source = 'all') => {
-  if (!source || source === 'all') return [...models]
-  if (source === 'installed') return models.filter((m) => isLocalModel(m))
-  if (source === 'local') return models.filter((m) => isLocalModel(m))
-  if (source === 'remote') return models.filter((m) => isRemoteModel(m) && !isLocalModel(m))
-  return [...models]
-}
-
-export const sortModels = (models = [], sort = 'best') => {
-  const list = [...models]
-  switch (sort) {
-    case 'downloads':
-      return list.sort((a, b) => Number(b.downloads || 0) - Number(a.downloads || 0))
-    case 'likes':
-      return list.sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0))
-    case 'updated':
-      return list.sort((a, b) => {
-        const aTime = new Date(a.updatedAt || a.modifiedAt || 0).getTime()
-        const bTime = new Date(b.updatedAt || b.modifiedAt || 0).getTime()
-        return bTime - aTime
-      })
-    case 'name':
-      return list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
-    case 'best':
-    default:
-      return sortByPopularity(list)
-  }
-}
-
-export const applyCatalogFilters = ({
-  models = [],
-  query = '',
-  format = 'all',
-  source = 'all',
-  sort = 'best'
-} = {}) => {
-  const byName = filterModelsByName(models, query)
-  const byFormat = filterByFormat(byName, format)
-  const bySource = filterBySource(byFormat, source)
-  return sortModels(bySource, sort)
-}
-
-export const getDownloadOption = (model) => {
-  model = model || {}
-  const format = getModelFormat(model)
-  const quantization = getModelQuantization(model)
-  const sizeLabel = getModelSizeLabel(model)
-  const fileName = String(model.fileName || model.filename || '').trim()
-  const installed = isLocalModel(model)
-  return {
-    format,
-    quantization,
-    sizeLabel,
-    fileName: fileName || resolveModelName(model),
-    installed,
-    status: installed
-      ? 'Applicable model file already downloaded'
-      : isRemoteModel(model)
-        ? 'Available for download'
-        : 'Local file'
-  }
-}
+export const MODEL_ROLES=Object.freeze([{id:'embedding',label:'Embedding',hint:'Semantic search and note graph retrieval'},{id:'chat',label:'Chat',hint:'Assistant, RAG chat and agent bridging'},{id:'ocr',label:'OCR',hint:'Extract text from images and scans'}])
+export const ROLE_IDS=Object.freeze(MODEL_ROLES.map(r=>r.id));export const USE_NONE='none'
+export const formatBytes=v=>{let b=Number(v)||0;if(!b)return'';const u=['B','KB','MB','GB','TB'];let i=0;while(b>=1024&&i<u.length-1){b/=1024;i++}const d=i===0||b>=100||Math.abs(b-Math.round(b))<.05?0:1;return`${b.toFixed(d)} ${u[i]}`}
+export const formatCompactCount=v=>{const n=Number(v)||0;if(n>=1e6)return`${(n/1e6).toFixed(n>=1e7?0:1)}M`;if(n>=1e3)return`${(n/1e3).toFixed(n>=1e4?0:1)}K`;return`${n}`}
+export const resolveModelId=m=>String(m?.id||m?.repoId||m?.modelId||m?.modelPath||m?.path||m?.name||'').trim()
+export const resolveModelName=m=>String(m?.name||m?.id||m?.repoId||m?.modelId||'Untitled model').trim()
+export const resolveModelAuthor=m=>{const a=String(m?.author||'').trim();if(a)return a;const r=String(m?.repoId||m?.id||'').trim();return r.includes('/')?r.split('/')[0]:''}
+export const isLocalModel=m=>m?.provider==='local-ocr'||Boolean(m?.path||m?.modelPath||m?.local)
+export const isRemoteModel=m=>!isLocalModel(m)&&Boolean(m?.provider==='huggingface'||m?.repoId||m?.source==='huggingface'||m?.pull||m?.uri)
+export const isRunnableModel=m=>isRunnableSetupModel(m)
+export const isDownloading=(m={},d=new Map())=>Boolean(resolveModelId(m)&&d.has(resolveModelId(m)))
+export const downloadProgress=(m={},d=new Map())=>Number(d.get(resolveModelId(m))?.percent||0)
+export const downloadMessage=(m={},d=new Map())=>String(d.get(resolveModelId(m))?.message||'')
+export const getRoleAssignments=(m={},s={})=>{const id=resolveModelId(m);return id?ROLE_IDS.filter(r=>s[r]===id):[]}
+export const isAssignedToRole=(m={},r='',s={})=>Boolean(resolveModelId(m)&&r&&s[r]===resolveModelId(m))
+export const assignRole=(s={},r='',m={})=>ROLE_IDS.includes(r)&&resolveModelId(m)?{...s,[r]:resolveModelId(m)}:{...s}
+export const clearRoleAssignment=(s={},m={})=>{const id=resolveModelId(m),n={...s};for(const r of ROLE_IDS)if(n[r]===id)n[r]='';return n}
+export const clearSpecificRole=(s={},r='')=>ROLE_IDS.includes(r)?{...s,[r]:''}:{...s}
+export const applyRoleChoice=(s={},r='',m={},c='')=>c===USE_NONE?clearRoleAssignment(s,m):assignRole(s,r,m)
+export const countAssignedRoles=s=>ROLE_IDS.reduce((n,r)=>n+(s?.[r]?1:0),0)
+export const getAssignedModelForRole=(r='',cat=[],s={})=>cat.find(m=>resolveModelId(m)===s[r])||null
+export const normalizeSelection=s=>({...createDefaultModelSelection(),...(s&&typeof s==='object'?s:{})})
+export const getModelSummary=m=>String(m?.summary||m?.notes||m?.pipelineTag||m?.message||m?.repoId||'No description available.').trim()
+export const getModelSizeLabel=m=>formatBytes(m?.sizeBytes||m?.size)||String(m?.size||'').trim()
+export const getModelTags=m=>Array.from(new Set([m?.pipelineTag,m?.purpose&&m.purpose!=='chat'?m.purpose:'',...(Array.isArray(m?.tags)?m.tags:[])].filter(Boolean))).slice(0,4)
+export const filterModelsByName=(models=[],q='')=>{const t=String(q).trim().toLowerCase();if(!t)return[...models];return models.filter(m=>[m.name,m.id,m.repoId,m.modelId,m.author,m.pipelineTag,...(Array.isArray(m.tags)?m.tags:[])].filter(Boolean).join(' ').toLowerCase().includes(t))}
+const dedupeKey=m=>String(m?.repoId||m?.id||m?.modelId||m?.name||m?.path||m?.modelPath||'').trim().toLowerCase()
+export const dedupeModelsById=(models=[])=>Array.from(models.reduce((map,m)=>{const k=dedupeKey(m);if(!k)return map;const old=map.get(k);if(!old||isLocalModel(m)&&!isLocalModel(old)||Number(m?.downloads||0)>Number(old?.downloads||0))map.set(k,m);return map},new Map()).values())
+export const sortByPopularity=(models=[])=>dedupeModelsById(models).sort((a,b)=>Number(b.downloads||0)-Number(a.downloads||0)||Number(b.likes||0)-Number(a.likes||0)||String(a.name||'').localeCompare(String(b.name||'')))
+export const mergeLocalAndRemote=(l=[],r=[])=>dedupeModelsById([...(Array.isArray(l)?l:[]),...(Array.isArray(r)?r:[])])
+export const getPopularModels=({catalog=ATOMIC_MODEL_CATALOG,remote=[],limit=12}={})=>sortByPopularity(mergeLocalAndRemote(catalog.filter(isRunnableModel),remote)).slice(0,Number(limit)||12)
+export const getRecommendedModelId=(r='')=>(AI_SETUP_RECOMMENDED_IDS['node-llama-cpp']||{})[r]||''
+export const getRecommendedModel=(r='',c=ATOMIC_MODEL_CATALOG)=>c.find(m=>m.id===getRecommendedModelId(r))||null
+export const buildStateBadge=(m={},s={},d=new Map())=>isDownloading(m,d)?{tone:'downloading',label:'Downloading'}:getRoleAssignments(m,s).length?{tone:'active',label:`Active · ${getRoleAssignments(m,s).length} role${getRoleAssignments(m,s).length>1?'s':''}`}:isLocalModel(m)?{tone:'installed',label:'Installed'}:{tone:'available',label:'Available'}
+export const createInitialSelection=()=>normalizeSelection({})
+export const getUseMenuOptions=(m={},s={})=>[...MODEL_ROLES.map(r=>({...r,selected:getRoleAssignments(m,s).includes(r.id),recommended:getRecommendedModelId(r.id)===resolveModelId(m)})),{id:USE_NONE,label:'None',hint:getRoleAssignments(m,s).length?'Unassign from every role':'Not in use',selected:getRoleAssignments(m,s).length===0}]
+export const FORMAT_FILTERS=Object.freeze([{id:'all',label:'All'},{id:'gguf',label:'GGUF'},{id:'mlx',label:'MLX'},{id:'onnx',label:'ONNX'}])
+export const SOURCE_FILTERS=Object.freeze([{id:'all',label:'All'},{id:'installed',label:'Installed'},{id:'local',label:'Local'},{id:'remote',label:'Remote'}])
+export const SORT_OPTIONS=Object.freeze([{id:'best',label:'Best Match'},{id:'downloads',label:'Downloads'},{id:'updated',label:'Recently Updated'},{id:'likes',label:'Likes'},{id:'name',label:'Name'}])
+export const getModelFormat=m=>{const n=String(m?.fileName||m?.filename||m?.name||m?.id||'').toLowerCase();if(n.includes('mlx'))return'MLX';if(n.includes('onnx'))return'ONNX';if(m?.provider==='local-ocr'||m?.task==='ocr')return'OCR';return'GGUF'}
+export const getModelQuantization=m=>{const n=String(m?.fileName||m?.filename||m?.name||m?.id||'');const q=n.match(/q([0-9]+(?:_[a-z0-9_]+)*)/i);if(q)return`Q${q[1].toUpperCase()}`;if(m?.dtype)return String(m.dtype).toUpperCase();if(/f16|fp16/i.test(n))return'F16';if(/q8/i.test(n))return'Q8';return''}
+export const getModelCapabilities=m=>{const caps=new Set(),p=String(m?.purpose||'').toLowerCase(),t=String(m?.task||'').toLowerCase(),pl=String(m?.pipelineTag||'').toLowerCase(),tags=Array.isArray(m?.tags)?m.tags.map(x=>String(x).toLowerCase()):[];if(p==='chat'||t.includes('chat')||t.includes('text-generation')||pl.includes('text-generation'))caps.add('Chat');if(p==='embedding'||t.includes('embedding'))caps.add('Embedding');if(p==='ocr'||t.includes('ocr'))caps.add('OCR');if(tags.some(x=>['vision','vlm','image'].includes(x)))caps.add('Vision');if(tags.some(x=>['tool-use','tools','function-calling'].includes(x)))caps.add('Tool Use');if(!caps.size&&isRunnableModel(m))caps.add('Chat');return[...caps]}
+export const getModelUpdatedDate=m=>{const raw=m?.updatedAt||m?.modifiedAt||m?.lastModified||m?.created_at||m?.createdAt;if(!raw)return'';const d=new Date(raw);return Number.isNaN(d.getTime())?'':d.toISOString().slice(0,10)}
+export const formatRelativeDate=(v='',now=new Date())=>{if(!v)return'';const d=new Date(v),days=Math.floor((now-d)/86400000);if(Number.isNaN(d.getTime()))return'';if(days<1)return'today';if(days<30)return`${days} days ago`;const mo=Math.floor(days/30);if(mo<12)return mo===1?'1 month ago':`${mo} months ago`;const y=Math.floor(days/365);return y===1?'1 year ago':`${y} years ago`}
+export const getModelSource=m=>isLocalModel(m)?'Local':isRemoteModel(m)?'Hugging Face':m?.provider||'Unknown'
+export const getModelLicense=m=>String(m?.cardData?.license||m?.license||'').trim()||'unknown'
+export const getModelRuntime=m=>m?.provider==='node-llama-cpp'?'llama.cpp':m?.provider==='local-ocr'||m?.engine==='tesseract'?'Tesseract':m?.engine||m?.provider||'llama.cpp'
+export const getModelReadme=m=>({creator:resolveModelAuthor(m)||'unknown',original:String(m?.repoId||m?.id||'').trim()||'unknown',format:getModelFormat(m),runtime:getModelRuntime(m),license:getModelLicense(m),description:getModelSummary(m)})
+export const filterByFormat=(ms=[],f='all')=>!f||f==='all'?[...ms]:ms.filter(m=>getModelFormat(m).toLowerCase()===f.toLowerCase())
+export const filterBySource=(ms=[],s='all')=>!s||s==='all'?[...ms]:s==='remote'?ms.filter(m=>isRemoteModel(m)&&!isLocalModel(m)):s==='installed'||s==='local'?ms.filter(isLocalModel):[...ms]
+export const sortModels=(ms=[],s='best')=>{const l=dedupeModelsById(ms);if(s==='downloads')return l.sort((a,b)=>Number(b.downloads||0)-Number(a.downloads||0));if(s==='likes')return l.sort((a,b)=>Number(b.likes||0)-Number(a.likes||0));if(s==='updated')return l.sort((a,b)=>new Date(b.updatedAt||b.modifiedAt||0)-new Date(a.updatedAt||a.modifiedAt||0));if(s==='name')return l.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));return sortByPopularity(l)}
+export const applyCatalogFilters=({models=[],query='',format='all',source='all',sort='best'}={})=>sortModels(filterBySource(filterByFormat(filterModelsByName(dedupeModelsById(models),query),format),source),sort)
+export const getDownloadOption=m=>({format:getModelFormat(m),quantization:getModelQuantization(m),sizeLabel:getModelSizeLabel(m),fileName:String(m?.fileName||m?.filename||'').trim()||resolveModelName(m),installed:isLocalModel(m),status:isLocalModel(m)?'Applicable model file already downloaded':isRemoteModel(m)?'Available for download':'Local file'})

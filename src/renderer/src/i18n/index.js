@@ -185,8 +185,6 @@ const englishFallback = createFallbackEnglishTranslations()
 const enTranslations = mergeLocaleMessages(englishFallback, loadLocaleMessages('en'))
 
 // Create the Vue i18n instance
-defaultLocaleFallback: {
-}
 const i18n = createI18n({
   legacy: false,
   locale: 'en', // default is en

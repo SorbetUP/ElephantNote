@@ -1,380 +1,615 @@
 <template>
   <section class="en-models-view">
-    <header class="en-models-hero">
-      <div class="en-models-hero-copy">
-        <p class="en-models-kicker">Model studio</p>
-        <h1>Local and remote GGUF models</h1>
-        <span>{{ statusMessage }}</span>
-        <div class="en-models-summary">
-          <span>{{ modelStats.local }} local</span>
-          <span>{{ modelStats.remote }} remote</span>
-          <span>{{ modelStats.active }} active</span>
-          <span>{{ modelStats.downloading }} downloading</span>
-        </div>
+    <header class="en-models-topbar">
+      <div class="en-models-searchbar">
+        <Search class="en-models-search-icon" />
+        <input
+          v-model.trim="query"
+          type="search"
+          placeholder="Search models by name (qwen, smollm2, nomic, bge…)"
+          @keyup.enter="searchRemote"
+        >
+        <button
+          v-if="query"
+          type="button"
+          class="en-models-search-clear"
+          @click="query = ''"
+        >
+          <X class="en-icon" />
+        </button>
       </div>
-      <div class="en-models-hero-actions">
+
+      <div class="en-models-filters">
+        <span class="en-models-count">{{ visibleModels.length }} models</span>
+
+        <label class="en-filter-pill">
+          <span>Format</span>
+          <select v-model="formatFilter">
+            <option
+              v-for="opt in FORMAT_FILTERS"
+              :key="opt.id"
+              :value="opt.id"
+            >{{ opt.label }}</option>
+          </select>
+        </label>
+
+        <label class="en-filter-pill">
+          <span>Source</span>
+          <select v-model="sourceFilter">
+            <option
+              v-for="opt in SOURCE_FILTERS"
+              :key="opt.id"
+              :value="opt.id"
+            >{{ opt.label }}</option>
+          </select>
+        </label>
+
+        <label class="en-filter-pill">
+          <span>Sort</span>
+          <select v-model="sortOption">
+            <option
+              v-for="opt in SORT_OPTIONS"
+              :key="opt.id"
+              :value="opt.id"
+            >{{ opt.label }}</option>
+          </select>
+        </label>
+
         <button
           type="button"
-          :class="{ active: activeTab === 'local' }"
-          @click="activeTab = 'local'"
-        >
-          Local
-        </button>
-        <button
-          type="button"
-          :class="{ active: activeTab === 'discover' }"
-          @click="activeTab = 'discover'"
-        >
-          Discover
-        </button>
-        <button
-          type="button"
-          :class="{ active: activeTab === 'active' }"
-          @click="activeTab = 'active'"
-        >
-          Active
-        </button>
-        <button
-          type="button"
+          class="en-models-refresh"
+          :disabled="isLoading"
           @click="refresh"
         >
-          Refresh
+          <RefreshCw
+            class="en-icon"
+            :class="{ spinning: isLoading }"
+          />
         </button>
       </div>
     </header>
 
-    <section class="en-models-toolbar">
-      <label>
-        <span>Search Hugging Face</span>
-        <input
-          v-model.trim="query"
-          type="search"
-          placeholder="smollm2, qwen, nomic..."
-          @keyup.enter="searchRemote"
+    <div class="en-models-body">
+      <section class="en-models-list-column">
+        <div
+          v-if="isLoading && !visibleModels.length"
+          class="en-models-empty"
         >
-      </label>
-      <label>
-        <span>Limit</span>
-        <input
-          v-model.number="limit"
-          type="number"
-          min="4"
-          max="50"
+          Loading model data…
+        </div>
+        <div
+          v-else-if="!visibleModels.length"
+          class="en-models-empty"
         >
-      </label>
-      <button
-        type="button"
-        :disabled="isSearching || !query"
-        @click="searchRemote"
-      >
-        Search
-      </button>
-    </section>
+          <p>{{ emptyMessage }}</p>
+          <button
+            v-if="!query"
+            type="button"
+            @click="loadPopular"
+          >
+            Load popular models
+          </button>
+        </div>
 
-    <div class="en-models-layout">
-      <div class="en-models-main">
-        <section class="en-models-section en-models-list-section">
-          <div class="en-models-section-head">
-            <div>
-              <h2>{{ activeTabTitle }}</h2>
-              <p>{{ activeTabDescription }}</p>
+        <ul
+          v-else
+          class="en-models-list"
+        >
+          <li
+            v-for="model in visibleModels"
+            :key="resolveModelId(model)"
+            class="en-model-row"
+            :class="{
+              selected: isSelected(model),
+              installed: isLocalModel(model),
+              downloading: isDownloadingModel(model)
+            }"
+            @click="selectModel(model)"
+          >
+            <div class="en-model-row-icon">
+              <Box class="en-icon" />
             </div>
-            <span class="en-models-pill">{{ visibleModels.length }} models</span>
+            <div class="en-model-row-main">
+              <strong class="en-model-row-name">{{ resolveModelName(model) }}</strong>
+              <span class="en-model-row-author">{{ resolveModelAuthor(model) || 'unknown' }}</span>
+              <div class="en-model-row-badges">
+                <span
+                  v-for="cap in getModelCapabilities(model).slice(0, 3)"
+                  :key="cap"
+                  class="en-cap-badge"
+                  :class="`cap-${cap.toLowerCase().replace(/[^a-z]/g, '')}`"
+                >{{ cap }}</span>
+                <span
+                  v-if="isLocalModel(model)"
+                  class="en-cap-badge cap-installed"
+                >Installed</span>
+              </div>
+            </div>
+            <div class="en-model-row-stats">
+              <span
+                v-if="model.likes != null"
+                class="en-stat"
+              >
+                <Heart class="en-icon" />
+                {{ formatCompactCount(model.likes) }}
+              </span>
+              <span
+                v-if="model.downloads != null"
+                class="en-stat"
+              >
+                <Download class="en-icon" />
+                {{ formatCompactCount(model.downloads) }}
+              </span>
+              <span
+                v-if="getModelUpdatedDate(model)"
+                class="en-stat en-stat-date"
+              >
+                {{ formatRelativeDate(getModelUpdatedDate(model)) }}
+              </span>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <section class="en-models-detail-column">
+        <template v-if="selectedModel">
+          <header class="en-detail-header">
+            <div class="en-detail-icon">
+              <Box class="en-icon" />
+            </div>
+            <div class="en-detail-title">
+              <strong>{{ resolveModelAuthor(selectedModel) || 'local' }}/{{ resolveModelName(selectedModel) }}</strong>
+              <small>{{ getModelSource(selectedModel) }}</small>
+            </div>
+            <div class="en-detail-actions">
+              <button
+                type="button"
+                class="en-icon-btn"
+                title="Copy model id"
+                @click="copyModelId"
+              >
+                <Copy class="en-icon" />
+              </button>
+              <button
+                type="button"
+                class="en-icon-btn"
+                title="Open model card"
+                @click="openModelCard"
+              >
+                <ExternalLink class="en-icon" />
+              </button>
+            </div>
+          </header>
+
+          <div class="en-detail-stats">
+            <span v-if="selectedModel.downloads != null">
+              <Download class="en-icon" />
+              {{ formatCompactCount(selectedModel.downloads) }} downloads
+            </span>
+            <span v-if="selectedModel.likes != null">
+              <Star class="en-icon" />
+              {{ formatCompactCount(selectedModel.likes) }} stars
+            </span>
+            <span v-if="getModelUpdatedDate(selectedModel)">
+              <Clock class="en-icon" />
+              Last updated: {{ formatRelativeDate(getModelUpdatedDate(selectedModel)) }}
+            </span>
           </div>
 
-          <div
-            v-if="isLoading"
-            class="en-models-empty"
-          >
-            Loading model data...
-          </div>
-
-          <div
-            v-else
-            class="en-models-grid"
-          >
-            <article
-              v-for="model in visibleModels"
-              :key="model.id || model.repoId || model.name"
-              class="en-model-card"
-              :class="{
-                active: model.active,
-                selected: isSelectedModel(model),
-                downloading: isDownloading(model)
-              }"
-              @click="selectModel(model)"
+          <div class="en-detail-badges">
+            <span class="en-meta-badge badge-format">Format: {{ getModelFormat(selectedModel) }}</span>
+            <span
+              v-if="getModelQuantization(selectedModel)"
+              class="en-meta-badge badge-quant"
             >
-              <header>
-                <div>
-                  <strong>{{ model.name || model.id }}</strong>
-                  <span>{{ model.provider || 'node-llama-cpp' }}</span>
-                </div>
-                <span class="en-model-state">
-                  {{ model.active ? 'Active' : model.downloaded ? 'Installed' : 'Available' }}
-                </span>
-              </header>
-
-              <p>
-                {{ model.summary || model.pipelineTag || model.message || model.repoId || 'Model entry.' }}
-              </p>
-
-              <div class="en-model-card-meta">
-                <span v-if="model.fileName || model.filename">{{ model.fileName || model.filename }}</span>
-                <span v-if="model.sizeBytes || model.size">{{ formatSize(model.sizeBytes || model.size) }}</span>
-                <span v-if="model.contextSize">ctx {{ model.contextSize }}</span>
-                <span v-if="model.embeddingContextSize">emb {{ model.embeddingContextSize }}</span>
-                <span v-if="model.downloads != null">{{ formatCompactCount(model.downloads) }} dl</span>
-                <span v-if="model.likes != null">{{ formatCompactCount(model.likes) }} likes</span>
-              </div>
-
-              <div
-                v-if="isDownloading(model)"
-                class="en-model-progress"
-              >
-                <div :style="{ width: `${downloadProgress(model)}%` }" />
-              </div>
-
-              <small v-if="downloadMessage(model)">{{ downloadMessage(model) }}</small>
-
-              <div class="en-model-card-actions">
-                <button
-                  v-if="model.provider === 'huggingface' || model.repoId || model.source === 'huggingface'"
-                  type="button"
-                  :disabled="isDownloading(model)"
-                  @click="download(model)"
-                >
-                  Download
-                </button>
-                <button
-                  v-if="model.provider === 'huggingface' || model.repoId || model.source === 'huggingface'"
-                  type="button"
-                  :disabled="isDownloading(model)"
-                  @click="downloadAndActivate(model)"
-                >
-                  Install & activate
-                </button>
-                <button
-                  v-if="model.active"
-                  type="button"
-                  :disabled="isDownloading(model)"
-                  @click="deactivate(model)"
-                >
-                  Deactivate
-                </button>
-                <button
-                  v-else-if="model.path || model.modelPath || model.fileName || model.filename"
-                  type="button"
-                  :disabled="isDownloading(model)"
-                  @click="activate(model)"
-                >
-                  Activate
-                </button>
-                <button
-                  v-if="model.path || model.modelPath"
-                  type="button"
-                  :disabled="isDownloading(model)"
-                  @click="remove(model)"
-                >
-                  Delete
-                </button>
-              </div>
-            </article>
+              Quantization: {{ getModelQuantization(selectedModel) }}
+            </span>
+            <span class="en-meta-badge badge-runtime">Runtime: {{ getModelRuntime(selectedModel) }}</span>
+            <span
+              v-if="getModelCapabilities(selectedModel).length"
+              class="en-meta-badge badge-caps"
+            >
+              Capabilities: {{ getModelCapabilities(selectedModel).join(', ') }}
+            </span>
+            <span class="en-meta-badge badge-source">Source: {{ getModelSource(selectedModel) }}</span>
           </div>
-        </section>
-      </div>
 
-      <aside class="en-models-sidebar">
-        <section class="en-models-panel">
-          <h3>{{ selectedModelTitle }}</h3>
-          <template v-if="selectedModel">
-            <div class="en-model-inspector-meta">
-              <span>{{ selectedModel.provider || 'node-llama-cpp' }}</span>
-              <span>{{ selectedModel.source || selectedModel.category || 'local' }}</span>
-              <span v-if="selectedModel.task">{{ selectedModel.task }}</span>
-              <span v-if="selectedModel.pipelineTag">{{ selectedModel.pipelineTag }}</span>
+          <section class="en-detail-card en-download-card">
+            <header>
+              <strong>Download Options</strong>
+              <small>{{ downloadOption.status }}</small>
+            </header>
+            <div class="en-download-row">
+              <div class="en-download-info">
+                <strong>{{ downloadOption.fileName }}</strong>
+                <span>{{ downloadOption.format }}{{ downloadOption.quantization ? ` · ${downloadOption.quantization}` : '' }} · {{ downloadOption.sizeLabel || 'unknown size' }}</span>
+              </div>
+              <div class="en-download-action">
+                <div class="en-use-menu">
+                  <button
+                    type="button"
+                    class="en-btn-primary en-use-trigger"
+                    :class="{ assigned: getRoleAssignments(selectedModel, modelSelection).length > 0 }"
+                    @click.stop="toggleUseMenu"
+                  >
+                    <Layers class="en-icon" />
+                    <span>Use…</span>
+                    <ChevronDown class="en-icon en-chevron" />
+                  </button>
+                  <div
+                    v-if="useMenuOpen"
+                    class="en-use-popover"
+                  >
+                    <p class="en-use-popover-title">
+                      Assign model to a role
+                    </p>
+                    <button
+                      v-for="option in useMenuOptions"
+                      :key="option.id"
+                      type="button"
+                      class="en-use-option"
+                      :class="{ selected: option.selected }"
+                      @click.stop="chooseRole(option.id)"
+                    >
+                      <span class="en-use-option-main">
+                        <strong>{{ option.label }}</strong>
+                        <small>{{ option.hint }}</small>
+                      </span>
+                      <span class="en-use-option-meta">
+                        <span
+                          v-if="option.recommended"
+                          class="en-use-tag recommended"
+                        >Recommended</span>
+                        <CheckCircle2
+                          v-if="option.selected"
+                          class="en-icon en-use-check"
+                        />
+                      </span>
+                    </button>
+                  </div>
+                </div>
+                <button
+                  v-if="!isLocalModel(selectedModel) && isRemoteModel(selectedModel) && !isDownloadingModel(selectedModel)"
+                  type="button"
+                  class="en-btn-secondary"
+                  @click="download(selectedModel)"
+                >
+                  <Download class="en-icon" />
+                  <span>Download {{ downloadOption.sizeLabel }}</span>
+                </button>
+                <button
+                  v-if="isDownloadingModel(selectedModel)"
+                  type="button"
+                  class="en-btn-ghost"
+                  @click="cancelDownload(selectedModel)"
+                >
+                  Cancel download
+                </button>
+                <button
+                  v-if="isLocalModel(selectedModel) && selectedModel.provider !== 'local-ocr'"
+                  type="button"
+                  class="en-btn-danger"
+                  :disabled="isDownloadingModel(selectedModel)"
+                  @click="remove(selectedModel)"
+                >
+                  <Trash2 class="en-icon" />
+                  <span>Uninstall</span>
+                </button>
+              </div>
             </div>
-            <p class="en-model-inspector-summary">
-              {{ selectedModel.summary || selectedModel.notes || selectedModel.message || 'Inspect a model entry to see details.' }}
-            </p>
-            <div class="en-model-inspector-grid">
-              <div>
-                <small>Path</small>
-                <strong>{{ selectedModel.modelPath || selectedModel.path || 'Remote' }}</strong>
-              </div>
-              <div>
-                <small>Size</small>
-                <strong>{{ formatSize(selectedModel.sizeBytes || selectedModel.size) || selectedModel.size || 'n/a' }}</strong>
-              </div>
-              <div>
-                <small>Context</small>
-                <strong>{{ selectedModel.contextSize || selectedModel.embeddingContextSize || 'auto' }}</strong>
-              </div>
-              <div>
-                <small>Backend</small>
-                <strong>{{ selectedModel.backend || selectedModel.engine || selectedModel.provider || 'auto' }}</strong>
-              </div>
-              <div>
-                <small>Repo</small>
-                <strong>{{ selectedModel.repoId || selectedModel.model || 'n/a' }}</strong>
-              </div>
-              <div>
-                <small>Downloads</small>
-                <strong>{{ selectedModel.downloads != null ? formatCompactCount(selectedModel.downloads) : 'n/a' }}</strong>
-              </div>
+            <div
+              v-if="isDownloadingModel(selectedModel)"
+              class="en-model-progress"
+            >
+              <div :style="{ width: `${downloadPercent(selectedModel)}%` }" />
             </div>
-            <div class="en-model-inspector-actions">
-              <button
-                v-if="selectedModel.provider === 'huggingface' || selectedModel.repoId || selectedModel.source === 'huggingface'"
-                type="button"
-                :disabled="isDownloading(selectedModel)"
-                @click.stop="download(selectedModel)"
-              >
-                Download
-              </button>
-              <button
-                v-if="selectedModel.provider === 'huggingface' || selectedModel.repoId || selectedModel.source === 'huggingface'"
-                type="button"
-                :disabled="isDownloading(selectedModel)"
-                @click.stop="downloadAndActivate(selectedModel)"
-              >
-                Install & activate
-              </button>
-              <button
-                v-if="selectedModel.active"
-                type="button"
-                :disabled="isDownloading(selectedModel)"
-                @click.stop="deactivate(selectedModel)"
-              >
-                Deactivate
-              </button>
-              <button
-                v-else-if="selectedModel.path || selectedModel.modelPath || selectedModel.fileName || selectedModel.filename"
-                type="button"
-                :disabled="isDownloading(selectedModel)"
-                @click.stop="activate(selectedModel)"
-              >
-                Activate
-              </button>
-              <button
-                v-if="selectedModel.path || selectedModel.modelPath"
-                type="button"
-                :disabled="isDownloading(selectedModel)"
-                @click.stop="remove(selectedModel)"
-              >
-                Delete
-              </button>
-            </div>
-          </template>
-          <p v-else>No model selected.</p>
-        </section>
+            <small v-if="downloadMessageFor(selectedModel)">{{ downloadMessageFor(selectedModel) }}</small>
+          </section>
 
-        <section class="en-models-panel">
-          <h3>Active runtime</h3>
-          <template v-if="activeModel">
-            <strong>{{ activeModel.name || activeModel.id }}</strong>
-            <p>{{ activeModel.modelPath || activeModel.path }}</p>
-            <small>{{ activeModel.source || activeModel.provider || 'local' }}</small>
-            <div class="en-models-active-meta">
-              <span v-if="activeModel.backend">{{ activeModel.backend }}</span>
-              <span v-if="activeModel.fileName">{{ activeModel.fileName }}</span>
-              <span v-if="activeModel.contextSize">ctx {{ activeModel.contextSize }}</span>
-            </div>
-          </template>
-          <p v-else>No model is active.</p>
-        </section>
+          <section class="en-detail-card en-roles-card">
+            <header>
+              <strong>Active roles for this model</strong>
+              <small>{{ getRoleAssignments(selectedModel, modelSelection).length || 0 }} assigned</small>
+            </header>
+            <ul class="en-role-list">
+              <li
+                v-for="role in MODEL_ROLES"
+                :key="role.id"
+              >
+                <div class="en-role-row">
+                  <div class="en-role-info">
+                    <strong>{{ role.label }}</strong>
+                    <small>{{ role.hint }}</small>
+                  </div>
+                  <div class="en-role-current">
+                    <template v-if="isAssignedToRole(selectedModel, role.id, modelSelection)">
+                      <span class="en-role-active">Assigned</span>
+                      <button
+                        type="button"
+                        class="en-btn-ghost en-role-clear"
+                        @click="clearRole(role.id)"
+                      >
+                        <X class="en-icon" />
+                      </button>
+                    </template>
+                    <span
+                      v-else
+                      class="en-role-empty"
+                    >Not assigned</span>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </section>
 
-        <section class="en-models-panel">
-          <h3>Discovery</h3>
-          <p>
-            Search the Hugging Face catalog, inspect local GGUF models, then activate a model for
-            chat or embeddings.
-          </p>
-        </section>
-      </aside>
+          <section class="en-detail-card en-readme-card">
+            <header>
+              <strong>README</strong>
+              <small>Technical details</small>
+            </header>
+            <div class="en-readme-body">
+              <h3>{{ readme.original }}</h3>
+              <p>{{ readme.description }}</p>
+              <dl class="en-readme-meta">
+                <div>
+                  <dt>Model creator</dt>
+                  <dd>{{ readme.creator }}</dd>
+                </div>
+                <div>
+                  <dt>Original model</dt>
+                  <dd>{{ readme.original }}</dd>
+                </div>
+                <div>
+                  <dt>Format</dt>
+                  <dd>{{ readme.format }}</dd>
+                </div>
+                <div>
+                  <dt>Runtime</dt>
+                  <dd>{{ readme.runtime }}</dd>
+                </div>
+                <div>
+                  <dt>License</dt>
+                  <dd>{{ readme.license }}</dd>
+                </div>
+                <div v-if="selectedModel.repoId">
+                  <dt>Repository</dt>
+                  <dd>{{ selectedModel.repoId }}</dd>
+                </div>
+                <div v-if="selectedModel.modelPath || selectedModel.path">
+                  <dt>Local path</dt>
+                  <dd>{{ selectedModel.modelPath || selectedModel.path }}</dd>
+                </div>
+              </dl>
+            </div>
+          </section>
+        </template>
+
+        <div
+          v-else
+          class="en-detail-empty"
+        >
+          <Box class="en-detail-empty-icon" />
+          <p>Select a model from the list to see details</p>
+        </div>
+      </section>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
-import log from 'electron-log'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import log from 'electron-log/renderer'
+import {
+  Box,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  Copy,
+  Download,
+  ExternalLink,
+  Heart,
+  Layers,
+  RefreshCw,
+  Search,
+  Star,
+  Trash2,
+  X
+} from '@lucide/vue'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
+import {
+  FORMAT_FILTERS,
+  MODEL_ROLES,
+  SORT_OPTIONS,
+  SOURCE_FILTERS,
+  USE_NONE,
+  applyCatalogFilters,
+  applyRoleChoice,
+  clearSpecificRole,
+  downloadMessage,
+  downloadProgress,
+  formatCompactCount,
+  formatRelativeDate,
+  getDownloadOption,
+  getModelCapabilities,
+  getModelFormat,
+  getModelQuantization,
+  getModelReadme,
+  getModelRuntime,
+  getModelSource,
+  getModelUpdatedDate,
+  getPopularModels,
+  getRoleAssignments,
+  getUseMenuOptions,
+  isAssignedToRole,
+  isDownloading,
+  isLocalModel,
+  isRemoteModel,
+  normalizeSelection,
+  resolveModelAuthor,
+  resolveModelId,
+  resolveModelName,
+  sortByPopularity
+} from './modelsViewHelpers'
+import { ATOMIC_MODEL_CATALOG } from 'common/elephantnote/atomicWorkspace'
 
-const activeTab = ref('local')
+const formatFilter = ref('all')
+const sourceFilter = ref('all')
+const sortOption = ref('best')
+const query = ref('')
 const isLoading = ref(false)
 const isSearching = ref(false)
-const query = ref('')
-const limit = ref(12)
 const localData = ref(null)
 const remoteData = ref(null)
-const activeModel = ref(null)
+const popularData = ref(null)
+const modelSelection = ref(normalizeSelection({}))
 const downloads = ref(new Map())
 const selectedModel = ref(null)
-
-const statusMessage = computed(() => {
-  if (isLoading.value) return 'Loading model catalog...'
-  if (isSearching.value) return 'Searching Hugging Face...'
-  return localData.value?.message || 'Browse, download, and activate models.'
-})
-
-const modelStats = computed(() => ({
-  local: allLocalModels.value.length,
-  remote: remoteModels.value.length,
-  active: activeModel.value ? 1 : 0,
-  downloading: downloads.value.size
-}))
-
-const allLocalModels = computed(() => Array.isArray(localData.value?.models) ? localData.value.models : [])
-const remoteModels = computed(() => Array.isArray(remoteData.value?.models) ? remoteData.value.models : [])
-
-const visibleModels = computed(() => {
-  if (activeTab.value === 'active') {
-    return activeModel.value ? [activeModel.value] : []
-  }
-  if (activeTab.value === 'discover') return remoteModels.value
-  return allLocalModels.value
-})
-
-const activeTabTitle = computed(() => {
-  if (activeTab.value === 'active') return 'Current active model'
-  if (activeTab.value === 'discover') return 'Hugging Face discovery'
-  return 'Installed models'
-})
-
-const activeTabDescription = computed(() => {
-  if (activeTab.value === 'active') return 'The model currently attached to the local runtime.'
-  if (activeTab.value === 'discover') return 'Remote catalog results ready to download.'
-  return 'Models present on disk and indexed by node-llama-cpp.'
-})
-
-const selectedModelTitle = computed(() => {
-  if (selectedModel.value) return selectedModel.value.name || selectedModel.value.id || 'Selected model'
-  if (activeModel.value) return activeModel.value.name || activeModel.value.id || 'Active model'
-  return 'Model details'
-})
+const useMenuOpen = ref(false)
 
 let stopDownloadProgress = null
+
+const allLocalModels = computed(() =>
+  Array.isArray(localData.value?.models) ? localData.value.models : []
+)
+const remoteModels = computed(() =>
+  Array.isArray(remoteData.value?.models) ? remoteData.value.models : []
+)
+const popularModels = computed(() => {
+  if (Array.isArray(popularData.value?.models) && popularData.value.models.length) {
+    return popularData.value.models
+  }
+  return getPopularModels({
+    catalog: ATOMIC_MODEL_CATALOG,
+    remote: remoteModels.value,
+    limit: 12
+  })
+})
+
+const allCatalogModels = computed(() =>
+  sortByPopularity([...allLocalModels.value, ...remoteModels.value, ...popularModels.value])
+)
+
+const visibleModels = computed(() =>
+  applyCatalogFilters({
+    models: allCatalogModels.value,
+    query: query.value,
+    format: formatFilter.value,
+    source: sourceFilter.value,
+    sort: sortOption.value
+  })
+)
+
+const emptyMessage = computed(() => {
+  if (query.value) return `No models found for "${query.value}".`
+  if (sourceFilter.value !== 'all' || formatFilter.value !== 'all') {
+    return 'No models match the current filters.'
+  }
+  return 'No models available yet. Try refreshing or searching Hugging Face.'
+})
+
+const useMenuOptions = computed(() => getUseMenuOptions(selectedModel.value || {}, modelSelection.value))
+const readme = computed(() => getModelReadme(selectedModel.value || {}))
+const downloadOption = computed(() => getDownloadOption(selectedModel.value || {}))
+
+const isSelected = (model) => {
+  const selectedId = resolveModelId(selectedModel.value)
+  const modelId = resolveModelId(model)
+  return Boolean(selectedId && modelId && selectedId === modelId)
+}
+
+const isDownloadingModel = (model) => isDownloading(model, downloads.value)
+const downloadPercent = (model) => downloadProgress(model, downloads.value)
+const downloadMessageFor = (model) => downloadMessage(model, downloads.value)
+
+const selectModel = (model) => {
+  selectedModel.value = model
+  useMenuOpen.value = false
+}
+
+const toggleUseMenu = () => {
+  useMenuOpen.value = !useMenuOpen.value
+}
+
+const chooseRole = async (choice) => {
+  const role = choice === USE_NONE ? '' : choice
+  const next = applyRoleChoice(modelSelection.value, role, selectedModel.value, choice)
+  modelSelection.value = next
+  useMenuOpen.value = false
+  try {
+    await elephantnoteClient.models.setSelection?.(next)
+  } catch (error) {
+    log.error('[models] setSelection failed', error)
+  }
+  const model = selectedModel.value
+  if (role && model && isRemoteModel(model) && !isLocalModel(model) && !isDownloadingModel(model)) {
+    download(model)
+  }
+}
+
+const clearRole = async (role) => {
+  const next = clearSpecificRole(modelSelection.value, role)
+  modelSelection.value = next
+  try {
+    await elephantnoteClient.models.setSelection?.(next)
+  } catch (error) {
+    log.error('[models] clearRole failed', error)
+  }
+}
+
+const copyModelId = () => {
+  const id = resolveModelId(selectedModel.value)
+  if (id && navigator?.clipboard) {
+    navigator.clipboard.writeText(id).catch(() => {})
+  }
+}
+
+const openModelCard = () => {
+  const repoId = selectedModel.value?.repoId || selectedModel.value?.id
+  if (!repoId) return
+  const url = repoId.includes('/')
+    ? `https://huggingface.co/${repoId}`
+    : `https://huggingface.co/models?search=${encodeURIComponent(repoId)}`
+  if (window?.open) window.open(url, '_blank', 'noopener')
+}
 
 const refresh = async () => {
   isLoading.value = true
   try {
-    const [local, active] = await Promise.allSettled([
+    const [local, selection] = await Promise.allSettled([
       elephantnoteClient.models.list(),
-      elephantnoteClient.models.active()
+      elephantnoteClient.models.getSelection?.()
     ])
-    if (local.status === 'fulfilled') localData.value = local.value
-    if (active.status === 'fulfilled') activeModel.value = active.value
-    if (!selectedModel.value) {
-      selectedModel.value = active.status === 'fulfilled'
-        ? active.value
-        : local.status === 'fulfilled'
-          ? local.value?.models?.[0] || null
-          : null
+    if (local.status === 'fulfilled') {
+      localData.value = local.value
+    }
+    if (selection.status === 'fulfilled' && selection.value) {
+      modelSelection.value = normalizeSelection(selection.value)
+    }
+    if (!selectedModel.value && visibleModels.value.length) {
+      selectedModel.value = visibleModels.value[0]
     }
   } catch (error) {
     log.error('[models] refresh failed', error)
   } finally {
     isLoading.value = false
+  }
+}
+
+const loadPopular = async () => {
+  try {
+    const result = await elephantnoteClient.models.searchHuggingFace({
+      query: '',
+      limit: 24,
+      sort: 'downloads',
+      direction: -1
+    })
+    popularData.value = result
+    if (!remoteData.value?.models?.length) remoteData.value = result
+    if (!selectedModel.value && visibleModels.value.length) {
+      selectedModel.value = visibleModels.value[0]
+    }
+  } catch (error) {
+    log.error('[models] loadPopular failed', error)
   }
 }
 
@@ -384,110 +619,86 @@ const searchRemote = async () => {
   try {
     remoteData.value = await elephantnoteClient.models.searchHuggingFace({
       query: query.value,
-      limit: Number(limit.value) || 12
+      limit: 24,
+      sort: 'downloads',
+      direction: -1
     })
-    activeTab.value = 'discover'
-    selectedModel.value = remoteData.value?.models?.[0] || selectedModel.value
+    if (visibleModels.value.length && !isSelected(selectedModel.value)) {
+      selectedModel.value = visibleModels.value[0]
+    }
   } catch (error) {
     log.error('[models] searchRemote failed', error)
+    remoteData.value = { models: [], message: error instanceof Error ? error.message : 'Search failed.' }
   } finally {
     isSearching.value = false
   }
 }
 
 const download = async (model) => {
-  if (!model?.id) return
-  downloads.value = new Map(downloads.value).set(model.id, { percent: 1, message: 'Starting download...' })
+  const id = resolveModelId(model)
+  if (!id) return
+  downloads.value = new Map(downloads.value).set(id, { percent: 1, message: 'Starting download…' })
   try {
-    const result = await elephantnoteClient.models.download({
-      id: model.id,
+    await elephantnoteClient.models.download({
+      id,
       repoId: model.repoId,
       provider: model.provider
     })
-    selectedModel.value = model
     await refresh()
-    return result
   } catch (error) {
-    downloads.value = new Map(downloads.value).set(model.id, {
+    downloads.value = new Map(downloads.value).set(id, {
       percent: 0,
       message: error instanceof Error ? error.message : 'Download failed.'
     })
-    return null
   }
 }
 
-const downloadAndActivate = async (model) => {
-  const result = await download(model)
-  if (!result?.modelPath) return
-  await elephantnoteClient.models.activate({
-    model: {
-      ...model,
-      id: result.id || model.id,
-      path: result.modelPath,
-      modelPath: result.modelPath,
-      provider: 'node-llama-cpp'
-    }
-  })
-  await refresh()
-}
-
-const activate = async (model) => {
-  await elephantnoteClient.models.activate({ model })
-  selectedModel.value = model
-  await refresh()
-}
-
-const deactivate = async (model) => {
-  await elephantnoteClient.models.deactivate({ modelRef: model?.path || model?.modelPath || model?.id })
-  await refresh()
+const cancelDownload = async (model) => {
+  const id = resolveModelId(model)
+  if (!id) return
+  try {
+    await elephantnoteClient.models.cancelDownload?.({ id })
+    const next = new Map(downloads.value)
+    next.delete(id)
+    downloads.value = next
+  } catch (error) {
+    log.error('[models] cancelDownload failed', error)
+  }
 }
 
 const remove = async (model) => {
-  await elephantnoteClient.models.remove({ modelRef: model?.path || model?.modelPath || model?.id })
-  await refresh()
-}
-
-const selectModel = (model) => {
-  selectedModel.value = model
-}
-
-const isSelectedModel = (model) => {
-  const selectedId = selectedModel.value?.id || selectedModel.value?.repoId || selectedModel.value?.name
-  const modelId = model?.id || model?.repoId || model?.name
-  return Boolean(selectedId && modelId && selectedId === modelId)
-}
-
-const isDownloading = (model) => {
-  return downloads.value.has(model.id || model.repoId || model.name)
-}
-
-const downloadProgress = (model) => {
-  return downloads.value.get(model.id || model.repoId || model.name)?.percent || 0
-}
-
-const downloadMessage = (model) => {
-  return downloads.value.get(model.id || model.repoId || model.name)?.message || ''
-}
-
-const formatSize = (value) => {
-  const bytes = Number(value) || 0
-  if (!bytes) return ''
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let size = bytes
-  let unit = 0
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024
-    unit += 1
+  const ref = model.path || model.modelPath || resolveModelId(model)
+  if (!ref) return
+  try {
+    await elephantnoteClient.models.remove({ modelRef: ref })
+    const next = applyRoleChoice(modelSelection.value, '', model, USE_NONE)
+    modelSelection.value = next
+    await elephantnoteClient.models.setSelection?.(next)
+    await refresh()
+  } catch (error) {
+    log.error('[models] remove failed', error)
   }
-  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`
 }
 
-const formatCompactCount = (value) => {
-  const count = Number(value) || 0
-  if (count >= 1000000) return `${(count / 1000000).toFixed(count >= 10000000 ? 0 : 1)}M`
-  if (count >= 1000) return `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}K`
-  return `${count}`
+const handleDocumentClick = (event) => {
+  if (!useMenuOpen.value) return
+  const target = event.target
+  if (!target || !target.closest || !target.closest('.en-use-menu')) {
+    useMenuOpen.value = false
+  }
 }
+
+const handleEscape = (event) => {
+  if (event.key === 'Escape') useMenuOpen.value = false
+}
+
+watch(visibleModels, (models) => {
+  if (!selectedModel.value && models.length) {
+    selectedModel.value = models[0]
+  } else if (selectedModel.value && !models.some((m) => isSelected(m))) {
+    selectedModel.value = models[0] || null
+  }
+})
 
 onMounted(() => {
   stopDownloadProgress = elephantnoteClient.models.onDownloadProgress?.((progress) => {
@@ -495,377 +706,896 @@ onMounted(() => {
     if (!key) return
     downloads.value = new Map(downloads.value).set(key, {
       percent: Number(progress.percent || 0),
-      message: progress.message || progress.phase || 'Downloading...'
+      message: progress.message || progress.phase || 'Downloading…'
     })
   }) || null
+  document.addEventListener('click', handleDocumentClick)
+  document.addEventListener('keydown', handleEscape)
   refresh()
+  loadPopular()
 })
 
 onBeforeUnmount(() => {
   stopDownloadProgress?.()
+  document.removeEventListener('click', handleDocumentClick)
+  document.removeEventListener('keydown', handleEscape)
   downloads.value = new Map()
 })
 </script>
 
 <style scoped>
 .en-models-view {
+  --lms-bg-app: #181818;
+  --lms-bg-surface: #222222;
+  --lms-bg-card: #2a2a2a;
+  --lms-bg-card-hover: #303030;
+  --lms-bg-input: #383838;
+  --lms-border-subtle: #3a3a3a;
+  --lms-border-strong: #505050;
+  --lms-text-primary: #f2f2f2;
+  --lms-text-secondary: #b8b8b8;
+  --lms-text-muted: #858585;
+  --lms-accent: #3f7df3;
+  --lms-accent-hover: #4d8cff;
+  --lms-accent-soft: rgba(63, 125, 243, 0.16);
+  --lms-purple: #6c5cff;
+  --lms-green: #4caf5c;
+  --lms-yellow: #d6a531;
+  --lms-danger: #ef5350;
+
   min-height: 0;
   flex: 1;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 14px;
-  padding: 6px 28px 28px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px 18px;
+  overflow: hidden;
+  background: var(--lms-bg-app);
+  color: var(--lms-text-primary);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+.en-models-topbar {
+  display: grid;
+  gap: 10px;
+}
+
+.en-models-searchbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 38px;
+  min-height: 40px;
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 12px;
+  background: var(--lms-bg-input);
+}
+
+.en-models-search-icon {
+  position: absolute;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--lms-text-muted);
+}
+
+.en-models-searchbar input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--lms-text-primary);
+  font-size: 14px;
+}
+
+.en-models-searchbar input:focus {
+  outline: none;
+}
+
+.en-models-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--lms-text-muted);
+  background: transparent;
+}
+
+.en-models-search-clear:hover {
+  color: var(--lms-text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.en-models-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.en-models-count {
+  color: var(--lms-text-muted);
+  font-size: 12px;
+  margin-right: 4px;
+}
+
+.en-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 999px;
+  background: var(--lms-bg-card);
+  color: var(--lms-text-secondary);
+  font-size: 12px;
+}
+
+.en-filter-pill span {
+  color: var(--lms-text-muted);
+}
+
+.en-filter-pill select {
+  border: 0;
+  background: transparent;
+  color: var(--lms-text-primary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.en-filter-pill select:focus {
+  outline: none;
+}
+
+.en-models-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 8px;
+  color: var(--lms-text-secondary);
+  background: var(--lms-bg-card);
+}
+
+.en-models-refresh:hover {
+  color: var(--lms-text-primary);
+  border-color: var(--lms-border-strong);
+}
+
+.en-models-refresh:disabled {
+  opacity: 0.5;
+}
+
+.en-models-body {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 38fr) minmax(0, 62fr);
+  gap: 12px;
   overflow: hidden;
 }
 
-.en-models-hero {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
-  padding: 18px;
-  border: 1px solid var(--en-border);
-  border-radius: 20px;
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--en-primary) 10%, transparent), transparent 40%),
-    color-mix(in srgb, var(--en-surface) 94%, transparent);
-}
-
-.en-models-hero-copy {
-  display: grid;
-  gap: 8px;
-}
-
-.en-models-kicker {
-  margin: 0;
-  color: var(--en-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 11px;
-}
-
-.en-models-hero p {
-  margin: 0;
-  color: var(--en-muted);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.en-models-hero h1 {
-  margin: 0;
-  font-size: 28px;
-}
-
-.en-models-hero span {
-  display: block;
-  color: var(--en-muted);
-  letter-spacing: normal;
-  text-transform: none;
-  font-size: 13px;
-}
-
-.en-models-summary {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.en-models-summary span,
-.en-model-state {
-  border: 1px solid var(--en-border);
-  border-radius: 999px;
-  padding: 5px 10px;
-  color: var(--en-muted);
-  background: var(--en-bg);
-  font-size: 12px;
-}
-
-.en-models-hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.en-models-hero-actions button,
-.en-models-toolbar button,
-.en-model-card-actions button {
-  min-height: 34px;
-  border: 1px solid var(--en-border);
-  border-radius: 10px;
-  padding: 0 12px;
-  color: var(--en-text);
-  background: var(--en-bg);
-}
-
-.en-models-hero-actions button.active {
-  background: color-mix(in srgb, var(--en-primary) 12%, var(--en-bg));
-}
-
-.en-models-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: end;
-}
-
-.en-models-toolbar label {
-  display: grid;
-  gap: 6px;
-}
-
-.en-models-toolbar span {
-  color: var(--en-muted);
-  font-size: 12px;
-}
-
-.en-models-toolbar input {
-  min-height: 38px;
-  min-width: 240px;
-  border: 1px solid var(--en-border);
-  border-radius: 10px;
-  padding: 0 12px;
-  color: var(--en-text);
-  background: var(--en-bg);
-}
-
-.en-models-layout {
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) 320px;
-  gap: 14px;
-}
-
-.en-models-main,
-.en-models-sidebar {
+.en-models-list-column {
   min-height: 0;
   overflow: auto;
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 14px;
+  background: var(--lms-bg-surface);
 }
 
-.en-models-section,
-.en-models-panel {
-  border: 1px solid var(--en-border);
-  border-radius: 22px;
-  padding: 16px;
-  background: color-mix(in srgb, var(--en-surface) 94%, transparent);
-  backdrop-filter: blur(14px);
-}
-
-.en-models-section-head {
-  display: flex;
-  justify-content: space-between;
+.en-models-detail-column {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
   gap: 12px;
-  align-items: flex-start;
-  margin-bottom: 14px;
-}
-
-.en-models-section h2,
-.en-models-panel h3 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.en-models-section p,
-.en-models-panel p,
-.en-models-panel small,
-.en-models-empty,
-.en-models-section-head p {
-  color: var(--en-muted);
-}
-
-.en-models-pill {
-  border: 1px solid var(--en-border);
-  border-radius: 999px;
-  padding: 5px 10px;
-  color: var(--en-muted);
-  background: var(--en-bg);
+  align-content: start;
+  padding: 4px;
 }
 
 .en-models-empty {
-  padding: 18px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--lms-text-muted);
+  font-size: 13px;
 }
 
-.en-models-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
+.en-models-empty p {
+  margin: 0 0 12px;
 }
 
-.en-model-card {
+.en-models-empty button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--lms-border-strong);
+  border-radius: 8px;
+  color: var(--lms-text-primary);
+  background: var(--lms-bg-card);
+  font-size: 12px;
+}
+
+.en-models-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
   display: grid;
+  gap: 2px;
+}
+
+.en-model-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--en-border);
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--en-bg) 88%, var(--en-surface)), var(--en-bg));
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
   cursor: pointer;
-  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  transition: background-color 100ms ease, border-color 100ms ease;
 }
 
-.en-model-card.active {
-  border-color: color-mix(in srgb, var(--en-primary) 48%, var(--en-border));
-  background: color-mix(in srgb, var(--en-primary) 8%, var(--en-bg));
+.en-model-row:hover {
+  background: var(--lms-bg-card-hover);
+  border-color: var(--lms-border-subtle);
 }
 
-.en-model-card.selected {
-  border-color: color-mix(in srgb, var(--en-primary) 60%, var(--en-border));
-  box-shadow: 0 18px 40px color-mix(in srgb, var(--en-primary) 12%, transparent);
-  transform: translateY(-1px);
+.en-model-row.selected {
+  background: var(--lms-accent);
+  border-color: var(--lms-accent-hover);
+  color: #fff;
 }
 
-.en-model-card.downloading {
-  border-color: color-mix(in srgb, #f59e0b 50%, var(--en-border));
+.en-model-row.selected .en-model-row-author,
+.en-model-row.selected .en-stat,
+.en-model-row.selected .en-stat-date,
+.en-model-row.selected .en-cap-badge {
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.en-model-card header {
+.en-model-row.selected .en-cap-badge {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.en-model-row.selected .en-model-row-icon,
+.en-model-row.selected .en-stat .en-icon {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.en-model-row-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--lms-bg-card);
+  color: var(--lms-text-secondary);
+}
+
+.en-model-row.selected .en-model-row-icon {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.en-model-row-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.en-model-row-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lms-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.en-model-row-author {
+  font-size: 11px;
+  color: var(--lms-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.en-model-row-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.en-cap-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 6px;
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 999px;
+  background: var(--lms-bg-card);
+  color: var(--lms-text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.en-cap-badge.cap-vision {
+  color: var(--lms-yellow);
+  border-color: rgba(214, 165, 49, 0.4);
+}
+
+.en-cap-badge.cap-tooluse {
+  color: var(--lms-accent);
+  border-color: rgba(63, 125, 243, 0.4);
+}
+
+.en-cap-badge.cap-installed {
+  color: var(--lms-green);
+  border-color: rgba(76, 175, 92, 0.4);
+}
+
+.en-model-row-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--lms-text-muted);
+  text-align: right;
+}
+
+.en-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.en-stat .en-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.en-stat-date {
+  color: var(--lms-text-muted);
+  font-size: 10px;
+}
+
+.en-detail-empty {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  align-content: center;
+  height: 100%;
+  color: var(--lms-text-muted);
+  text-align: center;
+}
+
+.en-detail-empty-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--lms-border-strong);
+}
+
+.en-detail-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.en-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 14px;
+  background: var(--lms-bg-surface);
+}
+
+.en-detail-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--lms-bg-card);
+  color: var(--lms-text-secondary);
+}
+
+.en-detail-icon .en-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.en-detail-title {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.en-detail-title strong {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--lms-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.en-detail-title small {
+  color: var(--lms-text-muted);
+  font-size: 12px;
+}
+
+.en-detail-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.en-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 8px;
+  color: var(--lms-text-secondary);
+  background: var(--lms-bg-card);
+}
+
+.en-icon-btn:hover {
+  color: var(--lms-text-primary);
+  border-color: var(--lms-border-strong);
+}
+
+.en-detail-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 0 4px;
+  color: var(--lms-text-secondary);
+  font-size: 12px;
+}
+
+.en-detail-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.en-detail-stats .en-icon {
+  width: 13px;
+  height: 13px;
+  color: var(--lms-text-muted);
+}
+
+.en-detail-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.en-meta-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 999px;
+  background: var(--lms-bg-card);
+  color: var(--lms-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.en-meta-badge.badge-format {
+  color: var(--lms-accent);
+  border-color: rgba(63, 125, 243, 0.4);
+  background: rgba(63, 125, 243, 0.1);
+}
+
+.en-meta-badge.badge-quant {
+  color: var(--lms-purple);
+  border-color: rgba(108, 92, 255, 0.4);
+  background: rgba(108, 92, 255, 0.1);
+}
+
+.en-meta-badge.badge-caps {
+  color: var(--lms-yellow);
+  border-color: rgba(214, 165, 49, 0.4);
+  background: rgba(214, 165, 49, 0.1);
+}
+
+.en-detail-card {
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 14px;
+  background: var(--lms-bg-surface);
+  overflow: hidden;
+}
+
+.en-detail-card header {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  align-items: flex-start;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--lms-border-subtle);
+  background: var(--lms-bg-card);
 }
 
-.en-model-card header div {
+.en-detail-card header strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lms-text-primary);
+}
+
+.en-detail-card header small {
+  color: var(--lms-text-muted);
+  font-size: 11px;
+}
+
+.en-download-card .en-download-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.en-download-info {
   min-width: 0;
   display: grid;
   gap: 4px;
 }
 
-.en-model-card header strong {
-  color: var(--en-text);
-}
-
-.en-model-card header span,
-.en-model-card p,
-.en-model-card small,
-.en-model-card-meta {
-  color: var(--en-muted);
-}
-
-.en-model-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.en-model-progress {
-  height: 8px;
+.en-download-info strong {
+  font-size: 13px;
+  color: var(--lms-text-primary);
   overflow: hidden;
-  border-radius: 999px;
-  background: var(--en-soft-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.en-model-progress div {
-  height: 100%;
-  min-width: 4%;
-  border-radius: inherit;
-  background: var(--en-primary);
+.en-download-info span {
+  font-size: 12px;
+  color: var(--lms-text-muted);
 }
 
-.en-model-card-actions {
+.en-download-action {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
 }
 
-.en-model-card-actions button:disabled {
+.en-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--lms-accent);
+  border-radius: 9px;
+  background: var(--lms-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.en-btn-primary:hover {
+  background: var(--lms-accent-hover);
+  border-color: var(--lms-accent-hover);
+}
+
+.en-btn-primary.assigned {
+  background: var(--lms-accent-soft);
+  color: var(--lms-accent);
+}
+
+.en-btn-primary .en-chevron {
+  width: 13px;
+  height: 13px;
+}
+
+.en-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--lms-border-strong);
+  border-radius: 9px;
+  background: var(--lms-bg-card);
+  color: var(--lms-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.en-btn-secondary:hover {
+  border-color: var(--lms-accent);
+  color: var(--lms-accent);
+}
+
+.en-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--lms-text-secondary);
+  font-size: 13px;
+}
+
+.en-btn-ghost:hover {
+  color: var(--lms-text-primary);
+  background: var(--lms-bg-card-hover);
+}
+
+.en-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(239, 83, 80, 0.4);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--lms-danger);
+  font-size: 13px;
+}
+
+.en-btn-danger:hover {
+  background: rgba(239, 83, 80, 0.1);
+}
+
+.en-btn-danger:disabled {
   opacity: 0.5;
 }
 
-.en-models-sidebar {
-  display: grid;
-  gap: 12px;
+.en-use-menu {
+  position: relative;
 }
 
-.en-models-panel {
-  display: grid;
-  gap: 8px;
-  align-content: start;
-}
-
-.en-model-inspector-meta,
-.en-model-inspector-grid,
-.en-model-inspector-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.en-model-inspector-meta span {
-  border: 1px solid var(--en-border);
-  border-radius: 999px;
-  padding: 5px 10px;
-  color: var(--en-muted);
-  background: var(--en-bg);
-  font-size: 12px;
-}
-
-.en-model-inspector-summary {
-  margin: 4px 0 0;
-  color: var(--en-muted);
-  line-height: 1.5;
-}
-
-.en-model-inspector-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.en-model-inspector-grid div {
+.en-use-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  min-width: 256px;
+  padding: 8px;
+  border: 1px solid var(--lms-border-strong);
+  border-radius: 12px;
+  background: var(--lms-bg-surface);
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.5);
   display: grid;
   gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid var(--en-border);
-  border-radius: 14px;
-  background: var(--en-bg);
 }
 
-.en-model-inspector-grid small {
-  color: var(--en-muted);
+.en-use-popover-title {
+  margin: 2px 8px 6px;
+  color: var(--lms-text-muted);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.en-model-inspector-grid strong {
-  color: var(--en-text);
+.en-use-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--lms-text-primary);
+  text-align: left;
+}
+
+.en-use-option:hover {
+  background: var(--lms-bg-card-hover);
+}
+
+.en-use-option.selected {
+  border-color: rgba(63, 125, 243, 0.4);
+  background: var(--lms-accent-soft);
+}
+
+.en-use-option-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.en-use-option-main strong {
+  font-size: 13px;
+}
+
+.en-use-option-main small {
+  color: var(--lms-text-muted);
+  font-size: 11px;
+}
+
+.en-use-option-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.en-use-tag.recommended {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 6px;
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 999px;
+  background: var(--lms-bg-card);
+  color: var(--lms-text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.en-use-check {
+  width: 15px;
+  height: 15px;
+  color: var(--lms-accent);
+}
+
+.en-model-progress {
+  height: 4px;
+  background: var(--lms-bg-input);
+}
+
+.en-model-progress div {
+  height: 100%;
+  min-width: 4%;
+  background: var(--lms-accent);
+  transition: width 160ms ease;
+}
+
+.en-download-card small {
+  display: block;
+  padding: 8px 16px 12px;
+  color: var(--lms-text-muted);
+  font-size: 11px;
+}
+
+.en-roles-card .en-role-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.en-role-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 9px;
+  background: var(--lms-bg-card);
+}
+
+.en-role-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.en-role-info strong {
+  font-size: 13px;
+  color: var(--lms-text-primary);
+}
+
+.en-role-info small {
+  color: var(--lms-text-muted);
+  font-size: 11px;
+}
+
+.en-role-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.en-role-active {
+  color: var(--lms-green);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.en-role-empty {
+  color: var(--lms-text-muted);
+  font-size: 12px;
+}
+
+.en-role-clear {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.en-readme-body {
+  padding: 16px;
+  color: var(--lms-text-secondary);
+}
+
+.en-readme-body h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: var(--lms-text-primary);
+}
+
+.en-readme-body p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.en-readme-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.en-readme-meta div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--lms-border-subtle);
+  border-radius: 9px;
+  background: var(--lms-bg-card);
+}
+
+.en-readme-meta dt {
+  color: var(--lms-text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.en-readme-meta dd {
+  margin: 0;
+  color: var(--lms-text-primary);
   font-size: 13px;
   word-break: break-word;
 }
 
-.en-model-inspector-actions button {
-  min-height: 34px;
-  border: 1px solid var(--en-border);
-  border-radius: 12px;
-  padding: 0 12px;
-  color: var(--en-text);
-  background: var(--en-bg);
+.en-icon.spinning {
+  animation: en-models-spin 0.9s linear infinite;
 }
 
-.en-model-inspector-actions button:disabled {
-  opacity: 0.5;
+@keyframes en-models-spin {
+  to { transform: rotate(360deg); }
 }
 
-.en-models-active-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.en-models-active-meta span {
-  border: 1px solid var(--en-border);
-  border-radius: 999px;
-  padding: 5px 10px;
-  color: var(--en-muted);
-  background: var(--en-bg);
-  font-size: 12px;
-}
-
-@media (max-width: 980px) {
-  .en-models-layout {
+@media (max-width: 920px) {
+  .en-models-body {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(220px, 38fr) minmax(0, 62fr);
+  }
+  .en-models-view {
+    padding: 12px;
   }
 }
 </style>

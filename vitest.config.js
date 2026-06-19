@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import vue from '@vitejs/plugin-vue'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -11,6 +12,7 @@ export default defineConfig({
     include: ['test/unit/specs/**/*.spec.js', 'Elephant/tests/unit/**/*.spec.js'],
     globals: true,
   },
+  plugins: [vue()],
   resolve: {
     alias: {
       'elephant-back': resolve(__dirname, 'Elephant/back/app'),

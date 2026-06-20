@@ -101,13 +101,7 @@ const remoteModels = computed(() => Array.isArray(remoteData.value?.models) ? re
 const getModelKey = (model = {}) => String(model.repoId || model.id || model.modelId || model.path || model.modelPath || resolveModelName(model)).toLowerCase()
 const firstGgufFile = (model = {}) => model.fileName || model.filename || (Array.isArray(model.siblings) ? model.siblings.find((s) => String(s.rfilename || '').toLowerCase().endsWith('.gguf'))?.rfilename : '') || ''
 const getRepoId = (model = {}) => String(model.repoId || model.id || model.modelId || '').trim()
-const isGgufCandidate = (model = {}) => {
-  if (isLocalModel(model)) return true
-  if (firstGgufFile(model)) return true
-  return [model.repoId, model.id, model.modelId, model.name, model.fileName, model.filename].filter(Boolean).some((value) => /gguf|\.gguf$/i.test(String(value)))
-}
 const dedupeModels = (models = []) => Array.from(models.reduce((map, model) => {
-  if (!isGgufCandidate(model)) return map
   const key = getModelKey(model)
   if (!key) return map
   const previous = map.get(key)
@@ -116,7 +110,7 @@ const dedupeModels = (models = []) => Array.from(models.reduce((map, model) => {
 }, new Map()).values())
 const allModels = computed(() => sortByPopularity(dedupeModels([...localModels.value, ...remoteModels.value])))
 const visibleModels = computed(() => dedupeModels(applyCatalogFilters({ models: allModels.value, query: query.value, format: formatFilter.value, source: sourceFilter.value, sort: sortOption.value })))
-const emptyMessage = computed(() => query.value ? `No GGUF models found for "${query.value}".` : 'No GGUF models returned by the model library yet.')
+const emptyMessage = computed(() => query.value ? `No models found for "${query.value}".` : 'No models returned by the model library yet.')
 const selectedInstalledModel = computed(() => findInstalledMatch(selectedModel.value))
 const roleTargetModel = computed(() => selectedInstalledModel.value || selectedModel.value)
 const downloadOption = computed(() => getDownloadOption(selectedInstalledModel.value || selectedModel.value || {}))
@@ -162,7 +156,8 @@ const loadLocalModels = async() => {
   if (selection) modelSelection.value = normalizeSelection(selection)
 }
 const loadRemoteModels = async() => {
-  remoteData.value = await elephantnoteClient.models.searchHuggingFace({ query: query.value, limit: 48, sort: sortForBackend(), direction: -1, libraryName: 'gguf' })
+  const searchQuery = query.value ? `${query.value} gguf` : 'gguf'
+  remoteData.value = await elephantnoteClient.models.searchHuggingFace({ query: searchQuery, limit: 48, sort: sortForBackend(), direction: -1, libraryName: 'gguf' })
 }
 const refreshAll = async() => {
   isLoading.value = true

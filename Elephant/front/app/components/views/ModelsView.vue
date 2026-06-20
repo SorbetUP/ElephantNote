@@ -3,23 +3,8 @@
     <aside class="en-models-list-column">
       <div class="en-models-searchbar">
         <Search class="en-models-search-icon" />
-        <input
-          v-model.trim="query"
-          type="text"
-          placeholder="Search GGUF models"
-          autocomplete="off"
-          spellcheck="false"
-          @keyup.enter="loadRemoteModels"
-        />
-        <button
-          v-if="query"
-          type="button"
-          class="en-models-search-clear"
-          aria-label="Clear search"
-          @click="query = ''"
-        >
-          <X class="en-icon" />
-        </button>
+        <input v-model.trim="query" type="text" placeholder="Search GGUF models" autocomplete="off" spellcheck="false" @keyup.enter="loadRemoteModels" />
+        <button v-if="query" type="button" class="en-models-search-clear" aria-label="Clear search" @click="query = ''"><X class="en-icon" /></button>
       </div>
 
       <div class="en-models-filters">
@@ -50,16 +35,15 @@
       <template v-if="selectedModel">
         <header class="en-detail-header">
           <div class="en-detail-icon"><Box class="en-icon" /></div>
-          <div class="en-detail-title"><strong>{{ detailTitle }}</strong><small>{{ detailSubtitle }}</small></div>
-          <button type="button" class="en-icon-btn" @click="copyModelId"><Copy class="en-icon" /></button>
-          <button type="button" class="en-icon-btn" @click="openModelCard"><ExternalLink class="en-icon" /></button>
+          <div class="en-detail-title"><strong>{{ detailTitle }}</strong></div>
+          <button type="button" class="en-icon-btn" title="Copy model id" aria-label="Copy model id" @click="copyModelId"><Copy class="en-icon" /></button>
+          <button type="button" class="en-icon-btn" title="Open model card" aria-label="Open model card" @click="openModelCard"><ExternalLink class="en-icon" /></button>
         </header>
 
         <div class="en-detail-stats"><span v-if="selectedModel.downloads != null">↓ {{ formatCompactCount(selectedModel.downloads) }} downloads</span><span v-if="selectedModel.likes != null">☆ {{ formatCompactCount(selectedModel.likes) }} stars</span><span v-if="getModelUpdatedDate(selectedModel)">Updated {{ formatRelativeDate(getModelUpdatedDate(selectedModel)) }}</span></div>
         <div class="en-detail-badges"><span class="en-meta-badge">Format: {{ getModelFormat(selectedModel) }}</span><span v-if="getModelQuantization(selectedModel)" class="en-meta-badge">Quantization: {{ getModelQuantization(selectedModel) }}</span><span class="en-meta-badge">Runtime: {{ getModelRuntime(selectedModel) }}</span><span class="en-meta-badge">Source: {{ getModelSource(selectedModel) }}</span></div>
 
         <section class="en-detail-card en-download-card">
-          <header><strong>Model options</strong><small>{{ modelOptionStatus }}</small></header>
           <div class="en-download-row">
             <div class="en-download-info"><strong>{{ downloadOption.fileName }}</strong><span>{{ downloadOption.format }}{{ downloadOption.quantization ? ` · ${downloadOption.quantization}` : '' }} · {{ downloadOption.sizeLabel || 'unknown size' }}</span></div>
             <div class="en-model-actions">
@@ -128,7 +112,6 @@ const selectedInstalledModel = computed(() => findInstalledMatch(selectedModel.v
 const roleTargetModel = computed(() => selectedInstalledModel.value || selectedModel.value)
 const downloadOption = computed(() => getDownloadOption(selectedInstalledModel.value || selectedModel.value || {}))
 const canDownload = computed(() => selectedModel.value && isRemoteModel(selectedModel.value) && !selectedInstalledModel.value)
-const modelOptionStatus = computed(() => selectedInstalledModel.value ? 'Applicable model file already downloaded' : downloadOption.value.status)
 const detailTitle = computed(() => {
   const model = selectedModel.value || {}
   const repoId = String(model.repoId || model.id || '').trim()
@@ -136,7 +119,6 @@ const detailTitle = computed(() => {
   const author = resolveModelAuthor(model)
   return author ? `${author}/${resolveModelName(model)}` : resolveModelName(model)
 })
-const detailSubtitle = computed(() => selectedInstalledModel.value ? `Installed · ${selectedInstalledModel.value.path || selectedInstalledModel.value.modelPath || ''}` : getModelSource(selectedModel.value || {}))
 const readmeStatus = computed(() => readmeLoading.value ? 'Loading' : readmeText.value ? 'Hugging Face' : 'Unavailable')
 
 const sortForBackend = () => sortOption.value === 'likes' ? 'likes' : sortOption.value === 'updated' ? 'lastModified' : 'downloads'
@@ -272,13 +254,63 @@ const remove = async(model) => {
   await elephantnoteClient.models.setSelection?.(next)
   await loadLocalModels()
 }
-const copyModelId = () => {
-  const id = resolveModelId(selectedModel.value)
-  if (id && navigator?.clipboard) navigator.clipboard.writeText(id).catch(() => {})
+
+const copyText = async(text = '') => {
+  const value = String(text || '').trim()
+  if (!value) return false
+  const bridgeWrite = globalThis.window?.elephantnote?.clipboard?.writeText
+  if (typeof bridgeWrite === 'function') {
+    await bridgeWrite(value)
+    return true
+  }
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value)
+    return true
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+  return true
 }
-const openModelCard = () => {
+const copyModelId = async() => {
+  try {
+    await copyText(resolveModelId(selectedModel.value))
+  } catch (error) {
+    log.error('[models] copy model id failed', error)
+  }
+}
+const openExternalUrl = async(url = '') => {
+  const target = String(url || '').trim()
+  if (!target) return
+  const openers = [
+    globalThis.window?.elephantnote?.shell?.openExternal,
+    globalThis.window?.elephantnote?.openExternal,
+    globalThis.window?.elephantnote?.sitePreview?.openExternal,
+    elephantnoteClient.sitePreview?.openExternal
+  ]
+  for (const opener of openers) {
+    if (typeof opener !== 'function') continue
+    try {
+      await opener(target)
+      return
+    } catch {
+      // Try the next app bridge or browser fallback.
+    }
+  }
+  const opened = globalThis.window?.open?.(target, '_blank', 'noopener,noreferrer')
+  if (!opened) globalThis.location.href = target
+}
+const openModelCard = async() => {
   const id = selectedModel.value?.repoId || selectedModel.value?.id
-  if (id && window?.open) window.open(id.includes('/') ? `https://huggingface.co/${id}` : `https://huggingface.co/models?search=${encodeURIComponent(id)}`, '_blank', 'noopener')
+  if (!id) return
+  const url = id.includes('/') ? `https://huggingface.co/${id}` : `https://huggingface.co/models?search=${encodeURIComponent(id)}`
+  await openExternalUrl(url).catch((error) => log.error('[models] open model card failed', error))
 }
 
 const escapeHtml = (value = '') => String(value).replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char])
@@ -348,5 +380,5 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.en-models-view{--bg:#181818;--surface:#222;--card:#2a2a2a;--input:#383838;--line:#3a3a3a;--strong:#505050;--text:#f2f2f2;--muted:#858585;--accent:#3f7df3;display:grid;grid-template-columns:minmax(300px,34fr) minmax(0,66fr);gap:12px;min-height:0;flex:1;padding:16px;background:var(--bg);color:var(--text);font:14px Inter,system-ui,sans-serif;overflow:hidden}.en-models-list-column,.en-models-detail-column{min-height:0;overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-models-list-column{display:grid;grid-template-rows:auto auto minmax(0,1fr)}.en-models-detail-column{display:grid;align-content:start;gap:12px;padding:14px}.en-models-searchbar{position:relative;display:flex;align-items:center;gap:8px;margin:12px;padding:0 44px 0 38px;min-height:40px;border:1px solid var(--line);border-radius:12px;background:var(--input)}.en-models-search-icon{position:absolute;left:12px;width:16px;height:16px;color:var(--muted)}input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text)}input::-webkit-search-cancel-button{display:none}.en-models-search-clear{position:absolute;right:8px;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center}.en-models-search-clear:hover{background:#2b2b2b;color:var(--text)}button,select{border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);min-height:30px}.en-models-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0 12px 12px;color:var(--muted);font-size:12px}.en-filter-pill{display:inline-flex;align-items:center;gap:6px;padding:0 10px;height:30px;border:1px solid var(--line);border-radius:999px;background:var(--card)}.en-filter-pill select{border:0;background:transparent}.en-models-list{list-style:none;margin:0;padding:6px;overflow:auto}.en-model-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;border-radius:10px;cursor:pointer}.en-model-row:hover{background:#303030}.en-model-row.selected{background:var(--accent);color:#fff}.en-model-row-icon,.en-detail-icon{display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--card)}.en-model-row-icon{width:28px;height:28px}.en-model-row-main{min-width:0;display:grid;gap:2px}.en-model-row-name,.en-model-row-author{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-model-row-author,.en-model-row-stats,.en-detail-stats,.en-detail-title small,.en-download-info span,.en-detail-card header small,.en-readme-loading,.en-models-empty{color:var(--muted)}.en-model-row-badges,.en-detail-badges,.en-model-actions,.en-role-grid{display:flex;gap:6px;flex-wrap:wrap}.en-cap-badge,.en-meta-badge,.en-status-pill{display:inline-flex;align-items:center;padding:2px 7px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:11px}.en-status-pill{height:30px;padding:0 12px;color:#bfe7c5;border-color:#4caf5c}.cap-installed{color:#bfe7c5}.en-model-row-stats{display:grid;justify-items:end;font-size:11px}.en-detail-header{display:grid;grid-template-columns:40px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-detail-icon{width:40px;height:40px}.en-detail-title strong{font-size:18px;overflow-wrap:anywhere}.en-icon-btn{width:32px}.en-detail-stats,.en-detail-badges{padding:0 4px}.en-detail-card{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}.en-detail-card header,.en-download-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 16px}.en-detail-card header{border-bottom:1px solid var(--line);background:var(--card)}.en-download-info{min-width:0;display:grid;gap:4px}.en-download-info strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-model-actions{justify-content:flex-end;align-items:center}.en-btn-primary{background:var(--accent);border-color:var(--accent);padding:0 14px}.en-btn-primary:disabled{opacity:.55}.en-btn-danger{color:#ef5350;padding:0 12px}.en-role-grid{justify-content:flex-end;padding:0 16px 14px}.en-role-button{min-width:112px;padding:0 16px;border-color:var(--strong);font-weight:600}.en-role-button.selected{border-color:#4caf5c;color:#bfe7c5;background:rgba(76,175,92,.12)}.en-role-button.selected:hover{background:rgba(76,175,92,.18)}.en-model-progress{height:4px;background:var(--input)}.en-model-progress div{height:100%;background:var(--accent)}.en-download-card small{display:block;padding:8px 16px 12px}.en-readme-loading{padding:16px}.en-readme-body{max-height:min(58vh,680px);min-height:260px;overflow:auto;margin:16px;padding:18px;border:1px solid var(--line);border-radius:12px;background:#1d1d1d;color:#bdbdbd;line-height:1.65}.en-readme-body :deep(h1),.en-readme-body :deep(h2),.en-readme-body :deep(h3){color:var(--text);margin:1.1em 0 .45em}.en-readme-body :deep(p){margin:.65em 0}.en-readme-body :deep(a){color:#82aaff}.en-readme-body :deep(code){border-radius:4px;background:#303030;padding:.1em .35em}.en-readme-body :deep(pre){overflow:auto;border-radius:8px;background:#151515;padding:12px}.en-readme-body :deep(ul){padding-left:1.5em}.en-detail-empty{height:100%;display:grid;place-items:center;color:var(--muted)}.en-icon{width:16px;height:16px}@keyframes spin{to{transform:rotate(360deg)}}.spinning{animation:spin .9s linear infinite}@media(max-width:920px){.en-models-view{grid-template-columns:1fr}.en-download-row{display:grid}.en-model-actions,.en-role-grid{justify-content:flex-start}}
+.en-models-view{--bg:#181818;--surface:#222;--card:#2a2a2a;--input:#383838;--line:#3a3a3a;--strong:#505050;--text:#f2f2f2;--muted:#858585;--accent:#3f7df3;display:grid;grid-template-columns:minmax(300px,34fr) minmax(0,66fr);gap:12px;min-height:0;flex:1;padding:16px;background:var(--bg);color:var(--text);font:14px Inter,system-ui,sans-serif;overflow:hidden}.en-models-list-column,.en-models-detail-column{min-height:0;overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-models-list-column{display:grid;grid-template-rows:auto auto minmax(0,1fr)}.en-models-detail-column{display:grid;align-content:start;gap:12px;padding:14px}.en-models-searchbar{position:relative;display:flex;align-items:center;gap:8px;margin:12px;padding:0 44px 0 38px;min-height:40px;border:1px solid var(--line);border-radius:12px;background:var(--input)}.en-models-search-icon{position:absolute;left:12px;width:16px;height:16px;color:var(--muted)}input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text)}input::-webkit-search-cancel-button{display:none}.en-models-search-clear{position:absolute;right:8px;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center}.en-models-search-clear:hover{background:#2b2b2b;color:var(--text)}button,select{border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);min-height:30px}.en-models-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0 12px 12px;color:var(--muted);font-size:12px}.en-filter-pill{display:inline-flex;align-items:center;gap:6px;padding:0 10px;height:30px;border:1px solid var(--line);border-radius:999px;background:var(--card)}.en-filter-pill select{border:0;background:transparent}.en-models-list{list-style:none;margin:0;padding:6px;overflow:auto}.en-model-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;border-radius:10px;cursor:pointer}.en-model-row:hover{background:#303030}.en-model-row.selected{background:var(--accent);color:#fff}.en-model-row-icon,.en-detail-icon{display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--card)}.en-model-row-icon{width:28px;height:28px}.en-model-row-main{min-width:0;display:grid;gap:2px}.en-model-row-name,.en-model-row-author{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-model-row-author,.en-model-row-stats,.en-detail-stats,.en-download-info span,.en-readme-loading,.en-models-empty{color:var(--muted)}.en-model-row-badges,.en-detail-badges,.en-model-actions,.en-role-grid{display:flex;gap:6px;flex-wrap:wrap}.en-cap-badge,.en-meta-badge,.en-status-pill{display:inline-flex;align-items:center;padding:2px 7px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:11px}.en-status-pill{height:30px;padding:0 12px;color:#bfe7c5;border-color:#4caf5c}.cap-installed{color:#bfe7c5}.en-model-row-stats{display:grid;justify-items:end;font-size:11px}.en-detail-header{display:grid;grid-template-columns:40px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-detail-icon{width:40px;height:40px}.en-detail-title strong{font-size:18px;overflow-wrap:anywhere}.en-icon-btn{width:32px}.en-detail-stats,.en-detail-badges{padding:0 4px}.en-detail-card{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}.en-download-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px 10px}.en-download-info{min-width:0;display:grid;gap:4px}.en-download-info strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-model-actions{justify-content:flex-end;align-items:center}.en-btn-primary{background:var(--accent);border-color:var(--accent);padding:0 14px}.en-btn-primary:disabled{opacity:.55}.en-btn-danger{color:#ef5350;padding:0 12px}.en-role-grid{justify-content:flex-end;padding:0 16px 14px}.en-role-button{min-width:112px;padding:0 16px;border-color:var(--strong);font-weight:600}.en-role-button.selected{border-color:#4caf5c;color:#bfe7c5;background:rgba(76,175,92,.12)}.en-role-button.selected:hover{background:rgba(76,175,92,.18)}.en-model-progress{height:4px;background:var(--input)}.en-model-progress div{height:100%;background:var(--accent)}.en-download-card small{display:block;padding:8px 16px 12px}.en-readme-card header{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--card)}.en-readme-card header small{color:var(--muted)}.en-readme-loading{padding:16px}.en-readme-body{max-height:min(58vh,680px);min-height:260px;overflow:auto;margin:16px;padding:18px;border:1px solid var(--line);border-radius:12px;background:#1d1d1d;color:#bdbdbd;line-height:1.65}.en-readme-body :deep(h1),.en-readme-body :deep(h2),.en-readme-body :deep(h3){color:var(--text);margin:1.1em 0 .45em}.en-readme-body :deep(p){margin:.65em 0}.en-readme-body :deep(a){color:#82aaff}.en-readme-body :deep(code){border-radius:4px;background:#303030;padding:.1em .35em}.en-readme-body :deep(pre){overflow:auto;border-radius:8px;background:#151515;padding:12px}.en-readme-body :deep(ul){padding-left:1.5em}.en-detail-empty{height:100%;display:grid;place-items:center;color:var(--muted)}.en-icon{width:16px;height:16px}@keyframes spin{to{transform:rotate(360deg)}}.spinning{animation:spin .9s linear infinite}@media(max-width:920px){.en-models-view{grid-template-columns:1fr}.en-download-row{display:grid}.en-model-actions,.en-role-grid{justify-content:flex-start}}
 </style>

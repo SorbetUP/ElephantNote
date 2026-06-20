@@ -3,9 +3,25 @@
     <aside class="en-models-list-column">
       <div class="en-models-searchbar">
         <Search class="en-models-search-icon" />
-        <input v-model.trim="query" type="search" placeholder="Search GGUF models" @keyup.enter="loadRemoteModels" />
-        <button v-if="query" type="button" class="en-models-search-clear" @click="query = ''"><X class="en-icon" /></button>
+        <input
+          v-model.trim="query"
+          type="text"
+          placeholder="Search GGUF models"
+          autocomplete="off"
+          spellcheck="false"
+          @keyup.enter="loadRemoteModels"
+        />
+        <button
+          v-if="query"
+          type="button"
+          class="en-models-search-clear"
+          aria-label="Clear search"
+          @click="query = ''"
+        >
+          <X class="en-icon" />
+        </button>
       </div>
+
       <div class="en-models-filters">
         <span class="en-models-count">{{ visibleModels.length }} models</span>
         <label class="en-filter-pill"><span>Format</span><select v-model="formatFilter"><option v-for="opt in FORMAT_FILTERS" :key="opt.id" :value="opt.id">{{ opt.label }}</option></select></label>
@@ -13,12 +29,18 @@
         <label class="en-filter-pill"><span>Sort</span><select v-model="sortOption"><option v-for="opt in SORT_OPTIONS" :key="opt.id" :value="opt.id">{{ opt.label }}</option></select></label>
         <button type="button" class="en-models-refresh" :disabled="isLoading" @click="refreshAll"><RefreshCw class="en-icon" :class="{ spinning: isLoading }" /></button>
       </div>
+
       <div v-if="isLoading && !visibleModels.length" class="en-models-empty">Loading model library…</div>
       <div v-else-if="!visibleModels.length" class="en-models-empty"><p>{{ emptyMessage }}</p><button type="button" @click="refreshAll">Refresh library</button></div>
+
       <ul v-else class="en-models-list">
         <li v-for="model in visibleModels" :key="getModelKey(model)" class="en-model-row" :class="{ selected: isSelected(model), installed: isInstalled(model), downloading: isDownloadingModel(model) }" @click="selectModel(model)">
           <div class="en-model-row-icon"><Box class="en-icon" /></div>
-          <div class="en-model-row-main"><strong class="en-model-row-name">{{ resolveModelName(model) }}</strong><span class="en-model-row-author">{{ resolveModelAuthor(model) || getModelSource(model) }}</span><div class="en-model-row-badges"><span v-for="cap in getModelCapabilities(model).slice(0, 3)" :key="cap" class="en-cap-badge">{{ cap }}</span><span v-if="isInstalled(model)" class="en-cap-badge cap-installed">Installed</span></div></div>
+          <div class="en-model-row-main">
+            <strong class="en-model-row-name">{{ resolveModelName(model) }}</strong>
+            <span class="en-model-row-author">{{ resolveModelAuthor(model) || getModelSource(model) }}</span>
+            <div class="en-model-row-badges"><span v-for="cap in getModelCapabilities(model).slice(0, 3)" :key="cap" class="en-cap-badge">{{ cap }}</span><span v-if="isInstalled(model)" class="en-cap-badge cap-installed">Installed</span></div>
+          </div>
           <div class="en-model-row-stats"><span v-if="model.likes != null">♡ {{ formatCompactCount(model.likes) }}</span><span v-if="model.downloads != null">↓ {{ formatCompactCount(model.downloads) }}</span><span v-if="getModelUpdatedDate(model)">{{ formatRelativeDate(getModelUpdatedDate(model)) }}</span></div>
         </li>
       </ul>
@@ -26,11 +48,38 @@
 
     <main class="en-models-detail-column">
       <template v-if="selectedModel">
-        <header class="en-detail-header"><div class="en-detail-icon"><Box class="en-icon" /></div><div class="en-detail-title"><strong>{{ detailTitle }}</strong><small>{{ detailSubtitle }}</small></div><button type="button" class="en-icon-btn" @click="copyModelId"><Copy class="en-icon" /></button><button type="button" class="en-icon-btn" @click="openModelCard"><ExternalLink class="en-icon" /></button></header>
+        <header class="en-detail-header">
+          <div class="en-detail-icon"><Box class="en-icon" /></div>
+          <div class="en-detail-title"><strong>{{ detailTitle }}</strong><small>{{ detailSubtitle }}</small></div>
+          <button type="button" class="en-icon-btn" @click="copyModelId"><Copy class="en-icon" /></button>
+          <button type="button" class="en-icon-btn" @click="openModelCard"><ExternalLink class="en-icon" /></button>
+        </header>
+
         <div class="en-detail-stats"><span v-if="selectedModel.downloads != null">↓ {{ formatCompactCount(selectedModel.downloads) }} downloads</span><span v-if="selectedModel.likes != null">☆ {{ formatCompactCount(selectedModel.likes) }} stars</span><span v-if="getModelUpdatedDate(selectedModel)">Updated {{ formatRelativeDate(getModelUpdatedDate(selectedModel)) }}</span></div>
         <div class="en-detail-badges"><span class="en-meta-badge">Format: {{ getModelFormat(selectedModel) }}</span><span v-if="getModelQuantization(selectedModel)" class="en-meta-badge">Quantization: {{ getModelQuantization(selectedModel) }}</span><span class="en-meta-badge">Runtime: {{ getModelRuntime(selectedModel) }}</span><span class="en-meta-badge">Source: {{ getModelSource(selectedModel) }}</span></div>
-        <section class="en-detail-card en-download-card"><header><strong>Model options</strong><small>{{ modelOptionStatus }}</small></header><div class="en-download-row"><div class="en-download-info"><strong>{{ downloadOption.fileName }}</strong><span>{{ downloadOption.format }}{{ downloadOption.quantization ? ` · ${downloadOption.quantization}` : '' }} · {{ downloadOption.sizeLabel || 'unknown size' }}</span></div><div class="en-download-action"><button type="button" class="en-btn-primary" :disabled="!canDownload || isDownloadingModel(selectedModel)" @click="download(selectedModel)"><Download class="en-icon" />{{ canDownload ? 'Download' : 'Downloaded' }}</button><button v-for="role in MODEL_ROLES" :key="role.id" type="button" class="en-btn-secondary" :class="{ assigned: isAssignedToRole(selectedModel, role.id, modelSelection) }" :disabled="isDownloadingModel(selectedModel)" @click="useFor(role.id)">{{ isAssignedToRole(selectedModel, role.id, modelSelection) ? `Used for ${role.label}` : `Use for ${role.label}` }}</button><button v-if="isDownloadingModel(selectedModel)" type="button" class="en-btn-ghost" @click="cancelDownload(selectedModel)">Cancel</button><button v-if="selectedInstalledModel && selectedInstalledModel.provider !== 'local-ocr'" type="button" class="en-btn-danger" @click="remove(selectedInstalledModel)">Uninstall</button></div></div><div v-if="isDownloadingModel(selectedModel)" class="en-model-progress"><div :style="{ width: `${downloadPercent(selectedModel)}%` }" /></div><small v-if="downloadMessageFor(selectedModel)">{{ downloadMessageFor(selectedModel) }}</small></section>
-        <section class="en-detail-card en-readme-card"><header><strong>README</strong><small>{{ readmeStatus }}</small></header><div class="en-readme-body"><pre>{{ readmeLoading ? 'Loading Hugging Face README…' : (readmeText || readmeMessage) }}</pre></div></section>
+
+        <section class="en-detail-card en-download-card">
+          <header><strong>Model options</strong><small>{{ modelOptionStatus }}</small></header>
+          <div class="en-download-row">
+            <div class="en-download-info"><strong>{{ downloadOption.fileName }}</strong><span>{{ downloadOption.format }}{{ downloadOption.quantization ? ` · ${downloadOption.quantization}` : '' }} · {{ downloadOption.sizeLabel || 'unknown size' }}</span></div>
+            <div class="en-model-actions">
+              <button v-if="canDownload" type="button" class="en-btn-primary" :disabled="isDownloadingModel(selectedModel)" @click="download(selectedModel)"><Download class="en-icon" />Download</button>
+              <span v-else class="en-status-pill">Downloaded</span>
+              <button v-if="selectedInstalledModel && selectedInstalledModel.provider !== 'local-ocr'" type="button" class="en-btn-danger" @click="remove(selectedInstalledModel)">Uninstall</button>
+            </div>
+          </div>
+          <div class="en-role-grid" aria-label="Model roles">
+            <button v-for="role in MODEL_ROLES" :key="role.id" type="button" class="en-role-button" :class="{ selected: isRoleSelected(role.id) }" :disabled="isDownloadingModel(selectedModel)" @click="toggleRole(role.id)">{{ role.label }}</button>
+          </div>
+          <div v-if="isDownloadingModel(selectedModel)" class="en-model-progress"><div :style="{ width: `${downloadPercent(selectedModel)}%` }" /></div>
+          <small v-if="downloadMessageFor(selectedModel)">{{ downloadMessageFor(selectedModel) }}</small>
+        </section>
+
+        <section class="en-detail-card en-readme-card">
+          <header><strong>README</strong><small>{{ readmeStatus }}</small></header>
+          <div v-if="readmeLoading" class="en-readme-loading">Loading Hugging Face README…</div>
+          <div v-else class="en-readme-body markdown-body" v-html="readmeHtml" />
+        </section>
       </template>
       <div v-else class="en-detail-empty"><Box class="en-detail-empty-icon" /><p>Select a model from the library to see details</p></div>
     </main>
@@ -39,6 +88,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import DOMPurify from 'dompurify'
 import log from 'electron-log/renderer'
 import { Box, Copy, Download, ExternalLink, RefreshCw, Search, X } from '@lucide/vue'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
@@ -75,6 +125,7 @@ const allModels = computed(() => sortByPopularity(dedupeModels([...localModels.v
 const visibleModels = computed(() => dedupeModels(applyCatalogFilters({ models: allModels.value, query: query.value, format: formatFilter.value, source: sourceFilter.value, sort: sortOption.value })))
 const emptyMessage = computed(() => query.value ? `No GGUF models found for "${query.value}".` : 'No GGUF models returned by the model library yet.')
 const selectedInstalledModel = computed(() => findInstalledMatch(selectedModel.value))
+const roleTargetModel = computed(() => selectedInstalledModel.value || selectedModel.value)
 const downloadOption = computed(() => getDownloadOption(selectedInstalledModel.value || selectedModel.value || {}))
 const canDownload = computed(() => selectedModel.value && isRemoteModel(selectedModel.value) && !selectedInstalledModel.value)
 const modelOptionStatus = computed(() => selectedInstalledModel.value ? 'Applicable model file already downloaded' : downloadOption.value.status)
@@ -94,6 +145,7 @@ const isInstalled = (model) => Boolean(findInstalledMatch(model))
 const isDownloadingModel = (model) => isDownloading(model, downloads.value)
 const downloadPercent = (model) => downloadProgress(model, downloads.value)
 const downloadMessageFor = (model) => downloadMessage(model, downloads.value)
+const isRoleSelected = (role) => Boolean(roleTargetModel.value && isAssignedToRole(roleTargetModel.value, role, modelSelection.value))
 
 const firstGgufFile = (model = {}) => model.fileName || model.filename || (Array.isArray(model.siblings) ? model.siblings.find((s) => String(s.rfilename || '').toLowerCase().endsWith('.gguf'))?.rfilename : '') || ''
 const findInstalledMatch = (model = {}) => {
@@ -111,13 +163,7 @@ const loadLocalModels = async() => {
   if (selection) modelSelection.value = normalizeSelection(selection)
 }
 const loadRemoteModels = async() => {
-  remoteData.value = await elephantnoteClient.models.searchHuggingFace({
-    query: query.value,
-    limit: 48,
-    sort: sortForBackend(),
-    direction: -1,
-    libraryName: 'gguf'
-  })
+  remoteData.value = await elephantnoteClient.models.searchHuggingFace({ query: query.value, limit: 48, sort: sortForBackend(), direction: -1, libraryName: 'gguf' })
 }
 const refreshAll = async() => {
   isLoading.value = true
@@ -191,8 +237,17 @@ const download = async(model) => {
     return null
   }
 }
-const useFor = async(role) => {
+const clearRole = async(role) => {
+  const next = { ...modelSelection.value, [role]: '' }
+  modelSelection.value = next
+  await elephantnoteClient.models.setSelection?.(next).catch((error) => log.error('[models] clear role failed', error))
+}
+const toggleRole = async(role) => {
   if (!selectedModel.value) return
+  if (isRoleSelected(role)) {
+    await clearRole(role)
+    return
+  }
   let target = selectedInstalledModel.value || selectedModel.value
   if (!selectedInstalledModel.value && isRemoteModel(selectedModel.value)) {
     await download(selectedModel.value)
@@ -226,6 +281,53 @@ const openModelCard = () => {
   if (id && window?.open) window.open(id.includes('/') ? `https://huggingface.co/${id}` : `https://huggingface.co/models?search=${encodeURIComponent(id)}`, '_blank', 'noopener')
 }
 
+const escapeHtml = (value = '') => String(value).replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char])
+const inlineMarkdown = (value = '') => escapeHtml(value)
+  .replace(/`([^`]+)`/g, '<code>$1</code>')
+  .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+const renderBasicMarkdown = (markdown = '') => {
+  const lines = String(markdown || '').split(/\r?\n/)
+  const html = []
+  let inList = false
+  let inCode = false
+  let code = []
+  const closeList = () => { if (inList) { html.push('</ul>'); inList = false } }
+  for (const line of lines) {
+    if (/^```/.test(line)) {
+      if (inCode) { html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`); code = []; inCode = false } else { closeList(); inCode = true }
+      continue
+    }
+    if (inCode) { code.push(line); continue }
+    if (!line.trim()) { closeList(); continue }
+    const heading = line.match(/^(#{1,6})\s+(.+)$/)
+    if (heading) { closeList(); const level = heading[1].length; html.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`); continue }
+    const bullet = line.match(/^[-*]\s+(.+)$/)
+    if (bullet) { if (!inList) { html.push('<ul>'); inList = true } html.push(`<li>${inlineMarkdown(bullet[1])}</li>`); continue }
+    closeList()
+    html.push(`<p>${inlineMarkdown(line)}</p>`)
+  }
+  closeList()
+  if (inCode) html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
+  return html.join('\n')
+}
+const getAppMarkdownRenderer = () => [
+  globalThis.window?.elephantnote?.markdown?.render,
+  globalThis.window?.elephantnote?.markdown?.renderToHtml,
+  globalThis.window?.elephantnote?.editor?.markdown?.render,
+  globalThis.window?.elephantnote?.preview?.renderMarkdown
+].find((renderer) => typeof renderer === 'function')
+const renderMarkdown = (markdown = '') => {
+  const renderer = getAppMarkdownRenderer()
+  if (renderer) {
+    const result = renderer(markdown)
+    if (typeof result === 'string') return result
+    if (typeof result?.html === 'string') return result.html
+  }
+  return renderBasicMarkdown(markdown)
+}
+const readmeHtml = computed(() => DOMPurify.sanitize(renderMarkdown(readmeText.value || readmeMessage.value || '')))
+
 watch([query, sortOption], () => {
   window.clearTimeout(searchTimer)
   searchTimer = window.setTimeout(() => loadRemoteModels().catch((error) => log.error('[models] remote search failed', error)), 350)
@@ -246,5 +348,5 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.en-models-view{--bg:#181818;--surface:#222;--card:#2a2a2a;--input:#383838;--line:#3a3a3a;--strong:#505050;--text:#f2f2f2;--muted:#858585;--accent:#3f7df3;display:grid;grid-template-columns:minmax(300px,34fr) minmax(0,66fr);gap:12px;min-height:0;flex:1;padding:16px;background:var(--bg);color:var(--text);font:14px Inter,system-ui,sans-serif;overflow:hidden}.en-models-list-column,.en-models-detail-column{min-height:0;overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-models-list-column{display:grid;grid-template-rows:auto auto minmax(0,1fr)}.en-models-detail-column{display:grid;align-content:start;gap:12px;padding:14px}.en-models-searchbar{position:relative;display:flex;align-items:center;gap:8px;margin:12px;padding:0 10px 0 38px;min-height:40px;border:1px solid var(--line);border-radius:12px;background:var(--input)}.en-models-search-icon{position:absolute;left:12px;width:16px;height:16px;color:var(--muted)}input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text)}button,select{border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);min-height:30px}.en-models-search-clear{width:24px;height:24px}.en-models-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0 12px 12px;color:var(--muted);font-size:12px}.en-filter-pill{display:inline-flex;align-items:center;gap:6px;padding:0 10px;height:30px;border:1px solid var(--line);border-radius:999px;background:var(--card)}.en-filter-pill select{border:0;background:transparent}.en-models-list{list-style:none;margin:0;padding:6px;overflow:auto}.en-model-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;border-radius:10px;cursor:pointer}.en-model-row:hover{background:#303030}.en-model-row.selected{background:var(--accent);color:#fff}.en-model-row-icon,.en-detail-icon{display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--card)}.en-model-row-icon{width:28px;height:28px}.en-model-row-main{min-width:0;display:grid;gap:2px}.en-model-row-name,.en-model-row-author{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-model-row-author,.en-model-row-stats,.en-detail-stats,.en-detail-title small,.en-download-info span,.en-detail-card header small,.en-readme-body pre,.en-models-empty{color:var(--muted)}.en-model-row-badges,.en-detail-badges,.en-download-action{display:flex;gap:6px;flex-wrap:wrap}.en-cap-badge,.en-meta-badge{display:inline-flex;align-items:center;padding:2px 7px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:11px}.cap-installed{color:#bfe7c5}.en-model-row-stats{display:grid;justify-items:end;font-size:11px}.en-detail-header{display:grid;grid-template-columns:40px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-detail-icon{width:40px;height:40px}.en-detail-title strong{font-size:18px;overflow-wrap:anywhere}.en-icon-btn{width:32px}.en-detail-stats,.en-detail-badges{padding:0 4px}.en-detail-card{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}.en-detail-card header,.en-download-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 16px}.en-detail-card header{border-bottom:1px solid var(--line);background:var(--card)}.en-download-info{min-width:0;display:grid;gap:4px}.en-download-info strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-download-action{justify-content:flex-end}.en-btn-primary{background:var(--accent);border-color:var(--accent);padding:0 14px}.en-btn-primary:disabled{opacity:.55}.en-btn-secondary{padding:0 12px}.en-btn-secondary.assigned{border-color:#4caf5c;color:#bfe7c5}.en-btn-danger{color:#ef5350;padding:0 12px}.en-btn-ghost{padding:0 12px}.en-model-progress{height:4px;background:var(--input)}.en-model-progress div{height:100%;background:var(--accent)}.en-download-card small{display:block;padding:8px 16px 12px}.en-readme-body{padding:16px}.en-readme-body pre{max-height:min(58vh,680px);min-height:260px;overflow:auto;margin:0;padding:14px;border:1px solid var(--line);border-radius:12px;background:#1d1d1d;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.55 Inter,system-ui,sans-serif}.en-detail-empty{height:100%;display:grid;place-items:center;color:var(--muted)}.en-icon{width:16px;height:16px}@keyframes spin{to{transform:rotate(360deg)}}.spinning{animation:spin .9s linear infinite}@media(max-width:920px){.en-models-view{grid-template-columns:1fr}.en-download-row{display:grid}.en-download-action{justify-content:flex-start}}
+.en-models-view{--bg:#181818;--surface:#222;--card:#2a2a2a;--input:#383838;--line:#3a3a3a;--strong:#505050;--text:#f2f2f2;--muted:#858585;--accent:#3f7df3;display:grid;grid-template-columns:minmax(300px,34fr) minmax(0,66fr);gap:12px;min-height:0;flex:1;padding:16px;background:var(--bg);color:var(--text);font:14px Inter,system-ui,sans-serif;overflow:hidden}.en-models-list-column,.en-models-detail-column{min-height:0;overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-models-list-column{display:grid;grid-template-rows:auto auto minmax(0,1fr)}.en-models-detail-column{display:grid;align-content:start;gap:12px;padding:14px}.en-models-searchbar{position:relative;display:flex;align-items:center;gap:8px;margin:12px;padding:0 44px 0 38px;min-height:40px;border:1px solid var(--line);border-radius:12px;background:var(--input)}.en-models-search-icon{position:absolute;left:12px;width:16px;height:16px;color:var(--muted)}input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text)}input::-webkit-search-cancel-button{display:none}.en-models-search-clear{position:absolute;right:8px;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center}.en-models-search-clear:hover{background:#2b2b2b;color:var(--text)}button,select{border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);min-height:30px}.en-models-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0 12px 12px;color:var(--muted);font-size:12px}.en-filter-pill{display:inline-flex;align-items:center;gap:6px;padding:0 10px;height:30px;border:1px solid var(--line);border-radius:999px;background:var(--card)}.en-filter-pill select{border:0;background:transparent}.en-models-list{list-style:none;margin:0;padding:6px;overflow:auto}.en-model-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;border-radius:10px;cursor:pointer}.en-model-row:hover{background:#303030}.en-model-row.selected{background:var(--accent);color:#fff}.en-model-row-icon,.en-detail-icon{display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--card)}.en-model-row-icon{width:28px;height:28px}.en-model-row-main{min-width:0;display:grid;gap:2px}.en-model-row-name,.en-model-row-author{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-model-row-author,.en-model-row-stats,.en-detail-stats,.en-detail-title small,.en-download-info span,.en-detail-card header small,.en-readme-loading,.en-models-empty{color:var(--muted)}.en-model-row-badges,.en-detail-badges,.en-model-actions,.en-role-grid{display:flex;gap:6px;flex-wrap:wrap}.en-cap-badge,.en-meta-badge,.en-status-pill{display:inline-flex;align-items:center;padding:2px 7px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:11px}.en-status-pill{height:30px;padding:0 12px;color:#bfe7c5;border-color:#4caf5c}.cap-installed{color:#bfe7c5}.en-model-row-stats{display:grid;justify-items:end;font-size:11px}.en-detail-header{display:grid;grid-template-columns:40px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-detail-icon{width:40px;height:40px}.en-detail-title strong{font-size:18px;overflow-wrap:anywhere}.en-icon-btn{width:32px}.en-detail-stats,.en-detail-badges{padding:0 4px}.en-detail-card{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}.en-detail-card header,.en-download-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 16px}.en-detail-card header{border-bottom:1px solid var(--line);background:var(--card)}.en-download-info{min-width:0;display:grid;gap:4px}.en-download-info strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-model-actions{justify-content:flex-end;align-items:center}.en-btn-primary{background:var(--accent);border-color:var(--accent);padding:0 14px}.en-btn-primary:disabled{opacity:.55}.en-btn-danger{color:#ef5350;padding:0 12px}.en-role-grid{justify-content:flex-end;padding:0 16px 14px}.en-role-button{min-width:112px;padding:0 16px;border-color:var(--strong);font-weight:600}.en-role-button.selected{border-color:#4caf5c;color:#bfe7c5;background:rgba(76,175,92,.12)}.en-role-button.selected:hover{background:rgba(76,175,92,.18)}.en-model-progress{height:4px;background:var(--input)}.en-model-progress div{height:100%;background:var(--accent)}.en-download-card small{display:block;padding:8px 16px 12px}.en-readme-loading{padding:16px}.en-readme-body{max-height:min(58vh,680px);min-height:260px;overflow:auto;margin:16px;padding:18px;border:1px solid var(--line);border-radius:12px;background:#1d1d1d;color:#bdbdbd;line-height:1.65}.en-readme-body :deep(h1),.en-readme-body :deep(h2),.en-readme-body :deep(h3){color:var(--text);margin:1.1em 0 .45em}.en-readme-body :deep(p){margin:.65em 0}.en-readme-body :deep(a){color:#82aaff}.en-readme-body :deep(code){border-radius:4px;background:#303030;padding:.1em .35em}.en-readme-body :deep(pre){overflow:auto;border-radius:8px;background:#151515;padding:12px}.en-readme-body :deep(ul){padding-left:1.5em}.en-detail-empty{height:100%;display:grid;place-items:center;color:var(--muted)}.en-icon{width:16px;height:16px}@keyframes spin{to{transform:rotate(360deg)}}.spinning{animation:spin .9s linear infinite}@media(max-width:920px){.en-models-view{grid-template-columns:1fr}.en-download-row{display:grid}.en-model-actions,.en-role-grid{justify-content:flex-start}}
 </style>

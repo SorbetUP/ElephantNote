@@ -98,7 +98,14 @@ let searchTimer = null
 const localModels = computed(() => Array.isArray(localData.value?.models) ? localData.value.models : [])
 const remoteModels = computed(() => Array.isArray(remoteData.value?.models) ? remoteData.value.models : [])
 const getModelKey = (model = {}) => String(model.repoId || model.id || model.modelId || model.path || model.modelPath || resolveModelName(model)).toLowerCase()
+const firstGgufFile = (model = {}) => model.fileName || model.filename || (Array.isArray(model.siblings) ? model.siblings.find((s) => String(s.rfilename || '').toLowerCase().endsWith('.gguf'))?.rfilename : '') || ''
+const isGgufCandidate = (model = {}) => {
+  if (isLocalModel(model)) return true
+  if (firstGgufFile(model)) return true
+  return [model.repoId, model.id, model.modelId, model.name, model.fileName, model.filename].filter(Boolean).some((value) => /gguf|\.gguf$/i.test(String(value)))
+}
 const dedupeModels = (models = []) => Array.from(models.reduce((map, model) => {
+  if (!isGgufCandidate(model)) return map
   const key = getModelKey(model)
   if (!key) return map
   const previous = map.get(key)
@@ -129,7 +136,6 @@ const downloadPercent = (model) => downloadProgress(model, downloads.value)
 const downloadMessageFor = (model) => downloadMessage(model, downloads.value)
 const isRoleSelected = (role) => Boolean(roleTargetModel.value && isAssignedToRole(roleTargetModel.value, role, modelSelection.value))
 
-const firstGgufFile = (model = {}) => model.fileName || model.filename || (Array.isArray(model.siblings) ? model.siblings.find((s) => String(s.rfilename || '').toLowerCase().endsWith('.gguf'))?.rfilename : '') || ''
 const findInstalledMatch = (model = {}) => {
   if (!model) return null
   const lookup = [model.repoId, model.id, model.modelId, model.fileName, model.filename, firstGgufFile(model)].filter(Boolean).map(String)
@@ -186,12 +192,12 @@ const loadReadme = async(model = {}) => {
   }
 }
 const loadSelectedInfo = async(model = {}) => {
-  if (!model?.repoId && !String(model?.id || '').includes('/')) return
+  if (!model?.path && !model?.modelPath) return
   try {
-    const info = await elephantnoteClient.models.info({ modelRef: model.repoId || model.id })
+    const info = await elephantnoteClient.models.info({ modelRef: model.path || model.modelPath })
     if (selectedModel.value && getModelKey(selectedModel.value) === getModelKey(model)) selectedModel.value = { ...selectedModel.value, ...info }
   } catch (error) {
-    log.warn('[models] info failed', error)
+    log.warn('[models] local info failed', error)
   }
 }
 const selectModel = (model) => {
@@ -206,11 +212,28 @@ const setDownloadState = (model, state) => {
   keys.forEach((key) => next.set(key, { ...(next.get(key) || {}), ...state }))
   downloads.value = next
 }
+const buildDownloadPayload = (model = {}) => {
+  const repoId = String(model.repoId || model.id || '').trim()
+  const fileName = firstGgufFile(model)
+  if (repoId.includes('/') && fileName) {
+    return {
+      id: fileName,
+      name: model.name || repoId,
+      provider: 'node-llama-cpp',
+      source: 'remote',
+      uri: `hf:${repoId}/${fileName}`,
+      fileName,
+      filename: fileName,
+      originalRepoId: repoId
+    }
+  }
+  return { ...model, id: resolveModelId(model), repoId: model.repoId || model.id, provider: model.provider || 'huggingface', source: model.source || 'huggingface', fileName }
+}
 const download = async(model) => {
   if (!model) return null
   setDownloadState(model, { percent: 1, message: 'Starting download…' })
   try {
-    const result = await elephantnoteClient.models.download({ ...model, id: resolveModelId(model), repoId: model.repoId || model.id, provider: model.provider || 'huggingface', source: model.source || 'huggingface', fileName: firstGgufFile(model) })
+    const result = await elephantnoteClient.models.download(buildDownloadPayload(model))
     setDownloadState(model, { percent: 100, message: result?.message || 'Download complete.', downloadId: result?.downloadId })
     await loadLocalModels()
     return result
@@ -288,12 +311,7 @@ const copyModelId = async() => {
 const openExternalUrl = async(url = '') => {
   const target = String(url || '').trim()
   if (!target) return
-  const openers = [
-    globalThis.window?.elephantnote?.shell?.openExternal,
-    globalThis.window?.elephantnote?.openExternal,
-    globalThis.window?.elephantnote?.sitePreview?.openExternal,
-    elephantnoteClient.sitePreview?.openExternal
-  ]
+  const openers = [globalThis.window?.elephantnote?.shell?.openExternal, globalThis.window?.elephantnote?.openExternal]
   for (const opener of openers) {
     if (typeof opener !== 'function') continue
     try {
@@ -314,10 +332,7 @@ const openModelCard = async() => {
 }
 
 const escapeHtml = (value = '') => String(value).replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char])
-const inlineMarkdown = (value = '') => escapeHtml(value)
-  .replace(/`([^`]+)`/g, '<code>$1</code>')
-  .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-  .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+const inlineMarkdown = (value = '') => escapeHtml(value).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
 const renderBasicMarkdown = (markdown = '') => {
   const lines = String(markdown || '').split(/\r?\n/)
   const html = []
@@ -343,12 +358,7 @@ const renderBasicMarkdown = (markdown = '') => {
   if (inCode) html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
   return html.join('\n')
 }
-const getAppMarkdownRenderer = () => [
-  globalThis.window?.elephantnote?.markdown?.render,
-  globalThis.window?.elephantnote?.markdown?.renderToHtml,
-  globalThis.window?.elephantnote?.editor?.markdown?.render,
-  globalThis.window?.elephantnote?.preview?.renderMarkdown
-].find((renderer) => typeof renderer === 'function')
+const getAppMarkdownRenderer = () => [globalThis.window?.elephantnote?.markdown?.render, globalThis.window?.elephantnote?.markdown?.renderToHtml, globalThis.window?.elephantnote?.editor?.markdown?.render, globalThis.window?.elephantnote?.preview?.renderMarkdown].find((renderer) => typeof renderer === 'function')
 const renderMarkdown = (markdown = '') => {
   const renderer = getAppMarkdownRenderer()
   if (renderer) {

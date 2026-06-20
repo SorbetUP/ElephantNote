@@ -76,7 +76,7 @@ import DOMPurify from 'dompurify'
 import log from 'electron-log/renderer'
 import { Box, Copy, Download, ExternalLink, RefreshCw, Search, X } from '@lucide/vue'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
-import { FORMAT_FILTERS, MODEL_ROLES, SORT_OPTIONS, SOURCE_FILTERS, USE_NONE, applyCatalogFilters, applyRoleChoice, downloadMessage, downloadProgress, formatCompactCount, formatRelativeDate, getDownloadOption, getModelCapabilities, getModelFormat, getModelQuantization, getModelRuntime, getModelSource, getModelUpdatedDate, isAssignedToRole, isDownloading, isLocalModel, isRemoteModel, normalizeSelection, resolveModelAuthor, resolveModelId, resolveModelName, sortByPopularity } from './modelsViewHelpers'
+import { FORMAT_FILTERS, MODEL_ROLES, SORT_OPTIONS, SOURCE_FILTERS, USE_NONE, applyCatalogFilters, applyRoleChoice, downloadMessage, downloadProgress, formatBytes, formatCompactCount, formatRelativeDate, getDownloadOption, getModelCapabilities, getModelFormat, getModelQuantization, getModelRuntime, getModelSource, getModelUpdatedDate, isAssignedToRole, isDownloading, isLocalModel, isRemoteModel, normalizeSelection, resolveModelAuthor, resolveModelId, resolveModelName, sortByPopularity } from './modelsViewHelpers'
 
 const formatFilter = ref('all')
 const sourceFilter = ref('all')
@@ -88,6 +88,8 @@ const remoteData = ref(null)
 const modelSelection = ref(normalizeSelection({}))
 const downloads = ref(new Map())
 const selectedModel = ref(null)
+const selectedFileName = ref('')
+const selectedFileSizeBytes = ref(0)
 const readmeText = ref('')
 const readmeMessage = ref('')
 const readmeLoading = ref(false)
@@ -113,7 +115,11 @@ const visibleModels = computed(() => dedupeModels(applyCatalogFilters({ models: 
 const emptyMessage = computed(() => query.value ? `No models found for "${query.value}".` : 'No models returned by the model library yet.')
 const selectedInstalledModel = computed(() => findInstalledMatch(selectedModel.value))
 const roleTargetModel = computed(() => selectedInstalledModel.value || selectedModel.value)
-const downloadOption = computed(() => getDownloadOption(selectedInstalledModel.value || selectedModel.value || {}))
+const downloadOption = computed(() => {
+  const base = getDownloadOption(selectedInstalledModel.value || selectedModel.value || {})
+  const sizeLabel = selectedFileSizeBytes.value > 0 ? formatBytes(selectedFileSizeBytes.value) : base.sizeLabel
+  return { ...base, fileName: selectedFileName.value || base.fileName, sizeLabel }
+})
 const canDownload = computed(() => selectedModel.value && isRemoteModel(selectedModel.value) && !selectedInstalledModel.value)
 const detailTitle = computed(() => {
   const model = selectedModel.value || {}
@@ -132,9 +138,10 @@ const downloadPercent = (model) => downloadProgress(model, downloads.value)
 const downloadMessageFor = (model) => downloadMessage(model, downloads.value)
 const isRoleSelected = (role) => Boolean(roleTargetModel.value && isAssignedToRole(roleTargetModel.value, role, modelSelection.value))
 const selectedCapabilities = computed(() => new Set(getModelCapabilities(roleTargetModel.value || selectedModel.value || {}).map((capability) => String(capability).toLowerCase())))
+const isGgufChatModel = (model = roleTargetModel.value || selectedModel.value || {}) => getModelFormat(model).toLowerCase() === 'gguf' || Boolean(firstGgufFile(model)) || /gguf|\.gguf$/i.test([model.repoId, model.id, model.name, model.fileName, model.filename].filter(Boolean).join(' '))
 const canUseRole = (role = '') => {
   const capabilities = selectedCapabilities.value
-  if (role === 'chat') return capabilities.has('chat')
+  if (role === 'chat') return capabilities.has('chat') || isGgufChatModel()
   if (role === 'embedding') return capabilities.has('embedding')
   if (role === 'ocr') return capabilities.has('ocr')
   return false
@@ -206,9 +213,15 @@ const loadSelectedInfo = async(model = {}) => {
     log.warn('[models] local info failed', error)
   }
 }
+const resetSelectedFileInfo = (model = {}) => {
+  selectedFileName.value = firstGgufFile(model) || model.fileName || model.filename || ''
+  selectedFileSizeBytes.value = Number(model.sizeBytes || model.size || model.lfs?.size || 0) || 0
+}
 const selectModel = (model) => {
   selectedModel.value = model
+  resetSelectedFileInfo(model)
   loadSelectedInfo(model)
+  loadSelectedRemoteFileInfo(model)
   loadReadme(model)
 }
 
@@ -216,24 +229,42 @@ const fetchHuggingFaceInfo = async(repoId = '') => {
   const normalizedRepoId = String(repoId || '').trim()
   if (!normalizedRepoId || !normalizedRepoId.includes('/')) return null
   if (hfInfoCache.has(normalizedRepoId)) return hfInfoCache.get(normalizedRepoId)
-  const response = await fetch(`https://huggingface.co/api/models/${normalizedRepoId}`, { headers: { accept: 'application/json' } })
+  const response = await fetch(`https://huggingface.co/api/models/${normalizedRepoId}?blobs=true`, { headers: { accept: 'application/json' } })
   const data = await response.json().catch(() => null)
   if (!response.ok) throw new Error(data?.error || `Hugging Face info returned HTTP ${response.status}.`)
   hfInfoCache.set(normalizedRepoId, data)
   return data
 }
-const pickGgufFileFromInfo = (info = {}) => {
+const getSiblingName = (item = {}) => String(item.rfilename || item.path || item.name || '').trim()
+const getSiblingSizeBytes = (item = {}) => Number(item.sizeBytes || item.size || item.lfs?.size || item.blob?.size || 0) || 0
+const pickGgufFileInfo = (info = {}) => {
   const siblings = Array.isArray(info?.siblings) ? info.siblings : []
-  const ggufFiles = siblings.map((item) => String(item.rfilename || '')).filter((name) => name.toLowerCase().endsWith('.gguf'))
-  return ggufFiles.find((name) => /q4_k_m/i.test(name)) || ggufFiles.find((name) => /q4/i.test(name)) || ggufFiles[0] || ''
+  const ggufFiles = siblings.map((item) => ({ name: getSiblingName(item), sizeBytes: getSiblingSizeBytes(item) })).filter((item) => item.name.toLowerCase().endsWith('.gguf'))
+  return ggufFiles.find((item) => /q4_k_m/i.test(item.name)) || ggufFiles.find((item) => /q4/i.test(item.name)) || ggufFiles[0] || { name: '', sizeBytes: 0 }
 }
-const resolveGgufFile = async(model = {}) => {
-  const existing = firstGgufFile(model)
-  if (existing) return existing
+const loadSelectedRemoteFileInfo = async(model = {}) => {
   const repoId = getRepoId(model)
-  if (!repoId.includes('/')) return ''
+  if (!repoId.includes('/') || firstGgufFile(model)) return
+  try {
+    const info = await fetchHuggingFaceInfo(repoId)
+    const file = pickGgufFileInfo(info)
+    if (!file.name) return
+    if (selectedModel.value && getModelKey(selectedModel.value) === getModelKey(model)) {
+      selectedFileName.value = file.name
+      selectedFileSizeBytes.value = file.sizeBytes
+      selectedModel.value = { ...selectedModel.value, fileName: file.name, filename: file.name, sizeBytes: file.sizeBytes || selectedModel.value.sizeBytes }
+    }
+  } catch (error) {
+    log.warn('[models] remote file info failed', error)
+  }
+}
+const resolveGgufFileInfo = async(model = {}) => {
+  const existing = firstGgufFile(model)
+  if (existing) return { name: existing, sizeBytes: Number(model.sizeBytes || model.size || 0) || 0 }
+  const repoId = getRepoId(model)
+  if (!repoId.includes('/')) return { name: '', sizeBytes: 0 }
   const info = await fetchHuggingFaceInfo(repoId)
-  return pickGgufFileFromInfo(info)
+  return pickGgufFileInfo(info)
 }
 
 const setDownloadState = (model, state) => {
@@ -244,10 +275,11 @@ const setDownloadState = (model, state) => {
 }
 const buildDownloadPayload = async(model = {}) => {
   const repoId = getRepoId(model)
-  const fileName = await resolveGgufFile(model)
+  const file = await resolveGgufFileInfo(model)
+  const fileName = file.name
   if (repoId.includes('/')) {
     if (!fileName) throw new Error(`No GGUF file found in ${repoId}.`)
-    return { id: fileName, name: fileName, provider: 'node-llama-cpp', source: 'remote', uri: `hf:${repoId}/${fileName}`, fileName, filename: fileName, originalRepoId: repoId }
+    return { id: fileName, name: fileName, provider: 'node-llama-cpp', source: 'remote', uri: `hf:${repoId}/${fileName}`, fileName, filename: fileName, sizeBytes: file.sizeBytes, originalRepoId: repoId }
   }
   return { ...model, id: resolveModelId(model), repoId: model.repoId || model.id, provider: model.provider || 'node-llama-cpp', source: model.source || 'local', fileName }
 }
@@ -354,6 +386,7 @@ const openModelCard = async() => {
 }
 
 const escapeHtml = (value = '') => String(value).replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char])
+const isHtmlLine = (line = '') => /^\s*<\/?[a-zA-Z][\s\S]*>\s*$/.test(line)
 const inlineMarkdown = (value = '') => escapeHtml(value).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
 const renderBasicMarkdown = (markdown = '') => {
   const lines = String(markdown || '').split(/\r?\n/)
@@ -369,6 +402,7 @@ const renderBasicMarkdown = (markdown = '') => {
     }
     if (inCode) { code.push(line); continue }
     if (!line.trim()) { closeList(); continue }
+    if (isHtmlLine(line)) { closeList(); html.push(line); continue }
     const heading = line.match(/^(#{1,6})\s+(.+)$/)
     if (heading) { closeList(); const level = heading[1].length; html.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`); continue }
     const bullet = line.match(/^[-*]\s+(.+)$/)
@@ -390,7 +424,7 @@ const renderMarkdown = (markdown = '') => {
   }
   return renderBasicMarkdown(markdown)
 }
-const readmeHtml = computed(() => DOMPurify.sanitize(renderMarkdown(readmeText.value || readmeMessage.value || '')))
+const readmeHtml = computed(() => DOMPurify.sanitize(renderMarkdown(readmeText.value || readmeMessage.value || ''), { ADD_ATTR: ['target', 'rel', 'style'] }))
 
 watch([query, sortOption], () => {
   window.clearTimeout(searchTimer)
@@ -412,5 +446,5 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.en-models-view{--bg:#181818;--surface:#222;--card:#2a2a2a;--input:#383838;--line:#3a3a3a;--strong:#505050;--text:#f2f2f2;--muted:#858585;--accent:#3f7df3;display:grid;grid-template-columns:minmax(300px,34fr) minmax(0,66fr);gap:12px;min-height:0;flex:1;padding:16px;background:var(--bg);color:var(--text);font:14px Inter,system-ui,sans-serif;overflow:hidden}.en-models-list-column,.en-models-detail-column{min-height:0;overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-models-list-column{display:grid;grid-template-rows:auto auto minmax(0,1fr)}.en-models-detail-column{display:grid;align-content:start;gap:12px;padding:14px}.en-models-searchbar{position:relative;display:flex;align-items:center;gap:8px;margin:12px;padding:0 44px 0 38px;min-height:40px;border:1px solid var(--line);border-radius:12px;background:var(--input)}.en-models-search-icon{position:absolute;left:12px;width:16px;height:16px;color:var(--muted)}input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text)}input::-webkit-search-cancel-button{display:none}.en-models-search-clear{position:absolute;right:8px;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center}.en-models-search-clear:hover{background:#2b2b2b;color:var(--text)}button,select{border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);min-height:30px}.en-models-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0 12px 12px;color:var(--muted);font-size:12px}.en-filter-pill{display:inline-flex;align-items:center;gap:6px;padding:0 10px;height:30px;border:1px solid var(--line);border-radius:999px;background:var(--card)}.en-filter-pill select{border:0;background:transparent}.en-models-list{list-style:none;margin:0;padding:6px;overflow:auto}.en-model-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;border-radius:10px;cursor:pointer}.en-model-row:hover{background:#303030}.en-model-row.selected{background:var(--accent);color:#fff}.en-model-row-icon,.en-detail-icon{display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--card)}.en-model-row-icon{width:28px;height:28px}.en-model-row-main{min-width:0;display:grid;gap:2px}.en-model-row-name,.en-model-row-author{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-model-row-author,.en-model-row-stats,.en-detail-stats,.en-download-info span,.en-readme-loading,.en-models-empty{color:var(--muted)}.en-model-row-badges,.en-detail-badges,.en-model-actions,.en-role-grid{display:flex;gap:6px;flex-wrap:wrap}.en-cap-badge,.en-meta-badge,.en-status-pill{display:inline-flex;align-items:center;padding:2px 7px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:11px}.en-status-pill{height:30px;padding:0 12px;color:#bfe7c5;border-color:#4caf5c}.cap-installed{color:#bfe7c5}.en-model-row-stats{display:grid;justify-items:end;font-size:11px}.en-detail-header{display:grid;grid-template-columns:40px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-detail-icon{width:40px;height:40px}.en-detail-title strong{font-size:18px;overflow-wrap:anywhere}.en-icon-btn{width:32px}.en-detail-stats,.en-detail-badges{padding:0 4px}.en-detail-card{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}.en-download-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px 10px}.en-download-info{min-width:0;display:grid;gap:4px}.en-download-info strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-model-actions{justify-content:flex-end;align-items:center}.en-btn-primary{background:var(--accent);border-color:var(--accent);padding:0 14px}.en-btn-primary:disabled{opacity:.55}.en-btn-danger{color:#ef5350;padding:0 12px}.en-role-grid{justify-content:flex-end;padding:0 16px 14px}.en-role-button{min-width:112px;padding:0 16px;border-color:var(--strong);font-weight:600}.en-role-button.selected{border-color:#4caf5c;color:#bfe7c5;background:rgba(76,175,92,.12)}.en-role-button.selected:hover{background:rgba(76,175,92,.18)}.en-role-button.unavailable,.en-role-button:disabled{cursor:not-allowed;opacity:.45;border-color:var(--line);color:var(--muted);background:#242424}.en-model-progress{height:4px;background:var(--input)}.en-model-progress div{height:100%;background:var(--accent)}.en-download-card small{display:block;padding:8px 16px 12px}.en-readme-card header{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--card)}.en-readme-card header small{color:var(--muted)}.en-readme-loading{padding:16px}.en-readme-body{max-height:min(58vh,680px);min-height:260px;overflow:auto;margin:16px;padding:18px;border:1px solid var(--line);border-radius:12px;background:#1d1d1d;color:#bdbdbd;line-height:1.65}.en-readme-body :deep(h1),.en-readme-body :deep(h2),.en-readme-body :deep(h3){color:var(--text);margin:1.1em 0 .45em}.en-readme-body :deep(p){margin:.65em 0}.en-readme-body :deep(a){color:#82aaff}.en-readme-body :deep(code){border-radius:4px;background:#303030;padding:.1em .35em}.en-readme-body :deep(pre){overflow:auto;border-radius:8px;background:#151515;padding:12px}.en-readme-body :deep(ul){padding-left:1.5em}.en-detail-empty{height:100%;display:grid;place-items:center;color:var(--muted)}.en-icon{width:16px;height:16px}@keyframes spin{to{transform:rotate(360deg)}}.spinning{animation:spin .9s linear infinite}@media(max-width:920px){.en-models-view{grid-template-columns:1fr}.en-download-row{display:grid}.en-model-actions,.en-role-grid{justify-content:flex-start}}
+.en-models-view{--bg:#181818;--surface:#222;--card:#2a2a2a;--input:#383838;--line:#3a3a3a;--strong:#505050;--text:#f2f2f2;--muted:#858585;--accent:#3f7df3;display:grid;grid-template-columns:minmax(300px,34fr) minmax(0,66fr);gap:12px;min-height:0;flex:1;padding:16px;background:var(--bg);color:var(--text);font:14px Inter,system-ui,sans-serif;overflow:hidden}.en-models-list-column,.en-models-detail-column{min-height:0;overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-models-list-column{display:grid;grid-template-rows:auto auto minmax(0,1fr)}.en-models-detail-column{display:grid;align-content:start;gap:12px;padding:14px}.en-models-searchbar{position:relative;display:flex;align-items:center;gap:8px;margin:12px;padding:0 44px 0 38px;min-height:40px;border:1px solid var(--line);border-radius:12px;background:var(--input)}.en-models-search-icon{position:absolute;left:12px;width:16px;height:16px;color:var(--muted)}input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text)}input::-webkit-search-cancel-button{display:none}.en-models-search-clear{position:absolute;right:8px;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center}.en-models-search-clear:hover{background:#2b2b2b;color:var(--text)}button,select{border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);min-height:30px}.en-models-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0 12px 12px;color:var(--muted);font-size:12px}.en-filter-pill{display:inline-flex;align-items:center;gap:6px;padding:0 10px;height:30px;border:1px solid var(--line);border-radius:999px;background:var(--card)}.en-filter-pill select{border:0;background:transparent}.en-models-list{list-style:none;margin:0;padding:6px;overflow:auto}.en-model-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;border-radius:10px;cursor:pointer}.en-model-row:hover{background:#303030}.en-model-row.selected{background:var(--accent);color:#fff}.en-model-row-icon,.en-detail-icon{display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--card)}.en-model-row-icon{width:28px;height:28px}.en-model-row-main{min-width:0;display:grid;gap:2px}.en-model-row-name,.en-model-row-author{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-model-row-author,.en-model-row-stats,.en-detail-stats,.en-download-info span,.en-readme-loading,.en-models-empty{color:var(--muted)}.en-model-row-badges,.en-detail-badges,.en-model-actions,.en-role-grid{display:flex;gap:6px;flex-wrap:wrap}.en-cap-badge,.en-meta-badge,.en-status-pill{display:inline-flex;align-items:center;padding:2px 7px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:11px}.en-status-pill{height:30px;padding:0 12px;color:#bfe7c5;border-color:#4caf5c}.cap-installed{color:#bfe7c5}.en-model-row-stats{display:grid;justify-items:end;font-size:11px}.en-detail-header{display:grid;grid-template-columns:40px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}.en-detail-icon{width:40px;height:40px}.en-detail-title strong{font-size:18px;overflow-wrap:anywhere}.en-icon-btn{width:32px}.en-detail-stats,.en-detail-badges{padding:0 4px}.en-detail-card{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}.en-download-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px 10px}.en-download-info{min-width:0;display:grid;gap:4px}.en-download-info strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-model-actions{justify-content:flex-end;align-items:center}.en-btn-primary{background:var(--accent);border-color:var(--accent);padding:0 14px}.en-btn-primary:disabled{opacity:.55}.en-btn-danger{color:#ef5350;padding:0 12px}.en-role-grid{justify-content:flex-end;padding:0 16px 14px}.en-role-button{min-width:112px;padding:0 16px;border-color:var(--strong);font-weight:600}.en-role-button.selected{border-color:#4caf5c;color:#bfe7c5;background:rgba(76,175,92,.12)}.en-role-button.selected:hover{background:rgba(76,175,92,.18)}.en-role-button.unavailable,.en-role-button:disabled{cursor:not-allowed;opacity:.45;border-color:var(--line);color:var(--muted);background:#242424}.en-model-progress{height:4px;background:var(--input)}.en-model-progress div{height:100%;background:var(--accent)}.en-download-card small{display:block;padding:8px 16px 12px}.en-readme-card header{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--card)}.en-readme-card header small{color:var(--muted)}.en-readme-loading{padding:16px}.en-readme-body{user-select:text;max-height:min(58vh,680px);min-height:260px;overflow:auto;margin:16px;padding:18px;border:1px solid var(--line);border-radius:12px;background:#1d1d1d;color:#bdbdbd;line-height:1.65}.en-readme-body :deep(h1),.en-readme-body :deep(h2),.en-readme-body :deep(h3){color:var(--text);margin:1.1em 0 .45em}.en-readme-body :deep(p){margin:.65em 0}.en-readme-body :deep(a){color:#82aaff}.en-readme-body :deep(code){border-radius:4px;background:#303030;padding:.1em .35em}.en-readme-body :deep(pre){overflow:auto;border-radius:8px;background:#151515;padding:12px}.en-readme-body :deep(ul){padding-left:1.5em}.en-readme-body :deep(img){max-width:100%;height:auto}.en-detail-empty{height:100%;display:grid;place-items:center;color:var(--muted)}.en-icon{width:16px;height:16px}@keyframes spin{to{transform:rotate(360deg)}}.spinning{animation:spin .9s linear infinite}@media(max-width:920px){.en-models-view{grid-template-columns:1fr}.en-download-row{display:grid}.en-model-actions,.en-role-grid{justify-content:flex-start}}
 </style>

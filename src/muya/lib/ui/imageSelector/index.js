@@ -5,6 +5,20 @@ import { getUniqueId, getImageInfo as getImageSrc } from '../../utils'
 import { getImageInfo } from '../../utils/getImageInfo'
 import './index.css'
 
+const IMAGE_SELECTOR_I18N = Object.freeze({
+  'editor.image.selector.tab.select': 'Select image',
+  'editor.image.selector.tab.embedLink': 'Embed link',
+  'editor.image.selector.select.chooseButton': 'Choose image',
+  'editor.image.selector.select.tip': 'Choose an image from your device.',
+  'editor.image.selector.inputs.alt': 'Alt text',
+  'editor.image.selector.inputs.src': 'Image path or URL',
+  'editor.image.selector.inputs.title': 'Title',
+  'editor.image.selector.embedButton': 'Embed image',
+  'editor.image.selector.hint.prefix': 'Need alt text or title?',
+  'editor.image.selector.hint.full': 'Show more fields',
+  'editor.image.selector.hint.simple': 'Show fewer fields'
+})
+
 class ImageSelector extends BaseFloat {
   static pluginName = 'imageSelector'
 
@@ -36,6 +50,18 @@ class ImageSelector extends BaseFloat {
     this.container.appendChild(imageSelectorContainer)
     this.floatBox.classList.add('ag-image-selector-wrapper')
     this.listen()
+  }
+
+  translate = (key) => {
+    const fallback = IMAGE_SELECTOR_I18N[key] || key
+    const t = this.muya?.options?.t
+    if (typeof t !== 'function') return fallback
+    try {
+      const value = t(key)
+      return typeof value === 'string' && value && value !== key ? value : fallback
+    } catch {
+      return fallback
+    }
   }
 
   listen() {
@@ -238,7 +264,7 @@ class ImageSelector extends BaseFloat {
   }
 
   renderHeader() {
-    const t = this.muya?.options?.t || ((k) => k)
+    const t = this.translate
     const tabs = [
       {
         label: t('editor.image.selector.tab.select'),
@@ -273,7 +299,7 @@ class ImageSelector extends BaseFloat {
 
   renderBody = () => {
     const { tab, state, isFullMode } = this
-    const t = this.muya?.options?.t || ((k) => k)
+    const t = this.translate
     const { alt, title, src } = state
     let bodyContent = null
     if (tab === 'select') {
@@ -373,7 +399,7 @@ class ImageSelector extends BaseFloat {
               }
             }
           },
-          `${isFullMode ? t('editor.image.selector.hint.simple') : t('editor.image.selector.hint.full')}.`
+          isFullMode ? t('editor.image.selector.hint.simple') : t('editor.image.selector.hint.full')
         )
       ])
       bodyContent = [inputWrapper, embedButton, bottomDes]

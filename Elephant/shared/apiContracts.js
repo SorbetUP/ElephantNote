@@ -219,6 +219,7 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
       model: optionalString,
       apiKey: optionalString,
       codexLinkEnabled: optionalBoolean,
+      defaultProvider: optionalString,
       localAi: optionalObject,
       providers: optionalObject,
       routes: optionalObject,

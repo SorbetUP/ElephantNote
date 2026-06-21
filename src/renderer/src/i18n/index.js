@@ -106,6 +106,27 @@ const createFallbackEnglishTranslations = () => ({
         alignCenter: 'Align center',
         alignRight: 'Align right',
         delete: 'Delete image'
+      },
+      selector: {
+        tab: {
+          select: 'Select image',
+          embedLink: 'Embed link'
+        },
+        select: {
+          chooseButton: 'Choose image',
+          tip: 'Choose an image from your device.'
+        },
+        inputs: {
+          alt: 'Alt text',
+          src: 'Image path or URL',
+          title: 'Title'
+        },
+        embedButton: 'Embed image',
+        hint: {
+          prefix: 'Need alt text or title?',
+          full: 'Show more fields',
+          simple: 'Show fewer fields'
+        }
       }
     },
     'highlight-start': 'Highlight start',
@@ -141,13 +162,21 @@ const createFallbackEnglishTranslations = () => ({
     selectAll: 'Select all'
   },
   commands: {
+    file: {
+      changeEncoding: 'Change encoding',
+      quickOpen: 'Quick open',
+      changeLineEnding: 'Change line ending',
+      trailingNewline: 'Trailing newline'
+    },
     spellchecker: {
       switchLanguage: 'Switch spellchecker language'
     }
   },
   commandPalette: {
     placeholders: {
-      selectLanguage: 'Select language'
+      selectLanguage: 'Select language',
+      selectOption: 'Select an option',
+      searchFileToOpen: 'Search a file to open'
     }
   },
   search: {
@@ -187,82 +216,72 @@ const enTranslations = mergeLocaleMessages(englishFallback, loadLocaleMessages('
 // Create the Vue i18n instance
 const i18n = createI18n({
   legacy: false,
-  locale: 'en', // default is en
+  locale: 'en',
   fallbackLocale: 'en',
-  messages: { en: enTranslations }, // Load en by default only
-  // Disable linking to avoid '@' symbols being misinterpreted
+  messages: { en: enTranslations },
+  fallbackWarn: false,
+  missingWarn: false,
   modifiers: {
     '@': () => '@'
   },
-  // Disable plural parsing
   pluralRules: {},
-  // Custom message compiler to handle '|' characters
   messageCompiler: {
     compile: (message) => {
-      // If the message contains '|', return the raw string without plural parsing
       if (typeof message === 'string' && message.includes('|')) {
         return () => message
       }
-      // For other messages, use the default compiler
       return null
     }
   }
 })
 
-// Export the translation function - Fix: correctly handle the Vue i18n v9+ global getter
 export const t = (key, ...args) => {
-  // Check if the i18n instance is available
   if (!i18n) {
-    console.warn('⚠️ i18n实例不可用，使用英文fallback')
+    console.warn('⚠️ i18n unavailable, using English fallback')
     return key
   }
 
   try {
-    // Correctly access the global property
     if (!i18n.global) {
       console.warn('⚠️ i18n.global not ready yet, falling back to EN')
       return key
     }
-
+    if (typeof i18n.global.te === 'function' && !i18n.global.te(key)) {
+      return key
+    }
     return i18n.global.t(key, ...args)
   } catch (error) {
-    console.error('❌ 翻译函数执行错误:', error)
+    console.error('❌ Translation function error:', error)
     return key
   }
 }
 
-// Export language setter function
 export const setLanguage = (locale) => {
   if (!locale) return
   if (!i18n.global.availableLocales.includes(locale)) {
     const translation = loadLocaleMessages(locale)
     const localeMessages = locale === 'en'
       ? mergeLocaleMessages(englishFallback, translation)
-      : translation
-    if (!localeMessages) return // Failed to load locale file, error msg should be in the loadTranslations function
+      : mergeLocaleMessages(englishFallback, translation)
+    if (!localeMessages) return
 
-    // Add the loaded locale to i18n instance
     i18n.global.setLocaleMessage(locale, localeMessages)
     console.log(`🌐 Loaded and set new locale: ${locale}`)
   }
   i18n.global.locale.value = locale
 }
 
-// Export the current language getter function
 export const getCurrentLanguage = () => i18n.global.locale.value
 
-// Export the i18n instance (named and default export)
 export { i18n }
 export default i18n
 
-// Listen for language changes
 if (window.electron && window.electron.ipcRenderer) {
   window.electron.ipcRenderer.on('language-changed', (event, newLocale) => {
     setLanguage(newLocale)
     bus.emit('language-changed', newLocale)
   })
 
-  // Request the current language setting at startup
   window.electron.ipcRenderer.send('mt::get-current-language')
   window.electron.ipcRenderer.on('mt::current-language', (event, language) => {
     setLanguage(language)

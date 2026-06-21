@@ -5,5 +5,14 @@ export const buildRcloneFilterRules = () => [
   '- .DS_Store',
   '- Thumbs.db',
   '- desktop.ini',
+  '- ~$*',
+  '- ~*.tmp',
+  '- .~*',
+  '- *.swp',
+  '- *.tmp',
+  '- .elephantnote/cache/**',
+  '- .elephantnote/logs/**',
+  '- .elephantnote/search/**',
+  '- .elephantnote/sync-local.json',
   '+ **'
 ]

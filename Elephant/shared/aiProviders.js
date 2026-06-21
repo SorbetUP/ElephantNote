@@ -169,9 +169,10 @@ export const normalizeAiConfig = (config = {}) => {
   const endpoint = normalizeAiEndpointForTransport(routeRuntime?.endpoint || config.endpoint || preset.endpoint, transport)
   const model = String(routeRuntime?.model || config.model || preset.model || '')
   const apiKey = String(routeRuntime?.apiKey || config.apiKey || '')
+  const { enabled: _enabled, ...restConfig } = getObject(config)
 
   return {
-    ...config,
+    ...restConfig,
     preset: preset.id,
     name: String(config.name || preset.label),
     provider: routeRuntime?.provider || (config.provider === 'disabled' && localAi.enabled ? 'app-local' : config.provider),

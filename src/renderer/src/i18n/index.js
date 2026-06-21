@@ -211,13 +211,13 @@ const loadLocaleMessages = (locale) => {
 }
 
 const englishFallback = createFallbackEnglishTranslations()
-const enTranslations = mergeLocaleMessages(englishFallback, loadLocaleMessages('en'))
+const loadedLocales = new Set(['en'])
 
 const i18n = createI18n({
   legacy: false,
   locale: 'en',
   fallbackLocale: 'en',
-  messages: { en: enTranslations },
+  messages: { en: englishFallback },
   modifiers: {
     '@': () => '@'
   },
@@ -255,12 +255,13 @@ export const t = (key, ...args) => {
 
 export const setLanguage = (locale) => {
   if (!locale) return
-  if (!i18n.global.availableLocales.includes(locale)) {
+  if (locale !== 'en' && !loadedLocales.has(locale)) {
     const translation = loadLocaleMessages(locale)
     const localeMessages = mergeLocaleMessages(englishFallback, translation)
     if (!localeMessages) return
 
     i18n.global.setLocaleMessage(locale, localeMessages)
+    loadedLocales.add(locale)
     console.log(`🌐 Loaded and set new locale: ${locale}`)
   }
   i18n.global.locale.value = locale

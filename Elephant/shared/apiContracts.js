@@ -211,7 +211,7 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   ]),
   aiRuntime: Object.freeze([
     action('AI_CONFIG_GET', 'ai.config.get'),
-    action('AI_CONFIG_SET', 'ai.config.set', schema.object({
+    action('AI_CONFIG_SET', 'ai.config.set', schema.strictObject({
       preset: optionalString,
       name: optionalString,
       provider: optionalString,

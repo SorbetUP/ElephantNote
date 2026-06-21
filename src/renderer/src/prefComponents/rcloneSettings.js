@@ -7,19 +7,29 @@ export default {
     statusLabel: 'Not configured'
   }),
   methods: {
+    readEnvelope(response) {
+      if (!response?.ok) throw new Error(response?.error?.message || 'Sync request failed.')
+      return response.data || {}
+    },
     async refreshStatus() {
-      const response = await window.elephantnote.api.call('sync.status')
-      const data = response?.data || {}
-      this.remotePath = data.remotePath || this.remotePath
-      this.statusLabel = data.running ? 'Running' : (data.remotePath ? 'Ready' : 'Not configured')
+      try {
+        const data = this.readEnvelope(await window.elephantnote.api.call('sync.status'))
+        this.remotePath = data.remotePath || this.remotePath
+        this.statusLabel = data.running ? 'Running' : (data.remotePath ? 'Ready' : 'Not configured')
+      } catch (error) {
+        this.statusLabel = error?.message || 'Unable to read status.'
+      }
     },
     async runNow() {
-      const response = await window.elephantnote.api.call('sync.run', {
-        init: { remotePath: this.remotePath },
-        snapshot: {}
-      })
-      const data = response?.data || {}
-      this.statusLabel = data.lastError || 'Done'
+      try {
+        const data = this.readEnvelope(await window.elephantnote.api.call('sync.run', {
+          init: { remotePath: this.remotePath },
+          snapshot: {}
+        }))
+        this.statusLabel = data.lastError || 'Done'
+      } catch (error) {
+        this.statusLabel = error?.message || 'Unable to run rclone.'
+      }
     }
   },
   mounted() {

@@ -1,8 +1,11 @@
 import { RcloneManager } from './RcloneManager.js'
 import { buildBisyncArgs } from './rcloneArgs.js'
+import { createRcloneExecutor } from './rcloneNodeRunner.js'
+
+const createDefaultRclone = () => new RcloneManager({ executor: createRcloneExecutor() })
 
 export class RcloneVaultEngine {
-  constructor({ cwd = '', rclone = new RcloneManager() } = {}) {
+  constructor({ cwd = '', rclone = createDefaultRclone() } = {}) {
     this.cwd = cwd
     this.rclone = rclone
     this.running = false

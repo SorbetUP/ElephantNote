@@ -9,6 +9,7 @@ describe('rclone sync helpers', () => {
   it('builds the default ElephantNote ignore rules', () => {
     expect(buildRcloneFilterRules()).toContain('- .git/**')
     expect(buildRcloneFilterRules()).toContain('- .elephantnote/search/**')
+    expect(buildRcloneFilterRules()).toContain('- .elephantnote/sync-config.json')
     expect(buildRcloneFilterRules()).toContain('+ **')
   })
 
@@ -28,11 +29,12 @@ describe('rclone sync helpers', () => {
     expect(rules).toContain('- *.tmp')
   })
 
-  it('excludes ElephantNote cache directories', () => {
+  it('excludes ElephantNote local-only sync and cache directories', () => {
     const rules = buildRcloneFilterRules()
     expect(rules).toContain('- .elephantnote/cache/**')
     expect(rules).toContain('- .elephantnote/logs/**')
     expect(rules).toContain('- .elephantnote/search/**')
+    expect(rules).toContain('- .elephantnote/sync/**')
   })
 
   it('keeps shared vault content included after exclusions', () => {
@@ -45,20 +47,18 @@ describe('rclone sync helpers', () => {
   })
 
   it('builds the first-run bisync command shape', () => {
-    expect(buildBisyncArgs({ localPath: '/vault', remotePath: 'remote:vault' })).toEqual([
-      RCLONE_SYNC_COMMAND,
-      '/vault',
-      'remote:vault',
-      '--resync'
-    ])
+    const args = buildBisyncArgs({ localPath: '/vault', remotePath: 'remote:vault' })
+    expect(args.slice(0, 3)).toEqual([RCLONE_SYNC_COMMAND, '/vault', 'remote:vault'])
+    expect(args).toContain('--check-access')
+    expect(args).toContain('--conflict-resolve')
+    expect(args).toContain('none')
+    expect(args).toContain('--resync')
   })
 
   it('can build a normal bisync run without resync', () => {
-    expect(buildBisyncArgs({ localPath: '/vault', remotePath: 'remote:vault', resync: false })).toEqual([
-      RCLONE_SYNC_COMMAND,
-      '/vault',
-      'remote:vault'
-    ])
+    const args = buildBisyncArgs({ localPath: '/vault', remotePath: 'remote:vault', resync: false })
+    expect(args.slice(0, 3)).toEqual([RCLONE_SYNC_COMMAND, '/vault', 'remote:vault'])
+    expect(args).not.toContain('--resync')
   })
 
   it('keeps local paths unchanged', () => {

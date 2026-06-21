@@ -1,7 +1,7 @@
 import fs from 'fs-extra'
 import path from 'path'
 import { RcloneManager } from './RcloneManager.js'
-import { buildBisyncArgs } from './rcloneArgs.js'
+import { buildBisyncArgs, buildRcloneFilterRules } from './rcloneArgs.js'
 import { createRcloneExecutor } from './rcloneNodeRunner.js'
 
 const createDefaultRclone = () => new RcloneManager({ executor: createRcloneExecutor() })
@@ -50,6 +50,21 @@ export class RcloneVaultEngine {
 
   configPath() {
     return path.join(this.cwd, CONFIG_DIR, CONFIG_FILE)
+  }
+
+  syncDir() {
+    return path.join(this.cwd, CONFIG_DIR, 'sync')
+  }
+
+  filtersPath() {
+    return path.join(this.syncDir(), 'rclone-filter.txt')
+  }
+
+  async ensureSupportFiles() {
+    if (!this.cwd) return {}
+    await fs.ensureDir(this.syncDir())
+    await fs.writeFile(this.filtersPath(), `${buildRcloneFilterRules().join('\n')}\n`, 'utf8')
+    return { filtersFile: this.filtersPath() }
   }
 
   applyConfig(config = {}) {
@@ -203,8 +218,9 @@ export class RcloneVaultEngine {
       return this.status()
     }
     await this.persistConfig()
+    const supportFiles = await this.ensureSupportFiles()
     try {
-      await this.rclone.run(buildBisyncArgs({ localPath: this.cwd, remotePath: this.remotePath, resync: !this.firstRunDone }), { cwd: this.cwd })
+      await this.rclone.run(buildBisyncArgs({ localPath: this.cwd, remotePath: this.remotePath, resync: !this.firstRunDone, filtersFile: supportFiles.filtersFile }), { cwd: this.cwd })
       this.firstRunDone = true
       await this.persistConfig()
       this.lastError = ''

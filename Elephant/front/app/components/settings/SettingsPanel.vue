@@ -1,21 +1,181 @@
 <template>
-  <div class="en-settings-backdrop" :class="[`en-theme-${themeMode}`, `en-theme-${themeClassId}`]" :style="settingsStyle" @click.self="$emit('close')">
-    <section class="en-settings-panel" :style="settingsStyle" aria-label="ElephantNote settings">
-      <header class="en-settings-header"><button class="en-settings-close" type="button" @click="$emit('close')"><X class="en-icon" /></button><div><p>ElephantNote</p><h2>Settings</h2></div></header>
+  <div
+    class="en-settings-backdrop"
+    :class="[`en-theme-${themeMode}`, `en-theme-${themeClassId}`]"
+    :style="settingsStyle"
+    @click.self="$emit('close')"
+  >
+    <section
+      class="en-settings-panel"
+      :style="settingsStyle"
+      aria-label="ElephantNote settings"
+    >
+      <header class="en-settings-header">
+        <button
+          class="en-settings-close"
+          type="button"
+          @click="$emit('close')"
+        >
+          <X class="en-icon" />
+        </button>
+        <div>
+          <p>ElephantNote</p>
+          <h2>Settings</h2>
+        </div>
+      </header>
+
       <div class="en-settings-grid">
-        <aside class="en-settings-nav"><button v-for="item in sections" :key="item.id" type="button" :class="{ active: activeSection === item.id }" @click="activeSection = item.id">{{ item.label }}</button></aside>
+        <aside class="en-settings-nav">
+          <button
+            v-for="item in sections"
+            :key="item.id"
+            type="button"
+            :class="{ active: activeSection === item.id }"
+            @click="activeSection = item.id"
+          >
+            {{ item.label }}
+          </button>
+        </aside>
+
         <div class="en-settings-content">
           <template v-if="activeSection === 'appearance'">
-            <section class="en-settings-section"><div><h3>Theme</h3><p>{{ activeThemeLabel }}</p></div><button class="en-theme-switch" type="button" :class="{ dark: themeMode === 'dark' }" @click="emit('update-theme', oppositeTheme)"><SunMedium class="en-theme-icon light" /><Moon class="en-theme-icon dark" />{{ themeMode === 'dark' ? 'Dark' : 'Light' }}</button></section>
-            <section class="en-settings-section stacked"><div><h3>Graphic themes</h3><p>Choose a visual family. Each family keeps matching light and dark variants.</p></div><div class="en-theme-grid"><button v-for="family in themeFamilies" :key="family.id" type="button" class="en-theme-card" :class="{ active: activeThemeFamily.id === family.id }" @click="emit('update-theme', getThemeVariant(family.id, themeMode))"><span class="en-theme-card-preview"><i v-for="swatch in family.swatches" :key="swatch" :style="{ backgroundColor: swatch }" /></span><span class="en-theme-card-copy"><strong>{{ family.name }}</strong><small>{{ family.description }}</small></span></button></div></section>
-            <section class="en-settings-section"><div><h3>Sidebar width</h3><p>The navigation rail can also be resized by dragging its right edge.</p></div><label class="en-settings-range"><input type="range" min="184" max="320" :value="sidebarWidth" @input="$emit('update-sidebar-width', Number($event.target.value))" /><output>{{ sidebarWidth }}px</output></label></section>
+            <section class="en-settings-section">
+              <div>
+                <h3>Theme</h3>
+                <p>{{ activeThemeLabel }}</p>
+              </div>
+              <button
+                class="en-theme-switch"
+                type="button"
+                :class="{ dark: themeMode === 'dark' }"
+                @click="emit('update-theme', oppositeTheme)"
+              >
+                <SunMedium class="en-theme-icon light" />
+                <Moon class="en-theme-icon dark" />
+                {{ themeMode === 'dark' ? 'Dark' : 'Light' }}
+              </button>
+            </section>
+            <section class="en-settings-section stacked">
+              <div>
+                <h3>Graphic themes</h3>
+                <p>Choose a visual family. Each family keeps matching light and dark variants.</p>
+              </div>
+              <div class="en-theme-grid">
+                <button
+                  v-for="family in themeFamilies"
+                  :key="family.id"
+                  type="button"
+                  class="en-theme-card"
+                  :class="{ active: activeThemeFamily.id === family.id }"
+                  @click="emit('update-theme', getThemeVariant(family.id, themeMode))"
+                >
+                  <span class="en-theme-card-preview">
+                    <i
+                      v-for="swatch in family.swatches"
+                      :key="swatch"
+                      :style="{ backgroundColor: swatch }"
+                    />
+                  </span>
+                  <span class="en-theme-card-copy">
+                    <strong>{{ family.name }}</strong>
+                    <small>{{ family.description }}</small>
+                  </span>
+                </button>
+              </div>
+            </section>
+            <section class="en-settings-section">
+              <div>
+                <h3>Sidebar width</h3>
+                <p>The navigation rail can also be resized by dragging its right edge.</p>
+              </div>
+              <label class="en-settings-range">
+                <input
+                  type="range"
+                  min="184"
+                  max="320"
+                  :value="sidebarWidth"
+                  @input="$emit('update-sidebar-width', Number($event.target.value))"
+                >
+                <output>{{ sidebarWidth }}px</output>
+              </label>
+            </section>
           </template>
-          <template v-else-if="activeSection === 'vaults'"><section class="en-settings-section"><div><h3>Active vault</h3><p>The current vault path is shown here.</p></div><span class="en-settings-pill">{{ activeVaultName }}</span></section><section class="en-settings-section stacked"><div><h3>Open vaults</h3><p v-for="vault in vaults" :key="vault.id" class="en-settings-path">{{ vault.name }} · {{ vault.path }}</p></div></section></template>
-          <template v-else-if="activeSection === 'editor'"><section class="en-settings-section"><div><h3>Editor footer</h3><p>Show the bottom bar with word count, typography controls, and theme shortcut.</p></div><button class="en-settings-toggle-pill" type="button" :class="{ active: preferences.showEditorFooter }" @click="setShowEditorFooter(!preferences.showEditorFooter)">{{ preferences.showEditorFooter ? 'Visible' : 'Hidden' }}</button></section><section class="en-settings-section"><div><h3>Tag prefix</h3><p>Show or hide the # prefix before tag names in the note editor.</p></div><button class="en-settings-toggle-pill" type="button" :class="{ active: preferences.showTagHashInEditor }" @click="setShowTagHashInEditor(!preferences.showTagHashInEditor)">{{ preferences.showTagHashInEditor ? 'Show #' : 'Hide #' }}</button></section><section class="en-settings-section stacked"><div><h3>Autosave</h3><p>Changes are written automatically after a short delay.</p></div><label class="en-settings-range"><input type="range" min="250" max="5000" step="250" :value="preferences.autoSaveDelay" @input="setAutoSaveDelay(Number($event.target.value))" /><output>{{ preferences.autoSaveDelay }} ms</output></label></section></template>
-          <template v-else-if="activeSection === 'import'"><section class="en-settings-section"><div><h3>Import notes</h3><p>Bring notes from a Google Keep export into the active vault.</p></div><button type="button" :disabled="isImporting" @click="importGoogleKeep"><Download class="en-icon" />{{ isImporting ? 'Importing...' : 'Import Google Keep' }}</button></section><section class="en-settings-section stacked"><div><h3>Sources</h3><p>Ingest a web page or RSS feed into local markdown notes.</p></div><div class="en-form-grid"><label><span>URL</span><input v-model.trim="sourceUrl" type="text" placeholder="https://example.com/article" /></label><label><span>Destination folder</span><input v-model.trim="sourceDestination" type="text" placeholder="Sources" /></label></div><div class="en-settings-actions-row"><button type="button" :disabled="isImportingSource || !sourceUrl" @click="ingestSourceUrl">Import URL</button><button type="button" :disabled="isImportingSource || !sourceUrl" @click="importRssSource">Import RSS</button><span class="en-settings-message">{{ sourceImportMessage || importMessage }}</span></div></section></template>
-          <template v-else-if="activeSection === 'sites'"><section class="en-settings-section stacked"><div><h3>Generated sites</h3><p>Manage the current folder website preview.</p></div><div class="en-settings-actions-row"><button type="button" :class="{ active: featureFlags.sitePreview }" @click="toggleFeature('sitePreview')">{{ featureFlags.sitePreview ? 'Enabled' : 'Disabled' }}</button><span class="en-settings-pill">{{ siteStatusLabel }}</span><button type="button" :disabled="!sitePreviewStore.previewUrl" @click="sitePreviewStore.openPreviewExternal">Open</button><button type="button" :disabled="!sitePreviewStore.info" @click="stopSitePreview">Stop</button></div></section></template>
-          <template v-else-if="activeSection === 'sync'"><section class="en-settings-section stacked"><div><h3>Synchronization</h3><p>Pair devices with Syncthing over the local network. Git is only used locally to order snapshots.</p></div><div class="en-sync-status-grid"><article class="en-sync-status-card" :class="{ ok: syncStatus.deviceId }"><GitBranch class="en-icon" /><div><strong>Local Git history</strong><span>{{ syncStatus.branch || 'No branch yet' }}</span></div></article><article class="en-sync-status-card" :class="{ ok: syncStatus.syncthing?.connected, warn: syncStatus.syncthing?.configured && !syncStatus.syncthing?.connected }"><Wifi class="en-icon" /><div><strong>{{ syncStatus.syncthing?.connected ? 'Syncthing connected' : 'Syncthing offline' }}</strong><span>{{ syncStatus.syncthing?.folderState || syncStatus.syncthing?.lastError || 'Waiting for configuration' }}</span></div></article><article class="en-sync-status-card" :class="{ warn: syncStatus.dirty || syncStatus.queued }"><RefreshCw class="en-icon" /><div><strong>{{ syncStatus.dirty ? 'Local changes' : 'Vault clean' }}</strong><span>{{ syncStatus.queued || 0 }} queued · Git history local</span></div></article></div><div class="en-form-grid"><label><span>Backend</span><select v-model="syncForm.backend"><option value="git">Local Git only</option><option value="syncthing-git">Syncthing LAN + local Git</option></select></label><label><span>Branch</span><input v-model.trim="syncForm.branch" type="text" placeholder="main" /></label><label><span>Peer device ID</span><input v-model.trim="syncForm.peerDeviceId" type="text" placeholder="Syncthing device ID" /></label><label><span>Peer address / IP</span><input v-model.trim="syncForm.peerAddress" type="text" placeholder="tcp://192.168.1.42:22000 or dynamic" /></label><label><span>Syncthing REST endpoint</span><input v-model.trim="syncForm.syncthingEndpoint" type="text" placeholder="http://127.0.0.1:8384" /></label></div><div class="en-settings-actions-row"><button type="button" :class="{ active: featureFlags.gitSync }" @click="toggleFeature('gitSync')">{{ featureFlags.gitSync ? 'Sync enabled' : 'Sync disabled' }}</button><button type="button" :disabled="isSyncRunning" @click="configureSync"><Server class="en-icon" />{{ isSyncRunning ? 'Configuring...' : 'Configure' }}</button><button type="button" :disabled="isSyncRunning" @click="runSync"><RefreshCw class="en-icon" />{{ isSyncRunning ? 'Synchronizing...' : 'Sync now' }}</button><button type="button" :disabled="isSyncRunning" @click="loadSyncStatus">Refresh status</button><span class="en-settings-message">{{ syncMessage }}</span></div></section></template>
-          <template v-else-if="activeSection === 'ai'"><ai-provider-settings-panel /></template>
+
+          <template v-else-if="activeSection === 'vaults'">
+            <section class="en-settings-section">
+              <div>
+                <h3>Active vault</h3>
+                <p>The current vault path is shown here.</p>
+              </div>
+              <span class="en-settings-pill">{{ activeVaultName }}</span>
+            </section>
+            <section class="en-settings-section stacked">
+              <div>
+                <h3>Open vaults</h3>
+                <p>Remove a vault from ElephantNote without deleting the folder from disk.</p>
+              </div>
+              <div class="en-vault-list">
+                <article
+                  v-for="vault in vaults"
+                  :key="vault.id"
+                  class="en-vault-row"
+                >
+                  <div>
+                    <strong>{{ vault.name }}</strong>
+                    <p class="en-settings-path">{{ vault.path }}</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="danger"
+                    :disabled="removingVaultId === vault.id"
+                    @click="removeVaultFromApp(vault)"
+                  >
+                    {{ removingVaultId === vault.id ? 'Removing...' : 'Remove from app' }}
+                  </button>
+                </article>
+              </div>
+              <span class="en-settings-message">{{ vaultMessage }}</span>
+            </section>
+          </template>
+
+          <template v-else-if="activeSection === 'editor'">
+            <section class="en-settings-section">
+              <div><h3>Editor footer</h3><p>Show the bottom bar with word count, typography controls, and theme shortcut.</p></div>
+              <button class="en-settings-toggle-pill" type="button" :class="{ active: preferences.showEditorFooter }" @click="setShowEditorFooter(!preferences.showEditorFooter)">{{ preferences.showEditorFooter ? 'Visible' : 'Hidden' }}</button>
+            </section>
+            <section class="en-settings-section">
+              <div><h3>Tag prefix</h3><p>Show or hide the # prefix before tag names in the note editor.</p></div>
+              <button class="en-settings-toggle-pill" type="button" :class="{ active: preferences.showTagHashInEditor }" @click="setShowTagHashInEditor(!preferences.showTagHashInEditor)">{{ preferences.showTagHashInEditor ? 'Show #' : 'Hide #' }}</button>
+            </section>
+            <section class="en-settings-section stacked">
+              <div><h3>Autosave</h3><p>Changes are written automatically after a short delay.</p></div>
+              <label class="en-settings-range"><input type="range" min="250" max="5000" step="250" :value="preferences.autoSaveDelay" @input="setAutoSaveDelay(Number($event.target.value))"><output>{{ preferences.autoSaveDelay }} ms</output></label>
+            </section>
+          </template>
+
+          <template v-else-if="activeSection === 'import'">
+            <section class="en-settings-section">
+              <div><h3>Import notes</h3><p>Bring notes from a Google Keep export into the active vault.</p></div>
+              <button type="button" :disabled="isImporting" @click="importGoogleKeep"><Download class="en-icon" />{{ isImporting ? 'Importing...' : 'Import Google Keep' }}</button>
+            </section>
+            <section class="en-settings-section stacked">
+              <div><h3>Sources</h3><p>Ingest a web page or RSS feed into local markdown notes.</p></div>
+              <div class="en-form-grid"><label><span>URL</span><input v-model.trim="sourceUrl" type="text" placeholder="https://example.com/article"></label><label><span>Destination folder</span><input v-model.trim="sourceDestination" type="text" placeholder="Sources"></label></div>
+              <div class="en-settings-actions-row"><button type="button" :disabled="isImportingSource || !sourceUrl" @click="ingestSourceUrl">Import URL</button><button type="button" :disabled="isImportingSource || !sourceUrl" @click="importRssSource">Import RSS</button><span class="en-settings-message">{{ sourceImportMessage || importMessage }}</span></div>
+            </section>
+          </template>
+
+          <template v-else-if="activeSection === 'sites'">
+            <section class="en-settings-section stacked"><div><h3>Generated sites</h3><p>Manage the current folder website preview.</p></div><div class="en-settings-actions-row"><button type="button" :class="{ active: featureFlags.sitePreview }" @click="toggleFeature('sitePreview')">{{ featureFlags.sitePreview ? 'Enabled' : 'Disabled' }}</button><span class="en-settings-pill">{{ siteStatusLabel }}</span><button type="button" :disabled="!sitePreviewStore.previewUrl" @click="sitePreviewStore.openPreviewExternal">Open</button><button type="button" :disabled="!sitePreviewStore.info" @click="stopSitePreview">Stop</button></div></section>
+          </template>
+
+          <template v-else-if="activeSection === 'sync'">
+            <section class="en-settings-section stacked"><div><h3>Synchronization</h3><p>Pair devices with Syncthing over the local network. Git is only used locally to order snapshots.</p></div><div class="en-sync-status-grid"><article class="en-sync-status-card" :class="{ ok: syncStatus.deviceId }"><GitBranch class="en-icon" /><div><strong>Local Git history</strong><span>{{ syncStatus.branch || 'No branch yet' }}</span></div></article><article class="en-sync-status-card" :class="{ ok: syncStatus.syncthing?.connected, warn: syncStatus.syncthing?.configured && !syncStatus.syncthing?.connected }"><Wifi class="en-icon" /><div><strong>{{ syncStatus.syncthing?.connected ? 'Syncthing connected' : 'Syncthing offline' }}</strong><span>{{ syncStatus.syncthing?.folderState || syncStatus.syncthing?.lastError || 'Waiting for configuration' }}</span></div></article><article class="en-sync-status-card" :class="{ warn: syncStatus.dirty || syncStatus.queued }"><RefreshCw class="en-icon" /><div><strong>{{ syncStatus.dirty ? 'Local changes' : 'Vault clean' }}</strong><span>{{ syncStatus.queued || 0 }} queued · Git history local</span></div></article></div><div class="en-form-grid"><label><span>Backend</span><select v-model="syncForm.backend"><option value="git">Local Git only</option><option value="syncthing-git">Syncthing LAN + local Git</option></select></label><label><span>Branch</span><input v-model.trim="syncForm.branch" type="text" placeholder="main"></label><label><span>Peer device ID</span><input v-model.trim="syncForm.peerDeviceId" type="text" placeholder="Syncthing device ID"></label><label><span>Peer address / IP</span><input v-model.trim="syncForm.peerAddress" type="text" placeholder="tcp://192.168.1.42:22000 or dynamic"></label><label><span>Syncthing REST endpoint</span><input v-model.trim="syncForm.syncthingEndpoint" type="text" placeholder="http://127.0.0.1:8384"></label></div><div class="en-settings-actions-row"><button type="button" :class="{ active: featureFlags.gitSync }" @click="toggleFeature('gitSync')">{{ featureFlags.gitSync ? 'Sync enabled' : 'Sync disabled' }}</button><button type="button" :disabled="isSyncRunning" @click="configureSync"><Server class="en-icon" />{{ isSyncRunning ? 'Configuring...' : 'Configure' }}</button><button type="button" :disabled="isSyncRunning" @click="runSync"><RefreshCw class="en-icon" />{{ isSyncRunning ? 'Synchronizing...' : 'Sync now' }}</button><button type="button" :disabled="isSyncRunning" @click="loadSyncStatus">Refresh status</button><span class="en-settings-message">{{ syncMessage }}</span></div></section>
+          </template>
+
+          <template v-else-if="activeSection === 'ai'">
+            <ai-provider-settings-panel />
+          </template>
         </div>
       </div>
     </section>
@@ -31,6 +191,8 @@ import { ELEPHANTNOTE_THEME_FAMILIES, getOppositeThemeVariant, getThemeFamily, g
 import AiProviderSettingsPanel from './AiProviderSettingsPanel.vue'
 import { useSitePreviewStore } from '../../sitePreview/sitePreviewStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
+import { useVaultStore } from '../../stores/vaultStore'
+
 const props = defineProps({ theme: { type: String, required: true }, sidebarWidth: { type: Number, required: true }, vaults: { type: Array, default: () => [] }, activeVaultName: { type: String, default: 'No vault' }, activeVaultPath: { type: String, default: '' } })
 const emit = defineEmits(['close', 'update-theme', 'update-sidebar-width'])
 const sections = [{ id: 'appearance', label: 'Appearance' }, { id: 'vaults', label: 'Vaults' }, { id: 'editor', label: 'Editor' }, { id: 'import', label: 'Import' }, { id: 'sites', label: 'Sites' }, { id: 'sync', label: 'Sync' }, { id: 'ai', label: 'AI' }]
@@ -46,11 +208,14 @@ const oppositeTheme = computed(() => getOppositeThemeVariant(theme.value))
 const settingsStyle = computed(() => getThemeTokens(theme.value))
 const preferences = usePreferencesStore()
 const sitePreviewStore = useSitePreviewStore()
+const vaultStore = useVaultStore()
 const featureFlags = ref({ askAi: true, sitePreview: true, gitSync: false, agents: true, semanticSearch: true })
 const sourceUrl = ref('')
 const sourceDestination = ref('Sources')
 const sourceImportMessage = ref('')
 const importMessage = ref('')
+const vaultMessage = ref('')
+const removingVaultId = ref('')
 const isImporting = ref(false)
 const isImportingSource = ref(false)
 const isSyncRunning = ref(false)
@@ -61,6 +226,7 @@ const siteStatusLabel = computed(() => sitePreviewStore.previewUrl ? 'Preview ru
 const setAutoSaveDelay = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'autoSaveDelay', value })
 const setShowEditorFooter = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'showEditorFooter', value })
 const setShowTagHashInEditor = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'showTagHashInEditor', value })
+const removeVaultFromApp = async (vault) => { if (!vault?.id) return; if (!window.confirm(`Remove "${vault.name}" from ElephantNote? The folder stays on disk.`)) return; removingVaultId.value = vault.id; vaultMessage.value = ''; log.info('[settings] vault-remove:start', { id: vault.id, path: vault.path }); try { await vaultStore.removeVault(vault.id); vaultMessage.value = `Removed ${vault.name} from ElephantNote. The folder still exists.`; log.info('[settings] vault-remove:done', { id: vault.id }) } catch (error) { log.error('[settings] vault-remove:failed', error); vaultMessage.value = error instanceof Error ? error.message : 'Unable to remove vault.' } finally { removingVaultId.value = '' } }
 const importGoogleKeep = async () => { log.info('[settings] importGoogleKeep:start'); isImporting.value = true; importMessage.value = ''; try { const result = await elephantnoteClient.imports.googleKeep(); importMessage.value = result?.canceled ? 'Import canceled.' : `Imported ${result.imported || 0} note${result.imported === 1 ? '' : 's'}.`; log.info('[settings] importGoogleKeep:done', result) } catch (error) { log.error('[settings] importGoogleKeep:failed', error); importMessage.value = error instanceof Error ? error.message : 'Import failed.' } finally { isImporting.value = false } }
 const ingestSourceUrl = async () => { log.info('[settings] ingestSourceUrl:start', { url: sourceUrl.value, destination: sourceDestination.value }); isImportingSource.value = true; try { const result = await elephantnoteClient.sources.ingestUrl(sourceUrl.value, sourceDestination.value || 'Sources'); sourceImportMessage.value = `Imported ${result.source?.title || 'source'}.`; log.info('[settings] ingestSourceUrl:done', result) } catch (error) { log.error('[settings] ingestSourceUrl:failed', error); sourceImportMessage.value = error instanceof Error ? error.message : 'Source import failed.' } finally { isImportingSource.value = false } }
 const importRssSource = async () => { log.info('[settings] importRssSource:start', { url: sourceUrl.value, destination: sourceDestination.value }); isImportingSource.value = true; try { const result = await elephantnoteClient.sources.importRss(sourceUrl.value, sourceDestination.value || 'Sources'); sourceImportMessage.value = `Imported ${result.imported || 0} feed item${result.imported === 1 ? '' : 's'}.`; log.info('[settings] importRssSource:done', result) } catch (error) { log.error('[settings] importRssSource:failed', error); sourceImportMessage.value = error instanceof Error ? error.message : 'RSS import failed.' } finally { isImportingSource.value = false } }
@@ -75,5 +241,5 @@ onMounted(async () => { log.info('[settings] mounted:start'); try { featureFlags
 </script>
 
 <style scoped>
-.en-settings-backdrop{position:fixed;inset:0;z-index:3000;display:grid;place-items:center;background:rgba(0,0,0,.46);color:var(--en-text,#f4f4f4)}.en-settings-panel{width:min(1120px,92vw);height:min(820px,88vh);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;border:1px solid var(--en-border,rgba(255,255,255,.14));border-radius:22px;background:var(--en-surface,#1f1f1f);box-shadow:0 28px 80px rgba(0,0,0,.35)}.en-settings-header{display:flex;align-items:center;justify-content:flex-start;gap:14px;padding:20px 24px;border-bottom:1px solid var(--en-border,rgba(255,255,255,.12))}.en-settings-header p{margin:0;color:var(--en-muted,#9a9a9a);text-transform:uppercase;letter-spacing:.16em;font-size:12px}.en-settings-header h2{margin:2px 0 0;font-size:24px}.en-settings-close,.en-settings-panel button,.en-settings-panel select,.en-settings-panel input{border:1px solid var(--en-border,rgba(255,255,255,.14));border-radius:12px;background:var(--en-card,#292929);color:var(--en-text,#f4f4f4)}.en-settings-panel button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:34px;padding:0 14px;cursor:pointer}.en-settings-panel button:disabled{opacity:.5;cursor:not-allowed}.en-settings-panel button.active,.en-settings-toggle-pill.active{border-color:#4caf5c;color:#c9f6d0;background:rgba(76,175,92,.12)}.en-settings-close{width:36px;height:36px;padding:0}.en-settings-grid{display:grid;grid-template-columns:180px minmax(0,1fr);min-height:0}.en-settings-nav{padding:14px;border-right:1px solid var(--en-border,rgba(255,255,255,.12));overflow:auto}.en-settings-nav button{width:100%;justify-content:flex-start;margin-bottom:8px}.en-settings-nav button.active{background:var(--en-accent,#3f7df3);border-color:var(--en-accent,#3f7df3);color:white}.en-settings-content{min-height:0;overflow:auto;padding:18px;display:grid;align-content:start;gap:14px}.en-settings-section{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px;border:1px solid var(--en-border,rgba(255,255,255,.14));border-radius:16px;background:var(--en-card,#252525)}.en-settings-section.stacked{display:grid;align-items:start}.en-settings-section h3{margin:0 0 5px;font-size:18px}.en-settings-section p{margin:0;color:var(--en-muted,#9a9a9a);line-height:1.45}.en-settings-pill{display:inline-flex;align-items:center;border:1px solid var(--en-border,rgba(255,255,255,.14));border-radius:999px;padding:4px 10px;color:var(--en-muted,#9a9a9a)}.en-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.en-form-grid label{display:grid;gap:6px;color:var(--en-muted,#9a9a9a)}.en-form-grid input,.en-form-grid select{width:100%;min-height:38px;padding:0 12px}.en-settings-actions-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.en-settings-message{color:var(--en-muted,#9a9a9a)}.en-settings-path{color:var(--en-muted,#9a9a9a);font-size:12px;overflow-wrap:anywhere}.en-settings-range{display:flex;align-items:center;gap:12px}.en-settings-range input{min-width:180px}.en-theme-switch{min-width:110px}.en-theme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.en-theme-card{justify-content:flex-start!important;text-align:left}.en-theme-card-preview{display:flex;gap:4px}.en-theme-card-preview i{width:18px;height:18px;border-radius:999px}.en-theme-card-copy{display:grid}.en-theme-card-copy small{color:var(--en-muted,#9a9a9a)}.en-sync-status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.en-sync-status-card{display:grid;gap:10px;padding:14px;border:1px solid var(--en-border,rgba(255,255,255,.14));border-radius:14px;background:rgba(0,0,0,.12)}.en-sync-status-card.ok{border-color:rgba(76,175,92,.6)}.en-sync-status-card.warn{border-color:rgba(255,193,7,.55)}.en-sync-status-card div{display:grid;gap:3px}.en-sync-status-card span{color:var(--en-muted,#9a9a9a)}.en-icon{width:16px;height:16px}@media(max-width:760px){.en-settings-grid{grid-template-columns:1fr}.en-settings-nav{display:flex;gap:8px;border-right:0;border-bottom:1px solid var(--en-border,rgba(255,255,255,.12))}.en-settings-nav button{width:auto;margin:0}.en-settings-section{display:grid}.en-form-grid{grid-template-columns:1fr}}
+.en-settings-backdrop{position:fixed;inset:0;z-index:3000;display:grid;place-items:center;background:rgba(0,0,0,.46);color:var(--en-text,#f4f4f4)}.en-settings-panel{width:min(1120px,92vw);height:min(820px,88vh);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;border:1px solid var(--en-border,rgba(255,255,255,.14));border-radius:22px;background:var(--en-surface,#1f1f1f);box-shadow:0 28px 80px rgba(0,0,0,.35)}.en-settings-header{display:flex;align-items:center;justify-content:flex-start;gap:14px;padding:20px 24px;border-bottom:1px solid var(--en-border,rgba(255,255,255,.12))}.en-settings-header p{margin:0;color:var(--en-muted,#9a9a9a);text-transform:uppercase;letter-spacing:.16em;font-size:12px}.en-settings-header h2{margin:2px 0 0;font-size:24px}.en-settings-close,.en-settings-panel button,.en-settings-panel select,.en-settings-panel input{border:1px solid var(--en-border,rgba(255,255,255,.14));border-radius:12px;background:var(--en-card,#292929);color:var(--en-text,#f4f4f4)}.en-settings-panel button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:34px;padding:0 14px;cursor:pointer}.en-settings-panel button:disabled{opacity:.5;cursor:not-allowed}.en-settings-panel button.active,.en-settings-toggle-pill.active{border-color:#4caf5c;color:#c9f6d0;background:rgba(76,175,92,.12)}.en-settings-panel button.danger{border-color:var(--en-danger,#ef4444);color:var(--en-danger,#ef4444)}.en-settings-close{width:36px;height:36px;padding:0}.en-settings-grid{display:grid;grid-template-columns:180px minmax(0,1fr);min-height:0}.en-settings-nav{padding:14px;border-right:1px solid var(--en-border,rgba(255,255,255,.12));overflow:auto}.en-settings-nav button{width:100%;justify-content:flex-start;margin-bottom:8px}.en-settings-nav button.active{background:var(--en-accent,#3f7df3);border-color:var(--en-accent,#3f7df3);color:white}.en-settings-content{min-height:0;overflow:auto;padding:18px;display:grid;align-content:start;gap:14px}.en-settings-section{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px;border:1px solid var(--en-border,rgba(255,255,255,.14));border-radius:16px;background:var(--en-card,#252525)}.en-settings-section.stacked{display:grid;align-items:start}.en-settings-section h3{margin:0 0 5px;font-size:18px}.en-settings-section p{margin:0;color:var(--en-muted,#9a9a9a);line-height:1.45}.en-settings-pill{display:inline-flex;align-items:center;border:1px solid var(--en-border,rgba(255,255,255,.14));border-radius:999px;padding:4px 10px;color:var(--en-muted,#9a9a9a)}.en-vault-list{display:grid;gap:10px}.en-vault-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px;border:1px solid var(--en-border,rgba(255,255,255,.14));border-radius:14px;background:rgba(0,0,0,.08)}.en-vault-row strong{display:block;margin-bottom:4px}.en-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.en-form-grid label{display:grid;gap:6px;color:var(--en-muted,#9a9a9a)}.en-form-grid input,.en-form-grid select{width:100%;min-height:38px;padding:0 12px}.en-settings-actions-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.en-settings-message{color:var(--en-muted,#9a9a9a)}.en-settings-path{color:var(--en-muted,#9a9a9a);font-size:12px;overflow-wrap:anywhere}.en-settings-range{display:flex;align-items:center;gap:12px}.en-settings-range input{min-width:180px}.en-theme-switch{min-width:110px}.en-theme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.en-theme-card{justify-content:flex-start!important;text-align:left}.en-theme-card-preview{display:flex;gap:4px}.en-theme-card-preview i{width:18px;height:18px;border-radius:999px}.en-theme-card-copy{display:grid}.en-theme-card-copy small{color:var(--en-muted,#9a9a9a)}.en-sync-status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.en-sync-status-card{display:grid;gap:10px;padding:14px;border:1px solid var(--en-border,rgba(255,255,255,.14));border-radius:14px;background:rgba(0,0,0,.12)}.en-sync-status-card.ok{border-color:rgba(76,175,92,.6)}.en-sync-status-card.warn{border-color:rgba(255,193,7,.55)}.en-sync-status-card div{display:grid;gap:3px}.en-sync-status-card span{color:var(--en-muted,#9a9a9a)}.en-icon{width:16px;height:16px}@media(max-width:760px){.en-settings-grid{grid-template-columns:1fr}.en-settings-nav{display:flex;gap:8px;border-right:0;border-bottom:1px solid var(--en-border,rgba(255,255,255,.12))}.en-settings-nav button{width:auto;margin:0}.en-settings-section,.en-vault-row{display:grid}.en-form-grid{grid-template-columns:1fr}}
 </style>

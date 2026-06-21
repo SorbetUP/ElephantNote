@@ -20,7 +20,7 @@ export const buildRcloneFilterRules = () => [
   '+ **'
 ]
 
-export const buildBisyncArgs = ({ localPath, remotePath, resync = true } = {}) => {
+export const buildBisyncArgs = ({ localPath, remotePath, resync = true, filtersFile = '' } = {}) => {
   const args = [
     RCLONE_SYNC_COMMAND,
     localPath,
@@ -32,6 +32,7 @@ export const buildBisyncArgs = ({ localPath, remotePath, resync = true } = {}) =
     '--conflict-suffix',
     'elephant-conflict'
   ]
+  if (filtersFile) args.push('--filters-file', filtersFile)
   if (resync) args.push('--resync')
   return args
 }

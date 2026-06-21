@@ -9,7 +9,10 @@
     :class="[
       `en-theme-${themeMode}`,
       `en-theme-${themeClassId}`,
-      { 'en-pinned-card-halo': preferences.pinnedCardHalo }
+      {
+        'en-pinned-card-halo': preferences.pinnedCardHalo,
+        'en-local-ai-disabled': !showLocalModelLibrary
+      }
     ]"
     :style="shellStyle"
   >
@@ -68,6 +71,7 @@ import {
   getThemeTokens,
   normalizeThemeId
 } from 'common/elephantnote/appearance'
+import { elephantnoteClient } from '../../services/elephantnoteClient'
 import EmptyVaultPicker from './EmptyVaultPicker.vue'
 import TopVaultBar from './TopVaultBar.vue'
 import IconRail from '../navigation/IconRail.vue'
@@ -88,10 +92,12 @@ const isSettingsOpen = ref(false)
 const theme = ref(normalizeThemeId(window.localStorage.getItem(ELEPHANTNOTE_THEME_STORAGE_KEY)))
 const sidebarWidth = ref(232)
 const sidebarVisible = ref(true)
+const localAi = ref({ enabled: true, showModelLibraryInSidebar: true })
 
 const activeThemeTokens = computed(() => getThemeTokens(theme.value))
 const themeMode = computed(() => getThemeMode(theme.value))
 const themeClassId = computed(() => theme.value.replace(/[^a-z0-9-]/gi, '-'))
+const showLocalModelLibrary = computed(() => localAi.value.enabled !== false && localAi.value.showModelLibraryInSidebar !== false)
 const shellStyle = computed(() => ({
   ...activeThemeTokens.value,
   '--en-sidebar-width': `${sidebarWidth.value}px`
@@ -195,8 +201,29 @@ const handleTabSaved = (_event, tabId) => {
   }
 }
 
+const applyAiConfigVisibility = (config = {}) => {
+  localAi.value = { ...localAi.value, ...(config.localAi || {}) }
+  if (!showLocalModelLibrary.value && store.activeWorkspaceView === 'models') {
+    store.setWorkspaceView('notes')
+  }
+}
+
+const loadAiConfigVisibility = async () => {
+  try {
+    const config = await elephantnoteClient.ai.getConfig()
+    applyAiConfigVisibility(config)
+  } catch (error) {
+    console.warn('Unable to load ElephantNote AI visibility settings:', error)
+  }
+}
+
+const handleAiConfigChanged = (event) => {
+  applyAiConfigVisibility(event.detail || {})
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleShortcut)
+  window.addEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
   window.electron.ipcRenderer.on('mt::tab-saved', handleTabSaved)
   setTheme(theme.value)
   const storedWidth = Number(window.localStorage.getItem('elephantnote:sidebarWidth'))
@@ -209,12 +236,14 @@ onMounted(() => {
     preferences.SET_SINGLE_PREFERENCE({ type: 'autoSave', value: true })
   }
   store.load()
+  loadAiConfigVisibility()
 })
 
 watch(theme, applyThemeVariables)
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleShortcut)
+  window.removeEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
   const ipcRenderer = window.electron.ipcRenderer
   if (ipcRenderer.off) {
     ipcRenderer.off('mt::tab-saved', handleTabSaved)
@@ -272,5 +301,9 @@ onBeforeUnmount(() => {
 .en-sidebar-resizer {
   background: var(--en-border);
   cursor: col-resize;
+}
+
+.en-local-ai-disabled :deep(.en-rail-icon[title="Models"]) {
+  display: none;
 }
 </style>

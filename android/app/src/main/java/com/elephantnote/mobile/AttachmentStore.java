@@ -30,12 +30,13 @@ final class AttachmentStore {
 
     AttachmentStore(Context context) {
         this.context = context.getApplicationContext();
+        AndroidVaultPaths.ensureDirectory(directory());
     }
 
     String save(Uri source, int index) {
         if (source == null) return "";
         File directory = directory();
-        if (!directory.exists() && !directory.mkdirs()) return source.toString();
+        AndroidVaultPaths.ensureDirectory(directory);
 
         File target = new File(directory, "attachment-" + System.currentTimeMillis() + "-" + index + extension(source));
         try (InputStream input = context.getContentResolver().openInputStream(source);
@@ -75,7 +76,7 @@ final class AttachmentStore {
     }
 
     private File directory() {
-        return new File(context.getFilesDir(), "attachments");
+        return AndroidVaultPaths.attachmentsRoot(context);
     }
 
     private String extension(Uri source) {

@@ -36,7 +36,7 @@ export const buildRagChatPrompt = ({
 
   return {
     systemMessage: hasLocalContext
-      ? 'You are a private local notes assistant. Use the provided citations and semantic graph wiki context for grounded factual claims. Cite relevant sources with markers like [1]. If the user asks for general help, you may also answer normally while keeping citations for note-derived claims.'
+      ? 'You are a private local notes assistant. Use the provided citations, semantic graph, and wiki context for grounded factual claims. Cite relevant sources with markers like [1]. If the user asks for general help, you may also answer normally while keeping citations for note-derived claims.'
       : 'You are the ElephantNote chat assistant. No local note citation matched the user message, so answer normally without pretending to have local-note evidence.',
     prompt: sections.join('\n\n')
   }

@@ -1,7 +1,10 @@
+import { getSyncPlatformCapabilities } from './syncPlatform.js'
+
 export class RcloneManager {
-  constructor({ binaryPath = '', executor = null } = {}) {
+  constructor({ binaryPath = '', executor = null, platform = globalThis.process?.platform || '' } = {}) {
     this.binaryPath = binaryPath
     this.executor = executor
+    this.platform = platform
     this.lastError = ''
     this.lastVersion = ''
   }
@@ -17,6 +20,10 @@ export class RcloneManager {
   async run(args = [], options = {}) {
     if (!this.executor) {
       throw new Error('Rclone execution backend is not configured.')
+    }
+    const capabilities = getSyncPlatformCapabilities(this.platform)
+    if (!capabilities.desktopRclone) {
+      throw new Error(`Rclone binary execution is not available on ${capabilities.platform || 'this platform'}. Use a remote sync backend for mobile sync.`)
     }
     const binary = await this.resolveBinary()
     try {
@@ -45,7 +52,8 @@ export class RcloneManager {
       configured: Boolean(this.executor),
       binaryPath: this.binaryPath,
       version: this.lastVersion,
-      lastError: this.lastError
+      lastError: this.lastError,
+      capabilities: getSyncPlatformCapabilities(this.platform)
     }
   }
 }

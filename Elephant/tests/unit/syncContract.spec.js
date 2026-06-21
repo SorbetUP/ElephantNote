@@ -25,6 +25,7 @@ describe('ElephantNote sync contract', () => {
       { operation: 'init', payload: {} },
       { operation: 'snapshot', payload: { message: 'Manual snapshot' } }
     ])
+    expect(normalizeSyncOperation('sync')).toBe(SYNC_OPERATIONS.SYNC)
   })
 
   it('normalizes queue items and rejects unknown operations', () => {
@@ -61,7 +62,7 @@ describe('ElephantNote sync contract', () => {
     expect(createSyncStatus({ cwd: '/vault', queue: [{ status: 'queued' }, { status: 'done' }] }))
       .toMatchObject({
         cwd: '/vault',
-        backend: SYNC_BACKENDS.GIT,
+        backend: SYNC_BACKENDS.RCLONE,
         queued: 1,
         running: false,
         syncthing: {

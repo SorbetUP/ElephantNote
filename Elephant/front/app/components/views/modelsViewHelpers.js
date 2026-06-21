@@ -5,21 +5,9 @@ import {
 import { AI_SETUP_RECOMMENDED_IDS, isRunnableSetupModel } from 'common/elephantnote/aiSetup'
 
 export const MODEL_ROLES = Object.freeze([
-  {
-    id: 'embedding',
-    label: 'Embedding',
-    hint: 'Semantic search and note graph retrieval'
-  },
-  {
-    id: 'chat',
-    label: 'Chat',
-    hint: 'Assistant, RAG chat and agent bridging'
-  },
-  {
-    id: 'ocr',
-    label: 'OCR',
-    hint: 'Extract text from images and scans'
-  }
+  { id: 'embedding', label: 'Embedding', hint: 'Semantic search and note graph retrieval' },
+  { id: 'chat', label: 'Chat', hint: 'Assistant, RAG chat and agent bridging' },
+  { id: 'ocr', label: 'OCR', hint: 'Extract text from images and scans' }
 ])
 
 export const ROLE_IDS = Object.freeze(MODEL_ROLES.map((role) => role.id))
@@ -276,16 +264,22 @@ export const getModelCapabilities = (model) => {
   const tags = Array.isArray(model?.tags) ? model.tags.map((tag) => String(tag).toLowerCase()) : []
   const all = [name, pipeline, purpose, task, ...tags].join(' ')
 
-  if (/embedding|embed|sentence-transformers|all-minilm|bge-|bge_|e5-|gte-|nomic-embed|gte|jina-embeddings/.test(all) || purpose === 'embedding' || task.includes('embedding') || pipeline.includes('feature-extraction')) {
+  if (
+    /embedding|embed|sentence-transformers|all-minilm|bge-|bge_|e5-|gte-|nomic-embed|gte|jina-embeddings/.test(all) ||
+    purpose === 'embedding' ||
+    task.includes('embedding') ||
+    pipeline.includes('feature-extraction')
+  ) {
     caps.add('Embedding')
   } else if (purpose === 'chat' || task.includes('chat') || task.includes('text-generation') || pipeline.includes('text-generation')) {
     caps.add('Chat')
   }
 
-  if (purpose === 'ocr' || task.includes('ocr')) caps.add('OCR')
   if (purpose === 'agent' || task.includes('agent') || pipeline.includes('agent') || tags.includes('agent')) caps.add('Agent')
+  if (purpose === 'ocr' || task.includes('ocr')) caps.add('OCR')
   if (tags.some((tag) => ['vision', 'vlm', 'image'].includes(tag))) caps.add('Vision')
   if (tags.some((tag) => ['tool-use', 'tools', 'function-calling'].includes(tag))) caps.add('Tool Use')
+  if (!caps.size && isRunnableModel(model)) caps.add('Chat')
 
   return [...caps]
 }
@@ -303,11 +297,11 @@ export const formatRelativeDate = (value = '', now = new Date()) => {
   if (Number.isNaN(date.getTime())) return ''
   const days = Math.floor((now - date) / 86400000)
   if (days < 1) return 'today'
-  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`
+  if (days < 30) return days === 1 ? '1 day ago' : `${days} days ago`
   const months = Math.floor(days / 30)
-  if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`
+  if (months < 12) return months === 1 ? '1 month ago' : `${months} months ago`
   const years = Math.floor(days / 365)
-  return `${years} year${years === 1 ? '' : 's'} ago`
+  return years === 1 ? '1 year ago' : `${years} years ago`
 }
 
 export const getModelSource = (model) =>

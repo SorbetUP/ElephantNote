@@ -158,38 +158,38 @@ const resolveFeatureRouteRuntime = ({ config = {}, localAi, preset } = {}) => {
 }
 
 export const normalizeAiConfig = (config = {}) => {
-  const rawLocalAi = getObject(config.localAi)
+  const { enabled: _legacyEnabled, ...restConfig } = getObject(config)
+  const rawLocalAi = getObject(restConfig.localAi)
   const localAi = normalizeLocalAiConfig(rawLocalAi)
-  const rawProvider = String(config.preset || config.provider || 'nodeLlamaCpp')
+  const rawProvider = String(restConfig.preset || restConfig.provider || 'nodeLlamaCpp')
   const presetId = rawProvider === 'disabled' ? (localAi.enabled ? 'nodeLlamaCpp' : 'custom') : rawProvider
   const preset = ELEPHANTNOTE_AI_PRESETS[presetId] || ELEPHANTNOTE_AI_PRESETS.custom
-  const routeRuntime = resolveFeatureRouteRuntime({ config, localAi, preset })
-  const rawTransport = String(routeRuntime?.transport || config.transport || preset.transport)
+  const routeRuntime = resolveFeatureRouteRuntime({ config: restConfig, localAi, preset })
+  const rawTransport = String(routeRuntime?.transport || restConfig.transport || preset.transport)
   const transport = rawTransport === 'disabled' ? (localAi.enabled ? 'node-llama-cpp' : 'openai-compatible') : rawTransport
-  const endpoint = normalizeAiEndpointForTransport(routeRuntime?.endpoint || config.endpoint || preset.endpoint, transport)
-  const model = String(routeRuntime?.model || config.model || preset.model || '')
-  const apiKey = String(routeRuntime?.apiKey || config.apiKey || '')
-  const { enabled: _enabled, ...restConfig } = getObject(config)
+  const endpoint = normalizeAiEndpointForTransport(routeRuntime?.endpoint || restConfig.endpoint || preset.endpoint, transport)
+  const model = String(routeRuntime?.model || restConfig.model || preset.model || '')
+  const apiKey = String(routeRuntime?.apiKey || restConfig.apiKey || '')
 
   return {
     ...restConfig,
     preset: preset.id,
-    name: String(config.name || preset.label),
-    provider: routeRuntime?.provider || (config.provider === 'disabled' && localAi.enabled ? 'app-local' : config.provider),
+    name: String(restConfig.name || preset.label),
+    provider: routeRuntime?.provider || (restConfig.provider === 'disabled' && localAi.enabled ? 'app-local' : restConfig.provider),
     transport,
     endpoint,
     model,
     apiKey,
-    codexLinkEnabled: config.codexLinkEnabled !== false,
-    defaultProvider: String(config.defaultProvider || (localAi.enabled ? 'app-local' : 'api')),
+    codexLinkEnabled: restConfig.codexLinkEnabled !== false,
+    defaultProvider: String(restConfig.defaultProvider || (localAi.enabled ? 'app-local' : 'api')),
     localAi,
-    providers: getObject(config.providers),
-    routes: getObject(config.routes),
-    rag: getObject(config.rag),
-    tools: getObject(config.tools),
-    search: getObject(config.search),
-    indexing: getObject(config.indexing),
-    ocr: getObject(config.ocr)
+    providers: getObject(restConfig.providers),
+    routes: getObject(restConfig.routes),
+    rag: getObject(restConfig.rag),
+    tools: getObject(restConfig.tools),
+    search: getObject(restConfig.search),
+    indexing: getObject(restConfig.indexing),
+    ocr: getObject(restConfig.ocr)
   }
 }
 

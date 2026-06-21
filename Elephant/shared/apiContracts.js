@@ -71,6 +71,39 @@ export const schema = Object.freeze({
 
 const action = (key, name, payload = schema.empty) => ({ key, name, payload })
 
+const aiConfigPayload = schema.strictObject({
+  preset: optionalString,
+  name: optionalString,
+  provider: optionalString,
+  transport: optionalString,
+  endpoint: optionalString,
+  model: optionalString,
+  apiKey: optionalString,
+  codexLinkEnabled: optionalBoolean,
+  defaultProvider: optionalString,
+  localAi: optionalObject,
+  providers: optionalObject,
+  routes: optionalObject,
+  localModelSelection: optionalObject,
+  rag: optionalObject,
+  tools: optionalObject,
+  search: optionalObject,
+  indexing: optionalObject,
+  ocr: optionalObject,
+  temperature: optionalNumber,
+  maxTokens: optionalNumber,
+  contextWindow: optionalNumber
+})
+
+const syncRunPayload = schema.object({
+  remotePath: optionalString,
+  init: optionalObject,
+  snapshot: optionalObject,
+  sync: optionalObject,
+  pull: optionalObject,
+  push: optionalObject
+})
+
 export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   system: Object.freeze([
     action('API_DESCRIBE', 'api.describe')
@@ -85,57 +118,26 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   ]),
   documents: Object.freeze([
     action('DIRECTORY_LIST', 'directory.list', schema.object({ relativePath: optionalString })),
-    action('NOTES_CREATE', 'notes.create', schema.object({
-      relativePath: optionalString,
-      filename: optionalString,
-      title: optionalString
-    })),
+    action('NOTES_CREATE', 'notes.create', schema.object({ relativePath: optionalString, filename: optionalString, title: optionalString })),
     action('FOLDERS_CREATE', 'folders.create', schema.object({ relativePath: optionalString })),
-    action('SIDEBAR_ATTACH', 'sidebar.attach', schema.object({
-      relativePath: requiredString,
-      title: optionalString,
-      type: optionalEnum(['note', 'folder'])
-    })),
+    action('SIDEBAR_ATTACH', 'sidebar.attach', schema.object({ relativePath: requiredString, title: optionalString, type: optionalEnum(['note', 'folder']) })),
     action('SIDEBAR_DETACH', 'sidebar.detach', schema.object({ relativePath: requiredString })),
-    action('ENTRIES_RENAME', 'entries.rename', schema.object({
-      relativePath: requiredString,
-      title: requiredString
-    })),
-    action('ENTRIES_MOVE', 'entries.move', schema.object({
-      relativePath: requiredString,
-      targetDirectoryPath: optionalString
-    })),
+    action('ENTRIES_RENAME', 'entries.rename', schema.object({ relativePath: requiredString, title: requiredString })),
+    action('ENTRIES_MOVE', 'entries.move', schema.object({ relativePath: requiredString, targetDirectoryPath: optionalString })),
     action('ENTRIES_DELETE', 'entries.delete', schema.object({ relativePath: requiredString }))
   ]),
   imports: Object.freeze([
     action('IMPORT_GOOGLE_KEEP', 'import.googleKeep'),
-    action('IMPORT_GOOGLE_KEEP_FROM_PATHS', 'import.googleKeepFromPaths', schema.object({
-      sourcePath: requiredString,
-      destinationRelativePath: optionalString
-    })),
+    action('IMPORT_GOOGLE_KEEP_FROM_PATHS', 'import.googleKeepFromPaths', schema.object({ sourcePath: requiredString, destinationRelativePath: optionalString })),
     action('CALENDAR_LIST', 'calendar.list'),
     action('CALENDAR_IMPORT_GOOGLE', 'calendar.importGoogle'),
     action('CALENDAR_IMPORT_GOOGLE_FROM_PATH', 'calendar.importGoogleFromPath', schema.object({ sourcePath: requiredString })),
     action('CALENDAR_GOOGLE_CONFIG_GET', 'calendar.google.config.get'),
-    action('CALENDAR_GOOGLE_CONFIG_SET', 'calendar.google.config.set', schema.object({
-      enabled: optionalBoolean,
-      clientId: optionalString,
-      clientSecret: optionalString,
-      refreshToken: optionalString,
-      accessToken: optionalString,
-      calendarId: optionalString
-    })),
+    action('CALENDAR_GOOGLE_CONFIG_SET', 'calendar.google.config.set', schema.object({ enabled: optionalBoolean, clientId: optionalString, clientSecret: optionalString, refreshToken: optionalString, accessToken: optionalString, calendarId: optionalString })),
     action('CALENDAR_GOOGLE_SYNC', 'calendar.google.sync'),
     action('SOURCES_LIST', 'sources.list'),
-    action('SOURCES_INGEST_URL', 'sources.ingestUrl', schema.object({
-      url: requiredString,
-      destinationRelativePath: optionalString
-    })),
-    action('SOURCES_IMPORT_RSS', 'sources.importRss', schema.object({
-      url: requiredString,
-      destinationRelativePath: optionalString,
-      limit: optionalNumber
-    }))
+    action('SOURCES_INGEST_URL', 'sources.ingestUrl', schema.object({ url: requiredString, destinationRelativePath: optionalString })),
+    action('SOURCES_IMPORT_RSS', 'sources.importRss', schema.object({ url: requiredString, destinationRelativePath: optionalString, limit: optionalNumber }))
   ]),
   knowledge: Object.freeze([
     action('WIKI_LIST', 'wiki.list'),
@@ -145,95 +147,40 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
     action('WIKI_SOURCE_INFO', 'wiki.sourceInfo', schema.object({ path: requiredString })),
     action('WIKI_CONTEXT', 'wiki.context', schema.object({ path: requiredString, limit: optionalNumber })),
     action('SEARCH_INIT_VAULT', 'search.initVault', schema.object({ vaultPath: requiredString })),
-    action('SEARCH_QUERY', 'search.query', schema.object({
-      query: requiredString,
-      mode: optionalEnum(['smart', 'exact', 'semantic']),
-      limit: optionalNumber
-    })),
+    action('SEARCH_QUERY', 'search.query', schema.object({ query: requiredString, mode: optionalEnum(['smart', 'exact', 'semantic']), limit: optionalNumber })),
     action('SEARCH_STATUS', 'search.status'),
     action('SEARCH_INSPECT', 'search.inspect'),
     action('SEARCH_REBUILD', 'search.rebuild'),
     action('SEARCH_CLEAR', 'search.clear'),
     action('SEARCH_DISABLE', 'search.disable'),
     action('SEARCH_ENABLE', 'search.enable'),
-    action('RAG_CHAT', 'rag.chat', schema.object({
-      message: requiredString,
-      limit: optionalNumber
-    })),
+    action('RAG_CHAT', 'rag.chat', schema.object({ message: requiredString, limit: optionalNumber })),
     action('NOTES_AUTOTAG', 'notes.autotag', schema.object({ relativePath: requiredString }))
   ]),
   publishing: Object.freeze([
-    action('SITES_PREVIEW_FOLDER', 'sites.previewFolder', schema.object({
-      vaultRoot: requiredString,
-      folderPath: requiredString
-    })),
-    action('SITES_BUILD_FOLDER', 'sites.buildFolder', schema.object({
-      vaultRoot: requiredString,
-      folderPath: requiredString
-    })),
+    action('SITES_PREVIEW_FOLDER', 'sites.previewFolder', schema.object({ vaultRoot: requiredString, folderPath: requiredString })),
+    action('SITES_BUILD_FOLDER', 'sites.buildFolder', schema.object({ vaultRoot: requiredString, folderPath: requiredString })),
     action('SITES_STOP', 'sites.stop', schema.object({ siteId: requiredString })),
     action('SITES_STATUS', 'sites.status', schema.object({ siteId: requiredString })),
     action('SITES_OPEN_EXTERNAL', 'sites.openExternal', schema.object({ url: requiredString }))
   ]),
   automation: Object.freeze([
     action('AGENTS_LIST', 'agents.list'),
-    action('AGENTS_REGISTER', 'agents.register', schema.object({
-      id: optionalString,
-      name: requiredString,
-      transport: optionalString,
-      endpoint: optionalString,
-      model: optionalString,
-      apiKey: optionalString
-    })),
+    action('AGENTS_REGISTER', 'agents.register', schema.object({ id: optionalString, name: requiredString, transport: optionalString, endpoint: optionalString, model: optionalString, apiKey: optionalString })),
     action('AGENTS_UNREGISTER', 'agents.unregister', schema.object({ id: requiredString })),
-    action('AGENTS_SEND', 'agents.send', schema.object({
-      id: requiredString,
-      message: requiredString
-    })),
+    action('AGENTS_SEND', 'agents.send', schema.object({ id: requiredString, message: requiredString })),
     action('MCP_TOOLS_LIST', 'mcp.tools.list'),
-    action('MCP_TOOLS_CALL', 'mcp.tools.call', schema.object({
-      name: requiredString,
-      arguments: optionalObject
-    })),
+    action('MCP_TOOLS_CALL', 'mcp.tools.call', schema.object({ name: requiredString, arguments: optionalObject })),
     action('TASKS_LIST', 'tasks.list'),
-    action('TASKS_SET', 'tasks.set', schema.object({
-      id: requiredString,
-      enabled: optionalBoolean
-    })),
+    action('TASKS_SET', 'tasks.set', schema.object({ id: requiredString, enabled: optionalBoolean })),
     action('TASKS_RUN', 'tasks.run', schema.object({ id: requiredString })),
     action('PROGRAMS_LIST', 'programs.list'),
     action('PROGRAMS_SET', 'programs.set', schema.object({ environments: optionalObject })),
-    action('PROGRAMS_RUN', 'programs.run', schema.object({
-      id: requiredString,
-      command: requiredString,
-      cwd: optionalString
-    }))
+    action('PROGRAMS_RUN', 'programs.run', schema.object({ id: requiredString, command: requiredString, cwd: optionalString }))
   ]),
   aiRuntime: Object.freeze([
     action('AI_CONFIG_GET', 'ai.config.get'),
-    action('AI_CONFIG_SET', 'ai.config.set', schema.strictObject({
-      preset: optionalString,
-      name: optionalString,
-      provider: optionalString,
-      transport: optionalString,
-      endpoint: optionalString,
-      model: optionalString,
-      apiKey: optionalString,
-      codexLinkEnabled: optionalBoolean,
-      defaultProvider: optionalString,
-      localAi: optionalObject,
-      providers: optionalObject,
-      routes: optionalObject,
-      localModelSelection: optionalObject,
-      rag: optionalObject,
-      tools: optionalObject,
-      search: optionalObject,
-      indexing: optionalObject,
-      ocr: optionalObject,
-      temperature: optionalNumber,
-      maxTokens: optionalNumber,
-      contextWindow: optionalNumber
-    })),
+    action('AI_CONFIG_SET', 'ai.config.set', aiConfigPayload),
     action('AI_CONFIG_TEST', 'ai.config.test', schema.object({
       preset: optionalString,
       name: optionalString,
@@ -245,56 +192,23 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
       codexLinkEnabled: optionalBoolean
     })),
     action('FEATURES_GET', 'features.get'),
-    action('FEATURES_SET', 'features.set', schema.object({
-      key: requiredString,
-      enabled: optionalBoolean
-    })),
+    action('FEATURES_SET', 'features.set', schema.object({ key: requiredString, enabled: optionalBoolean })),
     action('ATOMIC_CATALOG_GET', 'atomic.catalog.get'),
     action('MODEL_SELECTION_GET', 'models.selection.get'),
-    action('MODEL_SELECTION_SET', 'models.selection.set', schema.object({
-      embedding: optionalString,
-      chat: optionalString,
-      tagging: optionalString,
-      naming: optionalString,
-      wiki: optionalString,
-      summary: optionalString,
-      agent: optionalString,
-      ocr: optionalString,
-      'speech-to-text': optionalString,
-      'text-to-speech': optionalString
-    })),
+    action('MODEL_SELECTION_SET', 'models.selection.set', schema.object({ embedding: optionalString, chat: optionalString, tagging: optionalString, naming: optionalString, wiki: optionalString, summary: optionalString, agent: optionalString, ocr: optionalString, 'speech-to-text': optionalString, 'text-to-speech': optionalString })),
     action('MODELS_LOCAL_LIST', 'models.local.list'),
     action('MODELS_DOWNLOAD', 'models.download', schema.object({ id: requiredString })),
-    action('OCR_EXTRACT', 'ocr.extract', schema.object({
-      imagePath: requiredString,
-      language: optionalString,
-      pageSegmentationMode: optionalString
-    }))
+    action('OCR_EXTRACT', 'ocr.extract', schema.object({ imagePath: requiredString, language: optionalString, pageSegmentationMode: optionalString }))
   ]),
   plugins: Object.freeze([
     action('PLUGINS_LIST', 'plugins.list'),
-    action('PLUGINS_SET', 'plugins.set', schema.object({
-      id: requiredString,
-      enabled: optionalBoolean,
-      config: optionalObject
-    })),
-    action('PLUGINS_RUN', 'plugins.run', schema.object({
-      id: requiredString,
-      input: optionalObject
-    }))
+    action('PLUGINS_SET', 'plugins.set', schema.object({ id: requiredString, enabled: optionalBoolean, config: optionalObject })),
+    action('PLUGINS_RUN', 'plugins.run', schema.object({ id: requiredString, input: optionalObject }))
   ]),
   sync: Object.freeze([
     action('SYNC_STATUS', 'sync.status'),
-    action('SYNC_ENQUEUE', 'sync.enqueue', schema.object({
-      operation: requiredEnum(SYNC_OPERATION_IDS),
-      payload: optionalObject
-    })),
-    action('SYNC_RUN', 'sync.run', schema.object({
-      init: optionalObject,
-      snapshot: optionalObject,
-      pull: optionalObject,
-      push: optionalObject
-    }))
+    action('SYNC_ENQUEUE', 'sync.enqueue', schema.object({ operation: requiredEnum(SYNC_OPERATION_IDS), payload: optionalObject })),
+    action('SYNC_RUN', 'sync.run', syncRunPayload)
   ])
 })
 

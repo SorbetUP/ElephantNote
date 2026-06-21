@@ -24,13 +24,20 @@
   --en-primary: #2563eb;
 }
 
+:root,
+body,
 .en-shell,
 .en-editor-host,
 .ag-float-wrapper,
-.ag-tooltip {
+.ag-tooltip,
+.el-popper,
+.el-dialog,
+.el-message-box,
+.el-drawer {
   --editorBgColor: var(--en-bg, var(--editorBgColor));
   --editorColor: color-mix(in srgb, var(--en-text, #eef3fb) 88%, transparent);
   --editorColor80: color-mix(in srgb, var(--en-text, #eef3fb) 80%, transparent);
+  --editorColor70: color-mix(in srgb, var(--en-text, #eef3fb) 70%, transparent);
   --editorColor60: color-mix(in srgb, var(--en-text, #eef3fb) 62%, transparent);
   --editorColor50: color-mix(in srgb, var(--en-text, #eef3fb) 52%, transparent);
   --editorColor40: color-mix(in srgb, var(--en-text, #eef3fb) 42%, transparent);
@@ -41,12 +48,27 @@
   --floatHoverColor: var(--en-soft-strong, var(--en-soft, #1b2432));
   --floatBorderColor: var(--en-border, #283244);
   --floatShadow: var(--en-card-shadow, 0 18px 44px rgba(0, 0, 0, 0.28));
+  --inputBgColor: var(--en-soft, #1b2432);
   --itemBgColor: var(--en-soft, #1b2432);
   --iconColor: var(--en-muted, #98a3b6);
   --themeColor: var(--en-primary, #5ea1ff);
   --deleteColor: var(--en-danger, #ff6b7a);
   --selectionColor: color-mix(in srgb, var(--en-primary, #5ea1ff) 24%, transparent);
   --codeBlockBgColor: var(--en-surface, #141a24);
+  --linkColor: var(--en-primary, #5ea1ff);
+  --headingColor: var(--en-text, #eef3fb);
+  --h1Color: var(--en-text, #eef3fb);
+  --h2Color: var(--en-text, #eef3fb);
+  --h3Color: var(--en-text, #eef3fb);
+  --h4Color: var(--en-text, #eef3fb);
+  --h5Color: var(--en-text, #eef3fb);
+  --h6Color: var(--en-text, #eef3fb);
+  --maskColor: color-mix(in srgb, var(--en-bg, #0f141d) 74%, transparent);
+}
+
+body {
+  color: var(--en-text);
+  background: var(--en-bg);
 }
 
 .en-editor-layer {
@@ -116,20 +138,6 @@
   flex: 1;
   overflow: hidden;
   background: var(--en-bg);
-  --editorBgColor: var(--en-bg);
-  --editorColor: color-mix(in srgb, var(--en-text) 86%, transparent);
-  --editorColor80: color-mix(in srgb, var(--en-text) 80%, transparent);
-  --editorColor60: color-mix(in srgb, var(--en-text) 60%, transparent);
-  --editorColor50: color-mix(in srgb, var(--en-text) 50%, transparent);
-  --editorColor40: color-mix(in srgb, var(--en-text) 40%, transparent);
-  --editorColor30: color-mix(in srgb, var(--en-text) 30%, transparent);
-  --editorColor10: color-mix(in srgb, var(--en-text) 12%, transparent);
-  --editorColor04: color-mix(in srgb, var(--en-text) 5%, transparent);
-  --floatBgColor: var(--en-surface);
-  --floatHoverColor: var(--en-soft);
-  --floatBorderColor: var(--en-border);
-  --iconColor: var(--en-muted);
-  --codeBlockBgColor: var(--en-surface);
 }
 
 .en-editor-host .editor-with-tabs,
@@ -139,7 +147,7 @@
 
 .ag-float-wrapper {
   border: 1px solid var(--floatBorderColor);
-  border-radius: 8px;
+  border-radius: 12px;
   color: var(--editorColor);
   background: var(--floatBgColor);
   box-shadow: var(--floatShadow);
@@ -151,8 +159,15 @@
 
 .ag-quick-insert .title,
 .ag-front-menu .submenu,
-.ag-tooltip {
+.ag-tooltip,
+.ag-format-picker,
+.ag-link-tools,
+.ag-image-toolbar,
+.ag-table-bar-tools,
+.ag-image-selector-wrapper {
+  color: var(--editorColor);
   background: var(--floatBgColor);
+  border-color: var(--floatBorderColor);
 }
 
 .ag-quick-insert .active,
@@ -163,4 +178,56 @@
 .ag-image-toolbar li.item:hover,
 .ag-table-bar-tools li.item:hover {
   background: var(--floatHoverColor);
+}
+
+.el-dialog,
+.el-message-box,
+.el-drawer,
+.el-popover,
+.el-popper {
+  color: var(--en-text) !important;
+  background: var(--en-surface) !important;
+  border-color: var(--en-border) !important;
+}
+
+.el-dialog__title,
+.el-message-box__title,
+.el-form-item__label,
+.el-radio,
+.el-checkbox,
+.el-tabs__item,
+.el-select-dropdown__item {
+  color: var(--en-text) !important;
+}
+
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  color: var(--en-text) !important;
+  background: var(--en-soft) !important;
+  border-color: var(--en-border) !important;
+  box-shadow: 0 0 0 1px var(--en-border) inset !important;
+}
+
+.el-input__inner,
+.el-textarea__inner {
+  color: var(--en-text) !important;
+}
+
+.el-input__inner::placeholder,
+.el-textarea__inner::placeholder {
+  color: var(--en-muted) !important;
+}
+
+.el-button {
+  color: var(--en-text) !important;
+  background: var(--en-soft) !important;
+  border-color: var(--en-border) !important;
+}
+
+.el-button:hover,
+.el-button:focus {
+  color: var(--en-text) !important;
+  background: color-mix(in srgb, var(--en-primary) 14%, var(--en-soft)) !important;
+  border-color: var(--en-primary) !important;
 }

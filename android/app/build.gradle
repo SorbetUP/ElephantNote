@@ -6,15 +6,6 @@ android {
     namespace "com.elephantnote.mobile"
     compileSdk 34
 
-    signingConfigs {
-        release {
-            storeFile file(System.getProperty("user.home") + "/.android/debug.keystore")
-            storePassword "android"
-            keyAlias "androiddebugkey"
-            keyPassword "android"
-        }
-    }
-
     defaultConfig {
         applicationId "com.elephantnote.mobile"
         minSdk 26
@@ -25,13 +16,17 @@ android {
 
     sourceSets {
         main {
-            assets.srcDirs = ["src/main/assets", "../../docs"]
+            assets.srcDirs = ["src/main/assets"]
         }
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
         release {
-            signingConfig signingConfigs.release
+            minifyEnabled false
         }
     }
 }

@@ -16,3 +16,9 @@ export const buildRcloneFilterRules = () => [
   '- .elephantnote/sync-local.json',
   '+ **'
 ]
+
+export const buildBisyncArgs = ({ localPath, remotePath } = {}) => [
+  RCLONE_SYNC_COMMAND,
+  localPath,
+  remotePath
+]

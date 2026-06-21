@@ -13,6 +13,9 @@ export const buildRcloneFilterRules = () => [
   '- .elephantnote/cache/**',
   '- .elephantnote/logs/**',
   '- .elephantnote/search/**',
+  '- .elephantnote/sync/**',
+  '- .elephantnote/sync-config.json',
+  '- .elephantnote/sync-log.json',
   '- .elephantnote/sync-local.json',
   '+ **'
 ]

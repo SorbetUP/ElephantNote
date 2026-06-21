@@ -258,8 +258,12 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     },
 
     openResult(result) {
-      if (!result?.relativePath || !this.vaultPath) return
-      const absolutePath = window.path.join(this.vaultPath, result.relativePath)
+      if (!result?.relativePath) return
+      const vaultStore = useVaultStore()
+      const vaultPath = this.vaultPath || vaultStore.activeVault?.path || ''
+      if (!vaultPath) return
+      this.vaultPath = vaultPath
+      const absolutePath = window.path.join(vaultPath, result.relativePath)
       window.electron.ipcRenderer.send('mt::open-file', absolutePath, {})
       this.close()
     }

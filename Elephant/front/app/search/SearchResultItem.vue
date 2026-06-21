@@ -1,36 +1,60 @@
 <template>
-  <article class="en-search-result">
-    <button
-      class="en-search-result-main"
-      type="button"
-      @click="$emit('open', result)"
-    >
+  <article
+    class="en-search-result"
+    :class="{ selected }"
+    @click="$emit('open', result)"
+  >
+    <div class="en-search-result-icon">
+      <FileText />
+    </div>
+
+    <div class="en-search-result-body">
       <div class="en-search-result-headline">
-        <div class="en-search-result-title">
-          <FileText class="en-search-result-icon" />
-          <h3>{{ result.title }}</h3>
-        </div>
-        <span class="en-search-result-score">{{ scoreLabel }}</span>
+        <h3 class="en-search-result-title">
+          <template v-if="query && titleSegments.length">
+            <span
+              v-for="(segment, index) in titleSegments"
+              :key="`title-${index}`"
+              :class="{ 'en-search-result-match': segment.match }"
+            >{{ segment.text }}</span>
+          </template>
+          <template v-else>
+            {{ result.title }}
+          </template>
+        </h3>
+        <span class="en-search-result-badge">{{ matchLabel }}</span>
       </div>
-      <div class="en-search-result-path">
+
+      <div
+        v-if="result.relativePath"
+        class="en-search-result-path"
+      >
         {{ result.relativePath }}
       </div>
+
       <p
-        v-for="(snippet, index) in snippets"
-        :key="index"
+        v-for="(snippet, index) in displaySnippets"
+        :key="`snippet-${index}`"
         class="en-search-result-snippet"
       >
-        {{ snippet }}
+        <template v-if="query && snippetSegments(snippet).length">
+          <span
+            v-for="(segment, sIndex) in snippetSegments(snippet)"
+            :key="`sn-${index}-${sIndex}`"
+            :class="{ 'en-search-result-match': segment.match }"
+          >{{ segment.text }}</span>
+        </template>
+        <template v-else>
+          {{ snippet }}
+        </template>
       </p>
-      <div class="en-search-result-meta">
-        <span>{{ matchLabel }}</span>
-      </div>
-    </button>
+    </div>
+
     <button
       class="en-search-result-open"
       type="button"
       title="Open note"
-      @click="$emit('open', result)"
+      @click.stop="$emit('open', result)"
     >
       <ArrowUpRight />
     </button>
@@ -47,15 +71,15 @@ const props = defineProps({
   result: {
     type: Object,
     required: true
+  },
+  selected: {
+    type: Boolean,
+    default: false
+  },
+  query: {
+    type: String,
+    default: ''
   }
-})
-
-const scoreLabel = computed(() => {
-  const score = Number(props.result?.score || 0)
-  if (score >= 0.85) return 'Very close'
-  if (score >= 0.7) return 'Close'
-  if (score >= 0.55) return 'Related'
-  return 'Weak match'
 })
 
 const matchLabel = computed(() => {
@@ -66,89 +90,145 @@ const matchLabel = computed(() => {
   return 'Local match'
 })
 
-const snippets = computed(() => {
+const displaySnippets = computed(() => {
   return (props.result?.snippets || [])
     .map((snippet) => String(snippet?.text || '').trim())
     .filter(Boolean)
-    .slice(0, 2)
+    .slice(0, 1)
 })
+
+const escapedTokens = computed(() => {
+  const query = String(props.query || '').trim()
+  if (!query) return []
+  const tokens = query.split(/\s+/).filter(Boolean)
+  const seen = new Set()
+  const escaped = []
+  for (const token of tokens) {
+    if (token.length < 2) continue
+    if (seen.has(token.toLowerCase())) continue
+    seen.add(token.toLowerCase())
+    escaped.push(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  }
+  return escaped
+})
+
+const buildSegments = (text) => {
+  if (!text) return [{ text: '', match: false }]
+  if (!escapedTokens.value.length) return [{ text, match: false }]
+  try {
+    const re = new RegExp(`(${escapedTokens.value.join('|')})`, 'ig')
+    const parts = String(text).split(re)
+    return parts
+      .filter((part) => part !== undefined && part !== '')
+      .map((part) => ({ text: part, match: re.test(part) && part.length > 0 }))
+  } catch (error) {
+    return [{ text, match: false }]
+  }
+}
+
+const titleSegments = computed(() => buildSegments(props.result?.title || ''))
+const snippetSegments = (snippet) => buildSegments(snippet)
 </script>
 
 <style scoped>
 .en-search-result {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr) 34px;
+  align-items: start;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--en-border);
+  padding: 12px 14px;
   border-radius: 16px;
-  background: var(--en-surface);
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
-}
-
-.en-search-result:hover,
-.en-search-result:focus-within {
-  border-color: color-mix(in srgb, var(--en-primary) 28%, var(--en-border));
-  box-shadow: 0 14px 30px color-mix(in srgb, var(--en-primary) 8%, transparent);
-  transform: translateY(-1px);
-}
-
-.en-search-result-main {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-  border: 0;
-  padding: 0;
   background: transparent;
-  color: var(--en-text);
-  text-align: left;
   cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.en-search-result:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.en-search-result.selected {
+  background: rgba(37, 99, 235, 0.2);
+}
+
+.en-shell.en-theme-dark .en-search-result.selected {
+  background: rgba(94, 161, 255, 0.24);
+}
+
+.en-shell.en-theme-dark .en-search-result:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.en-search-result-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.34);
+  color: var(--en-primary);
+  flex: 0 0 auto;
+}
+
+.en-shell.en-theme-dark .en-search-result-icon {
+  background: color-mix(in srgb, white 8%, transparent);
+}
+
+.en-search-result-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.en-search-result-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .en-search-result-headline {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 
 .en-search-result-title {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-}
-
-.en-search-result-icon {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  color: var(--en-primary);
-}
-
-.en-search-result h3 {
   margin: 0;
   min-width: 0;
   font-size: 15px;
   line-height: 1.3;
-  font-weight: 800;
+  font-weight: 700;
+  color: var(--en-text);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.en-search-result-score {
+.en-search-result-badge {
   flex: 0 0 auto;
-  color: var(--en-muted);
-  font-size: 12px;
+  height: 22px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--en-muted) 20%, transparent);
+  color: color-mix(in srgb, var(--en-text) 74%, var(--en-muted));
+  font-size: 11.5px;
   font-weight: 700;
+  letter-spacing: 0;
+}
+
+.en-search-result.selected .en-search-result-badge {
+  background: rgba(37, 99, 235, 0.24);
+  color: var(--en-primary);
 }
 
 .en-search-result-path {
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--en-primary);
-  font-size: 12px;
-  font-weight: 700;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -156,39 +236,73 @@ const snippets = computed(() => {
 
 .en-search-result-snippet {
   margin: 0;
-  color: var(--en-muted);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--en-muted) 72%, var(--en-text));
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
-.en-search-result-meta {
-  color: var(--en-subtle);
-  font-size: 12px;
+.en-search-result-match {
+  background: color-mix(in srgb, var(--en-primary) 26%, transparent);
+  color: color-mix(in srgb, var(--en-primary) 74%, var(--en-text));
+  border-radius: 4px;
+  padding: 0 2px;
   font-weight: 700;
-  text-transform: capitalize;
+}
+
+.en-shell.en-theme-dark .en-search-result-match {
+  background: color-mix(in srgb, var(--en-primary) 28%, transparent);
+  color: color-mix(in srgb, var(--en-primary) 60%, white);
 }
 
 .en-search-result-open {
   align-self: center;
-  width: 38px;
-  height: 38px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--en-border);
-  border-radius: 12px;
-  background: var(--en-soft);
-  color: var(--en-text);
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--en-muted);
   cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
 }
 
 .en-search-result-open svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
-.en-search-result-open:hover,
-.en-search-result-main:hover + .en-search-result-open {
-  border-color: var(--en-primary);
+.en-search-result:hover .en-search-result-open,
+.en-search-result.selected .en-search-result-open {
+  opacity: 1;
+}
+
+.en-search-result-open:hover {
+  background: color-mix(in srgb, var(--en-primary) 18%, transparent);
   color: var(--en-primary);
+}
+
+@media (max-width: 760px) {
+  .en-search-result {
+    grid-template-columns: 32px minmax(0, 1fr) 28px;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .en-search-result-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .en-search-result-open {
+    width: 28px;
+    height: 28px;
+  }
 }
 </style>

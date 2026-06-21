@@ -5,77 +5,101 @@
     modal-class="en-search-overlay"
     :show-close="false"
     :close-on-click-modal="true"
-    :close-on-press-escape="true"
-    width="860px"
+    :close-on-press-escape="false"
+    width="720px"
     @closed="handleClosed"
   >
-    <div class="en-search-modal">
-      <header class="en-search-header">
-        <div class="en-search-commandbar">
-          <Search class="en-search-command-icon" />
-          <input
-            ref="searchInput"
-            v-model="query"
-            class="en-search-input"
-            type="search"
-            placeholder="Search notes, paths, tags, or ideas..."
-            autocomplete="off"
-            spellcheck="false"
-            @keydown.enter.prevent="searchNow"
-            @keydown.esc.stop.prevent="store.close()"
-          >
-          <button
-            class="en-search-icon-button"
-            type="button"
-            title="Close"
-            @click="store.close()"
-          >
-            <X />
-          </button>
-        </div>
-
-        <div
-          v-if="showStatus"
-          class="en-search-status-row"
+    <div
+      class="en-search-shell"
+      :class="{ 'has-panel': showPanel }"
+      @click.stop
+    >
+      <div class="en-search-bar">
+        <Search class="en-search-bar-icon" />
+        <input
+          ref="searchInput"
+          v-model="query"
+          class="en-search-bar-input"
+          type="text"
+          placeholder="Search notes, paths, tags, or ideas…"
+          autocomplete="off"
+          spellcheck="false"
+          @keydown="handleKeyDown"
         >
-          <SearchStatusBadge :status="store.status" />
+        <div
+          v-if="store.busy"
+          class="en-search-bar-loading"
+          aria-hidden="true"
+        >
+          <span /><span /><span />
         </div>
-      </header>
-
-      <div
-        v-if="store.error"
-        class="en-search-error"
-      >
-        {{ store.error }}
+        <button
+          v-if="store.query"
+          class="en-search-bar-clear"
+          type="button"
+          title="Clear"
+          @click="clearQuery"
+        >
+          <X />
+        </button>
       </div>
 
-      <div
-        v-if="store.busy"
-        class="en-search-loading"
-      >
-        <ScanSearch class="en-search-state-icon" />
-        <span>Searching locally...</span>
-      </div>
+      <transition name="en-panel">
+        <div
+          v-if="showPanel"
+          class="en-search-panel"
+        >
+          <div
+            v-if="showStatus"
+            class="en-search-status"
+          >
+            <SearchStatusBadge :status="store.status" />
+          </div>
 
-      <div
-        v-else-if="!store.results.length"
-        class="en-search-empty"
-      >
-        <Search class="en-search-state-icon" />
-        <span>No matching notes found.</span>
-      </div>
+          <div
+            v-if="store.error"
+            class="en-search-message en-search-message-error"
+          >
+            {{ store.error }}
+          </div>
 
-      <div
-        v-else
-        class="en-search-results"
-      >
-        <SearchResultItem
-          v-for="result in store.results"
-          :key="result.uri"
-          :result="result"
-          @open="store.openResult"
-        />
-      </div>
+          <div
+            v-else-if="store.busy && !store.results.length"
+            class="en-search-message en-search-message-loading"
+          >
+            <ScanSearch class="en-search-state-icon" />
+            <span>Searching locally…</span>
+          </div>
+
+          <div
+            v-else-if="!store.results.length && hasQuery"
+            class="en-search-empty"
+          >
+            <Search class="en-search-empty-icon" />
+            <div class="en-search-empty-title">
+              No matching notes found
+            </div>
+            <div class="en-search-empty-subtitle">
+              Try another keyword or search in all vaults.
+            </div>
+          </div>
+
+          <div
+            v-else-if="store.results.length"
+            class="en-search-results"
+          >
+            <SearchResultItem
+              v-for="(result, index) in store.results"
+              :key="result.uri || result.relativePath || index"
+              :result="result"
+              :selected="index === selectedIndex"
+              :query="hasQuery ? store.query : ''"
+              @open="openResult(result)"
+              @mouseenter="selectedIndex = index"
+            />
+          </div>
+        </div>
+      </transition>
     </div>
   </el-dialog>
 </template>
@@ -83,17 +107,14 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { debounce } from 'underscore'
-import {
-  ScanSearch,
-  Search,
-  X
-} from '@lucide/vue'
+import { ScanSearch, Search, X } from '@lucide/vue'
 import { useSearchStore } from '../stores/searchStore'
 import SearchResultItem from './SearchResultItem.vue'
 import SearchStatusBadge from './SearchStatusBadge.vue'
 
 const store = useSearchStore()
 const searchInput = ref(null)
+const selectedIndex = ref(0)
 let pollTimer = null
 
 const query = computed({
@@ -101,8 +122,17 @@ const query = computed({
   set: (value) => store.setQuery(value)
 })
 
+const hasQuery = computed(() => store.query.trim().length > 0)
 const showStatus = computed(() => {
   return !['ready', 'not_initialized'].includes(store.status?.status || 'not_initialized')
+})
+const showPanel = computed(() => {
+  if (store.error) return true
+  if (store.busy) return true
+  if (store.results.length > 0) return true
+  if (hasQuery.value) return true
+  if (showStatus.value) return true
+  return false
 })
 
 const focusInput = async () => {
@@ -111,19 +141,65 @@ const focusInput = async () => {
   searchInput.value?.select()
 }
 
-const searchNow = () => {
-  store.search()
+const clearQuery = () => {
+  store.setQuery('')
+  focusInput()
+}
+
+const openResult = (result) => {
+  store.openResult(result)
+}
+
+const moveSelection = (delta) => {
+  const count = store.results.length
+  if (!count) return
+  let next = selectedIndex.value + delta
+  if (next < 0) next = count - 1
+  if (next >= count) next = 0
+  selectedIndex.value = next
+}
+
+const handleKeyDown = (event) => {
+  switch (event.key) {
+    case 'Escape': {
+      event.preventDefault()
+      event.stopPropagation()
+      if (hasQuery.value) {
+        clearQuery()
+      } else {
+        store.close()
+      }
+      break
+    }
+    case 'ArrowDown': {
+      event.preventDefault()
+      moveSelection(1)
+      break
+    }
+    case 'ArrowUp': {
+      event.preventDefault()
+      moveSelection(-1)
+      break
+    }
+    case 'Enter': {
+      event.preventDefault()
+      const result = store.results[selectedIndex.value]
+      if (result) openResult(result)
+      break
+    }
+  }
 }
 
 const debouncedSearch = debounce(() => {
   store.search()
-}, 300)
+}, 220)
 
 watch(
   () => store.query,
   (value, oldValue) => {
     if (value === oldValue) return
     if (!store.isOpen) return
+    selectedIndex.value = 0
     debouncedSearch()
   }
 )
@@ -132,6 +208,7 @@ watch(
   () => store.mode,
   (value, oldValue) => {
     if (value !== oldValue && store.isOpen) {
+      selectedIndex.value = 0
       store.search()
     }
   }
@@ -141,6 +218,7 @@ watch(
   () => store.isOpen,
   async (value) => {
     if (value) {
+      selectedIndex.value = 0
       await focusInput()
       store.refreshStatus()
       clearInterval(pollTimer)
@@ -158,6 +236,7 @@ const handleClosed = () => {
   store.results = []
   store.error = ''
   store.busy = false
+  selectedIndex.value = 0
 }
 
 onMounted(() => {
@@ -170,178 +249,273 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.en-search-modal {
+.en-search-shell {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  color: var(--en-text);
+  width: 100%;
+  border-radius: 28px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.48),
+      rgba(225, 240, 255, 0.34) 58%,
+      rgba(255, 255, 255, 0.4)
+    );
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.24);
+  backdrop-filter: blur(42px) saturate(175%);
+  -webkit-backdrop-filter: blur(42px) saturate(175%);
+  overflow: hidden;
+  transition: border-radius 160ms ease;
 }
 
-.en-search-header {
-  display: grid;
-  gap: 14px;
+.en-shell.en-theme-dark .en-search-shell {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(30, 41, 59, 0.56),
+      rgba(15, 23, 42, 0.46) 58%,
+      rgba(30, 41, 59, 0.5)
+    );
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
 }
 
-.en-search-commandbar {
+.en-search-bar {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
   align-items: center;
-  min-height: 76px;
-  gap: 12px;
-  padding: 0 14px 0 24px;
-  border: 1px solid color-mix(in srgb, var(--en-border-strong) 78%, transparent);
-  border-radius: 24px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--en-soft) 78%, var(--en-surface)), var(--en-surface));
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 9%, transparent),
-    0 18px 42px rgba(15, 23, 42, 0.1);
+  gap: 14px;
+  min-height: 72px;
+  padding: 0 18px 0 24px;
+  background: transparent;
 }
 
-.en-shell.en-theme-dark .en-search-commandbar {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--en-soft-strong) 78%, #252832), var(--en-soft));
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 6%, transparent),
-    0 20px 54px rgba(0, 0, 0, 0.36);
+.en-search-bar-icon {
+  width: 22px;
+  height: 22px;
+  color: color-mix(in srgb, var(--en-text) 76%, var(--en-muted));
+  flex: 0 0 auto;
 }
 
-.en-search-command-icon {
-  width: 28px;
-  height: 28px;
-  color: var(--en-muted);
-}
-
-.en-search-input {
+.en-search-bar-input {
   min-width: 0;
-  height: 74px;
+  height: 100%;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--en-text);
   font: inherit;
-  font-size: 23px;
-  font-weight: 750;
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: 0;
   outline: none;
 }
 
-.en-search-input::placeholder {
-  color: color-mix(in srgb, var(--en-muted) 82%, transparent);
+.en-search-bar-input::placeholder {
+  color: color-mix(in srgb, var(--en-muted) 88%, var(--en-text));
+  font-weight: 650;
 }
 
-.en-search-icon-button {
-  width: 42px;
-  height: 42px;
+.en-search-bar-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+}
+
+.en-search-bar-loading span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--en-primary);
+  opacity: 0.45;
+  animation: en-search-dot 1s infinite ease-in-out;
+}
+
+.en-search-bar-loading span:nth-child(2) { animation-delay: 0.15s; }
+.en-search-bar-loading span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes en-search-dot {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+.en-search-bar-clear {
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 14px;
-  background: transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--en-muted) 14%, transparent);
   color: var(--en-muted);
   cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
 }
 
-.en-search-icon-button svg {
-  width: 22px;
-  height: 22px;
+.en-search-bar-clear svg {
+  width: 14px;
+  height: 14px;
 }
 
-.en-search-icon-button:hover {
-  background: var(--en-soft-strong);
+.en-search-bar-clear:hover {
+  background: color-mix(in srgb, var(--en-muted) 24%, transparent);
   color: var(--en-text);
 }
 
-.en-search-status-row {
+.en-search-panel {
   display: flex;
-  justify-content: flex-start;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 14px 14px;
+  background: transparent;
+  max-height: min(60vh, 560px);
+  overflow: hidden;
 }
 
-.en-search-error {
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: color-mix(in srgb, #ef4444 12%, var(--en-surface));
+.en-search-status {
+  padding: 2px 4px;
+}
+
+.en-search-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  color: var(--en-muted);
+  font-size: 13px;
+}
+
+.en-search-message-error {
+  background: color-mix(in srgb, #ef4444 10%, transparent);
   color: #c2410c;
 }
 
-.en-shell.en-theme-dark .en-search-error {
-  color: #ffb4b4;
-}
+.en-shell.en-theme-dark .en-search-message-error { color: #ffb4b4; }
 
-.en-search-loading,
-.en-search-empty {
-  min-height: 168px;
-  display: grid;
-  place-items: center;
-  gap: 10px;
-  padding: 22px;
-  color: var(--en-muted);
-  text-align: center;
+.en-search-message-loading {
+  padding: 22px 20px;
 }
 
 .en-search-state-icon {
-  width: 26px;
-  height: 26px;
+  width: 18px;
+  height: 18px;
   color: var(--en-primary);
 }
 
-.en-search-results {
+.en-search-empty {
   display: grid;
-  gap: 10px;
-  max-height: min(56vh, 520px);
-  overflow: auto;
-  padding-right: 2px;
+  place-items: center;
+  gap: 6px;
+  padding: 28px 24px 32px;
+  text-align: center;
+  color: var(--en-muted);
+}
+
+.en-search-empty-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--en-primary);
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+
+.en-search-empty-title {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--en-text);
+}
+
+.en-search-empty-subtitle {
+  font-size: 12.5px;
+  color: var(--en-muted);
+}
+
+.en-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 4px 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--en-muted) 28%, transparent) transparent;
+}
+
+.en-search-results::-webkit-scrollbar { width: 8px; }
+.en-search-results::-webkit-scrollbar-track { background: transparent; }
+.en-search-results::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--en-muted) 28%, transparent);
+  border-radius: 999px;
+}
+
+.en-panel-enter-active,
+.en-panel-leave-active {
+  transition: opacity 160ms ease;
+}
+
+.en-panel-enter-from,
+.en-panel-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 760px) {
+  .en-search-bar {
+    min-height: 56px;
+    padding-left: 18px;
+    gap: 10px;
+  }
+
+  .en-search-bar-input {
+    font-size: 17px;
+  }
+
+  .en-search-bar-icon {
+    width: 18px;
+    height: 18px;
+  }
 }
 
 :global(.en-search-dialog .el-dialog) {
-  border-radius: 26px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--en-surface) 18%, transparent);
-  border: 1px solid color-mix(in srgb, var(--en-border-strong) 46%, transparent);
-  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.18);
-  backdrop-filter: blur(26px) saturate(155%);
-  -webkit-backdrop-filter: blur(26px) saturate(155%);
+  margin-top: 12vh !important;
+  border-radius: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  overflow: visible;
 }
 
-:global(.en-shell.en-theme-dark .en-search-dialog .el-dialog) {
-  background: color-mix(in srgb, var(--en-surface) 14%, transparent);
-  box-shadow: 0 32px 100px rgba(0, 0, 0, 0.42);
-}
-
-:global(.en-search-overlay) {
-  background: rgba(8, 12, 18, 0.24);
-  backdrop-filter: blur(18px) saturate(145%);
-  -webkit-backdrop-filter: blur(18px) saturate(145%);
-}
-
-:global(.en-shell.en-theme-dark .en-search-overlay) {
-  background: rgba(3, 6, 12, 0.34);
+:global(.el-dialog.en-search-dialog),
+:global(.el-dialog.en-search-dialog.ag-dialog-table) {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
 }
 
 :global(.en-search-dialog .el-dialog__header),
 :global(.en-search-dialog .el-dialog__body) {
-  padding: 0;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
-:global(.en-search-dialog .el-dialog__body) {
-  padding: 20px;
+:global(.en-search-dialog .el-dialog__headerbtn) {
+  display: none;
 }
 
-@media (max-width: 760px) {
-  .en-search-commandbar {
-    grid-template-columns: 26px minmax(0, 1fr) auto;
-    min-height: 64px;
-    padding-left: 18px;
-    border-radius: 18px;
-  }
+:global(.en-search-overlay) {
+  background: rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
 
-  .en-search-input {
-    height: 62px;
-    font-size: 17px;
-  }
-
-  .en-search-commandbar .en-search-icon-button:last-child {
-    display: none;
-  }
-
+:global(.en-shell.en-theme-dark .en-search-overlay) {
+  background: rgba(3, 6, 12, 0.24);
 }
 </style>

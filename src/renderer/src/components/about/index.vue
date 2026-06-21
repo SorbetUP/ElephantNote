@@ -49,7 +49,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-const name = 'ElephantNote'
+const name = 'Elephant'
 const copyright = t('about.copyright', { year: new Date().getFullYear() })
 const copyrightContributors = t('about.copyrightContributors')
 const showAboutDialog = ref(false)

@@ -21,6 +21,57 @@ function run(cmd, env = {}) {
   execSync(cmd, { stdio: 'inherit', cwd: root, env: { ...process.env, ...env } })
 }
 
+function patchElectronDevBundle() {
+  if (process.platform !== 'darwin') return
+
+  const electronAppBundle = path.join(root, 'node_modules', 'electron', 'dist', 'Electron.app')
+  const appBundle = path.join(root, 'node_modules', 'electron', 'dist', 'Elephant.app')
+  if (!fs.existsSync(appBundle) && fs.existsSync(electronAppBundle)) {
+    fs.renameSync(electronAppBundle, appBundle)
+  }
+
+  const plistPath = path.join(appBundle, 'Contents', 'Info.plist')
+  if (!fs.existsSync(plistPath)) return
+
+  const plistBuddy = '/usr/libexec/PlistBuddy'
+  const setPlistValue = (key, value) => {
+    try {
+      execSync(`"${plistBuddy}" -c "Set :${key} ${value}" "${plistPath}"`, { stdio: 'ignore' })
+    } catch {
+      execSync(`"${plistBuddy}" -c "Add :${key} string ${value}" "${plistPath}"`, { stdio: 'ignore' })
+    }
+  }
+
+  console.log('Patching Electron dev bundle name...')
+  setPlistValue('CFBundleDisplayName', 'Elephant')
+  setPlistValue('CFBundleName', 'Elephant')
+  setPlistValue('CFBundleExecutable', 'Elephant')
+  setPlistValue('CFBundleIdentifier', 'com.elephantnote.dev')
+
+  const electronExecutable = path.join(appBundle, 'Contents', 'MacOS', 'Electron')
+  const elephantExecutable = path.join(appBundle, 'Contents', 'MacOS', 'Elephant')
+  if (!fs.existsSync(elephantExecutable) && fs.existsSync(electronExecutable)) {
+    fs.renameSync(electronExecutable, elephantExecutable)
+  }
+
+  fs.writeFileSync(
+    path.join(root, 'node_modules', 'electron', 'path.txt'),
+    'Elephant.app/Contents/MacOS/Elephant'
+  )
+
+  const sourceIcon = path.join(root, 'static', 'icon.icns')
+  const targetIcon = path.join(appBundle, 'Contents', 'Resources', 'electron.icns')
+  if (fs.existsSync(sourceIcon) && fs.existsSync(path.dirname(targetIcon))) {
+    fs.copyFileSync(sourceIcon, targetIcon)
+  }
+
+  try {
+    execSync(`codesign --force --deep --sign - "${appBundle}"`, { stdio: 'ignore' })
+  } catch {
+    console.warn('Unable to ad-hoc sign Electron dev bundle after renaming.')
+  }
+}
+
 // Detect which package manager invoked this postinstall so commands work
 // regardless of whether the caller is pnpm (primary) or npm (fallback).
 const userAgent = process.env.npm_config_user_agent || ''
@@ -69,7 +120,10 @@ if (!fs.existsSync(electronInstall)) {
     const rel = fs.readFileSync(pathTxt, 'utf8').trim()
     if (!fs.existsSync(path.join(root, 'node_modules', 'electron', rel))) return false
     if (plat === 'darwin' || plat === 'mas') {
-      return fs.existsSync(path.join(distDir, 'Electron.app', 'Contents', 'Frameworks'))
+      const appRoot = rel.includes('.app/')
+        ? path.join(distDir, rel.slice(0, rel.indexOf('.app/') + 4))
+        : path.join(distDir, 'Electron.app')
+      return fs.existsSync(path.join(appRoot, 'Contents', 'Frameworks'))
     }
     return true
   }
@@ -126,6 +180,10 @@ if (!fs.existsSync(electronInstall)) {
     }
   }
 }
+
+// Rename the local Electron.app used by `electron-vite dev` so macOS Dock does
+// not show the upstream runtime name while developing Elephant.
+patchElectronDevBundle()
 
 // ── 3. Apply C++20 patch to native-keymap ───────────────────────────────────
 console.log('Applying patches...')

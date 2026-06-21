@@ -18,3 +18,14 @@ playwright-report/
 .claude/
 .agents/
 .agent/
+
+# Android / Gradle generated files
+android/.gradle/
+android/**/build/
+android/**/.cxx/
+android/local.properties
+android/.idea/
+android/**/*.iml
+android/**/*.apk
+android/**/*.aab
+android/captures/

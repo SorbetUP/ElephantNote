@@ -29,6 +29,7 @@ export class RcloneVaultEngine {
     this.lastError = ''
     this.lastRunAt = ''
     this.remotePath = ''
+    this.firstRunDone = false
   }
 
   setCwd(cwd) {
@@ -36,6 +37,7 @@ export class RcloneVaultEngine {
     if (nextCwd !== this.cwd) {
       this.cwd = nextCwd
       this.remotePath = ''
+      this.firstRunDone = false
     }
   }
 
@@ -49,6 +51,7 @@ export class RcloneVaultEngine {
     if (!await fs.pathExists(target)) return
     const config = await fs.readJson(target).catch(() => null)
     if (config?.remotePath) this.remotePath = String(config.remotePath)
+    this.firstRunDone = Boolean(config?.firstRunDone)
   }
 
   async persistConfig() {
@@ -59,6 +62,7 @@ export class RcloneVaultEngine {
       version: 2,
       backend: 'rclone',
       remotePath: this.remotePath,
+      firstRunDone: this.firstRunDone,
       updatedAt: nowIso()
     }, { spaces: 2 })
   }
@@ -84,6 +88,7 @@ export class RcloneVaultEngine {
       cwd: this.cwd,
       running: this.running,
       remotePath: this.remotePath,
+      firstRunDone: this.firstRunDone,
       queued: this.queue.filter((item) => item.status === 'queued').length,
       operations: this.queue.slice(-20),
       history: this.history.slice(-50),
@@ -138,7 +143,9 @@ export class RcloneVaultEngine {
     if (!this.remotePath) throw new Error('Rclone sync requires a remote path.')
     await this.persistConfig()
     try {
-      await this.rclone.run(buildBisyncArgs({ localPath: this.cwd, remotePath: this.remotePath }), { cwd: this.cwd })
+      await this.rclone.run(buildBisyncArgs({ localPath: this.cwd, remotePath: this.remotePath, resync: !this.firstRunDone }), { cwd: this.cwd })
+      this.firstRunDone = true
+      await this.persistConfig()
       this.lastError = ''
       return this.status()
     } catch (error) {

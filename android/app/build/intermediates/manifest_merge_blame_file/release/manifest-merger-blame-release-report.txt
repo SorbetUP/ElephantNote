@@ -1,0 +1,89 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.elephantnote.mobile"
+4    android:versionCode="1"
+5    android:versionName="0.1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+8-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml
+9        android:targetSdkVersion="34" />
+9-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml
+10
+11    <application
+11-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:2:5-34:19
+12        android:allowBackup="true"
+12-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:3:9-35
+13        android:extractNativeLibs="false"
+14        android:icon="@drawable/ic_launcher"
+14-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:4:9-45
+15        android:label="ElephantNote"
+15-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:5:9-37
+16        android:theme="@style/AppTheme" >
+16-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:6:9-40
+17        <activity
+17-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:7:9-22:20
+18            android:name="com.elephantnote.mobile.ShareActivity"
+18-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:8:13-42
+19            android:exported="true"
+19-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:9:13-36
+20            android:theme="@style/AppTheme.Dialog" >
+20-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:10:13-51
+21            <intent-filter>
+21-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:11:13-15:29
+22                <action android:name="android.intent.action.SEND" />
+22-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:12:17-69
+22-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:12:25-66
+23
+24                <category android:name="android.intent.category.DEFAULT" />
+24-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:13:17-76
+24-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:13:27-73
+25
+26                <data android:mimeType="text/*" />
+26-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:14:17-51
+26-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:14:23-48
+27            </intent-filter>
+28            <intent-filter>
+28-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:16:13-21:29
+29                <action android:name="android.intent.action.SEND" />
+29-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:12:17-69
+29-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:12:25-66
+30                <action android:name="android.intent.action.SEND_MULTIPLE" />
+30-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:18:17-78
+30-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:18:25-75
+31
+32                <category android:name="android.intent.category.DEFAULT" />
+32-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:13:17-76
+32-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:13:27-73
+33
+34                <data android:mimeType="image/*" />
+34-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:14:17-51
+34-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:14:23-48
+35            </intent-filter>
+36        </activity>
+37        <activity
+37-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:23:9-25:40
+38            android:name="com.elephantnote.mobile.SketchActivity"
+38-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:24:13-43
+39            android:exported="false" />
+39-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:25:13-37
+40        <activity
+40-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:26:9-33:20
+41            android:name="com.elephantnote.mobile.MainActivity"
+41-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:27:13-41
+42            android:exported="true" >
+42-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:28:13-36
+43            <intent-filter>
+43-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:29:13-32:29
+44                <action android:name="android.intent.action.MAIN" />
+44-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:30:17-69
+44-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:30:25-66
+45
+46                <category android:name="android.intent.category.LAUNCHER" />
+46-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:31:17-77
+46-->/Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/AndroidManifest.xml:31:27-74
+47            </intent-filter>
+48        </activity>
+49    </application>
+50
+51</manifest>

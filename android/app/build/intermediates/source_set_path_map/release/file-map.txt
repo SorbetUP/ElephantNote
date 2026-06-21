@@ -1,0 +1,7 @@
+com.elephantnote.mobile.app-pngs-0 /Users/sorbet/Desktop/Dev/c-editor/android/app/build/generated/res/pngs/release
+com.elephantnote.mobile.app-resValues-1 /Users/sorbet/Desktop/Dev/c-editor/android/app/build/generated/res/resValues/release
+com.elephantnote.mobile.app-packageReleaseResources-2 /Users/sorbet/Desktop/Dev/c-editor/android/app/build/intermediates/incremental/release/packageReleaseResources/merged.dir
+com.elephantnote.mobile.app-packageReleaseResources-3 /Users/sorbet/Desktop/Dev/c-editor/android/app/build/intermediates/incremental/release/packageReleaseResources/stripped.dir
+com.elephantnote.mobile.app-merged_res-4 /Users/sorbet/Desktop/Dev/c-editor/android/app/build/intermediates/merged_res/release
+com.elephantnote.mobile.app-main-5 /Users/sorbet/Desktop/Dev/c-editor/android/app/src/main/res
+com.elephantnote.mobile.app-release-6 /Users/sorbet/Desktop/Dev/c-editor/android/app/src/release/res

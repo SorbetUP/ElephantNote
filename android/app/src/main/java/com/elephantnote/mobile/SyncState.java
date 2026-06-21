@@ -8,8 +8,10 @@ final class SyncState {
     final String deviceId;
     final String folderId;
     final String remote;
+    private final SharedPreferences preferences;
 
-    private SyncState(String deviceId, String folderId, String remote) {
+    private SyncState(SharedPreferences preferences, String deviceId, String folderId, String remote) {
+        this.preferences = preferences;
         this.deviceId = deviceId;
         this.folderId = folderId;
         this.remote = remote;
@@ -23,9 +25,20 @@ final class SyncState {
             preferences.edit().putString("deviceId", deviceId).apply();
         }
         return new SyncState(
+            preferences,
             deviceId,
             preferences.getString("folderId", "vault-mobile"),
             preferences.getString("remote", "")
         );
+    }
+
+    SyncState save(String folderId, String remote) {
+        String nextFolder = folderId == null || folderId.trim().isEmpty() ? "vault-mobile" : folderId.trim();
+        String nextRemote = remote == null ? "" : remote.trim();
+        preferences.edit()
+            .putString("folderId", nextFolder)
+            .putString("remote", nextRemote)
+            .apply();
+        return new SyncState(preferences, deviceId, nextFolder, nextRemote);
     }
 }

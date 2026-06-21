@@ -1,0 +1,4 @@
+#Sun Jun 21 22:06:32 CEST 2026
+base.0=/Users/sorbet/Desktop/Dev/c-editor/android/app/build/intermediates/dex/release/mergeDexRelease/classes.dex
+renamed.0=classes.dex
+path.0=classes.dex

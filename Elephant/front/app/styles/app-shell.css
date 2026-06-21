@@ -180,6 +180,29 @@ body {
   background: var(--floatHoverColor);
 }
 
+.ag-image-fail .ag-image-container {
+  display: inline-flex;
+  max-width: min(760px, 100%);
+  min-height: 64px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--deleteColor, #ff6b7a);
+  border-radius: 12px;
+  color: var(--editorColor, #eef3fb);
+  background: color-mix(in srgb, var(--deleteColor, #ff6b7a) 9%, var(--floatBgColor, #141a24));
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.ag-image-fail .ag-image-container::after {
+  content: 'Failed to load image\A' attr(data-image-src) '\AResolved: ' attr(data-image-domsrc) '\AReason: ' attr(data-image-error);
+  display: block;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--editorColor80, #eef3fb);
+}
+
 .el-dialog,
 .el-message-box,
 .el-drawer,

@@ -7,10 +7,10 @@
     @drop.prevent="handleRootDrop"
   >
     <NoteCard
-      v-for="(entry, index) in store.activeEntries"
+      v-for="(entry, index) in visibleEntries"
       :key="entry.path"
       :entry="entry"
-      :featured="index === 0 && store.activeEntries.length > 3"
+      :featured="index === 0 && visibleEntries.length > 3"
       @open="openEntry"
       @rename="renameEntry"
       @delete="deleteEntry"
@@ -42,7 +42,7 @@
 </template>
 
 <script setup>
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import NoteCard from './NoteCard.vue'
 import {
@@ -55,6 +55,13 @@ const renamingEntry = ref(null)
 const renameEntryTitle = ref('')
 const renameEntryInput = ref(null)
 const isRootDropTarget = ref(false)
+
+const isLegacyRootWikiEntry = (entry) => {
+  const pathname = String(entry?.path || '').replace(/\\/g, '/').replace(/\/+$/g, '')
+  return store.activeWorkspaceView === 'notes' && store.currentPath === '' && /^wiki$/i.test(pathname)
+}
+
+const visibleEntries = computed(() => store.activeEntries.filter((entry) => !isLegacyRootWikiEntry(entry)))
 
 const openEntry = (entry) => {
   if (entry.kind === 'folder') {

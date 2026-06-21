@@ -303,7 +303,21 @@ onBeforeUnmount(() => {
   cursor: col-resize;
 }
 
-.en-local-ai-disabled :deep(.en-rail-icon[title="Models"]) {
-  display: none;
+:global(.en-local-ai-disabled .en-rail-icon[title="Models"]) {
+  display: none !important;
+}
+
+:global(.en-settings-close) {
+  width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  flex: 0 0 32px !important;
+  padding: 0 !important;
+  border-radius: 10px !important;
+}
+
+:global(.en-settings-close .en-icon) {
+  width: 17px !important;
+  height: 17px !important;
 }
 </style>

@@ -218,7 +218,19 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
       endpoint: optionalString,
       model: optionalString,
       apiKey: optionalString,
-      codexLinkEnabled: optionalBoolean
+      codexLinkEnabled: optionalBoolean,
+      localAi: optionalObject,
+      providers: optionalObject,
+      routes: optionalObject,
+      localModelSelection: optionalObject,
+      rag: optionalObject,
+      tools: optionalObject,
+      search: optionalObject,
+      indexing: optionalObject,
+      ocr: optionalObject,
+      temperature: optionalNumber,
+      maxTokens: optionalNumber,
+      contextWindow: optionalNumber
     })),
     action('AI_CONFIG_TEST', 'ai.config.test', schema.strictObject({
       preset: optionalString,

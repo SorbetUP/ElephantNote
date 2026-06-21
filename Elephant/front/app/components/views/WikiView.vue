@@ -1,86 +1,78 @@
 <template>
-  <section class="en-wiki-workspace">
-    <header class="en-wiki-toolbar">
-      <div>
-        <p class="en-wiki-kicker">Wiki</p>
-        <h1>{{ currentTitle }}</h1>
-        <p>{{ visiblePath }}</p>
-      </div>
-      <div class="en-wiki-actions">
-        <button type="button" :disabled="loading" @click="loadWikiDirectory">
-          {{ loading ? 'Loading...' : 'Refresh' }}
-        </button>
-        <button type="button" @click="createWikiFolder">New folder</button>
-        <button type="button" @click="createWikiNote">New note</button>
-      </div>
-    </header>
-
-    <nav class="en-wiki-breadcrumbs" aria-label="Wiki folder path">
-      <button type="button" @click="openWikiPath(WIKI_ROOT)">Wiki</button>
-      <template v-for="crumb in breadcrumbs" :key="crumb.path">
-        <span>/</span>
-        <button type="button" @click="openWikiPath(crumb.path)">{{ crumb.label }}</button>
-      </template>
-    </nav>
-
-    <section class="en-wiki-explorer">
+  <section class="en-library en-wiki-library">
+    <library-toolbar />
+    <div
+      class="en-library-grid"
+      :class="{ list: store.viewMode === 'list' }"
+    >
       <article
         v-if="currentWikiPath !== WIKI_ROOT"
-        class="en-wiki-entry en-wiki-entry-parent"
+        class="en-card en-wiki-parent-card"
         @click="openWikiPath(parentPath)"
       >
-        <span class="en-wiki-entry-icon">↩</span>
-        <div>
+        <header>
+          <span class="en-wiki-parent-icon">↩</span>
           <h2>Parent folder</h2>
-          <p>{{ parentPathLabel }}</p>
-        </div>
+        </header>
+        <p>{{ parentPath === WIKI_ROOT ? 'Wiki' : parentPath }}</p>
       </article>
+
+      <NoteCard
+        v-for="(entry, index) in displayEntries"
+        :key="entry.path"
+        :entry="entry"
+        :featured="index === 0 && displayEntries.length > 3"
+        @open="openEntry"
+        @rename="renameEntry"
+        @delete="deleteEntry"
+      />
 
       <article
-        v-for="entry in entries"
-        :key="entry.path"
-        class="en-wiki-entry"
-        @click="openEntry(entry)"
+        v-if="!displayEntries.length && !loading"
+        class="en-card en-wiki-empty-card"
       >
-        <span class="en-wiki-entry-icon">{{ entry.kind === 'folder' ? '📁' : '📄' }}</span>
-        <div>
-          <h2>{{ entry.title || entry.filename || basename(entry.path) }}</h2>
-          <p>
-            <span>{{ entry.kind === 'folder' ? `${entry.noteCount || 0} notes` : entry.excerpt || entry.filename }}</span>
-            <span v-if="entry.updatedAt"> · {{ formatDate(entry.updatedAt) }}</span>
-          </p>
-        </div>
-        <button
-          v-if="entry.kind === 'note'"
-          type="button"
-          class="en-wiki-open-button"
-          @click.stop="openNote(entry)"
-        >
-          Open
-        </button>
-      </article>
-
-      <article v-if="!entries.length && !loading" class="en-wiki-empty-card">
-        <h2>No wiki pages yet</h2>
+        <h2>No wiki notes yet</h2>
         <p>
-          This view is a file explorer scoped to the hidden vault folder
-          <code>.elephantnote/wiki</code>. Create or move wiki notes there to show them here.
+          This page mirrors the normal notes explorer, but its root is
+          <code>.elephantnote/wiki</code> inside the active vault.
         </p>
       </article>
 
-      <article v-if="error" class="en-wiki-error-card">
-        <h2>Unable to load wiki folder</h2>
+      <article
+        v-if="error"
+        class="en-card en-wiki-error-card"
+      >
+        <h2>Unable to load wiki</h2>
         <p>{{ error }}</p>
       </article>
-    </section>
+
+      <form
+        v-if="renamingEntry"
+        class="en-library-rename-form"
+        @submit.prevent="submitRenameEntry"
+      >
+        <span>Rename</span>
+        <input
+          ref="renameEntryInput"
+          v-model.trim="renameEntryTitle"
+          type="text"
+          aria-label="Entry name"
+          @keydown.esc="cancelRenameEntry"
+        >
+        <button type="submit">Save</button>
+        <button type="button" @click="cancelRenameEntry">Cancel</button>
+      </form>
+    </div>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import log from 'electron-log/renderer'
 import { useVaultStore } from '../../stores/vaultStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
+import LibraryToolbar from '../library/LibraryToolbar.vue'
+import NoteCard from '../library/NoteCard.vue'
 
 const WIKI_ROOT = '.elephantnote/wiki'
 const store = useVaultStore()
@@ -88,39 +80,24 @@ const entries = ref([])
 const currentWikiPath = ref(WIKI_ROOT)
 const loading = ref(false)
 const error = ref('')
+const renamingEntry = ref(null)
+const renameEntryTitle = ref('')
+const renameEntryInput = ref(null)
 
-const basename = (value = '') => String(value || '').split('/').filter(Boolean).at(-1) || 'Wiki'
-const currentTitle = computed(() => currentWikiPath.value === WIKI_ROOT ? 'Wiki' : basename(currentWikiPath.value))
-const visiblePath = computed(() => currentWikiPath.value)
-const relativeInsideWiki = computed(() => {
-  const path = currentWikiPath.value
-  if (path === WIKI_ROOT) return ''
-  return path.startsWith(`${WIKI_ROOT}/`) ? path.slice(WIKI_ROOT.length + 1) : ''
-})
-const breadcrumbs = computed(() => {
-  const parts = relativeInsideWiki.value.split('/').filter(Boolean)
-  return parts.map((label, index) => ({
-    label,
-    path: [WIKI_ROOT, ...parts.slice(0, index + 1)].join('/')
-  }))
-})
+const displayEntries = computed(() => entries.value)
 const parentPath = computed(() => {
   if (currentWikiPath.value === WIKI_ROOT) return WIKI_ROOT
   const parts = currentWikiPath.value.split('/').filter(Boolean)
   parts.pop()
   return parts.join('/') || WIKI_ROOT
 })
-const parentPathLabel = computed(() => parentPath.value === WIKI_ROOT ? 'Wiki' : parentPath.value)
 
-const formatDate = (value = '') => {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
-}
-
-const openWikiPath = async (path = WIKI_ROOT) => {
-  const normalized = String(path || WIKI_ROOT).replace(/\\/g, '/').replace(/\/+$/g, '') || WIKI_ROOT
+const openWikiPath = async (relativePath = WIKI_ROOT) => {
+  const normalized = String(relativePath || WIKI_ROOT).replace(/\\/g, '/').replace(/\/+$/g, '') || WIKI_ROOT
   currentWikiPath.value = normalized.startsWith(WIKI_ROOT) ? normalized : WIKI_ROOT
+  store.currentPath = currentWikiPath.value
+  store.activeWorkspaceView = 'wiki'
+  store.openedNotePath = ''
   await loadWikiDirectory()
 }
 
@@ -128,15 +105,18 @@ const loadWikiDirectory = async () => {
   if (!store.activeVault?.path) return
   loading.value = true
   error.value = ''
-  log.info('[wiki] explorer:load:start', { path: currentWikiPath.value })
+  log.info('[wiki] library-explorer:load:start', { path: currentWikiPath.value })
   try {
     const result = await elephantnoteClient.directory.list(currentWikiPath.value)
     entries.value = Array.isArray(result) ? result : []
-    log.info('[wiki] explorer:load:done', { path: currentWikiPath.value, entries: entries.value.length })
+    store.entries = entries.value
+    store.currentPath = currentWikiPath.value
+    log.info('[wiki] library-explorer:load:done', { path: currentWikiPath.value, entries: entries.value.length })
   } catch (err) {
     entries.value = []
+    store.entries = []
     error.value = err?.message || 'Unable to load wiki folder.'
-    log.error('[wiki] explorer:load:failed', { path: currentWikiPath.value, error: err })
+    log.error('[wiki] library-explorer:load:failed', { path: currentWikiPath.value, error: err })
   } finally {
     loading.value = false
   }
@@ -148,160 +128,125 @@ const openEntry = (entry) => {
     openWikiPath(entry.path)
     return
   }
-  openNote(entry)
+  store.openNote({ ...entry, kind: 'note', type: 'note' })
 }
 
-const openNote = (entry) => {
-  if (!entry?.path) return
-  store.openNote({
-    ...entry,
-    kind: 'note',
-    type: 'note',
-    title: entry.title || entry.filename?.replace(/\.md$/i, '') || basename(entry.path)
-  })
+const renameEntry = async (entry) => {
+  renamingEntry.value = entry
+  renameEntryTitle.value = entry.title || entry.filename?.replace(/\.md$/i, '') || entry.path.split('/').pop()
+  await nextTick()
+  renameEntryInput.value?.focus()
+  renameEntryInput.value?.select()
 }
 
-const createWikiNote = async () => {
-  if (!store.activeVault?.path) return
-  log.info('[wiki] explorer:create-note:start', { path: currentWikiPath.value })
-  const result = await elephantnoteClient.notes.create(currentWikiPath.value)
-  await loadWikiDirectory()
-  if (result?.note?.path) {
-    openNote({
-      kind: 'note',
-      type: 'note',
-      path: result.note.path,
-      title: basename(result.note.path).replace(/\.md$/i, ''),
-      updatedAt: new Date().toISOString()
-    })
-  }
+const cancelRenameEntry = () => {
+  renamingEntry.value = null
+  renameEntryTitle.value = ''
 }
 
-const createWikiFolder = async () => {
-  if (!store.activeVault?.path) return
-  log.info('[wiki] explorer:create-folder:start', { path: currentWikiPath.value })
-  await elephantnoteClient.folders.create(currentWikiPath.value)
+const submitRenameEntry = async () => {
+  if (!renamingEntry.value) return
+  const nextName = renameEntryTitle.value.trim()
+  const entry = renamingEntry.value
+  cancelRenameEntry()
+  if (!nextName || nextName === entry.title) return
+  await store.renameEntry(entry, nextName)
   await loadWikiDirectory()
 }
 
-onMounted(loadWikiDirectory)
+const deleteEntry = async (entry) => {
+  if (!window.confirm(`Delete "${entry.title}"? This cannot be undone.`)) return
+  await store.deleteEntry(entry)
+  await loadWikiDirectory()
+}
 
-watch(() => store.activeVaultId, () => {
-  currentWikiPath.value = WIKI_ROOT
-  loadWikiDirectory()
-})
+onMounted(() => openWikiPath(currentWikiPath.value))
+watch(() => store.activeVaultId, () => openWikiPath(WIKI_ROOT))
 </script>
 
 <style scoped>
-.en-wiki-workspace {
+.en-wiki-library {
   min-height: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 24px 24px;
-  overflow: auto;
+  overflow: hidden;
   background: var(--en-bg);
-  color: var(--en-text);
 }
 
-.en-wiki-toolbar {
+.en-library-grid {
+  min-height: 0;
+  column-width: 360px;
+  column-gap: 18px;
+  padding: 0 28px 32px;
+  overflow-y: auto;
+}
+
+.en-library-grid :deep(.en-card),
+.en-library-grid > .en-card {
+  width: 100%;
+  display: inline-flex;
+  margin: 0 0 18px;
+  break-inside: avoid;
+}
+
+.en-library-grid.list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  column-width: auto;
+  column-gap: 0;
+}
+
+.en-library-grid.list :deep(.en-card),
+.en-library-grid.list > .en-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
-  border: 1px solid var(--en-border);
-  border-radius: 18px;
-  background: var(--en-surface);
-}
-
-.en-wiki-toolbar h1,
-.en-wiki-toolbar p {
   margin: 0;
 }
 
-.en-wiki-kicker {
-  margin: 0 0 4px;
-  color: var(--en-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.en-wiki-actions,
-.en-wiki-breadcrumbs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.en-wiki-actions button,
-.en-wiki-breadcrumbs button,
-.en-wiki-open-button {
-  min-height: 34px;
-  border: 1px solid var(--en-border);
-  border-radius: 10px;
-  padding: 0 12px;
-  color: var(--en-text);
-  background: var(--en-soft);
-}
-
-.en-wiki-actions button:hover,
-.en-wiki-breadcrumbs button:hover,
-.en-wiki-open-button:hover {
-  border-color: var(--en-primary);
-}
-
-.en-wiki-breadcrumbs {
-  color: var(--en-muted);
-}
-
-.en-wiki-breadcrumbs button {
-  background: transparent;
-}
-
-.en-wiki-explorer {
-  display: grid;
-  gap: 8px;
-}
-
-.en-wiki-entry,
+.en-wiki-parent-card,
 .en-wiki-empty-card,
 .en-wiki-error-card {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
-  align-items: center;
+  min-height: 160px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 22px;
   border: 1px solid var(--en-border);
   border-radius: 14px;
+  color: var(--en-text);
   background: var(--en-surface);
-}
-
-.en-wiki-entry {
   cursor: pointer;
 }
 
-.en-wiki-entry:hover {
-  border-color: var(--en-primary);
-  background: color-mix(in srgb, var(--en-primary) 8%, var(--en-surface));
+.en-wiki-empty-card,
+.en-wiki-error-card {
+  cursor: default;
 }
 
-.en-wiki-entry-icon {
-  width: 40px;
-  height: 40px;
+.en-wiki-error-card {
+  border-color: var(--en-danger, #ef4444);
+}
+
+.en-wiki-parent-card header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.en-wiki-parent-icon {
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--en-soft);
 }
 
-.en-wiki-entry h2,
-.en-wiki-entry p,
+.en-wiki-parent-card h2,
+.en-wiki-parent-card p,
 .en-wiki-empty-card h2,
 .en-wiki-empty-card p,
 .en-wiki-error-card h2,
@@ -309,23 +254,10 @@ watch(() => store.activeVaultId, () => {
   margin: 0;
 }
 
-.en-wiki-entry h2 {
-  font-size: 15px;
-}
-
-.en-wiki-entry p,
+.en-wiki-parent-card p,
 .en-wiki-empty-card p,
 .en-wiki-error-card p {
   color: var(--en-muted);
-}
-
-.en-wiki-empty-card,
-.en-wiki-error-card {
-  grid-template-columns: 1fr;
-}
-
-.en-wiki-error-card {
-  border-color: var(--en-danger, #ef4444);
 }
 
 code {
@@ -335,11 +267,19 @@ code {
   color: var(--en-text);
 }
 
-@media (max-width: 760px) {
-  .en-wiki-toolbar,
-  .en-wiki-entry {
-    grid-template-columns: 1fr;
-    display: grid;
-  }
+.en-library-rename-form {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--en-text);
+  background: var(--en-surface);
+  transform: translate(-50%, -50%);
 }
 </style>

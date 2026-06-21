@@ -21,6 +21,7 @@ final class AssetLibrary {
     private static final Entry[] ENTRIES = {
         new Entry("elephantnote/welcome.md", "Welcome to ElephantNote Android", "Offline vault, Markdown capture, folders, tags, backlinks and sync export."),
         new Entry("elephantnote/mobile-workflow.md", "Mobile workflow", "Daily capture, sources, calendar events, graph review and desktop handoff."),
+        new Entry("elephantnote/android-vault.md", "Android local vault", "Markdown file storage, attachment layout and desktop handoff."),
         new Entry("elephantnote/templates.md", "Templates", "Reusable Markdown templates for meetings, sources, decisions and daily briefings."),
         new Entry("elephantnote/parity-manifest.md", "Parity manifest", "Feature coverage included in this native Android release.")
     };
@@ -48,15 +49,6 @@ final class AssetLibrary {
     }
 
     int bundledDocumentationCount() {
-        return count("end-user") + count("dev") + count("i18n");
-    }
-
-    private int count(String path) {
-        try {
-            String[] files = context.getAssets().list(path);
-            return files == null ? 0 : files.length;
-        } catch (Exception ignored) {
-            return 0;
-        }
+        return entries().length;
     }
 }

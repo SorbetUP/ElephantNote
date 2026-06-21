@@ -1,9 +1,13 @@
+import fs from 'fs-extra'
+import path from 'path'
 import { RcloneManager } from './RcloneManager.js'
 import { buildBisyncArgs } from './rcloneArgs.js'
 import { createRcloneExecutor } from './rcloneNodeRunner.js'
 
 const createDefaultRclone = () => new RcloneManager({ executor: createRcloneExecutor() })
 const nowIso = () => new Date().toISOString()
+const CONFIG_DIR = '.elephantnote'
+const CONFIG_FILE = 'sync-config.json'
 
 const createQueueItem = ({ operation, payload = {} } = {}) => ({
   id: `sync-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -28,7 +32,35 @@ export class RcloneVaultEngine {
   }
 
   setCwd(cwd) {
-    this.cwd = cwd || ''
+    const nextCwd = cwd || ''
+    if (nextCwd !== this.cwd) {
+      this.cwd = nextCwd
+      this.remotePath = ''
+    }
+  }
+
+  configPath() {
+    return path.join(this.cwd, CONFIG_DIR, CONFIG_FILE)
+  }
+
+  async loadConfig() {
+    if (!this.cwd) return
+    const target = this.configPath()
+    if (!await fs.pathExists(target)) return
+    const config = await fs.readJson(target).catch(() => null)
+    if (config?.remotePath) this.remotePath = String(config.remotePath)
+  }
+
+  async persistConfig() {
+    if (!this.cwd) return
+    const target = this.configPath()
+    await fs.ensureDir(path.dirname(target))
+    await fs.writeJson(target, {
+      version: 2,
+      backend: 'rclone',
+      remotePath: this.remotePath,
+      updatedAt: nowIso()
+    }, { spaces: 2 })
   }
 
   enqueue(operation) {
@@ -63,6 +95,7 @@ export class RcloneVaultEngine {
 
   async run(payload = {}) {
     if (this.running) return this.status()
+    await this.loadConfig()
     if (Object.keys(payload || {}).length) this.enqueuePlan(payload)
     this.running = true
     try {
@@ -82,6 +115,7 @@ export class RcloneVaultEngine {
     try {
       if (item.operation === 'init') {
         if (item.payload.remotePath) this.remotePath = item.payload.remotePath
+        await this.persistConfig()
       } else if (['snapshot', 'pull', 'push', 'sync'].includes(item.operation)) {
         await this.sync(item.payload)
       }
@@ -102,6 +136,7 @@ export class RcloneVaultEngine {
     this.remotePath = remotePath || this.remotePath
     if (!this.cwd) throw new Error('Rclone sync requires an active vault path.')
     if (!this.remotePath) throw new Error('Rclone sync requires a remote path.')
+    await this.persistConfig()
     try {
       await this.rclone.run(buildBisyncArgs({ localPath: this.cwd, remotePath: this.remotePath }), { cwd: this.cwd })
       this.lastError = ''

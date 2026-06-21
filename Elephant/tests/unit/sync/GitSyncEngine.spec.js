@@ -31,6 +31,7 @@ describe('RcloneVaultEngine', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0].args.slice(0, 3)).toEqual(['bisync', cwd, 'remote:vault'])
     expect(calls[0].args).toContain('--resync')
+    expect(calls[0].args).toContain('--filters-file')
   })
 
   it('persists remote path and first run state after a successful sync', async() => {
@@ -41,6 +42,7 @@ describe('RcloneVaultEngine', () => {
 
     const config = await fs.readJson(path.join(cwd, '.elephantnote', 'sync-config.json'))
     expect(config).toMatchObject({ backend: 'rclone', remotePath: 'remote:vault', firstRunDone: true })
+    await expect(fs.pathExists(path.join(cwd, '.elephantnote', 'sync', 'rclone-filter.txt'))).resolves.toBe(true)
   })
 
   it('loads persisted config before a later sync run', async() => {
@@ -58,7 +60,8 @@ describe('RcloneVaultEngine', () => {
     await engine.run()
 
     expect(calls).toHaveLength(1)
-    expect(calls[0].args).toEqual(['bisync', cwd, 'remote:vault'])
+    expect(calls[0].args.slice(0, 3)).toEqual(['bisync', cwd, 'remote:vault'])
+    expect(calls[0].args).not.toContain('--resync')
   })
 
   it('keeps failed operations and diagnostics when rclone fails', async() => {

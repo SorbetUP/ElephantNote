@@ -95,6 +95,15 @@ const aiConfigPayload = schema.strictObject({
   contextWindow: optionalNumber
 })
 
+const syncRunPayload = schema.object({
+  remotePath: optionalString,
+  init: optionalObject,
+  snapshot: optionalObject,
+  sync: optionalObject,
+  pull: optionalObject,
+  push: optionalObject
+})
+
 export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   system: Object.freeze([
     action('API_DESCRIBE', 'api.describe')
@@ -190,7 +199,7 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   sync: Object.freeze([
     action('SYNC_STATUS', 'sync.status'),
     action('SYNC_ENQUEUE', 'sync.enqueue', schema.object({ operation: requiredEnum(SYNC_OPERATION_IDS), payload: optionalObject })),
-    action('SYNC_RUN', 'sync.run', schema.object({ init: optionalObject, snapshot: optionalObject, pull: optionalObject, push: optionalObject }))
+    action('SYNC_RUN', 'sync.run', syncRunPayload)
   ])
 })
 

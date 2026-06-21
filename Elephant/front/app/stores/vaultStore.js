@@ -98,7 +98,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     activeWorkspaceView: 'notes',
     chatSidebarOpen: false,
     chatSidebarWidth: 460,
-    chatHistoryOpen: true,
+    chatHistoryOpen: false,
     chatMode: 'advanced',
     filter: 'all',
     sort: 'updated-newest',

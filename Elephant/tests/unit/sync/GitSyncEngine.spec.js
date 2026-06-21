@@ -78,10 +78,36 @@ describe('RcloneVaultEngine', () => {
     await expect(engine.run({ init: { remotePath: 'remote:vault' }, snapshot: {} })).rejects.toThrow('active vault')
   })
 
-  it('rejects sync without a remote path', async() => {
+  it('does not throw when a remote path has not been configured yet', async() => {
+    const cwd = await tempVault()
+    const calls = []
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone(calls) })
+
+    await expect(engine.run({ snapshot: {} })).resolves.toMatchObject({ configured: false })
+
+    expect(calls).toHaveLength(0)
+    expect(engine.status().lastError).toContain('remote is not configured')
+  })
+
+  it('does not enqueue duplicate default snapshots when the queue is already populated', async() => {
     const cwd = await tempVault()
     const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone() })
-    await expect(engine.run({ snapshot: {} })).rejects.toThrow('remote path')
+    engine.enqueue({ operation: 'init', payload: {} })
+    engine.enqueue({ operation: 'snapshot', payload: {} })
+
+    expect(engine.enqueuePlan({})).toEqual([])
+    expect(engine.status().queued).toBe(2)
+  })
+
+  it('accepts a top-level remotePath payload for run', async() => {
+    const cwd = await tempVault()
+    const calls = []
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone(calls) })
+
+    await engine.run({ remotePath: 'remote:vault', snapshot: {} })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].args.slice(0, 3)).toEqual(['bisync', cwd, 'remote:vault'])
   })
 
   it('clears in-memory config when changing vaults', async() => {
@@ -129,6 +155,7 @@ describe('RcloneVaultEngine', () => {
     expect(status.operations).toHaveLength(1)
     expect(status.history).toEqual([])
     expect(status.rclone.configured).toBe(true)
+    expect(status.capabilities.mobileSyncRequiresBackend).toBe(true)
   })
 
   it('uses an empty snapshot plan when run receives no payload but queue is prefilled', async() => {

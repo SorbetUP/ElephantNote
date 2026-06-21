@@ -8,6 +8,7 @@ const createDefaultRclone = () => new RcloneManager({ executor: createRcloneExec
 const nowIso = () => new Date().toISOString()
 const CONFIG_DIR = '.elephantnote'
 const CONFIG_FILE = 'sync-config.json'
+const RUN_OPERATIONS = ['snapshot', 'pull', 'push', 'sync']
 
 const createQueueItem = ({ operation, payload = {} } = {}) => ({
   id: `sync-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -109,6 +110,9 @@ export class RcloneVaultEngine {
       }
       this.lastRunAt = nowIso()
       return this.status()
+    } catch (error) {
+      this.lastError = error?.message || 'Rclone sync failed.'
+      throw error
     } finally {
       this.running = false
     }
@@ -121,8 +125,10 @@ export class RcloneVaultEngine {
       if (item.operation === 'init') {
         if (item.payload.remotePath) this.remotePath = item.payload.remotePath
         await this.persistConfig()
-      } else if (['snapshot', 'pull', 'push', 'sync'].includes(item.operation)) {
+      } else if (RUN_OPERATIONS.includes(item.operation)) {
         await this.sync(item.payload)
+      } else {
+        throw new Error(`Unknown sync operation: ${item.operation}.`)
       }
       item.status = 'done'
       item.updatedAt = nowIso()

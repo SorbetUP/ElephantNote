@@ -16,4 +16,12 @@ describe('rclone sync helpers', () => {
       '--resync'
     ])
   })
+
+  it('can build a normal bisync run without resync', () => {
+    expect(buildBisyncArgs({ localPath: '/vault', remotePath: 'remote:vault', resync: false })).toEqual([
+      RCLONE_SYNC_COMMAND,
+      '/vault',
+      'remote:vault'
+    ])
+  })
 })

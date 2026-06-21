@@ -37,6 +37,14 @@
         <component :is="c.icon" />
         <span>{{ c.name }}</span>
       </div>
+      <div
+        class="item"
+        :class="{ active: currentCategory === 'rclone' }"
+        @click="handleCategoryItemClick(syncCategory)"
+      >
+        <Search width="28" height="28" />
+        <span>Sync</span>
+      </div>
     </section>
   </div>
 </template>
@@ -55,6 +63,7 @@ const route = useRoute()
 const currentCategory = ref('general')
 const restaurants = ref([])
 const state = ref('')
+const syncCategory = { name: 'Sync', label: 'rclone', path: '/preference/rclone' }
 
 watch(
   () => route.name,
@@ -88,7 +97,16 @@ const createFilter = (queryString) => {
   }
 }
 
-const loadAll = () => getTranslatedSearchContent()
+const loadAll = () => [
+  ...getTranslatedSearchContent(),
+  {
+    category: 'Sync',
+    categoryEn: 'Sync',
+    preference: 'Link this device or phone',
+    preferenceEn: 'Link this device or phone',
+    routeCategory: 'rclone'
+  }
+]
 
 const handleSelect = (item) => {
   // Use a safe routeCategory to avoid a blank screen caused by invalid categories
@@ -98,10 +116,10 @@ const handleSelect = (item) => {
 }
 
 const handleCategoryItemClick = (item) => {
-  if (item.name.toLowerCase() !== currentCategory.value) {
+  if (item.label !== currentCategory.value) {
     router.push({
       path: item.path
-    })
+    }).catch(() => {})
   }
 }
 

@@ -1,3 +1,4 @@
+import fs from 'fs-extra'
 import path from 'path'
 import { app } from 'electron'
 import Store from 'electron-store'
@@ -7,6 +8,44 @@ import { createDefaultModelSelection, createDefaultPluginState, createDefaultTas
 import { normalizeFeatureFlags } from 'common/elephantnote/featureFlags'
 import { normalizeGoogleCalendarConfig } from 'common/elephantnote/googleCalendar'
 import { normalizeProgramEnvironments } from '../programRuntime'
+
+export const ELEPHANTNOTE_CONFIG_DIR = path.join(app.getPath('appData'), 'ElephantNote')
+export const ELEPHANTNOTE_AI_SETTINGS_FILE = path.join(ELEPHANTNOTE_CONFIG_DIR, 'ai-settings.json')
+
+const readAiSettingsFile = () => {
+  try {
+    if (!fs.pathExistsSync(ELEPHANTNOTE_AI_SETTINGS_FILE)) return null
+    const data = fs.readJsonSync(ELEPHANTNOTE_AI_SETTINGS_FILE)
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : null
+  } catch (error) {
+    console.warn('[ai-config] read ai-settings.json failed:', error)
+    return null
+  }
+}
+
+const writeAiSettingsFile = (aiConfig = {}) => {
+  try {
+    fs.ensureDirSync(ELEPHANTNOTE_CONFIG_DIR)
+    fs.writeJsonSync(
+      ELEPHANTNOTE_AI_SETTINGS_FILE,
+      {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        aiConfig: normalizeAiConfig(aiConfig)
+      },
+      { spaces: 2 }
+    )
+  } catch (error) {
+    console.warn('[ai-config] write ai-settings.json failed:', error)
+  }
+}
+
+const readPersistedAiConfig = () => {
+  const file = readAiSettingsFile()
+  const fromFile = file?.aiConfig || null
+  const fromStore = elephantConfigStore.get('aiConfig') || {}
+  return normalizeAiConfig({ ...fromStore, ...(fromFile || {}) })
+}
 
 export const createElephantConfigDefaults = () => ({
   vaults: [],
@@ -22,7 +61,7 @@ export const createElephantConfigDefaults = () => ({
 
 export const elephantConfigStore = new Store({
   name: 'elephantnote',
-  cwd: path.join(app.getPath('appData'), 'ElephantNote'),
+  cwd: ELEPHANTNOTE_CONFIG_DIR,
   defaults: createElephantConfigDefaults()
 })
 
@@ -30,7 +69,7 @@ export const getConfig = () => ({
   vaults: elephantConfigStore.get('vaults') || [],
   activeVaultId: elephantConfigStore.get('activeVaultId') || null,
   featureFlags: normalizeFeatureFlags(elephantConfigStore.get('featureFlags') || {}),
-  aiConfig: normalizeAiConfig(elephantConfigStore.get('aiConfig') || {}),
+  aiConfig: readPersistedAiConfig(),
   atomicModelSelection: {
     ...createDefaultModelSelection(),
     ...(elephantConfigStore.get('atomicModelSelection') || {})
@@ -48,10 +87,12 @@ export const getConfig = () => ({
 })
 
 export const setConfig = (config) => {
+  const aiConfig = normalizeAiConfig(config.aiConfig || {})
   elephantConfigStore.set('vaults', config.vaults)
   elephantConfigStore.set('activeVaultId', config.activeVaultId)
   elephantConfigStore.set('featureFlags', normalizeFeatureFlags(config.featureFlags || {}))
-  elephantConfigStore.set('aiConfig', normalizeAiConfig(config.aiConfig || {}))
+  elephantConfigStore.set('aiConfig', aiConfig)
+  writeAiSettingsFile(aiConfig)
   elephantConfigStore.set('atomicModelSelection', {
     ...createDefaultModelSelection(),
     ...(config.atomicModelSelection || {})

@@ -66,18 +66,49 @@ export const resolveAiEndpoint = ({ endpoint = '', transport = 'openai-compatibl
   return normalizeAiEndpointForTransport(endpoint, transport)
 }
 
+export const createDefaultLocalAiConfig = () => ({
+  enabled: true,
+  showModelLibraryInSidebar: true,
+  allowHuggingFaceDownloads: true,
+  allowLocalRuntimeAutostart: true
+})
+
+export const normalizeLocalAiConfig = (localAi = {}) => {
+  const defaults = createDefaultLocalAiConfig()
+  const input = localAi && typeof localAi === 'object' ? localAi : {}
+  return {
+    ...defaults,
+    ...input,
+    enabled: input.enabled !== false,
+    showModelLibraryInSidebar: input.showModelLibraryInSidebar !== false,
+    allowHuggingFaceDownloads: input.allowHuggingFaceDownloads !== false,
+    allowLocalRuntimeAutostart: input.allowLocalRuntimeAutostart !== false
+  }
+}
+
 export const normalizeAiConfig = (config = {}) => {
   const presetId = String(config.preset || config.provider || 'nodeLlamaCpp')
   const preset = ELEPHANTNOTE_AI_PRESETS[presetId] || ELEPHANTNOTE_AI_PRESETS.custom
   const transport = String(config.transport || preset.transport)
+  const localAi = normalizeLocalAiConfig(config.localAi)
   return {
+    ...config,
     preset: preset.id,
     name: String(config.name || preset.label),
     transport,
     endpoint: normalizeAiEndpointForTransport(config.endpoint || preset.endpoint, transport),
     model: String(config.model || preset.model || ''),
     apiKey: String(config.apiKey || ''),
-    codexLinkEnabled: config.codexLinkEnabled !== false
+    codexLinkEnabled: config.codexLinkEnabled !== false,
+    defaultProvider: String(config.defaultProvider || (localAi.enabled ? 'app-local' : 'api')),
+    localAi,
+    providers: config.providers && typeof config.providers === 'object' ? config.providers : {},
+    routes: config.routes && typeof config.routes === 'object' ? config.routes : {},
+    rag: config.rag && typeof config.rag === 'object' ? config.rag : {},
+    tools: config.tools && typeof config.tools === 'object' ? config.tools : {},
+    search: config.search && typeof config.search === 'object' ? config.search : {},
+    indexing: config.indexing && typeof config.indexing === 'object' ? config.indexing : {},
+    ocr: config.ocr && typeof config.ocr === 'object' ? config.ocr : {}
   }
 }
 

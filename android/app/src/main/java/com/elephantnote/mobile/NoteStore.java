@@ -391,7 +391,7 @@ final class NoteStore {
     }
 
     private void writeMobileManifest() {
-        File manifest = new File(AndroidVaultPaths.workspaceRootWithoutRecursion(vaultRoot), "mobile-vault.json");
+        File manifest = new File(new File(vaultRoot, ".elephantnote"), "mobile-vault.json");
         if (manifest.exists()) return;
         JSONObject payload = new JSONObject();
         try {

@@ -3,6 +3,7 @@ export class RcloneManager {
     this.binaryPath = binaryPath
     this.executor = executor
     this.lastError = ''
+    this.lastVersion = ''
   }
 
   configure({ binaryPath = '' } = {}) {
@@ -34,7 +35,17 @@ export class RcloneManager {
   }
 
   async version() {
-    const result = await this.run(['version'], { timeout: 30_000 })
-    return result.stdout.split('\n')[0] || result.stdout.trim()
+    const result = await this.run(['version'], { timeout: 30000 })
+    this.lastVersion = result.stdout.split('\n')[0] || result.stdout.trim()
+    return this.lastVersion
+  }
+
+  status() {
+    return {
+      configured: Boolean(this.executor),
+      binaryPath: this.binaryPath,
+      version: this.lastVersion,
+      lastError: this.lastError
+    }
   }
 }

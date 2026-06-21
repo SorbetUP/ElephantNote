@@ -108,4 +108,76 @@ describe('RcloneVaultEngine', () => {
     expect(calls[0].args[0]).toBe('bisync')
     expect(calls[1].args[0]).toBe('bisync')
   })
+
+  it('rejects unknown operations instead of marking them done', async() => {
+    const cwd = await tempVault()
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone() })
+    engine.enqueue({ operation: 'unknown' })
+
+    await expect(engine.run()).rejects.toThrow('Unknown sync operation')
+    expect(engine.status().history.at(-1)).toMatchObject({ operation: 'unknown', status: 'error' })
+  })
+
+  it('returns a status snapshot with queue and history slices', async() => {
+    const cwd = await tempVault()
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone() })
+    engine.enqueue({ operation: 'init', payload: { remotePath: 'remote:vault' } })
+
+    const status = engine.status()
+
+    expect(status.queued).toBe(1)
+    expect(status.operations).toHaveLength(1)
+    expect(status.history).toEqual([])
+    expect(status.rclone.configured).toBe(true)
+  })
+
+  it('uses an empty snapshot plan when run receives no payload but queue is prefilled', async() => {
+    const cwd = await tempVault()
+    const calls = []
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone(calls) })
+    engine.enqueuePlan({ init: { remotePath: 'remote:vault' }, snapshot: {} })
+
+    await engine.run()
+
+    expect(calls).toHaveLength(1)
+  })
+
+  it('returns current status immediately while already running', async() => {
+    const cwd = await tempVault()
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone() })
+    engine.running = true
+
+    await expect(engine.run({ snapshot: {} })).resolves.toMatchObject({ running: true, cwd })
+  })
+
+  it('supports direct sync with a remote path override', async() => {
+    const cwd = await tempVault()
+    const calls = []
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone(calls) })
+
+    await engine.sync({ remotePath: 'remote:override' })
+
+    expect(calls[0].args.slice(0, 3)).toEqual(['bisync', cwd, 'remote:override'])
+  })
+
+  it('does not use resync after the first successful run', async() => {
+    const cwd = await tempVault()
+    const calls = []
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone(calls) })
+
+    await engine.run({ init: { remotePath: 'remote:vault' }, snapshot: {} })
+    engine.enqueue({ operation: 'snapshot' })
+    await engine.run()
+
+    expect(calls).toHaveLength(2)
+    expect(calls[0].args).toContain('--resync')
+    expect(calls[1].args).not.toContain('--resync')
+  })
+
+  it('exposes the generated config path', async() => {
+    const cwd = await tempVault()
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone() })
+
+    expect(engine.configPath()).toBe(path.join(cwd, '.elephantnote', 'sync-config.json'))
+  })
 })

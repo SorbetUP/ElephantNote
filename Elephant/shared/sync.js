@@ -2,7 +2,8 @@ export const SYNC_OPERATIONS = Object.freeze({
   INIT: 'init',
   SNAPSHOT: 'snapshot',
   PULL: 'pull',
-  PUSH: 'push'
+  PUSH: 'push',
+  SYNC: 'sync'
 })
 
 export const SYNC_OPERATION_SEQUENCE = Object.freeze([
@@ -35,6 +36,7 @@ export const SYNC_METADATA_DIR = '.elephantnote'
 export const SYNC_HISTORY_FILE = 'sync-log.json'
 export const SYNC_CONFIG_FILE = 'sync-config.json'
 export const SYNC_BACKENDS = Object.freeze({
+  RCLONE: 'rclone',
   GIT: 'git',
   SYNCTHING_GIT: 'syncthing-git'
 })
@@ -59,7 +61,7 @@ export const createUnknownSyncOperationError = (operation = '') => {
 }
 
 export const createMissingVaultSyncError = () => {
-  const error = new Error('Git sync requires an active vault path.')
+  const error = new Error('Rclone sync requires an active vault path.')
   error.code = SYNC_ERROR_CODES.NO_VAULT
   return error
 }
@@ -90,7 +92,7 @@ export const createSyncIdentity = ({ cwd = '', hostname = '', now = new Date() }
   return {
     deviceId: `en-${compactHash(seed || now.toISOString())}`,
     folderId: `vault-${compactHash(cwd || 'vault')}`,
-    folderLabel: cwd ? String(cwd).split(/[\\/]/).filter(Boolean).at(-1) || 'Vault' : 'Vault'
+    folderLabel: cwd ? String(cwd).split(/[\/]/).filter(Boolean).at(-1) || 'Vault' : 'Vault'
   }
 }
 
@@ -98,24 +100,22 @@ export const createSyncConfig = ({
   cwd = '',
   hostname = '',
   remote = '',
+  remotePath = '',
   remoteName = SYNC_DEFAULT_REMOTE,
   branch = '',
   mode = 'send-receive',
-  backend = SYNC_BACKENDS.GIT,
-  syncthingEndpoint = '',
-  syncthingApiKey = '',
+  backend = SYNC_BACKENDS.RCLONE,
   peers = [],
   now = new Date()
 } = {}) => ({
-  version: 1,
+  version: 2,
   ...createSyncIdentity({ cwd, hostname, now }),
-  backend: SYNC_BACKEND_IDS.includes(backend) ? backend : SYNC_BACKENDS.GIT,
+  backend: SYNC_BACKEND_IDS.includes(backend) ? backend : SYNC_BACKENDS.RCLONE,
   mode: String(mode || 'send-receive'),
   remoteName: remoteName || SYNC_DEFAULT_REMOTE,
   remote: String(remote || ''),
+  remotePath: String(remotePath || ''),
   branch: String(branch || ''),
-  syncthingEndpoint: String(syncthingEndpoint || ''),
-  syncthingApiKey: String(syncthingApiKey || ''),
   peers: Array.isArray(peers) ? peers : [],
   updatedAt: now.toISOString()
 })
@@ -135,8 +135,9 @@ export const createSyncStatus = ({
   running: Boolean(running),
   deviceId: config?.deviceId || '',
   folderId: config?.folderId || '',
-  backend: config?.backend || SYNC_BACKENDS.GIT,
+  backend: config?.backend || SYNC_BACKENDS.RCLONE,
   remote: config?.remote || '',
+  remotePath: config?.remotePath || '',
   peers: Array.isArray(config?.peers) ? config.peers : [],
   branch: repository?.branch || config?.branch || '',
   ahead: Number(repository?.ahead || 0),

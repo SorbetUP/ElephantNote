@@ -213,14 +213,11 @@ const loadLocaleMessages = (locale) => {
 const englishFallback = createFallbackEnglishTranslations()
 const enTranslations = mergeLocaleMessages(englishFallback, loadLocaleMessages('en'))
 
-// Create the Vue i18n instance
 const i18n = createI18n({
   legacy: false,
   locale: 'en',
   fallbackLocale: 'en',
   messages: { en: enTranslations },
-  fallbackWarn: false,
-  missingWarn: false,
   modifiers: {
     '@': () => '@'
   },
@@ -260,9 +257,7 @@ export const setLanguage = (locale) => {
   if (!locale) return
   if (!i18n.global.availableLocales.includes(locale)) {
     const translation = loadLocaleMessages(locale)
-    const localeMessages = locale === 'en'
-      ? mergeLocaleMessages(englishFallback, translation)
-      : mergeLocaleMessages(englishFallback, translation)
+    const localeMessages = mergeLocaleMessages(englishFallback, translation)
     if (!localeMessages) return
 
     i18n.global.setLocaleMessage(locale, localeMessages)

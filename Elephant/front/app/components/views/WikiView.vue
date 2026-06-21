@@ -1,363 +1,194 @@
 <template>
   <section class="en-wiki-workspace">
-    <header class="en-wiki-hero">
-      <div class="en-wiki-hero-copy">
-        <p class="en-wiki-kicker">Atomic-style wiki</p>
-        <h1>Graph-backed synthesis</h1>
-        <p>
-          Wiki pages are proposed from the semantic graph, citations stay clickable, and source
-          inspection is resolved from the backend.
-        </p>
+    <header class="en-wiki-toolbar">
+      <div>
+        <p class="en-wiki-kicker">Wiki</p>
+        <h1>{{ currentTitle }}</h1>
+        <p>{{ visiblePath }}</p>
       </div>
-
-      <div class="en-wiki-hero-actions">
-        <button
-          type="button"
-          :disabled="store.wikiLoading"
-          @click="store.loadWiki({ regenerate: true })"
-        >
-          {{ store.wikiLoading ? 'Synthesizing...' : 'Propose pages' }}
+      <div class="en-wiki-actions">
+        <button type="button" :disabled="loading" @click="loadWikiDirectory">
+          {{ loading ? 'Loading...' : 'Refresh' }}
         </button>
-        <button
-          type="button"
-          @click="searchStore.inspect()"
-        >
-          Refresh graph
-        </button>
+        <button type="button" @click="createWikiFolder">New folder</button>
+        <button type="button" @click="createWikiNote">New note</button>
       </div>
     </header>
 
-    <section class="en-wiki-graph-panel">
-      <div class="en-wiki-graph-panel-head">
-        <div>
-          <p class="en-wiki-kicker">Inspection</p>
-          <h2>Semantic graph first</h2>
-        </div>
-        <span class="en-wiki-status">{{ graphSummary.semanticEdges }} semantic links</span>
-      </div>
+    <nav class="en-wiki-breadcrumbs" aria-label="Wiki folder path">
+      <button type="button" @click="openWikiPath(WIKI_ROOT)">Wiki</button>
+      <template v-for="crumb in breadcrumbs" :key="crumb.path">
+        <span>/</span>
+        <button type="button" @click="openWikiPath(crumb.path)">{{ crumb.label }}</button>
+      </template>
+    </nav>
 
-      <div class="en-wiki-graph-metrics">
-        <span><strong>{{ graphSummary.nodes }}</strong> graph nodes</span>
-        <span><strong>{{ graphSummary.semanticEdges }}</strong> semantic links</span>
-        <span><strong>{{ graphSummary.structureEdges }}</strong> structure links</span>
-        <span><strong>{{ graphSummary.clusters }}</strong> clusters</span>
-        <span><strong>{{ graphSummary.sources }}</strong> cited sources</span>
-      </div>
-
-      <div
-        v-if="graphClusters.length"
-        class="en-wiki-cluster-strip"
+    <section class="en-wiki-explorer">
+      <article
+        v-if="currentWikiPath !== WIKI_ROOT"
+        class="en-wiki-entry en-wiki-entry-parent"
+        @click="openWikiPath(parentPath)"
       >
-        <button
-          v-for="cluster in graphClusters"
-          :key="cluster.id"
-          type="button"
-          class="en-wiki-cluster-chip"
-          @click="focusCluster(cluster)"
-        >
-          {{ cluster.label }} · {{ cluster.nodeCount }}
-        </button>
-      </div>
+        <span class="en-wiki-entry-icon">↩</span>
+        <div>
+          <h2>Parent folder</h2>
+          <p>{{ parentPathLabel }}</p>
+        </div>
+      </article>
 
-      <p class="en-wiki-graph-note">
-        The backend now synthesizes wiki proposals from graph clusters and source-rich notes.
-      </p>
-    </section>
-
-    <div class="en-wiki-layout">
-      <section class="en-wiki-list">
-        <article
-          v-for="record in records"
-          :key="record.id"
-          :class="{ selected: selectedRecord?.id === record.id }"
-          @click="selectRecord(record)"
-        >
-          <header>
-            <div>
-              <h2>{{ record.title || record.topic }}</h2>
-              <p>{{ record.status }} · {{ record.citations.length }} citations</p>
-            </div>
-            <button
-              v-if="record.notePath"
-              type="button"
-              class="en-wiki-open-page"
-              @click.stop="openPage(record)"
-            >
-              Open
-            </button>
-          </header>
-
-          <p class="en-wiki-summary">
-            {{ record.summary }}
-          </p>
-
-          <div
-            v-if="record.citations.length"
-            class="en-wiki-citations"
-          >
-            <button
-              v-for="citation in record.citations.slice(0, 6)"
-              :key="citation.path"
-              type="button"
-              class="en-wiki-citation"
-              @click.stop="inspectSource(record, citation)"
-            >
-              {{ citation.title }}
-            </button>
-          </div>
-
-          <footer class="en-wiki-actions">
-            <button
-              v-if="record.status === 'proposed'"
-              type="button"
-              @click.stop="store.acceptWikiProposal(record.id)"
-            >
-              Accept
-            </button>
-            <button
-              v-if="record.status === 'proposed'"
-              type="button"
-              @click.stop="store.dismissWikiProposal(record.id)"
-            >
-              Dismiss
-            </button>
-          </footer>
-        </article>
-
-        <article
-          v-if="!records.length"
-          class="en-wiki-empty-card"
-        >
-          <h2>No wiki proposals yet</h2>
+      <article
+        v-for="entry in entries"
+        :key="entry.path"
+        class="en-wiki-entry"
+        @click="openEntry(entry)"
+      >
+        <span class="en-wiki-entry-icon">{{ entry.kind === 'folder' ? '📁' : '📄' }}</span>
+        <div>
+          <h2>{{ entry.title || entry.filename || basename(entry.path) }}</h2>
           <p>
-            Build the semantic index and regenerate proposals to generate graph-backed wiki pages.
+            <span>{{ entry.kind === 'folder' ? `${entry.noteCount || 0} notes` : entry.excerpt || entry.filename }}</span>
+            <span v-if="entry.updatedAt"> · {{ formatDate(entry.updatedAt) }}</span>
           </p>
-        </article>
-      </section>
+        </div>
+        <button
+          v-if="entry.kind === 'note'"
+          type="button"
+          class="en-wiki-open-button"
+          @click.stop="openNote(entry)"
+        >
+          Open
+        </button>
+      </article>
 
-      <aside class="en-wiki-detail">
-        <template v-if="selectedRecord">
-          <div class="en-wiki-detail-head">
-            <div>
-              <p class="en-wiki-kicker">Selected topic</p>
-              <h2>{{ selectedRecord.title || selectedRecord.topic }}</h2>
-              <p>{{ selectedRecord.summary }}</p>
-              <div class="en-wiki-detail-meta">
-                <span>{{ selectedRecord.status }}</span>
-                <span>{{ selectedRecord.citations.length }} citations</span>
-                <span v-if="sourceInsight?.cluster">{{ sourceInsight.cluster.label }}</span>
-              </div>
-            </div>
-            <span class="en-wiki-status">{{ selectedRecord.status }}</span>
-          </div>
+      <article v-if="!entries.length && !loading" class="en-wiki-empty-card">
+        <h2>No wiki pages yet</h2>
+        <p>
+          This view is a file explorer scoped to the hidden vault folder
+          <code>.elephantnote/wiki</code>. Create or move wiki notes there to show them here.
+        </p>
+      </article>
 
-          <section class="en-wiki-source-section">
-            <h3>Sources</h3>
-            <div
-              v-if="selectedRecord.citations.length"
-              class="en-wiki-source-list"
-            >
-              <button
-                v-for="citation in selectedRecord.citations"
-                :key="citation.path"
-                type="button"
-                class="en-wiki-source-pill"
-                :class="{ active: selectedCitation?.path === citation.path }"
-                @click="inspectSource(selectedRecord, citation)"
-              >
-                {{ citation.title }}
-              </button>
-            </div>
-          </section>
-
-          <section
-            v-if="sourceInsight"
-            class="en-wiki-source-card"
-          >
-            <div class="en-wiki-source-card-head">
-              <div>
-                <p class="en-wiki-kicker">Source focus</p>
-                <h3>{{ sourceInsight.source?.title || selectedCitation?.title || 'Source' }}</h3>
-              </div>
-              <button
-                type="button"
-                @click="openSelectedSource"
-              >
-                Open note
-              </button>
-            </div>
-
-            <p class="en-wiki-source-summary">
-              {{ sourceInsight.source?.summary || selectedCitation?.excerpt || 'No source summary yet.' }}
-            </p>
-
-            <div class="en-wiki-source-meta">
-              <span>{{ sourceInsight.source?.kind || 'note' }}</span>
-              <span>{{ sourceInsight.source?.sourceCount || 0 }} sources</span>
-              <span>{{ sourceInsight.source?.chunkCount || 0 }} chunks</span>
-              <span v-if="sourceInsight.cluster">{{ sourceInsight.cluster.label }}</span>
-            </div>
-
-            <section
-              v-if="sourceInsight.relatedNodes.length"
-              class="en-wiki-related-section"
-            >
-              <h4>Connected notes</h4>
-              <div class="en-wiki-related-grid">
-                <button
-                  v-for="node in sourceInsight.relatedNodes"
-                  :key="node.id"
-                  type="button"
-                  class="en-wiki-related-card"
-                  @click="openNote(node.id)"
-                >
-                  <strong>{{ node.title }}</strong>
-                  <span>{{ node.linkType }}</span>
-                </button>
-              </div>
-            </section>
-          </section>
-
-          <section
-            v-if="selectedCitation"
-            class="en-wiki-citation-detail"
-          >
-            <p class="en-wiki-kicker">Citation detail</p>
-            <h3>{{ selectedCitation.title }}</h3>
-            <p>{{ selectedCitation.excerpt || 'No excerpt available.' }}</p>
-            <button
-              type="button"
-              @click="openNote(selectedCitation.path)"
-            >
-              Open citation note
-            </button>
-          </section>
-        </template>
-
-        <template v-else>
-          <h2>Select a proposal</h2>
-          <p>Choose a wiki proposal to inspect its citations and the graph-connected source notes.</p>
-        </template>
-      </aside>
-    </div>
+      <article v-if="error" class="en-wiki-error-card">
+        <h2>Unable to load wiki folder</h2>
+        <p>{{ error }}</p>
+      </article>
+    </section>
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import log from 'electron-log/renderer'
 import { useVaultStore } from '../../stores/vaultStore'
-import { useSearchStore } from '../../stores/searchStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
-import {
-  buildWikiGraphPanel,
-  buildWikiRecordCard,
-  buildWikiSourceCard
-} from './wikiViewHelpers'
 
+const WIKI_ROOT = '.elephantnote/wiki'
 const store = useVaultStore()
-const searchStore = useSearchStore()
+const entries = ref([])
+const currentWikiPath = ref(WIKI_ROOT)
+const loading = ref(false)
+const error = ref('')
 
-const selectedRecord = ref(null)
-const selectedCitation = ref(null)
-const sourceInsight = ref(null)
-const graphPanel = computed(() => buildWikiGraphPanel({
-  inspectionGraph: searchStore.indexInspection?.graph,
-  includeStructure: false
-}))
-const graphClusters = computed(() => graphPanel.value.clusters)
+const basename = (value = '') => String(value || '').split('/').filter(Boolean).at(-1) || 'Wiki'
+const currentTitle = computed(() => currentWikiPath.value === WIKI_ROOT ? 'Wiki' : basename(currentWikiPath.value))
+const visiblePath = computed(() => currentWikiPath.value)
+const relativeInsideWiki = computed(() => {
+  const path = currentWikiPath.value
+  if (path === WIKI_ROOT) return ''
+  return path.startsWith(`${WIKI_ROOT}/`) ? path.slice(WIKI_ROOT.length + 1) : ''
+})
+const breadcrumbs = computed(() => {
+  const parts = relativeInsideWiki.value.split('/').filter(Boolean)
+  return parts.map((label, index) => ({
+    label,
+    path: [WIKI_ROOT, ...parts.slice(0, index + 1)].join('/')
+  }))
+})
+const parentPath = computed(() => {
+  if (currentWikiPath.value === WIKI_ROOT) return WIKI_ROOT
+  const parts = currentWikiPath.value.split('/').filter(Boolean)
+  parts.pop()
+  return parts.join('/') || WIKI_ROOT
+})
+const parentPathLabel = computed(() => parentPath.value === WIKI_ROOT ? 'Wiki' : parentPath.value)
 
-const records = computed(() => store.wikiProposals.length
-  ? store.wikiProposals.map((record) => buildWikiRecordCard(record))
-  : [])
+const formatDate = (value = '') => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
+}
 
-const graphSummary = computed(() => graphPanel.value.summary)
-const selectedSourceCard = computed(() => buildWikiSourceCard({
-  selectedRecord: selectedRecord.value,
-  selectedCitation: selectedCitation.value,
-  sourceInsight: sourceInsight.value
-}))
+const openWikiPath = async (path = WIKI_ROOT) => {
+  const normalized = String(path || WIKI_ROOT).replace(/\\/g, '/').replace(/\/+$/g, '') || WIKI_ROOT
+  currentWikiPath.value = normalized.startsWith(WIKI_ROOT) ? normalized : WIKI_ROOT
+  await loadWikiDirectory()
+}
 
-const openNote = (value) => {
-  const notePath = typeof value === 'string' ? value : value?.path || value?.relativePath || ''
-  if (!notePath) return
-  const note = [...store.entries, ...store.rootEntries, ...store.openedNotes]
-    .find((entry) => entry?.path === notePath)
-  if (note) {
-    store.openNote(note)
+const loadWikiDirectory = async () => {
+  if (!store.activeVault?.path) return
+  loading.value = true
+  error.value = ''
+  log.info('[wiki] explorer:load:start', { path: currentWikiPath.value })
+  try {
+    const result = await elephantnoteClient.directory.list(currentWikiPath.value)
+    entries.value = Array.isArray(result) ? result : []
+    log.info('[wiki] explorer:load:done', { path: currentWikiPath.value, entries: entries.value.length })
+  } catch (err) {
+    entries.value = []
+    error.value = err?.message || 'Unable to load wiki folder.'
+    log.error('[wiki] explorer:load:failed', { path: currentWikiPath.value, error: err })
+  } finally {
+    loading.value = false
+  }
+}
+
+const openEntry = (entry) => {
+  if (!entry?.path) return
+  if (entry.kind === 'folder') {
+    openWikiPath(entry.path)
     return
   }
+  openNote(entry)
+}
+
+const openNote = (entry) => {
+  if (!entry?.path) return
   store.openNote({
+    ...entry,
     kind: 'note',
     type: 'note',
-    path: notePath,
-    title: notePath.split('/').pop()?.replace(/\.md$/i, '') || notePath
+    title: entry.title || entry.filename?.replace(/\.md$/i, '') || basename(entry.path)
   })
 }
 
-const openPage = (record) => {
-  if (!record?.notePath) return
-  openNote(record.notePath)
-}
-
-const selectRecord = (record) => {
-  selectedRecord.value = record
-  selectedCitation.value = record?.citations?.[0] || null
-  sourceInsight.value = null
-  if (selectedCitation.value) {
-    inspectSource(record, selectedCitation.value)
+const createWikiNote = async () => {
+  if (!store.activeVault?.path) return
+  log.info('[wiki] explorer:create-note:start', { path: currentWikiPath.value })
+  const result = await elephantnoteClient.notes.create(currentWikiPath.value)
+  await loadWikiDirectory()
+  if (result?.note?.path) {
+    openNote({
+      kind: 'note',
+      type: 'note',
+      path: result.note.path,
+      title: basename(result.note.path).replace(/\.md$/i, ''),
+      updatedAt: new Date().toISOString()
+    })
   }
 }
 
-const inspectSource = async (record, citation) => {
-  if (!citation?.path) return
-  selectedRecord.value = record || selectedRecord.value
-  selectedCitation.value = citation
-  try {
-    sourceInsight.value = await elephantnoteClient.wiki.sourceInfo(citation.path)
-  } catch {
-    sourceInsight.value = {
-      source: {
-        path: citation.path,
-        title: citation.title || citation.path,
-        summary: citation.excerpt || '',
-        kind: 'note',
-        sourceCount: 0,
-        chunkCount: 0
-      },
-      relatedNodes: [],
-      cluster: null
-    }
-  }
+const createWikiFolder = async () => {
+  if (!store.activeVault?.path) return
+  log.info('[wiki] explorer:create-folder:start', { path: currentWikiPath.value })
+  await elephantnoteClient.folders.create(currentWikiPath.value)
+  await loadWikiDirectory()
 }
 
-const openSelectedSource = () => {
-  const sourcePath = selectedSourceCard.value.source?.path || selectedCitation.value?.path
-  if (sourcePath) openNote(sourcePath)
-}
-
-const focusCluster = (cluster) => {
-  if (!cluster?.paths?.length) return
-  const firstPath = cluster.paths[0]
-  if (!firstPath) return
-  const record = records.value.find((item) => item.citations?.some((citation) => citation.path === firstPath))
-  if (record) {
-    selectRecord(record)
-    return
-  }
-  openNote(firstPath)
-}
-
-onMounted(() => {
-  searchStore.inspect().catch(() => {})
-  store.loadWiki().catch(() => {})
-})
+onMounted(loadWikiDirectory)
 
 watch(() => store.activeVaultId, () => {
-  searchStore.inspect().catch(() => {})
-  store.loadWiki().catch(() => {})
-  selectedRecord.value = null
-  selectedCitation.value = null
-  sourceInsight.value = null
+  currentWikiPath.value = WIKI_ROOT
+  loadWikiDirectory()
 })
 </script>
 
@@ -367,323 +198,148 @@ watch(() => store.activeVaultId, () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   padding: 16px 24px 24px;
   overflow: auto;
-  background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 32%),
-    radial-gradient(circle at bottom right, rgba(15, 23, 42, 0.06), transparent 36%),
-    var(--en-bg);
+  background: var(--en-bg);
+  color: var(--en-text);
 }
 
-.en-wiki-hero {
+.en-wiki-toolbar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 20px;
+  padding: 16px;
   border: 1px solid var(--en-border);
-  border-radius: 24px;
-  background: color-mix(in srgb, var(--en-surface) 92%, transparent);
-  box-shadow: 0 18px 50px color-mix(in srgb, #020617 12%, transparent);
+  border-radius: 18px;
+  background: var(--en-surface);
 }
 
-.en-wiki-hero-copy h1,
-.en-wiki-hero-copy p {
+.en-wiki-toolbar h1,
+.en-wiki-toolbar p {
   margin: 0;
 }
 
 .en-wiki-kicker {
-  margin-bottom: 8px !important;
+  margin: 0 0 4px;
   color: var(--en-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 11px;
-}
-
-.en-wiki-hero-copy h1 {
-  font-size: 30px;
-  line-height: 1.05;
-}
-
-.en-wiki-hero-copy p:last-child {
-  margin-top: 10px;
-  max-width: 760px;
-  color: var(--en-muted);
-}
-
-.en-wiki-hero-actions {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.en-wiki-hero-actions button,
-.en-wiki-source-card button,
-.en-wiki-citation-detail button,
-.en-wiki-list button,
-.en-wiki-cluster-chip {
-  border: 1px solid var(--en-border);
-  border-radius: 999px;
-  min-height: 36px;
-  padding: 0 14px;
-  color: var(--en-text);
-  background: var(--en-bg);
-}
-
-.en-wiki-graph-panel {
-  display: grid;
-  gap: 12px;
-  padding: 14px 18px;
-  border: 1px solid var(--en-border);
-  border-radius: 20px;
-  background: color-mix(in srgb, var(--en-surface) 90%, transparent);
-}
-
-.en-wiki-graph-panel-head,
-.en-wiki-detail-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.en-wiki-graph-panel-head h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.en-wiki-graph-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.en-wiki-graph-metrics span {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--en-border);
-  color: var(--en-muted);
-  background: var(--en-bg);
-}
-
-.en-wiki-graph-metrics strong {
-  color: var(--en-text);
-}
-
-.en-wiki-cluster-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.en-wiki-cluster-chip {
-  background: color-mix(in srgb, var(--en-soft) 55%, var(--en-bg));
-}
-
-.en-wiki-graph-note {
-  margin: 0;
-  color: var(--en-muted);
-}
-
-.en-wiki-detail-meta {
-  margin-top: 10px;
-  justify-content: flex-start;
-  color: var(--en-muted);
-  font-size: 12px;
-}
-
-.en-wiki-detail-meta span {
-  padding: 5px 9px;
-  border: 1px solid var(--en-border);
-  border-radius: 999px;
-  background: var(--en-bg);
-}
-
-.en-wiki-layout {
-  min-height: 0;
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
-  gap: 16px;
-}
-
-.en-wiki-list {
-  min-height: 0;
-  display: grid;
-  gap: 14px;
-  overflow: auto;
-}
-
-.en-wiki-list article,
-.en-wiki-detail {
-  border: 1px solid var(--en-border);
-  border-radius: 24px;
-  padding: 18px;
-  background: color-mix(in srgb, var(--en-surface) 94%, transparent);
-  box-shadow: 0 18px 60px color-mix(in srgb, #020617 10%, transparent);
-}
-
-.en-wiki-empty-card h2 {
-  margin: 0;
-}
-
-.en-wiki-empty-card p {
-  margin-top: 8px;
-  color: var(--en-muted);
-}
-
-.en-wiki-list article.selected {
-  border-color: color-mix(in srgb, var(--en-primary) 35%, var(--en-border));
-  box-shadow: 0 20px 70px color-mix(in srgb, var(--en-primary) 12%, transparent);
-}
-
-.en-wiki-list article header,
-.en-wiki-detail-head,
-.en-wiki-source-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.en-wiki-list h2,
-.en-wiki-detail h2,
-.en-wiki-source-card h3,
-.en-wiki-citation-detail h3 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.en-wiki-list p,
-.en-wiki-detail p {
-  margin: 0;
-}
-
-.en-wiki-summary,
-.en-wiki-detail-head p,
-.en-wiki-source-summary,
-.en-wiki-citation-detail p {
-  margin-top: 10px !important;
-  color: var(--en-muted);
-  line-height: 1.5;
-}
-
-.en-wiki-citations,
-.en-wiki-source-list,
-.en-wiki-actions,
-.en-wiki-source-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.en-wiki-citations {
-  margin-top: 14px;
-}
-
-.en-wiki-citation,
-.en-wiki-source-pill {
-  padding: 0 12px;
-  min-height: 32px;
-  border-radius: 999px;
-  border: 1px solid var(--en-border);
-  background: var(--en-bg);
-}
-
-.en-wiki-source-pill.active {
-  border-color: color-mix(in srgb, var(--en-primary) 35%, var(--en-border));
-  background: color-mix(in srgb, var(--en-primary) 10%, var(--en-bg));
-}
-
-.en-wiki-actions {
-  margin-top: 14px;
-}
-
-.en-wiki-status {
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--en-border);
-  color: var(--en-muted);
-}
-
-.en-wiki-detail {
-  min-height: 0;
-  overflow: auto;
-}
-
-.en-wiki-source-section,
-.en-wiki-source-card,
-.en-wiki-citation-detail {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--en-border);
-}
-
-.en-wiki-source-card {
-  display: grid;
-  gap: 12px;
-}
-
-.en-wiki-source-meta {
-  color: var(--en-muted);
-  font-size: 12px;
-}
-
-.en-wiki-related-section h4 {
-  margin: 0 0 8px;
-  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.en-wiki-actions,
+.en-wiki-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.en-wiki-actions button,
+.en-wiki-breadcrumbs button,
+.en-wiki-open-button {
+  min-height: 34px;
+  border: 1px solid var(--en-border);
+  border-radius: 10px;
+  padding: 0 12px;
+  color: var(--en-text);
+  background: var(--en-soft);
+}
+
+.en-wiki-actions button:hover,
+.en-wiki-breadcrumbs button:hover,
+.en-wiki-open-button:hover {
+  border-color: var(--en-primary);
+}
+
+.en-wiki-breadcrumbs {
   color: var(--en-muted);
 }
 
-.en-wiki-related-grid {
+.en-wiki-breadcrumbs button {
+  background: transparent;
+}
+
+.en-wiki-explorer {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
 
-.en-wiki-related-card {
+.en-wiki-entry,
+.en-wiki-empty-card,
+.en-wiki-error-card {
   display: grid;
-  gap: 4px;
-  justify-items: start;
-  text-align: left;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
   border: 1px solid var(--en-border);
-  border-radius: 16px;
-  padding: 12px;
-  background: var(--en-bg);
+  border-radius: 14px;
+  background: var(--en-surface);
 }
 
-.en-wiki-related-card strong {
-  font-size: 13px;
+.en-wiki-entry {
+  cursor: pointer;
 }
 
-.en-wiki-related-card span {
+.en-wiki-entry:hover {
+  border-color: var(--en-primary);
+  background: color-mix(in srgb, var(--en-primary) 8%, var(--en-surface));
+}
+
+.en-wiki-entry-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--en-soft);
+}
+
+.en-wiki-entry h2,
+.en-wiki-entry p,
+.en-wiki-empty-card h2,
+.en-wiki-empty-card p,
+.en-wiki-error-card h2,
+.en-wiki-error-card p {
+  margin: 0;
+}
+
+.en-wiki-entry h2 {
+  font-size: 15px;
+}
+
+.en-wiki-entry p,
+.en-wiki-empty-card p,
+.en-wiki-error-card p {
   color: var(--en-muted);
-  font-size: 12px;
 }
 
-.en-wiki-citation-detail button {
-  margin-top: 10px;
+.en-wiki-empty-card,
+.en-wiki-error-card {
+  grid-template-columns: 1fr;
 }
 
-@media (max-width: 1080px) {
-  .en-wiki-layout {
+.en-wiki-error-card {
+  border-color: var(--en-danger, #ef4444);
+}
+
+code {
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: var(--en-soft);
+  color: var(--en-text);
+}
+
+@media (max-width: 760px) {
+  .en-wiki-toolbar,
+  .en-wiki-entry {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 720px) {
-  .en-wiki-hero {
-    flex-direction: column;
-  }
-
-  .en-wiki-hero-actions {
-    flex-wrap: wrap;
+    display: grid;
   }
 }
 </style>

@@ -3,31 +3,29 @@
 folder: Guides
 #android #parity #release
 
-This release is a native Android implementation of the mobile-compatible parts
-of ElephantNote. It is not a zipped Electron desktop app. Android gets dedicated
-storage, UI and lifecycle behavior while preserving vault concepts.
+This release is a native Android implementation of the mobile-compatible parts of ElephantNote. It is not a zipped Electron desktop app. Android gets dedicated storage, UI and lifecycle behavior while preserving vault concepts.
 
 ## Included in the APK
 
 - Native launcher activity and Android share receiver.
-- Offline vault storage using app-private preferences.
+- Offline Markdown notes stored as real `.md` files under `ElephantVault/Notes`.
+- App-specific local vault structure for notes, attachments, canvas data and mobile metadata.
 - Markdown notes with local clipboard and file import/export.
 - Mobile Markdown toolbar for headings, bold, italic, tasks, wiki links, code, quotes, tags and folders.
 - Native Markdown preview for note details.
-- Folder inference through Markdown metadata.
+- Folder inference through `folder:` metadata and matching vault directories.
 - Tag extraction, tag counts and clickable wiki topics.
 - Search across local vault content.
 - Backlink parsing for `[[Wiki Links]]`.
 - Graph summary for notes, tags and backlinks.
 - Topic drill-down from Wiki and Graph into linked notes.
 - Shared text, single image and multiple image capture.
-- Shared images copied into app-private attachment storage.
+- Shared images copied into `ElephantVault/Attachments`.
 - Attachment browser with file URI copy, generated notes and deletion.
 - Source URL ingestion and generated source notes.
-- Calendar event storage.
-- Canvas drawing activity with persisted strokes.
+- Calendar event storage in `.elephantnote/mobile-calendar.json`.
+- Canvas drawing activity with metadata in `Canvas/drawings.json`.
 - Model slot settings for embedding, chat and OCR roles.
-- Local AI visibility setting.
 - Sync device id, folder id and remote path configuration.
 - Bundled starter guides and reusable templates.
 
@@ -37,10 +35,7 @@ storage, UI and lifecycle behavior while preserving vault concepts.
 - Full MarkText editor engine.
 - Node-based local model runtimes.
 - Desktop OCR execution.
-- Excalidraw file compatibility.
-- Native filesystem vault browsing.
-- Background sync daemons.
+- Excalidraw desktop file compatibility.
+- Background sync daemons running inside the APK.
 
-Those features require Android-specific runtimes or permissions before they can
-be called complete. The current APK is a real signed release build with the
-mobile feature set included and visible in-app.
+Heavy AI/OCR should run on desktop for now. The phone keeps capture, browsing, editing, attachments, graph/wiki navigation and Markdown handoff.

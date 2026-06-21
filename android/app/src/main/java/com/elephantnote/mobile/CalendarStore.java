@@ -1,9 +1,15 @@
 package com.elephantnote.mobile;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -25,10 +31,12 @@ final class CalendarStore {
         }
     }
 
-    private final SharedPreferences preferences;
+    private final File file;
 
     CalendarStore(Context context) {
-        preferences = context.getSharedPreferences("elephantnote-calendar", Context.MODE_PRIVATE);
+        File workspace = AndroidVaultPaths.workspaceRoot(context);
+        AndroidVaultPaths.ensureDirectory(workspace);
+        file = new File(workspace, "mobile-calendar.json");
     }
 
     List<Event> list() {
@@ -85,15 +93,22 @@ final class CalendarStore {
     }
 
     private JSONArray readArray() {
-        try {
-            return new JSONArray(preferences.getString("events", "[]"));
+        if (!file.exists()) return new JSONArray();
+        StringBuilder builder = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) builder.append(line);
+            return new JSONArray(builder.toString());
         } catch (Exception ignored) {
             return new JSONArray();
         }
     }
 
     private void writeArray(JSONArray array) {
-        preferences.edit().putString("events", array.toString()).apply();
+        try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {
+            writer.write(array.toString());
+        } catch (Exception ignored) {
+        }
     }
 
     private static String emptyToDefault(String value, String fallback) {

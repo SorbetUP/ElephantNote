@@ -45,6 +45,18 @@ export const ELEPHANTNOTE_AI_PRESETS = Object.freeze({
 
 const LOCALHOST_PATTERN = /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\d{1,3}(?:\.\d{1,3}){3}|\[[^\]]+\]):\d+(?:\/.*)?$/i
 
+const LOCAL_APP_SOURCE_IDS = new Set(['app-local', 'node-llama-cpp', 'nodeLlamaCpp'])
+const HTTP_COMPATIBLE_SOURCE_IDS = new Set([
+  'api',
+  'openai-compatible',
+  'openrouter',
+  'mistral',
+  'lmstudio',
+  'llamacpp',
+  'llama.cpp',
+  'llamacpp-server'
+])
+
 export const normalizeAiEndpoint = (endpoint = '') => {
   const value = String(endpoint || '').trim()
   if (!value) return ''
@@ -86,29 +98,97 @@ export const normalizeLocalAiConfig = (localAi = {}) => {
   }
 }
 
+const getObject = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {})
+
+const normalizeSourceId = (value = '') => String(value || '').trim()
+
+const sourceToTransport = (source = '') => {
+  const value = normalizeSourceId(source)
+  if (LOCAL_APP_SOURCE_IDS.has(value)) return 'node-llama-cpp'
+  if (value === 'ollama') return 'ollama'
+  if (HTTP_COMPATIBLE_SOURCE_IDS.has(value)) return 'openai-compatible'
+  if (value === 'codex') return 'openai-compatible'
+  if (value === 'browser') return 'browser'
+  return value || 'openai-compatible'
+}
+
+const providerMatchesSource = (provider = {}, source = '') => {
+  const normalizedSource = normalizeSourceId(source)
+  const type = normalizeSourceId(provider.type)
+  if (!normalizedSource || !type) return false
+  if (normalizedSource === type) return true
+  if (normalizedSource === 'api' && type === 'openai-compatible') return true
+  if (normalizedSource === 'llamacpp' && ['llama.cpp', 'llamacpp-server'].includes(type)) return true
+  return false
+}
+
+const resolveProviderForSource = (providers = {}, source = '') => {
+  const list = Array.isArray(providers.list) ? providers.list : []
+  const fromList = list.find((provider) => provider.enabled !== false && providerMatchesSource(provider, source))
+  if (fromList) return fromList
+  const normalizedSource = source === 'api' ? 'api' : normalizeSourceId(source)
+  return getObject(providers[normalizedSource])
+}
+
+const normalizeRoute = (route = {}) => getObject(route)
+
+const resolveFeatureRouteRuntime = ({ config = {}, localAi, preset } = {}) => {
+  const routes = getObject(config.routes)
+  const chatRoute = normalizeRoute(routes.chat)
+  const source = normalizeSourceId(chatRoute.source || chatRoute.provider)
+  const hasUsableRoute = source && source !== 'disabled'
+  if (!hasUsableRoute) return null
+
+  if (LOCAL_APP_SOURCE_IDS.has(source) && localAi.enabled === false) return null
+
+  const providers = getObject(config.providers)
+  const provider = resolveProviderForSource(providers, source)
+  const transport = sourceToTransport(source)
+  const endpoint = chatRoute.endpoint || provider.endpoint || preset.endpoint || ''
+  const model = String(chatRoute.model || config.model || preset.model || '').trim()
+  const apiKey = String(provider.apiKey || config.apiKey || '').trim()
+
+  return {
+    provider: source,
+    transport,
+    endpoint,
+    model,
+    apiKey
+  }
+}
+
 export const normalizeAiConfig = (config = {}) => {
-  const presetId = String(config.preset || config.provider || 'nodeLlamaCpp')
+  const rawLocalAi = getObject(config.localAi)
+  const localAi = normalizeLocalAiConfig(rawLocalAi)
+  const rawProvider = String(config.preset || config.provider || 'nodeLlamaCpp')
+  const presetId = rawProvider === 'disabled' ? (localAi.enabled ? 'nodeLlamaCpp' : 'custom') : rawProvider
   const preset = ELEPHANTNOTE_AI_PRESETS[presetId] || ELEPHANTNOTE_AI_PRESETS.custom
-  const transport = String(config.transport || preset.transport)
-  const localAi = normalizeLocalAiConfig(config.localAi)
+  const routeRuntime = resolveFeatureRouteRuntime({ config, localAi, preset })
+  const rawTransport = String(routeRuntime?.transport || config.transport || preset.transport)
+  const transport = rawTransport === 'disabled' ? (localAi.enabled ? 'node-llama-cpp' : 'openai-compatible') : rawTransport
+  const endpoint = normalizeAiEndpointForTransport(routeRuntime?.endpoint || config.endpoint || preset.endpoint, transport)
+  const model = String(routeRuntime?.model || config.model || preset.model || '')
+  const apiKey = String(routeRuntime?.apiKey || config.apiKey || '')
+
   return {
     ...config,
     preset: preset.id,
     name: String(config.name || preset.label),
+    provider: routeRuntime?.provider || (config.provider === 'disabled' && localAi.enabled ? 'app-local' : config.provider),
     transport,
-    endpoint: normalizeAiEndpointForTransport(config.endpoint || preset.endpoint, transport),
-    model: String(config.model || preset.model || ''),
-    apiKey: String(config.apiKey || ''),
+    endpoint,
+    model,
+    apiKey,
     codexLinkEnabled: config.codexLinkEnabled !== false,
     defaultProvider: String(config.defaultProvider || (localAi.enabled ? 'app-local' : 'api')),
     localAi,
-    providers: config.providers && typeof config.providers === 'object' ? config.providers : {},
-    routes: config.routes && typeof config.routes === 'object' ? config.routes : {},
-    rag: config.rag && typeof config.rag === 'object' ? config.rag : {},
-    tools: config.tools && typeof config.tools === 'object' ? config.tools : {},
-    search: config.search && typeof config.search === 'object' ? config.search : {},
-    indexing: config.indexing && typeof config.indexing === 'object' ? config.indexing : {},
-    ocr: config.ocr && typeof config.ocr === 'object' ? config.ocr : {}
+    providers: getObject(config.providers),
+    routes: getObject(config.routes),
+    rag: getObject(config.rag),
+    tools: getObject(config.tools),
+    search: getObject(config.search),
+    indexing: getObject(config.indexing),
+    ocr: getObject(config.ocr)
   }
 }
 

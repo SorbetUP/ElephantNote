@@ -8,6 +8,7 @@ export const usePreferencesStore = defineStore('preferences', {
     autoSaveDelay: 5000,
     pinnedCardHalo: false,
     showTagHashInEditor: true,
+    noteEditorMargin: 24,
     titleBarStyle: 'custom',
     openFilesInNewWindow: false,
     openFolderInNewWindow: false,

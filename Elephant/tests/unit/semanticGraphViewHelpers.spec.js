@@ -3,6 +3,7 @@ import {
   buildSemanticNeighborhood,
   buildSemanticViewModel,
   buildSemanticGraphSurface,
+  buildGraphFromVaultEntries,
   resolveSemanticGraph,
   selectSemanticGraphSource
 } from '../../front/app/components/views/semanticGraphViewHelpers.js'
@@ -122,5 +123,127 @@ describe('semanticGraphViewHelpers', () => {
     expect(surface.nodes).toEqual([
       { id: 'legacy-folder', kind: 'folder', title: 'Legacy folder' }
     ])
+  })
+
+  it('returns an empty graph when no source is available', () => {
+    const surface = selectSemanticGraphSource({
+      inspectionGraph: null,
+      fallbackGraph: null
+    })
+
+    expect(surface.nodes).toEqual([])
+    expect(surface.edges).toEqual([])
+  })
+})
+
+describe('buildGraphFromVaultEntries', () => {
+  it('builds a graph from vault entries with notes and folders', () => {
+    const entries = [
+      { path: 'Projects/Plan.md', title: 'Plan', kind: 'note', tags: ['ai'] },
+      { path: 'Projects/Graph.md', title: 'Graph', kind: 'note', tags: ['ai', 'semantic'] },
+      { path: 'Notes/Readme.md', title: 'Readme', kind: 'note', tags: [] }
+    ]
+
+    const result = buildGraphFromVaultEntries(entries)
+
+    expect(result.nodes.length).toBeGreaterThanOrEqual(3)
+    expect(result.nodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'Projects/Plan.md', kind: 'note', title: 'Plan' }),
+      expect.objectContaining({ id: 'Projects/Graph.md', kind: 'note', title: 'Graph' }),
+      expect.objectContaining({ id: 'Notes/Readme.md', kind: 'note', title: 'Readme' })
+    ]))
+    expect(result.nodes.some((n) => n.kind === 'folder')).toBe(true)
+    expect(result.edges.length).toBeGreaterThan(0)
+    expect(result.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'folder' })
+    ]))
+    expect(result.clusters.length).toBeGreaterThan(0)
+  })
+
+  it('creates tag edges between notes sharing a tag', () => {
+    const entries = [
+      { path: 'A.md', title: 'A', kind: 'note', tags: ['ai', 'ml'] },
+      { path: 'B.md', title: 'B', kind: 'note', tags: ['ai'] },
+      { path: 'C.md', title: 'C', kind: 'note', tags: ['ml'] }
+    ]
+
+    const result = buildGraphFromVaultEntries(entries)
+    const tagEdges = result.edges.filter((e) => e.type === 'tag')
+
+    expect(tagEdges.length).toBeGreaterThan(0)
+    expect(tagEdges.some((e) => e.reason === '#ai')).toBe(true)
+    expect(tagEdges.some((e) => e.reason === '#ml')).toBe(true)
+  })
+
+  it('does not create tag edges for unique tags', () => {
+    const entries = [
+      { path: 'A.md', title: 'A', kind: 'note', tags: ['unique'] },
+      { path: 'B.md', title: 'B', kind: 'note', tags: ['different'] }
+    ]
+
+    const result = buildGraphFromVaultEntries(entries)
+    const tagEdges = result.edges.filter((e) => e.type === 'tag')
+
+    expect(tagEdges).toHaveLength(0)
+  })
+
+  it('derives titles from filenames when missing', () => {
+    const entries = [
+      { path: 'Notes/My Note.md', kind: 'note' }
+    ]
+
+    const result = buildGraphFromVaultEntries(entries)
+
+    expect(result.nodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'My Note' })
+    ]))
+  })
+
+  it('handles root-level notes without folders', () => {
+    const entries = [
+      { path: 'root-note.md', title: 'Root', kind: 'note', tags: [] }
+    ]
+
+    const result = buildGraphFromVaultEntries(entries)
+
+    expect(result.nodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'root-note.md', kind: 'note' })
+    ]))
+    expect(result.nodes.filter((n) => n.kind === 'folder')).toHaveLength(0)
+  })
+
+  it('returns empty arrays for empty input', () => {
+    const result = buildGraphFromVaultEntries([])
+
+    expect(result.nodes).toEqual([])
+    expect(result.edges).toEqual([])
+    expect(result.clusters).toEqual([])
+  })
+
+  it('filters out non-note entries', () => {
+    const entries = [
+      { path: 'A.md', title: 'A', kind: 'note' },
+      { path: 'folder/', title: 'folder', kind: 'folder' },
+      { path: 'image.png', title: 'image', kind: 'file' }
+    ]
+
+    const result = buildGraphFromVaultEntries(entries)
+
+    expect(result.nodes.every((n) => n.kind === 'note' || n.kind === 'folder')).toBe(true)
+    expect(result.nodes.find((n) => n.id === 'image.png')).toBeUndefined()
+  })
+
+  it('preserves updatedAt for timelapse sorting', () => {
+    const entries = [
+      { path: 'A.md', title: 'A', kind: 'note', updatedAt: '2024-01-01T00:00:00Z' },
+      { path: 'B.md', title: 'B', kind: 'note', updatedAt: '2024-06-01T00:00:00Z' }
+    ]
+
+    const result = buildGraphFromVaultEntries(entries)
+
+    expect(result.nodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'A.md', updatedAt: '2024-01-01T00:00:00Z' }),
+      expect.objectContaining({ id: 'B.md', updatedAt: '2024-06-01T00:00:00Z' })
+    ]))
   })
 })

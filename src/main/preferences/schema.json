@@ -98,6 +98,13 @@
     "minimum": 1.2,
     "default": 1.6
   },
+  "noteEditorMargin": {
+    "description": "Editor--Horizontal margin in the ElephantNote note editor, in pixels.",
+    "type": "number",
+    "maximum": 160,
+    "minimum": 8,
+    "default": 24
+  },
   "wrapCodeBlocks": {
     "description": "Editor--Wrap text inside code blocks",
     "type": "boolean",

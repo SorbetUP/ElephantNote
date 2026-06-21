@@ -148,6 +148,10 @@
               <button class="en-settings-toggle-pill" type="button" :class="{ active: preferences.showTagHashInEditor }" @click="setShowTagHashInEditor(!preferences.showTagHashInEditor)">{{ preferences.showTagHashInEditor ? 'Show #' : 'Hide #' }}</button>
             </section>
             <section class="en-settings-section stacked">
+              <div><h3>Note margins</h3><p>Set the horizontal margin used by the note title and text.</p></div>
+              <label class="en-settings-range"><input type="range" min="8" max="160" step="4" :value="preferences.noteEditorMargin" @input="setNoteEditorMargin(Number($event.target.value))"><output>{{ preferences.noteEditorMargin }} px</output></label>
+            </section>
+            <section class="en-settings-section stacked">
               <div><h3>Autosave</h3><p>Changes are written automatically after a short delay.</p></div>
               <label class="en-settings-range"><input type="range" min="250" max="5000" step="250" :value="preferences.autoSaveDelay" @input="setAutoSaveDelay(Number($event.target.value))"><output>{{ preferences.autoSaveDelay }} ms</output></label>
             </section>
@@ -226,6 +230,7 @@ const siteStatusLabel = computed(() => sitePreviewStore.previewUrl ? 'Preview ru
 const setAutoSaveDelay = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'autoSaveDelay', value })
 const setShowEditorFooter = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'showEditorFooter', value })
 const setShowTagHashInEditor = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'showTagHashInEditor', value })
+const setNoteEditorMargin = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'noteEditorMargin', value: Math.max(8, Math.min(160, Number(value) || 24)) })
 const removeVaultFromApp = async (vault) => { if (!vault?.id) return; if (!window.confirm(`Remove "${vault.name}" from ElephantNote? The folder stays on disk.`)) return; removingVaultId.value = vault.id; vaultMessage.value = ''; log.info('[settings] vault-remove:start', { id: vault.id, path: vault.path }); try { await vaultStore.removeVault(vault.id); vaultMessage.value = `Removed ${vault.name} from ElephantNote. The folder still exists.`; log.info('[settings] vault-remove:done', { id: vault.id }) } catch (error) { log.error('[settings] vault-remove:failed', error); vaultMessage.value = error instanceof Error ? error.message : 'Unable to remove vault.' } finally { removingVaultId.value = '' } }
 const importGoogleKeep = async () => { log.info('[settings] importGoogleKeep:start'); isImporting.value = true; importMessage.value = ''; try { const result = await elephantnoteClient.imports.googleKeep(); importMessage.value = result?.canceled ? 'Import canceled.' : `Imported ${result.imported || 0} note${result.imported === 1 ? '' : 's'}.`; log.info('[settings] importGoogleKeep:done', result) } catch (error) { log.error('[settings] importGoogleKeep:failed', error); importMessage.value = error instanceof Error ? error.message : 'Import failed.' } finally { isImporting.value = false } }
 const ingestSourceUrl = async () => { log.info('[settings] ingestSourceUrl:start', { url: sourceUrl.value, destination: sourceDestination.value }); isImportingSource.value = true; try { const result = await elephantnoteClient.sources.ingestUrl(sourceUrl.value, sourceDestination.value || 'Sources'); sourceImportMessage.value = `Imported ${result.source?.title || 'source'}.`; log.info('[settings] ingestSourceUrl:done', result) } catch (error) { log.error('[settings] ingestSourceUrl:failed', error); sourceImportMessage.value = error instanceof Error ? error.message : 'Source import failed.' } finally { isImportingSource.value = false } }

@@ -34,25 +34,44 @@
       </button>
     </div>
 
-    <div class="en-graph-zoom-control">
-      <button
-        type="button"
-        class="en-graph-zoom-button"
-        title="Recentrer"
-        @click="resetView"
+    <div
+      v-if="!timelapseActive"
+      class="en-graph-bottom-left"
+    >
+      <div
+        v-if="showStats"
+        class="en-graph-stats"
       >
-        <Crosshair class="en-gz-svg" />
-      </button>
-      <input
-        type="range"
-        class="en-graph-zoom-slider"
-        min="0.1"
-        max="4"
-        step="0.01"
-        :value="zoomValue"
-        @input="onZoomSlider"
-      >
-      <span class="en-graph-zoom-pct">{{ Math.round(zoomValue * 100) }}%</span>
+        {{ displayData.nodes.length }} nœuds · {{ displayData.edges.length }} liens
+        <span
+          v-if="indexReady"
+          class="en-graph-stats-dot"
+        />
+        <span
+          v-else-if="indexBuilding"
+          class="en-graph-stats-dot en-graph-stats-dot-building"
+        />
+      </div>
+      <div class="en-graph-zoom-control">
+        <button
+          type="button"
+          class="en-graph-zoom-button"
+          title="Recentrer"
+          @click="resetView"
+        >
+          <Crosshair class="en-gz-svg" />
+        </button>
+        <input
+          type="range"
+          class="en-graph-zoom-slider"
+          min="0.1"
+          max="4"
+          step="0.01"
+          :value="zoomValue"
+          @input="onZoomSlider"
+        >
+        <span class="en-graph-zoom-pct">{{ Math.round(zoomValue * 100) }}%</span>
+      </div>
     </div>
 
     <transition name="en-panel">
@@ -124,17 +143,6 @@
                     </button>
                   </div>
                   <div class="en-filter-row">
-                    <span class="en-filter-label">Pièces jointes</span>
-                    <button
-                      type="button"
-                      class="en-switch"
-                      :class="{ active: filterAttachments }"
-                      @click="filterAttachments = !filterAttachments"
-                    >
-                      <span class="en-switch-thumb" />
-                    </button>
-                  </div>
-                  <div class="en-filter-row">
                     <span class="en-filter-label">Fichiers existants uniquement</span>
                     <button
                       type="button"
@@ -188,23 +196,23 @@
 
                 <template v-if="section.id === 'display'">
                   <div class="en-filter-row">
-                    <span class="en-filter-label">Afficher les flèches</span>
-                    <button
-                      type="button"
-                      class="en-switch"
-                      :class="{ active: showArrows }"
-                      @click="showArrows = !showArrows"
-                    >
-                      <span class="en-switch-thumb" />
-                    </button>
-                  </div>
-                  <div class="en-filter-row">
                     <span class="en-filter-label">Afficher les labels</span>
                     <button
                       type="button"
                       class="en-switch"
                       :class="{ active: showLabels }"
                       @click="showLabels = !showLabels"
+                    >
+                      <span class="en-switch-thumb" />
+                    </button>
+                  </div>
+                  <div class="en-filter-row">
+                    <span class="en-filter-label">Afficher les statistiques</span>
+                    <button
+                      type="button"
+                      class="en-switch"
+                      :class="{ active: showStats }"
+                      @click="showStats = !showStats"
                     >
                       <span class="en-switch-thumb" />
                     </button>
@@ -411,7 +419,6 @@
         <template v-if="!cardCollapsed">
           <div class="en-card-meta">
             <span>{{ selectedNode.kind || 'note' }}</span>
-            <span v-if="selectedNode.cluster">· {{ selectedNode.cluster }}</span>
             <span>{{ selectedNode.sourceCount || 0 }} sources</span>
             <span>{{ selectedNode.chunkCount || 0 }} chunks</span>
           </div>
@@ -446,7 +453,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import Graph from 'graphology'
 import Sigma from 'sigma'
 import EdgeCurveProgram from '@sigma/edge-curve'
@@ -470,8 +477,8 @@ import { useVaultStore } from '../../stores/vaultStore'
 import { useSearchStore } from '../../stores/searchStore'
 import { useCanvasStore } from '../../stores/canvasStore'
 import {
-  buildSemanticGraphSurface,
   buildSemanticViewModel,
+  buildGraphFromVaultEntries,
   selectSemanticGraphSource
 } from './semanticGraphViewHelpers'
 import { nodeColor } from '../../graph/graphThemes'
@@ -487,8 +494,7 @@ const NODE_PALETTE = [
 
 const containerRef = ref(null)
 const graphData = ref(null)
-const loading = ref(false)
-const error = ref('')
+const indexBuilding = ref(false)
 
 let renderer = null
 let graphInstance = null
@@ -503,10 +509,10 @@ let hoverTargetRef = 0
 let selectTargetRef = 0
 let simRaf = null
 let timelapseRaf = null
+let hoverRaf = null
+let graphMountRaf = null
 
 const selectedNode = ref(null)
-const selectedSource = ref(null)
-
 const panelOpen = ref(true)
 const timelapseActive = ref(false)
 const timelapsePlaying = ref(false)
@@ -520,12 +526,11 @@ const cardDragging = ref(false)
 
 const filterQuery = ref('')
 const filterTags = ref(true)
-const filterAttachments = ref(false)
 const filterExisting = ref(true)
 const filterOrphans = ref(false)
 
-const showArrows = ref(false)
 const showLabels = ref(true)
+const showStats = ref(true)
 const labelThreshold = ref(7)
 const nodeSizeScale = ref(1)
 const linkThickness = ref(1)
@@ -544,17 +549,88 @@ const sections = ref([
 
 const groups = ref([])
 
-const semanticThreshold = ref(0.24)
-const showStructure = ref(false)
-
 const theme = computed(() => canvasStore.activeTheme)
 const isLight = computed(() => theme.value?.isLight)
 
+const indexReady = computed(() => {
+  const g = searchStore.indexInspection?.graph
+  return Array.isArray(g?.nodes) && g.nodes.length > 0
+})
+
+const fallbackGraph = computed(() => {
+  if (indexReady.value) return null
+  const entries = store.rootEntries || []
+  if (entries.length === 0) return null
+  return buildGraphFromVaultEntries(entries)
+})
+
+const rawGraph = computed(() => {
+  if (indexReady.value) {
+    return selectSemanticGraphSource({
+      inspectionGraph: searchStore.indexInspection?.graph
+    })
+  }
+  return fallbackGraph.value || { nodes: [], edges: [], clusters: [] }
+})
+
+const semanticModel = computed(() => {
+  const nodeCount = rawGraph.value?.nodes?.length || 0
+  const scale = Math.max(1, Math.sqrt(nodeCount) / 12)
+  return buildSemanticViewModel({
+    graph: rawGraph.value,
+    savedPositions: canvasStore.canvasPositions,
+    width: Math.round(1800 * scale),
+    height: Math.round(1200 * scale)
+  })
+})
+
+const filteredNodes = computed(() => {
+  const nodes = semanticModel.value.nodes
+  const q = filterQuery.value.trim().toLowerCase()
+  if (!q) return nodes
+  return nodes.filter((n) => {
+    const title = String(n.title || '').toLowerCase()
+    const tags = Array.isArray(n.tags) ? n.tags.join(' ').toLowerCase() : ''
+    return title.includes(q) || tags.includes(q)
+  })
+})
+
+const filteredNodeIds = computed(() => new Set(filteredNodes.value.map((n) => n.id)))
+
+const MAX_VISIBLE_EDGES = 3000
+
+const filteredEdges = computed(() => {
+  const candidate = semanticModel.value.edges.filter((e) =>
+    filteredNodeIds.value.has(e.source) && filteredNodeIds.value.has(e.target)
+  )
+  if (candidate.length <= MAX_VISIBLE_EDGES) return candidate
+  const sorted = [...candidate].sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
+  return sorted.slice(0, MAX_VISIBLE_EDGES)
+})
+
+const renderEdges = computed(() => {
+  const edges = semanticModel.value.edges
+  if (edges.length <= MAX_VISIBLE_EDGES) return edges
+  const sorted = [...edges].sort((a, b) => Number(b.weight || 0) - Number(a.weight || 0))
+  return sorted.slice(0, MAX_VISIBLE_EDGES)
+})
+
+const displayData = computed(() => ({
+  nodes: filteredNodes.value,
+  edges: filteredEdges.value,
+  edgeCounts: semanticModel.value.edgeCounts,
+  maxEdges: semanticModel.value.maxEdges,
+  clusters: semanticModel.value.clusters || []
+}))
+
 const statusMessage = computed(() => {
-  if (error.value) return error.value
+  if (indexBuilding.value) return 'Construction de l\'index sémantique…'
   if (searchStore.status.status === 'indexing') return searchStore.status.message || 'Indexation…'
-  if (graphData.value) return `${graphData.value.nodes.length} nœuds · ${graphData.value.edges.length} liens`
-  return searchStore.status.message || 'Graphe sémantique non construit.'
+  if (displayData.value.nodes.length === 0) {
+    if (store.rootEntries?.length > 0) return 'Aucune note à afficher. Ajustez les filtres.'
+    return 'Aucun vault chargé.'
+  }
+  return ''
 })
 
 const cardStyle = computed(() => {
@@ -563,11 +639,16 @@ const cardStyle = computed(() => {
 })
 
 const timelapseLabel = computed(() => {
-  if (!graphData.value?.nodes?.length) return '—'
-  const nodes = graphData.value.nodes
-  const idx = Math.min(nodes.length - 1, Math.floor((timelapseProgress.value / 100) * nodes.length))
-  const node = nodes[idx]
-  if (!node?.updatedAt) return `Note ${idx + 1}/${nodes.length}`
+  const nodes = displayData.value.nodes
+  if (!nodes.length) return '—'
+  const sorted = [...nodes].sort((a, b) => {
+    const da = new Date(a.updatedAt || 0).getTime()
+    const db = new Date(b.updatedAt || 0).getTime()
+    return da - db
+  })
+  const idx = Math.min(sorted.length - 1, Math.floor((timelapseProgress.value / 100) * sorted.length))
+  const node = sorted[idx]
+  if (!node?.updatedAt) return `Note ${idx + 1}/${sorted.length}`
   return new Date(node.updatedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
 })
 
@@ -576,26 +657,38 @@ function truncLabel (str, max) {
   return str.length > max ? str.substring(0, max - 1) + '\u2026' : str
 }
 
-function parseRgb (s) {
-  const m = String(s || '').match(/^rgb\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)\)$/)
-  return m ? [+m[1], +m[2], +m[3]] : null
-}
-
-function edgeColorFor (type = '') {
+function edgeColorFor (type) {
   if (type === 'semantic') return '#6d5fd3'
   if (type === 'explicit-link') return '#3b9b96'
   if (type === 'folder') return '#d98a3b'
+  if (type === 'tag') return '#9b6cff'
   if (type === 'lexical') return '#9b6cff'
   return '#5a6478'
 }
 
-function edgeBaseColor (type) {
-  return edgeColorFor(type)
+function rgbToHex (rgb) {
+  if (!Array.isArray(rgb)) return '#1e1e1e'
+  const toHex = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
+  return `#${toHex(rgb[0])}${toHex(rgb[1])}${toHex(rgb[2])}`
+}
+
+function hexToRgb (hex) {
+  const m = String(hex || '').match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null
 }
 
 function dimColor (rgb, target, amount) {
-  if (!rgb) return target
-  return `rgb(${Math.round(rgb[0] + (target[0] - rgb[0]) * amount)},${Math.round(rgb[1] + (target[1] - rgb[1]) * amount)},${Math.round(rgb[2] + (target[2] - rgb[2]) * amount)})`
+  if (!rgb) return Array.isArray(target) ? rgbToHex(target) : '#1e1e1e'
+  const r = Math.round(rgb[0] + (target[0] - rgb[0]) * amount)
+  const g = Math.round(rgb[1] + (target[1] - rgb[1]) * amount)
+  const b = Math.round(rgb[2] + (target[2] - rgb[2]) * amount)
+  return rgbToHex([r, g, b])
+}
+
+function dimHex (hexColor, target, amount) {
+  const rgb = hexToRgb(hexColor)
+  if (!rgb) return hexColor
+  return dimColor(rgb, target, amount)
 }
 
 function buildGraph (data) {
@@ -645,9 +738,20 @@ function buildGraph (data) {
   return graph
 }
 
+function getTimelapseVisibleIds (progress, nodes = []) {
+  if (!nodes.length) return new Set()
+  const sorted = [...nodes].sort((a, b) => {
+    const da = new Date(a.updatedAt || 0).getTime()
+    const db = new Date(b.updatedAt || 0).getTime()
+    return da - db
+  })
+  const visibleCount = Math.max(1, Math.floor((progress / 100) * sorted.length))
+  return new Set(sorted.slice(0, visibleCount).map((node) => node.id))
+}
+
 function buildNeighbors (graph) {
   const neighbors = new Map()
-  graph.forEachEdge((edge, attrs, source, target) => {
+  graph.forEachEdge((edge, _attrs, source, target) => {
     if (!neighbors.has(source)) neighbors.set(source, new Set())
     if (!neighbors.has(target)) neighbors.set(target, new Set())
     neighbors.get(source).add(target)
@@ -697,15 +801,14 @@ function drawLabels (sigma, graph, container) {
       vy: pos.y,
       rsize,
       label: attrs.label || '',
-      fullLabel: attrs.fullLabel || attrs.label || '',
-      size: attrs.size || 4
+      fullLabel: attrs.fullLabel || attrs.label || ''
     })
   })
 
   candidates.sort((a, b) => {
-    const aImportant = (a.id === sel ? 100 : a.id === hov ? 50 : 0) + a.rsize
-    const bImportant = (b.id === sel ? 100 : b.id === hov ? 50 : 0) + b.rsize
-    return bImportant - aImportant
+    const aImp = (a.id === sel ? 100 : a.id === hov ? 50 : 0) + a.rsize
+    const bImp = (b.id === sel ? 100 : b.id === hov ? 50 : 0) + b.rsize
+    return bImp - aImp
   })
 
   const isPinned = (id) => id === sel || id === hov
@@ -738,15 +841,10 @@ function drawLabels (sigma, graph, container) {
     if (!pinned && collides(rect, 6)) continue
     placed.push(rect)
 
-    if (isSel) {
-      ctx.globalAlpha = selAnim
-    } else if (isHov) {
-      ctx.globalAlpha = hovAnim
-    } else {
-      ctx.globalAlpha = 0.85
-    }
+    ctx.globalAlpha = isSel ? selAnim : isHov ? hovAnim : 0.85
 
-    ctx.fillStyle = isLight.value ? 'rgba(18,22,30,0.9)' : 'rgba(18,22,30,0.92)'
+    const labelBg = isLight.value ? 'rgba(18,22,30,0.9)' : 'rgba(18,22,30,0.92)'
+    ctx.fillStyle = labelBg
     ctx.beginPath()
     ctx.roundRect(rect.x, rect.y, pillW, pillH, pillH / 2)
     ctx.fill()
@@ -783,6 +881,45 @@ function drawLabels (sigma, graph, container) {
   }
 }
 
+function updateGraphVisibility (progress = null) {
+  if (!graphInstance || !graphData.value) return
+
+  const queryVisibleIds = filteredNodeIds.value
+  const timelapseVisibleIds = timelapseActive.value
+    ? getTimelapseVisibleIds(
+      Number.isFinite(progress) ? progress : timelapseProgress.value,
+      filteredNodes.value
+    )
+    : null
+
+  graphInstance.forEachNode((id) => {
+    const hiddenByQuery = !queryVisibleIds.has(id)
+    const hiddenByTimelapse = timelapseVisibleIds ? !timelapseVisibleIds.has(id) : false
+    graphInstance.setNodeAttribute(id, 'hidden', hiddenByQuery || hiddenByTimelapse)
+  })
+  graphInstance.forEachEdge((edge, _attrs, source, target) => {
+    const hiddenByQuery = !queryVisibleIds.has(source) || !queryVisibleIds.has(target)
+    const hiddenByTimelapse = timelapseVisibleIds
+      ? !timelapseVisibleIds.has(source) || !timelapseVisibleIds.has(target)
+      : false
+    graphInstance.setEdgeAttribute(edge, 'hidden', hiddenByQuery || hiddenByTimelapse)
+  })
+}
+
+function refreshGraphVisibility (progress = null) {
+  if (!graphInstance || !renderer) return
+  updateGraphVisibility(progress)
+  renderer.refresh()
+}
+
+function scheduleGraphMount () {
+  if (graphMountRaf) cancelAnimationFrame(graphMountRaf)
+  graphMountRaf = requestAnimationFrame(() => {
+    graphMountRaf = null
+    mountSigma()
+  })
+}
+
 function mountSigma () {
   const container = containerRef.value
   const data = graphData.value
@@ -801,7 +938,7 @@ function mountSigma () {
   hoverTargetRef = 0
   selectTargetRef = 0
 
-  const bgDim = isLight.value ? [245, 245, 245] : [30, 30, 30]
+  const bgDimRgb = isLight.value ? [245, 245, 245] : [30, 30, 30]
 
   let sigma
   try {
@@ -824,41 +961,23 @@ function mountSigma () {
         const hoverActive = hov && hoverAnimRef > 0.1
         const active = focusActive || hoverActive
         if (!active) {
-          return {
-            ...attrs,
-            size: (attrs.size || 4) * nodeSizeScale.value
-          }
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value }
         }
-        const isSel = node === sel
-        const isHov = node === hov
-        if (isSel) {
-          return {
-            ...attrs,
-            size: (attrs.size || 4) * nodeSizeScale.value * (1 + 0.45 * selectAnimRef),
-            zIndex: 3
-          }
+        if (node === sel) {
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value * (1 + 0.45 * selectAnimRef), zIndex: 3 }
         }
-        if (isHov) {
-          return {
-            ...attrs,
-            size: (attrs.size || 4) * nodeSizeScale.value * (1 + 0.35 * hoverAnimRef),
-            zIndex: 2
-          }
+        if (node === hov) {
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value * (1 + 0.35 * hoverAnimRef), zIndex: 2 }
         }
         const selNeighbor = sel && neighborsMap.get(sel)?.has(node)
         const hovNeighbor = hov && neighborsMap.get(hov)?.has(node)
         if (selNeighbor || hovNeighbor) {
-          return {
-            ...attrs,
-            size: (attrs.size || 4) * nodeSizeScale.value * 1.12,
-            zIndex: 1
-          }
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value * 1.12, zIndex: 1 }
         }
         const dim = Math.max(selectAnimRef, hoverAnimRef)
-        const rgb = parseRgb(attrs.color)
         return {
           ...attrs,
-          color: dimColor(rgb, bgDim, dim * 0.88),
+          color: dimHex(attrs.color, bgDimRgb, dim * 0.88),
           size: (attrs.size || 4) * nodeSizeScale.value * (1 - 0.5 * dim)
         }
       },
@@ -871,7 +990,7 @@ function mountSigma () {
         const src = g.source(edge)
         const dst = g.target(edge)
         const baseSize = (0.25 + w * 0.7) * linkThickness.value
-        const baseColor = edgeBaseColor(attrs.edgeType) || edgeColorFor(attrs.edgeType) || attrs.color
+        const baseColor = edgeColorFor(attrs.edgeType) || attrs.color
 
         const touchesSel = sel && (src === sel || dst === sel)
         const touchesHov = hov && (src === hov || dst === hov)
@@ -879,43 +998,29 @@ function mountSigma () {
         const hoverActive = hov && hoverAnimRef > 0.1
 
         if (touchesSel && focusActive) {
-          return {
-            ...attrs,
-            color: baseColor,
-            size: baseSize + 0.6 * selectAnimRef,
-            zIndex: 2
-          }
+          return { ...attrs, color: baseColor, size: baseSize + 0.6 * selectAnimRef, zIndex: 2 }
         }
         if (touchesHov && hoverActive) {
-          return {
-            ...attrs,
-            color: baseColor,
-            size: baseSize + 0.5 * hoverAnimRef,
-            zIndex: 1
-          }
+          return { ...attrs, color: baseColor, size: baseSize + 0.5 * hoverAnimRef, zIndex: 1 }
         }
         if (focusActive || hoverActive) {
           const dim = Math.max(selectAnimRef, hoverAnimRef)
           return {
             ...attrs,
-            color: dimColor(parseRgb(baseColor), bgDim, dim * 0.92),
+            color: dimHex(baseColor, bgDimRgb, dim * 0.92),
             size: baseSize * (1 - 0.7 * dim)
           }
         }
-        return {
-          ...attrs,
-          color: baseColor,
-          size: baseSize
-        }
+        return { ...attrs, color: baseColor, size: baseSize }
       }
     })
   } catch (err) {
     console.error('AtomicGraphView: sigma init failed', err)
-    error.value = 'Impossible d\'initialiser le graphe.'
     return
   }
 
   renderer = sigma
+  updateGraphVisibility()
 
   labelCanvas = document.createElement('canvas')
   labelCanvas.style.position = 'absolute'
@@ -946,7 +1051,7 @@ function mountSigma () {
     zoomValue.value = 1 / state.ratio
   })
 
-  let hoverRaf = null
+  hoverRaf = null
   const tickHover = () => {
     const diff = hoverTargetRef - hoverAnimRef
     const diffSel = selectTargetRef - selectAnimRef
@@ -984,9 +1089,15 @@ function mountSigma () {
   renderer.on('clickStage', () => {
     deselectNode()
   })
+
+  renderer.refresh()
 }
 
 function destroySigma () {
+  if (hoverRaf) {
+    cancelAnimationFrame(hoverRaf)
+    hoverRaf = null
+  }
   if (renderer) {
     renderer.kill()
     renderer = null
@@ -1003,7 +1114,6 @@ function selectNode (data, nodeId) {
   selectedNodeRef = nodeId
   selectTargetRef = 1
   selectedNode.value = data
-  selectedSource.value = null
   cardCollapsed.value = false
   if (cardPos.x === null) positionCardNearNode(nodeId)
   if (renderer && graphInstance && graphInstance.hasNode(nodeId)) {
@@ -1031,7 +1141,8 @@ function selectNode (data, nodeId) {
 function positionCardNearNode (nodeId) {
   if (!renderer || !graphInstance || !containerRef.value) return
   if (!graphInstance.hasNode(nodeId)) return
-  const attrs = graphInstance.getNodeAttribute(nodeId)
+  const attrs = graphInstance.getNodeAttributes(nodeId)
+  if (typeof attrs.x !== 'number' || typeof attrs.y !== 'number') return
   const pos = renderer.graphToViewport({ x: attrs.x, y: attrs.y })
   const w = containerRef.value.clientWidth
   const cardW = 380
@@ -1046,7 +1157,6 @@ function deselectNode () {
   selectedNodeRef = null
   selectTargetRef = 0
   selectedNode.value = null
-  selectedSource.value = null
   cardPos.x = null
   cardPos.y = null
   cardCollapsed.value = false
@@ -1107,11 +1217,10 @@ function toggleSection (section) {
 function resetOptions () {
   filterQuery.value = ''
   filterTags.value = true
-  filterAttachments.value = false
   filterExisting.value = true
   filterOrphans.value = false
-  showArrows.value = false
   showLabels.value = true
+  showStats.value = true
   labelThreshold.value = 7
   nodeSizeScale.value = 1
   linkThickness.value = 1
@@ -1167,7 +1276,7 @@ function runForceSimulation (duration = 1500) {
         }
       }
 
-      graphInstance.forEachEdge((edge, attrs, s, t) => {
+      graphInstance.forEachEdge((edge, _attrs, s, t) => {
         const a = graphInstance.getNodeAttributes(s)
         const b = graphInstance.getNodeAttributes(t)
         const dx = b.x - a.x
@@ -1222,6 +1331,7 @@ function toggleTimelapse () {
   timelapseActive.value = true
   timelapsePlaying.value = true
   timelapseProgress.value = 0
+  updateTimelapseVisibility(0)
   runTimelapse()
 }
 
@@ -1232,7 +1342,7 @@ function stopTimelapse () {
     cancelAnimationFrame(timelapseRaf)
     timelapseRaf = null
   }
-  if (renderer) renderer.refresh()
+  refreshGraphVisibility()
 }
 
 function runTimelapse () {
@@ -1259,17 +1369,7 @@ function runTimelapse () {
 }
 
 function updateTimelapseVisibility (progress) {
-  if (!graphInstance || !renderer || !graphData.value) return
-  const nodes = graphData.value.nodes
-  const visibleCount = Math.max(1, Math.floor((progress / 100) * nodes.length))
-  const visibleIds = new Set(nodes.slice(0, visibleCount).map((n) => n.id))
-  graphInstance.forEachNode((id) => {
-    graphInstance.setNodeAttribute(id, 'hidden', !visibleIds.has(id))
-  })
-  graphInstance.forEachEdge((edge, attrs, s, t) => {
-    graphInstance.setEdgeAttribute(edge, 'hidden', !visibleIds.has(s) || !visibleIds.has(t))
-  })
-  renderer.refresh()
+  refreshGraphVisibility(progress)
 }
 
 function onTimelapseSeek (event) {
@@ -1282,13 +1382,15 @@ function cycleTimelapseSpeed () {
   const idx = speeds.indexOf(timelapseSpeed.value)
   timelapseSpeed.value = speeds[(idx + 1) % speeds.length]
   if (timelapsePlaying.value) {
+    if (timelapseRaf) cancelAnimationFrame(timelapseRaf)
     runTimelapse()
   }
 }
 
 function openSelectedNode () {
-  if (!selectedNode.value?.relativePath && !selectedNode.value?.path) return
-  const notePath = selectedNode.value.relativePath || selectedNode.value.path
+  if (!selectedNode.value) return
+  const notePath = selectedNode.value.relativePath || selectedNode.value.path || selectedNode.value.id
+  if (!notePath) return
   const note = [...store.entries, ...store.rootEntries, ...store.openedNotes]
     .find((entry) => entry?.path === notePath)
   if (note) {
@@ -1305,60 +1407,65 @@ function openSelectedNode () {
 }
 
 function loadGraphData () {
-  if (!searchStore.indexInspection?.graph) return
-  const surface = buildSemanticGraphSurface({
-    graph: selectSemanticGraphSource({
-      inspectionGraph: searchStore.indexInspection?.graph
-    }),
-    includeStructure: showStructure.value
-  })
-  const model = buildSemanticViewModel({
-    graph: selectSemanticGraphSource({
-      inspectionGraph: searchStore.indexInspection?.graph
-    }),
-    savedPositions: canvasStore.canvasPositions,
-    width: 1800,
-    height: 1200
-  })
+  const model = semanticModel.value
   graphData.value = {
-    nodes: model.nodes.filter((n) => {
-      if (filterExisting.value && n.kind === 'folder') return showStructure.value
-      return true
-    }),
-    edges: model.edges,
+    nodes: model.nodes,
+    edges: renderEdges.value,
     edgeCounts: model.edgeCounts,
     maxEdges: model.maxEdges,
-    clusters: model.clusters || surface.clusters
+    clusters: model.clusters || []
   }
 }
 
-async function ensureIndex () {
-  loading.value = true
-  error.value = ''
+async function rebuildIndex () {
+  indexBuilding.value = true
   try {
+    await searchStore.rebuild()
     await searchStore.inspect()
-    loadGraphData()
-    await nextTick()
-    mountSigma()
   } catch (err) {
-    error.value = err?.message || 'Impossible de construire le graphe sémantique.'
+    console.error('rebuildIndex failed', err)
   } finally {
-    loading.value = false
+    indexBuilding.value = false
+  }
+}
+
+async function ensureGraphData () {
+  const activeVaultPath = store.activeVault?.path || ''
+  const graphVaultPath = searchStore.vaultPath || ''
+  const hasFreshGraph = indexReady.value && graphVaultPath === activeVaultPath
+
+  if (!hasFreshGraph && graphVaultPath !== activeVaultPath) {
+    await searchStore.inspect()
+  }
+
+  if (!indexReady.value && store.rootEntries?.length > 0) {
+    loadGraphData()
+    scheduleGraphMount()
+    rebuildIndex().catch(() => {})
+  } else {
+    loadGraphData()
+    scheduleGraphMount()
   }
 }
 
 watch(() => searchStore.indexInspection?.graph, () => {
   loadGraphData()
-  nextTick(() => mountSigma())
+  scheduleGraphMount()
 })
 
 watch(() => store.activeVault?.path, () => {
-  ensureIndex()
+  ensureGraphData()
 })
 
-watch([semanticThreshold, showStructure, filterTags, filterExisting, filterOrphans], () => {
-  loadGraphData()
-  nextTick(() => mountSigma())
+watch(() => store.rootEntries, () => {
+  if (!indexReady.value) {
+    loadGraphData()
+    scheduleGraphMount()
+  }
+}, { deep: false })
+
+watch(filterQuery, () => {
+  refreshGraphVisibility()
 })
 
 watch([nodeSizeScale, linkThickness, labelThreshold, showLabels], () => {
@@ -1378,12 +1485,13 @@ watch(theme, () => {
 
 onMounted(() => {
   canvasStore.loadPositions(store.activeVaultId || 'default')
-  ensureIndex()
+  ensureGraphData()
 })
 
 onBeforeUnmount(() => {
   if (simRaf) cancelAnimationFrame(simRaf)
   if (timelapseRaf) cancelAnimationFrame(timelapseRaf)
+  if (graphMountRaf) cancelAnimationFrame(graphMountRaf)
   destroySigma()
 })
 </script>
@@ -1394,9 +1502,9 @@ onBeforeUnmount(() => {
   min-height: 0;
   flex: 1;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
-  background:
-    radial-gradient(circle at center, #1f1f1f 0%, #181818 65%, #141414 100%);
+  background: var(--en-bg);
 }
 
 .en-graph-stage {
@@ -1404,6 +1512,11 @@ onBeforeUnmount(() => {
   inset: 0;
   overflow: hidden;
   cursor: grab;
+  background:
+    radial-gradient(circle at center,
+      color-mix(in srgb, var(--en-surface) 80%, var(--en-bg)) 0%,
+      var(--en-bg) 65%,
+      color-mix(in srgb, var(--en-bg) 90%, black) 100%);
 }
 
 .en-graph-stage:active {
@@ -1413,13 +1526,13 @@ onBeforeUnmount(() => {
 .en-graph-status {
   position: absolute;
   left: 50%;
-  top: 18px;
+  top: 14px;
   transform: translateX(-50%);
   padding: 6px 14px;
   border-radius: 999px;
-  background: rgba(24, 24, 24, 0.85);
-  border: 1px solid rgba(60, 60, 60, 0.5);
-  color: #b8b8b8;
+  background: color-mix(in srgb, var(--en-surface) 90%, transparent);
+  border: 1px solid var(--en-border);
+  color: var(--en-muted);
   font-size: 12px;
   backdrop-filter: blur(12px);
   z-index: 15;
@@ -1428,7 +1541,7 @@ onBeforeUnmount(() => {
 
 .en-graph-floating-icons {
   position: absolute;
-  top: 18px;
+  top: 14px;
   right: 22px;
   display: flex;
   gap: 8px;
@@ -1436,12 +1549,12 @@ onBeforeUnmount(() => {
 }
 
 .en-graph-floating-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 11px;
-  border: 1px solid rgba(60, 60, 60, 0.6);
-  background: rgba(34, 34, 34, 0.92);
-  color: #cfcfcf;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--en-border);
+  background: color-mix(in srgb, var(--en-surface) 92%, transparent);
+  color: var(--en-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1451,124 +1564,161 @@ onBeforeUnmount(() => {
 }
 
 .en-graph-floating-icon:hover {
-  background: #303030;
-  color: #ffffff;
-  border-color: rgba(139, 92, 246, 0.5);
+  background: var(--en-soft);
+  color: var(--en-text);
+  border-color: color-mix(in srgb, var(--en-primary) 50%, var(--en-border));
 }
 
 .en-graph-floating-icon.active {
-  background: rgba(139, 92, 246, 0.2);
-  color: #c4b5fd;
-  border-color: rgba(139, 92, 246, 0.6);
+  background: color-mix(in srgb, var(--en-primary) 18%, var(--en-surface));
+  color: var(--en-primary);
+  border-color: color-mix(in srgb, var(--en-primary) 60%, transparent);
 }
 
 .en-fi-svg {
-  width: 19px;
-  height: 19px;
+  width: 18px;
+  height: 18px;
 }
 
-.en-graph-zoom-control {
+.en-graph-bottom-left {
   position: absolute;
-  left: 24px;
-  bottom: 22px;
+  left: 22px;
+  bottom: 20px;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   z-index: 20;
 }
 
+.en-graph-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--en-surface) 88%, transparent);
+  border: 1px solid var(--en-border);
+  color: var(--en-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  backdrop-filter: blur(10px);
+}
+
+.en-graph-stats-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+  flex-shrink: 0;
+}
+
+.en-graph-stats-dot-building {
+  background: #eab308;
+  animation: en-pulse 1s ease-in-out infinite;
+}
+
+@keyframes en-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.en-graph-zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .en-graph-zoom-button {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   border: none;
-  background: #8b5cf6;
+  background: var(--en-primary);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 0 14px rgba(139, 92, 246, 0.45);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--en-primary) 45%, transparent);
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
 .en-graph-zoom-button:hover {
   transform: scale(1.08);
-  box-shadow: 0 0 18px rgba(139, 92, 246, 0.6);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--en-primary) 60%, transparent);
 }
 
 .en-gz-svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
 }
 
 .en-graph-zoom-slider {
-  width: 110px;
+  width: 100px;
   height: 4px;
   appearance: none;
-  background: #333333;
+  background: var(--en-border);
   border-radius: 999px;
   cursor: pointer;
 }
 
 .en-graph-zoom-slider::-webkit-slider-thumb {
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
-  background: #cfcfcf;
+  background: var(--en-text);
   cursor: pointer;
 }
 
 .en-graph-zoom-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
-  background: #cfcfcf;
+  background: var(--en-text);
   border: none;
   cursor: pointer;
 }
 
 .en-graph-zoom-pct {
-  color: #9a9a9a;
+  color: var(--en-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  min-width: 38px;
+  min-width: 36px;
 }
 
 .en-graph-settings-panel {
   position: absolute;
-  top: 72px;
-  right: 22px;
-  width: 380px;
-  max-height: calc(100% - 110px);
+  top: 62px;
+  right: 70px;
+  width: 340px;
+  max-height: calc(100% - 90px);
   display: flex;
   flex-direction: column;
-  background: #222222;
-  border: 1px solid #3a3a3a;
-  border-radius: 18px;
-  box-shadow:
-    0 18px 48px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.03);
+  background: var(--en-surface);
+  border: 1px solid var(--en-border);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
   overflow: hidden;
-  color: #e2e2e2;
+  color: var(--en-text);
   z-index: 25;
 }
 
 .en-panel-topbar {
-  height: 56px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 22px;
-  border-bottom: 1px solid #363636;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--en-border);
   flex-shrink: 0;
 }
 
 .en-panel-topbar-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  color: #f0f0f0;
+  color: var(--en-text);
 }
 
 .en-panel-topbar-actions {
@@ -1577,12 +1727,12 @@ onBeforeUnmount(() => {
 }
 
 .en-panel-icon-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
   border: none;
   background: transparent;
-  color: #b8b8b8;
+  color: var(--en-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1591,13 +1741,13 @@ onBeforeUnmount(() => {
 }
 
 .en-panel-icon-btn:hover {
-  background: #303030;
-  color: #ffffff;
+  background: var(--en-soft);
+  color: var(--en-text);
 }
 
 .en-panel-icn {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 .en-panel-scroll {
@@ -1611,12 +1761,12 @@ onBeforeUnmount(() => {
 }
 
 .en-panel-scroll::-webkit-scrollbar-thumb {
-  background: #3a3a3a;
+  background: var(--en-border);
   border-radius: 999px;
 }
 
 .en-panel-section {
-  border-bottom: 1px solid #2e2e2e;
+  border-bottom: 1px solid var(--en-border);
 }
 
 .en-panel-section:last-child {
@@ -1625,15 +1775,15 @@ onBeforeUnmount(() => {
 
 .en-section-header {
   width: 100%;
-  height: 56px;
+  height: 48px;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 22px;
+  padding: 0 18px;
   border: none;
   background: transparent;
-  color: #dedede;
-  font-size: 15px;
+  color: var(--en-text);
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.14s;
@@ -1641,13 +1791,13 @@ onBeforeUnmount(() => {
 }
 
 .en-section-header:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--en-soft) 50%, transparent);
 }
 
 .en-section-chevron {
-  width: 18px;
-  height: 18px;
-  color: #8b8b8b;
+  width: 17px;
+  height: 17px;
+  color: var(--en-muted);
   transition: transform 0.22s ease;
   transform: rotate(-90deg);
   flex-shrink: 0;
@@ -1662,65 +1812,65 @@ onBeforeUnmount(() => {
 }
 
 .en-section-body {
-  padding: 8px 22px 20px;
+  padding: 6px 18px 18px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .en-filter-search {
   position: relative;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .en-filter-search-icon {
   position: absolute;
-  left: 14px;
+  left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 17px;
-  height: 17px;
-  color: #888888;
+  width: 16px;
+  height: 16px;
+  color: var(--en-muted);
   pointer-events: none;
 }
 
 .en-filter-input {
   width: 100%;
-  height: 44px;
-  border-radius: 10px;
-  background: #252525;
-  border: 1px solid #3a3a3a;
-  color: #e0e0e0;
-  font-size: 14px;
-  padding: 0 14px 0 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: var(--en-soft);
+  border: 1px solid var(--en-border);
+  color: var(--en-text);
+  font-size: 13px;
+  padding: 0 12px 0 36px;
   outline: none;
   transition: border-color 0.14s;
 }
 
 .en-filter-input::placeholder {
-  color: #777777;
+  color: var(--en-muted);
 }
 
 .en-filter-input:focus {
-  border-color: rgba(139, 92, 246, 0.6);
+  border-color: color-mix(in srgb, var(--en-primary) 60%, var(--en-border));
 }
 
 .en-filter-row {
-  min-height: 48px;
+  min-height: 42px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: #dcdcdc;
+  color: var(--en-text);
 }
 
 .en-switch {
-  width: 46px;
-  height: 26px;
+  width: 42px;
+  height: 24px;
   border-radius: 999px;
   border: none;
-  background: #3a3a3a;
+  background: var(--en-border);
   padding: 3px;
   cursor: pointer;
   transition: background 0.16s ease;
@@ -1730,32 +1880,32 @@ onBeforeUnmount(() => {
 }
 
 .en-switch-thumb {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--en-text);
   transition: transform 0.16s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 .en-switch.active {
-  background: #8b5cf6;
+  background: var(--en-primary);
 }
 
 .en-switch.active .en-switch-thumb {
-  transform: translateX(20px);
+  transform: translateX(18px);
 }
 
 .en-slider-control {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .en-slider-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: #dcdcdc;
+  color: var(--en-text);
 }
 
 .en-slider {
@@ -1764,7 +1914,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 5px;
   border-radius: 999px;
-  background: #3a3a3a;
+  background: var(--en-border);
   outline: none;
   cursor: pointer;
 }
@@ -1772,12 +1922,12 @@ onBeforeUnmount(() => {
 .en-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 22px;
-  height: 16px;
+  width: 20px;
+  height: 15px;
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--en-text);
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   transition: transform 0.12s;
 }
 
@@ -1786,35 +1936,34 @@ onBeforeUnmount(() => {
 }
 
 .en-slider::-moz-range-thumb {
-  width: 22px;
-  height: 16px;
+  width: 20px;
+  height: 15px;
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--en-text);
   border: none;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
 .en-primary-button {
   width: 100%;
-  height: 48px;
-  border-radius: 10px;
+  height: 44px;
+  border-radius: 9px;
   border: none;
-  background: linear-gradient(180deg, #9b6cff 0%, #8655ee 100%);
+  background: var(--en-primary);
   color: #ffffff;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   cursor: pointer;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-  transition: background 0.16s, transform 0.12s;
+  transition: opacity 0.16s, transform 0.12s;
 }
 
 .en-primary-button:hover:not(:disabled) {
-  background: linear-gradient(180deg, #a77bff 0%, #8b5cf6 100%);
+  opacity: 0.9;
 }
 
 .en-primary-button:active:not(:disabled) {
@@ -1822,13 +1971,13 @@ onBeforeUnmount(() => {
 }
 
 .en-primary-button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .en-btn-icn {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
 }
 
 .en-spin {
@@ -1851,88 +2000,88 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: #2a2a2a;
+  padding: 7px 11px;
+  border-radius: 9px;
+  background: var(--en-soft);
   font-size: 13px;
 }
 
 .en-group-dot {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .en-group-name {
   flex: 1;
-  color: #dcdcdc;
+  color: var(--en-text);
 }
 
 .en-group-count {
-  color: #888888;
+  color: var(--en-muted);
   font-size: 12px;
 }
 
 .en-timeline-panel {
   position: absolute;
   left: 50%;
-  bottom: 28px;
+  bottom: 20px;
   transform: translateX(-50%);
-  height: 52px;
-  min-width: 540px;
-  max-width: 90%;
+  height: 44px;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 16px;
-  background: rgba(28, 28, 28, 0.92);
-  border: 1px solid #383838;
-  border-radius: 14px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  gap: 10px;
+  padding: 0 12px;
+  background: color-mix(in srgb, var(--en-surface) 94%, transparent);
+  border: 1px solid var(--en-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(12px);
   z-index: 22;
 }
 
 .en-timeline-play,
 .en-timeline-close {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   border: none;
-  background: #8b5cf6;
+  background: var(--en-primary);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.14s;
+  transition: opacity 0.14s;
 }
 
 .en-timeline-play:hover {
-  background: #9b6cff;
+  opacity: 0.88;
 }
 
 .en-timeline-close {
-  background: #3a3a3a;
+  background: var(--en-soft);
+  color: var(--en-muted);
 }
 
 .en-timeline-close:hover {
-  background: #4a4a4a;
+  color: var(--en-text);
 }
 
 .en-tl-icn {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
 }
 
 .en-timeline-slider {
   flex: 1;
+  min-width: 200px;
   height: 5px;
   -webkit-appearance: none;
   appearance: none;
-  background: #3a3a3a;
+  background: var(--en-border);
   border-radius: 999px;
   cursor: pointer;
 }
@@ -1940,73 +2089,71 @@ onBeforeUnmount(() => {
 .en-timeline-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
-  background: #8b5cf6;
+  background: var(--en-primary);
   cursor: pointer;
-  box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--en-primary) 50%, transparent);
 }
 
 .en-timeline-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
-  background: #8b5cf6;
+  background: var(--en-primary);
   border: none;
   cursor: pointer;
 }
 
 .en-timeline-date {
-  color: #d0d0d0;
-  font-size: 13px;
+  color: var(--en-text);
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  min-width: 120px;
+  min-width: 100px;
 }
 
 .en-timeline-speed {
-  padding: 5px 12px;
-  border-radius: 8px;
-  border: 1px solid #3a3a3a;
-  background: #2a2a2a;
-  color: #d0d0d0;
-  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--en-border);
+  background: var(--en-soft);
+  color: var(--en-text);
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.14s;
 }
 
 .en-timeline-speed:hover {
-  background: #343434;
+  background: var(--en-bg);
 }
 
 .en-note-preview-card {
   position: absolute;
-  width: 380px;
-  max-height: 460px;
+  width: 360px;
+  max-height: 440px;
   display: flex;
   flex-direction: column;
-  background: rgba(47, 47, 47, 0.97);
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: color-mix(in srgb, var(--en-surface) 97%, transparent);
+  border: 1px solid var(--en-border);
   border-radius: 12px;
-  box-shadow:
-    0 18px 46px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.03);
-  color: #e7e7e7;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.4);
+  color: var(--en-text);
   overflow: hidden;
   z-index: 30;
   transition: opacity 0.18s ease, transform 0.18s ease, max-height 0.22s ease;
 }
 
 .en-note-preview-card.collapsed {
-  max-height: 56px;
+  max-height: 52px;
 }
 
 .en-note-preview-card.dragging {
   cursor: grabbing;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
 }
 
 .en-card-header {
@@ -2014,7 +2161,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   cursor: grab;
   flex-shrink: 0;
 }
@@ -2025,9 +2172,9 @@ onBeforeUnmount(() => {
 
 .en-card-title {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  color: #f2f2f2;
+  color: var(--en-text);
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2042,12 +2189,12 @@ onBeforeUnmount(() => {
 }
 
 .en-card-mini-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
   border: none;
   background: transparent;
-  color: #b0b0b0;
+  color: var(--en-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2056,31 +2203,31 @@ onBeforeUnmount(() => {
 }
 
 .en-card-mini-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--en-soft);
+  color: var(--en-text);
 }
 
 .en-card-icn {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
 .en-card-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0 16px;
-  color: #9a9a9a;
+  padding: 0 14px;
+  color: var(--en-muted);
   font-size: 12px;
 }
 
 .en-card-summary {
-  margin: 12px 0 0;
-  padding: 0 16px;
-  font-size: 14px;
+  margin: 10px 0 0;
+  padding: 0 14px;
+  font-size: 13px;
   line-height: 1.5;
-  color: #d4d4d4;
-  max-height: 140px;
+  color: color-mix(in srgb, var(--en-text) 80%, transparent);
+  max-height: 130px;
   overflow-y: auto;
 }
 
@@ -2088,32 +2235,32 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 12px 16px 0;
+  padding: 10px 14px 0;
 }
 
 .en-card-tag {
-  padding: 4px 9px;
+  padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(139, 92, 246, 0.15);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: #c4b5fd;
-  font-size: 12px;
+  background: color-mix(in srgb, var(--en-primary) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--en-primary) 30%, transparent);
+  color: var(--en-primary);
+  font-size: 11px;
   font-weight: 600;
 }
 
 .en-card-open {
-  margin: 0;
-  height: 50px;
+  margin: 12px 0 0;
+  height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 0 16px;
+  padding: 0 14px;
   border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--en-border);
   background: transparent;
-  color: #a77bff;
-  font-size: 14px;
+  color: var(--en-primary);
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.14s, color 0.14s;
@@ -2121,13 +2268,12 @@ onBeforeUnmount(() => {
 }
 
 .en-card-open:hover {
-  background: rgba(139, 92, 246, 0.1);
-  color: #c4b5fd;
+  background: color-mix(in srgb, var(--en-primary) 10%, transparent);
 }
 
 .en-card-open-icn {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
 }
 
 .en-panel-enter-active,
@@ -2172,90 +2318,5 @@ onBeforeUnmount(() => {
 .en-card-leave-to {
   opacity: 0;
   transform: translateY(10px) scale(0.96);
-}
-
-:global(.en-shell.en-theme-light) .en-graph-premium {
-  background:
-    radial-gradient(circle at center, #f5f5f7 0%, #ececef 65%, #e4e4e7 100%);
-}
-
-:global(.en-shell.en-theme-light) .en-graph-settings-panel {
-  background: #ffffff;
-  border-color: #d8d8de;
-  color: #2a2a2a;
-}
-
-:global(.en-shell.en-theme-light) .en-section-header,
-:global(.en-shell.en-theme-light) .en-panel-topbar-title,
-:global(.en-shell.en-theme-light) .en-filter-label,
-:global(.en-shell.en-theme-light) .en-slider-label {
-  color: #2a2a2a;
-}
-
-:global(.en-shell.en-theme-light) .en-panel-icon-btn {
-  color: #555555;
-}
-
-:global(.en-shell.en-theme-light) .en-panel-icon-btn:hover {
-  background: #f0f0f3;
-  color: #000000;
-}
-
-:global(.en-shell.en-theme-light) .en-filter-input {
-  background: #f3f3f5;
-  border-color: #d8d8de;
-  color: #2a2a2a;
-}
-
-:global(.en-shell.en-theme-light) .en-switch {
-  background: #d0d0d6;
-}
-
-:global(.en-shell.en-theme-light) .en-slider {
-  background: #d0d0d6;
-}
-
-:global(.en-shell.en-theme-light) .en-note-preview-card {
-  background: rgba(255, 255, 255, 0.97);
-  border-color: rgba(0, 0, 0, 0.1);
-  color: #2a2a2a;
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.18);
-}
-
-:global(.en-shell.en-theme-light) .en-card-title {
-  color: #1a1a1a;
-}
-
-:global(.en-shell.en-theme-light) .en-card-summary {
-  color: #444444;
-}
-
-:global(.en-shell.en-theme-light) .en-card-meta {
-  color: #666666;
-}
-
-:global(.en-shell.en-theme-light) .en-timeline-panel {
-  background: rgba(255, 255, 255, 0.94);
-  border-color: #d8d8de;
-}
-
-:global(.en-shell.en-theme-light) .en-timeline-date {
-  color: #2a2a2a;
-}
-
-:global(.en-shell.en-theme-light) .en-timeline-speed {
-  background: #f0f0f3;
-  border-color: #d8d8de;
-  color: #2a2a2a;
-}
-
-:global(.en-shell.en-theme-light) .en-group-item {
-  background: #f3f3f5;
-}
-
-:global(.en-shell.en-theme-light) .en-graph-status {
-  background: rgba(255, 255, 255, 0.88);
-  border-color: rgba(0, 0, 0, 0.1);
-  color: #555555;
 }
 </style>

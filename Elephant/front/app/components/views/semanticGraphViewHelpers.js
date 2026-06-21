@@ -34,6 +34,9 @@ const groupNodeCluster = (node = {}) => {
   return folder || 'root'
 }
 
+const semanticViewModelCache = new WeakMap()
+const vaultGraphCache = new WeakMap()
+
 export const selectSemanticGraphSource = ({
   inspectionGraph = null,
   fallbackGraph = null
@@ -48,12 +51,14 @@ export const resolveSemanticGraph = (graph = null, fallback = null) => {
   return {
     nodes: Array.isArray(source.nodes) ? source.nodes.map(normalizeGraphNode) : [],
     edges: Array.isArray(source.edges) ? source.edges.map(normalizeGraphEdge) : [],
-    clusters: Array.isArray(source.clusters) ? source.clusters.map((cluster) => ({
-      ...cluster,
-      id: String(cluster.id || '').trim(),
-      label: String(cluster.label || cluster.id || '').trim(),
-      paths: Array.isArray(cluster.paths) ? cluster.paths.map((path) => String(path || '').trim()).filter(Boolean) : []
-    })) : []
+    clusters: Array.isArray(source.clusters)
+      ? source.clusters.map((cluster) => ({
+        ...cluster,
+        id: String(cluster.id || '').trim(),
+        label: String(cluster.label || cluster.id || '').trim(),
+        paths: Array.isArray(cluster.paths) ? cluster.paths.map((path) => String(path || '').trim()).filter(Boolean) : []
+      }))
+      : []
   }
 }
 
@@ -96,10 +101,9 @@ export const buildSemanticGraphSurface = ({
   }
 }
 
-export const buildSemanticViewModel = ({
+const buildSemanticViewModelBase = ({
   graph = null,
   fallback = null,
-  savedPositions = {},
   width = 1800,
   height = 1200
 } = {}) => {
@@ -121,7 +125,7 @@ export const buildSemanticViewModel = ({
 
   const centerX = width / 2
   const centerY = height / 2
-  const clusterRadius = Math.max(140, Math.min(width, height) * 0.28)
+  const clusterRadius = Math.max(200, Math.min(width, height) * 0.32)
   const clusterCount = Math.max(1, clusterNodes.size)
   const clusterCenters = new Map()
   const clusterIndexMap = new Map()
@@ -141,14 +145,14 @@ export const buildSemanticViewModel = ({
     const anchor = clusterCenters.get(clusterId) || { x: centerX, y: centerY }
     const folderNode = clusterMembers.find((node) => (node.kind || node.type) === 'folder') || null
     const noteNodes = clusterMembers.filter((node) => node !== folderNode)
-    const noteRadius = Math.max(72, 54 + Math.min(noteNodes.length, 8) * 10)
+    const noteRadius = Math.max(80, 54 + Math.sqrt(noteNodes.length) * 18)
     const clusterIndex = clusterIndexMap.get(clusterId) || 0
 
     if (folderNode) {
       positionedNodes.push({
         ...folderNode,
-        x: savedPositions[folderNode.id]?.x ?? anchor.x,
-        y: savedPositions[folderNode.id]?.y ?? anchor.y,
+        x: anchor.x,
+        y: anchor.y,
         depth: 0,
         clusterId,
         clusterIndex,
@@ -157,14 +161,16 @@ export const buildSemanticViewModel = ({
     }
 
     const noteCount = Math.max(1, noteNodes.length)
+    const rings = Math.max(1, Math.ceil(Math.sqrt(noteCount / Math.PI)))
     for (let index = 0; index < noteNodes.length; index += 1) {
       const node = noteNodes[index]
-      const angle = (Math.PI * 2 * index) / noteCount
-      const orbit = noteRadius + (index % 3) * 12
+      const ringIdx = Math.floor(index / Math.max(1, Math.ceil(noteCount / rings)))
+      const angle = (Math.PI * 2 * (index % Math.max(1, Math.ceil(noteCount / rings)))) / Math.max(1, Math.ceil(noteCount / rings))
+      const orbit = noteRadius + ringIdx * Math.max(24, noteRadius * 0.3)
       positionedNodes.push({
         ...node,
-        x: savedPositions[node.id]?.x ?? anchor.x + Math.cos(angle) * orbit,
-        y: savedPositions[node.id]?.y ?? anchor.y + Math.sin(angle) * orbit,
+        x: anchor.x + Math.cos(angle) * orbit,
+        y: anchor.y + Math.sin(angle) * orbit,
         depth: 1,
         clusterId,
         clusterIndex,
@@ -200,6 +206,41 @@ export const buildSemanticViewModel = ({
     atomCluster,
     clusterIndexMap,
     nodeMap: byId
+  }
+}
+
+export const buildSemanticViewModel = ({
+  graph = null,
+  fallback = null,
+  savedPositions = {},
+  width = 1800,
+  height = 1200
+} = {}) => {
+  const source = graph?.nodes?.length ? graph : fallback || { nodes: [], edges: [], clusters: [] }
+  const cacheKey = `${width}x${height}`
+  let cached = semanticViewModelCache.get(source)
+  if (!cached || cached.cacheKey !== cacheKey) {
+    cached = {
+      cacheKey,
+      base: buildSemanticViewModelBase({ graph: source, width, height })
+    }
+    if (source && typeof source === 'object') semanticViewModelCache.set(source, cached)
+  }
+
+  const base = cached.base
+  const hasSavedPositions = savedPositions && Object.keys(savedPositions).length > 0
+  if (!hasSavedPositions) return base
+
+  return {
+    ...base,
+    nodes: base.nodes.map((node) => {
+      const saved = savedPositions[node.id]
+      if (!saved) return node
+      const x = Number.isFinite(saved.x) ? saved.x : node.x
+      const y = Number.isFinite(saved.y) ? saved.y : node.y
+      if (x === node.x && y === node.y) return node
+      return { ...node, x, y }
+    })
   }
 }
 
@@ -282,4 +323,107 @@ const buildClusters = (nodes = []) => {
     cluster.nodeCount += 1
   }
   return [...clusterMap.values()]
+}
+
+export const buildGraphFromVaultEntries = (entries = []) => {
+  if (Array.isArray(entries) && vaultGraphCache.has(entries)) return vaultGraphCache.get(entries)
+  const noteEntries = entries.filter((entry) => {
+    const kind = entry.kind || entry.type || 'note'
+    return kind === 'note' || (entry.path || '').endsWith('.md')
+  })
+  const nodes = noteEntries.map((entry) => {
+    const relativePath = String(entry.path || entry.relativePath || entry.id || '').trim()
+    const title = String(entry.title || relativePath.split('/').pop()?.replace(/\.md$/i, '') || 'Untitled').trim()
+    const folderPath = relativePath.includes('/')
+      ? relativePath.split('/').slice(0, -1).join('/')
+      : 'root'
+    return {
+      id: relativePath,
+      path: relativePath,
+      relativePath,
+      title,
+      kind: 'note',
+      type: 'note',
+      summary: '',
+      tags: Array.isArray(entry.tags) ? entry.tags : [],
+      sourceCount: 0,
+      chunkCount: 0,
+      updatedAt: entry.updatedAt || entry.modifiedAt || '',
+      cluster: folderPath
+    }
+  })
+  const folderSet = new Set()
+  for (const node of nodes) {
+    const folder = node.cluster
+    if (folder && folder !== 'root') folderSet.add(folder)
+  }
+  const folderNodes = [...folderSet].map((folderPath) => ({
+    id: folderPath,
+    path: folderPath,
+    relativePath: folderPath,
+    title: folderPath.split('/').pop() || folderPath,
+    kind: 'folder',
+    type: 'folder',
+    summary: '',
+    tags: [],
+    sourceCount: 0,
+    chunkCount: 0
+  }))
+  const allNodes = [...folderNodes, ...nodes]
+  const edges = []
+  for (const node of nodes) {
+    const folder = node.cluster
+    if (folder && folder !== 'root') {
+      edges.push({
+        source: folder,
+        target: node.id,
+        type: 'folder',
+        reason: 'folder',
+        weight: 0.3
+      })
+    }
+  }
+  const byTag = new Map()
+  for (const node of nodes) {
+    for (const tag of node.tags) {
+      if (!tag) continue
+      if (!byTag.has(tag)) byTag.set(tag, [])
+      byTag.get(tag).push(node)
+    }
+  }
+  for (const [tag, tagged] of byTag.entries()) {
+    if (tagged.length < 2) continue
+    for (let i = 1; i < tagged.length; i++) {
+      edges.push({
+        source: tagged[0].id,
+        target: tagged[i].id,
+        type: 'tag',
+        reason: `#${tag}`,
+        weight: 0.5
+      })
+    }
+  }
+  const clusters = []
+  const byFolder = new Map()
+  for (const node of nodes) {
+    const folder = node.cluster || 'root'
+    if (!byFolder.has(folder)) {
+      byFolder.set(folder, {
+        id: folder,
+        label: folder === 'root' ? 'Root' : folder.split('/').pop() || folder,
+        paths: [],
+        nodeCount: 0,
+        tags: []
+      })
+    }
+    const c = byFolder.get(folder)
+    c.paths.push(node.id)
+    c.nodeCount += 1
+  }
+  for (const c of byFolder.values()) {
+    clusters.push({ id: c.id, label: c.label, paths: c.paths, nodeCount: c.nodeCount, tags: c.tags })
+  }
+  const result = { nodes: allNodes, edges, clusters }
+  if (Array.isArray(entries)) vaultGraphCache.set(entries, result)
+  return result
 }

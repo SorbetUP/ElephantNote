@@ -276,16 +276,27 @@ watch(
 
 <style scoped>
 .en-note-topbar {
+  position: relative;
   min-height: 58px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--en-border);
+  padding: 0 var(--en-note-editor-gutter-right, var(--en-note-editor-gutter, 24px)) 0 var(--en-note-editor-gutter-left, var(--en-note-editor-gutter, 24px));
   color: var(--en-text);
   background: var(--en-bg);
   box-sizing: border-box;
   overflow: visible;
+}
+
+.en-note-topbar::after {
+  content: '';
+  position: absolute;
+  left: var(--en-note-editor-gutter-left, var(--en-note-editor-gutter, 24px));
+  right: var(--en-note-editor-gutter-right, var(--en-note-editor-gutter, 24px));
+  bottom: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--en-border) 42%, transparent);
+  pointer-events: none;
 }
 
 .en-note-title-input {
@@ -421,7 +432,7 @@ watch(
   .en-note-topbar {
     flex-wrap: wrap;
     align-content: center;
-    padding: 6px 12px;
+    padding: 6px var(--en-note-editor-gutter-right, 24px) 6px var(--en-note-editor-gutter-left, 32px);
   }
 
   .en-note-title-input {

@@ -150,7 +150,7 @@ kbd {
     min-width: 400px;
     min-height: 100%;
     margin: 0 auto;
-    padding: 20px 50px 100px 50px;
+    padding: 20px var(--en-note-editor-gutter-right, var(--en-note-editor-gutter, 50px)) 100px var(--en-note-editor-gutter-left, var(--en-note-editor-gutter, 50px));
     box-sizing: border-box;
     cursor: text;
   }

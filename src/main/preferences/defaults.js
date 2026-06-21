@@ -2,6 +2,7 @@ const DEFAULT_PREFERENCES = Object.freeze({
   autoSave: false,
   autoSaveDelay: 5000,
   pinnedCardHalo: false,
+  noteEditorMargin: 24,
   titleBarStyle: 'custom',
   openFilesInNewWindow: false,
   openFolderInNewWindow: false,

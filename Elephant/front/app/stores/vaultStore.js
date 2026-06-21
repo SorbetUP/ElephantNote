@@ -97,7 +97,9 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     currentPath: '',
     activeWorkspaceView: 'notes',
     chatSidebarOpen: false,
-    chatSidebarWidth: 420,
+    chatSidebarWidth: 460,
+    chatHistoryOpen: true,
+    chatMode: 'advanced',
     filter: 'all',
     sort: 'updated-newest',
     viewMode: 'grid',
@@ -526,9 +528,17 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.chatSidebarOpen = !this.chatSidebarOpen
     },
 
+    toggleChatHistory() {
+      this.chatHistoryOpen = !this.chatHistoryOpen
+    },
+
     setChatSidebarWidth(width) {
       const parsed = Number(width)
-      this.chatSidebarWidth = Math.min(560, Math.max(320, Number.isFinite(parsed) ? parsed : 420))
+      this.chatSidebarWidth = Math.min(720, Math.max(360, Number.isFinite(parsed) ? parsed : 460))
+    },
+
+    setChatMode(mode) {
+      this.chatMode = mode || 'advanced'
     },
 
     async navigateTo(entry) {

@@ -16,29 +16,31 @@
     ]"
     :style="shellStyle"
   >
-    <top-vault-bar :sidebar-visible="sidebarVisible" />
-    <div class="en-layout">
-      <icon-rail
-        @open-settings="openSettings"
-        @search="openSearch"
-        @toggle-sidebar="toggleSidebar"
-      />
-      <div
-        class="en-body"
-        :class="{ 'en-sidebar-hidden': !sidebarVisible }"
-      >
-        <sidebar-nav
-          v-if="sidebarVisible"
+    <div class="en-shell-main">
+      <top-vault-bar :sidebar-visible="sidebarVisible" />
+      <div class="en-layout">
+        <icon-rail
+          @open-settings="openSettings"
           @search="openSearch"
+          @toggle-sidebar="toggleSidebar"
         />
         <div
-          v-if="sidebarVisible"
-          class="en-sidebar-resizer"
-          role="separator"
-          aria-orientation="vertical"
-          @pointerdown="startResize"
-        />
-        <main-content class="en-body-main" />
+          class="en-body"
+          :class="{ 'en-sidebar-hidden': !sidebarVisible }"
+        >
+          <sidebar-nav
+            v-if="sidebarVisible"
+            @search="openSearch"
+          />
+          <div
+            v-if="sidebarVisible"
+            class="en-sidebar-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            @pointerdown="startResize"
+          />
+          <main-content class="en-body-main" />
+        </div>
       </div>
     </div>
     <ChatSidebar v-if="store.chatSidebarOpen" />
@@ -268,12 +270,20 @@ onBeforeUnmount(() => {
   background: var(--en-bg);
   overflow: hidden;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
 }
 
 .en-shell,
 .en-shell :deep(*) {
   box-sizing: border-box;
+}
+
+.en-shell-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .en-layout {

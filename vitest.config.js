@@ -11,6 +11,20 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['test/unit/specs/**/*.spec.js', 'Elephant/tests/unit/**/*.spec.js'],
     globals: true,
+    coverage: {
+      provider: 'v8',
+      include: [
+        'Elephant/back/app/sync/RcloneManager.js',
+        'Elephant/back/app/sync/rcloneArgs.js',
+        'Elephant/back/app/sync/rcloneVaultEngine.js'
+      ],
+      thresholds: {
+        lines: 90,
+        functions: 90,
+        branches: 90,
+        statements: 90
+      }
+    }
   },
   plugins: [vue()],
   resolve: {
@@ -24,8 +38,8 @@ export default defineConfig({
       '@': resolve(__dirname, 'src/renderer/src'),
       common: resolve(__dirname, 'src/common'),
       muya: resolve(__dirname, 'src/muya'),
-      main_renderer: resolve(__dirname, 'src/main'),
+      main_renderer: resolve(__dirname, 'src/main')
     },
-    extensions: ['.mjs', '.js', '.json'],
-  },
+    extensions: ['.mjs', '.js', '.json']
+  }
 })

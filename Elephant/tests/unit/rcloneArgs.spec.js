@@ -8,11 +8,12 @@ describe('rclone sync helpers', () => {
     expect(buildRcloneFilterRules()).toContain('+ **')
   })
 
-  it('builds the basic bisync command shape', () => {
+  it('builds the first-run bisync command shape', () => {
     expect(buildBisyncArgs({ localPath: '/vault', remotePath: 'remote:vault' })).toEqual([
       RCLONE_SYNC_COMMAND,
       '/vault',
-      'remote:vault'
+      'remote:vault',
+      '--resync'
     ])
   })
 })

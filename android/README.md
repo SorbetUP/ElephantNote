@@ -39,11 +39,14 @@ ElephantVault/
   Attachments/
     attachment-....jpg
   Canvas/
+    drawings.json
   .elephantnote/
     mobile-vault.json
+    mobile-calendar.json
+    mobile-sources.json
 ```
 
-The Android app still uses lightweight native stores for some mobile-only state such as settings, model slots, sync identity and simple canvas metadata. These are intentionally separated from desktop-only runtimes.
+Notes, attachments, source metadata, calendar metadata and canvas metadata are now vault-backed. Settings, model slots and sync identity remain lightweight app settings because they are device-specific rather than note content.
 
 ## Not implemented on Android yet
 

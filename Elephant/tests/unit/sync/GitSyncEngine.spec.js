@@ -2,109 +2,110 @@ import { describe, expect, it, vi } from 'vitest'
 import fs from 'fs-extra'
 import os from 'os'
 import path from 'path'
-import { GitSyncEngine } from 'main_renderer/elephantnote/sync/GitSyncEngine'
+import { RcloneVaultEngine } from 'main_renderer/elephantnote/sync/rcloneVaultEngine.js'
+import { RcloneManager } from 'main_renderer/elephantnote/sync/RcloneManager.js'
 
-const tempVault = async() => fs.mkdtemp(path.join(os.tmpdir(), 'elephant-sync-'))
+const tempVault = async() => fs.mkdtemp(path.join(os.tmpdir(), 'elephant-rclone-engine-'))
 
-describe('GitSyncEngine', () => {
-  it('queues and runs git operations without renderer or Electron coupling', async() => {
+const fakeRclone = (calls = [], executor = async() => ({ stdout: 'ok', stderr: '' })) =>
+  new RcloneManager({
+    executor: vi.fn(async(binary, args, options) => {
+      calls.push({ binary, args, options })
+      return executor(binary, args, options)
+    })
+  })
+
+describe('RcloneVaultEngine', () => {
+  it('queues and runs legacy init/snapshot operations through rclone bisync', async() => {
     const cwd = await tempVault()
-    const executor = vi.fn(async() => ({ stdout: '', stderr: '' }))
-    const engine = new GitSyncEngine({ cwd, executor })
+    const calls = []
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone(calls) })
 
-    const operation = engine.enqueue({ operation: 'init' })
+    const operation = engine.enqueue({ operation: 'init', payload: { remotePath: 'remote:vault' } })
+    engine.enqueue({ operation: 'snapshot' })
     const status = await engine.run()
 
     expect(operation.status).toBe('done')
     expect(status.queued).toBe(0)
-    expect(executor).toHaveBeenCalledWith('git', ['init'], { cwd })
-    expect(status.history[0]).toMatchObject({ operation: 'init', status: 'done' })
-    expect(status.deviceId).toMatch(/^en-/)
+    expect(status.remotePath).toBe('remote:vault')
+    expect(calls).toHaveLength(1)
+    expect(calls[0].args.slice(0, 3)).toEqual(['bisync', cwd, 'remote:vault'])
+    expect(calls[0].args).toContain('--resync')
   })
 
-  it('creates compact git snapshots when the vault is dirty', async() => {
+  it('persists remote path and first run state after a successful sync', async() => {
     const cwd = await tempVault()
-    await fs.ensureDir(path.join(cwd, '.git'))
-    const executor = vi.fn(async(_command, args) => {
-      if (args[0] === 'status') return { stdout: ' M note.md\n', stderr: '' }
-      if (args[0] === 'branch') return { stdout: 'main\n', stderr: '' }
-      return { stdout: '', stderr: '' }
-    })
-    const engine = new GitSyncEngine({ cwd, executor })
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone() })
 
-    engine.enqueue({ operation: 'snapshot', payload: { message: 'Manual snapshot' } })
+    await engine.run({ init: { remotePath: 'remote:vault' }, snapshot: {} })
+
+    const config = await fs.readJson(path.join(cwd, '.elephantnote', 'sync-config.json'))
+    expect(config).toMatchObject({ backend: 'rclone', remotePath: 'remote:vault', firstRunDone: true })
+  })
+
+  it('loads persisted config before a later sync run', async() => {
+    const cwd = await tempVault()
+    const calls = []
+    await fs.ensureDir(path.join(cwd, '.elephantnote'))
+    await fs.writeJson(path.join(cwd, '.elephantnote', 'sync-config.json'), {
+      backend: 'rclone',
+      remotePath: 'remote:vault',
+      firstRunDone: true
+    })
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone(calls) })
+
+    engine.enqueue({ operation: 'snapshot' })
     await engine.run()
 
-    expect(executor).toHaveBeenCalledWith('git', ['add', '-A'], { cwd })
-    expect(executor).toHaveBeenCalledWith('git', ['commit', '-m', 'Manual snapshot'], { cwd })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].args).toEqual(['bisync', cwd, 'remote:vault'])
   })
 
-  it('configures Syncthing folders when a Syncthing backend is selected', async() => {
+  it('keeps failed operations and diagnostics when rclone fails', async() => {
     const cwd = await tempVault()
-    const executor = vi.fn(async() => ({ stdout: '', stderr: '' }))
-    const syncthing = {
-      status: vi.fn(() => ({ configured: true, connected: false, endpoint: 'http://127.0.0.1:8384' })),
-      configure: vi.fn(),
-      ping: vi.fn(async() => ({ connected: true })),
-      ensureFolder: vi.fn(async(folder) => folder),
-      ensurePeer: vi.fn(async(peer) => peer),
-      folderStatus: vi.fn(async() => ({ configured: true, connected: true, endpoint: 'http://127.0.0.1:8384', folderState: 'idle' }))
-    }
-    const engine = new GitSyncEngine({ cwd, executor, syncthing })
-
-    engine.enqueue({
-      operation: 'init',
-      payload: {
-        backend: 'syncthing-git',
-        syncthingEndpoint: 'http://127.0.0.1:8384',
-        syncthingApiKey: 'secret',
-        peerDeviceId: 'PEERDEVICE',
-        peerAddress: 'tcp://192.168.1.42:22000'
-      }
-    })
-    const status = await engine.run()
-
-    expect(syncthing.configure).toHaveBeenCalledWith({
-      endpoint: 'http://127.0.0.1:8384',
-      apiKey: 'secret',
-      binaryPath: ''
-    })
-    expect(syncthing.ensureFolder).toHaveBeenCalledWith(expect.objectContaining({
-      path: cwd,
-      type: 'sendreceive'
-    }))
-    expect(syncthing.ensurePeer).toHaveBeenCalledWith(expect.objectContaining({
-      deviceId: 'PEERDEVICE',
-      address: 'tcp://192.168.1.42:22000'
-    }))
-    expect(status.backend).toBe('syncthing-git')
-    expect(status.peers).toEqual([{ deviceId: 'PEERDEVICE', address: 'tcp://192.168.1.42:22000' }])
-    expect(status.syncthing).toMatchObject({ connected: true, folderState: 'idle' })
-  })
-
-  it('can enqueue a partial sync plan for configuration-only UI actions', async() => {
-    const cwd = await tempVault()
-    const executor = vi.fn(async() => ({ stdout: '', stderr: '' }))
-    const engine = new GitSyncEngine({ cwd, executor })
-
-    engine.enqueuePlan({ init: { branch: 'main' } })
-    const status = await engine.run()
-
-    expect(status.history.map((item) => item.operation)).toEqual(['init'])
-    expect(executor).not.toHaveBeenCalledWith('git', ['pull', '--ff-only', 'origin', 'main'], { cwd })
-    expect(executor).not.toHaveBeenCalledWith('git', ['push', '-u', 'origin', 'main'], { cwd })
-  })
-
-  it('rejects unknown operations and keeps diagnostics', async() => {
-    const cwd = await tempVault()
-    const engine = new GitSyncEngine({
+    const engine = new RcloneVaultEngine({
       cwd,
-      executor: vi.fn(async() => ({ stdout: '', stderr: '' }))
+      rclone: fakeRclone([], async() => { throw new Error('boom') })
     })
-    engine.enqueue({ operation: 'unknown' })
 
-    await expect(engine.run()).rejects.toThrow('Unknown sync operation')
-    expect(engine.status().lastError).toContain('Unknown sync operation')
-    expect(engine.status().operations[0].status).toBe('error')
+    await expect(engine.run({ init: { remotePath: 'remote:vault' }, snapshot: {} })).rejects.toThrow('boom')
+    expect(engine.status().lastError).toContain('boom')
+    expect(engine.status().history.at(-1)).toMatchObject({ operation: 'snapshot', status: 'error' })
+  })
+
+  it('rejects sync without an active vault path', async() => {
+    const engine = new RcloneVaultEngine({ rclone: fakeRclone() })
+    await expect(engine.run({ init: { remotePath: 'remote:vault' }, snapshot: {} })).rejects.toThrow('active vault')
+  })
+
+  it('rejects sync without a remote path', async() => {
+    const cwd = await tempVault()
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone() })
+    await expect(engine.run({ snapshot: {} })).rejects.toThrow('remote path')
+  })
+
+  it('clears in-memory config when changing vaults', async() => {
+    const first = await tempVault()
+    const second = await tempVault()
+    const engine = new RcloneVaultEngine({ cwd: first, rclone: fakeRclone() })
+    await engine.run({ init: { remotePath: 'remote:first' } })
+
+    engine.setCwd(second)
+
+    expect(engine.status().cwd).toBe(second)
+    expect(engine.status().remotePath).toBe('')
+    expect(engine.status().firstRunDone).toBe(false)
+  })
+
+  it('maps pull and push legacy operations to the same rclone bisync transport', async() => {
+    const cwd = await tempVault()
+    const calls = []
+    const engine = new RcloneVaultEngine({ cwd, rclone: fakeRclone(calls) })
+
+    await engine.run({ init: { remotePath: 'remote:vault' }, pull: {}, push: {} })
+
+    expect(calls).toHaveLength(2)
+    expect(calls[0].args[0]).toBe('bisync')
+    expect(calls[1].args[0]).toBe('bisync')
   })
 })

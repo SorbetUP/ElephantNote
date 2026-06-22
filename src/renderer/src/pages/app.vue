@@ -1,20 +1,17 @@
 <template>
   <div class="editor-container">
     <div class="editor-middle elephantnote-middle">
-      <tauri-note-app v-if="isTauriRuntime" />
-      <template v-else>
-        <div
-          v-if="!init"
-          class="editor-placeholder"
-        />
-        <app-shell v-if="init" />
-        <command-palette />
-        <about-dialog />
-        <export-setting-dialog />
-        <rename />
-        <tweet />
-        <import-modal />
-      </template>
+      <div
+        v-if="!init"
+        class="editor-placeholder"
+      />
+      <app-shell v-if="init" />
+      <command-palette />
+      <about-dialog />
+      <export-setting-dialog />
+      <rename />
+      <tweet />
+      <import-modal />
     </div>
   </div>
 </template>
@@ -42,7 +39,6 @@ import { useProjectStore } from '@/store/project'
 import { useAutoUpdatesStore } from '@/store/autoUpdates'
 import { useNotificationStore } from '@/store/notification'
 import AppShell from 'elephant-front/components/shell/AppShell.vue'
-import TauriNoteApp from '@/elephant_tauri/TauriNoteApp.vue'
 
 const isTauriRuntime = window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron'
 const mainStore = useMainStore()
@@ -90,6 +86,7 @@ const setupDragDropHandler = () => {
           e.dataTransfer.items.length === 1 &&
           e.dataTransfer.items[0].type.indexOf('image') > -1
         ) {
+          // Do nothing
         } else {
           e.preventDefault()
           if (timer.value) {
@@ -147,7 +144,6 @@ onMounted(async () => {
   editorStore.LINTEN_FOR_PRINT_SERVICE_CLEARUP()
   editorStore.LINTEN_FOR_EXPORT_SUCCESS()
   editorStore.LISTEN_FOR_FILE_CHANGE()
-  editorStore.LISTEN_WINDOW_ZOOM()
   editorStore.LISTEN_FOR_RELOAD_IMAGES()
   editorStore.LISTEN_FOR_CONTEXT_MENU()
   editorStore.LISTEN_FOR_STATE_REPLACE()

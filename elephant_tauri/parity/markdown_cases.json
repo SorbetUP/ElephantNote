@@ -39,5 +39,23 @@
       "linkCount": 0,
       "htmlContains": ["strong", "em", "del", "code"]
     }
+  },
+  {
+    "name": "muya-math-inline-and-block",
+    "markdown": "# Math\n\nInline $x^2 + y^2$ expression.\n\n$$\na^2 + b^2 = c^2\n$$",
+    "expect": {
+      "outlineCount": 1,
+      "extraKinds": ["inline_math", "math_block"],
+      "htmlContains": ["math-inline", "math-block", "a^2 + b^2"]
+    }
+  },
+  {
+    "name": "muya-diagram-mermaid",
+    "markdown": "# Diagram\n\n```mermaid\ngraph TD;\nA-->B;\n```",
+    "expect": {
+      "outlineCount": 1,
+      "extraKinds": ["diagram"],
+      "htmlContains": ["diagram-block", "data-language=\"mermaid\"", "graph TD"]
+    }
   }
 ]

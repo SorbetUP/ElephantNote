@@ -14,7 +14,7 @@ fn generate_tauri_parity_tests() {
   let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is required"));
   let mut out = String::new();
 
-  out.push_str("use crate::markdown_engine::{excerpt, parse_markdown, render_note};\n");
+  out.push_str("use crate::markdown_engine::{excerpt, heading_title, parse_markdown, parse_tags, render_note};\n");
   out.push_str("use crate::model_domain::{model_cache_key, ModelSelection};\n");
   out.push_str("use crate::note_domain::{create_note_markdown, note_filename_from_title, rename_note_markdown};\n");
   out.push_str("use crate::path_utils::{clean_relative_path, join_path, with_markdown_extension};\n");
@@ -92,6 +92,46 @@ fn generate_tauri_parity_tests() {
       &mut out,
       &format!("generated_rename_case_{index:03}"),
       &format!("let markdown = create_note_markdown(\"Old {index}\", &[String::from(\"tag\")]); let renamed = rename_note_markdown(&markdown, \"New {index}\", \"fallback.md\"); let parsed = parse_markdown(&renamed, \"fallback.md\"); assert_eq!(parsed.title, \"New {index}\"); assert!(renamed.contains(\"title: \\\"New {index}\\\"\"));"),
+    );
+  }
+
+  for index in 0..70 {
+    push_test(
+      &mut out,
+      &format!("generated_tag_parse_case_{index:03}"),
+      &format!("let tags = parse_tags(\" [\\\"alpha-{index}\\\", #beta-{index}, gamma-{index}] \""); assert_eq!(tags, vec![String::from(\"alpha-{index}\"), String::from(\"beta-{index}\"), String::from(\"gamma-{index}\")]);"),
+    );
+  }
+
+  for index in 0..70 {
+    push_test(
+      &mut out,
+      &format!("generated_heading_excerpt_case_{index:03}"),
+      &format!("let body = \"# Heading {index}\\n\\nFirst line {index}\\nSecond line {index}\"; assert_eq!(heading_title(body).unwrap(), \"Heading {index}\"); assert_eq!(excerpt(body, 2), \"Heading {index} First line {index}\");"),
+    );
+  }
+
+  for index in 0..60 {
+    push_test(
+      &mut out,
+      &format!("generated_vault_collision_case_{index:03}"),
+      &format!("let existing = vec![vault_descriptor(\"team-{index}\", \"Team\", \"/vault/team\"), vault_descriptor(\"team-{index}-2\", \"Team 2\", \"/vault/team2\")]; assert_eq!(next_vault_id(&existing, \"Team {index}\"), \"team-{index}-3\");"),
+    );
+  }
+
+  for index in 0..60 {
+    push_test(
+      &mut out,
+      &format!("generated_active_vault_none_case_{index:03}"),
+      &format!("let config = VaultConfig {{ vaults: vec![vault_descriptor(\"a-{index}\", \"A\", \"/vault/a\")], active_vault_id: Some(String::from(\"missing-{index}\")) }}; assert!(active_vault(&config).is_none()); let empty = VaultConfig {{ vaults: vec![], active_vault_id: None }}; assert!(active_vault(&empty).is_none());"),
+    );
+  }
+
+  for index in 0..60 {
+    push_test(
+      &mut out,
+      &format!("generated_case_whitespace_query_case_{index:03}"),
+      &format!("assert_eq!(normalize_query(\"\\tMixed   CASE {index}\\n\"), \"mixed case {index}\"); assert!(score_text(\"mixed case {index}\", \"MIXED CASE {index}\", \"\") > 0);"),
     );
   }
 

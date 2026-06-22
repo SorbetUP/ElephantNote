@@ -2,6 +2,7 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use super::muya_extras::{collect_muya_extras, render_muya_extras_html};
 use super::parser_v4::parse_markdown_document;
 use super::renderer_v2::render_html;
 
@@ -26,11 +27,17 @@ pub fn muya_options() -> Options {
 }
 
 pub fn render_muya_html(markdown: &str) -> String {
-  render_html(markdown)
+  let extra_html = render_muya_extras_html(markdown);
+  if extra_html.trim().is_empty() {
+    render_html(markdown)
+  } else {
+    render_html(&extra_html)
+  }
 }
 
 pub fn parse_muya_document(markdown: &str) -> Value {
   let doc = parse_markdown_document(markdown);
+  let extras = collect_muya_extras(markdown);
   json!({
     "frontmatter": doc.frontmatter,
     "blocks": doc.blocks,
@@ -39,8 +46,9 @@ pub fn parse_muya_document(markdown: &str) -> Value {
     "images": doc.images,
     "tasks": doc.tasks,
     "plainText": doc.plain_text,
-    "html": doc.html,
-    "tokens": tokenize_muya(markdown)
+    "html": render_muya_html(markdown),
+    "tokens": tokenize_muya(markdown),
+    "extras": extras
   })
 }
 
@@ -64,6 +72,13 @@ pub fn tokenize_muya(markdown: &str) -> Vec<MuyaToken> {
       _ => tokens.push(MuyaToken { kind: "unknown_event".to_string(), entering: false, text: String::new(), attrs: json!({}) }),
     }
   }
+
+  tokens.extend(collect_muya_extras(markdown).into_iter().map(|extra| MuyaToken {
+    kind: extra.kind,
+    entering: false,
+    text: extra.text,
+    attrs: json!({ "line": extra.line, "extra": extra.attrs }),
+  }));
 
   tokens
 }
@@ -157,5 +172,16 @@ mod tests {
     assert!(tokens.iter().any(|token| token.kind == "strong" && token.entering));
     assert!(tokens.iter().any(|token| token.kind == "link" && token.entering));
     assert!(tokens.iter().any(|token| token.kind == "table" && token.entering));
+  }
+
+  #[test]
+  fn includes_math_and_diagram_extras() {
+    let doc = parse_muya_document("$x$\n\n$$\ny=x\n$$\n\n```mermaid\ngraph TD;\n```");
+    let extras = doc["extras"].as_array().unwrap();
+    assert!(extras.iter().any(|extra| extra["kind"] == "inline_math"));
+    assert!(extras.iter().any(|extra| extra["kind"] == "math_block"));
+    assert!(extras.iter().any(|extra| extra["kind"] == "diagram"));
+    assert!(doc["html"].as_str().unwrap().contains("math-inline"));
+    assert!(doc["html"].as_str().unwrap().contains("diagram-block"));
   }
 }

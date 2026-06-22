@@ -17,16 +17,16 @@ Reference source: the Electron/MarkText Muya implementation is the source of tru
 | Area | Current estimate | Notes |
 |---|---:|---|
 | CommonMark block parsing | 55% | Headings, paragraphs, blockquotes, lists, HR and code blocks exist. Nested/edge cases still need more fixtures. |
-| GFM tables | 45% | Render/token support exists through pulldown-cmark. Editing behavior is not ported. |
+| GFM tables | 50% | Render/token support exists through pulldown-cmark. Alignment fixtures started. Editing behavior is not ported. |
 | Task lists | 70% | HTML classes are normalized to `task-list` and `task-list-item`; tokens expose `task_marker`. |
 | Inline marks | 55% | Strong/emphasis/strike/code/link tokens exist. Nested mark edge cases need fixtures. |
 | Links and images | 55% | Cmark extraction exists; reference-style links and advanced titles need fixtures. |
-| Footnotes | 35% | Token coverage started. Rendering/parity fixtures need expansion. |
-| HTML blocks/inline HTML | 35% | Token coverage started. Sanitization/export rules not complete. |
-| Math blocks/inline math | 0% | Not implemented in Rust yet. Muya has dedicated math preview/editor behavior. |
-| Diagrams | 0% | Not implemented in Rust yet. Muya has dedicated diagram preview/editor behavior. |
+| Footnotes | 45% | Token coverage exists; rendering/parity fixtures still need expansion. |
+| HTML blocks/inline HTML | 45% | Token coverage exists. Sanitization/export rules not complete. |
+| Math blocks/inline math | 35% | Rust now detects inline `$...$` and block `$$...$$`, emits extras and placeholder HTML. Full KaTeX/Muya preview parity is not done. |
+| Diagrams | 35% | Rust now detects mermaid/flowchart/sequence/vega/plantuml fences, emits extras and placeholder HTML. Full preview parity is not done. |
 | Frontmatter | 45% | Simple key/value, booleans and arrays supported. Full YAML compatibility not implemented. |
-| Export HTML contract | 25% | Rendering exists, but MarkText/Muya export normalization is not fully matched. |
+| Export HTML contract | 35% | Rendering exists, task classes/math/diagram placeholders started, but MarkText/Muya export normalization is not fully matched. |
 
 ## Editor interaction parity
 
@@ -58,7 +58,7 @@ Reference source: the Electron/MarkText Muya implementation is the source of tru
 
 ## Honest global estimate
 
-- Muya deterministic Markdown engine: about 45-55%.
+- Muya deterministic Markdown engine: about 50-60%.
 - Muya full editor behavior: about 10-15%.
 - Full Tauri replacement of Electron app: about 20-25%.
 

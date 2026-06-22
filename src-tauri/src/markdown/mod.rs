@@ -1,10 +1,10 @@
 pub mod commands;
-pub mod parser_v3;
-pub mod renderer;
+pub mod parser_v4;
+pub mod renderer_v2;
 pub mod types;
 
 #[cfg(test)]
 mod parity_tests;
 
-pub use parser_v3::parse_markdown_document;
-pub use renderer::{render_html, render_plain_text};
+pub use parser_v4::parse_markdown_document;
+pub use renderer_v2::{render_html, render_plain_text};

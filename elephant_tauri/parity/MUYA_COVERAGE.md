@@ -14,31 +14,42 @@ Reference source: the Electron/MarkText Muya implementation is the source of tru
 
 ## Source comparison layer
 
-The deterministic engine now has four fixture/snapshot layers:
+The deterministic engine now has five fixture/snapshot layers:
 
 - `muya_deterministic_cases.json`: Markdown inputs and expected deterministic fields.
 - `muya_edge_cases.json`: CommonMark/Muya edge-case inputs for autolinks, escapes, heading attrs and fence variants.
-- `muya_source_snapshots.json`: source-of-truth snapshots for the Electron/Muya render contract.
+- `muya_source_snapshots.json`: source-of-truth snapshots consumed by Rust snapshot tests.
+- `muya_source_snapshots_meta.json`: generation metadata, including whether the snapshots came from the real renderer or the fallback contract adapter.
 - Rust snapshot tests: compare the Rust deterministic contracts against these snapshots.
 
-`pnpm muya:snapshots` regenerates the source snapshot file from the current fixture set. The current generator still uses contract adapters; the final 100% step is to replace those adapters with calls into the real Electron/Muya renderer and keep the Rust tests strict.
+`pnpm muya:snapshots` regenerates contract snapshots for development.
+
+The strict 100% path is:
+
+```bash
+pnpm add -D @muyajs/core
+node scripts/generate-muya-source-snapshots.mjs --strict-real --adapter=scripts/adapters/real-muya-renderer.mjs
+bash scripts/tauri-rust-check.sh
+```
+
+`--strict-real` must fail if the adapter or `@muyajs/core` is unavailable. The engine is only allowed to claim 100% when `muya_source_snapshots_meta.json` reports `mode: real-electron-muya-renderer` and all Rust tests pass.
 
 ## Markdown engine parity
 
 | Area | Current estimate | Notes |
 |---|---:|---|
-| CommonMark block parsing | 75% | Headings, paragraphs, blockquotes, lists, HR, code blocks and fence variants exist. Nested list metadata, deterministic fixtures and source-snapshot comparisons exist. |
-| GFM tables | 75% | Render/token support exists, row/column contracts exist, deterministic alignment/export fixtures exist, and source-snapshot comparison exists. |
-| Task lists | 75% | HTML classes are normalized to `task-list` and `task-list-item`; tokens expose `task_marker`; nested checked item metadata exists. |
-| Inline marks | 78% | Strong/emphasis/strike/code/link tokens exist, nested inline mark deterministic fixtures exist, and source-snapshot comparison exists. |
-| Links and images | 75% | Direct links, reference-style links/images and autolinks are covered by extras/edge fixtures. Advanced title/escaping cases still need expansion. |
-| Footnotes | 75% | Definitions, references, footnote HTML contract, fixtures and source-snapshot comparison now exist. |
-| HTML blocks/inline HTML | 68% | Token coverage and sanitization contract exist. Dangerous payload tests are kept in Rust tests, not JSON fixtures. |
-| Math blocks/inline math | 70% | Inline and block math emit extras plus KaTeX-like HTML contract and source-snapshot comparison. Real KaTeX DOM rendering parity is not done. |
-| Diagrams | 70% | Mermaid/flowchart/sequence/vega/plantuml fences emit extras plus diagram HTML contract and source-snapshot comparison. Real preview renderer parity is not done. |
-| Frontmatter | 75% | YAML-like scalars, booleans, numbers, null, inline arrays, block arrays, simple objects and source-snapshot comparison are covered. Full YAML spec is not implemented. |
-| Escapes and attributes | 70% | Escaped Markdown punctuation, autolink normalization, heading attributes and fence metadata now have edge contracts and tests. |
-| Export HTML contract | 72% | Rendering exists; task classes, math/diagram placeholders, reference links, footnotes, sanitized HTML, table alignment, edge cases and source snapshots are covered. Exact MarkText export normalization still needs automated Electron generation. |
+| CommonMark block parsing | 78% | Headings, paragraphs, blockquotes, lists, HR, code blocks and fence variants exist. Nested list metadata, deterministic fixtures, edge fixtures and source-snapshot comparisons exist. |
+| GFM tables | 78% | Render/token support exists, row/column contracts exist, deterministic alignment/export fixtures exist, and source-snapshot comparison exists. |
+| Task lists | 78% | HTML classes are normalized to `task-list` and `task-list-item`; tokens expose `task_marker`; nested checked item metadata exists. |
+| Inline marks | 80% | Strong/emphasis/strike/code/link tokens exist, nested inline mark deterministic fixtures exist, and source-snapshot comparison exists. |
+| Links and images | 78% | Direct links, reference-style links/images and autolinks are covered by extras/edge fixtures. Advanced title/escaping cases still need expansion. |
+| Footnotes | 78% | Definitions, references, footnote HTML contract, fixtures and source-snapshot comparison now exist. |
+| HTML blocks/inline HTML | 70% | Token coverage and sanitization contract exist. Dangerous payload tests are kept in Rust tests, not JSON fixtures. |
+| Math blocks/inline math | 75% | Inline and block math emit extras plus KaTeX-like HTML contract. A strict real-Muya adapter scaffold now exists but must be run with `@muyajs/core`. |
+| Diagrams | 75% | Mermaid/flowchart/sequence/vega/plantuml fences emit extras plus diagram HTML contract. A strict real-Muya adapter scaffold now exists but real preview parity still needs generated snapshots. |
+| Frontmatter | 78% | YAML-like scalars, booleans, numbers, null, inline arrays, block arrays, simple objects and source-snapshot comparison are covered. Full YAML spec is not implemented. |
+| Escapes and attributes | 75% | Escaped Markdown punctuation, autolink normalization, heading attributes and fence metadata now have edge contracts and tests. |
+| Export HTML contract | 75% | Rendering exists; task classes, math/diagram placeholders, reference links, footnotes, sanitized HTML, table alignment, edge cases, source snapshots and a real adapter scaffold are covered. Exact MarkText export normalization requires strict generated snapshots. |
 
 ## Editor interaction parity
 
@@ -70,8 +81,8 @@ The deterministic engine now has four fixture/snapshot layers:
 
 ## Honest global estimate
 
-- Muya deterministic Markdown engine: about 75-82%.
+- Muya deterministic Markdown engine: about 78-85%.
 - Muya full editor behavior: about 20-30%.
 - Full Tauri replacement of Electron app: about 22-28%.
 
-The engine is not allowed to claim 100% until `pnpm muya:snapshots` uses the real Electron/Muya renderer and every edge-case row stays green in Rust.
+The engine is not allowed to claim 100% until strict real snapshots are generated through `scripts/adapters/real-muya-renderer.mjs`, `muya_source_snapshots_meta.json` reports `real-electron-muya-renderer`, and every edge-case row stays green in Rust.

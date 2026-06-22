@@ -64,7 +64,7 @@
     "coverage": "vitest run --coverage",
     "coverage:unit": "vitest run test/unit --coverage",
     "coverage:open": "pnpm coverage:unit && open coverage/index.html",
-    "test:e2e": "playwright test test/e2e",
+    "test:e2e": "playwright test",
     "prod:check": "pnpm lint && pnpm test:unit && pnpm test:e2e && pnpm validate-licenses && pnpm run build:unpack",
     "gen-third-party": "node scripts/generateThirdPartyLicense.js",
     "validate-licenses": "node scripts/validateLicenses.js"
@@ -148,6 +148,7 @@
   "devDependencies": {
     "@babel/eslint-parser": "^7.28.6",
     "@electron/rebuild": "^4.0.4",
+    "@playwright/test": "^1.60.0",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vitest/coverage-v8": "^4.1.6",
     "cross-env": "^10.1.0",

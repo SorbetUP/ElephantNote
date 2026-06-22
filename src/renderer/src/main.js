@@ -30,9 +30,46 @@ import './assets/styles/printService.css'
 
 // -----------------------------------------------
 
+const ensurePathResolve = () => {
+  window.path = window.path || {}
+  const normalize = window.path.normalize || ((value = '') => String(value || '').split('\\').join('/'))
+  const join = window.path.join || ((...parts) => normalize(parts.filter(Boolean).join('/')))
+  if (typeof window.path.normalize !== 'function') window.path.normalize = normalize
+  if (typeof window.path.join !== 'function') window.path.join = join
+  if (typeof window.path.resolve !== 'function') window.path.resolve = (...parts) => join(...parts)
+  if (typeof window.path.basename !== 'function') {
+    window.path.basename = (value = '') => {
+      const parts = normalize(value).split('/').filter(Boolean)
+      return parts.at(-1) || ''
+    }
+  }
+  if (typeof window.path.dirname !== 'function') {
+    window.path.dirname = (value = '') => {
+      const parts = normalize(value).split('/').filter(Boolean)
+      if (parts.length <= 1) return normalize(value).startsWith('/') ? '/' : '.'
+      return `${normalize(value).startsWith('/') ? '/' : ''}${parts.slice(0, -1).join('/')}`
+    }
+  }
+  if (typeof window.path.isAbsolute !== 'function') {
+    window.path.isAbsolute = (value = '') => normalize(value).startsWith('/')
+  }
+  if (typeof window.path.relative !== 'function') {
+    window.path.relative = (from = '', to = '') => {
+      const fromParts = normalize(from).split('/').filter(Boolean)
+      const toParts = normalize(to).split('/').filter(Boolean)
+      while (fromParts.length && toParts.length && fromParts[0] === toParts[0]) {
+        fromParts.shift()
+        toParts.shift()
+      }
+      return [...fromParts.map(() => '..'), ...toParts].join('/') || ''
+    }
+  }
+}
+
 installRendererDiagnostics()
 globalThis.marktext = {}
 installRuntimeBridge()
+ensurePathResolve()
 installTauriElephantNoteBridge()
 const isNonElectronRuntime = () => window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron'
 

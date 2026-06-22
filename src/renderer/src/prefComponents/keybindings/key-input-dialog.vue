@@ -49,7 +49,7 @@ import {
   isCompositionEvent,
   isValidElectronAccelerator,
   getAcceleratorFromKeyboardEvent
-} from '@hfelix/electron-localshortcut'
+} from '@/platform/electronLocalShortcutShim'
 import { ref, watch, useTemplateRef, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 

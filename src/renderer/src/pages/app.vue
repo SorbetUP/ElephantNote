@@ -155,6 +155,14 @@ onMounted(async () => {
 
   setupDragDropHandler()
 
+  if (window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron') {
+    setTimeout(() => {
+      if (!mainStore.init) {
+        mainStore.SET_INITIALIZED()
+      }
+    }, 250)
+  }
+
   nextTick(() => {
     const style = global.marktext.initialState || DEFAULT_STYLE
     addStyles(style)

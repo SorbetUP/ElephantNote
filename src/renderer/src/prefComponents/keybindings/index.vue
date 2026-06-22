@@ -100,13 +100,13 @@
 </template>
 
 <script setup>
-import log from 'electron-log'
-import { setKeyboardLayout } from '@hfelix/electron-localshortcut'
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import Separator from '../common/separator'
 import KeyInputDialog from './key-input-dialog.vue'
 import KeybindingConfigurator from './KeybindingConfigurator'
 import notice from '@/services/notification'
+import log from '@/platform/electronLogShim'
+import { setKeyboardLayout } from '@/platform/electronLocalShortcutShim'
 import { Edit, RefreshRight, Delete } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 

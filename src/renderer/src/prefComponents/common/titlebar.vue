@@ -17,11 +17,11 @@
 </template>
 
 <script setup>
-import { getCurrentWindow } from '@electron/remote'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { closePath as windowIconClose } from '../../assets/window-controls.js'
 
-const handleCloseClick = () => {
-  getCurrentWindow().close()
+const handleCloseClick = async() => {
+  await getCurrentWindow().close()
 }
 </script>
 

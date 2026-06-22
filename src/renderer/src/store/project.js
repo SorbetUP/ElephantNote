@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import log from 'electron-log/renderer'
+import log from '@/platform/electronLogShim'
 import { addFile, unlinkFile, addDirectory, unlinkDirectory } from './treeCtrl'
 import bus from '../bus'
 import { create, paste, rename } from '../util/fileSystem'

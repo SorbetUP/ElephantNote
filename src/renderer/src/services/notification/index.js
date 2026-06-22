@@ -1,6 +1,7 @@
 import template from './index.html?raw'
 import { getUniqueId } from '../../util'
 import { sanitize, EXPORT_DOMPURIFY_CONFIG } from '../../util/dompurify'
+import { isPortableRuntime } from '../../platform/preferenceStorage'
 import './index.css'
 
 const INON_HASH = {
@@ -23,6 +24,44 @@ const fillTemplate = (type, title, message) => {
     .replace(/\{\{message\}\}/, sanitize(message, EXPORT_DOMPURIFY_CONFIG))
 }
 
+const canUseNativeNotification = () => {
+  return (
+    isPortableRuntime() &&
+    typeof window !== 'undefined' &&
+    typeof window.Notification === 'function'
+  )
+}
+
+const notifyNative = async({ title = '', message = '', type = 'primary', time = 10000 }) => {
+  if (!canUseNativeNotification()) return false
+  if (type === 'error') {
+    // Native notifications do not expose the richer HTML styling, so we keep them simple.
+  }
+
+  if (window.Notification.permission === 'default' && window.Notification.requestPermission) {
+    try {
+      await window.Notification.requestPermission()
+    } catch {
+      return false
+    }
+  }
+
+  if (window.Notification.permission !== 'granted') return false
+
+  const nativeNotification = new window.Notification(title || document.title, {
+    body: message,
+    silent: time === 0
+  })
+
+  if (time > 0) {
+    setTimeout(() => {
+      nativeNotification.close?.()
+    }, time)
+  }
+
+  return true
+}
+
 const notification = {
   name: 'notify',
   noticeCache: {},
@@ -38,6 +77,10 @@ const notification = {
     type = 'primary', // primary, error, warning or info
     showConfirm = false
   }) {
+    if (!showConfirm && canUseNativeNotification()) {
+      return notifyNative({ time, title, message, type, showConfirm })
+    }
+
     let rs
     let rj
     let timer = null

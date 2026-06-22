@@ -62,21 +62,29 @@ const dragLeaveHandler = () => {
   isOver.value = false
 }
 
+const getDroppedPath = (file) => {
+  return window.electron?.webUtils?.getPathForFile?.(file) ||
+    file?.path ||
+    file?.webkitRelativePath ||
+    file?.name ||
+    ''
+}
+
 const dropHandler = (e) => {
   const fileList = []
   e.preventDefault()
   if (e.dataTransfer.files.length > 0) {
     for (const file of e.dataTransfer.files) {
-      fileList.push(window.electron.webUtils.getPathForFile(file))
+      fileList.push(getDroppedPath(file))
     }
   } else {
     for (const file of e.dataTransfer.items) {
       if (file.kind === 'file') {
-        fileList.push(window.electron.webUtils.getPathForFile(file.getAsFile()))
+        fileList.push(getDroppedPath(file.getAsFile()))
       }
     }
   }
-  window.electron.ipcRenderer.send('mt::window::drop', fileList)
+  window.electron?.ipcRenderer?.send('mt::window::drop', fileList)
 }
 
 onMounted(() => {

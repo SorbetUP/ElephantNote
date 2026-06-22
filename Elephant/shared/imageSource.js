@@ -1,7 +1,24 @@
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const normalizeLocalPath = (value = '') => String(value || '').replace(/\\/g, '/')
+const fileUrlToPath = (value = '') => {
+  if (!String(value || '').startsWith('file://')) return String(value || '')
+  try {
+    const url = new URL(value)
+    return decodeURIComponent(url.pathname)
+  } catch {
+    return String(value || '').replace(/^file:\/\//, '')
+  }
+}
+const pathToFileUrl = (value = '') => {
+  const normalized = normalizeLocalPath(value)
+  if (!normalized) return ''
+  if (/^[a-z]:\//i.test(normalized)) {
+    return `file:///${encodeURI(normalized)}`
+  }
+  const prefixed = normalized.startsWith('/') ? normalized : `/${normalized}`
+  return `file://${encodeURI(prefixed)}`
+}
 
 export const resolveLocalImageSource = (src = '', baseDirectory = '') => {
   const value = String(src || '').trim()
@@ -21,7 +38,7 @@ export const resolveLocalImageSource = (src = '', baseDirectory = '') => {
 
   if (decoded.startsWith('file://')) {
     try {
-      return fileURLToPath(decoded)
+      return fileUrlToPath(decoded)
     } catch {
       return decoded.replace(/^file:\/\//, '')
     }
@@ -35,14 +52,9 @@ export const toFileUrl = (filePath = '') => {
   const value = String(filePath || '').trim()
   if (!value) return ''
   try {
-    return pathToFileURL(value).href
+    return pathToFileUrl(value)
   } catch {
-    const normalized = normalizeLocalPath(value)
-    if (/^[a-z]:\//i.test(normalized)) {
-      return `file:///${encodeURI(normalized)}`
-    }
-    const prefixed = normalized.startsWith('/') ? normalized : `/${normalized}`
-    return `file://${encodeURI(prefixed)}`
+    return pathToFileUrl(value)
   }
 }
 

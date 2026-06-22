@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import log from 'electron-log'
+import log from '@/platform/electronLogShim'
 import bus from '../bus'
 import staticCommands, { RootCommand, getCommandsWithDescriptions } from '../commands'
 

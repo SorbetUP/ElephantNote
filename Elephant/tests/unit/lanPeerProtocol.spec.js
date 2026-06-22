@@ -8,7 +8,7 @@ import {
   parsePairingInvite,
   parsePeerDescriptor,
   serializePeerDescriptor
-} from '../back/app/sync/lanPeerProtocol.js'
+} from '../../back/app/sync/lanPeerProtocol.js'
 
 describe('LAN peer sync protocol', () => {
   it('creates a local network peer announcement', () => {

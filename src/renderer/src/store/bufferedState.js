@@ -1,5 +1,5 @@
 import debounce from 'lodash/debounce'
-import log from 'electron-log/renderer'
+import log from '@/platform/electronLogShim'
 import { toPlainObject } from '../../../../Elephant/shared/plainObject.js'
 import { useEditorStore } from './editor'
 import { useProjectStore } from './project'

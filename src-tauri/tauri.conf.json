@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Elephant",
+  "version": "0.18.9",
+  "identifier": "com.elephantnote.app",
+  "build": {
+    "beforeDevCommand": "pnpm tauri:web:dev",
+    "beforeBuildCommand": "pnpm tauri:web:build",
+    "devUrl": "http://127.0.0.1:1420",
+    "frontendDist": "../out/renderer"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Elephant",
+        "width": 1280,
+        "height": 840
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:",
+        "worker-src": "'self' blob:",
+        "child-src": "'self' blob:",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob: asset: http://asset.localhost https:",
+        "font-src": "'self' data:",
+        "connect-src": "'self' http://localhost:* http://127.0.0.1:* https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co https://*.hf.co https://*.xethub.hf.co https://cas-bridge.xethub.hf.co https://transfer.xethub.hf.co https://cdn.jsdelivr.net blob: ipc: http://ipc.localhost"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "../static/icon.ico",
+      "../static/icon.icns"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "active": false
+    }
+  }
+}

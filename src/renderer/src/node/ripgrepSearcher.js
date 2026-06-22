@@ -21,8 +21,8 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import { spawn } from 'child_process'
-import log from 'electron-log'
+import * as childProcess from 'child_process'
+import log from '@/platform/electronLogShim'
 
 function cleanResultLine(resultLine) {
   resultLine = getText(resultLine)
@@ -226,7 +226,7 @@ class RipgrepDirectorySearcher {
 
     let child = null
     try {
-      child = spawn(this.rgPath, args, {
+      child = childProcess.spawn(this.rgPath, args, {
         cwd: directoryPath,
         stdio: ['pipe', 'pipe', 'pipe']
       })

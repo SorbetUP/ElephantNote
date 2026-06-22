@@ -1,4 +1,4 @@
-import log from 'electron-log/renderer'
+import log from '@/platform/electronLogShim'
 import RendererPaths from './node/paths'
 import { createConsoleMirror } from '../../common/logging'
 
@@ -30,13 +30,11 @@ const parseUrlArgs = () => {
   const hideScrollbar = params.get('hsb') === '1'
   const theme = params.get('theme')
   const titleBarStyle = params.get('tbs')
-  const userDataPath = params.get('udp')
-  const windowId = Number(params.get('wid'))
-  const type = params.get('type')
-
-  if (Number.isNaN(windowId)) {
-    throw new Error('Error while parsing URL arguments: windowId!')
-  }
+  const userDataPath = params.get('udp') || window.__MARKTEXT_USER_DATA_PATH__ || ''
+  const rawWindowId = params.get('wid') || window.__MARKTEXT_WINDOW_ID__ || 1
+  const parsedWindowId = Number(rawWindowId)
+  const windowId = Number.isNaN(parsedWindowId) ? 1 : parsedWindowId
+  const type = params.get('type') || window.__MARKTEXT_WINDOW_TYPE__ || 'editor'
 
   return {
     type,
@@ -96,7 +94,7 @@ const handleRendererError = (event) => {
     exceptionLogger(event.error)
 
     // Pass exception to main process exception handler to show a error dialog.
-    window.electron.ipcRenderer.send('mt::handle-renderer-error', copy)
+    window.electron?.ipcRenderer?.send('mt::handle-renderer-error', copy)
   } else {
     log.error('[renderer] uncaught non-error event', event)
   }
@@ -119,7 +117,7 @@ const bootstrapRenderer = () => {
     },
     paths
   }
-  global.marktext = marktext
+  globalThis.marktext = marktext
 
   configureLogger()
 }

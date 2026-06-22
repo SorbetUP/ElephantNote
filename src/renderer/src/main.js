@@ -1,9 +1,13 @@
+import './platform/bootstrapGlobals'
 import { createApp } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import bootstrapRenderer from './bootstrap'
 import axios from './axios'
 import pinia from './store'
 import './assets/symbolIcon'
+import { installRuntimeBridge } from './platform/runtimeBridge'
+import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
+import { appDataDir } from '@tauri-apps/api/path'
 
 // Element Plus instead of Element UI for Vue 3
 import ElementPlus from 'element-plus'
@@ -23,38 +27,84 @@ import './assets/styles/printService.css'
 
 // -----------------------------------------------
 
-global.marktext = {}
-bootstrapRenderer()
+globalThis.marktext = {}
+installRuntimeBridge()
+const isNonElectronRuntime = () => window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron'
+
+const bootstrapTauriRuntime = async() => {
+  try {
+    const userDataPath = await appDataDir()
+    window.__MARKTEXT_USER_DATA_PATH__ = userDataPath
+    window.__MARKTEXT_WINDOW_ID__ = 1
+    window.__MARKTEXT_WINDOW_TYPE__ = 'editor'
+  } catch (error) {
+    console.warn('[tauri] app data dir unavailable, using fallback runtime paths', error)
+    window.__MARKTEXT_USER_DATA_PATH__ =
+      window.__MARKTEXT_USER_DATA_PATH__ ||
+      window.path.resolve('/tmp', 'elephantnote')
+    window.__MARKTEXT_WINDOW_ID__ = 1
+    window.__MARKTEXT_WINDOW_TYPE__ = 'editor'
+  }
+
+  bootstrapRenderer()
+  restorePortableWindowState().catch((error) => {
+    console.warn('[tauri] window-state restore failed', error)
+  })
+  window.addEventListener('beforeunload', () => {
+    void savePortableWindowState().catch((error) => {
+      console.warn('[tauri] window-state save failed', error)
+    })
+  })
+}
 
 // -----------------------------------------------
 // Be careful when changing code before this line!
 
-// Create Vue app
-const app = createApp(Main)
+const startApp = async() => {
+  await bootstrapTauriRuntime()
 
-// Configure Element Plus with locale
-app.use(ElementPlus, {
-  locale: en
-})
+  // Create Vue app
+  const app = createApp(Main)
 
-const router = createRouter({
-  history: createWebHashHistory(),
-  // it seems like something might have changed in vue-router? it uses the full "file path" instead of
-  // links like /editor if we use the old createWebHistory()
-  routes: routes(global.marktext.env.type)
-})
+  // Configure Element Plus with locale
+  app.use(ElementPlus, {
+    locale: en
+  })
 
-app.use(router)
-app.use(pinia)
-app.use(i18nPlugin)
+  const router = createRouter({
+    history: createWebHashHistory(),
+    // it seems like something might have changed in vue-router? it uses the full "file path" instead of
+    // links like /editor if we use the old createWebHistory()
+    routes: routes(globalThis.marktext.env.type)
+  })
 
-// Configure axios globally
-app.config.globalProperties.$http = axios
+  app.use(router)
+  app.use(pinia)
+  app.use(i18nPlugin)
 
-// Register services globally
-services.forEach((s) => {
-  app.config.globalProperties['$' + s.name] = s[s.name]
-})
+  // Configure axios globally
+  app.config.globalProperties.$http = axios
 
-// Mount the app
-app.mount('#app')
+  // Register services globally
+  services.forEach((s) => {
+    app.config.globalProperties['$' + s.name] = s[s.name]
+  })
+
+  // Mount the app
+  app.mount('#app')
+
+  if (isNonElectronRuntime()) {
+    setTimeout(() => {
+      window.electron?.ipcRenderer?.send('mt::bootstrap-editor', {
+        addBlankTab: true,
+        markdownList: [],
+        lineEnding: 'lf',
+        sideBarVisibility: false,
+        tabBarVisibility: true,
+        sourceCodeModeEnabled: false
+      })
+    }, 0)
+  }
+}
+
+void startApp()

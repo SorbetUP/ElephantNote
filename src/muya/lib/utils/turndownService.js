@@ -1,7 +1,6 @@
 import TurndownService from 'turndown'
+import * as turndownPluginGfm from 'joplin-turndown-plugin-gfm'
 import { identity } from './index'
-
-const turndownPluginGfm = require('joplin-turndown-plugin-gfm')
 
 export const usePluginAddRules = (turndownService, keeps) => {
   // Use the gfm plugin

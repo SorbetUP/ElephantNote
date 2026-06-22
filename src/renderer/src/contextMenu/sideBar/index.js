@@ -1,4 +1,4 @@
-import { getCurrentWindow, Menu as RemoteMenu, MenuItem as RemoteMenuItem } from '@electron/remote'
+import { getCurrentWindow, Menu as RemoteMenu, MenuItem as RemoteMenuItem } from '@/platform/electronRemoteShim'
 import {
   SEPARATOR,
   getNewFile,

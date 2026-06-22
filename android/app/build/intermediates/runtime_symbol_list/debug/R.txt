@@ -1,2 +1,0 @@
-int style AppTheme 0x7f010000
-int style AppTheme_Dialog 0x7f010001

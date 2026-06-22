@@ -1,8 +1,8 @@
 import crypto from 'crypto'
 
-import { statSync, constants } from 'fs'
-import { exec, execFile } from 'child_process'
-import { tmpdir } from 'os'
+import * as fs from 'fs'
+import * as childProcess from 'child_process'
+import * as os from 'os'
 import dayjs from 'dayjs'
 import { Octokit } from '@octokit/rest'
 
@@ -194,40 +194,80 @@ export const uploadImage = async(pathname, image, preferences) => {
     if (typeof filepath !== 'string') {
       localIsPath = false
       const data = new Uint8Array(filepath)
-      localPath = window.path.join(tmpdir(), `${Date.now()}${suffix}`)
+      localPath = window.path.join(os.tmpdir(), `${Date.now()}${suffix}`)
       await window.fileUtils.writeFile(localPath, data)
     }
-    const handleExec = (err, data, stderr) => {
+    const cleanupLocalFile = () => {
       try {
         if (!localIsPath) window.fileUtils?.unlink && window.fileUtils.unlink(localPath)
       } catch {}
+    }
+    const handleExec = (err, data, stderr) => {
+      cleanupLocalFile()
       if (err) return rejectPromise(err)
       const text = String(data || '') + (stderr ? `\n${String(stderr)}` : '')
       const url = parsePicgoOutput(text)
       if (url) resolvePromise(url)
       else rejectPromise(`PicGo upload error: cannot parse output\n${text.slice(0, 400)}`)
     }
+    const execWithRuntime = async(command, args, options = {}) => {
+      if (window.electron?.shell?.exec) {
+        const result = await window.electron.shell.exec(command, args, options)
+        const text = `${result?.stdout || ''}${result?.stderr ? `\n${result.stderr}` : ''}`
+        if (!result?.success) {
+          throw new Error(text || `Command exited with ${result?.status ?? 'unknown status'}`)
+        }
+        return text
+      }
+      return null
+    }
     if (uploader === 'picgo') {
       const cmd = resolvePicgoBinary()
       if (!cmd) return rejectPromise('PicGo command not found in PATH')
-      exec(
-        `${cmd} u "${localPath}"`,
-        { env: { ...process.env, PATH: getPreferredPathEnv() } },
-        handleExec
-      )
+      execWithRuntime(cmd, ['u', localPath], { env: { ...process.env, PATH: getPreferredPathEnv() } })
+        .then((text) => {
+          if (text === null) {
+            childProcess.exec(
+              `${cmd} u "${localPath}"`,
+              { env: { ...process.env, PATH: getPreferredPathEnv() } },
+              handleExec
+            )
+            return
+          }
+          cleanupLocalFile()
+          const url = parsePicgoOutput(text)
+          if (url) resolvePromise(url)
+          else rejectPromise(`PicGo upload error: cannot parse output\n${text.slice(0, 400)}`)
+        })
+        .catch((err) => {
+          cleanupLocalFile()
+          rejectPromise(err)
+        })
     } else {
-      execFile(
-        cliScript,
-        [localPath],
-        { env: { ...process.env, PATH: getPreferredPathEnv() } },
-        (err, data) => {
-          try {
-            if (!localIsPath) window.fileUtils?.unlink && window.fileUtils.unlink(localPath)
-          } catch {}
-          if (err) return rejectPromise(err)
-          resolvePromise(String(data || '').trim())
-        }
-      )
+      execWithRuntime(cliScript, [localPath], { env: { ...process.env, PATH: getPreferredPathEnv() } })
+        .then((text) => {
+          if (text === null) {
+            childProcess.execFile(
+              cliScript,
+              [localPath],
+              { env: { ...process.env, PATH: getPreferredPathEnv() } },
+              (err, data) => {
+                try {
+                  if (!localIsPath) window.fileUtils?.unlink && window.fileUtils.unlink(localPath)
+                } catch {}
+                if (err) return rejectPromise(err)
+                resolvePromise(String(data || '').trim())
+              }
+            )
+            return
+          }
+          cleanupLocalFile()
+          resolvePromise(String(text || '').trim())
+        })
+        .catch((err) => {
+          cleanupLocalFile()
+          rejectPromise(err)
+        })
     }
   }
 
@@ -282,13 +322,13 @@ export const uploadImage = async(pathname, image, preferences) => {
 
 export const isFileExecutableSync = (filepath) => {
   try {
-    const stat = statSync(filepath)
+    const stat = fs.statSync(filepath)
     if (process.platform === 'win32') {
       return stat.isFile()
     } else {
       return (
         stat.isFile() &&
-        (stat.mode & (constants.S_IXUSR | constants.S_IXGRP | constants.S_IXOTH)) !== 0
+        (stat.mode & (fs.constants.S_IXUSR | fs.constants.S_IXGRP | fs.constants.S_IXOTH)) !== 0
       )
     }
   } catch {

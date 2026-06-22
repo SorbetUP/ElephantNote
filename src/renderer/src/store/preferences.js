@@ -1,6 +1,13 @@
 import { defineStore } from 'pinia'
 import bus from '../bus'
 import { setLanguage } from '../i18n'
+import {
+  hydratePortablePreferences,
+  hydratePortableUserData,
+  persistPortablePreference,
+  persistPortableUserData,
+  isPortableRuntime
+} from '../platform/preferenceStorage'
 
 export const usePreferencesStore = defineStore('preferences', {
   state: () => ({
@@ -137,6 +144,14 @@ export const usePreferencesStore = defineStore('preferences', {
       this[entryName] = !this[entryName]
     },
     ASK_FOR_USER_PREFERENCE() {
+      if (isPortableRuntime()) {
+        this.SET_USER_PREFERENCE(hydratePortablePreferences(this.$state))
+        const portableUserData = hydratePortableUserData(this.$state)
+        Object.entries(portableUserData).forEach(([type, value]) => {
+          this.SET_USER_DATA({ type, value })
+        })
+        return
+      }
       window.electron.ipcRenderer.send('mt::ask-for-user-preference')
       window.electron.ipcRenderer.send('mt::ask-for-user-data')
 
@@ -155,26 +170,43 @@ export const usePreferencesStore = defineStore('preferences', {
       }
 
       // save to electron-store
+      persistPortablePreference(type, value)
+      if (isPortableRuntime()) {
+        return
+      }
       window.electron.ipcRenderer.send('mt::set-user-preference', { [type]: value })
     },
 
     SET_USER_DATA({ type, value }) {
+      this[type] = value
+      persistPortableUserData(type, value)
+      if (isPortableRuntime()) {
+        return
+      }
       window.electron.ipcRenderer.send('mt::set-user-data', { [type]: value })
     },
 
     SET_IMAGE_FOLDER_PATH(value) {
+      if (isPortableRuntime()) {
+        this.imageFolderPath = value
+        persistPortableUserData('imageFolderPath', value)
+        return
+      }
       window.electron.ipcRenderer.send('mt::ask-for-modify-image-folder-path', value)
     },
 
     SELECT_DEFAULT_DIRECTORY_TO_OPEN() {
+      if (isPortableRuntime()) {
+        return
+      }
       window.electron.ipcRenderer.send('mt::select-default-directory-to-open')
     },
 
     LISTEN_FOR_VIEW() {
-      window.electron.ipcRenderer.on('mt::show-command-palette', () => {
+      window.electron?.ipcRenderer?.on('mt::show-command-palette', () => {
         bus.emit('show-command-palette')
       })
-      window.electron.ipcRenderer.on('mt::toggle-view-mode-entry', (event, entryName) => {
+      window.electron?.ipcRenderer?.on('mt::toggle-view-mode-entry', (event, entryName) => {
         this.TOGGLE_VIEW_MODE(entryName)
         this.DISPATCH_EDITOR_VIEW_STATE({ [entryName]: this[entryName] })
       })

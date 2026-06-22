@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import * as childProcess from 'child_process'
 import RipgrepDirectorySearcher from './ripgrepSearcher'
 
 // Use ripgrep searcher to search for files on disk only.
@@ -25,7 +25,7 @@ class FileSearcher extends RipgrepDirectorySearcher {
 
     let child = null
     try {
-      child = spawn(this.rgPath, args, {
+      child = childProcess.spawn(this.rgPath, args, {
         cwd: directoryPath,
         stdio: ['pipe', 'pipe', 'pipe']
       })

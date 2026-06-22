@@ -29,3 +29,7 @@ android/**/*.iml
 android/**/*.apk
 android/**/*.aab
 android/captures/
+
+# Tauri / Rust build artifacts
+src-tauri/target/
+src-tauri/gen/

@@ -1,10 +1,12 @@
 // List of all static commands that are loaded into command center.
-import { getCurrentWindow } from '@electron/remote'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import bus from '../bus'
 import { delay, isOsx } from '@/util'
 import { isUpdatable } from './utils'
 import getCommandDescriptionById from './descriptions'
 import { t } from '../i18n'
+import pinia from '../store'
+import { usePreferencesStore } from '../store/preferences'
 
 export { default as FileEncodingCommand } from './fileEncoding'
 export { default as LineEndingCommand } from './lineEnding'
@@ -426,7 +428,7 @@ const commands = [
   {
     id: 'window.minimize',
     execute: async() => {
-      getCurrentWindow().minimize()
+      await getCurrentWindow().minimize()
     }
   },
   {
@@ -439,7 +441,11 @@ const commands = [
     id: 'window.toggle-full-screen',
     execute: async() => {
       const win = getCurrentWindow()
-      win.setFullScreen(!win.isFullScreen())
+      if (await win.isFullscreen()) {
+        await win.setFullscreen(false)
+      } else {
+        await win.setFullscreen(true)
+      }
     }
   },
 
@@ -551,7 +557,8 @@ const commands = [
       }
     ],
     executeSubcommand: async(_, theme) => {
-      window.electron.ipcRenderer.send('mt::set-user-preference', { theme })
+      const preferencesStore = usePreferencesStore(pinia)
+      preferencesStore.SET_SINGLE_PREFERENCE({ type: 'theme', value: theme })
     }
   },
 
@@ -604,7 +611,8 @@ const commands = [
       }
     ],
     executeSubcommand: async(_, value) => {
-      window.electron.ipcRenderer.send('mt::set-user-preference', { textDirection: value })
+      const preferencesStore = usePreferencesStore(pinia)
+      preferencesStore.SET_SINGLE_PREFERENCE({ type: 'textDirection', value })
     }
   },
 

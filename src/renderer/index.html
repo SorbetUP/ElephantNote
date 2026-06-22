@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <title>Elephant</title>
     <meta
-  http-equiv="Content-Security-Policy"
-  content="
+      http-equiv="Content-Security-Policy"
+      content="
     default-src 'self';
     script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:;
     worker-src 'self' blob:;
     child-src 'self' blob:;
     style-src 'self' 'unsafe-inline';
-    img-src 'self' data: blob: https:;
+    img-src 'self' data: blob: asset: http://asset.localhost https:;
     font-src 'self' data:;
     connect-src 'self'
       http://localhost:*
@@ -24,9 +24,10 @@
       https://cas-bridge.xethub.hf.co
       https://transfer.xethub.hf.co
       https://cdn.jsdelivr.net
-      blob:;
-  "
-/>
+      blob:
+      ipc:
+      http://ipc.localhost;
+      "
     />
   </head>
 

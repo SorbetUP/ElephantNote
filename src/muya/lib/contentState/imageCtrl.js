@@ -1,6 +1,16 @@
 import { URL_REG, DATA_URL_REG } from '../config'
 import { correctImageSrc } from '../utils/getImageInfo'
-import { fileURLToPath } from 'url'
+
+const toFilePath = (pathname) => {
+  if (!pathname) return ''
+  if (!String(pathname).startsWith('file://')) return pathname
+  try {
+    const url = new URL(pathname)
+    return decodeURIComponent(url.pathname)
+  } catch {
+    return pathname.replace(/^file:\/\//, '')
+  }
+}
 
 const imageCtrl = (ContentState) => {
   /**
@@ -220,7 +230,7 @@ const imageCtrl = (ContentState) => {
     const block = this.getBlock(key)
     const { eventCenter } = this.muya
     if (this.muya.options.openImageWithExternalTool) {
-      const path = fileURLToPath(absoluteImagePath)
+      const path = toFilePath(absoluteImagePath)
       this.muya.options.openImageWithExternalTool(path)
       this.singleRender(block)
       eventCenter.dispatch('muya-transformer', { reference: null })

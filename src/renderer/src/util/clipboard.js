@@ -1,6 +1,6 @@
 import { isLinux, isOsx, isWindows } from './index'
 import plist from 'plist'
-import { clipboard as remoteClipboard } from '@electron/remote'
+import { clipboard as remoteClipboard } from '@/platform/electronRemoteShim'
 
 const hasClipboardFiles = () => {
   return remoteClipboard.has('NSFilenamesPboardType')

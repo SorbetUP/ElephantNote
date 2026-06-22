@@ -1,5 +1,6 @@
 import { createI18n } from 'vue-i18n'
 import bus from '../bus'
+import { isPortableRuntime, readPortablePreference } from '../platform/preferenceStorage'
 
 const createFallbackEnglishTranslations = () => ({
   quickInsert: {
@@ -273,6 +274,13 @@ export { i18n }
 export default i18n
 
 if (window.electron && window.electron.ipcRenderer) {
+  if (isPortableRuntime()) {
+    const language = readPortablePreference('language')
+    if (language) {
+      setLanguage(language)
+      bus.emit('language-changed', language)
+    }
+  }
   window.electron.ipcRenderer.on('language-changed', (event, newLocale) => {
     setLanguage(newLocale)
     bus.emit('language-changed', newLocale)

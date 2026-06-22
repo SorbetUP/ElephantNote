@@ -1,3 +1,13 @@
+pub mod markdown_engine;
+pub mod path_utils;
+pub mod vault_lib;
+pub mod note_domain;
+pub mod folder_domain;
+pub mod media_domain;
+pub mod drawing_domain;
+pub mod model_domain;
+pub mod search_logic;
+
 mod vault_min;
 
 #[tauri::command]

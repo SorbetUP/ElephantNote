@@ -2,6 +2,7 @@ pub mod markdown_engine;
 pub mod path_utils;
 pub mod vault_layout;
 pub mod vault_lib;
+pub mod vault;
 pub mod note_domain;
 pub mod folder_domain;
 pub mod media_domain;
@@ -9,7 +10,6 @@ pub mod drawing_domain;
 pub mod model_domain;
 pub mod search_logic;
 
-mod vault_min;
 mod tauri_extra_commands;
 
 #[tauri::command]
@@ -32,28 +32,28 @@ pub fn run() {
   builder
     .invoke_handler(tauri::generate_handler![
       healthcheck,
-      vault_min::tauri_vaults_get,
-      vault_min::tauri_vaults_select_path,
-      vault_min::tauri_vaults_set_active,
-      vault_min::tauri_vaults_set_icon,
-      vault_min::tauri_vaults_set_name,
-      vault_min::tauri_vaults_remove,
-      vault_min::tauri_directory_list,
-      vault_min::tauri_notes_create,
-      vault_min::tauri_folders_create,
-      vault_min::tauri_sidebar_attach,
-      vault_min::tauri_sidebar_detach,
-      vault_min::tauri_entries_rename,
-      vault_min::tauri_entries_move,
-      vault_min::tauri_entries_delete,
-      vault_min::tauri_calendar_list,
-      vault_min::tauri_sources_list,
-      vault_min::tauri_wiki_list,
-      vault_min::tauri_search_query,
-      vault_min::tauri_search_status,
-      vault_min::tauri_sync_status,
-      vault_min::tauri_sync_enqueue,
-      vault_min::tauri_sync_run,
+      vault::commands::tauri_vaults_get,
+      vault::commands::tauri_vaults_select_path,
+      vault::commands::tauri_vaults_set_active,
+      vault::commands::tauri_vaults_set_icon,
+      vault::commands::tauri_vaults_set_name,
+      vault::commands::tauri_vaults_remove,
+      vault::commands::tauri_directory_list,
+      vault::commands::tauri_notes_create,
+      vault::commands::tauri_folders_create,
+      vault::commands::tauri_sidebar_attach,
+      vault::commands::tauri_sidebar_detach,
+      vault::commands::tauri_entries_rename,
+      vault::commands::tauri_entries_move,
+      vault::commands::tauri_entries_delete,
+      vault::commands::tauri_calendar_list,
+      vault::commands::tauri_sources_list,
+      vault::commands::tauri_wiki_list,
+      vault::commands::tauri_search_query,
+      vault::commands::tauri_search_status,
+      vault::commands::tauri_sync_status,
+      vault::commands::tauri_sync_enqueue,
+      vault::commands::tauri_sync_run,
       tauri_extra_commands::tauri_notes_read,
       tauri_extra_commands::tauri_notes_write,
       tauri_extra_commands::tauri_attachments_list,

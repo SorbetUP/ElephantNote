@@ -9,7 +9,7 @@ const __dirname = dirname(__filename)
 export default defineConfig({
   test: {
     environment: 'jsdom',
-    include: ['test/unit/specs/**/*.spec.js', 'Elephant/tests/unit/**/*.spec.js'],
+    include: ['test/unit/**/*.spec.js', 'Elephant/tests/unit/**/*.spec.js'],
     globals: true,
     coverage: {
       provider: 'v8',
@@ -40,6 +40,6 @@ export default defineConfig({
       muya: resolve(__dirname, 'src/muya'),
       main_renderer: resolve(__dirname, 'src/main')
     },
-    extensions: ['.mjs', '.js', '.json']
+    extensions: ['.mjs', '.js', '.json', '.vue']
   }
 })

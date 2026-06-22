@@ -1,17 +1,20 @@
 <template>
   <div class="editor-container">
     <div class="editor-middle elephantnote-middle">
-      <div
-        v-if="!init"
-        class="editor-placeholder"
-      />
-      <app-shell v-if="init" />
-      <command-palette />
-      <about-dialog />
-      <export-setting-dialog />
-      <rename />
-      <tweet />
-      <import-modal />
+      <tauri-note-app v-if="isTauriRuntime" />
+      <template v-else>
+        <div
+          v-if="!init"
+          class="editor-placeholder"
+        />
+        <app-shell v-if="init" />
+        <command-palette />
+        <about-dialog />
+        <export-setting-dialog />
+        <rename />
+        <tweet />
+        <import-modal />
+      </template>
     </div>
   </div>
 </template>
@@ -39,7 +42,9 @@ import { useProjectStore } from '@/store/project'
 import { useAutoUpdatesStore } from '@/store/autoUpdates'
 import { useNotificationStore } from '@/store/notification'
 import AppShell from 'elephant-front/components/shell/AppShell.vue'
+import TauriNoteApp from '@/elephant_tauri/TauriNoteApp.vue'
 
+const isTauriRuntime = window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron'
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
 const preferencesStore = usePreferencesStore()
@@ -53,11 +58,9 @@ const notificationStore = useNotificationStore()
 
 const timer = ref(null)
 
-// States from Pini
 const { init } = storeToRefs(mainStore)
 const { theme, customCss, zoom } = storeToRefs(preferencesStore)
 
-// Watchers
 watch(theme, (value, oldValue) => {
   if (value !== oldValue) {
     addThemeStyle(value)
@@ -87,7 +90,6 @@ const setupDragDropHandler = () => {
           e.dataTransfer.items.length === 1 &&
           e.dataTransfer.items[0].type.indexOf('image') > -1
         ) {
-          // Do nothing
         } else {
           e.preventDefault()
           if (timer.value) {
@@ -150,12 +152,11 @@ onMounted(async () => {
   editorStore.LISTEN_FOR_CONTEXT_MENU()
   editorStore.LISTEN_FOR_STATE_REPLACE()
 
-  // module: notification
   notificationStore.listenForNotification()
 
   setupDragDropHandler()
 
-  if (window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron') {
+  if (isTauriRuntime) {
     setTimeout(() => {
       if (!mainStore.init) {
         mainStore.SET_INITIALIZED()

@@ -12,6 +12,9 @@ pub mod types;
 mod compat_extra_tests;
 
 #[cfg(test)]
+mod editor_parity_tests;
+
+#[cfg(test)]
 mod parity_tests;
 
 pub use parser_v4::parse_markdown_document;

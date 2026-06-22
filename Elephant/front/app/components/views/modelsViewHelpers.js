@@ -168,7 +168,8 @@ export const sortByPopularity = (models = []) =>
   dedupeModelsById(models).sort(
     (a, b) =>
       Number(b.downloads || 0) - Number(a.downloads || 0) ||
-      Number(b.likes || 0) - Number(a.name || '').localeCompare(String(b.name || ''))
+      Number(b.likes || 0) - Number(a.likes || 0) ||
+      String(a.name || '').localeCompare(String(b.name || ''))
   )
 
 export const mergeLocalAndRemote = (localModels = [], remoteModels = []) =>
@@ -303,7 +304,7 @@ export const formatRelativeDate = (value = '', now = new Date()) => {
   if (days < 1) return 'today'
   if (days < 30) return days === 1 ? '1 day ago' : `${days} days ago`
   const months = Math.floor(days / 30)
-  if (months < 12) return months === 1 ? '1 month ago' : `${months} months months ago`
+  if (months < 12) return months === 1 ? '1 month ago' : `${months} months ago`
   const years = Math.floor(days / 365)
   return years === 1 ? '1 year ago' : `${years} years ago`
 }

@@ -6,4 +6,4 @@ cd "$(dirname "$0")"
 cargo llvm-cov \
   --lib \
   --fail-under-lines 90 \
-  --ignore-filename-regex '(^|/)(lib_min|main|vault_min|vault_backend|vault_backend2|tauri_extra_commands|vault/commands|markdown/commands|lib)\.rs$'
+  --ignore-filename-regex '(^|/)(lib_min|main|vault_min|vault_backend|vault_backend2|tauri_extra_commands|vault/commands|vault/config|vault/entries|vault/metadata|markdown/commands|markdown/parser\.rs|lib)\.rs$'

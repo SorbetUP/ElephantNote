@@ -5,6 +5,9 @@ pub mod renderer_v2;
 pub mod types;
 
 #[cfg(test)]
+mod compat_extra_tests;
+
+#[cfg(test)]
 mod parity_tests;
 
 pub use parser_v4::parse_markdown_document;

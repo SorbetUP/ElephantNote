@@ -5,15 +5,13 @@ use super::types::{MarkdownBlock, MarkdownDocument, MarkdownHeading, MarkdownIma
 
 pub fn parse_markdown_document(markdown: &str) -> MarkdownDocument {
   let (frontmatter, body) = split_frontmatter(markdown);
-  let mut blocks = parse_blocks(body);
+  let blocks = parse_blocks(body);
   let outline = extract_outline(&blocks);
   let links = extract_links(body);
   let images = extract_images(body);
   let tasks = extract_tasks(&blocks);
   let html = render_html(&blocks);
   let plain_text = render_plain_text(&blocks);
-
-  normalize_adjacent_paragraphs(&mut blocks);
 
   MarkdownDocument {
     frontmatter,
@@ -155,8 +153,6 @@ pub fn parse_blocks(markdown: &str) -> Vec<MarkdownBlock> {
   blocks
 }
 
-fn normalize_adjacent_paragraphs(_blocks: &mut Vec<MarkdownBlock>) {}
-
 fn flush_paragraph(blocks: &mut Vec<MarkdownBlock>, paragraph: &mut Vec<String>) {
   if paragraph.is_empty() {
     return;
@@ -269,6 +265,7 @@ pub fn extract_links(markdown: &str) -> Vec<MarkdownLink> {
   for (line_index, line) in markdown.lines().enumerate() {
     let mut rest = line;
     while let Some(start) = rest.find('[') {
+      let is_image = start > 0 && rest[..start].ends_with('!');
       let candidate = &rest[start + 1..];
       let Some(label_end) = candidate.find(']') else { break; };
       let label = &candidate[..label_end];
@@ -276,7 +273,7 @@ pub fn extract_links(markdown: &str) -> Vec<MarkdownLink> {
       if after_label.starts_with('(') {
         if let Some(url_end) = after_label[1..].find(')') {
           let url = &after_label[1..1 + url_end];
-          if !label.starts_with('!') && !url.is_empty() {
+          if !is_image && !url.is_empty() {
             links.push(MarkdownLink { label: label.to_string(), url: url.to_string(), line: line_index + 1 });
           }
           rest = &after_label[1 + url_end + 1..];
@@ -330,6 +327,7 @@ mod tests {
     assert_eq!(doc.outline[0].title, "Title");
     assert_eq!(doc.tasks[0].checked, true);
     assert_eq!(doc.images[0].url, "a.png");
+    assert_eq!(doc.links.len(), 1);
     assert_eq!(doc.links[0].label, "site");
     assert!(doc.html.contains("task-list"));
   }

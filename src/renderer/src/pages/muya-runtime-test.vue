@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">Muya Runtime</p>
         <h1>Runtime integration test</h1>
-        <p class="description">Test page for the replacement Muya runtime in real app conditions.</p>
+        <p class="description">Live Muya-style rendering test page for the replacement runtime.</p>
       </div>
       <div class="runtime-controls">
         <label>
@@ -26,13 +26,18 @@
       </article>
 
       <article class="panel editor-panel">
-        <h2>MuyaRuntimeEditor</h2>
+        <h2>Live MuyaRuntimeEditor</h2>
         <MuyaRuntimeEditor
           v-model="markdown"
           :mode="mode"
           @ready="handleReady"
           @change="handleChange"
         />
+      </article>
+
+      <article class="panel preview-panel">
+        <h2>Live HTML preview</h2>
+        <div class="live-preview" v-html="liveHtml" />
       </article>
 
       <article class="panel">
@@ -93,12 +98,15 @@ const handleChange = (value) => {
   lastChange.value = value
 }
 
+const liveHtml = computed(() => runtime.value?.html || '')
+
 const statePreview = computed(() => JSON.stringify({
   mode: mode.value,
   globalMode: window.__ELEPHANT_MUYA_RUNTIME__?.mode?.() || null,
   ready: Boolean(runtime.value),
   markdownLength: markdown.value.length,
   lastChangeLength: lastChange.value.length,
+  htmlLength: liveHtml.value.length,
   blockTypes: runtime.value?.state?.blocks?.map((block) => block.type) || []
 }, null, 2))
 </script>
@@ -160,7 +168,7 @@ p {
 
 .muya-runtime-test-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr) minmax(260px, 0.8fr);
+  grid-template-columns: minmax(240px, 0.8fr) minmax(320px, 1.1fr) minmax(320px, 1.1fr) minmax(240px, 0.8fr);
   gap: 16px;
 }
 
@@ -191,6 +199,15 @@ textarea {
 
 .editor-panel :deep(.muya-runtime-shell) {
   min-height: calc(68vh - 52px);
+}
+
+.live-preview {
+  line-height: 1.6;
+}
+
+.live-preview :deep(pre),
+.live-preview :deep(code) {
+  white-space: pre-wrap;
 }
 
 pre {

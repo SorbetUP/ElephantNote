@@ -22,6 +22,7 @@ export const useMuyaRuntimeEditor = ({ markdown = ref(''), mode = ref(readMuyaRu
   }
 
   const destroy = () => {
+    runtimeRef.value?.live?.cancel?.()
     runtimeRef.value = null
     ready.value = false
     mounted.value = false
@@ -34,8 +35,13 @@ export const useMuyaRuntimeEditor = ({ markdown = ref(''), mode = ref(readMuyaRu
 
   const syncFromRuntime = () => {
     if (!runtimeRef.value) return markdown.value
+    runtimeRef.value.renderLiveNow?.('input')
     markdown.value = runtimeRef.value.markdown
     return markdown.value
+  }
+
+  const scheduleLiveRender = () => {
+    runtimeRef.value?.scheduleLiveRender?.()
   }
 
   onMounted(mount)
@@ -63,6 +69,7 @@ export const useMuyaRuntimeEditor = ({ markdown = ref(''), mode = ref(readMuyaRu
     mount,
     destroy,
     setMarkdown,
-    syncFromRuntime
+    syncFromRuntime,
+    scheduleLiveRender
   }
 }

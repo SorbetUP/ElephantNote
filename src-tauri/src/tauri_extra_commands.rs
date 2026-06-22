@@ -4,9 +4,11 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
+use crate::vault_layout;
+
 type R<T> = Result<T, String>;
 const CONFIG_FILE: &str = "tauri-vaults.json";
-const META_DIR: &str = ".elephantnote";
+const META_DIR: &str = vault_layout::HIDDEN_ROOT;
 
 fn now() -> String {
   SystemTime::now()
@@ -59,10 +61,6 @@ fn write_json(path: PathBuf, value: &Value) -> R<()> {
   }
   let raw = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
   fs::write(path, raw).map_err(|e| e.to_string())
-}
-
-fn metadata_path(root: &str, filename: &str) -> PathBuf {
-  PathBuf::from(root).join(META_DIR).join(filename)
 }
 
 fn file_summary(root: &Path, path: &Path) -> Value {
@@ -121,25 +119,26 @@ pub fn tauri_notes_write(app: AppHandle, relative_path: String, content: String)
 pub fn tauri_attachments_list(app: AppHandle) -> R<Vec<Value>> {
   let root = active_vault_root(&app)?;
   let root_path = PathBuf::from(&root);
-  let attachments = root_path.join("Attachments");
-  if !attachments.exists() {
+  let assets = vault_layout::assets_dir(&root_path);
+  if !assets.exists() {
     return Ok(Vec::new());
   }
   let mut out = Vec::new();
-  scan_files(&root_path, &attachments, &mut out, None)?;
+  scan_files(&root_path, &assets, &mut out, None)?;
   Ok(out)
 }
 
 #[tauri::command]
 pub fn tauri_attachments_write_text(app: AppHandle, relative_path: String, content: String) -> R<Value> {
   let root = active_vault_root(&app)?;
-  let relative_path = normalize_relative_path(&format!("Attachments/{}", relative_path));
-  let path = inside(&root, &relative_path);
+  let relative_path = normalize_relative_path(&relative_path);
+  let path = vault_layout::assets_dir(&root).join(&relative_path);
   if let Some(parent) = path.parent() {
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
   }
   fs::write(&path, content).map_err(|e| e.to_string())?;
-  Ok(json!({ "ok": true, "path": relative_path, "fullPath": path.to_string_lossy() }))
+  let public_path = path.strip_prefix(&root).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+  Ok(json!({ "ok": true, "path": public_path, "fullPath": path.to_string_lossy() }))
 }
 
 #[tauri::command]
@@ -188,13 +187,13 @@ pub fn tauri_drawings_write(app: AppHandle, relative_path: String, scene: Value)
 #[tauri::command]
 pub fn tauri_models_get_selection(app: AppHandle) -> R<Value> {
   let root = active_vault_root(&app)?;
-  Ok(read_json(metadata_path(&root, "models.json"), json!({ "provider": "none", "modelId": "", "local": false })))
+  Ok(read_json(vault_layout::models_file(&root, vault_layout::MODELS_FILE), json!({ "provider": "none", "modelId": "", "local": false })))
 }
 
 #[tauri::command]
 pub fn tauri_models_set_selection(app: AppHandle, selection: Value) -> R<Value> {
   let root = active_vault_root(&app)?;
-  write_json(metadata_path(&root, "models.json"), &selection)?;
+  write_json(vault_layout::models_file(&root, vault_layout::MODELS_FILE), &selection)?;
   Ok(selection)
 }
 
@@ -205,7 +204,7 @@ pub fn tauri_search_rebuild(app: AppHandle) -> R<Value> {
   let mut entries = Vec::new();
   scan_files(&root_path, &root_path, &mut entries, Some(".md"))?;
   let index = json!({ "version": 1, "updatedAt": now(), "entries": entries });
-  write_json(metadata_path(&root, "index.json"), &index)?;
+  write_json(vault_layout::index_file(&root, vault_layout::INDEX_FILE), &index)?;
   Ok(index)
 }
 
@@ -214,11 +213,11 @@ pub fn tauri_sync_plan(app: AppHandle) -> R<Value> {
   let root = active_vault_root(&app)?;
   let root_path = PathBuf::from(&root);
   let mut notes = Vec::new();
-  let mut attachments = Vec::new();
+  let mut assets = Vec::new();
   scan_files(&root_path, &root_path, &mut notes, Some(".md"))?;
-  let attachments_dir = root_path.join("Attachments");
-  if attachments_dir.exists() {
-    scan_files(&root_path, &attachments_dir, &mut attachments, None)?;
+  let assets_dir = vault_layout::assets_dir(&root_path);
+  if assets_dir.exists() {
+    scan_files(&root_path, &assets_dir, &mut assets, None)?;
   }
-  Ok(json!({ "runtime": "tauri-rust", "notes": notes.len(), "attachments": attachments.len(), "queued": 0, "running": false }))
+  Ok(json!({ "runtime": "tauri-rust", "notes": notes.len(), "assets": assets.len(), "queued": 0, "running": false }))
 }

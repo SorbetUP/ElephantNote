@@ -24,4 +24,4 @@ jobs:
       - run: cargo check --manifest-path src-tauri/Cargo.toml --lib
       - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
       - uses: taiki-e/install-action@cargo-llvm-cov
-      - run: cd src-tauri && cargo llvm-cov --lib --fail-under-lines 90 --ignore-filename-regex 'src/(lib_min|main|vault_min|vault_backend|vault_backend2|lib)\\.rs'
+      - run: bash src-tauri/coverage.sh

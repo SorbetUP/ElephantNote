@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+const electronLogShim = resolve(__dirname, 'src/renderer/src/platform/electronLogShim.js')
 
 export default defineConfig({
   main: {
@@ -28,6 +29,8 @@ export default defineConfig({
     },
     resolve: {
       alias: {
+        'electron-log/renderer': electronLogShim,
+        'electron-log': electronLogShim,
         'elephant-back': resolve(__dirname, 'Elephant/back/app'),
         'elephant-front': resolve(__dirname, 'Elephant/front/app'),
         'elephant-shared': resolve(__dirname, 'Elephant/shared'),
@@ -44,6 +47,8 @@ export default defineConfig({
     // --> Bundled as CommonJS
     resolve: {
       alias: {
+        'electron-log/renderer': electronLogShim,
+        'electron-log': electronLogShim,
         'elephant-back': resolve(__dirname, 'Elephant/back/app'),
         'elephant-front': resolve(__dirname, 'Elephant/front/app'),
         'elephant-shared': resolve(__dirname, 'Elephant/shared'),
@@ -65,6 +70,8 @@ export default defineConfig({
     },
     resolve: {
       alias: {
+        'electron-log/renderer': electronLogShim,
+        'electron-log': electronLogShim,
         'elephant-back': resolve(__dirname, 'Elephant/back/app'),
         'elephant-front': resolve(__dirname, 'Elephant/front/app'),
         'elephant-shared': resolve(__dirname, 'Elephant/shared'),

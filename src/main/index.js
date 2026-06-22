@@ -24,6 +24,16 @@ app.setAboutPanelOptions({
   applicationName: APP_NAME
 })
 
+const shouldUseMockKeychain = process.platform === 'darwin' && (
+  process.env.NODE_ENV === 'development' ||
+  process.env.PERF_TESTING === 'true' ||
+  process.env.ELEPHANT_DISABLE_KEYCHAIN_PROMPT === 'true'
+)
+
+if (shouldUseMockKeychain) {
+  app.commandLine.appendSwitch('use-mock-keychain')
+}
+
 // Set version strings into global and process.versions
 process.env.MARKTEXT_VERSION = MARKTEXT_VERSION
 process.env.MARKTEXT_VERSION_STRING = MARKTEXT_VERSION_STRING

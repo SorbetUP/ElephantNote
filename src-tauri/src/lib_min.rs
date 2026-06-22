@@ -1,5 +1,6 @@
 pub mod markdown_engine;
 pub mod path_utils;
+pub mod vault_layout;
 pub mod vault_lib;
 pub mod note_domain;
 pub mod folder_domain;

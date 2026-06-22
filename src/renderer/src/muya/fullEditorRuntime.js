@@ -5,6 +5,7 @@ import { clipboardPayloadToMarkdown, copyMarkdownAndHtml } from './clipboardRunt
 import { imageToolbarState, resizeImageMarkdown, tableCommand } from './tableImageRuntime.js'
 import { floatingToolbarState, footnotePopupState, previewBlock, slashCommands, upsertFootnote } from './menusPreviewRuntime.js'
 import { createLiveRenderScheduler, domToMarkdown } from './liveRenderingRuntime.js'
+import { renderCurrentBlockNow } from './blockLiveRuntime.js'
 
 export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) => {
   const editor = createDomEditor(root, options.document || globalThis.document)
@@ -30,8 +31,14 @@ export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) =
 
   const syncDomToState = (group = 'live') => {
     const before = jsonStateToMarkdown(state)
-    const result = live.renderNow()
-    if (result?.markdown && result.markdown !== before) pushGroupedHistory(history, before, result.markdown, group)
+    const blockResult = renderCurrentBlockNow({
+      root,
+      setState: (nextState) => { state = nextState },
+      getDocument: () => options.document || globalThis.document
+    })
+    const result = blockResult || live.renderNow()
+    const after = jsonStateToMarkdown(state)
+    if (result && after !== before) pushGroupedHistory(history, before, after, group)
     return state
   }
 
@@ -46,6 +53,7 @@ export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) =
     setMarkdown,
     scheduleLiveRender: () => live.schedule(),
     renderLiveNow: syncDomToState,
+    renderCurrentBlockNow: () => renderCurrentBlockNow({ root, setState: (nextState) => { state = nextState }, getDocument: () => options.document || globalThis.document }),
     domToMarkdown: () => domToMarkdown(root),
     snapshotSelection: () => editor?.snapshotSelection?.(),
     restoreSelection: (snapshot) => editor?.restoreSelection?.(snapshot),
@@ -82,3 +90,4 @@ export * from './clipboardRuntime.js'
 export * from './tableImageRuntime.js'
 export * from './menusPreviewRuntime.js'
 export * from './liveRenderingRuntime.js'
+export * from './blockLiveRuntime.js'

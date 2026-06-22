@@ -154,8 +154,8 @@ const getActiveNoteFile = () => {
 }
 const activeNoteFile = computed(() => getActiveNoteFile() || (openedNoteAbsolutePath.value ? null : currentFile.value))
 const markdown = computed(() => activeNoteFile.value?.markdown || '')
-const cursor = computed(() => activeNoteFile.value?.cursor)
-const muyaIndexCursor = computed(() => activeNoteFile.value?.muyaIndexCursor)
+const cursor = computed(() => activeNoteFile.value?.cursor || {})
+const muyaIndexCursor = computed(() => activeNoteFile.value?.muyaIndexCursor || {})
 const fallbackTitle = computed(() => activeNoteFile.value?.filename?.replace(/\.md$/i, '') || 'Untitled')
 const documentToEditorMarkdown = (documentMarkdown) => toEditorMarkdown(documentMarkdown, fallbackTitle.value)
 const editorToDocumentMarkdown = (editorMarkdown) =>
@@ -218,658 +218,104 @@ const selectOpenedNoteTab = () => {
   if (hasTab) editorStore.SWITCH_TAB_BY_FILEPATH(pathname)
 }
 
-const scheduleSave = () => {
-  const file = getActiveNoteFile()
-  if (!file?.id || !file.pathname) return
-  editorStore.HANDLE_AUTO_SAVE({
-    id: file.id,
-    filename: file.filename,
-    pathname: file.pathname,
-    markdown: file.markdown,
-    options: getOptionsFromState(file)
-  })
-}
+watch(openedNoteAbsolutePath, selectOpenedNoteTab, { immediate: true })
+watch(() => editorStore.tabs.length, selectOpenedNoteTab)
 
-const togglePin = () => {
-  const pathname = currentNoteRelativePath.value
-  if (!pathname) return
-  store.togglePinnedNote(pathname)
-}
-
-const updateMarkdown = (nextMarkdown) => {
-  const file = getActiveNoteFile()
+const updateCurrentFileMarkdown = (nextMarkdown) => {
+  const file = activeNoteFile.value || currentFile.value
   if (!file) return
   file.markdown = nextMarkdown
   file.isSaved = false
-  if (file.id && file.id !== currentFile.value?.id) {
-    editorStore.UPDATE_CURRENT_FILE(file)
+  if (currentFile.value && file.id === currentFile.value.id) {
+    currentFile.value.markdown = nextMarkdown
+    currentFile.value.isSaved = false
   }
-  store.updateNoteMetadata(currentNoteRelativePath.value, {
-    title: getDocumentTitle(nextMarkdown, fallbackTitle.value),
-    tags: parseMarkdownTags(nextMarkdown),
-    updatedAt: new Date().toISOString()
-  })
-  scheduleSave()
+  if (store.openedNotePath) searchStore.updateNoteIndex(store.openedNotePath, nextMarkdown)
 }
 
-const updateTitle = (value) => {
-  const title = String(value || '').trim() || 'Untitled'
-  updateMarkdown(renameDocumentTitle(markdown.value || '', title))
+const updateTitle = (nextTitle) => updateCurrentFileMarkdown(renameDocumentTitle(markdown.value, nextTitle, fallbackTitle.value))
+const togglePin = () => {
+  const pathname = currentNoteRelativePath.value
+  if (pathname) store.togglePin(pathname)
 }
 
-const addTag = () => {
-  isAddingTag.value = true
-  isEditingTag.value = false
-  editingTagIndex.value = -1
-  tagDraft.value = ''
-}
-
-const startTagCreation = () => {
-  addTag()
-}
-
-const beginEditTag = (index) => {
-  const tag = tags.value[index]
-  if (!tag) return
-  isAddingTag.value = true
-  isEditingTag.value = true
-  editingTagIndex.value = index
-  tagDraft.value = tag
-}
-
-const cancelTag = () => {
-  isAddingTag.value = false
-  isEditingTag.value = false
-  editingTagIndex.value = -1
-  tagDraft.value = ''
-}
-
-const submitTag = (submittedValue = tagDraft.value) => {
-  const nextTag = String(submittedValue || '').replace(/^#+/, '').trim()
-  if (!nextTag) {
-    cancelTag()
-    return
-  }
-
-  const nextTags = [...tags.value]
-  if (isEditingTag.value && editingTagIndex.value >= 0) {
-    nextTags[editingTagIndex.value] = nextTag
-  } else {
-    nextTags.push(nextTag)
-  }
-
-  updateMarkdown(updateMarkdownTags(markdown.value || '', nextTags, noteTitle.value))
+const startTagCreation = () => { isAddingTag.value = true; isEditingTag.value = false; editingTagIndex.value = -1; tagDraft.value = '' }
+const beginEditTag = (index) => { isEditingTag.value = true; isAddingTag.value = false; editingTagIndex.value = index; tagDraft.value = tags.value[index] || '' }
+const cancelTag = () => { isAddingTag.value = false; isEditingTag.value = false; editingTagIndex.value = -1; tagDraft.value = '' }
+const submitTag = () => {
+  const tag = tagDraft.value.trim()
+  if (!tag) { cancelTag(); return }
+  updateCurrentFileMarkdown(updateMarkdownTags(markdown.value, tag, isEditingTag.value ? editingTagIndex.value : -1))
   cancelTag()
 }
-
-const deleteTag = (index) => {
-  const tag = tags.value[index]
-  if (!tag) return
-  const nextMarkdown = deleteMarkdownTag(markdown.value || '', tag, noteTitle.value)
-  updateMarkdown(nextMarkdown)
-  if (isEditingTag.value && editingTagIndex.value === index) {
-    cancelTag()
-  }
+const deleteTag = (index) => updateCurrentFileMarkdown(deleteMarkdownTag(markdown.value, index))
+const setTextScale = (value) => { textScale.value = value; window.localStorage.setItem('elephantnote:editorTextScale', value) }
+const toggleTheme = () => {
+  const next = getOppositeThemeVariant(shellTheme.value)
+  shellTheme.value = next
+  setShellTheme(next)
 }
+const openGraphView = () => bus.emit('ELEPHANT::set-main-view', 'graph')
 
-const runFormat = (type) => {
-  bus.emit('editor-focus')
-  bus.emit('format', type)
-}
-
-const runParagraph = (type) => {
-  bus.emit('editor-focus')
-  bus.emit('paragraph', type)
-}
-
-const insertImage = async () => {
-  const imagePath = await editorStore.ASK_FOR_IMAGE_PATH()
-  if (imagePath) {
-    bus.emit('editor-focus')
-    bus.emit('insert-image', imagePath)
-  }
-}
-
-const insertHorizontalRule = () => {
-  bus.emit('editor-focus')
-  bus.emit('paragraph', 'hr')
-}
-
-const runWritingCommand = (command) => {
-  switch (command) {
-    case 'heading-2':
-      runParagraph('heading 2')
-      break
-    case 'bold':
-      runFormat('strong')
-      break
-    case 'italic':
-      runFormat('em')
-      break
-    case 'strike':
-      runFormat('del')
-      break
-    case 'link':
-      runFormat('link')
-      break
-    case 'bullets':
-      runParagraph('ul-bullet')
-      break
-    case 'numbers':
-      runParagraph('ol-order')
-      break
-    case 'tasks':
-      runParagraph('ul-task')
-      break
-    case 'code':
-      runFormat('inline_code')
-      break
-    case 'quote':
-      runParagraph('blockquote')
-      break
-    case 'table':
-      runParagraph('table')
-      break
-    case 'image':
-      insertImage()
-      break
-    case 'excalidraw':
-      openExcalidraw()
-      break
-    case 'horizontal-rule':
-      insertHorizontalRule()
-      break
-    case 'speech-to-text':
-      startSpeechToText()
-      break
-    case 'text-to-speech':
-      speakNote()
-      break
-    default:
-      console.warn(`Unknown writing command: ${command}`)
-  }
-}
-
-const startSpeechToText = () => {
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
-  if (!Recognition) {
-    window.electron.ipcRenderer.send('mt::show-notification', {
-      title: 'Speech to text is not available in this runtime.',
-      type: 'warning'
-    })
-    return
-  }
-  const recognition = new Recognition()
-  recognition.lang = navigator.language || 'en-US'
-  recognition.interimResults = false
-  recognition.maxAlternatives = 1
-  recognition.onresult = (event) => {
-    const transcript = event.results?.[0]?.[0]?.transcript || ''
-    if (!transcript) return
-    const separator = markdown.value.trim() ? '\n\n' : ''
-    updateMarkdown(`${markdown.value || ''}${separator}${transcript}`)
-  }
-  recognition.start()
-}
-
-const speakNote = () => {
-  if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
-    window.electron.ipcRenderer.send('mt::show-notification', {
-      title: 'Text to speech is not available in this runtime.',
-      type: 'warning'
-    })
-    return
-  }
-  window.speechSynthesis.cancel()
-  const utterance = new SpeechSynthesisUtterance(
-    visibleMarkdown.value
-      .replace(/^---[\s\S]*?---/, '')
-      .replace(/[#*_`>\-[\]()]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-  )
-  utterance.lang = navigator.language || 'en-US'
-  window.speechSynthesis.speak(utterance)
-}
-
-const getMimeTypeFromPath = (pathname) => {
-  const ext = String(window.path.extname(pathname || '')).toLowerCase()
-  switch (ext) {
-    case '.excalidraw':
-      return 'application/vnd.excalidraw+json'
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg'
-    case '.webp':
-      return 'image/webp'
-    case '.gif':
-      return 'image/gif'
-    case '.svg':
-      return 'image/svg+xml'
-    default:
-      return 'image/png'
-  }
-}
-
-const blobFromFilePath = async (pathname) => {
-  const data = await window.fileUtils.readFile(pathname)
-  return new Blob([data], { type: getMimeTypeFromPath(pathname) })
-}
-
-const resolveLocalImagePath = (source) =>
-  resolveLocalImageSource(source, currentNoteDirectory.value || store.activeVault?.path || '')
-
-const openExcalidrawFromPath = async (sourcePath = '', { insertOnSave = false, refreshOnSave = false } = {}) => {
-  let selectedPath = sourcePath || ''
-  const noteDirectory = currentNoteDirectory.value
-  let initialBlob = null
-  const extension = String(window.path.extname(selectedPath || '')).toLowerCase()
-  const isSceneFile = extension === '.excalidraw'
-
-  const scenePath = selectedPath
-    ? (isSceneFile ? selectedPath : findExcalidrawSceneForImage(selectedPath) || getExcalidrawScenePath(selectedPath))
-    : window.path.join(noteDirectory || '', `excalidraw-${Date.now()}.excalidraw`)
-
-  const previewPath = getExcalidrawPreviewPath(scenePath)
-
-  if (scenePath && window.fileUtils.pathExistsSync(scenePath)) {
-    try {
-      initialBlob = await blobFromFilePath(scenePath)
-    } catch (error) {
-      console.warn('Unable to load Excalidraw source:', error)
-      selectedPath = ''
-    }
-  }
-
-  excalidrawSaveMode.value = 'png'
-  excalidrawInsertOnSave.value = insertOnSave
-  excalidrawRefreshOnSave.value = refreshOnSave
+const openExcalidraw = async({ markdown, fileName, title, saveMode, insertOnSave, refreshOnSave }) => {
+  const baseDir = currentNoteDirectory.value
+  const targetName = fileName || `drawing-${Date.now()}.png`
+  const targetPath = window.path.join(baseDir, targetName)
+  const scenePath = getExcalidrawScenePath(targetPath)
+  excalidrawTitle.value = title || 'Excalidraw'
+  excalidrawFileName.value = targetName
+  excalidrawSaveMode.value = saveMode || 'png'
+  excalidrawInsertOnSave.value = !!insertOnSave
+  excalidrawRefreshOnSave.value = !!refreshOnSave
+  excalidrawTargetPath.value = targetPath
   excalidrawScenePath.value = scenePath
-  excalidrawPreviewPath.value = previewPath
-  excalidrawTargetPath.value = previewPath
-  excalidrawFileName.value = window.path.basename(scenePath)
-  excalidrawTitle.value = selectedPath
-    ? window.path.basename(selectedPath, window.path.extname(selectedPath))
-    : noteTitle.value
-  excalidrawInitialBlob.value = initialBlob
+  excalidrawPreviewPath.value = getExcalidrawPreviewPath(targetPath)
+  excalidrawInitialBlob.value = markdown || ''
   isExcalidrawOpen.value = true
 }
-
-const openExcalidraw = async () => {
-  bus.emit('editor-focus')
-  await openExcalidrawFromPath('', { insertOnSave: true })
-}
-
-const openExcalidrawFromImage = async (imageSource) => {
-  const imagePath = resolveLocalImagePath(imageSource)
-  if (!imagePath) return
-  if (/^(?:https?:|data:|blob:)/i.test(String(imagePath))) {
-    window.electron.ipcRenderer.send('mt::show-notification', {
-      title: 'Only local images can be opened in Excalidraw.',
-      type: 'warning'
-    })
-    return
+const closeExcalidraw = () => { isExcalidrawOpen.value = false; excalidrawInitialBlob.value = null }
+const saveExcalidraw = async({ imageBlob, sceneBlob }) => {
+  await window.fileUtils.ensureDir(window.path.dirname(excalidrawTargetPath.value))
+  await window.fileUtils.writeFile(excalidrawTargetPath.value, imageBlob)
+  if (sceneBlob) await window.fileUtils.writeFile(excalidrawScenePath.value, sceneBlob)
+  if (excalidrawInsertOnSave.value) {
+    const source = resolveLocalImageSource(excalidrawTargetPath.value, { notePath: currentFile.value?.pathname, vaultPath: store.activeVault?.path })
+    updateCurrentFileMarkdown(`${markdown.value}\n\n![${excalidrawFileName.value}](${source})`)
   }
-
-  const scenePath = findExcalidrawSceneForImage(imagePath)
-  if (!scenePath) {
-    window.electron.ipcRenderer.send('mt::show-notification', {
-      title: 'No Excalidraw source file found for this image.',
-      type: 'warning'
-    })
-    return
-  }
-
-  bus.emit('editor-focus')
-  await openExcalidrawFromPath(scenePath, { insertOnSave: false, refreshOnSave: true })
+  closeExcalidraw()
 }
-
-const closeExcalidraw = () => {
-  isExcalidrawOpen.value = false
-  excalidrawInitialBlob.value = null
-  excalidrawRefreshOnSave.value = false
-}
-
-const normalizeExcalidrawBaseName = (value) => {
-  return String(value || '')
-    .replace(/\.excalidraw\.png$/i, '')
-    .replace(/\.excalidraw$/i, '')
-    .replace(/\.png$/i, '')
-    .trim() || `excalidraw-${Date.now()}`
-}
-
-const saveExcalidraw = async ({ blob, fileName, baseName, sceneBlob }) => {
-  const currentScenePath = excalidrawScenePath.value
-  const currentPreviewPath = excalidrawTargetPath.value || excalidrawPreviewPath.value
-  const targetDirectory = window.path.dirname(currentScenePath || currentPreviewPath || currentNoteDirectory.value || '')
-  const finalBaseName = normalizeExcalidrawBaseName(baseName || fileName)
-  const targetPath = window.path.join(targetDirectory, `${finalBaseName}.png`)
-  const scenePath = window.path.join(targetDirectory, `${finalBaseName}.excalidraw`)
-
-  if (!targetPath || !scenePath || !blob || !sceneBlob) {
-    closeExcalidraw()
-    return
-  }
-
-  try {
-    const pngBuffer = new Uint8Array(await blob.arrayBuffer())
-    const sceneBuffer = new Uint8Array(await sceneBlob.arrayBuffer())
-    await window.fileUtils.writeFile(targetPath, pngBuffer)
-    await window.fileUtils.writeFile(scenePath, sceneBuffer)
-
-    excalidrawScenePath.value = scenePath
-    excalidrawPreviewPath.value = targetPath
-    excalidrawTargetPath.value = targetPath
-    excalidrawFileName.value = window.path.basename(scenePath)
-
-    if (excalidrawInsertOnSave.value) {
-      bus.emit('editor-focus')
-      bus.emit('insert-image', targetPath)
-    } else if (excalidrawRefreshOnSave.value) {
-      bus.emit('invalidate-image-cache')
-    }
-
-    closeExcalidraw()
-  } catch (error) {
-    console.error('Failed to save Excalidraw drawing:', error)
-  }
-}
-
-const setTextScale = (value) => {
-  textScale.value = value
-  window.localStorage.setItem('elephantnote:editorTextScale', value)
-  document.documentElement.style.setProperty(
-    '--en-editor-text-scale',
-    value === 'compact' ? '15px' : value === 'large' ? '18px' : '16px'
-  )
-  isTypographyOpen.value = false
-}
-
-const toggleTheme = () => {
-  setShellTheme(getOppositeThemeVariant(shellTheme.value))
-}
-
-const openGraphView = () => {
-  store.setWorkspaceView('graph')
-}
-
-const closeTransientMenus = (event) => {
-  if (isTypographyOpen.value && !event?.target?.closest?.('.en-note-menu-wrap')) {
-    isTypographyOpen.value = false
-  }
-  if (
-    isAddingTag.value &&
-    !event?.target?.closest?.('.en-inline-tag-form') &&
-    !event?.target?.closest?.('.en-note-topbar')
-  ) {
-    cancelTag()
-  }
-}
-
-setTextScale(textScale.value)
 
 onMounted(() => {
-  selectOpenedNoteTab()
-  searchStore.inspect().catch(() => {})
-  window.addEventListener('click', closeTransientMenus)
-  bus.on('open-excalidraw-from-image', openExcalidrawFromImage)
-  bus.on('elephantnote-writing-command', runWritingCommand)
+  bus.on('ELEPHANT::open-excalidraw', openExcalidraw)
 })
-
 onBeforeUnmount(() => {
-  window.removeEventListener('click', closeTransientMenus)
-  bus.off('open-excalidraw-from-image', openExcalidrawFromImage)
-  bus.off('elephantnote-writing-command', runWritingCommand)
+  bus.off('ELEPHANT::open-excalidraw', openExcalidraw)
 })
-
-watch(markdown, (content) => {
-  if (!currentFile.value || !content || content.startsWith('---\n')) return
-  updateMarkdown(ensureNoteDocument(content, noteTitle.value))
-}, { flush: 'post' })
-
-watch(openedNoteAbsolutePath, () => {
-  selectOpenedNoteTab()
-}, { flush: 'post' })
-
-watch(() => store.activeVault?.path, () => {
-  searchStore.inspect().catch(() => {})
-})
-
-watch(showEditorFooter, (visible) => {
-  if (!visible) isTypographyOpen.value = false
-})
-
-watch(
-  () => editorStore.tabs.length,
-  () => {
-    selectOpenedNoteTab()
-  },
-  { flush: 'post' }
-)
-
 </script>
 
 <style scoped>
 .en-editor-layer {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
   height: 100%;
-  z-index: 1;
-  background: var(--en-bg);
-  overflow: hidden;
-}
-
-.en-editor-panel {
-  height: 100%;
-  min-height: 0;
   display: flex;
-  flex-direction: column;
-  color: var(--en-text);
-  background: var(--en-bg);
-  --en-note-editor-gutter: 24px;
-  --en-note-editor-gutter-left: 32px;
-  --en-note-editor-gutter-right: 24px;
-}
-
-.en-note-header {
-  min-height: 74px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--en-border);
-}
-
-.en-note-title-row {
-  min-width: 0;
   flex: 1;
+  min-width: 0;
 }
-
-.en-note-title-input {
-  width: 100%;
-  border: 0;
-  color: var(--en-text);
-  background: transparent;
-  font: inherit;
-  font-size: 28px;
-  font-weight: 800;
-  outline: none;
+.en-editor-panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: var(--editorBgColor);
+  color: var(--editorColor);
 }
-
-.en-note-state,
-.en-note-footer-actions,
-.en-note-counts,
-.en-note-meta {
-  display: flex;
-  align-items: center;
-}
-
-.en-note-state,
-.en-note-footer-actions {
-  gap: 8px;
-}
-
-.en-note-pin-button,
-.en-note-exit-zone,
-.en-note-footer-actions > button,
-.en-note-menu-wrap > button,
-.en-note-tag-icon,
-.en-note-tag-label,
-.en-note-meta > button {
-  border: 1px solid var(--en-border);
-  border-radius: 8px;
-  color: var(--en-text);
-  background: transparent;
-  font: inherit;
-}
-
-.en-note-pin-button,
-.en-note-exit-zone,
-.en-note-footer-actions > button,
-.en-note-menu-wrap > button,
-.en-note-tag-icon {
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-.en-note-meta {
-  min-height: 48px;
-  gap: 8px;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--en-border);
-  color: var(--en-muted);
-}
-
-.en-note-meta > button,
-.en-note-tag-label {
-  height: 30px;
-  padding: 0 10px;
-}
-
-.en-note-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.en-inline-tag-form {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.en-inline-tag-form input,
-.en-inline-tag-form button {
-  height: 30px;
-  border: 1px solid var(--en-border);
-  border-radius: 6px;
-  color: var(--en-text);
-  background: transparent;
-  font: inherit;
-}
-
 .en-note-editor-shell {
   min-height: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--en-bg);
-}
-
-.en-note-pin-button:hover,
-.en-note-exit-zone:hover,
-.en-note-footer-actions button:hover {
-  background: var(--en-soft);
-}
-
-.en-editor-host {
-  min-height: 0;
-  flex: 1;
   overflow: hidden;
-  background: var(--en-bg);
-  scrollbar-width: none;
-  --editorAreaWidth: 100%;
-  --editorBgColor: var(--en-bg);
-  --editorColor: color-mix(in srgb, var(--en-text) 86%, transparent);
-  --editorColor80: color-mix(in srgb, var(--en-text) 80%, transparent);
-  --editorColor60: color-mix(in srgb, var(--en-text) 60%, transparent);
-  --editorColor50: color-mix(in srgb, var(--en-text) 50%, transparent);
-  --editorColor40: color-mix(in srgb, var(--en-text) 40%, transparent);
-  --editorColor30: color-mix(in srgb, var(--en-text) 30%, transparent);
-  --editorColor10: color-mix(in srgb, var(--en-text) 12%, transparent);
-  --editorColor04: color-mix(in srgb, var(--en-text) 5%, transparent);
-  --floatBgColor: var(--en-surface);
-  --floatHoverColor: var(--en-soft);
-  --floatBorderColor: var(--en-border);
-  --iconColor: var(--en-muted);
-  --codeBlockBgColor: var(--en-surface);
+  padding: 0 var(--en-note-editor-gutter-right) 0 var(--en-note-editor-gutter-left);
 }
-
-.en-editor-host :deep(*) {
-  scrollbar-width: none;
-}
-
-.en-editor-host :deep(::-webkit-scrollbar) {
-  display: none;
-}
-
-.en-note-footer {
-  min-height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 24px;
-  border-top: 1px solid var(--en-border);
-  color: var(--en-muted);
-}
-
-.en-note-counts {
-  gap: 12px;
-}
-
-.en-note-menu-wrap {
-  position: relative;
-}
-
-.en-note-popover {
-  position: absolute;
-  right: 0;
-  bottom: 42px;
-  z-index: 30;
-  min-width: 150px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border: 1px solid var(--en-border);
-  border-radius: 8px;
-  padding: 8px;
-  background: var(--en-surface);
-}
-
-.en-note-popover button {
-  min-height: 32px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--en-text);
-  background: transparent;
-  font: inherit;
-  text-align: left;
-}
-
-.en-icon {
-  width: 20px;
-  height: 20px;
-}
-
-.en-icon-small {
-  width: 14px;
-  height: 14px;
+.en-editor-host {
+  height: 100%;
+  min-width: 0;
 }
 </style>

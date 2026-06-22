@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 
 use super::{parse_markdown_document, render_html, render_plain_text};
-use super::parser_v2::{extract_images_cmark, extract_links_cmark, parse_blocks, split_frontmatter};
+use super::parser_v3::{extract_images, extract_links, parse_blocks, split_frontmatter};
 
 #[tauri::command]
 pub fn tauri_markdown_parse(markdown: String) -> Value {
@@ -27,5 +27,5 @@ pub fn tauri_markdown_extract_frontmatter(markdown: String) -> Value {
 
 #[tauri::command]
 pub fn tauri_markdown_extract_links(markdown: String) -> Value {
-  json!({ "links": extract_links_cmark(&markdown), "images": extract_images_cmark(&markdown) })
+  json!({ "links": extract_links(&markdown), "images": extract_images(&markdown) })
 }

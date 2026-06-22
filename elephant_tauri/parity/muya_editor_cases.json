@@ -1,0 +1,62 @@
+[
+  {
+    "name": "copy-markdown-and-html",
+    "kind": "clipboard",
+    "markdown": "# A\n\n**bold**",
+    "selection": { "start": 5, "end": 13 },
+    "expect": {
+      "markdown": "**bold**",
+      "htmlContains": ["strong", "bold"]
+    }
+  },
+  {
+    "name": "paste-selection",
+    "kind": "paste",
+    "state": { "markdown": "abc", "cursor": 1, "selection": { "start": 0, "end": 2 }, "undoStack": [], "redoStack": [] },
+    "text": "x",
+    "expect": { "markdown": "xc", "cursor": 1, "canUndo": true }
+  },
+  {
+    "name": "backspace-utf8",
+    "kind": "backspace",
+    "state": { "markdown": "Aé", "cursor": 3, "selection": null, "undoStack": [], "redoStack": [] },
+    "expect": { "markdown": "A", "cursor": 1, "canUndo": true }
+  },
+  {
+    "name": "arrow-down",
+    "kind": "moveCursor",
+    "markdown": "abc\ndef",
+    "cursor": 1,
+    "direction": "down",
+    "extend": false,
+    "anchor": null,
+    "expect": { "cursor": 5 }
+  },
+  {
+    "name": "input-rule-task",
+    "kind": "inputRule",
+    "lineBeforeCursor": "- [x] ",
+    "expect": { "kind": "task_list", "checked": true }
+  },
+  {
+    "name": "table-insert-column",
+    "kind": "tableInsertColumn",
+    "markdown": "| A | B |\n| - | - |\n| 1 | 2 |",
+    "columnIndex": 1,
+    "expect": { "contains": "A |  | B" }
+  },
+  {
+    "name": "image-selection",
+    "kind": "imageSelection",
+    "markdown": "before ![Alt](pic.png) after",
+    "cursor": 10,
+    "expect": { "alt": "Alt", "url": "pic.png" }
+  },
+  {
+    "name": "ime-composition",
+    "kind": "ime",
+    "state": { "markdown": "A", "cursor": 1, "composing": false, "composition": "" },
+    "text": "é",
+    "expect": { "markdown": "Aé", "cursor": 3, "composing": false }
+  }
+]

@@ -5,7 +5,15 @@
         v-if="!init"
         class="editor-placeholder"
       />
-      <app-shell v-if="init" />
+      <app-shell v-if="init && !muyaRuntimeActive" />
+      <MuyaRuntimeEditor
+        v-if="init && muyaRuntimeEnabled"
+        v-show="muyaRuntimeActive"
+        v-model="muyaRuntimeMarkdown"
+        :mode="muyaRuntimeMode"
+        class="muya-runtime-production-editor"
+        @change="handleMuyaRuntimeChange"
+      />
       <command-palette />
       <about-dialog />
       <export-setting-dialog />
@@ -17,7 +25,7 @@
 </template>
 
 <script setup>
-import { watch, nextTick, onMounted, ref } from 'vue'
+import { watch, nextTick, onMounted, onBeforeUnmount, ref, computed } from 'vue'
 import { useMainStore } from '@/store'
 import { storeToRefs } from 'pinia'
 import { addStyles, addThemeStyle, addCustomStyle } from '@/util/theme'
@@ -38,6 +46,7 @@ import { useCommandCenterStore } from '@/store/commandCenter'
 import { useProjectStore } from '@/store/project'
 import { useAutoUpdatesStore } from '@/store/autoUpdates'
 import { useNotificationStore } from '@/store/notification'
+import { MuyaRuntimeEditor, isMuyaRuntimeActive, isMuyaRuntimeEnabled, readMuyaRuntimeMode } from '@/muya'
 import AppShell from 'elephant-front/components/shell/AppShell.vue'
 
 const isTauriRuntime = window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron'
@@ -53,9 +62,37 @@ const commandCenterStore = useCommandCenterStore()
 const notificationStore = useNotificationStore()
 
 const timer = ref(null)
+const muyaRuntimeModeTimer = ref(null)
+const muyaRuntimeMode = ref(window.__ELEPHANT_MUYA_RUNTIME__?.mode?.() || readMuyaRuntimeMode(window))
 
 const { init } = storeToRefs(mainStore)
 const { theme, customCss, zoom } = storeToRefs(preferencesStore)
+
+const syncMuyaRuntimeMode = () => {
+  muyaRuntimeMode.value = window.__ELEPHANT_MUYA_RUNTIME__?.mode?.() || readMuyaRuntimeMode(window)
+}
+
+const muyaRuntimeEnabled = computed(() => isMuyaRuntimeEnabled(muyaRuntimeMode.value))
+const muyaRuntimeActive = computed(() => isMuyaRuntimeActive(muyaRuntimeMode.value))
+
+const muyaRuntimeMarkdown = computed({
+  get: () => editorStore.currentFile?.markdown || '',
+  set: (value) => {
+    const file = editorStore.currentFile
+    if (!file?.id) return
+    file.markdown = value
+    file.isSaved = false
+    const index = editorStore.tabIdToIndex[file.id]
+    if (index !== undefined && editorStore.tabs[index]) {
+      editorStore.tabs[index].markdown = value
+      editorStore.tabs[index].isSaved = false
+    }
+  }
+})
+
+const handleMuyaRuntimeChange = (value) => {
+  muyaRuntimeMarkdown.value = value
+}
 
 watch(theme, (value, oldValue) => {
   if (value !== oldValue) {
@@ -151,6 +188,7 @@ onMounted(async () => {
   notificationStore.listenForNotification()
 
   setupDragDropHandler()
+  muyaRuntimeModeTimer.value = setInterval(syncMuyaRuntimeMode, 500)
 
   if (isTauriRuntime) {
     setTimeout(() => {
@@ -164,6 +202,10 @@ onMounted(async () => {
     const style = global.marktext.initialState || DEFAULT_STYLE
     addStyles(style)
   })
+})
+
+onBeforeUnmount(() => {
+  if (muyaRuntimeModeTimer.value) clearInterval(muyaRuntimeModeTimer.value)
 })
 </script>
 
@@ -198,5 +240,13 @@ onMounted(async () => {
   & > .editor {
     flex: 1;
   }
+}
+.muya-runtime-production-editor {
+  flex: 1;
+  min-height: 100vh;
+  padding: 48px 72px;
+  overflow: auto;
+  background: var(--editorBgColor);
+  color: var(--editorColor);
 }
 </style>

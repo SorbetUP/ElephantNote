@@ -1,21 +1,67 @@
-import { getCurrentWindow } from '@tauri-apps/api/window'
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
-import { confirm as confirmDialog, open as openDialog } from '@tauri-apps/plugin-dialog'
+import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { openUrl, openPath, revealItemInDir } from '@tauri-apps/plugin-opener'
 import { writeText as clipboardWriteText, readText as clipboardReadText } from '@tauri-apps/plugin-clipboard-manager'
 import keybindingsDarwin from '../../../main/keyboard/keybindingsDarwin.js'
 import keybindingsLinux from '../../../main/keyboard/keybindingsLinux.js'
 import keybindingsWindows from '../../../main/keyboard/keybindingsWindows.js'
+import { pushDiagnosticLog } from './rendererDiagnostics'
 
 const normalizeSlashes = (value) => String(value || '').replace(/\\/g, '/')
+const STORAGE_PREFIX = 'elephantnote:tauri:'
+const USER_PREFS_STORAGE_KEY = `${STORAGE_PREFIX}preferences`
+const USER_DATA_STORAGE_KEY = `${STORAGE_PREFIX}user-data`
+const BUFFER_STORAGE_KEY = `${STORAGE_PREFIX}buffer-state`
+
+const bridgeLog = (message, details = null) => {
+  try { pushDiagnosticLog('debug', `runtimeBridge:${message}`, details) } catch {}
+}
+
+const summarize = (value) => {
+  if (value == null) return null
+  if (typeof value === 'string') return value.length > 240 ? `${value.slice(0, 240)}…` : value
+  if (Array.isArray(value)) return { type: 'array', length: value.length }
+  if (typeof value === 'object') return Object.fromEntries(Object.entries(value).slice(0, 12))
+  return value
+}
+
+const readStoredJson = (target, key, fallback) => {
+  try {
+    const raw = target?.localStorage?.getItem(key) ?? target?.__TAURI_BRIDGE_STORAGE__?.get?.(key) ?? null
+    if (raw == null) return fallback
+    return JSON.parse(raw)
+  } catch {
+    return fallback
+  }
+}
+
+const writeStoredJson = (target, key, value) => {
+  try {
+    const raw = JSON.stringify(value)
+    if (!target.__TAURI_BRIDGE_STORAGE__) target.__TAURI_BRIDGE_STORAGE__ = new Map()
+    target.__TAURI_BRIDGE_STORAGE__.set(key, raw)
+    try { target?.localStorage?.setItem(key, raw) } catch {}
+    return true
+  } catch {
+    return false
+  }
+}
+
+const getStoredPreferences = (target) => readStoredJson(target, USER_PREFS_STORAGE_KEY, {})
+const setStoredPreferences = (target, nextPrefs) => {
+  const merged = { ...getStoredPreferences(target), ...(nextPrefs || {}) }
+  writeStoredJson(target, USER_PREFS_STORAGE_KEY, merged)
+  return merged
+}
+const getStoredUserData = (target) => readStoredJson(target, USER_DATA_STORAGE_KEY, {})
+const setStoredUserData = (target, nextData) => {
+  const merged = { ...getStoredUserData(target), ...(nextData || {}) }
+  writeStoredJson(target, USER_DATA_STORAGE_KEY, merged)
+  return merged
+}
 
 const isAbsolute = (pathname) => {
   const value = normalizeSlashes(pathname)
-  return (
-    value.startsWith('/') ||
-    /^([a-zA-Z]:\/)/.test(value) ||
-    value.startsWith('//')
-  )
+  return value.startsWith('/') || /^([a-zA-Z]:\/)/.test(value) || value.startsWith('//')
 }
 
 const splitSegments = (pathname) => {
@@ -26,11 +72,8 @@ const splitSegments = (pathname) => {
   const resolved = []
   for (const segment of segments) {
     if (segment === '..') {
-      if (resolved.length && resolved[resolved.length - 1] !== '..') {
-        resolved.pop()
-      } else if (!isAbsolute(prefix)) {
-        resolved.push(segment)
-      }
+      if (resolved.length && resolved[resolved.length - 1] !== '..') resolved.pop()
+      else if (!isAbsolute(prefix)) resolved.push(segment)
       continue
     }
     resolved.push(segment)
@@ -85,33 +128,20 @@ export const createPathFacade = () => {
   const joinWithAbsolute = (parts, resolveMode = false) => {
     const filtered = parts.filter((part) => part !== undefined && part !== null && part !== '')
     if (!filtered.length) return resolveMode ? '/' : '.'
-    const resolved = filtered.map((part) => normalizeSlashes(part))
-    const merged = resolved.join('/')
-    return normalize(merged)
+    return normalize(filtered.map((part) => normalizeSlashes(part)).join('/'))
   }
-  function joinedPath(parts, resolveMode = false) {
-    return joinWithAbsolute(parts, resolveMode)
-  }
-  return {
-    sep: '/',
-    delimiter: ':',
-    normalize,
-    join,
-    resolve,
-    dirname,
-    basename,
-    extname,
-    isAbsolute,
-    relative
-  }
+  function joinedPath(parts, resolveMode = false) { return joinWithAbsolute(parts, resolveMode) }
+  return { sep: '/', delimiter: ':', normalize, join, resolve, dirname, basename, extname, isAbsolute, relative }
 }
 
 const createEventBus = (target = globalThis) => {
   const listeners = new Map()
   const add = (eventName, handler, once = false) => {
+    bridgeLog('ipc:on', { eventName, once })
     const wrapped = (event) => {
       if (once) remove(eventName, handler)
       const detail = Array.isArray(event?.detail) ? event.detail : [event?.detail]
+      bridgeLog('ipc:event', { eventName, detail: detail.map(summarize) })
       handler?.({ error: event?.detail?.error || null }, ...detail)
     }
     const eventListeners = listeners.get(eventName) || new Map()
@@ -131,115 +161,109 @@ const createEventBus = (target = globalThis) => {
   const removeAll = (eventName) => {
     const eventListeners = listeners.get(eventName)
     if (!eventListeners) return
-    for (const wrapped of eventListeners.values()) {
-      target.removeEventListener(eventName, wrapped)
-    }
+    for (const wrapped of eventListeners.values()) target.removeEventListener(eventName, wrapped)
     listeners.delete(eventName)
   }
   const send = (eventName, ...args) => {
+    bridgeLog('ipc:send', { eventName, args: args.map(summarize) })
     target.dispatchEvent(new CustomEvent(eventName, { detail: args }))
   }
-  return {
-    send,
-    on: (eventName, handler) => add(eventName, handler, false),
-    once: (eventName, handler) => add(eventName, handler, true),
-    removeListener: remove,
-    removeAllListeners: removeAll,
-    invoke: async(channel, payload) => {
-      const handler = listeners.get(`invoke:${channel}`)?.values()?.next()?.value
-      if (handler) return handler({ detail: payload }, payload)
-      if (channel === 'update-buffer-state') return true
-      throw new Error(`No invoke handler registered for "${channel}"`)
-    }
-  }
+  return { send, on: (eventName, handler) => add(eventName, handler, false), once: (eventName, handler) => add(eventName, handler, true), removeListener: remove, removeAllListeners: removeAll }
 }
 
-const createShellFallback = () => ({
-  openExternal: async(url) => {
-    window.open(url, '_blank', 'noopener,noreferrer')
-  },
-  openPath: async(pathname) => {
-    window.open(`file://${pathname}`, '_blank', 'noopener,noreferrer')
-  },
-  showItemInFolder: async(pathname) => {
-    window.open(`file://${pathname}`, '_blank', 'noopener,noreferrer')
+const getDefaultKeybindings = (target) => {
+  const platform = String(target?.navigator?.platform || target?.navigator?.userAgent || '').toLowerCase()
+  if (platform.includes('mac')) return keybindingsDarwin
+  if (platform.includes('linux')) return keybindingsLinux
+  return keybindingsWindows
+}
+
+const getCurrentLanguage = (target) => {
+  const browserLocale = String(target?.navigator?.language || target?.navigator?.languages?.[0] || 'en').toLowerCase()
+  if (browserLocale.startsWith('fr')) return 'fr'
+  if (browserLocale.startsWith('zh')) return 'zh-CN'
+  return 'en'
+}
+
+const createTauriFacade = (target, tauri) => {
+  const coreApi = tauri?.core
+  const fsApi = tauri?.fs
+  const eventBus = createEventBus(target)
+  const openFolderPath = async(pathname) => {
+    if (!pathname) return
+    bridgeLog('open-folder:selected', { pathname })
+    eventBus.send('mt::open-directory', pathname)
   }
-})
-
-const createClipboardFallback = () => ({
-  writeText: async(text) => navigator.clipboard?.writeText?.(text),
-  readText: async() => navigator.clipboard?.readText?.()
-})
-
-const createWebUtilsFallback = () => ({
-  getPathForFile: (file) => file?.path || file?.webkitRelativePath || file?.name || ''
-})
-
-const createCommandExistsFallback = () => ({
-  exists: () => false
-})
-
-const STORAGE_PREFIX = 'elephantnote:tauri:'
-const KEYBINDINGS_STORAGE_KEY = `${STORAGE_PREFIX}user-keybindings`
-const SPELLCHECKER_STORAGE_KEY = `${STORAGE_PREFIX}spellchecker`
-const USER_PREFS_STORAGE_KEY = `${STORAGE_PREFIX}preferences`
-const USER_DATA_STORAGE_KEY = `${STORAGE_PREFIX}user-data`
+  const dispatchNativeCommand = async(channel, args) => {
+    bridgeLog('native:send', { channel, args: args.map(summarize) })
+    switch (channel) {
+      case 'mt::cmd-open-folder':
+      case 'mt::ask-for-open-project-in-sidebar': {
+        const folder = await openDialog({ multiple: false, directory: true, createDirectory: true })
+        if (typeof folder === 'string' && folder) await openFolderPath(folder)
+        else if (Array.isArray(folder) && folder[0]) await openFolderPath(folder[0])
+        else bridgeLog('open-folder:cancelled')
+        return true
+      }
+      case 'mt::ask-for-user-preference':
+        eventBus.send('mt::user-preference', getStoredPreferences(target)); return true
+      case 'mt::ask-for-user-data':
+        eventBus.send('mt::user-preference', getStoredUserData(target)); return true
+      case 'mt::set-user-preference': {
+        const [settings] = args
+        eventBus.send('mt::user-preference', setStoredPreferences(target, settings)); return true
+      }
+      case 'mt::set-user-data': {
+        const [settings] = args
+        eventBus.send('mt::user-preference', setStoredUserData(target, settings)); return true
+      }
+      default:
+        return false
+    }
+  }
+  const invoke = async(channel, payload) => {
+    bridgeLog('native:invoke', { channel, payload: summarize(payload) })
+    if (channel === 'update-buffer-state') { writeStoredJson(target, BUFFER_STORAGE_KEY, payload); return true }
+    if (channel === 'mt::get-current-language') return getCurrentLanguage(target)
+    if (channel === 'mt::keybinding-get-keyboard-info') return { layout: target?.navigator?.language || 'en-US', keymap: {} }
+    if (channel === 'mt::keybinding-get-pref-keybindings') return { defaultKeybindings: getDefaultKeybindings(target), userKeybindings: new Map() }
+    if (channel === 'mt::fs-trash-item') { if (fsApi?.remove) { await fsApi.remove(payload, { recursive: true }); return true } return false }
+    if (!coreApi?.invoke) throw new Error('Tauri core API is unavailable')
+    return coreApi.invoke(channel, payload)
+  }
+  return {
+    ipcRenderer: {
+      send: (channel, ...args) => { void dispatchNativeCommand(channel, args).then((handled) => { if (!handled) eventBus.send(channel, ...args) }) },
+      on: eventBus.on,
+      once: eventBus.once,
+      removeListener: eventBus.removeListener,
+      removeAllListeners: eventBus.removeAllListeners,
+      invoke
+    },
+    shell: { openExternal: async(url) => openUrl(url), openPath: async(pathname) => openPath(pathname), showItemInFolder: async(pathname) => revealItemInDir(pathname), exec: async(command, args = [], options = {}) => coreApi.invoke('shell_exec', { command, args, cwd: options.cwd || null, env: options.env || null }) },
+    clipboard: { writeText: async(text) => clipboardWriteText(text), readText: async() => clipboardReadText() },
+    webUtils: { getPathForFile: (file) => file?.path || file?.webkitRelativePath || file?.name || '' },
+    process: { platform: target.navigator?.userAgentData?.platform || target.navigator?.platform || 'tauri', env: { MARKTEXT_VERSION_STRING: target.__MARKTEXT_VERSION_STRING__ || '' } },
+    fs: fsApi
+  }
+}
 
 export const installRuntimeBridge = (target = globalThis) => {
   const hasElectron = !!target?.electron?.ipcRenderer
   const hasTauri = !!target?.__TAURI__
-  const markRuntime = (mode) => {
-    target.__MARKTEXT_RUNTIME__ = mode
-    return mode
-  }
+  const markRuntime = (mode) => { target.__MARKTEXT_RUNTIME__ = mode; return mode }
   if (!target.path) target.path = createPathFacade()
-  if (!target.commandExists) target.commandExists = createCommandExistsFallback()
+  if (!target.commandExists) target.commandExists = { exists: () => false }
   if (!target.i18nUtils) target.i18nUtils = {}
   if (!target.elephantnote) target.elephantnote = {}
-
-  if (hasElectron) {
-    return { mode: markRuntime('electron'), installed: false }
+  if (hasElectron) return { mode: markRuntime('electron'), installed: false }
+  if (hasTauri) {
+    target.electron = createTauriFacade(target, target.__TAURI__)
+    return { mode: markRuntime('tauri'), installed: true }
   }
-
-  const ipcRenderer = createEventBus(target)
-  const shell = hasTauri
-    ? {
-        openExternal: async(url) => openUrl(url),
-        openPath: async(pathname) => openPath(pathname),
-        showItemInFolder: async(pathname) => revealItemInDir(pathname)
-      }
-    : createShellFallback()
-  const clipboard = hasTauri
-    ? { writeText: async(text) => clipboardWriteText(text), readText: async() => clipboardReadText() }
-    : createClipboardFallback()
-  const webUtils = createWebUtilsFallback()
-
-  if (!target.fileUtils) {
-    target.fileUtils = {
-      isFile: () => false,
-      isDirectory: () => false,
-      ensureDirSync: () => {},
-      pathExistsSync: () => false,
-      isChildOfDirectory: () => false,
-      hasMarkdownExtension: (filename) => /\.md$/i.test(String(filename || '')),
-      MARKDOWN_INCLUSIONS: ['.md', '.markdown', '.mdown', '.mkdn', '.mkd', '.mdtxt'],
-      isSamePathSync: (pathA, pathB) => normalizeSlashes(pathA) === normalizeSlashes(pathB),
-      isImageFile: (filepath) => /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(String(filepath || ''))
-    }
-  }
-
-  target.electron = {
-    ipcRenderer,
-    shell,
-    clipboard,
-    webUtils,
-    process: {
-      platform: target.navigator?.userAgentData?.platform || target.navigator?.platform || 'tauri',
-      env: { MARKTEXT_VERSION_STRING: target.__MARKTEXT_VERSION_STRING__ || '' }
-    }
-  }
-
-  return { mode: markRuntime(hasTauri ? 'tauri' : 'tauri-compatible'), installed: true }
+  const eventBus = createEventBus(target)
+  target.electron = { ipcRenderer: eventBus, shell: {}, clipboard: {}, webUtils: {}, process: { platform: 'browser', env: {} } }
+  return { mode: markRuntime('tauri-compatible'), installed: true }
 }
 
 export const createCompatibilitySurface = installRuntimeBridge

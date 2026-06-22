@@ -1,5 +1,5 @@
 const { expect, test } = require('@playwright/test')
-const { launchElectron } = require('../helpers')
+const { launchElectronWithSeededVault } = require('../helpers')
 
 const getBodyText = async(page) => (await page.locator('body').innerText()).trim()
 
@@ -17,30 +17,35 @@ const getVisibleCardTexts = async(page) => {
 }
 
 test.describe('Native app UI parity contract baseline', () => {
-  test('Electron baseline renders without a blank page', async() => {
-    const { app, page } = await launchElectron()
+  test('Electron baseline opens seeded vault without a blank page', async() => {
+    const { app, page } = await launchElectronWithSeededVault()
     try {
       await expect(page.locator('body')).toBeVisible()
-      expect((await getBodyText(page)).length).toBeGreaterThan(0)
+      const bodyText = await getBodyText(page)
+      expect(bodyText.length).toBeGreaterThan(0)
+      expect(bodyText).toContain('Alpha note')
       await expect(page.locator('#elephant-diagnostic-overlay')).toHaveCount(0)
     } finally {
       await app.close()
     }
   })
 
-  test('Electron baseline does not show diagnostic overlay during normal startup', async() => {
-    const { app, page } = await launchElectron()
+  test('Electron baseline does not stay on first vault selection screen', async() => {
+    const { app, page } = await launchElectronWithSeededVault()
     try {
-      await expect(page.locator('#elephant-diagnostic-overlay')).toHaveCount(0)
+      const bodyText = await getBodyText(page)
+      expect(bodyText).not.toMatch(/select.*vault|choose.*vault|premi[eè]re.*vault|s[eé]lection/i)
+      expect(bodyText).toContain('E2E Vault')
     } finally {
       await app.close()
     }
   })
 
   test('Electron baseline note cards do not expose raw metadata when cards are present', async() => {
-    const { app, page } = await launchElectron()
+    const { app, page } = await launchElectronWithSeededVault()
     try {
       const texts = await getVisibleCardTexts(page)
+      expect(texts.join('\n')).toContain('Alpha note')
       for (const text of texts) {
         expect(text).not.toContain('---')
         expect(text.toLowerCase()).not.toContain('type:')
@@ -50,11 +55,12 @@ test.describe('Native app UI parity contract baseline', () => {
     }
   })
 
-  test('Electron baseline visible note cards have titles when cards are present', async() => {
-    const { app, page } = await launchElectron()
+  test('Electron baseline visible note cards have titles', async() => {
+    const { app, page } = await launchElectronWithSeededVault()
     try {
       const cards = page.locator('.en-note-card')
       const count = await cards.count()
+      expect(count).toBeGreaterThan(0)
       for (let index = 0; index < count; index += 1) {
         const card = cards.nth(index)
         if (await card.isVisible().catch(() => false)) {
@@ -68,8 +74,18 @@ test.describe('Native app UI parity contract baseline', () => {
     }
   })
 
+  test('Electron baseline can open the seeded note content', async() => {
+    const { app, page } = await launchElectronWithSeededVault()
+    try {
+      await page.getByText('Alpha note').first().click()
+      await expect(page.getByText('Visible alpha body line.').first()).toBeVisible({ timeout: 5000 })
+    } finally {
+      await app.close()
+    }
+  })
+
   test('Electron baseline never enables experimental Muya active mode by default', async() => {
-    const { app, page } = await launchElectron()
+    const { app, page } = await launchElectronWithSeededVault()
     try {
       const mode = await page.evaluate(() => window.__ELEPHANT_MUYA_RUNTIME__?.mode?.() || window.__ELEPHANT_MUYA_RUNTIME_MODE__ || null)
       expect(mode).not.toBe('active')

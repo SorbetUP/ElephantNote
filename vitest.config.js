@@ -29,6 +29,7 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
+      'electron-log/renderer': resolve(__dirname, 'test/unit/stubs/electronLog.js'),
       'electron-log': resolve(__dirname, 'test/unit/stubs/electronLog.js'),
       'elephant-back': resolve(__dirname, 'Elephant/back/app'),
       'elephant-front': resolve(__dirname, 'Elephant/front/app'),

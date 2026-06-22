@@ -51,13 +51,16 @@ src/renderer/src/muya/index.js
 Internal modules:
 
 ```text
-selectionRuntime.js     DOM editor and browser selection snapshots
-jsonStateRuntime.js     Markdown <-> JSONState <-> HTML
-operationsRuntime.js    OT operations and grouped history
-clipboardRuntime.js     copy/paste and rich HTML normalization
-tableImageRuntime.js    table commands and image toolbar state
-menusPreviewRuntime.js  footnotes, slash menu, floating toolbar, previews
-fullEditorRuntime.js    runtime composition facade
+selectionRuntime.js       DOM editor and browser selection snapshots
+jsonStateRuntime.js       Markdown <-> JSONState <-> HTML
+operationsRuntime.js      OT operations and grouped history
+clipboardRuntime.js       copy/paste and rich HTML normalization
+tableImageRuntime.js      table commands and image toolbar state
+menusPreviewRuntime.js    footnotes, slash menu, floating toolbar, previews
+fullEditorRuntime.js      runtime composition facade
+runtimeFlags.js           disabled/shadow/active rollout modes
+useMuyaRuntimeEditor.js   Vue composable
+MuyaRuntimeEditor.vue     Vue wrapper component
 ```
 
 ### 3. Source snapshot adapter
@@ -77,19 +80,28 @@ Responsibilities:
 
 ### 4. Vue integration layer
 
-Target future integration:
+Available integration API:
 
 ```text
-src/renderer/src/elephant-front/components/editor/
+src/renderer/src/muya/useMuyaRuntimeEditor.js
+src/renderer/src/muya/MuyaRuntimeEditor.vue
 ```
 
 The Vue UI should import only:
 
 ```js
-import { createMuyaFullEditorRuntime } from '@/muya'
+import { createMuyaFullEditorRuntime, MuyaRuntimeEditor, useMuyaRuntimeEditor } from '@/muya'
 ```
 
 It must not import internal modules directly unless a component owns that exact concern.
+
+Rollout modes:
+
+```text
+disabled  do not mount the replacement runtime
+shadow    mount for comparison/telemetry without replacing production behavior
+active    use the replacement runtime as the editor runtime
+```
 
 ## Runtime facade contract
 
@@ -119,15 +131,16 @@ previewBlock()
 
 ## Testing strategy
 
-### Unit tests
+### JS unit/runtime tests
 
-Location:
+Locations:
 
 ```text
 test/unit/muyaFullEditorRuntime.spec.js
+test/unit/muyaRuntimeVueIntegration.spec.js
 ```
 
-These tests validate the whole runtime facade in one pass.
+These tests validate the runtime facade and the Vue wrapper in one pass.
 
 ### Rust tests
 
@@ -162,4 +175,4 @@ The project may not claim 100% Muya parity until all of the following are true:
 
 ## Current status
 
-The architecture exists and the runtime facade is testable, but it is not yet the production editor implementation. The next step is to wire `createMuyaFullEditorRuntime` into the actual editor component behind a runtime flag, then compare behavior against the current Electron/Muya editor.
+The architecture exists, the runtime facade is testable, and the Vue composable/wrapper integration exists. The next step is to wire `MuyaRuntimeEditor` or `useMuyaRuntimeEditor` into the actual production editor component behind the `shadow` flag, then compare behavior against the current Electron/Muya editor.

@@ -14,6 +14,12 @@ pub mod types;
 mod compat_extra_tests;
 
 #[cfg(test)]
+mod deterministic_parity_basic_tests;
+
+#[cfg(test)]
+mod deterministic_parity_render_tests;
+
+#[cfg(test)]
 mod editor_parity_tests;
 
 #[cfg(test)]

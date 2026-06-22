@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod commands_contract;
 pub mod muya_clipboard;
 pub mod muya_compat;
 pub mod muya_deterministic;

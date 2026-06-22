@@ -1,4 +1,4 @@
-mod vault;
+mod vault_backend;
 
 use serde::Serialize;
 use std::collections::HashMap;
@@ -90,28 +90,28 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       healthcheck,
       shell_exec,
-      vault::tauri_vaults_get,
-      vault::tauri_vaults_select_path,
-      vault::tauri_vaults_set_active,
-      vault::tauri_vaults_set_icon,
-      vault::tauri_vaults_set_name,
-      vault::tauri_vaults_remove,
-      vault::tauri_directory_list,
-      vault::tauri_notes_create,
-      vault::tauri_folders_create,
-      vault::tauri_sidebar_attach,
-      vault::tauri_sidebar_detach,
-      vault::tauri_entries_rename,
-      vault::tauri_entries_move,
-      vault::tauri_entries_delete,
-      vault::tauri_calendar_list,
-      vault::tauri_sources_list,
-      vault::tauri_wiki_list,
-      vault::tauri_search_query,
-      vault::tauri_search_status,
-      vault::tauri_sync_status,
-      vault::tauri_sync_enqueue,
-      vault::tauri_sync_run
+      vault_backend::tauri_vaults_get,
+      vault_backend::tauri_vaults_select_path,
+      vault_backend::tauri_vaults_set_active,
+      vault_backend::tauri_vaults_set_icon,
+      vault_backend::tauri_vaults_set_name,
+      vault_backend::tauri_vaults_remove,
+      vault_backend::tauri_directory_list,
+      vault_backend::tauri_notes_create,
+      vault_backend::tauri_folders_create,
+      vault_backend::tauri_sidebar_attach,
+      vault_backend::tauri_sidebar_detach,
+      vault_backend::tauri_entries_rename,
+      vault_backend::tauri_entries_move,
+      vault_backend::tauri_entries_delete,
+      vault_backend::tauri_calendar_list,
+      vault_backend::tauri_sources_list,
+      vault_backend::tauri_wiki_list,
+      vault_backend::tauri_search_query,
+      vault_backend::tauri_search_status,
+      vault_backend::tauri_sync_status,
+      vault_backend::tauri_sync_enqueue,
+      vault_backend::tauri_sync_run
     ])
     .run(tauri::generate_context!())
     .expect("failed to run Tauri application");

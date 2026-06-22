@@ -25,3 +25,25 @@ pub fn with_markdown_extension(name: &str) -> String {
     format!("{trimmed}.md")
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn cleans_empty_segments() {
+    assert_eq!(clean_relative_path("a//b/./c.md"), "a/b/c.md");
+  }
+
+  #[test]
+  fn joins_root_and_relative_path() {
+    let joined = join_path("vault", "Notes/a.md");
+    assert!(joined.ends_with("Notes/a.md"));
+  }
+
+  #[test]
+  fn adds_markdown_extension_only_when_needed() {
+    assert_eq!(with_markdown_extension("Note"), "Note.md");
+    assert_eq!(with_markdown_extension("Note.md"), "Note.md");
+  }
+}

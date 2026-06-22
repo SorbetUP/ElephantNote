@@ -12,12 +12,14 @@ type R<T> = Result<T, String>;
 fn payload(app: &AppHandle, vault: Option<super::types::VaultDescriptor>) -> R<Value> {
   let config = read_config(app)?;
   if let Some(vault) = vault {
+    let workspace = initialize_vault(&vault.path)?;
+    let listed_entries = entries::list_directory(&vault, "")?;
     Ok(json!({
       "vaults": config.vaults,
       "activeVaultId": config.active_vault_id,
       "activeVault": vault,
-      "workspace": initialize_vault(&vault.path)?,
-      "entries": entries::list_directory(&vault, "")?
+      "workspace": workspace,
+      "entries": listed_entries
     }))
   } else {
     Ok(json!({

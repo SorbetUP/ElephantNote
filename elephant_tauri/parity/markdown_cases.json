@@ -8,7 +8,7 @@
       "taskCount": 1,
       "checkedTaskCount": 1,
       "linkCount": 1,
-      "htmlContains": ["Demo", "checkbox"]
+      "htmlContains": ["Demo", "checkbox", "task-list", "task-list-item"]
     }
   },
   {
@@ -28,6 +28,16 @@
       "outlineCount": 1,
       "codeBlockCount": 1,
       "htmlContains": ["language-rust", "value"]
+    }
+  },
+  {
+    "name": "muya-inline-marks",
+    "markdown": "# Inline\n\n**bold** *em* ~~deleted~~ `code`",
+    "expect": {
+      "outlineCount": 1,
+      "taskCount": 0,
+      "linkCount": 0,
+      "htmlContains": ["strong", "em", "del", "code"]
     }
   }
 ]

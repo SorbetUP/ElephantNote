@@ -96,9 +96,12 @@ const launchElectron = async (userArgs, options = {}) => {
   userArgs = userArgs || []
   const executablePath = getElectronPath()
   const userDataPath = options.userDataPath || getTempPath()
-  // Pass project root as entry so Electron reads package.json and getAppPath() returns project root.
-  // Passing out/main/index.js directly bypasses package.json and breaks __static path resolution.
-  const args = [projectRoot, '--user-data-dir', userDataPath].concat(userArgs)
+  const baseArgs = process.platform === 'darwin'
+    ? ['--use-mock-keychain', '--password-store=basic']
+    : []
+  // Chromium switches must be passed before the Electron app path so Safe Storage is disabled
+  // before Chromium initializes the macOS keychain backend.
+  const args = baseArgs.concat([projectRoot, '--user-data-dir', userDataPath], userArgs)
   const app = await _electron.launch({
     executablePath,
     args,

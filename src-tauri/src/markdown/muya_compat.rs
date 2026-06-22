@@ -27,11 +27,10 @@ pub fn muya_options() -> Options {
 }
 
 pub fn render_muya_html(markdown: &str) -> String {
-  let extra_html = render_muya_extras_html(markdown);
-  if extra_html.trim().is_empty() {
+  if collect_muya_extras(markdown).is_empty() {
     render_html(markdown)
   } else {
-    render_html(&extra_html)
+    render_html(&render_muya_extras_html(markdown))
   }
 }
 
@@ -176,11 +175,12 @@ mod tests {
 
   #[test]
   fn includes_math_and_diagram_extras() {
-    let doc = parse_muya_document("$x$\n\n$$\ny=x\n$$\n\n```mermaid\ngraph TD;\n```");
+    let doc = parse_muya_document("# A\n\n$x$\n\n$$\ny=x\n$$\n\n```mermaid\ngraph TD;\n```");
     let extras = doc["extras"].as_array().unwrap();
     assert!(extras.iter().any(|extra| extra["kind"] == "inline_math"));
     assert!(extras.iter().any(|extra| extra["kind"] == "math_block"));
     assert!(extras.iter().any(|extra| extra["kind"] == "diagram"));
+    assert!(doc["html"].as_str().unwrap().contains("<h1"));
     assert!(doc["html"].as_str().unwrap().contains("math-inline"));
     assert!(doc["html"].as_str().unwrap().contains("diagram-block"));
   }

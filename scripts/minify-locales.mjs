@@ -4,7 +4,8 @@ import path from 'path'
 const localesDir = path.join(process.cwd(), 'static/locales')
 
 if (!fs.existsSync(localesDir)) {
-  console.error('Locales directory does not exist!')
+  console.log('Locales directory does not exist; skipping locale minification.')
+  process.exit(0)
 }
 
 const files = fs.readdirSync(localesDir)

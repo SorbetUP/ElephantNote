@@ -1,0 +1,33 @@
+[
+  {
+    "name": "frontmatter-heading-task-link",
+    "markdown": "---\ntitle: \"Demo\"\ntags: [alpha, beta]\n---\n# Demo\n\n- [x] Done\n\n[site](https://example.com)",
+    "expect": {
+      "title": "Demo",
+      "outlineCount": 1,
+      "taskCount": 1,
+      "checkedTaskCount": 1,
+      "linkCount": 1,
+      "htmlContains": ["Demo", "checkbox"]
+    }
+  },
+  {
+    "name": "gfm-table-strike",
+    "markdown": "# Table\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n~~old~~",
+    "expect": {
+      "outlineCount": 1,
+      "taskCount": 0,
+      "linkCount": 0,
+      "htmlContains": ["table", "del"]
+    }
+  },
+  {
+    "name": "code-block",
+    "markdown": "# Code\n\n```rust\nlet value = 1;\n```",
+    "expect": {
+      "outlineCount": 1,
+      "codeBlockCount": 1,
+      "htmlContains": ["language-rust", "value"]
+    }
+  }
+]

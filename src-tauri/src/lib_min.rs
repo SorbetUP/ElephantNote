@@ -1,4 +1,5 @@
 pub mod markdown_engine;
+pub mod markdown;
 pub mod path_utils;
 pub mod vault_layout;
 pub mod vault_lib;
@@ -54,6 +55,11 @@ pub fn run() {
       vault::commands::tauri_sync_status,
       vault::commands::tauri_sync_enqueue,
       vault::commands::tauri_sync_run,
+      markdown::commands::tauri_markdown_parse,
+      markdown::commands::tauri_markdown_render_html,
+      markdown::commands::tauri_markdown_to_text,
+      markdown::commands::tauri_markdown_extract_frontmatter,
+      markdown::commands::tauri_markdown_extract_links,
       tauri_extra_commands::tauri_notes_read,
       tauri_extra_commands::tauri_notes_write,
       tauri_extra_commands::tauri_attachments_list,

@@ -9,6 +9,7 @@ pub mod model_domain;
 pub mod search_logic;
 
 mod vault_min;
+mod tauri_extra_commands;
 
 #[tauri::command]
 fn healthcheck() -> &'static str {
@@ -51,7 +52,19 @@ pub fn run() {
       vault_min::tauri_search_status,
       vault_min::tauri_sync_status,
       vault_min::tauri_sync_enqueue,
-      vault_min::tauri_sync_run
+      vault_min::tauri_sync_run,
+      tauri_extra_commands::tauri_notes_read,
+      tauri_extra_commands::tauri_notes_write,
+      tauri_extra_commands::tauri_attachments_list,
+      tauri_extra_commands::tauri_attachments_write_text,
+      tauri_extra_commands::tauri_drawings_list,
+      tauri_extra_commands::tauri_drawings_create,
+      tauri_extra_commands::tauri_drawings_read,
+      tauri_extra_commands::tauri_drawings_write,
+      tauri_extra_commands::tauri_models_get_selection,
+      tauri_extra_commands::tauri_models_set_selection,
+      tauri_extra_commands::tauri_search_rebuild,
+      tauri_extra_commands::tauri_sync_plan
     ])
     .run(tauri::generate_context!())
     .expect("failed to run Tauri application");

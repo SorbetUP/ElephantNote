@@ -13,6 +13,8 @@ export const MODEL_ROLES = Object.freeze([
 export const ROLE_IDS = Object.freeze(MODEL_ROLES.map((role) => role.id))
 export const USE_NONE = 'none'
 
+const isDateLikeString = (value) => /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(String(value || ''))
+
 export const formatBytes = (value) => {
   let bytes = Number(value) || 0
   if (!bytes) return ''
@@ -166,8 +168,7 @@ export const sortByPopularity = (models = []) =>
   dedupeModelsById(models).sort(
     (a, b) =>
       Number(b.downloads || 0) - Number(a.downloads || 0) ||
-      Number(b.likes || 0) - Number(a.likes || 0) ||
-      String(a.name || '').localeCompare(String(b.name || ''))
+      Number(b.likes || 0) - Number(a.name || '').localeCompare(String(b.name || ''))
   )
 
 export const mergeLocalAndRemote = (localModels = [], remoteModels = []) =>
@@ -238,6 +239,7 @@ export const getModelFormat = (model) => {
   const name = String(model?.fileName || model?.filename || model?.name || model?.id || '').toLowerCase()
   if (name.includes('mlx')) return 'MLX'
   if (name.includes('onnx')) return 'ONNX'
+  if (name.includes('gguf')) return 'GGUF'
   if (model?.provider === 'local-ocr' || model?.task === 'ocr') return 'OCR'
   return 'GGUF'
 }
@@ -287,19 +289,21 @@ export const getModelCapabilities = (model) => {
 export const getModelUpdatedDate = (model) => {
   const raw = model?.updatedAt || model?.modifiedAt || model?.lastModified || model?.created_at || model?.createdAt
   if (!raw) return ''
+  if (typeof raw === 'string' && !isDateLikeString(raw)) return ''
   const date = new Date(raw)
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10)
 }
 
 export const formatRelativeDate = (value = '', now = new Date()) => {
   if (!value) return ''
+  if (typeof value === 'string' && !isDateLikeString(value)) return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   const days = Math.floor((now - date) / 86400000)
   if (days < 1) return 'today'
   if (days < 30) return days === 1 ? '1 day ago' : `${days} days ago`
   const months = Math.floor(days / 30)
-  if (months < 12) return months === 1 ? '1 month ago' : `${months} months ago`
+  if (months < 12) return months === 1 ? '1 month ago' : `${months} months months ago`
   const years = Math.floor(days / 365)
   return years === 1 ? '1 year ago' : `${years} years ago`
 }
@@ -357,20 +361,4 @@ export const sortModels = (models = [], sort = 'best') => {
 }
 
 export const applyCatalogFilters = ({ models = [], query = '', format = 'all', source = 'all', sort = 'best' } = {}) =>
-  sortModels(
-    filterBySource(filterByFormat(filterModelsByName(dedupeModelsById(models), query), format), source),
-    sort
-  )
-
-export const getDownloadOption = (model) => ({
-  format: getModelFormat(model),
-  quantization: getModelQuantization(model),
-  sizeLabel: getModelSizeLabel(model),
-  fileName: String(model?.fileName || model?.filename || '').trim() || resolveModelName(model),
-  installed: isLocalModel(model),
-  status: isLocalModel(model)
-    ? 'Applicable model file already downloaded'
-    : isRemoteModel(model)
-      ? 'Available for download'
-      : 'Local file'
-})
+  sortModels(filterBySource(filterByFormat(filterModelsByName(models, query), format), source), sort)

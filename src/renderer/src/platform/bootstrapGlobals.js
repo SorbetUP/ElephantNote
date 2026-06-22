@@ -1,3 +1,5 @@
+import { installGlobalMuyaRuntimeBridge } from '../muya/globalRuntimeBridge.js'
+
 const normalizeSlashes = (value) => String(value || '').replace(/\\/g, '/')
 
 const createPathFacade = () => {
@@ -88,6 +90,7 @@ const installBootstrapGlobals = (target = globalThis) => {
   if (!target.fileUtils) target.fileUtils = createFileUtilsFallback()
   if (!target.rgPath) target.rgPath = ''
   if (!target.global) target.global = target
+  installGlobalMuyaRuntimeBridge(target)
 }
 
 installBootstrapGlobals()

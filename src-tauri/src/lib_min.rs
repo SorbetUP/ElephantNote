@@ -12,6 +12,7 @@ pub mod model_domain;
 pub mod search_logic;
 
 mod tauri_extra_commands;
+mod debug_commands;
 
 #[tauri::command]
 fn healthcheck() -> &'static str {
@@ -33,6 +34,7 @@ pub fn run() {
   builder
     .invoke_handler(tauri::generate_handler![
       healthcheck,
+      debug_commands::tauri_debug_log,
       vault::commands::tauri_vaults_get,
       vault::commands::tauri_vaults_select_path,
       vault::commands::tauri_vaults_set_active,

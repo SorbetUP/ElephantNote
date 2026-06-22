@@ -10,11 +10,30 @@
 // The adapter accepts one item from elephant_tauri/parity/muya_deterministic_cases.json
 // and returns the source-of-truth expectation shape consumed by Rust snapshot tests.
 
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+
+const installAssetRequireHooks = () => {
+  for (const ext of ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.css', '.scss', '.less']) {
+    if (!require.extensions?.[ext]) {
+      require.extensions[ext] = (module, filename) => {
+        module.exports = filename
+      }
+    }
+  }
+}
+
 const loadMuyaCore = async() => {
+  installAssetRequireHooks()
   try {
-    return await import('@muyajs/core')
-  } catch (error) {
-    throw new Error(`Unable to load @muyajs/core. Install it before generating real Muya snapshots. Original error: ${error.message}`)
+    return require('@muyajs/core')
+  } catch (requireError) {
+    try {
+      return await import('@muyajs/core')
+    } catch (importError) {
+      throw new Error(`Unable to load @muyajs/core. Install it before generating real Muya snapshots. require error: ${requireError.message}; import error: ${importError.message}`)
+    }
   }
 }
 
@@ -59,11 +78,12 @@ const inferNestedInlineKinds = (markdown) => {
 }
 
 const renderHtml = async(core, markdown) => {
-  if (typeof core.renderToStaticHTML === 'function') {
-    return await core.renderToStaticHTML(markdown, { sanitize: true })
+  const api = core.default || core
+  if (typeof api.renderToStaticHTML === 'function') {
+    return await api.renderToStaticHTML(markdown, { sanitize: true })
   }
-  if (typeof core.MarkdownToHtml === 'function') {
-    const renderer = new core.MarkdownToHtml(markdown)
+  if (typeof api.MarkdownToHtml === 'function') {
+    const renderer = new api.MarkdownToHtml(markdown)
     return await renderer.generate()
   }
   throw new Error('@muyajs/core does not expose renderToStaticHTML or MarkdownToHtml')

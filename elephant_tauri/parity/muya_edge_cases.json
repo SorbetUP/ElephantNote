@@ -1,0 +1,36 @@
+[
+  {
+    "name": "autolinks-email-and-url",
+    "markdown": "Visit <https://example.com> or mail <me@example.com>.",
+    "expect": {
+      "autolinkCount": 2,
+      "hrefs": ["https://example.com", "mailto:me@example.com"]
+    }
+  },
+  {
+    "name": "escaped-markdown-punctuation",
+    "markdown": "\\*literal\\* and \\# not heading and \\[not link\\]",
+    "expect": {
+      "escapeCount": 6,
+      "literalContains": ["*literal*", "# not heading", "[not link]"]
+    }
+  },
+  {
+    "name": "heading-attributes",
+    "markdown": "## Title {#section .wide .primary key=\"v\"}",
+    "expect": {
+      "headingCount": 1,
+      "level": 2,
+      "id": "section",
+      "classes": ["wide", "primary"]
+    }
+  },
+  {
+    "name": "tilde-and-backtick-code-fences",
+    "markdown": "~~~python\nprint(1)\n~~~\n\n```rust\nlet x = 1;\n```",
+    "expect": {
+      "fenceCount": 2,
+      "languages": ["python", "rust"]
+    }
+  }
+]

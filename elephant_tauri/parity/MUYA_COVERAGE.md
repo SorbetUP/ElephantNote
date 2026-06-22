@@ -16,17 +16,17 @@ Reference source: the Electron/MarkText Muya implementation is the source of tru
 
 | Area | Current estimate | Notes |
 |---|---:|---|
-| CommonMark block parsing | 60% | Headings, paragraphs, blockquotes, lists, HR and code blocks exist. Nested list metadata fixtures started. |
-| GFM tables | 55% | Render/token support exists through pulldown-cmark. Row/column contract functions and fixtures started. Full table editor parity is not done. |
-| Task lists | 70% | HTML classes are normalized to `task-list` and `task-list-item`; tokens expose `task_marker`; nested checked item metadata exists. |
-| Inline marks | 55% | Strong/emphasis/strike/code/link tokens exist. Nested mark edge cases need fixtures. |
-| Links and images | 65% | Direct and reference-style links/images are now covered by extras and parity fixtures. Advanced titles/edge cases still need expansion. |
-| Footnotes | 45% | Token coverage exists; rendering/parity fixtures still need expansion. |
-| HTML blocks/inline HTML | 45% | Token coverage exists. Sanitization/export rules not complete. |
-| Math blocks/inline math | 35% | Rust now detects inline `$...$` and block `$$...$$`, emits extras and placeholder HTML. Full KaTeX/Muya preview parity is not done. |
-| Diagrams | 35% | Rust now detects mermaid/flowchart/sequence/vega/plantuml fences, emits extras and placeholder HTML. Full preview parity is not done. |
-| Frontmatter | 45% | Simple key/value, booleans and arrays supported. Full YAML compatibility not implemented. |
-| Export HTML contract | 40% | Rendering exists; task classes, math/diagram placeholders, reference links and nested-list metadata are now covered. MarkText/Muya export normalization is not fully matched. |
+| CommonMark block parsing | 65% | Headings, paragraphs, blockquotes, lists, HR and code blocks exist. Nested list metadata and deterministic fixtures exist. |
+| GFM tables | 70% | Render/token support exists, row/column contracts exist, and deterministic alignment/export fixtures exist. |
+| Task lists | 75% | HTML classes are normalized to `task-list` and `task-list-item`; tokens expose `task_marker`; nested checked item metadata exists. |
+| Inline marks | 70% | Strong/emphasis/strike/code/link tokens exist, and nested inline mark deterministic fixtures exist. More exotic nesting still needs source comparison. |
+| Links and images | 70% | Direct and reference-style links/images are covered by extras and parity fixtures. Advanced title/escaping cases still need expansion. |
+| Footnotes | 70% | Definitions, references and footnote HTML contract now exist with fixtures. Exact MarkText export still needs source comparison. |
+| HTML blocks/inline HTML | 65% | Token coverage and sanitization contract exist. Dangerous payload tests are kept in Rust tests, not JSON fixtures. |
+| Math blocks/inline math | 65% | Inline and block math emit extras plus KaTeX-like HTML contract. Real KaTeX rendering parity is not done. |
+| Diagrams | 65% | Mermaid/flowchart/sequence/vega/plantuml fences emit extras plus diagram HTML contract. Real preview renderer parity is not done. |
+| Frontmatter | 70% | YAML-like scalars, booleans, numbers, null, inline arrays, block arrays and simple objects are covered. Full YAML spec is not implemented. |
+| Export HTML contract | 65% | Rendering exists; task classes, math/diagram placeholders, reference links, footnotes, sanitized HTML and table alignment are covered. Exact MarkText export normalization still needs source comparison. |
 
 ## Editor interaction parity
 
@@ -58,8 +58,8 @@ Reference source: the Electron/MarkText Muya implementation is the source of tru
 
 ## Honest global estimate
 
-- Muya deterministic Markdown engine: about 55-65%.
+- Muya deterministic Markdown engine: about 65-75%.
 - Muya full editor behavior: about 20-30%.
 - Full Tauri replacement of Electron app: about 22-28%.
 
-The next milestone is not "claim 100%". The next milestone is: every Muya feature above must have a fixture and a parity assertion. Only then can the percentage become objective.
+The engine is not allowed to claim 100% until every line above is backed by parity fixtures and compared against the Electron/Muya source behavior.

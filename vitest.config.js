@@ -9,6 +9,7 @@ const __dirname = dirname(__filename)
 export default defineConfig({
   test: {
     environment: 'jsdom',
+    setupFiles: ['test/unit/setup/webgl.js'],
     include: ['test/unit/**/*.spec.js', 'Elephant/tests/unit/**/*.spec.js'],
     globals: true,
     coverage: {

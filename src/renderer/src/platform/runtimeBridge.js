@@ -29,9 +29,7 @@ const readStoredJson = (target, key, fallback) => {
     const raw = target?.localStorage?.getItem(key) ?? target?.__TAURI_BRIDGE_STORAGE__?.get?.(key) ?? null
     if (raw == null) return fallback
     return JSON.parse(raw)
-  } catch {
-    return fallback
-  }
+  } catch { return fallback }
 }
 
 const writeStoredJson = (target, key, value) => {
@@ -41,9 +39,7 @@ const writeStoredJson = (target, key, value) => {
     target.__TAURI_BRIDGE_STORAGE__.set(key, raw)
     try { target?.localStorage?.setItem(key, raw) } catch {}
     return true
-  } catch {
-    return false
-  }
+  } catch { return false }
 }
 
 const getStoredPreferences = (target) => readStoredJson(target, USER_PREFS_STORAGE_KEY, {})
@@ -89,9 +85,7 @@ export const createPathFacade = () => {
     const { prefix, segments } = splitSegments(value)
     const body = segments.join('/')
     if (!body) return prefix === '/' ? '/' : prefix || '.'
-    return prefix === '/' || prefix === '//' || /^[a-zA-Z]:\/$/.test(prefix)
-      ? `${prefix.replace(/\/$/, '')}/${body}`.replace(/\/+/g, '/')
-      : body
+    return prefix === '/' || prefix === '//' || /^[a-zA-Z]:\/$/.test(prefix) ? `${prefix.replace(/\/$/, '')}/${body}`.replace(/\/+/g, '/') : body
   }
   const dirname = (pathname) => {
     const value = normalizeSlashes(pathname)
@@ -119,10 +113,7 @@ export const createPathFacade = () => {
   const relative = (from, to) => {
     const fromParts = splitSegments(resolve(from)).segments
     const toParts = splitSegments(resolve(to)).segments
-    while (fromParts.length && toParts.length && fromParts[0] === toParts[0]) {
-      fromParts.shift()
-      toParts.shift()
-    }
+    while (fromParts.length && toParts.length && fromParts[0] === toParts[0]) { fromParts.shift(); toParts.shift() }
     return [...fromParts.map(() => '..'), ...toParts].join('/') || ''
   }
   const joinWithAbsolute = (parts, resolveMode = false) => {
@@ -133,6 +124,26 @@ export const createPathFacade = () => {
   function joinedPath(parts, resolveMode = false) { return joinWithAbsolute(parts, resolveMode) }
   return { sep: '/', delimiter: ':', normalize, join, resolve, dirname, basename, extname, isAbsolute, relative }
 }
+
+const createTauriFileUtilsFacade = (tauriFs) => ({
+  isFile: () => false,
+  isDirectory: () => false,
+  emptyDir: async(pathname) => { if (tauriFs?.remove) return tauriFs.remove(pathname, { recursive: true }) },
+  copy: async(src, dest) => tauriFs?.copyFile?.(src, dest),
+  ensureDir: async(pathname) => tauriFs?.mkdir?.(pathname, { recursive: true }).catch(() => {}),
+  outputFile: async(pathname, data) => typeof data === 'string' ? tauriFs?.writeTextFile?.(pathname, data) : tauriFs?.writeFile?.(pathname, data),
+  move: async(src, dest) => tauriFs?.rename?.(src, dest),
+  stat: async(pathname) => tauriFs?.stat?.(pathname),
+  writeFile: async(pathname, data) => typeof data === 'string' ? tauriFs?.writeTextFile?.(pathname, data) : tauriFs?.writeFile?.(pathname, data),
+  readFile: async(pathname) => tauriFs?.readTextFile?.(pathname) ?? tauriFs?.readFile?.(pathname),
+  ensureDirSync: () => {},
+  pathExistsSync: () => false,
+  isChildOfDirectory: (dir, child) => normalizeSlashes(child).startsWith(normalizeSlashes(dir).replace(/\/+$/, '')),
+  hasMarkdownExtension: (filename) => /\.md$/i.test(String(filename || '')),
+  MARKDOWN_INCLUSIONS: ['.md', '.markdown', '.mdown', '.mkdn', '.mkd', '.mdtxt'],
+  isSamePathSync: (pathA, pathB) => normalizeSlashes(pathA) === normalizeSlashes(pathB),
+  isImageFile: (filepath) => /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(String(filepath || ''))
+})
 
 const createEventBus = (target = globalThis) => {
   const listeners = new Map()
@@ -189,11 +200,7 @@ const createTauriFacade = (target, tauri) => {
   const coreApi = tauri?.core
   const fsApi = tauri?.fs
   const eventBus = createEventBus(target)
-  const openFolderPath = async(pathname) => {
-    if (!pathname) return
-    bridgeLog('open-folder:selected', { pathname })
-    eventBus.send('mt::open-directory', pathname)
-  }
+  const openFolderPath = async(pathname) => { if (pathname) { bridgeLog('open-folder:selected', { pathname }); eventBus.send('mt::open-directory', pathname) } }
   const dispatchNativeCommand = async(channel, args) => {
     bridgeLog('native:send', { channel, args: args.map(summarize) })
     switch (channel) {
@@ -205,20 +212,11 @@ const createTauriFacade = (target, tauri) => {
         else bridgeLog('open-folder:cancelled')
         return true
       }
-      case 'mt::ask-for-user-preference':
-        eventBus.send('mt::user-preference', getStoredPreferences(target)); return true
-      case 'mt::ask-for-user-data':
-        eventBus.send('mt::user-preference', getStoredUserData(target)); return true
-      case 'mt::set-user-preference': {
-        const [settings] = args
-        eventBus.send('mt::user-preference', setStoredPreferences(target, settings)); return true
-      }
-      case 'mt::set-user-data': {
-        const [settings] = args
-        eventBus.send('mt::user-preference', setStoredUserData(target, settings)); return true
-      }
-      default:
-        return false
+      case 'mt::ask-for-user-preference': eventBus.send('mt::user-preference', getStoredPreferences(target)); return true
+      case 'mt::ask-for-user-data': eventBus.send('mt::user-preference', getStoredUserData(target)); return true
+      case 'mt::set-user-preference': eventBus.send('mt::user-preference', setStoredPreferences(target, args[0])); return true
+      case 'mt::set-user-data': eventBus.send('mt::user-preference', setStoredUserData(target, args[0])); return true
+      default: return false
     }
   }
   const invoke = async(channel, payload) => {
@@ -232,14 +230,7 @@ const createTauriFacade = (target, tauri) => {
     return coreApi.invoke(channel, payload)
   }
   return {
-    ipcRenderer: {
-      send: (channel, ...args) => { void dispatchNativeCommand(channel, args).then((handled) => { if (!handled) eventBus.send(channel, ...args) }) },
-      on: eventBus.on,
-      once: eventBus.once,
-      removeListener: eventBus.removeListener,
-      removeAllListeners: eventBus.removeAllListeners,
-      invoke
-    },
+    ipcRenderer: { send: (channel, ...args) => { void dispatchNativeCommand(channel, args).then((handled) => { if (!handled) eventBus.send(channel, ...args) }) }, on: eventBus.on, once: eventBus.once, removeListener: eventBus.removeListener, removeAllListeners: eventBus.removeAllListeners, invoke },
     shell: { openExternal: async(url) => openUrl(url), openPath: async(pathname) => openPath(pathname), showItemInFolder: async(pathname) => revealItemInDir(pathname), exec: async(command, args = [], options = {}) => coreApi.invoke('shell_exec', { command, args, cwd: options.cwd || null, env: options.env || null }) },
     clipboard: { writeText: async(text) => clipboardWriteText(text), readText: async() => clipboardReadText() },
     webUtils: { getPathForFile: (file) => file?.path || file?.webkitRelativePath || file?.name || '' },
@@ -258,10 +249,12 @@ export const installRuntimeBridge = (target = globalThis) => {
   if (!target.elephantnote) target.elephantnote = {}
   if (hasElectron) return { mode: markRuntime('electron'), installed: false }
   if (hasTauri) {
+    target.fileUtils = target.fileUtils || createTauriFileUtilsFacade(target.__TAURI__?.fs)
     target.electron = createTauriFacade(target, target.__TAURI__)
     return { mode: markRuntime('tauri'), installed: true }
   }
   const eventBus = createEventBus(target)
+  target.fileUtils = target.fileUtils || createTauriFileUtilsFacade(null)
   target.electron = { ipcRenderer: eventBus, shell: {}, clipboard: {}, webUtils: {}, process: { platform: 'browser', env: {} } }
   return { mode: markRuntime('tauri-compatible'), installed: true }
 }

@@ -4,9 +4,11 @@ The deterministic Rust engine may only be considered 100% compatible with Muya a
 
 ## Current state
 
-`muya_source_snapshots.json` is currently kept in the legacy array shape so existing Rust tests continue to read it directly.
+`muya_source_snapshots.json` is kept as a JSON array so existing Rust tests can read it directly.
 
-`generate-muya-source-snapshots.mjs` now supports two modes:
+`muya_source_snapshots_meta.json` stores generation metadata such as mode, strictness and adapter path.
+
+`generate-muya-source-snapshots.mjs` supports two modes:
 
 ```bash
 pnpm muya:snapshots
@@ -18,7 +20,22 @@ This regenerates contract snapshots. This is useful for development, but it is n
 node scripts/generate-muya-source-snapshots.mjs --strict-real --adapter=scripts/adapters/real-muya-renderer.mjs
 ```
 
-This is the required 100% mode. It must fail if the adapter is missing.
+This is the required 100% mode. It must fail if the adapter is missing or if the adapter cannot load Muya.
+
+## Real adapter
+
+A strict adapter scaffold exists at:
+
+```text
+scripts/adapters/real-muya-renderer.mjs
+```
+
+It attempts to load `@muyajs/core` and use Muya's static rendering APIs. Install the package before running strict snapshots:
+
+```bash
+pnpm add -D @muyajs/core
+node scripts/generate-muya-source-snapshots.mjs --strict-real --adapter=scripts/adapters/real-muya-renderer.mjs
+```
 
 ## Adapter contract
 
@@ -43,7 +60,7 @@ export async function renderCase(caseInput) {
 }
 ```
 
-The adapter should eventually call the real Electron/Muya renderer, not the Rust implementation and not the contract fallback.
+The adapter must call the real Electron/Muya renderer, not the Rust implementation and not the contract fallback.
 
 ## 100% rule
 
@@ -51,6 +68,7 @@ Do not mark `Muya deterministic Markdown engine` as 100% until all conditions be
 
 1. The real adapter exists.
 2. `--strict-real` succeeds without fallback.
-3. Rust snapshot tests compare against those generated snapshots.
-4. Edge fixtures include all known Muya block, inline, table, math, diagram, footnote, HTML and frontmatter cases.
-5. Any Electron/Muya snapshot change causes Rust tests to fail until the Rust engine is updated.
+3. `muya_source_snapshots_meta.json` says `mode: real-electron-muya-renderer`.
+4. Rust snapshot tests compare against those generated snapshots.
+5. Edge fixtures include all known Muya block, inline, table, math, diagram, footnote, HTML and frontmatter cases.
+6. Any Electron/Muya snapshot change causes Rust tests to fail until the Rust engine is updated.

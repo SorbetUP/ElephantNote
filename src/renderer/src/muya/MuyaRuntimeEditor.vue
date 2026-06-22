@@ -5,6 +5,7 @@
       class="muya-runtime-editor"
       data-testid="muya-runtime-editor"
       @input="handleInput"
+      @keydown="handleKeydown"
       @paste="handlePaste"
     />
   </div>
@@ -13,6 +14,7 @@
 <script setup>
 import { computed, toRef, watch } from 'vue'
 
+import { handleMuyaKeydown } from './inputRulesRuntime.js'
 import { useMuyaRuntimeEditor } from './useMuyaRuntimeEditor.js'
 
 const props = defineProps({
@@ -31,9 +33,17 @@ const mode = toRef(props, 'mode')
 const runtime = useMuyaRuntimeEditor({ markdown, mode })
 const { rootRef, runtimeRef, ready } = runtime
 
-const handleInput = () => {
+const syncAndEmit = () => {
   const next = runtime.syncFromRuntime()
   emit('change', next)
+}
+
+const handleInput = () => {
+  syncAndEmit()
+}
+
+const handleKeydown = (event) => {
+  if (handleMuyaKeydown(runtimeRef.value, event)) syncAndEmit()
 }
 
 const handlePaste = (event) => {
@@ -43,8 +53,7 @@ const handlePaste = (event) => {
   if (!html && !text) return
   event.preventDefault()
   runtimeRef.value.pasteClipboard({ html, text })
-  const next = runtime.syncFromRuntime()
-  emit('change', next)
+  syncAndEmit()
 }
 
 watch(ready, (value) => {

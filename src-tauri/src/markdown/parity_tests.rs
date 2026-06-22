@@ -2,6 +2,7 @@ use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
 
+use super::muya_compat::parse_muya_document;
 use super::parse_markdown_document;
 
 #[test]
@@ -17,6 +18,7 @@ fn validates_markdown_parity_fixtures() {
     let markdown = case["markdown"].as_str().expect("case markdown");
     let expect = &case["expect"];
     let doc = parse_markdown_document(markdown);
+    let muya_doc = parse_muya_document(markdown);
 
     if let Some(title) = expect.get("title").and_then(Value::as_str) {
       assert_eq!(doc.frontmatter["title"], title, "case {name}");
@@ -38,9 +40,16 @@ fn validates_markdown_parity_fixtures() {
       let code_blocks = doc.blocks.iter().filter(|block| block.kind == "code").count() as u64;
       assert_eq!(code_blocks, count, "case {name}");
     }
+    if let Some(kinds) = expect.get("extraKinds").and_then(Value::as_array) {
+      let extras = muya_doc["extras"].as_array().expect("extras array");
+      for kind in kinds.iter().filter_map(Value::as_str) {
+        assert!(extras.iter().any(|extra| extra["kind"] == kind), "case {name} missing extra kind {kind}");
+      }
+    }
     if let Some(needles) = expect.get("htmlContains").and_then(Value::as_array) {
       for needle in needles.iter().filter_map(Value::as_str) {
-        assert!(doc.html.contains(needle), "case {name} missing html fragment {needle}");
+        let html = muya_doc["html"].as_str().unwrap_or(&doc.html);
+        assert!(html.contains(needle), "case {name} missing html fragment {needle}");
       }
     }
   }

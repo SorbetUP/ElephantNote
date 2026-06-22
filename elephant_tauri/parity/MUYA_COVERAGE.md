@@ -2,7 +2,7 @@
 
 This file is the migration contract for replacing Muya behavior with Rust/Tauri behavior without changing the Vue UI.
 
-Reference source: the Electron/MarkText Muya implementation is the source of truth. The Rust engine is not considered equivalent until every observable item below has fixtures and tests.
+Reference source: the Electron/MarkText Muya implementation is the source of truth. The Rust engine/runtime is not considered equivalent until every observable item below has fixtures and tests.
 
 ## Status scale
 
@@ -55,23 +55,28 @@ bash scripts/tauri-rust-check.sh
 
 | Area | Current estimate | Notes |
 |---|---:|---|
-| Cursor/selection model | 20% | Pure cursor movement and selection-extension contracts exist; DOM selection parity is not verified yet. |
-| Input rules | 25% | Contracts exist for headings, lists, tasks, blockquote, HR, code fence and math block. Transform application is still not fully ported. |
-| Backspace/delete behavior | 20% | Text-buffer backspace/remove-next and selection replacement are covered. Structural Markdown behavior is not complete. |
-| Arrow navigation | 20% | Left/right/up/down/line-start/line-end contracts exist. Block-aware navigation is not complete. |
-| Clipboard copy/cut/paste | 25% | Copy as Markdown, copy as HTML and paste replacement contracts exist. Full HTML paste normalization is not complete. |
-| Drag/drop images/files | 0% | Not ported. |
-| Table editing controls | 25% | Insert row/column and table contract functions exist. Full Muya table UI behavior is not complete. |
-| Image selection/editing | 20% | Image-under-cursor detection exists. Resize/edit UI behavior is not complete. |
-| History/undo/redo | 25% | Basic undo/redo stacks exist for Rust edit state. Full grouped transaction parity is not complete. |
-| IME/composition | 20% | Start/update/commit/cancel composition contracts exist. Browser composition-event parity is not verified yet. |
+| DOM editor real | 45% | A contenteditable DOM editor runtime exists in `selectionRuntime.js`, with selection snapshot/restore. It is not yet wired as the production editor. |
+| Browser selection | 45% | Node-path based selection serialization/restore is implemented and unit-tested. Complex browser selection edge cases still need real browser tests. |
+| JSONState compatible Muya | 45% | JSONState-like parse/render/HTML runtime exists for headings, paragraphs, blockquotes, lists, tasks, code, math and tables. It is not full Muya JSONState yet. |
+| OT operations | 40% | Insert/delete/replace, transform and transaction composition exist in `operationsRuntime.js`. Collaborative OT parity is not complete. |
+| Grouped history | 45% | Grouped undo/redo exists for runtime transactions. Full Muya grouped history semantics still need source comparison. |
+| Clipboard HTML complex | 45% | Clipboard runtime sanitizes and converts pasted HTML from rich sources into Markdown. More Word/Notion/web cases need fixtures. |
+| Paste from Word/Notion/web | 45% | Word/Notion style attributes and rich HTML are normalized in `clipboardRuntime.js`; not exhaustive yet. |
+| Table editing UI complete | 45% | Row/column insert/delete and alignment commands exist in `tableImageRuntime.js`; UI integration and all table gestures are not complete. |
+| Image resize/edit toolbar | 45% | Image-under-cursor, toolbar state and Markdown width update exist. Real resize handles and asset pipeline integration are not complete. |
+| Footnote popup tool | 45% | Footnote popup state and upsert behavior exist. Real floating popup UI is not wired yet. |
+| Slash command menu | 45% | Slash command filtering and snippets exist. Real menu UI/event integration is not wired yet. |
+| Floating toolbars | 45% | Floating toolbar state/actions exist. DOM placement and collision behavior need browser tests. |
+| Preview blocks | 45% | KaTeX-like and diagram preview descriptors exist. Real KaTeX/Mermaid/Vega/PlantUML renderers are not wired in runtime yet. |
+| Round-trip Markdown HTML exact | 35% | JSONState Markdown/HTML round-trip primitives exist; exact Muya round-trip is not complete. |
+| CommonMark/GFM edge cases | 75% | Rust deterministic edge contracts exist; renderer runtime still needs more JS fixtures. |
 
 ## App migration parity
 
 | Area | Current estimate | Notes |
 |---|---:|---|
 | Vue UI reuse | 80% | Tauri uses the same AppShell path again. Pixel diff tests are still missing. |
-| Runtime bridge | 40% | Muya editor contract commands are now exposed; many Electron APIs are still stubs. |
+| Runtime bridge | 45% | Muya editor contract commands and renderer runtime contracts are now exposed/available; many Electron APIs are still stubs. |
 | Notes read/write | 40% | Basic Rust commands exist. Full tab/editor integration still incomplete. |
 | Vault layout | 65% | Hidden/visible layout exists. More migration tests needed. |
 | Search | 15% | Basic query/rebuild exists. Not equivalent to Electron yet. |
@@ -82,7 +87,7 @@ bash scripts/tauri-rust-check.sh
 ## Honest global estimate
 
 - Muya deterministic Markdown engine: about 78-85%.
-- Muya full editor behavior: about 20-30%.
-- Full Tauri replacement of Electron app: about 22-28%.
+- Muya full editor behavior: about 40-50%.
+- Full Tauri replacement of Electron app: about 25-32%.
 
-The engine is not allowed to claim 100% until strict real snapshots are generated through `scripts/adapters/real-muya-renderer.mjs`, `muya_source_snapshots_meta.json` reports `real-electron-muya-renderer`, and every edge-case row stays green in Rust.
+The engine/runtime is not allowed to claim 100% until strict real snapshots are generated through `scripts/adapters/real-muya-renderer.mjs`, `muya_source_snapshots_meta.json` reports `real-electron-muya-renderer`, the renderer runtime is wired into the production editor, and every Rust + JS parity test stays green.

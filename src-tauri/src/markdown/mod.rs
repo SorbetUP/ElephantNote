@@ -23,6 +23,12 @@ mod deterministic_parity_render_tests;
 mod editor_parity_tests;
 
 #[cfg(test)]
+mod muya_snapshot_basic_tests;
+
+#[cfg(test)]
+mod muya_snapshot_render_tests;
+
+#[cfg(test)]
 mod parity_tests;
 
 pub use parser_v4::parse_markdown_document;

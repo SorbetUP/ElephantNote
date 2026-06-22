@@ -6,6 +6,18 @@ const toErrorObject = (error) => ({
   stack: error?.stack || ''
 })
 
+const forwardToTauriTerminal = (entry) => {
+  const invoke = globalThis.window?.__TAURI__?.core?.invoke
+  if (!invoke) return
+  try {
+    void invoke('tauri_debug_log', {
+      level: entry.level,
+      message: entry.message,
+      details: entry.details || null
+    }).catch(() => {})
+  } catch {}
+}
+
 export const pushDiagnosticLog = (level, message, details = null) => {
   const target = globalThis.window || globalThis
   const entry = {
@@ -19,6 +31,7 @@ export const pushDiagnosticLog = (level, message, details = null) => {
   if (target.__ELEPHANT_DEBUG_LOGS__.length > MAX_LOGS) target.__ELEPHANT_DEBUG_LOGS__.shift()
   const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'
   console[method](`[elephant:${level}] ${message}`, entry.details || '')
+  forwardToTauriTerminal(entry)
   return entry
 }
 

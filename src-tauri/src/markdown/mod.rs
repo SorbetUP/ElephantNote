@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod muya_compat;
 pub mod parser_v4;
 pub mod renderer_v2;
 pub mod types;

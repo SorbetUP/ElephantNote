@@ -60,7 +60,7 @@ fn generate_tauri_parity_tests() {
   }
 
   for index in 0..70 {
-    push_test(&mut out, &format!("generated_tag_parse_case_{index:03}"), &format!("let tags = parse_tags(\" [alpha-{index}, #beta-{index}, gamma-{index}] \""); assert_eq!(tags, vec![String::from(\"alpha-{index}\"), String::from(\"beta-{index}\"), String::from(\"gamma-{index}\")]);"));
+    push_test(&mut out, &format!("generated_tag_parse_case_{index:03}"), &format!(r#"let tags = parse_tags(" [alpha-{index}, #beta-{index}, gamma-{index}] "); assert_eq!(tags, vec![String::from("alpha-{index}"), String::from("beta-{index}"), String::from("gamma-{index}")]);"#));
   }
 
   for index in 0..70 {

@@ -11,10 +11,10 @@ import {
 } from '../../src/renderer/src/muya/index.js'
 
 describe('advanced Muya runtime behavior', () => {
-  it('uses active mode by default only in Tauri-like runtimes', () => {
-    expect(defaultMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('active')
+  it('uses shadow mode by default in Tauri while the runtime is stabilizing', () => {
+    expect(defaultMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('shadow')
     expect(defaultMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'electron' })).toBe('disabled')
-    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('active')
+    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('shadow')
   })
 
   it('applies keyboard input rules for list continuation and indentation', () => {

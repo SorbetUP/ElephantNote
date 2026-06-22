@@ -2,16 +2,26 @@
 export const isUpdatable = () => {
   // TODO: t('commands.utils.todoUpdateCheck')
 
-  const resFile = window.fileUtils.isFile(window.path.join(process.resourcesPath, 'app-update.yml'))
+  const fileUtils = globalThis.window?.fileUtils
+  const pathApi = globalThis.window?.path
+  const resourcesPath = globalThis.process?.resourcesPath
+  const platform = globalThis.process?.platform
+  const env = globalThis.process?.env || {}
+
+  if (typeof fileUtils?.isFile !== 'function' || typeof pathApi?.join !== 'function' || !resourcesPath) {
+    return false
+  }
+
+  const resFile = fileUtils.isFile(pathApi.join(resourcesPath, 'app-update.yml'))
   if (!resFile) {
     // t('commands.utils.noUpdateResourceFile')
     return false
-  } else if (process.env.APPIMAGE) {
+  } else if (env.APPIMAGE) {
     // We are running as AppImage.
     return true
   } else if (
-    process.platform === 'win32' &&
-    window.fileUtils.isFile(window.path.join(process.resourcesPath, 'md.ico'))
+    platform === 'win32' &&
+    fileUtils.isFile(pathApi.join(resourcesPath, 'md.ico'))
   ) {
     // Windows is a little but tricky. The update resource file is always available and
     // there is no way to check the target type at runtime (electron-builder#4119).

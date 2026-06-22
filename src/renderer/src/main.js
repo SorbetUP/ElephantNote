@@ -6,6 +6,7 @@ import axios from './axios'
 import pinia from './store'
 import './assets/symbolIcon'
 import { installRuntimeBridge } from './platform/runtimeBridge'
+import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
 import { appDataDir } from '@tauri-apps/api/path'
 
@@ -29,6 +30,7 @@ import './assets/styles/printService.css'
 
 globalThis.marktext = {}
 installRuntimeBridge()
+installTauriElephantNoteBridge()
 const isNonElectronRuntime = () => window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron'
 
 const bootstrapTauriRuntime = async() => {

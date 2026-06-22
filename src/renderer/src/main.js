@@ -9,6 +9,7 @@ import { installRuntimeBridge } from './platform/runtimeBridge'
 import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
 import { installRendererDiagnostics, pushDiagnosticLog, showDiagnosticOverlay } from './platform/rendererDiagnostics'
+import { installStoreDiagnostics } from './platform/storeDiagnostics'
 import { appDataDir } from '@tauri-apps/api/path'
 
 // Element Plus instead of Element UI for Vue 3
@@ -98,6 +99,7 @@ const startApp = async() => {
 
     app.use(router)
     app.use(pinia)
+    installStoreDiagnostics()
     app.use(i18nPlugin)
 
     // Configure axios globally

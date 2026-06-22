@@ -5,7 +5,10 @@
         v-if="!init"
         class="editor-placeholder"
       />
-      <app-shell v-if="init && !muyaRuntimeActive" />
+      <app-shell
+        v-if="init"
+        :class="{ 'muya-runtime-underlay': muyaRuntimeActive }"
+      />
       <MuyaRuntimeEditor
         v-if="init && muyaRuntimeEnabled"
         v-show="muyaRuntimeActive"
@@ -241,8 +244,14 @@ onBeforeUnmount(() => {
     flex: 1;
   }
 }
+.muya-runtime-underlay {
+  opacity: 0;
+  pointer-events: none;
+}
 .muya-runtime-production-editor {
-  flex: 1;
+  position: absolute;
+  inset: 0;
+  z-index: 20;
   min-height: 100vh;
   padding: 48px 72px;
   overflow: auto;

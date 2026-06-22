@@ -57,5 +57,25 @@
       "extraKinds": ["diagram"],
       "htmlContains": ["diagram-block", "data-language=\"mermaid\"", "graph TD"]
     }
+  },
+  {
+    "name": "muya-reference-links-and-images",
+    "markdown": "# References\n\n[ref]: https://example.com \"Title\"\n\nUse [label][ref] and ![alt][ref].",
+    "expect": {
+      "outlineCount": 1,
+      "extraKinds": ["reference_definition", "reference_link", "reference_image"],
+      "htmlContains": ["https://example.com", "img"]
+    }
+  },
+  {
+    "name": "muya-nested-list-meta",
+    "markdown": "# Lists\n\n- root\n  - child\n    1. ordered\n  - [x] checked",
+    "expect": {
+      "outlineCount": 1,
+      "taskCount": 1,
+      "checkedTaskCount": 1,
+      "extraKinds": ["list_item_meta"],
+      "htmlContains": ["task-list", "checked"]
+    }
   }
 ]

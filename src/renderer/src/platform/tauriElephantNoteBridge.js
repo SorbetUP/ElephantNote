@@ -40,19 +40,31 @@ const createBridge = (target) => ({
         'vaults.remove',
         'directory.list',
         'notes.create',
+        'notes.read',
+        'notes.write',
         'folders.create',
         'sidebar.attach',
         'sidebar.detach',
         'entries.rename',
         'entries.move',
         'entries.delete',
+        'attachments.list',
+        'attachments.writeText',
+        'drawings.list',
+        'drawings.create',
+        'drawings.read',
+        'drawings.write',
         'calendar.list',
         'sources.list',
         'wiki.list',
         'search.query',
+        'search.rebuild',
         'sync.status',
+        'sync.plan',
         'sync.enqueue',
-        'sync.run'
+        'sync.run',
+        'models.getSelection',
+        'models.setSelection'
       ]
     })
   },
@@ -71,6 +83,8 @@ const createBridge = (target) => ({
 
   listDirectory: (relativePath = '') => invoke(target, 'tauri_directory_list', { relativePath }),
   createNote: (payload = {}) => invoke(target, 'tauri_notes_create', asRelativePathPayload(payload)),
+  readNote: (payload = {}) => invoke(target, 'tauri_notes_read', asRelativePathPayload(payload)),
+  writeNote: (payload = {}) => invoke(target, 'tauri_notes_write', normalizePayload(payload)),
   createFolder: (payload = {}) => invoke(target, 'tauri_folders_create', asRelativePathPayload(payload)),
   attachSidebarEntry: (payload = {}) => invoke(target, 'tauri_sidebar_attach', {
     relativePath: payload.relativePath || payload.path || '',
@@ -83,6 +97,24 @@ const createBridge = (target) => ({
   deleteEntry: (payload = {}) => invoke(target, 'tauri_entries_delete', normalizePayload(payload)),
 
   importGoogleKeep: async() => createDesktopOnlyResult('Google Keep import'),
+
+  notes: {
+    read: (payload = {}) => invoke(target, 'tauri_notes_read', asRelativePathPayload(payload)),
+    write: (payload = {}) => invoke(target, 'tauri_notes_write', normalizePayload(payload)),
+    autotag: async() => ({ tags: [] })
+  },
+
+  attachments: {
+    list: () => invoke(target, 'tauri_attachments_list'),
+    writeText: (payload = {}) => invoke(target, 'tauri_attachments_write_text', normalizePayload(payload))
+  },
+
+  drawings: {
+    list: () => invoke(target, 'tauri_drawings_list'),
+    create: (payload = {}) => invoke(target, 'tauri_drawings_create', normalizePayload(payload)),
+    read: (payload = {}) => invoke(target, 'tauri_drawings_read', asRelativePathPayload(payload)),
+    write: (payload = {}) => invoke(target, 'tauri_drawings_write', normalizePayload(payload))
+  },
 
   calendar: {
     list: () => invoke(target, 'tauri_calendar_list'),
@@ -112,8 +144,8 @@ const createBridge = (target) => ({
     initVault: (vaultPath = '') => Promise.resolve({ ok: true, runtime: 'tauri-rust', vaultPath }),
     query: (params = {}) => invoke(target, 'tauri_search_query', { params }),
     status: () => invoke(target, 'tauri_search_status'),
+    rebuild: () => invoke(target, 'tauri_search_rebuild'),
     inspect: async() => ({}),
-    rebuild: async() => ({ ok: true, runtime: 'tauri-rust' }),
     clear: async() => ({ ok: true, runtime: 'tauri-rust' }),
     disable: async() => ({ ok: true, runtime: 'tauri-rust' }),
     enable: async() => ({ ok: true, runtime: 'tauri-rust' })
@@ -121,6 +153,7 @@ const createBridge = (target) => ({
 
   sync: {
     status: () => invoke(target, 'tauri_sync_status'),
+    plan: () => invoke(target, 'tauri_sync_plan'),
     enqueue: (operation, payload = {}) => invoke(target, 'tauri_sync_enqueue', { operation, payload }),
     run: (payloadByOperation = {}) => invoke(target, 'tauri_sync_run', { payloadByOperation })
   },
@@ -128,9 +161,9 @@ const createBridge = (target) => ({
   models: {
     list: async() => [],
     listLocal: async() => [],
-    getSelection: async() => ({}),
-    setSelection: async(selection) => selection,
-    active: async() => null,
+    getSelection: () => invoke(target, 'tauri_models_get_selection'),
+    setSelection: (selection) => invoke(target, 'tauri_models_set_selection', { selection }),
+    active: () => invoke(target, 'tauri_models_get_selection'),
     searchHuggingFace: async() => [],
     info: async() => null,
     download: async() => createDesktopOnlyResult('model download'),
@@ -172,7 +205,6 @@ const createBridge = (target) => ({
   plugins: { list: async() => [], set: async(payload) => payload, run: async() => null },
   tasks: { list: async() => [], set: async(payload) => payload, run: async() => null },
   rag: { chat: async() => ({ answer: '', sources: [] }) },
-  notes: { autotag: async() => ({ tags: [] }) },
   mcp: { listTools: async() => [], callTool: async() => null },
   programs: { list: async() => [], set: async(payload) => payload, run: async() => null }
 })

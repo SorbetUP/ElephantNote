@@ -48,6 +48,9 @@ const createBridge = (target) => ({
         'markdown.toText',
         'markdown.extractFrontmatter',
         'markdown.extractLinks',
+        'muya.parse',
+        'muya.renderHtml',
+        'muya.tokens',
         'folders.create',
         'sidebar.attach',
         'sidebar.detach',
@@ -116,6 +119,12 @@ const createBridge = (target) => ({
     toText: (payload = '') => invoke(target, 'tauri_markdown_to_text', asMarkdownPayload(payload)),
     extractFrontmatter: (payload = '') => invoke(target, 'tauri_markdown_extract_frontmatter', asMarkdownPayload(payload)),
     extractLinks: (payload = '') => invoke(target, 'tauri_markdown_extract_links', asMarkdownPayload(payload))
+  },
+
+  muya: {
+    parse: (payload = '') => invoke(target, 'tauri_muya_parse', asMarkdownPayload(payload)),
+    renderHtml: (payload = '') => invoke(target, 'tauri_muya_render_html', asMarkdownPayload(payload)),
+    tokens: (payload = '') => invoke(target, 'tauri_muya_tokens', asMarkdownPayload(payload))
   },
 
   attachments: {

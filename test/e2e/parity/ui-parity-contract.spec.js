@@ -1,4 +1,4 @@
-const { expect, test } = require('@playwright/test')
+const { expect, test } = require('playwright/test')
 const { launchElectronWithSeededVault } = require('../helpers')
 
 const getBodyText = async(page) => (await page.locator('body').innerText()).trim()

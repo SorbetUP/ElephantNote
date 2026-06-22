@@ -27,6 +27,11 @@ pub fn with_markdown_extension(name: &str) -> String {
 }
 
 #[cfg(test)]
+mod generated_tauri_parity_tests {
+  include!(concat!(env!("OUT_DIR"), "/generated_tauri_parity_tests.rs"));
+}
+
+#[cfg(test)]
 mod tests {
   use super::*;
 

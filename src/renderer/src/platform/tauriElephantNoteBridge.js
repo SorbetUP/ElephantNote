@@ -18,6 +18,7 @@ const asRelativePathPayload = (payload = {}) => {
   if (typeof payload === 'string') return { relativePath: payload }
   return normalizePayload(payload)
 }
+const asMarkdownPayload = (payload = '') => (typeof payload === 'string' ? { markdown: payload } : normalizePayload(payload))
 
 const createDesktopOnlyResult = (feature) => ({
   ok: false,
@@ -42,6 +43,11 @@ const createBridge = (target) => ({
         'notes.create',
         'notes.read',
         'notes.write',
+        'markdown.parse',
+        'markdown.renderHtml',
+        'markdown.toText',
+        'markdown.extractFrontmatter',
+        'markdown.extractLinks',
         'folders.create',
         'sidebar.attach',
         'sidebar.detach',
@@ -102,6 +108,14 @@ const createBridge = (target) => ({
     read: (payload = {}) => invoke(target, 'tauri_notes_read', asRelativePathPayload(payload)),
     write: (payload = {}) => invoke(target, 'tauri_notes_write', normalizePayload(payload)),
     autotag: async() => ({ tags: [] })
+  },
+
+  markdown: {
+    parse: (payload = '') => invoke(target, 'tauri_markdown_parse', asMarkdownPayload(payload)),
+    renderHtml: (payload = '') => invoke(target, 'tauri_markdown_render_html', asMarkdownPayload(payload)),
+    toText: (payload = '') => invoke(target, 'tauri_markdown_to_text', asMarkdownPayload(payload)),
+    extractFrontmatter: (payload = '') => invoke(target, 'tauri_markdown_extract_frontmatter', asMarkdownPayload(payload)),
+    extractLinks: (payload = '') => invoke(target, 'tauri_markdown_extract_links', asMarkdownPayload(payload))
   },
 
   attachments: {

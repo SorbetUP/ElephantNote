@@ -5,8 +5,10 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
+use crate::vault_layout;
+
 type R<T> = Result<T, String>;
-const META: &str = ".elephantnote";
+const META: &str = vault_layout::HIDDEN_ROOT;
 const CONFIG_FILE: &str = "tauri-vaults.json";
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -85,6 +87,10 @@ fn active_vault(config: &Config) -> Option<Vault> {
 }
 
 fn workspace_path(root: &str, file: &str) -> PathBuf {
+  vault_layout::config_file(root, file)
+}
+
+fn legacy_workspace_path(root: &str, file: &str) -> PathBuf {
   PathBuf::from(root).join(META).join(file)
 }
 
@@ -104,24 +110,33 @@ fn read_json(path: PathBuf, fallback: Value) -> Value {
 
 fn init_vault(root: &str) -> R<Value> {
   let root_path = PathBuf::from(root);
-  fs::create_dir_all(root_path.join(META)).map_err(|e| e.to_string())?;
+  fs::create_dir_all(vault_layout::hidden_root(&root_path)).map_err(|e| e.to_string())?;
+  for dir in vault_layout::required_hidden_dirs() {
+    fs::create_dir_all(vault_layout::hidden_dir(&root_path, dir)).map_err(|e| e.to_string())?;
+  }
   fs::create_dir_all(root_path.join("Getting Started")).map_err(|e| e.to_string())?;
   let workspace = json!({
     "version": 1,
     "vaultName": basename(&root_path),
     "sidebar": [{ "id": "getting-started", "title": "Getting started", "type": "folder", "path": "Getting Started", "collapsed": false }]
   });
-  write_json_if_missing(workspace_path(root, "workspace.json"), workspace.clone())?;
-  write_json_if_missing(workspace_path(root, "index.json"), json!({ "version": 1, "updatedAt": now(), "entries": [] }))?;
-  write_json_if_missing(workspace_path(root, "calendar.json"), json!({ "version": 1, "updatedAt": now(), "events": [] }))?;
-  write_json_if_missing(workspace_path(root, "sources.json"), json!({ "version": 1, "updatedAt": now(), "sources": [] }))?;
-  write_json_if_missing(workspace_path(root, "wiki.json"), json!({ "version": 1, "updatedAt": now(), "records": [] }))?;
+  write_json_if_missing(workspace_path(root, vault_layout::WORKSPACE_FILE), workspace.clone())?;
+  write_json_if_missing(vault_layout::config_file(root, vault_layout::VAULT_FILE), json!({ "version": 1, "createdAt": now() }))?;
+  write_json_if_missing(vault_layout::index_file(root, vault_layout::INDEX_FILE), json!({ "version": 1, "updatedAt": now(), "entries": [] }))?;
+  write_json_if_missing(vault_layout::config_file(root, vault_layout::CALENDAR_FILE), json!({ "version": 1, "updatedAt": now(), "events": [] }))?;
+  write_json_if_missing(vault_layout::config_file(root, vault_layout::SOURCES_FILE), json!({ "version": 1, "updatedAt": now(), "sources": [] }))?;
+  write_json_if_missing(vault_layout::wiki_file(root, vault_layout::WIKI_FILE), json!({ "version": 1, "updatedAt": now(), "records": [] }))?;
+  write_json_if_missing(vault_layout::models_file(root, vault_layout::MODELS_FILE), json!({ "provider": "none", "modelId": "", "local": false }))?;
+  write_json_if_missing(vault_layout::sync_file(root, vault_layout::SYNC_FILE), json!({ "version": 1, "queue": [], "lastRunAt": null }))?;
   let welcome = root_path.join("Getting Started").join("Welcome.md");
   if !welcome.exists() {
     let stamp = now();
     fs::write(welcome, format!("---\ntitle: \"Welcome\"\ntype: \"note\"\ntags: []\ncreatedAt: \"{}\"\nupdatedAt: \"{}\"\n---\n\n# Welcome to ElephantNote\n", stamp, stamp)).map_err(|e| e.to_string())?;
   }
-  Ok(read_json(workspace_path(root, "workspace.json"), workspace))
+  let canonical = workspace_path(root, vault_layout::WORKSPACE_FILE);
+  let legacy = legacy_workspace_path(root, vault_layout::WORKSPACE_FILE);
+  let fallback = read_json(legacy, workspace.clone());
+  Ok(read_json(canonical, fallback))
 }
 
 fn entry_updated_at(path: &Path) -> String {
@@ -325,26 +340,29 @@ pub fn tauri_folders_create(app: AppHandle, relative_path: Option<String>) -> R<
 #[tauri::command]
 pub fn tauri_sidebar_attach(app: AppHandle, relative_path: String, title: Option<String>, entry_type: Option<String>) -> R<Value> {
   let vault = current(&app)?;
-  let mut workspace = read_json(workspace_path(&vault.path, "workspace.json"), json!({ "sidebar": [] }));
+  let mut workspace = read_json(workspace_path(&vault.path, vault_layout::WORKSPACE_FILE), json!({ "sidebar": [] }));
   let normalized = normalize_relative_path(&relative_path);
   let mut sidebar = workspace.get("sidebar").and_then(Value::as_array).cloned().unwrap_or_default();
   sidebar.retain(|entry| entry.get("path").and_then(Value::as_str) != Some(normalized.as_str()));
   sidebar.push(json!({ "id": id(&normalized), "title": title.unwrap_or_else(|| basename(Path::new(&normalized)).trim_end_matches(".md").to_string()), "type": entry_type.unwrap_or_else(|| if normalized.ends_with(".md") { "note".to_string() } else { "folder".to_string() }), "path": normalized, "collapsed": false }));
   workspace["sidebar"] = json!(sidebar);
-  write_json_if_missing(workspace_path(&vault.path, "workspace.json"), workspace.clone())?;
+  let raw = serde_json::to_string_pretty(&workspace).map_err(|e| e.to_string())?;
+  let path = workspace_path(&vault.path, vault_layout::WORKSPACE_FILE);
+  if let Some(parent) = path.parent() { fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+  fs::write(path, raw).map_err(|e| e.to_string())?;
   Ok(json!({ "workspace": workspace, "entries": list_directory(&vault, "")? }))
 }
 
 #[tauri::command]
 pub fn tauri_sidebar_detach(app: AppHandle, relative_path: String) -> R<Value> {
   let vault = current(&app)?;
-  let mut workspace = read_json(workspace_path(&vault.path, "workspace.json"), json!({ "sidebar": [] }));
+  let mut workspace = read_json(workspace_path(&vault.path, vault_layout::WORKSPACE_FILE), json!({ "sidebar": [] }));
   let normalized = normalize_relative_path(&relative_path);
   let mut sidebar = workspace.get("sidebar").and_then(Value::as_array).cloned().unwrap_or_default();
   sidebar.retain(|entry| entry.get("path").and_then(Value::as_str) != Some(normalized.as_str()));
   workspace["sidebar"] = json!(sidebar);
   let raw = serde_json::to_string_pretty(&workspace).map_err(|e| e.to_string())?;
-  fs::write(workspace_path(&vault.path, "workspace.json"), raw).map_err(|e| e.to_string())?;
+  fs::write(workspace_path(&vault.path, vault_layout::WORKSPACE_FILE), raw).map_err(|e| e.to_string())?;
   Ok(json!({ "workspace": workspace, "entries": list_directory(&vault, "")? }))
 }
 
@@ -378,19 +396,19 @@ pub fn tauri_entries_delete(_app: AppHandle, _relative_path: String) -> R<Value>
 #[tauri::command]
 pub fn tauri_calendar_list(app: AppHandle) -> R<Vec<Value>> {
   let vault = current(&app)?;
-  Ok(read_json(workspace_path(&vault.path, "calendar.json"), json!({ "events": [] })).get("events").and_then(Value::as_array).cloned().unwrap_or_default())
+  Ok(read_json(vault_layout::config_file(&vault.path, vault_layout::CALENDAR_FILE), json!({ "events": [] })).get("events").and_then(Value::as_array).cloned().unwrap_or_default())
 }
 
 #[tauri::command]
 pub fn tauri_sources_list(app: AppHandle) -> R<Vec<Value>> {
   let vault = current(&app)?;
-  Ok(read_json(workspace_path(&vault.path, "sources.json"), json!({ "sources": [] })).get("sources").and_then(Value::as_array).cloned().unwrap_or_default())
+  Ok(read_json(vault_layout::config_file(&vault.path, vault_layout::SOURCES_FILE), json!({ "sources": [] })).get("sources").and_then(Value::as_array).cloned().unwrap_or_default())
 }
 
 #[tauri::command]
 pub fn tauri_wiki_list(app: AppHandle) -> R<Vec<Value>> {
   let vault = current(&app)?;
-  Ok(read_json(workspace_path(&vault.path, "wiki.json"), json!({ "records": [] })).get("records").and_then(Value::as_array).cloned().unwrap_or_default())
+  Ok(read_json(vault_layout::wiki_file(&vault.path, vault_layout::WIKI_FILE), json!({ "records": [] })).get("records").and_then(Value::as_array).cloned().unwrap_or_default())
 }
 
 #[tauri::command]

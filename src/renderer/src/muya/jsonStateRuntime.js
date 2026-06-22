@@ -39,6 +39,7 @@ export const markdownToJsonState = (markdown = '') => {
     blocks.push(block('paragraph', { text: line }))
     i += 1
   }
+  if (!blocks.length) blocks.push(block('paragraph', { text: '' }))
   return { version: 1, type: 'muya-json-state', blocks }
 }
 
@@ -60,7 +61,7 @@ export const jsonStateToHtml = (state) => (state?.blocks || []).map((item) => {
   if (item.type === 'code_fence') return `<pre data-muya-block="code_fence"><code class="language-${escapeAttr(item.language)}">${escapeHtml(item.text)}</code></pre>`
   if (item.type === 'math_block') return `<div data-muya-block="math_block" class="math-block katex-display">${escapeHtml(item.text)}</div>`
   if (item.type === 'table') return tableToHtml(item)
-  return `<p data-muya-block="paragraph">${escapeHtml(item.text || '')}</p>`
+  return `<p data-muya-block="paragraph">${item.text ? escapeHtml(item.text) : '<br>'}</p>`
 }).join('\n')
 
 export const renderJsonStateIntoDom = (root, state, doc = globalThis.document) => {

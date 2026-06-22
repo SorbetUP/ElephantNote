@@ -12,7 +12,12 @@ Active modules:
 - vault/entries.rs: visible vault content operations.
 - vault/commands.rs: Tauri command wrappers for vault operations.
 - vault_layout.rs: canonical hidden/visible vault layout contract.
-- markdown_engine.rs: Markdown metadata engine.
+- markdown/: active Rust Markdown engine replacing the deterministic parts of Muya.
+- markdown/types.rs: parsed document model.
+- markdown/parser.rs: frontmatter, blocks, outline, links, images and tasks parser.
+- markdown/renderer.rs: safe HTML and plain-text renderer.
+- markdown/commands.rs: Tauri command wrappers for Markdown operations.
+- markdown_engine.rs: old simple Markdown metadata helper kept temporarily.
 - path_utils.rs: generic path helpers.
 - note_domain.rs: note naming and Markdown creation.
 - folder_domain.rs: folder path primitives.
@@ -27,6 +32,6 @@ Legacy modules:
 
 Rule: new behavior goes into a small domain module with tests first. Tauri commands should only call those modules.
 
-Future folders: core, markdown, notes, folders, drawings, media, models, search, sync, commands.
+Future folders: core, notes, folders, drawings, media, models, search, sync, commands.
 
 Coverage rule: domain modules must keep at least 90 percent line coverage. Temporary command glue is excluded from the first coverage gate until it is split into smaller testable files.

@@ -16,9 +16,9 @@ const adapterPath = optionValue('--adapter') || process.env.MUYA_SNAPSHOT_ADAPTE
 const parityDir = path.join(root, 'elephant_tauri', 'parity')
 const casesPath = path.join(parityDir, 'muya_deterministic_cases.json')
 const outPath = path.join(parityDir, 'muya_source_snapshots.json')
+const metaPath = path.join(parityDir, 'muya_source_snapshots_meta.json')
 
 const cases = JSON.parse(fs.readFileSync(casesPath, 'utf8'))
-const readCase = (name) => cases.find((item) => item.name === name)
 
 const loadAdapter = async() => {
   if (!adapterPath) return null
@@ -138,15 +138,17 @@ const main = async() => {
     mode: loaded ? 'real-electron-muya-renderer' : 'contract-adapter',
     strictReal,
     adapter: loaded ? path.relative(root, loaded.absolute) : null,
-    snapshots
+    snapshotCount: snapshots.length
   }
 
-  fs.writeFileSync(outPath, `${JSON.stringify(metadata, null, 2)}\n`)
+  fs.writeFileSync(outPath, `${JSON.stringify(snapshots, null, 2)}\n`)
+  fs.writeFileSync(metaPath, `${JSON.stringify(metadata, null, 2)}\n`)
   console.log(`Wrote ${snapshots.length} Muya source snapshots to ${path.relative(root, outPath)}`)
+  console.log(`Wrote metadata to ${path.relative(root, metaPath)}`)
   console.log(`mode=${metadata.mode}`)
   if (!loaded) {
     console.log('Not 100% yet: snapshots were generated from contract adapters, not the real Electron/Muya renderer.')
-    console.log('Use: pnpm muya:snapshots:real -- --adapter=path/to/real-muya-adapter.mjs')
+    console.log('Use: node scripts/generate-muya-source-snapshots.mjs --strict-real --adapter=scripts/adapters/real-muya-renderer.mjs')
   }
 }
 

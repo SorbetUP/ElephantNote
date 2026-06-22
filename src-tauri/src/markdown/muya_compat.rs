@@ -61,6 +61,7 @@ pub fn tokenize_muya(markdown: &str) -> Vec<MuyaToken> {
       Event::HardBreak => tokens.push(text_token("hard_break", "\n")),
       Event::Rule => tokens.push(MuyaToken { kind: "hr".to_string(), entering: false, text: String::new(), attrs: json!({}) }),
       Event::TaskListMarker(checked) => tokens.push(MuyaToken { kind: "task_marker".to_string(), entering: false, text: String::new(), attrs: json!({ "checked": checked }) }),
+      _ => tokens.push(MuyaToken { kind: "unknown_event".to_string(), entering: false, text: String::new(), attrs: json!({}) }),
     }
   }
 

@@ -64,6 +64,7 @@ pub fn run() {
       markdown::commands::tauri_muya_render_html,
       markdown::commands::tauri_muya_tokens,
       markdown::commands::tauri_muya_extras,
+      markdown::commands_contract::tauri_muya_contract,
       markdown::commands::tauri_muya_clipboard,
       markdown::commands::tauri_muya_copy_markdown,
       markdown::commands::tauri_muya_copy_html,

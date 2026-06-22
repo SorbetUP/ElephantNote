@@ -92,6 +92,7 @@ fn start_tag_kind(tag: &Tag<'_>) -> String {
     Tag::Link { .. } => "link",
     Tag::Image { .. } => "image",
     Tag::MetadataBlock(_) => "metadata_block",
+    _ => "unknown_block",
   }.to_string()
 }
 
@@ -115,6 +116,7 @@ fn end_tag_kind(tag: &TagEnd) -> String {
     TagEnd::Link => "link",
     TagEnd::Image => "image",
     TagEnd::MetadataBlock(_) => "metadata_block",
+    _ => "unknown_block",
   }.to_string()
 }
 

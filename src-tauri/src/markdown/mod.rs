@@ -3,6 +3,7 @@ pub mod commands_contract;
 pub mod muya_clipboard;
 pub mod muya_compat;
 pub mod muya_deterministic;
+pub mod muya_edges;
 pub mod muya_extras;
 pub mod muya_frontmatter;
 pub mod muya_interactions;

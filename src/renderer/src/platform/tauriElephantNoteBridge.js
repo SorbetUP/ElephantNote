@@ -51,6 +51,7 @@ const createBridge = (target) => ({
         'muya.parse',
         'muya.renderHtml',
         'muya.tokens',
+        'muya.extras',
         'folders.create',
         'sidebar.attach',
         'sidebar.detach',
@@ -124,7 +125,8 @@ const createBridge = (target) => ({
   muya: {
     parse: (payload = '') => invoke(target, 'tauri_muya_parse', asMarkdownPayload(payload)),
     renderHtml: (payload = '') => invoke(target, 'tauri_muya_render_html', asMarkdownPayload(payload)),
-    tokens: (payload = '') => invoke(target, 'tauri_muya_tokens', asMarkdownPayload(payload))
+    tokens: (payload = '') => invoke(target, 'tauri_muya_tokens', asMarkdownPayload(payload)),
+    extras: (payload = '') => invoke(target, 'tauri_muya_extras', asMarkdownPayload(payload))
   },
 
   attachments: {

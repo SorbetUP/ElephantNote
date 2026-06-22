@@ -11,7 +11,7 @@
     "name": "escaped-markdown-punctuation",
     "markdown": "\\*literal\\* and \\# not heading and \\[not link\\]",
     "expect": {
-      "escapeCount": 6,
+      "escapeCount": 5,
       "literalContains": ["*literal*", "# not heading", "[not link]"]
     }
   },

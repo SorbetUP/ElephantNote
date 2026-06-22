@@ -1,4 +1,5 @@
 use super::muya_compat::{parse_muya_document, render_muya_html, tokenize_muya};
+use super::muya_extras::{collect_list_item_meta, collect_muya_extras};
 use super::parser_v4::{extract_images, extract_links, extract_outline, parse_blocks, parse_markdown_document, split_frontmatter};
 use super::renderer_v2::{normalize_editor_html, render_html, render_plain_text, slugify, strip_inline_markdown};
 
@@ -34,6 +35,23 @@ fn muya_tokenizes_code_and_html() {
   assert!(tokens.iter().any(|token| token.kind == "code_block" && token.attrs["kind"].as_str().unwrap().contains("rust")));
   assert!(tokens.iter().any(|token| token.kind == "html" || token.kind == "inline_html"));
   assert!(tokens.iter().any(|token| token.kind == "inline_code" && token.text == "inline"));
+}
+
+#[test]
+fn muya_collects_reference_links_images_and_definitions() {
+  let extras = collect_muya_extras("[ref]: https://example.com \"Title\"\n\nUse [label][ref] and ![alt][ref].");
+  assert!(extras.iter().any(|extra| extra.kind == "reference_definition" && extra.attrs["url"] == "https://example.com"));
+  assert!(extras.iter().any(|extra| extra.kind == "reference_link" && extra.attrs["reference"] == "ref"));
+  assert!(extras.iter().any(|extra| extra.kind == "reference_image" && extra.text == "alt"));
+}
+
+#[test]
+fn muya_collects_nested_list_item_metadata() {
+  let items = collect_list_item_meta("- root\n  - child\n    1. ordered\n  - [x] checked");
+  assert!(items.iter().any(|item| item.attrs["depth"] == 0 && item.attrs["text"] == "root"));
+  assert!(items.iter().any(|item| item.attrs["depth"] == 1 && item.attrs["text"] == "child"));
+  assert!(items.iter().any(|item| item.attrs["ordered"] == true && item.attrs["marker"] == "1."));
+  assert!(items.iter().any(|item| item.attrs["checked"] == true));
 }
 
 #[test]

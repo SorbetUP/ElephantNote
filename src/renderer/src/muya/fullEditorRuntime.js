@@ -4,6 +4,7 @@ import { applyOperation, createGroupedHistory, pushGroupedHistory, undoGroupedHi
 import { clipboardPayloadToMarkdown, copyMarkdownAndHtml } from './clipboardRuntime.js'
 import { imageToolbarState, resizeImageMarkdown, tableCommand } from './tableImageRuntime.js'
 import { floatingToolbarState, footnotePopupState, previewBlock, slashCommands, upsertFootnote } from './menusPreviewRuntime.js'
+import { createLiveRenderScheduler, domToMarkdown } from './liveRenderingRuntime.js'
 
 export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) => {
   const editor = createDomEditor(root, options.document || globalThis.document)
@@ -19,14 +20,33 @@ export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) =
     return state
   }
 
+  const live = createLiveRenderScheduler({
+    root,
+    getState: () => state,
+    setState: (nextState) => { state = nextState },
+    getDocument: () => options.document || globalThis.document,
+    delay: options.liveDelay || 0
+  })
+
+  const syncDomToState = (group = 'live') => {
+    const before = jsonStateToMarkdown(state)
+    const result = live.renderNow()
+    if (result?.markdown && result.markdown !== before) pushGroupedHistory(history, before, result.markdown, group)
+    return state
+  }
+
   return {
     root,
     editor,
     history,
+    live,
     get state() { return state },
     get markdown() { return jsonStateToMarkdown(state) },
     get html() { return jsonStateToHtml(state) },
     setMarkdown,
+    scheduleLiveRender: () => live.schedule(),
+    renderLiveNow: syncDomToState,
+    domToMarkdown: () => domToMarkdown(root),
     snapshotSelection: () => editor?.snapshotSelection?.(),
     restoreSelection: (snapshot) => editor?.restoreSelection?.(snapshot),
     applyOperation: (operation, group = 'operation') => setMarkdown(applyOperation(jsonStateToMarkdown(state), operation), group),
@@ -61,3 +81,4 @@ export * from './operationsRuntime.js'
 export * from './clipboardRuntime.js'
 export * from './tableImageRuntime.js'
 export * from './menusPreviewRuntime.js'
+export * from './liveRenderingRuntime.js'

@@ -1,10 +1,10 @@
 export const applyLineInputRule = (line = '') => {
   const value = String(line)
-  if (/^#{1,6}\s+/.test(value)) return { type: 'heading', markdown: value }
-  if (/^>\s+/.test(value)) return { type: 'blockquote', markdown: value }
-  if (/^[-*+]\s+\[[ xX]\]\s+/.test(value)) return { type: 'task_list_item', markdown: value.replace(/^[-*+]\s+\[X\]/, '- [x]') }
-  if (/^[-*+]\s+/.test(value)) return { type: 'list_item', markdown: value.replace(/^[-*+]\s+/, '- ') }
-  if (/^\d+\.\s+/.test(value)) return { type: 'ordered_list_item', markdown: value }
+  if (/^\s*#{1,6}\s+/.test(value)) return { type: 'heading', markdown: value }
+  if (/^\s*>\s+/.test(value)) return { type: 'blockquote', markdown: value }
+  if (/^\s*[-*+]\s+\[[ xX]\]\s+/.test(value)) return { type: 'task_list_item', markdown: value.replace(/^(\s*)[-*+]\s+\[X\]/, '$1- [x]') }
+  if (/^\s*[-*+]\s+/.test(value)) return { type: 'list_item', markdown: value.replace(/^(\s*)[-*+]\s+/, '$1- ') }
+  if (/^\s*\d+\.\s+/.test(value)) return { type: 'ordered_list_item', markdown: value }
   if (value.trim() === '$$') return { type: 'math_block', markdown: '$$\n\n$$' }
   if (value.trim().startsWith('```')) return { type: 'code_fence', markdown: `${value.trim()}\n\n\`\`\`` }
   return { type: 'paragraph', markdown: value }

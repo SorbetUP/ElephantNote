@@ -11,7 +11,7 @@
 </template>
 
 <script setup>
-import { computed, toRef } from 'vue'
+import { computed, toRef, watch } from 'vue'
 
 import { useMuyaRuntimeEditor } from './useMuyaRuntimeEditor.js'
 
@@ -47,11 +47,9 @@ const handlePaste = (event) => {
   emit('change', next)
 }
 
-const notifyReady = () => {
-  if (ready.value) emit('ready', runtimeRef.value)
-}
-
-queueMicrotask(notifyReady)
+watch(ready, (value) => {
+  if (value) emit('ready', runtimeRef.value)
+}, { immediate: true })
 </script>
 
 <style scoped>

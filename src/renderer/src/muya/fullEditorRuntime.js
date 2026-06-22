@@ -6,6 +6,7 @@ import { imageToolbarState, resizeImageMarkdown, tableCommand } from './tableIma
 import { floatingToolbarState, footnotePopupState, previewBlock, slashCommands, upsertFootnote } from './menusPreviewRuntime.js'
 import { createLiveRenderScheduler, domToMarkdown } from './liveRenderingRuntime.js'
 import { renderCurrentBlockNow } from './blockLiveRuntime.js'
+import { renderPreviewBlock } from './previewRenderersRuntime.js'
 
 export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) => {
   const editor = createDomEditor(root, options.document || globalThis.document)
@@ -79,7 +80,8 @@ export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) =
     upsertFootnote: (label, text) => setMarkdown(upsertFootnote(jsonStateToMarkdown(state), label, text), 'footnote'),
     slashCommands,
     floatingToolbar: floatingToolbarState,
-    previewBlock
+    previewBlock,
+    renderPreviewBlock
   }
 }
 
@@ -91,3 +93,5 @@ export * from './tableImageRuntime.js'
 export * from './menusPreviewRuntime.js'
 export * from './liveRenderingRuntime.js'
 export * from './blockLiveRuntime.js'
+export * from './inputRulesRuntime.js'
+export * from './previewRenderersRuntime.js'

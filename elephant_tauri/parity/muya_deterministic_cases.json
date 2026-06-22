@@ -1,0 +1,58 @@
+[
+  {
+    "name": "rich-frontmatter",
+    "markdown": "---\ntitle: \"Demo\"\ndraft: false\nscore: 12\nratio: 1.5\ntags:\n  - alpha\n  - beta\nauthor:\n  name: Noam\n  role: engineer\n---\n# Body",
+    "expect": {
+      "frontmatter": {
+        "title": "Demo",
+        "draft": false,
+        "score": 12,
+        "ratio": 1.5,
+        "tag0": "alpha",
+        "authorName": "Noam"
+      }
+    }
+  },
+  {
+    "name": "footnotes",
+    "markdown": "Text with note[^a].\n\n[^a]: Footnote text",
+    "expect": {
+      "footnoteDefinitions": 1,
+      "footnoteReferences": 1,
+      "htmlContains": ["footnotes", "Footnote text"]
+    }
+  },
+  {
+    "name": "katex-like-math",
+    "markdown": "Inline $x+1$\n\n$$\ny=x\n$$",
+    "expect": {
+      "mathInline": 1,
+      "mathBlock": 1,
+      "mathHtmlContains": ["katex", "katex-display", "data-latex"]
+    }
+  },
+  {
+    "name": "diagram-contract",
+    "markdown": "```mermaid\ngraph TD;\nA-->B;\n```",
+    "expect": {
+      "diagramCount": 1,
+      "diagramHtmlContains": ["diagram-block", "diagram-mermaid", "data-diagram-language"]
+    }
+  },
+  {
+    "name": "nested-inline-marks",
+    "markdown": "***bold em*** and ~~**dead**~~ and [`code`](x)",
+    "expect": {
+      "nestedKinds": ["strong_emphasis", "strike_strong", "link_code"]
+    }
+  },
+  {
+    "name": "table-alignment",
+    "markdown": "| A | B | C |\n| :- | :-: | -: |\n| 1 | 2 | 3 |",
+    "expect": {
+      "alignments": ["left", "center", "right"],
+      "columns": 3,
+      "rows": 1
+    }
+  }
+]

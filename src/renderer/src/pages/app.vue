@@ -49,6 +49,7 @@ import { useCommandCenterStore } from '@/store/commandCenter'
 import { useProjectStore } from '@/store/project'
 import { useAutoUpdatesStore } from '@/store/autoUpdates'
 import { useNotificationStore } from '@/store/notification'
+import { debouncedSendBufferedState } from '@/store/bufferedState'
 import { MuyaRuntimeEditor, isMuyaRuntimeActive, isMuyaRuntimeEnabled, readMuyaRuntimeMode } from '@/muya'
 import AppShell from 'elephant-front/components/shell/AppShell.vue'
 
@@ -90,6 +91,7 @@ const muyaRuntimeMarkdown = computed({
       editorStore.tabs[index].markdown = value
       editorStore.tabs[index].isSaved = false
     }
+    debouncedSendBufferedState()
   }
 })
 

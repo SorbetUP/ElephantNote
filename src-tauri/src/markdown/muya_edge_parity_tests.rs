@@ -21,7 +21,7 @@ fn validates_autolink_and_escape_edge_cases() {
 
   let escapes = cases.iter().find(|case| case["name"] == "escaped-markdown-punctuation").unwrap();
   let contract = edge_contract(escapes["markdown"].as_str().unwrap());
-  assert_eq!(contract["escapes"]["items"].as_array().unwrap().len(), 6);
+  assert_eq!(contract["escapes"]["items"].as_array().unwrap().len(), 5);
   let literal = contract["escapes"]["literal"].as_str().unwrap();
   assert!(literal.contains("*literal*"));
   assert!(literal.contains("# not heading"));

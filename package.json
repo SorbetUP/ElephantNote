@@ -104,6 +104,7 @@
     "dom-autoscroller": "^2.3.4",
     "dompurify": "^3.4.3",
     "dragula": "^3.7.3",
+    "electron-log": "^5.4.3",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.8.3",
     "electron-window-state": "^5.0.3",

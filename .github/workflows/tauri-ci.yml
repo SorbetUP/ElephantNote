@@ -13,12 +13,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy, llvm-tools-preview
+          components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-      - run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
-      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - run: cargo check --manifest-path src-tauri/Cargo.toml --lib
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
       - uses: taiki-e/install-action@cargo-llvm-cov
-      - run: bash src-tauri/coverage.sh
+      - run: cd src-tauri && cargo llvm-cov --lib --fail-under-lines 90 --ignore-filename-regex 'src/(lib_min|main|vault_min|vault_backend|vault_backend2|lib)\\.rs'

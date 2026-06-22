@@ -1,5 +1,6 @@
 import App from '@/pages/app'
 import Preference from '@/pages/preference'
+import MuyaRuntimeTest from '@/pages/muya-runtime-test'
 import General from '@/prefComponents/general'
 import Editor from '@/prefComponents/editor'
 import Markdown from '@/prefComponents/markdown'
@@ -25,6 +26,10 @@ const routes = (type) => [
   {
     path: '/editor',
     component: App
+  },
+  {
+    path: '/muya-runtime-test',
+    component: MuyaRuntimeTest
   },
   {
     path: '/preference',

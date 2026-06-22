@@ -3,10 +3,14 @@ import { jsonStateToMarkdown, markdownToJsonState, renderJsonStateIntoDom } from
 
 export const domToMarkdown = (root) => {
   if (!root) return ''
-  return [...root.children].map((node) => blockNodeToMarkdown(node)).filter(Boolean).join('\n\n')
+  const nodes = [...root.childNodes]
+  if (!nodes.length) return ''
+  return nodes.map((node) => blockNodeToMarkdown(node)).filter((value) => value !== null && value !== undefined).join('\n\n').trim()
 }
 
 export const blockNodeToMarkdown = (node) => {
+  if (!node) return ''
+  if (node.nodeType === 3) return node.nodeValue || ''
   const type = node?.dataset?.muyaBlock || node?.tagName?.toLowerCase()
   const text = node?.textContent || ''
   if (type === 'heading' || /^h[1-6]$/.test(type)) {

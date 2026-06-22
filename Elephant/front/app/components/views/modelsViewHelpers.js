@@ -255,6 +255,21 @@ export const getModelQuantization = (model) => {
   return ''
 }
 
+export const getDownloadOption = (model = {}) => {
+  const siblings = Array.isArray(model?.siblings) ? model.siblings : []
+  const sibling = siblings.find((item) => String(item?.rfilename || item?.path || item?.name || '').toLowerCase().endsWith('.gguf')) || null
+  const fileName = String(model?.fileName || model?.filename || sibling?.rfilename || sibling?.path || sibling?.name || model?.name || resolveModelName(model) || '').trim()
+  const sizeBytes = Number(model?.sizeBytes || model?.size || model?.lfs?.size || sibling?.sizeBytes || sibling?.size || sibling?.lfs?.size || 0) || 0
+  const formatModel = { ...model, fileName, filename: fileName }
+  return {
+    fileName: fileName || 'Unknown model file',
+    format: getModelFormat(formatModel),
+    quantization: getModelQuantization(formatModel),
+    sizeBytes,
+    sizeLabel: formatBytes(sizeBytes)
+  }
+}
+
 export const getModelCapabilities = (model) => {
   const caps = new Set()
   const purpose = String(model?.purpose || '').toLowerCase()

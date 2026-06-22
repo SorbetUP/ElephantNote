@@ -1,0 +1,70 @@
+[
+  {
+    "name": "rich-frontmatter",
+    "source": "electron-muya-contract",
+    "expect": {
+      "frontmatter": {
+        "title": "Demo",
+        "draft": false,
+        "score": 12,
+        "ratio": 1.5,
+        "tags": ["alpha", "beta"],
+        "author": { "name": "Noam", "role": "engineer" }
+      }
+    }
+  },
+  {
+    "name": "footnotes",
+    "source": "electron-muya-contract",
+    "expect": {
+      "footnotes": {
+        "definitionLabels": ["a"],
+        "referenceLabels": ["a"],
+        "htmlFragments": ["footnotes", "Footnote text"]
+      }
+    }
+  },
+  {
+    "name": "katex-like-math",
+    "source": "electron-katex-contract",
+    "expect": {
+      "math": {
+        "inlineCount": 1,
+        "blockCount": 1,
+        "htmlFragments": ["math-inline", "katex", "math-block", "katex-display", "data-latex"]
+      }
+    }
+  },
+  {
+    "name": "diagram-contract",
+    "source": "electron-diagram-contract",
+    "expect": {
+      "diagrams": {
+        "count": 1,
+        "languages": ["mermaid"],
+        "htmlFragments": ["diagram-block", "diagram-mermaid", "data-diagram-language"]
+      }
+    }
+  },
+  {
+    "name": "nested-inline-marks",
+    "source": "electron-muya-contract",
+    "expect": {
+      "inlineMarks": {
+        "nestedKinds": ["strong_emphasis", "strike_strong", "link_code"]
+      }
+    }
+  },
+  {
+    "name": "table-alignment",
+    "source": "electron-muya-contract",
+    "expect": {
+      "tables": {
+        "count": 1,
+        "alignments": ["left", "center", "right"],
+        "columns": 3,
+        "rows": 1
+      }
+    }
+  }
+]

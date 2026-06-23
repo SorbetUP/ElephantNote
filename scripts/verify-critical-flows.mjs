@@ -55,8 +55,17 @@ assertOrdered(
 assertOrdered(
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   [
+    'const syncVisibleNoteMetadata = (pathname, metadata = {}) => {',
+    'store.updateNoteMetadata(pathname, metadata)',
+    'store.rootEntries = store.rootEntries.map((entry) => applyNoteMetadata(entry, pathname, metadata))'
+  ],
+  'editor metadata edits must synchronise rootEntries as well as the active list and opened-note history'
+)
+assertOrdered(
+  'Elephant/front/app/components/editor/NoteEditorHost.vue',
+  [
     'const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {',
-    'store.updateNoteMetadata(notePath, metadata)',
+    'syncVisibleNoteMetadata(notePath, metadata)',
     'searchStore.updateNoteIndex(notePath, nextMarkdown, metadata)'
   ],
   'editor edits must synchronise visible list metadata and local search index'

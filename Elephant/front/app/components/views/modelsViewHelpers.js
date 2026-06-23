@@ -421,3 +421,6 @@ export const sortModels = (models = [], sort = 'best') => {
   if (sort === 'name') return list.sort((a, b) => resolveModelName(a).localeCompare(resolveModelName(b)))
   return sortByPopularity(list)
 }
+
+export const applyCatalogFilters = ({ models = [], query = '', format = 'all', source = 'all', sort = 'best' } = {}) =>
+  sortModels(filterBySource(filterByFormat(filterModelsByName(models, query), format), source), sort)

@@ -4,6 +4,7 @@ use tauri::AppHandle;
 use super::config::{get_active_vault, read_config, remove_vault, set_active_vault, set_vault_icon, set_vault_name, upsert_vault, write_config};
 use super::entries;
 use super::metadata::{initialize_vault, read_json_or};
+use super::sync;
 use super::types::active_vault;
 use crate::vault_layout;
 
@@ -186,15 +187,15 @@ pub fn tauri_search_status(app: AppHandle) -> R<Value> {
 
 #[tauri::command]
 pub fn tauri_sync_status(app: AppHandle) -> R<Value> {
-  Ok(json!({ "runtime": "tauri-rust", "activeVault": active_vault(&read_config(&app)?), "queued": 0, "running": false, "lastRunAt": null }))
+  sync::sync_status(active_vault(&read_config(&app)?))
 }
 
 #[tauri::command]
-pub fn tauri_sync_enqueue(operation: String, payload: Option<Value>) -> R<Value> {
-  Ok(json!({ "queued": false, "operation": operation, "payload": payload, "reason": "queue-not-enabled-yet" }))
+pub fn tauri_sync_enqueue(app: AppHandle, operation: String, payload: Option<Value>) -> R<Value> {
+  sync::sync_enqueue(get_active_vault(&app)?, operation, payload)
 }
 
 #[tauri::command]
 pub fn tauri_sync_run(app: AppHandle, payload_by_operation: Option<Value>) -> R<Value> {
-  Ok(json!({ "ok": true, "runtime": "tauri-rust", "activeVault": active_vault(&read_config(&app)?), "payload": payload_by_operation }))
+  sync::sync_run(get_active_vault(&app)?, payload_by_operation)
 }

@@ -32,14 +32,6 @@ const assertOrdered = (relativePath, needles, description) => {
   }
 }
 
-const packageJson = JSON.parse(read('package.json'))
-if (packageJson.scripts?.['test:contracts:elephantnote'] !== 'vitest run test/unit/specs/main/elephantnote') {
-  failures.push('package.json: test:contracts:elephantnote must run the ElephantNote contract suite')
-}
-if (packageJson.scripts?.['ci:critical-flows'] !== 'node scripts/verify-critical-flows.mjs') {
-  failures.push('package.json: ci:critical-flows must run scripts/verify-critical-flows.mjs')
-}
-
 for (const requiredFile of [
   'test/unit/specs/main/elephantnote/markdown.spec.js',
   'test/unit/specs/main/elephantnote/markdownDocument.spec.js',
@@ -48,8 +40,8 @@ for (const requiredFile of [
   assertFile(requiredFile)
 }
 
-assertIncludes('.github/workflows/ci.yml', 'pnpm ci:critical-flows', 'critical-flow guard in CI')
-assertIncludes('.github/workflows/ci.yml', 'pnpm test:contracts:elephantnote', 'dedicated ElephantNote contract tests in CI')
+assertIncludes('.github/workflows/ci.yml', 'node scripts/verify-critical-flows.mjs', 'critical-flow guard in CI')
+assertIncludes('.github/workflows/ci.yml', 'pnpm exec vitest run test/unit/specs/main/elephantnote', 'dedicated ElephantNote contract tests in CI')
 
 assertOrdered(
   'Elephant/front/app/components/editor/NoteEditorHost.vue',

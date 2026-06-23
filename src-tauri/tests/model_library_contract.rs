@@ -1,5 +1,7 @@
 use serde_json::json;
-use std::{env, fs, path::PathBuf};
+use std::{env, fs, path::PathBuf, sync::Mutex};
+
+static MODEL_ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn isolated_model_dir(name: &str) -> PathBuf {
   let dir = env::temp_dir().join(format!(
@@ -14,6 +16,7 @@ fn isolated_model_dir(name: &str) -> PathBuf {
 
 #[test]
 fn tauri_model_library_lists_local_gguf_models() {
+  let _guard = MODEL_ENV_LOCK.lock().expect("lock model env");
   let dir = isolated_model_dir("list");
   let model_path = dir.join("tiny.Q4_K_M.gguf");
   fs::write(&model_path, b"dummy gguf bytes").expect("write fake gguf model");
@@ -33,6 +36,7 @@ fn tauri_model_library_lists_local_gguf_models() {
 
 #[test]
 fn tauri_model_library_can_activate_and_delete_local_models() {
+  let _guard = MODEL_ENV_LOCK.lock().expect("lock model env");
   let dir = isolated_model_dir("activate-delete");
   let model_path = dir.join("local-model.gguf");
   fs::write(&model_path, b"dummy gguf bytes").expect("write fake gguf model");
@@ -57,6 +61,7 @@ fn tauri_model_library_can_activate_and_delete_local_models() {
 
 #[test]
 fn tauri_model_library_reports_idle_download_status() {
+  let _guard = MODEL_ENV_LOCK.lock().expect("lock model env");
   let _dir = isolated_model_dir("download-status");
 
   let status = elephantnote_tauri::model_library::tauri_models_download_status(json!({

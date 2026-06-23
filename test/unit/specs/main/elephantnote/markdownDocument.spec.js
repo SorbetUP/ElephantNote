@@ -5,6 +5,7 @@ import {
   toEditorMarkdown,
   updateMarkdownTags
 } from 'common/elephantnote/markdownDocument'
+import { getNoteCardExcerpt } from 'elephant-front/utils/noteCardView'
 
 describe('ElephantNote markdown document helpers', () => {
   it('shows body text in the editor without frontmatter or duplicated title heading', () => {
@@ -85,5 +86,32 @@ describe('ElephantNote markdown document helpers', () => {
     expect(result).toContain('# Tagged')
     expect(result).toContain('Body')
     expect(result).not.toContain('  - old')
+  })
+
+  it('shows note card body text instead of raw multiline frontmatter', () => {
+    const entry = {
+      excerpt: [
+        '---',
+        'title: "Noteh"',
+        'type: "note"',
+        '---',
+        '',
+        'This is the real note content.'
+      ].join('\n')
+    }
+
+    expect(getNoteCardExcerpt(entry)).toBe('This is the real note content.')
+  })
+
+  it('hides compact inline frontmatter when no body preview exists', () => {
+    expect(getNoteCardExcerpt({ excerpt: '--- title: "Noteh" type: "note"' })).toBe('No preview yet.')
+  })
+
+  it('keeps card body text after compact inline frontmatter', () => {
+    const entry = {
+      excerpt: '--- title: "Noteh" type: "note" --- Real body after metadata.'
+    }
+
+    expect(getNoteCardExcerpt(entry)).toBe('Real body after metadata.')
   })
 })

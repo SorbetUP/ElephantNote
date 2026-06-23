@@ -35,6 +35,7 @@ const assertOrdered = (relativePath, needles, description) => {
 for (const requiredFile of [
   'test/unit/specs/main/elephantnote/markdown.spec.js',
   'test/unit/specs/main/elephantnote/markdownDocument.spec.js',
+  'src/renderer/src/platform/tauriMarkTextSaveBridge.js',
   'scripts/verify-critical-flows.mjs'
 ]) {
   assertFile(requiredFile)
@@ -42,6 +43,53 @@ for (const requiredFile of [
 
 assertIncludes('.github/workflows/ci.yml', 'node scripts/verify-critical-flows.mjs', 'critical-flow guard in CI')
 assertIncludes('.github/workflows/ci.yml', 'pnpm exec vitest run test/unit/specs/main/elephantnote', 'dedicated ElephantNote contract tests in CI')
+
+assertOrdered(
+  'src/renderer/src/main.js',
+  [
+    "import { installRuntimeBridge } from './platform/runtimeBridge'",
+    "import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'",
+    "import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'",
+    'installRuntimeBridge()',
+    'installTauriElephantNoteBridge()',
+    'installTauriMarkTextSaveBridge()'
+  ],
+  'Tauri MarkText save bridge must be installed after the runtime and ElephantNote bridges'
+)
+assertOrdered(
+  'src/renderer/src/platform/tauriMarkTextSaveBridge.js',
+  [
+    "ipc.on('mt::response-file-save'",
+    "writeRecord(target, ipc, getRecordFromArgs(args), 'response-file-save')",
+    "ipc.on('mt::save-tabs'",
+    "writeRecord(target, ipc, record, 'save-tabs')",
+    "ipc.on('mt::save-and-close-tabs'",
+    "writeRecord(target, ipc, record, 'save-and-close-tabs')",
+    "ipc.send('mt::force-close-tabs-by-id', closeIds)"
+  ],
+  'Tauri must handle the same MarkText save IPC events that Electron handles'
+)
+assertOrdered(
+  'src/renderer/src/platform/tauriMarkTextSaveBridge.js',
+  [
+    "console.info('[tauri:marktext-save] write:start'",
+    'await target.fileUtils?.writeFile?.(pathname, markdown)',
+    "console.info('[tauri:marktext-save] write:done'",
+    "ipc.send('mt::tab-saved', id)",
+    "console.error('[tauri:marktext-save] write:failed'",
+    "ipc.send('mt::tab-save-failure', id, message)"
+  ],
+  'Tauri MarkText save bridge must write to disk, acknowledge saved tabs and surface failures'
+)
+assertOrdered(
+  'src/renderer/src/store/editor.js',
+  [
+    'HANDLE_AUTO_SAVE({ id, filename, pathname, markdown, options }) {',
+    "window.electron.ipcRenderer.send(",
+    "'mt::response-file-save'"
+  ],
+  'MarkText editor autosave must keep emitting the canonical Electron save event'
+)
 
 assertOrdered(
   'Elephant/shared/apiContracts.js',

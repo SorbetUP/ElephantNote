@@ -204,6 +204,27 @@ const currentNoteDirectory = computed(() => {
   return ''
 })
 
+const applyNoteMetadata = (entry, pathname, metadata = {}) => {
+  if (!entry || entry.path !== pathname) return entry
+  return {
+    ...entry,
+    title: metadata.title || entry.title,
+    tags: Array.isArray(metadata.tags) ? metadata.tags : entry.tags,
+    updatedAt: metadata.updatedAt || entry.updatedAt
+  }
+}
+
+const syncVisibleNoteMetadata = (pathname, metadata = {}) => {
+  if (!pathname || !Object.keys(metadata).length) return
+  if (typeof store.updateNoteMetadata === 'function') {
+    store.updateNoteMetadata(pathname, metadata)
+  } else {
+    store.entries = store.entries.map((entry) => applyNoteMetadata(entry, pathname, metadata))
+    store.openedNotes = store.openedNotes.map((entry) => applyNoteMetadata(entry, pathname, metadata))
+  }
+  store.rootEntries = store.rootEntries.map((entry) => applyNoteMetadata(entry, pathname, metadata))
+}
+
 const selectOpenedNoteTab = () => {
   const pathname = openedNoteAbsolutePath.value
   if (!pathname || !editorStore.tabs?.length) return
@@ -226,9 +247,7 @@ const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {
   }
   const notePath = currentNoteRelativePath.value || store.openedNotePath
   if (notePath) {
-    if (typeof store.updateNoteMetadata === 'function' && Object.keys(metadata).length) {
-      store.updateNoteMetadata(notePath, metadata)
-    }
+    syncVisibleNoteMetadata(notePath, metadata)
     if (typeof searchStore.updateNoteIndex === 'function') {
       searchStore.updateNoteIndex(notePath, nextMarkdown, metadata)
     }

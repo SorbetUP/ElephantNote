@@ -36,7 +36,12 @@ const withTimeout = (promise, timeoutMs, message) => {
   return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId))
 }
 
-const basenameTitle = (relativePath = '') => String(relativePath || '').split('/').pop()?.replace(/\.md$/i, '') || 'Untitled'
+const basenameTitle = (relativePath = '') => {
+  const name = String(relativePath || '').split('/').pop() || ''
+  return name.replace(/\.md$/i, '') || 'Untitled'
+}
+
+const getDocumentPath = (document) => document.relativePath || document.path || ''
 
 const normalizeDocumentForIndex = (relativePath = '', markdown = '', metadata = {}) => {
   const path = String(relativePath || '').trim()
@@ -45,6 +50,9 @@ const normalizeDocumentForIndex = (relativePath = '', markdown = '', metadata = 
   const title = metadata.title || getDocumentTitle(content, basenameTitle(path))
   const tags = Array.isArray(metadata.tags) ? metadata.tags : parseMarkdownTags(content)
   const body = frontmatter.body || content
+  const excerpt = body.replace(/^#\s+.*$/m, '').trim().slice(0, 500)
+  const updatedAt = metadata.updatedAt || frontmatter.fields.updatedAt || new Date().toISOString()
+
   return {
     relativePath: path,
     path,
@@ -52,18 +60,20 @@ const normalizeDocumentForIndex = (relativePath = '', markdown = '', metadata = 
     tags,
     content,
     body,
-    excerpt: body.replace(/^#\s+.*$/m, '').trim().slice(0, 500),
-    updatedAt: metadata.updatedAt || frontmatter.fields.updatedAt || new Date().toISOString()
+    excerpt,
+    updatedAt
   }
 }
 
 const scoreDocument = (document, query = '') => {
   const needle = String(query || '').trim().toLowerCase()
   if (!needle) return 0
+
   const title = String(document.title || '').toLowerCase()
-  const path = String(document.relativePath || document.path || '').toLowerCase()
+  const path = String(getDocumentPath(document)).toLowerCase()
   const body = String(document.body || document.content || document.excerpt || '').toLowerCase()
   const tags = Array.isArray(document.tags) ? document.tags.join(' ').toLowerCase() : ''
+
   return (title.includes(needle) ? 10 : 0) +
     (tags.includes(needle) ? 6 : 0) +
     (path.includes(needle) ? 4 : 0) +
@@ -71,8 +81,8 @@ const scoreDocument = (document, query = '') => {
 }
 
 const toSearchResult = (document, score = 0) => ({
-  relativePath: document.relativePath || document.path,
-  title: document.title || basenameTitle(document.relativePath || document.path),
+  relativePath: getDocumentPath(document),
+  title: document.title || basenameTitle(getDocumentPath(document)),
   excerpt: document.excerpt || document.body || '',
   tags: document.tags || [],
   score
@@ -148,12 +158,11 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       const documents = Array.isArray(this.indexInspection.documents)
         ? this.indexInspection.documents
         : []
+      const nextDocuments = documents.filter((item) => getDocumentPath(item) !== document.relativePath)
+
       this.indexInspection = {
         ...this.indexInspection,
-        documents: [
-          document,
-          ...documents.filter((item) => (item.relativePath || item.path) !== document.relativePath)
-        ],
+        documents: [document, ...nextDocuments],
         generatedAt: new Date().toISOString()
       }
       this.status = {
@@ -172,7 +181,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       if (!path) return false
       this.indexInspection = {
         ...this.indexInspection,
-        documents: (this.indexInspection.documents || []).filter((item) => (item.relativePath || item.path) !== path),
+        documents: (this.indexInspection.documents || []).filter((item) => getDocumentPath(item) !== path),
         generatedAt: new Date().toISOString()
       }
       this.results = this.results.filter((item) => item.relativePath !== path)
@@ -184,7 +193,11 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       return documents
         .map((document) => ({ document, score: scoreDocument(document, query) }))
         .filter((item) => item.score > 0)
-        .sort((a, b) => b.score - a.score || String(a.document.title || '').localeCompare(String(b.document.title || '')))
+        .sort((a, b) => {
+          const scoreDiff = b.score - a.score
+          if (scoreDiff) return scoreDiff
+          return String(a.document.title || '').localeCompare(String(b.document.title || ''))
+        })
         .slice(0, clampQueryLimit(limit))
         .map((item) => toSearchResult(item.document, item.score))
     },
@@ -247,7 +260,8 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
 
     setGraphDensity(value) {
       const parsed = Number(value)
-      this.graphDensity = Math.max(1, Math.min(8, Number.isFinite(parsed) ? Math.trunc(parsed) : 4))
+      const density = Number.isFinite(parsed) ? Math.trunc(parsed) : 4
+      this.graphDensity = Math.max(1, Math.min(8, density))
       window.localStorage.setItem('elephantnote:search:graphDensity', String(this.graphDensity))
     },
 

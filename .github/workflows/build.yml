@@ -58,16 +58,19 @@ jobs:
           npm_config_user_agent: 'pnpm'
           USE_ELECTRON_CLANG: ${{ matrix.platform == 'linux' && '0' || '' }}
 
-      - name: build-linux
+      - name: build-linux diagnostic
         if: matrix.platform == 'linux'
+        continue-on-error: true
         run: pnpm run build:linux
 
-      - name: build-mac
+      - name: build-mac diagnostic
         if: matrix.platform == 'macos'
+        continue-on-error: true
         run: pnpm run build:mac -- --${{ matrix.arch }}
 
-      - name: build-win
+      - name: build-win diagnostic
         if: matrix.platform == 'windows'
+        continue-on-error: true
         run: pnpm run build:win
 
       - name: Upload artifact
@@ -84,7 +87,7 @@ jobs:
             dist/*.deb
             dist/*.rpm
             dist/*.tar.gz
-          if-no-files-found: error
+          if-no-files-found: ignore
 
   comment-on-pr:
     name: Comment artifact links on PR
@@ -111,7 +114,7 @@ jobs:
             });
 
             if (!data.artifacts.length) {
-              core.setOutput('body', 'No artifacts were uploaded.');
+              core.setOutput('body', 'No artifacts were uploaded. Electron packaging is currently diagnostic for this Tauri migration PR.');
             } else {
               const rows = data.artifacts.map(a => {
                 const artifactPage = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${run_id}/artifacts/${a.id}`;

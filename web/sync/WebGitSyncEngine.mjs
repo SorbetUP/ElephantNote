@@ -29,6 +29,16 @@ const outputFile = async(target, content) => {
 }
 const outputJson = async(target, value) => outputFile(target, `${JSON.stringify(value, null, 2)}\n`)
 
+const appendMissingLines = async(target, lines) => {
+  await ensureDir(path.dirname(target))
+  const existing = await fs.readFile(target, 'utf8').catch(() => '')
+  const existingLines = new Set(existing.split('\n').map((line) => line.trim()).filter(Boolean))
+  const missing = lines.filter((line) => !existingLines.has(line))
+  if (!missing.length) return
+  const prefix = existing && !existing.endsWith('\n') ? '\n' : ''
+  await fs.appendFile(target, `${prefix}${missing.join('\n')}\n`, 'utf8')
+}
+
 export class WebGitSyncEngine {
   constructor({ cwd, executor = execFileAsync } = {}) {
     this.cwd = cwd
@@ -110,7 +120,7 @@ export class WebGitSyncEngine {
     await ensureDir(this.cwd)
     if (!await pathExists(path.join(this.cwd, '.git'))) await this.git(['init'])
     await this.ensureGitIdentity()
-    await outputFile(path.join(this.cwd, SYNC_METADATA_DIR, '.gitignore'), `${SYNC_HISTORY_FILE}\n`)
+    await this.ensureGitExclude()
 
     const configPath = path.join(this.cwd, SYNC_METADATA_DIR, SYNC_CONFIG_FILE)
     this.config = await readJson(configPath).catch(() => null)
@@ -163,6 +173,13 @@ export class WebGitSyncEngine {
     }
   }
 
+  async ensureGitExclude() {
+    await appendMissingLines(path.join(this.cwd, '.git', 'info', 'exclude'), [
+      `/${SYNC_METADATA_DIR}/${SYNC_CONFIG_FILE}`,
+      `/${SYNC_METADATA_DIR}/${SYNC_HISTORY_FILE}`
+    ])
+  }
+
   async upsertRemote(remoteName, remote) {
     const exists = await this.hasRemote(remoteName)
     await this.git(exists ? ['remote', 'set-url', remoteName, remote] : ['remote', 'add', remoteName, remote])
@@ -204,4 +221,3 @@ export class WebGitSyncEngine {
     }).catch(() => {})
   }
 }
-

@@ -64,11 +64,26 @@ assertOrdered(
 assertOrdered(
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   [
+    'const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value) => {',
+    'elephantnoteClient.notes.write({',
+    'relativePath: notePath,',
+    'markdown: nextMarkdown',
+    'await window.fileUtils.writeFile(window.path.join(store.activeVault.path, notePath), nextMarkdown)',
+    'markFileSavedIfCurrent(file, notePath, nextMarkdown)'
+  ],
+  'editor changes must be persisted to the note markdown file, with direct file fallback'
+)
+assertOrdered(
+  'Elephant/front/app/components/editor/NoteEditorHost.vue',
+  [
+    'watch(',
+    'scheduleNoteSave(notePath, nextMarkdown, file)',
     'const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {',
     'syncVisibleNoteMetadata(notePath, metadata)',
-    'searchStore.updateNoteIndex(notePath, nextMarkdown, metadata)'
+    'searchStore.updateNoteIndex(notePath, nextMarkdown, metadata)',
+    'scheduleNoteSave(notePath, nextMarkdown, file, 0)'
   ],
-  'editor edits must synchronise visible list metadata and local search index'
+  'body edits and title/tag toolbar edits must schedule disk saves'
 )
 assertOrdered(
   'Elephant/front/app/components/editor/NoteEditorHost.vue',

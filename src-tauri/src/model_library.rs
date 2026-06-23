@@ -439,7 +439,8 @@ fn find_local(model_ref: &Value) -> R<Value> {
       text(&model, &["id"]), text(&model, &["name"]), text(&model, &["fileName", "filename"]),
       text(&model, &["repoId", "originalRepoId"]), text(&model, &["path", "modelPath"]),
     ];
-    values.extend(values.iter().map(|value| file_name(value)).collect::<Vec<_>>());
+    let aliases = values.iter().map(|value| file_name(value)).collect::<Vec<_>>();
+    values.extend(aliases);
     if lookup.iter().any(|item| values.iter().any(|value| value == item)) {
       return Ok(model);
     }

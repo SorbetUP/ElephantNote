@@ -16,7 +16,10 @@
         "label": "main",
         "title": "Elephant",
         "width": 1280,
-        "height": 840
+        "height": 840,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "acceptFirstMouse": true
       }
     ],
     "security": {

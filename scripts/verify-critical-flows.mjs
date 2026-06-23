@@ -84,10 +84,10 @@ assertOrdered(
   'Elephant/front/app/stores/searchStore.js',
   [
     'const normalizeRelativePath = (relativePath = \'\')',
-    '.replace(/\\\\/g, \'/\')',
+    "replaceAll(String.fromCharCode(92), '/')",
     'const getDocumentPath = (document) => normalizeRelativePath'
   ],
-  'search paths must be normalised before indexing/opening results'
+  'search paths must be normalised before indexing/opening results without brittle backslash escaping'
 )
 assertOrdered(
   'Elephant/front/app/stores/searchStore.js',

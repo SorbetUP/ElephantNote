@@ -67,8 +67,15 @@ const ensurePathResolve = () => {
   }
 }
 
+const clearBootstrapFileUtilsFallbackForTauri = () => {
+  if (window.__TAURI__ && window.fileUtils?.__elephantnoteBootstrapFallback) {
+    delete window.fileUtils
+  }
+}
+
 installRendererDiagnostics()
 globalThis.marktext = {}
+clearBootstrapFileUtilsFallbackForTauri()
 installRuntimeBridge()
 ensurePathResolve()
 installTauriElephantNoteBridge()

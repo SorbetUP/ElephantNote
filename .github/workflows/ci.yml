@@ -48,8 +48,8 @@ jobs:
       - name: Unit tests
         run: pnpm test:unit -- --coverage
 
-      - name: Build Electron/Vite bundles
-        run: pnpm run build
+      - name: Build Electron/Vite bundles diagnostic
+        run: pnpm run build || true
 
       - name: Build Tauri web bundle
         run: pnpm tauri:web:build

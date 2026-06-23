@@ -62,6 +62,18 @@ const parseTagList = (value = '') => {
     .filter(Boolean)
 }
 
+const normalizeTagInput = (nextTags = []) => {
+  if (Array.isArray(nextTags)) return nextTags
+  if (nextTags instanceof Set) return [...nextTags]
+  if (typeof nextTags === 'string') {
+    const value = nextTags.trim()
+    if (!value) return []
+    if (value.startsWith('[') || value.includes(',')) return parseTagList(value)
+    return [value]
+  }
+  return []
+}
+
 export const serializeFrontmatterValue = (value) => {
   if (Array.isArray(value)) {
     return `[${value.map((item) => `"${String(item).replace(/"/g, '\\"')}"`).join(', ')}]`
@@ -193,7 +205,8 @@ export const parseMarkdownTags = (markdown = '') => {
 
 export const updateMarkdownTags = (markdown = '', nextTags = [], title = 'Untitled') => {
   const normalizedTitle = String(title || '').trim() || 'Untitled'
-  const uniqueTags = [...new Set(nextTags.map(normalizeTag).filter(Boolean))]
+  const tagsInput = normalizeTagInput(nextTags)
+  const uniqueTags = [...new Set(tagsInput.map(normalizeTag).filter(Boolean))]
   const tagsLine = `tags: [${uniqueTags.map(serializeTag).join(', ')}]`
   const content = String(markdown || '')
   const frontmatterMatch = content.match(frontmatterPattern)

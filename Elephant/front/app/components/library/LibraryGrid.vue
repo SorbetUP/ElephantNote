@@ -121,10 +121,23 @@ const handleRootDrop = async (event) => {
 <style scoped>
 .en-library-grid {
   min-height: 0;
-  column-width: 500px;
-  column-gap: 22px;
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
+  grid-auto-flow: row;
+  align-content: start;
+  gap: 22px;
   padding: 0 34px 40px;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.en-library-grid::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .en-library-grid.is-drop-target {
@@ -138,22 +151,13 @@ const handleRootDrop = async (event) => {
 
 .en-library-grid :deep(.en-card) {
   width: 100%;
-  display: inline-flex;
-  margin: 0 0 22px;
-  break-inside: avoid;
+  min-width: 0;
+  display: flex;
 }
 
 .en-library-grid.list {
-  display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
-  column-width: auto;
-  column-gap: 0;
-}
-
-.en-library-grid.list :deep(.en-card) {
-  display: flex;
-  margin: 0;
 }
 
 .en-library-rename-form {

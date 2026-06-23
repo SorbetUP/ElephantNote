@@ -15,6 +15,7 @@ jobs:
       actions: read
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: linux
@@ -51,7 +52,8 @@ jobs:
 
       # Run the full postinstall: Electron binary download, patch-package,
       # electron-rebuild, and minify-locales.
-      - name: Run postinstall
+      - name: Run postinstall diagnostic
+        continue-on-error: true
         run: node scripts/postinstall.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

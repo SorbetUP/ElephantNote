@@ -121,9 +121,9 @@ const handleRootDrop = async (event) => {
 <style scoped>
 .en-library-grid {
   min-height: 0;
-  column-width: 360px;
-  column-gap: 18px;
-  padding: 0 28px 32px;
+  column-width: 500px;
+  column-gap: 22px;
+  padding: 0 34px 40px;
   overflow-y: auto;
 }
 
@@ -139,7 +139,7 @@ const handleRootDrop = async (event) => {
 .en-library-grid :deep(.en-card) {
   width: 100%;
   display: inline-flex;
-  margin: 0 0 18px;
+  margin: 0 0 22px;
   break-inside: avoid;
 }
 

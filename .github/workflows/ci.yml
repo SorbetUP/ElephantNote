@@ -42,6 +42,14 @@ jobs:
       - name: Critical ElephantNote flow guard
         run: node scripts/verify-critical-flows.mjs
 
+      - name: Guard removed Electron shortcut dependency
+        shell: bash
+        run: |
+          if grep -R "@hfelix/electron-localshortcut" --exclude-dir=.git --exclude-dir=node_modules .; then
+            echo "Unexpected @hfelix/electron-localshortcut import remains. Use src/main/keyboard/electronLocalshortcut.js instead."
+            exit 1
+          fi
+
       - name: Lint diagnostic
         run: pnpm lint || true
 

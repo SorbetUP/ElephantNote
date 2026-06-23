@@ -29,12 +29,6 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - name: Run postinstall
-        run: node scripts/postinstall.js
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          npm_config_user_agent: pnpm
-
       - name: Generate parity backlog docs
         run: pnpm docs:parity
 

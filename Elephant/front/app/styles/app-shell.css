@@ -254,3 +254,57 @@ body {
   background: color-mix(in srgb, var(--en-primary) 14%, var(--en-soft)) !important;
   border-color: var(--en-primary) !important;
 }
+
+/* Tauri shell parity with the polished Electron workspace. */
+.en-shell {
+  --en-sidebar-width: 290px !important;
+}
+
+.en-theme-light {
+  --en-bg: #f8faff;
+  --en-surface: #ffffff;
+  --en-sidebar-bg: #e8eff7;
+  --en-soft: #e3ecf8;
+  --en-soft-strong: #d4e2f6;
+  --en-border: #c5cfde;
+  --en-border-strong: #aebbd0;
+  --en-text: #111827;
+  --en-muted: #475569;
+  --en-primary: #2563eb;
+}
+
+.en-rail {
+  width: 56px !important;
+}
+
+.en-topstrip {
+  height: 44px !important;
+  background: linear-gradient(
+    to right,
+    var(--en-sidebar-bg, var(--en-bg)) 0,
+    var(--en-sidebar-bg, var(--en-bg)) calc(56px + var(--en-sidebar-width) + 1px),
+    var(--en-bg) calc(56px + var(--en-sidebar-width) + 1px),
+    var(--en-bg) 100%
+  ) !important;
+}
+
+.en-topstrip::after {
+  left: calc(56px + var(--en-sidebar-width) - 1px) !important;
+}
+
+.en-topstrip-nav {
+  top: 10px !important;
+  width: 92px !important;
+}
+
+.en-topstrip-nav-macos {
+  left: 104px !important;
+}
+
+.en-sidebar {
+  background: var(--en-sidebar-bg) !important;
+}
+
+.en-library {
+  background: var(--en-bg) !important;
+}

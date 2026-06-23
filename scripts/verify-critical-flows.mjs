@@ -84,10 +84,10 @@ assertOrdered(
   'Elephant/front/app/stores/searchStore.js',
   [
     'const normalizeRelativePath = (relativePath = \'\')',
-    "replaceAll(String.fromCharCode(92), '/')",
+    '.replace(/\\\\/g, \'/\')',
     'const getDocumentPath = (document) => normalizeRelativePath'
   ],
-  'search paths must be normalised before indexing/opening results without brittle backslash escaping'
+  'search paths must be normalised before indexing/opening results'
 )
 assertOrdered(
   'Elephant/front/app/stores/searchStore.js',
@@ -152,6 +152,35 @@ assertOrdered(
   ],
   'moving entries must refresh visible directory state and update opened/pinned paths'
 )
+
+assertIncludes('src-tauri/src/vault/mod.rs', 'pub mod sync;', 'Tauri sync module registration')
+assertOrdered(
+  'src-tauri/src/vault/commands.rs',
+  [
+    'pub fn tauri_sync_status(app: AppHandle) -> R<Value> {',
+    'sync::sync_status(active_vault(&read_config(&app)?))',
+    'pub fn tauri_sync_enqueue(app: AppHandle, operation: String, payload: Option<Value>) -> R<Value> {',
+    'sync::sync_enqueue(get_active_vault(&app)?, operation, payload)',
+    'pub fn tauri_sync_run(app: AppHandle, payload_by_operation: Option<Value>) -> R<Value> {',
+    'sync::sync_run(get_active_vault(&app)?, payload_by_operation)'
+  ],
+  'Tauri sync commands must call the Rust sync engine instead of returning stubbed JSON'
+)
+assertOrdered(
+  'src-tauri/src/vault/sync.rs',
+  [
+    'pub const SYNC_CONFIG_FILE: &str = "sync-config.json";',
+    'struct GitSyncEngine {',
+    'Command::new("git")',
+    'fn snapshot(&mut self, payload: &Value) -> R<()> {',
+    'self.git(&["add", "-A"])?;',
+    'self.git_args(&["commit".to_string(), "-m".to_string(), message])?;'
+  ],
+  'Tauri sync must implement real Git-backed snapshots with persisted configuration'
+)
+assertIncludes('src-tauri/src/vault/sync.rs', 'fn pull(&mut self, payload: &Value) -> R<()>', 'Tauri sync pull operation')
+assertIncludes('src-tauri/src/vault/sync.rs', 'fn push(&mut self, payload: &Value) -> R<()>', 'Tauri sync push operation')
+assertIncludes('src-tauri/src/vault/sync.rs', 'mod tests {', 'Rust unit tests for Tauri sync')
 
 if (failures.length) {
   console.error('Critical ElephantNote flow guard failed:')

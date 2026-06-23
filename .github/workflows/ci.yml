@@ -43,7 +43,7 @@ jobs:
         run: pnpm lint || true
 
       - name: ElephantNote contract tests
-        run: pnpm exec vitest run test/unit/specs/elephantnote
+        run: pnpm exec vitest run test/unit/specs/main/elephantnote
 
       - name: Unit tests
         run: pnpm test:unit -- --coverage

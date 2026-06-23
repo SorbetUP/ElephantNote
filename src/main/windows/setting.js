@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { enable as remoteEnable } from '@electron/remote/main'
-import { electronLocalshortcut } from '@hfelix/electron-localshortcut'
+import { electronLocalshortcut } from '../keyboard/electronLocalshortcut'
 import BaseWindow, { WindowLifecycle, WindowType } from './base'
 import { centerWindowOptions } from './utils'
 import { TITLE_BAR_HEIGHT, preferencesWinOptions, isOsx } from '../config'

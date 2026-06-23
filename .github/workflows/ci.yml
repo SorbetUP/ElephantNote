@@ -10,6 +10,7 @@ on:
       - 'v*'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,7 +23,7 @@ jobs:
   quality:
     name: Quality gate
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +35,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           npm_config_user_agent: pnpm
 
+      - name: Generate parity backlog docs
+        run: pnpm docs:parity
+
+      - name: Verify generated parity backlog size
+        shell: bash
+        run: |
+          lines=$(cat docs/parity/generated/*.md docs/parity/index.md | wc -l | tr -d ' ')
+          echo "Generated parity documentation lines: $lines"
+          test "$lines" -ge 10000
+
       - name: Lint
         run: pnpm lint
 
@@ -41,28 +52,72 @@ jobs:
         run: pnpm exec vitest run test/unit/specs/elephantnote
 
       - name: Unit tests
-        run: pnpm test -- --coverage
+        run: pnpm test:unit -- --coverage
 
       - name: Build Electron/Vite bundles
         run: pnpm run build
 
+      - name: Build Tauri web bundle
+        run: pnpm tauri:web:build
+
       - name: Validate licenses
         run: pnpm run validate-licenses
 
-      - name: Upload coverage
+      - name: Upload coverage and generated docs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
-          path: coverage/
+          name: quality-artifacts
+          path: |
+            coverage/
+            docs/parity/generated/
+            docs/parity/index.md
           if-no-files-found: ignore
           retention-days: 14
 
+  tauri-rust:
+    name: Tauri Rust check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Cargo check
+        run: cargo check --manifest-path src-tauri/Cargo.toml --no-default-features
+
+      - name: Cargo tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --no-default-features
+
   package-smoke:
     name: Package smoke (${{ matrix.platform }})
-    needs: quality
+    needs: [quality, tauri-rust]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:

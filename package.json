@@ -49,6 +49,7 @@
     "tauri:dev": "./build_dev.sh",
     "tauri:build": "cd src-tauri && cargo tauri build",
     "tauri:android:build": "./build_dev_apk.sh",
+    "docs:parity": "node scripts/generate-parity-docs.mjs",
     "muya:snapshots": "node scripts/generate-muya-source-snapshots.mjs",
     "build:win": "node scripts/minify-locales.mjs && electron-rebuild && electron-vite build && electron-builder --win --publish never",
     "build:mac": "node scripts/minify-locales.mjs && electron-rebuild && electron-vite build && electron-builder --mac --publish never",

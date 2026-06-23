@@ -326,16 +326,24 @@ const scheduleNoteSave = (notePath, nextMarkdown, file = activeNoteFile.value ||
   }, delay)
 }
 
+const rememberObservedMarkdown = (notePath, nextMarkdown, file, reason = 'observe') => {
+  lastSeenNotePath = notePath
+  lastSeenMarkdown = nextMarkdown
+  if (file?.isSaved === false) {
+    scheduleNoteSave(notePath, nextMarkdown, file, 0, `${reason}:first-unsaved`)
+    return
+  }
+  lastSavedNotePath = notePath
+  lastSavedMarkdown = nextMarkdown
+}
+
 const pollActiveMarkdownSave = (reason = 'poll') => {
   const file = getActiveNoteFile() || currentFile.value
   const notePath = currentNoteRelativePath.value || store.openedNotePath
   const nextMarkdown = file?.markdown
   if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return
   if (lastSeenNotePath !== notePath) {
-    lastSeenNotePath = notePath
-    lastSeenMarkdown = nextMarkdown
-    lastSavedNotePath = notePath
-    lastSavedMarkdown = nextMarkdown
+    rememberObservedMarkdown(notePath, nextMarkdown, file, reason)
     return
   }
   if (lastSeenMarkdown === nextMarkdown) return
@@ -376,10 +384,7 @@ watch(
   ({ notePath, markdown: nextMarkdown, file }, previous) => {
     if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return
     if (previous?.notePath !== notePath) {
-      lastSeenNotePath = notePath
-      lastSeenMarkdown = nextMarkdown
-      lastSavedNotePath = notePath
-      lastSavedMarkdown = nextMarkdown
+      rememberObservedMarkdown(notePath, nextMarkdown, file, 'vue-watch')
       return
     }
     if (previous?.markdown === nextMarkdown) return
@@ -503,6 +508,7 @@ const saveExcalidraw = async({ imageBlob, sceneBlob }) => {
 
 onMounted(() => {
   bus.on('ELEPHANT::open-excalidraw', openExcalidraw)
+  pollActiveMarkdownSave('mount')
   noteSaveInterval = window.setInterval(() => pollActiveMarkdownSave('interval'), 250)
 })
 onBeforeUnmount(() => {

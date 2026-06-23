@@ -92,6 +92,17 @@ assertOrdered(
 assertOrdered(
   'Elephant/front/app/stores/searchStore.js',
   [
+    'const loadBooleanSearchPreference = (key, fallback = false) => {',
+    'const value = loadSearchPreference(key, String(Boolean(fallback)))',
+    "showVisualizationLabels: loadBooleanSearchPreference('showVisualizationLabels')",
+    "showFolderClusters: loadBooleanSearchPreference('showFolderClusters')",
+    "autoRefreshInspection: loadBooleanSearchPreference('autoRefreshInspection')"
+  ],
+  'search boolean options must survive store re-creation and app restart'
+)
+assertOrdered(
+  'Elephant/front/app/stores/searchStore.js',
+  [
     'async hydrateLocalFallback() {',
     'await this.inspect()'
   ],

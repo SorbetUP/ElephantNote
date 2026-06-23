@@ -214,19 +214,19 @@ onBeforeUnmount(() => {
 <style scoped>
 .en-card {
   position: relative;
-  min-height: 168px;
+  min-height: 208px;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--en-border);
-  border-radius: 8px;
-  padding: 18px;
+  border-radius: 10px;
+  padding: 22px;
   color: var(--en-text);
-  background: var(--en-bg);
+  background: color-mix(in srgb, var(--en-surface) 34%, var(--en-bg));
   overflow: hidden;
 }
 
 .en-card.is-featured {
-  min-height: 230px;
+  min-height: 286px;
 }
 
 .en-card:hover {
@@ -252,8 +252,8 @@ onBeforeUnmount(() => {
 
 .en-card-actions {
   position: absolute;
-  top: 18px;
-  right: 18px;
+  top: 22px;
+  right: 22px;
   display: flex;
   gap: 10px;
 }
@@ -289,8 +289,8 @@ onBeforeUnmount(() => {
 
 .en-card-popover {
   position: absolute;
-  top: 52px;
-  right: 18px;
+  top: 56px;
+  right: 22px;
   z-index: 5;
   min-width: 190px;
   display: flex;
@@ -314,7 +314,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   max-width: calc(100% - 42px);
   margin: 0;
-  font-size: clamp(18px, 1.8vw, 28px);
+  font-size: clamp(22px, 1.8vw, 30px);
   line-height: 1.12;
   overflow-wrap: anywhere;
   display: -webkit-box;
@@ -326,21 +326,21 @@ onBeforeUnmount(() => {
 .en-note-card-title-row {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
 }
 
 .en-note-document-icon {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   flex: 0 0 auto;
   margin-top: 4px;
   color: var(--en-primary);
 }
 
 .en-note-card p {
-  margin: 14px 0 0;
+  margin: 22px 0 0;
   color: color-mix(in srgb, var(--en-text) 90%, transparent);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.42;
   overflow-wrap: anywhere;
   display: -webkit-box;
@@ -363,12 +363,12 @@ onBeforeUnmount(() => {
 
 .en-note-card footer {
   margin-top: auto;
-  padding-top: 16px;
+  padding-top: 22px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--en-muted);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   min-width: 0;
 }
@@ -381,8 +381,8 @@ onBeforeUnmount(() => {
 }
 
 .en-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 999px;
   background: var(--en-primary);
 }

@@ -1,6 +1,6 @@
 import { installGlobalMuyaRuntimeBridge } from '../muya/globalRuntimeBridge.js'
 
-const normalizeSlashes = (value) => String(value || '').replace(/\\/g, '/')
+const normalizeSlashes = (value) => String(value || '').replace(/\/g, '/')
 
 const createPathFacade = () => {
   const join = (...parts) => normalize(joinedPath(parts))
@@ -66,6 +66,7 @@ const createPathFacade = () => {
 }
 
 const createFileUtilsFallback = () => ({
+  __elephantnoteBootstrapFallback: true,
   isFile: () => false,
   isDirectory: () => false,
   emptyDir: async() => {},
@@ -87,7 +88,8 @@ const createFileUtilsFallback = () => ({
 
 const installBootstrapGlobals = (target = globalThis) => {
   if (!target.path) target.path = createPathFacade()
-  if (!target.fileUtils) target.fileUtils = createFileUtilsFallback()
+  if (!target.fileUtils && !target.__TAURI__) target.fileUtils = createFileUtilsFallback()
+  if (target.fileUtils?.__elephantnoteBootstrapFallback && target.__TAURI__) delete target.fileUtils
   if (!target.rgPath) target.rgPath = ''
   if (!target.global) target.global = target
   installGlobalMuyaRuntimeBridge(target)

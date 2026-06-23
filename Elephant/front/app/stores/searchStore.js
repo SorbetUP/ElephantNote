@@ -51,7 +51,7 @@ const withTimeout = (promise, timeoutMs, message) => {
 }
 
 const normalizeRelativePath = (relativePath = '') => String(relativePath || '')
-  .replace(/\/g, '/')
+  .replaceAll(String.fromCharCode(92), '/')
   .split('/')
   .filter((part) => part && part !== '.')
   .join('/')

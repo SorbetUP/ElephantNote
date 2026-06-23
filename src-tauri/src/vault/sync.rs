@@ -90,7 +90,6 @@ struct SyncState {
 
 struct GitOutput {
   stdout: String,
-  stderr: String,
 }
 
 struct GitSyncEngine {
@@ -176,10 +175,8 @@ fn read_config(cwd: &Path) -> Option<SyncConfig> {
 
 fn read_queue(cwd: &Path) -> Vec<SyncQueueItem> {
   let value = read_json_value(&sync_path(cwd, SYNC_QUEUE_FILE), json!({ "queue": [] }));
-  value
-    .get("queue")
-    .or_else(|| value.as_array().map(|_| &value))
-    .and_then(Value::as_array)
+  let array = value.get("queue").and_then(Value::as_array).or_else(|| value.as_array());
+  array
     .map(|items| items.iter().filter_map(|item| serde_json::from_value(item.clone()).ok()).collect())
     .unwrap_or_default()
 }
@@ -370,7 +367,7 @@ fn create_status(
   json!({
     "runtime": "tauri-rust",
     "activeVault": vault,
-    "cwd": vault.path,
+    "cwd": vault.path.as_str(),
     "running": queue.iter().any(|item| item.status == SYNC_STATUS_RUNNING),
     "deviceId": config.map(|config| config.device_id.as_str()).unwrap_or(""),
     "folderId": config.map(|config| config.folder_id.as_str()).unwrap_or(""),
@@ -393,8 +390,8 @@ fn create_status(
     "queued": queue.iter().filter(|item| item.status == SYNC_STATUS_QUEUED).count(),
     "operations": tail_values(queue, 20),
     "history": tail_values(history, 50),
-    "lastRunAt": state.last_run_at,
-    "lastError": state.last_error
+    "lastRunAt": state.last_run_at.as_str(),
+    "lastError": state.last_error.as_str()
   })
 }
 
@@ -510,7 +507,7 @@ impl GitSyncEngine {
       return Err(format!("git {} failed: {}", args.join(" "), details));
     }
 
-    Ok(GitOutput { stdout, stderr })
+    Ok(GitOutput { stdout })
   }
 
   fn git(&self, args: &[&str]) -> R<GitOutput> {
@@ -572,7 +569,7 @@ impl GitSyncEngine {
     if !self.has_configured_remote(&remote_name) {
       return Ok(());
     }
-    let branch = self.target_branch(payload)?;
+    let branch = self.target_branch(payload);
     self.git_args(&["pull".to_string(), "--ff-only".to_string(), remote_name, branch])?;
     Ok(())
   }
@@ -586,7 +583,7 @@ impl GitSyncEngine {
     if !self.has_configured_remote(&remote_name) {
       return Ok(());
     }
-    let branch = self.target_branch(payload)?;
+    let branch = self.target_branch(payload);
     self.git_args(&["push".to_string(), "-u".to_string(), remote_name, branch])?;
     Ok(())
   }
@@ -640,14 +637,14 @@ impl GitSyncEngine {
       .unwrap_or_default()
   }
 
-  fn target_branch(&self, payload: &Value) -> R<String> {
-    Ok(payload_string(payload, "branch")
+  fn target_branch(&self, payload: &Value) -> String {
+    payload_string(payload, "branch")
       .or_else(|| self.config.as_ref().map(|config| config.branch.clone()))
       .filter(|value| !value.is_empty())
       .unwrap_or_else(|| {
         let current = self.current_branch();
         if current.is_empty() { "main".to_string() } else { current }
-      }))
+      })
   }
 
   fn refresh_repository(&mut self) -> RepositoryStatus {
@@ -655,7 +652,7 @@ impl GitSyncEngine {
       return RepositoryStatus::default();
     }
 
-    let status = self.git(&["status", "--short", "--branch"]).unwrap_or(GitOutput { stdout: String::new(), stderr: String::new() });
+    let status = self.git(&["status", "--short", "--branch"]).unwrap_or(GitOutput { stdout: String::new() });
     let mut lines = status.stdout.lines();
     let branch_line = lines.next().unwrap_or_default();
     let dirty = lines.any(|line| !line.trim().is_empty());

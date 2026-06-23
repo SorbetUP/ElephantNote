@@ -13,14 +13,14 @@ vi.mock('electron-log', () => ({
 vi.mock('../../Elephant/front/app/services/elephantnoteClient.js', () => ({
   elephantnoteClient: {
     search: {
-      initVault: vi.fn(async (vaultPath) => ({ status: 'ready', vaultPath, indexedDocuments: 0, totalDocuments: 0 })),
-      query: vi.fn(async () => []),
-      status: vi.fn(async () => ({ status: 'ready', vaultPath: '/vault', indexedDocuments: 0, totalDocuments: 0 })),
-      inspect: vi.fn(async () => ({ documents: [], folders: [], semanticLinks: [], graph: null, generatedAt: '' })),
-      rebuild: vi.fn(async () => ({ status: 'indexing' })),
-      clear: vi.fn(async () => ({ status: 'cleared' })),
-      disable: vi.fn(async () => ({ status: 'disabled' })),
-      enable: vi.fn(async () => ({ status: 'ready' }))
+      initVault: vi.fn(async(vaultPath) => ({ status: 'ready', vaultPath, indexedDocuments: 0, totalDocuments: 0 })),
+      query: vi.fn(async() => []),
+      status: vi.fn(async() => ({ status: 'ready', vaultPath: '/vault', indexedDocuments: 0, totalDocuments: 0 })),
+      inspect: vi.fn(async() => ({ documents: [], folders: [], semanticLinks: [], graph: null, generatedAt: '' })),
+      rebuild: vi.fn(async() => ({ status: 'indexing' })),
+      clear: vi.fn(async() => ({ status: 'cleared' })),
+      disable: vi.fn(async() => ({ status: 'disabled' })),
+      enable: vi.fn(async() => ({ status: 'ready' }))
     }
   }
 }))
@@ -58,7 +58,7 @@ describe('editor runtime regression coverage', () => {
     expect(parseMarkdownTags(updateMarkdownTags(markdown, { bad: true }, 'Alpha'))).toEqual([])
   })
 
-  it('searchStore.updateNoteIndex indexes edited markdown locally', async () => {
+  it('searchStore.updateNoteIndex indexes edited markdown locally', async() => {
     const { useSearchStore } = await import('../../Elephant/front/app/stores/searchStore.js')
     const store = useSearchStore()
     store.vaultPath = '/vault'
@@ -72,7 +72,7 @@ describe('editor runtime regression coverage', () => {
     expect(store.localSearch()[0].relativePath).toBe('Alpha.md')
   })
 
-  it('searchStore.search falls back to local index when backend returns no result', async () => {
+  it('searchStore.search falls back to local index when backend returns no result', async() => {
     const { useSearchStore } = await import('../../Elephant/front/app/stores/searchStore.js')
     const store = useSearchStore()
     store.vaultPath = '/vault'

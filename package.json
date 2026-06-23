@@ -64,7 +64,7 @@
     "test": "vitest run",
     "test:unit": "vitest run test/unit",
     "coverage": "vitest run --coverage",
-    "coverage:unit": "pnpm coverage:unit && open coverage/index.html",
+    "coverage:unit": "vitest run test/unit --coverage",
     "coverage:open": "pnpm coverage:unit && open coverage/index.html",
     "test:e2e": "playwright test",
     "prod:check": "pnpm lint && pnpm test:unit && pnpm test:e2e && pnpm validate-licenses && pnpm run build:unpack",

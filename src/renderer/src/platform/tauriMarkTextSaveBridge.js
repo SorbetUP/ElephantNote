@@ -16,6 +16,15 @@ const getRecordFromArgs = ([id, filename, pathname, markdown, options, defaultPa
   defaultPath
 })
 
+const assertRealFileWriter = (target) => {
+  if (target.fileUtils?.__elephantnoteBootstrapFallback) {
+    throw new Error('Tauri save bridge is using bootstrap fileUtils fallback instead of the real Tauri file system bridge.')
+  }
+  if (typeof target.fileUtils?.writeFile !== 'function') {
+    throw new Error('Tauri save bridge cannot write: fileUtils.writeFile is unavailable.')
+  }
+}
+
 const writeRecord = async(target, ipc, record = {}, reason = 'save') => {
   const pathname = getSaveTarget(target, record)
   const id = record.id
@@ -34,6 +43,7 @@ const writeRecord = async(target, ipc, record = {}, reason = 'save') => {
   }
 
   try {
+    assertRealFileWriter(target)
     const directory = target.path?.dirname?.(pathname)
     console.info('[tauri:marktext-save] write:start', {
       reason,
@@ -45,7 +55,7 @@ const writeRecord = async(target, ipc, record = {}, reason = 'save') => {
     if (directory && directory !== '.') {
       await target.fileUtils?.ensureDir?.(directory)
     }
-    await target.fileUtils?.writeFile?.(pathname, markdown)
+    await target.fileUtils.writeFile(pathname, markdown)
 
     console.info('[tauri:marktext-save] write:done', {
       reason,

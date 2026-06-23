@@ -8,6 +8,8 @@ const optionalString = (value) => value === undefined || typeof value === 'strin
 
 const requiredString = (value) => typeof value === 'string' && value.trim().length > 0
 
+const textString = (value) => typeof value === 'string'
+
 const optionalBoolean = (value) => value === undefined || typeof value === 'boolean'
 
 const optionalNumber = (value) => value === undefined || Number.isFinite(Number(value))
@@ -62,6 +64,7 @@ export const schema = Object.freeze({
   },
   optionalString,
   requiredString,
+  textString,
   optionalBoolean,
   optionalNumber,
   optionalObject,
@@ -119,6 +122,8 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   documents: Object.freeze([
     action('DIRECTORY_LIST', 'directory.list', schema.object({ relativePath: optionalString })),
     action('NOTES_CREATE', 'notes.create', schema.object({ relativePath: optionalString, filename: optionalString, title: optionalString })),
+    action('NOTES_READ', 'notes.read', schema.object({ relativePath: requiredString })),
+    action('NOTES_WRITE', 'notes.write', schema.object({ relativePath: requiredString, markdown: textString })),
     action('FOLDERS_CREATE', 'folders.create', schema.object({ relativePath: optionalString })),
     action('SIDEBAR_ATTACH', 'sidebar.attach', schema.object({ relativePath: requiredString, title: optionalString, type: optionalEnum(['note', 'folder']) })),
     action('SIDEBAR_DETACH', 'sidebar.detach', schema.object({ relativePath: requiredString })),
@@ -217,13 +222,3 @@ export const listApiContracts = () => Object.values(ELEPHANTNOTE_API_DOMAINS).fl
 export const ELEPHANTNOTE_API_ACTIONS = Object.freeze(
   Object.fromEntries(listApiContracts().map(({ key, name }) => [key, name]))
 )
-
-export const API_PAYLOAD_SCHEMAS = Object.freeze(
-  Object.fromEntries(listApiContracts().map(({ name, payload }) => [name, payload]))
-)
-
-export const validateApiPayload = (actionName, payload = {}) => {
-  const validator = API_PAYLOAD_SCHEMAS[actionName]
-  if (!validator) return payload
-  return validator(payload, actionName)
-}

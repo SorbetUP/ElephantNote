@@ -15,7 +15,7 @@
         :tag-draft="tagDraft"
         @update-title="updateTitle"
         @toggle-pin="togglePin"
-        @close="store.closeNote"
+        @close="closeOpenedNote"
         @start-tag-creation="startTagCreation"
         @edit-tag="beginEditTag"
         @delete-tag="deleteTag"
@@ -133,8 +133,13 @@ const setShellTheme = inject('setElephantnoteTheme', (value) => {
   window.localStorage.setItem('elephantnote:theme', value)
 })
 let noteSaveTimer = null
+let noteSaveInterval = null
+let noteSaveInFlight = false
+let pendingSaveAfterFlight = null
 let lastSavedNotePath = ''
 let lastSavedMarkdown = ''
+let lastSeenNotePath = ''
+let lastSeenMarkdown = ''
 
 const openedNoteAbsolutePath = computed(() => {
   if (!store.activeVault?.path || !store.openedNotePath) return ''
@@ -264,12 +269,18 @@ const refreshSavedEntries = async(notePath, result) => {
       store.entries = await elephantnoteClient.directory.list(store.currentPath)
     }
   } catch (error) {
-    console.warn('Unable to refresh ElephantNote entries after note save:', error)
+    console.warn('[elephantnote:save] unable to refresh entries after save', error)
   }
 }
 
-const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value) => {
+const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, reason = 'unknown') => {
   if (!store.activeVault?.path || !notePath || typeof nextMarkdown !== 'string') return false
+  if (noteSaveInFlight) {
+    pendingSaveAfterFlight = { notePath, nextMarkdown, file, reason }
+    return false
+  }
+  noteSaveInFlight = true
+  console.info('[elephantnote:save] write:start', { notePath, length: nextMarkdown.length, reason })
   try {
     const result = await elephantnoteClient.notes.write({
       relativePath: notePath,
@@ -277,31 +288,77 @@ const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.
     })
     await refreshSavedEntries(notePath, result)
     markFileSavedIfCurrent(file, notePath, nextMarkdown)
+    console.info('[elephantnote:save] write:done', { notePath, length: nextMarkdown.length, via: 'notes.write' })
     return true
   } catch (apiError) {
+    console.warn('[elephantnote:save] notes.write failed; trying direct file write', { notePath, error: apiError?.message || String(apiError) })
     try {
       await window.fileUtils.writeFile(window.path.join(store.activeVault.path, notePath), nextMarkdown)
       await refreshSavedEntries(notePath, null)
       markFileSavedIfCurrent(file, notePath, nextMarkdown)
+      console.info('[elephantnote:save] write:done', { notePath, length: nextMarkdown.length, via: 'fileUtils.writeFile' })
       return true
     } catch (fileError) {
-      console.error('Unable to persist ElephantNote note:', apiError, fileError)
+      console.error('[elephantnote:save] write:failed', { notePath, apiError, fileError })
       if (file?.id) {
         window.electron?.ipcRenderer?.send?.('mt::tab-save-failure', file.id, fileError?.message || apiError?.message || 'Unable to save note.')
       }
       return false
     }
+  } finally {
+    noteSaveInFlight = false
+    const pending = pendingSaveAfterFlight
+    pendingSaveAfterFlight = null
+    if (pending && (pending.notePath !== lastSavedNotePath || pending.nextMarkdown !== lastSavedMarkdown)) {
+      scheduleNoteSave(pending.notePath, pending.nextMarkdown, pending.file, 0, `${pending.reason}:after-flight`)
+    }
   }
 }
 
-const scheduleNoteSave = (notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, delay = 450) => {
+const scheduleNoteSave = (notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, delay = 150, reason = 'scheduled') => {
   if (!notePath || !store.activeVault?.path || typeof nextMarkdown !== 'string') return
   if (lastSavedNotePath === notePath && lastSavedMarkdown === nextMarkdown) return
   if (noteSaveTimer) window.clearTimeout(noteSaveTimer)
+  console.info('[elephantnote:save] schedule', { notePath, length: nextMarkdown.length, delay, reason })
   noteSaveTimer = window.setTimeout(() => {
     noteSaveTimer = null
-    void persistNoteMarkdown(notePath, nextMarkdown, file)
+    void persistNoteMarkdown(notePath, nextMarkdown, file, reason)
   }, delay)
+}
+
+const pollActiveMarkdownSave = (reason = 'poll') => {
+  const file = getActiveNoteFile() || currentFile.value
+  const notePath = currentNoteRelativePath.value || store.openedNotePath
+  const nextMarkdown = file?.markdown
+  if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return
+  if (lastSeenNotePath !== notePath) {
+    lastSeenNotePath = notePath
+    lastSeenMarkdown = nextMarkdown
+    lastSavedNotePath = notePath
+    lastSavedMarkdown = nextMarkdown
+    return
+  }
+  if (lastSeenMarkdown === nextMarkdown) return
+  lastSeenMarkdown = nextMarkdown
+  scheduleNoteSave(notePath, nextMarkdown, file, 120, reason)
+}
+
+const flushActiveNoteSave = async(reason = 'flush') => {
+  if (noteSaveTimer) {
+    window.clearTimeout(noteSaveTimer)
+    noteSaveTimer = null
+  }
+  const file = getActiveNoteFile() || currentFile.value
+  const notePath = currentNoteRelativePath.value || store.openedNotePath
+  const nextMarkdown = file?.markdown
+  if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return false
+  if (lastSavedNotePath === notePath && lastSavedMarkdown === nextMarkdown) return true
+  return persistNoteMarkdown(notePath, nextMarkdown, file, reason)
+}
+
+const closeOpenedNote = async() => {
+  await flushActiveNoteSave('close-note')
+  store.closeNote()
 }
 
 const selectOpenedNoteTab = () => {
@@ -319,12 +376,16 @@ watch(
   ({ notePath, markdown: nextMarkdown, file }, previous) => {
     if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return
     if (previous?.notePath !== notePath) {
+      lastSeenNotePath = notePath
+      lastSeenMarkdown = nextMarkdown
       lastSavedNotePath = notePath
       lastSavedMarkdown = nextMarkdown
       return
     }
     if (previous?.markdown === nextMarkdown) return
-    scheduleNoteSave(notePath, nextMarkdown, file)
+    lastSeenNotePath = notePath
+    lastSeenMarkdown = nextMarkdown
+    scheduleNoteSave(notePath, nextMarkdown, file, 120, 'vue-watch')
   }
 )
 
@@ -343,7 +404,9 @@ const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {
     if (typeof searchStore.updateNoteIndex === 'function') {
       searchStore.updateNoteIndex(notePath, nextMarkdown, metadata)
     }
-    scheduleNoteSave(notePath, nextMarkdown, file, 0)
+    lastSeenNotePath = notePath
+    lastSeenMarkdown = nextMarkdown
+    scheduleNoteSave(notePath, nextMarkdown, file, 0, 'toolbar-edit')
   }
 }
 
@@ -440,16 +503,15 @@ const saveExcalidraw = async({ imageBlob, sceneBlob }) => {
 
 onMounted(() => {
   bus.on('ELEPHANT::open-excalidraw', openExcalidraw)
+  noteSaveInterval = window.setInterval(() => pollActiveMarkdownSave('interval'), 250)
 })
 onBeforeUnmount(() => {
   bus.off('ELEPHANT::open-excalidraw', openExcalidraw)
-  if (noteSaveTimer) {
-    window.clearTimeout(noteSaveTimer)
-    noteSaveTimer = null
-    const notePath = currentNoteRelativePath.value || store.openedNotePath
-    const file = activeNoteFile.value || currentFile.value
-    void persistNoteMarkdown(notePath, markdown.value, file)
+  if (noteSaveInterval) {
+    window.clearInterval(noteSaveInterval)
+    noteSaveInterval = null
   }
+  void flushActiveNoteSave('unmount')
 })
 </script>
 

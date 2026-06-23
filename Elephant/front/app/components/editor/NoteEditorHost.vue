@@ -78,20 +78,16 @@ import EditorWithTabs from '@/components/editorWithTabs'
 import { useMainStore } from '@/store'
 import { usePreferencesStore } from '@/store/preferences'
 import { useEditorStore } from '@/store/editor'
-import { getOptionsFromState } from '@/store/help'
 import bus from '@/bus'
 import { useVaultStore } from '../../stores/vaultStore'
 import ExcalidrawDialog from './ExcalidrawDialog.vue'
 import NoteEditorFooter from './NoteEditorFooter.vue'
 import NoteEditorTopBar from './NoteEditorTopBar.vue'
 import {
-  findExcalidrawSceneForImage,
-  getExcalidrawPreviewPath,
   getExcalidrawScenePath
 } from '../../services/excalidraw'
 import { formatShortDate } from '../../services/markdownMetaService'
 import {
-  ensureNoteDocument,
   getEditorMarkdownStats,
   getDocumentCreatedAt,
   getDocumentTitle,
@@ -100,7 +96,6 @@ import {
   toEditorMarkdown
 } from '../../utils/noteDocument'
 import {
-  deleteMarkdownTag,
   parseMarkdownTags,
   updateMarkdownTags
 } from '../../utils/markdownTags'
@@ -130,9 +125,7 @@ const isExcalidrawOpen = ref(false)
 const excalidrawInitialBlob = ref(null)
 const excalidrawTargetPath = ref('')
 const excalidrawScenePath = ref('')
-const excalidrawPreviewPath = ref('')
 const excalidrawInsertOnSave = ref(false)
-const excalidrawRefreshOnSave = ref(false)
 const excalidrawFileName = ref('excalidraw.png')
 const excalidrawTitle = ref('Excalidraw')
 const excalidrawSaveMode = ref('png')
@@ -243,12 +236,30 @@ const togglePin = () => {
   if (typeof toggle === 'function') toggle.call(store, pathname)
 }
 
-const startTagCreation = () => { isAddingTag.value = true; isEditingTag.value = false; editingTagIndex.value = -1; tagDraft.value = '' }
-const beginEditTag = (index) => { isEditingTag.value = true; isAddingTag.value = false; editingTagIndex.value = index; tagDraft.value = tags.value[index] || '' }
-const cancelTag = () => { isAddingTag.value = false; isEditingTag.value = false; editingTagIndex.value = -1; tagDraft.value = '' }
+const startTagCreation = () => {
+  isAddingTag.value = true
+  isEditingTag.value = false
+  editingTagIndex.value = -1
+  tagDraft.value = ''
+}
+const beginEditTag = (index) => {
+  isEditingTag.value = true
+  isAddingTag.value = false
+  editingTagIndex.value = index
+  tagDraft.value = tags.value[index] || ''
+}
+const cancelTag = () => {
+  isAddingTag.value = false
+  isEditingTag.value = false
+  editingTagIndex.value = -1
+  tagDraft.value = ''
+}
 const submitTag = () => {
   const tag = tagDraft.value.trim()
-  if (!tag) { cancelTag(); return }
+  if (!tag) {
+    cancelTag()
+    return
+  }
   const nextTags = [...tags.value]
   if (isEditingTag.value && editingTagIndex.value >= 0) {
     nextTags[editingTagIndex.value] = tag
@@ -262,7 +273,10 @@ const deleteTag = (index) => {
   const nextTags = tags.value.filter((_tag, currentIndex) => currentIndex !== index)
   updateCurrentFileMarkdown(updateMarkdownTags(markdown.value, nextTags, noteTitle.value))
 }
-const setTextScale = (value) => { textScale.value = value; window.localStorage.setItem('elephantnote:editorTextScale', value) }
+const setTextScale = (value) => {
+  textScale.value = value
+  window.localStorage.setItem('elephantnote:editorTextScale', value)
+}
 const toggleTheme = () => {
   const next = getOppositeThemeVariant(shellTheme.value)
   shellTheme.value = next
@@ -270,7 +284,7 @@ const toggleTheme = () => {
 }
 const openGraphView = () => bus.emit('ELEPHANT::set-main-view', 'graph')
 
-const openExcalidraw = async({ markdown, fileName, title, saveMode, insertOnSave, refreshOnSave }) => {
+const openExcalidraw = async({ markdown, fileName, title, saveMode, insertOnSave }) => {
   const baseDir = currentNoteDirectory.value
   const targetName = fileName || `drawing-${Date.now()}.png`
   const targetPath = window.path.join(baseDir, targetName)
@@ -279,20 +293,24 @@ const openExcalidraw = async({ markdown, fileName, title, saveMode, insertOnSave
   excalidrawFileName.value = targetName
   excalidrawSaveMode.value = saveMode || 'png'
   excalidrawInsertOnSave.value = !!insertOnSave
-  excalidrawRefreshOnSave.value = !!refreshOnSave
   excalidrawTargetPath.value = targetPath
   excalidrawScenePath.value = scenePath
-  excalidrawPreviewPath.value = getExcalidrawPreviewPath(targetPath)
   excalidrawInitialBlob.value = markdown || ''
   isExcalidrawOpen.value = true
 }
-const closeExcalidraw = () => { isExcalidrawOpen.value = false; excalidrawInitialBlob.value = null }
+const closeExcalidraw = () => {
+  isExcalidrawOpen.value = false
+  excalidrawInitialBlob.value = null
+}
 const saveExcalidraw = async({ imageBlob, sceneBlob }) => {
   await window.fileUtils.ensureDir(window.path.dirname(excalidrawTargetPath.value))
   await window.fileUtils.writeFile(excalidrawTargetPath.value, imageBlob)
   if (sceneBlob) await window.fileUtils.writeFile(excalidrawScenePath.value, sceneBlob)
   if (excalidrawInsertOnSave.value) {
-    const source = resolveLocalImageSource(excalidrawTargetPath.value, { notePath: currentFile.value?.pathname, vaultPath: store.activeVault?.path })
+    const source = resolveLocalImageSource(excalidrawTargetPath.value, {
+      notePath: currentFile.value?.pathname,
+      vaultPath: store.activeVault?.path
+    })
     updateCurrentFileMarkdown(`${markdown.value}\n\n![${excalidrawFileName.value}](${source})`)
   }
   closeExcalidraw()

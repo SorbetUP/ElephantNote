@@ -107,6 +107,18 @@ assertOrdered(
   ],
   'backend search failures must still try local fallback'
 )
+assertOrdered(
+  'Elephant/front/app/stores/searchStore.js',
+  [
+    'openResult(result) {',
+    'const vaultStore = useVaultStore()',
+    'const noteEntry = existingEntry || {',
+    "vaultStore.activeWorkspaceView = 'notes'",
+    "if (typeof vaultStore.openNote === 'function') {",
+    'vaultStore.openNote(noteEntry)'
+  ],
+  'opening a search result must update vault navigation state instead of sending a detached open-file IPC only'
+)
 
 assertOrdered(
   'Elephant/front/app/stores/vaultStore.js',

@@ -418,8 +418,27 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       const vaultPath = this.vaultPath || vaultStore.activeVault?.path || ''
       if (!vaultPath) return
       this.vaultPath = vaultPath
-      const absolutePath = window.path.join(vaultPath, relativePath)
-      window.electron.ipcRenderer.send('mt::open-file', absolutePath, {})
+
+      const existingEntry = [
+        ...(vaultStore.entries || []),
+        ...(vaultStore.rootEntries || []),
+        ...(vaultStore.openedNotes || [])
+      ].find((entry) => normalizeRelativePath(entry?.path) === relativePath)
+
+      const noteEntry = existingEntry || {
+        path: relativePath,
+        title: result?.title || basenameTitle(relativePath),
+        kind: 'note',
+        type: 'note',
+        updatedAt: result?.updatedAt || new Date().toISOString()
+      }
+
+      vaultStore.activeWorkspaceView = 'notes'
+      if (typeof vaultStore.openNote === 'function') {
+        vaultStore.openNote(noteEntry)
+      } else {
+        window.electron.ipcRenderer.send('mt::open-file', window.path.join(vaultPath, relativePath), {})
+      }
       this.close()
     }
   }

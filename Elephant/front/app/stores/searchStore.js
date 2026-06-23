@@ -2,6 +2,11 @@ import { defineStore } from 'pinia'
 import log from 'electron-log'
 import { useVaultStore } from './vaultStore'
 import { elephantnoteClient } from '../services/elephantnoteClient'
+import {
+  getDocumentTitle,
+  parseFrontmatter,
+  parseMarkdownTags
+} from 'common/elephantnote/markdownDocument'
 
 const DEFAULT_STATUS = Object.freeze({
   status: 'not_initialized',
@@ -30,6 +35,48 @@ const withTimeout = (promise, timeoutMs, message) => {
   })
   return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId))
 }
+
+const basenameTitle = (relativePath = '') => String(relativePath || '').split('/').pop()?.replace(/\.md$/i, '') || 'Untitled'
+
+const normalizeDocumentForIndex = (relativePath = '', markdown = '', metadata = {}) => {
+  const path = String(relativePath || '').trim()
+  const content = String(markdown || '')
+  const frontmatter = parseFrontmatter(content)
+  const title = metadata.title || getDocumentTitle(content, basenameTitle(path))
+  const tags = Array.isArray(metadata.tags) ? metadata.tags : parseMarkdownTags(content)
+  const body = frontmatter.body || content
+  return {
+    relativePath: path,
+    path,
+    title,
+    tags,
+    content,
+    body,
+    excerpt: body.replace(/^#\s+.*$/m, '').trim().slice(0, 500),
+    updatedAt: metadata.updatedAt || frontmatter.fields.updatedAt || new Date().toISOString()
+  }
+}
+
+const scoreDocument = (document, query = '') => {
+  const needle = String(query || '').trim().toLowerCase()
+  if (!needle) return 0
+  const title = String(document.title || '').toLowerCase()
+  const path = String(document.relativePath || document.path || '').toLowerCase()
+  const body = String(document.body || document.content || document.excerpt || '').toLowerCase()
+  const tags = Array.isArray(document.tags) ? document.tags.join(' ').toLowerCase() : ''
+  return (title.includes(needle) ? 10 : 0) +
+    (tags.includes(needle) ? 6 : 0) +
+    (path.includes(needle) ? 4 : 0) +
+    (body.includes(needle) ? 2 : 0)
+}
+
+const toSearchResult = (document, score = 0) => ({
+  relativePath: document.relativePath || document.path,
+  title: document.title || basenameTitle(document.relativePath || document.path),
+  excerpt: document.excerpt || document.body || '',
+  tags: document.tags || [],
+  score
+})
 
 export const useSearchStore = defineStore('elephantnoteSearch', {
   state: () => ({
@@ -95,6 +142,53 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       this.query = String(value || '')
     },
 
+    updateNoteIndex(relativePath, markdown = '', metadata = {}) {
+      const document = normalizeDocumentForIndex(relativePath, markdown, metadata)
+      if (!document.relativePath) return false
+      const documents = Array.isArray(this.indexInspection.documents)
+        ? this.indexInspection.documents
+        : []
+      this.indexInspection = {
+        ...this.indexInspection,
+        documents: [
+          document,
+          ...documents.filter((item) => (item.relativePath || item.path) !== document.relativePath)
+        ],
+        generatedAt: new Date().toISOString()
+      }
+      this.status = {
+        ...this.status,
+        indexedDocuments: this.indexInspection.documents.length,
+        totalDocuments: Math.max(this.status.totalDocuments || 0, this.indexInspection.documents.length)
+      }
+      if (this.query.trim()) {
+        this.results = this.localSearch(this.query, this.queryLimit)
+      }
+      return true
+    },
+
+    removeNoteIndex(relativePath) {
+      const path = String(relativePath || '').trim()
+      if (!path) return false
+      this.indexInspection = {
+        ...this.indexInspection,
+        documents: (this.indexInspection.documents || []).filter((item) => (item.relativePath || item.path) !== path),
+        generatedAt: new Date().toISOString()
+      }
+      this.results = this.results.filter((item) => item.relativePath !== path)
+      return true
+    },
+
+    localSearch(query = this.query, limit = this.queryLimit) {
+      const documents = Array.isArray(this.indexInspection.documents) ? this.indexInspection.documents : []
+      return documents
+        .map((document) => ({ document, score: scoreDocument(document, query) }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score || String(a.document.title || '').localeCompare(String(b.document.title || '')))
+        .slice(0, clampQueryLimit(limit))
+        .map((item) => toSearchResult(item.document, item.score))
+    },
+
     async refreshStatus() {
       try {
         await this.ensureActiveVault()
@@ -126,6 +220,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
           documents: [],
           folders: [],
           semanticLinks: [],
+          graph: null,
           generatedAt: new Date().toISOString()
         }
       }
@@ -186,9 +281,16 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
           15000,
           'Local search timed out. Try Exact mode or rebuild the semantic index.'
         )
-        this.results = Array.isArray(results) ? results : []
+        const backendResults = Array.isArray(results) ? results : []
+        this.results = backendResults.length ? backendResults : this.localSearch(query, this.queryLimit)
         return this.results
       } catch (error) {
+        const fallbackResults = this.localSearch(query, this.queryLimit)
+        if (fallbackResults.length) {
+          this.error = ''
+          this.results = fallbackResults
+          return this.results
+        }
         this.error = error?.message || 'Search failed.'
         this.results = []
         return []

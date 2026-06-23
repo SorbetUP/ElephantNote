@@ -17,6 +17,15 @@ const DEFAULT_STATUS = Object.freeze({
   error: ''
 })
 
+const EMPTY_INSPECTION = Object.freeze({
+  indexPath: '',
+  documents: [],
+  folders: [],
+  semanticLinks: [],
+  graph: null,
+  generatedAt: ''
+})
+
 const clampQueryLimit = (value) => {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 20
@@ -36,15 +45,21 @@ const withTimeout = (promise, timeoutMs, message) => {
   return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId))
 }
 
+const normalizeRelativePath = (relativePath = '') => String(relativePath || '')
+  .replace(/\\/g, '/')
+  .split('/')
+  .filter((part) => part && part !== '.')
+  .join('/')
+
 const basenameTitle = (relativePath = '') => {
-  const name = String(relativePath || '').split('/').pop() || ''
+  const name = normalizeRelativePath(relativePath).split('/').pop() || ''
   return name.replace(/\.md$/i, '') || 'Untitled'
 }
 
-const getDocumentPath = (document) => document.relativePath || document.path || ''
+const getDocumentPath = (document) => normalizeRelativePath(document?.relativePath || document?.path || '')
 
 const normalizeDocumentForIndex = (relativePath = '', markdown = '', metadata = {}) => {
-  const path = String(relativePath || '').trim()
+  const path = normalizeRelativePath(relativePath)
   const content = String(markdown || '')
   const frontmatter = parseFrontmatter(content)
   const title = metadata.title || getDocumentTitle(content, basenameTitle(path))
@@ -64,6 +79,12 @@ const normalizeDocumentForIndex = (relativePath = '', markdown = '', metadata = 
     updatedAt
   }
 }
+
+const normalizeBackendResult = (result = {}) => ({
+  ...result,
+  relativePath: normalizeRelativePath(result.relativePath || result.path || ''),
+  path: normalizeRelativePath(result.path || result.relativePath || '')
+})
 
 const scoreDocument = (document, query = '') => {
   const needle = String(query || '').trim().toLowerCase()
@@ -88,6 +109,8 @@ const toSearchResult = (document, score = 0) => ({
   score
 })
 
+const emptyInspection = () => ({ ...EMPTY_INSPECTION })
+
 export const useSearchStore = defineStore('elephantnoteSearch', {
   state: () => ({
     isOpen: false,
@@ -96,14 +119,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     mode: 'exact',
     results: [],
     status: { ...DEFAULT_STATUS },
-    indexInspection: {
-      indexPath: '',
-      documents: [],
-      folders: [],
-      semanticLinks: [],
-      graph: null,
-      generatedAt: ''
-    },
+    indexInspection: emptyInspection(),
     busy: false,
     error: '',
     queryLimit: clampQueryLimit(loadSearchPreference('queryLimit', 20)),
@@ -123,6 +139,8 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       if (!vaultPath) return this.status
       this.vaultPath = vaultPath
       if (this.status.vaultPath !== vaultPath && this.status.status !== 'disabled') {
+        this.indexInspection = emptyInspection()
+        this.results = []
         this.status = await elephantnoteClient.search.initVault(vaultPath)
       }
       return this.status
@@ -177,14 +195,14 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     },
 
     removeNoteIndex(relativePath) {
-      const path = String(relativePath || '').trim()
+      const path = normalizeRelativePath(relativePath)
       if (!path) return false
       this.indexInspection = {
         ...this.indexInspection,
         documents: (this.indexInspection.documents || []).filter((item) => getDocumentPath(item) !== path),
         generatedAt: new Date().toISOString()
       }
-      this.results = this.results.filter((item) => item.relativePath !== path)
+      this.results = this.results.filter((item) => normalizeRelativePath(item.relativePath) !== path)
       return true
     },
 
@@ -221,7 +239,20 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       try {
         await this.ensureActiveVault()
         log.info('[search] inspect:start', { vaultPath: this.vaultPath || '' })
-        this.indexInspection = await elephantnoteClient.search.inspect()
+        const inspection = await elephantnoteClient.search.inspect()
+        this.indexInspection = {
+          ...emptyInspection(),
+          ...(inspection || {}),
+          documents: Array.isArray(inspection?.documents)
+            ? inspection.documents.map((document) => ({
+              ...document,
+              relativePath: getDocumentPath(document),
+              path: getDocumentPath(document)
+            }))
+            : [],
+          folders: Array.isArray(inspection?.folders) ? inspection.folders : [],
+          semanticLinks: Array.isArray(inspection?.semanticLinks) ? inspection.semanticLinks : []
+        }
         log.info('[search] inspect:done', {
           documents: Array.isArray(this.indexInspection?.documents) ? this.indexInspection.documents.length : 0,
           semanticLinks: Array.isArray(this.indexInspection?.semanticLinks) ? this.indexInspection.semanticLinks.length : 0
@@ -229,11 +260,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       } catch (error) {
         log.error('[search] inspect failed', error)
         this.indexInspection = {
-          indexPath: '',
-          documents: [],
-          folders: [],
-          semanticLinks: [],
-          graph: null,
+          ...emptyInspection(),
           generatedAt: new Date().toISOString()
         }
       }
@@ -271,8 +298,17 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       window.localStorage.setItem(`elephantnote:search:${key}`, String(this[key]))
     },
 
+    async hydrateLocalFallback() {
+      const hasDocuments = Array.isArray(this.indexInspection.documents) && this.indexInspection.documents.length > 0
+      if (hasDocuments) return
+      await this.inspect()
+    },
+
     async search() {
       const query = this.query.trim()
+      if (!this.vaultPath) {
+        await this.ensureActiveVault()
+      }
       if (!this.vaultPath) {
         this.results = []
         return []
@@ -295,10 +331,19 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
           15000,
           'Local search timed out. Try Exact mode or rebuild the semantic index.'
         )
-        const backendResults = Array.isArray(results) ? results : []
-        this.results = backendResults.length ? backendResults : this.localSearch(query, this.queryLimit)
+        const backendResults = Array.isArray(results)
+          ? results.map(normalizeBackendResult).filter((result) => result.relativePath)
+          : []
+        if (backendResults.length) {
+          this.results = backendResults
+          return this.results
+        }
+
+        await this.hydrateLocalFallback()
+        this.results = this.localSearch(query, this.queryLimit)
         return this.results
       } catch (error) {
+        await this.hydrateLocalFallback()
         const fallbackResults = this.localSearch(query, this.queryLimit)
         if (fallbackResults.length) {
           this.error = ''
@@ -344,14 +389,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       try {
         this.status = await elephantnoteClient.search.clear()
         this.results = []
-        this.indexInspection = {
-          indexPath: '',
-          documents: [],
-          folders: [],
-          semanticLinks: [],
-          graph: null,
-          generatedAt: ''
-        }
+        this.indexInspection = emptyInspection()
         await this.refreshStatus()
       } finally {
         this.busy = false
@@ -374,12 +412,13 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     },
 
     openResult(result) {
-      if (!result?.relativePath) return
+      const relativePath = normalizeRelativePath(result?.relativePath || result?.path || '')
+      if (!relativePath) return
       const vaultStore = useVaultStore()
       const vaultPath = this.vaultPath || vaultStore.activeVault?.path || ''
       if (!vaultPath) return
       this.vaultPath = vaultPath
-      const absolutePath = window.path.join(vaultPath, result.relativePath)
+      const absolutePath = window.path.join(vaultPath, relativePath)
       window.electron.ipcRenderer.send('mt::open-file', absolutePath, {})
       this.close()
     }

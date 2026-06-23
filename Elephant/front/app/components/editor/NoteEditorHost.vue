@@ -230,13 +230,17 @@ const updateCurrentFileMarkdown = (nextMarkdown) => {
     currentFile.value.markdown = nextMarkdown
     currentFile.value.isSaved = false
   }
-  if (store.openedNotePath) searchStore.updateNoteIndex(store.openedNotePath, nextMarkdown)
+  if (store.openedNotePath && typeof searchStore.updateNoteIndex === 'function') {
+    searchStore.updateNoteIndex(store.openedNotePath, nextMarkdown)
+  }
 }
 
 const updateTitle = (nextTitle) => updateCurrentFileMarkdown(renameDocumentTitle(markdown.value, nextTitle, fallbackTitle.value))
 const togglePin = () => {
   const pathname = currentNoteRelativePath.value
-  if (pathname) store.togglePin(pathname)
+  if (!pathname) return
+  const toggle = store.togglePin || store.togglePinnedNote || store.togglePinnedEntry
+  if (typeof toggle === 'function') toggle.call(store, pathname)
 }
 
 const startTagCreation = () => { isAddingTag.value = true; isEditingTag.value = false; editingTagIndex.value = -1; tagDraft.value = '' }
@@ -245,10 +249,19 @@ const cancelTag = () => { isAddingTag.value = false; isEditingTag.value = false;
 const submitTag = () => {
   const tag = tagDraft.value.trim()
   if (!tag) { cancelTag(); return }
-  updateCurrentFileMarkdown(updateMarkdownTags(markdown.value, tag, isEditingTag.value ? editingTagIndex.value : -1))
+  const nextTags = [...tags.value]
+  if (isEditingTag.value && editingTagIndex.value >= 0) {
+    nextTags[editingTagIndex.value] = tag
+  } else if (!nextTags.includes(tag)) {
+    nextTags.push(tag)
+  }
+  updateCurrentFileMarkdown(updateMarkdownTags(markdown.value, nextTags, noteTitle.value))
   cancelTag()
 }
-const deleteTag = (index) => updateCurrentFileMarkdown(deleteMarkdownTag(markdown.value, index))
+const deleteTag = (index) => {
+  const nextTags = tags.value.filter((_tag, currentIndex) => currentIndex !== index)
+  updateCurrentFileMarkdown(updateMarkdownTags(markdown.value, nextTags, noteTitle.value))
+}
 const setTextScale = (value) => { textScale.value = value; window.localStorage.setItem('elephantnote:editorTextScale', value) }
 const toggleTheme = () => {
   const next = getOppositeThemeVariant(shellTheme.value)

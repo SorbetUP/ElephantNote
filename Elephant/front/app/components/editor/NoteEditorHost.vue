@@ -282,7 +282,7 @@ const toggleTheme = () => {
 }
 const openGraphView = () => bus.emit('ELEPHANT::set-main-view', 'graph')
 
-const openExcalidraw = async ({ markdown, fileName, title, saveMode, insertOnSave }) => {
+const openExcalidraw = async({ markdown, fileName, title, saveMode, insertOnSave }) => {
   const baseDir = currentNoteDirectory.value
   const targetName = fileName || `drawing-${Date.now()}.png`
   const targetPath = window.path.join(baseDir, targetName)
@@ -300,7 +300,7 @@ const closeExcalidraw = () => {
   isExcalidrawOpen.value = false
   excalidrawInitialBlob.value = null
 }
-const saveExcalidraw = async ({ imageBlob, sceneBlob }) => {
+const saveExcalidraw = async({ imageBlob, sceneBlob }) => {
   await window.fileUtils.ensureDir(window.path.dirname(excalidrawTargetPath.value))
   await window.fileUtils.writeFile(excalidrawTargetPath.value, imageBlob)
   if (sceneBlob) await window.fileUtils.writeFile(excalidrawScenePath.value, sceneBlob)

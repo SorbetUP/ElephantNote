@@ -59,6 +59,7 @@ pub fn parse_blocks(markdown: &str) -> Vec<MarkdownBlock> {
   let mut code_lines = Vec::<String>::new();
   for line in markdown.lines() {
     let trimmed = line.trim_end();
+    let marker_trimmed = trimmed.trim_start();
     if let Some(language) = code_language.clone() {
       if trimmed.starts_with("```") {
         blocks.push(code_block(language, &code_lines));
@@ -85,19 +86,19 @@ pub fn parse_blocks(markdown: &str) -> Vec<MarkdownBlock> {
       blocks.push(MarkdownBlock::new("heading", trimmed, title, Some(level)));
       continue;
     }
-    if let Some((checked, text)) = parse_task(trimmed) {
+    if let Some((checked, text)) = parse_task(marker_trimmed) {
       flush_paragraph(&mut blocks, &mut paragraph);
       let mut block = MarkdownBlock::new("task", trimmed, text, None);
       block.checked = Some(checked);
       blocks.push(block);
       continue;
     }
-    if let Some(text) = parse_unordered_item(trimmed) {
+    if let Some(text) = parse_unordered_item(marker_trimmed) {
       flush_paragraph(&mut blocks, &mut paragraph);
       blocks.push(MarkdownBlock::new("list_item", trimmed, text, None));
       continue;
     }
-    if let Some(text) = parse_ordered_item(trimmed) {
+    if let Some(text) = parse_ordered_item(marker_trimmed) {
       flush_paragraph(&mut blocks, &mut paragraph);
       blocks.push(MarkdownBlock::new("ordered_list_item", trimmed, text, None));
       continue;

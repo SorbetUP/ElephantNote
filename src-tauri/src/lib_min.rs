@@ -10,6 +10,7 @@ pub mod media_domain;
 pub mod drawing_domain;
 pub mod model_domain;
 pub mod model_library;
+pub mod chat_runtime;
 pub mod search_logic;
 
 mod tauri_extra_commands;
@@ -112,6 +113,7 @@ pub fn run() {
       model_library::tauri_models_delete,
       model_library::tauri_models_active,
       model_library::tauri_models_refresh_index,
+      chat_runtime::tauri_rag_chat,
       tauri_extra_commands::tauri_search_rebuild,
       tauri_extra_commands::tauri_sync_plan
     ])

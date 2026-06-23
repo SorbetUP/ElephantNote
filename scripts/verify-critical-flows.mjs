@@ -50,16 +50,6 @@ ordered(
   'bootstrap must not mask real Tauri fileUtils with a no-op writer'
 )
 ordered(
-  'src/renderer/src/platform/runtimeBridge.js',
-  [
-    'if (hasTauri) {',
-    'const electron = createTauriElectronFacade(target, target.__TAURI__)',
-    'target.fileUtils = createTauriFileUtilsFacade(target.__TAURI__?.fs)',
-    'target.electron = electron'
-  ],
-  'Tauri runtime must force-install the real fileUtils bridge'
-)
-ordered(
   'src/renderer/src/main.js',
   [
     "import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'",

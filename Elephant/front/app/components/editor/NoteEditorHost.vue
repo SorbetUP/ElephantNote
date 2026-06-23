@@ -132,6 +132,10 @@ const shellTheme = inject('elephantnoteTheme', ref(window.localStorage.getItem('
 const setShellTheme = inject('setElephantnoteTheme', (value) => {
   window.localStorage.setItem('elephantnote:theme', value)
 })
+let noteSaveTimer = null
+let lastSavedNotePath = ''
+let lastSavedMarkdown = ''
+
 const openedNoteAbsolutePath = computed(() => {
   if (!store.activeVault?.path || !store.openedNotePath) return ''
   return window.path.join(store.activeVault.path, store.openedNotePath)
@@ -225,6 +229,81 @@ const syncVisibleNoteMetadata = (pathname, metadata = {}) => {
   store.rootEntries = store.rootEntries.map((entry) => applyNoteMetadata(entry, pathname, metadata))
 }
 
+const getNoteParentPath = (relativePath = '') => {
+  const parentPath = window.path.dirname(relativePath)
+  return parentPath === '.' ? '' : parentPath
+}
+
+const markFileSavedIfCurrent = (file, notePath, savedMarkdown) => {
+  if (!file || file.markdown !== savedMarkdown) return
+  file.isSaved = true
+  if (currentFile.value?.id === file.id && currentFile.value.markdown === savedMarkdown) {
+    currentFile.value.isSaved = true
+  }
+  if (file.id) {
+    window.electron?.ipcRenderer?.send?.('mt::tab-saved', file.id)
+  }
+  lastSavedNotePath = notePath
+  lastSavedMarkdown = savedMarkdown
+}
+
+const refreshSavedEntries = async(notePath, result) => {
+  const parentPath = getNoteParentPath(notePath)
+  if (Array.isArray(result?.entries)) {
+    if (parentPath === store.currentPath) {
+      store.entries = result.entries
+    }
+    if (!parentPath) {
+      store.rootEntries = result.entries
+      return
+    }
+  }
+  try {
+    store.rootEntries = await elephantnoteClient.directory.list('')
+    if (parentPath === store.currentPath) {
+      store.entries = await elephantnoteClient.directory.list(store.currentPath)
+    }
+  } catch (error) {
+    console.warn('Unable to refresh ElephantNote entries after note save:', error)
+  }
+}
+
+const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value) => {
+  if (!store.activeVault?.path || !notePath || typeof nextMarkdown !== 'string') return false
+  try {
+    const result = await elephantnoteClient.notes.write({
+      relativePath: notePath,
+      markdown: nextMarkdown
+    })
+    await refreshSavedEntries(notePath, result)
+    markFileSavedIfCurrent(file, notePath, nextMarkdown)
+    return true
+  } catch (apiError) {
+    try {
+      await window.fileUtils.writeFile(window.path.join(store.activeVault.path, notePath), nextMarkdown)
+      await refreshSavedEntries(notePath, null)
+      markFileSavedIfCurrent(file, notePath, nextMarkdown)
+      return true
+    } catch (fileError) {
+      console.error('Unable to persist ElephantNote note:', apiError, fileError)
+      if (file?.id) {
+        window.electron?.ipcRenderer?.send?.('mt::tab-save-failure', file.id, fileError?.message || apiError?.message || 'Unable to save note.')
+      }
+      return false
+    }
+  }
+}
+
+const scheduleNoteSave = (notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, delay = 450) => {
+  if (!notePath || !store.activeVault?.path || typeof nextMarkdown !== 'string') return
+  if (lastSavedNotePath === notePath && lastSavedMarkdown === nextMarkdown) return
+  if (noteSaveTimer) window.clearTimeout(noteSaveTimer)
+  noteSaveTimer = window.setTimeout(() => {
+    noteSaveTimer = null
+    void persistNoteMarkdown(notePath, nextMarkdown, file)
+  }, delay)
+}
+
 const selectOpenedNoteTab = () => {
   const pathname = openedNoteAbsolutePath.value
   if (!pathname || !editorStore.tabs?.length) return
@@ -235,6 +314,19 @@ const selectOpenedNoteTab = () => {
 
 watch(openedNoteAbsolutePath, selectOpenedNoteTab, { immediate: true })
 watch(() => editorStore.tabs.length, selectOpenedNoteTab)
+watch(
+  () => ({ notePath: currentNoteRelativePath.value || store.openedNotePath, markdown: markdown.value, file: activeNoteFile.value || currentFile.value }),
+  ({ notePath, markdown: nextMarkdown, file }, previous) => {
+    if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return
+    if (previous?.notePath !== notePath) {
+      lastSavedNotePath = notePath
+      lastSavedMarkdown = nextMarkdown
+      return
+    }
+    if (previous?.markdown === nextMarkdown) return
+    scheduleNoteSave(notePath, nextMarkdown, file)
+  }
+)
 
 const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {
   const file = activeNoteFile.value || currentFile.value
@@ -251,6 +343,7 @@ const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {
     if (typeof searchStore.updateNoteIndex === 'function') {
       searchStore.updateNoteIndex(notePath, nextMarkdown, metadata)
     }
+    scheduleNoteSave(notePath, nextMarkdown, file, 0)
   }
 }
 
@@ -350,6 +443,13 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   bus.off('ELEPHANT::open-excalidraw', openExcalidraw)
+  if (noteSaveTimer) {
+    window.clearTimeout(noteSaveTimer)
+    noteSaveTimer = null
+    const notePath = currentNoteRelativePath.value || store.openedNotePath
+    const file = activeNoteFile.value || currentFile.value
+    void persistNoteMarkdown(notePath, markdown.value, file)
+  }
 })
 </script>
 

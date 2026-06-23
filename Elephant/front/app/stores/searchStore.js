@@ -37,6 +37,11 @@ const loadSearchPreference = (key, fallback) => {
   return value === null ? fallback : value
 }
 
+const loadBooleanSearchPreference = (key, fallback = false) => {
+  const value = loadSearchPreference(key, String(Boolean(fallback)))
+  return value === true || value === 'true'
+}
+
 const withTimeout = (promise, timeoutMs, message) => {
   let timeoutId
   const timeout = new Promise((_resolve, reject) => {
@@ -46,7 +51,7 @@ const withTimeout = (promise, timeoutMs, message) => {
 }
 
 const normalizeRelativePath = (relativePath = '') => String(relativePath || '')
-  .replace(/\\/g, '/')
+  .replace(/\/g, '/')
   .split('/')
   .filter((part) => part && part !== '.')
   .join('/')
@@ -126,9 +131,9 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     defaultMode: loadSearchPreference('defaultMode', 'exact'),
     visualizationMode: loadSearchPreference('visualizationMode', 'list'),
     graphDensity: Number(loadSearchPreference('graphDensity', 1)) || 1,
-    showVisualizationLabels: false,
-    showFolderClusters: false,
-    autoRefreshInspection: false,
+    showVisualizationLabels: loadBooleanSearchPreference('showVisualizationLabels'),
+    showFolderClusters: loadBooleanSearchPreference('showFolderClusters'),
+    autoRefreshInspection: loadBooleanSearchPreference('autoRefreshInspection'),
     polling: false
   }),
 

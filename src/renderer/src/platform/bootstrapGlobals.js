@@ -1,26 +1,48 @@
 import { installGlobalMuyaRuntimeBridge } from '../muya/globalRuntimeBridge.js'
 
-const normalizeSlashes = (value) => String(value || '').replace(/\/g, '/')
+const WINDOWS_SEPARATOR = String.fromCharCode(92)
+const normalizeSlashes = (value) => String(value || '').split(WINDOWS_SEPARATOR).join('/')
+
+const collapseForwardSlashes = (value = '') => {
+  let next = String(value || '')
+  while (next.includes('//')) next = next.replaceAll('//', '/')
+  return next
+}
+
+const trimTrailingForwardSlashes = (value = '') => {
+  let next = String(value || '')
+  while (next.length > 1 && next.endsWith('/')) next = next.slice(0, -1)
+  return next
+}
+
+const isWindowsDrivePath = (value = '') => {
+  const text = String(value || '')
+  const first = text.charCodeAt(0)
+  const isLetter = (first >= 65 && first <= 90) || (first >= 97 && first <= 122)
+  return isLetter && text[1] === ':' && text[2] === '/'
+}
 
 const createPathFacade = () => {
   const join = (...parts) => normalize(joinedPath(parts))
   const normalize = (pathname) => {
     const value = normalizeSlashes(pathname)
     if (!value) return '.'
-    const isDrive = /^[a-zA-Z]:\//.test(value)
+    const isDrive = isWindowsDrivePath(value)
     const prefix = value.startsWith('//') ? '//' : isDrive ? value.slice(0, 3) : value.startsWith('/') ? '/' : ''
-    const body = value.slice(prefix.length).replace(/\/+/g, '/').replace(/\/+$/, '')
-    if (!body) return prefix || '.'
-    return prefix ? `${prefix.replace(/\/$/, '')}/${body}`.replace(/\/+/g, '/') : body
+    const rawBody = trimTrailingForwardSlashes(collapseForwardSlashes(value.slice(prefix.length)))
+    if (!rawBody) return prefix || '.'
+    if (!prefix) return rawBody
+    const cleanPrefix = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix
+    return collapseForwardSlashes(`${cleanPrefix}/${rawBody}`)
   }
   const dirname = (pathname) => {
     const normalized = normalize(pathname)
-    if (normalized === '/' || /^[a-zA-Z]:\/$/.test(normalized)) return normalized
+    if (normalized === '/' || isWindowsDrivePath(normalized)) return normalized
     const index = normalized.lastIndexOf('/')
     return index > 0 ? normalized.slice(0, index) : '.'
   }
   const basename = (pathname, ext = '') => {
-    const value = normalizeSlashes(pathname).replace(/\/+$/, '')
+    const value = trimTrailingForwardSlashes(normalizeSlashes(pathname))
     const index = value.lastIndexOf('/')
     const base = index >= 0 ? value.slice(index + 1) : value
     return ext && base.endsWith(ext) ? base.slice(0, -ext.length) : base
@@ -59,7 +81,7 @@ const createPathFacade = () => {
     extname,
     isAbsolute: (pathname) => {
       const value = normalizeSlashes(pathname)
-      return value.startsWith('/') || /^([a-zA-Z]:\/)/.test(value) || value.startsWith('//')
+      return value.startsWith('/') || isWindowsDrivePath(value) || value.startsWith('//')
     },
     relative
   }
@@ -80,10 +102,13 @@ const createFileUtilsFallback = () => ({
   ensureDirSync: () => {},
   pathExistsSync: () => false,
   isChildOfDirectory: () => false,
-  hasMarkdownExtension: (filename) => /\.md$/i.test(String(filename || '')),
+  hasMarkdownExtension: (filename) => String(filename || '').toLowerCase().endsWith('.md'),
   MARKDOWN_INCLUSIONS: ['.md', '.markdown', '.mdown', '.mkdn', '.mkd', '.mdtxt'],
   isSamePathSync: (pathA, pathB) => normalizeSlashes(pathA) === normalizeSlashes(pathB),
-  isImageFile: (filepath) => /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(String(filepath || ''))
+  isImageFile: (filepath) => {
+    const value = String(filepath || '').toLowerCase()
+    return ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico'].some((ext) => value.endsWith(ext))
+  }
 })
 
 const installBootstrapGlobals = (target = globalThis) => {

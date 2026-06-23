@@ -138,6 +138,8 @@
     "temporal-polyfill": "^0.3.2",
     "turndown": "^7.2.4",
     "underscore": "^1.13.8",
+    "vectra": "^0.14.0",
+    "vega-embed": "^7.1.0",
     "vue-i18n": "^11.4.2",
     "vue-router": "^4.6.4",
     "webfontloader": "^1.6.28"
@@ -172,6 +174,6 @@
     "vite-svg-loader": "^5.1.1",
     "vitest": "^4.1.6",
     "vue": "^3.5.34",
-    "vue-eslint-parser": "^10.4.2"
+    "vue-eslint-parser": "^10.4.0"
   }
 }

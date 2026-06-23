@@ -64,26 +64,45 @@ assertOrdered(
 assertOrdered(
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   [
-    'const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value) => {',
+    'const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, reason = \'unknown\') => {',
+    "console.info('[elephantnote:save] write:start'",
     'elephantnoteClient.notes.write({',
     'relativePath: notePath,',
     'markdown: nextMarkdown',
     'await window.fileUtils.writeFile(window.path.join(store.activeVault.path, notePath), nextMarkdown)',
-    'markFileSavedIfCurrent(file, notePath, nextMarkdown)'
+    "console.info('[elephantnote:save] write:done'"
   ],
-  'editor changes must be persisted to the note markdown file, with direct file fallback'
+  'editor changes must be persisted to the note markdown file, with direct file fallback and visible save logs'
 )
 assertOrdered(
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   [
-    'watch(',
-    'scheduleNoteSave(notePath, nextMarkdown, file)',
+    'const pollActiveMarkdownSave = (reason = \'poll\') => {',
+    'const file = getActiveNoteFile() || currentFile.value',
+    'const nextMarkdown = file?.markdown',
+    'scheduleNoteSave(notePath, nextMarkdown, file, 120, reason)',
+    'noteSaveInterval = window.setInterval(() => pollActiveMarkdownSave(\'interval\'), 250)'
+  ],
+  'note autosave must poll the active editor markdown directly so it does not depend on fragile nested Pinia watchers'
+)
+assertOrdered(
+  'Elephant/front/app/components/editor/NoteEditorHost.vue',
+  [
+    'const closeOpenedNote = async() => {',
+    'await flushActiveNoteSave(\'close-note\')',
+    'store.closeNote()'
+  ],
+  'closing a note must flush pending markdown before hiding the editor'
+)
+assertOrdered(
+  'Elephant/front/app/components/editor/NoteEditorHost.vue',
+  [
     'const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {',
     'syncVisibleNoteMetadata(notePath, metadata)',
     'searchStore.updateNoteIndex(notePath, nextMarkdown, metadata)',
-    'scheduleNoteSave(notePath, nextMarkdown, file, 0)'
+    "scheduleNoteSave(notePath, nextMarkdown, file, 0, 'toolbar-edit')"
   ],
-  'body edits and title/tag toolbar edits must schedule disk saves'
+  'title/tag toolbar edits must update UI, search index and disk immediately'
 )
 assertOrdered(
   'Elephant/front/app/components/editor/NoteEditorHost.vue',

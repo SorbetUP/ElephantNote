@@ -1,0 +1,28 @@
+name: Sync Docker Smoke
+
+on:
+  push:
+    branches:
+      - main
+      - nsb/tauri
+      - 'assistant/**'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: sync-docker-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  two-device-sync:
+    name: Two-device Docker sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+
+      - name: Run two-device Docker sync smoke
+        run: pnpm test:sync:docker:pair

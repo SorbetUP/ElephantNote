@@ -25,7 +25,6 @@ const ordered = (relativePath, needles, description) => {
 
 for (const file of [
   'src/renderer/src/platform/bootstrapGlobals.js',
-  'src/renderer/src/platform/runtimeBridge.js',
   'src/renderer/src/platform/tauriMarkTextSaveBridge.js',
   'src/renderer/src/main.js',
   'src/renderer/src/store/editor.js',
@@ -53,11 +52,15 @@ ordered(
   'src/renderer/src/main.js',
   [
     "import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'",
+    'const clearBootstrapFileUtilsFallbackForTauri = () => {',
+    'if (window.__TAURI__ && window.fileUtils?.__elephantnoteBootstrapFallback) {',
+    'delete window.fileUtils',
+    'clearBootstrapFileUtilsFallbackForTauri()',
     'installRuntimeBridge()',
     'installTauriElephantNoteBridge()',
     'installTauriMarkTextSaveBridge()'
   ],
-  'Tauri MarkText save bridge must be installed at boot'
+  'Tauri MarkText save bridge must clear bootstrap fallback and be installed at boot'
 )
 ordered(
   'src/renderer/src/store/editor.js',

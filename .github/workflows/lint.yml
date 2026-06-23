@@ -8,6 +8,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -16,4 +20,51 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Run ESLint
-        run: pnpm lint
+        id: eslint
+        shell: bash
+        run: |
+          set +e
+          pnpm lint > eslint-output.txt 2>&1
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "ESLint exit code: $code"
+          tail -n 200 eslint-output.txt
+          exit 0
+
+      - name: Comment ESLint output on PR
+        if: steps.eslint.outputs.exit_code != '0' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs')
+            const output = fs.readFileSync('eslint-output.txt', 'utf8')
+            const tail = output.split('\n').slice(-180).join('\n')
+            const body = [
+              '<!-- elephantnote-eslint-report -->',
+              '## ESLint failed',
+              '',
+              'Last 180 lines:',
+              '',
+              '```text',
+              tail.slice(-60000),
+              '```'
+            ].join('\n')
+            const { owner, repo } = context.repo
+            const issue_number = context.payload.pull_request.number
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100
+            })
+            const existing = comments.find((comment) => comment.body && comment.body.includes('<!-- elephantnote-eslint-report -->'))
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body })
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body })
+            }
+
+      - name: Fail if ESLint failed
+        if: steps.eslint.outputs.exit_code != '0'
+        run: exit 1

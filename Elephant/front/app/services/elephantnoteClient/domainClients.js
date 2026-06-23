@@ -52,6 +52,8 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
       }
       return call(API.NOTES_CREATE, payload)
     },
+    read: (relativePath) => call(API.NOTES_READ, typeof relativePath === 'string' ? { relativePath } : relativePath),
+    write: (payload = {}) => call(API.NOTES_WRITE, payload),
     autotag: (relativePath) => call(API.NOTES_AUTOTAG, { relativePath })
   },
   folders: {
@@ -158,36 +160,51 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
               payload?.repoId ||
               payload?.uri ||
               payload?.pull ||
-              payload?.model ||
               ''
       }),
-    list: () => callModelBridge('list') || call(API.MODELS_LOCAL_LIST),
-    searchHuggingFace: (payload = {}) => callModelBridge('searchHuggingFace', payload),
-    info: (payload = {}) => callModelBridge('info', payload),
-    activate: (payload = {}) => callModelBridge('activate', payload),
-    deactivate: (payload = {}) => callModelBridge('deactivate', payload),
-    remove: (payload = {}) => callModelBridge('remove', payload),
-    active: () => callModelBridge('active'),
-    cancelDownload: (payload = {}) => callModelBridge('cancelDownload', payload),
-    downloadStatus: (payload = {}) => callModelBridge('downloadStatus', payload),
-    refreshIndex: () => callModelBridge('refreshIndex'),
+    searchHuggingFace: (payload = {}) =>
+      callModelBridge('searchHuggingFace', payload) ||
+      call(API.MODELS_SEARCH_HUGGING_FACE, payload),
+    info: (payload = {}) =>
+      callModelBridge('info', payload) ||
+      call(API.MODELS_INFO, payload),
+    activate: (payload = {}) =>
+      callModelBridge('activate', payload) ||
+      call(API.MODELS_ACTIVATE, payload),
+    deactivate: (payload = {}) =>
+      callModelBridge('deactivate', payload) ||
+      call(API.MODELS_DEACTIVATE, payload),
+    remove: (payload = {}) =>
+      callModelBridge('remove', payload) ||
+      call(API.MODELS_DELETE, payload),
+    active: () =>
+      callModelBridge('active') ||
+      call(API.MODELS_ACTIVE),
+    list: () =>
+      callModelBridge('list') ||
+      call(API.MODELS_LIST),
+    cancelDownload: (payload = {}) =>
+      callModelBridge('cancelDownload', payload) ||
+      call(API.MODELS_CANCEL_DOWNLOAD, payload),
+    downloadStatus: (payload = {}) =>
+      callModelBridge('downloadStatus', payload) ||
+      call(API.MODELS_DOWNLOAD_STATUS, payload),
+    refreshIndex: () =>
+      callModelBridge('refreshIndex') ||
+      call(API.MODELS_REFRESH_INDEX),
     onDownloadProgress: (listener) =>
-      getBridge()?.models?.onDownloadProgress?.(listener) ||
-      requireAtomicFeatureApi().onModelPullProgress?.(listener) ||
-      (() => {})
+      getBridge()?.models?.onDownloadProgress?.(listener) || (() => {})
   },
   ocr: {
     extract: (imagePath, options = {}) => call(API.OCR_EXTRACT, { imagePath, ...options })
   },
-  plugins: {
-    list: () => call(API.PLUGINS_LIST),
-    set: (payload) => call(API.PLUGINS_SET, payload),
-    run: (id, input = {}) => call(API.PLUGINS_RUN, { id, input })
+  sync: {
+    status: () => call(API.SYNC_STATUS),
+    enqueue: (operation, payload = {}) => call(API.SYNC_ENQUEUE, { operation, payload }),
+    run: (payloadByOperation = {}) => call(API.SYNC_RUN, payloadByOperation)
   },
-  tasks: {
-    list: () => call(API.TASKS_LIST),
-    set: (payload) => call(API.TASKS_SET, payload),
-    run: (id) => call(API.TASKS_RUN, { id })
+  rag: {
+    chat: (message, limit = 6) => callRagChat(call, message, limit)
   },
   agents: {
     list: () => call(API.AGENTS_LIST),
@@ -195,8 +212,15 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     unregister: (id) => call(API.AGENTS_UNREGISTER, { id }),
     send: (id, message) => call(API.AGENTS_SEND, { id, message })
   },
-  rag: {
-    chat: (message, limit = 6) => callRagChat(call, message, limit)
+  plugins: {
+    list: () => call(API.PLUGINS_LIST),
+    set: (id, enabled, config = {}) => call(API.PLUGINS_SET, { id, enabled, config }),
+    run: (id, input = {}) => call(API.PLUGINS_RUN, { id, input })
+  },
+  tasks: {
+    list: () => call(API.TASKS_LIST),
+    set: (id, enabled) => call(API.TASKS_SET, { id, enabled }),
+    run: (id) => call(API.TASKS_RUN, { id })
   },
   mcp: {
     listTools: () => call(API.MCP_TOOLS_LIST),
@@ -204,12 +228,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   },
   programs: {
     list: () => call(API.PROGRAMS_LIST),
-    set: (environments) => call(API.PROGRAMS_SET, { environments }),
+    set: (environments = {}) => call(API.PROGRAMS_SET, { environments }),
     run: (id, command, cwd = '') => call(API.PROGRAMS_RUN, { id, command, cwd })
-  },
-  sync: {
-    status: () => call(API.SYNC_STATUS),
-    enqueue: (operation, payload = {}) => call(API.SYNC_ENQUEUE, { operation, payload }),
-    run: (payloadByOperation = {}) => call(API.SYNC_RUN, payloadByOperation)
   }
 })

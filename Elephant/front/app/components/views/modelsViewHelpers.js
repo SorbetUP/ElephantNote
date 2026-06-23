@@ -261,9 +261,12 @@ export const getDownloadOption = (model = {}) => {
   const fileName = String(model?.fileName || model?.filename || sibling?.rfilename || sibling?.path || sibling?.name || model?.name || resolveModelName(model) || '').trim()
   const sizeBytes = Number(model?.sizeBytes || model?.size || model?.lfs?.size || sibling?.sizeBytes || sibling?.size || sibling?.lfs?.size || 0) || 0
   const formatModel = { ...model, fileName, filename: fileName }
+  const installed = isLocalModel(model)
   return {
     fileName: fileName || 'Unknown model file',
     format: getModelFormat(formatModel),
+    installed,
+    status: installed ? 'Applicable model file already downloaded' : 'Available for download',
     quantization: getModelQuantization(formatModel),
     sizeBytes,
     sizeLabel: formatBytes(sizeBytes)

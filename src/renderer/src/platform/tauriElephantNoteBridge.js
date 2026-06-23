@@ -32,8 +32,6 @@ const asMarkdownPayload = (payload = '') => (typeof payload === 'string' ? { mar
 
 const normalizeModelSearchPayload = (payload = {}) => {
   const next = { ...normalizePayload(payload) }
-  // Hugging Face does not reliably treat `library=gguf` as a broad GGUF catalog filter.
-  // Keep the text query (`gguf`) and let the renderer's existing filters decide what is usable.
   if (String(next.libraryName || next.library || '').toLowerCase() === 'gguf') {
     delete next.libraryName
     delete next.library
@@ -238,7 +236,7 @@ const apiActions = [
   'calendar.list', 'sources.list', 'wiki.list', 'search.query', 'search.status', 'search.rebuild', 'search.inspect',
   'sync.status', 'sync.plan', 'sync.enqueue', 'sync.run',
   'models.getSelection', 'models.setSelection', 'models.selection.get', 'models.selection.set', 'models.local.list', 'models.list', 'models.searchHuggingFace', 'models.info', 'models.download', 'models.cancelDownload', 'models.downloadStatus', 'models.activate', 'models.deactivate', 'models.remove', 'models.active', 'models.refreshIndex',
-  'ai.config.get', 'ai.config.set', 'ai.config.test', 'features.get', 'features.set', 'ocr.extract'
+  'rag.chat', 'ai.config.get', 'ai.config.set', 'ai.config.test', 'features.get', 'features.set', 'ocr.extract'
 ]
 
 const createBridge = (target) => {
@@ -307,7 +305,7 @@ const createBridge = (target) => {
       tableContract: (payload = {}) => invoke(target, 'tauri_muya_table_contract', normalizePayload(payload)),
       imageSelection: (payload = {}) => invoke(target, 'tauri_muya_image_selection', normalizePayload(payload)),
       startComposition: (payload = {}) => invoke(target, 'tauri_muya_start_composition', normalizePayload(payload)),
-      updateComposition: (payload = {}) => invoke(target, 'tauri_muya_updateComposition', normalizePayload(payload)),
+      updateComposition: (payload = {}) => invoke(target, 'tauri_muya_update_composition', normalizePayload(payload)),
       commitComposition: (payload = {}) => invoke(target, 'tauri_muya_commit_composition', normalizePayload(payload)),
       cancelComposition: (payload = {}) => invoke(target, 'tauri_muya_cancel_composition', normalizePayload(payload)),
       editorSnapshot: (payload = {}) => invoke(target, 'tauri_muya_editor_snapshot', normalizePayload(payload))
@@ -458,7 +456,19 @@ const createBridge = (target) => {
     atomic: { getCatalog: async() => [] },
     plugins: { list: async() => [], set: async(payload) => payload, run: async() => null },
     tasks: { list: async() => [], set: async(payload) => payload, run: async() => null },
-    rag: { chat: async() => ({ answer: '', sources: [] }) },
+    rag: {
+      chat: (payload = {}, limit = 6) => {
+        const normalized = typeof payload === 'string' ? { message: payload, limit } : normalizePayload(payload)
+        return invoke(target, 'tauri_rag_chat', {
+          payload: {
+            limit,
+            ...normalized,
+            aiConfig: readStoredJson(target, AI_CONFIG_STORAGE_KEY, defaultAiConfig()),
+            modelSelection: readStoredJson(target, MODEL_SELECTION_STORAGE_KEY, defaultModelSelection())
+          }
+        })
+      }
+    },
     mcp: { listTools: async() => [], callTool: async() => null },
     programs: { list: async() => [], set: async(payload) => payload, run: async() => null },
     ocr: { extract: async() => createDesktopOnlyResult('OCR extraction') },

@@ -13,6 +13,11 @@ const openVaultDirectory = async() => {
   return dialog.open({ multiple: false, directory: true, createDirectory: true })
 }
 
+const listenToTauriEvent = async(eventName, handler) => {
+  const events = await import('@tauri-apps/api/event')
+  return events.listen(eventName, handler)
+}
+
 const normalizePayload = (payload = {}) => (payload && typeof payload === 'object' ? payload : {})
 const asRelativePathPayload = (payload = {}) => {
   if (typeof payload === 'string') return { relativePath: payload }
@@ -25,6 +30,22 @@ const createDesktopOnlyResult = (feature) => ({
   runtime: 'tauri',
   reason: `${feature} is not implemented in the Rust Tauri backend yet.`
 })
+
+const onTauriProgress = (eventName, listener) => {
+  if (typeof listener !== 'function') return () => {}
+  let disposed = false
+  let unlisten = null
+  listenToTauriEvent(eventName, (event) => listener(event?.payload ?? event))
+    .then((cleanup) => {
+      if (disposed) cleanup()
+      else unlisten = cleanup
+    })
+    .catch(() => {})
+  return () => {
+    disposed = true
+    if (typeof unlisten === 'function') unlisten()
+  }
+}
 
 const createBridge = (target) => ({
   api: {
@@ -93,6 +114,18 @@ const createBridge = (target) => ({
         'sync.plan',
         'sync.enqueue',
         'sync.run',
+        'models.list',
+        'models.listLocal',
+        'models.searchHuggingFace',
+        'models.info',
+        'models.download',
+        'models.cancelDownload',
+        'models.downloadStatus',
+        'models.activate',
+        'models.deactivate',
+        'models.remove',
+        'models.active',
+        'models.refreshIndex',
         'models.getSelection',
         'models.setSelection'
       ]
@@ -224,21 +257,21 @@ const createBridge = (target) => ({
   },
 
   models: {
-    list: async() => [],
-    listLocal: async() => [],
+    list: () => invoke(target, 'tauri_models_list'),
+    listLocal: () => invoke(target, 'tauri_models_list_local'),
     getSelection: () => invoke(target, 'tauri_models_get_selection'),
     setSelection: (selection) => invoke(target, 'tauri_models_set_selection', { selection }),
-    active: () => invoke(target, 'tauri_models_get_selection'),
-    searchHuggingFace: async() => [],
-    info: async() => null,
-    download: async() => createDesktopOnlyResult('model download'),
-    cancelDownload: async() => ({ ok: true }),
-    downloadStatus: async() => null,
-    activate: async() => null,
-    deactivate: async() => null,
-    remove: async() => null,
-    refreshIndex: async() => ({ ok: true }),
-    onDownloadProgress: () => () => {}
+    active: () => invoke(target, 'tauri_models_active'),
+    searchHuggingFace: (payload = {}) => invoke(target, 'tauri_models_search_hugging_face', { payload: normalizePayload(payload) }),
+    info: (payload = {}) => invoke(target, 'tauri_models_info', { payload: normalizePayload(payload) }),
+    download: (payload = {}) => invoke(target, 'tauri_models_download', { payload: normalizePayload(payload) }),
+    cancelDownload: (payload = {}) => invoke(target, 'tauri_models_cancel_download', { payload: normalizePayload(payload) }),
+    downloadStatus: (payload = {}) => invoke(target, 'tauri_models_download_status', { payload: normalizePayload(payload) }),
+    activate: (payload = {}) => invoke(target, 'tauri_models_activate', { payload: normalizePayload(payload) }),
+    deactivate: (payload = {}) => invoke(target, 'tauri_models_deactivate', { payload: normalizePayload(payload) }),
+    remove: (payload = {}) => invoke(target, 'tauri_models_delete', { payload: normalizePayload(payload) }),
+    refreshIndex: () => invoke(target, 'tauri_models_refresh_index'),
+    onDownloadProgress: (listener) => onTauriProgress('elephantnote:models:download:progress', listener)
   },
 
   sitePreview: {

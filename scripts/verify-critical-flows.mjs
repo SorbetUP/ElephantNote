@@ -44,6 +44,26 @@ assertIncludes('.github/workflows/ci.yml', 'node scripts/verify-critical-flows.m
 assertIncludes('.github/workflows/ci.yml', 'pnpm exec vitest run test/unit/specs/main/elephantnote', 'dedicated ElephantNote contract tests in CI')
 
 assertOrdered(
+  'Elephant/shared/apiContracts.js',
+  [
+    'const textString = (value) => typeof value === \'string\'',
+    "action('NOTES_READ', 'notes.read'",
+    "action('NOTES_WRITE', 'notes.write'"
+  ],
+  'shared ElephantNote API contract must expose notes.read and notes.write for disk persistence'
+)
+assertOrdered(
+  'Elephant/front/app/services/elephantnoteClient/domainClients.js',
+  [
+    'notes: {',
+    'read: (relativePath) => call(API.NOTES_READ',
+    'write: (payload = {}) => call(API.NOTES_WRITE, payload)'
+  ],
+  'front ElephantNote domain client must expose notes.write instead of relying on a missing method'
+)
+assertIncludes('src/renderer/src/platform/tauriElephantNoteBridge.js', "case 'notes.write': return bridge.notes.write(payload)", 'Tauri bridge API dispatch for notes.write')
+
+assertOrdered(
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   [
     'const getActiveNoteFile = () => {',
@@ -73,6 +93,15 @@ assertOrdered(
     "console.info('[elephantnote:save] write:done'"
   ],
   'editor changes must be persisted to the note markdown file, with direct file fallback and visible save logs'
+)
+assertOrdered(
+  'Elephant/front/app/components/editor/NoteEditorHost.vue',
+  [
+    'const rememberObservedMarkdown = (notePath, nextMarkdown, file, reason = \'observe\') => {',
+    'if (file?.isSaved === false) {',
+    'scheduleNoteSave(notePath, nextMarkdown, file, 0, `${reason}:first-unsaved`)'
+  ],
+  'first observation of an already dirty note must save instead of marking it as already persisted'
 )
 assertOrdered(
   'Elephant/front/app/components/editor/NoteEditorHost.vue',

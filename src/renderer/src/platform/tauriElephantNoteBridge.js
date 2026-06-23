@@ -30,6 +30,17 @@ const asRelativePathPayload = (payload = {}) => {
 }
 const asMarkdownPayload = (payload = '') => (typeof payload === 'string' ? { markdown: payload } : normalizePayload(payload))
 
+const normalizeModelSearchPayload = (payload = {}) => {
+  const next = { ...normalizePayload(payload) }
+  // Hugging Face does not reliably treat `library=gguf` as a broad GGUF catalog filter.
+  // Keep the text query (`gguf`) and let the renderer's existing filters decide what is usable.
+  if (String(next.libraryName || next.library || '').toLowerCase() === 'gguf') {
+    delete next.libraryName
+    delete next.library
+  }
+  return next
+}
+
 const readStoredJson = (target, key, fallback) => {
   try {
     const raw = target?.localStorage?.getItem(key)
@@ -177,8 +188,8 @@ const dispatchApiAction = async(bridge, action, payload = {}) => {
     case 'models.selection.get': return bridge.models.getSelection()
     case 'models.setSelection':
     case 'models.selection.set': return bridge.models.setSelection(payload)
-    case 'models.local.list':
-    case 'models.list': return bridge.models.listLocal()
+    case 'models.local.list': return bridge.models.listLocal()
+    case 'models.list': return bridge.models.list()
     case 'models.download': return bridge.models.download(payload)
     case 'models.searchHuggingFace': return bridge.models.searchHuggingFace(payload)
     case 'models.info': return bridge.models.info(payload)
@@ -225,7 +236,8 @@ const apiActions = [
   'vaults.get', 'vaults.select', 'vaults.setActive', 'vaults.setIcon', 'vaults.setName', 'vaults.remove',
   'directory.list', 'notes.create', 'notes.read', 'notes.write', 'folders.create', 'sidebar.attach', 'sidebar.detach', 'entries.rename', 'entries.move', 'entries.delete',
   'calendar.list', 'sources.list', 'wiki.list', 'search.query', 'search.status', 'search.rebuild', 'search.inspect',
-  'sync.status', 'sync.plan', 'sync.enqueue', 'sync.run', 'models.getSelection', 'models.setSelection', 'models.selection.get', 'models.selection.set', 'models.local.list',
+  'sync.status', 'sync.plan', 'sync.enqueue', 'sync.run',
+  'models.getSelection', 'models.setSelection', 'models.selection.get', 'models.selection.set', 'models.local.list', 'models.list', 'models.searchHuggingFace', 'models.info', 'models.download', 'models.cancelDownload', 'models.downloadStatus', 'models.activate', 'models.deactivate', 'models.remove', 'models.active', 'models.refreshIndex',
   'ai.config.get', 'ai.config.set', 'ai.config.test', 'features.get', 'features.set', 'ocr.extract'
 ]
 
@@ -295,7 +307,7 @@ const createBridge = (target) => {
       tableContract: (payload = {}) => invoke(target, 'tauri_muya_table_contract', normalizePayload(payload)),
       imageSelection: (payload = {}) => invoke(target, 'tauri_muya_image_selection', normalizePayload(payload)),
       startComposition: (payload = {}) => invoke(target, 'tauri_muya_start_composition', normalizePayload(payload)),
-      updateComposition: (payload = {}) => invoke(target, 'tauri_muya_update_composition', normalizePayload(payload)),
+      updateComposition: (payload = {}) => invoke(target, 'tauri_muya_updateComposition', normalizePayload(payload)),
       commitComposition: (payload = {}) => invoke(target, 'tauri_muya_commit_composition', normalizePayload(payload)),
       cancelComposition: (payload = {}) => invoke(target, 'tauri_muya_cancel_composition', normalizePayload(payload)),
       editorSnapshot: (payload = {}) => invoke(target, 'tauri_muya_editor_snapshot', normalizePayload(payload))
@@ -359,8 +371,8 @@ const createBridge = (target) => {
     },
 
     models: {
-      list: async() => ({ models: [], runtime: 'tauri-rust' }),
-      listLocal: async() => ({ models: [], runtime: 'tauri-rust' }),
+      list: () => invoke(target, 'tauri_models_list'),
+      listLocal: () => invoke(target, 'tauri_models_list_local'),
       getSelection: () => callWithLocalFallback(target, 'tauri_models_get_selection', {}, MODEL_SELECTION_STORAGE_KEY, defaultModelSelection()),
       setSelection: async(selection = {}) => {
         const normalized = { ...defaultModelSelection(), ...normalizePayload(selection) }
@@ -371,16 +383,16 @@ const createBridge = (target) => {
           return writeStoredJson(target, MODEL_SELECTION_STORAGE_KEY, normalized)
         }
       },
-      active: () => callWithLocalFallback(target, 'tauri_models_get_selection', {}, MODEL_SELECTION_STORAGE_KEY, defaultModelSelection()),
-      searchHuggingFace: async() => ({ models: [], runtime: 'tauri-rust', unavailable: true }),
-      info: async() => null,
-      download: async() => createDesktopOnlyResult('model download'),
-      cancelDownload: async() => ({ ok: true }),
-      downloadStatus: async() => null,
-      activate: async() => null,
-      deactivate: async() => null,
-      remove: async() => null,
-      refreshIndex: async() => ({ ok: true }),
+      active: () => invoke(target, 'tauri_models_active'),
+      searchHuggingFace: (payload = {}) => invoke(target, 'tauri_models_search_hugging_face', { payload: normalizeModelSearchPayload(payload) }),
+      info: (payload = {}) => invoke(target, 'tauri_models_info', { payload: normalizePayload(payload) }),
+      download: (payload = {}) => invoke(target, 'tauri_models_download', { payload: normalizePayload(payload) }),
+      cancelDownload: (payload = {}) => invoke(target, 'tauri_models_cancel_download', { payload: normalizePayload(payload) }),
+      downloadStatus: (payload = {}) => invoke(target, 'tauri_models_download_status', { payload: normalizePayload(payload) }),
+      activate: (payload = {}) => invoke(target, 'tauri_models_activate', { payload: normalizePayload(payload) }),
+      deactivate: (payload = {}) => invoke(target, 'tauri_models_deactivate', { payload: normalizePayload(payload) }),
+      remove: (payload = {}) => invoke(target, 'tauri_models_delete', { payload: normalizePayload(payload) }),
+      refreshIndex: () => invoke(target, 'tauri_models_refresh_index'),
       onDownloadProgress: (listener) => onTauriProgress('elephantnote:models:download:progress', listener)
     },
 

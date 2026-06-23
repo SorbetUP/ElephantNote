@@ -84,10 +84,10 @@ assertOrdered(
   'Elephant/front/app/stores/searchStore.js',
   [
     'const normalizeRelativePath = (relativePath = \'\')',
-    '.replace(/\\\\/g, \'/\')',
+    "replaceAll(String.fromCharCode(92), '/')",
     'const getDocumentPath = (document) => normalizeRelativePath'
   ],
-  'search paths must be normalised before indexing/opening results'
+  'search paths must be normalised before indexing/opening results without brittle backslash escaping'
 )
 assertOrdered(
   'Elephant/front/app/stores/searchStore.js',
@@ -138,6 +138,22 @@ assertOrdered(
     'vaultStore.openNote(noteEntry)'
   ],
   'opening a search result must update vault navigation state instead of sending a detached open-file IPC only'
+)
+
+assertOrdered(
+  'Elephant/front/app/utils/noteCardView.js',
+  [
+    'const stripInlineFrontmatterPrefix = (value = \'\') => {',
+    'const closedInline = raw.match',
+    'const metadataPairPattern = new RegExp',
+    'export const getNoteCardExcerpt = (entry) => cleanPreview'
+  ],
+  'note cards must strip multiline and compact frontmatter before rendering previews'
+)
+assertIncludes(
+  'test/unit/specs/main/elephantnote/markdownDocument.spec.js',
+  'hides compact inline frontmatter when no body preview exists',
+  'note card frontmatter preview regression test'
 )
 
 assertOrdered(

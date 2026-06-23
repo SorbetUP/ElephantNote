@@ -14,6 +14,32 @@ export const ROLE_IDS = Object.freeze(MODEL_ROLES.map((role) => role.id))
 export const USE_NONE = 'none'
 
 const isDateLikeString = (value) => /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(String(value || ''))
+const getRepoParts = (model = {}) => String(model?.repoId || model?.modelId || model?.id || '')
+  .trim()
+  .split('/')
+  .filter(Boolean)
+const getSiblingName = (item = {}) => String(item?.rfilename || item?.path || item?.name || '').trim()
+const getSiblingSizeBytes = (item = {}) => Number(item?.sizeBytes || item?.size || item?.lfs?.size || item?.blob?.size || 0) || 0
+const getGgufSiblings = (model = {}) => Array.isArray(model?.siblings)
+  ? model.siblings
+    .map((item) => ({ ...item, fileName: getSiblingName(item), sizeBytes: getSiblingSizeBytes(item) }))
+    .filter((item) => item.fileName.toLowerCase().endsWith('.gguf'))
+  : []
+const getPreferredGgufSibling = (model = {}) => {
+  const siblings = getGgufSiblings(model)
+  return siblings.find((item) => /q4_k_m/i.test(item.fileName)) || siblings.find((item) => /q4/i.test(item.fileName)) || siblings[0] || null
+}
+const normalizeDateValue = (value) => {
+  if (value == null || value === '') return null
+  if (typeof value === 'number') return new Date(value > 10_000_000_000 ? value : value * 1000)
+  const text = String(value).trim()
+  if (/^\d+$/.test(text)) {
+    const numeric = Number(text)
+    return new Date(numeric > 10_000_000_000 ? numeric : numeric * 1000)
+  }
+  if (!isDateLikeString(text)) return null
+  return new Date(text)
+}
 
 export const formatBytes = (value) => {
   let bytes = Number(value) || 0
@@ -38,14 +64,20 @@ export const formatCompactCount = (value) => {
 export const resolveModelId = (model) =>
   String(model?.id || model?.repoId || model?.modelId || model?.modelPath || model?.path || model?.name || '').trim()
 
-export const resolveModelName = (model) =>
-  String(model?.name || model?.id || model?.repoId || model?.modelId || 'Untitled model').trim()
+export const resolveModelName = (model) => {
+  const raw = String(model?.name || model?.id || model?.repoId || model?.modelId || 'Untitled model').trim()
+  const repoParts = getRepoParts(model)
+  if (repoParts.length >= 2 && (raw === repoParts.join('/') || raw === model?.repoId || raw === model?.id)) {
+    return repoParts.slice(1).join('/')
+  }
+  return raw.replace(/^.*[/\\]([^/\\]+)$/u, '$1')
+}
 
 export const resolveModelAuthor = (model) => {
   const author = String(model?.author || '').trim()
   if (author) return author
-  const repo = String(model?.repoId || model?.id || '').trim()
-  return repo.includes('/') ? repo.split('/')[0] : ''
+  const repoParts = getRepoParts(model)
+  return repoParts.length >= 2 ? repoParts[0] : ''
 }
 
 export const isLocalModel = (model) =>
@@ -113,7 +145,10 @@ export const normalizeSelection = (selection) => ({
 export const getModelSummary = (model) =>
   String(model?.summary || model?.notes || model?.pipelineTag || model?.message || model?.repoId || 'No description available.').trim()
 
-export const getModelSizeLabel = (model) => formatBytes(model?.sizeBytes || model?.size) || String(model?.size || '').trim()
+export const getModelSizeLabel = (model) => {
+  const sibling = getPreferredGgufSibling(model)
+  return formatBytes(model?.sizeBytes || model?.size || sibling?.sizeBytes) || String(model?.size || '').trim()
+}
 
 export const getModelTags = (model) =>
   Array.from(
@@ -135,6 +170,9 @@ export const filterModelsByName = (models = [], query = '') => {
       model.modelId,
       model.author,
       model.pipelineTag,
+      model.fileName,
+      model.filename,
+      ...(Array.isArray(model.siblings) ? model.siblings.map(getSiblingName) : []),
       ...(Array.isArray(model.tags) ? model.tags : [])
     ]
       .filter(Boolean)
@@ -145,7 +183,7 @@ export const filterModelsByName = (models = [], query = '') => {
 }
 
 const dedupeKey = (model) =>
-  String(model?.repoId || model?.id || model?.modelId || model?.name || model?.path || model?.modelPath || '').trim().toLowerCase()
+  String(model?.repoId || model?.originalRepoId || model?.id || model?.modelId || model?.name || model?.path || model?.modelPath || '').trim().toLowerCase()
 
 export const dedupeModelsById = (models = []) =>
   Array.from(
@@ -169,7 +207,7 @@ export const sortByPopularity = (models = []) =>
     (a, b) =>
       Number(b.downloads || 0) - Number(a.downloads || 0) ||
       Number(b.likes || 0) - Number(a.likes || 0) ||
-      String(a.name || '').localeCompare(String(b.name || ''))
+      resolveModelName(a).localeCompare(resolveModelName(b))
   )
 
 export const mergeLocalAndRemote = (localModels = [], remoteModels = []) =>
@@ -237,16 +275,18 @@ export const SORT_OPTIONS = Object.freeze([
 ])
 
 export const getModelFormat = (model) => {
-  const name = String(model?.fileName || model?.filename || model?.name || model?.id || '').toLowerCase()
+  const sibling = getPreferredGgufSibling(model)
+  const name = String(model?.fileName || model?.filename || sibling?.fileName || model?.name || model?.id || '').toLowerCase()
   if (name.includes('mlx')) return 'MLX'
   if (name.includes('onnx')) return 'ONNX'
-  if (name.includes('gguf')) return 'GGUF'
+  if (name.includes('gguf') || sibling) return 'GGUF'
   if (model?.provider === 'local-ocr' || model?.task === 'ocr') return 'OCR'
   return 'GGUF'
 }
 
 export const getModelQuantization = (model) => {
-  const name = String(model?.fileName || model?.filename || model?.name || model?.id || '')
+  const sibling = getPreferredGgufSibling(model)
+  const name = String(model?.fileName || model?.filename || sibling?.fileName || model?.name || model?.id || '')
   const quantization = name.match(/q([0-9]+(?:_[a-z0-9_]+)*)/i)
   if (quantization) return `Q${quantization[1].toUpperCase()}`
   if (model?.dtype) return String(model.dtype).toUpperCase()
@@ -256,10 +296,9 @@ export const getModelQuantization = (model) => {
 }
 
 export const getDownloadOption = (model = {}) => {
-  const siblings = Array.isArray(model?.siblings) ? model.siblings : []
-  const sibling = siblings.find((item) => String(item?.rfilename || item?.path || item?.name || '').toLowerCase().endsWith('.gguf')) || null
-  const fileName = String(model?.fileName || model?.filename || sibling?.rfilename || sibling?.path || sibling?.name || model?.name || resolveModelName(model) || '').trim()
-  const sizeBytes = Number(model?.sizeBytes || model?.size || model?.lfs?.size || sibling?.sizeBytes || sibling?.size || sibling?.lfs?.size || 0) || 0
+  const sibling = getPreferredGgufSibling(model)
+  const fileName = String(model?.fileName || model?.filename || sibling?.fileName || model?.name || resolveModelName(model) || '').trim()
+  const sizeBytes = Number(model?.sizeBytes || model?.size || model?.lfs?.size || sibling?.sizeBytes || 0) || 0
   const formatModel = { ...model, fileName, filename: fileName }
   const installed = isLocalModel(model)
   return {
@@ -278,7 +317,7 @@ export const getModelCapabilities = (model) => {
   const purpose = String(model?.purpose || '').toLowerCase()
   const task = String(model?.task || '').toLowerCase()
   const pipeline = String(model?.pipelineTag || '').toLowerCase()
-  const name = [model?.repoId, model?.id, model?.modelId, model?.name, model?.fileName, model?.filename]
+  const name = [model?.repoId, model?.id, model?.modelId, model?.name, model?.fileName, model?.filename, getPreferredGgufSibling(model)?.fileName]
     .filter(Boolean)
     .join(' ')
     .toLowerCase()
@@ -292,7 +331,13 @@ export const getModelCapabilities = (model) => {
     pipeline.includes('feature-extraction')
   ) {
     caps.add('Embedding')
-  } else if (purpose === 'chat' || task.includes('chat') || task.includes('text-generation') || pipeline.includes('text-generation')) {
+  } else if (
+    purpose === 'chat' ||
+    task.includes('chat') ||
+    task.includes('text-generation') ||
+    pipeline.includes('text-generation') ||
+    getModelFormat(model) === 'GGUF'
+  ) {
     caps.add('Chat')
   }
 
@@ -307,17 +352,14 @@ export const getModelCapabilities = (model) => {
 
 export const getModelUpdatedDate = (model) => {
   const raw = model?.updatedAt || model?.modifiedAt || model?.lastModified || model?.created_at || model?.createdAt
-  if (!raw) return ''
-  if (typeof raw === 'string' && !isDateLikeString(raw)) return ''
-  const date = new Date(raw)
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10)
+  const date = normalizeDateValue(raw)
+  return !date || Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10)
 }
 
 export const formatRelativeDate = (value = '', now = new Date()) => {
   if (!value) return ''
-  if (typeof value === 'string' && !isDateLikeString(value)) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
+  const date = normalizeDateValue(value)
+  if (!date || Number.isNaN(date.getTime())) return ''
   const days = Math.floor((now - date) / 86400000)
   if (days < 1) return 'today'
   if (days < 30) return days === 1 ? '1 day ago' : `${days} days ago`
@@ -372,12 +414,10 @@ export const sortModels = (models = [], sort = 'best') => {
   if (sort === 'updated') {
     return list.sort(
       (a, b) =>
-        new Date(b.updatedAt || b.modifiedAt || 0) - new Date(a.updatedAt || a.modifiedAt || 0)
+        (normalizeDateValue(b.updatedAt || b.modifiedAt)?.getTime() || 0) -
+        (normalizeDateValue(a.updatedAt || a.modifiedAt)?.getTime() || 0)
     )
   }
-  if (sort === 'name') return list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+  if (sort === 'name') return list.sort((a, b) => resolveModelName(a).localeCompare(resolveModelName(b)))
   return sortByPopularity(list)
 }
-
-export const applyCatalogFilters = ({ models = [], query = '', format = 'all', source = 'all', sort = 'best' } = {}) =>
-  sortModels(filterBySource(filterByFormat(filterModelsByName(models, query), format), source), sort)

@@ -15,6 +15,9 @@ pub mod search_logic;
 mod tauri_extra_commands;
 mod debug_commands;
 
+#[cfg(test)]
+mod sync_contract_tests;
+
 #[tauri::command]
 fn healthcheck() -> &'static str {
   "ok"
@@ -97,18 +100,6 @@ pub fn run() {
       tauri_extra_commands::tauri_drawings_write,
       tauri_extra_commands::tauri_models_get_selection,
       tauri_extra_commands::tauri_models_set_selection,
-      model_library::tauri_models_list,
-      model_library::tauri_models_list_local,
-      model_library::tauri_models_search_hugging_face,
-      model_library::tauri_models_info,
-      model_library::tauri_models_download,
-      model_library::tauri_models_cancel_download,
-      model_library::tauri_models_download_status,
-      model_library::tauri_models_activate,
-      model_library::tauri_models_deactivate,
-      model_library::tauri_models_delete,
-      model_library::tauri_models_active,
-      model_library::tauri_models_refresh_index,
       tauri_extra_commands::tauri_search_rebuild,
       tauri_extra_commands::tauri_sync_plan
     ])

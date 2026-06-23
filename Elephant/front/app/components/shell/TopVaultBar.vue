@@ -2,12 +2,16 @@
   <header
     class="en-topstrip"
     :class="{ 'en-topstrip-sidebar-hidden': !sidebarVisible }"
+    data-tauri-drag-region
   >
     <navigation-bar
       class="en-topstrip-nav"
       :class="{ 'en-topstrip-nav-macos': isMac }"
     />
-    <div class="en-topstrip-drag" />
+    <div
+      class="en-topstrip-drag"
+      data-tauri-drag-region
+    />
   </header>
 </template>
 
@@ -33,7 +37,7 @@ const isMac = navigator.platform
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
   background:
     linear-gradient(
       to right,
@@ -57,6 +61,7 @@ const isMac = navigator.platform
   width: 2px;
   background: var(--en-border);
   z-index: 1;
+  pointer-events: none;
 }
 
 .en-topstrip-sidebar-hidden::after {

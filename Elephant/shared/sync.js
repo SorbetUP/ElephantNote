@@ -81,11 +81,53 @@ export const createSyncQueueItem = ({ operation, payload = {} } = {}, now = new 
   }
 }
 
-export const createDefaultSyncPlan = (payloadByOperation = {}) =>
-  SYNC_OPERATION_SEQUENCE.map((operation) => ({
-    operation,
-    payload: payloadByOperation?.[operation] || {}
-  }))
+const hasPayloadObject = (payloadByOperation = {}, operation) => (
+  Object.prototype.hasOwnProperty.call(payloadByOperation || {}, operation)
+)
+
+const createPlanItem = (payloadByOperation = {}, operation) => ({
+  operation,
+  payload: payloadByOperation?.[operation] || {}
+})
+
+const normalizeExplicitOperations = (operations = []) => operations
+  .map((operation) => normalizeSyncOperation(operation))
+  .filter(Boolean)
+
+export const createDefaultSyncPlan = (payloadByOperation = {}) => {
+  const explicitOperations = normalizeExplicitOperations(payloadByOperation?.operations)
+  if (explicitOperations.length) {
+    return explicitOperations.map((operation) => createPlanItem(payloadByOperation, operation))
+  }
+
+  if (hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.SYNC)) {
+    return SYNC_GIT_REMOTE_OPERATION_SEQUENCE.map((operation) => ({
+      operation,
+      payload: payloadByOperation?.[operation] || payloadByOperation?.[SYNC_OPERATIONS.SYNC] || {}
+    }))
+  }
+
+  const hasExplicitGitOperation = [SYNC_OPERATIONS.INIT, SYNC_OPERATIONS.SNAPSHOT, SYNC_OPERATIONS.PULL, SYNC_OPERATIONS.PUSH]
+    .some((operation) => hasPayloadObject(payloadByOperation, operation))
+
+  if (!hasExplicitGitOperation) {
+    return SYNC_OPERATION_SEQUENCE.map((operation) => createPlanItem(payloadByOperation, operation))
+  }
+
+  const plan = []
+  if (
+    hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.INIT) ||
+    hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.SNAPSHOT) ||
+    hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PULL) ||
+    hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PUSH)
+  ) {
+    plan.push(createPlanItem(payloadByOperation, SYNC_OPERATIONS.INIT))
+  }
+  for (const operation of [SYNC_OPERATIONS.SNAPSHOT, SYNC_OPERATIONS.PULL, SYNC_OPERATIONS.PUSH]) {
+    if (hasPayloadObject(payloadByOperation, operation)) plan.push(createPlanItem(payloadByOperation, operation))
+  }
+  return plan
+}
 
 export const createSyncIdentity = ({ cwd = '', hostname = '', now = new Date() } = {}) => {
   const seed = `${cwd}|${hostname}`

@@ -9,6 +9,30 @@ const callModelBridge = (method, payload) => {
   return bridgeMethod(toPlainObject(payload))
 }
 
+const ensureSearchVaultForChat = async (call) => {
+  const vaultPayload = await call(API.VAULTS_GET).catch(() => null)
+  const vaultPath = String(vaultPayload?.activeVault?.path || '').trim()
+  if (!vaultPath) return ''
+  await call(API.SEARCH_INIT_VAULT, { vaultPath }).catch(() => null)
+  return vaultPath
+}
+
+const hasCitations = (result) => Array.isArray(result?.citations) && result.citations.length > 0
+
+const callRagChat = async (call, message, limit = 6) => {
+  const vaultPath = await ensureSearchVaultForChat(call)
+  const payload = { message, limit }
+  const result = await call(API.RAG_CHAT, payload)
+
+  if (hasCitations(result) || !vaultPath) {
+    return result
+  }
+
+  await call(API.SEARCH_REBUILD, {}).catch(() => null)
+  const retry = await call(API.RAG_CHAT, payload).catch(() => null)
+  return retry?.answer || hasCitations(retry) ? retry : result
+}
+
 export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   vaults: {
     get: () => call(API.VAULTS_GET),
@@ -172,7 +196,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     send: (id, message) => call(API.AGENTS_SEND, { id, message })
   },
   rag: {
-    chat: (message, limit = 6) => call(API.RAG_CHAT, { message, limit })
+    chat: (message, limit = 6) => callRagChat(call, message, limit)
   },
   mcp: {
     listTools: () => call(API.MCP_TOOLS_LIST),

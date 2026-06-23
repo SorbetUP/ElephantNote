@@ -79,7 +79,14 @@ fn default_ai_config() -> Value {
 fn init(root: &str) -> R<Value> {
   let root_path = PathBuf::from(root);
   let meta_path = root_path.join(META);
-  for dir in [&meta_path, &root_path.join("Getting Started"), &meta_path.join("wiki"), &meta_path.join("attachments"), &meta_path.join("drawings")] {
+  let dirs = vec![
+    meta_path.clone(),
+    root_path.join("Getting Started"),
+    meta_path.join("wiki"),
+    meta_path.join("attachments"),
+    meta_path.join("drawings"),
+  ];
+  for dir in dirs {
     fs::create_dir_all(dir).map_err(|error| error.to_string())?;
   }
   ensure_json(wp(root, "workspace.json"), workspace_default(root))?;

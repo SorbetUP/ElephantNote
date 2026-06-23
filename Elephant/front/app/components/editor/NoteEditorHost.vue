@@ -139,6 +139,9 @@ const openedNoteAbsolutePath = computed(() => {
 const getActiveNoteFile = () => {
   const pathname = openedNoteAbsolutePath.value
   if (!pathname) return currentFile.value
+  if (currentFile.value?.pathname && window.fileUtils.isSamePathSync(currentFile.value.pathname, pathname)) {
+    return currentFile.value
+  }
   return editorStore.tabs.find((tab) => (
     tab?.pathname && window.fileUtils.isSamePathSync(tab.pathname, pathname)
   )) || null
@@ -212,7 +215,7 @@ const selectOpenedNoteTab = () => {
 watch(openedNoteAbsolutePath, selectOpenedNoteTab, { immediate: true })
 watch(() => editorStore.tabs.length, selectOpenedNoteTab)
 
-const updateCurrentFileMarkdown = (nextMarkdown) => {
+const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {
   const file = activeNoteFile.value || currentFile.value
   if (!file) return
   file.markdown = nextMarkdown
@@ -221,12 +224,21 @@ const updateCurrentFileMarkdown = (nextMarkdown) => {
     currentFile.value.markdown = nextMarkdown
     currentFile.value.isSaved = false
   }
-  if (store.openedNotePath && typeof searchStore.updateNoteIndex === 'function') {
-    searchStore.updateNoteIndex(store.openedNotePath, nextMarkdown)
+  const notePath = currentNoteRelativePath.value || store.openedNotePath
+  if (notePath) {
+    if (typeof store.updateNoteMetadata === 'function' && Object.keys(metadata).length) {
+      store.updateNoteMetadata(notePath, metadata)
+    }
+    if (typeof searchStore.updateNoteIndex === 'function') {
+      searchStore.updateNoteIndex(notePath, nextMarkdown, metadata)
+    }
   }
 }
 
-const updateTitle = (nextTitle) => updateCurrentFileMarkdown(renameDocumentTitle(markdown.value, nextTitle, fallbackTitle.value))
+const updateTitle = (nextTitle) => {
+  const title = String(nextTitle || '').trim() || fallbackTitle.value
+  updateCurrentFileMarkdown(renameDocumentTitle(markdown.value, title, fallbackTitle.value), { title })
+}
 const togglePin = () => {
   const pathname = currentNoteRelativePath.value
   if (!pathname) return
@@ -264,12 +276,12 @@ const submitTag = () => {
   } else if (!nextTags.includes(tag)) {
     nextTags.push(tag)
   }
-  updateCurrentFileMarkdown(updateMarkdownTags(markdown.value, nextTags, noteTitle.value))
+  updateCurrentFileMarkdown(updateMarkdownTags(markdown.value, nextTags, noteTitle.value), { tags: nextTags })
   cancelTag()
 }
 const deleteTag = (index) => {
   const nextTags = tags.value.filter((_tag, currentIndex) => currentIndex !== index)
-  updateCurrentFileMarkdown(updateMarkdownTags(markdown.value, nextTags, noteTitle.value))
+  updateCurrentFileMarkdown(updateMarkdownTags(markdown.value, nextTags, noteTitle.value), { tags: nextTags })
 }
 const setTextScale = (value) => {
   textScale.value = value

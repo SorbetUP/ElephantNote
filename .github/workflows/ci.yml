@@ -40,13 +40,13 @@ jobs:
           test "$lines" -ge 10000
 
       - name: Critical ElephantNote flow guard
-        run: pnpm ci:critical-flows
+        run: node scripts/verify-critical-flows.mjs
 
       - name: Lint diagnostic
         run: pnpm lint || true
 
       - name: ElephantNote contract tests
-        run: pnpm test:contracts:elephantnote
+        run: pnpm exec vitest run test/unit/specs/main/elephantnote
 
       - name: Unit tests
         run: pnpm test:unit -- --coverage

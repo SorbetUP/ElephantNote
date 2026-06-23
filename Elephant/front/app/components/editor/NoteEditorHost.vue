@@ -83,9 +83,7 @@ import { useVaultStore } from '../../stores/vaultStore'
 import ExcalidrawDialog from './ExcalidrawDialog.vue'
 import NoteEditorFooter from './NoteEditorFooter.vue'
 import NoteEditorTopBar from './NoteEditorTopBar.vue'
-import {
-  getExcalidrawScenePath
-} from '../../services/excalidraw'
+import { getExcalidrawScenePath } from '../../services/excalidraw'
 import { formatShortDate } from '../../services/markdownMetaService'
 import {
   getEditorMarkdownStats,
@@ -181,10 +179,6 @@ const editorLayoutStyle = computed(() => ({
   '--en-note-editor-gutter-right': `${editorMarginPx.value}px`
 }))
 const themeIcon = computed(() => getThemeMode(shellTheme.value) === 'dark' ? SunMedium : Moon)
-const isPinned = computed(() => {
-  const pathname = currentNoteRelativePath.value
-  return !!pathname && store.pinnedNotePaths.includes(pathname)
-})
 const currentNoteRelativePath = computed(() => {
   if (store.openedNotePath) return store.openedNotePath
   const pathname = currentFile.value?.pathname
@@ -193,6 +187,10 @@ const currentNoteRelativePath = computed(() => {
   const relativePath = window.path.relative(vaultPath, pathname)
   if (!relativePath || relativePath.startsWith('..') || window.path.isAbsolute(relativePath)) return ''
   return relativePath
+})
+const isPinned = computed(() => {
+  const pathname = currentNoteRelativePath.value
+  return !!pathname && store.pinnedNotePaths.includes(pathname)
 })
 const currentNoteDirectory = computed(() => {
   const pathname = currentFile.value?.pathname || openedNoteAbsolutePath.value
@@ -284,7 +282,7 @@ const toggleTheme = () => {
 }
 const openGraphView = () => bus.emit('ELEPHANT::set-main-view', 'graph')
 
-const openExcalidraw = async({ markdown, fileName, title, saveMode, insertOnSave }) => {
+const openExcalidraw = async ({ markdown, fileName, title, saveMode, insertOnSave }) => {
   const baseDir = currentNoteDirectory.value
   const targetName = fileName || `drawing-${Date.now()}.png`
   const targetPath = window.path.join(baseDir, targetName)
@@ -302,7 +300,7 @@ const closeExcalidraw = () => {
   isExcalidrawOpen.value = false
   excalidrawInitialBlob.value = null
 }
-const saveExcalidraw = async({ imageBlob, sceneBlob }) => {
+const saveExcalidraw = async ({ imageBlob, sceneBlob }) => {
   await window.fileUtils.ensureDir(window.path.dirname(excalidrawTargetPath.value))
   await window.fileUtils.writeFile(excalidrawTargetPath.value, imageBlob)
   if (sceneBlob) await window.fileUtils.writeFile(excalidrawScenePath.value, sceneBlob)

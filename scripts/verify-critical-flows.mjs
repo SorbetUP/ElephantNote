@@ -230,7 +230,7 @@ has('scripts/sync-two-docker-smoke.mjs', 'assertPeerIdentity', 'two-device peer 
 has('scripts/sync-two-docker-smoke.mjs', 'stopDevice(deviceB)', 'offline device simulation')
 has('scripts/sync-two-docker-smoke.mjs', 'device B reconnect auto-pull', 'automatic reconnect pull check')
 has('scripts/sync-two-docker-smoke.mjs', 'assertResourceBudget', 'Docker sync memory and runtime budget check')
-has('.github/workflows/sync-docker.yml', 'pnpm test:sync:docker:pair', 'Docker pair sync workflow')
+has('.github/workflows/sync-docker.yml', 'node scripts/sync-two-docker-smoke.mjs', 'Docker pair sync workflow runs directly with Node')
 
 if (failures.length) {
   console.error('Critical ElephantNote flow guard failed:')

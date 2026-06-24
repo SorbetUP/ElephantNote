@@ -15,4 +15,16 @@ describe('ElephantNote API contracts', () => {
   it('rejects non-array sync.plan operations', () => {
     expect(() => validateApiPayload('sync.plan', { operations: 'pull' })).toThrow(/operations/)
   })
+
+  it('accepts local runtime AI config payloads used by the Tauri bridge', () => {
+    const payload = {
+      localRuntime: {
+        llamaServerMode: 'bundled',
+        llamaServerPath: '',
+        llamaBaseUrl: 'http://127.0.0.1:11434'
+      }
+    }
+
+    expect(validateApiPayload('ai.config.set', payload)).toBe(payload)
+  })
 })

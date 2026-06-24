@@ -359,9 +359,17 @@ pub fn tauri_sync_plan(payload_by_operation: Option<Value>) -> R<Value> {
 mod tests {
   use super::*;
 
+  fn temp_test_root(name: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .map(|duration| duration.as_nanos())
+      .unwrap_or(0);
+    std::env::temp_dir().join(format!("elephant-{name}-{}-{nanos}", std::process::id()))
+  }
+
   #[test]
   fn write_text_if_changed_skips_identical_content() {
-    let dir = std::env::temp_dir().join(format!("elephant-write-skip-{}", now()));
+    let dir = temp_test_root("write-skip");
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("note.md");
 
@@ -370,5 +378,70 @@ mod tests {
     assert!(write_text_if_changed(&path, "changed").unwrap());
 
     let _ = fs::remove_dir_all(&dir);
+  }
+
+  #[test]
+  fn normalizes_relative_paths_without_allowing_traversal_components() {
+    assert_eq!(normalize_relative_path("./a//b/../c.md"), "a/b/c.md");
+    assert_eq!(normalize_relative_path("..\\outside.md"), "outside.md");
+    assert_eq!(normalize_relative_path("/leading/slash.md"), "leading/slash.md");
+  }
+
+  #[test]
+  fn writable_relative_path_keeps_normalized_targets_inside_root() {
+    let root = temp_test_root("relative-path-root");
+    fs::create_dir_all(&root).unwrap();
+    let target = writable_relative_path(root.to_str().unwrap(), "../nested/./note.md").unwrap();
+    let canonical_root = fs::canonicalize(&root).unwrap();
+
+    assert!(target.starts_with(&canonical_root));
+    assert!(target.ends_with(Path::new("nested/note.md")) || target.ends_with(Path::new("nested\\note.md")));
+
+    let _ = fs::remove_dir_all(&root);
+  }
+
+  #[test]
+  fn writable_relative_path_rejects_empty_targets() {
+    let root = temp_test_root("empty-target-root");
+    fs::create_dir_all(&root).unwrap();
+
+    assert!(writable_relative_path(root.to_str().unwrap(), ".././").is_err());
+
+    let _ = fs::remove_dir_all(&root);
+  }
+
+  #[test]
+  fn writable_path_inside_root_rejects_absolute_paths_outside_root() {
+    let root = temp_test_root("root");
+    let outside = temp_test_root("outside");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    let outside_file = outside.join("stolen.md");
+
+    let result = writable_path_inside_root(&root, &outside_file);
+
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("Refusing to write outside the active vault"));
+
+    let _ = fs::remove_dir_all(&root);
+    let _ = fs::remove_dir_all(&outside);
+  }
+
+  #[test]
+  fn existing_path_guard_rejects_reads_outside_root() {
+    let root = temp_test_root("read-root");
+    let outside = temp_test_root("read-outside");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    let outside_file = outside.join("outside.md");
+    fs::write(&outside_file, "secret").unwrap();
+
+    let result = assert_existing_path_inside_root(&root, &outside_file);
+
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("Refusing to access a path outside the active vault"));
+
+    let _ = fs::remove_dir_all(&root);
+    let _ = fs::remove_dir_all(&outside);
   }
 }

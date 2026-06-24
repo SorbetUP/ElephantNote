@@ -94,6 +94,7 @@ pub fn run() {
       markdown::commands::tauri_muya_editor_snapshot,
       tauri_extra_commands::tauri_notes_read,
       tauri_extra_commands::tauri_notes_write,
+      tauri_extra_commands::tauri_marktext_write_file,
       tauri_extra_commands::tauri_attachments_list,
       tauri_extra_commands::tauri_attachments_write_text,
       tauri_extra_commands::tauri_drawings_list,

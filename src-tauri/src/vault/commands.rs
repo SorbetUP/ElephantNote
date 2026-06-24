@@ -16,12 +16,13 @@ const SEARCH_FILE_READ_LIMIT: usize = 256 * 1024;
 const SEARCH_FILE_READ_LIMIT_MIN: usize = 4 * 1024;
 const SEARCH_FILE_READ_LIMIT_MAX: usize = 1024 * 1024;
 const SEARCH_EXCERPT_LIMIT: usize = 600;
+const DIRECTORY_LIST_LIMIT_MAX: usize = 500;
 
 fn payload(app: &AppHandle, vault: Option<super::types::VaultDescriptor>) -> R<Value> {
   let config = read_config(app)?;
   if let Some(vault) = vault {
     let workspace = initialize_vault(&vault.path)?;
-    let listed_entries = entries::list_directory(&vault, "")?;
+    let listed_entries = entries::list_directory_page(&vault, "", 0, Some(120), true)?;
     Ok(json!({
       "vaults": config.vaults,
       "activeVaultId": config.active_vault_id,
@@ -91,8 +92,16 @@ pub fn tauri_vaults_remove(app: AppHandle, vault_id: String) -> R<Value> {
 }
 
 #[tauri::command]
-pub fn tauri_directory_list(app: AppHandle, relative_path: Option<String>) -> R<Vec<Value>> {
-  entries::list_directory(&get_active_vault(&app)?, relative_path.as_deref().unwrap_or(""))
+pub fn tauri_directory_list(app: AppHandle, relative_path: Option<String>, offset: Option<u64>, limit: Option<u64>, include_preview: Option<bool>) -> R<Vec<Value>> {
+  let offset = offset.unwrap_or(0) as usize;
+  let limit = limit.map(|value| value.clamp(1, DIRECTORY_LIST_LIMIT_MAX as u64) as usize);
+  entries::list_directory_page(
+    &get_active_vault(&app)?,
+    relative_path.as_deref().unwrap_or(""),
+    offset,
+    limit,
+    include_preview.unwrap_or(true),
+  )
 }
 
 #[tauri::command]

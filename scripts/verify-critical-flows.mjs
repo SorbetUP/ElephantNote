@@ -2,8 +2,15 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
-const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const failures = []
+const read = (relativePath) => {
+  const absolutePath = path.join(root, relativePath)
+  if (!fs.existsSync(absolutePath)) {
+    failures.push(`Missing critical-flow file: ${relativePath}`)
+    return ''
+  }
+  return fs.readFileSync(absolutePath, 'utf8')
+}
 
 const has = (relativePath, needle, description = needle) => {
   const content = read(relativePath)
@@ -35,7 +42,10 @@ for (const file of [
   'src-tauri/src/sync_contract_tests.rs',
   'web/server.mjs',
   'web/sync/WebGitSyncEngine.mjs',
+  'scripts/security-guardrails-core.mjs',
+  'scripts/verify-security-guardrails.mjs',
   'scripts/sync-two-docker-smoke.mjs',
+  'security/guardrails-baseline.json',
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   'Elephant/front/app/components/editor/ExcalidrawDialog.vue',
   'Elephant/front/app/utils/noteCardView.js',
@@ -48,6 +58,7 @@ for (const file of [
   'test/unit/specs/main/elephantnote/apiRuntime.spec.js',
   'test/unit/specs/main/elephantnote/legacyCalls.spec.js',
   'test/unit/specs/main/elephantnote/markdownDocument.spec.js',
+  'test/unit/specs/main/elephantnote/securityGuardrails.spec.js',
   'test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js',
   'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
   'test/unit/specs/main/elephantnote/syncPlan.spec.js',
@@ -57,10 +68,33 @@ for (const file of [
   if (!fs.existsSync(path.join(root, file))) failures.push(`Missing critical-flow file: ${file}`)
 }
 
+has('package.json', '"security:guard": "node scripts/verify-security-guardrails.mjs"', 'security guard script in package.json')
 has('.github/workflows/ci.yml', '- name: Critical ElephantNote flow guard\n        run: node scripts/verify-critical-flows.mjs', 'blocking critical-flow guard in CI')
+has('.github/workflows/ci.yml', '- name: Security guardrails\n        run: pnpm security:guard', 'blocking security guardrails in CI')
 has('.github/workflows/ci.yml', 'pnpm exec vitest run test/unit/specs/main/elephantnote', 'ElephantNote contract tests in CI')
 has('.github/workflows/ci.yml', '- name: Cargo check\n        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'blocking Tauri cargo check in main CI')
 has('.github/workflows/tauri-ci.yml', '- name: Cargo check all targets\n        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'blocking Tauri all-target cargo check')
+
+ordered('scripts/security-guardrails-core.mjs', [
+  'export const DEFAULT_BASELINE_PATH',
+  'const isBroadFsScope',
+  "id: 'TAURI_FS_SCOPE_BROAD'",
+  'const scanGitHubWorkflows',
+  "id: 'GITHUB_ACTIONS_PULL_REQUEST_TARGET'",
+  'const scanPackageScripts',
+  "id: 'PACKAGE_SCRIPT_REMOTE_PIPE_TO_SHELL'",
+  'export const collectSecurityFindings'
+], 'security guardrails must block broad Tauri scopes, unsafe workflows and unsafe package scripts')
+ordered('scripts/verify-security-guardrails.mjs', [
+  'loadSecurityBaseline(root)',
+  'collectSecurityFindings(root)',
+  'splitFindingsByBaseline(findings, baseline)',
+  'summary.hasBlockingFindings',
+  'process.exit(1)'
+], 'security guardrail runner must fail on unbaselined blocker findings')
+has('security/guardrails-baseline.json', 'TAURI_FS_SCOPE_BROAD', 'explicit baseline for current broad Tauri fs scopes')
+has('test/unit/specs/main/elephantnote/securityGuardrails.spec.js', 'flags broad Tauri filesystem scopes', 'security guardrail regression test for broad scopes')
+has('test/unit/specs/main/elephantnote/securityGuardrails.spec.js', 'rejects pull_request_target workflows', 'security guardrail regression test for unsafe workflow triggers')
 
 ordered('src/renderer/src/platform/bootstrapGlobals.js', [
   '__elephantnoteBootstrapFallback: true',

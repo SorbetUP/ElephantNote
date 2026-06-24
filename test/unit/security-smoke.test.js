@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 describe('security smoke', () => {
-  it('keeps the test runner wired', () => {
-    expect(true).toBe(true)
+  it('keeps basic assertions wired', () => {
+    expect(1 + 1).toBe(2)
   })
 })

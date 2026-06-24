@@ -5,7 +5,7 @@
   "identifier": "com.elephantnote.app",
   "build": {
     "beforeDevCommand": "pnpm tauri:web:dev",
-    "beforeBuildCommand": "pnpm tauri:web:build",
+    "beforeBuildCommand": "pnpm tauri:llama:install && pnpm tauri:web:build",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../out/renderer"
   },
@@ -38,6 +38,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": [
+      "bin/llama-server"
+    ],
     "icon": [
       "../static/icon.ico",
       "../static/icon.icns"

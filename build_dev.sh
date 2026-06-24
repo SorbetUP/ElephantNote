@@ -22,10 +22,9 @@ kill_port_1420
 cd "$ROOT_DIR"
 node scripts/ensure-tauri-llama-server.mjs
 
-TAURI_ARGS=()
-if [ "$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then
-  TAURI_ARGS+=(--config tauri.linux.conf.json)
-fi
-
 cd "$ROOT_DIR/src-tauri"
-cargo tauri dev "${TAURI_ARGS[@]}"
+if [ "$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then
+  cargo tauri dev --config tauri.linux.conf.json "$@"
+else
+  cargo tauri dev "$@"
+fi

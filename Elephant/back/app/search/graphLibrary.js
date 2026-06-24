@@ -81,7 +81,8 @@ const collectFolderEdges = (documents = []) => {
 export const createSemanticGraph = ({
   documents = [],
   semanticLinks = [],
-  includeFolderEdges = true
+  includeFolderEdges = true,
+  includeTagEdges = true
 } = {}) => {
   const documentNodes = collectDocumentNodes(documents)
   const folderNodes = collectFolderNodes(documents)
@@ -89,6 +90,7 @@ export const createSemanticGraph = ({
 
   const edges = []
   if (includeFolderEdges) edges.push(...collectFolderEdges(documents))
+  if (includeTagEdges) edges.push(...collectTagEdges(documents))
   for (const link of semanticLinks || []) {
     if (!link?.source || !link?.target) continue
     edges.push({

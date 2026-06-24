@@ -12,7 +12,8 @@ const createTempVault = async() => {
   return root
 }
 
-const createNoopGitExecutor = () => async(_command, args) => {
+const createNoopGitExecutor = (calls = []) => async(_command, args) => {
+  calls.push(args)
   if (args[0] === 'config' && args.length === 2) return { stdout: '' }
   return { stdout: '' }
 }
@@ -22,9 +23,20 @@ afterEach(async() => {
 })
 
 describe('WebGitSyncEngine', () => {
-  it('persists a git backend config and excludes local sync metadata from commits', async() => {
+  it('preserves direct string enqueue operations', async() => {
     const cwd = await createTempVault()
     const engine = new WebGitSyncEngine({ cwd, executor: createNoopGitExecutor() })
+
+    const item = engine.enqueue('init')
+
+    expect(item.operation).toBe('init')
+    expect(engine.status().operations.at(-1).operation).toBe('init')
+  })
+
+  it('persists a git backend config and excludes local sync metadata from commits', async() => {
+    const cwd = await createTempVault()
+    const calls = []
+    const engine = new WebGitSyncEngine({ cwd, executor: createNoopGitExecutor(calls) })
 
     await engine.init()
 
@@ -36,6 +48,7 @@ describe('WebGitSyncEngine', () => {
     expect(config.folderId).toMatch(/^vault-/)
     expect(exclude).toContain('/.elephantnote/sync-config.json')
     expect(exclude).toContain('/.elephantnote/sync-log.json')
+    expect(calls).toContainEqual(['rm', '--cached', '--ignore-unmatch', '.elephantnote/sync-config.json', '.elephantnote/sync-log.json'])
   })
 
   it('returns a completed status after a successful sync run', async() => {

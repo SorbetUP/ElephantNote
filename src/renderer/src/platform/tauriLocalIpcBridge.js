@@ -1,5 +1,6 @@
 const LOCAL_IPC_EVENTS = new Set([
   'mt::response-file-save',
+  'mt::response-file-save-as',
   'mt::save-tabs',
   'mt::save-and-close-tabs',
   'mt::tab-saved',

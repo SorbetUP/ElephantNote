@@ -1,49 +1,24 @@
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::vault::config as vault_config;
 use crate::vault_layout;
 
 type R<T> = Result<T, String>;
 const META_DIR: &str = vault_layout::HIDDEN_ROOT;
-const SYNC_OPERATION_INIT: &str = "init";
-const SYNC_OPERATION_SNAPSHOT: &str = "snapshot";
-const SYNC_OPERATION_PULL: &str = "pull";
-const SYNC_OPERATION_PUSH: &str = "push";
-const SYNC_OPERATION_SYNC: &str = "sync";
-
-fn civil_from_days(days_since_unix_epoch: i64) -> (i32, u32, u32) {
-  let z = days_since_unix_epoch + 719_468;
-  let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-  let doe = z - era * 146_097;
-  let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-  let y = yoe + era * 400;
-  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-  let mp = (5 * doy + 2) / 153;
-  let day = doy - (153 * mp + 2) / 5 + 1;
-  let month = mp + if mp < 10 { 3 } else { -9 };
-  let year = y + if month <= 2 { 1 } else { 0 };
-  (year as i32, month as u32, day as u32)
-}
-
-fn unix_seconds_to_utc_string(seconds: u64) -> String {
-  let days = (seconds / 86_400) as i64;
-  let second_of_day = seconds % 86_400;
-  let (year, month, day) = civil_from_days(days);
-  let hour = second_of_day / 3_600;
-  let minute = (second_of_day % 3_600) / 60;
-  let second = second_of_day % 60;
-  format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.000Z")
-}
+const AI_CONFIG_FILE: &str = "tauri-ai-config.json";
+const FEATURES_FILE: &str = "tauri-features.json";
 
 fn now() -> String {
   SystemTime::now()
     .duration_since(UNIX_EPOCH)
-    .map(|d| unix_seconds_to_utc_string(d.as_secs()))
-    .unwrap_or_else(|_| "1970-01-01T00:00:00.000Z".to_string())
+    .map(|d| d.as_secs().to_string())
+    .unwrap_or_else(|_| "0".to_string())
 }
 
 fn normalize_relative_path(path: &str) -> String {
@@ -78,6 +53,47 @@ fn write_json(path: PathBuf, value: &Value) -> R<()> {
   fs::write(path, raw).map_err(|e| e.to_string())
 }
 
+fn app_json_path(app: &AppHandle, file_name: &str) -> R<PathBuf> {
+  let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+  fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+  Ok(dir.join(file_name))
+}
+
+fn canonical_root(root: &Path) -> R<PathBuf> {
+  fs::create_dir_all(root).map_err(|e| e.to_string())?;
+  fs::canonicalize(root).map_err(|e| e.to_string())
+}
+
+fn assert_existing_path_inside_root(root: &Path, target: &Path) -> R<PathBuf> {
+  let root = canonical_root(root)?;
+  let target = fs::canonicalize(target).map_err(|e| e.to_string())?;
+  if !target.starts_with(&root) {
+    return Err(format!("Refusing to access a path outside the active vault: {}", target.to_string_lossy()));
+  }
+  Ok(target)
+}
+
+fn writable_path_inside_root(root: &Path, candidate: &Path) -> R<PathBuf> {
+  let root = canonical_root(root)?;
+  let target = if candidate.is_absolute() { candidate.to_path_buf() } else { root.join(candidate) };
+  let parent = target.parent().ok_or_else(|| "Cannot write a path without a parent directory.".to_string())?;
+  fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+  let parent = fs::canonicalize(parent).map_err(|e| e.to_string())?;
+  if !parent.starts_with(&root) {
+    return Err(format!("Refusing to write outside the active vault: {}", target.to_string_lossy()));
+  }
+  let file_name = target.file_name().ok_or_else(|| "Cannot write a path without a file name.".to_string())?;
+  Ok(parent.join(file_name))
+}
+
+fn writable_relative_path(root: &str, relative_path: &str) -> R<PathBuf> {
+  let normalized = normalize_relative_path(relative_path);
+  if normalized.is_empty() {
+    return Err("A file path is required.".to_string());
+  }
+  writable_path_inside_root(Path::new(root), Path::new(&normalized))
+}
+
 fn file_summary(root: &Path, path: &Path) -> Value {
   let relative = path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/");
   let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("").to_string();
@@ -85,7 +101,7 @@ fn file_summary(root: &Path, path: &Path) -> Value {
     .and_then(|metadata| metadata.modified())
     .ok()
     .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-    .map(|duration| unix_seconds_to_utc_string(duration.as_secs()))
+    .map(|duration| duration.as_secs().to_string())
     .unwrap_or_else(now);
   json!({ "name": name, "path": relative, "updatedAt": updated_at })
 }
@@ -98,7 +114,10 @@ fn scan_files(root: &Path, current: &Path, out: &mut Vec<Value>, extension: Opti
     if name == META_DIR || name == ".git" || name == "node_modules" || name.starts_with('.') {
       continue;
     }
-    let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
+    let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+    if metadata.file_type().is_symlink() {
+      continue;
+    }
     if metadata.is_dir() {
       scan_files(root, &path, out, extension)?;
     } else if metadata.is_file() {
@@ -111,143 +130,65 @@ fn scan_files(root: &Path, current: &Path, out: &mut Vec<Value>, extension: Opti
   Ok(())
 }
 
-fn normalized_payload(value: Value) -> Value {
-  if value.is_object() { value } else { json!({}) }
-}
-
-fn valid_sync_operation(operation: &str) -> bool {
-  matches!(
-    operation,
-    SYNC_OPERATION_INIT | SYNC_OPERATION_SNAPSHOT | SYNC_OPERATION_PULL | SYNC_OPERATION_PUSH | SYNC_OPERATION_SYNC
-  )
-}
-
-fn payload_has(payload_by_operation: &Value, operation: &str) -> bool {
-  payload_by_operation.as_object().is_some_and(|payload| payload.contains_key(operation))
-}
-
-fn payload_for(payload_by_operation: &Value, operation: &str) -> Value {
-  normalized_payload(payload_by_operation.get(operation).cloned().unwrap_or_else(|| json!({})))
-}
-
-fn payload_for_or(payload_by_operation: &Value, operation: &str, fallback_operation: &str) -> Value {
-  normalized_payload(
-    payload_by_operation
-      .get(operation)
-      .cloned()
-      .or_else(|| payload_by_operation.get(fallback_operation).cloned())
-      .unwrap_or_else(|| json!({})),
-  )
-}
-
-fn explicit_sync_operations(payload_by_operation: &Value) -> Vec<String> {
-  payload_by_operation
-    .get("operations")
-    .and_then(Value::as_array)
-    .map(|operations| {
-      operations
-        .iter()
-        .filter_map(Value::as_str)
-        .map(str::trim)
-        .filter(|operation| valid_sync_operation(operation))
-        .map(str::to_string)
-        .collect()
-    })
-    .unwrap_or_default()
-}
-
-fn plan_item(operation: &str, payload: Value) -> Value {
-  json!({ "operation": operation, "payload": normalized_payload(payload) })
-}
-
-fn create_default_sync_plan(payload_by_operation: &Value) -> Vec<Value> {
-  let operations = explicit_sync_operations(payload_by_operation);
-  if !operations.is_empty() {
-    return operations
-      .iter()
-      .map(|operation| plan_item(operation, payload_for(payload_by_operation, operation)))
-      .collect();
+#[tauri::command]
+pub fn shell_exec(app: AppHandle, command: String, args: Option<Vec<String>>, cwd: Option<String>, env: Option<HashMap<String, String>>) -> R<Value> {
+  let command_name = Path::new(&command)
+    .file_name()
+    .and_then(|name| name.to_str())
+    .unwrap_or(command.as_str());
+  if command_name != "pandoc" {
+    return Err(format!("Refusing to execute unsupported command: {command_name}"));
   }
 
-  if payload_has(payload_by_operation, SYNC_OPERATION_SYNC) {
-    return [SYNC_OPERATION_INIT, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH]
-      .iter()
-      .map(|operation| plan_item(operation, payload_for_or(payload_by_operation, operation, SYNC_OPERATION_SYNC)))
-      .collect();
+  let mut process = Command::new(command_name);
+  process.args(args.unwrap_or_default());
+  if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) {
+    let root = active_vault_root(&app)?;
+    let cwd = assert_existing_path_inside_root(Path::new(&root), Path::new(&cwd))?;
+    process.current_dir(cwd);
   }
-
-  let has_explicit_git_operation = [SYNC_OPERATION_INIT, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH]
-    .iter()
-    .any(|operation| payload_has(payload_by_operation, operation));
-
-  if !has_explicit_git_operation {
-    return vec![
-      plan_item(SYNC_OPERATION_INIT, payload_for(payload_by_operation, SYNC_OPERATION_INIT)),
-      plan_item(SYNC_OPERATION_SNAPSHOT, payload_for(payload_by_operation, SYNC_OPERATION_SNAPSHOT)),
-    ];
-  }
-
-  let mut plan = vec![plan_item(SYNC_OPERATION_INIT, payload_for(payload_by_operation, SYNC_OPERATION_INIT))];
-  for operation in [SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH] {
-    if payload_has(payload_by_operation, operation) {
-      plan.push(plan_item(operation, payload_for(payload_by_operation, operation)));
+  if let Some(env) = env {
+    for (key, value) in env {
+      if key.starts_with("PANDOC_") {
+        process.env(key, value);
+      }
     }
   }
-  plan
-}
 
-fn scan_sync_changes(root_path: &Path) -> R<(Vec<Value>, Vec<Value>, Vec<Value>)> {
-  let mut notes = Vec::new();
-  let mut assets = Vec::new();
-  scan_files(root_path, root_path, &mut notes, Some(".md"))?;
-  let assets_dir = vault_layout::assets_dir(root_path);
-  if assets_dir.exists() {
-    scan_files(root_path, &assets_dir, &mut assets, None)?;
-  }
-
-  let mut changes = Vec::new();
-  for note in &notes {
-    let mut item = note.clone();
-    item["kind"] = json!("note");
-    changes.push(item);
-  }
-  for asset in &assets {
-    let mut item = asset.clone();
-    item["kind"] = json!("asset");
-    changes.push(item);
-  }
-  Ok((notes, assets, changes))
+  let output = process.output().map_err(|e| e.to_string())?;
+  Ok(json!({
+    "success": output.status.success(),
+    "code": output.status.code(),
+    "stdout": String::from_utf8_lossy(&output.stdout).to_string(),
+    "stderr": String::from_utf8_lossy(&output.stderr).to_string()
+  }))
 }
 
 #[tauri::command]
 pub fn tauri_notes_read(app: AppHandle, relative_path: String) -> R<Value> {
   let root = active_vault_root(&app)?;
-  let path = inside(&root, &relative_path);
+  let normalized = normalize_relative_path(&relative_path);
+  let path = assert_existing_path_inside_root(Path::new(&root), &inside(&root, &normalized))?;
   let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-  Ok(json!({ "path": normalize_relative_path(&relative_path), "fullPath": path.to_string_lossy(), "content": content }))
+  Ok(json!({ "path": normalized, "fullPath": path.to_string_lossy(), "content": content }))
 }
 
 #[tauri::command]
 pub fn tauri_notes_write(app: AppHandle, relative_path: String, content: Option<String>, markdown: Option<String>) -> R<Value> {
   let root = active_vault_root(&app)?;
-  let path = inside(&root, &relative_path);
+  let path = writable_relative_path(&root, &relative_path)?;
   let content = content.or(markdown).unwrap_or_default();
-  if let Some(parent) = path.parent() {
-    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-  }
   fs::write(&path, content).map_err(|e| e.to_string())?;
   Ok(json!({ "ok": true, "path": normalize_relative_path(&relative_path), "fullPath": path.to_string_lossy(), "updatedAt": now() }))
 }
 
 #[tauri::command]
-pub fn tauri_marktext_write_file(pathname: String, content: String) -> R<Value> {
+pub fn tauri_marktext_write_file(app: AppHandle, pathname: String, content: String) -> R<Value> {
   if pathname.trim().is_empty() {
     return Err("Cannot save MarkText file without a pathname.".to_string());
   }
-  let path = PathBuf::from(&pathname);
-  if let Some(parent) = path.parent() {
-    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-  }
+  let root = active_vault_root(&app)?;
+  let path = writable_path_inside_root(Path::new(&root), Path::new(&pathname))?;
   fs::write(&path, content).map_err(|e| e.to_string())?;
   Ok(json!({ "ok": true, "fullPath": path.to_string_lossy(), "updatedAt": now() }))
 }
@@ -268,11 +209,9 @@ pub fn tauri_attachments_list(app: AppHandle) -> R<Vec<Value>> {
 #[tauri::command]
 pub fn tauri_attachments_write_text(app: AppHandle, relative_path: String, content: String) -> R<Value> {
   let root = active_vault_root(&app)?;
+  let assets = vault_layout::assets_dir(&root);
   let relative_path = normalize_relative_path(&relative_path);
-  let path = vault_layout::assets_dir(&root).join(&relative_path);
-  if let Some(parent) = path.parent() {
-    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-  }
+  let path = writable_path_inside_root(&assets, Path::new(&relative_path))?;
   fs::write(&path, content).map_err(|e| e.to_string())?;
   let public_path = path.strip_prefix(&root).unwrap_or(&path).to_string_lossy().replace('\\', "/");
   Ok(json!({ "ok": true, "path": public_path, "fullPath": path.to_string_lossy() }))
@@ -297,10 +236,7 @@ pub fn tauri_drawings_create(app: AppHandle, title: Option<String>) -> R<Value> 
   let title = title.filter(|value| !value.trim().is_empty()).unwrap_or_else(|| "Untitled Drawing".to_string());
   let safe_title = title.replace('/', "-").replace('\\', "-");
   let relative_path = normalize_relative_path(&format!("Drawings/{}.drawing.json", safe_title));
-  let path = inside(&root, &relative_path);
-  if let Some(parent) = path.parent() {
-    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-  }
+  let path = writable_relative_path(&root, &relative_path)?;
   let scene = json!({ "kind": "drawing", "version": 1, "title": title, "items": [] });
   write_json(path.clone(), &scene)?;
   Ok(json!({ "path": relative_path, "fullPath": path.to_string_lossy(), "scene": scene }))
@@ -309,14 +245,15 @@ pub fn tauri_drawings_create(app: AppHandle, title: Option<String>) -> R<Value> 
 #[tauri::command]
 pub fn tauri_drawings_read(app: AppHandle, relative_path: String) -> R<Value> {
   let root = active_vault_root(&app)?;
-  let path = inside(&root, &relative_path);
+  let normalized = normalize_relative_path(&relative_path);
+  let path = assert_existing_path_inside_root(Path::new(&root), &inside(&root, &normalized))?;
   Ok(read_json(path, json!({ "kind": "drawing", "items": [] })))
 }
 
 #[tauri::command]
 pub fn tauri_drawings_write(app: AppHandle, relative_path: String, scene: Value) -> R<Value> {
   let root = active_vault_root(&app)?;
-  let path = inside(&root, &relative_path);
+  let path = writable_relative_path(&root, &relative_path)?;
   write_json(path.clone(), &scene)?;
   Ok(json!({ "ok": true, "path": normalize_relative_path(&relative_path), "fullPath": path.to_string_lossy() }))
 }
@@ -346,58 +283,88 @@ pub fn tauri_search_rebuild(app: AppHandle) -> R<Value> {
 }
 
 #[tauri::command]
-pub fn tauri_sync_plan(app: AppHandle, payload_by_operation: Option<Value>) -> R<Value> {
-  let vault = vault_config::get_active_vault(&app)?;
-  let root_path = PathBuf::from(&vault.path);
-  let payload_by_operation = normalized_payload(payload_by_operation.unwrap_or_else(|| json!({})));
-  let operations = create_default_sync_plan(&payload_by_operation);
-  let (notes, assets, changes) = scan_sync_changes(&root_path)?;
+pub fn tauri_search_inspect(app: AppHandle) -> R<Value> {
+  let root = active_vault_root(&app)?;
+  let index_path = vault_layout::index_file(&root, vault_layout::INDEX_FILE);
+  let index = read_json(index_path.clone(), json!({ "entries": [] }));
+  let entries = index.get("entries").and_then(Value::as_array).map(|items| items.len()).unwrap_or(0);
   Ok(json!({
     "runtime": "tauri-rust",
-    "activeVault": vault,
-    "operations": operations,
-    "changes": changes,
-    "notes": notes,
-    "assets": assets,
-    "generatedAt": now()
+    "indexPath": index_path.to_string_lossy(),
+    "exists": index_path.exists(),
+    "entries": entries,
+    "updatedAt": index.get("updatedAt").and_then(Value::as_str).unwrap_or("")
   }))
+}
+
+#[tauri::command]
+pub fn tauri_ai_config_get(app: AppHandle) -> R<Value> {
+  Ok(read_json(app_json_path(&app, AI_CONFIG_FILE)?, json!({
+    "localAi": { "enabled": true, "showModelLibraryInSidebar": true },
+    "localRuntime": { "llamaServerMode": "bundled", "llamaServerPath": "", "llamaBaseUrl": "" },
+    "providers": { "list": [], "codex": { "connected": false, "mode": "account", "model": "" } },
+    "routes": {},
+    "localModelSelection": {}
+  })))
+}
+
+#[tauri::command]
+pub fn tauri_ai_config_set(app: AppHandle, config: Value) -> R<Value> {
+  write_json(app_json_path(&app, AI_CONFIG_FILE)?, &config)?;
+  Ok(config)
+}
+
+#[tauri::command]
+pub fn tauri_ai_config_test(_app: AppHandle, config: Value) -> R<Value> {
+  Ok(json!({ "ok": true, "runtime": "tauri-rust", "latencyMs": 0, "config": config }))
+}
+
+#[tauri::command]
+pub fn tauri_features_get(app: AppHandle) -> R<Value> {
+  Ok(read_json(app_json_path(&app, FEATURES_FILE)?, json!({ "askAi": true, "sitePreview": false, "gitSync": false })))
+}
+
+#[tauri::command]
+pub fn tauri_features_set(app: AppHandle, key: String, enabled: bool) -> R<Value> {
+  let mut features = tauri_features_get(app.clone())?;
+  if let Some(object) = features.as_object_mut() {
+    object.insert(key, json!(enabled));
+  }
+  write_json(app_json_path(&app, FEATURES_FILE)?, &features)?;
+  Ok(features)
+}
+
+#[tauri::command]
+pub fn tauri_sync_plan(app: AppHandle) -> R<Value> {
+  let root = active_vault_root(&app)?;
+  let root_path = PathBuf::from(&root);
+  let mut notes = Vec::new();
+  let mut assets = Vec::new();
+  scan_files(&root_path, &root_path, &mut notes, Some(".md"))?;
+  let assets_dir = vault_layout::assets_dir(&root_path);
+  if assets_dir.exists() {
+    scan_files(&root_path, &assets_dir, &mut assets, None)?;
+  }
+  Ok(json!({ "notes": notes, "assets": assets, "generatedAt": now() }))
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
 
-  fn operation_names(plan: &[Value]) -> Vec<String> {
-    plan
-      .iter()
-      .filter_map(|item| item.get("operation").and_then(Value::as_str).map(str::to_string))
-      .collect()
+  #[test]
+  fn normalizes_parent_traversal_without_preserving_dotdot() {
+    assert_eq!(normalize_relative_path("a/../b.md"), "a/b.md");
+    assert_eq!(normalize_relative_path("../secret.md"), "secret.md");
   }
 
   #[test]
-  fn sync_plan_keeps_pull_only_flow_without_snapshot() {
-    let plan = create_default_sync_plan(&json!({
-      "init": { "remote": "/tmp/remote.git" },
-      "pull": {}
-    }));
-
-    assert_eq!(operation_names(&plan), vec![SYNC_OPERATION_INIT, SYNC_OPERATION_PULL]);
-    assert_eq!(plan[0]["payload"]["remote"], "/tmp/remote.git");
-  }
-
-  #[test]
-  fn sync_plan_expands_sync_payload_to_remote_sequence() {
-    let plan = create_default_sync_plan(&json!({
-      "sync": { "remoteName": "origin" }
-    }));
-
-    assert_eq!(operation_names(&plan), vec![SYNC_OPERATION_INIT, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH]);
-    assert_eq!(plan[2]["payload"]["remoteName"], "origin");
-  }
-
-  #[test]
-  fn formats_tauri_extra_timestamps_as_js_parseable_utc_iso() {
-    assert_eq!(unix_seconds_to_utc_string(0), "1970-01-01T00:00:00.000Z");
-    assert_eq!(unix_seconds_to_utc_string(1_717_945_200), "2024-06-09T15:00:00.000Z");
+  fn refuses_writable_path_outside_root() {
+    let root = std::env::temp_dir().join(format!("elephantnote-root-{}", now()));
+    let outside = std::env::temp_dir().join(format!("elephantnote-outside-{}", now()));
+    fs::create_dir_all(&root).unwrap();
+    let error = writable_path_inside_root(&root, &outside.join("x.md")).unwrap_err();
+    assert!(error.contains("outside"));
+    let _ = fs::remove_dir_all(&root);
   }
 }

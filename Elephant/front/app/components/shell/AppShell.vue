@@ -95,6 +95,8 @@ const theme = ref(normalizeThemeId(window.localStorage.getItem(ELEPHANTNOTE_THEM
 const sidebarWidth = ref(232)
 const sidebarVisible = ref(true)
 const localAi = ref({ enabled: true, showModelLibraryInSidebar: true })
+let sidebarResizeFrame = null
+let pendingSidebarWidth = null
 
 const activeThemeTokens = computed(() => getThemeTokens(theme.value))
 const themeMode = computed(() => getThemeMode(theme.value))
@@ -129,19 +131,32 @@ const setTheme = (value) => {
   const nextTheme = normalizeThemeId(value)
   theme.value = nextTheme
   window.localStorage.setItem(ELEPHANTNOTE_THEME_STORAGE_KEY, nextTheme)
-  applyThemeVariables()
 }
 
 watch(theme, (mode) => {
   canvasStore.setAppMode(getThemeMode(mode))
+  applyThemeVariables()
 }, { immediate: true })
 
 provide('elephantnoteTheme', theme)
 provide('setElephantnoteTheme', setTheme)
 
-const setSidebarWidth = (value) => {
-  sidebarWidth.value = Math.min(320, Math.max(184, value))
-  window.localStorage.setItem('elephantnote:sidebarWidth', String(sidebarWidth.value))
+const normalizeSidebarWidth = (value) => Math.min(320, Math.max(184, Number(value) || 232))
+
+const setSidebarWidth = (value, { persist = true } = {}) => {
+  sidebarWidth.value = normalizeSidebarWidth(value)
+  if (persist) {
+    window.localStorage.setItem('elephantnote:sidebarWidth', String(sidebarWidth.value))
+  }
+}
+
+const scheduleSidebarWidth = (value) => {
+  pendingSidebarWidth = value
+  if (sidebarResizeFrame) return
+  sidebarResizeFrame = window.requestAnimationFrame(() => {
+    sidebarResizeFrame = null
+    setSidebarWidth(pendingSidebarWidth, { persist: false })
+  })
 }
 
 const startResize = (event) => {
@@ -150,11 +165,17 @@ const startResize = (event) => {
   event.currentTarget.setPointerCapture(event.pointerId)
 
   const onMove = (moveEvent) => {
-    setSidebarWidth(startWidth + moveEvent.clientX - startX)
+    scheduleSidebarWidth(startWidth + moveEvent.clientX - startX)
   }
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
+    if (sidebarResizeFrame) {
+      window.cancelAnimationFrame(sidebarResizeFrame)
+      sidebarResizeFrame = null
+    }
+    setSidebarWidth(pendingSidebarWidth ?? sidebarWidth.value)
+    pendingSidebarWidth = null
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
@@ -241,11 +262,13 @@ onMounted(() => {
   loadAiConfigVisibility()
 })
 
-watch(theme, applyThemeVariables)
-
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleShortcut)
   window.removeEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
+  if (sidebarResizeFrame) {
+    window.cancelAnimationFrame(sidebarResizeFrame)
+    sidebarResizeFrame = null
+  }
   const ipcRenderer = window.electron.ipcRenderer
   if (ipcRenderer.off) {
     ipcRenderer.off('mt::tab-saved', handleTabSaved)
@@ -328,6 +351,6 @@ onBeforeUnmount(() => {
 
 :global(.en-settings-close .en-icon) {
   width: 17px !important;
-  height: 17px !important;
+  height: 17px;
 }
 </style>

@@ -31,8 +31,8 @@ describe('Search library embedding provider integration', () => {
       async embedText(text) {
         calls.push(text)
         const lower = String(text || '').toLowerCase()
-        if (lower.includes('embedding') || lower.includes('model') || lower.includes('neural')) return [1, 0, 0, 0]
-        if (lower.includes('recipe') || lower.includes('tomato') || lower.includes('cooking')) return [0, 1, 0, 0]
+        if (lower.includes('embedding') || lower.includes('model') || lower.includes('neural')) return new Float32Array([1, 0, 0, 0])
+        if (lower.includes('recipe') || lower.includes('tomato') || lower.includes('cooking')) return { embedding: new Float32Array([0, 1, 0, 0]) }
         return [0, 0, 1, 0]
       }
     }

@@ -24,12 +24,36 @@ pub fn inside(vault_root: &str, relative_path: &str) -> PathBuf {
   if relative_path.is_empty() { PathBuf::from(vault_root) } else { PathBuf::from(vault_root).join(relative_path) }
 }
 
+fn civil_from_days(days_since_unix_epoch: i64) -> (i32, u32, u32) {
+  let z = days_since_unix_epoch + 719_468;
+  let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+  let doe = z - era * 146_097;
+  let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+  let y = yoe + era * 400;
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  let mp = (5 * doy + 2) / 153;
+  let day = doy - (153 * mp + 2) / 5 + 1;
+  let month = mp + if mp < 10 { 3 } else { -9 };
+  let year = y + if month <= 2 { 1 } else { 0 };
+  (year as i32, month as u32, day as u32)
+}
+
+fn unix_seconds_to_utc_string(seconds: u64) -> String {
+  let days = (seconds / 86_400) as i64;
+  let second_of_day = seconds % 86_400;
+  let (year, month, day) = civil_from_days(days);
+  let hour = second_of_day / 3_600;
+  let minute = (second_of_day % 3_600) / 60;
+  let second = second_of_day % 60;
+  format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.000Z")
+}
+
 fn entry_updated_at(path: &Path) -> String {
   fs::metadata(path)
     .and_then(|m| m.modified())
     .ok()
     .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-    .map(|d| d.as_secs().to_string())
+    .map(|d| unix_seconds_to_utc_string(d.as_secs()))
     .unwrap_or_else(now_string)
 }
 
@@ -226,5 +250,11 @@ mod tests {
     assert!(is_ignored_entry(".elephantnote"));
     assert!(is_ignored_entry(".git"));
     assert!(!is_ignored_entry("Projects"));
+  }
+
+  #[test]
+  fn formats_entry_timestamps_as_js_parseable_utc_iso() {
+    assert_eq!(unix_seconds_to_utc_string(0), "1970-01-01T00:00:00.000Z");
+    assert_eq!(unix_seconds_to_utc_string(1_717_952_400), "2024-06-09T15:00:00.000Z");
   }
 }

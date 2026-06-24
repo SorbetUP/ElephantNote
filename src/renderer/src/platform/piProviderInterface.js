@@ -55,7 +55,11 @@ const requestJson = async({ url, fetchImpl = globalThis.fetch, signal }) => {
   if (!response.ok) {
     return { ok: false, provider: 'pi', status: response.status, error: response.status === 401 || response.status === 403 ? 'authentication_required' : 'pi_error', message: response.statusText || `HTTP ${response.status}`, data: null }
   }
-  return { ok: true, provider: 'pi', status: response.status, data: await response.json() }
+  try {
+    return { ok: true, provider: 'pi', status: response.status, data: await response.json() }
+  } catch (error) {
+    return { ok: false, provider: 'pi', status: response.status, error: 'invalid_json', message: error?.message || 'PI response was not valid JSON.', data: null }
+  }
 }
 
 export const listPiModels = async(options = {}) => {

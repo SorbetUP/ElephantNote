@@ -65,7 +65,7 @@ const visibleEntries = computed(() => store.activeEntries.filter((entry) => !isL
 
 const openEntry = (entry) => {
   if (entry.kind === 'folder') {
-    store.openDirectory(entry.path)
+    store.openDirectory(entry.path, { workspaceView: store.activeWorkspaceView })
   } else {
     store.openNote(entry)
   }

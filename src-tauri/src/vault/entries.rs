@@ -12,12 +12,39 @@ use super::types::VaultDescriptor;
 
 type R<T> = Result<T, String>;
 const MARKDOWN_PREVIEW_LIMIT: usize = 16 * 1024;
+const MAX_PREVIEW_LINE_BYTES: usize = 2048;
+const PREVIEW_READ_CHUNK_BYTES: usize = 2048;
+const EXCERPT_LINE_LIMIT: usize = 3;
 
 struct DirectorySeed {
   name: String,
+  sort_name: String,
   path: PathBuf,
   metadata: fs::Metadata,
   child_relative: String,
+  is_dir: bool,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct NotePreview {
+  title: String,
+  excerpt: String,
+}
+
+#[derive(Eq, PartialEq)]
+enum PreviewParseMode {
+  Start,
+  Frontmatter,
+  Body,
+}
+
+struct PreviewBuilder {
+  fallback_title: String,
+  title: Option<String>,
+  excerpt: String,
+  excerpt_lines: usize,
+  mode: PreviewParseMode,
+  can_skip_leading_title: bool,
 }
 
 pub fn normalize_relative_path(path: &str) -> String {
@@ -68,7 +95,7 @@ fn sanitize_leaf_name(value: Option<String>, fallback: &str, force_markdown: boo
   if name.starts_with('.') || name.ends_with('~') || name.ends_with(".tmp") {
     return Err(format!("Refusing unsafe entry file name: {name}"));
   }
-  if force_markdown && !name.to_ascii_lowercase().ends_with(".md") {
+  if force_markdown && !is_markdown_name(&name) {
     name.push_str(".md");
   }
   Ok(name)
@@ -92,90 +119,208 @@ pub fn is_ignored_entry(name: &str) -> bool {
     || name.ends_with(".tmp")
 }
 
-fn read_text_prefix(path: &Path, max_bytes: usize) -> R<String> {
-  let file = fs::File::open(path).map_err(|e| e.to_string())?;
-  let mut limited = file.take(max_bytes as u64);
-  let mut buffer = Vec::with_capacity(max_bytes.min(8 * 1024));
-  limited.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
-  Ok(String::from_utf8_lossy(&buffer).to_string())
+fn is_markdown_name(name: &str) -> bool {
+  name
+    .get(name.len().saturating_sub(3)..)
+    .map(|suffix| suffix.eq_ignore_ascii_case(".md"))
+    .unwrap_or(false)
 }
 
-fn markdown_title(markdown: &str, fallback: &str) -> String {
-  for line in markdown.lines() {
-    if let Some(title) = line.strip_prefix("title:") {
-      return title.trim().trim_matches('"').to_string();
-    }
+fn markdown_stem(name: &str) -> String {
+  if is_markdown_name(name) {
+    name.get(..name.len().saturating_sub(3)).unwrap_or(name).to_string()
+  } else {
+    name.to_string()
   }
-  markdown
-    .lines()
-    .find_map(|line| line.strip_prefix("# ").map(|value| value.trim().to_string()))
-    .unwrap_or_else(|| fallback.trim_end_matches(".md").to_string())
 }
 
-fn strip_frontmatter(markdown: &str) -> String {
-  let raw = markdown.trim_start();
-  if !raw.starts_with("---") {
-    return raw.to_string();
-  }
-
-  let lines = raw.lines().collect::<Vec<_>>();
-  if lines.first().map(|line| line.trim()) == Some("---") {
-    if let Some(close_index) = lines
-      .iter()
-      .enumerate()
-      .skip(1)
-      .find_map(|(index, line)| (line.trim() == "---").then_some(index))
-    {
-      return lines
-        .iter()
-        .skip(close_index + 1)
-        .copied()
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim()
-        .to_string();
+fn clean_yaml_value(value: &str) -> String {
+  let trimmed = value.trim();
+  if trimmed.len() >= 2 {
+    let bytes = trimmed.as_bytes();
+    let quote = bytes[0];
+    if (quote == b'\'' || quote == b'"') && bytes[trimmed.len() - 1] == quote {
+      return trimmed[1..trimmed.len() - 1].trim().to_string();
     }
   }
-
-  if let Some(first_line) = lines.first().and_then(|line| line.strip_prefix("---")) {
-    if let Some(close_index) = first_line.find("---") {
-      let mut body = first_line[close_index + 3..].trim_start().to_string();
-      let remaining = lines.iter().skip(1).copied().collect::<Vec<_>>().join("\n");
-      if !remaining.trim().is_empty() {
-        if !body.is_empty() {
-          body.push('\n');
-        }
-        body.push_str(&remaining);
-      }
-      return body.trim().to_string();
-    }
-  }
-
-  raw.to_string()
+  trimmed.to_string()
 }
 
-fn markdown_excerpt(markdown: &str) -> String {
-  let body = strip_frontmatter(markdown);
-  let mut excerpt_lines = Vec::new();
-  let mut can_skip_leading_title = true;
+fn inline_yaml_value_after_key<'a>(metadata: &'a str, key: &str) -> Option<&'a str> {
+  let start = metadata.find(key)? + key.len();
+  let rest = metadata.get(start..)?.trim_start();
+  if rest.is_empty() {
+    return None;
+  }
+  let bytes = rest.as_bytes();
+  if bytes[0] == b'"' || bytes[0] == b'\'' {
+    let quote = bytes[0] as char;
+    return rest
+      .get(1..)
+      .and_then(|tail| tail.find(quote).and_then(|end| rest.get(..end + 2)));
+  }
+  rest
+    .split_once(char::is_whitespace)
+    .map(|(value, _)| value)
+    .or(Some(rest))
+}
 
-  for line in body.lines() {
+impl PreviewBuilder {
+  fn new(fallback_name: &str) -> Self {
+    Self {
+      fallback_title: markdown_stem(fallback_name),
+      title: None,
+      excerpt: String::with_capacity(160),
+      excerpt_lines: 0,
+      mode: PreviewParseMode::Start,
+      can_skip_leading_title: true,
+    }
+  }
+
+  fn set_title_if_empty(&mut self, value: &str) {
+    let title = clean_yaml_value(value);
+    if self.title.is_none() && !title.is_empty() {
+      self.title = Some(title);
+    }
+  }
+
+  fn parse_frontmatter_line(&mut self, trimmed: &str) {
+    if let Some(title) = trimmed.strip_prefix("title:") {
+      self.set_title_if_empty(title);
+    }
+  }
+
+  fn parse_inline_frontmatter(&mut self, metadata: &str) {
+    if let Some(title) = inline_yaml_value_after_key(metadata, "title:") {
+      self.set_title_if_empty(title);
+    }
+  }
+
+  fn push_excerpt_line(&mut self, trimmed: &str) {
+    if self.excerpt_lines > 0 {
+      self.excerpt.push(' ');
+    }
+    self.excerpt.push_str(trimmed);
+    self.excerpt_lines += 1;
+  }
+
+  fn feed_body_line(&mut self, trimmed: &str) {
+    if trimmed.is_empty() || trimmed == "---" || self.is_done() {
+      return;
+    }
+
+    if self.can_skip_leading_title && trimmed.starts_with("# ") {
+      self.set_title_if_empty(trimmed.trim_start_matches("# ").trim());
+      self.can_skip_leading_title = false;
+      return;
+    }
+
+    self.can_skip_leading_title = false;
+    self.push_excerpt_line(trimmed);
+  }
+
+  fn feed_line(&mut self, line: &str) {
     let trimmed = line.trim();
-    if trimmed.is_empty() || trimmed == "---" {
-      continue;
+    match self.mode {
+      PreviewParseMode::Start => {
+        if trimmed.is_empty() {
+          return;
+        }
+        if trimmed == "---" {
+          self.mode = PreviewParseMode::Frontmatter;
+          return;
+        }
+        if let Some(after_open) = trimmed.strip_prefix("---") {
+          if let Some(close_index) = after_open.find("---") {
+            let metadata = after_open[..close_index].trim();
+            let body = after_open[close_index + 3..].trim();
+            self.parse_inline_frontmatter(metadata);
+            self.mode = PreviewParseMode::Body;
+            self.feed_body_line(body);
+            return;
+          }
+        }
+        self.mode = PreviewParseMode::Body;
+        self.feed_body_line(trimmed);
+      }
+      PreviewParseMode::Frontmatter => {
+        if trimmed == "---" {
+          self.mode = PreviewParseMode::Body;
+          return;
+        }
+        self.parse_frontmatter_line(trimmed);
+      }
+      PreviewParseMode::Body => self.feed_body_line(trimmed),
     }
-    if can_skip_leading_title && trimmed.starts_with("# ") {
-      can_skip_leading_title = false;
-      continue;
+  }
+
+  fn is_done(&self) -> bool {
+    self.excerpt_lines >= EXCERPT_LINE_LIMIT
+  }
+
+  fn finish(self) -> NotePreview {
+    NotePreview {
+      title: self.title.unwrap_or(self.fallback_title),
+      excerpt: self.excerpt,
     }
-    can_skip_leading_title = false;
-    excerpt_lines.push(trimmed.to_string());
-    if excerpt_lines.len() >= 3 {
+  }
+}
+
+fn markdown_preview_from_text(markdown: &str, fallback_name: &str) -> NotePreview {
+  let mut builder = PreviewBuilder::new(fallback_name);
+  for line in markdown.lines() {
+    builder.feed_line(line);
+    if builder.is_done() {
       break;
     }
   }
+  builder.finish()
+}
 
-  excerpt_lines.join(" ")
+fn read_note_preview(path: &Path, fallback_name: &str) -> R<NotePreview> {
+  let mut file = fs::File::open(path).map_err(|e| e.to_string())?;
+  let mut builder = PreviewBuilder::new(fallback_name);
+  let mut chunk = [0_u8; PREVIEW_READ_CHUNK_BYTES];
+  let mut line = Vec::with_capacity(256);
+  let mut total_bytes = 0_usize;
+
+  loop {
+    if total_bytes >= MARKDOWN_PREVIEW_LIMIT || builder.is_done() {
+      break;
+    }
+    let read_len = (MARKDOWN_PREVIEW_LIMIT - total_bytes).min(chunk.len());
+    let count = file.read(&mut chunk[..read_len]).map_err(|e| e.to_string())?;
+    if count == 0 {
+      break;
+    }
+    total_bytes += count;
+
+    for byte in &chunk[..count] {
+      match *byte {
+        b'\n' => {
+          let decoded = String::from_utf8_lossy(&line);
+          builder.feed_line(decoded.as_ref());
+          line.clear();
+          if builder.is_done() {
+            break;
+          }
+        }
+        b'\r' => {}
+        value => {
+          if line.len() < MAX_PREVIEW_LINE_BYTES {
+            line.push(value);
+          }
+        }
+      }
+    }
+  }
+
+  if !line.is_empty() && !builder.is_done() {
+    let decoded = String::from_utf8_lossy(&line);
+    builder.feed_line(decoded.as_ref());
+  }
+
+  Ok(builder.finish())
 }
 
 fn direct_markdown_note_count(path: &Path) -> usize {
@@ -185,8 +330,8 @@ fn direct_markdown_note_count(path: &Path) -> usize {
       children
         .filter_map(Result::ok)
         .filter(|child| {
-          let name = child.file_name().to_string_lossy().to_string();
-          !is_ignored_entry(&name) && name.to_ascii_lowercase().ends_with(".md")
+          let name = child.file_name().to_string_lossy();
+          !is_ignored_entry(&name) && is_markdown_name(&name)
         })
         .count()
     })
@@ -207,24 +352,24 @@ fn collect_directory_seeds(directory: &Path, relative_path: &str) -> R<Vec<Direc
     if metadata.file_type().is_symlink() {
       continue;
     }
-    if !metadata.is_dir() && !(metadata.is_file() && name.to_ascii_lowercase().ends_with(".md")) {
+    let is_dir = metadata.is_dir();
+    if !is_dir && !(metadata.is_file() && is_markdown_name(&name)) {
       continue;
     }
+    let sort_name = name.to_ascii_lowercase();
     let child_relative = normalize_relative_path(&format!("{}/{}", relative_path, name));
-    seeds.push(DirectorySeed { name, path, metadata, child_relative });
+    seeds.push(DirectorySeed { name, sort_name, path, metadata, child_relative, is_dir });
   }
   seeds.sort_by(|a, b| {
-    let a_is_dir = a.metadata.is_dir();
-    let b_is_dir = b.metadata.is_dir();
-    b_is_dir
-      .cmp(&a_is_dir)
-      .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+    b.is_dir
+      .cmp(&a.is_dir)
+      .then_with(|| a.sort_name.cmp(&b.sort_name))
   });
   Ok(seeds)
 }
 
 fn entry_from_seed(seed: DirectorySeed, include_preview: bool) -> Value {
-  if seed.metadata.is_dir() {
+  if seed.is_dir {
     return json!({
       "kind": "folder",
       "title": seed.name,
@@ -240,22 +385,26 @@ fn entry_from_seed(seed: DirectorySeed, include_preview: bool) -> Value {
   }
 
   let preview = if include_preview {
-    read_text_prefix(&seed.path, MARKDOWN_PREVIEW_LIMIT).unwrap_or_default()
+    read_note_preview(&seed.path, &seed.name).unwrap_or_else(|_| NotePreview {
+      title: markdown_stem(&seed.name),
+      excerpt: String::new(),
+    })
   } else {
-    String::new()
+    NotePreview {
+      title: markdown_stem(&seed.name),
+      excerpt: String::new(),
+    }
   };
-  let title = if include_preview { markdown_title(&preview, &seed.name) } else { seed.name.trim_end_matches(".md").to_string() };
-  let excerpt = if include_preview { markdown_excerpt(&preview) } else { String::new() };
   json!({
     "kind": "note",
-    "title": title,
+    "title": preview.title,
     "path": seed.child_relative,
     "filename": seed.name,
     "updatedAt": metadata_updated_at(&seed.metadata),
     "type": "note",
     "tags": [],
     "createdAt": "",
-    "excerpt": excerpt,
+    "excerpt": preview.excerpt,
     "coverImage": ""
   })
 }
@@ -337,7 +486,7 @@ pub fn attach_sidebar_entry(vault: &VaultDescriptor, relative_path: String, titl
   sidebar.push(json!({
     "id": normalized.replace('/', "-"),
     "title": title.unwrap_or_else(|| Path::new(&normalized).file_name().and_then(|name| name.to_str()).unwrap_or("Entry").trim_end_matches(".md").to_string()),
-    "type": entry_type.unwrap_or_else(|| if normalized.ends_with(".md") { "note".to_string() } else { "folder".to_string() }),
+    "type": entry_type.unwrap_or_else(|| if is_markdown_name(&normalized) { "note".to_string() } else { "folder".to_string() }),
     "path": normalized,
     "collapsed": false
   }));
@@ -411,14 +560,18 @@ mod tests {
 
   #[test]
   fn preview_reads_are_bounded() {
-    let dir = std::env::temp_dir().join(format!("elephant-entry-preview-{}", now_string()));
+    let unique = std::time::SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .unwrap()
+      .as_nanos();
+    let dir = std::env::temp_dir().join(format!("elephant-entry-preview-{unique}"));
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("large.md");
     fs::write(&path, format!("---\ntitle: \"Fast\"\n---\n\n{}", "x".repeat(MARKDOWN_PREVIEW_LIMIT * 2))).unwrap();
 
-    let preview = read_text_prefix(&path, 128).unwrap();
-    assert!(preview.len() <= 128);
-    assert!(preview.contains("title"));
+    let preview = read_note_preview(&path, "large.md").unwrap();
+    assert_eq!(preview.title, "Fast");
+    assert!(preview.excerpt.len() <= MAX_PREVIEW_LINE_BYTES);
 
     let _ = fs::remove_dir_all(&dir);
   }
@@ -426,19 +579,28 @@ mod tests {
   #[test]
   fn extracts_excerpt_after_yaml_frontmatter_and_title() {
     let markdown = "---\ntitle: \"Noteh\"\ntype: \"note\"\ntags: []\n---\n\n# Noteh\n\nFirst useful line.\nSecond useful line.";
-    assert_eq!(markdown_excerpt(markdown), "First useful line. Second useful line.");
+    assert_eq!(markdown_preview_from_text(markdown, "fallback.md"), NotePreview {
+      title: "Noteh".to_string(),
+      excerpt: "First useful line. Second useful line.".to_string(),
+    });
   }
 
   #[test]
   fn extracts_excerpt_after_inline_frontmatter() {
     let markdown = "--- title: \"Noteh\" type: \"note\" --- Real content starts here.\nSecond line.";
-    assert_eq!(markdown_excerpt(markdown), "Real content starts here. Second line.");
+    assert_eq!(markdown_preview_from_text(markdown, "fallback.md"), NotePreview {
+      title: "Noteh".to_string(),
+      excerpt: "Real content starts here. Second line.".to_string(),
+    });
   }
 
   #[test]
   fn keeps_scaffold_note_excerpt_empty() {
     let markdown = "---\ntitle: \"Empty\"\ntype: \"note\"\ntags: []\n---\n\n# Empty\n";
-    assert_eq!(markdown_excerpt(markdown), "");
+    assert_eq!(markdown_preview_from_text(markdown, "fallback.md"), NotePreview {
+      title: "Empty".to_string(),
+      excerpt: String::new(),
+    });
   }
 
   #[test]

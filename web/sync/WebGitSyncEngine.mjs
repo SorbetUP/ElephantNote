@@ -8,6 +8,7 @@ import {
   SYNC_CONFIG_FILE,
   SYNC_DEFAULT_REMOTE,
   SYNC_HISTORY_FILE,
+  SYNC_LEGACY_METADATA_DIR,
   SYNC_METADATA_DIR,
   SYNC_OPERATIONS,
   SYNC_STATUSES,
@@ -24,6 +25,14 @@ const MAX_QUEUE_ITEMS = 100
 const SYNC_LOCAL_METADATA_FILES = Object.freeze([
   `${SYNC_METADATA_DIR}/${SYNC_CONFIG_FILE}`,
   `${SYNC_METADATA_DIR}/${SYNC_HISTORY_FILE}`
+])
+const SYNC_LEGACY_LOCAL_METADATA_FILES = Object.freeze([
+  `${SYNC_LEGACY_METADATA_DIR}/${SYNC_CONFIG_FILE}`,
+  `${SYNC_LEGACY_METADATA_DIR}/${SYNC_HISTORY_FILE}`
+])
+const ALL_LOCAL_METADATA_FILES = Object.freeze([
+  ...SYNC_LOCAL_METADATA_FILES,
+  ...SYNC_LEGACY_LOCAL_METADATA_FILES
 ])
 
 const pathExists = async(target) => fs.access(target).then(() => true, () => false)
@@ -62,6 +71,18 @@ export class WebGitSyncEngine {
     this.lastError = ''
     this.config = null
     this.repository = {}
+  }
+
+  metadataPath(file) {
+    return path.join(this.cwd, SYNC_METADATA_DIR, file)
+  }
+
+  legacyMetadataPath(file) {
+    return path.join(this.cwd, SYNC_LEGACY_METADATA_DIR, file)
+  }
+
+  async readMetadataJson(file) {
+    return readJson(this.metadataPath(file)).catch(() => readJson(this.legacyMetadataPath(file)).catch(() => null))
   }
 
   enqueue(operationOrPlanItem) {
@@ -145,8 +166,7 @@ export class WebGitSyncEngine {
     await this.ensureGitExclude()
     await this.untrackSyncMetadata()
 
-    const configPath = path.join(this.cwd, SYNC_METADATA_DIR, SYNC_CONFIG_FILE)
-    this.config = await readJson(configPath).catch(() => null)
+    this.config = await this.readMetadataJson(SYNC_CONFIG_FILE)
     this.config = {
       ...createSyncConfig({
         cwd: this.cwd,
@@ -162,7 +182,7 @@ export class WebGitSyncEngine {
     }
 
     if (this.config.remote) await this.upsertRemote(this.config.remoteName, this.config.remote)
-    await outputJson(configPath, this.config)
+    await outputJson(this.metadataPath(SYNC_CONFIG_FILE), this.config)
   }
 
   async snapshot({ message = '' } = {}) {
@@ -192,17 +212,17 @@ export class WebGitSyncEngine {
     if (!await pathExists(path.join(this.cwd, '.git'))) {
       await this.init()
     } else if (!this.config) {
-      this.config = await readJson(path.join(this.cwd, SYNC_METADATA_DIR, SYNC_CONFIG_FILE)).catch(() => null)
+      this.config = await this.readMetadataJson(SYNC_CONFIG_FILE)
       if (!this.config) await this.init()
     }
   }
 
   async ensureGitExclude() {
-    await appendMissingLines(path.join(this.cwd, '.git', 'info', 'exclude'), SYNC_LOCAL_METADATA_FILES.map((file) => `/${file}`))
+    await appendMissingLines(path.join(this.cwd, '.git', 'info', 'exclude'), ALL_LOCAL_METADATA_FILES.map((file) => `/${file}`))
   }
 
   async untrackSyncMetadata() {
-    await this.git(['rm', '--cached', '--ignore-unmatch', ...SYNC_LOCAL_METADATA_FILES]).catch((error) => {
+    await this.git(['rm', '--cached', '--ignore-unmatch', ...ALL_LOCAL_METADATA_FILES]).catch((error) => {
       throw new Error(`Failed to untrack local sync metadata: ${error.message || error}`)
     })
   }
@@ -241,7 +261,7 @@ export class WebGitSyncEngine {
 
   async recordHistory(item) {
     this.history = [...this.history, createSyncHistoryRecord(item)].slice(-200)
-    await outputJson(path.join(this.cwd, SYNC_METADATA_DIR, SYNC_HISTORY_FILE), {
+    await outputJson(this.metadataPath(SYNC_HISTORY_FILE), {
       version: 1,
       updatedAt: new Date().toISOString(),
       history: this.history

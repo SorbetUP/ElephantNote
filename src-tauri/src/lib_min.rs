@@ -10,6 +10,7 @@ pub mod media_domain;
 pub mod drawing_domain;
 pub mod model_domain;
 pub mod model_library;
+pub mod local_llama_runtime;
 pub mod chat_runtime;
 pub mod search_logic;
 

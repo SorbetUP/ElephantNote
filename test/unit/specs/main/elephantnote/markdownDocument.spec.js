@@ -103,6 +103,23 @@ describe('ElephantNote markdown document helpers', () => {
     expect(getNoteCardExcerpt(entry)).toBe('This is the real note content.')
   })
 
+  it('shows note card body text instead of the duplicated title heading', () => {
+    const entry = {
+      excerpt: [
+        '---',
+        'title: "Noteh"',
+        'type: "note"',
+        '---',
+        '',
+        '# Noteh',
+        '',
+        'This is the real note content after the title.'
+      ].join('\n')
+    }
+
+    expect(getNoteCardExcerpt(entry)).toBe('This is the real note content after the title.')
+  })
+
   it('hides compact inline frontmatter when no body preview exists', () => {
     expect(getNoteCardExcerpt({ excerpt: '--- title: "Noteh" type: "note"' })).toBe('No preview yet.')
   })

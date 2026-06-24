@@ -7,6 +7,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
+use tauri::AppHandle;
 
 type R<T> = Result<T, String>;
 const MODEL_PROVIDER: &str = "node-llama-cpp";
@@ -290,6 +291,108 @@ pub async fn chat_with_selected_model(selection: &str, messages: &[Value], paylo
     model: model_name,
     base_url,
   }))
+}
+
+fn extract_messages(payload: &Value) -> Vec<Value> {
+  if let Some(messages) = payload.get("messages").and_then(Value::as_array) {
+    let out = messages
+      .iter()
+      .filter_map(|message| {
+        let role = text(message, &["role"]);
+        let content = text(message, &["content", "text", "message"]);
+        if role.is_empty() || content.is_empty() { None } else { Some(json!({ "role": role, "content": content })) }
+      })
+      .collect::<Vec<_>>();
+    if !out.is_empty() {
+      return out;
+    }
+  }
+  let message = text(payload, &["message", "prompt", "query", "text"]);
+  if message.is_empty() { Vec::new() } else { vec![json!({ "role": "user", "content": message })] }
+}
+
+fn local_chat_model_selection(payload: &Value) -> String {
+  let ai_config = payload.get("aiConfig").or_else(|| payload.get("config")).unwrap_or(&Value::Null);
+  [
+    text(payload.pointer("/modelSelection").unwrap_or(&Value::Null), &["chat"]),
+    text(payload.pointer("/localModelSelection").unwrap_or(&Value::Null), &["chat"]),
+    text(ai_config.pointer("/localModelSelection").unwrap_or(&Value::Null), &["chat"]),
+  ]
+  .into_iter()
+  .find(|value| !value.is_empty())
+  .unwrap_or_default()
+}
+
+fn build_messages_with_sources(payload: &Value, sources: &[Value]) -> Vec<Value> {
+  let context = sources
+    .iter()
+    .enumerate()
+    .map(|(index, source)| {
+      let title = text(source, &["title"]);
+      let path = text(source, &["path"]);
+      let snippet = text(source, &["snippet"]);
+      format!("[Source {}] {} ({})\n{}", index + 1, title, path, snippet)
+    })
+    .collect::<Vec<_>>()
+    .join("\n\n");
+  let mut messages = vec![json!({
+    "role": "system",
+    "content": "Tu es l'assistant local d'ElephantNote. Réponds en français par défaut. Utilise le contexte local fourni. Cite les chemins de notes utiles entre parenthèses."
+  })];
+  if !context.trim().is_empty() {
+    messages.push(json!({ "role": "system", "content": format!("Contexte local extrait du vault ElephantNote:\n\n{context}") }));
+  }
+  messages.extend(extract_messages(payload));
+  messages
+}
+
+fn merge_local_failure(mut result: Value, error: &str, selection: &str) -> Value {
+  let previous = text(&result, &["answer"]);
+  if let Some(object) = result.as_object_mut() {
+    object.insert("warning".to_string(), json!(error));
+    object.insert("selectedLocalModel".to_string(), json!(selection));
+    object.insert(
+      "answer".to_string(),
+      json!(format!(
+        "Le modèle local sélectionné `{selection}` n'a pas pu être lancé par Tauri.\n\nDétail technique : {error}\n\n{previous}"
+      )),
+    );
+  }
+  result
+}
+
+#[tauri::command]
+pub async fn tauri_rag_chat(app: AppHandle, payload: Value) -> R<Value> {
+  let result = crate::chat_runtime::tauri_rag_chat(app, payload.clone()).await?;
+  let selection = local_chat_model_selection(&payload);
+  let warning = text(&result, &["warning"]);
+  if selection.is_empty() || warning.is_empty() {
+    return Ok(result);
+  }
+  let sources = result
+    .get("sources")
+    .or_else(|| result.get("citations"))
+    .and_then(Value::as_array)
+    .cloned()
+    .unwrap_or_default();
+  let messages = build_messages_with_sources(&payload, &sources);
+  eprintln!("[tauri-rag] attempting selected local GGUF through llama.cpp runtime: {selection}");
+  match chat_with_selected_model(&selection, &messages, &payload).await {
+    Ok(Some(local)) => Ok(json!({
+      "answer": local.answer,
+      "sources": sources,
+      "runtime": "tauri-rust-local-llama.cpp",
+      "provider": local.provider,
+      "model": local.model,
+      "baseUrl": local.base_url,
+      "selectedLocalModel": selection
+    })),
+    Ok(None) => Ok(result),
+    Err(error) => {
+      eprintln!("[tauri-rag][warn] local GGUF runtime failed: {error}");
+      Ok(merge_local_failure(result, &error, &selection))
+    }
+  }
 }
 
 trait IfEmpty {

@@ -6,12 +6,22 @@ runs:
   steps:
     - name: Install pnpm
       uses: pnpm/action-setup@v4
+      with:
+        version: 10.33.4
+        run_install: false
 
     - name: Install Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '22.21.1'
+        node-version: '22'
         cache: 'pnpm'
+
+    - name: Print package manager diagnostics
+      shell: bash
+      run: |
+        node --version
+        pnpm --version
+        pnpm store path
 
     - name: Install Dependencies
       shell: bash

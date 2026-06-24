@@ -1,22 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LEGACY_CALLS } from '../../../../../Elephant/front/app/services/elephantnoteClient/legacyCalls.js'
 
-const originalWindow = globalThis.window
+const originalBridge = globalThis.window?.elephantnote
 
 const installBridge = (bridge) => {
-  Object.defineProperty(globalThis, 'window', {
-    value: { elephantnote: bridge },
-    configurable: true,
-    writable: true
-  })
+  globalThis.window.elephantnote = bridge
 }
 
 afterEach(() => {
-  Object.defineProperty(globalThis, 'window', {
-    value: originalWindow,
-    configurable: true,
-    writable: true
-  })
+  globalThis.window.elephantnote = originalBridge
 })
 
 describe('LEGACY_CALLS', () => {

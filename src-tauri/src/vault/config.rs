@@ -7,6 +7,9 @@ use super::types::{active_vault, next_vault_id, VaultConfig, VaultDescriptor};
 
 pub const CONFIG_FILE: &str = "tauri-vaults.json";
 
+const MOBILE_DEFAULT_VAULT_ID: &str = "mobile-personal";
+const MOBILE_DEFAULT_VAULT_NAME: &str = "Personal";
+
 type R<T> = Result<T, String>;
 
 pub fn now_string() -> String {
@@ -30,13 +33,65 @@ pub fn config_path(app: &AppHandle) -> R<PathBuf> {
   Ok(dir.join(CONFIG_FILE))
 }
 
+fn mobile_default_vault(path: PathBuf) -> VaultDescriptor {
+  VaultDescriptor {
+    id: MOBILE_DEFAULT_VAULT_ID.to_string(),
+    name: MOBILE_DEFAULT_VAULT_NAME.to_string(),
+    path: normalize_absolute_path(path.to_string_lossy()),
+    icon: String::new(),
+    last_opened_at: now_string(),
+  }
+}
+
+fn with_fallback_vault(mut config: VaultConfig, fallback_path: Option<PathBuf>) -> VaultConfig {
+  let Some(fallback_path) = fallback_path else {
+    return config;
+  };
+
+  if config.vaults.is_empty() {
+    let vault = mobile_default_vault(fallback_path);
+    config.active_vault_id = Some(vault.id.clone());
+    config.vaults.push(vault);
+    return config;
+  }
+
+  if config.active_vault_id.as_deref().is_none()
+    || active_vault(&config).is_none()
+  {
+    config.active_vault_id = config.vaults.first().map(|vault| vault.id.clone());
+  }
+
+  config
+}
+
+#[cfg(mobile)]
+fn fallback_vault_path(app: &AppHandle) -> Option<PathBuf> {
+  app
+    .path()
+    .app_data_dir()
+    .ok()
+    .map(|dir| dir.join("vaults").join(MOBILE_DEFAULT_VAULT_NAME))
+}
+
+#[cfg(not(mobile))]
+fn fallback_vault_path(_app: &AppHandle) -> Option<PathBuf> {
+  None
+}
+
 pub fn read_config(app: &AppHandle) -> R<VaultConfig> {
   let path = config_path(app)?;
-  if !path.exists() {
-    return Ok(VaultConfig::default());
+  let config = if !path.exists() {
+    VaultConfig::default()
+  } else {
+    let raw = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&raw).unwrap_or_default()
+  };
+
+  let fallback = fallback_vault_path(app);
+  if let Some(path) = fallback.as_ref() {
+    fs::create_dir_all(path).map_err(|e| e.to_string())?;
   }
-  let raw = fs::read_to_string(path).map_err(|e| e.to_string())?;
-  Ok(serde_json::from_str(&raw).unwrap_or_default())
+  Ok(with_fallback_vault(config, fallback))
 }
 
 pub fn write_config(app: &AppHandle, config: &VaultConfig) -> R<()> {
@@ -131,5 +186,30 @@ mod tests {
     set_active_vault(&mut config, a.id.clone());
     remove_vault(&mut config, &a.id);
     assert_eq!(config.active_vault_id, Some(b.id));
+  }
+
+  #[test]
+  fn desktop_config_does_not_invent_a_vault() {
+    let config = with_fallback_vault(VaultConfig::default(), None);
+    assert!(config.vaults.is_empty());
+    assert!(config.active_vault_id.is_none());
+  }
+
+  #[test]
+  fn mobile_fallback_adds_an_internal_personal_vault() {
+    let config = with_fallback_vault(VaultConfig::default(), Some(PathBuf::from("/data/app/vaults/Personal")));
+    assert_eq!(config.vaults.len(), 1);
+    assert_eq!(config.vaults[0].id, MOBILE_DEFAULT_VAULT_ID);
+    assert_eq!(config.vaults[0].name, MOBILE_DEFAULT_VAULT_NAME);
+    assert_eq!(config.active_vault_id, Some(MOBILE_DEFAULT_VAULT_ID.to_string()));
+  }
+
+  #[test]
+  fn fallback_keeps_existing_desktop_vaults() {
+    let mut config = VaultConfig::default();
+    let existing = upsert_vault(&mut config, "/Users/noam/Documents/Vault".to_string());
+    let next = with_fallback_vault(config, Some(PathBuf::from("/data/app/vaults/Personal")));
+    assert_eq!(next.vaults.len(), 1);
+    assert_eq!(next.active_vault_id, Some(existing.id));
   }
 }

@@ -3,19 +3,23 @@ export const isOsx = process.platform === 'darwin'
 export const isWindows = process.platform === 'win32'
 export const isLinux = process.platform === 'linux'
 
+const secureWebPreferences = Object.freeze({
+  contextIsolation: true,
+  // Keep Node.js out of the renderer. Native capabilities must go through the
+  // audited preload bridge and main-process IPC handlers.
+  nodeIntegration: false,
+  webSecurity: true,
+  // WORKAROUND: We cannot enable spellcheck if it was disabled during
+  // renderer startup due to a bug in Electron (Electron#32755). We'll
+  // enable it always and set the HTML spelling attribute to false.
+  spellcheck: true,
+  preload: path.join(__dirname, '../preload/index.js')
+})
+
 export const editorWinOptions = Object.freeze({
   minWidth: 550,
   minHeight: 350,
-  webPreferences: {
-    contextIsolation: false,
-    // WORKAROUND: We cannot enable spellcheck if it was disabled during
-    // renderer startup due to a bug in Electron (Electron#32755). We'll
-    // enable it always and set the HTML spelling attribute to false.
-    spellcheck: true,
-    nodeIntegration: true,
-    webSecurity: false,
-    preload: path.join(__dirname, '../preload/index.js')
-  },
+  webPreferences: { ...secureWebPreferences },
   useContentSize: true,
   show: true,
   frame: false,
@@ -28,14 +32,7 @@ export const preferencesWinOptions = Object.freeze({
   minHeight: 350,
   width: 950,
   height: 650,
-  webPreferences: {
-    contextIsolation: false,
-    // Always true to access native spellchecker.
-    spellcheck: true,
-    nodeIntegration: true,
-    webSecurity: false,
-    preload: path.join(__dirname, '../preload/index.js')
-  },
+  webPreferences: { ...secureWebPreferences },
   fullscreenable: false,
   fullscreen: false,
   minimizable: false,

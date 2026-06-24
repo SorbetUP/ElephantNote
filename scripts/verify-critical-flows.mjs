@@ -30,6 +30,7 @@ for (const file of [
   'src/renderer/src/main.js',
   'src/renderer/src/store/editor.js',
   'src-tauri/src/tauri_extra_commands.rs',
+  'src-tauri/src/lib_min.rs',
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   'Elephant/front/app/utils/noteCardView.js',
   'Elephant/shared/apiContracts.js',
@@ -69,6 +70,7 @@ ordered(
   [
     'const LOCAL_IPC_EVENTS = new Set([',
     "'mt::response-file-save'",
+    "'mt::response-file-save-as'",
     "'mt::tab-saved'",
     'const nativeSend = ipc.send.bind(ipc)',
     'ipc.send = (channel, ...args) => {',
@@ -76,7 +78,7 @@ ordered(
     'dispatchLocalIpcEvent(target, channel, args)',
     'return nativeSend(channel, ...args)'
   ],
-  'Tauri renderer-local IPC bridge must bypass core.invoke for MarkText save events'
+  'Tauri renderer-local IPC bridge must bypass core.invoke for MarkText save and save-as events'
 )
 ordered(
   'src/renderer/src/store/editor.js',
@@ -87,17 +89,24 @@ ordered(
   'MarkText editor must emit the canonical Electron save IPC'
 )
 ordered(
+  'src/renderer/src/store/editor.js',
+  [
+    'FILE_SAVE_AS() {',
+    "'mt::response-file-save-as'"
+  ],
+  'MarkText save-as must keep emitting the canonical Electron save-as IPC'
+)
+ordered(
   'src/renderer/src/platform/tauriMarkTextSaveBridge.js',
   [
-    'const assertRealFileWriter = (target) => {',
-    'if (target.fileUtils?.__elephantnoteBootstrapFallback) {',
-    'fileUtils.writeFile is unavailable',
+    'const writeViaRustBackend = async(target, pathname, markdown) => {',
+    "return invoke('tauri_marktext_write_file', { pathname, content: markdown })",
     "ipc.on('mt::response-file-save'",
-    'await target.fileUtils.writeFile(pathname, markdown)',
+    "ipc.on('mt::response-file-save-as'",
     "ipc.send('mt::tab-saved', id)",
     "ipc.send('mt::tab-save-failure', id, message)"
   ],
-  'Tauri save bridge must reject fallback fileUtils, write to disk, and report success/failure'
+  'Tauri save bridge must use the Rust backend writer and report success/failure for save and save-as'
 )
 ordered(
   'src-tauri/src/tauri_extra_commands.rs',
@@ -108,6 +117,16 @@ ordered(
   ],
   'Rust note write command must accept both content and markdown payloads before writing to disk'
 )
+ordered(
+  'src-tauri/src/tauri_extra_commands.rs',
+  [
+    'pub fn tauri_marktext_write_file(pathname: String, content: String) -> R<Value> {',
+    'if pathname.trim().is_empty() {',
+    'fs::write(&path, content)'
+  ],
+  'Rust MarkText backend writer must write absolute editor file paths without relying on renderer FS plugin permissions'
+)
+has('src-tauri/src/lib_min.rs', 'tauri_extra_commands::tauri_marktext_write_file', 'registered MarkText backend file writer')
 ordered(
   'Elephant/shared/apiContracts.js',
   [

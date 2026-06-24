@@ -50,6 +50,20 @@ fn text(value: &Value, keys: &[&str]) -> String {
     .to_string()
 }
 
+fn local_runtime_config(payload: &Value) -> &Value {
+  payload
+    .get("localRuntime")
+    .or_else(|| payload.pointer("/aiConfig/localRuntime"))
+    .or_else(|| payload.pointer("/config/localRuntime"))
+    .unwrap_or(&Value::Null)
+}
+
+fn runtime_mode(payload: &Value) -> String {
+  let config = local_runtime_config(payload);
+  let mode = text(config, &["llamaServerMode", "serverMode", "mode"]);
+  if mode.trim().is_empty() { "bundled".to_string() } else { mode.to_lowercase() }
+}
+
 fn selected_model_candidates(selection: &str) -> Vec<String> {
   let raw = selection.trim();
   let normalized = raw.replace('\\', "/");
@@ -124,12 +138,15 @@ fn resolve_model_path(selection: &str) -> R<Option<PathBuf>> {
 }
 
 fn base_url_from_env_or_payload(payload: &Value) -> String {
+  let runtime = local_runtime_config(payload);
+  let from_runtime = text(runtime, &["llamaBaseUrl", "baseUrl"]);
   let from_payload = text(payload, &["llamaBaseUrl", "baseUrl"]);
   env::var("ELEPHANTNOTE_LLAMA_BASE_URL")
     .ok()
     .filter(|value| !value.trim().is_empty())
     .or_else(|| env::var("LLAMA_CPP_BASE_URL").ok().filter(|value| !value.trim().is_empty()))
     .or_else(|| if from_payload.trim().is_empty() { None } else { Some(from_payload) })
+    .or_else(|| if from_runtime.trim().is_empty() { None } else { Some(from_runtime) })
     .unwrap_or_else(|| DEFAULT_BASE_URL.to_string())
     .trim_end_matches('/')
     .to_string()
@@ -195,13 +212,30 @@ fn app_managed_binary_candidates(app: &AppHandle) -> Vec<String> {
   out
 }
 
-fn server_binary_candidates(app: &AppHandle, payload: &Value) -> Vec<String> {
-  let mut out = Vec::new();
+fn configured_server_path(payload: &Value) -> String {
+  let runtime = local_runtime_config(payload);
   let from_payload = text(payload, &["llamaServerPath", "serverPath", "llamaBinary"]);
   if !from_payload.trim().is_empty() {
-    out.push(from_payload);
+    return from_payload;
   }
-  out.extend(app_managed_binary_candidates(app));
+  text(runtime, &["llamaServerPath", "serverPath", "llamaBinary", "path"])
+}
+
+fn is_path_mode(payload: &Value) -> bool {
+  matches!(runtime_mode(payload).as_str(), "path" | "custom" | "external" | "existing")
+}
+
+fn server_binary_candidates(app: &AppHandle, payload: &Value) -> Vec<String> {
+  let mut out = Vec::new();
+  let configured_path = configured_server_path(payload);
+  if !configured_path.trim().is_empty() {
+    out.push(configured_path);
+  }
+
+  if !is_path_mode(payload) {
+    out.extend(app_managed_binary_candidates(app));
+  }
+
   for key in ["ELEPHANTNOTE_LLAMA_SERVER", "LLAMA_SERVER", "LLAMA_CPP_SERVER"] {
     if let Ok(value) = env::var(key) {
       if !value.trim().is_empty() {
@@ -209,13 +243,17 @@ fn server_binary_candidates(app: &AppHandle, payload: &Value) -> Vec<String> {
       }
     }
   }
-  out.extend([
-    LLAMA_SERVER_BIN.to_string(),
-    "llama.cpp-server".to_string(),
-    "llama-cpp-server".to_string(),
-    "/opt/homebrew/bin/llama-server".to_string(),
-    "/usr/local/bin/llama-server".to_string(),
-  ]);
+
+  if !is_path_mode(payload) {
+    out.extend([
+      LLAMA_SERVER_BIN.to_string(),
+      "llama.cpp-server".to_string(),
+      "llama-cpp-server".to_string(),
+      "/opt/homebrew/bin/llama-server".to_string(),
+      "/usr/local/bin/llama-server".to_string(),
+    ]);
+  }
+
   out.sort();
   out.dedup();
   out
@@ -250,10 +288,14 @@ async fn start_server_if_needed(app: &AppHandle, model_path: &Path, base_url: &s
   let port = local_port_from_base_url(base_url).unwrap_or(DEFAULT_PORT);
   let model_path_string = model_path.to_string_lossy().to_string();
   let context = context_size_from_payload(payload);
+  let candidates = server_binary_candidates(app, payload);
+  if candidates.is_empty() && is_path_mode(payload) {
+    return Err("Local llama runtime is set to `path`, but no llama-server path is configured.".to_string());
+  }
   let mut errors = Vec::new();
 
-  eprintln!("[tauri-rag] starting bundled llama server for model={} base={}", model_path_string, base_url);
-  for binary in server_binary_candidates(app, payload) {
+  eprintln!("[tauri-rag] starting llama server for model={} base={} mode={}", model_path_string, base_url, runtime_mode(payload));
+  for binary in candidates {
     eprintln!("[tauri-rag] trying llama server binary: {}", binary);
     match Command::new(&binary)
       .arg("-m")
@@ -277,7 +319,7 @@ async fn start_server_if_needed(app: &AppHandle, model_path: &Path, base_url: &s
       Err(error) => errors.push(format!("{}: {}", binary, error)),
     }
   }
-  Err(format!("Unable to start bundled local llama server. Attempts: {}", errors.join(" | ")))
+  Err(format!("Unable to start local llama server. Attempts: {}", errors.join(" | ")))
 }
 
 pub async fn chat_with_selected_model(app: &AppHandle, selection: &str, messages: &[Value], payload: &Value) -> R<Option<LocalChatResult>> {
@@ -323,7 +365,7 @@ pub async fn chat_with_selected_model(app: &AppHandle, selection: &str, messages
   }
   Ok(Some(LocalChatResult {
     answer,
-    provider: "local-llama.cpp-bundled".to_string(),
+    provider: if is_path_mode(payload) { "local-llama.cpp-path".to_string() } else { "local-llama.cpp-bundled".to_string() },
     model: model_name,
     base_url,
   }))
@@ -352,5 +394,15 @@ mod tests {
   #[test]
   fn local_port_from_default_base_url() {
     assert_eq!(local_port_from_base_url(DEFAULT_BASE_URL), Some(DEFAULT_PORT));
+  }
+
+  #[test]
+  fn default_runtime_mode_is_bundled() {
+    assert_eq!(runtime_mode(&json!({})), "bundled");
+  }
+
+  #[test]
+  fn nested_runtime_mode_is_read_from_ai_config() {
+    assert!(is_path_mode(&json!({ "aiConfig": { "localRuntime": { "llamaServerMode": "path" } } })));
   }
 }

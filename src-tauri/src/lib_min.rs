@@ -12,7 +12,6 @@ pub mod media_domain;
 pub mod drawing_domain;
 pub mod model_domain;
 pub mod model_library;
-#[cfg(not(mobile))]
 pub mod local_llama_runtime;
 pub mod chat_runtime;
 pub mod search_logic;
@@ -22,8 +21,6 @@ mod debug_commands;
 
 #[cfg(test)]
 mod sync_contract_tests;
-#[cfg(test)]
-mod platform_contract_tests;
 
 #[tauri::command]
 fn healthcheck() -> &'static str {
@@ -112,6 +109,7 @@ pub fn run() {
       markdown::commands::tauri_muya_commit_composition,
       markdown::commands::tauri_muya_cancel_composition,
       markdown::commands::tauri_muya_editor_snapshot,
+      tauri_extra_commands::shell_exec,
       tauri_extra_commands::tauri_notes_read,
       tauri_extra_commands::tauri_notes_write,
       tauri_extra_commands::tauri_marktext_write_file,
@@ -123,6 +121,12 @@ pub fn run() {
       tauri_extra_commands::tauri_drawings_write,
       tauri_extra_commands::tauri_models_get_selection,
       tauri_extra_commands::tauri_models_set_selection,
+      tauri_extra_commands::tauri_search_inspect,
+      tauri_extra_commands::tauri_ai_config_get,
+      tauri_extra_commands::tauri_ai_config_set,
+      tauri_extra_commands::tauri_ai_config_test,
+      tauri_extra_commands::tauri_features_get,
+      tauri_extra_commands::tauri_features_set,
       model_library::tauri_models_list,
       model_library::tauri_models_list_local,
       model_library::tauri_models_search_hugging_face,

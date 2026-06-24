@@ -11,6 +11,7 @@ import {
   createTextEmbedding,
   searchAtomicSemanticIndex
 } from 'common/elephantnote/atomicAiEngine'
+import { createKnowledgeChunkIndex } from 'common/elephantnote/knowledge/knowledgeIndex'
 import { createSemanticGraph } from './graphLibrary'
 
 const normalizeVaultRoot = (vaultRoot) => path.resolve(vaultRoot || '')
@@ -123,7 +124,12 @@ const runtimeEmbeddingFallback = (text) => createTextEmbedding(text)
 
 const createRuntimeEmbeddedDocument = async ({ relativePath, markdown, embeddingProvider }) => {
   const document = createAtomicDocument({ relativePath, markdown })
-  if (!embeddingProvider?.embedText) return document
+  if (!embeddingProvider?.embedText) {
+    return {
+      ...document,
+      markdown
+    }
+  }
   const safeEmbedText = async (text, fallbackEmbedding) => {
     try {
       const vector = coerceEmbeddingVector(await embeddingProvider.embedText(text))
@@ -149,6 +155,7 @@ const createRuntimeEmbeddedDocument = async ({ relativePath, markdown, embedding
   )
   return {
     ...document,
+    markdown,
     chunks,
     embedding: await safeEmbedText(`${document.title}\n${document.plainText}`, document.embedding)
   }
@@ -166,6 +173,15 @@ const readAtomicDocuments = async (vaultRoot, embeddingProvider = null) => {
   }
   return documents
 }
+
+const createKnowledgeIndexFromAtomicDocuments = (documents = []) => createKnowledgeChunkIndex(
+  documents.map((document) => ({
+    relativePath: document.relativePath,
+    title: document.title,
+    markdown: document.markdown || document.plainText || '',
+    updatedAt: document.updatedAt || ''
+  }))
+)
 
 const shouldUseRuntimeQueryEmbedding = (semanticIndex, embeddingProvider) =>
   semanticIndex?.embeddingSource &&
@@ -261,14 +277,17 @@ export const createSearchLibrary = ({ embeddingProvider = null } = {}) => {
     })
     try {
       const documents = await readAtomicDocuments(root, currentEmbeddingProvider)
+      const knowledgeChunkIndex = createKnowledgeIndexFromAtomicDocuments(documents)
       const index = {
         ...createAtomicSemanticIndex(documents),
+        knowledgeChunkIndex,
         embeddingSource: currentEmbeddingProvider?.source || 'deterministic-local'
       }
       indexByVault.set(root, index)
       log.info('[search] buildIndex:done', {
         root,
         documents: documents.length,
+        chunks: knowledgeChunkIndex.chunks.length,
         embeddingSource: index.embeddingSource
       })
       return setStatus(root, {
@@ -361,7 +380,7 @@ export const createSearchLibrary = ({ embeddingProvider = null } = {}) => {
     },
 
     async indexFile(absolutePath, windowId = null) {
-      const root = this._resolveVaultRootForPath
+      const root = absolutePath
         ? this._resolveVaultRootForPath(absolutePath, windowId)
         : ''
       if (!root) return
@@ -424,6 +443,18 @@ export const createSearchLibrary = ({ embeddingProvider = null } = {}) => {
         sources: document.sources,
         tags: document.tags
       }))
+      const knowledgeChunks = (index?.knowledgeChunkIndex?.chunks || []).map((chunk) => ({
+        id: chunk.id,
+        documentPath: chunk.documentPath,
+        relativePath: chunk.relativePath,
+        chunkIndex: chunk.chunkIndex,
+        headingPath: chunk.headingPath,
+        textHash: chunk.textHash,
+        tokenCount: chunk.tokenCount,
+        wordCount: chunk.wordCount,
+        lexicalTerms: chunk.lexicalTerms,
+        preview: String(chunk.text || '').slice(0, 240)
+      }))
       const graph = createSemanticGraph({
         documents: index?.documents || [],
         semanticLinks: index?.semanticLinks || []
@@ -432,6 +463,14 @@ export const createSearchLibrary = ({ embeddingProvider = null } = {}) => {
         status,
         indexPath: '',
         documents,
+        chunks: knowledgeChunks,
+        chunkIndex: index?.knowledgeChunkIndex
+          ? {
+              version: index.knowledgeChunkIndex.version,
+              generatedAt: index.knowledgeChunkIndex.generatedAt,
+              stats: index.knowledgeChunkIndex.stats
+            }
+          : null,
         folders: graph.nodes.filter((node) => node.kind === 'folder'),
         semanticLinks: index?.semanticLinks || [],
         graph,
@@ -440,7 +479,8 @@ export const createSearchLibrary = ({ embeddingProvider = null } = {}) => {
           embeddingSource: index?.embeddingSource || 'deterministic-local',
           semanticLinks: true,
           automaticSources: true,
-          autoTags: true
+          autoTags: true,
+          chunkLevelKnowledgeIndex: Boolean(index?.knowledgeChunkIndex)
         },
         generatedAt: index?.generatedAt || new Date().toISOString()
       }

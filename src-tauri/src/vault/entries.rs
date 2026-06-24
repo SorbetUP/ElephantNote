@@ -255,6 +255,6 @@ mod tests {
   #[test]
   fn formats_entry_timestamps_as_js_parseable_utc_iso() {
     assert_eq!(unix_seconds_to_utc_string(0), "1970-01-01T00:00:00.000Z");
-    assert_eq!(unix_seconds_to_utc_string(1_717_952_400), "2024-06-09T15:00:00.000Z");
+    assert_eq!(unix_seconds_to_utc_string(1_717_945_200), "2024-06-09T15:00:00.000Z");
   }
 }

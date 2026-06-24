@@ -276,6 +276,19 @@ async fn server_ready(base_url: &str) -> bool {
     .unwrap_or(false)
 }
 
+async fn server_has_model(base_url: &str, model_name: &str) -> bool {
+  let Ok(client) = Client::builder().timeout(Duration::from_secs(2)).build() else {
+    return false;
+  };
+  let Ok(response) = client.get(format!("{}/models", base_url)).send().await else {
+    return false;
+  };
+  let Ok(data) = response.json::<Value>().await else {
+    return false;
+  };
+  data.to_string().to_lowercase().contains(&model_name.to_lowercase())
+}
+
 async fn wait_until_ready(base_url: &str) -> bool {
   for _ in 0..80 {
     if server_ready(base_url).await {
@@ -288,9 +301,14 @@ async fn wait_until_ready(base_url: &str) -> bool {
   false
 }
 
-async fn start_server_if_needed(app: &AppHandle, model_path: &Path, base_url: &str, payload: &Value) -> R<()> {
+async fn start_server_if_needed(app: &AppHandle, model_path: &Path, model_name: &str, base_url: &str, payload: &Value) -> R<()> {
   if server_ready(base_url).await {
-    return Ok(());
+    if server_has_model(base_url, model_name).await {
+      return Ok(());
+    }
+    return Err(format!(
+      "Local llama.cpp endpoint at {base_url} is already running, but it does not report the selected model `{model_name}`. Stop the existing llama-server process or configure another local runtime base URL."
+    ));
   }
   let port = local_port_from_base_url(base_url).unwrap_or(DEFAULT_PORT);
   let model_path_string = model_path.to_string_lossy().to_string();
@@ -317,10 +335,12 @@ async fn start_server_if_needed(app: &AppHandle, model_path: &Path, base_url: &s
       .stderr(Stdio::null())
       .spawn()
     {
-      Ok(_child) => {
+      Ok(mut child) => {
         if wait_until_ready(base_url).await {
           return Ok(());
         }
+        let _ = child.kill();
+        let _ = child.wait();
         errors.push(format!("{}: endpoint did not become ready", binary));
       }
       Err(error) => errors.push(format!("{}: {}", binary, error)),
@@ -334,9 +354,9 @@ pub async fn chat_with_selected_model(app: &AppHandle, selection: &str, messages
     return Ok(None);
   };
   let base_url = base_url_from_env_or_payload(payload);
-  start_server_if_needed(app, &model_path, &base_url, payload).await?;
-
   let model_name = model_path.file_name().and_then(|name| name.to_str()).unwrap_or("local.gguf").to_string();
+  start_server_if_needed(app, &model_path, &model_name, &base_url, payload).await?;
+
   let temperature = payload.get("temperature").and_then(Value::as_f64).unwrap_or(0.2);
   let max_tokens = payload.get("maxTokens").or_else(|| payload.get("max_tokens")).and_then(Value::as_u64).unwrap_or(900);
   let body = json!({

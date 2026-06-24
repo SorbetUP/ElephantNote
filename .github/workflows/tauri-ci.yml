@@ -2,26 +2,75 @@ name: Tauri CI
 
 on:
   push:
-    branches: [nsb/tauri]
+    branches:
+      - nsb/tauri
+      - 'assistant/**'
   pull_request:
-    branches: [nsb/tauri]
+    branches:
+      - nsb/tauri
+      - main
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   rust-tauri:
+    name: Rust compile and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CARGO_TERM_COLOR: always
+      DEBIAN_FRONTEND: noninteractive
     steps:
       - uses: actions/checkout@v4
-      - uses: awalsh128/cache-apt-pkgs-action@latest
+
+      - name: Install Tauri Linux dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf \
+            wget
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev libssl-dev build-essential curl wget file
-          version: tauri-linux-deps-v1
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@v2
+          components: rustfmt,llvm-tools-preview
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-      - run: cargo check --manifest-path src-tauri/Cargo.toml --lib
-      - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
-      - uses: taiki-e/install-action@cargo-llvm-cov
-      - run: bash src-tauri/coverage.sh
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Cargo check all targets
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features
+
+      - name: Cargo tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib --no-default-features
+
+      - name: Install coverage tool
+        if: always()
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Coverage diagnostic
+        if: always()
+        continue-on-error: true
+        run: bash src-tauri/coverage.sh

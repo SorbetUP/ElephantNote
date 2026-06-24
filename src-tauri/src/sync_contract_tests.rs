@@ -41,15 +41,26 @@ fn git(cwd: &Path, args: &[&str]) -> String {
   String::from_utf8_lossy(&output.stdout).to_string()
 }
 
-fn assert_history(status: &Value, operation: &str) {
-  let history = status.get("history").and_then(Value::as_array).expect("history array");
-  assert!(
-    history.iter().any(|entry| {
+fn history_has(status: &Value, operation: &str) -> bool {
+  status
+    .get("history")
+    .and_then(Value::as_array)
+    .expect("history array")
+    .iter()
+    .any(|entry| {
       entry.get("operation").and_then(Value::as_str) == Some(operation)
         && entry.get("status").and_then(Value::as_str) == Some("done")
-    }),
-    "missing completed {operation} entry in {history:?}"
-  );
+    })
+}
+
+fn assert_history(status: &Value, operation: &str) {
+  let history = status.get("history").and_then(Value::as_array).expect("history array");
+  assert!(history_has(status, operation), "missing completed {operation} entry in {history:?}");
+}
+
+fn assert_no_history(status: &Value, operation: &str) {
+  let history = status.get("history").and_then(Value::as_array).expect("history array");
+  assert!(!history_has(status, operation), "unexpected completed {operation} entry in {history:?}");
 }
 
 #[test]
@@ -112,7 +123,7 @@ fn run_init_and_snapshot_creates_clean_git_repository() {
 }
 
 #[test]
-fn sync_operation_runs_init_snapshot_and_skips_missing_remote() {
+fn sync_operation_expands_to_git_remote_sequence_and_skips_missing_remote() {
   let root = unique_temp_dir("sync-operation");
   write_note(&root, "Sync.md", "# Sync\n\nBody");
   let vault = vault(&root);
@@ -123,7 +134,11 @@ fn sync_operation_runs_init_snapshot_and_skips_missing_remote() {
 
   assert_eq!(status["queued"], 0);
   assert_eq!(status["dirty"], false);
-  assert_history(&status, "sync");
+  assert_history(&status, "init");
+  assert_history(&status, "snapshot");
+  assert_history(&status, "pull");
+  assert_history(&status, "push");
+  assert_no_history(&status, "sync");
   assert!(root.join(".git").exists());
 
   fs::remove_dir_all(root).ok();
@@ -157,6 +172,61 @@ fn push_uses_configured_local_git_remote() {
 
   fs::remove_dir_all(root).ok();
   fs::remove_dir_all(remote).ok();
+}
+
+#[test]
+fn second_device_can_pull_without_creating_local_snapshot() {
+  let root_a = unique_temp_dir("pull-device-a");
+  let root_b = unique_temp_dir("pull-device-b");
+  let remote = unique_temp_dir("pull-remote.git");
+  fs::create_dir_all(remote.parent().unwrap()).unwrap();
+  let output = Command::new("git").args(["init", "--bare", remote.to_str().unwrap()]).output().unwrap();
+  assert!(output.status.success(), "git init --bare failed: {}", String::from_utf8_lossy(&output.stderr));
+
+  write_note(&root_a, "FromA.md", "# From A\n\nPulled by B");
+  let remote_path = remote.to_string_lossy().replace('\\', "/");
+  let status_a = sync_run(vault(&root_a), Some(json!({
+    "init": { "remote": remote_path },
+    "snapshot": { "message": "device A snapshot" },
+    "push": {}
+  }))).unwrap();
+  assert_history(&status_a, "push");
+
+  let status_b = sync_run(vault(&root_b), Some(json!({
+    "init": { "remote": remote_path },
+    "pull": {}
+  }))).unwrap();
+
+  assert_history(&status_b, "init");
+  assert_history(&status_b, "pull");
+  assert_no_history(&status_b, "snapshot");
+  assert_eq!(fs::read_to_string(root_b.join("FromA.md")).unwrap(), "# From A\n\nPulled by B");
+
+  fs::remove_dir_all(root_a).ok();
+  fs::remove_dir_all(root_b).ok();
+  fs::remove_dir_all(remote).ok();
+}
+
+#[test]
+fn sync_metadata_stays_local_and_is_not_tracked_by_git() {
+  let root = unique_temp_dir("metadata-exclude");
+  write_note(&root, "Tracked.md", "# Tracked\n");
+
+  let status = sync_run(vault(&root), Some(json!({
+    "snapshot": { "message": "metadata exclusion baseline" }
+  }))).unwrap();
+  assert_history(&status, "snapshot");
+
+  let exclude = fs::read_to_string(root.join(".git/info/exclude")).unwrap();
+  assert!(exclude.contains("/.elephantnote/sync/sync-config.json"));
+  assert!(exclude.contains("/.elephantnote/sync/sync-log.json"));
+  assert!(exclude.contains("/.elephantnote/sync/sync-queue.json"));
+  assert!(exclude.contains("/.elephantnote/sync/sync-state.json"));
+
+  let tracked_sync_files = git(&root, &["ls-files", ".elephantnote/sync"]);
+  assert!(tracked_sync_files.trim().is_empty(), "sync metadata must not be tracked: {tracked_sync_files}");
+
+  fs::remove_dir_all(root).ok();
 }
 
 #[test]

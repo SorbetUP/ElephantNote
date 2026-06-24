@@ -3,15 +3,32 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TAURI_DIR="$ROOT_DIR/src-tauri"
+ANDROID_CONFIG="tauri.android.conf.json"
 
-if [ ! -d "$TAURI_DIR/gen/android" ]; then
-  echo "Tauri Android project is not initialized yet."
-  echo "Run: cd src-tauri && cargo tauri android init"
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing required command: $1" >&2
+    exit 1
+  fi
+}
+
+require_cmd cargo
+require_cmd node
+require_cmd pnpm
+
+if [ -z "${ANDROID_HOME:-}${ANDROID_SDK_ROOT:-}" ]; then
+  echo "ANDROID_HOME or ANDROID_SDK_ROOT is not set. Install Android Studio/SDK first." >&2
   exit 1
 fi
 
+if [ ! -d "$TAURI_DIR/gen/android" ]; then
+  echo "Tauri Android project is not initialized; running cargo tauri android init."
+  cd "$TAURI_DIR"
+  cargo tauri android init
+fi
+
 cd "$TAURI_DIR"
-cargo tauri android build --debug --apk
+ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1 cargo tauri android build --debug --apk --config "$ANDROID_CONFIG"
 
 for APK_DIR in \
   "$TAURI_DIR/gen/android/app/build/outputs/apk/debug" \

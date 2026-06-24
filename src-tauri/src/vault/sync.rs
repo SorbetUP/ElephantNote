@@ -606,6 +606,7 @@ impl GitSyncEngine {
     }
     self.ensure_git_identity()?;
     self.ensure_git_exclude()?;
+    self.untrack_sync_metadata()?;
 
     fs::create_dir_all(vault_layout::hidden_dir(&self.cwd, vault_layout::SYNC_DIR)).map_err(|error| error.to_string())?;
 
@@ -682,16 +683,34 @@ impl GitSyncEngine {
     format!("/{}", normalize_path(relative))
   }
 
-  fn ensure_git_exclude(&self) -> R<()> {
-    let sync_dir = vault_layout::hidden_dir(&self.cwd, vault_layout::SYNC_DIR);
-    let legacy_gitignore = sync_dir.join(".gitignore");
-    let _ = fs::remove_file(&legacy_gitignore);
-    let patterns = [SYNC_CONFIG_FILE, SYNC_HISTORY_FILE, SYNC_QUEUE_FILE, SYNC_STATE_FILE]
+  fn metadata_relative_path(&self, path: &Path) -> String {
+    let relative = path.strip_prefix(&self.cwd).unwrap_or(path);
+    normalize_path(relative)
+  }
+
+  fn metadata_files(&self) -> Vec<PathBuf> {
+    [SYNC_CONFIG_FILE, SYNC_HISTORY_FILE, SYNC_QUEUE_FILE, SYNC_STATE_FILE]
       .iter()
-      .map(|file| self.metadata_pattern(&sync_path(&self.cwd, file)))
-      .chain(std::iter::once(self.metadata_pattern(&legacy_gitignore)))
-      .collect::<Vec<_>>();
+      .map(|file| sync_path(&self.cwd, file))
+      .chain(std::iter::once(vault_layout::hidden_dir(&self.cwd, vault_layout::SYNC_DIR).join(".gitignore")))
+      .collect()
+  }
+
+  fn ensure_git_exclude(&self) -> R<()> {
+    let legacy_gitignore = vault_layout::hidden_dir(&self.cwd, vault_layout::SYNC_DIR).join(".gitignore");
+    let _ = fs::remove_file(&legacy_gitignore);
+    let patterns = self.metadata_files().iter().map(|path| self.metadata_pattern(path)).collect::<Vec<_>>();
     append_missing_lines(&self.cwd.join(".git").join("info").join("exclude"), &patterns)
+  }
+
+  fn untrack_sync_metadata(&self) -> R<()> {
+    let metadata = self.metadata_files().iter().map(|path| self.metadata_relative_path(path)).collect::<Vec<_>>();
+    if metadata.is_empty() {
+      return Ok(());
+    }
+    let mut args = vec!["rm".to_string(), "--cached".to_string(), "--ignore-unmatch".to_string()];
+    args.extend(metadata);
+    self.git_args(&args).map(|_| ())
   }
 
   fn upsert_remote(&self, remote_name: &str, remote: &str) -> R<()> {

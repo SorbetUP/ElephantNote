@@ -118,4 +118,52 @@ describe('security guardrails', () => {
       })
     ]))
   }))
+
+  it('rejects committed real environment files while allowing examples', () => withFixture((root) => {
+    writeText(root, '.env.local', 'OPENROUTER_API_KEY=do-not-commit\n')
+    writeText(root, '.env.example', 'OPENROUTER_API_KEY=replace-me\n')
+
+    const findings = collectSecurityFindings(root)
+
+    expect(findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'SECRET_ENV_FILE_COMMITTED',
+        file: '.env.local',
+        value: '.env.local'
+      })
+    ]))
+    expect(findings).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'SECRET_ENV_FILE_COMMITTED',
+        file: '.env.example'
+      })
+    ]))
+  }))
+
+  it('rejects private key material in committed files', () => withFixture((root) => {
+    writeText(root, 'fixtures/bad-key.txt', '-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----\n')
+
+    const findings = collectSecurityFindings(root)
+
+    expect(findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'SECRET_PRIVATE_KEY_CONTENT',
+        file: 'fixtures/bad-key.txt'
+      })
+    ]))
+  }))
+
+  it('rejects GitHub and OpenAI-compatible tokens in source files', () => withFixture((root) => {
+    writeText(root, 'src/bad.js', `
+      const github = 'ghp_0123456789abcdefghijklmnop'
+      const llm = 'sk-0123456789abcdefghijklmnopqrstuv'
+    `)
+
+    const findings = collectSecurityFindings(root)
+
+    expect(findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'SECRET_GITHUB_TOKEN', file: 'src/bad.js' }),
+      expect.objectContaining({ id: 'SECRET_OPENAI_COMPATIBLE_TOKEN', file: 'src/bad.js' })
+    ]))
+  }))
 })

@@ -29,6 +29,16 @@ const flush = async() => {
   await nextTick()
 }
 
+const createDeferred = () => {
+  let resolve
+  let reject
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 const createVault = () => ({
   id: 'vault-1',
   name: 'Vault 1',
@@ -84,6 +94,60 @@ describe('WikiView library root', () => {
     expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Cluster.md'])
     expect(container.querySelector('.en-library-grid')).not.toBeNull()
     expect(container.textContent).toContain('Cluster')
+
+    app.unmount()
+    container.remove()
+  })
+
+  it('clears stale normal-note entries before the wiki root load resolves', async() => {
+    const deferred = createDeferred()
+    listDirectory.mockReturnValueOnce(deferred.promise)
+
+    const { useVaultStore } = await import('../../front/app/stores/vaultStore.js')
+    const WikiView = (await import('../../front/app/components/views/WikiView.vue')).default
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const store = useVaultStore()
+    store.applyPayload({
+      vaults: [createVault()],
+      activeVaultId: 'vault-1',
+      activeVault: createVault(),
+      workspace: { sidebar: [] },
+      entries: [
+        {
+          kind: 'note',
+          path: 'Normal.md',
+          title: 'Normal',
+          tags: [],
+          updatedAt: '2026-06-24T06:59:00.000Z'
+        }
+      ]
+    })
+
+    const app = createApp({ render: () => h(WikiView) })
+    app.use(pinia)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    app.mount(container)
+    await nextTick()
+
+    expect(listDirectory).toHaveBeenCalledWith('.elephantnote/wiki')
+    expect(store.currentPath).toBe('.elephantnote/wiki')
+    expect(store.entries).toEqual([])
+    expect(container.textContent).not.toContain('Normal')
+
+    deferred.resolve([
+      {
+        kind: 'note',
+        path: '.elephantnote/wiki/Root.md',
+        title: 'Root',
+        tags: [],
+        updatedAt: '2026-06-24T07:03:00.000Z'
+      }
+    ])
+    await flush()
+
+    expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Root.md'])
 
     app.unmount()
     container.remove()
@@ -214,6 +278,65 @@ describe('WikiView library root', () => {
     expect(listDirectory).toHaveBeenCalledWith('.elephantnote/wiki')
     expect(store.activeWorkspaceView).toBe('wiki')
     expect(store.currentPath).toBe('.elephantnote/wiki')
+    expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Root.md'])
+
+    app.unmount()
+    container.remove()
+  })
+
+  it('clears stale subfolder entries immediately when the rail button resets to wiki root', async() => {
+    const deferred = createDeferred()
+    listDirectory.mockReturnValueOnce(deferred.promise)
+
+    const { useVaultStore } = await import('../../front/app/stores/vaultStore.js')
+    const IconRail = (await import('../../front/app/components/navigation/IconRail.vue')).default
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const store = useVaultStore()
+    store.applyPayload({
+      vaults: [createVault()],
+      activeVaultId: 'vault-1',
+      activeVault: createVault(),
+      workspace: { sidebar: [] },
+      entries: []
+    })
+    store.activeWorkspaceView = 'wiki'
+    store.currentPath = '.elephantnote/wiki/Cluster'
+    store.entries = [
+      {
+        kind: 'note',
+        path: '.elephantnote/wiki/Cluster/Stale.md',
+        title: 'Stale',
+        tags: [],
+        updatedAt: '2026-06-24T07:03:00.000Z'
+      }
+    ]
+
+    const app = createApp({ render: () => h(IconRail) })
+    app.use(pinia)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    app.mount(container)
+    await flush()
+
+    container.querySelector('button[title="Wiki"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await nextTick()
+
+    expect(listDirectory).toHaveBeenCalledWith('.elephantnote/wiki')
+    expect(store.currentPath).toBe('.elephantnote/wiki')
+    expect(store.entries).toEqual([])
+
+    deferred.resolve([
+      {
+        kind: 'note',
+        path: '.elephantnote/wiki/Root.md',
+        title: 'Root',
+        tags: [],
+        updatedAt: '2026-06-24T07:04:00.000Z'
+      }
+    ])
+    await flush()
+
     expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Root.md'])
 
     app.unmount()

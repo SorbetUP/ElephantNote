@@ -15,11 +15,35 @@ const SYNC_OPERATION_PULL: &str = "pull";
 const SYNC_OPERATION_PUSH: &str = "push";
 const SYNC_OPERATION_SYNC: &str = "sync";
 
+fn civil_from_days(days_since_unix_epoch: i64) -> (i32, u32, u32) {
+  let z = days_since_unix_epoch + 719_468;
+  let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+  let doe = z - era * 146_097;
+  let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+  let y = yoe + era * 400;
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  let mp = (5 * doy + 2) / 153;
+  let day = doy - (153 * mp + 2) / 5 + 1;
+  let month = mp + if mp < 10 { 3 } else { -9 };
+  let year = y + if month <= 2 { 1 } else { 0 };
+  (year as i32, month as u32, day as u32)
+}
+
+fn unix_seconds_to_utc_string(seconds: u64) -> String {
+  let days = (seconds / 86_400) as i64;
+  let second_of_day = seconds % 86_400;
+  let (year, month, day) = civil_from_days(days);
+  let hour = second_of_day / 3_600;
+  let minute = (second_of_day % 3_600) / 60;
+  let second = second_of_day % 60;
+  format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.000Z")
+}
+
 fn now() -> String {
   SystemTime::now()
     .duration_since(UNIX_EPOCH)
-    .map(|d| d.as_secs().to_string())
-    .unwrap_or_else(|_| "0".to_string())
+    .map(|d| unix_seconds_to_utc_string(d.as_secs()))
+    .unwrap_or_else(|_| "1970-01-01T00:00:00.000Z".to_string())
 }
 
 fn normalize_relative_path(path: &str) -> String {
@@ -61,7 +85,7 @@ fn file_summary(root: &Path, path: &Path) -> Value {
     .and_then(|metadata| metadata.modified())
     .ok()
     .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-    .map(|duration| duration.as_secs().to_string())
+    .map(|duration| unix_seconds_to_utc_string(duration.as_secs()))
     .unwrap_or_else(now);
   json!({ "name": name, "path": relative, "updatedAt": updated_at })
 }
@@ -369,5 +393,11 @@ mod tests {
 
     assert_eq!(operation_names(&plan), vec![SYNC_OPERATION_INIT, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH]);
     assert_eq!(plan[2]["payload"]["remoteName"], "origin");
+  }
+
+  #[test]
+  fn formats_tauri_extra_timestamps_as_js_parseable_utc_iso() {
+    assert_eq!(unix_seconds_to_utc_string(0), "1970-01-01T00:00:00.000Z");
+    assert_eq!(unix_seconds_to_utc_string(1_717_945_200), "2024-06-09T15:00:00.000Z");
   }
 }

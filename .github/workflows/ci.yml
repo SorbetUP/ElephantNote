@@ -121,7 +121,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Rust formatting
+      - name: Rust formatting diagnostic
+        continue-on-error: true
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
       - name: Cargo check

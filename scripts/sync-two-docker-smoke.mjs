@@ -110,6 +110,12 @@ const stopDevice = async(name) => {
   await execFileAsync('docker', ['rm', '-f', name]).catch(() => {})
 }
 
+const restartDeviceWithoutAutoSync = async(name, port, vaultVolume) => {
+  await stopDevice(name)
+  await startDevice(name, port, vaultVolume)
+  await waitForServer(port, `${name} manual restart`)
+}
+
 const assertNoteListed = (notes, notePath, label) => {
   if (!notes.some((note) => note.path === notePath)) {
     throw new Error(`${label} did not list ${notePath}. Notes: ${JSON.stringify(notes)}`)
@@ -263,6 +269,7 @@ try {
     throw new Error('Device B did not auto-pull the note created while it was offline.')
   }
 
+  await restartDeviceWithoutAutoSync(deviceB, basePort + 1, vaultB)
   await request(basePort + 1, '/api/notes', {
     method: 'POST',
     body: { title: 'Two Device Sync B', body: 'Created on device B and expected on device A.' }
@@ -311,6 +318,7 @@ try {
       'device B auto-pulled and exposed the note through the API',
       'device B left the network while device A created and pushed a note',
       'device B reconnected and auto-pulled the offline note without an explicit sync call',
+      'device B restarted in manual mode before reverse sync to avoid auto-sync races',
       'device B pushed a second note',
       'device A pulled and exposed the second note through the API',
       'containers stayed under the configured memory and end-to-end runtime budgets'

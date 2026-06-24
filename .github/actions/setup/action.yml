@@ -4,21 +4,17 @@ description: Install pnpm, Node.js, and project dependencies (skips postinstall 
 runs:
   using: composite
   steps:
-    - name: Install pnpm
-      uses: pnpm/action-setup@v4
-      with:
-        version: 10.33.4
-        run_install: false
-
     - name: Install Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '22'
-        cache: 'pnpm'
 
-    - name: Print package manager diagnostics
+    - name: Install pnpm with corepack
       shell: bash
       run: |
+        set -euxo pipefail
+        corepack enable
+        corepack prepare pnpm@10.33.4 --activate
         node --version
         pnpm --version
         pnpm store path

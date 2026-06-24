@@ -56,6 +56,7 @@ export class ElephantAddonManager {
 
     this.records.set(manifest.id, record)
     this.emit('registered', createSnapshot(record))
+    this.emit('changed', createSnapshot(record))
     return createSnapshot(record)
   }
 
@@ -86,6 +87,8 @@ export class ElephantAddonManager {
       this.emit('changed', createSnapshot(record))
       return createSnapshot(record)
     } catch (error) {
+      this.disposeRecord(record)
+      this.clearContributionsFromAddon(id)
       record.enabled = false
       record.status = ADDON_STATUS.error
       record.error = normalizeError(error)
@@ -103,15 +106,7 @@ export class ElephantAddonManager {
     try {
       await record.module.deactivate?.(this.createAddonContext(record))
     } finally {
-      while (record.disposables.length) {
-        const dispose = record.disposables.pop()
-        try {
-          dispose()
-        } catch (error) {
-          this.logger.warn('addon cleanup failed', { id, error: normalizeError(error) })
-        }
-      }
-
+      this.disposeRecord(record)
       this.clearContributionsFromAddon(id)
       record.enabled = false
       record.status = ADDON_STATUS.disabled
@@ -146,6 +141,7 @@ export class ElephantAddonManager {
 
     this.contributions.get(normalizedArea).push(entry)
     this.emit('contribution:registered', { area: normalizedArea, entry })
+    this.emit('contribution:changed', this.getContributionMap())
 
     return () => {
       this.unregisterContribution(normalizedArea, entry)
@@ -162,10 +158,17 @@ export class ElephantAddonManager {
       this.contributions.delete(area)
     }
     this.emit('contribution:removed', { area, entry })
+    this.emit('contribution:changed', this.getContributionMap())
   }
 
   getContributions(area) {
     return [...(this.contributions.get(area) || [])]
+  }
+
+  getContributionMap() {
+    return Object.fromEntries(
+      [...this.contributions.entries()].map(([area, entries]) => [area, [...entries]])
+    )
   }
 
   on(eventName, listener) {
@@ -208,12 +211,32 @@ export class ElephantAddonManager {
   }
 
   clearContributionsFromAddon(addonId) {
+    let changed = false
     for (const [area, entries] of this.contributions.entries()) {
       const nextEntries = entries.filter((entry) => entry.addonId !== addonId)
+      if (nextEntries.length !== entries.length) changed = true
       if (nextEntries.length) {
         this.contributions.set(area, nextEntries)
       } else {
         this.contributions.delete(area)
+      }
+    }
+
+    if (changed) {
+      this.emit('contribution:changed', this.getContributionMap())
+    }
+  }
+
+  disposeRecord(record) {
+    while (record.disposables.length) {
+      const dispose = record.disposables.pop()
+      try {
+        dispose()
+      } catch (error) {
+        this.logger.warn('addon cleanup failed', {
+          id: record.manifest.id,
+          error: normalizeError(error)
+        })
       }
     }
   }

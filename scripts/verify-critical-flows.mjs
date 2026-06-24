@@ -3,6 +3,7 @@ import path from 'node:path'
 
 const root = process.cwd()
 const failures = []
+
 const read = (relativePath) => {
   const absolutePath = path.join(root, relativePath)
   if (!fs.existsSync(absolutePath)) {
@@ -34,6 +35,7 @@ for (const file of [
   'src/renderer/src/platform/bootstrapGlobals.js',
   'src/renderer/src/platform/tauriLocalIpcBridge.js',
   'src/renderer/src/platform/tauriMarkTextSaveBridge.js',
+  'src/renderer/src/platform/piProviderInterface.js',
   'src/renderer/src/main.js',
   'src/renderer/src/store/editor.js',
   'src-tauri/src/tauri_extra_commands.rs',
@@ -58,11 +60,13 @@ for (const file of [
   'test/unit/specs/main/elephantnote/apiRuntime.spec.js',
   'test/unit/specs/main/elephantnote/legacyCalls.spec.js',
   'test/unit/specs/main/elephantnote/markdownDocument.spec.js',
+  'test/unit/specs/main/elephantnote/piProviderInterface.spec.js',
   'test/unit/specs/main/elephantnote/securityGuardrails.spec.js',
   'test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js',
   'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
   'test/unit/specs/main/elephantnote/syncPlan.spec.js',
   'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
+  'test/unit/elephantnote/domainClients.spec.js',
   '.github/dependabot.yml',
   '.github/workflows/codeql.yml',
   '.github/workflows/sync-docker.yml'
@@ -88,12 +92,17 @@ ordered('scripts/security-guardrails-core.mjs', [
   'const scanPackageScripts',
   "id: 'PACKAGE_SCRIPT_REMOTE_PIPE_TO_SHELL'",
   'const scanCommittedSecrets',
+  'export const collectSecurityFindings'
+], 'security guardrails must wire broad Tauri scopes, unsafe workflows, unsafe scripts, committed secrets and finding collection')
+for (const secretFindingId of [
   "id: 'SECRET_ENV_FILE_COMMITTED'",
+  "id: 'SECRET_PRIVATE_KEY_FILE'",
   "id: 'SECRET_PRIVATE_KEY_CONTENT'",
   "id: 'SECRET_GITHUB_TOKEN'",
-  "id: 'SECRET_OPENAI_COMPATIBLE_TOKEN'",
-  'export const collectSecurityFindings'
-], 'security guardrails must block broad Tauri scopes, unsafe workflows, unsafe scripts and committed secrets')
+  "id: 'SECRET_OPENAI_COMPATIBLE_TOKEN'"
+]) {
+  has('scripts/security-guardrails-core.mjs', secretFindingId, `security secret detector ${secretFindingId}`)
+}
 ordered('scripts/verify-security-guardrails.mjs', [
   'loadSecurityBaseline(root)',
   'collectSecurityFindings(root)',
@@ -112,17 +121,16 @@ ordered('src/renderer/src/platform/bootstrapGlobals.js', [
   'if (!target.fileUtils && !target.__TAURI__) target.fileUtils = createFileUtilsFallback()',
   'if (target.fileUtils?.__elephantnoteBootstrapFallback && target.__TAURI__) delete target.fileUtils'
 ], 'bootstrap must not mask real Tauri fileUtils with a no-op writer')
-
 ordered('src/renderer/src/main.js', [
   "import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'",
   "import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'",
   'clearBootstrapFileUtilsFallbackForTauri()',
   'installRuntimeBridge()',
   'installTauriElephantNoteBridge()',
+  'installPiProviderBridge()',
   'installTauriMarkTextSaveBridge()',
   'installTauriLocalIpcBridge()'
-], 'Tauri bridges must be installed in the correct order')
-
+], 'Tauri and PI bridges must be installed in the correct order')
 ordered('src/renderer/src/platform/tauriLocalIpcBridge.js', [
   "'mt::response-file-save'",
   "'mt::response-file-save-as'",
@@ -133,7 +141,6 @@ ordered('src/renderer/src/platform/tauriLocalIpcBridge.js', [
   'if (LOCAL_IPC_EVENTS.has(channel)) {',
   'dispatchLocalIpcEvent(target, channel, args)'
 ], 'Tauri local IPC must route open, save and save-as events locally')
-
 ordered('test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js', [
   'opens a vault note through notes.read even when target.path is unavailable',
   "expect(read).toHaveBeenCalledWith({ relativePath: 'test_keep/Note.md' })",
@@ -149,7 +156,6 @@ ordered('src/renderer/src/store/editor.js', [
   'FILE_SAVE_AS() {',
   "'mt::response-file-save-as'"
 ], 'MarkText editor must emit the canonical save-as IPC')
-
 ordered('src/renderer/src/platform/tauriMarkTextSaveBridge.js', [
   'const writeViaRustBackend = async(target, pathname, markdown) => {',
   "return invoke('tauri_marktext_write_file', { pathname, content: markdown })",
@@ -177,18 +183,20 @@ has('src-tauri/src/tauri_extra_commands.rs', 'existing_path_guard_rejects_reads_
 has('src-tauri/src/lib_min.rs', 'tauri_extra_commands::tauri_marktext_write_file', 'registered MarkText backend writer')
 
 ordered('Elephant/shared/apiContracts.js', [
-  'const textString = (value) => typeof value === \'string\'',
+  "const textString = (value) => typeof value === 'string'",
   'const optionalSyncOperationArray =',
   'operations: optionalSyncOperationArray',
   "action('NOTES_READ', 'notes.read'",
   "action('NOTES_WRITE', 'notes.write'",
   "action('SYNC_PLAN', 'sync.plan', syncRunPayload)"
 ], 'shared API must expose notes.read/write and validate explicit sync plan operations')
+has('Elephant/shared/apiContracts.js', 'localRuntime: optionalObject', 'AI config contract must accept local runtime settings')
 ordered('test/unit/specs/main/elephantnote/apiContracts.spec.js', [
   'accepts explicit valid sync.plan operations',
   'rejects unknown sync.plan operations instead of falling back to the default plan',
-  'rejects non-array sync.plan operations'
-], 'API contract tests must reject unsafe sync plan operations payloads')
+  'rejects non-array sync.plan operations',
+  'accepts local runtime AI config payloads used by the Tauri bridge'
+], 'API contract tests must reject unsafe sync plans and accept local runtime config')
 ordered('Elephant/front/app/services/elephantnoteClient/apiRuntime.js', [
   "import { validateApiPayload } from 'common/elephantnote/apiContracts'",
   'const plainPayload = toPlainObject(payload)',
@@ -212,21 +220,36 @@ ordered('test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js', [
   'routes public API sync.plan payloads to the Rust command'
 ], 'Tauri bridge tests must cover direct and public sync.plan routing')
 ordered('Elephant/front/app/services/elephantnoteClient/domainClients.js', [
+  'const CHAT_REBUILD_COOLDOWN_MS',
+  'const searchVaultInitializedForChat',
+  'const shouldRebuildChatSearch',
   'notes: {',
   'read: (relativePath) => call(API.NOTES_READ',
   'write: (payload = {}) => call(API.NOTES_WRITE, payload)'
-], 'front client must expose notes.write')
+], 'front client must expose notes.write and throttle chat search rebuilds')
+has('test/unit/elephantnote/domainClients.spec.js', 'does not repeatedly rebuild chat search when citations are still empty', 'chat search rebuild throttling regression test')
 has('src/renderer/src/platform/tauriElephantNoteBridge.js', "case 'notes.write': return bridge.notes.write(payload)", 'Tauri ElephantNote notes.write dispatch')
+
+ordered('src/renderer/src/platform/piProviderInterface.js', [
+  'export const piModelsUrl',
+  'export const normalizePiModels',
+  'export const normalizePiCodexModels',
+  "error: 'invalid_json'",
+  'export const installPiProviderBridge'
+], 'PI provider interface must normalize models, handle invalid JSON and install the bridge')
+has('test/unit/specs/main/elephantnote/piProviderInterface.spec.js', 'returns a structured error instead of throwing on invalid JSON responses', 'PI invalid JSON regression test')
 
 ordered('Elephant/front/app/components/editor/NoteEditorHost.vue', [
   "import { elephantnoteClient } from '../../services/elephantnoteClient'",
+  'const AUTOSAVE_POLL_MS',
+  'const autosaveDelayFor',
   'const getActiveNoteFile = () => {',
   'currentFile.value?.pathname',
   'const persistNoteMarkdown = async',
   'elephantnoteClient.notes.write({',
   'const rememberObservedMarkdown =',
   'noteSaveInterval = window.setInterval'
-], 'editor host must import the client and persist dirty active notes')
+], 'editor host must import the client, throttle autosave and persist dirty active notes')
 ordered('Elephant/front/app/components/editor/NoteEditorHost.vue', [
   'const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {',
   'const writableImage = imageBlob || blob',

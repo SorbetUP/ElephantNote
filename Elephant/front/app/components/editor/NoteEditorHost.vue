@@ -540,6 +540,8 @@ const openExcalidrawFromImage = async(src) => {
       saveMode: 'png',
       insertOnSave: false
     })
+    excalidrawTargetPath.value = previewPath
+    excalidrawScenePath.value = scenePath
   } catch (error) {
     console.error('[elephantnote:excalidraw] failed to open image-backed drawing', error)
   }
@@ -556,7 +558,10 @@ const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {
     return
   }
   const resolvedName = fileName || excalidrawFileName.value
-  const targetPath = window.path.join(currentNoteDirectory.value, resolvedName)
+  const targetDirectory = excalidrawTargetPath.value
+    ? window.path.dirname(excalidrawTargetPath.value)
+    : currentNoteDirectory.value
+  const targetPath = window.path.join(targetDirectory, resolvedName)
   const scenePath = getExcalidrawScenePath(targetPath)
   await window.fileUtils.ensureDir(window.path.dirname(targetPath))
   await window.fileUtils.writeFile(targetPath, writableImage)

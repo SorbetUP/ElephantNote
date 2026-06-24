@@ -19,13 +19,21 @@ const store = useVaultStore()
 const normalizeWikiPath = (relativePath = WIKI_ROOT) => {
   const normalized = String(relativePath || WIKI_ROOT)
     .replace(/\\/g, '/')
-    .replace(/^\/+|\/+$/g, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
   if (!normalized || normalized === WIKI_ROOT) return WIKI_ROOT
   return normalized.startsWith(`${WIKI_ROOT}/`) ? normalized : WIKI_ROOT
 }
 
+const shouldApplyWikiDirectoryResult = (wikiPath, vaultId) => {
+  return store.activeWorkspaceView === 'wiki' &&
+    store.currentPath === wikiPath &&
+    store.activeVaultId === vaultId
+}
+
 const loadWikiDirectory = async (relativePath = WIKI_ROOT) => {
   const wikiPath = normalizeWikiPath(relativePath)
+  const vaultId = store.activeVaultId
   store.currentPath = wikiPath
   store.activeWorkspaceView = 'wiki'
   store.openedNotePath = ''
@@ -37,6 +45,7 @@ const loadWikiDirectory = async (relativePath = WIKI_ROOT) => {
 
   try {
     const entries = await elephantnoteClient.directory.list(wikiPath)
+    if (!shouldApplyWikiDirectoryResult(wikiPath, vaultId)) return
     store.entries = Array.isArray(entries) ? entries : []
     store.currentPath = wikiPath
     store.activeWorkspaceView = 'wiki'
@@ -46,6 +55,7 @@ const loadWikiDirectory = async (relativePath = WIKI_ROOT) => {
       entries: store.entries.length
     })
   } catch (error) {
+    if (!shouldApplyWikiDirectoryResult(wikiPath, vaultId)) return
     store.entries = []
     store.currentPath = wikiPath
     store.activeWorkspaceView = 'wiki'

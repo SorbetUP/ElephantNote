@@ -3,10 +3,13 @@ use serde_json::{json, Value};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::thread;
 use std::time::Duration;
 
 type R<T> = Result<T, String>;
 const MODEL_PROVIDER: &str = "node-llama-cpp";
+const DEFAULT_PORT: u16 = 39281;
 const DEFAULT_BASE_URL: &str = "http://127.0.0.1:39281/v1";
 
 pub struct LocalChatResult {
@@ -126,6 +129,48 @@ fn base_url_from_env_or_payload(payload: &Value) -> String {
     .to_string()
 }
 
+fn context_size_from_payload(payload: &Value) -> String {
+  payload
+    .get("contextWindow")
+    .or_else(|| payload.get("ctxSize"))
+    .and_then(Value::as_u64)
+    .filter(|value| *value >= 512)
+    .unwrap_or(4096)
+    .to_string()
+}
+
+fn local_port_from_base_url(base_url: &str) -> Option<u16> {
+  let cleaned = base_url.trim_end_matches('/').trim_end_matches("/v1");
+  for prefix in ["http://127.0.0.1:", "http://localhost:"] {
+    if let Some(rest) = cleaned.strip_prefix(prefix) {
+      let port = rest.split('/').next().unwrap_or(rest);
+      return port.parse::<u16>().ok();
+    }
+  }
+  None
+}
+
+fn server_binary_candidates() -> Vec<String> {
+  let mut out = Vec::new();
+  for key in ["ELEPHANTNOTE_LLAMA_SERVER", "LLAMA_SERVER", "LLAMA_CPP_SERVER"] {
+    if let Ok(value) = env::var(key) {
+      if !value.trim().is_empty() {
+        out.push(value);
+      }
+    }
+  }
+  out.extend([
+    "llama-server".to_string(),
+    "llama.cpp-server".to_string(),
+    "llama-cpp-server".to_string(),
+    "/opt/homebrew/bin/llama-server".to_string(),
+    "/usr/local/bin/llama-server".to_string(),
+  ]);
+  out.sort();
+  out.dedup();
+  out
+}
+
 async fn server_ready(base_url: &str) -> bool {
   let Ok(client) = Client::builder().timeout(Duration::from_secs(2)).build() else {
     return false;
@@ -138,17 +183,59 @@ async fn server_ready(base_url: &str) -> bool {
     .unwrap_or(false)
 }
 
+async fn wait_until_ready(base_url: &str) -> bool {
+  for _ in 0..80 {
+    if server_ready(base_url).await {
+      return true;
+    }
+    thread::sleep(Duration::from_millis(250));
+  }
+  false
+}
+
+async fn start_server_if_needed(model_path: &Path, base_url: &str, payload: &Value) -> R<()> {
+  if server_ready(base_url).await {
+    return Ok(());
+  }
+  let port = local_port_from_base_url(base_url).unwrap_or(DEFAULT_PORT);
+  let model_path_string = model_path.to_string_lossy().to_string();
+  let context = context_size_from_payload(payload);
+  let mut errors = Vec::new();
+
+  eprintln!("[tauri-rag] starting llama server for model={} base={}", model_path_string, base_url);
+  for binary in server_binary_candidates() {
+    eprintln!("[tauri-rag] trying llama server binary: {}", binary);
+    match Command::new(&binary)
+      .arg("-m")
+      .arg(&model_path_string)
+      .arg("--host")
+      .arg("127.0.0.1")
+      .arg("--port")
+      .arg(port.to_string())
+      .arg("-c")
+      .arg(&context)
+      .stdout(Stdio::null())
+      .stderr(Stdio::null())
+      .spawn()
+    {
+      Ok(_child) => {
+        if wait_until_ready(base_url).await {
+          return Ok(());
+        }
+        errors.push(format!("{}: endpoint did not become ready", binary));
+      }
+      Err(error) => errors.push(format!("{}: {}", binary, error)),
+    }
+  }
+  Err(format!("Unable to start local llama server. Attempts: {}", errors.join(" | ")))
+}
+
 pub async fn chat_with_selected_model(selection: &str, messages: &[Value], payload: &Value) -> R<Option<LocalChatResult>> {
   let Some(model_path) = resolve_model_path(selection)? else {
     return Ok(None);
   };
   let base_url = base_url_from_env_or_payload(payload);
-  if !server_ready(&base_url).await {
-    return Err(format!(
-      "Local llama.cpp HTTP endpoint is not reachable at {base_url}. Model resolved to {}.",
-      model_path.to_string_lossy()
-    ));
-  }
+  start_server_if_needed(&model_path, &base_url, payload).await?;
 
   let model_name = model_path.file_name().and_then(|name| name.to_str()).unwrap_or("local.gguf").to_string();
   let temperature = payload.get("temperature").and_then(Value::as_f64).unwrap_or(0.2);
@@ -210,5 +297,10 @@ mod tests {
   fn selection_candidates_include_filename() {
     let values = selected_model_candidates("/tmp/model.Q4_K_M.gguf");
     assert!(values.contains(&"model.Q4_K_M.gguf".to_string()));
+  }
+
+  #[test]
+  fn local_port_from_default_base_url() {
+    assert_eq!(local_port_from_base_url(DEFAULT_BASE_URL), Some(DEFAULT_PORT));
   }
 }

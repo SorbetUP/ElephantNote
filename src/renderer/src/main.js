@@ -7,7 +7,7 @@ import pinia from './store'
 import './assets/symbolIcon'
 import { installRuntimeBridge } from './platform/runtimeBridge'
 import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
-import { installCodexProviderBridge } from './platform/providerInterface'
+import { installPiProviderBridge } from './platform/piProviderInterface'
 import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'
 import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
@@ -84,7 +84,7 @@ clearBootstrapFileUtilsFallbackForTauri()
 installRuntimeBridge()
 ensurePathResolve()
 installTauriElephantNoteBridge()
-installCodexProviderBridge()
+installPiProviderBridge()
 installTauriMarkTextSaveBridge()
 installTauriLocalIpcBridge()
 

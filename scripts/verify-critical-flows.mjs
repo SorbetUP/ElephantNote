@@ -319,8 +319,8 @@ ordered('scripts/sync-two-docker-smoke.mjs', [
   'assertPeerIdentity',
   'stopDevice(deviceB)',
   'device B reconnect auto-pull',
+  "await assertNoTrackedSyncMetadata(deviceB, 'device B reconnect auto-pull')",
   'assertResourceBudget',
-  'assertNoTrackedSyncMetadata',
   'local sync metadata files stay untracked in each container git repository'
 ], 'Docker sync smoke must cover peer identity, offline reconnect, resource budget and metadata leaks')
 has('.github/workflows/sync-docker.yml', 'node scripts/sync-two-docker-smoke.mjs', 'Docker pair sync workflow runs directly with Node')

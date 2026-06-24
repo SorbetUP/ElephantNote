@@ -102,6 +102,20 @@ export const useAddonsStore = defineStore('addons', {
       } else {
         await this.disableAddon(id)
       }
+    },
+
+    async runAction(id, payload = undefined) {
+      if (!this.manager) throw new Error('Addon manager is not installed')
+      try {
+        const result = await this.manager.runAction(id, payload)
+        this.lastError = null
+        return result
+      } catch (error) {
+        this.lastError = error?.message || String(error)
+        throw error
+      } finally {
+        this.refresh()
+      }
     }
   }
 })

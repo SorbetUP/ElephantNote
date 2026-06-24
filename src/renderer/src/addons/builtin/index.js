@@ -9,7 +9,8 @@ export const addonInspectorAddon = {
     permissions: [],
     contributes: {
       settings: true,
-      actions: true
+      actions: true,
+      sidebar: true
     }
   },
 
@@ -19,6 +20,14 @@ export const addonInspectorAddon = {
       title: 'Open Addon Inspector',
       description: 'Open the Addons settings page.',
       run: () => ctx.router?.push?.('/preference/addons')
+    })
+
+    ctx.addSidebarItem({
+      id: 'elephant.addon-inspector.rail',
+      title: 'Addon Inspector',
+      tooltip: 'Open Addon Inspector',
+      actionId: 'elephant.addon-inspector.open',
+      order: 100
     })
 
     ctx.addSettingsSection({

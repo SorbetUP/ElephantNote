@@ -230,6 +230,31 @@ fn sync_metadata_stays_local_and_is_not_tracked_by_git() {
 }
 
 #[test]
+fn legacy_tracked_sync_metadata_is_removed_from_git_index() {
+  let root = unique_temp_dir("legacy-metadata");
+  write_note(&root, "Tracked.md", "# Tracked\n");
+  git(&root, &["init"]);
+  git(&root, &["config", "user.name", "Legacy Sync"]);
+  git(&root, &["config", "user.email", "legacy@example.test"]);
+  fs::create_dir_all(root.join(".elephantnote/sync")).unwrap();
+  fs::write(root.join(".elephantnote/sync/sync-config.json"), "{\"deviceId\":\"legacy\"}\n").unwrap();
+  git(&root, &["add", "-f", ".elephantnote/sync/sync-config.json"]);
+  git(&root, &["commit", "-m", "legacy tracked metadata"]);
+  assert!(git(&root, &["ls-files", ".elephantnote/sync"]).contains("sync-config.json"));
+
+  let status = sync_run(vault(&root), Some(json!({
+    "snapshot": { "message": "remove legacy metadata from index" }
+  }))).unwrap();
+  assert_history(&status, "snapshot");
+
+  let tracked_sync_files = git(&root, &["ls-files", ".elephantnote/sync"]);
+  assert!(tracked_sync_files.trim().is_empty(), "legacy sync metadata must be untracked: {tracked_sync_files}");
+  assert!(root.join(".elephantnote/sync/sync-config.json").exists());
+
+  fs::remove_dir_all(root).ok();
+}
+
+#[test]
 fn status_reports_dirty_repository_after_uncommitted_note_change() {
   let root = unique_temp_dir("dirty");
   write_note(&root, "Clean.md", "# Clean\n");

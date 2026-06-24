@@ -153,7 +153,7 @@ pub fn tauri_wiki_list(app: AppHandle) -> R<Vec<Value>> {
 }
 
 #[tauri::command]
-pub fn tauri_search_query(app: AppHandle, params: Option<Value>) -> R<Value> {
+pub fn tauri_search_query(app: AppHandle, params: Option<Value>) -> R<Vec<Value>> {
   let vault = get_active_vault(&app)?;
   let params_ref = params.as_ref();
   let query = params_ref
@@ -161,7 +161,7 @@ pub fn tauri_search_query(app: AppHandle, params: Option<Value>) -> R<Value> {
     .unwrap_or_default()
     .to_lowercase();
   if query.trim().is_empty() {
-    return Ok(json!({ "results": [] }));
+    return Ok(Vec::new());
   }
 
   let limit = params_ref
@@ -174,9 +174,9 @@ pub fn tauri_search_query(app: AppHandle, params: Option<Value>) -> R<Value> {
     .unwrap_or(SEARCH_FILE_READ_LIMIT);
 
   let root = std::path::PathBuf::from(&vault.path);
-  let mut results = Vec::new();
+  let mut results = Vec::with_capacity(limit.min(SEARCH_RESULT_LIMIT));
   scan_notes(&root, &root, &mut results, &query, limit, max_file_bytes)?;
-  Ok(json!({ "results": results, "limit": limit, "maxBytesPerFile": max_file_bytes }))
+  Ok(results)
 }
 
 fn read_text_prefix(path: &std::path::Path, max_bytes: usize) -> R<String> {

@@ -29,6 +29,7 @@ for (const file of [
   'src/renderer/src/platform/tauriMarkTextSaveBridge.js',
   'src/renderer/src/main.js',
   'src/renderer/src/store/editor.js',
+  'src-tauri/src/tauri_extra_commands.rs',
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   'Elephant/front/app/utils/noteCardView.js',
   'Elephant/shared/apiContracts.js',
@@ -97,6 +98,15 @@ ordered(
     "ipc.send('mt::tab-save-failure', id, message)"
   ],
   'Tauri save bridge must reject fallback fileUtils, write to disk, and report success/failure'
+)
+ordered(
+  'src-tauri/src/tauri_extra_commands.rs',
+  [
+    'pub fn tauri_notes_write(app: AppHandle, relative_path: String, content: Option<String>, markdown: Option<String>) -> R<Value> {',
+    'let content = content.or(markdown).unwrap_or_default();',
+    'fs::write(&path, content)'
+  ],
+  'Rust note write command must accept both content and markdown payloads before writing to disk'
 )
 ordered(
   'Elephant/shared/apiContracts.js',

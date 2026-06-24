@@ -23,6 +23,20 @@ const optionalEnum = (allowed) => (value) => value === undefined || allowed.incl
 
 const requiredEnum = (allowed) => (value) => allowed.includes(value)
 
+const isSafeLeafFilename = (value) => {
+  if (value === undefined) return true
+  if (typeof value !== 'string') return false
+  const filename = value.trim()
+  if (!filename) return true
+  if (filename === '.' || filename === '..') return false
+  if (filename.includes('\0')) return false
+  if (/[\\/]/.test(filename)) return false
+  if (filename.split(/[\\/]/).some((part) => part === '..')) return false
+  return true
+}
+
+const optionalSafeFilename = (value) => isSafeLeafFilename(value)
+
 const assertObject = (payload, action) => {
   if (!isPlainObject(payload)) {
     const error = new Error(`Invalid payload for ${action}: expected an object.`)
@@ -37,6 +51,20 @@ const assertField = (payload, field, validator, action) => {
     error.code = 'ELEPHANTNOTE_INVALID_API_PAYLOAD'
     throw error
   }
+}
+
+const createInvalidPayloadError = (action, reason) => {
+  const error = new Error(`Invalid payload for ${action}: ${reason}`)
+  error.code = 'ELEPHANTNOTE_INVALID_API_PAYLOAD'
+  return error
+}
+
+const validateMcpToolsCallPayload = (payload, action) => {
+  schema.object({ name: requiredString, arguments: optionalObject })(payload, action)
+  if (payload.name === 'notes.create' && !optionalSafeFilename(payload.arguments?.filename)) {
+    throw createInvalidPayloadError(action, 'notes.create filename must be a simple file name, not a path.')
+  }
+  return payload
 }
 
 export const schema = Object.freeze({
@@ -73,7 +101,8 @@ export const schema = Object.freeze({
   optionalObject,
   optionalSyncOperationArray,
   optionalEnum,
-  requiredEnum
+  requiredEnum,
+  optionalSafeFilename
 })
 
 const action = (key, name, payload = schema.empty) => ({ key, name, payload })
@@ -89,7 +118,6 @@ const aiConfigPayload = schema.strictObject({
   codexLinkEnabled: optionalBoolean,
   defaultProvider: optionalString,
   localAi: optionalObject,
-  localRuntime: optionalObject,
   providers: optionalObject,
   routes: optionalObject,
   localModelSelection: optionalObject,
@@ -127,7 +155,7 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   ]),
   documents: Object.freeze([
     action('DIRECTORY_LIST', 'directory.list', schema.object({ relativePath: optionalString, offset: optionalNumber, limit: optionalNumber, includePreview: optionalBoolean })),
-    action('NOTES_CREATE', 'notes.create', schema.object({ relativePath: optionalString, filename: optionalString, title: optionalString })),
+    action('NOTES_CREATE', 'notes.create', schema.object({ relativePath: optionalString, filename: optionalSafeFilename, title: optionalString })),
     action('NOTES_READ', 'notes.read', schema.object({ relativePath: requiredString })),
     action('NOTES_WRITE', 'notes.write', schema.object({ relativePath: requiredString, markdown: textString })),
     action('FOLDERS_CREATE', 'folders.create', schema.object({ relativePath: optionalString })),
@@ -181,7 +209,7 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
     action('AGENTS_UNREGISTER', 'agents.unregister', schema.object({ id: requiredString })),
     action('AGENTS_SEND', 'agents.send', schema.object({ id: requiredString, message: requiredString })),
     action('MCP_TOOLS_LIST', 'mcp.tools.list'),
-    action('MCP_TOOLS_CALL', 'mcp.tools.call', schema.object({ name: requiredString, arguments: optionalObject })),
+    action('MCP_TOOLS_CALL', 'mcp.tools.call', validateMcpToolsCallPayload),
     action('TASKS_LIST', 'tasks.list'),
     action('TASKS_SET', 'tasks.set', schema.object({ id: requiredString, enabled: optionalBoolean })),
     action('TASKS_RUN', 'tasks.run', schema.object({ id: requiredString })),
@@ -229,13 +257,3 @@ export const listApiContracts = () => Object.values(ELEPHANTNOTE_API_DOMAINS).fl
 export const ELEPHANTNOTE_API_ACTIONS = Object.freeze(
   Object.fromEntries(listApiContracts().map(({ key, name }) => [key, name]))
 )
-
-export const API_PAYLOAD_SCHEMAS = Object.freeze(
-  Object.fromEntries(listApiContracts().map(({ name, payload }) => [name, payload]))
-)
-
-export const validateApiPayload = (actionName, payload = {}) => {
-  const validator = API_PAYLOAD_SCHEMAS[actionName]
-  if (!validator) return payload
-  return validator(payload, actionName)
-}

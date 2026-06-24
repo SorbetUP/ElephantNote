@@ -42,6 +42,7 @@
       "bin"
     ],
     "icon": [
+      "../static/icon.png",
       "../static/icon.ico",
       "../static/icon.icns"
     ]

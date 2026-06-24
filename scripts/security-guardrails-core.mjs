@@ -6,6 +6,26 @@ export const DEFAULT_BASELINE_PATH = 'security/guardrails-baseline.json'
 const BLOCKER = 'blocker'
 const WARNING = 'warning'
 
+const IGNORED_SCAN_DIRECTORIES = new Set([
+  '.git',
+  '.next',
+  '.pnpm-store',
+  '.tauri',
+  'coverage',
+  'dist',
+  'node_modules',
+  'out',
+  'release',
+  'target'
+])
+
+const SAFE_ENV_FILE_NAMES = new Set([
+  '.env.example',
+  '.env.sample',
+  '.env.template',
+  '.env.defaults'
+])
+
 const readText = (filePath) => fs.readFileSync(filePath, 'utf8')
 
 const toRepoPath = (root, absolutePath) => path.relative(root, absolutePath).split(path.sep).join('/')
@@ -24,7 +44,7 @@ const listFiles = (directory, predicate = () => true) => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const absolutePath = path.join(current, entry.name)
       if (entry.isDirectory()) {
-        pending.push(absolutePath)
+        if (!IGNORED_SCAN_DIRECTORIES.has(entry.name)) pending.push(absolutePath)
       } else if (entry.isFile() && predicate(absolutePath)) {
         files.push(absolutePath)
       }
@@ -253,11 +273,114 @@ const scanPackageScripts = (root, findings) => {
   }
 }
 
+const isUnsafeEnvFileName = (fileName) => {
+  if (SAFE_ENV_FILE_NAMES.has(fileName)) return false
+  if (!fileName.startsWith('.env')) return false
+  return fileName === '.env' || fileName.startsWith('.env.') || fileName.startsWith('.env-') || fileName.startsWith('.env_')
+}
+
+const isPrivateKeyFileName = (fileName) => /^(id_rsa|id_dsa|id_ecdsa|id_ed25519|.*\.(pem|key|p12|pfx))$/i.test(fileName)
+
+const SECRET_PATTERNS = [
+  {
+    id: 'SECRET_PRIVATE_KEY_CONTENT',
+    pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/,
+    message: 'Private key material must never be committed. Use a secret manager or local untracked file.'
+  },
+  {
+    id: 'SECRET_GITHUB_TOKEN',
+    pattern: /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/,
+    message: 'GitHub tokens must not be committed.'
+  },
+  {
+    id: 'SECRET_OPENAI_COMPATIBLE_TOKEN',
+    pattern: /\bsk-[A-Za-z0-9]{32,}\b/,
+    message: 'OpenAI-compatible API keys must not be committed.'
+  }
+]
+
+const shouldScanFileContent = (filePath) => {
+  const extension = path.extname(filePath).toLowerCase()
+  const textExtensions = new Set([
+    '',
+    '.c',
+    '.conf',
+    '.css',
+    '.env',
+    '.go',
+    '.html',
+    '.js',
+    '.json',
+    '.jsx',
+    '.md',
+    '.mjs',
+    '.py',
+    '.rs',
+    '.sh',
+    '.toml',
+    '.ts',
+    '.tsx',
+    '.txt',
+    '.vue',
+    '.yaml',
+    '.yml'
+  ])
+  return textExtensions.has(extension)
+}
+
+const scanCommittedSecrets = (root, findings) => {
+  const files = listFiles(root)
+
+  for (const absolutePath of files) {
+    const file = toRepoPath(root, absolutePath)
+    const fileName = path.basename(file)
+
+    if (isUnsafeEnvFileName(fileName)) {
+      findings.push(makeFinding({
+        id: 'SECRET_ENV_FILE_COMMITTED',
+        file,
+        value: fileName,
+        message: 'Real .env files must not be committed. Commit .env.example instead.'
+      }))
+    }
+
+    if (isPrivateKeyFileName(fileName)) {
+      findings.push(makeFinding({
+        id: 'SECRET_PRIVATE_KEY_FILE',
+        file,
+        value: fileName,
+        message: 'Private key or certificate bundle files must not be committed.'
+      }))
+    }
+
+    if (!shouldScanFileContent(absolutePath)) continue
+
+    let content = ''
+    try {
+      content = readText(absolutePath)
+    } catch {
+      continue
+    }
+
+    for (const secretPattern of SECRET_PATTERNS) {
+      const match = content.match(secretPattern.pattern)
+      if (!match) continue
+      findings.push(makeFinding({
+        id: secretPattern.id,
+        file,
+        value: match[0].slice(0, 24),
+        message: secretPattern.message
+      }))
+    }
+  }
+}
+
 export const collectSecurityFindings = (root = process.cwd()) => {
   const findings = []
   scanTauriCapabilities(root, findings)
   scanGitHubWorkflows(root, findings)
   scanPackageScripts(root, findings)
+  scanCommittedSecrets(root, findings)
   return findings.sort((left, right) => makeFindingKey(left).localeCompare(makeFindingKey(right)))
 }
 

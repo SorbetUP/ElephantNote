@@ -20,6 +20,20 @@ describe('builtin addons', () => {
     await manager.enable('elephant.addon-inspector')
 
     expect(manager.getContributions(ADDON_EXTENSION_POINTS.actions)).toHaveLength(1)
+    expect(manager.getContributions(ADDON_EXTENSION_POINTS.sidebarItems)).toHaveLength(1)
     expect(manager.getContributions(ADDON_EXTENSION_POINTS.settingsSections)).toHaveLength(1)
+  })
+
+  it('runs the addon inspector open action', async () => {
+    const pushed = []
+    const manager = new ElephantAddonManager({
+      router: { push: (path) => pushed.push(path) }
+    })
+
+    manager.register(addonInspectorAddon)
+    await manager.enable('elephant.addon-inspector')
+    await manager.runAction('elephant.addon-inspector.open')
+
+    expect(pushed).toEqual(['/preference/addons'])
   })
 })

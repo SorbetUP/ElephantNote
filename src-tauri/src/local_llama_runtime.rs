@@ -4,7 +4,6 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
@@ -141,12 +140,16 @@ fn base_url_from_env_or_payload(payload: &Value) -> String {
   let runtime = local_runtime_config(payload);
   let from_runtime = text(runtime, &["llamaBaseUrl", "baseUrl"]);
   let from_payload = text(payload, &["llamaBaseUrl", "baseUrl"]);
+  if !from_payload.trim().is_empty() {
+    return from_payload.trim_end_matches('/').to_string();
+  }
+  if !from_runtime.trim().is_empty() {
+    return from_runtime.trim_end_matches('/').to_string();
+  }
   env::var("ELEPHANTNOTE_LLAMA_BASE_URL")
     .ok()
     .filter(|value| !value.trim().is_empty())
     .or_else(|| env::var("LLAMA_CPP_BASE_URL").ok().filter(|value| !value.trim().is_empty()))
-    .or_else(|| if from_payload.trim().is_empty() { None } else { Some(from_payload) })
-    .or_else(|| if from_runtime.trim().is_empty() { None } else { Some(from_runtime) })
     .unwrap_or_else(|| DEFAULT_BASE_URL.to_string())
     .trim_end_matches('/')
     .to_string()
@@ -232,9 +235,13 @@ fn server_binary_candidates(app: &AppHandle, payload: &Value) -> Vec<String> {
     out.push(configured_path);
   }
 
-  if !is_path_mode(payload) {
-    out.extend(app_managed_binary_candidates(app));
+  if is_path_mode(payload) {
+    out.sort();
+    out.dedup();
+    return out;
   }
+
+  out.extend(app_managed_binary_candidates(app));
 
   for key in ["ELEPHANTNOTE_LLAMA_SERVER", "LLAMA_SERVER", "LLAMA_CPP_SERVER"] {
     if let Ok(value) = env::var(key) {
@@ -244,15 +251,13 @@ fn server_binary_candidates(app: &AppHandle, payload: &Value) -> Vec<String> {
     }
   }
 
-  if !is_path_mode(payload) {
-    out.extend([
-      LLAMA_SERVER_BIN.to_string(),
-      "llama.cpp-server".to_string(),
-      "llama-cpp-server".to_string(),
-      "/opt/homebrew/bin/llama-server".to_string(),
-      "/usr/local/bin/llama-server".to_string(),
-    ]);
-  }
+  out.extend([
+    LLAMA_SERVER_BIN.to_string(),
+    "llama.cpp-server".to_string(),
+    "llama-cpp-server".to_string(),
+    "/opt/homebrew/bin/llama-server".to_string(),
+    "/usr/local/bin/llama-server".to_string(),
+  ]);
 
   out.sort();
   out.dedup();
@@ -276,7 +281,9 @@ async fn wait_until_ready(base_url: &str) -> bool {
     if server_ready(base_url).await {
       return true;
     }
-    thread::sleep(Duration::from_millis(250));
+    let _ = tauri::async_runtime::spawn_blocking(|| {
+      std::thread::sleep(Duration::from_millis(250));
+    }).await;
   }
   false
 }
@@ -404,5 +411,11 @@ mod tests {
   #[test]
   fn nested_runtime_mode_is_read_from_ai_config() {
     assert!(is_path_mode(&json!({ "aiConfig": { "localRuntime": { "llamaServerMode": "path" } } })));
+  }
+
+  #[test]
+  fn runtime_base_url_overrides_environment_fallback() {
+    let value = json!({ "aiConfig": { "localRuntime": { "llamaBaseUrl": "http://127.0.0.1:49999/v1/" } } });
+    assert_eq!(base_url_from_env_or_payload(&value), "http://127.0.0.1:49999/v1");
   }
 }

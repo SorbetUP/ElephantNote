@@ -32,7 +32,8 @@ export const SYNC_ERROR_CODES = Object.freeze({
 })
 
 export const SYNC_DEFAULT_REMOTE = 'origin'
-export const SYNC_METADATA_DIR = '.elephantnote'
+export const SYNC_METADATA_DIR = '.elephantnote/sync'
+export const SYNC_LEGACY_METADATA_DIR = '.elephantnote'
 export const SYNC_HISTORY_FILE = 'sync-log.json'
 export const SYNC_CONFIG_FILE = 'sync-config.json'
 export const SYNC_BACKENDS = Object.freeze({
@@ -153,13 +154,21 @@ export const createSyncConfig = ({
   version: 2,
   ...createSyncIdentity({ cwd, hostname, now }),
   backend: SYNC_BACKEND_IDS.includes(backend) ? backend : SYNC_BACKENDS.RCLONE,
-  mode: String(mode || 'send-receive'),
+  mode,
   remoteName: remoteName || SYNC_DEFAULT_REMOTE,
-  remote: String(remote || ''),
-  remotePath: String(remotePath || ''),
-  branch: String(branch || ''),
+  remote,
+  remotePath,
+  branch,
   peers: Array.isArray(peers) ? peers : [],
   updatedAt: now.toISOString()
+})
+
+export const createSyncHistoryRecord = (item = {}) => ({
+  id: item.id,
+  operation: item.operation,
+  status: item.status,
+  updatedAt: item.updatedAt,
+  error: item.error || ''
 })
 
 export const createSyncStatus = ({
@@ -170,40 +179,32 @@ export const createSyncStatus = ({
   lastRunAt = '',
   lastError = '',
   config = null,
-  repository = {},
-  syncthing = {}
+  repository = {}
 } = {}) => ({
+  runtime: 'web-git',
   cwd,
-  running: Boolean(running),
+  running,
   deviceId: config?.deviceId || '',
   folderId: config?.folderId || '',
-  backend: config?.backend || SYNC_BACKENDS.RCLONE,
+  backend: config?.backend || SYNC_BACKENDS.GIT,
   remote: config?.remote || '',
   remotePath: config?.remotePath || '',
-  peers: Array.isArray(config?.peers) ? config.peers : [],
-  branch: repository?.branch || config?.branch || '',
-  ahead: Number(repository?.ahead || 0),
-  behind: Number(repository?.behind || 0),
-  dirty: Boolean(repository?.dirty),
+  peers: config?.peers || [],
+  branch: repository.branch || config?.branch || '',
+  ahead: repository.ahead || 0,
+  behind: repository.behind || 0,
+  dirty: Boolean(repository.dirty),
   syncthing: {
-    configured: Boolean(config?.syncthingEndpoint || syncthing?.configured),
-    connected: Boolean(syncthing?.connected),
-    endpoint: syncthing?.endpoint || config?.syncthingEndpoint || '',
-    localDeviceId: syncthing?.localDeviceId || syncthing?.myID || '',
-    folderState: syncthing?.folderState || '',
-    lastError: syncthing?.lastError || ''
+    configured: false,
+    connected: false,
+    endpoint: '',
+    localDeviceId: '',
+    folderState: '',
+    lastError: ''
   },
   queued: queue.filter((item) => item.status === SYNC_STATUSES.QUEUED).length,
   operations: queue.slice(-20),
   history: history.slice(-50),
   lastRunAt,
   lastError
-})
-
-export const createSyncHistoryRecord = (item = {}) => ({
-  id: String(item.id || ''),
-  operation: normalizeSyncOperation(item.operation) || String(item.operation || ''),
-  status: Object.values(SYNC_STATUSES).includes(item.status) ? item.status : SYNC_STATUSES.ERROR,
-  updatedAt: String(item.updatedAt || ''),
-  error: String(item.error || '')
 })

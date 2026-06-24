@@ -1,3 +1,5 @@
+use serde_json::json;
+
 pub mod markdown_engine;
 pub mod markdown;
 pub mod path_utils;
@@ -25,6 +27,20 @@ fn healthcheck() -> &'static str {
   "ok"
 }
 
+#[tauri::command]
+fn tauri_platform_info() -> serde_json::Value {
+  json!({
+    "os": std::env::consts::OS,
+    "family": std::env::consts::FAMILY,
+    "arch": std::env::consts::ARCH,
+    "mobile": cfg!(mobile),
+    "desktop": !cfg!(mobile),
+    "linux": cfg!(target_os = "linux"),
+    "macos": cfg!(target_os = "macos"),
+    "android": cfg!(target_os = "android")
+  })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let builder = tauri::Builder::default()
@@ -40,6 +56,7 @@ pub fn run() {
   builder
     .invoke_handler(tauri::generate_handler![
       healthcheck,
+      tauri_platform_info,
       debug_commands::tauri_debug_log,
       vault::commands::tauri_vaults_get,
       vault::commands::tauri_vaults_select_path,
@@ -121,4 +138,17 @@ pub fn run() {
     ])
     .run(tauri::generate_context!())
     .expect("failed to run Tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn platform_info_contains_target_flags() {
+    let info = tauri_platform_info();
+    assert!(info.get("os").and_then(|value| value.as_str()).is_some());
+    assert!(info.get("arch").and_then(|value| value.as_str()).is_some());
+    assert_eq!(info.get("desktop").and_then(|value| value.as_bool()), Some(!cfg!(mobile)));
+  }
 }

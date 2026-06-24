@@ -24,12 +24,18 @@ export const ALLOWED_SITE_EXTENSIONS = Object.freeze([
   '.json'
 ])
 
+const hasPathValue = (value) => typeof value === 'string' && value.trim().length > 0
+
 export const assertPathInsideVault = (vaultRoot, targetPath) => {
-  const root = path.resolve(vaultRoot || '')
-  const target = path.resolve(targetPath || '')
+  if (!hasPathValue(vaultRoot) || !hasPathValue(targetPath)) {
+    throw new Error('The selected folder is outside the active vault.')
+  }
+
+  const root = path.resolve(vaultRoot)
+  const target = path.resolve(targetPath)
   const relative = path.relative(root, target)
 
-  if (!root || !target || relative.startsWith('..') || path.isAbsolute(relative)) {
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error('The selected folder is outside the active vault.')
   }
 }

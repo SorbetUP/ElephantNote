@@ -25,6 +25,7 @@ const ordered = (relativePath, needles, description) => {
 
 for (const file of [
   'src/renderer/src/platform/bootstrapGlobals.js',
+  'src/renderer/src/platform/tauriLocalIpcBridge.js',
   'src/renderer/src/platform/tauriMarkTextSaveBridge.js',
   'src/renderer/src/main.js',
   'src/renderer/src/store/editor.js',
@@ -52,15 +53,29 @@ ordered(
   'src/renderer/src/main.js',
   [
     "import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'",
+    "import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'",
     'const clearBootstrapFileUtilsFallbackForTauri = () => {',
-    'if (window.__TAURI__ && window.fileUtils?.__elephantnoteBootstrapFallback) {',
-    'delete window.fileUtils',
     'clearBootstrapFileUtilsFallbackForTauri()',
     'installRuntimeBridge()',
     'installTauriElephantNoteBridge()',
-    'installTauriMarkTextSaveBridge()'
+    'installTauriMarkTextSaveBridge()',
+    'installTauriLocalIpcBridge()'
   ],
-  'Tauri MarkText save bridge must clear bootstrap fallback and be installed at boot'
+  'Tauri bridges must clear fallback, install save listener, then route local IPC sends to local listeners'
+)
+ordered(
+  'src/renderer/src/platform/tauriLocalIpcBridge.js',
+  [
+    'const LOCAL_IPC_EVENTS = new Set([',
+    "'mt::response-file-save'",
+    "'mt::tab-saved'",
+    'const nativeSend = ipc.send.bind(ipc)',
+    'ipc.send = (channel, ...args) => {',
+    'if (LOCAL_IPC_EVENTS.has(channel)) {',
+    'dispatchLocalIpcEvent(target, channel, args)',
+    'return nativeSend(channel, ...args)'
+  ],
+  'Tauri renderer-local IPC bridge must bypass core.invoke for MarkText save events'
 )
 ordered(
   'src/renderer/src/store/editor.js',

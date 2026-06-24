@@ -63,6 +63,8 @@ for (const file of [
   'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
   'test/unit/specs/main/elephantnote/syncPlan.spec.js',
   'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
+  '.github/dependabot.yml',
+  '.github/workflows/codeql.yml',
   '.github/workflows/sync-docker.yml'
 ]) {
   if (!fs.existsSync(path.join(root, file))) failures.push(`Missing critical-flow file: ${file}`)
@@ -74,6 +76,8 @@ has('.github/workflows/ci.yml', '- name: Security guardrails\n        run: pnpm 
 has('.github/workflows/ci.yml', 'pnpm exec vitest run test/unit/specs/main/elephantnote', 'ElephantNote contract tests in CI')
 has('.github/workflows/ci.yml', '- name: Cargo check\n        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'blocking Tauri cargo check in main CI')
 has('.github/workflows/tauri-ci.yml', '- name: Cargo check all targets\n        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'blocking Tauri all-target cargo check')
+has('.github/workflows/codeql.yml', 'github/codeql-action/analyze@v3', 'CodeQL security analysis workflow')
+has('.github/dependabot.yml', 'package-ecosystem: cargo', 'Dependabot coverage for Cargo dependencies')
 
 ordered('scripts/security-guardrails-core.mjs', [
   'export const DEFAULT_BASELINE_PATH',
@@ -83,8 +87,13 @@ ordered('scripts/security-guardrails-core.mjs', [
   "id: 'GITHUB_ACTIONS_PULL_REQUEST_TARGET'",
   'const scanPackageScripts',
   "id: 'PACKAGE_SCRIPT_REMOTE_PIPE_TO_SHELL'",
+  'const scanCommittedSecrets',
+  "id: 'SECRET_ENV_FILE_COMMITTED'",
+  "id: 'SECRET_PRIVATE_KEY_CONTENT'",
+  "id: 'SECRET_GITHUB_TOKEN'",
+  "id: 'SECRET_OPENAI_COMPATIBLE_TOKEN'",
   'export const collectSecurityFindings'
-], 'security guardrails must block broad Tauri scopes, unsafe workflows and unsafe package scripts')
+], 'security guardrails must block broad Tauri scopes, unsafe workflows, unsafe scripts and committed secrets')
 ordered('scripts/verify-security-guardrails.mjs', [
   'loadSecurityBaseline(root)',
   'collectSecurityFindings(root)',
@@ -95,6 +104,8 @@ ordered('scripts/verify-security-guardrails.mjs', [
 has('security/guardrails-baseline.json', 'TAURI_FS_SCOPE_BROAD', 'explicit baseline for current broad Tauri fs scopes')
 has('test/unit/specs/main/elephantnote/securityGuardrails.spec.js', 'flags broad Tauri filesystem scopes', 'security guardrail regression test for broad scopes')
 has('test/unit/specs/main/elephantnote/securityGuardrails.spec.js', 'rejects pull_request_target workflows', 'security guardrail regression test for unsafe workflow triggers')
+has('test/unit/specs/main/elephantnote/securityGuardrails.spec.js', 'rejects committed real environment files while allowing examples', 'security guardrail regression test for committed env files')
+has('test/unit/specs/main/elephantnote/securityGuardrails.spec.js', 'rejects private key material in committed files', 'security guardrail regression test for private keys')
 
 ordered('src/renderer/src/platform/bootstrapGlobals.js', [
   '__elephantnoteBootstrapFallback: true',
@@ -149,15 +160,20 @@ ordered('src/renderer/src/platform/tauriMarkTextSaveBridge.js', [
 ], 'Tauri save bridge must write through Rust backend and report result')
 
 ordered('src-tauri/src/tauri_extra_commands.rs', [
+  'fn writable_relative_path(root: &str, relative_path: &str) -> R<PathBuf> {',
   'pub fn tauri_notes_write(app: AppHandle, relative_path: String, content: Option<String>, markdown: Option<String>) -> R<Value> {',
   'let content = content.or(markdown).unwrap_or_default();',
-  'fs::write(&path, content)'
-], 'Rust notes.write must accept markdown alias')
+  'let changed = write_text_if_changed(&path, &content)?;'
+], 'Rust notes.write must accept markdown alias and use the guarded writer')
 ordered('src-tauri/src/tauri_extra_commands.rs', [
-  'pub fn tauri_marktext_write_file(pathname: String, content: String) -> R<Value> {',
+  'fn writable_path_inside_root(root: &Path, candidate: &Path) -> R<PathBuf> {',
+  'pub fn tauri_marktext_write_file(app: AppHandle, pathname: String, content: String) -> R<Value> {',
   'if pathname.trim().is_empty() {',
-  'fs::write(&path, content)'
-], 'Rust MarkText backend writer must write absolute editor file paths')
+  'let path = writable_path_inside_root(Path::new(&root), Path::new(&pathname))?;',
+  'let changed = write_text_if_changed(&path, &content)?;'
+], 'Rust MarkText backend writer must stay inside the active vault and report result')
+has('src-tauri/src/tauri_extra_commands.rs', 'writable_path_inside_root_rejects_absolute_paths_outside_root', 'Rust regression test for refusing writes outside the vault')
+has('src-tauri/src/tauri_extra_commands.rs', 'existing_path_guard_rejects_reads_outside_root', 'Rust regression test for refusing reads outside the vault')
 has('src-tauri/src/lib_min.rs', 'tauri_extra_commands::tauri_marktext_write_file', 'registered MarkText backend writer')
 
 ordered('Elephant/shared/apiContracts.js', [

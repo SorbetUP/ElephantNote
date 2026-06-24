@@ -21,10 +21,15 @@ if [ -z "${ANDROID_HOME:-}${ANDROID_SDK_ROOT:-}" ]; then
   exit 1
 fi
 
+if [ ! -f "$TAURI_DIR/$ANDROID_CONFIG" ]; then
+  echo "Missing Android Tauri config: $TAURI_DIR/$ANDROID_CONFIG" >&2
+  exit 1
+fi
+
 if [ ! -d "$TAURI_DIR/gen/android" ]; then
-  echo "Tauri Android project is not initialized; running cargo tauri android init."
+  echo "Tauri Android project is not initialized; running cargo tauri android init with $ANDROID_CONFIG."
   cd "$TAURI_DIR"
-  cargo tauri android init
+  cargo tauri android init --config "$ANDROID_CONFIG"
 fi
 
 cd "$TAURI_DIR"

@@ -74,6 +74,7 @@ const openFolderInCurrentView = async (relativePath) => {
   store.currentPath = relativePath
   store.openedNotePath = ''
   store.activeWorkspaceView = 'wiki'
+  store.entries = []
 
   try {
     const entries = await elephantnoteClient.directory.list(relativePath)

@@ -12,6 +12,7 @@ pub mod media_domain;
 pub mod drawing_domain;
 pub mod model_domain;
 pub mod model_library;
+pub mod model_safety;
 pub mod local_llama_runtime;
 pub mod chat_runtime;
 pub mod search_logic;
@@ -136,7 +137,7 @@ pub fn run() {
       model_library::tauri_models_download_status,
       model_library::tauri_models_activate,
       model_library::tauri_models_deactivate,
-      model_library::tauri_models_delete,
+      model_safety::tauri_models_delete,
       model_library::tauri_models_active,
       model_library::tauri_models_refresh_index,
       chat_runtime::tauri_rag_chat,

@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import { promisify } from 'util'
 import {
+  SYNC_BACKENDS,
   SYNC_CONFIG_FILE,
   SYNC_DEFAULT_REMOTE,
   SYNC_HISTORY_FILE,
@@ -19,6 +20,7 @@ import {
 } from '../../Elephant/shared/sync.js'
 
 const execFileAsync = promisify(execFile)
+const MAX_QUEUE_ITEMS = 100
 
 const pathExists = async(target) => fs.access(target).then(() => true, () => false)
 const ensureDir = async(target) => fs.mkdir(target, { recursive: true })
@@ -55,7 +57,14 @@ export class WebGitSyncEngine {
   enqueue(operation) {
     const item = createSyncQueueItem(operation, new Date(), { strict: false })
     this.queue.push(item)
+    this.compactQueue()
     return item
+  }
+
+  compactQueue() {
+    const active = this.queue.filter((item) => item.status === SYNC_STATUSES.QUEUED || item.status === SYNC_STATUSES.RUNNING)
+    const completed = this.queue.filter((item) => item.status !== SYNC_STATUSES.QUEUED && item.status !== SYNC_STATUSES.RUNNING)
+    this.queue = [...completed.slice(-MAX_QUEUE_ITEMS), ...active]
   }
 
   status() {
@@ -89,6 +98,7 @@ export class WebGitSyncEngine {
       throw error
     } finally {
       this.running = false
+      this.compactQueue()
     }
   }
 
@@ -128,6 +138,7 @@ export class WebGitSyncEngine {
       ...createSyncConfig({
         cwd: this.cwd,
         hostname: os.hostname(),
+        backend: SYNC_BACKENDS.GIT,
         remote: remote || this.config?.remote || '',
         remoteName: remoteName || this.config?.remoteName || SYNC_DEFAULT_REMOTE,
         branch: branch || this.config?.branch || '',

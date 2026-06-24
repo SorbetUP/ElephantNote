@@ -43,6 +43,7 @@ for (const file of [
   'Elephant/shared/sync.js',
   'Elephant/front/app/services/elephantnoteClient/domainClients.js',
   'test/unit/specs/main/elephantnote/markdownDocument.spec.js',
+  'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
   'test/unit/specs/main/elephantnote/syncPlan.spec.js',
   'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
   '.github/workflows/sync-docker.yml'
@@ -50,9 +51,10 @@ for (const file of [
   if (!fs.existsSync(path.join(root, file))) failures.push(`Missing critical-flow file: ${file}`)
 }
 
-has('.github/workflows/ci.yml', 'node scripts/verify-critical-flows.mjs', 'critical-flow guard in CI')
+has('.github/workflows/ci.yml', '- name: Critical ElephantNote flow guard\n        run: node scripts/verify-critical-flows.mjs', 'blocking critical-flow guard in CI')
 has('.github/workflows/ci.yml', 'pnpm exec vitest run test/unit/specs/main/elephantnote', 'ElephantNote contract tests in CI')
-has('.github/workflows/tauri-ci.yml', 'cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'Tauri all-target cargo check')
+has('.github/workflows/ci.yml', '- name: Cargo check\n        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'blocking Tauri cargo check in main CI')
+has('.github/workflows/tauri-ci.yml', '- name: Cargo check all targets\n        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'blocking Tauri all-target cargo check')
 
 ordered('src/renderer/src/platform/bootstrapGlobals.js', [
   '__elephantnoteBootstrapFallback: true',
@@ -74,11 +76,19 @@ ordered('src/renderer/src/platform/tauriLocalIpcBridge.js', [
   "'mt::response-file-save'",
   "'mt::response-file-save-as'",
   "'mt::open-file'",
+  'const fallbackRelativePath =',
   'target.elephantnote.notes.read({ relativePath })',
   "dispatchLocalIpcEvent(target, 'mt::open-new-tab'",
   'if (LOCAL_IPC_EVENTS.has(channel)) {',
   'dispatchLocalIpcEvent(target, channel, args)'
 ], 'Tauri local IPC must route open, save and save-as events locally')
+
+ordered('test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js', [
+  'opens a vault note through notes.read even when target.path is unavailable',
+  "expect(read).toHaveBeenCalledWith({ relativePath: 'test_keep/Note.md' })",
+  'falls back to native IPC for files outside the active vault',
+  'keeps renderer-local save events local and does not call native IPC'
+], 'Tauri local IPC bridge regression test must cover backend note open and save event routing')
 
 ordered('src/renderer/src/store/editor.js', [
   'HANDLE_AUTO_SAVE({ id, filename, pathname, markdown, options }) {',

@@ -29,6 +29,15 @@ const withFixture = (callback) => {
   }
 }
 
+const privateKeyFixture = [
+  '-----BEGIN PRIVATE KEY-----',
+  'secret',
+  '-----END PRIVATE KEY-----'
+].join('\n')
+
+const githubTokenFixture = ['ghp_', '0123456789abcdefghijklmnop'].join('')
+const openAiCompatibleTokenFixture = ['sk-', '0123456789abcdefghijklmnopqrstuv'].join('')
+
 describe('security guardrails', () => {
   it('flags broad Tauri filesystem scopes', () => withFixture((root) => {
     writeJson(root, 'src-tauri/capabilities/default.json', {
@@ -141,7 +150,7 @@ describe('security guardrails', () => {
   }))
 
   it('rejects private key material in committed files', () => withFixture((root) => {
-    writeText(root, 'fixtures/bad-key.txt', '-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----\n')
+    writeText(root, 'fixtures/bad-key.txt', `${privateKeyFixture}\n`)
 
     const findings = collectSecurityFindings(root)
 
@@ -155,8 +164,8 @@ describe('security guardrails', () => {
 
   it('rejects GitHub and OpenAI-compatible tokens in source files', () => withFixture((root) => {
     writeText(root, 'src/bad.js', `
-      const github = 'ghp_0123456789abcdefghijklmnop'
-      const llm = 'sk-0123456789abcdefghijklmnopqrstuv'
+      const github = '${githubTokenFixture}'
+      const llm = '${openAiCompatibleTokenFixture}'
     `)
 
     const findings = collectSecurityFindings(root)

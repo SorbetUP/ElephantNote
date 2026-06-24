@@ -1,4 +1,3 @@
-import path from 'path'
 import { createWikiMarkdown as createSharedWikiMarkdown, normalizeWikiRecord } from 'common/elephantnote/wiki'
 
 const slugify = (value = '') =>

@@ -56,6 +56,9 @@ assert(buildAndroid.includes('cargo tauri android build --debug --apk --config "
 
 assert(chatRuntime.includes('#[cfg(mobile)]'), 'Chat runtime must have a mobile guard')
 assert(chatRuntime.includes('desktop-only'), 'Mobile chat guard must explain that bundled llama.cpp is desktop-only')
+assert(chatRuntime.includes('#[cfg(not(mobile))]\nuse crate::local_llama_runtime;'), 'Chat runtime must import bundled llama runtime only on desktop')
+assert(chatRuntime.includes('#[cfg(not(mobile))]\nfn with_system_prompt'), 'Desktop prompt assembly must not be required by mobile chat')
+assert(libMin.includes('#[cfg(not(mobile))]\npub mod local_llama_runtime;'), 'Bundled local llama runtime module must be desktop-only')
 assert(vaultConfig.includes('MOBILE_DEFAULT_VAULT_ID'), 'Vault config must define a mobile fallback vault')
 assert(vaultConfig.includes('app_data_dir'), 'Mobile fallback vault must use the app data directory')
 assert(tauriExtra.includes('vault_config::get_active_vault'), 'Extra commands must use the shared vault config path resolver')

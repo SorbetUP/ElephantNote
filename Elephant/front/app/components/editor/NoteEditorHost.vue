@@ -315,8 +315,8 @@ const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.
   }
 }
 
-const scheduleNoteSave = (notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, delay = 150, reason = 'scheduled') => {
-  if (!notePath || !store.activeVault?.path || typeof nextMarkdown !== 'string') return
+const scheduleNoteSave = (notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, delay = 120, reason = 'unknown') => {
+  if (!notePath || typeof nextMarkdown !== 'string') return
   if (lastSavedNotePath === notePath && lastSavedMarkdown === nextMarkdown) return
   if (noteSaveTimer) window.clearTimeout(noteSaveTimer)
   console.info('[elephantnote:save] schedule', { notePath, length: nextMarkdown.length, delay, reason })
@@ -485,23 +485,31 @@ const openExcalidraw = async({ markdown, fileName, title, saveMode, insertOnSave
   excalidrawInsertOnSave.value = !!insertOnSave
   excalidrawTargetPath.value = targetPath
   excalidrawScenePath.value = scenePath
-  excalidrawInitialBlob.value = markdown || ''
+  excalidrawInitialBlob.value = markdown instanceof Blob ? markdown : null
   isExcalidrawOpen.value = true
 }
 const closeExcalidraw = () => {
   isExcalidrawOpen.value = false
   excalidrawInitialBlob.value = null
 }
-const saveExcalidraw = async({ imageBlob, sceneBlob }) => {
-  await window.fileUtils.ensureDir(window.path.dirname(excalidrawTargetPath.value))
-  await window.fileUtils.writeFile(excalidrawTargetPath.value, imageBlob)
-  if (sceneBlob) await window.fileUtils.writeFile(excalidrawScenePath.value, sceneBlob)
+const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {
+  const writableImage = imageBlob || blob
+  if (!writableImage) {
+    console.error('[elephantnote:excalidraw] save failed: missing image payload')
+    return
+  }
+  const resolvedName = fileName || excalidrawFileName.value
+  const targetPath = window.path.join(currentNoteDirectory.value, resolvedName)
+  const scenePath = getExcalidrawScenePath(targetPath)
+  await window.fileUtils.ensureDir(window.path.dirname(targetPath))
+  await window.fileUtils.writeFile(targetPath, writableImage)
+  if (sceneBlob) await window.fileUtils.writeFile(scenePath, sceneBlob)
+  excalidrawFileName.value = resolvedName
+  excalidrawTargetPath.value = targetPath
+  excalidrawScenePath.value = scenePath
   if (excalidrawInsertOnSave.value) {
-    const source = resolveLocalImageSource(excalidrawTargetPath.value, {
-      notePath: currentFile.value?.pathname,
-      vaultPath: store.activeVault?.path
-    })
-    updateCurrentFileMarkdown(`${markdown.value}\n\n![${excalidrawFileName.value}](${source})`)
+    const source = resolveLocalImageSource(targetPath, currentNoteDirectory.value)
+    updateCurrentFileMarkdown(`${markdown.value}\n\n![${resolvedName}](${source})`)
   }
   closeExcalidraw()
 }

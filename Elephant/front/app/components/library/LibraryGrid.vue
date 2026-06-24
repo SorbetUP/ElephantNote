@@ -43,7 +43,9 @@
 
 <script setup>
 import { computed, nextTick, ref } from 'vue'
+import log from 'electron-log/renderer'
 import { useVaultStore } from '../../stores/vaultStore'
+import { elephantnoteClient } from '../../services/elephantnoteClient'
 import NoteCard from './NoteCard.vue'
 import {
   canDropEntryOnDirectory,
@@ -63,9 +65,37 @@ const isLegacyRootWikiEntry = (entry) => {
 
 const visibleEntries = computed(() => store.activeEntries.filter((entry) => !isLegacyRootWikiEntry(entry)))
 
-const openEntry = (entry) => {
+const openFolderInCurrentView = async (relativePath) => {
+  if (store.activeWorkspaceView !== 'wiki') {
+    await store.openDirectory(relativePath)
+    return
+  }
+
+  store.currentPath = relativePath
+  store.openedNotePath = ''
+  store.activeWorkspaceView = 'wiki'
+
+  try {
+    const entries = await elephantnoteClient.directory.list(relativePath)
+    store.entries = Array.isArray(entries) ? entries : []
+    store.activeWorkspaceView = 'wiki'
+    log.info('[wiki] opened folder in library grid', {
+      path: relativePath,
+      entries: store.entries.length
+    })
+  } catch (error) {
+    store.entries = []
+    store.activeWorkspaceView = 'wiki'
+    log.info('[wiki] folder empty or unavailable in library grid', {
+      path: relativePath,
+      error: error?.message || error
+    })
+  }
+}
+
+const openEntry = async (entry) => {
   if (entry.kind === 'folder') {
-    store.openDirectory(entry.path, { workspaceView: store.activeWorkspaceView })
+    await openFolderInCurrentView(entry.path)
   } else {
     store.openNote(entry)
   }

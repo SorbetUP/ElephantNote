@@ -1,4 +1,5 @@
 import { toPlainObject } from '../../../../shared/plainObject.js'
+import { validateApiPayload } from 'common/elephantnote/apiContracts'
 
 const getBridge = () => globalThis.window?.elephantnote
 
@@ -23,13 +24,16 @@ export const unwrapApiEnvelope = async(promise) => {
 }
 
 export const createApiCaller = (legacyCalls = {}) => (action, payload = {}) => {
+  const plainPayload = toPlainObject(payload)
+  const validatedPayload = validateApiPayload(action, plainPayload)
+
   if (isElephantNoteApiAvailable()) {
-    return unwrapApiEnvelope(requireElephantNoteApi().call(action, toPlainObject(payload)))
+    return unwrapApiEnvelope(requireElephantNoteApi().call(action, validatedPayload))
   }
 
   const legacyCall = legacyCalls[action]
   if (!legacyCall) {
     throw new Error(`ElephantNote API is not available for action: ${action}`)
   }
-  return legacyCall(toPlainObject(payload))
+  return legacyCall(validatedPayload)
 }

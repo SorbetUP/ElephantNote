@@ -198,6 +198,21 @@
       >
         <Search class="en-rail-icon-svg" />
       </button>
+
+      <template v-if="addonSidebarItems.length">
+        <div class="en-rail-separator" />
+        <button
+          v-for="item in addonSidebarItems"
+          :key="`${item.addonId}:${item.id}`"
+          class="en-rail-icon"
+          type="button"
+          :title="item.tooltip"
+          :class="{ active: item.view && store.activeWorkspaceView === item.view }"
+          @click="handleAddonSidebarItem(item)"
+        >
+          <Star class="en-rail-icon-svg" />
+        </button>
+      </template>
     </div>
 
     <div class="en-rail-bottom">
@@ -248,6 +263,8 @@ import {
 } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
+import { getAddonSidebarItems } from '@/addons'
+import { useAddonsStore } from '@/store/addons'
 import {
   VAULT_ICON_OPTIONS,
   normalizeVaultIcon
@@ -255,6 +272,7 @@ import {
 
 const emit = defineEmits(['open-settings', 'search', 'toggle-sidebar'])
 const store = useVaultStore()
+const addonsStore = useAddonsStore()
 const WIKI_ROOT = '.elephantnote/wiki'
 
 const featureFlags = ref({ askAi: true })
@@ -290,6 +308,7 @@ const showVaultMenu = ref(false)
 const getVaultIconComponent = (vault) => vaultIconComponentsByName[normalizeVaultIcon(vault?.icon)] || null
 
 const activeVaultIconComponent = computed(() => getVaultIconComponent(store.activeVault))
+const addonSidebarItems = computed(() => getAddonSidebarItems(addonsStore.contributions))
 
 const vaultInitial = (vault) => {
   const name = vault?.name || '?'
@@ -355,6 +374,17 @@ const openWikiRoot = async () => {
   } catch {
     if (!shouldApplyWikiRootResult(vaultId)) return
     store.entries = []
+  }
+}
+
+const handleAddonSidebarItem = async (item) => {
+  if (item.actionId) {
+    await addonsStore.runAction(item.actionId)
+    return
+  }
+
+  if (item.view) {
+    store.setWorkspaceView(item.view)
   }
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  assertPathInsideVault,
   isAllowedSiteFile,
   isIgnoredForSite
 } from '../../Elephant/back/app/sitePreview/pathSafety.js'
@@ -20,6 +21,11 @@ describe('preview and vault file safety', () => {
     expect(isAllowedSiteFile('assets/photo.webp')).toBe(true)
     expect(isAllowedSiteFile('scripts/install.sh')).toBe(false)
     expect(isAllowedSiteFile('bin/native')).toBe(false)
+  })
+
+  it('rejects preview source checks when no active vault root is available', () => {
+    expect(() => assertPathInsideVault('', process.cwd())).toThrow(/outside the active vault/)
+    expect(() => assertPathInsideVault('   ', process.cwd())).toThrow(/outside the active vault/)
   })
 
   it('hides internal vault folders from user-facing listings', () => {

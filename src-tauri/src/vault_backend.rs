@@ -223,7 +223,7 @@ fn search_result(relative_path: String, full_path: PathBuf, markdown: &str, scor
   let metadata = meta(markdown, &relative_path);
   json!({
     "id": format!("tauri:{}", relative_path),
-    "path": relative_path,
+    "path": relative_path.clone(),
     "relativePath": relative_path,
     "fullPath": full_path.to_string_lossy(),
     "title": metadata.get("title").cloned().unwrap_or(json!("Untitled")),

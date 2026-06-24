@@ -200,6 +200,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   },
   sync: {
     status: () => call(API.SYNC_STATUS),
+    plan: (payloadByOperation = {}) => call(API.SYNC_PLAN, payloadByOperation),
     enqueue: (operation, payload = {}) => call(API.SYNC_ENQUEUE, { operation, payload }),
     run: (payloadByOperation = {}) => call(API.SYNC_RUN, payloadByOperation)
   },

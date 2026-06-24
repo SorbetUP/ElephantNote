@@ -31,12 +31,21 @@ for (const file of [
   'src/renderer/src/store/editor.js',
   'src-tauri/src/tauri_extra_commands.rs',
   'src-tauri/src/lib_min.rs',
+  'src-tauri/src/vault/sync.rs',
+  'src-tauri/src/sync_contract_tests.rs',
+  'web/server.mjs',
+  'web/sync/WebGitSyncEngine.mjs',
+  'scripts/sync-two-docker-smoke.mjs',
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   'Elephant/front/app/components/editor/ExcalidrawDialog.vue',
   'Elephant/front/app/utils/noteCardView.js',
   'Elephant/shared/apiContracts.js',
+  'Elephant/shared/sync.js',
   'Elephant/front/app/services/elephantnoteClient/domainClients.js',
-  'test/unit/specs/main/elephantnote/markdownDocument.spec.js'
+  'test/unit/specs/main/elephantnote/markdownDocument.spec.js',
+  'test/unit/specs/main/elephantnote/syncPlan.spec.js',
+  'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
+  '.github/workflows/sync-docker.yml'
 ]) {
   if (!fs.existsSync(path.join(root, file))) failures.push(`Missing critical-flow file: ${file}`)
 }
@@ -141,6 +150,36 @@ ordered('Elephant/front/app/utils/noteCardView.js', [
   'export const getNoteCardExcerpt = (entry) => cleanPreview'
 ], 'note cards must strip compact frontmatter before preview rendering')
 has('test/unit/specs/main/elephantnote/markdownDocument.spec.js', 'hides compact inline frontmatter when no body preview exists', 'note card preview regression test')
+
+ordered('Elephant/shared/sync.js', [
+  'export const createDefaultSyncPlan = (payloadByOperation = {}) => {',
+  'const explicitOperations = normalizeExplicitOperations',
+  'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PULL)',
+  'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PUSH)'
+], 'shared sync plan must keep explicit pull/push operations for multi-device sync')
+has('test/unit/specs/main/elephantnote/syncPlan.spec.js', 'can pull into a second device without creating a local snapshot first', 'sync plan second-device pull regression test')
+has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'preserves direct string enqueue operations', 'web sync direct enqueue regression test')
+has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', "expect(calls).toContainEqual(['rm', '--cached', '--ignore-unmatch'", 'web sync metadata untracking test')
+has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'compacts completed queue items so periodic auto-sync cannot grow memory forever', 'web sync queue compaction regression test')
+has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', "expect(config.backend).toBe('git')", 'web sync git backend regression test')
+has('web/sync/WebGitSyncEngine.mjs', 'normalizeQueueInput', 'web sync queue input normalization')
+has('web/sync/WebGitSyncEngine.mjs', 'untrackSyncMetadata', 'web sync metadata untracking')
+has('web/sync/WebGitSyncEngine.mjs', 'compactQueue()', 'web sync queue compaction')
+has('web/sync/WebGitSyncEngine.mjs', 'backend: SYNC_BACKENDS.GIT', 'web sync reports the git backend')
+has('web/sync/WebGitSyncEngine.mjs', 'ensureGitExclude()', 'web sync must exclude local metadata from shared git history')
+has('src-tauri/src/vault/sync.rs', 'explicit_pull_plan_does_not_force_snapshot', 'Tauri sync plan pull regression')
+has('src-tauri/src/vault/sync.rs', 'ensure_git_exclude', 'Tauri sync metadata exclusion')
+has('src-tauri/src/vault/sync.rs', 'untrack_sync_metadata', 'Tauri legacy sync metadata untracking')
+has('src-tauri/src/sync_contract_tests.rs', 'second_device_can_pull_without_creating_local_snapshot', 'Tauri second-device pull contract test')
+has('src-tauri/src/sync_contract_tests.rs', 'sync_metadata_stays_local_and_is_not_tracked_by_git', 'Tauri sync metadata local-only contract test')
+has('src-tauri/src/sync_contract_tests.rs', 'legacy_tracked_sync_metadata_is_removed_from_git_index', 'Tauri legacy metadata untracking contract test')
+has('web/server.mjs', 'ELEPHANTNOTE_SYNC_AUTO_INTERVAL_MS', 'auto sync loop configuration')
+has('web/server.mjs', '/api/sync/auto/status', 'auto sync status endpoint')
+has('scripts/sync-two-docker-smoke.mjs', 'assertPeerIdentity', 'two-device peer identity detection check')
+has('scripts/sync-two-docker-smoke.mjs', 'stopDevice(deviceB)', 'offline device simulation')
+has('scripts/sync-two-docker-smoke.mjs', 'device B reconnect auto-pull', 'automatic reconnect pull check')
+has('scripts/sync-two-docker-smoke.mjs', 'assertResourceBudget', 'Docker sync memory and runtime budget check')
+has('.github/workflows/sync-docker.yml', 'node scripts/sync-two-docker-smoke.mjs', 'Docker pair sync workflow runs directly with Node')
 
 if (failures.length) {
   console.error('Critical ElephantNote flow guard failed:')

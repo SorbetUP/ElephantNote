@@ -8,6 +8,7 @@ import {
   chunkAtomicMarkdown,
   createAtomicDocument,
   createAtomicSemanticIndex,
+  createTextEmbedding,
   searchAtomicSemanticIndex
 } from 'common/elephantnote/atomicAiEngine'
 import { createSemanticGraph } from './graphLibrary'
@@ -102,30 +103,54 @@ const exactSearchMarkdownFiles = async ({ vaultRoot, query, limit }) => {
   return matches
 }
 
+const coerceEmbeddingVector = (value) => {
+  const raw = Array.isArray(value)
+    ? value
+    : ArrayBuffer.isView(value)
+      ? Array.from(value)
+      : Array.isArray(value?.embedding)
+        ? value.embedding
+        : ArrayBuffer.isView(value?.embedding)
+          ? Array.from(value.embedding)
+          : null
+
+  if (!raw?.length) return null
+  const vector = raw.map((entry) => Number(entry))
+  return vector.every(Number.isFinite) ? vector : null
+}
+
+const runtimeEmbeddingFallback = (text) => createTextEmbedding(text)
+
 const createRuntimeEmbeddedDocument = async ({ relativePath, markdown, embeddingProvider }) => {
   const document = createAtomicDocument({ relativePath, markdown })
   if (!embeddingProvider?.embedText) return document
-  const safeEmbedText = async (text) => {
+  const safeEmbedText = async (text, fallbackEmbedding) => {
     try {
-      return await embeddingProvider.embedText(text)
+      const vector = coerceEmbeddingVector(await embeddingProvider.embedText(text))
+      if (vector) return vector
+      log.warn('[search] embedText returned an invalid vector, using deterministic fallback', {
+        relativePath,
+        source: embeddingProvider?.source || ''
+      })
+      return fallbackEmbedding || runtimeEmbeddingFallback(text)
     } catch (error) {
       log.warn('[search] embedText fallback to deterministic index', {
         relativePath,
         error: error instanceof Error ? error.message : String(error || '')
       })
-      return null
+      return fallbackEmbedding || runtimeEmbeddingFallback(text)
     }
   }
   const chunks = await Promise.all(
     chunkAtomicMarkdown(markdown).map(async (chunk) => ({
       ...chunk,
-      embedding: await safeEmbedText(chunk.content)
+      embedding: await safeEmbedText(chunk.content, chunk.embedding)
     }))
   )
   return {
     ...document,
     chunks,
-    embedding: await safeEmbedText(`${document.title}\n${document.plainText}`)
+    embedding: await safeEmbedText(`${document.title}\n${document.plainText}`, document.embedding)
   }
 }
 
@@ -142,6 +167,28 @@ const readAtomicDocuments = async (vaultRoot, embeddingProvider = null) => {
   return documents
 }
 
+const shouldUseRuntimeQueryEmbedding = (semanticIndex, embeddingProvider) =>
+  semanticIndex?.embeddingSource &&
+  semanticIndex.embeddingSource !== 'deterministic-local' &&
+  Boolean(embeddingProvider?.embedText)
+
+const createRuntimeQueryEmbedding = async ({ query, semanticIndex, embeddingProvider }) => {
+  if (!shouldUseRuntimeQueryEmbedding(semanticIndex, embeddingProvider)) return null
+  try {
+    const vector = coerceEmbeddingVector(await embeddingProvider.embedText(query))
+    if (vector) return vector
+    log.warn('[search] query embedding returned an invalid vector, using deterministic query embedding', {
+      source: embeddingProvider?.source || ''
+    })
+    return null
+  } catch (error) {
+    log.warn('[search] query embedding fallback to deterministic index', {
+      error: error instanceof Error ? error.message : String(error || '')
+    })
+    return null
+  }
+}
+
 const localSearchMarkdownFiles = async ({
   vaultRoot,
   query,
@@ -152,15 +199,11 @@ const localSearchMarkdownFiles = async ({
 }) => {
   if (mode === SEARCH_MODES.EXACT) return exactSearchMarkdownFiles({ vaultRoot, query, limit })
 
-  const queryEmbedding =
-    semanticIndex?.embeddingSource === 'node-llama-cpp' && embeddingProvider?.embedText
-      ? await embeddingProvider.embedText(query).catch((error) => {
-        log.warn('[search] query embedding fallback to deterministic index', {
-          error: error instanceof Error ? error.message : String(error || '')
-        })
-        return null
-      })
-      : null
+  const queryEmbedding = await createRuntimeQueryEmbedding({
+    query,
+    semanticIndex,
+    embeddingProvider
+  })
   const semanticMatches = searchAtomicSemanticIndex({
     index: semanticIndex,
     query,
@@ -453,4 +496,3 @@ export const createSearchLibrary = ({ embeddingProvider = null } = {}) => {
 }
 
 export { createStatus }
-

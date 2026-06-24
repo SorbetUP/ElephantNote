@@ -2,6 +2,10 @@ import { toPlainObject } from '../../../../shared/plainObject.js'
 import { ELEPHANTNOTE_API_ACTIONS as API } from 'common/elephantnote/apiActions'
 
 const getBridge = () => globalThis.window?.elephantnote
+const CHAT_REBUILD_COOLDOWN_MS = 60_000
+let searchVaultInitializedForChat = ''
+let lastChatSearchRebuildVault = ''
+let lastChatSearchRebuildAt = 0
 
 const callModelBridge = (method, payload) => {
   const bridgeMethod = getBridge()?.models?.[method]
@@ -18,21 +22,39 @@ const ensureSearchVaultForChat = async (call) => {
   const vaultPayload = await call(API.VAULTS_GET).catch(() => null)
   const vaultPath = String(vaultPayload?.activeVault?.path || '').trim()
   if (!vaultPath) return ''
-  await call(API.SEARCH_INIT_VAULT, { vaultPath }).catch(() => null)
+  if (searchVaultInitializedForChat === vaultPath) return vaultPath
+  try {
+    await call(API.SEARCH_INIT_VAULT, { vaultPath })
+    searchVaultInitializedForChat = vaultPath
+  } catch {
+    searchVaultInitializedForChat = ''
+  }
   return vaultPath
 }
 
 const hasCitations = (result) => Array.isArray(result?.citations) && result.citations.length > 0
+
+const shouldRebuildChatSearch = (vaultPath, now = Date.now()) => {
+  if (!vaultPath) return false
+  if (lastChatSearchRebuildVault !== vaultPath) return true
+  return now - lastChatSearchRebuildAt >= CHAT_REBUILD_COOLDOWN_MS
+}
+
+const rememberChatSearchRebuild = (vaultPath, now = Date.now()) => {
+  lastChatSearchRebuildVault = vaultPath
+  lastChatSearchRebuildAt = now
+}
 
 const callRagChat = async (call, message, limit = 6) => {
   const vaultPath = await ensureSearchVaultForChat(call)
   const payload = { message, limit }
   const result = await call(API.RAG_CHAT, payload)
 
-  if (hasCitations(result) || !vaultPath) {
+  if (hasCitations(result) || !vaultPath || !shouldRebuildChatSearch(vaultPath)) {
     return result
   }
 
+  rememberChatSearchRebuild(vaultPath)
   await call(API.SEARCH_REBUILD, {}).catch(() => null)
   const retry = await call(API.RAG_CHAT, payload).catch(() => null)
   return retry?.answer || hasCitations(retry) ? retry : result

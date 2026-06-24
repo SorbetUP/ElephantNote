@@ -64,7 +64,7 @@
           </div>
 
           <div
-            v-else-if="store.busy && !store.results.length"
+            v-else-if="store.busy && !hasSearchContent"
             class="en-search-message en-search-message-loading"
           >
             <ScanSearch class="en-search-state-icon" />
@@ -72,7 +72,7 @@
           </div>
 
           <div
-            v-else-if="!store.results.length && hasQuery"
+            v-else-if="!hasSearchContent && hasQuery"
             class="en-search-empty"
           >
             <Search class="en-search-empty-icon" />
@@ -85,18 +85,58 @@
           </div>
 
           <div
-            v-else-if="store.results.length"
+            v-else-if="hasSearchContent"
             class="en-search-results"
           >
-            <SearchResultItem
-              v-for="(result, index) in store.results"
-              :key="result.uri || result.relativePath || index"
-              :result="result"
-              :selected="index === selectedIndex"
-              :query="hasQuery ? store.query : ''"
-              @open="openResult(result)"
-              @mouseenter="selectedIndex = index"
-            />
+            <section
+              v-if="store.conceptResults.length"
+              class="en-search-concepts"
+            >
+              <div class="en-search-section-title">
+                Wikis & concepts
+                <span v-if="store.conceptRoute?.ambiguous">ambiguous query</span>
+              </div>
+              <button
+                v-for="concept in store.conceptResults"
+                :key="concept.id"
+                class="en-search-concept-card"
+                type="button"
+                @click="openConceptEvidence(concept)"
+              >
+                <div class="en-search-concept-main">
+                  <div class="en-search-concept-title">
+                    {{ concept.title }}
+                  </div>
+                  <div class="en-search-concept-meta">
+                    {{ formatConceptMeta(concept) }}
+                  </div>
+                </div>
+                <div class="en-search-concept-score">
+                  {{ Math.round((concept.score || 0) * 100) }}%
+                </div>
+              </button>
+            </section>
+
+            <section
+              v-if="store.results.length"
+              class="en-search-note-results"
+            >
+              <div
+                v-if="store.conceptResults.length"
+                class="en-search-section-title"
+              >
+                Notes & passages
+              </div>
+              <SearchResultItem
+                v-for="(result, index) in store.results"
+                :key="result.uri || result.relativePath || index"
+                :result="result"
+                :selected="index === selectedIndex"
+                :query="hasQuery ? store.query : ''"
+                @open="openResult(result)"
+                @mouseenter="selectedIndex = index"
+              />
+            </section>
           </div>
         </div>
       </transition>
@@ -123,13 +163,14 @@ const query = computed({
 })
 
 const hasQuery = computed(() => store.query.trim().length > 0)
+const hasSearchContent = computed(() => store.results.length > 0 || store.conceptResults.length > 0)
 const showStatus = computed(() => {
   return !['ready', 'not_initialized'].includes(store.status?.status || 'not_initialized')
 })
 const showPanel = computed(() => {
   if (store.error) return true
   if (store.busy) return true
-  if (store.results.length > 0) return true
+  if (hasSearchContent.value) return true
   if (hasQuery.value) return true
   if (showStatus.value) return true
   return false
@@ -148,6 +189,25 @@ const clearQuery = () => {
 
 const openResult = (result) => {
   store.openResult(result)
+}
+
+const openConceptEvidence = (concept) => {
+  const firstEvidence = concept?.evidenceChunks?.find((chunk) => chunk.relativePath || chunk.documentPath)
+  if (!firstEvidence) return
+  store.openResult({
+    relativePath: firstEvidence.relativePath || firstEvidence.documentPath,
+    title: concept.title
+  })
+}
+
+const formatConceptMeta = (concept) => {
+  const evidenceCount = concept?.evidenceChunks?.length || 0
+  if (evidenceCount <= 0) return 'Concept candidate'
+  const first = concept.evidenceChunks[0]
+  const source = first.headingPath?.length
+    ? first.headingPath.join(' › ')
+    : first.relativePath || first.documentPath || 'source chunk'
+  return `${evidenceCount} source chunk${evidenceCount === 1 ? '' : 's'} · ${source}`
 }
 
 const moveSelection = (delta) => {
@@ -185,6 +245,7 @@ const handleKeyDown = (event) => {
       event.preventDefault()
       const result = store.results[selectedIndex.value]
       if (result) openResult(result)
+      else if (store.conceptResults[0]) openConceptEvidence(store.conceptResults[0])
       break
     }
   }
@@ -234,6 +295,8 @@ watch(
 
 const handleClosed = () => {
   store.results = []
+  store.conceptResults = []
+  store.conceptRoute = null
   store.error = ''
   store.busy = false
   selectedIndex.value = 0
@@ -435,7 +498,7 @@ onBeforeUnmount(() => {
 .en-search-results {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
   padding: 0 4px 6px;
   overflow-y: auto;
   overflow-x: hidden;
@@ -448,6 +511,79 @@ onBeforeUnmount(() => {
 .en-search-results::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--en-muted) 28%, transparent);
   border-radius: 999px;
+}
+
+.en-search-concepts,
+.en-search-note-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.en-search-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 8px 4px;
+  color: var(--en-muted);
+  font-size: 11px;
+  font-weight: 760;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.en-search-section-title span {
+  font-size: 10px;
+  font-weight: 720;
+  color: var(--en-primary);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.en-search-concept-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--en-primary) 18%, transparent);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--en-primary) 7%, transparent);
+  color: var(--en-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.en-search-concept-card:hover {
+  background: color-mix(in srgb, var(--en-primary) 12%, transparent);
+}
+
+.en-search-concept-main {
+  min-width: 0;
+}
+
+.en-search-concept-title {
+  font-size: 14px;
+  font-weight: 760;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.en-search-concept-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--en-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.en-search-concept-score {
+  font-size: 12px;
+  font-weight: 760;
+  color: var(--en-primary);
 }
 
 .en-panel-enter-active,

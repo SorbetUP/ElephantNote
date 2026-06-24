@@ -219,6 +219,20 @@ fn note_payload(vault: &Value, relative_path: &str, markdown: String) -> Value {
   let content = markdown.clone();
   json!({ "path": rel(relative_path), "fullPath": path.to_string_lossy(), "markdown": markdown, "content": content, "title": metadata.get("title").cloned().unwrap_or(json!(no_md(filename))), "tags": metadata.get("tags").cloned().unwrap_or(json!([])), "excerpt": metadata.get("excerpt").cloned().unwrap_or(json!("")), "updatedAt": mt(&path), "kind": "note", "type": "note" })
 }
+fn search_result(relative_path: String, full_path: PathBuf, markdown: &str, score: f64) -> Value {
+  let metadata = meta(markdown, &relative_path);
+  json!({
+    "id": format!("tauri:{}", relative_path),
+    "path": relative_path,
+    "relativePath": relative_path,
+    "fullPath": full_path.to_string_lossy(),
+    "title": metadata.get("title").cloned().unwrap_or(json!("Untitled")),
+    "tags": metadata.get("tags").cloned().unwrap_or(json!([])),
+    "excerpt": metadata.get("excerpt").cloned().unwrap_or(json!("")),
+    "score": score,
+    "matchType": "keyword"
+  })
+}
 
 #[tauri::command] pub fn tauri_vaults_get(app: AppHandle) -> R<Value> { let config = rc(&app)?; payload(&app, av(&config)) }
 #[tauri::command] pub fn tauri_vaults_select_path(app: AppHandle, vault_path: String) -> R<Value> { let vault = upsert(&app, vault_path)?; payload(&app, Some(vault)) }
@@ -239,10 +253,56 @@ fn note_payload(vault: &Value, relative_path: &str, markdown: String) -> Value {
 #[tauri::command] pub fn tauri_calendar_list(app: AppHandle) -> R<Vec<Value>> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); Ok(read_json(wp(root, "calendar.json"), json!({ "events": [] })).get("events").and_then(Value::as_array).cloned().unwrap_or_default()) }
 #[tauri::command] pub fn tauri_sources_list(app: AppHandle) -> R<Vec<Value>> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); Ok(read_json(wp(root, "sources.json"), json!({ "sources": [] })).get("sources").and_then(Value::as_array).cloned().unwrap_or_default()) }
 #[tauri::command] pub fn tauri_wiki_list(app: AppHandle) -> R<Vec<Value>> { let vault = active(&app)?; list(&vault, &format!("{}/wiki", META)) }
-#[tauri::command] pub fn tauri_search_query(app: AppHandle, params: Option<Value>) -> R<Value> { let vault = active(&app)?; let query = params.and_then(|value| value.get("query").or_else(|| value.get("q")).and_then(Value::as_str).map(|value| value.to_lowercase())).unwrap_or_default(); if query.trim().is_empty() { return Ok(json!({ "results": [] })); } let mut results = Vec::new(); for (relative_path, full_path, markdown) in all_notes(&vault)? { if markdown.to_lowercase().contains(&query) || relative_path.to_lowercase().contains(&query) { let metadata = meta(&markdown, &relative_path); results.push(json!({ "path": relative_path, "fullPath": full_path.to_string_lossy(), "title": metadata.get("title").cloned().unwrap_or(json!("Untitled")), "tags": metadata.get("tags").cloned().unwrap_or(json!([])), "excerpt": metadata.get("excerpt").cloned().unwrap_or(json!("")), "score": 1 })); } } Ok(json!({ "results": results })) }
-#[tauri::command] pub fn tauri_search_status(app: AppHandle) -> R<Value> { let active_vault = av(&rc(&app)?); let indexed_notes = match active_vault.as_ref() { Some(vault) => all_notes(vault).map(|notes| notes.len()).unwrap_or(0), None => 0 }; Ok(json!({ "enabled": true, "runtime": "tauri-rust", "activeVault": active_vault, "indexedNotes": indexed_notes, "notesIndexed": indexed_notes })) }
+
+#[tauri::command]
+pub fn tauri_search_query(app: AppHandle, params: Option<Value>) -> R<Vec<Value>> {
+  let vault = active(&app)?;
+  let query = params
+    .and_then(|value| value.get("query").or_else(|| value.get("q")).and_then(Value::as_str).map(|value| value.to_lowercase()))
+    .unwrap_or_default();
+  if query.trim().is_empty() { return Ok(Vec::new()); }
+
+  let mut results = Vec::new();
+  for (relative_path, full_path, markdown) in all_notes(&vault)? {
+    if markdown.to_lowercase().contains(&query) || relative_path.to_lowercase().contains(&query) {
+      results.push(search_result(relative_path, full_path, &markdown, 1.0));
+    }
+  }
+  Ok(results)
+}
+
+#[tauri::command] pub fn tauri_search_status(app: AppHandle) -> R<Value> { let active_vault = av(&rc(&app)?); let indexed_notes = match active_vault.as_ref() { Some(vault) => all_notes(vault).map(|notes| notes.len()).unwrap_or(0), None => 0 }; Ok(json!({ "enabled": true, "runtime": "tauri-rust", "activeVault": active_vault, "indexedNotes": indexed_notes, "notesIndexed": indexed_notes, "status": "ready" })) }
 #[tauri::command] pub fn tauri_search_rebuild(app: AppHandle) -> R<Value> { tauri_search_status(app) }
-#[tauri::command] pub fn tauri_search_inspect(app: AppHandle) -> R<Value> { let active_vault = active(&app)?; let notes = all_notes(&active_vault)?; let nodes = notes.iter().map(|(path, _, markdown)| { let metadata = meta(markdown, path); json!({ "id": path, "label": metadata.get("title").cloned().unwrap_or(json!(path)), "path": path, "type": "note" }) }).collect::<Vec<Value>>(); Ok(json!({ "runtime": "tauri-rust", "notesIndexed": notes.len(), "documents": notes.len(), "graph": { "nodes": nodes, "edges": [] } })) }
+
+#[tauri::command]
+pub fn tauri_search_inspect(app: AppHandle) -> R<Value> {
+  let active_vault = active(&app)?;
+  let notes = all_notes(&active_vault)?;
+  let documents = notes.iter().map(|(path, full_path, markdown)| {
+    let metadata = meta(markdown, path);
+    json!({
+      "id": path,
+      "path": path,
+      "relativePath": path,
+      "fullPath": full_path.to_string_lossy(),
+      "title": metadata.get("title").cloned().unwrap_or(json!(path)),
+      "tags": metadata.get("tags").cloned().unwrap_or(json!([])),
+      "excerpt": metadata.get("excerpt").cloned().unwrap_or(json!("")),
+      "kind": "note"
+    })
+  }).collect::<Vec<Value>>();
+  let nodes = documents.iter().map(|document| json!({
+    "id": document.get("relativePath").cloned().unwrap_or(json!("")),
+    "label": document.get("title").cloned().unwrap_or(json!("Untitled")),
+    "title": document.get("title").cloned().unwrap_or(json!("Untitled")),
+    "path": document.get("relativePath").cloned().unwrap_or(json!("")),
+    "relativePath": document.get("relativePath").cloned().unwrap_or(json!("")),
+    "kind": "note",
+    "type": "note"
+  })).collect::<Vec<Value>>();
+  Ok(json!({ "runtime": "tauri-rust", "notesIndexed": documents.len(), "documents": documents, "folders": [], "semanticLinks": [], "graph": { "nodes": nodes, "edges": [], "clusters": [] } }))
+}
+
 #[tauri::command] pub fn tauri_features_get(app: AppHandle) -> R<Value> { app_json(&app, FEATURES_CFG, default_features()) }
 #[tauri::command] pub fn tauri_features_set(app: AppHandle, key: String, enabled: Option<bool>) -> R<Value> { let mut features = app_json(&app, FEATURES_CFG, default_features())?; if !features.is_object() { features = default_features(); } features[key.as_str()] = json!(enabled.unwrap_or(true)); write_app_json(&app, FEATURES_CFG, &features)?; Ok(features) }
 #[tauri::command] pub fn tauri_ai_config_get(app: AppHandle) -> R<Value> { app_json(&app, AI_CFG, default_ai_config()) }
@@ -250,6 +310,43 @@ fn note_payload(vault: &Value, relative_path: &str, markdown: String) -> Value {
 #[tauri::command] pub fn tauri_ai_config_test(config: Option<Value>) -> R<Value> { let started = Instant::now(); Ok(json!({ "ok": true, "runtime": "tauri-rust", "latencyMs": started.elapsed().as_millis() as u64, "message": "Tauri bridge configuration is reachable.", "config": config.unwrap_or(json!({})) })) }
 #[tauri::command] pub fn tauri_models_get_selection(app: AppHandle) -> R<Value> { app_json(&app, MODEL_SELECTION_CFG, json!({})) }
 #[tauri::command] pub fn tauri_models_set_selection(app: AppHandle, selection: Value) -> R<Value> { let normalized = if selection.is_object() { selection } else { json!({}) }; write_app_json(&app, MODEL_SELECTION_CFG, &normalized)?; let mut ai_config = app_json(&app, AI_CFG, default_ai_config())?; if ai_config.is_object() { ai_config["localModelSelection"] = normalized.clone(); let _ = write_app_json(&app, AI_CFG, &ai_config); } Ok(normalized) }
+#[tauri::command] pub fn tauri_models_list() -> R<Vec<Value>> { Ok(Vec::new()) }
+#[tauri::command] pub fn tauri_models_list_local() -> R<Vec<Value>> { Ok(Vec::new()) }
+#[tauri::command] pub fn tauri_models_active(app: AppHandle) -> R<Value> { Ok(json!({ "runtime": "tauri-rust", "selection": tauri_models_get_selection(app)? })) }
+#[tauri::command] pub fn tauri_models_search_hugging_face(payload: Option<Value>) -> R<Value> { Ok(json!({ "ok": false, "runtime": "tauri-rust", "reason": "Hugging Face search is handled by the Electron backend until the Rust model library is implemented.", "payload": payload.unwrap_or(json!({})) })) }
+#[tauri::command] pub fn tauri_models_info(payload: Option<Value>) -> R<Value> { Ok(json!({ "ok": false, "runtime": "tauri-rust", "reason": "Model info is not implemented in the Rust Tauri backend yet.", "payload": payload.unwrap_or(json!({})) })) }
+#[tauri::command] pub fn tauri_models_download(payload: Option<Value>) -> R<Value> { Ok(json!({ "ok": false, "runtime": "tauri-rust", "reason": "Model download is not implemented in the Rust Tauri backend yet.", "payload": payload.unwrap_or(json!({})) })) }
+#[tauri::command] pub fn tauri_models_cancel_download(payload: Option<Value>) -> R<Value> { Ok(json!({ "ok": true, "runtime": "tauri-rust", "cancelled": false, "payload": payload.unwrap_or(json!({})) })) }
+#[tauri::command] pub fn tauri_models_download_status(payload: Option<Value>) -> R<Value> { Ok(json!({ "ok": true, "runtime": "tauri-rust", "status": "not_started", "payload": payload.unwrap_or(json!({})) })) }
+#[tauri::command] pub fn tauri_models_activate(payload: Option<Value>) -> R<Value> { Ok(json!({ "ok": false, "runtime": "tauri-rust", "reason": "Model activation is not implemented in the Rust Tauri backend yet.", "payload": payload.unwrap_or(json!({})) })) }
+#[tauri::command] pub fn tauri_models_deactivate(payload: Option<Value>) -> R<Value> { Ok(json!({ "ok": true, "runtime": "tauri-rust", "payload": payload.unwrap_or(json!({})) })) }
+#[tauri::command] pub fn tauri_models_delete(payload: Option<Value>) -> R<Value> { Ok(json!({ "ok": false, "runtime": "tauri-rust", "reason": "Model deletion is not implemented in the Rust Tauri backend yet.", "payload": payload.unwrap_or(json!({})) })) }
+#[tauri::command] pub fn tauri_models_refresh_index() -> R<Value> { Ok(json!({ "ok": true, "runtime": "tauri-rust", "models": [] })) }
+
+#[tauri::command]
+pub fn tauri_rag_chat(app: AppHandle, payload: Option<Value>) -> R<Value> {
+  let payload = payload.unwrap_or(json!({}));
+  let message = payload.get("message").or_else(|| payload.get("query")).and_then(Value::as_str).unwrap_or("").to_string();
+  let limit = payload.get("limit").and_then(Value::as_u64).unwrap_or(6).max(1).min(20) as usize;
+  let active_vault = active(&app)?;
+  let query = message.to_lowercase();
+  let mut citations = Vec::new();
+  if !query.trim().is_empty() {
+    for (relative_path, full_path, markdown) in all_notes(&active_vault)? {
+      if citations.len() >= limit { break; }
+      if markdown.to_lowercase().contains(&query) || relative_path.to_lowercase().contains(&query) {
+        citations.push(search_result(relative_path, full_path, &markdown, 1.0));
+      }
+    }
+  }
+  Ok(json!({
+    "answer": if citations.is_empty() { "Le runtime RAG Tauri est joignable, mais aucun contexte local correspondant n'a été trouvé." } else { "Le runtime RAG Tauri est joignable. J'ai trouvé du contexte local correspondant dans la vault." },
+    "citations": citations,
+    "runtime": "tauri-rust",
+    "model": "tauri-local-search-fallback"
+  }))
+}
+
 #[tauri::command] pub fn tauri_sync_status(app: AppHandle) -> R<Value> { Ok(json!({ "runtime": "tauri-rust", "activeVault": av(&rc(&app)?), "queued": 0, "running": false, "lastRunAt": null })) }
 #[tauri::command] pub fn tauri_sync_plan(app: AppHandle) -> R<Value> { Ok(json!({ "runtime": "tauri-rust", "activeVault": av(&rc(&app)?), "operations": [], "changes": [] })) }
 #[tauri::command] pub fn tauri_sync_enqueue(operation: String, payload: Option<Value>) -> R<Value> { Ok(json!({ "queued": false, "operation": operation, "payload": payload, "reason": "queue-not-enabled-yet" })) }

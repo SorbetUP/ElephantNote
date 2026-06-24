@@ -38,6 +38,17 @@ describe('WebGitSyncEngine', () => {
     expect(exclude).toContain('/.elephantnote/sync-log.json')
   })
 
+  it('returns a completed status after a successful sync run', async() => {
+    const cwd = await createTempVault()
+    const engine = new WebGitSyncEngine({ cwd, executor: createNoopGitExecutor() })
+
+    const status = await engine.run({ init: {} })
+
+    expect(status.running).toBe(false)
+    expect(status.queued).toBe(0)
+    expect(status.history.some((item) => item.operation === 'init' && item.status === 'done')).toBe(true)
+  })
+
   it('compacts completed queue items so periodic auto-sync cannot grow memory forever', async() => {
     const cwd = await createTempVault()
     const engine = new WebGitSyncEngine({ cwd, executor: createNoopGitExecutor() })

@@ -83,7 +83,10 @@ import { useVaultStore } from '../../stores/vaultStore'
 import ExcalidrawDialog from './ExcalidrawDialog.vue'
 import NoteEditorFooter from './NoteEditorFooter.vue'
 import NoteEditorTopBar from './NoteEditorTopBar.vue'
-import { getExcalidrawScenePath } from '../../services/excalidraw'
+import {
+  getExcalidrawPreviewPath,
+  getExcalidrawScenePath
+} from '../../services/excalidraw'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
 import { formatShortDate } from '../../services/markdownMetaService'
 import {
@@ -103,7 +106,10 @@ import {
   getThemeMode
 } from 'common/elephantnote/appearance'
 import { useSearchStore } from '../../stores/searchStore'
-import { toMarkdownImageSource } from '../../../../shared/imageSource.js'
+import {
+  resolveLocalImageSource,
+  toMarkdownImageSource
+} from '../../../../shared/imageSource.js'
 
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
@@ -491,6 +497,12 @@ const toggleTheme = () => {
 }
 const openGraphView = () => bus.emit('ELEPHANT::set-main-view', 'graph')
 
+const readLocalBlob = async(pathname, type = '') => {
+  const content = await window.fileUtils.readFile(pathname)
+  if (content instanceof Blob) return content
+  return new Blob([content], type ? { type } : undefined)
+}
+
 const openExcalidraw = async({ markdown, fileName, title, saveMode, insertOnSave }) => {
   const baseDir = currentNoteDirectory.value
   const targetName = fileName || `drawing-${Date.now()}.png`
@@ -505,6 +517,34 @@ const openExcalidraw = async({ markdown, fileName, title, saveMode, insertOnSave
   excalidrawInitialBlob.value = markdown instanceof Blob ? markdown : null
   isExcalidrawOpen.value = true
 }
+
+const openExcalidrawFromImage = async(src) => {
+  try {
+    const baseDir = currentNoteDirectory.value
+    const imagePath = resolveLocalImageSource(src, baseDir)
+    if (!imagePath) return
+    const previewPath = window.path.extname(imagePath).toLowerCase() === '.excalidraw'
+      ? getExcalidrawPreviewPath(imagePath)
+      : imagePath
+    const scenePath = getExcalidrawScenePath(previewPath)
+    const initialBlob = window.fileUtils?.pathExistsSync?.(scenePath)
+      ? await readLocalBlob(scenePath, 'application/vnd.excalidraw+json')
+      : window.fileUtils?.pathExistsSync?.(previewPath)
+        ? await readLocalBlob(previewPath)
+        : null
+
+    await openExcalidraw({
+      markdown: initialBlob,
+      fileName: window.path.basename(previewPath),
+      title: 'Excalidraw',
+      saveMode: 'png',
+      insertOnSave: false
+    })
+  } catch (error) {
+    console.error('[elephantnote:excalidraw] failed to open image-backed drawing', error)
+  }
+}
+
 const closeExcalidraw = () => {
   isExcalidrawOpen.value = false
   excalidrawInitialBlob.value = null
@@ -535,11 +575,13 @@ const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {
 
 onMounted(() => {
   bus.on('ELEPHANT::open-excalidraw', openExcalidraw)
+  bus.on('open-excalidraw-from-image', openExcalidrawFromImage)
   pollActiveMarkdownSave('mount')
   noteSaveInterval = window.setInterval(() => pollActiveMarkdownSave('interval'), AUTOSAVE_POLL_MS)
 })
 onBeforeUnmount(() => {
   bus.off('ELEPHANT::open-excalidraw', openExcalidraw)
+  bus.off('open-excalidraw-from-image', openExcalidrawFromImage)
   if (noteSaveInterval) {
     window.clearInterval(noteSaveInterval)
     noteSaveInterval = null

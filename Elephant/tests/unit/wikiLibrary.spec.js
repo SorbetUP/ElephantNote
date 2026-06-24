@@ -57,6 +57,59 @@ describe('wikiLibrary', () => {
     expect(proposals[0].summary).toContain('semantic link')
   })
 
+  it('excludes folder graph nodes from wiki proposal citations', () => {
+    const proposals = buildWikiProposalsFromGraph({
+      graph: {
+        nodes: [
+          {
+            id: 'Project',
+            kind: 'folder',
+            title: 'Project'
+          },
+          {
+            id: 'Project/Plan.md',
+            kind: 'note',
+            title: 'Plan',
+            summary: 'A plan for local search'
+          },
+          {
+            id: 'Project/Loose.md',
+            title: 'Loose',
+            summary: 'A note-like graph node without an explicit kind'
+          }
+        ],
+        edges: [
+          {
+            source: 'Project',
+            target: 'Project/Plan.md',
+            type: 'folder',
+            weight: 0.2
+          },
+          {
+            source: 'Project/Plan.md',
+            target: 'Project/Loose.md',
+            type: 'semantic',
+            weight: 0.9
+          }
+        ],
+        clusters: [
+          {
+            id: 'cluster-project',
+            label: 'Project',
+            paths: ['Project', 'Project/Plan.md', 'Project/Loose.md']
+          }
+        ]
+      }
+    })
+
+    expect(proposals).toHaveLength(1)
+    expect(proposals[0].citations.map((citation) => citation.path)).toEqual([
+      'Project/Plan.md',
+      'Project/Loose.md'
+    ])
+    expect(proposals[0].summary).toContain('2 notes')
+  })
+
   it('renders wiki markdown with related graph sources', () => {
     const markdown = createGraphBackedWikiMarkdown({
       topic: 'ai',

@@ -223,10 +223,14 @@ onBeforeUnmount(() => {
   color: var(--en-text);
   background: color-mix(in srgb, var(--en-surface) 34%, var(--en-bg));
   overflow: hidden;
+  contain: layout paint style;
+  content-visibility: auto;
+  contain-intrinsic-size: 208px 360px;
 }
 
 .en-card.is-featured {
   min-height: 286px;
+  contain-intrinsic-size: 286px 720px;
 }
 
 .en-card:hover {

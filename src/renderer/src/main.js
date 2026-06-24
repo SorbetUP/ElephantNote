@@ -87,7 +87,6 @@ installTauriElephantNoteBridge()
 installCodexProviderBridge()
 installTauriMarkTextSaveBridge()
 installTauriLocalIpcBridge()
-const isNonElectronRuntime = () => window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron'
 
 const bootstrapTauriRuntime = async() => {
   pushDiagnosticLog('info', 'bootstrapTauriRuntime:start', { runtime: window.__MARKTEXT_RUNTIME__ })

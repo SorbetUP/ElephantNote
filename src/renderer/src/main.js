@@ -7,6 +7,7 @@ import pinia from './store'
 import './assets/symbolIcon'
 import { installRuntimeBridge } from './platform/runtimeBridge'
 import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
+import { installCodexProviderBridge } from './platform/providerInterface'
 import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'
 import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
@@ -82,6 +83,7 @@ clearBootstrapFileUtilsFallbackForTauri()
 installRuntimeBridge()
 ensurePathResolve()
 installTauriElephantNoteBridge()
+installCodexProviderBridge()
 installTauriMarkTextSaveBridge()
 installTauriLocalIpcBridge()
 const isNonElectronRuntime = () => window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron'
@@ -118,71 +120,32 @@ const bootstrapTauriRuntime = async() => {
 // -----------------------------------------------
 // Be careful when changing code before this line!
 
-const startApp = async() => {
-  try {
-    pushDiagnosticLog('info', 'startApp:start')
-    await bootstrapTauriRuntime()
+const runtime = window.__MARKTEXT_RUNTIME__ || (window.__TAURI__ ? 'tauri' : 'electron')
+window.__MARKTEXT_RUNTIME__ = runtime
 
-    // Create Vue app
-    const app = createApp(Main)
-    installRendererDiagnostics(app)
-
-    // Configure Element Plus with locale
-    app.use(ElementPlus, {
-      locale: en
-    })
-
-    const router = createRouter({
-      history: createWebHashHistory(),
-      // it seems like something might have changed in vue-router? it uses the full "file path" instead of
-      // links like /editor if we use the old createWebHistory()
-      routes: routes(globalThis.marktext.env.type)
-    })
-
-    router.beforeEach((to, from) => {
-      pushDiagnosticLog('info', 'router:navigate', { from: from.fullPath, to: to.fullPath })
-    })
-    router.onError((error) => {
-      pushDiagnosticLog('error', 'router:error', error)
-      showDiagnosticOverlay('Router error', error)
-    })
-
-    app.use(router)
-    app.use(pinia)
-    installGraphRuntimeFixes()
-    installStoreDiagnostics()
-    app.use(i18nPlugin)
-
-    // Configure axios globally
-    app.config.globalProperties.$http = axios
-
-    // Register services globally
-    services.forEach((s) => {
-      app.config.globalProperties['$' + s.name] = s[s.name]
-    })
-
-    // Mount the app
-    app.mount('#app')
-    pushDiagnosticLog('info', 'vue:mounted')
-
-    if (isNonElectronRuntime()) {
-      setTimeout(() => {
-        pushDiagnosticLog('info', 'bootstrap-editor:send-default')
-        window.electron?.ipcRenderer?.send('mt::bootstrap-editor', {
-          addBlankTab: true,
-          markdownList: [],
-          lineEnding: 'lf',
-          sideBarVisibility: false,
-          tabBarVisibility: true,
-          sourceCodeModeEnabled: false
-        })
-      }, 0)
-    }
-  } catch (error) {
-    pushDiagnosticLog('error', 'startApp:fatal', error)
-    showDiagnosticOverlay('Fatal renderer bootstrap error', error)
-    throw error
-  }
+if (runtime === 'tauri') {
+  bootstrapTauriRuntime()
+} else {
+  bootstrapRenderer()
 }
 
-void startApp()
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes
+})
+
+const app = createApp(Main)
+app.use(pinia)
+app.use(router)
+app.use(ElementPlus, { locale: en })
+app.use(i18nPlugin)
+app.config.globalProperties.$http = axios
+app.config.globalProperties.$services = services
+app.mount('#app')
+
+installGraphRuntimeFixes()
+installStoreDiagnostics()
+
+if (import.meta.hot) {
+  import.meta.hot.accept()
+}

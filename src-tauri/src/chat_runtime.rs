@@ -1,6 +1,8 @@
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
+use crate::local_llama_runtime;
+
 type R<T> = Result<T, String>;
 
 fn text(value: &Value, keys: &[&str]) -> String {
@@ -15,17 +17,31 @@ fn text(value: &Value, keys: &[&str]) -> String {
     .to_string()
 }
 
-fn last_user_message(payload: &Value) -> String {
+fn extract_messages(payload: &Value) -> Vec<Value> {
   if let Some(messages) = payload.get("messages").and_then(Value::as_array) {
-    if let Some(message) = messages
+    let out = messages
       .iter()
-      .rev()
-      .find(|message| message.get("role").and_then(Value::as_str).unwrap_or("") == "user")
-    {
-      return text(message, &["content", "text", "message"]);
+      .filter_map(|message| {
+        let role = text(message, &["role"]);
+        let content = text(message, &["content", "text", "message"]);
+        if role.is_empty() || content.is_empty() { None } else { Some(json!({ "role": role, "content": content })) }
+      })
+      .collect::<Vec<_>>();
+    if !out.is_empty() {
+      return out;
     }
   }
-  text(payload, &["message", "prompt", "query", "text"])
+  let message = text(payload, &["message", "prompt", "query", "text"]);
+  if message.is_empty() { Vec::new() } else { vec![json!({ "role": "user", "content": message })] }
+}
+
+fn last_user_message(payload: &Value) -> String {
+  extract_messages(payload)
+    .into_iter()
+    .rev()
+    .find(|message| message.get("role").and_then(Value::as_str).unwrap_or("") == "user")
+    .map(|message| text(&message, &["content", "text", "message"]))
+    .unwrap_or_default()
 }
 
 fn selected_chat_model(payload: &Value) -> String {
@@ -44,11 +60,13 @@ fn selected_chat_model(payload: &Value) -> String {
   .unwrap_or_default()
 }
 
-fn is_greeting(message: &str) -> bool {
-  matches!(
-    message.trim().to_lowercase().as_str(),
-    "hi" | "hello" | "hey" | "salut" | "bonjour" | "coucou"
-  )
+fn with_system_prompt(payload: &Value) -> Vec<Value> {
+  let mut messages = vec![json!({
+    "role": "system",
+    "content": "Tu es l'assistant local d'ElephantNote. Réponds en français par défaut. Si une question concerne les notes, explique ce que tu peux faire et demande une requête précise si le contexte local n'est pas fourni."
+  })];
+  messages.extend(extract_messages(payload));
+  messages
 }
 
 #[tauri::command]
@@ -56,38 +74,68 @@ pub async fn tauri_rag_chat(_app: AppHandle, payload: Value) -> R<Value> {
   let message = last_user_message(&payload);
   let model = selected_chat_model(&payload);
 
+  eprintln!(
+    "[tauri-rag] local GGUF chat request message_len={} selected_chat_model={}",
+    message.chars().count(),
+    if model.is_empty() { "<none>" } else { model.as_str() }
+  );
+
   if message.trim().is_empty() {
     return Ok(json!({
       "answer": "Écris un message pour démarrer le chat.",
       "sources": [],
-      "runtime": "tauri-rust-chat",
-      "provider": "local-gguf",
+      "runtime": "tauri-rust-local-llama.cpp",
+      "provider": "local-llama.cpp",
       "model": model
     }));
   }
 
-  if is_greeting(&message) {
+  if model.trim().is_empty() {
+    let warning = "No local GGUF chat model is selected.";
+    eprintln!("[tauri-rag][warn] {warning}");
     return Ok(json!({
-      "answer": "Bonjour, je suis prêt. Pose-moi une question sur tes notes ou sur le vault courant.",
+      "answer": "Aucun modèle local n’est sélectionné pour le rôle Chat. Sélectionne un modèle GGUF avec le bouton Chat dans la bibliothèque de modèles.",
       "sources": [],
-      "runtime": "tauri-rust-chat",
-      "provider": "local-gguf",
-      "model": model
+      "runtime": "tauri-rust-local-llama.cpp",
+      "provider": "local-llama.cpp",
+      "model": model,
+      "warning": warning
     }));
   }
 
-  let answer = if model.trim().is_empty() {
-    "Aucun modèle local n’est sélectionné pour le rôle Chat. Sélectionne un modèle GGUF avec le bouton Chat dans la bibliothèque de modèles.".to_string()
-  } else {
-    format!("Le modèle local « {model} » est sélectionné pour le chat, mais l’inférence GGUF locale côté Tauri n’est pas encore reliée au runtime. La sélection est maintenant bien détectée.")
-  };
-
-  Ok(json!({
-    "answer": answer,
-    "sources": [],
-    "runtime": "tauri-rust-chat",
-    "provider": "local-gguf",
-    "model": model,
-    "warning": "Local GGUF inference runner is not wired yet."
-  }))
+  let messages = with_system_prompt(&payload);
+  match local_llama_runtime::chat_with_selected_model(&model, &messages, &payload).await {
+    Ok(Some(local)) => Ok(json!({
+      "answer": local.answer,
+      "sources": [],
+      "runtime": "tauri-rust-local-llama.cpp",
+      "provider": local.provider,
+      "model": local.model,
+      "baseUrl": local.base_url,
+      "selectedLocalModel": model
+    })),
+    Ok(None) => {
+      let warning = "Selected local GGUF model resolved to no model path.";
+      eprintln!("[tauri-rag][warn] {warning}");
+      Ok(json!({
+        "answer": warning,
+        "sources": [],
+        "runtime": "tauri-rust-local-llama.cpp",
+        "provider": "local-llama.cpp",
+        "model": model,
+        "warning": warning
+      }))
+    },
+    Err(error) => {
+      eprintln!("[tauri-rag][warn] local GGUF generation failed: {error}");
+      Ok(json!({
+        "answer": format!("Le modèle local « {model} » est sélectionné, mais Tauri n’a pas pu lancer ou joindre le runtime llama.cpp.\n\nDétail technique : {error}"),
+        "sources": [],
+        "runtime": "tauri-rust-local-llama.cpp",
+        "provider": "local-llama.cpp",
+        "model": model,
+        "warning": error
+      }))
+    },
+  }
 }

@@ -24,28 +24,45 @@ pub fn inside(vault_root: &str, relative_path: &str) -> PathBuf {
   if relative_path.is_empty() { PathBuf::from(vault_root) } else { PathBuf::from(vault_root).join(relative_path) }
 }
 
-fn civil_from_days(days_since_unix_epoch: i64) -> (i32, u32, u32) {
-  let z = days_since_unix_epoch + 719_468;
-  let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-  let doe = z - era * 146_097;
-  let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-  let y = yoe + era * 400;
-  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-  let mp = (5 * doy + 2) / 153;
-  let day = doy - (153 * mp + 2) / 5 + 1;
-  let month = mp + if mp < 10 { 3 } else { -9 };
-  let year = y + if month <= 2 { 1 } else { 0 };
-  (year as i32, month as u32, day as u32)
+fn canonical_root(root: &str) -> R<PathBuf> {
+  let root = PathBuf::from(root);
+  fs::create_dir_all(&root).map_err(|e| e.to_string())?;
+  fs::canonicalize(root).map_err(|e| e.to_string())
 }
 
-fn unix_seconds_to_utc_string(seconds: u64) -> String {
-  let days = (seconds / 86_400) as i64;
-  let second_of_day = seconds % 86_400;
-  let (year, month, day) = civil_from_days(days);
-  let hour = second_of_day / 3_600;
-  let minute = (second_of_day % 3_600) / 60;
-  let second = second_of_day % 60;
-  format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.000Z")
+fn existing_path_inside_vault(vault_root: &str, relative_path: &str) -> R<PathBuf> {
+  let root = canonical_root(vault_root)?;
+  let path = fs::canonicalize(inside(vault_root, relative_path)).map_err(|e| e.to_string())?;
+  if !path.starts_with(&root) {
+    return Err(format!("Refusing to access a path outside the active vault: {}", path.to_string_lossy()));
+  }
+  Ok(path)
+}
+
+fn writable_dir_inside_vault(vault_root: &str, relative_path: &str) -> R<PathBuf> {
+  let root = canonical_root(vault_root)?;
+  let directory = inside(vault_root, relative_path);
+  fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+  let directory = fs::canonicalize(directory).map_err(|e| e.to_string())?;
+  if !directory.starts_with(&root) {
+    return Err(format!("Refusing to write outside the active vault: {}", directory.to_string_lossy()));
+  }
+  Ok(directory)
+}
+
+fn sanitize_leaf_name(value: Option<String>, fallback: &str, force_markdown: bool) -> R<String> {
+  let mut name = value.filter(|value| !value.trim().is_empty()).unwrap_or_else(|| fallback.to_string());
+  name = name.trim().replace('\\', "/");
+  if name.contains('/') || name == "." || name == ".." || name.contains('\0') {
+    return Err(format!("Invalid entry file name: {name}"));
+  }
+  if name.starts_with('.') || name.ends_with('~') || name.ends_with(".tmp") {
+    return Err(format!("Refusing unsafe entry file name: {name}"));
+  }
+  if force_markdown && !name.to_lowercase().ends_with(".md") {
+    name.push_str(".md");
+  }
+  Ok(name)
 }
 
 fn entry_updated_at(path: &Path) -> String {
@@ -53,7 +70,7 @@ fn entry_updated_at(path: &Path) -> String {
     .and_then(|m| m.modified())
     .ok()
     .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-    .map(|d| unix_seconds_to_utc_string(d.as_secs()))
+    .map(|d| d.as_secs().to_string())
     .unwrap_or_else(now_string)
 }
 
@@ -80,7 +97,7 @@ fn markdown_title(markdown: &str, fallback: &str) -> String {
 
 pub fn list_directory(vault: &VaultDescriptor, relative_path: &str) -> R<Vec<Value>> {
   let mut entries = Vec::new();
-  let directory = inside(&vault.path, relative_path);
+  let directory = existing_path_inside_vault(&vault.path, relative_path)?;
 
   for item in fs::read_dir(directory).map_err(|e| e.to_string())? {
     let item = item.map_err(|e| e.to_string())?;
@@ -90,8 +107,11 @@ pub fn list_directory(vault: &VaultDescriptor, relative_path: &str) -> R<Vec<Val
     }
 
     let path = item.path();
+    let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+    if metadata.file_type().is_symlink() {
+      continue;
+    }
     let child_relative = normalize_relative_path(&format!("{}/{}", relative_path, name));
-    let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
 
     if metadata.is_dir() {
       let note_count = fs::read_dir(&path)
@@ -150,11 +170,11 @@ fn next_available_name(directory: &Path, base: &str) -> String {
 }
 
 pub fn create_note(vault: &VaultDescriptor, relative_path: Option<String>, filename: Option<String>, title: Option<String>) -> R<Value> {
-  let relative_path = relative_path.unwrap_or_default();
-  let directory = inside(&vault.path, &relative_path);
-  fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+  let relative_path = normalize_relative_path(&relative_path.unwrap_or_default());
+  let directory = writable_dir_inside_vault(&vault.path, &relative_path)?;
 
-  let filename = filename.filter(|f| !f.trim().is_empty()).unwrap_or_else(|| next_available_name(&directory, "Untitled.md"));
+  let filename = sanitize_leaf_name(filename, "Untitled.md", true)?;
+  let filename = next_available_name(&directory, &filename);
   let full_path = directory.join(&filename);
   let title = title.filter(|t| !t.trim().is_empty()).unwrap_or_else(|| filename.trim_end_matches(".md").to_string());
 
@@ -173,9 +193,8 @@ pub fn create_note(vault: &VaultDescriptor, relative_path: Option<String>, filen
 }
 
 pub fn create_folder(vault: &VaultDescriptor, relative_path: Option<String>) -> R<Value> {
-  let relative_path = relative_path.unwrap_or_default();
-  let directory = inside(&vault.path, &relative_path);
-  fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+  let relative_path = normalize_relative_path(&relative_path.unwrap_or_default());
+  let directory = writable_dir_inside_vault(&vault.path, &relative_path)?;
   let folder = next_available_name(&directory, "New Folder");
   let full_path = directory.join(&folder);
   fs::create_dir_all(&full_path).map_err(|e| e.to_string())?;
@@ -214,21 +233,28 @@ pub fn detach_sidebar_entry(vault: &VaultDescriptor, relative_path: String) -> R
 }
 
 pub fn rename_entry(vault: &VaultDescriptor, relative_path: String, title: String) -> R<()> {
-  let source = inside(&vault.path, &relative_path);
+  let source = existing_path_inside_vault(&vault.path, &relative_path)?;
   let parent = source.parent().ok_or_else(|| "Cannot rename vault root.".to_string())?;
-  let mut safe = title.trim().replace('/', "-").replace('\\', "-");
-  if source.extension().and_then(|e| e.to_str()) == Some("md") && !safe.to_lowercase().ends_with(".md") {
-    safe.push_str(".md");
+  let safe = sanitize_leaf_name(Some(title), "Untitled", source.extension().and_then(|e| e.to_str()) == Some("md"))?;
+  let destination = parent.join(safe);
+  if destination.exists() {
+    return Err("Cannot rename entry because the target already exists.".to_string());
   }
-  fs::rename(&source, parent.join(safe)).map_err(|e| e.to_string())
+  fs::rename(&source, destination).map_err(|e| e.to_string())
 }
 
 pub fn move_entry(vault: &VaultDescriptor, relative_path: String, target_directory_path: Option<String>) -> R<()> {
-  let source = inside(&vault.path, &relative_path);
-  let target_dir = inside(&vault.path, target_directory_path.as_deref().unwrap_or(""));
-  fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
+  let source = existing_path_inside_vault(&vault.path, &relative_path)?;
+  let target_dir = writable_dir_inside_vault(&vault.path, target_directory_path.as_deref().unwrap_or(""))?;
+  if target_dir.starts_with(&source) {
+    return Err("Cannot move a folder into itself.".to_string());
+  }
   let name = source.file_name().ok_or_else(|| "Invalid source path.".to_string())?;
-  fs::rename(&source, target_dir.join(name)).map_err(|e| e.to_string())
+  let destination = target_dir.join(name);
+  if destination.exists() {
+    return Err("Cannot move entry because the target already exists.".to_string());
+  }
+  fs::rename(&source, destination).map_err(|e| e.to_string())
 }
 
 pub fn delete_entry(_vault: &VaultDescriptor, _relative_path: String) -> R<Value> {
@@ -253,8 +279,9 @@ mod tests {
   }
 
   #[test]
-  fn formats_entry_timestamps_as_js_parseable_utc_iso() {
-    assert_eq!(unix_seconds_to_utc_string(0), "1970-01-01T00:00:00.000Z");
-    assert_eq!(unix_seconds_to_utc_string(1_717_945_200), "2024-06-09T15:00:00.000Z");
+  fn rejects_path_like_note_filenames() {
+    assert!(sanitize_leaf_name(Some("../secret.md".to_string()), "Untitled.md", true).is_err());
+    assert!(sanitize_leaf_name(Some("nested/file.md".to_string()), "Untitled.md", true).is_err());
+    assert_eq!(sanitize_leaf_name(Some("Note".to_string()), "Untitled.md", true).unwrap(), "Note.md");
   }
 }

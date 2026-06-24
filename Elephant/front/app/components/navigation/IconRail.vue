@@ -329,8 +329,15 @@ const setVaultIcon = async (vaultId, icon) => {
   editingVaultId.value = ''
 }
 
+const shouldApplyWikiRootResult = (vaultId) => {
+  return store.activeWorkspaceView === 'wiki' &&
+    store.currentPath === WIKI_ROOT &&
+    store.activeVaultId === vaultId
+}
+
 const openWikiRoot = async () => {
   const wasAlreadyInWiki = store.activeWorkspaceView === 'wiki'
+  const vaultId = store.activeVaultId
   store.currentPath = WIKI_ROOT
   store.openedNotePath = ''
   store.entries = []
@@ -343,8 +350,10 @@ const openWikiRoot = async () => {
 
   try {
     const entries = await elephantnoteClient.directory.list(WIKI_ROOT)
+    if (!shouldApplyWikiRootResult(vaultId)) return
     store.entries = Array.isArray(entries) ? entries : []
   } catch {
+    if (!shouldApplyWikiRootResult(vaultId)) return
     store.entries = []
   }
 }

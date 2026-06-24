@@ -65,12 +65,19 @@ const isLegacyRootWikiEntry = (entry) => {
 
 const visibleEntries = computed(() => store.activeEntries.filter((entry) => !isLegacyRootWikiEntry(entry)))
 
+const shouldApplyWikiFolderResult = (relativePath, vaultId) => {
+  return store.activeWorkspaceView === 'wiki' &&
+    store.currentPath === relativePath &&
+    store.activeVaultId === vaultId
+}
+
 const openFolderInCurrentView = async (relativePath) => {
   if (store.activeWorkspaceView !== 'wiki') {
     await store.openDirectory(relativePath)
     return
   }
 
+  const vaultId = store.activeVaultId
   store.currentPath = relativePath
   store.openedNotePath = ''
   store.activeWorkspaceView = 'wiki'
@@ -78,6 +85,7 @@ const openFolderInCurrentView = async (relativePath) => {
 
   try {
     const entries = await elephantnoteClient.directory.list(relativePath)
+    if (!shouldApplyWikiFolderResult(relativePath, vaultId)) return
     store.entries = Array.isArray(entries) ? entries : []
     store.activeWorkspaceView = 'wiki'
     log.info('[wiki] opened folder in library grid', {
@@ -85,6 +93,7 @@ const openFolderInCurrentView = async (relativePath) => {
       entries: store.entries.length
     })
   } catch (error) {
+    if (!shouldApplyWikiFolderResult(relativePath, vaultId)) return
     store.entries = []
     store.activeWorkspaceView = 'wiki'
     log.info('[wiki] folder empty or unavailable in library grid', {

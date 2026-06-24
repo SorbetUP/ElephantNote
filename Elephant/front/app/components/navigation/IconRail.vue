@@ -333,11 +333,11 @@ const openWikiRoot = async () => {
   const wasAlreadyInWiki = store.activeWorkspaceView === 'wiki'
   store.currentPath = WIKI_ROOT
   store.openedNotePath = ''
+  store.entries = []
   store.setWorkspaceView('wiki')
 
   if (!wasAlreadyInWiki) return
   if (!store.activeVault?.path) {
-    store.entries = []
     return
   }
 

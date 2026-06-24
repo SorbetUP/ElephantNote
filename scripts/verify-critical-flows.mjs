@@ -31,9 +31,16 @@ for (const file of [
   'src/renderer/src/store/editor.js',
   'src-tauri/src/tauri_extra_commands.rs',
   'src-tauri/src/lib_min.rs',
+  'src-tauri/src/vault/sync.rs',
+  'web/server.mjs',
+  'web/sync/WebGitSyncEngine.mjs',
+  'scripts/sync-two-docker-smoke.mjs',
+  '.github/workflows/sync-docker.yml',
+  'test/unit/specs/main/elephantnote/syncPlan.spec.js',
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   'Elephant/front/app/utils/noteCardView.js',
   'Elephant/shared/apiContracts.js',
+  'Elephant/shared/sync.js',
   'Elephant/front/app/services/elephantnoteClient/domainClients.js'
 ]) {
   if (!fs.existsSync(path.join(root, file))) failures.push(`Missing critical-flow file: ${file}`)
@@ -173,6 +180,26 @@ ordered(
   'note cards must strip compact frontmatter before preview rendering'
 )
 has('test/unit/specs/main/elephantnote/markdownDocument.spec.js', 'hides compact inline frontmatter when no body preview exists', 'note card preview regression test')
+
+ordered(
+  'Elephant/shared/sync.js',
+  [
+    'export const createDefaultSyncPlan = (payloadByOperation = {}) => {',
+    'const explicitOperations = normalizeExplicitOperations',
+    'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PULL)',
+    'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PUSH)'
+  ],
+  'shared sync plan must keep explicit pull/push operations for multi-device sync'
+)
+has('test/unit/specs/main/elephantnote/syncPlan.spec.js', 'can pull into a second device without creating a local snapshot first', 'sync plan second-device pull regression test')
+has('web/sync/WebGitSyncEngine.mjs', 'ensureGitExclude()', 'web sync must exclude local metadata from shared git history')
+has('web/server.mjs', 'ELEPHANTNOTE_SYNC_AUTO_INTERVAL_MS', 'auto sync loop configuration')
+has('web/server.mjs', '/api/sync/auto/status', 'auto sync status endpoint')
+has('scripts/sync-two-docker-smoke.mjs', 'assertPeerIdentity', 'two-device peer identity detection check')
+has('scripts/sync-two-docker-smoke.mjs', 'stopDevice(deviceB)', 'offline device simulation')
+has('scripts/sync-two-docker-smoke.mjs', 'device B reconnect auto-pull', 'automatic reconnect pull check')
+has('scripts/sync-two-docker-smoke.mjs', 'assertResourceBudget', 'Docker sync memory and runtime budget check')
+has('.github/workflows/sync-docker.yml', 'pnpm test:sync:docker:pair', 'Docker pair sync workflow')
 
 if (failures.length) {
   console.error('Critical ElephantNote flow guard failed:')

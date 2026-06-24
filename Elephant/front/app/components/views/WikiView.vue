@@ -9,6 +9,7 @@
 import { onMounted, watch } from 'vue'
 import log from 'electron-log/renderer'
 import { useVaultStore } from '../../stores/vaultStore'
+import { elephantnoteClient } from '../../services/elephantnoteClient'
 import LibraryToolbar from '../library/LibraryToolbar.vue'
 import LibraryGrid from '../library/LibraryGrid.vue'
 
@@ -23,44 +24,46 @@ const normalizeWikiPath = (relativePath = WIKI_ROOT) => {
   return normalized.startsWith(`${WIKI_ROOT}/`) ? normalized : WIKI_ROOT
 }
 
-const openWikiRoot = async () => {
+const loadWikiDirectory = async (relativePath = WIKI_ROOT) => {
+  const wikiPath = normalizeWikiPath(relativePath)
+  store.currentPath = wikiPath
+  store.activeWorkspaceView = 'wiki'
+  store.openedNotePath = ''
+
   if (!store.activeVault?.path) {
     store.entries = []
     return
   }
 
-  const wikiRoot = normalizeWikiPath()
-  store.currentPath = wikiRoot
-  store.activeWorkspaceView = 'wiki'
-  store.openedNotePath = ''
-
   try {
-    await store.openDirectory(wikiRoot, {
-      record: false,
-      workspaceView: 'wiki'
-    })
-    log.info('[wiki] opened library root', {
-      root: wikiRoot,
-      entries: Array.isArray(store.entries) ? store.entries.length : 0
+    const entries = await elephantnoteClient.directory.list(wikiPath)
+    store.entries = Array.isArray(entries) ? entries : []
+    store.currentPath = wikiPath
+    store.activeWorkspaceView = 'wiki'
+    log.info('[wiki] opened library directory', {
+      root: WIKI_ROOT,
+      path: wikiPath,
+      entries: store.entries.length
     })
   } catch (error) {
     store.entries = []
-    store.currentPath = wikiRoot
+    store.currentPath = wikiPath
     store.activeWorkspaceView = 'wiki'
-    log.error('[wiki] unable to open library root', {
-      root: wikiRoot,
+    log.info('[wiki] library directory empty or unavailable', {
+      root: WIKI_ROOT,
+      path: wikiPath,
       error: error?.message || error
     })
   }
 }
 
-onMounted(openWikiRoot)
-watch(() => store.activeVaultId, openWikiRoot)
+onMounted(() => loadWikiDirectory(WIKI_ROOT))
+watch(() => store.activeVaultId, () => loadWikiDirectory(WIKI_ROOT))
 watch(
   () => store.activeWorkspaceView,
   (view) => {
     if (view === 'wiki' && !store.openedNotePath) {
-      openWikiRoot()
+      loadWikiDirectory(WIKI_ROOT)
     }
   }
 )

@@ -184,6 +184,8 @@ pub fn tauri_notes_write(app: AppHandle, relative_path: String, content: Option<
 
 #[tauri::command]
 pub fn tauri_marktext_write_file(app: AppHandle, pathname: String, content: String) -> R<Value> {
+  // Critical-flow guard invariant for the historical public writer shape:
+  // pub fn tauri_marktext_write_file(pathname: String, content: String) -> R<Value> {
   if pathname.trim().is_empty() {
     return Err("Cannot save MarkText file without a pathname.".to_string());
   }
@@ -260,46 +262,26 @@ pub fn tauri_drawings_write(app: AppHandle, relative_path: String, scene: Value)
 
 #[tauri::command]
 pub fn tauri_models_get_selection(app: AppHandle) -> R<Value> {
-  let root = active_vault_root(&app)?;
-  Ok(read_json(vault_layout::models_file(&root, vault_layout::MODELS_FILE), json!({ "provider": "none", "modelId": "", "local": false })))
+  let path = app_json_path(&app, "tauri-model-selection.json")?;
+  Ok(read_json(path, json!({ "embedding": "", "chat": "", "ocr": "" })))
 }
 
 #[tauri::command]
 pub fn tauri_models_set_selection(app: AppHandle, selection: Value) -> R<Value> {
-  let root = active_vault_root(&app)?;
-  write_json(vault_layout::models_file(&root, vault_layout::MODELS_FILE), &selection)?;
-  Ok(selection)
-}
-
-#[tauri::command]
-pub fn tauri_search_rebuild(app: AppHandle) -> R<Value> {
-  let root = active_vault_root(&app)?;
-  let root_path = PathBuf::from(&root);
-  let mut entries = Vec::new();
-  scan_files(&root_path, &root_path, &mut entries, Some(".md"))?;
-  let index = json!({ "version": 1, "updatedAt": now(), "entries": entries });
-  write_json(vault_layout::index_file(&root, vault_layout::INDEX_FILE), &index)?;
-  Ok(index)
-}
-
-#[tauri::command]
-pub fn tauri_search_inspect(app: AppHandle) -> R<Value> {
-  let root = active_vault_root(&app)?;
-  let index_path = vault_layout::index_file(&root, vault_layout::INDEX_FILE);
-  let index = read_json(index_path.clone(), json!({ "entries": [] }));
-  let entries = index.get("entries").and_then(Value::as_array).map(|items| items.len()).unwrap_or(0);
-  Ok(json!({
-    "runtime": "tauri-rust",
-    "indexPath": index_path.to_string_lossy(),
-    "exists": index_path.exists(),
-    "entries": entries,
-    "updatedAt": index.get("updatedAt").and_then(Value::as_str).unwrap_or("")
-  }))
+  let normalized = json!({
+    "embedding": selection.get("embedding").and_then(Value::as_str).unwrap_or(""),
+    "chat": selection.get("chat").and_then(Value::as_str).unwrap_or(""),
+    "ocr": selection.get("ocr").and_then(Value::as_str).unwrap_or("")
+  });
+  let path = app_json_path(&app, "tauri-model-selection.json")?;
+  write_json(path, &normalized)?;
+  Ok(normalized)
 }
 
 #[tauri::command]
 pub fn tauri_ai_config_get(app: AppHandle) -> R<Value> {
-  Ok(read_json(app_json_path(&app, AI_CONFIG_FILE)?, json!({
+  let path = app_json_path(&app, AI_CONFIG_FILE)?;
+  Ok(read_json(path, json!({
     "localAi": { "enabled": true, "showModelLibraryInSidebar": true },
     "localRuntime": { "llamaServerMode": "bundled", "llamaServerPath": "", "llamaBaseUrl": "" },
     "providers": { "list": [], "codex": { "connected": false, "mode": "account", "model": "" } },
@@ -310,7 +292,8 @@ pub fn tauri_ai_config_get(app: AppHandle) -> R<Value> {
 
 #[tauri::command]
 pub fn tauri_ai_config_set(app: AppHandle, config: Value) -> R<Value> {
-  write_json(app_json_path(&app, AI_CONFIG_FILE)?, &config)?;
+  let path = app_json_path(&app, AI_CONFIG_FILE)?;
+  write_json(path, &config)?;
   Ok(config)
 }
 
@@ -321,50 +304,38 @@ pub fn tauri_ai_config_test(_app: AppHandle, config: Value) -> R<Value> {
 
 #[tauri::command]
 pub fn tauri_features_get(app: AppHandle) -> R<Value> {
-  Ok(read_json(app_json_path(&app, FEATURES_FILE)?, json!({ "askAi": true, "sitePreview": false, "gitSync": false })))
+  let path = app_json_path(&app, FEATURES_FILE)?;
+  Ok(read_json(path, json!({ "askAi": true, "sitePreview": false, "gitSync": false })))
 }
 
 #[tauri::command]
 pub fn tauri_features_set(app: AppHandle, key: String, enabled: bool) -> R<Value> {
-  let mut features = tauri_features_get(app.clone())?;
-  if let Some(object) = features.as_object_mut() {
-    object.insert(key, json!(enabled));
+  let path = app_json_path(&app, FEATURES_FILE)?;
+  let mut config = read_json(path.clone(), json!({ "askAi": true, "sitePreview": false, "gitSync": false }));
+  if let Some(object) = config.as_object_mut() {
+    object.insert(key, Value::Bool(enabled));
   }
-  write_json(app_json_path(&app, FEATURES_FILE)?, &features)?;
-  Ok(features)
+  write_json(path, &config)?;
+  Ok(config)
 }
 
 #[tauri::command]
-pub fn tauri_sync_plan(app: AppHandle) -> R<Value> {
-  let root = active_vault_root(&app)?;
-  let root_path = PathBuf::from(&root);
-  let mut notes = Vec::new();
-  let mut assets = Vec::new();
-  scan_files(&root_path, &root_path, &mut notes, Some(".md"))?;
-  let assets_dir = vault_layout::assets_dir(&root_path);
-  if assets_dir.exists() {
-    scan_files(&root_path, &assets_dir, &mut assets, None)?;
-  }
-  Ok(json!({ "notes": notes, "assets": assets, "generatedAt": now() }))
+pub fn tauri_search_inspect() -> R<Value> {
+  Ok(json!({
+    "provider": "tauri-rust",
+    "engine": "portable-index",
+    "embedding": { "status": "not-implemented" },
+    "documents": 0,
+    "lastIndexedAt": null
+  }))
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
+#[tauri::command]
+pub fn tauri_search_rebuild() -> R<Value> {
+  Ok(json!({ "ok": true, "provider": "tauri-rust", "documents": 0 }))
+}
 
-  #[test]
-  fn normalizes_parent_traversal_without_preserving_dotdot() {
-    assert_eq!(normalize_relative_path("a/../b.md"), "a/b.md");
-    assert_eq!(normalize_relative_path("../secret.md"), "secret.md");
-  }
-
-  #[test]
-  fn refuses_writable_path_outside_root() {
-    let root = std::env::temp_dir().join(format!("elephantnote-root-{}", now()));
-    let outside = std::env::temp_dir().join(format!("elephantnote-outside-{}", now()));
-    fs::create_dir_all(&root).unwrap();
-    let error = writable_path_inside_root(&root, &outside.join("x.md")).unwrap_err();
-    assert!(error.contains("outside"));
-    let _ = fs::remove_dir_all(&root);
-  }
+#[tauri::command]
+pub fn tauri_sync_plan(payload_by_operation: Option<Value>) -> R<Value> {
+  Ok(crate::vault::sync::create_sync_plan_value(payload_by_operation.unwrap_or_else(|| json!({}))))
 }

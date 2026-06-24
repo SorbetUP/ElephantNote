@@ -79,6 +79,13 @@ const getSelectedEmbeddingModelId = () => {
   return String(selection.embedding || '').trim()
 }
 
+const getActiveVaultPath = () => {
+  const config = getConfig()
+  const vault = config.vaults.find((item) => item.id === config.activeVaultId)
+  if (!vault?.path) throw new Error('No active ElephantNote vault.')
+  return vault.path
+}
+
 const resolveEmbeddingCatalogEntry = (modelId = '') => (
   ATOMIC_MODEL_CATALOG.find((item) =>
     item.id === modelId ||
@@ -207,10 +214,8 @@ export const registerSearchIpc = () => {
   ensureAtomicIpc()
   ensureEmbeddingProviderRegistered()
 
-  ipcMain.handle('en:search:init-vault', async(event, vaultPath) => {
-    if (typeof vaultPath !== 'string' || !vaultPath.trim()) {
-      throw new Error('A vault path is required.')
-    }
+  ipcMain.handle('en:search:init-vault', async(event) => {
+    const vaultPath = getActiveVaultPath()
     const windowId = getSenderWindowId(event)
     clearInspectCache(windowId)
     log.info('[search] init-vault', { windowId, vaultPath })

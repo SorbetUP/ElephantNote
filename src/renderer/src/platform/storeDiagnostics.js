@@ -1,7 +1,7 @@
 import { useEditorStore } from '@/store/editor'
 import { useLayoutStore } from '@/store/layout'
 import { useProjectStore } from '@/store/project'
-import { pushDiagnosticLog } from './rendererDiagnostics'
+import { isDiagnosticVerbose, pushDiagnosticLog } from './rendererDiagnostics'
 
 const summarizeProject = (store) => ({
   root: store.projectTree?.pathname || null,
@@ -26,6 +26,8 @@ const summarizeLayout = (store) => ({
 })
 
 export const installStoreDiagnostics = () => {
+  if (!isDiagnosticVerbose()) return
+
   const projectStore = useProjectStore()
   const editorStore = useEditorStore()
   const layoutStore = useLayoutStore()
@@ -36,7 +38,7 @@ export const installStoreDiagnostics = () => {
     layout: summarizeLayout(layoutStore)
   })
 
-  projectStore.$subscribe((mutation, state) => {
+  projectStore.$subscribe((mutation) => {
     pushDiagnosticLog('info', 'pinia:project', {
       type: mutation.type,
       events: mutation.events,
@@ -44,14 +46,14 @@ export const installStoreDiagnostics = () => {
     })
   })
 
-  editorStore.$subscribe((mutation, state) => {
+  editorStore.$subscribe((mutation) => {
     pushDiagnosticLog('info', 'pinia:editor', {
       type: mutation.type,
       editor: summarizeEditor(editorStore)
     })
   })
 
-  layoutStore.$subscribe((mutation, state) => {
+  layoutStore.$subscribe((mutation) => {
     pushDiagnosticLog('info', 'pinia:layout', {
       type: mutation.type,
       layout: summarizeLayout(layoutStore)

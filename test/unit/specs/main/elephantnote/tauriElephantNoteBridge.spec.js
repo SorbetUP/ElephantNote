@@ -46,4 +46,16 @@ describe('tauriElephantNoteBridge', () => {
       { command: 'tauri_sync_plan', payload: { payloadByOperation: payload } }
     ])
   })
+
+  it('keeps paged directory.list options when routing through the public API', async() => {
+    const { target, calls } = createTarget()
+    const payload = { relativePath: 'Projects', offset: 120, limit: 121, includePreview: false }
+
+    expect(installTauriElephantNoteBridge(target)).toBe(true)
+    await target.elephantnote.api.call('directory.list', payload)
+
+    expect(calls).toEqual([
+      { command: 'tauri_directory_list', payload }
+    ])
+  })
 })

@@ -81,7 +81,8 @@ export const resolveLocalImageSource = (src = '', baseDirectory = '') => {
   }
 
   if (isAbsoluteLocalPath(decoded)) return normalizeLocalPath(decoded)
-  return normalizeLocalPath(path.resolve(String(baseDirectory || ''), decoded))
+  const pathApi = getPathApi(baseDirectory, decoded)
+  return normalizeLocalPath(pathApi.resolve(String(baseDirectory || ''), decoded))
 }
 
 export const toFileUrl = (filePath = '') => {

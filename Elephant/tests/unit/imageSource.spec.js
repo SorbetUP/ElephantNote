@@ -12,6 +12,10 @@ describe('imageSource utilities', () => {
     expect(resolveLocalImageSource('assets/pic.png', '/vault/notes')).toBe('/vault/notes/assets/pic.png')
   })
 
+  it('resolves local image paths against a Windows base directory', () => {
+    expect(resolveLocalImageSource('assets/pic.png', 'C:/vault/notes')).toBe('C:/vault/notes/assets/pic.png')
+  })
+
   it('preserves external URLs, including query strings', () => {
     expect(resolveLocalImageSource('https://example.test/image.png?token=abc#preview', '/vault/notes')).toBe('https://example.test/image.png?token=abc#preview')
   })
@@ -56,6 +60,7 @@ describe('imageSource utilities', () => {
 
   it('resolves the current note directory before falling back to the workspace root', () => {
     expect(getImageBaseDirectory('/vault/notes/todo.md', '/fallback')).toBe('/vault/notes')
+    expect(getImageBaseDirectory('C:/vault/notes/todo.md', '/fallback')).toBe('C:/vault/notes')
     expect(getImageBaseDirectory('', '/fallback')).toBe('/fallback')
   })
 })

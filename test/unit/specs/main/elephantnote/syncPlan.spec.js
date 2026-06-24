@@ -14,6 +14,17 @@ describe('createDefaultSyncPlan', () => {
     ])
   })
 
+  it('ignores invalid explicit operation payload shapes instead of throwing', () => {
+    expect(operations(createDefaultSyncPlan({ operations: 'pull' }))).toEqual([
+      SYNC_OPERATIONS.INIT,
+      SYNC_OPERATIONS.SNAPSHOT
+    ])
+    expect(operations(createDefaultSyncPlan({ operations: { 0: 'pull' } }))).toEqual([
+      SYNC_OPERATIONS.INIT,
+      SYNC_OPERATIONS.SNAPSHOT
+    ])
+  })
+
   it('adds push when a caller explicitly asks for a remote upload', () => {
     const plan = createDefaultSyncPlan({
       init: { remote: '/git/elephantnote.git' },

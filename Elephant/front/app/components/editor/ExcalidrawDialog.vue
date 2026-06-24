@@ -78,7 +78,7 @@ import {
   createInitialExcalidrawData,
   exportExcalidrawBlob,
   exportExcalidrawSceneBlob,
-  ensureExcalidrawName
+  ensurePngName
 } from '../../services/excalidraw'
 
 const props = defineProps({
@@ -131,7 +131,7 @@ const normalizedBaseName = computed(() => {
   const cleaned = stripKnownExtensions(editableBaseName.value).trim()
   return cleaned || 'drawing'
 })
-const resolvedFileName = computed(() => ensureExcalidrawName(normalizedBaseName.value))
+const resolvedFileName = computed(() => ensurePngName(normalizedBaseName.value))
 
 const handleClose = () => {
   emit('close')

@@ -33,22 +33,61 @@ describe('WebGitSyncEngine', () => {
     expect(engine.status().operations.at(-1).operation).toBe('init')
   })
 
-  it('persists a git backend config and excludes local sync metadata from commits', async() => {
+  it('persists a git backend config in the canonical tauri-compatible sync directory', async() => {
     const cwd = await createTempVault()
     const calls = []
     const engine = new WebGitSyncEngine({ cwd, executor: createNoopGitExecutor(calls) })
 
     await engine.init()
 
-    const config = JSON.parse(await fs.readFile(path.join(cwd, '.elephantnote', 'sync-config.json'), 'utf8'))
+    const config = JSON.parse(await fs.readFile(path.join(cwd, '.elephantnote', 'sync', 'sync-config.json'), 'utf8'))
     const exclude = await fs.readFile(path.join(cwd, '.git', 'info', 'exclude'), 'utf8')
 
     expect(config.backend).toBe('git')
     expect(config.deviceId).toMatch(/^en-/)
     expect(config.folderId).toMatch(/^vault-/)
+    expect(exclude).toContain('/.elephantnote/sync/sync-config.json')
+    expect(exclude).toContain('/.elephantnote/sync/sync-log.json')
     expect(exclude).toContain('/.elephantnote/sync-config.json')
     expect(exclude).toContain('/.elephantnote/sync-log.json')
-    expect(calls).toContainEqual(['rm', '--cached', '--ignore-unmatch', '.elephantnote/sync-config.json', '.elephantnote/sync-log.json'])
+    expect(calls).toContainEqual([
+      'rm',
+      '--cached',
+      '--ignore-unmatch',
+      '.elephantnote/sync/sync-config.json',
+      '.elephantnote/sync/sync-log.json',
+      '.elephantnote/sync-config.json',
+      '.elephantnote/sync-log.json'
+    ])
+  })
+
+  it('migrates legacy root sync config into the canonical sync directory', async() => {
+    const cwd = await createTempVault()
+    await fs.mkdir(path.join(cwd, '.elephantnote'), { recursive: true })
+    await fs.writeFile(path.join(cwd, '.elephantnote', 'sync-config.json'), JSON.stringify({
+      version: 2,
+      deviceId: 'en-legacy-device',
+      folderId: 'vault-legacy-folder',
+      folderLabel: 'Legacy Vault',
+      backend: 'git',
+      mode: 'send-receive',
+      remoteName: 'backup',
+      remote: '/git/legacy.git',
+      remotePath: '',
+      branch: 'notes',
+      peers: [],
+      updatedAt: '0'
+    }), 'utf8')
+    const engine = new WebGitSyncEngine({ cwd, executor: createNoopGitExecutor() })
+
+    await engine.init()
+
+    const migrated = JSON.parse(await fs.readFile(path.join(cwd, '.elephantnote', 'sync', 'sync-config.json'), 'utf8'))
+    expect(migrated.deviceId).toBe('en-legacy-device')
+    expect(migrated.folderId).toBe('vault-legacy-folder')
+    expect(migrated.remoteName).toBe('backup')
+    expect(migrated.remote).toBe('/git/legacy.git')
+    expect(migrated.branch).toBe('notes')
   })
 
   it('returns a completed status after a successful sync run', async() => {

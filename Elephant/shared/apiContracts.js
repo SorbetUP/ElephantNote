@@ -257,3 +257,14 @@ export const listApiContracts = () => Object.values(ELEPHANTNOTE_API_DOMAINS).fl
 export const ELEPHANTNOTE_API_ACTIONS = Object.freeze(
   Object.fromEntries(listApiContracts().map(({ key, name }) => [key, name]))
 )
+
+export const API_PAYLOAD_SCHEMAS = Object.freeze(
+  Object.fromEntries(listApiContracts().map(({ name, payload }) => [name, payload]))
+)
+
+export const validateApiPayload = (actionName, payload = {}) => {
+  const action = String(actionName || '').trim()
+  const validator = API_PAYLOAD_SCHEMAS[action]
+  if (!validator) return schema.empty(payload, action)
+  return validator(payload, action)
+}

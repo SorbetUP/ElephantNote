@@ -187,6 +187,7 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
     action('WIKI_CONTEXT', 'wiki.context', schema.object({ path: requiredString, limit: optionalNumber })),
     action('SEARCH_INIT_VAULT', 'search.initVault', schema.object({ vaultPath: requiredString })),
     action('SEARCH_QUERY', 'search.query', schema.object({ query: requiredString, mode: optionalEnum(['smart', 'exact', 'semantic']), limit: optionalNumber })),
+    action('SEARCH_CONCEPTS', 'search.concepts', schema.object({ query: requiredString, limit: optionalNumber, evidenceLimit: optionalNumber })),
     action('SEARCH_STATUS', 'search.status'),
     action('SEARCH_INSPECT', 'search.inspect'),
     action('SEARCH_REBUILD', 'search.rebuild'),
@@ -212,7 +213,7 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
     action('MCP_TOOLS_CALL', 'mcp.tools.call', validateMcpToolsCallPayload),
     action('TASKS_LIST', 'tasks.list'),
     action('TASKS_SET', 'tasks.set', schema.object({ id: requiredString, enabled: optionalBoolean })),
-    action('TASKS_RUN', 'tasks.run', schema.object({ id: requiredString })),
+    action('TASKS_RUN', 'tasks.run'),
     action('PROGRAMS_LIST', 'programs.list'),
     action('PROGRAMS_SET', 'programs.set', schema.object({ environments: optionalObject })),
     action('PROGRAMS_RUN', 'programs.run', schema.object({ id: requiredString, command: requiredString, cwd: optionalString }))
@@ -263,8 +264,7 @@ export const API_PAYLOAD_SCHEMAS = Object.freeze(
 )
 
 export const validateApiPayload = (actionName, payload = {}) => {
-  const action = String(actionName || '').trim()
-  const validator = API_PAYLOAD_SCHEMAS[action]
-  if (!validator) return schema.empty(payload, action)
-  return validator(payload, action)
+  const validator = API_PAYLOAD_SCHEMAS[actionName]
+  if (!validator) return payload
+  return validator(payload, actionName)
 }

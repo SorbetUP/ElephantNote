@@ -76,7 +76,7 @@ fn escape_html(value: &str) -> String {
 fn fallback_markdown_text(markdown: &str) -> String {
   markdown
     .lines()
-    .map(|line| line.trim().trim_start_matches('#').trim_start_matches(['-', '*', ' ']).trim())
+    .map(|line| line.trim().trim_start_matches(|ch| matches!(ch, '#' | '-' | '*' | ' ')).trim())
     .filter(|line| !line.is_empty() && *line != "---")
     .collect::<Vec<_>>()
     .join("\n")

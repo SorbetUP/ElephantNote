@@ -179,6 +179,7 @@ const handleSave = async () => {
     })
     emit('save', {
       blob,
+      imageBlob: blob,
       fileName: resolvedFileName.value,
       baseName: normalizedBaseName.value,
       sceneBlob
@@ -238,151 +239,68 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 0 8px 0 86px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.08);
-  background: rgba(15, 23, 42, 0.78);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  z-index: 2147483000;
-  pointer-events: auto;
-  user-select: none;
-  -webkit-app-region: drag;
+  background: color-mix(in srgb, var(--en-bg, #0f172a) 92%, transparent);
+  backdrop-filter: blur(16px);
+  z-index: 2;
 }
 
 .en-excalidraw-name-wrap {
-  min-width: 0;
-  width: min(320px, 34vw);
-  max-width: 320px;
-  flex: 0 1 auto;
-  -webkit-app-region: no-drag;
+  flex: 1;
+  max-width: 420px;
 }
 
 .en-excalidraw-name-input {
   width: 100%;
   height: 20px;
   border: 0;
-  outline: none;
-  padding: 0;
-  background: transparent;
-  color: #e5e7eb;
+  outline: 0;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.12);
+  color: inherit;
   font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 20px;
-  letter-spacing: 0;
-  pointer-events: auto;
-  user-select: text;
-  -webkit-app-region: no-drag;
-}
-
-.en-excalidraw-name-input::placeholder {
-  color: #94a3b8;
+  font-size: 12px;
+  padding: 0 8px;
 }
 
 .en-excalidraw-actions {
-  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  pointer-events: auto;
-  -webkit-app-region: no-drag;
+  gap: 6px;
 }
 
 .en-excalidraw-button {
-  width: 20px;
-  min-width: 20px;
-  height: 20px;
-  border: 0;
-  border-radius: 5px;
-  padding: 0;
-  color: var(--en-text, #eef2ff);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 700;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.12);
+  color: inherit;
   cursor: pointer;
-  pointer-events: auto;
-  -webkit-app-region: no-drag;
-  transition:
-    background 140ms ease,
-    transform 140ms ease,
-    opacity 140ms ease;
-}
-
-.en-excalidraw-button.secondary {
-  background: transparent;
-  color: #cbd5e1;
-}
-
-.en-excalidraw-button.secondary:hover {
-  background: rgba(255, 255, 255, 0.06);
+  line-height: 1;
 }
 
 .en-excalidraw-button.primary {
-  background: transparent;
-  color: #86efac;
-}
-
-.en-excalidraw-button.primary:hover:not(:disabled),
-.en-excalidraw-button.secondary:hover:not(:disabled) {
-  transform: translateY(-1px);
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
 }
 
 .en-excalidraw-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.48;
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.en-excalidraw-error {
+  margin: 96px auto;
+  max-width: 520px;
+  border-radius: 16px;
+  padding: 24px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
 }
 
 .en-excalidraw-canvas {
   flex: 1;
   min-height: 0;
-  background: #f8f8f8;
-  padding-top: 28px;
-}
-
-.en-excalidraw-canvas :deep(.excalidraw) {
-  width: 100%;
-  height: 100%;
-}
-
-@media (max-width: 640px) {
-  .en-excalidraw-header {
-    top: 0;
-    height: 28px;
-    padding: 0 8px 0 10px;
-  }
-
-  .en-excalidraw-name-wrap {
-    width: min(220px, 42vw);
-    max-width: 220px;
-  }
-
-  .en-excalidraw-name-input {
-    font-size: 12px;
-  }
-
-  .en-excalidraw-canvas {
-    padding-top: 28px;
-  }
-}
-
-.en-excalidraw-error {
-  margin: 24px;
-  padding: 18px;
-  border: 1px solid #ef4444;
-  border-radius: 10px;
-  background: rgba(127, 29, 29, 0.24);
-}
-
-.en-excalidraw-error p {
-  margin: 8px 0 0;
-}
-</style>
-
-<style>
-body.en-excalidraw-open .ag-image-toolbar,
-body.en-excalidraw-open .ag-quick-insert,
-body.en-excalidraw-open .ag-float-wrapper,
-body.en-excalidraw-open .ag-format-picker,
-body.en-excalidraw-open .ag-front-menu {
-  display: none !important;
 }
 </style>

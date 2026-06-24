@@ -9,6 +9,7 @@ import Theme from '@/prefComponents/theme'
 import Image from '@/prefComponents/image'
 import Keybindings from '@/prefComponents/keybindings'
 import RcloneSettings from '@/prefComponents/rcloneSettings'
+import AddonsSettings from '@/prefComponents/addons'
 
 const parseSettingsPage = (type) => {
   let pageUrl = '/preference'
@@ -78,6 +79,11 @@ const routes = (type) => [
         path: 'rclone',
         component: RcloneSettings,
         name: 'rclone'
+      },
+      {
+        path: 'addons',
+        component: AddonsSettings,
+        name: 'addons'
       }
     ]
   }

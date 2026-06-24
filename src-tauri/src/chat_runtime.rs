@@ -305,6 +305,17 @@ fn provider_array(config: &Value) -> Vec<Value> {
   Vec::new()
 }
 
+fn local_chat_model_selection(config: &Value, payload: &Value) -> String {
+  [
+    value_text(payload.pointer("/modelSelection").unwrap_or(&Value::Null), &["chat"]),
+    value_text(payload.pointer("/localModelSelection").unwrap_or(&Value::Null), &["chat"]),
+    value_text(config.pointer("/localModelSelection").unwrap_or(&Value::Null), &["chat"]),
+  ]
+  .into_iter()
+  .find(|value| !value.is_empty())
+  .unwrap_or_default()
+}
+
 fn selected_provider_id(config: &Value, payload: &Value) -> String {
   [
     value_text(payload, &["providerId", "provider"]),
@@ -322,7 +333,7 @@ fn selected_model(config: &Value, payload: &Value, provider: &Value) -> String {
     value_text(payload, &["model", "modelId"]),
     value_text(route, &["model", "modelId", "id"]),
     value_text(provider, &["model", "modelId", "defaultModel", "chatModel"]),
-    value_text(config.pointer("/localModelSelection").unwrap_or(&Value::Null), &["chat"]),
+    local_chat_model_selection(config, payload),
   ]
   .into_iter()
   .find(|value| !value.is_empty())
@@ -493,26 +504,34 @@ impl IfEmpty for String {
   }
 }
 
-fn fallback_answer(message: &str, sources: &[Value], reason: &str) -> String {
+fn extractive_answer(message: &str, sources: &[Value], reason: &str, selected_local_model: &str) -> String {
+  let mut head = String::from("Réponse RAG locale extractive : je n'ai pas encore de moteur génératif joignable côté Tauri, donc je résume uniquement les notes retrouvées.\n");
+  if !selected_local_model.trim().is_empty() {
+    head.push_str(&format!(
+      "\nModèle Chat sélectionné : `{selected_local_model}`. Attention : le modèle GGUF est installé/sélectionné dans la librairie, mais il n'est pas chargé par un runtime llama.cpp natif dans Tauri. Configure un provider Ollama/OpenAI-compatible, ou branche un runtime llama.cpp serveur, pour obtenir une génération réelle.\n"
+    ));
+  }
+  head.push_str(&format!("\nDétail technique : {reason}\n"));
   if sources.is_empty() {
-    return format!(
-      "Je n'ai pas encore de provider de chat utilisable et je n'ai trouvé aucune note locale pertinente. Détail technique : {reason}"
-    );
+    return format!("{head}\nAucune note locale pertinente trouvée pour « {message} ».");
   }
   let source_lines = sources
     .iter()
-    .take(5)
-    .map(|source| {
+    .take(6)
+    .enumerate()
+    .map(|(index, source)| {
       let title = value_text(source, &["title"]);
       let path = value_text(source, &["path"]);
-      let snippet = compact_text(&value_text(source, &["snippet"]), 180);
-      format!("- {title} ({path}) : {snippet}")
+      let snippet = compact_text(&value_text(source, &["snippet"]), 320);
+      format!("{}. **{}** (`{}`)\n   {}", index + 1, title, path, snippet)
     })
     .collect::<Vec<_>>()
-    .join("\n");
-  format!(
-    "J'ai trouvé des notes locales pertinentes pour « {message} », mais aucun provider de chat n'est encore configuré ou joignable côté Tauri.\n\nSources trouvées :\n{source_lines}\n\nDétail technique : {reason}"
-  )
+    .join("\n\n");
+  format!("{head}\nNotes les plus pertinentes pour « {message} » :\n\n{source_lines}")
+}
+
+fn fallback_answer(message: &str, sources: &[Value], reason: &str, selected_local_model: &str) -> String {
+  extractive_answer(message, sources, reason, selected_local_model)
 }
 
 #[tauri::command]
@@ -527,10 +546,27 @@ pub async fn tauri_rag_chat(app: AppHandle, payload: Value) -> R<Value> {
   let notes = ranked_notes(&PathBuf::from(&root), &message, limit)?;
   let sources = notes.iter().map(source_value).collect::<Vec<_>>();
   let ai_config = payload.get("aiConfig").or_else(|| payload.get("config")).cloned().unwrap_or_else(|| json!({}));
+  let provider_count = provider_array(&ai_config).len();
+  let selected_local_model = local_chat_model_selection(&ai_config, &payload);
+  eprintln!(
+    "[tauri-rag] request message_len={} limit={} notes={} providers={} selected_chat_model={}",
+    message.chars().count(),
+    limit,
+    sources.len(),
+    provider_count,
+    if selected_local_model.is_empty() { "<none>" } else { selected_local_model.as_str() }
+  );
   let provider = choose_provider(&ai_config, &payload);
   let prompt_messages = build_prompt_messages(&payload, &messages, &notes);
   if let Some(provider) = provider {
     let provider_kind = provider.kind.to_lowercase();
+    eprintln!(
+      "[tauri-rag] using provider id={} kind={} base={} model={}",
+      provider.id,
+      provider.kind,
+      provider.base_url,
+      provider.model
+    );
     let result = if provider_kind.contains("ollama") || provider.base_url.contains("11434") {
       call_ollama(&provider, &prompt_messages).await
     } else {
@@ -544,21 +580,39 @@ pub async fn tauri_rag_chat(app: AppHandle, payload: Value) -> R<Value> {
         "provider": provider.id,
         "model": provider.model
       })),
-      Err(error) => Ok(json!({
-        "answer": fallback_answer(&message, &sources, &error),
-        "sources": sources,
-        "runtime": "tauri-rust",
-        "provider": provider.id,
-        "model": provider.model,
-        "warning": error
-      })),
+      Err(error) => {
+        eprintln!(
+          "[tauri-rag][warn] provider failed id={} model={} error={}",
+          provider.id,
+          provider.model,
+          error
+        );
+        Ok(json!({
+          "answer": fallback_answer(&message, &sources, &error, &selected_local_model),
+          "sources": sources,
+          "runtime": "tauri-rust",
+          "provider": provider.id,
+          "model": provider.model,
+          "warning": error,
+          "selectedLocalModel": selected_local_model
+        }))
+      },
     }
   } else {
+    let reason = if selected_local_model.is_empty() {
+      "No OpenAI-compatible or Ollama provider found in the AI settings. No local chat model is selected.".to_string()
+    } else {
+      format!(
+        "No OpenAI-compatible or Ollama provider found in the AI settings. A local chat model is selected ({selected_local_model}), but Tauri does not currently load GGUF files directly for inference."
+      )
+    };
+    eprintln!("[tauri-rag][warn] {reason}");
     Ok(json!({
-      "answer": fallback_answer(&message, &sources, "No OpenAI-compatible or Ollama provider found in the AI settings."),
+      "answer": fallback_answer(&message, &sources, &reason, &selected_local_model),
       "sources": sources,
       "runtime": "tauri-rust",
-      "warning": "No chat provider configured."
+      "warning": reason,
+      "selectedLocalModel": selected_local_model
     }))
   }
 }

@@ -39,8 +39,7 @@ jobs:
           echo "Generated parity documentation lines: $lines"
           test "$lines" -ge 10000
 
-      - name: Critical ElephantNote flow guard diagnostic
-        continue-on-error: true
+      - name: Critical ElephantNote flow guard
         run: node scripts/verify-critical-flows.mjs
 
       - name: Lint diagnostic
@@ -120,16 +119,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Rust formatting diagnostic
-        continue-on-error: true
+      - name: Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
-      - name: Cargo check diagnostic
-        continue-on-error: true
+      - name: Cargo check
         run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features
 
-      - name: Cargo tests diagnostic
-        continue-on-error: true
+      - name: Cargo tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib --no-default-features
 
   package-smoke:
@@ -165,7 +161,52 @@ jobs:
 
       - name: Set C++20 for macOS native rebuilds
         if: matrix.platform == 'macos'
-        run: echo "CXXFLAGS=-std=c++20" >> "$GITHUB_ENV"
+        run: echo "CXXFLAGS=-std=gnu++20 -stdlib=libc++" >> $GITHUB_ENV
 
-      - name: Package smoke
+      - name: Run postinstall
+        run: node scripts/postinstall.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_user_agent: pnpm
+          USE_ELECTRON_CLANG: ${{ matrix.platform == 'linux' && '0' || '' }}
+
+      - name: Package
         run: ${{ matrix.command }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.platform }}
+          retention-days: 14
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.snap
+            dist/*.deb
+            dist/*.rpm
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish release artifacts
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: gh release create "$TAG_NAME" release-artifacts/* --title "$TAG_NAME" --notes "Automated ElephantNote release for $TAG_NAME."

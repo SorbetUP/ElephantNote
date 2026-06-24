@@ -23,6 +23,7 @@ const autoSyncState = {
   mode: autoSyncMode,
   intervalMs: autoSyncIntervalMs,
   running: false,
+  skippedBusy: 0,
   attempts: 0,
   successes: 0,
   failures: 0,
@@ -107,6 +108,10 @@ const createAutoSyncPayload = () => {
 
 const runAutoSyncOnce = async(reason = 'interval') => {
   if (!autoSyncState.enabled || autoSyncState.running) return autoSyncState
+  if (syncEngine.status().running) {
+    autoSyncState.skippedBusy += 1
+    return autoSyncState
+  }
   autoSyncState.running = true
   autoSyncState.attempts += 1
   autoSyncState.lastAttemptAt = new Date().toISOString()

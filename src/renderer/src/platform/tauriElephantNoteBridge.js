@@ -189,7 +189,7 @@ const dispatchApiAction = async(bridge, action, payload = {}) => {
     case 'search.disable': return bridge.search.disable()
     case 'search.enable': return bridge.search.enable()
     case 'sync.status': return bridge.sync.status()
-    case 'sync.plan': return bridge.sync.plan()
+    case 'sync.plan': return bridge.sync.plan(payload)
     case 'sync.enqueue': return bridge.sync.enqueue(payload.operation, payload.payload || {})
     case 'sync.run': return bridge.sync.run(payload)
     case 'models.getSelection':
@@ -373,7 +373,7 @@ const createBridge = (target) => {
 
     sync: {
       status: () => invoke(target, 'tauri_sync_status'),
-      plan: () => invoke(target, 'tauri_sync_plan'),
+      plan: (payloadByOperation = {}) => invoke(target, 'tauri_sync_plan', { payloadByOperation }),
       enqueue: (operation, payload = {}) => invoke(target, 'tauri_sync_enqueue', { operation, payload }),
       run: (payloadByOperation = {}) => invoke(target, 'tauri_sync_run', { payloadByOperation })
     },

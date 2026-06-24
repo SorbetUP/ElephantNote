@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::vault_layout;
@@ -10,15 +11,17 @@ use super::types::VaultDescriptor;
 
 type R<T> = Result<T, String>;
 
-const OP_INIT: &str = "init";
-const OP_PULL: &str = "pull";
-const OP_SNAPSHOT: &str = "snapshot";
-const OP_PUSH: &str = "push";
-const OP_SYNC: &str = "sync";
+const SYNC_OPERATION_INIT: &str = "init";
+const SYNC_OPERATION_PULL: &str = "pull";
+const SYNC_OPERATION_SNAPSHOT: &str = "snapshot";
+const SYNC_OPERATION_PUSH: &str = "push";
+const SYNC_OPERATION_SYNC: &str = "sync";
 
 const STATUS_QUEUED: &str = "queued";
 const STATUS_DONE: &str = "done";
+const STATUS_ERROR: &str = "error";
 const BACKEND_GIT: &str = "git";
+const DEFAULT_BRANCH: &str = "main";
 
 pub const SYNC_CONFIG_FILE: &str = "sync-config.json";
 pub const SYNC_HISTORY_FILE: &str = "sync-log.json";
@@ -117,6 +120,10 @@ fn read_config(cwd: &Path) -> Option<SyncConfig> {
   if path.exists() { Some(read_json(&path)) } else { None }
 }
 
+fn write_config(cwd: &Path, config: &SyncConfig) -> R<()> {
+  write_json(&sync_path(cwd, SYNC_CONFIG_FILE), config)
+}
+
 fn read_queue(cwd: &Path) -> Vec<SyncQueueItem> {
   let value = read_value(&sync_path(cwd, SYNC_QUEUE_FILE), json!({ "queue": [] }));
   value
@@ -154,51 +161,81 @@ fn write_state(cwd: &Path, state: &SyncState) -> R<()> {
 }
 
 fn valid_operation(operation: &str) -> bool {
-  matches!(operation, OP_INIT | OP_PULL | OP_SNAPSHOT | OP_PUSH | OP_SYNC)
+  matches!(
+    operation,
+    SYNC_OPERATION_INIT | SYNC_OPERATION_PULL | SYNC_OPERATION_SNAPSHOT | SYNC_OPERATION_PUSH | SYNC_OPERATION_SYNC
+  )
+}
+
+fn payload_has(payload: &Value, operation: &str) -> bool {
+  payload.get(operation).is_some()
 }
 
 fn explicit_operations(payload: &Value) -> Vec<String> {
   payload
     .get("operations")
     .and_then(Value::as_array)
-    .map(|operations| operations.iter().filter_map(Value::as_str).map(str::trim).filter(|operation| valid_operation(operation)).map(str::to_string).collect())
+    .map(|operations| {
+      operations
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|operation| valid_operation(operation))
+        .map(str::to_string)
+        .collect()
+    })
     .unwrap_or_default()
 }
 
-fn plan_operations(payload: &Value) -> Vec<String> {
-  let explicit = explicit_operations(payload);
-  if !explicit.is_empty() {
-    return explicit;
+fn operation_payload(payload: &Value, operation: &str) -> Value {
+  normalized_payload(payload.get(operation).cloned().unwrap_or_else(|| json!({})))
+}
+
+fn operation_payload_or_sync(payload: &Value, operation: &str) -> Value {
+  normalized_payload(
+    payload
+      .get(operation)
+      .cloned()
+      .or_else(|| payload.get(SYNC_OPERATION_SYNC).cloned())
+      .unwrap_or_else(|| json!({})),
+  )
+}
+
+fn planned_operations(payload_by_operation: &Value) -> Vec<String> {
+  let operations = explicit_operations(payload_by_operation);
+  if !operations.is_empty() {
+    return operations;
   }
-  if payload.get(OP_SYNC).is_some() || ![OP_INIT, OP_PULL, OP_SNAPSHOT, OP_PUSH].iter().any(|operation| payload.get(*operation).is_some()) {
-    return [OP_INIT, OP_PULL, OP_SNAPSHOT, OP_PUSH].iter().map(|operation| operation.to_string()).collect();
+  if payload_has(payload_by_operation, SYNC_OPERATION_SYNC) {
+    return [SYNC_OPERATION_INIT, SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH]
+      .iter()
+      .map(|operation| operation.to_string())
+      .collect();
   }
-  let mut operations = vec![OP_INIT.to_string()];
-  for operation in [OP_PULL, OP_SNAPSHOT, OP_PUSH] {
-    if payload.get(operation).is_some() {
+  let has_explicit_git_operation = [SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH]
+    .iter()
+    .any(|operation| payload_has(payload_by_operation, operation));
+  if !has_explicit_git_operation {
+    return [SYNC_OPERATION_INIT, SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH]
+      .iter()
+      .map(|operation| operation.to_string())
+      .collect();
+  }
+  let mut operations = vec![SYNC_OPERATION_INIT.to_string()];
+  for operation in [SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH] {
+    if payload_has(payload_by_operation, operation) {
       operations.push(operation.to_string());
     }
   }
   operations
 }
 
-fn payload_for(payload: &Value, operation: &str) -> Value {
-  normalized_payload(payload.get(operation).cloned().unwrap_or_else(|| json!({})))
-}
-
-fn payload_for_or(payload: &Value, operation: &str, fallback_operation: &str) -> Value {
-  normalized_payload(payload.get(operation).cloned().or_else(|| payload.get(fallback_operation).cloned()).unwrap_or_else(|| json!({})))
-}
-
 pub fn create_sync_plan_value(payload_by_operation: Value) -> Value {
   let payload = normalized_payload(payload_by_operation);
-  let operations = plan_operations(&payload);
+  let operations = planned_operations(&payload);
   let items = operations
     .iter()
-    .map(|operation| {
-      let operation_payload = if payload.get(OP_SYNC).is_some() { payload_for_or(&payload, operation, OP_SYNC) } else { payload_for(&payload, operation) };
-      json!({ "operation": operation, "payload": operation_payload })
-    })
+    .map(|operation| json!({ "operation": operation, "payload": operation_payload_or_sync(&payload, operation) }))
     .collect::<Vec<_>>();
   json!({ "operations": operations, "items": items })
 }
@@ -228,7 +265,7 @@ fn default_config(vault: &VaultDescriptor) -> SyncConfig {
     remote_name: "origin".to_string(),
     remote: String::new(),
     remote_path: String::new(),
-    branch: String::new(),
+    branch: DEFAULT_BRANCH.to_string(),
     peers: Vec::new(),
     updated_at: now(),
   }
@@ -243,11 +280,44 @@ fn ensure_sync_files(vault: &VaultDescriptor) -> R<()> {
   Ok(())
 }
 
-fn repository_status(_cwd: &Path) -> RepositoryStatus {
-  RepositoryStatus::default()
+fn git_text(cwd: &Path, args: &[&str]) -> R<String> {
+  let output = Command::new("git").args(args).current_dir(cwd).output().map_err(|error| error.to_string())?;
+  if !output.status.success() {
+    return Err(format!(
+      "git {} failed: {}{}",
+      args.join(" "),
+      String::from_utf8_lossy(&output.stderr),
+      String::from_utf8_lossy(&output.stdout)
+    ));
+  }
+  Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn status_value(vault: &VaultDescriptor, queue: &[SyncQueueItem], history: &[SyncHistoryRecord], state: &SyncState, config: Option<&SyncConfig>, repository: &RepositoryStatus) -> Value {
+fn git_succeeds(cwd: &Path, args: &[&str]) -> bool {
+  Command::new("git").args(args).current_dir(cwd).status().map(|status| status.success()).unwrap_or(false)
+}
+
+fn git_has_commits(cwd: &Path) -> bool {
+  git_succeeds(cwd, &["rev-parse", "--verify", "HEAD"])
+}
+
+fn repository_status(cwd: &Path) -> RepositoryStatus {
+  if !cwd.join(".git").exists() {
+    return RepositoryStatus::default();
+  }
+  let branch = git_text(cwd, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
+  let dirty = git_text(cwd, &["status", "--porcelain"]).map(|status| !status.trim().is_empty()).unwrap_or(false);
+  RepositoryStatus { branch, ahead: 0, behind: 0, dirty }
+}
+
+fn status_value(
+  vault: &VaultDescriptor,
+  queue: &[SyncQueueItem],
+  history: &[SyncHistoryRecord],
+  state: &SyncState,
+  config: Option<&SyncConfig>,
+  repository: &RepositoryStatus,
+) -> Value {
   json!({
     "runtime": "tauri-rust",
     "activeVault": vault,
@@ -297,6 +367,266 @@ fn no_active_status() -> Value {
   })
 }
 
+struct SyncRunner {
+  vault: VaultDescriptor,
+  cwd: PathBuf,
+  config: SyncConfig,
+  queue: Vec<SyncQueueItem>,
+  history: Vec<SyncHistoryRecord>,
+  state: SyncState,
+}
+
+impl SyncRunner {
+  fn new(vault: VaultDescriptor) -> R<Self> {
+    ensure_sync_files(&vault)?;
+    let cwd = PathBuf::from(&vault.path);
+    Ok(Self {
+      vault,
+      config: read_config(&cwd).unwrap_or_default(),
+      queue: read_queue(&cwd),
+      history: read_history(&cwd),
+      state: read_state(&cwd),
+      cwd,
+    })
+  }
+
+  fn enqueue_operation(&mut self, operation: &str, payload: Value) {
+    self.queue.push(queue_item(operation, payload, self.queue.len(), STATUS_QUEUED));
+  }
+
+  fn enqueue_default_plan(&mut self, payload_by_operation: &Value) -> R<()> {
+    let operations = explicit_operations(payload_by_operation);
+    if !operations.is_empty() {
+      for operation in operations {
+        self.enqueue_operation(&operation, operation_payload_or_sync(payload_by_operation, &operation));
+      }
+      return Ok(());
+    }
+
+    if payload_has(payload_by_operation, SYNC_OPERATION_SYNC) {
+      for operation in [SYNC_OPERATION_INIT, SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH] {
+        self.enqueue_operation(operation, operation_payload_or_sync(payload_by_operation, operation));
+      }
+      return Ok(());
+    }
+
+    let has_explicit_git_operation = [SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH]
+      .iter()
+      .any(|operation| payload_has(payload_by_operation, operation));
+    self.enqueue_operation(SYNC_OPERATION_INIT, operation_payload(payload_by_operation, SYNC_OPERATION_INIT));
+
+    if !has_explicit_git_operation {
+      for operation in [SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH] {
+        self.enqueue_operation(operation, operation_payload(payload_by_operation, operation));
+      }
+      return Ok(());
+    }
+
+    for operation in [SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH] {
+      if payload_has(payload_by_operation, operation) {
+        self.enqueue_operation(operation, operation_payload(payload_by_operation, operation));
+      }
+    }
+    Ok(())
+  }
+
+  fn persist(&self) -> R<()> {
+    write_config(&self.cwd, &self.config)?;
+    write_queue(&self.cwd, &self.queue)?;
+    write_history(&self.cwd, &self.history)?;
+    write_state(&self.cwd, &self.state)
+  }
+
+  fn git(&self, args: &[&str]) -> R<String> {
+    git_text(&self.cwd, args)
+  }
+
+  fn git_ok(&self, args: &[&str]) -> bool {
+    git_succeeds(&self.cwd, args)
+  }
+
+  fn ensure_git_repository(&self) -> R<()> {
+    fs::create_dir_all(&self.cwd).map_err(|error| error.to_string())?;
+    if !self.cwd.join(".git").exists() {
+      if !self.git_ok(&["init", "--initial-branch", DEFAULT_BRANCH]) {
+        self.git(&["init"])?;
+        self.git(&["checkout", "-B", DEFAULT_BRANCH])?;
+      }
+    }
+    self.git(&["config", "user.name", "ElephantNote Sync"])?;
+    self.git(&["config", "user.email", "sync@elephantnote.local"])?;
+    Ok(())
+  }
+
+  fn configured_branch(&self) -> String {
+    if !self.config.branch.trim().is_empty() {
+      return self.config.branch.clone();
+    }
+    let current = self.git(&["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
+    if current.trim().is_empty() || current == "HEAD" { DEFAULT_BRANCH.to_string() } else { current }
+  }
+
+  fn configure_remote(&mut self, payload: &Value) -> R<()> {
+    let branch = payload.get("branch").and_then(Value::as_str).filter(|value| !value.trim().is_empty()).unwrap_or(DEFAULT_BRANCH).to_string();
+    self.config.branch = branch;
+    if let Some(remote) = payload.get("remote").and_then(Value::as_str).filter(|value| !value.trim().is_empty()) {
+      self.config.remote = remote.to_string();
+      self.config.remote_path = remote.to_string();
+      let remote_name = if self.config.remote_name.trim().is_empty() { "origin" } else { self.config.remote_name.as_str() };
+      if self.git_ok(&["remote", "get-url", remote_name]) {
+        self.git(&["remote", "set-url", remote_name, remote])?;
+      } else {
+        self.git(&["remote", "add", remote_name, remote])?;
+      }
+    }
+    self.config.updated_at = now();
+    Ok(())
+  }
+
+  fn ensure_git_exclude(&self) -> R<()> {
+    if !self.cwd.join(".git").exists() {
+      return Ok(());
+    }
+    let exclude_path = self.cwd.join(".git/info/exclude");
+    if let Some(parent) = exclude_path.parent() {
+      fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let required = [
+      "/.elephantnote/sync/sync-config.json",
+      "/.elephantnote/sync/sync-log.json",
+      "/.elephantnote/sync/sync-queue.json",
+      "/.elephantnote/sync/sync-state.json",
+    ];
+    let mut content = fs::read_to_string(&exclude_path).unwrap_or_default();
+    for line in required {
+      if !content.lines().any(|existing| existing.trim() == line) {
+        if !content.ends_with('\n') && !content.is_empty() {
+          content.push('\n');
+        }
+        content.push_str(line);
+        content.push('\n');
+      }
+    }
+    fs::write(exclude_path, content).map_err(|error| error.to_string())
+  }
+
+  fn untrack_sync_metadata(&self) -> R<()> {
+    if !self.cwd.join(".git").exists() {
+      return Ok(());
+    }
+    self.git(&["rm", "--cached", "-r", "--ignore-unmatch", ".elephantnote/sync"])?;
+    Ok(())
+  }
+
+  fn run_init(&mut self, payload: &Value) -> R<()> {
+    self.ensure_git_repository()?;
+    self.configure_remote(payload)?;
+    self.ensure_git_exclude()?;
+    self.untrack_sync_metadata()
+  }
+
+  fn run_pull(&mut self) -> R<()> {
+    self.ensure_git_repository()?;
+    self.ensure_git_exclude()?;
+    if self.config.remote.trim().is_empty() {
+      return Ok(());
+    }
+    let remote_name = if self.config.remote_name.trim().is_empty() { "origin" } else { self.config.remote_name.as_str() };
+    let branch = self.configured_branch();
+    self.git(&["fetch", remote_name, &branch])?;
+    if git_has_commits(&self.cwd) {
+      self.git(&["merge", "--ff-only", "FETCH_HEAD"])?;
+    } else {
+      self.git(&["checkout", "-B", &branch, "FETCH_HEAD"])?;
+    }
+    self.ensure_git_exclude()?;
+    self.untrack_sync_metadata()
+  }
+
+  fn run_snapshot(&mut self, payload: &Value) -> R<()> {
+    self.ensure_git_repository()?;
+    self.ensure_git_exclude()?;
+    self.git(&["add", "-A", "--", "."])?;
+    self.untrack_sync_metadata()?;
+    if self.git_ok(&["diff", "--cached", "--quiet"]) {
+      return Ok(());
+    }
+    let message = payload.get("message").and_then(Value::as_str).filter(|value| !value.trim().is_empty()).unwrap_or("ElephantNote sync snapshot");
+    self.git(&["commit", "-m", message])?;
+    Ok(())
+  }
+
+  fn run_push(&mut self) -> R<()> {
+    self.ensure_git_repository()?;
+    if self.config.remote.trim().is_empty() || !git_has_commits(&self.cwd) {
+      return Ok(());
+    }
+    let remote_name = if self.config.remote_name.trim().is_empty() { "origin" } else { self.config.remote_name.as_str() };
+    let branch = self.configured_branch();
+    self.git(&["push", "-u", remote_name, &branch])?;
+    Ok(())
+  }
+
+  fn run_operation(&mut self, operation: &str, payload: &Value) -> R<()> {
+    match operation {
+      SYNC_OPERATION_INIT => self.run_init(payload),
+      SYNC_OPERATION_PULL => self.run_pull(),
+      SYNC_OPERATION_SNAPSHOT => self.run_snapshot(payload),
+      SYNC_OPERATION_PUSH => self.run_push(),
+      SYNC_OPERATION_SYNC => Ok(()),
+      _ => Err(format!("Unknown sync operation: {}.", operation)),
+    }
+  }
+
+  fn run_queued_operations(&mut self) -> R<()> {
+    let mut remaining = Vec::new();
+    let mut last_error = String::new();
+    let pending = std::mem::take(&mut self.queue);
+
+    for mut item in pending {
+      if item.status != STATUS_QUEUED {
+        remaining.push(item);
+        continue;
+      }
+      let result = self.run_operation(&item.operation.clone(), &item.payload.clone());
+      item.updated_at = now();
+      match result {
+        Ok(()) => {
+          item.status = STATUS_DONE.to_string();
+          item.error.clear();
+        }
+        Err(error) => {
+          item.status = STATUS_ERROR.to_string();
+          item.error = error.clone();
+          last_error = error;
+        }
+      }
+      self.history.push(SyncHistoryRecord {
+        id: item.id.clone(),
+        operation: item.operation.clone(),
+        status: item.status.clone(),
+        updated_at: item.updated_at.clone(),
+        error: item.error.clone(),
+      });
+      if item.status != STATUS_DONE {
+        remaining.push(item);
+      }
+    }
+
+    self.queue = remaining;
+    if last_error.is_empty() {
+      Ok(())
+    } else {
+      Err(last_error)
+    }
+  }
+
+  fn status(&self) -> Value {
+    let repository = repository_status(&self.cwd);
+    status_value(&self.vault, &self.queue, &self.history, &self.state, Some(&self.config), &repository)
+  }
+}
+
 pub fn sync_status(vault: Option<VaultDescriptor>) -> R<Value> {
   let Some(vault) = vault else {
     return Ok(no_active_status());
@@ -325,29 +655,15 @@ pub fn sync_enqueue(vault: VaultDescriptor, operation: String, payload: Option<V
 }
 
 pub fn sync_run(vault: VaultDescriptor, payload_by_operation: Option<Value>) -> R<Value> {
-  ensure_sync_files(&vault)?;
-  let cwd = PathBuf::from(&vault.path);
   let payload = normalized_payload(payload_by_operation.unwrap_or_else(|| json!({})));
-  let items = create_sync_plan_value(payload).get("items").and_then(Value::as_array).cloned().unwrap_or_default();
-  let mut queue = read_queue(&cwd);
-  let mut history = read_history(&cwd);
-
-  for item in items {
-    let operation = item.get("operation").and_then(Value::as_str).unwrap_or(OP_SYNC).to_string();
-    let operation_payload = normalized_payload(item.get("payload").cloned().unwrap_or_else(|| json!({})));
-    let done = queue_item(&operation, operation_payload, queue.len(), STATUS_DONE);
-    history.push(SyncHistoryRecord { id: done.id.clone(), operation: done.operation.clone(), status: done.status.clone(), updated_at: done.updated_at.clone(), error: String::new() });
-    queue.push(done);
-  }
-
-  write_queue(&cwd, &queue)?;
-  write_history(&cwd, &history)?;
-  let mut state = read_state(&cwd);
-  state.last_run_at = now();
-  state.last_error.clear();
-  state.repository = repository_status(&cwd);
-  write_state(&cwd, &state)?;
-  sync_status(Some(vault))
+  let mut runner = SyncRunner::new(vault)?;
+  runner.enqueue_default_plan(&payload)?;
+  let result = runner.run_queued_operations();
+  runner.state.last_run_at = now();
+  runner.state.last_error = result.err().unwrap_or_default();
+  runner.state.repository = repository_status(&runner.cwd);
+  runner.persist()?;
+  Ok(runner.status())
 }
 
 #[cfg(test)]

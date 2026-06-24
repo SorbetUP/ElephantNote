@@ -2,10 +2,6 @@ import { toPlainObject } from '../../../../shared/plainObject.js'
 import { ELEPHANTNOTE_API_ACTIONS as API } from 'common/elephantnote/apiActions'
 
 const getBridge = () => globalThis.window?.elephantnote
-const CHAT_REBUILD_COOLDOWN_MS = 60_000
-let searchVaultInitializedForChat = ''
-let lastChatSearchRebuildVault = ''
-let lastChatSearchRebuildAt = 0
 
 const callModelBridge = (method, payload) => {
   const bridgeMethod = getBridge()?.models?.[method]
@@ -13,48 +9,25 @@ const callModelBridge = (method, payload) => {
   return bridgeMethod(toPlainObject(payload))
 }
 
-const normalizeDirectoryPayload = (payload = '') => {
-  if (typeof payload === 'string') return { relativePath: payload }
-  return toPlainObject(payload)
-}
-
 const ensureSearchVaultForChat = async (call) => {
   const vaultPayload = await call(API.VAULTS_GET).catch(() => null)
   const vaultPath = String(vaultPayload?.activeVault?.path || '').trim()
   if (!vaultPath) return ''
-  if (searchVaultInitializedForChat === vaultPath) return vaultPath
-  try {
-    await call(API.SEARCH_INIT_VAULT, { vaultPath })
-    searchVaultInitializedForChat = vaultPath
-  } catch {
-    searchVaultInitializedForChat = ''
-  }
+  await call(API.SEARCH_INIT_VAULT, { vaultPath }).catch(() => null)
   return vaultPath
 }
 
 const hasCitations = (result) => Array.isArray(result?.citations) && result.citations.length > 0
-
-const shouldRebuildChatSearch = (vaultPath, now = Date.now()) => {
-  if (!vaultPath) return false
-  if (lastChatSearchRebuildVault !== vaultPath) return true
-  return now - lastChatSearchRebuildAt >= CHAT_REBUILD_COOLDOWN_MS
-}
-
-const rememberChatSearchRebuild = (vaultPath, now = Date.now()) => {
-  lastChatSearchRebuildVault = vaultPath
-  lastChatSearchRebuildAt = now
-}
 
 const callRagChat = async (call, message, limit = 6) => {
   const vaultPath = await ensureSearchVaultForChat(call)
   const payload = { message, limit }
   const result = await call(API.RAG_CHAT, payload)
 
-  if (hasCitations(result) || !vaultPath || !shouldRebuildChatSearch(vaultPath)) {
+  if (hasCitations(result) || !vaultPath) {
     return result
   }
 
-  rememberChatSearchRebuild(vaultPath)
   await call(API.SEARCH_REBUILD, {}).catch(() => null)
   const retry = await call(API.RAG_CHAT, payload).catch(() => null)
   return retry?.answer || hasCitations(retry) ? retry : result
@@ -70,7 +43,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     remove: (vaultId) => call(API.VAULTS_REMOVE, { vaultId })
   },
   directory: {
-    list: (payload = '') => call(API.DIRECTORY_LIST, normalizeDirectoryPayload(payload))
+    list: (relativePath = '') => call(API.DIRECTORY_LIST, { relativePath })
   },
   notes: {
     create: (payload = '') => {
@@ -125,6 +98,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   search: {
     initVault: (vaultPath) => call(API.SEARCH_INIT_VAULT, { vaultPath }),
     query: (params) => call(API.SEARCH_QUERY, params),
+    concepts: (params) => call(API.SEARCH_CONCEPTS, params),
     status: () => call(API.SEARCH_STATUS),
     inspect: () => call(API.SEARCH_INSPECT),
     rebuild: () => call(API.SEARCH_REBUILD),

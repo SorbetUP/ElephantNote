@@ -19,12 +19,14 @@ const buildAndroid = readText('build_dev_apk.sh')
 const chatRuntime = readText('src-tauri/src/chat_runtime.rs')
 const vaultConfig = readText('src-tauri/src/vault/config.rs')
 const tauriExtra = readText('src-tauri/src/tauri_extra_commands.rs')
+const libMin = readText('src-tauri/src/lib_min.rs')
 
 for (const script of [
   'tauri:check',
   'tauri:platform:check',
   'tauri:linux:build',
   'tauri:android:init',
+  'tauri:android:dev',
   'tauri:android:build'
 ]) {
   assert(packageJson.scripts?.[script], `Missing package script: ${script}`)
@@ -44,16 +46,21 @@ assert(Array.isArray(androidConfig.bundle?.resources), 'Android bundle resources
 assert(androidConfig.bundle.resources.length === 0, 'Android bundle must not include desktop bin resources')
 assert(androidConfig.bundle?.icon?.includes('../static/icon.png'), 'Android config must use the PNG icon')
 
+assert(packageJson.scripts['tauri:android:init'].includes('tauri.android.conf.json'), 'Android init script must use the Android config')
+assert(packageJson.scripts['tauri:android:dev'].includes('tauri.android.conf.json'), 'Android dev script must use the Android config')
 assert(buildDev.includes('tauri.linux.conf.json'), 'Linux dev must use the Linux Tauri config override')
 assert(buildAndroid.includes('tauri.android.conf.json'), 'Android build script must use the Android Tauri config override')
 assert(buildAndroid.includes('ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1'), 'Android build must skip bundled llama-server')
-assert(buildAndroid.includes('cargo tauri android init'), 'Android build script must initialize the generated Android project when missing')
+assert(buildAndroid.includes('cargo tauri android init --config "$ANDROID_CONFIG"'), 'Android build script must initialize the generated Android project with the Android config')
+assert(buildAndroid.includes('cargo tauri android build --debug --apk --config "$ANDROID_CONFIG"'), 'Android build script must build with the Android config')
 
 assert(chatRuntime.includes('#[cfg(mobile)]'), 'Chat runtime must have a mobile guard')
 assert(chatRuntime.includes('desktop-only'), 'Mobile chat guard must explain that bundled llama.cpp is desktop-only')
 assert(vaultConfig.includes('MOBILE_DEFAULT_VAULT_ID'), 'Vault config must define a mobile fallback vault')
 assert(vaultConfig.includes('app_data_dir'), 'Mobile fallback vault must use the app data directory')
 assert(tauriExtra.includes('vault_config::get_active_vault'), 'Extra commands must use the shared vault config path resolver')
+assert(libMin.includes('mod platform_contract_tests;'), 'Rust platform contract tests must be registered')
+assert(existsSync(resolve(root, 'src-tauri/src/platform_contract_tests.rs')), 'Rust platform contract tests must exist')
 
 if (errors.length > 0) {
   console.error('[tauri-platforms] compatibility guard failed:')

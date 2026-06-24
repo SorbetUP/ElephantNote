@@ -117,6 +117,19 @@ pub fn tauri_notes_write(app: AppHandle, relative_path: String, content: Option<
 }
 
 #[tauri::command]
+pub fn tauri_marktext_write_file(pathname: String, content: String) -> R<Value> {
+  if pathname.trim().is_empty() {
+    return Err("Cannot save MarkText file without a pathname.".to_string());
+  }
+  let path = PathBuf::from(&pathname);
+  if let Some(parent) = path.parent() {
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+  }
+  fs::write(&path, content).map_err(|e| e.to_string())?;
+  Ok(json!({ "ok": true, "fullPath": path.to_string_lossy(), "updatedAt": now() }))
+}
+
+#[tauri::command]
 pub fn tauri_attachments_list(app: AppHandle) -> R<Vec<Value>> {
   let root = active_vault_root(&app)?;
   let root_path = PathBuf::from(&root);

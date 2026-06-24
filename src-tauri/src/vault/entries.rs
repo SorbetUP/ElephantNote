@@ -1,5 +1,6 @@
 use serde_json::{json, Value};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -10,6 +11,7 @@ use super::metadata::{read_json_or, write_json};
 use super::types::VaultDescriptor;
 
 type R<T> = Result<T, String>;
+const MARKDOWN_PREVIEW_LIMIT: usize = 64 * 1024;
 
 pub fn normalize_relative_path(path: &str) -> String {
   path.replace('\\', "/")
@@ -59,15 +61,15 @@ fn sanitize_leaf_name(value: Option<String>, fallback: &str, force_markdown: boo
   if name.starts_with('.') || name.ends_with('~') || name.ends_with(".tmp") {
     return Err(format!("Refusing unsafe entry file name: {name}"));
   }
-  if force_markdown && !name.to_lowercase().ends_with(".md") {
+  if force_markdown && !name.to_ascii_lowercase().ends_with(".md") {
     name.push_str(".md");
   }
   Ok(name)
 }
 
-fn entry_updated_at(path: &Path) -> String {
-  fs::metadata(path)
-    .and_then(|m| m.modified())
+fn metadata_updated_at(metadata: &fs::Metadata) -> String {
+  metadata
+    .modified()
     .ok()
     .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
     .map(|d| d.as_secs().to_string())
@@ -83,6 +85,14 @@ pub fn is_ignored_entry(name: &str) -> bool {
     || name.ends_with(".tmp")
 }
 
+fn read_text_prefix(path: &Path, max_bytes: usize) -> R<String> {
+  let file = fs::File::open(path).map_err(|e| e.to_string())?;
+  let mut limited = file.take(max_bytes as u64);
+  let mut buffer = Vec::with_capacity(max_bytes.min(8 * 1024));
+  limited.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
+  Ok(String::from_utf8_lossy(&buffer).to_string())
+}
+
 fn markdown_title(markdown: &str, fallback: &str) -> String {
   for line in markdown.lines() {
     if let Some(title) = line.strip_prefix("title:") {
@@ -93,6 +103,30 @@ fn markdown_title(markdown: &str, fallback: &str) -> String {
     .lines()
     .find_map(|line| line.strip_prefix("# ").map(|value| value.trim().to_string()))
     .unwrap_or_else(|| fallback.trim_end_matches(".md").to_string())
+}
+
+fn markdown_excerpt(markdown: &str) -> String {
+  markdown
+    .lines()
+    .filter(|line| !line.trim().is_empty())
+    .take(3)
+    .collect::<Vec<_>>()
+    .join(" ")
+}
+
+fn direct_markdown_note_count(path: &Path) -> usize {
+  fs::read_dir(path)
+    .ok()
+    .map(|children| {
+      children
+        .filter_map(Result::ok)
+        .filter(|child| {
+          let name = child.file_name().to_string_lossy().to_string();
+          !is_ignored_entry(&name) && name.to_ascii_lowercase().ends_with(".md")
+        })
+        .count()
+    })
+    .unwrap_or(0)
 }
 
 pub fn list_directory(vault: &VaultDescriptor, relative_path: &str) -> R<Vec<Value>> {
@@ -114,32 +148,28 @@ pub fn list_directory(vault: &VaultDescriptor, relative_path: &str) -> R<Vec<Val
     let child_relative = normalize_relative_path(&format!("{}/{}", relative_path, name));
 
     if metadata.is_dir() {
-      let note_count = fs::read_dir(&path)
-        .ok()
-        .map(|children| children.filter_map(Result::ok).filter(|child| child.file_name().to_string_lossy().to_lowercase().ends_with(".md")).count())
-        .unwrap_or(0);
       entries.push(json!({
         "kind": "folder",
         "title": name,
         "path": child_relative,
-        "noteCount": note_count,
-        "updatedAt": entry_updated_at(&path),
+        "noteCount": direct_markdown_note_count(&path),
+        "updatedAt": metadata_updated_at(&metadata),
         "type": "folder",
         "tags": [],
         "createdAt": "",
         "excerpt": "",
         "coverImage": ""
       }));
-    } else if metadata.is_file() && name.to_lowercase().ends_with(".md") {
-      let markdown = fs::read_to_string(&path).unwrap_or_default();
-      let title = markdown_title(&markdown, &name);
-      let excerpt = markdown.lines().filter(|line| !line.trim().is_empty()).take(3).collect::<Vec<_>>().join(" ");
+    } else if metadata.is_file() && name.to_ascii_lowercase().ends_with(".md") {
+      let preview = read_text_prefix(&path, MARKDOWN_PREVIEW_LIMIT).unwrap_or_default();
+      let title = markdown_title(&preview, &name);
+      let excerpt = markdown_excerpt(&preview);
       entries.push(json!({
         "kind": "note",
         "title": title,
         "path": child_relative,
         "filename": name,
-        "updatedAt": entry_updated_at(&path),
+        "updatedAt": metadata_updated_at(&metadata),
         "type": "note",
         "tags": [],
         "createdAt": "",
@@ -283,5 +313,19 @@ mod tests {
     assert!(sanitize_leaf_name(Some("../secret.md".to_string()), "Untitled.md", true).is_err());
     assert!(sanitize_leaf_name(Some("nested/file.md".to_string()), "Untitled.md", true).is_err());
     assert_eq!(sanitize_leaf_name(Some("Note".to_string()), "Untitled.md", true).unwrap(), "Note.md");
+  }
+
+  #[test]
+  fn preview_reads_are_bounded() {
+    let dir = std::env::temp_dir().join(format!("elephant-entry-preview-{}", now_string()));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("large.md");
+    fs::write(&path, format!("---\ntitle: \"Fast\"\n---\n\n{}", "x".repeat(MARKDOWN_PREVIEW_LIMIT * 2))).unwrap();
+
+    let preview = read_text_prefix(&path, 128).unwrap();
+    assert!(preview.len() <= 128);
+    assert!(preview.contains("title"));
+
+    let _ = fs::remove_dir_all(&dir);
   }
 }

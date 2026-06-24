@@ -9,6 +9,11 @@ use crate::vault_layout;
 
 type R<T> = Result<T, String>;
 const META_DIR: &str = vault_layout::HIDDEN_ROOT;
+const SYNC_OPERATION_INIT: &str = "init";
+const SYNC_OPERATION_SNAPSHOT: &str = "snapshot";
+const SYNC_OPERATION_PULL: &str = "pull";
+const SYNC_OPERATION_PUSH: &str = "push";
+const SYNC_OPERATION_SYNC: &str = "sync";
 
 fn now() -> String {
   SystemTime::now()
@@ -80,6 +85,114 @@ fn scan_files(root: &Path, current: &Path, out: &mut Vec<Value>, extension: Opti
     }
   }
   Ok(())
+}
+
+fn normalized_payload(value: Value) -> Value {
+  if value.is_object() { value } else { json!({}) }
+}
+
+fn valid_sync_operation(operation: &str) -> bool {
+  matches!(
+    operation,
+    SYNC_OPERATION_INIT | SYNC_OPERATION_SNAPSHOT | SYNC_OPERATION_PULL | SYNC_OPERATION_PUSH | SYNC_OPERATION_SYNC
+  )
+}
+
+fn payload_has(payload_by_operation: &Value, operation: &str) -> bool {
+  payload_by_operation.as_object().is_some_and(|payload| payload.contains_key(operation))
+}
+
+fn payload_for(payload_by_operation: &Value, operation: &str) -> Value {
+  normalized_payload(payload_by_operation.get(operation).cloned().unwrap_or_else(|| json!({})))
+}
+
+fn payload_for_or(payload_by_operation: &Value, operation: &str, fallback_operation: &str) -> Value {
+  normalized_payload(
+    payload_by_operation
+      .get(operation)
+      .cloned()
+      .or_else(|| payload_by_operation.get(fallback_operation).cloned())
+      .unwrap_or_else(|| json!({})),
+  )
+}
+
+fn explicit_sync_operations(payload_by_operation: &Value) -> Vec<String> {
+  payload_by_operation
+    .get("operations")
+    .and_then(Value::as_array)
+    .map(|operations| {
+      operations
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|operation| valid_sync_operation(operation))
+        .map(str::to_string)
+        .collect()
+    })
+    .unwrap_or_default()
+}
+
+fn plan_item(operation: &str, payload: Value) -> Value {
+  json!({ "operation": operation, "payload": normalized_payload(payload) })
+}
+
+fn create_default_sync_plan(payload_by_operation: &Value) -> Vec<Value> {
+  let operations = explicit_sync_operations(payload_by_operation);
+  if !operations.is_empty() {
+    return operations
+      .iter()
+      .map(|operation| plan_item(operation, payload_for(payload_by_operation, operation)))
+      .collect();
+  }
+
+  if payload_has(payload_by_operation, SYNC_OPERATION_SYNC) {
+    return [SYNC_OPERATION_INIT, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH]
+      .iter()
+      .map(|operation| plan_item(operation, payload_for_or(payload_by_operation, operation, SYNC_OPERATION_SYNC)))
+      .collect();
+  }
+
+  let has_explicit_git_operation = [SYNC_OPERATION_INIT, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH]
+    .iter()
+    .any(|operation| payload_has(payload_by_operation, operation));
+
+  if !has_explicit_git_operation {
+    return vec![
+      plan_item(SYNC_OPERATION_INIT, payload_for(payload_by_operation, SYNC_OPERATION_INIT)),
+      plan_item(SYNC_OPERATION_SNAPSHOT, payload_for(payload_by_operation, SYNC_OPERATION_SNAPSHOT)),
+    ];
+  }
+
+  let mut plan = vec![plan_item(SYNC_OPERATION_INIT, payload_for(payload_by_operation, SYNC_OPERATION_INIT))];
+  for operation in [SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH] {
+    if payload_has(payload_by_operation, operation) {
+      plan.push(plan_item(operation, payload_for(payload_by_operation, operation)));
+    }
+  }
+  plan
+}
+
+fn scan_sync_changes(root_path: &Path) -> R<(Vec<Value>, Vec<Value>, Vec<Value>)> {
+  let mut notes = Vec::new();
+  let mut assets = Vec::new();
+  scan_files(root_path, root_path, &mut notes, Some(".md"))?;
+  let assets_dir = vault_layout::assets_dir(root_path);
+  if assets_dir.exists() {
+    scan_files(root_path, &assets_dir, &mut assets, None)?;
+  }
+
+  let mut changes = Vec::new();
+  for note in &notes {
+    let mut item = note.clone();
+    item["kind"] = json!("note");
+    changes.push(item);
+  }
+  for asset in &assets {
+    let mut item = asset.clone();
+    item["kind"] = json!("asset");
+    changes.push(item);
+  }
+  Ok((notes, assets, changes))
 }
 
 #[tauri::command]
@@ -209,15 +322,52 @@ pub fn tauri_search_rebuild(app: AppHandle) -> R<Value> {
 }
 
 #[tauri::command]
-pub fn tauri_sync_plan(app: AppHandle) -> R<Value> {
-  let root = active_vault_root(&app)?;
-  let root_path = PathBuf::from(&root);
-  let mut notes = Vec::new();
-  let mut assets = Vec::new();
-  scan_files(&root_path, &root_path, &mut notes, Some(".md"))?;
-  let assets_dir = vault_layout::assets_dir(&root_path);
-  if assets_dir.exists() {
-    scan_files(&root_path, &assets_dir, &mut assets, None)?;
+pub fn tauri_sync_plan(app: AppHandle, payload_by_operation: Option<Value>) -> R<Value> {
+  let vault = vault_config::get_active_vault(&app)?;
+  let root_path = PathBuf::from(&vault.path);
+  let payload_by_operation = normalized_payload(payload_by_operation.unwrap_or_else(|| json!({})));
+  let operations = create_default_sync_plan(&payload_by_operation);
+  let (notes, assets, changes) = scan_sync_changes(&root_path)?;
+  Ok(json!({
+    "runtime": "tauri-rust",
+    "activeVault": vault,
+    "operations": operations,
+    "changes": changes,
+    "notes": notes,
+    "assets": assets,
+    "generatedAt": now()
+  }))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn operation_names(plan: &[Value]) -> Vec<String> {
+    plan
+      .iter()
+      .filter_map(|item| item.get("operation").and_then(Value::as_str).map(str::to_string))
+      .collect()
   }
-  Ok(json!({ "notes": notes, "assets": assets, "generatedAt": now() }))
+
+  #[test]
+  fn sync_plan_keeps_pull_only_flow_without_snapshot() {
+    let plan = create_default_sync_plan(&json!({
+      "init": { "remote": "/tmp/remote.git" },
+      "pull": {}
+    }));
+
+    assert_eq!(operation_names(&plan), vec![SYNC_OPERATION_INIT, SYNC_OPERATION_PULL]);
+    assert_eq!(plan[0]["payload"]["remote"], "/tmp/remote.git");
+  }
+
+  #[test]
+  fn sync_plan_expands_sync_payload_to_remote_sequence() {
+    let plan = create_default_sync_plan(&json!({
+      "sync": { "remoteName": "origin" }
+    }));
+
+    assert_eq!(operation_names(&plan), vec![SYNC_OPERATION_INIT, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH]);
+    assert_eq!(plan[2]["payload"]["remoteName"], "origin");
+  }
 }

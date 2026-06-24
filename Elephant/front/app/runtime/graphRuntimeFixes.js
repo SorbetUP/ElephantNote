@@ -5,6 +5,10 @@ import { useVaultStore } from '../stores/vaultStore'
 let installed = false
 let repairInFlight = false
 let lastRepairVaultPath = ''
+let repairTimer = null
+let lastRepairCheckAt = 0
+
+const MIN_REPAIR_CHECK_INTERVAL_MS = 30000
 
 const graphCounts = (searchStore) => {
   const graph = searchStore?.indexInspection?.graph
@@ -40,12 +44,26 @@ export const shouldRepairSparseGraph = ({ vaultStore, searchStore, vaultPath, la
   return hasSparseGraph(searchStore) && hasSubstantialVault(vaultStore)
 }
 
+const scheduleRepairCheck = (repairGraphIfNeeded, delayMs = 0) => {
+  if (repairTimer) window.clearTimeout(repairTimer)
+  repairTimer = window.setTimeout(() => {
+    repairTimer = null
+    repairGraphIfNeeded().catch((error) => {
+      pushDiagnosticLog('error', 'graph repair check failed', error)
+    })
+  }, delayMs)
+}
+
 export const installGraphRuntimeFixes = () => {
   if (installed) return
   installed = true
   pushDiagnosticLog('info', 'graph runtime repair guard installed')
 
-  const repairGraphIfNeeded = async () => {
+  const repairGraphIfNeeded = async ({ force = false } = {}) => {
+    const now = Date.now()
+    if (!force && now - lastRepairCheckAt < MIN_REPAIR_CHECK_INTERVAL_MS) return
+    lastRepairCheckAt = now
+
     const vaultStore = useVaultStore()
     const searchStore = useSearchStore()
     const vaultPath = vaultStore.activeVault?.path || searchStore.vaultPath || ''
@@ -90,10 +108,14 @@ export const installGraphRuntimeFixes = () => {
     }
   }
 
-  window.addEventListener('elephantnote:repair-graph', repairGraphIfNeeded)
-  window.setInterval(() => {
-    repairGraphIfNeeded().catch((error) => {
-      pushDiagnosticLog('error', 'graph repair interval failed', error)
-    })
-  }, 1500)
+  const forceRepair = () => repairGraphIfNeeded({ force: true })
+  const scheduleLazyRepair = () => scheduleRepairCheck(repairGraphIfNeeded, 250)
+
+  window.addEventListener('elephantnote:repair-graph', forceRepair)
+  window.addEventListener('focus', scheduleLazyRepair)
+  window.addEventListener('visibilitychange', () => {
+    if (!document.hidden) scheduleLazyRepair()
+  })
+
+  scheduleLazyRepair()
 }

@@ -47,6 +47,7 @@ export const LEGACY_CALLS = {
   'wiki.context': (payload) => getBridge()?.wiki?.context?.(payload),
   'search.initVault': ({ vaultPath }) => getBridge()?.search?.initVault?.(vaultPath),
   'search.query': (payload) => getBridge()?.search?.query?.(payload),
+  'search.concepts': (payload) => getBridge()?.search?.concepts?.(payload),
   'search.status': () => getBridge()?.search?.status?.(),
   'search.inspect': () => getBridge()?.search?.inspect?.(),
   'search.rebuild': () => getBridge()?.search?.rebuild?.(),

@@ -8,8 +8,8 @@ use super::config::{basename, now_string};
 
 type R<T> = Result<T, String>;
 
-pub fn read_json_or(path: PathBuf, fallback: Value) -> Value {
-  fs::read_to_string(path)
+pub fn read_json_or(path: impl AsRef<Path>, fallback: Value) -> Value {
+  fs::read_to_string(path.as_ref())
     .ok()
     .and_then(|raw| serde_json::from_str(&raw).ok())
     .unwrap_or(fallback)

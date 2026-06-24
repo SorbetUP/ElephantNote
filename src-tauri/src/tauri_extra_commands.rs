@@ -45,12 +45,27 @@ fn read_json(path: PathBuf, fallback: Value) -> Value {
     .unwrap_or(fallback)
 }
 
+fn write_text_if_changed(path: &Path, content: &str) -> R<bool> {
+  if let Ok(metadata) = fs::metadata(path) {
+    if metadata.is_file() && metadata.len() == content.len() as u64 {
+      if let Ok(existing) = fs::read(path) {
+        if existing == content.as_bytes() {
+          return Ok(false);
+        }
+      }
+    }
+  }
+
+  fs::write(path, content).map_err(|e| e.to_string())?;
+  Ok(true)
+}
+
 fn write_json(path: PathBuf, value: &Value) -> R<()> {
   if let Some(parent) = path.parent() {
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
   }
   let raw = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
-  fs::write(path, raw).map_err(|e| e.to_string())
+  write_text_if_changed(&path, &raw).map(|_| ())
 }
 
 fn app_json_path(app: &AppHandle, file_name: &str) -> R<PathBuf> {
@@ -121,7 +136,7 @@ fn scan_files(root: &Path, current: &Path, out: &mut Vec<Value>, extension: Opti
     if metadata.is_dir() {
       scan_files(root, &path, out, extension)?;
     } else if metadata.is_file() {
-      let matches = extension.map(|ext| name.to_lowercase().ends_with(ext)).unwrap_or(true);
+      let matches = extension.map(|ext| name.to_ascii_lowercase().ends_with(ext)).unwrap_or(true);
       if matches {
         out.push(file_summary(root, &path));
       }
@@ -178,8 +193,8 @@ pub fn tauri_notes_write(app: AppHandle, relative_path: String, content: Option<
   let root = active_vault_root(&app)?;
   let path = writable_relative_path(&root, &relative_path)?;
   let content = content.or(markdown).unwrap_or_default();
-  fs::write(&path, content).map_err(|e| e.to_string())?;
-  Ok(json!({ "ok": true, "path": normalize_relative_path(&relative_path), "fullPath": path.to_string_lossy(), "updatedAt": now() }))
+  let changed = write_text_if_changed(&path, &content)?;
+  Ok(json!({ "ok": true, "changed": changed, "path": normalize_relative_path(&relative_path), "fullPath": path.to_string_lossy(), "updatedAt": now() }))
 }
 
 #[tauri::command]
@@ -191,8 +206,8 @@ pub fn tauri_marktext_write_file(app: AppHandle, pathname: String, content: Stri
   }
   let root = active_vault_root(&app)?;
   let path = writable_path_inside_root(Path::new(&root), Path::new(&pathname))?;
-  fs::write(&path, content).map_err(|e| e.to_string())?;
-  Ok(json!({ "ok": true, "fullPath": path.to_string_lossy(), "updatedAt": now() }))
+  let changed = write_text_if_changed(&path, &content)?;
+  Ok(json!({ "ok": true, "changed": changed, "fullPath": path.to_string_lossy(), "updatedAt": now() }))
 }
 
 #[tauri::command]
@@ -214,9 +229,9 @@ pub fn tauri_attachments_write_text(app: AppHandle, relative_path: String, conte
   let assets = vault_layout::assets_dir(&root);
   let relative_path = normalize_relative_path(&relative_path);
   let path = writable_path_inside_root(&assets, Path::new(&relative_path))?;
-  fs::write(&path, content).map_err(|e| e.to_string())?;
+  let changed = write_text_if_changed(&path, &content)?;
   let public_path = path.strip_prefix(&root).unwrap_or(&path).to_string_lossy().replace('\\', "/");
-  Ok(json!({ "ok": true, "path": public_path, "fullPath": path.to_string_lossy() }))
+  Ok(json!({ "ok": true, "changed": changed, "path": public_path, "fullPath": path.to_string_lossy() }))
 }
 
 #[tauri::command]
@@ -338,4 +353,22 @@ pub fn tauri_search_rebuild() -> R<Value> {
 #[tauri::command]
 pub fn tauri_sync_plan(payload_by_operation: Option<Value>) -> R<Value> {
   Ok(crate::vault::sync::create_sync_plan_value(payload_by_operation.unwrap_or_else(|| json!({}))))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn write_text_if_changed_skips_identical_content() {
+    let dir = std::env::temp_dir().join(format!("elephant-write-skip-{}", now()));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("note.md");
+
+    assert!(write_text_if_changed(&path, "same").unwrap());
+    assert!(!write_text_if_changed(&path, "same").unwrap());
+    assert!(write_text_if_changed(&path, "changed").unwrap());
+
+    let _ = fs::remove_dir_all(&dir);
+  }
 }

@@ -4,13 +4,14 @@ import path from 'node:path'
 const root = process.cwd()
 const failures = []
 
+const filePath = (relativePath) => path.join(root, relativePath)
+const exists = (relativePath) => fs.existsSync(filePath(relativePath))
 const read = (relativePath) => {
-  const absolutePath = path.join(root, relativePath)
-  if (!fs.existsSync(absolutePath)) {
+  if (!exists(relativePath)) {
     failures.push(`Missing critical-flow file: ${relativePath}`)
     return ''
   }
-  return fs.readFileSync(absolutePath, 'utf8')
+  return fs.readFileSync(filePath(relativePath), 'utf8')
 }
 
 const has = (relativePath, needle, description = needle) => {
@@ -31,15 +32,25 @@ const ordered = (relativePath, needles, description) => {
   }
 }
 
-for (const file of [
+const requireFiles = (files) => {
+  for (const file of files) {
+    if (!exists(file)) failures.push(`Missing critical-flow file: ${file}`)
+  }
+}
+
+requireFiles([
+  'package.json',
+  'src/main/config.js',
+  'src/preload/index.js',
+  'src/renderer/src/main.js',
   'src/renderer/src/platform/bootstrapGlobals.js',
+  'src/renderer/src/platform/tauriElephantNoteBridge.js',
   'src/renderer/src/platform/tauriLocalIpcBridge.js',
   'src/renderer/src/platform/tauriMarkTextSaveBridge.js',
   'src/renderer/src/platform/piProviderInterface.js',
-  'src/renderer/src/main.js',
   'src/renderer/src/store/editor.js',
-  'src-tauri/src/tauri_extra_commands.rs',
   'src-tauri/src/lib_min.rs',
+  'src-tauri/src/tauri_extra_commands.rs',
   'src-tauri/src/vault/sync.rs',
   'src-tauri/src/sync_contract_tests.rs',
   'web/server.mjs',
@@ -48,40 +59,61 @@ for (const file of [
   'scripts/verify-security-guardrails.mjs',
   'scripts/sync-two-docker-smoke.mjs',
   'security/guardrails-baseline.json',
-  'Elephant/front/app/components/editor/NoteEditorHost.vue',
-  'Elephant/front/app/components/editor/ExcalidrawDialog.vue',
-  'Elephant/front/app/utils/noteCardView.js',
   'Elephant/shared/apiContracts.js',
   'Elephant/shared/sync.js',
+  'Elephant/front/app/components/editor/NoteEditorHost.vue',
+  'Elephant/front/app/components/editor/ExcalidrawDialog.vue',
   'Elephant/front/app/services/elephantnoteClient/apiRuntime.js',
   'Elephant/front/app/services/elephantnoteClient/domainClients.js',
   'Elephant/front/app/services/elephantnoteClient/legacyCalls.js',
+  'Elephant/front/app/utils/noteCardView.js',
+  'test/unit/elephantnote/domainClients.spec.js',
   'test/unit/specs/main/elephantnote/apiContracts.spec.js',
   'test/unit/specs/main/elephantnote/apiRuntime.spec.js',
+  'test/unit/specs/main/elephantnote/electronWindowSecurity.spec.js',
   'test/unit/specs/main/elephantnote/legacyCalls.spec.js',
   'test/unit/specs/main/elephantnote/markdownDocument.spec.js',
   'test/unit/specs/main/elephantnote/piProviderInterface.spec.js',
   'test/unit/specs/main/elephantnote/securityGuardrails.spec.js',
+  'test/unit/specs/main/elephantnote/syncPlan.spec.js',
   'test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js',
   'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
-  'test/unit/specs/main/elephantnote/syncPlan.spec.js',
   'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
-  'test/unit/elephantnote/domainClients.spec.js',
   '.github/dependabot.yml',
+  '.github/workflows/ci.yml',
   '.github/workflows/codeql.yml',
-  '.github/workflows/sync-docker.yml'
-]) {
-  if (!fs.existsSync(path.join(root, file))) failures.push(`Missing critical-flow file: ${file}`)
-}
+  '.github/workflows/sync-docker.yml',
+  '.github/workflows/tauri-ci.yml'
+])
 
 has('package.json', '"security:guard": "node scripts/verify-security-guardrails.mjs"', 'security guard script in package.json')
-has('.github/workflows/ci.yml', '- name: Critical ElephantNote flow guard\n        run: node scripts/verify-critical-flows.mjs', 'blocking critical-flow guard in CI')
-has('.github/workflows/ci.yml', '- name: Security guardrails\n        run: pnpm security:guard', 'blocking security guardrails in CI')
-has('.github/workflows/ci.yml', 'pnpm exec vitest run test/unit/specs/main/elephantnote', 'ElephantNote contract tests in CI')
-has('.github/workflows/ci.yml', '- name: Cargo check\n        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'blocking Tauri cargo check in main CI')
-has('.github/workflows/tauri-ci.yml', '- name: Cargo check all targets\n        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'blocking Tauri all-target cargo check')
+ordered('.github/workflows/ci.yml', [
+  '- name: Critical ElephantNote flow guard',
+  'run: node scripts/verify-critical-flows.mjs',
+  '- name: Security guardrails',
+  'run: pnpm security:guard',
+  'pnpm exec vitest run test/unit/specs/main/elephantnote'
+], 'main CI must run critical guard, security guard and ElephantNote contract tests')
+has('.github/workflows/ci.yml', 'cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'blocking Tauri cargo check in main CI')
+has('.github/workflows/tauri-ci.yml', 'cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'blocking Tauri all-target cargo check')
 has('.github/workflows/codeql.yml', 'github/codeql-action/analyze@v3', 'CodeQL security analysis workflow')
 has('.github/dependabot.yml', 'package-ecosystem: cargo', 'Dependabot coverage for Cargo dependencies')
+
+ordered('src/main/config.js', [
+  'const secureWebPreferences = Object.freeze({',
+  'contextIsolation: true',
+  'nodeIntegration: false',
+  'webSecurity: true',
+  'webPreferences: { ...secureWebPreferences }'
+], 'Electron windows must use secure shared webPreferences')
+ordered('src/preload/index.js', [
+  'if (process.contextIsolated)',
+  "contextBridge.exposeInMainWorld('electron'",
+  "contextBridge.exposeInMainWorld('fileUtils'",
+  "contextBridge.exposeInMainWorld('path'",
+  "contextBridge.exposeInMainWorld('elephantnote'"
+], 'secure Electron renderer must expose required APIs through preload')
+has('test/unit/specs/main/elephantnote/electronWindowSecurity.spec.js', 'keeps renderer Node.js disabled and browser security enabled', 'Electron security regression test')
 
 ordered('scripts/security-guardrails-core.mjs', [
   'export const DEFAULT_BASELINE_PATH',
@@ -93,7 +125,7 @@ ordered('scripts/security-guardrails-core.mjs', [
   "id: 'PACKAGE_SCRIPT_REMOTE_PIPE_TO_SHELL'",
   'const scanCommittedSecrets',
   'export const collectSecurityFindings'
-], 'security guardrails must wire broad Tauri scopes, unsafe workflows, unsafe scripts, committed secrets and finding collection')
+], 'security guardrails must wire broad scopes, workflow checks, package script checks, secret checks and finding collection')
 for (const secretFindingId of [
   "id: 'SECRET_ENV_FILE_COMMITTED'",
   "id: 'SECRET_PRIVATE_KEY_FILE'",
@@ -109,12 +141,15 @@ ordered('scripts/verify-security-guardrails.mjs', [
   'splitFindingsByBaseline(findings, baseline)',
   'summary.hasBlockingFindings',
   'process.exit(1)'
-], 'security guardrail runner must fail on unbaselined blocker findings')
+], 'security guardrail runner must fail on unbaselined blockers')
 has('security/guardrails-baseline.json', 'TAURI_FS_SCOPE_BROAD', 'explicit baseline for current broad Tauri fs scopes')
-has('test/unit/specs/main/elephantnote/securityGuardrails.spec.js', 'flags broad Tauri filesystem scopes', 'security guardrail regression test for broad scopes')
-has('test/unit/specs/main/elephantnote/securityGuardrails.spec.js', 'rejects pull_request_target workflows', 'security guardrail regression test for unsafe workflow triggers')
-has('test/unit/specs/main/elephantnote/securityGuardrails.spec.js', 'rejects committed real environment files while allowing examples', 'security guardrail regression test for committed env files')
-has('test/unit/specs/main/elephantnote/securityGuardrails.spec.js', 'rejects private key material in committed files', 'security guardrail regression test for private keys')
+ordered('test/unit/specs/main/elephantnote/securityGuardrails.spec.js', [
+  'flags broad Tauri filesystem scopes',
+  'rejects pull_request_target workflows',
+  'rejects committed real environment files while allowing examples',
+  'rejects private key material in committed files',
+  'rejects GitHub and OpenAI-compatible tokens in source files'
+], 'security guardrail regression tests must cover broad scopes, unsafe workflows and secrets')
 
 ordered('src/renderer/src/platform/bootstrapGlobals.js', [
   '__elephantnoteBootstrapFallback: true',
@@ -122,6 +157,8 @@ ordered('src/renderer/src/platform/bootstrapGlobals.js', [
   'if (target.fileUtils?.__elephantnoteBootstrapFallback && target.__TAURI__) delete target.fileUtils'
 ], 'bootstrap must not mask real Tauri fileUtils with a no-op writer')
 ordered('src/renderer/src/main.js', [
+  "import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'",
+  "import { installPiProviderBridge } from './platform/piProviderInterface'",
   "import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'",
   "import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'",
   'clearBootstrapFileUtilsFallbackForTauri()',
@@ -141,21 +178,6 @@ ordered('src/renderer/src/platform/tauriLocalIpcBridge.js', [
   'if (LOCAL_IPC_EVENTS.has(channel)) {',
   'dispatchLocalIpcEvent(target, channel, args)'
 ], 'Tauri local IPC must route open, save and save-as events locally')
-ordered('test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js', [
-  'opens a vault note through notes.read even when target.path is unavailable',
-  "expect(read).toHaveBeenCalledWith({ relativePath: 'test_keep/Note.md' })",
-  'falls back to native IPC for files outside the active vault',
-  'keeps renderer-local save events local and does not call native IPC'
-], 'Tauri local IPC bridge regression test must cover backend note open and save event routing')
-
-ordered('src/renderer/src/store/editor.js', [
-  'HANDLE_AUTO_SAVE({ id, filename, pathname, markdown, options }) {',
-  "'mt::response-file-save'"
-], 'MarkText editor must emit the canonical save IPC')
-ordered('src/renderer/src/store/editor.js', [
-  'FILE_SAVE_AS() {',
-  "'mt::response-file-save-as'"
-], 'MarkText editor must emit the canonical save-as IPC')
 ordered('src/renderer/src/platform/tauriMarkTextSaveBridge.js', [
   'const writeViaRustBackend = async(target, pathname, markdown) => {',
   "return invoke('tauri_marktext_write_file', { pathname, content: markdown })",
@@ -164,6 +186,11 @@ ordered('src/renderer/src/platform/tauriMarkTextSaveBridge.js', [
   "ipc.send('mt::tab-saved', id)",
   "ipc.send('mt::tab-save-failure', id, message)"
 ], 'Tauri save bridge must write through Rust backend and report result')
+ordered('src/renderer/src/store/editor.js', [
+  'HANDLE_AUTO_SAVE({ id, filename, pathname, markdown, options }) {',
+  "'mt::response-file-save'"
+], 'MarkText editor must emit the canonical save IPC')
+has('test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js', 'keeps renderer-local save events local and does not call native IPC', 'Tauri local IPC bridge save routing test')
 
 ordered('src-tauri/src/tauri_extra_commands.rs', [
   'fn writable_relative_path(root: &str, relative_path: &str) -> R<PathBuf> {',
@@ -174,7 +201,6 @@ ordered('src-tauri/src/tauri_extra_commands.rs', [
 ordered('src-tauri/src/tauri_extra_commands.rs', [
   'fn writable_path_inside_root(root: &Path, candidate: &Path) -> R<PathBuf> {',
   'pub fn tauri_marktext_write_file(app: AppHandle, pathname: String, content: String) -> R<Value> {',
-  'if pathname.trim().is_empty() {',
   'let path = writable_path_inside_root(Path::new(&root), Path::new(&pathname))?;',
   'let changed = write_text_if_changed(&path, &content)?;'
 ], 'Rust MarkText backend writer must stay inside the active vault and report result')
@@ -204,21 +230,8 @@ ordered('Elephant/front/app/services/elephantnoteClient/apiRuntime.js', [
   'requireElephantNoteApi().call(action, validatedPayload)',
   'return legacyCall(validatedPayload)'
 ], 'renderer API runtime must validate payloads before public bridge and legacy fallback dispatch')
-ordered('test/unit/specs/main/elephantnote/apiRuntime.spec.js', [
-  'validates payloads before dispatching to the public bridge API',
-  'rejects invalid payloads before they can reach the public bridge API',
-  'rejects invalid payloads before they can reach legacy fallback calls'
-], 'API runtime tests must cover validation before dispatch')
-ordered('test/unit/specs/main/elephantnote/legacyCalls.spec.js', [
-  'routes sync.plan to the bridge when Tauri invoke is unavailable',
-  'disableTauriInvoke()',
-  'passes sync.plan payloads directly to the Tauri command when available',
-  'normalizes non-object sync.plan payloads before dispatching to Tauri'
-], 'legacy sync.plan tests must be isolated from leaked Tauri globals')
-ordered('test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js', [
-  'routes direct sync plan payloads to the Rust command',
-  'routes public API sync.plan payloads to the Rust command'
-], 'Tauri bridge tests must cover direct and public sync.plan routing')
+has('test/unit/specs/main/elephantnote/apiRuntime.spec.js', 'rejects invalid payloads before they can reach legacy fallback calls', 'API runtime validation regression test')
+has('test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js', 'routes public API sync.plan payloads to the Rust command', 'Tauri bridge public sync.plan routing test')
 ordered('Elephant/front/app/services/elephantnoteClient/domainClients.js', [
   'const CHAT_REBUILD_COOLDOWN_MS',
   'const searchVaultInitializedForChat',
@@ -263,6 +276,7 @@ ordered('Elephant/front/app/components/editor/ExcalidrawDialog.vue', [
   'imageBlob: await blobToBytes(blob)',
   'sceneBlob: await sceneBlob.text()'
 ], 'Excalidraw dialog must emit writable bytes/text')
+has('Elephant/front/app/components/editor/NoteEditorHost.vue', "bus.on('open-excalidraw-from-image', openExcalidrawFromImage)", 'image-backed Excalidraw open event')
 ordered('Elephant/front/app/utils/noteCardView.js', [
   'const stripInlineFrontmatterPrefix',
   'const metadataPairPattern = new RegExp',
@@ -278,33 +292,37 @@ ordered('Elephant/shared/sync.js', [
   'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PULL)',
   'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PUSH)'
 ], 'shared sync plan must keep explicit pull/push operations and Tauri-compatible metadata layout')
-has('test/unit/specs/main/elephantnote/syncPlan.spec.js', 'can pull into a second device without creating a local snapshot first', 'sync plan second-device pull regression test')
-has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'preserves direct string enqueue operations', 'web sync direct enqueue regression test')
-has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'canonical tauri-compatible sync directory', 'web sync canonical metadata layout test')
-has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'migrates legacy root sync config into the canonical sync directory', 'web sync legacy metadata migration test')
-has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'compacts completed queue items so periodic auto-sync cannot grow memory forever', 'web sync queue compaction regression test')
-has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', "expect(config.backend).toBe('git')", 'web sync git backend regression test')
-has('web/sync/WebGitSyncEngine.mjs', 'normalizeQueueInput', 'web sync queue input normalization')
-has('web/sync/WebGitSyncEngine.mjs', 'readMetadataJson', 'web sync legacy metadata reader')
-has('web/sync/WebGitSyncEngine.mjs', 'ALL_LOCAL_METADATA_FILES', 'web sync canonical and legacy metadata untracking')
-has('web/sync/WebGitSyncEngine.mjs', 'untrackSyncMetadata', 'web sync metadata untracking')
-has('web/sync/WebGitSyncEngine.mjs', 'compactQueue()', 'web sync queue compaction')
-has('web/sync/WebGitSyncEngine.mjs', 'backend: SYNC_BACKENDS.GIT', 'web sync reports the git backend')
-has('web/sync/WebGitSyncEngine.mjs', 'ensureGitExclude()', 'web sync must exclude local metadata from shared git history')
-has('src-tauri/src/vault/sync.rs', 'explicit_pull_plan_does_not_force_snapshot', 'Tauri sync plan pull regression')
-has('src-tauri/src/vault/sync.rs', 'ensure_git_exclude', 'Tauri sync metadata exclusion')
-has('src-tauri/src/vault/sync.rs', 'untrack_sync_metadata', 'Tauri legacy sync metadata untracking')
+ordered('src-tauri/src/vault/sync.rs', [
+  'fn enqueue_default_plan(&mut self, payload_by_operation: &Value) -> R<()> {',
+  'let operations = explicit_operations(payload_by_operation);',
+  'if payload_has(payload_by_operation, SYNC_OPERATION_SYNC)',
+  'let has_explicit_git_operation',
+  'if payload_has(payload_by_operation, operation)'
+], 'Tauri sync plan expansion must keep explicit operations without forcing snapshots')
+has('src-tauri/src/vault/sync.rs', 'fn ensure_git_exclude(&self) -> R<()>', 'Tauri sync metadata exclusion')
+has('src-tauri/src/vault/sync.rs', 'fn untrack_sync_metadata(&self) -> R<()>', 'Tauri legacy sync metadata untracking')
 has('src-tauri/src/sync_contract_tests.rs', 'second_device_can_pull_without_creating_local_snapshot', 'Tauri second-device pull contract test')
 has('src-tauri/src/sync_contract_tests.rs', 'sync_metadata_stays_local_and_is_not_tracked_by_git', 'Tauri sync metadata local-only contract test')
 has('src-tauri/src/sync_contract_tests.rs', 'legacy_tracked_sync_metadata_is_removed_from_git_index', 'Tauri legacy metadata untracking contract test')
-has('web/server.mjs', 'ELEPHANTNOTE_SYNC_AUTO_INTERVAL_MS', 'auto sync loop configuration')
-has('web/server.mjs', '/api/sync/auto/status', 'auto sync status endpoint')
-has('scripts/sync-two-docker-smoke.mjs', 'assertPeerIdentity', 'two-device peer identity detection check')
-has('scripts/sync-two-docker-smoke.mjs', 'stopDevice(deviceB)', 'offline device simulation')
-has('scripts/sync-two-docker-smoke.mjs', 'device B reconnect auto-pull', 'automatic reconnect pull check')
-has('scripts/sync-two-docker-smoke.mjs', 'assertResourceBudget', 'Docker sync memory and runtime budget check')
-has('scripts/sync-two-docker-smoke.mjs', 'assertNoTrackedSyncMetadata', 'Docker sync metadata leak regression check')
-has('scripts/sync-two-docker-smoke.mjs', 'local sync metadata files stay untracked in each container git repository', 'Docker sync metadata leak summary check')
+has('test/unit/specs/main/elephantnote/syncPlan.spec.js', 'can pull into a second device without creating a local snapshot first', 'sync plan second-device pull regression test')
+has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'compacts completed queue items so periodic auto-sync cannot grow memory forever', 'web sync queue compaction regression test')
+ordered('web/sync/WebGitSyncEngine.mjs', [
+  'normalizeQueueInput',
+  'readMetadataJson',
+  'ALL_LOCAL_METADATA_FILES',
+  'untrackSyncMetadata',
+  'compactQueue()',
+  'backend: SYNC_BACKENDS.GIT',
+  'ensureGitExclude()'
+], 'web sync engine must normalize queue input, migrate metadata and keep local metadata untracked')
+ordered('scripts/sync-two-docker-smoke.mjs', [
+  'assertPeerIdentity',
+  'stopDevice(deviceB)',
+  'device B reconnect auto-pull',
+  'assertResourceBudget',
+  'assertNoTrackedSyncMetadata',
+  'local sync metadata files stay untracked in each container git repository'
+], 'Docker sync smoke must cover peer identity, offline reconnect, resource budget and metadata leaks')
 has('.github/workflows/sync-docker.yml', 'node scripts/sync-two-docker-smoke.mjs', 'Docker pair sync workflow runs directly with Node')
 
 if (failures.length) {

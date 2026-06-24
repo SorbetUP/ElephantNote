@@ -105,9 +105,10 @@ pub fn tauri_notes_read(app: AppHandle, relative_path: String) -> R<Value> {
 }
 
 #[tauri::command]
-pub fn tauri_notes_write(app: AppHandle, relative_path: String, content: String) -> R<Value> {
+pub fn tauri_notes_write(app: AppHandle, relative_path: String, content: Option<String>, markdown: Option<String>) -> R<Value> {
   let root = active_vault_root(&app)?;
   let path = inside(&root, &relative_path);
+  let content = content.or(markdown).unwrap_or_default();
   if let Some(parent) = path.parent() {
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
   }
@@ -219,5 +220,5 @@ pub fn tauri_sync_plan(app: AppHandle) -> R<Value> {
   if assets_dir.exists() {
     scan_files(&root_path, &assets_dir, &mut assets, None)?;
   }
-  Ok(json!({ "runtime": "tauri-rust", "notes": notes.len(), "assets": assets.len(), "queued": 0, "running": false }))
+  Ok(json!({ "notes": notes, "assets": assets, "generatedAt": now() }))
 }

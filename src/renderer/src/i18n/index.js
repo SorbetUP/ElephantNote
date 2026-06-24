@@ -3,6 +3,10 @@ import bus from '../bus'
 import { isPortableRuntime, readPortablePreference } from '../platform/preferenceStorage'
 
 const createFallbackEnglishTranslations = () => ({
+  about: {
+    copyright: 'Copyright',
+    copyrightContributors: 'Contributors'
+  },
   quickInsert: {
     basicBlock: 'Basic blocks',
     paragraph: {

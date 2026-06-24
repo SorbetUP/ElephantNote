@@ -43,6 +43,9 @@ jobs:
         continue-on-error: true
         run: node scripts/verify-critical-flows.mjs
 
+      - name: Tauri platform compatibility guard
+        run: pnpm tauri:platform:check
+
       - name: Lint diagnostic
         continue-on-error: true
         run: pnpm lint

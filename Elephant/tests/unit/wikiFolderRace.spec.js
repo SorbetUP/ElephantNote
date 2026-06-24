@@ -12,7 +12,7 @@ vi.mock('electron-log', () => ({
 vi.mock('electron-log/renderer', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() }
 }))
-vi.mock('../front/app/services/elephantnoteClient', () => ({
+vi.mock('../../front/app/services/elephantnoteClient', () => ({
   elephantnoteClient: {
     directory: {
       list: listDirectory
@@ -72,8 +72,8 @@ describe('Wiki folder request races', () => {
       ])
       .mockReturnValueOnce(folderLoad.promise)
 
-    const { useVaultStore } = await import('../front/app/stores/vaultStore.js')
-    const WikiView = (await import('../front/app/components/views/WikiView.vue')).default
+    const { useVaultStore } = await import('../../front/app/stores/vaultStore.js')
+    const WikiView = (await import('../../front/app/components/views/WikiView.vue')).default
     const pinia = createPinia()
     setActivePinia(pinia)
     const store = useVaultStore()
@@ -145,8 +145,8 @@ describe('Wiki folder request races', () => {
       ])
       .mockReturnValueOnce(folderLoad.promise)
 
-    const { useVaultStore } = await import('../front/app/stores/vaultStore.js')
-    const WikiView = (await import('../front/app/components/views/WikiView.vue')).default
+    const { useVaultStore } = await import('../../front/app/stores/vaultStore.js')
+    const WikiView = (await import('../../front/app/components/views/WikiView.vue')).default
     const pinia = createPinia()
     setActivePinia(pinia)
     const store = useVaultStore()

@@ -2,6 +2,8 @@ import { BrowserWindow, ipcMain } from 'electron'
 import log from 'electron-log'
 import { createDefaultModelSelection, ATOMIC_MODEL_CATALOG } from 'common/elephantnote/atomicWorkspace'
 import { createTextEmbedding } from 'common/elephantnote/atomicAiEngine'
+import { createConceptProfile } from 'common/elephantnote/knowledge/knowledgeIndex'
+import { rankConceptsForQuery } from 'common/elephantnote/knowledge/conceptRouter'
 import { getConfig } from '../config/elephantConfigStore'
 import { modelRuntime } from '../runtime/elephantRuntime'
 import { ElephantSearchService } from './ElephantSearchService'
@@ -204,6 +206,64 @@ export const normalizeSearchQuery = (params = {}) => {
   }
 }
 
+export const normalizeConceptQuery = (params = {}) => {
+  if (typeof params !== 'object' || params === null) {
+    throw new Error('Invalid concept search payload.')
+  }
+
+  if (typeof params.query !== 'string') {
+    throw new Error('Query must be a string.')
+  }
+
+  return {
+    query: params.query,
+    limit: Math.max(1, Math.min(12, Number(params.limit) || 5)),
+    evidenceLimit: Math.max(1, Math.min(8, Number(params.evidenceLimit) || 5))
+  }
+}
+
+const createConceptProfilesFromInspection = (inspection = {}) => {
+  const documentConcepts = (inspection.documents || []).map((document) => createConceptProfile({
+    id: `document:${document.relativePath}`,
+    title: document.title || document.relativePath,
+    aliases: [document.relativePath, ...(document.tags || [])],
+    positiveTerms: [document.title, document.relativePath, ...(document.tags || []), ...(document.sources || []).map((source) => source.title || source.url)].flat(),
+    negativeTerms: []
+  }))
+
+  const clusterConcepts = (inspection.graph?.clusters || []).map((cluster) => createConceptProfile({
+    id: `cluster:${cluster.id || cluster.label}`,
+    title: cluster.label || cluster.id || 'Cluster',
+    aliases: [...(cluster.tags || []), ...(cluster.paths || [])],
+    positiveTerms: [cluster.label, ...(cluster.tags || []), ...(cluster.paths || [])],
+    negativeTerms: []
+  }))
+
+  const byId = new Map()
+  for (const concept of [...documentConcepts, ...clusterConcepts]) {
+    if (!concept.id || byId.has(concept.id)) continue
+    byId.set(concept.id, concept)
+  }
+  return [...byId.values()]
+}
+
+const routeConcepts = async (payload, windowId) => {
+  let inspection = await inspectWithCache(windowId)
+  if (!inspection?.chunks?.length && !inspection?.documents?.length) {
+    await searchService.rebuildIndex(windowId)
+    clearInspectCache(windowId)
+    inspection = await inspectWithCache(windowId)
+  }
+
+  return rankConceptsForQuery({
+    query: payload.query,
+    concepts: createConceptProfilesFromInspection(inspection),
+    chunks: inspection?.chunks || [],
+    limit: payload.limit,
+    evidenceLimit: payload.evidenceLimit
+  })
+}
+
 const getSenderWindowId = (event) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   return win?.id ?? null
@@ -231,6 +291,17 @@ export const registerSearchIpc = () => {
       query: payload.query.slice(0, 80)
     })
     return searchService.search(payload, getSenderWindowId(event))
+  })
+
+  ipcMain.handle('en:search:concepts', async(event, params) => {
+    const payload = normalizeConceptQuery(params)
+    const windowId = getSenderWindowId(event)
+    log.info('[search] concepts', {
+      windowId,
+      limit: payload.limit,
+      query: payload.query.slice(0, 80)
+    })
+    return routeConcepts(payload, windowId)
   })
 
   ipcMain.handle('en:search:status', async(event) => {

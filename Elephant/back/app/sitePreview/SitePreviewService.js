@@ -1,9 +1,40 @@
 import { shell } from 'electron'
 import fs from 'fs-extra'
 import path from 'path'
+import { getConfig } from '../config/elephantConfigStore'
 import { ElephantSiteManager } from './ElephantSiteManager'
 import { StaticSiteServer } from './StaticSiteServer'
 import { SITE_PREVIEW_STATUS } from './siteTypes'
+
+const getActiveVaultRoot = () => {
+  const config = getConfig()
+  const vault = config.vaults.find((item) => item.id === config.activeVaultId)
+  if (!vault?.path) throw new Error('No active ElephantNote vault.')
+  return path.resolve(vault.path)
+}
+
+const assertPathInside = (root, target) => {
+  const relative = path.relative(root, target)
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Website preview folder must stay inside the active vault.')
+  }
+}
+
+const resolveTrustedPreviewRequest = ({ folderPath } = {}) => {
+  if (typeof folderPath !== 'string' || !folderPath.trim()) {
+    throw new Error('A folder path is required.')
+  }
+
+  const vaultRoot = getActiveVaultRoot()
+  const resolvedFolderPath = path.resolve(
+    path.isAbsolute(folderPath) ? folderPath : path.join(vaultRoot, folderPath)
+  )
+  assertPathInside(vaultRoot, resolvedFolderPath)
+  return {
+    vaultRoot,
+    folderPath: resolvedFolderPath
+  }
+}
 
 export class SitePreviewService {
   constructor({ siteManager = new ElephantSiteManager() } = {}) {
@@ -11,8 +42,11 @@ export class SitePreviewService {
     this.previews = new Map()
   }
 
-  async previewFolder({ vaultRoot, folderPath }) {
-    const info = await this.siteManager.preparePreview({ vaultRoot, folderPath, mode: 'preview' })
+  async previewFolder(request) {
+    const info = await this.siteManager.preparePreview({
+      ...resolveTrustedPreviewRequest(request),
+      mode: 'preview'
+    })
     if (info.status === SITE_PREVIEW_STATUS.ERROR) {
       this.previews.set(info.id, info)
       return info
@@ -43,8 +77,11 @@ export class SitePreviewService {
     return readyInfo
   }
 
-  async buildFolder({ vaultRoot, folderPath }) {
-    return this.siteManager.buildStaticSite({ vaultRoot, folderPath, mode: 'static-export' })
+  async buildFolder(request) {
+    return this.siteManager.buildStaticSite({
+      ...resolveTrustedPreviewRequest(request),
+      mode: 'static-export'
+    })
   }
 
   async stopPreview(siteId) {

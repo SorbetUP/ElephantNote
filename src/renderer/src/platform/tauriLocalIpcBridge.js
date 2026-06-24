@@ -15,6 +15,22 @@ const NOTE_OPEN_EVENTS = new Set([
 
 const normalizePath = (value = '') => String(value || '').replace(/\\/g, '/').replace(/\/+/g, '/')
 
+const trimTrailingSlash = (value = '') => normalizePath(value).replace(/\/+$/g, '')
+
+const isAbsolutePath = (value = '') => {
+  const normalized = normalizePath(value)
+  return normalized.startsWith('/') || /^[a-zA-Z]:\//.test(normalized)
+}
+
+const fallbackRelativePath = (vaultRoot = '', filePath = '') => {
+  const root = trimTrailingSlash(vaultRoot)
+  const file = normalizePath(filePath)
+  if (!root || !file || file === root) return ''
+  const prefix = `${root}/`
+  if (!file.startsWith(prefix)) return ''
+  return file.slice(prefix.length)
+}
+
 const dispatchLocalIpcEvent = (target, channel, args) => {
   target.dispatchEvent(new CustomEvent(channel, { detail: args }))
 }
@@ -25,8 +41,9 @@ const getBasename = (target, pathname = '') => (
 
 const getRelativeVaultPath = (target, vaultRoot = '', filePath = '') => {
   if (!vaultRoot || !filePath) return ''
-  const relative = target.path?.relative?.(vaultRoot, filePath) || ''
-  if (!relative || relative.startsWith('..') || target.path?.isAbsolute?.(relative)) return ''
+
+  const relative = target.path?.relative?.(vaultRoot, filePath) || fallbackRelativePath(vaultRoot, filePath)
+  if (!relative || relative.startsWith('..') || isAbsolutePath(relative)) return ''
   return normalizePath(relative)
 }
 

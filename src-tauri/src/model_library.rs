@@ -4,18 +4,20 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::Write;
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 
-type R<T> = Result<T, String>;
+ type R<T> = Result<T, String>;
 
 const MODEL_PROVIDER: &str = "node-llama-cpp";
 const HF_API_BASE_URL: &str = "https://huggingface.co";
 const MODEL_INDEX_FILE: &str = "model-index.json";
 const ACTIVE_MODEL_FILE: &str = "active-model.json";
 const MANIFEST_SUFFIX: &str = ".model.json";
+const MAX_MODEL_DOWNLOAD_BYTES: u64 = 64 * 1024 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 struct DownloadState {
@@ -110,6 +112,14 @@ fn file_name(value: &str) -> String {
     .to_string()
 }
 
+fn file_name_from_url(raw: &str) -> String {
+  reqwest::Url::parse(raw)
+    .ok()
+    .and_then(|url| url.path_segments().and_then(|mut segments| segments.rev().find(|segment| !segment.trim().is_empty()).map(str::to_string)))
+    .filter(|name| !name.trim().is_empty())
+    .unwrap_or_else(|| file_name(raw))
+}
+
 fn safe_file_name(value: &str) -> String {
   let safe = file_name(value)
     .chars()
@@ -123,6 +133,71 @@ fn safe_file_name(value: &str) -> String {
     .trim_matches('.')
     .to_string();
   if safe.is_empty() { "model.gguf".to_string() } else { safe }
+}
+
+fn ensure_gguf_file_name(file_name: &str) -> R<()> {
+  if file_name.to_ascii_lowercase().ends_with(".gguf") {
+    Ok(())
+  } else {
+    Err(format!("Only .gguf model downloads are allowed, got `{file_name}`."))
+  }
+}
+
+fn is_blocked_host(host: &str) -> bool {
+  let host = host.trim_matches('.').to_ascii_lowercase();
+  matches!(host.as_str(), "localhost" | "localhost.localdomain" | "ip6-localhost" | "ip6-loopback")
+}
+
+fn is_blocked_ip(ip: IpAddr) -> bool {
+  match ip {
+    IpAddr::V4(ip) => {
+      let octets = ip.octets();
+      ip.is_loopback()
+        || ip.is_private()
+        || ip.is_link_local()
+        || ip.is_broadcast()
+        || ip.is_unspecified()
+        || octets[0] == 0
+        || octets[0] >= 224
+        || (octets[0] == 100 && (64..=127).contains(&octets[1]))
+    }
+    IpAddr::V6(ip) => {
+      let first_segment = ip.segments()[0];
+      ip.is_loopback()
+        || ip.is_unspecified()
+        || (first_segment & 0xfe00) == 0xfc00
+        || (first_segment & 0xffc0) == 0xfe80
+    }
+  }
+}
+
+fn is_allowed_model_download_host(host: &str) -> bool {
+  let host = host.trim_matches('.').to_ascii_lowercase();
+  host == "huggingface.co"
+    || host == "cdn-lfs.huggingface.co"
+    || host == "hf.co"
+    || host.ends_with(".hf.co")
+    || host.ends_with(".xethub.hf.co")
+}
+
+fn validate_download_url(raw: &str) -> R<reqwest::Url> {
+  let url = reqwest::Url::parse(raw).map_err(|error| format!("Invalid model download URL: {error}"))?;
+  if url.scheme() != "https" {
+    return Err("Model downloads must use HTTPS Hugging Face URLs.".to_string());
+  }
+  let host = url.host_str().ok_or_else(|| "Model download URL must include a host.".to_string())?;
+  if is_blocked_host(host) {
+    return Err(format!("Refusing to download a model from local host `{host}`."));
+  }
+  if let Ok(ip) = host.parse::<IpAddr>() {
+    if is_blocked_ip(ip) {
+      return Err(format!("Refusing to download a model from private or local address `{host}`."));
+    }
+  }
+  if !is_allowed_model_download_host(host) {
+    return Err(format!("Refusing model download from non-Hugging Face host `{host}`."));
+  }
+  Ok(url)
 }
 
 fn active_record() -> Option<Value> {
@@ -302,15 +377,24 @@ fn resolve_download(payload: &Value) -> R<(String, String, String)> {
     }
     let repo_id = format!("{}/{}", parts[0], parts[1]);
     let file = parts[2..].join("/");
-    return Ok((format!("{HF_API_BASE_URL}/{repo_id}/resolve/main/{file}?download=true"), repo_id, file));
+    ensure_gguf_file_name(&file)?;
+    let url = format!("{HF_API_BASE_URL}/{repo_id}/resolve/main/{file}?download=true");
+    validate_download_url(&url)?;
+    return Ok((url, repo_id, file));
   }
   if uri.starts_with("http://") || uri.starts_with("https://") {
-    return Ok((uri.clone(), repo_hint, text_or(payload, &["fileName", "filename"], file_name(&uri))));
+    let url = validate_download_url(&uri)?;
+    let remote_file = text_or(payload, &["fileName", "filename"], file_name_from_url(url.as_str()));
+    ensure_gguf_file_name(&remote_file)?;
+    return Ok((url.to_string(), repo_hint, remote_file));
   }
   if repo_hint.contains('/') && !file_hint.is_empty() {
-    return Ok((format!("{HF_API_BASE_URL}/{repo_hint}/resolve/main/{file_hint}?download=true"), repo_hint, file_hint));
+    ensure_gguf_file_name(&file_hint)?;
+    let url = format!("{HF_API_BASE_URL}/{repo_hint}/resolve/main/{file_hint}?download=true");
+    validate_download_url(&url)?;
+    return Ok((url, repo_hint, file_hint));
   }
-  Err("Only hf: and http(s) model downloads are supported by the Tauri model backend.".to_string())
+  Err("Only hf: and HTTPS Hugging Face .gguf model downloads are supported by the Tauri model backend.".to_string())
 }
 
 fn set_progress(download_id: &str, payload: Value) {
@@ -342,19 +426,21 @@ async fn download_file(app: AppHandle, payload: Value) -> R<Value> {
   let name = text_or(&payload, &["name", "fileName", "filename", "id"], id.clone());
   let (url, repo_id, remote_file) = resolve_download(&payload)?;
   let file_name = safe_file_name(&remote_file);
+  ensure_gguf_file_name(&file_name)?;
   let dir = model_dir();
   fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
   let destination = dir.join(&file_name);
   let tmp = dir.join(format!(".{file_name}.{download_id}.tmp"));
+  let max_bytes = MAX_MODEL_DOWNLOAD_BYTES;
 
   emit_progress(&app, &download_id, json!({
     "downloadId": download_id.clone(), "id": id.clone(), "modelId": id.clone(),
     "phase": "downloading", "percent": 5, "message": format!("Downloading {name}…"),
-    "fileName": file_name.clone(), "repoId": repo_id.clone()
+    "fileName": file_name.clone(), "repoId": repo_id.clone(), "maxSizeBytes": max_bytes
   }));
 
   let response = reqwest::Client::new()
-    .get(url)
+    .get(&url)
     .header("accept", "application/octet-stream")
     .send()
     .await
@@ -367,6 +453,9 @@ async fn download_file(app: AppHandle, payload: Value) -> R<Value> {
     let value = number(&payload, &["sizeBytes", "size"]);
     if value > 0 { Some(value) } else { None }
   }).unwrap_or(0);
+  if total > max_bytes {
+    return Err(format!("Model download is too large: {total} bytes exceeds the {max_bytes} byte limit."));
+  }
   let mut downloaded = 0_u64;
   let mut file = fs::File::create(&tmp).map_err(|error| error.to_string())?;
   let mut stream = response.bytes_stream();
@@ -376,13 +465,18 @@ async fn download_file(app: AppHandle, payload: Value) -> R<Value> {
       return Err("Download cancelled.".to_string());
     }
     let chunk = chunk.map_err(|error| error.to_string())?;
+    let next_downloaded = downloaded.saturating_add(chunk.len() as u64);
+    if next_downloaded > max_bytes {
+      let _ = fs::remove_file(&tmp);
+      return Err(format!("Model download exceeded the {max_bytes} byte limit."));
+    }
     file.write_all(&chunk).map_err(|error| error.to_string())?;
-    downloaded += chunk.len() as u64;
+    downloaded = next_downloaded;
     let percent = if total > 0 { (downloaded.saturating_mul(94) / total).min(94) + 5 } else { 50 };
     emit_progress(&app, &download_id, json!({
       "downloadId": download_id.clone(), "id": id.clone(), "modelId": id.clone(),
       "phase": "downloading", "percent": percent, "downloadedSize": downloaded, "totalSize": total,
-      "message": format!("Downloading {name}…"), "fileName": file_name.clone(), "repoId": repo_id.clone()
+      "message": format!("Downloading {name}…"), "fileName": file_name.clone(), "repoId": repo_id.clone(), "maxSizeBytes": max_bytes
     }));
   }
   file.flush().map_err(|error| error.to_string())?;
@@ -390,12 +484,13 @@ async fn download_file(app: AppHandle, payload: Value) -> R<Value> {
   fs::rename(&tmp, &destination).map_err(|error| error.to_string())?;
 
   let manifest = write_manifest(&destination, &json!({
-    "id": id.clone(), "name": name.clone(), "source": if repo_id.is_empty() { "remote" } else { "huggingface" },
-    "provider": MODEL_PROVIDER, "repoId": repo_id.clone(),
+    "id": id.clone(), "name": name.clone(), "source": "huggingface",
+    "provider": MODEL_PROVIDER, "repoId": repo_id.clone(), "sourceUrl": url.clone(),
     "originalRepoId": text_or(&payload, &["originalRepoId"], text(&payload, &["repoId"])),
     "filename": file_name.clone(), "fileName": file_name.clone(),
     "modelPath": destination.to_string_lossy().to_string(), "installedAt": now(), "downloadedAt": now(),
-    "downloadId": download_id.clone()
+    "downloadId": download_id.clone(), "downloadedSize": downloaded, "declaredSize": total,
+    "maxSizeBytes": max_bytes
   }))?;
   refresh_index()?;
   let result = json!({
@@ -603,5 +698,29 @@ mod tests {
     let (_url, repo, file) = resolve_download(&value).unwrap();
     assert_eq!(repo, "owner/repo");
     assert_eq!(file, "model.Q4_K_M.gguf");
+  }
+
+  #[test]
+  fn rejects_http_downloads() {
+    let value = json!({ "uri": "http://huggingface.co/owner/repo/resolve/main/model.gguf" });
+    assert!(resolve_download(&value).is_err());
+  }
+
+  #[test]
+  fn rejects_localhost_downloads() {
+    let value = json!({ "uri": "https://localhost/owner/repo/resolve/main/model.gguf" });
+    assert!(resolve_download(&value).is_err());
+  }
+
+  #[test]
+  fn rejects_non_hugging_face_downloads() {
+    let value = json!({ "uri": "https://example.com/model.gguf" });
+    assert!(resolve_download(&value).is_err());
+  }
+
+  #[test]
+  fn rejects_non_gguf_model_names() {
+    let value = json!({ "uri": "hf:owner/repo/model.bin" });
+    assert!(resolve_download(&value).is_err());
   }
 }

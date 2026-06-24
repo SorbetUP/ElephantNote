@@ -33,6 +33,7 @@ export const createElephantNoteAPI = (ipcRenderer = electronAPI.ipcRenderer) => 
   search: {
     initVault: (vaultPath) => ipcRenderer.invoke('en:search:init-vault', toPlainObject(vaultPath)),
     query: (params) => ipcRenderer.invoke('en:search:query', toPlainObject(params)),
+    concepts: (params) => ipcRenderer.invoke('en:search:concepts', toPlainObject(params)),
     status: () => ipcRenderer.invoke('en:search:status'),
     inspect: () => ipcRenderer.invoke('en:search:inspect'),
     rebuild: () => ipcRenderer.invoke('en:search:rebuild'),

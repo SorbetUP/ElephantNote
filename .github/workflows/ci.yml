@@ -45,23 +45,19 @@ jobs:
       - name: Tauri platform compatibility guard
         run: pnpm tauri:platform:check
 
-      - name: Lint diagnostic
-        continue-on-error: true
+      - name: Lint
         run: pnpm lint
 
       - name: ElephantNote contract tests
         run: pnpm exec vitest run test/unit/specs/main/elephantnote
 
-      - name: Legacy unit suite diagnostic
-        continue-on-error: true
-        run: pnpm test:unit -- --coverage
+      - name: Unit suite
+        run: pnpm test:unit
 
-      - name: Build Electron reference bundles diagnostic
-        continue-on-error: true
+      - name: Build Electron reference bundles
         run: pnpm run build
 
-      - name: Build Tauri web bundle diagnostic
-        continue-on-error: true
+      - name: Build Tauri web bundle
         run: pnpm tauri:web:build
 
       - name: Validate licenses
@@ -122,8 +118,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Rust formatting diagnostic
-        continue-on-error: true
+      - name: Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
       - name: Cargo check
@@ -137,7 +132,7 @@ jobs:
     needs: [quality, tauri-rust]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || matrix.platform == 'linux'
     strategy:
       fail-fast: false
       matrix:

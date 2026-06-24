@@ -2,6 +2,9 @@ use serde_json::{json, Value};
 use tauri::AppHandle;
 
 #[cfg(not(mobile))]
+use std::path::Path;
+
+#[cfg(not(mobile))]
 use crate::local_llama_runtime;
 
 type R<T> = Result<T, String>;
@@ -25,9 +28,7 @@ fn extract_messages(payload: &Value) -> Vec<Value> {
       .filter_map(|message| {
         let role = text(message, &["role"]);
         let content = text(message, &["content", "text", "message"]);
-        if role.is_empty() { return None; }
-        if content.is_empty() { return None; }
-        Some(json!({ "role": role, "content": content }))
+        if role.is_empty() || content.is_empty() { None } else { Some(json!({ "role": role, "content": content })) }
       })
       .collect::<Vec<_>>();
     if !out.is_empty() {
@@ -63,7 +64,6 @@ fn selected_chat_model(payload: &Value) -> String {
   .unwrap_or_default()
 }
 
-#[cfg(not(mobile))]
 fn with_system_prompt(payload: &Value) -> Vec<Value> {
   let mut messages = vec![json!({
     "role": "system",
@@ -71,6 +71,46 @@ fn with_system_prompt(payload: &Value) -> Vec<Value> {
   })];
   messages.extend(extract_messages(payload));
   messages
+}
+
+#[cfg(not(mobile))]
+fn local_runtime_config(payload: &Value) -> &Value {
+  payload
+    .get("localRuntime")
+    .or_else(|| payload.pointer("/aiConfig/localRuntime"))
+    .or_else(|| payload.pointer("/config/localRuntime"))
+    .unwrap_or(&Value::Null)
+}
+
+#[cfg(not(mobile))]
+fn configured_server_path(payload: &Value) -> String {
+  let runtime = local_runtime_config(payload);
+  let from_payload = text(payload, &["llamaServerPath", "serverPath", "llamaBinary"]);
+  if !from_payload.trim().is_empty() {
+    return from_payload;
+  }
+  text(runtime, &["llamaServerPath", "serverPath", "llamaBinary", "path"])
+}
+
+#[cfg(not(mobile))]
+fn validate_configured_llama_binary(payload: &Value) -> R<()> {
+  let configured = configured_server_path(payload);
+  if configured.trim().is_empty() {
+    return Ok(());
+  }
+  let basename = Path::new(&configured)
+    .file_name()
+    .and_then(|name| name.to_str())
+    .unwrap_or(configured.as_str());
+  let allowed = ["llama-server", "llama-server.exe", "llama.cpp-server", "llama-cpp-server"];
+  if !allowed.contains(&basename) {
+    return Err(format!("Refusing to start unsupported llama runtime binary: {basename}. Configure llama-server instead."));
+  }
+  let configured_path = Path::new(&configured);
+  if configured_path.is_absolute() && !configured_path.is_file() {
+    return Err(format!("Configured llama runtime path does not exist: {configured}"));
+  }
+  Ok(())
 }
 
 #[tauri::command]
@@ -125,6 +165,18 @@ pub async fn tauri_rag_chat(app: AppHandle, payload: Value) -> R<Value> {
 
   #[cfg(not(mobile))]
   {
+    if let Err(error) = validate_configured_llama_binary(&payload) {
+      eprintln!("[tauri-rag][warn] llama runtime configuration rejected: {error}");
+      return Ok(json!({
+        "answer": format!("Configuration du runtime llama.cpp refusée.\n\nDétail technique : {error}"),
+        "sources": [],
+        "runtime": "tauri-rust-local-llama.cpp",
+        "provider": "local-llama.cpp",
+        "model": model,
+        "warning": error
+      }));
+    }
+
     let messages = with_system_prompt(&payload);
     match local_llama_runtime::chat_with_selected_model(&app, &model, &messages, &payload).await {
       Ok(Some(local)) => Ok(json!({
@@ -181,5 +233,17 @@ mod tests {
       { "role": "user", "content": "second" }
     ] });
     assert_eq!(last_user_message(&payload), "second");
+  }
+
+  #[test]
+  fn rejects_unexpected_llama_binary_name() {
+    let payload = json!({ "aiConfig": { "localRuntime": { "llamaServerPath": "/tmp/not-llama" } } });
+    assert!(validate_configured_llama_binary(&payload).is_err());
+  }
+
+  #[test]
+  fn accepts_llama_server_binary_name() {
+    let payload = json!({ "aiConfig": { "localRuntime": { "llamaServerPath": "llama-server" } } });
+    assert!(validate_configured_llama_binary(&payload).is_ok());
   }
 }

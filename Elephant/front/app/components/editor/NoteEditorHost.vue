@@ -103,7 +103,7 @@ import {
   getThemeMode
 } from 'common/elephantnote/appearance'
 import { useSearchStore } from '../../stores/searchStore'
-import { resolveLocalImageSource } from '../../../../shared/imageSource.js'
+import { toMarkdownImageSource } from '../../../../shared/imageSource.js'
 
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
@@ -525,8 +525,10 @@ const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {
   excalidrawTargetPath.value = targetPath
   excalidrawScenePath.value = scenePath
   if (excalidrawInsertOnSave.value) {
-    const source = resolveLocalImageSource(targetPath, currentNoteDirectory.value)
-    updateCurrentFileMarkdown(`${markdown.value}\n\n![${resolvedName}](${source})`)
+    const source = toMarkdownImageSource(targetPath, currentNoteDirectory.value)
+    const imageMarkdown = `![${resolvedName}](${source})`
+    const nextMarkdown = [markdown.value.trimEnd(), imageMarkdown].filter(Boolean).join('\n\n')
+    updateCurrentFileMarkdown(nextMarkdown)
   }
   closeExcalidraw()
 }

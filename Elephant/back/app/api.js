@@ -10,6 +10,9 @@ export {
 } from 'common/elephantnote/apiActions'
 
 const normalizeAction = (action) => String(action || '').trim()
+const shouldTraceApi = () =>
+  process.env.ELEPHANTNOTE_TRACE_API === 'true' ||
+  String(process.env.DEBUG || '').includes('elephantnote:api')
 
 export const createApiResponse = ({ ok, action, data, error }) => ({
   ok,
@@ -49,16 +52,21 @@ export const createElephantNoteApi = ({ handlers = {} } = {}) => {
 
   const callEnvelope = async(actionName, payload = {}, context = {}) => {
     const action = normalizeAction(actionName)
-    log.info('[api] callEnvelope:start', {
-      action,
-      payloadType: Array.isArray(payload) ? 'array' : typeof payload
-    })
+    const traceApi = shouldTraceApi()
+    if (traceApi) {
+      log.info('[api] callEnvelope:start', {
+        action,
+        payloadType: Array.isArray(payload) ? 'array' : typeof payload
+      })
+    }
     try {
       const data = await call(action, payload, context)
-      log.info('[api] callEnvelope:done', {
-        action,
-        dataType: Array.isArray(data) ? 'array' : typeof data
-      })
+      if (traceApi) {
+        log.info('[api] callEnvelope:done', {
+          action,
+          dataType: Array.isArray(data) ? 'array' : typeof data
+        })
+      }
       return createApiResponse({
         ok: true,
         action,

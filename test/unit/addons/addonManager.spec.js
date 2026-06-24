@@ -1,0 +1,81 @@
+import { describe, expect, it, vi } from 'vitest'
+import { ADDON_EXTENSION_POINTS, ADDON_STATUS, ElephantAddonManager } from '@/addons'
+
+const createTestAddon = (overrides = {}) => ({
+  manifest: {
+    id: 'test.addon',
+    name: 'Test Addon',
+    ...overrides.manifest
+  },
+  activate: overrides.activate || vi.fn(),
+  deactivate: overrides.deactivate || vi.fn()
+})
+
+describe('ElephantAddonManager', () => {
+  it('registers addons and returns immutable snapshots', () => {
+    const manager = new ElephantAddonManager()
+    const snapshot = manager.register(createTestAddon())
+
+    expect(snapshot.manifest.id).toBe('test.addon')
+    expect(snapshot.enabled).toBe(false)
+    expect(snapshot.status).toBe(ADDON_STATUS.disabled)
+    expect(manager.list()).toHaveLength(1)
+  })
+
+  it('activates an addon and stores contributions', async () => {
+    const manager = new ElephantAddonManager()
+    const activate = vi.fn((ctx) => {
+      ctx.addAction({ id: 'open-graph', title: 'Open graph' })
+    })
+
+    manager.register(createTestAddon({ activate }))
+    const snapshot = await manager.enable('test.addon')
+
+    expect(snapshot.enabled).toBe(true)
+    expect(snapshot.status).toBe(ADDON_STATUS.enabled)
+    expect(activate).toHaveBeenCalledOnce()
+    expect(manager.getContributions(ADDON_EXTENSION_POINTS.actions)).toEqual([
+      {
+        addonId: 'test.addon',
+        contribution: { id: 'open-graph', title: 'Open graph' }
+      }
+    ])
+  })
+
+  it('cleans contributions and disposables when disabled', async () => {
+    const manager = new ElephantAddonManager()
+    const dispose = vi.fn()
+    const deactivate = vi.fn()
+    const activate = vi.fn((ctx) => {
+      ctx.addSidebarItem({ id: 'library', title: 'Library' })
+      ctx.addDisposable(dispose)
+    })
+
+    manager.register(createTestAddon({ activate, deactivate }))
+    await manager.enable('test.addon')
+    await manager.disable('test.addon')
+
+    expect(deactivate).toHaveBeenCalledOnce()
+    expect(dispose).toHaveBeenCalledOnce()
+    expect(manager.getContributions(ADDON_EXTENSION_POINTS.sidebarItems)).toEqual([])
+    expect(manager.get('test.addon').status).toBe(ADDON_STATUS.disabled)
+  })
+
+  it('marks addon as failed when activation throws', async () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    const manager = new ElephantAddonManager({ logger })
+    manager.register(createTestAddon({
+      activate: vi.fn(() => {
+        throw new Error('boom')
+      })
+    }))
+
+    await expect(manager.enable('test.addon')).rejects.toThrow('boom')
+    expect(manager.get('test.addon')).toMatchObject({
+      enabled: false,
+      status: ADDON_STATUS.error,
+      error: { message: 'boom' }
+    })
+    expect(logger.error).toHaveBeenCalledOnce()
+  })
+})

@@ -65,15 +65,28 @@ const autoUpdateStore = useAutoUpdatesStore()
 const commandCenterStore = useCommandCenterStore()
 const notificationStore = useNotificationStore()
 
-const timer = ref(null)
-const muyaRuntimeModeTimer = ref(null)
+let importDialogHideTimer = null
+let dragOverHandler = null
+let muyaRuntimeModeTimer = null
+let pendingMuyaRuntimeFrame = null
 const muyaRuntimeMode = ref(window.__ELEPHANT_MUYA_RUNTIME__?.mode?.() || readMuyaRuntimeMode(window))
 
 const { init } = storeToRefs(mainStore)
 const { theme, customCss, zoom } = storeToRefs(preferencesStore)
 
 const syncMuyaRuntimeMode = () => {
-  muyaRuntimeMode.value = window.__ELEPHANT_MUYA_RUNTIME__?.mode?.() || readMuyaRuntimeMode(window)
+  const nextMode = window.__ELEPHANT_MUYA_RUNTIME__?.mode?.() || readMuyaRuntimeMode(window)
+  if (muyaRuntimeMode.value !== nextMode) {
+    muyaRuntimeMode.value = nextMode
+  }
+}
+
+const scheduleMuyaRuntimeModeSync = () => {
+  if (pendingMuyaRuntimeFrame) return
+  pendingMuyaRuntimeFrame = window.requestAnimationFrame(() => {
+    pendingMuyaRuntimeFrame = null
+    syncMuyaRuntimeMode()
+  })
 }
 
 const muyaRuntimeEnabled = computed(() => isMuyaRuntimeEnabled(muyaRuntimeMode.value))
@@ -117,37 +130,55 @@ watch(zoom, (zoomValue) => {
   bus.emit('mt::window-zoom', zoomValue)
 })
 
-const setupDragDropHandler = () => {
-  window.addEventListener(
-    'dragover',
-    (e) => {
-      if (!e.dataTransfer.types.length) return
-
-      if (e.dataTransfer.types.indexOf('Files') >= 0) {
-        if (
-          e.dataTransfer.items.length === 1 &&
-          e.dataTransfer.items[0].type.indexOf('image') > -1
-        ) {
-          // Do nothing
-        } else {
-          e.preventDefault()
-          if (timer.value) {
-            clearTimeout(timer.value)
-          }
-          timer.value = setTimeout(() => {
-            bus.emit('importDialog', false)
-          }, 300)
-          bus.emit('importDialog', true)
-        }
-        e.dataTransfer.dropEffect = 'copy'
-      } else {
-        e.stopPropagation()
-        e.dataTransfer.dropEffect = 'none'
-      }
-    },
-    false
-  )
+const hideImportDialogSoon = () => {
+  if (importDialogHideTimer) {
+    window.clearTimeout(importDialogHideTimer)
+  }
+  importDialogHideTimer = window.setTimeout(() => {
+    importDialogHideTimer = null
+    bus.emit('importDialog', false)
+  }, 300)
 }
+
+const handleDragOver = (e) => {
+  const dataTransfer = e.dataTransfer
+  if (!dataTransfer?.types?.length) return
+
+  if (dataTransfer.types.indexOf('Files') >= 0) {
+    if (
+      dataTransfer.items.length === 1 &&
+      dataTransfer.items[0].type.indexOf('image') > -1
+    ) {
+      // Do nothing
+    } else {
+      e.preventDefault()
+      hideImportDialogSoon()
+      bus.emit('importDialog', true)
+    }
+    dataTransfer.dropEffect = 'copy'
+  } else {
+    e.stopPropagation()
+    dataTransfer.dropEffect = 'none'
+  }
+}
+
+const setupDragDropHandler = () => {
+  if (dragOverHandler) return
+  dragOverHandler = handleDragOver
+  window.addEventListener('dragover', dragOverHandler, false)
+}
+
+const cleanupDragDropHandler = () => {
+  if (dragOverHandler) {
+    window.removeEventListener('dragover', dragOverHandler, false)
+    dragOverHandler = null
+  }
+  if (importDialogHideTimer) {
+    window.clearTimeout(importDialogHideTimer)
+    importDialogHideTimer = null
+  }
+}
+
 onMounted(async () => {
   if (global.marktext.initialState) {
     preferencesStore.SET_USER_PREFERENCE(global.marktext.initialState)
@@ -193,7 +224,10 @@ onMounted(async () => {
   notificationStore.listenForNotification()
 
   setupDragDropHandler()
-  muyaRuntimeModeTimer.value = setInterval(syncMuyaRuntimeMode, 500)
+  window.addEventListener('focus', scheduleMuyaRuntimeModeSync)
+  window.addEventListener('visibilitychange', scheduleMuyaRuntimeModeSync)
+  window.addEventListener('elephantnote:muya-runtime-mode-changed', scheduleMuyaRuntimeModeSync)
+  muyaRuntimeModeTimer = window.setInterval(syncMuyaRuntimeMode, 2500)
 
   if (isTauriRuntime) {
     setTimeout(() => {
@@ -210,7 +244,18 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  if (muyaRuntimeModeTimer.value) clearInterval(muyaRuntimeModeTimer.value)
+  cleanupDragDropHandler()
+  window.removeEventListener('focus', scheduleMuyaRuntimeModeSync)
+  window.removeEventListener('visibilitychange', scheduleMuyaRuntimeModeSync)
+  window.removeEventListener('elephantnote:muya-runtime-mode-changed', scheduleMuyaRuntimeModeSync)
+  if (muyaRuntimeModeTimer) {
+    window.clearInterval(muyaRuntimeModeTimer)
+    muyaRuntimeModeTimer = null
+  }
+  if (pendingMuyaRuntimeFrame) {
+    window.cancelAnimationFrame(pendingMuyaRuntimeFrame)
+    pendingMuyaRuntimeFrame = null
+  }
 })
 </script>
 
@@ -258,6 +303,5 @@ onBeforeUnmount(() => {
   padding: 48px 72px;
   overflow: auto;
   background: var(--editorBgColor);
-  color: var(--editorColor);
 }
 </style>

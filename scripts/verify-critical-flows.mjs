@@ -32,9 +32,12 @@ for (const file of [
   'src-tauri/src/tauri_extra_commands.rs',
   'src-tauri/src/lib_min.rs',
   'src-tauri/src/vault/sync.rs',
+  'src-tauri/capabilities/default.json',
   'web/server.mjs',
   'web/sync/WebGitSyncEngine.mjs',
   'scripts/sync-two-docker-smoke.mjs',
+  '.github/workflows/ci.yml',
+  '.github/workflows/tauri-ci.yml',
   '.github/workflows/sync-docker.yml',
   'test/unit/specs/main/elephantnote/syncPlan.spec.js',
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
@@ -48,6 +51,14 @@ for (const file of [
 
 has('.github/workflows/ci.yml', 'node scripts/verify-critical-flows.mjs', 'critical-flow guard in CI')
 has('.github/workflows/ci.yml', 'pnpm exec vitest run test/unit/specs/main/elephantnote', 'ElephantNote contract tests in CI')
+has('.github/workflows/ci.yml', 'permissions:\n  contents: read', 'least-privilege default CI token permissions')
+has('.github/workflows/ci.yml', 'cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'main CI all-target Tauri cargo check')
+has('.github/workflows/tauri-ci.yml', "- 'assistant/**'", 'Tauri CI runs on assistant branches')
+has('.github/workflows/tauri-ci.yml', 'cargo fmt --manifest-path src-tauri/Cargo.toml -- --check', 'Tauri CI Rust format check')
+has('.github/workflows/tauri-ci.yml', 'cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features', 'Tauri CI all-target cargo check')
+has('.github/workflows/tauri-ci.yml', 'continue-on-error: true', 'Tauri coverage remains diagnostic during migration')
+has('src-tauri/capabilities/default.json', 'core:window:allow-start-dragging', 'Tauri window dragging permission')
+has('src-tauri/capabilities/default.json', 'notification:default', 'Tauri notification permission remains enabled')
 
 ordered(
   'src/renderer/src/platform/bootstrapGlobals.js',
@@ -86,6 +97,21 @@ ordered(
     'return nativeSend(channel, ...args)'
   ],
   'Tauri renderer-local IPC bridge must bypass core.invoke for MarkText save and save-as events'
+)
+ordered(
+  'src/renderer/src/platform/tauriLocalIpcBridge.js',
+  [
+    'const NOTE_OPEN_EVENTS = new Set([',
+    "'mt::open-file'",
+    "'mt::open-file-by-window-id'",
+    'const readVaultNote = async',
+    'target.elephantnote.notes.read({ relativePath })',
+    'const openVaultNoteWithBackend = async',
+    'open-file via notes.read',
+    "dispatchLocalIpcEvent(target, 'mt::open-new-tab'",
+    'if (NOTE_OPEN_EVENTS.has(channel)) {'
+  ],
+  'Tauri vault note opening must read through the Rust notes.read backend before falling back to fileUtils'
 )
 ordered(
   'src/renderer/src/store/editor.js',

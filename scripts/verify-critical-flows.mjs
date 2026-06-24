@@ -179,6 +179,8 @@ has('scripts/sync-two-docker-smoke.mjs', 'assertPeerIdentity', 'two-device peer 
 has('scripts/sync-two-docker-smoke.mjs', 'stopDevice(deviceB)', 'offline device simulation')
 has('scripts/sync-two-docker-smoke.mjs', 'device B reconnect auto-pull', 'automatic reconnect pull check')
 has('scripts/sync-two-docker-smoke.mjs', 'assertResourceBudget', 'Docker sync memory and runtime budget check')
+has('scripts/sync-two-docker-smoke.mjs', 'assertNoTrackedSyncMetadata', 'Docker sync metadata leak regression check')
+has('scripts/sync-two-docker-smoke.mjs', 'local sync metadata files stay untracked in each container git repository', 'Docker sync metadata leak summary check')
 has('.github/workflows/sync-docker.yml', 'node scripts/sync-two-docker-smoke.mjs', 'Docker pair sync workflow runs directly with Node')
 
 if (failures.length) {

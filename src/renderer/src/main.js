@@ -8,6 +8,7 @@ import './assets/symbolIcon'
 import { installRuntimeBridge } from './platform/runtimeBridge'
 import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
 import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'
+import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
 import { installRendererDiagnostics, pushDiagnosticLog, showDiagnosticOverlay } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
@@ -80,6 +81,7 @@ installRuntimeBridge()
 ensurePathResolve()
 installTauriElephantNoteBridge()
 installTauriMarkTextSaveBridge()
+installTauriLocalIpcBridge()
 const isNonElectronRuntime = () => window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron'
 
 const bootstrapTauriRuntime = async() => {

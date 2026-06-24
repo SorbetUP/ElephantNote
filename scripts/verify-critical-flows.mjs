@@ -42,6 +42,7 @@ for (const file of [
   'Elephant/shared/apiContracts.js',
   'Elephant/shared/sync.js',
   'Elephant/front/app/services/elephantnoteClient/domainClients.js',
+  'test/unit/specs/main/elephantnote/apiContracts.spec.js',
   'test/unit/specs/main/elephantnote/markdownDocument.spec.js',
   'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
   'test/unit/specs/main/elephantnote/syncPlan.spec.js',
@@ -122,9 +123,17 @@ has('src-tauri/src/lib_min.rs', 'tauri_extra_commands::tauri_marktext_write_file
 
 ordered('Elephant/shared/apiContracts.js', [
   'const textString = (value) => typeof value === \'string\'',
+  'const optionalSyncOperationArray =',
+  'operations: optionalSyncOperationArray',
   "action('NOTES_READ', 'notes.read'",
-  "action('NOTES_WRITE', 'notes.write'"
-], 'shared API must expose notes.read/write')
+  "action('NOTES_WRITE', 'notes.write'",
+  "action('SYNC_PLAN', 'sync.plan', syncRunPayload)"
+], 'shared API must expose notes.read/write and validate explicit sync plan operations')
+ordered('test/unit/specs/main/elephantnote/apiContracts.spec.js', [
+  'accepts explicit valid sync.plan operations',
+  'rejects unknown sync.plan operations instead of falling back to the default plan',
+  'rejects non-array sync.plan operations'
+], 'API contract tests must reject unsafe sync plan operations payloads')
 ordered('Elephant/front/app/services/elephantnoteClient/domainClients.js', [
   'notes: {',
   'read: (relativePath) => call(API.NOTES_READ',

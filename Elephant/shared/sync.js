@@ -90,7 +90,7 @@ const createPlanItem = (payloadByOperation = {}, operation) => ({
   payload: payloadByOperation?.[operation] || {}
 })
 
-const normalizeExplicitOperations = (operations = []) => operations
+const normalizeExplicitOperations = (operations = []) => (Array.isArray(operations) ? operations : [])
   .map((operation) => normalizeSyncOperation(operation))
   .filter(Boolean)
 
@@ -134,7 +134,7 @@ export const createSyncIdentity = ({ cwd = '', hostname = '', now = new Date() }
   return {
     deviceId: `en-${compactHash(seed || now.toISOString())}`,
     folderId: `vault-${compactHash(cwd || 'vault')}`,
-    folderLabel: cwd ? String(cwd).split(/[\/]/).filter(Boolean).at(-1) || 'Vault' : 'Vault'
+    folderLabel: cwd ? String(cwd).split(/[\\/]/).filter(Boolean).at(-1) || 'Vault' : 'Vault'
   }
 }
 

@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use std::io::Read;
 use tauri::AppHandle;
 
 use super::config::{get_active_vault, read_config, remove_vault, set_active_vault, set_vault_icon, set_vault_name, upsert_vault, write_config};
@@ -9,6 +10,12 @@ use super::types::active_vault;
 use crate::vault_layout;
 
 type R<T> = Result<T, String>;
+const SEARCH_RESULT_LIMIT: usize = 50;
+const SEARCH_RESULT_LIMIT_MAX: usize = 200;
+const SEARCH_FILE_READ_LIMIT: usize = 256 * 1024;
+const SEARCH_FILE_READ_LIMIT_MIN: usize = 4 * 1024;
+const SEARCH_FILE_READ_LIMIT_MAX: usize = 1024 * 1024;
+const SEARCH_EXCERPT_LIMIT: usize = 600;
 
 fn payload(app: &AppHandle, vault: Option<super::types::VaultDescriptor>) -> R<Value> {
   let config = read_config(app)?;
@@ -148,32 +155,90 @@ pub fn tauri_wiki_list(app: AppHandle) -> R<Vec<Value>> {
 #[tauri::command]
 pub fn tauri_search_query(app: AppHandle, params: Option<Value>) -> R<Value> {
   let vault = get_active_vault(&app)?;
-  let query = params.and_then(|p| p.get("query").or_else(|| p.get("q")).and_then(Value::as_str).map(str::to_string)).unwrap_or_default().to_lowercase();
+  let params_ref = params.as_ref();
+  let query = params_ref
+    .and_then(|p| p.get("query").or_else(|| p.get("q")).and_then(Value::as_str).map(str::to_string))
+    .unwrap_or_default()
+    .to_lowercase();
   if query.trim().is_empty() {
     return Ok(json!({ "results": [] }));
   }
+
+  let limit = params_ref
+    .and_then(|p| p.get("limit").or_else(|| p.get("maxResults")).and_then(Value::as_u64))
+    .map(|value| value.clamp(1, SEARCH_RESULT_LIMIT_MAX as u64) as usize)
+    .unwrap_or(SEARCH_RESULT_LIMIT);
+  let max_file_bytes = params_ref
+    .and_then(|p| p.get("maxBytesPerFile").and_then(Value::as_u64))
+    .map(|value| value.clamp(SEARCH_FILE_READ_LIMIT_MIN as u64, SEARCH_FILE_READ_LIMIT_MAX as u64) as usize)
+    .unwrap_or(SEARCH_FILE_READ_LIMIT);
+
   let root = std::path::PathBuf::from(&vault.path);
   let mut results = Vec::new();
-  scan_notes(&root, &root, &mut results, &query)?;
-  Ok(json!({ "results": results }))
+  scan_notes(&root, &root, &mut results, &query, limit, max_file_bytes)?;
+  Ok(json!({ "results": results, "limit": limit, "maxBytesPerFile": max_file_bytes }))
 }
 
-fn scan_notes(root: &std::path::Path, current: &std::path::Path, out: &mut Vec<Value>, query: &str) -> R<()> {
+fn read_text_prefix(path: &std::path::Path, max_bytes: usize) -> R<String> {
+  let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+  let mut limited = file.take(max_bytes as u64);
+  let mut buffer = Vec::with_capacity(max_bytes.min(8 * 1024));
+  limited.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
+  Ok(String::from_utf8_lossy(&buffer).to_string())
+}
+
+fn search_excerpt(markdown: &str) -> String {
+  let excerpt = markdown
+    .lines()
+    .filter(|line| !line.trim().is_empty())
+    .take(3)
+    .collect::<Vec<_>>()
+    .join(" ");
+  if excerpt.chars().count() <= SEARCH_EXCERPT_LIMIT {
+    excerpt
+  } else {
+    format!("{}…", excerpt.chars().take(SEARCH_EXCERPT_LIMIT).collect::<String>())
+  }
+}
+
+fn scan_notes(root: &std::path::Path, current: &std::path::Path, out: &mut Vec<Value>, query: &str, limit: usize, max_file_bytes: usize) -> R<()> {
+  if out.len() >= limit {
+    return Ok(());
+  }
+
   for item in std::fs::read_dir(current).map_err(|e| e.to_string())? {
+    if out.len() >= limit {
+      break;
+    }
+
     let item = item.map_err(|e| e.to_string())?;
     let name = item.file_name().to_string_lossy().to_string();
     if entries::is_ignored_entry(&name) {
       continue;
     }
+
     let path = item.path();
-    let metadata = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+    let metadata = std::fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+    if metadata.file_type().is_symlink() {
+      continue;
+    }
+
     if metadata.is_dir() {
-      scan_notes(root, &path, out, query)?;
-    } else if metadata.is_file() && name.to_lowercase().ends_with(".md") {
-      let markdown = std::fs::read_to_string(&path).unwrap_or_default();
+      scan_notes(root, &path, out, query, limit, max_file_bytes)?;
+    } else if metadata.is_file() && name.to_ascii_lowercase().ends_with(".md") {
       let relative = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().replace('\\', "/");
-      if markdown.to_lowercase().contains(query) || relative.to_lowercase().contains(query) {
-        out.push(json!({ "path": relative, "fullPath": path.to_string_lossy(), "title": name.trim_end_matches(".md"), "excerpt": markdown.lines().take(3).collect::<Vec<_>>().join(" "), "tags": [], "score": 1 }));
+      let path_matches = relative.to_lowercase().contains(query) || name.to_lowercase().contains(query);
+      let preview = read_text_prefix(&path, max_file_bytes).unwrap_or_default();
+      let content_matches = path_matches || preview.to_lowercase().contains(query);
+      if content_matches {
+        out.push(json!({
+          "path": relative,
+          "fullPath": path.to_string_lossy(),
+          "title": name.trim_end_matches(".md"),
+          "excerpt": search_excerpt(&preview),
+          "tags": [],
+          "score": if path_matches { 2 } else { 1 }
+        }));
       }
     }
   }
@@ -198,4 +263,45 @@ pub fn tauri_sync_enqueue(app: AppHandle, operation: String, payload: Option<Val
 #[tauri::command]
 pub fn tauri_sync_run(app: AppHandle, payload_by_operation: Option<Value>) -> R<Value> {
   sync::sync_run(get_active_vault(&app)?, payload_by_operation)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn temp_dir(name: &str) -> std::path::PathBuf {
+    let stamp = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .unwrap()
+      .as_nanos();
+    std::env::temp_dir().join(format!("elephant-{name}-{stamp}"))
+  }
+
+  #[test]
+  fn search_scan_respects_result_limit() {
+    let root = temp_dir("search-limit");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("a.md"), "needle one").unwrap();
+    std::fs::write(root.join("b.md"), "needle two").unwrap();
+
+    let mut out = Vec::new();
+    scan_notes(&root, &root, &mut out, "needle", 1, 1024).unwrap();
+    assert_eq!(out.len(), 1);
+
+    let _ = std::fs::remove_dir_all(&root);
+  }
+
+  #[test]
+  fn search_scan_ignores_hidden_directories() {
+    let root = temp_dir("search-hidden");
+    let hidden = root.join(".git");
+    std::fs::create_dir_all(&hidden).unwrap();
+    std::fs::write(hidden.join("secret.md"), "needle").unwrap();
+
+    let mut out = Vec::new();
+    scan_notes(&root, &root, &mut out, "needle", 10, 1024).unwrap();
+    assert!(out.is_empty());
+
+    let _ = std::fs::remove_dir_all(&root);
+  }
 }

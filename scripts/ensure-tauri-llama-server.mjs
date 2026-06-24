@@ -1,19 +1,33 @@
-import { createWriteStream, existsSync, mkdirSync, readdirSync, statSync, chmodSync, copyFileSync, rmSync } from 'node:fs'
+import { chmodSync, copyFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve, basename } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
-const root = resolve(new URL('..', import.meta.url).pathname)
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const binDir = join(root, 'src-tauri', 'bin')
 const binaryName = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server'
 const targetPath = join(binDir, binaryName)
+const optionalInstall = process.env.ELEPHANTNOTE_LLAMA_INSTALL_REQUIRED !== '1'
 
 const log = (...args) => console.log('[tauri-llama]', ...args)
+const warn = (...args) => console.warn('[tauri-llama]', ...args)
+
+const exitSoft = (message) => {
+  if (message) warn(message)
+  if (optionalInstall) {
+    warn('continuing without bundled llama-server; configure an existing path in Preferences > Local AI runtime if needed')
+    process.exit(0)
+  }
+  process.exit(1)
+}
 
 if (process.env.ELEPHANTNOTE_SKIP_LLAMA_BUNDLE === '1') {
   log('skip requested through ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1')
   process.exit(0)
 }
+
+mkdirSync(binDir, { recursive: true })
 
 if (existsSync(targetPath)) {
   log(`already installed: ${targetPath}`)
@@ -49,7 +63,7 @@ const scoreAsset = (asset) => {
 const requestJson = async(url) => {
   const response = await fetch(url, {
     headers: {
-      'accept': 'application/vnd.github+json',
+      accept: 'application/vnd.github+json',
       'user-agent': 'ElephantNote llama-server installer'
     }
   })
@@ -60,8 +74,10 @@ const requestJson = async(url) => {
 const download = async(url, destination) => {
   const response = await fetch(url, { headers: { 'user-agent': 'ElephantNote llama-server installer' } })
   if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`)
+  if (!response.body) throw new Error('download response body is empty')
   await new Promise((resolvePromise, reject) => {
     const file = createWriteStream(destination)
+    file.on('error', reject)
     response.body.pipeTo(new WritableStream({
       write(chunk) { file.write(Buffer.from(chunk)) },
       close() { file.end(resolvePromise) },
@@ -102,7 +118,6 @@ const findBinary = (dir) => {
 }
 
 const main = async() => {
-  mkdirSync(binDir, { recursive: true })
   log(`installing ${binaryName} for ${process.platform}/${process.arch}`)
   const release = await requestJson('https://api.github.com/repos/ggerganov/llama.cpp/releases/latest')
   const asset = [...(release.assets || [])]
@@ -118,17 +133,19 @@ const main = async() => {
   const archive = join(workDir, asset.asset.name)
   const extractDir = join(workDir, 'extract')
   mkdirSync(workDir, { recursive: true })
-  await download(asset.asset.browser_download_url, archive)
-  extractArchive(archive, extractDir)
-  const extracted = findBinary(extractDir)
-  if (!extracted) throw new Error(`Downloaded archive does not contain ${binaryName}`)
-  copyFileSync(extracted, targetPath)
-  if (process.platform !== 'win32') chmodSync(targetPath, 0o755)
-  rmSync(workDir, { recursive: true, force: true })
-  log(`installed ${targetPath}`)
+  try {
+    await download(asset.asset.browser_download_url, archive)
+    extractArchive(archive, extractDir)
+    const extracted = findBinary(extractDir)
+    if (!extracted) throw new Error(`Downloaded archive does not contain ${binaryName}`)
+    copyFileSync(extracted, targetPath)
+    if (process.platform !== 'win32') chmodSync(targetPath, 0o755)
+    log(`installed ${targetPath}`)
+  } finally {
+    rmSync(workDir, { recursive: true, force: true })
+  }
 }
 
 main().catch((error) => {
-  console.error('[tauri-llama] failed:', error.message || error)
-  process.exit(1)
+  exitSoft(error?.message || String(error))
 })

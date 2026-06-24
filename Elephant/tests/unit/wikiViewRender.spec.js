@@ -16,6 +16,9 @@ vi.mock('../../front/app/services/elephantnoteClient', () => ({
   elephantnoteClient: {
     directory: {
       list: listDirectory
+    },
+    features: {
+      get: vi.fn().mockResolvedValue({ askAi: true })
     }
   }
 }))
@@ -167,6 +170,51 @@ describe('WikiView library root', () => {
     expect(store.activeWorkspaceView).toBe('wiki')
     expect(store.currentPath).toBe('.elephantnote/wiki/Cluster')
     expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Cluster/Index.md'])
+
+    app.unmount()
+    container.remove()
+  })
+
+  it('resets an already-open wiki subfolder to the wiki root from the rail button', async() => {
+    listDirectory.mockResolvedValueOnce([
+      {
+        kind: 'note',
+        path: '.elephantnote/wiki/Root.md',
+        title: 'Root',
+        tags: [],
+        updatedAt: '2026-06-24T07:02:00.000Z'
+      }
+    ])
+
+    const { useVaultStore } = await import('../../front/app/stores/vaultStore.js')
+    const IconRail = (await import('../../front/app/components/navigation/IconRail.vue')).default
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const store = useVaultStore()
+    store.applyPayload({
+      vaults: [createVault()],
+      activeVaultId: 'vault-1',
+      activeVault: createVault(),
+      workspace: { sidebar: [] },
+      entries: []
+    })
+    store.activeWorkspaceView = 'wiki'
+    store.currentPath = '.elephantnote/wiki/Cluster'
+
+    const app = createApp({ render: () => h(IconRail) })
+    app.use(pinia)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    app.mount(container)
+    await flush()
+
+    container.querySelector('button[title="Wiki"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flush()
+
+    expect(listDirectory).toHaveBeenCalledWith('.elephantnote/wiki')
+    expect(store.activeWorkspaceView).toBe('wiki')
+    expect(store.currentPath).toBe('.elephantnote/wiki')
+    expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Root.md'])
 
     app.unmount()
     container.remove()

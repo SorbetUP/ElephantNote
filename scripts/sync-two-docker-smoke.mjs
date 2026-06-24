@@ -155,6 +155,19 @@ const waitForAutoSyncSuccess = async(port, label, minSuccesses = 1, timeoutMs = 
 
 const catFromContainer = async(container, absolutePath) => docker(['exec', container, 'cat', absolutePath])
 
+const trackedSyncMetadata = async(container) => {
+  const output = await docker(['exec', container, 'git', '-C', '/data/vault', 'ls-files', '.elephantnote'])
+  return output.split('\n').map((line) => line.trim()).filter(Boolean)
+}
+
+const assertNoTrackedSyncMetadata = async(container, label) => {
+  const tracked = await trackedSyncMetadata(container)
+  const leaked = tracked.filter((file) => /(^|\/)sync-(config|log|queue|state)\.json$/.test(file))
+  if (leaked.length) {
+    throw new Error(`${label} leaked local sync metadata into git: ${JSON.stringify(leaked)}`)
+  }
+}
+
 const parseMemoryMiB = (value = '') => {
   const match = String(value).match(/([0-9.]+)\s*([KMGT]?i?B)/i)
   if (!match) return Number.NaN
@@ -234,11 +247,13 @@ try {
   })
   assertClean(pushedFromA, 'device A push')
   assertHistory(pushedFromA, 'push', 'device A push')
+  await assertNoTrackedSyncMetadata(deviceA, 'device A initial push')
   const branch = pushedFromA.branch || 'master'
 
   const notesOnB = await waitForNote(basePort + 1, 'Two Device Sync A.md', 'device B online auto-pull')
   assertNoteListed(notesOnB, 'Two Device Sync A.md', 'device B')
   await waitForAutoSyncSuccess(basePort + 1, 'device B online auto-pull')
+  await assertNoTrackedSyncMetadata(deviceB, 'device B online auto-pull')
   const contentOnB = await catFromContainer(deviceB, '/data/vault/Two Device Sync A.md')
   if (!contentOnB.includes('Created on device A and expected on device B.')) {
     throw new Error('Device B file content did not match the note created on device A.')
@@ -258,12 +273,14 @@ try {
   })
   assertClean(pushedWhileBOffline, 'device A push while B offline')
   assertHistory(pushedWhileBOffline, 'push', 'device A push while B offline')
+  await assertNoTrackedSyncMetadata(deviceA, 'device A push while B offline')
 
   await startAutoPullDevice(deviceB, basePort + 1, vaultB, branch)
   await waitForServer(basePort + 1, 'device B reconnect')
   const notesAfterReconnect = await waitForNote(basePort + 1, 'Offline Reconnect Sync.md', 'device B reconnect auto-pull')
   assertNoteListed(notesAfterReconnect, 'Offline Reconnect Sync.md', 'device B reconnect')
   await waitForAutoSyncSuccess(basePort + 1, 'device B reconnect auto-pull')
+  await assertNoTrackedSyncMetadata(deviceB, 'device B reconnect auto-pull')
   const reconnectedContentOnB = await catFromContainer(deviceB, '/data/vault/Offline Reconnect Sync.md')
   if (!reconnectedContentOnB.includes('Created while device B is outside the network.')) {
     throw new Error('Device B did not auto-pull the note created while it was offline.')
@@ -284,6 +301,7 @@ try {
   })
   assertClean(pushedFromB, 'device B push')
   assertHistory(pushedFromB, 'push', 'device B push')
+  await assertNoTrackedSyncMetadata(deviceB, 'device B push')
 
   const pulledIntoA = await request(basePort, '/api/sync/run', {
     method: 'POST',
@@ -293,6 +311,7 @@ try {
   })
   assertClean(pulledIntoA, 'device A pull')
   assertHistory(pulledIntoA, 'pull', 'device A pull')
+  await assertNoTrackedSyncMetadata(deviceA, 'device A pull')
 
   const notesOnA = await request(basePort, '/api/notes')
   assertNoteListed(notesOnA, 'Two Device Sync B.md', 'device A')
@@ -321,6 +340,7 @@ try {
       'device B restarted in manual mode before reverse sync to avoid auto-sync races',
       'device B pushed a second note',
       'device A pulled and exposed the second note through the API',
+      'local sync metadata files stay untracked in each container git repository',
       'containers stayed under the configured memory and end-to-end runtime budgets'
     ]
   }, null, 2))

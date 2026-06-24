@@ -29,9 +29,9 @@ const loadWikiDirectory = async (relativePath = WIKI_ROOT) => {
   store.currentPath = wikiPath
   store.activeWorkspaceView = 'wiki'
   store.openedNotePath = ''
+  store.entries = []
 
   if (!store.activeVault?.path) {
-    store.entries = []
     return
   }
 

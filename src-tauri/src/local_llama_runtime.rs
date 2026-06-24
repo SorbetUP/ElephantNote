@@ -264,6 +264,36 @@ fn server_binary_candidates(app: &AppHandle, payload: &Value) -> Vec<String> {
   out
 }
 
+fn llama_server_args(model_path: &str, port: u16, context: &str, model_name: &str) -> Vec<String> {
+  vec![
+    "-m".to_string(),
+    model_path.to_string(),
+    "--host".to_string(),
+    "127.0.0.1".to_string(),
+    "--port".to_string(),
+    port.to_string(),
+    "-c".to_string(),
+    context.to_string(),
+    "--alias".to_string(),
+    model_name.to_string(),
+  ]
+}
+
+fn models_response_has_model(data: &Value, model_name: &str) -> bool {
+  let model_name = model_name.trim().to_lowercase();
+  if model_name.is_empty() {
+    return false;
+  }
+  if let Some(models) = data.get("data").and_then(Value::as_array) {
+    return models.iter().any(|model| {
+      ["id", "name", "model"]
+        .iter()
+        .any(|key| model.get(*key).and_then(Value::as_str).map(|value| value.to_lowercase().contains(&model_name)).unwrap_or(false))
+    });
+  }
+  data.to_string().to_lowercase().contains(&model_name)
+}
+
 async fn server_ready(base_url: &str) -> bool {
   let Ok(client) = Client::builder().timeout(Duration::from_secs(2)).build() else {
     return false;
@@ -286,7 +316,7 @@ async fn server_has_model(base_url: &str, model_name: &str) -> bool {
   let Ok(data) = response.json::<Value>().await else {
     return false;
   };
-  data.to_string().to_lowercase().contains(&model_name.to_lowercase())
+  models_response_has_model(&data, model_name)
 }
 
 async fn wait_until_ready(base_url: &str) -> bool {
@@ -320,28 +350,22 @@ async fn start_server_if_needed(app: &AppHandle, model_path: &Path, model_name: 
   let mut errors = Vec::new();
 
   eprintln!("[tauri-rag] starting llama server for model={} base={} mode={}", model_path_string, base_url, runtime_mode(payload));
+  let args = llama_server_args(&model_path_string, port, &context, model_name);
   for binary in candidates {
     eprintln!("[tauri-rag] trying llama server binary: {}", binary);
     match Command::new(&binary)
-      .arg("-m")
-      .arg(&model_path_string)
-      .arg("--host")
-      .arg("127.0.0.1")
-      .arg("--port")
-      .arg(port.to_string())
-      .arg("-c")
-      .arg(&context)
+      .args(&args)
       .stdout(Stdio::null())
       .stderr(Stdio::null())
       .spawn()
     {
       Ok(mut child) => {
-        if wait_until_ready(base_url).await {
+        if wait_until_ready(base_url).await && server_has_model(base_url, model_name).await {
           return Ok(());
         }
         let _ = child.kill();
         let _ = child.wait();
-        errors.push(format!("{}: endpoint did not become ready", binary));
+        errors.push(format!("{}: endpoint did not become ready with selected model `{model_name}`", binary));
       }
       Err(error) => errors.push(format!("{}: {}", binary, error)),
     }
@@ -467,5 +491,25 @@ mod tests {
   fn context_size_rejects_too_small_values() {
     assert_eq!(context_size_from_payload(&json!({ "ctxSize": 128 })), "4096");
     assert_eq!(context_size_from_payload(&json!({ "ctxSize": 2048 })), "2048");
+  }
+
+  #[test]
+  fn llama_server_args_set_model_alias() {
+    let args = llama_server_args("/models/smol.gguf", 39281, "4096", "smol.gguf");
+    assert!(args.windows(2).any(|window| window == ["--alias", "smol.gguf"]));
+    assert!(args.windows(2).any(|window| window == ["-m", "/models/smol.gguf"]));
+  }
+
+  #[test]
+  fn models_response_detects_selected_model() {
+    let response = json!({ "data": [{ "id": "smol.gguf" }] });
+    assert!(models_response_has_model(&response, "smol.gguf"));
+    assert!(!models_response_has_model(&response, "other.gguf"));
+  }
+
+  #[test]
+  fn models_response_supports_name_and_model_fields() {
+    assert!(models_response_has_model(&json!({ "data": [{ "name": "Qwen2.5.gguf" }] }), "qwen2.5.gguf"));
+    assert!(models_response_has_model(&json!({ "data": [{ "model": "/tmp/TinyLlama.gguf" }] }), "tinyllama.gguf"));
   }
 }

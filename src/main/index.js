@@ -76,7 +76,7 @@ const initializeLogger = (env) => {
     return path.join(env.paths.logPath, 'main.log')
   }
   log.transports.file.level = getLogLevel()
-  log.transports.file.sync = true
+  log.transports.file.sync = false
   log.errorHandler.startCatching({
     onError(error) {
       // This callback receives the full Error object with stack
@@ -158,15 +158,12 @@ try {
   }
   process.exit(1)
 }
-const appController = new App(accessor, args)
-registerElephantNoteIpc()
-log.info('[boot] IPC handlers registered')
-appController.init()
-log.info('[boot] app controller initialized')
 
-// Quit when all windows are closed (except on macOS)
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+const appController = new App(accessor)
+appController.run()
+
+registerElephantNoteIpc({
+  ipcMain: accessor.ipcMain,
+  appEnvironment,
+  mainWindow: appController.window
 })

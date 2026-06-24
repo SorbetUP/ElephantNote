@@ -164,6 +164,35 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> R<()> {
   fs::write(path, format!("{}\n", raw)).map_err(|error| error.to_string())
 }
 
+fn append_missing_lines(path: &Path, lines: &[String]) -> R<()> {
+  if let Some(parent) = path.parent() {
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+  }
+  let existing = fs::read_to_string(path).unwrap_or_default();
+  let existing_lines = existing
+    .lines()
+    .map(str::trim)
+    .filter(|line| !line.is_empty())
+    .collect::<Vec<_>>();
+  let missing = lines
+    .iter()
+    .filter(|line| !existing_lines.iter().any(|existing| existing == &&line.as_str()))
+    .cloned()
+    .collect::<Vec<_>>();
+
+  if missing.is_empty() {
+    return Ok(());
+  }
+
+  let mut next = existing;
+  if !next.is_empty() && !next.ends_with('\n') {
+    next.push('\n');
+  }
+  next.push_str(&missing.join("\n"));
+  next.push('\n');
+  fs::write(path, next).map_err(|error| error.to_string())
+}
+
 fn sync_path(cwd: &Path, file: &str) -> PathBuf {
   vault_layout::sync_file(cwd, file)
 }
@@ -235,8 +264,38 @@ fn normalized_payload(payload: Value) -> Value {
   if payload.is_object() { payload } else { json!({}) }
 }
 
+fn payload_has(payload_by_operation: &Value, operation: &str) -> bool {
+  payload_by_operation.as_object().is_some_and(|payload| payload.contains_key(operation))
+}
+
 fn payload_for(payload_by_operation: &Value, operation: &str) -> Value {
   normalized_payload(payload_by_operation.get(operation).cloned().unwrap_or_else(|| json!({})))
+}
+
+fn payload_for_or(payload_by_operation: &Value, operation: &str, fallback_operation: &str) -> Value {
+  normalized_payload(
+    payload_by_operation
+      .get(operation)
+      .cloned()
+      .or_else(|| payload_by_operation.get(fallback_operation).cloned())
+      .unwrap_or_else(|| json!({})),
+  )
+}
+
+fn explicit_operations(payload_by_operation: &Value) -> Vec<String> {
+  payload_by_operation
+    .get("operations")
+    .and_then(Value::as_array)
+    .map(|operations| {
+      operations
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|operation| valid_operation(operation))
+        .map(str::to_string)
+        .collect()
+    })
+    .unwrap_or_default()
 }
 
 fn create_sync_identity(cwd: &Path, hostname: &str) -> (String, String, String) {
@@ -414,19 +473,36 @@ impl GitSyncEngine {
   }
 
   fn enqueue_default_plan(&mut self, payload_by_operation: &Value) -> R<()> {
-    if payload_by_operation.get(SYNC_OPERATION_SYNC).is_some() {
-      self.enqueue(SYNC_OPERATION_SYNC, payload_for(payload_by_operation, SYNC_OPERATION_SYNC))?;
+    let operations = explicit_operations(payload_by_operation);
+    if !operations.is_empty() {
+      for operation in operations {
+        self.enqueue(&operation, payload_for(payload_by_operation, &operation))?;
+      }
+      return Ok(());
+    }
+
+    if payload_has(payload_by_operation, SYNC_OPERATION_SYNC) {
+      for operation in [SYNC_OPERATION_INIT, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH] {
+        self.enqueue(operation, payload_for_or(payload_by_operation, operation, SYNC_OPERATION_SYNC))?;
+      }
+      return Ok(());
+    }
+
+    let has_explicit_git_operation = [SYNC_OPERATION_INIT, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH]
+      .iter()
+      .any(|operation| payload_has(payload_by_operation, operation));
+
+    if !has_explicit_git_operation {
+      self.enqueue(SYNC_OPERATION_INIT, payload_for(payload_by_operation, SYNC_OPERATION_INIT))?;
+      self.enqueue(SYNC_OPERATION_SNAPSHOT, payload_for(payload_by_operation, SYNC_OPERATION_SNAPSHOT))?;
       return Ok(());
     }
 
     self.enqueue(SYNC_OPERATION_INIT, payload_for(payload_by_operation, SYNC_OPERATION_INIT))?;
-    self.enqueue(SYNC_OPERATION_SNAPSHOT, payload_for(payload_by_operation, SYNC_OPERATION_SNAPSHOT))?;
-
-    if payload_by_operation.get(SYNC_OPERATION_PULL).is_some() {
-      self.enqueue(SYNC_OPERATION_PULL, payload_for(payload_by_operation, SYNC_OPERATION_PULL))?;
-    }
-    if payload_by_operation.get(SYNC_OPERATION_PUSH).is_some() {
-      self.enqueue(SYNC_OPERATION_PUSH, payload_for(payload_by_operation, SYNC_OPERATION_PUSH))?;
+    for operation in [SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH] {
+      if payload_has(payload_by_operation, operation) {
+        self.enqueue(operation, payload_for(payload_by_operation, operation))?;
+      }
     }
 
     Ok(())
@@ -529,10 +605,9 @@ impl GitSyncEngine {
       self.git(&["init"])?;
     }
     self.ensure_git_identity()?;
+    self.ensure_git_exclude()?;
 
-    let sync_dir = vault_layout::hidden_dir(&self.cwd, vault_layout::SYNC_DIR);
-    fs::create_dir_all(&sync_dir).map_err(|error| error.to_string())?;
-    fs::write(sync_dir.join(".gitignore"), format!("{}\n{}\n{}\n", SYNC_HISTORY_FILE, SYNC_QUEUE_FILE, SYNC_STATE_FILE)).map_err(|error| error.to_string())?;
+    fs::create_dir_all(vault_layout::hidden_dir(&self.cwd, vault_layout::SYNC_DIR)).map_err(|error| error.to_string())?;
 
     let previous = read_config(&self.cwd);
     let next_config = create_sync_config(&self.cwd, previous.as_ref(), payload);
@@ -600,6 +675,23 @@ impl GitSyncEngine {
       self.init(&json!({}))?;
     }
     Ok(())
+  }
+
+  fn metadata_pattern(&self, path: &Path) -> String {
+    let relative = path.strip_prefix(&self.cwd).unwrap_or(path);
+    format!("/{}", normalize_path(relative))
+  }
+
+  fn ensure_git_exclude(&self) -> R<()> {
+    let sync_dir = vault_layout::hidden_dir(&self.cwd, vault_layout::SYNC_DIR);
+    let legacy_gitignore = sync_dir.join(".gitignore");
+    let _ = fs::remove_file(&legacy_gitignore);
+    let patterns = [SYNC_CONFIG_FILE, SYNC_HISTORY_FILE, SYNC_QUEUE_FILE, SYNC_STATE_FILE]
+      .iter()
+      .map(|file| self.metadata_pattern(&sync_path(&self.cwd, file)))
+      .chain(std::iter::once(self.metadata_pattern(&legacy_gitignore)))
+      .collect::<Vec<_>>();
+    append_missing_lines(&self.cwd.join(".git").join("info").join("exclude"), &patterns)
   }
 
   fn upsert_remote(&self, remote_name: &str, remote: &str) -> R<()> {
@@ -726,6 +818,20 @@ pub fn sync_run(vault: VaultDescriptor, payload_by_operation: Option<Value>) -> 
 mod tests {
   use super::*;
 
+  fn test_engine() -> GitSyncEngine {
+    GitSyncEngine {
+      cwd: PathBuf::from("/tmp/elephantnote-sync-plan-test"),
+      queue: Vec::new(),
+      history: Vec::new(),
+      state: SyncState::default(),
+      config: None,
+    }
+  }
+
+  fn queued_operations(engine: &GitSyncEngine) -> Vec<String> {
+    engine.queue.iter().map(|item| item.operation.clone()).collect()
+  }
+
   #[test]
   fn compact_hash_matches_shared_javascript_shape() {
     assert_eq!(compact_hash("vault|host"), "7opio3");
@@ -750,6 +856,36 @@ mod tests {
     assert_eq!(second.remote_name, "backup");
     assert_eq!(second.branch, "notes");
     assert_eq!(second.backend, SYNC_BACKEND_GIT);
+  }
+
+  #[test]
+  fn explicit_pull_plan_does_not_force_snapshot() {
+    let mut engine = test_engine();
+    engine
+      .enqueue_default_plan(&json!({
+        "init": { "remote": "/git/elephantnote.git" },
+        "pull": {}
+      }))
+      .unwrap();
+
+    assert_eq!(queued_operations(&engine), vec![SYNC_OPERATION_INIT, SYNC_OPERATION_PULL]);
+  }
+
+  #[test]
+  fn explicit_operation_list_is_preserved() {
+    let mut engine = test_engine();
+    engine
+      .enqueue_default_plan(&json!({
+        "operations": ["init", "pull", "snapshot", "push"],
+        "snapshot": { "message": "manual order" }
+      }))
+      .unwrap();
+
+    assert_eq!(
+      queued_operations(&engine),
+      vec![SYNC_OPERATION_INIT, SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH]
+    );
+    assert_eq!(engine.queue[2].payload["message"], "manual order");
   }
 
   #[test]

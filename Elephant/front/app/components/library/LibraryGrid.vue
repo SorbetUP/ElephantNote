@@ -55,6 +55,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import log from 'electron-log/renderer'
 import { useVaultStore } from '../../stores/vaultStore'
+import { useNavigationStore } from '../../stores/navigationStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
 import NoteCard from './NoteCard.vue'
 import {
@@ -67,6 +68,7 @@ const RENDER_CHUNK_SIZE = 72
 const SCROLL_PREFETCH_PX = 720
 
 const store = useVaultStore()
+const navigationStore = useNavigationStore()
 const renamingEntry = ref(null)
 const renameEntryTitle = ref('')
 const renameEntryInput = ref(null)
@@ -103,8 +105,8 @@ watch(
   }
 )
 
-const shouldApplyWikiFolderResult = (relativePath, vaultId) => {
-  return store.activeWorkspaceView === 'wiki' &&
+const shouldApplyFolderResult = (relativePath, vaultId, view) => {
+  return store.activeWorkspaceView === view &&
     store.currentPath === relativePath &&
     store.activeVaultId === vaultId
 }
@@ -123,40 +125,45 @@ const fetchDirectoryPage = async(relativePath, offset = 0, generation = director
   return items.slice(0, DIRECTORY_PAGE_SIZE)
 }
 
-const openFolderInCurrentView = async (relativePath) => {
-  if (store.activeWorkspaceView !== 'wiki') {
-    await store.openDirectory(relativePath, { limit: DIRECTORY_PAGE_SIZE + 1 })
-    resetVisibleWindow()
-    return
-  }
-
+const openPagedFolder = async(relativePath, view) => {
   const vaultId = store.activeVaultId
   store.currentPath = relativePath
   store.openedNotePath = ''
-  store.activeWorkspaceView = 'wiki'
+  store.activeWorkspaceView = view
   store.entries = []
   resetVisibleWindow()
+  await nextTick()
 
   try {
     const page = await fetchDirectoryPage(relativePath, 0)
-    if (!shouldApplyWikiFolderResult(relativePath, vaultId) || !page) return
+    if (!shouldApplyFolderResult(relativePath, vaultId, view) || !page) return
     store.entries = page
-    store.activeWorkspaceView = 'wiki'
-    log.info('[wiki] opened folder in library grid', {
+    if (!relativePath) store.rootEntries = page
+    store.activeWorkspaceView = view
+    if (view === 'notes') {
+      navigationStore.push(relativePath
+        ? { type: 'folder', id: relativePath, path: relativePath }
+        : { type: 'all_notes' })
+    }
+    log.info(`[${view}] opened paged folder in library grid`, {
       path: relativePath,
       entries: store.entries.length,
       mayHaveMore: directoryMayHaveMore.value
     })
   } catch (error) {
-    if (!shouldApplyWikiFolderResult(relativePath, vaultId)) return
+    if (!shouldApplyFolderResult(relativePath, vaultId, view)) return
     store.entries = []
-    store.activeWorkspaceView = 'wiki'
+    store.activeWorkspaceView = view
     directoryMayHaveMore.value = false
-    log.info('[wiki] folder empty or unavailable in library grid', {
+    log.info(`[${view}] folder empty or unavailable in library grid`, {
       path: relativePath,
       error: error?.message || error
     })
   }
+}
+
+const openFolderInCurrentView = async (relativePath) => {
+  await openPagedFolder(relativePath, store.activeWorkspaceView === 'wiki' ? 'wiki' : 'notes')
 }
 
 const loadMoreVisibleEntries = async() => {

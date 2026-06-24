@@ -69,3 +69,13 @@ fn android_scripts_always_use_the_android_config() {
   assert!(build_script.contains("cargo tauri android build --debug --apk --config \"$ANDROID_CONFIG\""), "APK script must build Android with the Android config");
   assert!(build_script.contains("ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1"), "APK script must skip desktop llama-server bundling");
 }
+
+#[test]
+fn bundled_llama_runtime_is_desktop_only() {
+  let lib_min = read_text("src-tauri/src/lib_min.rs");
+  assert!(lib_min.contains("#[cfg(not(mobile))]\npub mod local_llama_runtime;"), "local_llama_runtime must not be compiled into mobile builds");
+
+  let chat_runtime = read_text("src-tauri/src/chat_runtime.rs");
+  assert!(chat_runtime.contains("#[cfg(not(mobile))]\nuse crate::local_llama_runtime;"), "chat runtime must import local_llama_runtime only on desktop");
+  assert!(chat_runtime.contains("#[cfg(not(mobile))]\nfn with_system_prompt"), "desktop-only prompt assembly must not be required by the mobile chat path");
+}

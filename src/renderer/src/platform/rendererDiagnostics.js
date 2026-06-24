@@ -1,4 +1,17 @@
-const MAX_LOGS = 500
+const MAX_LOGS = 200
+
+const DIAGNOSTIC_VERBOSE_STORAGE_KEY = 'elephantnote:diagnostics:verbose'
+
+export const isDiagnosticVerbose = () => {
+  const target = globalThis.window || globalThis
+  return Boolean(
+    target.__ELEPHANT_VERBOSE_DIAGNOSTICS__ ||
+    target.localStorage?.getItem?.(DIAGNOSTIC_VERBOSE_STORAGE_KEY) === 'true' ||
+    target.location?.search?.includes('elephantDiagnostics=1')
+  )
+}
+
+const shouldEmitDiagnostic = (level) => level === 'error' || level === 'warn' || isDiagnosticVerbose()
 
 const toErrorObject = (error) => ({
   name: error?.name || 'Error',
@@ -6,7 +19,14 @@ const toErrorObject = (error) => ({
   stack: error?.stack || ''
 })
 
+const normalizeDetails = (details) => {
+  if (details instanceof Error) return toErrorObject(details)
+  if (typeof details === 'string' && details.length > 4000) return `${details.slice(0, 4000)}…`
+  return details
+}
+
 const forwardToTauriTerminal = (entry) => {
+  if (!shouldEmitDiagnostic(entry.level)) return
   const invoke = globalThis.window?.__TAURI__?.core?.invoke
   if (!invoke) return
   try {
@@ -24,13 +44,17 @@ export const pushDiagnosticLog = (level, message, details = null) => {
     time: new Date().toISOString(),
     level,
     message,
-    details: details instanceof Error ? toErrorObject(details) : details
+    details: normalizeDetails(details)
   }
   target.__ELEPHANT_DEBUG_LOGS__ = target.__ELEPHANT_DEBUG_LOGS__ || []
   target.__ELEPHANT_DEBUG_LOGS__.push(entry)
-  if (target.__ELEPHANT_DEBUG_LOGS__.length > MAX_LOGS) target.__ELEPHANT_DEBUG_LOGS__.shift()
-  const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'
-  console[method](`[elephant:${level}] ${message}`, entry.details || '')
+  if (target.__ELEPHANT_DEBUG_LOGS__.length > MAX_LOGS) {
+    target.__ELEPHANT_DEBUG_LOGS__.splice(0, target.__ELEPHANT_DEBUG_LOGS__.length - MAX_LOGS)
+  }
+  if (shouldEmitDiagnostic(level)) {
+    const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'
+    console[method](`[elephant:${level}] ${message}`, entry.details || '')
+  }
   forwardToTauriTerminal(entry)
   return entry
 }

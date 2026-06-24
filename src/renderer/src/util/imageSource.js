@@ -2,5 +2,6 @@ export {
   getImageBaseDirectory,
   normalizeInsertedImageSource,
   resolveLocalImageSource,
-  toFileUrl
+  toFileUrl,
+  toMarkdownImageSource
 } from '../../../../Elephant/shared/imageSource.js'

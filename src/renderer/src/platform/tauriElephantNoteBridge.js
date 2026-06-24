@@ -29,13 +29,6 @@ const asRelativePathPayload = (payload = {}) => {
   return normalizePayload(payload)
 }
 const asMarkdownPayload = (payload = '') => (typeof payload === 'string' ? { markdown: payload } : normalizePayload(payload))
-const asNoteWritePayload = (payload = {}) => {
-  const value = normalizePayload(payload)
-  return {
-    relativePath: value.relativePath || value.relative_path || value.path || '',
-    content: typeof value.content === 'string' ? value.content : String(value.markdown ?? '')
-  }
-}
 
 const normalizeModelSearchPayload = (payload = {}) => {
   const next = { ...normalizePayload(payload) }
@@ -155,21 +148,39 @@ const dispatchApiAction = async(bridge, action, payload = {}) => {
     case 'muya.updateComposition': return bridge.muya.updateComposition(payload)
     case 'muya.commitComposition': return bridge.muya.commitComposition(payload)
     case 'muya.cancelComposition': return bridge.muya.cancelComposition(payload)
+    case 'muya.editorSnapshot': return bridge.muya.editorSnapshot(payload)
+    case 'attachments.list': return bridge.attachments.list(payload)
+    case 'attachments.writeText': return bridge.attachments.writeText(payload)
+    case 'drawings.list': return bridge.drawings.list(payload)
+    case 'drawings.create': return bridge.drawings.create(payload)
+    case 'drawings.read': return bridge.drawings.read(payload)
+    case 'drawings.write': return bridge.drawings.write(payload)
     case 'calendar.list': return bridge.calendar.list()
+    case 'calendar.importGoogle': return bridge.calendar.importGoogle()
+    case 'calendar.importGoogleFromPath': return bridge.calendar.importGoogleFromPath(payload)
+    case 'calendar.google.config.get': return bridge.calendar.googleConfigGet()
+    case 'calendar.google.config.set': return bridge.calendar.googleConfigSet(payload)
+    case 'calendar.google.sync': return bridge.calendar.googleSync()
     case 'sources.list': return bridge.sources.list()
+    case 'sources.ingestUrl': return bridge.sources.ingestUrl(payload)
+    case 'sources.importRss': return bridge.sources.importRss(payload)
     case 'wiki.list': return bridge.wiki.list()
-    case 'wiki.context': return bridge.wiki.context(payload)
-    case 'wiki.sourceInfo': return bridge.wiki.sourceInfo(payload)
-    case 'wiki.propose': return bridge.wiki.propose(payload)
+    case 'wiki.propose': return bridge.wiki.propose()
     case 'wiki.accept': return bridge.wiki.accept(payload)
     case 'wiki.dismiss': return bridge.wiki.dismiss(payload)
+    case 'wiki.sourceInfo': return bridge.wiki.sourceInfo(payload)
+    case 'wiki.context': return bridge.wiki.context(payload)
+    case 'search.initVault': return bridge.search.initVault(payload.vaultPath || '')
     case 'search.query': return bridge.search.query(payload)
     case 'search.status': return bridge.search.status()
-    case 'search.rebuild': return bridge.search.rebuild()
     case 'search.inspect': return bridge.search.inspect()
+    case 'search.rebuild': return bridge.search.rebuild()
+    case 'search.clear': return bridge.search.clear()
+    case 'search.disable': return bridge.search.disable()
+    case 'search.enable': return bridge.search.enable()
     case 'sync.status': return bridge.sync.status()
     case 'sync.plan': return bridge.sync.plan()
-    case 'sync.enqueue': return bridge.sync.enqueue(payload)
+    case 'sync.enqueue': return bridge.sync.enqueue(payload.operation, payload.payload || {})
     case 'sync.run': return bridge.sync.run(payload)
     case 'models.getSelection':
     case 'models.selection.get': return bridge.models.getSelection()
@@ -177,33 +188,34 @@ const dispatchApiAction = async(bridge, action, payload = {}) => {
     case 'models.selection.set': return bridge.models.setSelection(payload)
     case 'models.local.list': return bridge.models.listLocal()
     case 'models.list': return bridge.models.list()
+    case 'models.download': return bridge.models.download(payload)
     case 'models.searchHuggingFace': return bridge.models.searchHuggingFace(payload)
     case 'models.info': return bridge.models.info(payload)
-    case 'models.download': return bridge.models.download(payload)
-    case 'models.cancelDownload': return bridge.models.cancelDownload(payload)
-    case 'models.downloadStatus': return bridge.models.downloadStatus(payload)
     case 'models.activate': return bridge.models.activate(payload)
     case 'models.deactivate': return bridge.models.deactivate(payload)
     case 'models.remove': return bridge.models.remove(payload)
     case 'models.active': return bridge.models.active()
+    case 'models.cancelDownload': return bridge.models.cancelDownload(payload)
+    case 'models.downloadStatus': return bridge.models.downloadStatus(payload)
     case 'models.refreshIndex': return bridge.models.refreshIndex()
-    case 'rag.chat': return bridge.rag.chat(payload)
     case 'ai.config.get': return bridge.ai.getConfig()
     case 'ai.config.set': return bridge.ai.setConfig(payload)
     case 'ai.config.test': return bridge.ai.testConfig(payload)
     case 'features.get': return bridge.features.get()
-    case 'features.set': return bridge.features.set(payload)
+    case 'features.set': return bridge.features.set(payload.key, payload.enabled)
     case 'ocr.extract': return bridge.ocr.extract(payload)
+    case 'atomic.catalog.get': return bridge.atomic.getCatalog()
     case 'agents.list': return bridge.agents.list()
     case 'agents.register': return bridge.agents.register(payload)
-    case 'agents.unregister': return bridge.agents.unregister(payload.id || payload)
-    case 'agents.send': return bridge.agents.send(payload.id, payload.message)
+    case 'agents.unregister': return bridge.agents.unregister(payload.id)
+    case 'agents.send': return bridge.agents.send(payload)
     case 'plugins.list': return bridge.plugins.list()
-    case 'plugins.set': return bridge.plugins.set(payload.id, payload.enabled, payload.config)
-    case 'plugins.run': return bridge.plugins.run(payload.id, payload.input)
+    case 'plugins.set': return bridge.plugins.set(payload)
+    case 'plugins.run': return bridge.plugins.run(payload)
     case 'tasks.list': return bridge.tasks.list()
-    case 'tasks.set': return bridge.tasks.set(payload.id, payload.enabled)
-    case 'tasks.run': return bridge.tasks.run(payload.id || payload)
+    case 'tasks.set': return bridge.tasks.set(payload)
+    case 'tasks.run': return bridge.tasks.run(payload)
+    case 'rag.chat': return bridge.rag.chat(payload)
     case 'mcp.tools.list': return bridge.mcp.listTools()
     case 'mcp.tools.call': return bridge.mcp.callTool(payload)
     case 'programs.list': return bridge.programs.list()
@@ -244,7 +256,7 @@ const createBridge = (target) => {
     listDirectory: (relativePath = '') => invoke(target, 'tauri_directory_list', { relativePath }),
     createNote: (payload = {}) => invoke(target, 'tauri_notes_create', asRelativePathPayload(payload)),
     readNote: (payload = {}) => invoke(target, 'tauri_notes_read', asRelativePathPayload(payload)),
-    writeNote: (payload = {}) => invoke(target, 'tauri_notes_write', asNoteWritePayload(payload)),
+    writeNote: (payload = {}) => invoke(target, 'tauri_notes_write', normalizePayload(payload)),
     createFolder: (payload = {}) => invoke(target, 'tauri_folders_create', asRelativePathPayload(payload)),
     attachSidebarEntry: (payload = {}) => invoke(target, 'tauri_sidebar_attach', {
       relativePath: payload.relativePath || payload.path || '',
@@ -260,7 +272,7 @@ const createBridge = (target) => {
 
     notes: {
       read: (payload = {}) => invoke(target, 'tauri_notes_read', asRelativePathPayload(payload)),
-      write: (payload = {}) => invoke(target, 'tauri_notes_write', asNoteWritePayload(payload)),
+      write: (payload = {}) => invoke(target, 'tauri_notes_write', normalizePayload(payload)),
       autotag: async() => ({ tags: [] })
     },
 
@@ -271,3 +283,222 @@ const createBridge = (target) => {
       extractFrontmatter: (payload = '') => invoke(target, 'tauri_markdown_extract_frontmatter', asMarkdownPayload(payload)),
       extractLinks: (payload = '') => invoke(target, 'tauri_markdown_extract_links', asMarkdownPayload(payload))
     },
+
+    muya: {
+      parse: (payload = '') => invoke(target, 'tauri_muya_parse', asMarkdownPayload(payload)),
+      renderHtml: (payload = '') => invoke(target, 'tauri_muya_render_html', asMarkdownPayload(payload)),
+      tokens: (payload = '') => invoke(target, 'tauri_muya_tokens', asMarkdownPayload(payload)),
+      extras: (payload = '') => invoke(target, 'tauri_muya_extras', asMarkdownPayload(payload)),
+      contract: (payload = '') => invoke(target, 'tauri_muya_contract', asMarkdownPayload(payload)),
+      clipboard: (payload = {}) => invoke(target, 'tauri_muya_clipboard', normalizePayload(payload)),
+      copyMarkdown: (payload = {}) => invoke(target, 'tauri_muya_copy_markdown', normalizePayload(payload)),
+      copyHtml: (payload = {}) => invoke(target, 'tauri_muya_copy_html', normalizePayload(payload)),
+      paste: (payload = {}) => invoke(target, 'tauri_muya_paste', normalizePayload(payload)),
+      backspace: (payload = {}) => invoke(target, 'tauri_muya_backspace', normalizePayload(payload)),
+      removeNext: (payload = {}) => invoke(target, 'tauri_muya_remove_next', normalizePayload(payload)),
+      undo: (payload = {}) => invoke(target, 'tauri_muya_undo', normalizePayload(payload)),
+      redo: (payload = {}) => invoke(target, 'tauri_muya_redo', normalizePayload(payload)),
+      moveCursor: (payload = {}) => invoke(target, 'tauri_muya_move_cursor', normalizePayload(payload)),
+      inputRule: (payload = {}) => invoke(target, 'tauri_muya_input_rule', normalizePayload(payload)),
+      tableInsertRow: (payload = {}) => invoke(target, 'tauri_muya_table_insert_row', normalizePayload(payload)),
+      tableInsertColumn: (payload = {}) => invoke(target, 'tauri_muya_table_insert_column', normalizePayload(payload)),
+      tableContract: (payload = {}) => invoke(target, 'tauri_muya_table_contract', normalizePayload(payload)),
+      imageSelection: (payload = {}) => invoke(target, 'tauri_muya_image_selection', normalizePayload(payload)),
+      startComposition: (payload = {}) => invoke(target, 'tauri_muya_start_composition', normalizePayload(payload)),
+      updateComposition: (payload = {}) => invoke(target, 'tauri_muya_update_composition', normalizePayload(payload)),
+      commitComposition: (payload = {}) => invoke(target, 'tauri_muya_commit_composition', normalizePayload(payload)),
+      cancelComposition: (payload = {}) => invoke(target, 'tauri_muya_cancel_composition', normalizePayload(payload)),
+      editorSnapshot: (payload = {}) => invoke(target, 'tauri_muya_editor_snapshot', normalizePayload(payload))
+    },
+
+    attachments: {
+      list: () => invoke(target, 'tauri_attachments_list'),
+      writeText: (payload = {}) => invoke(target, 'tauri_attachments_write_text', normalizePayload(payload))
+    },
+
+    drawings: {
+      list: () => invoke(target, 'tauri_drawings_list'),
+      create: (payload = {}) => invoke(target, 'tauri_drawings_create', normalizePayload(payload)),
+      read: (payload = {}) => invoke(target, 'tauri_drawings_read', asRelativePathPayload(payload)),
+      write: (payload = {}) => invoke(target, 'tauri_drawings_write', normalizePayload(payload))
+    },
+
+    calendar: {
+      list: () => invoke(target, 'tauri_calendar_list'),
+      importGoogle: async() => createDesktopOnlyResult('Google Calendar import'),
+      importGoogleFromPath: async() => createDesktopOnlyResult('Google Calendar import from path'),
+      googleConfigGet: async() => ({}),
+      googleConfigSet: async(config) => config,
+      googleSync: async() => createDesktopOnlyResult('Google Calendar sync')
+    },
+
+    sources: {
+      list: () => invoke(target, 'tauri_sources_list'),
+      ingestUrl: async() => createDesktopOnlyResult('source URL ingestion'),
+      importRss: async() => createDesktopOnlyResult('RSS import')
+    },
+
+    wiki: {
+      list: async() => {
+        const result = await invoke(target, 'tauri_wiki_list')
+        return Array.isArray(result) ? { records: result } : { records: Array.isArray(result?.records) ? result.records : [] }
+      },
+      propose: async() => [],
+      accept: async() => null,
+      dismiss: async() => null,
+      sourceInfo: async() => null,
+      context: async() => ({ records: [], notes: [] })
+    },
+
+    search: {
+      initVault: (vaultPath = '') => Promise.resolve({ ok: true, runtime: 'tauri-rust', vaultPath }),
+      query: (params = {}) => invoke(target, 'tauri_search_query', { params }),
+      status: () => invoke(target, 'tauri_search_status'),
+      rebuild: () => invoke(target, 'tauri_search_rebuild'),
+      inspect: () => invoke(target, 'tauri_search_inspect'),
+      clear: async() => ({ ok: true, runtime: 'tauri-rust' }),
+      disable: async() => ({ ok: true, runtime: 'tauri-rust' }),
+      enable: async() => ({ ok: true, runtime: 'tauri-rust' })
+    },
+
+    sync: {
+      status: () => invoke(target, 'tauri_sync_status'),
+      plan: () => invoke(target, 'tauri_sync_plan'),
+      enqueue: (operation, payload = {}) => invoke(target, 'tauri_sync_enqueue', { operation, payload }),
+      run: (payloadByOperation = {}) => invoke(target, 'tauri_sync_run', { payloadByOperation })
+    },
+
+    models: {
+      list: () => invoke(target, 'tauri_models_list'),
+      listLocal: () => invoke(target, 'tauri_models_list_local'),
+      getSelection: () => callWithLocalFallback(target, 'tauri_models_get_selection', {}, MODEL_SELECTION_STORAGE_KEY, defaultModelSelection()),
+      setSelection: async(selection = {}) => {
+        const normalized = { ...defaultModelSelection(), ...normalizePayload(selection) }
+        try {
+          const result = await invoke(target, 'tauri_models_set_selection', { selection: normalized })
+          return writeStoredJson(target, MODEL_SELECTION_STORAGE_KEY, result || normalized)
+        } catch {
+          return writeStoredJson(target, MODEL_SELECTION_STORAGE_KEY, normalized)
+        }
+      },
+      active: () => invoke(target, 'tauri_models_active'),
+      searchHuggingFace: (payload = {}) => invoke(target, 'tauri_models_search_hugging_face', { payload: normalizeModelSearchPayload(payload) }),
+      info: (payload = {}) => invoke(target, 'tauri_models_info', { payload: normalizePayload(payload) }),
+      download: (payload = {}) => invoke(target, 'tauri_models_download', { payload: normalizePayload(payload) }),
+      cancelDownload: (payload = {}) => invoke(target, 'tauri_models_cancel_download', { payload: normalizePayload(payload) }),
+      downloadStatus: (payload = {}) => invoke(target, 'tauri_models_download_status', { payload: normalizePayload(payload) }),
+      activate: (payload = {}) => invoke(target, 'tauri_models_activate', { payload: normalizePayload(payload) }),
+      deactivate: (payload = {}) => invoke(target, 'tauri_models_deactivate', { payload: normalizePayload(payload) }),
+      remove: (payload = {}) => invoke(target, 'tauri_models_delete', { payload: normalizePayload(payload) }),
+      refreshIndex: () => invoke(target, 'tauri_models_refresh_index'),
+      onDownloadProgress: (listener) => onTauriProgress('elephantnote:models:download:progress', listener)
+    },
+
+    ai: {
+      getConfig: () => callWithLocalFallback(target, 'tauri_ai_config_get', {}, AI_CONFIG_STORAGE_KEY, defaultAiConfig()),
+      setConfig: async(config = {}) => {
+        const normalized = { ...defaultAiConfig(), ...normalizePayload(config) }
+        try {
+          const result = await invoke(target, 'tauri_ai_config_set', { config: normalized })
+          return writeStoredJson(target, AI_CONFIG_STORAGE_KEY, result || normalized)
+        } catch {
+          return writeStoredJson(target, AI_CONFIG_STORAGE_KEY, normalized)
+        }
+      },
+      testConfig: async(config = {}) => {
+        try {
+          return invoke(target, 'tauri_ai_config_test', { config: normalizePayload(config) })
+        } catch {
+          return { ok: true, runtime: 'tauri-local', latencyMs: 0, config: normalizePayload(config) }
+        }
+      }
+    },
+
+    features: {
+      get: () => callWithLocalFallback(target, 'tauri_features_get', {}, FEATURES_STORAGE_KEY, defaultFeatures()),
+      set: async(key, enabled = true) => {
+        const current = readStoredJson(target, FEATURES_STORAGE_KEY, defaultFeatures())
+        const next = { ...current, [key]: enabled !== false }
+        try {
+          const result = await invoke(target, 'tauri_features_set', { key, enabled: enabled !== false })
+          return writeStoredJson(target, FEATURES_STORAGE_KEY, result || next)
+        } catch {
+          return writeStoredJson(target, FEATURES_STORAGE_KEY, next)
+        }
+      }
+    },
+
+    sitePreview: {
+      previewFolder: async() => createDesktopOnlyResult('site preview'),
+      buildFolder: async() => createDesktopOnlyResult('site build'),
+      stop: async() => ({ ok: true }),
+      status: async() => null,
+      openExternal: async(url) => target.electron?.shell?.openExternal?.(url)
+    },
+
+    atomicFeatures: {
+      describeApi: async() => ({ runtime: 'tauri-rust', actions: [] }),
+      callApi: async() => null,
+      providers: async() => [],
+      overview: async() => null,
+      graph: async() => null,
+      wiki: async() => null,
+      createWikiPage: async() => null,
+      summarize: async() => null,
+      structure: async() => null,
+      autoNameNote: async() => null,
+      listLocalModels: async() => [],
+      pullModel: async() => createDesktopOnlyResult('model pull'),
+      onModelPullProgress: () => () => {}
+    },
+
+    agents: { list: async() => [], register: async() => null, unregister: async() => null, send: async() => null },
+    atomic: { getCatalog: async() => [] },
+    plugins: { list: async() => [], set: async(payload) => payload, run: async() => null },
+    tasks: { list: async() => [], set: async(payload) => payload, run: async() => null },
+    rag: {
+      chat: (payload = {}, limit = 6) => {
+        const normalized = typeof payload === 'string' ? { message: payload, limit } : normalizePayload(payload)
+        return invoke(target, 'tauri_rag_chat', {
+          payload: {
+            limit,
+            ...normalized,
+            aiConfig: readStoredJson(target, AI_CONFIG_STORAGE_KEY, defaultAiConfig()),
+            modelSelection: readStoredJson(target, MODEL_SELECTION_STORAGE_KEY, defaultModelSelection())
+          }
+        })
+      }
+    },
+    mcp: { listTools: async() => [], callTool: async() => null },
+    programs: { list: async() => [], set: async(payload) => payload, run: async() => null },
+    ocr: { extract: async() => createDesktopOnlyResult('OCR extraction') },
+    clipboard: {
+      writeText: async(text) => target.electron?.clipboard?.writeText?.(text),
+      readText: async() => target.electron?.clipboard?.readText?.()
+    }
+  }
+
+  bridge.api = {
+    describe: async() => ({
+      runtime: 'tauri',
+      backend: 'rust',
+      bridge: 'elephantnote-tauri',
+      actions: apiActions
+    }),
+    call: async(action, payload = {}) => ({
+      ok: true,
+      data: await dispatchApiAction(bridge, action, normalizePayload(payload))
+    })
+  }
+
+  return bridge
+}
+
+export const installTauriElephantNoteBridge = (target = globalThis) => {
+  if (!target?.__TAURI__ || target?.elephantnote?.getVaults) return false
+  target.elephantnote = {
+    ...(target.elephantnote || {}),
+    ...createBridge(target)
+  }
+  return true
+}

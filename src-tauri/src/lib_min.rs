@@ -13,6 +13,7 @@ pub mod drawing_domain;
 pub mod model_domain;
 pub mod model_library;
 pub mod model_safety;
+pub mod sync_safety;
 pub mod local_llama_runtime;
 pub mod chat_runtime;
 pub mod search_logic;
@@ -80,7 +81,7 @@ pub fn run() {
       vault::commands::tauri_search_status,
       vault::commands::tauri_sync_status,
       vault::commands::tauri_sync_enqueue,
-      vault::commands::tauri_sync_run,
+      sync_safety::tauri_sync_run,
       markdown::commands::tauri_markdown_parse,
       markdown::commands::tauri_markdown_render_html,
       markdown::commands::tauri_markdown_to_text,

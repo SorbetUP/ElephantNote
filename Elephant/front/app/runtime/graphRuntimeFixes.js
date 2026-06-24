@@ -1,9 +1,25 @@
+import { pushDiagnosticLog } from '@/platform/rendererDiagnostics'
 import { useSearchStore } from '../stores/searchStore'
 import { useVaultStore } from '../stores/vaultStore'
 
 let installed = false
 let repairInFlight = false
 let lastRepairVaultPath = ''
+
+const graphCounts = (searchStore) => {
+  const graph = searchStore?.indexInspection?.graph
+  return {
+    nodes: Array.isArray(graph?.nodes) ? graph.nodes.length : 0,
+    edges: Array.isArray(graph?.edges) ? graph.edges.length : 0,
+    clusters: Array.isArray(graph?.clusters) ? graph.clusters.length : 0,
+    documents: Array.isArray(searchStore?.indexInspection?.documents)
+      ? searchStore.indexInspection.documents.length
+      : 0,
+    semanticLinks: Array.isArray(searchStore?.indexInspection?.semanticLinks)
+      ? searchStore.indexInspection.semanticLinks.length
+      : 0
+  }
+}
 
 export const hasSparseGraph = (searchStore) => {
   const graph = searchStore?.indexInspection?.graph
@@ -27,11 +43,13 @@ export const shouldRepairSparseGraph = ({ vaultStore, searchStore, vaultPath, la
 export const installGraphRuntimeFixes = () => {
   if (installed) return
   installed = true
+  pushDiagnosticLog('info', 'graph runtime repair guard installed')
 
   const repairGraphIfNeeded = async () => {
     const vaultStore = useVaultStore()
     const searchStore = useSearchStore()
     const vaultPath = vaultStore.activeVault?.path || searchStore.vaultPath || ''
+    const countsBefore = graphCounts(searchStore)
 
     if (!shouldRepairSparseGraph({
       vaultStore,
@@ -43,10 +61,29 @@ export const installGraphRuntimeFixes = () => {
 
     repairInFlight = true
     lastRepairVaultPath = vaultPath
+    pushDiagnosticLog('warn', 'graph sparse index detected; rebuilding search index', {
+      vaultPath,
+      rootEntries: Array.isArray(vaultStore.rootEntries) ? vaultStore.rootEntries.length : 0,
+      ...countsBefore
+    })
+
     try {
-      await searchStore.rebuild()
+      const rebuildStatus = await searchStore.rebuild()
       await searchStore.inspect()
+      pushDiagnosticLog('info', 'graph sparse index rebuild finished', {
+        vaultPath,
+        rebuildStatus: rebuildStatus || searchStore.status || null,
+        before: countsBefore,
+        after: graphCounts(searchStore)
+      })
     } catch (error) {
+      pushDiagnosticLog('error', 'graph sparse index rebuild failed', {
+        vaultPath,
+        before: countsBefore,
+        error: error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack || '' }
+          : String(error || '')
+      })
       console.warn('Unable to repair sparse graph index:', error)
     } finally {
       repairInFlight = false
@@ -55,6 +92,8 @@ export const installGraphRuntimeFixes = () => {
 
   window.addEventListener('elephantnote:repair-graph', repairGraphIfNeeded)
   window.setInterval(() => {
-    repairGraphIfNeeded().catch(() => {})
+    repairGraphIfNeeded().catch((error) => {
+      pushDiagnosticLog('error', 'graph repair interval failed', error)
+    })
   }, 1500)
 }

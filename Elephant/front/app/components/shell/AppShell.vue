@@ -351,6 +351,6 @@ onBeforeUnmount(() => {
 
 :global(.en-settings-close .en-icon) {
   width: 17px !important;
-  height: 17px;
+  height: 17px !important;
 }
 </style>

@@ -124,6 +124,8 @@ const stripKnownExtensions = (value) => {
     .replace(/\.png$/i, '')
 }
 
+const blobToBytes = async(blob) => new Uint8Array(await blob.arrayBuffer())
+
 const editableBaseName = ref(stripKnownExtensions(props.fileName) || 'drawing')
 const normalizedBaseName = computed(() => {
   const cleaned = stripKnownExtensions(editableBaseName.value).trim()
@@ -179,10 +181,10 @@ const handleSave = async () => {
     })
     emit('save', {
       blob,
-      imageBlob: blob,
+      imageBlob: await blobToBytes(blob),
       fileName: resolvedFileName.value,
       baseName: normalizedBaseName.value,
-      sceneBlob
+      sceneBlob: await sceneBlob.text()
     })
   } catch (error) {
     console.error('Failed to save Excalidraw:', error)

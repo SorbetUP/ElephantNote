@@ -105,13 +105,70 @@ fn markdown_title(markdown: &str, fallback: &str) -> String {
     .unwrap_or_else(|| fallback.trim_end_matches(".md").to_string())
 }
 
+fn strip_frontmatter(markdown: &str) -> String {
+  let raw = markdown.trim_start();
+  if !raw.starts_with("---") {
+    return raw.to_string();
+  }
+
+  let lines = raw.lines().collect::<Vec<_>>();
+  if lines.first().map(|line| line.trim()) == Some("---") {
+    if let Some(close_index) = lines
+      .iter()
+      .enumerate()
+      .skip(1)
+      .find_map(|(index, line)| (line.trim() == "---").then_some(index))
+    {
+      return lines
+        .iter()
+        .skip(close_index + 1)
+        .copied()
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string();
+    }
+  }
+
+  if let Some(first_line) = lines.first().and_then(|line| line.strip_prefix("---")) {
+    if let Some(close_index) = first_line.find("---") {
+      let mut body = first_line[close_index + 3..].trim_start().to_string();
+      let remaining = lines.iter().skip(1).copied().collect::<Vec<_>>().join("\n");
+      if !remaining.trim().is_empty() {
+        if !body.is_empty() {
+          body.push('\n');
+        }
+        body.push_str(&remaining);
+      }
+      return body.trim().to_string();
+    }
+  }
+
+  raw.to_string()
+}
+
 fn markdown_excerpt(markdown: &str) -> String {
-  markdown
-    .lines()
-    .filter(|line| !line.trim().is_empty())
-    .take(3)
-    .collect::<Vec<_>>()
-    .join(" ")
+  let body = strip_frontmatter(markdown);
+  let mut excerpt_lines = Vec::new();
+  let mut can_skip_leading_title = true;
+
+  for line in body.lines() {
+    let trimmed = line.trim();
+    if trimmed.is_empty() || trimmed == "---" {
+      continue;
+    }
+    if can_skip_leading_title && trimmed.starts_with("# ") {
+      can_skip_leading_title = false;
+      continue;
+    }
+    can_skip_leading_title = false;
+    excerpt_lines.push(trimmed.to_string());
+    if excerpt_lines.len() >= 3 {
+      break;
+    }
+  }
+
+  excerpt_lines.join(" ")
 }
 
 fn direct_markdown_note_count(path: &Path) -> usize {
@@ -327,5 +384,49 @@ mod tests {
     assert!(preview.contains("title"));
 
     let _ = fs::remove_dir_all(&dir);
+  }
+
+  #[test]
+  fn extracts_excerpt_after_yaml_frontmatter_and_title() {
+    let markdown = "---\ntitle: \"Noteh\"\ntype: \"note\"\ntags: []\n---\n\n# Noteh\n\nFirst useful line.\nSecond useful line.";
+    assert_eq!(markdown_excerpt(markdown), "First useful line. Second useful line.");
+  }
+
+  #[test]
+  fn extracts_excerpt_after_inline_frontmatter() {
+    let markdown = "--- title: \"Noteh\" type: \"note\" --- Real content starts here.\nSecond line.";
+    assert_eq!(markdown_excerpt(markdown), "Real content starts here. Second line.");
+  }
+
+  #[test]
+  fn keeps_scaffold_note_excerpt_empty() {
+    let markdown = "---\ntitle: \"Empty\"\ntype: \"note\"\ntags: []\n---\n\n# Empty\n";
+    assert_eq!(markdown_excerpt(markdown), "");
+  }
+
+  #[test]
+  fn list_directory_uses_clean_note_excerpts() {
+    let unique = std::time::SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .unwrap()
+      .as_nanos();
+    let root = std::env::temp_dir().join(format!("elephantnote-preview-test-{unique}"));
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("Noteh.md"), "---\ntitle: \"Noteh\"\ntype: \"note\"\n---\n\n# Noteh\n\nVisible preview.").unwrap();
+
+    let vault = VaultDescriptor {
+      id: "test".to_string(),
+      name: "Test".to_string(),
+      path: root.to_string_lossy().to_string(),
+      icon: String::new(),
+      last_opened_at: "0".to_string(),
+    };
+
+    let entries = list_directory(&vault, "").unwrap();
+    fs::remove_dir_all(&root).ok();
+
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].get("excerpt").and_then(Value::as_str), Some("Visible preview."));
+    assert_eq!(entries[0].get("title").and_then(Value::as_str), Some("Noteh"));
   }
 }

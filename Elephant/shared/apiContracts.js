@@ -16,6 +16,9 @@ const optionalNumber = (value) => value === undefined || Number.isFinite(Number(
 
 const optionalObject = (value) => value === undefined || isPlainObject(value)
 
+const optionalStringArray = (value) =>
+  value === undefined || (Array.isArray(value) && value.every((item) => typeof item === 'string'))
+
 const optionalEnum = (allowed) => (value) => value === undefined || allowed.includes(value)
 
 const requiredEnum = (allowed) => (value) => allowed.includes(value)
@@ -68,6 +71,7 @@ export const schema = Object.freeze({
   optionalBoolean,
   optionalNumber,
   optionalObject,
+  optionalStringArray,
   optionalEnum,
   requiredEnum
 })
@@ -100,6 +104,7 @@ const aiConfigPayload = schema.strictObject({
 
 const syncRunPayload = schema.object({
   remotePath: optionalString,
+  operations: optionalStringArray,
   init: optionalObject,
   snapshot: optionalObject,
   sync: optionalObject,
@@ -212,6 +217,7 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   ]),
   sync: Object.freeze([
     action('SYNC_STATUS', 'sync.status'),
+    action('SYNC_PLAN', 'sync.plan', syncRunPayload),
     action('SYNC_ENQUEUE', 'sync.enqueue', schema.object({ operation: requiredEnum(SYNC_OPERATION_IDS), payload: optionalObject })),
     action('SYNC_RUN', 'sync.run', syncRunPayload)
   ])

@@ -26,6 +26,7 @@ import i18nPlugin from './i18n'
 import services from './services/index'
 import routes from './router'
 import Main from './Main.vue'
+import { installGraphRuntimeFixes } from 'elephant-front/runtime/graphRuntimeFixes'
 
 import './assets/styles/index.css'
 import './assets/styles/printService.css'
@@ -148,6 +149,7 @@ const startApp = async() => {
 
     app.use(router)
     app.use(pinia)
+    installGraphRuntimeFixes()
     installStoreDiagnostics()
     app.use(i18nPlugin)
 

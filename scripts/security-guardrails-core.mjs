@@ -205,6 +205,69 @@ const scanTauriCapabilities = (root, findings) => {
   }
 }
 
+const scanElectronHardening = (root, findings) => {
+  const configFile = path.join(root, 'src', 'main', 'config.js')
+  if (exists(configFile)) {
+    const content = readText(configFile)
+    const file = toRepoPath(root, configFile)
+    const checks = [
+      {
+        id: 'ELECTRON_CONTEXT_ISOLATION_DISABLED',
+        pattern: /contextIsolation\s*:\s*false/,
+        value: 'contextIsolation: false',
+        message: 'Electron renderer windows must keep contextIsolation enabled.'
+      },
+      {
+        id: 'ELECTRON_NODE_INTEGRATION_ENABLED',
+        pattern: /nodeIntegration\s*:\s*true/,
+        value: 'nodeIntegration: true',
+        message: 'Electron renderer windows must not enable Node.js integration.'
+      },
+      {
+        id: 'ELECTRON_WEB_SECURITY_DISABLED',
+        pattern: /webSecurity\s*:\s*false/,
+        value: 'webSecurity: false',
+        message: 'Electron renderer windows must keep Chromium web security enabled.'
+      }
+    ]
+
+    for (const check of checks) {
+      if (check.pattern.test(content)) {
+        findings.push(makeFinding({
+          id: check.id,
+          file,
+          value: check.value,
+          message: check.message
+        }))
+      }
+    }
+  }
+
+  const sourceFiles = listFiles(path.join(root, 'src'), (filePath) => /\.(mjs|js|ts|tsx|vue)$/.test(filePath))
+  for (const absolutePath of sourceFiles) {
+    const content = readText(absolutePath)
+    const file = toRepoPath(root, absolutePath)
+    if (/@electron\/remote/.test(content)) {
+      findings.push(makeFinding({
+        severity: WARNING,
+        id: 'ELECTRON_REMOTE_LEGACY_USAGE',
+        file,
+        value: '@electron/remote',
+        message: '@electron/remote is legacy attack surface and should be removed after migrating renderer calls to explicit IPC.'
+      }))
+    }
+    if (/from\s+['"]fs-extra['"]/.test(content) && /fileUtils/.test(content)) {
+      findings.push(makeFinding({
+        severity: WARNING,
+        id: 'ELECTRON_PRELOAD_EXPOSES_FILE_UTILS',
+        file,
+        value: 'fs-extra fileUtils bridge',
+        message: 'Do not expose generic filesystem helpers to the renderer; expose audited vault-specific IPC only.'
+      }))
+    }
+  }
+}
+
 const scanGitHubWorkflows = (root, findings) => {
   const workflowDirectory = path.join(root, '.github', 'workflows')
   const workflowFiles = listFiles(workflowDirectory, (filePath) => /\.ya?ml$/.test(filePath))
@@ -378,6 +441,7 @@ const scanCommittedSecrets = (root, findings) => {
 export const collectSecurityFindings = (root = process.cwd()) => {
   const findings = []
   scanTauriCapabilities(root, findings)
+  scanElectronHardening(root, findings)
   scanGitHubWorkflows(root, findings)
   scanPackageScripts(root, findings)
   scanCommittedSecrets(root, findings)

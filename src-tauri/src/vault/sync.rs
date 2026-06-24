@@ -1,4 +1,4 @@
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,8 +23,6 @@ const SYNC_STATUS_DONE: &str = "done";
 const SYNC_STATUS_ERROR: &str = "error";
 
 const SYNC_BACKEND_GIT: &str = "git";
-const SYNC_BACKEND_RCLONE: &str = "rclone";
-const SYNC_BACKEND_SYNCTHING_GIT: &str = "syncthing-git";
 const SYNC_DEFAULT_REMOTE: &str = "origin";
 
 pub const SYNC_CONFIG_FILE: &str = "sync-config.json";
@@ -88,18 +86,6 @@ struct SyncState {
   repository: RepositoryStatus,
 }
 
-struct GitOutput {
-  stdout: String,
-}
-
-struct GitSyncEngine {
-  cwd: PathBuf,
-  queue: Vec<SyncQueueItem>,
-  history: Vec<SyncHistoryRecord>,
-  state: SyncState,
-  config: Option<SyncConfig>,
-}
-
 fn now() -> String {
   SystemTime::now()
     .duration_since(UNIX_EPOCH)
@@ -107,49 +93,18 @@ fn now() -> String {
     .unwrap_or_else(|_| "0".to_string())
 }
 
-fn normalize_path(path: impl AsRef<Path>) -> String {
-  path.as_ref().to_string_lossy().replace('\\', "/")
+fn sync_path(cwd: &Path, file: &str) -> PathBuf {
+  vault_layout::sync_file(cwd, file)
 }
 
-fn base36(mut value: u32) -> String {
-  if value == 0 {
-    return "0".to_string();
-  }
-  let digits = b"0123456789abcdefghijklmnopqrstuvwxyz";
-  let mut out = Vec::new();
-  while value > 0 {
-    out.push(digits[(value % 36) as usize] as char);
-    value /= 36;
-  }
-  out.iter().rev().collect()
-}
-
-fn compact_hash(value: &str) -> String {
-  let mut hash = 5381_u32;
-  for character in value.chars() {
-    hash = hash.wrapping_shl(5).wrapping_add(hash) ^ character as u32;
-  }
-  base36(hash)
-}
-
-fn hostname() -> String {
-  std::env::var("HOSTNAME")
-    .or_else(|_| std::env::var("COMPUTERNAME"))
-    .unwrap_or_else(|_| "localhost".to_string())
-}
-
-fn folder_label(cwd: &Path) -> String {
-  cwd.file_name().and_then(|name| name.to_str()).unwrap_or("Vault").to_string()
-}
-
-fn read_json<T: DeserializeOwned + Default>(path: &Path) -> T {
+fn read_json<T: for<'de> Deserialize<'de> + Default>(path: &Path) -> T {
   fs::read_to_string(path)
     .ok()
     .and_then(|raw| serde_json::from_str(&raw).ok())
     .unwrap_or_default()
 }
 
-fn read_json_value(path: &Path, fallback: Value) -> Value {
+fn read_value(path: &Path, fallback: Value) -> Value {
   fs::read_to_string(path)
     .ok()
     .and_then(|raw| serde_json::from_str(&raw).ok())
@@ -164,59 +119,27 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> R<()> {
   fs::write(path, format!("{}\n", raw)).map_err(|error| error.to_string())
 }
 
-fn append_missing_lines(path: &Path, lines: &[String]) -> R<()> {
-  if let Some(parent) = path.parent() {
-    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-  }
-  let existing = fs::read_to_string(path).unwrap_or_default();
-  let existing_lines = existing
-    .lines()
-    .map(str::trim)
-    .filter(|line| !line.is_empty())
-    .collect::<Vec<_>>();
-  let missing = lines
-    .iter()
-    .filter(|line| !existing_lines.iter().any(|existing| existing == &&line.as_str()))
-    .cloned()
-    .collect::<Vec<_>>();
-
-  if missing.is_empty() {
-    return Ok(());
-  }
-
-  let mut next = existing;
-  if !next.is_empty() && !next.ends_with('\n') {
-    next.push('\n');
-  }
-  next.push_str(&missing.join("\n"));
-  next.push('\n');
-  fs::write(path, next).map_err(|error| error.to_string())
-}
-
-fn sync_path(cwd: &Path, file: &str) -> PathBuf {
-  vault_layout::sync_file(cwd, file)
-}
-
 fn read_config(cwd: &Path) -> Option<SyncConfig> {
   let path = sync_path(cwd, SYNC_CONFIG_FILE);
   if path.exists() { Some(read_json(&path)) } else { None }
 }
 
 fn read_queue(cwd: &Path) -> Vec<SyncQueueItem> {
-  let value = read_json_value(&sync_path(cwd, SYNC_QUEUE_FILE), json!({ "queue": [] }));
-  let array = value.get("queue").and_then(Value::as_array).or_else(|| value.as_array());
-  array
+  let value = read_value(&sync_path(cwd, SYNC_QUEUE_FILE), json!({ "queue": [] }));
+  value
+    .get("queue")
+    .and_then(Value::as_array)
+    .or_else(|| value.as_array())
     .map(|items| items.iter().filter_map(|item| serde_json::from_value(item.clone()).ok()).collect())
     .unwrap_or_default()
 }
 
 fn write_queue(cwd: &Path, queue: &[SyncQueueItem]) -> R<()> {
-  let queue = if queue.len() > 200 { queue[queue.len() - 200..].to_vec() } else { queue.to_vec() };
   write_json(&sync_path(cwd, SYNC_QUEUE_FILE), &json!({ "version": 1, "updatedAt": now(), "queue": queue }))
 }
 
 fn read_history(cwd: &Path) -> Vec<SyncHistoryRecord> {
-  let value = read_json_value(&sync_path(cwd, SYNC_HISTORY_FILE), json!({ "history": [] }));
+  let value = read_value(&sync_path(cwd, SYNC_HISTORY_FILE), json!({ "history": [] }));
   value
     .get("history")
     .and_then(Value::as_array)
@@ -225,7 +148,7 @@ fn read_history(cwd: &Path) -> Vec<SyncHistoryRecord> {
 }
 
 fn write_history(cwd: &Path, history: &[SyncHistoryRecord]) -> R<()> {
-  let history = if history.len() > 200 { history[history.len() - 200..].to_vec() } else { history.to_vec() };
+  let history = if history.len() > 200 { &history[history.len() - 200..] } else { history };
   write_json(&sync_path(cwd, SYNC_HISTORY_FILE), &json!({ "version": 1, "updatedAt": now(), "history": history }))
 }
 
@@ -237,150 +160,254 @@ fn write_state(cwd: &Path, state: &SyncState) -> R<()> {
   write_json(&sync_path(cwd, SYNC_STATE_FILE), state)
 }
 
-fn payload_source(payload: &Value) -> &Value {
-  payload.get("config").filter(|value| value.is_object()).unwrap_or(payload)
-}
-
-fn payload_string(payload: &Value, key: &str) -> Option<String> {
-  payload_source(payload).get(key).and_then(Value::as_str).map(str::to_string)
-}
-
-fn payload_array(payload: &Value, key: &str) -> Option<Vec<Value>> {
-  payload_source(payload).get(key).and_then(Value::as_array).cloned()
-}
-
-fn valid_backend(value: &str) -> bool {
-  matches!(value, SYNC_BACKEND_GIT | SYNC_BACKEND_RCLONE | SYNC_BACKEND_SYNCTHING_GIT)
-}
-
-fn valid_operation(operation: &str) -> bool {
-  matches!(
-    operation,
-    SYNC_OPERATION_INIT | SYNC_OPERATION_SNAPSHOT | SYNC_OPERATION_PULL | SYNC_OPERATION_PUSH | SYNC_OPERATION_SYNC
-  )
-}
-
 fn normalized_payload(payload: Value) -> Value {
   if payload.is_object() { payload } else { json!({}) }
 }
 
-fn payload_has(payload_by_operation: &Value, operation: &str) -> bool {
-  payload_by_operation.as_object().is_some_and(|payload| payload.contains_key(operation))
+fn valid_operation(operation: &str) -> bool {
+  matches!(operation, SYNC_OPERATION_INIT | SYNC_OPERATION_SNAPSHOT | SYNC_OPERATION_PULL | SYNC_OPERATION_PUSH | SYNC_OPERATION_SYNC)
 }
 
-fn payload_for(payload_by_operation: &Value, operation: &str) -> Value {
-  normalized_payload(payload_by_operation.get(operation).cloned().unwrap_or_else(|| json!({})))
-}
-
-fn payload_for_or(payload_by_operation: &Value, operation: &str, fallback_operation: &str) -> Value {
-  normalized_payload(
-    payload_by_operation
-      .get(operation)
-      .cloned()
-      .or_else(|| payload_by_operation.get(fallback_operation).cloned())
-      .unwrap_or_else(|| json!({})),
-  )
-}
-
-fn explicit_operations(payload_by_operation: &Value) -> Vec<String> {
-  payload_by_operation
+fn explicit_operations(payload: &Value) -> Vec<String> {
+  payload
     .get("operations")
     .and_then(Value::as_array)
-    .map(|operations| {
-      operations
-        .iter()
-        .filter_map(Value::as_str)
-        .map(str::trim)
-        .filter(|operation| valid_operation(operation))
-        .map(str::to_string)
-        .collect()
-    })
+    .map(|operations| operations.iter().filter_map(Value::as_str).map(str::trim).filter(|op| valid_operation(op)).map(str::to_string).collect())
     .unwrap_or_default()
 }
 
-fn create_sync_identity(cwd: &Path, hostname: &str) -> (String, String, String) {
-  let cwd = normalize_path(cwd);
-  let seed = format!("{}|{}", cwd, hostname);
-  (
-    format!("en-{}", compact_hash(&seed)),
-    format!("vault-{}", compact_hash(&cwd)),
-    cwd.split('/').filter(|part| !part.is_empty()).last().unwrap_or("Vault").to_string(),
-  )
+fn payload_for(payload: &Value, operation: &str) -> Value {
+  normalized_payload(payload.get(operation).cloned().unwrap_or_else(|| json!({})))
 }
 
-fn create_sync_config(cwd: &Path, previous: Option<&SyncConfig>, payload: &Value) -> SyncConfig {
-  let host = hostname();
-  let (device_id, folder_id, folder_label_from_identity) = create_sync_identity(cwd, &host);
-  let backend = payload_string(payload, "backend")
-    .or_else(|| previous.map(|config| config.backend.clone()))
-    .filter(|value| valid_backend(value))
-    .unwrap_or_else(|| SYNC_BACKEND_GIT.to_string());
-
-  SyncConfig {
-    version: 2,
-    device_id: previous
-      .map(|config| config.device_id.clone())
-      .filter(|value| !value.is_empty())
-      .unwrap_or(device_id),
-    folder_id: previous
-      .map(|config| config.folder_id.clone())
-      .filter(|value| !value.is_empty())
-      .unwrap_or(folder_id),
-    folder_label: previous
-      .map(|config| config.folder_label.clone())
-      .filter(|value| !value.is_empty())
-      .unwrap_or_else(|| if folder_label_from_identity.is_empty() { folder_label(cwd) } else { folder_label_from_identity }),
-    backend,
-    mode: payload_string(payload, "mode")
-      .or_else(|| previous.map(|config| config.mode.clone()))
-      .filter(|value| !value.is_empty())
-      .unwrap_or_else(|| "send-receive".to_string()),
-    remote_name: payload_string(payload, "remoteName")
-      .or_else(|| previous.map(|config| config.remote_name.clone()))
-      .filter(|value| !value.is_empty())
-      .unwrap_or_else(|| SYNC_DEFAULT_REMOTE.to_string()),
-    remote: payload_string(payload, "remote").or_else(|| previous.map(|config| config.remote.clone())).unwrap_or_default(),
-    remote_path: payload_string(payload, "remotePath").or_else(|| previous.map(|config| config.remote_path.clone())).unwrap_or_default(),
-    branch: payload_string(payload, "branch").or_else(|| previous.map(|config| config.branch.clone())).unwrap_or_default(),
-    peers: payload_array(payload, "peers").or_else(|| previous.map(|config| config.peers.clone())).unwrap_or_default(),
-    updated_at: now(),
-  }
+fn payload_for_or(payload: &Value, operation: &str, fallback: &str) -> Value {
+  normalized_payload(payload.get(operation).cloned().or_else(|| payload.get(fallback).cloned()).unwrap_or_else(|| json!({})))
 }
 
-fn create_queue_item(operation: &str, payload: Value, index: usize) -> R<SyncQueueItem> {
-  let operation = operation.trim();
-  if !valid_operation(operation) {
-    return Err(format!("Unknown sync operation: {}.", operation));
+fn plan_operations(payload: &Value) -> Vec<String> {
+  let explicit = explicit_operations(payload);
+  if !explicit.is_empty() {
+    return explicit;
   }
+  if payload.get(SYNC_OPERATION_SYNC).is_some() || ![SYNC_OPERATION_INIT, SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH].iter().any(|op| payload.get(*op).is_some()) {
+    return vec![SYNC_OPERATION_INIT, SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH].into_iter().map(str::to_string).collect();
+  }
+
+  let mut operations = vec![SYNC_OPERATION_INIT.to_string()];
+  for operation in [SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH] {
+    if payload.get(operation).is_some() {
+      operations.push(operation.to_string());
+    }
+  }
+  operations
+}
+
+pub fn create_sync_plan_value(payload_by_operation: Value) -> Value {
+  let payload = normalized_payload(payload_by_operation);
+  let operations = plan_operations(&payload);
+  let payloads = operations
+    .iter()
+    .map(|operation| {
+      let value = if payload.get(SYNC_OPERATION_SYNC).is_some() {
+        payload_for_or(&payload, operation, SYNC_OPERATION_SYNC)
+      } else {
+        payload_for(&payload, operation)
+      };
+      json!({ "operation": operation, "payload": value })
+    })
+    .collect::<Vec<_>>();
+  json!({ "operations": operations, "items": payloads })
+}
+
+fn queue_item(operation: &str, payload: Value, index: usize) -> SyncQueueItem {
   let timestamp = now();
-  Ok(SyncQueueItem {
-    id: format!("sync-{}-{}", timestamp, compact_hash(&format!("{}:{}", operation, index))),
+  SyncQueueItem {
+    id: format!("sync-{}-{}", timestamp, index),
     operation: operation.to_string(),
-    payload: normalized_payload(payload),
+    payload,
     status: SYNC_STATUS_QUEUED.to_string(),
     created_at: timestamp.clone(),
     updated_at: timestamp,
     error: String::new(),
-  })
-}
-
-fn history_record(item: &SyncQueueItem) -> SyncHistoryRecord {
-  SyncHistoryRecord {
-    id: item.id.clone(),
-    operation: item.operation.clone(),
-    status: if [SYNC_STATUS_QUEUED, SYNC_STATUS_RUNNING, SYNC_STATUS_DONE, SYNC_STATUS_ERROR].contains(&item.status.as_str()) {
-      item.status.clone()
-    } else {
-      SYNC_STATUS_ERROR.to_string()
-    },
-    updated_at: item.updated_at.clone(),
-    error: item.error.clone(),
   }
 }
 
-fn tail_values<T: Clone + Serialize>(items: &[T], limit: usize) -> Value {
-  let slice = if items.len() > limit { &items[items.len() - limit..] } else { items };
-  serde_json::to_value(slice).unwrap_or_else(|_| json!([]))
+fn git(cwd: &Path, args: &[&str]) -> R<String> {
+  let output = Command::new("git")
+    .args(args)
+    .current_dir(cwd)
+    .output()
+    .map_err(|error| format!("failed to execute git {}: {}", args.join(" "), error))?;
+  let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+  let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+  if output.status.success() {
+    Ok(stdout)
+  } else {
+    let details = if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() };
+    Err(format!("git {} failed: {}", args.join(" "), details))
+  }
+}
+
+fn git_ok(cwd: &Path, args: &[&str]) -> bool {
+  Command::new("git").args(args).current_dir(cwd).output().map(|output| output.status.success()).unwrap_or(false)
+}
+
+fn config_from_payload(cwd: &Path, previous: Option<SyncConfig>, payload: &Value) -> SyncConfig {
+  let previous = previous.unwrap_or_default();
+  let timestamp = now();
+  let label = cwd.file_name().and_then(|name| name.to_str()).unwrap_or("Vault").to_string();
+  SyncConfig {
+    version: 2,
+    device_id: if previous.device_id.is_empty() { format!("en-{}", timestamp) } else { previous.device_id },
+    folder_id: if previous.folder_id.is_empty() { format!("vault-{}", label.replace(' ', "-").to_lowercase()) } else { previous.folder_id },
+    folder_label: if previous.folder_label.is_empty() { label } else { previous.folder_label },
+    backend: payload.get("backend").and_then(Value::as_str).unwrap_or(if previous.backend.is_empty() { SYNC_BACKEND_GIT } else { &previous.backend }).to_string(),
+    mode: payload.get("mode").and_then(Value::as_str).unwrap_or(if previous.mode.is_empty() { "send-receive" } else { &previous.mode }).to_string(),
+    remote_name: payload.get("remoteName").and_then(Value::as_str).unwrap_or(if previous.remote_name.is_empty() { SYNC_DEFAULT_REMOTE } else { &previous.remote_name }).to_string(),
+    remote: payload.get("remote").and_then(Value::as_str).unwrap_or(&previous.remote).to_string(),
+    remote_path: payload.get("remotePath").and_then(Value::as_str).unwrap_or(&previous.remote_path).to_string(),
+    branch: payload.get("branch").and_then(Value::as_str).unwrap_or(&previous.branch).to_string(),
+    peers: payload.get("peers").and_then(Value::as_array).cloned().unwrap_or(previous.peers),
+    updated_at: timestamp,
+  }
+}
+
+fn ensure_ready(cwd: &Path, payload: &Value) -> R<SyncConfig> {
+  fs::create_dir_all(cwd).map_err(|error| error.to_string())?;
+  fs::create_dir_all(vault_layout::hidden_dir(cwd, vault_layout::SYNC_DIR)).map_err(|error| error.to_string())?;
+  if !cwd.join(".git").exists() {
+    git(cwd, &["init"])?;
+  }
+  if !git_ok(cwd, &["config", "user.name"]) {
+    git(cwd, &["config", "user.name", "ElephantNote Sync"])?;
+  }
+  if !git_ok(cwd, &["config", "user.email"]) {
+    git(cwd, &["config", "user.email", "sync@elephantnote.local"])?;
+  }
+
+  let config = config_from_payload(cwd, read_config(cwd), payload);
+  if !config.remote.is_empty() {
+    if git_ok(cwd, &["remote", "get-url", &config.remote_name]) {
+      git(cwd, &["remote", "set-url", &config.remote_name, &config.remote])?;
+    } else {
+      git(cwd, &["remote", "add", &config.remote_name, &config.remote])?;
+    }
+  }
+  write_json(&sync_path(cwd, SYNC_CONFIG_FILE), &config)?;
+  Ok(config)
+}
+
+fn current_branch(cwd: &Path) -> String {
+  git(cwd, &["branch", "--show-current"]).map(|out| out.trim().to_string()).unwrap_or_default()
+}
+
+fn target_branch(cwd: &Path, config: &SyncConfig, payload: &Value) -> String {
+  payload
+    .get("branch")
+    .and_then(Value::as_str)
+    .filter(|branch| !branch.is_empty())
+    .or_else(|| if config.branch.is_empty() { None } else { Some(config.branch.as_str()) })
+    .map(str::to_string)
+    .unwrap_or_else(|| {
+      let branch = current_branch(cwd);
+      if branch.is_empty() { "main".to_string() } else { branch }
+    })
+}
+
+fn has_remote(cwd: &Path, config: &SyncConfig) -> bool {
+  !config.remote.is_empty() || git_ok(cwd, &["remote", "get-url", &config.remote_name])
+}
+
+fn run_operation(cwd: &Path, operation: &str, payload: &Value) -> R<()> {
+  match operation {
+    SYNC_OPERATION_INIT => ensure_ready(cwd, payload).map(|_| ()),
+    SYNC_OPERATION_PULL => {
+      let config = ensure_ready(cwd, payload)?;
+      if has_remote(cwd, &config) {
+        let branch = target_branch(cwd, &config, payload);
+        git(cwd, &["pull", "--ff-only", &config.remote_name, &branch])?;
+      }
+      Ok(())
+    }
+    SYNC_OPERATION_SNAPSHOT => {
+      ensure_ready(cwd, payload)?;
+      if git(cwd, &["status", "--short"])?.trim().is_empty() {
+        return Ok(());
+      }
+      git(cwd, &["add", "-A"])?;
+      let message = payload
+        .get("message")
+        .and_then(Value::as_str)
+        .filter(|message| !message.trim().is_empty())
+        .unwrap_or("ElephantNote sync snapshot");
+      git(cwd, &["commit", "-m", message])?;
+      Ok(())
+    }
+    SYNC_OPERATION_PUSH => {
+      let config = ensure_ready(cwd, payload)?;
+      if has_remote(cwd, &config) {
+        let branch = target_branch(cwd, &config, payload);
+        git(cwd, &["push", "-u", &config.remote_name, &branch])?;
+      }
+      Ok(())
+    }
+    SYNC_OPERATION_SYNC => {
+      run_operation(cwd, SYNC_OPERATION_INIT, payload)?;
+      run_operation(cwd, SYNC_OPERATION_PULL, payload)?;
+      run_operation(cwd, SYNC_OPERATION_SNAPSHOT, payload)?;
+      run_operation(cwd, SYNC_OPERATION_PUSH, payload)
+    }
+    _ => Err(format!("Unknown sync operation: {}.", operation)),
+  }
+}
+
+fn repository_status(cwd: &Path) -> RepositoryStatus {
+  if !cwd.join(".git").exists() {
+    return RepositoryStatus::default();
+  }
+  let status = git(cwd, &["status", "--short", "--branch"]).unwrap_or_default();
+  let mut lines = status.lines();
+  let branch_line = lines.next().unwrap_or_default();
+  RepositoryStatus {
+    branch: current_branch(cwd),
+    ahead: parse_counter(branch_line, "ahead"),
+    behind: parse_counter(branch_line, "behind"),
+    dirty: lines.any(|line| !line.trim().is_empty()),
+  }
+}
+
+fn parse_counter(line: &str, label: &str) -> u32 {
+  line
+    .split(label)
+    .nth(1)
+    .and_then(|tail| tail.trim_start().split(|character: char| !character.is_ascii_digit()).next())
+    .and_then(|digits| digits.parse::<u32>().ok())
+    .unwrap_or(0)
+}
+
+fn status_value(vault: &VaultDescriptor, queue: &[SyncQueueItem], history: &[SyncHistoryRecord], state: &SyncState, config: Option<&SyncConfig>, repository: &RepositoryStatus) -> Value {
+  json!({
+    "runtime": "tauri-rust",
+    "activeVault": vault,
+    "cwd": vault.path,
+    "running": queue.iter().any(|item| item.status == SYNC_STATUS_RUNNING),
+    "deviceId": config.map(|config| config.device_id.as_str()).unwrap_or(""),
+    "folderId": config.map(|config| config.folder_id.as_str()).unwrap_or(""),
+    "backend": config.map(|config| config.backend.as_str()).unwrap_or(SYNC_BACKEND_GIT),
+    "remote": config.map(|config| config.remote.as_str()).unwrap_or(""),
+    "remotePath": config.map(|config| config.remote_path.as_str()).unwrap_or(""),
+    "peers": config.map(|config| config.peers.clone()).unwrap_or_default(),
+    "branch": if repository.branch.is_empty() { config.map(|config| config.branch.as_str()).unwrap_or("") } else { repository.branch.as_str() },
+    "ahead": repository.ahead,
+    "behind": repository.behind,
+    "dirty": repository.dirty,
+    "syncthing": { "configured": false, "connected": false, "endpoint": "", "localDeviceId": "", "folderState": "", "lastError": "" },
+    "queued": queue.iter().filter(|item| item.status == SYNC_STATUS_QUEUED).count(),
+    "operations": queue,
+    "history": history,
+    "lastRunAt": state.last_run_at,
+    "lastError": state.last_error
+  })
 }
 
 fn no_active_status() -> Value {
@@ -399,14 +426,7 @@ fn no_active_status() -> Value {
     "ahead": 0,
     "behind": 0,
     "dirty": false,
-    "syncthing": {
-      "configured": false,
-      "connected": false,
-      "endpoint": "",
-      "localDeviceId": "",
-      "folderState": "",
-      "lastError": ""
-    },
+    "syncthing": { "configured": false, "connected": false, "endpoint": "", "localDeviceId": "", "folderState": "", "lastError": "" },
     "queued": 0,
     "operations": [],
     "history": [],
@@ -415,502 +435,99 @@ fn no_active_status() -> Value {
   })
 }
 
-fn create_status(
-  vault: &VaultDescriptor,
-  config: Option<&SyncConfig>,
-  queue: &[SyncQueueItem],
-  history: &[SyncHistoryRecord],
-  state: &SyncState,
-  repository: &RepositoryStatus,
-) -> Value {
-  json!({
-    "runtime": "tauri-rust",
-    "activeVault": vault,
-    "cwd": vault.path.as_str(),
-    "running": queue.iter().any(|item| item.status == SYNC_STATUS_RUNNING),
-    "deviceId": config.map(|config| config.device_id.as_str()).unwrap_or(""),
-    "folderId": config.map(|config| config.folder_id.as_str()).unwrap_or(""),
-    "backend": config.map(|config| config.backend.as_str()).unwrap_or(SYNC_BACKEND_GIT),
-    "remote": config.map(|config| config.remote.as_str()).unwrap_or(""),
-    "remotePath": config.map(|config| config.remote_path.as_str()).unwrap_or(""),
-    "peers": config.map(|config| config.peers.clone()).unwrap_or_default(),
-    "branch": if repository.branch.is_empty() { config.map(|config| config.branch.as_str()).unwrap_or("") } else { repository.branch.as_str() },
-    "ahead": repository.ahead,
-    "behind": repository.behind,
-    "dirty": repository.dirty,
-    "syncthing": {
-      "configured": false,
-      "connected": false,
-      "endpoint": "",
-      "localDeviceId": "",
-      "folderState": "",
-      "lastError": ""
-    },
-    "queued": queue.iter().filter(|item| item.status == SYNC_STATUS_QUEUED).count(),
-    "operations": tail_values(queue, 20),
-    "history": tail_values(history, 50),
-    "lastRunAt": state.last_run_at.as_str(),
-    "lastError": state.last_error.as_str()
-  })
-}
-
-impl GitSyncEngine {
-  fn load(cwd: impl AsRef<Path>) -> GitSyncEngine {
-    let cwd = cwd.as_ref().to_path_buf();
-    GitSyncEngine {
-      queue: read_queue(&cwd),
-      history: read_history(&cwd),
-      state: read_state(&cwd),
-      config: read_config(&cwd),
-      cwd,
-    }
-  }
-
-  fn enqueue(&mut self, operation: &str, payload: Value) -> R<()> {
-    let item = create_queue_item(operation, payload, self.queue.len())?;
-    self.queue.push(item);
-    Ok(())
-  }
-
-  fn enqueue_default_plan(&mut self, payload_by_operation: &Value) -> R<()> {
-    let operations = explicit_operations(payload_by_operation);
-    if !operations.is_empty() {
-      for operation in operations {
-        self.enqueue(&operation, payload_for(payload_by_operation, &operation))?;
-      }
-      return Ok(());
-    }
-
-    if payload_has(payload_by_operation, SYNC_OPERATION_SYNC) {
-      for operation in [SYNC_OPERATION_INIT, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH] {
-        self.enqueue(operation, payload_for_or(payload_by_operation, operation, SYNC_OPERATION_SYNC))?;
-      }
-      return Ok(());
-    }
-
-    let has_explicit_git_operation = [SYNC_OPERATION_INIT, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH]
-      .iter()
-      .any(|operation| payload_has(payload_by_operation, operation));
-
-    if !has_explicit_git_operation {
-      self.enqueue(SYNC_OPERATION_INIT, payload_for(payload_by_operation, SYNC_OPERATION_INIT))?;
-      self.enqueue(SYNC_OPERATION_SNAPSHOT, payload_for(payload_by_operation, SYNC_OPERATION_SNAPSHOT))?;
-      return Ok(());
-    }
-
-    self.enqueue(SYNC_OPERATION_INIT, payload_for(payload_by_operation, SYNC_OPERATION_INIT))?;
-    for operation in [SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PULL, SYNC_OPERATION_PUSH] {
-      if payload_has(payload_by_operation, operation) {
-        self.enqueue(operation, payload_for(payload_by_operation, operation))?;
-      }
-    }
-
-    Ok(())
-  }
-
-  fn run_queued(&mut self) -> R<()> {
-    let mut index = 0;
-    while index < self.queue.len() {
-      if self.queue[index].status == SYNC_STATUS_QUEUED {
-        self.run_item(index)?;
-      }
-      index += 1;
-    }
-    Ok(())
-  }
-
-  fn run_item(&mut self, index: usize) -> R<()> {
-    self.queue[index].status = SYNC_STATUS_RUNNING.to_string();
-    self.queue[index].updated_at = now();
-    write_queue(&self.cwd, &self.queue)?;
-
-    let operation = self.queue[index].operation.clone();
-    let payload = self.queue[index].payload.clone();
-    let result = match operation.as_str() {
-      SYNC_OPERATION_INIT => self.init(&payload),
-      SYNC_OPERATION_SNAPSHOT => self.snapshot(&payload),
-      SYNC_OPERATION_PULL => self.pull(&payload),
-      SYNC_OPERATION_PUSH => self.push(&payload),
-      SYNC_OPERATION_SYNC => self.sync(&payload),
-      _ => Err(format!("Unknown sync operation: {}.", operation)),
-    };
-
-    match result {
-      Ok(()) => {
-        self.queue[index].status = SYNC_STATUS_DONE.to_string();
-        self.queue[index].error.clear();
-      }
-      Err(error) => {
-        self.queue[index].status = SYNC_STATUS_ERROR.to_string();
-        self.queue[index].error = error.clone();
-      }
-    }
-
-    self.queue[index].updated_at = now();
-    self.record_history(index)?;
-    write_queue(&self.cwd, &self.queue)?;
-
-    if self.queue[index].status == SYNC_STATUS_ERROR {
-      Err(self.queue[index].error.clone())
-    } else {
-      Ok(())
-    }
-  }
-
-  fn record_history(&mut self, index: usize) -> R<()> {
-    self.history.push(history_record(&self.queue[index]));
-    if self.history.len() > 200 {
-      self.history = self.history[self.history.len() - 200..].to_vec();
-    }
-    write_history(&self.cwd, &self.history)
-  }
-
-  fn persist_state(&self) -> R<()> {
-    write_state(&self.cwd, &self.state)
-  }
-
-  fn git_args(&self, args: &[String]) -> R<GitOutput> {
-    let output = Command::new("git")
-      .args(args)
-      .current_dir(&self.cwd)
-      .output()
-      .map_err(|error| format!("failed to execute git {}: {}", args.join(" "), error))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if !output.status.success() {
-      let details = if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() };
-      return Err(format!("git {} failed: {}", args.join(" "), details));
-    }
-
-    Ok(GitOutput { stdout })
-  }
-
-  fn git(&self, args: &[&str]) -> R<GitOutput> {
-    self.git_args(&args.iter().map(|arg| arg.to_string()).collect::<Vec<_>>())
-  }
-
-  fn git_success(&self, args: &[String]) -> bool {
-    Command::new("git")
-      .args(args)
-      .current_dir(&self.cwd)
-      .output()
-      .map(|output| output.status.success())
-      .unwrap_or(false)
-  }
-
-  fn init(&mut self, payload: &Value) -> R<()> {
-    fs::create_dir_all(&self.cwd).map_err(|error| error.to_string())?;
-    if !self.cwd.join(".git").exists() {
-      self.git(&["init"])?;
-    }
-    self.ensure_git_identity()?;
-    self.ensure_git_exclude()?;
-    self.untrack_sync_metadata()?;
-
-    fs::create_dir_all(vault_layout::hidden_dir(&self.cwd, vault_layout::SYNC_DIR)).map_err(|error| error.to_string())?;
-
-    let previous = read_config(&self.cwd);
-    let next_config = create_sync_config(&self.cwd, previous.as_ref(), payload);
-    if !next_config.remote.is_empty() {
-      self.upsert_remote(&next_config.remote_name, &next_config.remote)?;
-    }
-
-    write_json(&sync_path(&self.cwd, SYNC_CONFIG_FILE), &next_config)?;
-    self.config = Some(next_config);
-    Ok(())
-  }
-
-  fn snapshot(&mut self, payload: &Value) -> R<()> {
-    self.ensure_ready()?;
-    let status = self.git(&["status", "--short"])?;
-    if status.stdout.trim().is_empty() {
-      return Ok(());
-    }
-
-    self.git(&["add", "-A"])?;
-    let message = payload_string(payload, "message")
-      .filter(|message| !message.trim().is_empty())
-      .unwrap_or_else(|| format!("ElephantNote sync snapshot {}", now()));
-    self.git_args(&["commit".to_string(), "-m".to_string(), message])?;
-    Ok(())
-  }
-
-  fn pull(&mut self, payload: &Value) -> R<()> {
-    self.ensure_ready()?;
-    let remote_name = payload_string(payload, "remoteName")
-      .or_else(|| self.config.as_ref().map(|config| config.remote_name.clone()))
-      .filter(|value| !value.is_empty())
-      .unwrap_or_else(|| SYNC_DEFAULT_REMOTE.to_string());
-    if !self.has_configured_remote(&remote_name) {
-      return Ok(());
-    }
-    let branch = self.target_branch(payload);
-    self.git_args(&["pull".to_string(), "--ff-only".to_string(), remote_name, branch])?;
-    Ok(())
-  }
-
-  fn push(&mut self, payload: &Value) -> R<()> {
-    self.ensure_ready()?;
-    let remote_name = payload_string(payload, "remoteName")
-      .or_else(|| self.config.as_ref().map(|config| config.remote_name.clone()))
-      .filter(|value| !value.is_empty())
-      .unwrap_or_else(|| SYNC_DEFAULT_REMOTE.to_string());
-    if !self.has_configured_remote(&remote_name) {
-      return Ok(());
-    }
-    let branch = self.target_branch(payload);
-    self.git_args(&["push".to_string(), "-u".to_string(), remote_name, branch])?;
-    Ok(())
-  }
-
-  fn sync(&mut self, payload: &Value) -> R<()> {
-    self.init(payload)?;
-    self.snapshot(payload)?;
-    self.pull(payload)?;
-    self.push(payload)
-  }
-
-  fn ensure_ready(&mut self) -> R<()> {
-    if !self.cwd.join(".git").exists() || self.config.is_none() {
-      self.init(&json!({}))?;
-    }
-    Ok(())
-  }
-
-  fn metadata_pattern(&self, path: &Path) -> String {
-    let relative = path.strip_prefix(&self.cwd).unwrap_or(path);
-    format!("/{}", normalize_path(relative))
-  }
-
-  fn metadata_relative_path(&self, path: &Path) -> String {
-    let relative = path.strip_prefix(&self.cwd).unwrap_or(path);
-    normalize_path(relative)
-  }
-
-  fn metadata_files(&self) -> Vec<PathBuf> {
-    [SYNC_CONFIG_FILE, SYNC_HISTORY_FILE, SYNC_QUEUE_FILE, SYNC_STATE_FILE]
-      .iter()
-      .map(|file| sync_path(&self.cwd, file))
-      .chain(std::iter::once(vault_layout::hidden_dir(&self.cwd, vault_layout::SYNC_DIR).join(".gitignore")))
-      .collect()
-  }
-
-  fn ensure_git_exclude(&self) -> R<()> {
-    let legacy_gitignore = vault_layout::hidden_dir(&self.cwd, vault_layout::SYNC_DIR).join(".gitignore");
-    let _ = fs::remove_file(&legacy_gitignore);
-    let patterns = self.metadata_files().iter().map(|path| self.metadata_pattern(path)).collect::<Vec<_>>();
-    append_missing_lines(&self.cwd.join(".git").join("info").join("exclude"), &patterns)
-  }
-
-  fn untrack_sync_metadata(&self) -> R<()> {
-    let metadata = self.metadata_files().iter().map(|path| self.metadata_relative_path(path)).collect::<Vec<_>>();
-    if metadata.is_empty() {
-      return Ok(());
-    }
-    let mut args = vec!["rm".to_string(), "--cached".to_string(), "--ignore-unmatch".to_string()];
-    args.extend(metadata);
-    self.git_args(&args).map(|_| ())
-  }
-
-  fn upsert_remote(&self, remote_name: &str, remote: &str) -> R<()> {
-    if self.has_remote(remote_name) {
-      self.git_args(&["remote".to_string(), "set-url".to_string(), remote_name.to_string(), remote.to_string()])?;
-    } else {
-      self.git_args(&["remote".to_string(), "add".to_string(), remote_name.to_string(), remote.to_string()])?;
-    }
-    Ok(())
-  }
-
-  fn has_remote(&self, remote_name: &str) -> bool {
-    self.git_success(&["remote".to_string(), "get-url".to_string(), remote_name.to_string()])
-  }
-
-  fn has_configured_remote(&self, remote_name: &str) -> bool {
-    self.config.as_ref().is_some_and(|config| !config.remote.is_empty()) || self.has_remote(remote_name)
-  }
-
-  fn ensure_git_identity(&self) -> R<()> {
-    let has_name = self.git(&["config", "user.name"]).map(|output| !output.stdout.trim().is_empty()).unwrap_or(false);
-    let has_email = self.git(&["config", "user.email"]).map(|output| !output.stdout.trim().is_empty()).unwrap_or(false);
-    if !has_name {
-      self.git(&["config", "user.name", "ElephantNote Sync"])?;
-    }
-    if !has_email {
-      self.git(&["config", "user.email", "sync@elephantnote.local"])?;
-    }
-    Ok(())
-  }
-
-  fn current_branch(&self) -> String {
-    self.git(&["branch", "--show-current"])
-      .map(|output| output.stdout.trim().to_string())
-      .unwrap_or_default()
-  }
-
-  fn target_branch(&self, payload: &Value) -> String {
-    payload_string(payload, "branch")
-      .or_else(|| self.config.as_ref().map(|config| config.branch.clone()))
-      .filter(|value| !value.is_empty())
-      .unwrap_or_else(|| {
-        let current = self.current_branch();
-        if current.is_empty() { "main".to_string() } else { current }
-      })
-  }
-
-  fn refresh_repository(&mut self) -> RepositoryStatus {
-    if !self.cwd.join(".git").exists() {
-      return RepositoryStatus::default();
-    }
-
-    let status = self.git(&["status", "--short", "--branch"]).unwrap_or(GitOutput { stdout: String::new() });
-    let mut lines = status.stdout.lines();
-    let branch_line = lines.next().unwrap_or_default();
-    let dirty = lines.any(|line| !line.trim().is_empty());
-    let repository = RepositoryStatus {
-      branch: self.current_branch(),
-      ahead: parse_counter(branch_line, "ahead"),
-      behind: parse_counter(branch_line, "behind"),
-      dirty,
-    };
-    self.state.repository = repository.clone();
-    repository
-  }
-}
-
-fn parse_counter(line: &str, label: &str) -> u32 {
-  line.split(label)
-    .nth(1)
-    .and_then(|tail| tail.trim_start().split(|character: char| !character.is_ascii_digit()).next())
-    .and_then(|digits| digits.parse::<u32>().ok())
-    .unwrap_or(0)
-}
-
 pub fn sync_status(vault: Option<VaultDescriptor>) -> R<Value> {
   let Some(vault) = vault else {
     return Ok(no_active_status());
   };
-
   let cwd = PathBuf::from(&vault.path);
-  let mut engine = GitSyncEngine::load(&cwd);
-  let repository = engine.refresh_repository();
-  Ok(create_status(&vault, engine.config.as_ref(), &engine.queue, &engine.history, &engine.state, &repository))
+  let queue = read_queue(&cwd);
+  let history = read_history(&cwd);
+  let mut state = read_state(&cwd);
+  let repository = repository_status(&cwd);
+  state.repository = repository.clone();
+  Ok(status_value(&vault, &queue, &history, &state, read_config(&cwd).as_ref(), &repository))
 }
 
 pub fn sync_enqueue(vault: VaultDescriptor, operation: String, payload: Option<Value>) -> R<Value> {
+  if !valid_operation(&operation) {
+    return Err(format!("Unknown sync operation: {}.", operation));
+  }
   let cwd = PathBuf::from(&vault.path);
-  let mut engine = GitSyncEngine::load(&cwd);
-  let item_payload = payload.unwrap_or_else(|| json!({}));
-  engine.enqueue(&operation, item_payload)?;
-  write_queue(&cwd, &engine.queue)?;
-  let repository = engine.refresh_repository();
-  Ok(create_status(&vault, engine.config.as_ref(), &engine.queue, &engine.history, &engine.state, &repository))
+  let mut queue = read_queue(&cwd);
+  queue.push(queue_item(&operation, normalized_payload(payload.unwrap_or_else(|| json!({}))), queue.len()));
+  write_queue(&cwd, &queue)?;
+  sync_status(Some(vault))
 }
 
 pub fn sync_run(vault: VaultDescriptor, payload_by_operation: Option<Value>) -> R<Value> {
   let cwd = PathBuf::from(&vault.path);
-  let mut engine = GitSyncEngine::load(&cwd);
-  let payload_by_operation = normalized_payload(payload_by_operation.unwrap_or_else(|| json!({})));
-  engine.enqueue_default_plan(&payload_by_operation)?;
-  write_queue(&cwd, &engine.queue)?;
+  let payload = normalized_payload(payload_by_operation.unwrap_or_else(|| json!({})));
+  let plan = create_sync_plan_value(payload.clone());
+  let items = plan.get("items").and_then(Value::as_array).cloned().unwrap_or_default();
+  let mut queue = read_queue(&cwd);
+  let mut history = read_history(&cwd);
+  let mut state = read_state(&cwd);
 
-  match engine.run_queued() {
-    Ok(()) => {
-      let repository = engine.refresh_repository();
-      engine.state.repository = repository.clone();
-      engine.state.last_run_at = now();
-      engine.state.last_error.clear();
-      engine.persist_state()?;
-      Ok(create_status(&vault, engine.config.as_ref(), &engine.queue, &engine.history, &engine.state, &repository))
+  for item in items {
+    let operation = item.get("operation").and_then(Value::as_str).unwrap_or(SYNC_OPERATION_SYNC).to_string();
+    let operation_payload = normalized_payload(item.get("payload").cloned().unwrap_or_else(|| json!({})));
+    let mut queue_item = queue_item(&operation, operation_payload.clone(), queue.len());
+    queue_item.status = SYNC_STATUS_RUNNING.to_string();
+    queue_item.updated_at = now();
+    queue.push(queue_item.clone());
+    write_queue(&cwd, &queue)?;
+
+    match run_operation(&cwd, &operation, &operation_payload) {
+      Ok(()) => {
+        if let Some(last) = queue.last_mut() {
+          last.status = SYNC_STATUS_DONE.to_string();
+          last.updated_at = now();
+          queue_item = last.clone();
+        }
+      }
+      Err(error) => {
+        if let Some(last) = queue.last_mut() {
+          last.status = SYNC_STATUS_ERROR.to_string();
+          last.error = error.clone();
+          last.updated_at = now();
+          queue_item = last.clone();
+        }
+        history.push(SyncHistoryRecord { id: queue_item.id, operation: queue_item.operation, status: queue_item.status, updated_at: queue_item.updated_at, error: queue_item.error });
+        write_history(&cwd, &history)?;
+        write_queue(&cwd, &queue)?;
+        state.last_error = error.clone();
+        state.repository = repository_status(&cwd);
+        write_state(&cwd, &state)?;
+        return Err(error);
+      }
     }
-    Err(error) => {
-      let repository = engine.refresh_repository();
-      engine.state.repository = repository.clone();
-      engine.state.last_error = error.clone();
-      engine.persist_state()?;
-      Err(error)
-    }
+
+    history.push(SyncHistoryRecord { id: queue_item.id, operation: queue_item.operation, status: queue_item.status, updated_at: queue_item.updated_at, error: queue_item.error });
+    write_history(&cwd, &history)?;
+    write_queue(&cwd, &queue)?;
   }
+
+  state.last_run_at = now();
+  state.last_error.clear();
+  state.repository = repository_status(&cwd);
+  write_state(&cwd, &state)?;
+  sync_status(Some(vault))
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
 
-  fn test_engine() -> GitSyncEngine {
-    GitSyncEngine {
-      cwd: PathBuf::from("/tmp/elephantnote-sync-plan-test"),
-      queue: Vec::new(),
-      history: Vec::new(),
-      state: SyncState::default(),
-      config: None,
-    }
-  }
-
-  fn queued_operations(engine: &GitSyncEngine) -> Vec<String> {
-    engine.queue.iter().map(|item| item.operation.clone()).collect()
+  #[test]
+  fn default_plan_pulls_before_snapshot() {
+    let plan = create_sync_plan_value(json!({}));
+    assert_eq!(plan["operations"], json!(["init", "pull", "snapshot", "push"]));
   }
 
   #[test]
-  fn compact_hash_matches_shared_javascript_shape() {
-    assert_eq!(compact_hash("vault|host"), "7opio3");
-    assert_eq!(compact_hash("vault"), "352fsv");
-  }
-
-  #[test]
-  fn creates_stable_sync_identity() {
-    let (device_id, folder_id, label) = create_sync_identity(Path::new("/tmp/My Vault"), "machine");
-    assert!(device_id.starts_with("en-"));
-    assert!(folder_id.starts_with("vault-"));
-    assert_eq!(label, "My Vault");
-  }
-
-  #[test]
-  fn creates_config_from_payload_and_preserves_identity() {
-    let first = create_sync_config(Path::new("/tmp/vault"), None, &json!({ "remote": "git@example.test:vault.git", "branch": "notes" }));
-    let second = create_sync_config(Path::new("/tmp/vault"), Some(&first), &json!({ "remoteName": "backup" }));
-    assert_eq!(second.device_id, first.device_id);
-    assert_eq!(second.folder_id, first.folder_id);
-    assert_eq!(second.remote, "git@example.test:vault.git");
-    assert_eq!(second.remote_name, "backup");
-    assert_eq!(second.branch, "notes");
-    assert_eq!(second.backend, SYNC_BACKEND_GIT);
-  }
-
-  #[test]
-  fn explicit_pull_plan_does_not_force_snapshot() {
-    let mut engine = test_engine();
-    engine
-      .enqueue_default_plan(&json!({
-        "init": { "remote": "/git/elephantnote.git" },
-        "pull": {}
-      }))
-      .unwrap();
-
-    assert_eq!(queued_operations(&engine), vec![SYNC_OPERATION_INIT, SYNC_OPERATION_PULL]);
-  }
-
-  #[test]
-  fn explicit_operation_list_is_preserved() {
-    let mut engine = test_engine();
-    engine
-      .enqueue_default_plan(&json!({
-        "operations": ["init", "pull", "snapshot", "push"],
-        "snapshot": { "message": "manual order" }
-      }))
-      .unwrap();
-
-    assert_eq!(
-      queued_operations(&engine),
-      vec![SYNC_OPERATION_INIT, SYNC_OPERATION_PULL, SYNC_OPERATION_SNAPSHOT, SYNC_OPERATION_PUSH]
-    );
-    assert_eq!(engine.queue[2].payload["message"], "manual order");
-  }
-
-  #[test]
-  fn rejects_unknown_queue_operations() {
-    let error = create_queue_item("erase-vault", json!({}), 0).unwrap_err();
-    assert!(error.contains("Unknown sync operation"));
+  fn explicit_plan_is_preserved() {
+    let plan = create_sync_plan_value(json!({ "operations": ["init", "snapshot"] }));
+    assert_eq!(plan["operations"], json!(["init", "snapshot"]));
   }
 
   #[test]

@@ -16,4 +16,14 @@ describe('CI workflow guards', () => {
     expect(workflow.slice(checkIndex, testIndex)).not.toContain('continue-on-error: true')
     expect(workflow.slice(checkIndex, testIndex)).toContain('cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features')
   })
+
+  it('keeps dependency setup resilient to stale pnpm lockfiles', () => {
+    const setup = read('.github/actions/setup/action.yml')
+
+    expect(setup).toContain('pnpm install --frozen-lockfile --ignore-scripts || {')
+    expect(setup).toContain('pnpm install --no-frozen-lockfile --ignore-scripts')
+    expect(setup.indexOf('pnpm install --frozen-lockfile --ignore-scripts')).toBeLessThan(
+      setup.indexOf('pnpm install --no-frozen-lockfile --ignore-scripts')
+    )
+  })
 })

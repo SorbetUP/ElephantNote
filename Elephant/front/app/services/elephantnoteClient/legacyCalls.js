@@ -86,6 +86,7 @@ export const LEGACY_CALLS = {
   'programs.set': (payload) => getBridge()?.programs?.set?.(payload),
   'programs.run': (payload) => getBridge()?.programs?.run?.(payload),
   'sync.status': () => getBridge()?.sync?.status?.(),
+  'sync.plan': (payload) => getBridge()?.sync?.plan?.(payload),
   'sync.enqueue': ({ operation, payload }) => getBridge()?.sync?.enqueue?.(operation, payload),
   'sync.run': (payload) => getBridge()?.sync?.run?.(payload)
 }

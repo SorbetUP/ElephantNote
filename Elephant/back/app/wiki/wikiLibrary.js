@@ -9,9 +9,20 @@ const slugify = (value = '') =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'topic'
 
+const getNodePath = (node = {}) => String(node.relativePath || node.path || node.id || '')
+
+const isNoteLikeNode = (node = {}) => {
+  const kind = String(node.kind || node.type || '').toLowerCase()
+  const nodePath = getNodePath(node)
+  if (!nodePath) return false
+  if (kind === 'folder' || kind === 'directory') return false
+  if (kind === 'note') return true
+  return /\.md$/i.test(nodePath)
+}
+
 const createCitation = (node = {}) => ({
-  path: String(node.relativePath || node.id || ''),
-  title: String(node.title || node.relativePath || node.id || 'Untitled'),
+  path: getNodePath(node),
+  title: String(node.title || node.relativePath || node.path || node.id || 'Untitled'),
   excerpt: String(node.summary || node.plainText || '').trim(),
   updatedAt: String(node.updatedAt || ''),
   kind: String(node.kind || 'note'),
@@ -22,7 +33,7 @@ const createCitation = (node = {}) => ({
 
 const toNodeMap = (graph = {}) => {
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : []
-  return new Map(nodes.map((node) => [String(node.relativePath || node.id || ''), node]))
+  return new Map(nodes.map((node) => [getNodePath(node), node]))
 }
 
 const createGraphWikiSummary = ({ topic, nodeCount, semanticLinkCount, sourceCount }) => {
@@ -43,14 +54,15 @@ export const buildWikiProposalsFromGraph = ({
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : []
   const edges = Array.isArray(graph?.edges) ? graph.edges : []
   const clusters = Array.isArray(graph?.clusters) ? graph.clusters : []
-  const noteNodes = nodes.filter((node) => node?.kind === 'note' || node?.relativePath || node?.id)
-  const byPath = new Map(noteNodes.map((node) => [String(node.relativePath || node.id), node]))
+  const noteNodes = nodes.filter(isNoteLikeNode)
+  const byPath = new Map(noteNodes.map((node) => [getNodePath(node), node]))
   const semanticEdges = edges.filter((edge) => edge?.type === 'semantic')
   const proposals = []
 
   for (const cluster of clusters) {
-    const clusterPaths = Array.isArray(cluster?.paths) ? cluster.paths : []
-    const clusterNodes = clusterPaths.map((relativePath) => byPath.get(String(relativePath))).filter(Boolean)
+    const clusterPaths = Array.isArray(cluster?.paths) ? cluster.paths.map((relativePath) => String(relativePath || '')) : []
+    const clusterPathSet = new Set(clusterPaths)
+    const clusterNodes = clusterPaths.map((relativePath) => byPath.get(relativePath)).filter(Boolean)
     if (!clusterNodes.length) continue
 
     const citations = clusterNodes
@@ -60,7 +72,7 @@ export const buildWikiProposalsFromGraph = ({
     const topic = String(cluster.label || cluster.id || citations[0]?.title || 'Wiki topic').trim()
     const sourceCount = clusterNodes.reduce((total, node) => total + Number(node.sourceCount || node.sources?.length || 0), 0)
     const semanticLinkCount = semanticEdges.filter((edge) =>
-      clusterPaths.includes(edge.source) || clusterPaths.includes(edge.target)
+      clusterPathSet.has(String(edge.source || '')) || clusterPathSet.has(String(edge.target || ''))
     ).length
 
     proposals.push(normalizeWikiRecord({
@@ -104,10 +116,10 @@ export const buildWikiSourceInsight = ({
   const edges = Array.isArray(graph?.edges) ? graph.edges : []
   const clusters = Array.isArray(graph?.clusters) ? graph.clusters : []
   const byPath = toNodeMap(graph)
-  const node = byPath.get(lookupPath) || nodes.find((item) => String(item.relativePath || item.id || '') === lookupPath) || null
+  const node = byPath.get(lookupPath) || nodes.find((item) => getNodePath(item) === lookupPath) || null
   const selectedSources = Array.isArray(record?.citations) ? record.citations : []
   const relatedNodes = []
-  const byId = new Map(nodes.map((item) => [String(item.relativePath || item.id || ''), item]))
+  const byId = new Map(nodes.map((item) => [getNodePath(item), item]))
 
   for (const edge of edges) {
     if (edge.source !== lookupPath && edge.target !== lookupPath) continue
@@ -115,8 +127,8 @@ export const buildWikiSourceInsight = ({
     const otherNode = byId.get(String(otherPath || ''))
     if (!otherNode) continue
     relatedNodes.push({
-      id: String(otherNode.relativePath || otherNode.id || ''),
-      title: String(otherNode.title || otherNode.relativePath || otherNode.id || 'Untitled'),
+      id: getNodePath(otherNode),
+      title: String(otherNode.title || otherNode.relativePath || otherNode.path || otherNode.id || 'Untitled'),
       summary: String(otherNode.summary || ''),
       kind: String(otherNode.kind || 'note'),
       linkType: String(edge.type || 'related'),
@@ -126,12 +138,12 @@ export const buildWikiSourceInsight = ({
   }
 
   const cluster = clusters.find((item) =>
-    Array.isArray(item?.paths) && item.paths.includes(lookupPath)
+    Array.isArray(item?.paths) && item.paths.map((clusterPath) => String(clusterPath || '')).includes(lookupPath)
   ) || null
 
   const source = node ? {
     path: lookupPath,
-    title: String(node.title || node.relativePath || node.id || 'Untitled'),
+    title: String(node.title || node.relativePath || node.path || node.id || 'Untitled'),
     summary: String(node.summary || node.plainText || '').trim(),
     kind: String(node.kind || 'note'),
     tags: Array.isArray(node.tags) ? node.tags : [],

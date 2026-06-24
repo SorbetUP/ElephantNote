@@ -40,6 +40,7 @@ for (const file of [
   '.github/workflows/tauri-ci.yml',
   '.github/workflows/sync-docker.yml',
   'test/unit/specs/main/elephantnote/syncPlan.spec.js',
+  'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   'Elephant/front/app/utils/noteCardView.js',
   'Elephant/shared/apiContracts.js',
@@ -218,6 +219,10 @@ ordered(
   'shared sync plan must keep explicit pull/push operations for multi-device sync'
 )
 has('test/unit/specs/main/elephantnote/syncPlan.spec.js', 'can pull into a second device without creating a local snapshot first', 'sync plan second-device pull regression test')
+has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'compacts completed queue items so periodic auto-sync cannot grow memory forever', 'web sync queue compaction regression test')
+has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', "expect(config.backend).toBe('git')", 'web sync git backend regression test')
+has('web/sync/WebGitSyncEngine.mjs', 'compactQueue()', 'web sync queue compaction')
+has('web/sync/WebGitSyncEngine.mjs', 'backend: SYNC_BACKENDS.GIT', 'web sync reports the git backend')
 has('web/sync/WebGitSyncEngine.mjs', 'ensureGitExclude()', 'web sync must exclude local metadata from shared git history')
 has('web/server.mjs', 'ELEPHANTNOTE_SYNC_AUTO_INTERVAL_MS', 'auto sync loop configuration')
 has('web/server.mjs', '/api/sync/auto/status', 'auto sync status endpoint')

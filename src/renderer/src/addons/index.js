@@ -1,6 +1,7 @@
 import { inject } from 'vue'
 import { ElephantAddonManager } from './AddonManager'
 import { builtinAddons } from './builtin'
+import { useAddonsStore } from '@/store/addons'
 export { ADDON_EXTENSION_POINTS } from './extensionPoints'
 export { ADDON_API_VERSION, ADDON_STATUS, normalizeAddonManifest } from './manifest'
 export { ElephantAddonManager } from './AddonManager'
@@ -31,6 +32,10 @@ export const installAddonSystem = (app, options = {}) => {
   const manager = createAddonManager(options)
   app.provide(ADDON_MANAGER_KEY, manager)
   app.config.globalProperties.$addons = manager
+
+  if (options.pinia) {
+    useAddonsStore(options.pinia).install(manager)
+  }
 
   if (typeof window !== 'undefined') {
     window.__ELEPHANT_ADDONS__ = manager

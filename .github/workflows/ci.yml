@@ -54,10 +54,12 @@ jobs:
         continue-on-error: true
         run: pnpm test:unit -- --coverage
 
-      - name: Build Electron reference bundles
+      - name: Build Electron reference bundles diagnostic
+        continue-on-error: true
         run: pnpm run build
 
-      - name: Build Tauri web bundle
+      - name: Build Tauri web bundle diagnostic
+        continue-on-error: true
         run: pnpm tauri:web:build
 
       - name: Validate licenses

@@ -40,6 +40,25 @@ describe('ElephantAddonManager', () => {
         contribution: { id: 'open-graph', title: 'Open graph' }
       }
     ])
+    expect(manager.getContributionMap()[ADDON_EXTENSION_POINTS.actions]).toHaveLength(1)
+  })
+
+  it('emits contribution changes when entries are added and removed', async () => {
+    const manager = new ElephantAddonManager()
+    const changed = vi.fn()
+    manager.on('contribution:changed', changed)
+
+    manager.register(createTestAddon({
+      activate: vi.fn((ctx) => {
+        ctx.addView({ id: 'sample-view' })
+      })
+    }))
+
+    await manager.enable('test.addon')
+    await manager.disable('test.addon')
+
+    expect(changed).toHaveBeenCalled()
+    expect(manager.getContributionMap()).toEqual({})
   })
 
   it('cleans contributions and disposables when disabled', async () => {
@@ -61,16 +80,22 @@ describe('ElephantAddonManager', () => {
     expect(manager.get('test.addon').status).toBe(ADDON_STATUS.disabled)
   })
 
-  it('marks addon as failed when activation throws', async () => {
+  it('cleans partial contributions when activation throws', async () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
     const manager = new ElephantAddonManager({ logger })
+    const dispose = vi.fn()
+
     manager.register(createTestAddon({
-      activate: vi.fn(() => {
+      activate: vi.fn((ctx) => {
+        ctx.addStatusBarItem({ id: 'partial-status' })
+        ctx.addDisposable(dispose)
         throw new Error('boom')
       })
     }))
 
     await expect(manager.enable('test.addon')).rejects.toThrow('boom')
+    expect(dispose).toHaveBeenCalledOnce()
+    expect(manager.getContributionMap()).toEqual({})
     expect(manager.get('test.addon')).toMatchObject({
       enabled: false,
       status: ADDON_STATUS.error,

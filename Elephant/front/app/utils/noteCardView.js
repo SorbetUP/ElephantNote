@@ -54,7 +54,19 @@ const stripFrontmatter = (value = '') => {
   return stripInlineFrontmatterPrefix(raw)
 }
 
-const cleanPreview = (value) => stripFrontmatter(value)
+const stripLeadingDocumentTitle = (value = '') => {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+
+  const lines = raw.split(/\r?\n/)
+  if (/^#\s+\S/.test(lines[0] || '') && lines.slice(1).some((line) => line.trim())) {
+    return lines.slice(1).join('\n').trim()
+  }
+
+  return raw.replace(/^#{1,6}\s+/, '').trim()
+}
+
+const cleanPreview = (value) => stripLeadingDocumentTitle(stripFrontmatter(value))
 
 export const getNoteCardTitle = (entry) => entry?.title?.trim() || cardTitleFromName(entry) || 'Untitled'
 
@@ -62,4 +74,4 @@ export const getNoteCardTypeLabel = (entry) => entry?.type?.trim() || 'Note'
 
 export const getNoteCardUpdatedLabel = (entry) => formatShortDate(entry?.updatedAt)
 
-export const getNoteCardExcerpt = (entry) => cleanPreview(entry?.excerpt || entry?.markdown || entry?.content).replace(/^#{1,6}\s+/, '').trim() || 'No preview yet.'
+export const getNoteCardExcerpt = (entry) => cleanPreview(entry?.excerpt || entry?.markdown || entry?.content) || 'No preview yet.'

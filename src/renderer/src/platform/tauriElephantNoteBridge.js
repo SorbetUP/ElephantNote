@@ -61,9 +61,19 @@ const writeStoredJson = (target, key, value) => {
 const defaultFeatures = () => ({ askAi: true, sitePreview: false, gitSync: false })
 const defaultAiConfig = () => ({
   localAi: { enabled: true, showModelLibraryInSidebar: true },
+  localRuntime: { llamaServerMode: 'bundled', llamaServerPath: '', llamaBaseUrl: '' },
   providers: { list: [], codex: { connected: false, mode: 'account', model: '' } },
   routes: {},
   localModelSelection: {}
+})
+const mergeAiConfig = (config = {}) => ({
+  ...defaultAiConfig(),
+  ...normalizePayload(config),
+  localAi: { ...defaultAiConfig().localAi, ...normalizePayload(config.localAi) },
+  localRuntime: { ...defaultAiConfig().localRuntime, ...normalizePayload(config.localRuntime) },
+  providers: { ...defaultAiConfig().providers, ...normalizePayload(config.providers) },
+  routes: { ...normalizePayload(config.routes) },
+  localModelSelection: { ...normalizePayload(config.localModelSelection) }
 })
 const defaultModelSelection = () => ({ embedding: '', chat: '', ocr: '' })
 
@@ -395,12 +405,12 @@ const createBridge = (target) => {
     },
 
     ai: {
-      getConfig: () => callWithLocalFallback(target, 'tauri_ai_config_get', {}, AI_CONFIG_STORAGE_KEY, defaultAiConfig()),
+      getConfig: () => callWithLocalFallback(target, 'tauri_ai_config_get', {}, AI_CONFIG_STORAGE_KEY, defaultAiConfig(), mergeAiConfig),
       setConfig: async(config = {}) => {
-        const normalized = { ...defaultAiConfig(), ...normalizePayload(config) }
+        const normalized = mergeAiConfig(config)
         try {
           const result = await invoke(target, 'tauri_ai_config_set', { config: normalized })
-          return writeStoredJson(target, AI_CONFIG_STORAGE_KEY, result || normalized)
+          return writeStoredJson(target, AI_CONFIG_STORAGE_KEY, mergeAiConfig(result || normalized))
         } catch {
           return writeStoredJson(target, AI_CONFIG_STORAGE_KEY, normalized)
         }

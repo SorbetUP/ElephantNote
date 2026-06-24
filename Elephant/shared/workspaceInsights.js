@@ -2,7 +2,22 @@ export const isNoteEntry = (entry) => (entry?.kind || entry?.type) === 'note'
 
 export const isFolderEntry = (entry) => (entry?.kind || entry?.type) === 'folder'
 
-const byNewestUpdated = (a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)
+const toTime = (value) => {
+  const time = Date.parse(value || '')
+  return Number.isFinite(time) ? time : 0
+}
+
+const byNewestUpdated = (a, b) => toTime(b.updatedAt) - toTime(a.updatedAt)
+
+const splitWorkspaceEntries = (entries = []) => {
+  const notes = []
+  const folders = []
+  for (const entry of entries || []) {
+    if (isNoteEntry(entry)) notes.push(entry)
+    else if (isFolderEntry(entry)) folders.push(entry)
+  }
+  return { notes, folders }
+}
 
 export const createRecentNoteEntries = ({
   entries = [],
@@ -10,14 +25,18 @@ export const createRecentNoteEntries = ({
   pinnedNotePaths = [],
   limit = 8
 } = {}) => {
-  const opened = openedNotes.filter((note) => note?.path)
+  const byPath = new Map()
+  for (const note of openedNotes) {
+    if (note?.path && !byPath.has(note.path)) byPath.set(note.path, note)
+  }
+
   const modified = entries
     .filter(isNoteEntry)
     .sort(byNewestUpdated)
-  const byPath = new Map()
-  for (const note of [...opened, ...modified]) {
-    if (!byPath.has(note.path)) byPath.set(note.path, note)
+  for (const note of modified) {
+    if (note?.path && !byPath.has(note.path)) byPath.set(note.path, note)
   }
+
   const pinned = new Set(pinnedNotePaths)
   return [...byPath.values()]
     .sort((a, b) => {
@@ -31,43 +50,56 @@ export const createRecentNoteEntries = ({
 
 export const createTagTopics = (entries = []) => {
   const byTag = new Map()
-  const notes = entries.filter(isNoteEntry)
-  for (const note of notes) {
+  for (const note of entries) {
+    if (!isNoteEntry(note)) continue
+    const noteUpdatedAt = note.updatedAt || ''
+    const noteUpdatedTime = toTime(noteUpdatedAt)
     for (const tag of note.tags || []) {
       if (!tag) continue
       const topic = byTag.get(tag) || {
         tag,
         notes: [],
-        updatedAt: note.updatedAt || ''
+        updatedAt: noteUpdatedAt,
+        updatedTime: noteUpdatedTime
       }
       topic.notes.push(note)
-      if (new Date(note.updatedAt || 0) > new Date(topic.updatedAt || 0)) {
-        topic.updatedAt = note.updatedAt
+      if (noteUpdatedTime > topic.updatedTime) {
+        topic.updatedAt = noteUpdatedAt
+        topic.updatedTime = noteUpdatedTime
       }
       byTag.set(tag, topic)
     }
   }
-  return [...byTag.values()].sort((a, b) => {
-    if (b.notes.length !== a.notes.length) return b.notes.length - a.notes.length
-    return a.tag.localeCompare(b.tag)
-  })
+  return [...byTag.values()]
+    .sort((a, b) => {
+      if (b.notes.length !== a.notes.length) return b.notes.length - a.notes.length
+      return a.tag.localeCompare(b.tag)
+    })
+    .map(({ updatedTime, ...topic }) => topic)
 }
 
 export const createWorkspaceStats = ({
   entries = [],
   recentNoteEntries = []
 } = {}) => {
-  const notes = entries.filter(isNoteEntry)
-  const folders = entries.filter(isFolderEntry)
+  let notes = 0
+  let folders = 0
   const tags = new Set()
-  for (const note of notes) {
-    for (const tag of note.tags || []) {
-      if (tag) tags.add(tag)
+
+  for (const entry of entries) {
+    if (isNoteEntry(entry)) {
+      notes += 1
+      for (const tag of entry.tags || []) {
+        if (tag) tags.add(tag)
+      }
+    } else if (isFolderEntry(entry)) {
+      folders += 1
     }
   }
+
   return {
-    notes: notes.length,
-    folders: folders.length,
+    notes,
+    folders,
     tags: tags.size,
     recent: recentNoteEntries.length
   }
@@ -75,8 +107,8 @@ export const createWorkspaceStats = ({
 
 export const createCalendarBuckets = (entries = []) => {
   const buckets = new Map()
-  const notes = entries.filter(isNoteEntry)
-  for (const note of notes) {
+  for (const note of entries) {
+    if (!isNoteEntry(note)) continue
     const day = String(note.updatedAt || '').slice(0, 10) || 'No date'
     const bucket = buckets.get(day) || []
     bucket.push(note)
@@ -94,8 +126,7 @@ export const createGraphModel = ({
   entries = [],
   tagTopics = createTagTopics(entries)
 } = {}) => {
-  const notes = entries.filter(isNoteEntry)
-  const folders = entries.filter(isFolderEntry)
+  const { notes, folders } = splitWorkspaceEntries(entries)
   const folderPaths = new Set(folders.map((folder) => folder.path).filter(Boolean))
   const nodes = [
     ...folders.map((folder) => ({

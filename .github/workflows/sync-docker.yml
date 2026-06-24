@@ -22,7 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./.github/actions/setup
+      - name: Show runtime versions
+        run: |
+          node --version
+          docker --version
+          git --version
 
       - name: Run two-device Docker sync smoke
-        run: pnpm test:sync:docker:pair
+        run: node scripts/sync-two-docker-smoke.mjs

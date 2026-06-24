@@ -1,0 +1,20 @@
+.en-topstrip.en-topstrip-sidebar-hidden {
+  background: var(--en-bg) !important;
+}
+
+.en-topstrip.en-topstrip-sidebar-hidden::after {
+  display: none !important;
+}
+
+.en-topstrip.en-topstrip-sidebar-hidden .en-topstrip-drag {
+  margin-left: 180px;
+}
+
+.en-graph-premium,
+.en-graph-stage,
+.en-sigma-canvas,
+.en-sigma-stage {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}

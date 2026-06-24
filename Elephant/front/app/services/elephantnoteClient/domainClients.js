@@ -98,7 +98,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   search: {
     initVault: (vaultPath) => call(API.SEARCH_INIT_VAULT, { vaultPath }),
     query: (params) => call(API.SEARCH_QUERY, params),
-    concepts: (params) => call(API.SEARCH_CONCEPTS, params),
+    concepts: (params) => getBridge()?.search?.concepts?.(toPlainObject(params)) || call(API.SEARCH_CONCEPTS, params),
     status: () => call(API.SEARCH_STATUS),
     inspect: () => call(API.SEARCH_INSPECT),
     rebuild: () => call(API.SEARCH_REBUILD),

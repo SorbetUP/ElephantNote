@@ -22,18 +22,6 @@ import {
 
 const execFileAsync = promisify(execFile)
 const MAX_QUEUE_ITEMS = 100
-const SYNC_LOCAL_METADATA_FILES = Object.freeze([
-  `${SYNC_METADATA_DIR}/${SYNC_CONFIG_FILE}`,
-  `${SYNC_METADATA_DIR}/${SYNC_HISTORY_FILE}`
-])
-const SYNC_LEGACY_LOCAL_METADATA_FILES = Object.freeze([
-  `${SYNC_LEGACY_METADATA_DIR}/${SYNC_CONFIG_FILE}`,
-  `${SYNC_LEGACY_METADATA_DIR}/${SYNC_HISTORY_FILE}`
-])
-const ALL_LOCAL_METADATA_FILES = Object.freeze([
-  ...SYNC_LOCAL_METADATA_FILES,
-  ...SYNC_LEGACY_LOCAL_METADATA_FILES
-])
 
 const pathExists = async(target) => fs.access(target).then(() => true, () => false)
 const ensureDir = async(target) => fs.mkdir(target, { recursive: true })
@@ -60,6 +48,23 @@ const normalizeQueueInput = (operationOrPlanItem = {}) => (
     : operationOrPlanItem
 )
 
+const readMetadataJson = async(metadataPath, legacyMetadataPath) => (
+  readJson(metadataPath).catch(() => readJson(legacyMetadataPath).catch(() => null))
+)
+
+const SYNC_LOCAL_METADATA_FILES = Object.freeze([
+  `${SYNC_METADATA_DIR}/${SYNC_CONFIG_FILE}`,
+  `${SYNC_METADATA_DIR}/${SYNC_HISTORY_FILE}`
+])
+const SYNC_LEGACY_LOCAL_METADATA_FILES = Object.freeze([
+  `${SYNC_LEGACY_METADATA_DIR}/${SYNC_CONFIG_FILE}`,
+  `${SYNC_LEGACY_METADATA_DIR}/${SYNC_HISTORY_FILE}`
+])
+const ALL_LOCAL_METADATA_FILES = Object.freeze([
+  ...SYNC_LOCAL_METADATA_FILES,
+  ...SYNC_LEGACY_LOCAL_METADATA_FILES
+])
+
 export class WebGitSyncEngine {
   constructor({ cwd, executor = execFileAsync } = {}) {
     this.cwd = cwd
@@ -82,7 +87,19 @@ export class WebGitSyncEngine {
   }
 
   async readMetadataJson(file) {
-    return readJson(this.metadataPath(file)).catch(() => readJson(this.legacyMetadataPath(file)).catch(() => null))
+    return readMetadataJson(this.metadataPath(file), this.legacyMetadataPath(file))
+  }
+
+  async untrackSyncMetadata() {
+    await this.git(['rm', '--cached', '--ignore-unmatch', ...ALL_LOCAL_METADATA_FILES]).catch((error) => {
+      throw new Error(`Failed to untrack local sync metadata: ${error.message || error}`)
+    })
+  }
+
+  compactQueue() {
+    const active = this.queue.filter((item) => item.status === SYNC_STATUSES.QUEUED || item.status === SYNC_STATUSES.RUNNING)
+    const completed = this.queue.filter((item) => item.status !== SYNC_STATUSES.QUEUED && item.status !== SYNC_STATUSES.RUNNING)
+    this.queue = [...completed.slice(-MAX_QUEUE_ITEMS), ...active]
   }
 
   enqueue(operationOrPlanItem) {
@@ -90,12 +107,6 @@ export class WebGitSyncEngine {
     this.queue.push(item)
     this.compactQueue()
     return item
-  }
-
-  compactQueue() {
-    const active = this.queue.filter((item) => item.status === SYNC_STATUSES.QUEUED || item.status === SYNC_STATUSES.RUNNING)
-    const completed = this.queue.filter((item) => item.status !== SYNC_STATUSES.QUEUED && item.status !== SYNC_STATUSES.RUNNING)
-    this.queue = [...completed.slice(-MAX_QUEUE_ITEMS), ...active]
   }
 
   status() {
@@ -163,8 +174,6 @@ export class WebGitSyncEngine {
     await ensureDir(this.cwd)
     if (!await pathExists(path.join(this.cwd, '.git'))) await this.git(['init'])
     await this.ensureGitIdentity()
-    await this.ensureGitExclude()
-    await this.untrackSyncMetadata()
 
     this.config = await this.readMetadataJson(SYNC_CONFIG_FILE)
     this.config = {
@@ -183,6 +192,8 @@ export class WebGitSyncEngine {
 
     if (this.config.remote) await this.upsertRemote(this.config.remoteName, this.config.remote)
     await outputJson(this.metadataPath(SYNC_CONFIG_FILE), this.config)
+    await this.ensureGitExclude()
+    await this.untrackSyncMetadata()
   }
 
   async snapshot({ message = '' } = {}) {
@@ -219,12 +230,6 @@ export class WebGitSyncEngine {
 
   async ensureGitExclude() {
     await appendMissingLines(path.join(this.cwd, '.git', 'info', 'exclude'), ALL_LOCAL_METADATA_FILES.map((file) => `/${file}`))
-  }
-
-  async untrackSyncMetadata() {
-    await this.git(['rm', '--cached', '--ignore-unmatch', ...ALL_LOCAL_METADATA_FILES]).catch((error) => {
-      throw new Error(`Failed to untrack local sync metadata: ${error.message || error}`)
-    })
   }
 
   async upsertRemote(remoteName, remote) {

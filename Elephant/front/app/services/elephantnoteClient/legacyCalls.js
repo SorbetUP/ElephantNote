@@ -1,4 +1,15 @@
 const getBridge = () => globalThis.window?.elephantnote
+const getTauriInvoke = () => globalThis.window?.__TAURI__?.core?.invoke
+const normalizePayload = (payload = {}) => (payload && typeof payload === 'object' ? payload : {})
+
+const callTauriSyncPlan = (payload = {}) => {
+  const normalizedPayload = normalizePayload(payload)
+  const invoke = getTauriInvoke()
+  if (typeof invoke === 'function') {
+    return invoke('tauri_sync_plan', { payloadByOperation: normalizedPayload })
+  }
+  return getBridge()?.sync?.plan?.(normalizedPayload)
+}
 
 export const LEGACY_CALLS = {
   'vaults.get': () => getBridge()?.getVaults?.(),
@@ -86,7 +97,7 @@ export const LEGACY_CALLS = {
   'programs.set': (payload) => getBridge()?.programs?.set?.(payload),
   'programs.run': (payload) => getBridge()?.programs?.run?.(payload),
   'sync.status': () => getBridge()?.sync?.status?.(),
-  'sync.plan': (payload) => getBridge()?.sync?.plan?.(payload),
+  'sync.plan': (payload) => callTauriSyncPlan(payload),
   'sync.enqueue': ({ operation, payload }) => getBridge()?.sync?.enqueue?.(operation, payload),
   'sync.run': (payload) => getBridge()?.sync?.run?.(payload)
 }

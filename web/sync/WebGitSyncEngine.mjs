@@ -21,6 +21,10 @@ import {
 
 const execFileAsync = promisify(execFile)
 const MAX_QUEUE_ITEMS = 100
+const SYNC_LOCAL_METADATA_FILES = Object.freeze([
+  `${SYNC_METADATA_DIR}/${SYNC_CONFIG_FILE}`,
+  `${SYNC_METADATA_DIR}/${SYNC_HISTORY_FILE}`
+])
 
 const pathExists = async(target) => fs.access(target).then(() => true, () => false)
 const ensureDir = async(target) => fs.mkdir(target, { recursive: true })
@@ -41,6 +45,12 @@ const appendMissingLines = async(target, lines) => {
   await fs.appendFile(target, `${prefix}${missing.join('\n')}\n`, 'utf8')
 }
 
+const normalizeQueueInput = (operationOrPlanItem = {}) => (
+  typeof operationOrPlanItem === 'string'
+    ? { operation: operationOrPlanItem }
+    : operationOrPlanItem
+)
+
 export class WebGitSyncEngine {
   constructor({ cwd, executor = execFileAsync } = {}) {
     this.cwd = cwd
@@ -54,8 +64,8 @@ export class WebGitSyncEngine {
     this.repository = {}
   }
 
-  enqueue(operation) {
-    const item = createSyncQueueItem(operation, new Date(), { strict: false })
+  enqueue(operationOrPlanItem) {
+    const item = createSyncQueueItem(normalizeQueueInput(operationOrPlanItem), new Date(), { strict: false })
     this.queue.push(item)
     this.compactQueue()
     return item
@@ -133,6 +143,7 @@ export class WebGitSyncEngine {
     if (!await pathExists(path.join(this.cwd, '.git'))) await this.git(['init'])
     await this.ensureGitIdentity()
     await this.ensureGitExclude()
+    await this.untrackSyncMetadata()
 
     const configPath = path.join(this.cwd, SYNC_METADATA_DIR, SYNC_CONFIG_FILE)
     this.config = await readJson(configPath).catch(() => null)
@@ -187,10 +198,13 @@ export class WebGitSyncEngine {
   }
 
   async ensureGitExclude() {
-    await appendMissingLines(path.join(this.cwd, '.git', 'info', 'exclude'), [
-      `/${SYNC_METADATA_DIR}/${SYNC_CONFIG_FILE}`,
-      `/${SYNC_METADATA_DIR}/${SYNC_HISTORY_FILE}`
-    ])
+    await appendMissingLines(path.join(this.cwd, '.git', 'info', 'exclude'), SYNC_LOCAL_METADATA_FILES.map((file) => `/${file}`))
+  }
+
+  async untrackSyncMetadata() {
+    await this.git(['rm', '--cached', '--ignore-unmatch', ...SYNC_LOCAL_METADATA_FILES]).catch((error) => {
+      throw new Error(`Failed to untrack local sync metadata: ${error.message || error}`)
+    })
   }
 
   async upsertRemote(remoteName, remote) {

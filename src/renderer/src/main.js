@@ -29,6 +29,7 @@ import Main from './Main.vue'
 
 import './assets/styles/index.css'
 import './assets/styles/printService.css'
+import 'elephant-front/styles/runtime-layout-fixes.css'
 
 // -----------------------------------------------
 

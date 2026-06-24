@@ -34,10 +34,11 @@ pub fn config_path(app: &AppHandle) -> R<PathBuf> {
 }
 
 fn mobile_default_vault(path: PathBuf) -> VaultDescriptor {
+  let normalized_path = path.to_string_lossy();
   VaultDescriptor {
     id: MOBILE_DEFAULT_VAULT_ID.to_string(),
     name: MOBILE_DEFAULT_VAULT_NAME.to_string(),
-    path: normalize_absolute_path(path.to_string_lossy()),
+    path: normalize_absolute_path(normalized_path.as_ref()),
     icon: String::new(),
     last_opened_at: now_string(),
   }
@@ -202,6 +203,12 @@ mod tests {
     assert_eq!(config.vaults[0].id, MOBILE_DEFAULT_VAULT_ID);
     assert_eq!(config.vaults[0].name, MOBILE_DEFAULT_VAULT_NAME);
     assert_eq!(config.active_vault_id, Some(MOBILE_DEFAULT_VAULT_ID.to_string()));
+  }
+
+  #[test]
+  fn mobile_default_vault_normalizes_pathbuf_lossy_text_explicitly() {
+    let vault = mobile_default_vault(PathBuf::from("C:\\Users\\noam\\Vault"));
+    assert_eq!(vault.path, "C:/Users/noam/Vault");
   }
 
   #[test]

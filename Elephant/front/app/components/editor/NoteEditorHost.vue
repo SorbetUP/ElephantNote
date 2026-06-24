@@ -115,6 +115,21 @@ const { platform } = storeToRefs(mainStore)
 const { sourceCode, textDirection } = storeToRefs(preferencesStore)
 const { currentFile } = storeToRefs(editorStore)
 
+const AUTOSAVE_POLL_MS = 1000
+const AUTOSAVE_DELAY_MS = 180
+const HEAVY_NOTE_AUTOSAVE_DELAY_MS = 700
+const HEAVY_NOTE_BYTES = 512 * 1024
+const isAutosaveDebugEnabled = () => window.localStorage.getItem('elephantnote:debugAutosave') === 'true'
+const autosaveDelayFor = (value, requestedDelay = AUTOSAVE_DELAY_MS) => {
+  if (requestedDelay === 0) return 0
+  const length = typeof value === 'string' ? value.length : 0
+  return length >= HEAVY_NOTE_BYTES ? Math.max(requestedDelay, HEAVY_NOTE_AUTOSAVE_DELAY_MS) : requestedDelay
+}
+const logAutosave = (level, message, details) => {
+  if (!isAutosaveDebugEnabled()) return
+  console[level]?.(message, details)
+}
+
 const isAddingTag = ref(false)
 const isEditingTag = ref(false)
 const editingTagIndex = ref(-1)
@@ -265,9 +280,9 @@ const refreshSavedEntries = async(notePath, result) => {
     }
   }
   try {
-    store.rootEntries = await elephantnoteClient.directory.list('')
+    store.rootEntries = await elephantnoteClient.directory.list({ relativePath: '', limit: 121, includePreview: true })
     if (parentPath === store.currentPath) {
-      store.entries = await elephantnoteClient.directory.list(store.currentPath)
+      store.entries = await elephantnoteClient.directory.list({ relativePath: store.currentPath, limit: 121, includePreview: true })
     }
   } catch (error) {
     console.warn('[elephantnote:save] unable to refresh entries after save', error)
@@ -281,7 +296,7 @@ const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.
     return false
   }
   noteSaveInFlight = true
-  console.info('[elephantnote:save] write:start', { notePath, length: nextMarkdown.length, reason })
+  logAutosave('info', '[elephantnote:save] write:start', { notePath, length: nextMarkdown.length, reason })
   try {
     const result = await elephantnoteClient.notes.write({
       relativePath: notePath,
@@ -289,7 +304,7 @@ const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.
     })
     await refreshSavedEntries(notePath, result)
     markFileSavedIfCurrent(file, notePath, nextMarkdown)
-    console.info('[elephantnote:save] write:done', { notePath, length: nextMarkdown.length, via: 'notes.write' })
+    logAutosave('info', '[elephantnote:save] write:done', { notePath, length: nextMarkdown.length, via: 'notes.write' })
     return true
   } catch (apiError) {
     console.warn('[elephantnote:save] notes.write failed; trying direct file write', { notePath, error: apiError?.message || String(apiError) })
@@ -297,7 +312,7 @@ const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.
       await window.fileUtils.writeFile(window.path.join(store.activeVault.path, notePath), nextMarkdown)
       await refreshSavedEntries(notePath, null)
       markFileSavedIfCurrent(file, notePath, nextMarkdown)
-      console.info('[elephantnote:save] write:done', { notePath, length: nextMarkdown.length, via: 'fileUtils.writeFile' })
+      logAutosave('info', '[elephantnote:save] write:done', { notePath, length: nextMarkdown.length, via: 'fileUtils.writeFile' })
       return true
     } catch (fileError) {
       console.error('[elephantnote:save] write:failed', { notePath, apiError, fileError })
@@ -316,15 +331,16 @@ const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.
   }
 }
 
-const scheduleNoteSave = (notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, delay = 120, reason = 'unknown') => {
+const scheduleNoteSave = (notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, delay = AUTOSAVE_DELAY_MS, reason = 'unknown') => {
   if (!notePath || typeof nextMarkdown !== 'string') return
   if (lastSavedNotePath === notePath && lastSavedMarkdown === nextMarkdown) return
   if (noteSaveTimer) window.clearTimeout(noteSaveTimer)
-  console.info('[elephantnote:save] schedule', { notePath, length: nextMarkdown.length, delay, reason })
+  const effectiveDelay = autosaveDelayFor(nextMarkdown, delay)
+  logAutosave('info', '[elephantnote:save] schedule', { notePath, length: nextMarkdown.length, delay: effectiveDelay, reason })
   noteSaveTimer = window.setTimeout(() => {
     noteSaveTimer = null
     void persistNoteMarkdown(notePath, nextMarkdown, file, reason)
-  }, delay)
+  }, effectiveDelay)
 }
 
 const rememberObservedMarkdown = (notePath, nextMarkdown, file, reason = 'observe') => {
@@ -349,7 +365,7 @@ const pollActiveMarkdownSave = (reason = 'poll') => {
   }
   if (lastSeenMarkdown === nextMarkdown) return
   lastSeenMarkdown = nextMarkdown
-  scheduleNoteSave(notePath, nextMarkdown, file, 120, reason)
+  scheduleNoteSave(notePath, nextMarkdown, file, AUTOSAVE_DELAY_MS, reason)
 }
 
 const flushActiveNoteSave = async(reason = 'flush') => {
@@ -391,7 +407,7 @@ watch(
     if (previous?.markdown === nextMarkdown) return
     lastSeenNotePath = notePath
     lastSeenMarkdown = nextMarkdown
-    scheduleNoteSave(notePath, nextMarkdown, file, 120, 'vue-watch')
+    scheduleNoteSave(notePath, nextMarkdown, file, AUTOSAVE_DELAY_MS, 'vue-watch')
   }
 )
 
@@ -518,7 +534,7 @@ const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {
 onMounted(() => {
   bus.on('ELEPHANT::open-excalidraw', openExcalidraw)
   pollActiveMarkdownSave('mount')
-  noteSaveInterval = window.setInterval(() => pollActiveMarkdownSave('interval'), 250)
+  noteSaveInterval = window.setInterval(() => pollActiveMarkdownSave('interval'), AUTOSAVE_POLL_MS)
 })
 onBeforeUnmount(() => {
   bus.off('ELEPHANT::open-excalidraw', openExcalidraw)

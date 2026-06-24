@@ -84,6 +84,7 @@ import ExcalidrawDialog from './ExcalidrawDialog.vue'
 import NoteEditorFooter from './NoteEditorFooter.vue'
 import NoteEditorTopBar from './NoteEditorTopBar.vue'
 import { getExcalidrawScenePath } from '../../services/excalidraw'
+import { elephantnoteClient } from '../../services/elephantnoteClient'
 import { formatShortDate } from '../../services/markdownMetaService'
 import {
   getEditorMarkdownStats,

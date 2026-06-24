@@ -5,16 +5,23 @@ let installed = false
 let repairInFlight = false
 let lastRepairVaultPath = ''
 
-const hasSparseGraph = (searchStore) => {
-  const graph = searchStore.indexInspection?.graph
+export const hasSparseGraph = (searchStore) => {
+  const graph = searchStore?.indexInspection?.graph
   const nodeCount = Array.isArray(graph?.nodes) ? graph.nodes.length : 0
   return nodeCount <= 1
 }
 
-const hasSubstantialVault = (vaultStore) => {
-  const entries = Array.isArray(vaultStore.rootEntries) ? vaultStore.rootEntries : []
+export const hasSubstantialVault = (vaultStore) => {
+  const entries = Array.isArray(vaultStore?.rootEntries) ? vaultStore.rootEntries : []
   if (entries.length > 8) return true
   return entries.some((entry) => entry?.kind === 'folder' || entry?.type === 'folder')
+}
+
+export const shouldRepairSparseGraph = ({ vaultStore, searchStore, vaultPath, lastRepairPath = '', inFlight = false } = {}) => {
+  if (vaultStore?.activeWorkspaceView !== 'graph') return false
+  if (!vaultPath || inFlight) return false
+  if (lastRepairPath === vaultPath) return false
+  return hasSparseGraph(searchStore) && hasSubstantialVault(vaultStore)
 }
 
 export const installGraphRuntimeFixes = () => {
@@ -26,10 +33,13 @@ export const installGraphRuntimeFixes = () => {
     const searchStore = useSearchStore()
     const vaultPath = vaultStore.activeVault?.path || searchStore.vaultPath || ''
 
-    if (vaultStore.activeWorkspaceView !== 'graph') return
-    if (!vaultPath || repairInFlight) return
-    if (!hasSparseGraph(searchStore) || !hasSubstantialVault(vaultStore)) return
-    if (lastRepairVaultPath === vaultPath) return
+    if (!shouldRepairSparseGraph({
+      vaultStore,
+      searchStore,
+      vaultPath,
+      lastRepairPath: lastRepairVaultPath,
+      inFlight: repairInFlight
+    })) return
 
     repairInFlight = true
     lastRepairVaultPath = vaultPath

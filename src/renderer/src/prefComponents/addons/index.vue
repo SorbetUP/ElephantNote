@@ -94,6 +94,49 @@
     </section>
 
     <section
+      v-if="actions.length"
+      class="pref-addon-contributions"
+    >
+      <h5>Addon actions</h5>
+      <article
+        v-for="action in actions"
+        :key="`${action.addonId}:${action.id}`"
+        class="pref-addon-action"
+      >
+        <div>
+          <strong>{{ action.title }}</strong>
+          <span>{{ action.id }} · {{ action.addonId }}</span>
+          <p v-if="action.description">{{ action.description }}</p>
+        </div>
+        <el-button
+          size="small"
+          :disabled="!action.enabled || typeof action.run !== 'function'"
+          @click="runAddonAction(action.id)"
+        >
+          Run
+        </el-button>
+      </article>
+    </section>
+
+    <section
+      v-if="settingsSections.length"
+      class="pref-addon-contributions"
+    >
+      <h5>Addon settings sections</h5>
+      <article
+        v-for="section in settingsSections"
+        :key="`${section.addonId}:${section.id}`"
+        class="pref-addon-action"
+      >
+        <div>
+          <strong>{{ section.title }}</strong>
+          <span>{{ section.id }} · {{ section.addonId }}</span>
+          <p v-if="section.description">{{ section.description }}</p>
+        </div>
+      </article>
+    </section>
+
+    <section
       v-if="Object.keys(contributions).length"
       class="pref-addon-contributions"
     >
@@ -111,7 +154,9 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
+import { getAddonActions, getAddonSettingsSections } from '@/addons'
 import { useAddonsStore } from '@/store/addons'
 
 const addonsStore = useAddonsStore()
@@ -124,8 +169,15 @@ const {
   lastError
 } = storeToRefs(addonsStore)
 
+const actions = computed(() => getAddonActions(contributions.value))
+const settingsSections = computed(() => getAddonSettingsSections(contributions.value))
+
 const setAddonEnabled = async (id, enabled) => {
   await addonsStore.setAddonEnabled(id, enabled)
+}
+
+const runAddonAction = async (id) => {
+  await addonsStore.runAction(id)
 }
 </script>
 
@@ -168,7 +220,8 @@ const setAddonEnabled = async (id, enabled) => {
 .pref-addons-summary span,
 .pref-addon-meta,
 .pref-addon-permissions,
-.pref-addon-contribution-area span {
+.pref-addon-contribution-area span,
+.pref-addon-action span {
   color: var(--editorColor60, var(--editorColor));
   font-size: 12px;
 }
@@ -186,17 +239,24 @@ const setAddonEnabled = async (id, enabled) => {
   gap: 12px;
 }
 
-.pref-addon-card {
+.pref-addon-card,
+.pref-addon-action {
   border: 1px solid var(--floatBorderColor, var(--editorColor10));
   border-radius: 12px;
   padding: 16px;
   background: var(--floatBgColor, transparent);
 }
 
-.pref-addon-card-main {
+.pref-addon-card-main,
+.pref-addon-action {
   display: flex;
   justify-content: space-between;
   gap: 16px;
+}
+
+.pref-addon-action {
+  align-items: center;
+  margin-top: 10px;
 }
 
 .pref-addon-card h5,
@@ -210,7 +270,8 @@ const setAddonEnabled = async (id, enabled) => {
   color: var(--editorColor60, var(--editorColor));
 }
 
-.pref-addon-card p {
+.pref-addon-card p,
+.pref-addon-action p {
   margin: 10px 0 0;
   line-height: 1.4;
 }

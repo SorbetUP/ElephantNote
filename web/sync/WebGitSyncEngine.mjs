@@ -92,6 +92,7 @@ export class WebGitSyncEngine {
       }
       await this.refresh()
       this.lastRunAt = new Date().toISOString()
+      this.running = false
       this.compactQueue()
       return this.status()
     } catch (error) {

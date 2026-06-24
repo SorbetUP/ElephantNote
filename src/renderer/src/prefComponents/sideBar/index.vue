@@ -45,6 +45,14 @@
         <Search width="28" height="28" />
         <span>Sync</span>
       </div>
+      <div
+        class="item"
+        :class="{ active: currentCategory === 'addons' }"
+        @click="handleCategoryItemClick(addonsCategory)"
+      >
+        <Search width="28" height="28" />
+        <span>Addons</span>
+      </div>
     </section>
   </div>
 </template>
@@ -64,6 +72,7 @@ const currentCategory = ref('general')
 const restaurants = ref([])
 const state = ref('')
 const syncCategory = { name: 'Sync', label: 'rclone', path: '/preference/rclone' }
+const addonsCategory = { name: 'Addons', label: 'addons', path: '/preference/addons' }
 
 watch(
   () => route.name,
@@ -105,6 +114,13 @@ const loadAll = () => [
     preference: 'Link this device or phone',
     preferenceEn: 'Link this device or phone',
     routeCategory: 'rclone'
+  },
+  {
+    category: 'Addons',
+    categoryEn: 'Addons',
+    preference: 'Manage installed addons',
+    preferenceEn: 'Manage installed addons',
+    routeCategory: 'addons'
   }
 ]
 
@@ -258,10 +274,10 @@ onUnmounted(() => {
       transform: translateY(-50%);
     }
     &.active {
-      color: var(--sideBarTitleColor);
-    }
-    &.active::before {
-      height: 100%;
+      background: var(--sideBarItemCurrentBgColor);
+      &::before {
+        height: 100%;
+      }
     }
   }
 }

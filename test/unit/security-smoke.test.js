@@ -1,7 +1,30 @@
 import { describe, expect, it } from 'vitest'
 
-describe('security smoke', () => {
-  it('keeps basic assertions wired', () => {
-    expect(1 + 1).toBe(2)
+import {
+  isAllowedSiteFile,
+  isIgnoredForSite
+} from '../../Elephant/back/app/sitePreview/pathSafety.js'
+import {
+  isIgnoredVaultEntry
+} from '../../Elephant/shared/workspace.js'
+
+describe('preview and vault file safety', () => {
+  it('keeps generated previews away from hidden app and dependency folders', () => {
+    expect(isIgnoredForSite('.elephantnote/index.json')).toBe(true)
+    expect(isIgnoredForSite('node_modules/pkg/index.js')).toBe(true)
+    expect(isIgnoredForSite('Notes/index.md')).toBe(false)
+  })
+
+  it('limits static site files to explicitly supported extensions', () => {
+    expect(isAllowedSiteFile('Notes/index.md')).toBe(true)
+    expect(isAllowedSiteFile('assets/photo.webp')).toBe(true)
+    expect(isAllowedSiteFile('scripts/install.sh')).toBe(false)
+    expect(isAllowedSiteFile('bin/native')).toBe(false)
+  })
+
+  it('hides internal vault folders from user-facing listings', () => {
+    expect(isIgnoredVaultEntry('.git')).toBe(true)
+    expect(isIgnoredVaultEntry('.elephantnote')).toBe(true)
+    expect(isIgnoredVaultEntry('Projects')).toBe(false)
   })
 })

@@ -5,6 +5,12 @@ import { useAddonsStore } from '@/store/addons'
 export { ADDON_EXTENSION_POINTS } from './extensionPoints'
 export { ADDON_API_VERSION, ADDON_STATUS, normalizeAddonManifest } from './manifest'
 export { ElephantAddonManager } from './AddonManager'
+export {
+  getAddonActions,
+  getAddonContributions,
+  getAddonSettingsSections,
+  getAddonSidebarItems
+} from './contributionSelectors'
 
 export const ADDON_MANAGER_KEY = Symbol('ElephantAddonManager')
 

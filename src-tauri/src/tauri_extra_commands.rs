@@ -358,13 +358,16 @@ pub fn tauri_sync_plan(payload_by_operation: Option<Value>) -> R<Value> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::fs;
+  use std::path::{Path, PathBuf};
+  use std::time::{SystemTime, UNIX_EPOCH};
 
   fn temp_test_root(name: &str) -> PathBuf {
     let nanos = SystemTime::now()
       .duration_since(UNIX_EPOCH)
       .map(|duration| duration.as_nanos())
       .unwrap_or(0);
-    std::env::temp_dir().join(format!("elephant-{name}-{}-{nanos}", std::process::id()))
+    std::env::temp_dir().join(format!("elephant-{}-{}-{}", name, std::process::id(), nanos))
   }
 
   #[test]

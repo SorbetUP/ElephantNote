@@ -17,6 +17,7 @@
     "fs:allow-rename",
     "fs:allow-copy-file",
     "fs:allow-stat",
+    "notification:default",
     "window-state:default",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-text",

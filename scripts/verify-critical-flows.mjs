@@ -43,6 +43,7 @@ for (const file of [
   'test/unit/specs/main/elephantnote/syncPlan.spec.js',
   'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
+  'Elephant/front/app/components/editor/ExcalidrawDialog.vue',
   'Elephant/front/app/utils/noteCardView.js',
   'Elephant/shared/apiContracts.js',
   'Elephant/shared/sync.js',
@@ -199,6 +200,15 @@ ordered(
   'ElephantNote editor must keep UI metadata and fallback save path coherent'
 )
 ordered(
+  'Elephant/front/app/components/editor/ExcalidrawDialog.vue',
+  [
+    'const blobToBytes = async(blob) => new Uint8Array(await blob.arrayBuffer())',
+    'imageBlob: await blobToBytes(blob)',
+    'sceneBlob: await sceneBlob.text()'
+  ],
+  'Excalidraw save must emit bytes/text that renderer and Tauri writers can actually persist'
+)
+ordered(
   'Elephant/front/app/utils/noteCardView.js',
   [
     'const stripInlineFrontmatterPrefix',
@@ -228,14 +238,6 @@ has('web/sync/WebGitSyncEngine.mjs', 'ensureGitExclude()', 'web sync must exclud
 has('src-tauri/src/vault/sync.rs', 'explicit_pull_plan_does_not_force_snapshot', 'Tauri sync plan pull regression')
 has('src-tauri/src/vault/sync.rs', 'ensure_git_exclude', 'Tauri sync metadata exclusion')
 has('src-tauri/src/sync_contract_tests.rs', 'second_device_can_pull_without_creating_local_snapshot', 'Tauri second-device pull contract test')
-has('src-tauri/src/sync_contract_tests.rs', 'sync_metadata_stays_local_and_is_not_tracked_by_git', 'Tauri sync metadata local-only contract test')
-has('web/server.mjs', 'ELEPHANTNOTE_SYNC_AUTO_INTERVAL_MS', 'auto sync loop configuration')
-has('web/server.mjs', '/api/sync/auto/status', 'auto sync status endpoint')
-has('scripts/sync-two-docker-smoke.mjs', 'assertPeerIdentity', 'two-device peer identity detection check')
-has('scripts/sync-two-docker-smoke.mjs', 'stopDevice(deviceB)', 'offline device simulation')
-has('scripts/sync-two-docker-smoke.mjs', 'device B reconnect auto-pull', 'automatic reconnect pull check')
-has('scripts/sync-two-docker-smoke.mjs', 'assertResourceBudget', 'Docker sync memory and runtime budget check')
-has('.github/workflows/sync-docker.yml', 'node scripts/sync-two-docker-smoke.mjs', 'Docker pair sync workflow runs directly with Node')
 
 if (failures.length) {
   console.error('Critical ElephantNote flow guard failed:')

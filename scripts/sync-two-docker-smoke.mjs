@@ -13,6 +13,10 @@ const vaultB = `${prefix}-vault-b`
 const deviceA = `${prefix}-a`
 const deviceB = `${prefix}-b`
 const remotePath = '/git/elephantnote.git'
+const autoSyncIntervalMs = Number(process.env.ELEPHANTNOTE_SYNC_SMOKE_AUTO_INTERVAL_MS || 1000)
+const maxContainerMemoryMiB = Number(process.env.ELEPHANTNOTE_SYNC_SMOKE_MAX_CONTAINER_MIB || 256)
+const maxEndToEndMs = Number(process.env.ELEPHANTNOTE_SYNC_SMOKE_MAX_TOTAL_MS || 120000)
+const startedAt = Date.now()
 
 const resources = {
   containers: [deviceA, deviceB],
@@ -64,7 +68,18 @@ const waitForServer = async(port, label) => {
   throw new Error(`${label} did not become ready.`)
 }
 
-const startDevice = async(name, port, vaultVolume) => {
+const waitForNote = async(port, notePath, label, timeoutMs = 45000) => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const notes = await request(port, '/api/notes').catch(() => [])
+    if (notes.some((note) => note.path === notePath)) return notes
+    await delay(500)
+  }
+  throw new Error(`${label} did not auto-detect ${notePath} before timeout.`)
+}
+
+const startDevice = async(name, port, vaultVolume, env = {}) => {
+  const envArgs = Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`])
   await docker([
     'run',
     '--rm',
@@ -79,8 +94,20 @@ const startDevice = async(name, port, vaultVolume) => {
     `${vaultVolume}:/data/vault`,
     '-v',
     `${remoteVolume}:/git`,
+    ...envArgs,
     image
   ])
+}
+
+const startAutoPullDevice = async(name, port, vaultVolume, branch = '') => startDevice(name, port, vaultVolume, {
+  ELEPHANTNOTE_SYNC_REMOTE: remotePath,
+  ELEPHANTNOTE_SYNC_BRANCH: branch,
+  ELEPHANTNOTE_SYNC_AUTO_INTERVAL_MS: autoSyncIntervalMs,
+  ELEPHANTNOTE_SYNC_AUTO_MODE: 'pull'
+})
+
+const stopDevice = async(name) => {
+  await execFileAsync('docker', ['rm', '-f', name]).catch(() => {})
 }
 
 const assertNoteListed = (notes, notePath, label) => {
@@ -101,7 +128,59 @@ const assertClean = (status, label) => {
   if (!status.deviceId || !status.folderId) throw new Error(`${label} expected sync identity fields.`)
 }
 
+const assertPeerIdentity = (statusA, statusB) => {
+  if (!statusA.deviceId || !statusB.deviceId) throw new Error('Expected both devices to expose a deviceId.')
+  if (statusA.deviceId === statusB.deviceId) throw new Error(`Expected distinct device IDs, got ${statusA.deviceId}.`)
+  if (!statusA.folderId || !statusB.folderId) throw new Error('Expected both devices to expose a folderId.')
+  if (statusA.folderId !== statusB.folderId) {
+    throw new Error(`Expected both devices to detect the same logical vault folder, got ${statusA.folderId} and ${statusB.folderId}.`)
+  }
+}
+
+const waitForAutoSyncSuccess = async(port, label, minSuccesses = 1, timeoutMs = 45000) => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const state = await request(port, '/api/sync/auto/status').catch(() => null)
+    if (state?.successes >= minSuccesses) return state
+    await delay(500)
+  }
+  throw new Error(`${label} auto sync did not report ${minSuccesses} successful run(s).`)
+}
+
 const catFromContainer = async(container, absolutePath) => docker(['exec', container, 'cat', absolutePath])
+
+const parseMemoryMiB = (value = '') => {
+  const match = String(value).match(/([0-9.]+)\s*([KMGT]?i?B)/i)
+  if (!match) return Number.NaN
+  const amount = Number(match[1])
+  const unit = match[2].toLowerCase()
+  if (unit.startsWith('k')) return amount / 1024
+  if (unit.startsWith('g')) return amount * 1024
+  if (unit.startsWith('t')) return amount * 1024 * 1024
+  return amount
+}
+
+const containerMemoryMiB = async(container) => {
+  const output = await docker(['stats', '--no-stream', '--format', '{{.MemUsage}}', container])
+  return parseMemoryMiB(output.split('/')[0])
+}
+
+const assertResourceBudget = async(containers) => {
+  const samples = []
+  for (const container of containers) {
+    const memoryMiB = await containerMemoryMiB(container)
+    samples.push({ container, memoryMiB })
+    if (!Number.isFinite(memoryMiB)) throw new Error(`Could not parse Docker memory usage for ${container}.`)
+    if (memoryMiB > maxContainerMemoryMiB) {
+      throw new Error(`${container} used ${memoryMiB.toFixed(1)} MiB, above ${maxContainerMemoryMiB} MiB budget.`)
+    }
+  }
+  const elapsedMs = Date.now() - startedAt
+  if (elapsedMs > maxEndToEndMs) {
+    throw new Error(`Docker sync smoke took ${elapsedMs} ms, above ${maxEndToEndMs} ms budget.`)
+  }
+  return { samples, elapsedMs }
+}
 
 try {
   await docker(['build', '-t', image, '.'])
@@ -121,9 +200,19 @@ try {
   ])
 
   await startDevice(deviceA, basePort, vaultA)
-  await startDevice(deviceB, basePort + 1, vaultB)
+  await startAutoPullDevice(deviceB, basePort + 1, vaultB)
   await waitForServer(basePort, 'device A')
   await waitForServer(basePort + 1, 'device B')
+
+  await request(basePort, '/api/sync/run', {
+    method: 'POST',
+    body: { init: { remote: remotePath } }
+  })
+  await request(basePort + 1, '/api/sync/auto/run', { method: 'POST' }).catch(() => {})
+  assertPeerIdentity(
+    await request(basePort, '/api/sync/status'),
+    await request(basePort + 1, '/api/sync/status')
+  )
 
   await request(basePort, '/api/notes', {
     method: 'POST',
@@ -133,7 +222,6 @@ try {
   const pushedFromA = await request(basePort, '/api/sync/run', {
     method: 'POST',
     body: {
-      init: { remote: remotePath },
       snapshot: { message: 'Device A sync snapshot' },
       push: {}
     }
@@ -142,21 +230,37 @@ try {
   assertHistory(pushedFromA, 'push', 'device A push')
   const branch = pushedFromA.branch || 'master'
 
-  const pulledIntoB = await request(basePort + 1, '/api/sync/run', {
-    method: 'POST',
-    body: {
-      init: { remote: remotePath, branch },
-      pull: { branch }
-    }
-  })
-  assertClean(pulledIntoB, 'device B pull')
-  assertHistory(pulledIntoB, 'pull', 'device B pull')
-
-  const notesOnB = await request(basePort + 1, '/api/notes')
+  const notesOnB = await waitForNote(basePort + 1, 'Two Device Sync A.md', 'device B online auto-pull')
   assertNoteListed(notesOnB, 'Two Device Sync A.md', 'device B')
+  await waitForAutoSyncSuccess(basePort + 1, 'device B online auto-pull')
   const contentOnB = await catFromContainer(deviceB, '/data/vault/Two Device Sync A.md')
   if (!contentOnB.includes('Created on device A and expected on device B.')) {
     throw new Error('Device B file content did not match the note created on device A.')
+  }
+
+  await stopDevice(deviceB)
+  await request(basePort, '/api/notes', {
+    method: 'POST',
+    body: { title: 'Offline Reconnect Sync', body: 'Created while device B is outside the network.' }
+  })
+  const pushedWhileBOffline = await request(basePort, '/api/sync/run', {
+    method: 'POST',
+    body: {
+      snapshot: { message: 'Device A offline peer snapshot' },
+      push: { branch }
+    }
+  })
+  assertClean(pushedWhileBOffline, 'device A push while B offline')
+  assertHistory(pushedWhileBOffline, 'push', 'device A push while B offline')
+
+  await startAutoPullDevice(deviceB, basePort + 1, vaultB, branch)
+  await waitForServer(basePort + 1, 'device B reconnect')
+  const notesAfterReconnect = await waitForNote(basePort + 1, 'Offline Reconnect Sync.md', 'device B reconnect auto-pull')
+  assertNoteListed(notesAfterReconnect, 'Offline Reconnect Sync.md', 'device B reconnect')
+  await waitForAutoSyncSuccess(basePort + 1, 'device B reconnect auto-pull')
+  const reconnectedContentOnB = await catFromContainer(deviceB, '/data/vault/Offline Reconnect Sync.md')
+  if (!reconnectedContentOnB.includes('Created while device B is outside the network.')) {
+    throw new Error('Device B did not auto-pull the note created while it was offline.')
   }
 
   await request(basePort + 1, '/api/notes', {
@@ -190,17 +294,26 @@ try {
     throw new Error('Device A file content did not match the note created on device B.')
   }
 
+  const resourcesUsed = await assertResourceBudget([deviceA, deviceB])
+
   console.log(JSON.stringify({
     ok: true,
     image,
     branch,
     ports: { deviceA: basePort, deviceB: basePort + 1 },
     remotePath,
+    autoSyncIntervalMs,
+    memoryBudgetMiB: maxContainerMemoryMiB,
+    resources: resourcesUsed,
     checks: [
+      'device identities are distinct while the logical vault folder is detected as shared',
       'device A pushed a note to a shared bare git remote',
-      'device B pulled and exposed the note through the API',
+      'device B auto-pulled and exposed the note through the API',
+      'device B left the network while device A created and pushed a note',
+      'device B reconnected and auto-pulled the offline note without an explicit sync call',
       'device B pushed a second note',
-      'device A pulled and exposed the second note through the API'
+      'device A pulled and exposed the second note through the API',
+      'containers stayed under the configured memory and end-to-end runtime budgets'
     ]
   }, null, 2))
 } finally {

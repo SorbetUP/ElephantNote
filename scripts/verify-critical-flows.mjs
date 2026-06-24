@@ -200,6 +200,19 @@ ordered(
   'ElephantNote editor must keep UI metadata and fallback save path coherent'
 )
 ordered(
+  'Elephant/front/app/components/editor/NoteEditorHost.vue',
+  [
+    'const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {',
+    'const writableImage = imageBlob || blob',
+    'if (!writableImage) {',
+    'const resolvedName = fileName || excalidrawFileName.value',
+    'await window.fileUtils.writeFile(targetPath, writableImage)',
+    'if (sceneBlob) await window.fileUtils.writeFile(scenePath, sceneBlob)',
+    'updateCurrentFileMarkdown(`${markdown.value}'
+  ],
+  'NoteEditorHost must save Excalidraw image bytes before inserting the markdown link and must respect the emitted filename'
+)
+ordered(
   'Elephant/front/app/components/editor/ExcalidrawDialog.vue',
   [
     'const blobToBytes = async(blob) => new Uint8Array(await blob.arrayBuffer())',

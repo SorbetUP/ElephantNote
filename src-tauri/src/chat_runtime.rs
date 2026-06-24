@@ -70,7 +70,7 @@ fn with_system_prompt(payload: &Value) -> Vec<Value> {
 }
 
 #[tauri::command]
-pub async fn tauri_rag_chat(_app: AppHandle, payload: Value) -> R<Value> {
+pub async fn tauri_rag_chat(app: AppHandle, payload: Value) -> R<Value> {
   let message = last_user_message(&payload);
   let model = selected_chat_model(&payload);
 
@@ -104,7 +104,7 @@ pub async fn tauri_rag_chat(_app: AppHandle, payload: Value) -> R<Value> {
   }
 
   let messages = with_system_prompt(&payload);
-  match local_llama_runtime::chat_with_selected_model(&model, &messages, &payload).await {
+  match local_llama_runtime::chat_with_selected_model(&app, &model, &messages, &payload).await {
     Ok(Some(local)) => Ok(json!({
       "answer": local.answer,
       "sources": [],
@@ -129,7 +129,7 @@ pub async fn tauri_rag_chat(_app: AppHandle, payload: Value) -> R<Value> {
     Err(error) => {
       eprintln!("[tauri-rag][warn] local GGUF generation failed: {error}");
       Ok(json!({
-        "answer": format!("Le modèle local « {model} » est sélectionné, mais Tauri n’a pas pu lancer ou joindre le runtime llama.cpp.\n\nDétail technique : {error}"),
+        "answer": format!("Le modèle local « {model} » est sélectionné, mais Tauri n’a pas pu lancer ou joindre le runtime llama.cpp embarqué.\n\nDétail technique : {error}"),
         "sources": [],
         "runtime": "tauri-rust-local-llama.cpp",
         "provider": "local-llama.cpp",

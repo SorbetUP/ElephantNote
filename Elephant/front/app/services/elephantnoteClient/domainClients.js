@@ -9,6 +9,11 @@ const callModelBridge = (method, payload) => {
   return bridgeMethod(toPlainObject(payload))
 }
 
+const normalizeDirectoryPayload = (payload = '') => {
+  if (typeof payload === 'string') return { relativePath: payload }
+  return toPlainObject(payload)
+}
+
 const ensureSearchVaultForChat = async (call) => {
   const vaultPayload = await call(API.VAULTS_GET).catch(() => null)
   const vaultPath = String(vaultPayload?.activeVault?.path || '').trim()
@@ -43,7 +48,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     remove: (vaultId) => call(API.VAULTS_REMOVE, { vaultId })
   },
   directory: {
-    list: (relativePath = '') => call(API.DIRECTORY_LIST, { relativePath })
+    list: (payload = '') => call(API.DIRECTORY_LIST, normalizeDirectoryPayload(payload))
   },
   notes: {
     create: (payload = '') => {

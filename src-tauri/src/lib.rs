@@ -65,6 +65,151 @@ fn tauri_marktext_write_file(pathname: String, content: String) -> Result<MarkTe
   })
 }
 
+fn escape_html(value: &str) -> String {
+  value
+    .replace('&', "&amp;")
+    .replace('<', "&lt;")
+    .replace('>', "&gt;")
+    .replace('"', "&quot;")
+}
+
+fn fallback_markdown_text(markdown: &str) -> String {
+  markdown
+    .lines()
+    .map(|line| line.trim().trim_start_matches('#').trim_start_matches(['-', '*', ' ']).trim())
+    .filter(|line| !line.is_empty() && *line != "---")
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
+fn fallback_markdown_html(markdown: &str) -> String {
+  let mut html = String::new();
+  for line in markdown.lines() {
+    let trimmed = line.trim();
+    if trimmed.is_empty() || trimmed == "---" { continue; }
+    if let Some(title) = trimmed.strip_prefix("# ") {
+      html.push_str(&format!("<h1>{}</h1>", escape_html(title.trim())));
+    } else if let Some(title) = trimmed.strip_prefix("## ") {
+      html.push_str(&format!("<h2>{}</h2>", escape_html(title.trim())));
+    } else {
+      html.push_str(&format!("<p>{}</p>", escape_html(trimmed)));
+    }
+  }
+  html
+}
+
+#[tauri::command]
+fn tauri_markdown_parse(markdown: Option<String>) -> Result<Value, String> {
+  let markdown = markdown.unwrap_or_default();
+  Ok(json!({ "markdown": markdown, "html": fallback_markdown_html(&markdown), "text": fallback_markdown_text(&markdown), "tokens": [] }))
+}
+
+#[tauri::command]
+fn tauri_markdown_render_html(markdown: Option<String>) -> Result<String, String> {
+  Ok(fallback_markdown_html(&markdown.unwrap_or_default()))
+}
+
+#[tauri::command]
+fn tauri_markdown_to_text(markdown: Option<String>) -> Result<String, String> {
+  Ok(fallback_markdown_text(&markdown.unwrap_or_default()))
+}
+
+#[tauri::command]
+fn tauri_markdown_extract_frontmatter(markdown: Option<String>) -> Result<Value, String> {
+  let markdown = markdown.unwrap_or_default();
+  let mut title = String::new();
+  let mut tags = Vec::<String>::new();
+  if let Some(rest) = markdown.strip_prefix("---") {
+    if let Some(end) = rest.find("\n---") {
+      for line in rest[..end].lines() {
+        if let Some((key, value)) = line.split_once(':') {
+          let key = key.trim();
+          let value = value.trim();
+          if key == "title" { title = value.trim_matches('"').to_string(); }
+          if key == "tags" {
+            tags = value.trim_matches(&['[', ']'][..]).split(',').map(|tag| tag.trim().trim_matches('"').trim_start_matches('#').to_string()).filter(|tag| !tag.is_empty()).collect();
+          }
+        }
+      }
+    }
+  }
+  Ok(json!({ "title": title, "tags": tags }))
+}
+
+#[tauri::command]
+fn tauri_markdown_extract_links(markdown: Option<String>) -> Result<Vec<Value>, String> {
+  let markdown = markdown.unwrap_or_default();
+  let mut links = Vec::new();
+  for token in markdown.split_whitespace() {
+    if token.starts_with("http://") || token.starts_with("https://") {
+      links.push(json!({ "href": token.trim_matches(|c| matches!(c, ')' | ']' | ',' | '.')), "title": "" }));
+    }
+  }
+  Ok(links)
+}
+
+#[tauri::command]
+fn tauri_muya_parse(markdown: Option<String>) -> Result<Value, String> { tauri_markdown_parse(markdown) }
+#[tauri::command]
+fn tauri_muya_render_html(markdown: Option<String>) -> Result<String, String> { tauri_markdown_render_html(markdown) }
+#[tauri::command]
+fn tauri_muya_tokens(markdown: Option<String>) -> Result<Vec<Value>, String> { Ok(vec![json!({ "type": "text", "raw": markdown.unwrap_or_default() })]) }
+#[tauri::command]
+fn tauri_muya_extras(markdown: Option<String>) -> Result<Value, String> { Ok(json!({ "text": fallback_markdown_text(&markdown.unwrap_or_default()) })) }
+#[tauri::command]
+fn tauri_muya_contract() -> Result<Value, String> { Ok(json!({ "runtime": "tauri-rust", "fallback": true })) }
+#[tauri::command]
+fn tauri_muya_clipboard() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_copy_markdown() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_copy_html() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_paste() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_backspace() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_remove_next() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_undo() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_redo() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_move_cursor() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_input_rule() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_table_insert_row() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_table_insert_column() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_table_contract() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_image_selection() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_start_composition() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_update_composition() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_commit_composition() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_cancel_composition() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust" })) }
+#[tauri::command]
+fn tauri_muya_editor_snapshot() -> Result<Value, String> { Ok(json!({ "ok": true, "runtime": "tauri-rust", "snapshot": null })) }
+
+#[tauri::command]
+fn tauri_attachments_list() -> Result<Vec<Value>, String> { Ok(Vec::new()) }
+#[tauri::command]
+fn tauri_attachments_write_text() -> Result<Value, String> { Ok(json!({ "ok": false, "runtime": "tauri-rust", "reason": "Attachment write fallback is not implemented yet." })) }
+#[tauri::command]
+fn tauri_drawings_list() -> Result<Vec<Value>, String> { Ok(Vec::new()) }
+#[tauri::command]
+fn tauri_drawings_create() -> Result<Value, String> { Ok(json!({ "ok": false, "runtime": "tauri-rust", "reason": "Drawing create fallback is not implemented yet." })) }
+#[tauri::command]
+fn tauri_drawings_read() -> Result<Value, String> { Ok(json!({ "ok": false, "runtime": "tauri-rust", "reason": "Drawing read fallback is not implemented yet." })) }
+#[tauri::command]
+fn tauri_drawings_write() -> Result<Value, String> { Ok(json!({ "ok": false, "runtime": "tauri-rust", "reason": "Drawing write fallback is not implemented yet." })) }
+
 fn allowed_shell_command(command: &str) -> bool {
   if command.contains('/') || command.contains('\\') {
     return false;
@@ -139,6 +284,41 @@ pub fn run() {
       healthcheck,
       tauri_debug_log,
       tauri_marktext_write_file,
+      tauri_markdown_parse,
+      tauri_markdown_render_html,
+      tauri_markdown_to_text,
+      tauri_markdown_extract_frontmatter,
+      tauri_markdown_extract_links,
+      tauri_muya_parse,
+      tauri_muya_render_html,
+      tauri_muya_tokens,
+      tauri_muya_extras,
+      tauri_muya_contract,
+      tauri_muya_clipboard,
+      tauri_muya_copy_markdown,
+      tauri_muya_copy_html,
+      tauri_muya_paste,
+      tauri_muya_backspace,
+      tauri_muya_remove_next,
+      tauri_muya_undo,
+      tauri_muya_redo,
+      tauri_muya_move_cursor,
+      tauri_muya_input_rule,
+      tauri_muya_table_insert_row,
+      tauri_muya_table_insert_column,
+      tauri_muya_table_contract,
+      tauri_muya_image_selection,
+      tauri_muya_start_composition,
+      tauri_muya_update_composition,
+      tauri_muya_commit_composition,
+      tauri_muya_cancel_composition,
+      tauri_muya_editor_snapshot,
+      tauri_attachments_list,
+      tauri_attachments_write_text,
+      tauri_drawings_list,
+      tauri_drawings_create,
+      tauri_drawings_read,
+      tauri_drawings_write,
       shell_exec,
       vault_backend::tauri_vaults_get,
       vault_backend::tauri_vaults_select_path,

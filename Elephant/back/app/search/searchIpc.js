@@ -1,10 +1,16 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import log from 'electron-log'
+import { createDefaultModelSelection, ATOMIC_MODEL_CATALOG } from 'common/elephantnote/atomicWorkspace'
+import { createTextEmbedding } from 'common/elephantnote/atomicAiEngine'
+import { getConfig } from '../config/elephantConfigStore'
+import { modelRuntime } from '../runtime/elephantRuntime'
 import { ElephantSearchService } from './ElephantSearchService'
 import { SEARCH_MODES } from './searchTypes'
 
 const searchService = new ElephantSearchService()
 let atomicIpcImportPromise = null
+let embeddingProviderRegistered = false
+let warnedMissingEmbeddingModel = false
 
 const INSPECT_CACHE_TTL_MS = 5000
 const inspectCacheByWindow = new Map()
@@ -65,6 +71,99 @@ const ensureAtomicIpc = () => {
   return atomicIpcImportPromise
 }
 
+const getSelectedEmbeddingModelId = () => {
+  const selection = {
+    ...createDefaultModelSelection(),
+    ...(getConfig().atomicModelSelection || {})
+  }
+  return String(selection.embedding || '').trim()
+}
+
+const resolveEmbeddingCatalogEntry = (modelId = '') => (
+  ATOMIC_MODEL_CATALOG.find((item) =>
+    item.id === modelId ||
+    item.model === modelId ||
+    item.uri === modelId ||
+    item.pull === modelId
+  ) || {
+    id: modelId,
+    name: modelId,
+    provider: 'node-llama-cpp',
+    task: 'embedding',
+    model: modelId,
+    uri: modelId,
+    pull: modelId
+  }
+)
+
+const createNodeLlamaCppEmbeddingProvider = () => ({
+  get source() {
+    return getSelectedEmbeddingModelId() ? 'node-llama-cpp' : 'deterministic-local'
+  },
+
+  async embedText(text = '') {
+    const selectedModelId = getSelectedEmbeddingModelId()
+    const preview = String(text || '').replace(/\s+/g, ' ').slice(0, 120)
+
+    if (!selectedModelId) {
+      if (!warnedMissingEmbeddingModel) {
+        warnedMissingEmbeddingModel = true
+        log.warn('[embedding] no embedding model selected; using deterministic local fallback')
+      }
+      return createTextEmbedding(text)
+    }
+
+    const startedAt = Date.now()
+    const configuredModel = resolveEmbeddingCatalogEntry(selectedModelId)
+    let resolvedModel = configuredModel
+
+    try {
+      resolvedModel = await modelRuntime.modelLibrary.resolveLocalModel(configuredModel)
+    } catch (error) {
+      log.warn('[embedding] selected model is not resolved locally; attempting configured model fallback', {
+        selectedModelId,
+        error: error instanceof Error ? error.message : String(error || '')
+      })
+    }
+
+    log.info('[embedding] embed:start', {
+      selectedModelId,
+      model: resolvedModel?.path || resolvedModel?.modelPath || resolvedModel?.model || configuredModel.model || selectedModelId,
+      textLength: String(text || '').length,
+      preview
+    })
+
+    const vector = await modelRuntime.nodeLlamaCppRuntime.embedText({
+      model: {
+        ...configuredModel,
+        ...resolvedModel,
+        task: 'embedding',
+        purpose: 'embedding'
+      },
+      text
+    })
+
+    log.info('[embedding] embed:done', {
+      selectedModelId,
+      dimensions: Array.isArray(vector) ? vector.length : 0,
+      latencyMs: Date.now() - startedAt
+    })
+
+    return vector
+  }
+})
+
+const ensureEmbeddingProviderRegistered = () => {
+  if (embeddingProviderRegistered) return
+  embeddingProviderRegistered = true
+  const provider = createNodeLlamaCppEmbeddingProvider()
+  searchService.setEmbeddingProvider(provider)
+  log.info('[embedding] search embedding provider registered', {
+    source: provider.source,
+    selectedModelId: getSelectedEmbeddingModelId() || ''
+  })
+}
+
 export const normalizeSearchMode = (mode) => {
   if (
     mode === SEARCH_MODES.EXACT ||
@@ -106,6 +205,7 @@ const getSenderWindowId = (event) => {
 export const registerSearchIpc = () => {
   log.info('[search] registering IPC handlers')
   ensureAtomicIpc()
+  ensureEmbeddingProviderRegistered()
 
   ipcMain.handle('en:search:init-vault', async(event, vaultPath) => {
     if (typeof vaultPath !== 'string' || !vaultPath.trim()) {

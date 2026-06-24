@@ -6,7 +6,7 @@ const isSameEntry = (a, b) => {
   if (a.type !== b.type) return false
   if (a.id || b.id) return a.id === b.id
   if (a.path || b.path) return a.path === b.path
-  return a.type === 'all_notes' && b.type === 'all_notes'
+  return a.type === b.type
 }
 
 export const useNavigationStore = defineStore('elephantnoteNavigation', {

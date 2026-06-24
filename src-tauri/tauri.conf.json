@@ -39,8 +39,7 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "bin/llama-server",
-      "bin/llama-server.exe"
+      "bin"
     ],
     "icon": [
       "../static/icon.ico",

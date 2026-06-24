@@ -30,9 +30,9 @@ const withFixture = (callback) => {
 }
 
 const privateKeyFixture = [
-  '-----BEGIN PRIVATE KEY-----',
+  ['-----BEGIN ', 'PRIVATE KEY', '-----'].join(''),
   'secret',
-  '-----END PRIVATE KEY-----'
+  ['-----END ', 'PRIVATE KEY', '-----'].join('')
 ].join('\n')
 
 const githubTokenFixture = ['ghp_', '0123456789abcdefghijklmnop'].join('')

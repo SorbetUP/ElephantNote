@@ -2,6 +2,7 @@
   <div
     class="en-library-grid"
     :class="{ list: store.viewMode === 'list', 'is-drop-target': isRootDropTarget }"
+    @scroll.passive="handleGridScroll"
     @dragover.prevent="handleRootDragOver"
     @dragleave="handleRootDragLeave"
     @drop.prevent="handleRootDrop"
@@ -15,6 +16,15 @@
       @rename="renameEntry"
       @delete="deleteEntry"
     />
+    <button
+      v-if="canShowMore"
+      type="button"
+      class="en-library-load-more"
+      :disabled="loadingMoreEntries"
+      @click="loadMoreVisibleEntries"
+    >
+      {{ loadingMoreEntries ? 'Loading…' : 'Load more' }}
+    </button>
     <form
       v-if="renamingEntry"
       class="en-library-rename-form"
@@ -42,7 +52,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import log from 'electron-log/renderer'
 import { useVaultStore } from '../../stores/vaultStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
@@ -52,18 +62,46 @@ import {
   parseDraggedEntry
 } from '../../utils/entryDragDrop'
 
+const DIRECTORY_PAGE_SIZE = 120
+const RENDER_CHUNK_SIZE = 72
+const SCROLL_PREFETCH_PX = 720
+
 const store = useVaultStore()
 const renamingEntry = ref(null)
 const renameEntryTitle = ref('')
 const renameEntryInput = ref(null)
 const isRootDropTarget = ref(false)
+const visibleEntryLimit = ref(RENDER_CHUNK_SIZE)
+const loadingMoreEntries = ref(false)
+const directoryMayHaveMore = ref(true)
+const directoryGeneration = ref(0)
 
 const isLegacyRootWikiEntry = (entry) => {
   const pathname = String(entry?.path || '').replace(/\\/g, '/').replace(/\/+$/g, '')
   return store.activeWorkspaceView === 'notes' && store.currentPath === '' && /^wiki$/i.test(pathname)
 }
 
-const visibleEntries = computed(() => store.activeEntries.filter((entry) => !isLegacyRootWikiEntry(entry)))
+const filteredEntries = computed(() => store.activeEntries.filter((entry) => !isLegacyRootWikiEntry(entry)))
+const visibleEntries = computed(() => filteredEntries.value.slice(0, visibleEntryLimit.value))
+const canShowMore = computed(() => visibleEntryLimit.value < filteredEntries.value.length || directoryMayHaveMore.value)
+
+const resetVisibleWindow = () => {
+  visibleEntryLimit.value = RENDER_CHUNK_SIZE
+  directoryMayHaveMore.value = store.entries.length >= DIRECTORY_PAGE_SIZE
+  directoryGeneration.value += 1
+}
+
+watch(
+  () => [store.currentPath, store.activeWorkspaceView, store.activeVaultId],
+  resetVisibleWindow
+)
+
+watch(
+  () => store.entries.length,
+  (length, previousLength) => {
+    if (length < previousLength) resetVisibleWindow()
+  }
+)
 
 const shouldApplyWikiFolderResult = (relativePath, vaultId) => {
   return store.activeWorkspaceView === 'wiki' &&
@@ -71,9 +109,24 @@ const shouldApplyWikiFolderResult = (relativePath, vaultId) => {
     store.activeVaultId === vaultId
 }
 
+const normalizeDirectoryPage = (items) => Array.isArray(items) ? items : []
+
+const fetchDirectoryPage = async(relativePath, offset = 0, generation = directoryGeneration.value) => {
+  const items = normalizeDirectoryPage(await elephantnoteClient.directory.list({
+    relativePath,
+    offset,
+    limit: DIRECTORY_PAGE_SIZE + 1,
+    includePreview: true
+  }))
+  if (generation !== directoryGeneration.value) return null
+  directoryMayHaveMore.value = items.length > DIRECTORY_PAGE_SIZE
+  return items.slice(0, DIRECTORY_PAGE_SIZE)
+}
+
 const openFolderInCurrentView = async (relativePath) => {
   if (store.activeWorkspaceView !== 'wiki') {
-    await store.openDirectory(relativePath)
+    await store.openDirectory(relativePath, { limit: DIRECTORY_PAGE_SIZE + 1 })
+    resetVisibleWindow()
     return
   }
 
@@ -82,24 +135,59 @@ const openFolderInCurrentView = async (relativePath) => {
   store.openedNotePath = ''
   store.activeWorkspaceView = 'wiki'
   store.entries = []
+  resetVisibleWindow()
 
   try {
-    const entries = await elephantnoteClient.directory.list(relativePath)
-    if (!shouldApplyWikiFolderResult(relativePath, vaultId)) return
-    store.entries = Array.isArray(entries) ? entries : []
+    const page = await fetchDirectoryPage(relativePath, 0)
+    if (!shouldApplyWikiFolderResult(relativePath, vaultId) || !page) return
+    store.entries = page
     store.activeWorkspaceView = 'wiki'
     log.info('[wiki] opened folder in library grid', {
       path: relativePath,
-      entries: store.entries.length
+      entries: store.entries.length,
+      mayHaveMore: directoryMayHaveMore.value
     })
   } catch (error) {
     if (!shouldApplyWikiFolderResult(relativePath, vaultId)) return
     store.entries = []
     store.activeWorkspaceView = 'wiki'
+    directoryMayHaveMore.value = false
     log.info('[wiki] folder empty or unavailable in library grid', {
       path: relativePath,
       error: error?.message || error
     })
+  }
+}
+
+const loadMoreVisibleEntries = async() => {
+  if (visibleEntryLimit.value < filteredEntries.value.length) {
+    visibleEntryLimit.value = Math.min(filteredEntries.value.length, visibleEntryLimit.value + RENDER_CHUNK_SIZE)
+    return
+  }
+  if (!directoryMayHaveMore.value || loadingMoreEntries.value) return
+  const generation = directoryGeneration.value
+  loadingMoreEntries.value = true
+  try {
+    const page = await fetchDirectoryPage(store.currentPath, store.entries.length, generation)
+    if (!page || generation !== directoryGeneration.value) return
+    if (page.length) {
+      const seen = new Set(store.entries.map((entry) => entry.path))
+      const appended = page.filter((entry) => !seen.has(entry.path))
+      store.entries = [...store.entries, ...appended]
+      if (!store.currentPath) store.rootEntries = store.entries
+      visibleEntryLimit.value = Math.min(filteredEntries.value.length + appended.length, visibleEntryLimit.value + RENDER_CHUNK_SIZE)
+    }
+  } finally {
+    loadingMoreEntries.value = false
+  }
+}
+
+const handleGridScroll = (event) => {
+  const target = event.currentTarget
+  if (!target) return
+  const distanceFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight
+  if (distanceFromBottom <= SCROLL_PREFETCH_PX) {
+    void loadMoreVisibleEntries()
   }
 }
 
@@ -131,11 +219,13 @@ const submitRenameEntry = async () => {
   cancelRenameEntry()
   if (!nextName || nextName === entry.title) return
   await store.renameEntry(entry, nextName)
+  resetVisibleWindow()
 }
 
 const deleteEntry = async (entry) => {
   if (!window.confirm(`Delete "${entry.title}"? This cannot be undone.`)) return
   await store.deleteEntry(entry)
+  resetVisibleWindow()
 }
 
 const handleRootDragOver = (event) => {
@@ -155,6 +245,7 @@ const handleRootDrop = async (event) => {
   isRootDropTarget.value = false
   if (!entry || !canDropEntryOnDirectory(entry, store.currentPath)) return
   await store.moveEntry(entry, store.currentPath)
+  resetVisibleWindow()
 }
 </script>
 
@@ -198,6 +289,18 @@ const handleRootDrop = async (event) => {
 .en-library-grid.list {
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+}
+
+.en-library-load-more {
+  min-height: 44px;
+  border: 1px solid var(--en-border);
+  border-radius: 12px;
+  color: var(--en-muted);
+  background: color-mix(in srgb, var(--en-surface) 60%, transparent);
+}
+
+.en-library-grid.list .en-library-load-more {
+  width: 100%;
 }
 
 .en-library-rename-form {

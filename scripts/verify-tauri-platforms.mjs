@@ -49,6 +49,8 @@ assert(androidConfig.bundle?.icon?.includes('../static/icon.png'), 'Android conf
 assert(packageJson.scripts['tauri:android:init'].includes('tauri.android.conf.json'), 'Android init script must use the Android config')
 assert(packageJson.scripts['tauri:android:dev'].includes('tauri.android.conf.json'), 'Android dev script must use the Android config')
 assert(buildDev.includes('tauri.linux.conf.json'), 'Linux dev must use the Linux Tauri config override')
+assert(!buildDev.includes('TAURI_ARGS'), 'Tauri dev script must not use an empty Bash array under set -u')
+assert(buildDev.includes('cargo tauri dev "$@"'), 'macOS Tauri dev must run without config args while preserving CLI passthrough')
 assert(buildAndroid.includes('tauri.android.conf.json'), 'Android build script must use the Android Tauri config override')
 assert(buildAndroid.includes('ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1'), 'Android build must skip bundled llama-server')
 assert(buildAndroid.includes('cargo tauri android init --config "$ANDROID_CONFIG"'), 'Android build script must initialize the generated Android project with the Android config')

@@ -32,6 +32,7 @@ for (const file of [
   'src-tauri/src/tauri_extra_commands.rs',
   'src-tauri/src/lib_min.rs',
   'src-tauri/src/vault/sync.rs',
+  'src-tauri/src/sync_contract_tests.rs',
   'src-tauri/capabilities/default.json',
   'web/server.mjs',
   'web/sync/WebGitSyncEngine.mjs',
@@ -224,6 +225,10 @@ has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', "expect(config
 has('web/sync/WebGitSyncEngine.mjs', 'compactQueue()', 'web sync queue compaction')
 has('web/sync/WebGitSyncEngine.mjs', 'backend: SYNC_BACKENDS.GIT', 'web sync reports the git backend')
 has('web/sync/WebGitSyncEngine.mjs', 'ensureGitExclude()', 'web sync must exclude local metadata from shared git history')
+has('src-tauri/src/vault/sync.rs', 'explicit_pull_plan_does_not_force_snapshot', 'Tauri sync plan pull regression')
+has('src-tauri/src/vault/sync.rs', 'ensure_git_exclude', 'Tauri sync metadata exclusion')
+has('src-tauri/src/sync_contract_tests.rs', 'second_device_can_pull_without_creating_local_snapshot', 'Tauri second-device pull contract test')
+has('src-tauri/src/sync_contract_tests.rs', 'sync_metadata_stays_local_and_is_not_tracked_by_git', 'Tauri sync metadata local-only contract test')
 has('web/server.mjs', 'ELEPHANTNOTE_SYNC_AUTO_INTERVAL_MS', 'auto sync loop configuration')
 has('web/server.mjs', '/api/sync/auto/status', 'auto sync status endpoint')
 has('scripts/sync-two-docker-smoke.mjs', 'assertPeerIdentity', 'two-device peer identity detection check')

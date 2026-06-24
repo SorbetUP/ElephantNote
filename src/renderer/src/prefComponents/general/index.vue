@@ -66,6 +66,49 @@
 
     <compound>
       <template #head>
+        <h6 class="title">Local AI runtime</h6>
+      </template>
+      <template #children>
+        <section class="local-runtime-settings">
+          <p class="local-runtime-description">
+            Choose how Elephant starts llama.cpp for local GGUF chat. By default Elephant installs and uses its own app-managed llama-server.
+          </p>
+          <el-radio-group
+            v-model="llamaServerMode"
+            class="local-runtime-radio"
+            @change="saveLlamaRuntimeConfig"
+          >
+            <el-radio label="bundled">
+              Install and use llama-server inside the app
+            </el-radio>
+            <el-radio label="path">
+              Use an existing llama-server path
+            </el-radio>
+          </el-radio-group>
+          <div class="local-runtime-path-row">
+            <el-input
+              v-model="llamaServerPath"
+              :disabled="llamaServerMode !== 'path'"
+              placeholder="/opt/homebrew/bin/llama-server"
+              @change="saveLlamaRuntimeConfig"
+            />
+            <el-button
+              size="small"
+              :disabled="llamaRuntimeSaving"
+              @click="saveLlamaRuntimeConfig"
+            >
+              Save
+            </el-button>
+          </div>
+          <small>
+            Use the bundled mode for the normal app experience. Use path mode only if llama-server is already installed somewhere else.
+          </small>
+        </section>
+      </template>
+    </compound>
+
+    <compound>
+      <template #head>
         <h6 class="title">
           {{ t('preferences.general.sidebar.title') }}
         </h6>
@@ -186,7 +229,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { usePreferencesStore } from '@/store/preferences'
@@ -206,6 +249,9 @@ import {
 
 const { t } = useI18n()
 const preferenceStore = usePreferencesStore()
+const llamaServerMode = ref('bundled')
+const llamaServerPath = ref('')
+const llamaRuntimeSaving = ref(false)
 
 const {
   autoSave,
@@ -245,6 +291,48 @@ const onSelectChange = (type, value) => {
 const selectDefaultDirectoryToOpen = () => {
   preferenceStore.SELECT_DEFAULT_DIRECTORY_TO_OPEN()
 }
+
+const defaultAiConfig = () => ({
+  localRuntime: { llamaServerMode: 'bundled', llamaServerPath: '', llamaBaseUrl: '' }
+})
+const readStoredAiConfig = () => {
+  try {
+    const raw = globalThis.window?.localStorage?.getItem('elephantnote:tauri:ai-config')
+    return raw ? JSON.parse(raw) : defaultAiConfig()
+  } catch {
+    return defaultAiConfig()
+  }
+}
+const loadLlamaRuntimeConfig = async() => {
+  const bridge = globalThis.window?.elephantnote?.ai
+  const config = await bridge?.getConfig?.().catch(() => null) || readStoredAiConfig()
+  const runtime = config.localRuntime || defaultAiConfig().localRuntime
+  llamaServerMode.value = runtime.llamaServerMode || runtime.mode || 'bundled'
+  llamaServerPath.value = runtime.llamaServerPath || runtime.serverPath || runtime.path || ''
+}
+const saveLlamaRuntimeConfig = async() => {
+  llamaRuntimeSaving.value = true
+  try {
+    const bridge = globalThis.window?.elephantnote?.ai
+    const current = await bridge?.getConfig?.().catch(() => null) || readStoredAiConfig()
+    const next = {
+      ...current,
+      localRuntime: {
+        ...(current.localRuntime || {}),
+        llamaServerMode: llamaServerMode.value || 'bundled',
+        llamaServerPath: llamaServerPath.value.trim()
+      }
+    }
+    if (bridge?.setConfig) await bridge.setConfig(next)
+    else globalThis.window?.localStorage?.setItem('elephantnote:tauri:ai-config', JSON.stringify(next))
+  } finally {
+    llamaRuntimeSaving.value = false
+  }
+}
+
+onMounted(() => {
+  loadLlamaRuntimeConfig()
+})
 </script>
 
 <style scoped>
@@ -267,5 +355,33 @@ const selectDefaultDirectoryToOpen = () => {
 
 .pref-general .startup-action-ctrl label {
   margin: 5px 0;
+}
+
+.local-runtime-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--editorColor);
+}
+
+.local-runtime-description,
+.local-runtime-settings small {
+  margin: 0;
+  color: var(--editorColor80);
+  line-height: 1.45;
+}
+
+.local-runtime-radio {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.local-runtime-path-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
 }
 </style>

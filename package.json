@@ -36,6 +36,7 @@
     "postinstall": "node scripts/postinstall.js",
     "format": "prettier --write .",
     "lint": "eslint --cache .",
+    "security:guard": "node scripts/verify-security-guardrails.mjs",
     "minify-locales": "node scripts/minify-locales.mjs",
     "rebuild-native": "electron-rebuild -f",
     "start": "electron-vite dev",
@@ -72,7 +73,7 @@
     "coverage:unit": "vitest run test/unit --coverage",
     "coverage:open": "pnpm coverage:unit && open coverage/index.html",
     "test:e2e": "playwright test",
-    "prod:check": "pnpm lint && pnpm test:unit && pnpm test:e2e && pnpm validate-licenses && pnpm run build:unpack",
+    "prod:check": "pnpm lint && pnpm security:guard && pnpm test:unit && pnpm test:e2e && pnpm validate-licenses && pnpm run build:unpack",
     "gen-third-party": "node scripts/generateThirdPartyLicense.js",
     "validate-licenses": "node scripts/validateLicenses.js"
   },

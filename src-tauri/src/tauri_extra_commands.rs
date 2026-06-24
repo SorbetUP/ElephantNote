@@ -2,12 +2,12 @@ use serde_json::{json, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
+use crate::vault::config as vault_config;
 use crate::vault_layout;
 
 type R<T> = Result<T, String>;
-const CONFIG_FILE: &str = "tauri-vaults.json";
 const META_DIR: &str = vault_layout::HIDDEN_ROOT;
 
 fn now() -> String {
@@ -30,22 +30,8 @@ fn inside(root: &str, relative_path: &str) -> PathBuf {
   if relative_path.is_empty() { PathBuf::from(root) } else { PathBuf::from(root).join(relative_path) }
 }
 
-fn config_path(app: &AppHandle) -> R<PathBuf> {
-  let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-  Ok(dir.join(CONFIG_FILE))
-}
-
 fn active_vault_root(app: &AppHandle) -> R<String> {
-  let raw = fs::read_to_string(config_path(app)?).map_err(|e| e.to_string())?;
-  let config: Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-  let active_id = config.get("activeVaultId").and_then(Value::as_str).ok_or_else(|| "No active vault id.".to_string())?;
-  let vaults = config.get("vaults").and_then(Value::as_array).ok_or_else(|| "Invalid vault config.".to_string())?;
-  vaults
-    .iter()
-    .find(|vault| vault.get("id").and_then(Value::as_str) == Some(active_id))
-    .and_then(|vault| vault.get("path").and_then(Value::as_str))
-    .map(str::to_string)
-    .ok_or_else(|| "No active ElephantNote vault.".to_string())
+  vault_config::get_active_vault(app).map(|vault| vault.path)
 }
 
 fn read_json(path: PathBuf, fallback: Value) -> Value {

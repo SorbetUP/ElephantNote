@@ -3,13 +3,14 @@ import { createPinia, setActivePinia } from 'pinia'
 import { ADDON_EXTENSION_POINTS, ElephantAddonManager } from '@/addons'
 import { useAddonsStore } from '@/store/addons'
 
-const createAddon = () => ({
+const createAddon = (run = vi.fn()) => ({
   manifest: {
     id: 'store.addon',
     name: 'Store Addon'
   },
   activate: vi.fn((ctx) => {
     ctx.addSidebarItem({ id: 'store-sidebar', title: 'Store Sidebar' })
+    ctx.addAction({ id: 'store.action', title: 'Store Action', run })
   }),
   deactivate: vi.fn()
 })
@@ -40,13 +41,27 @@ describe('useAddonsStore', () => {
     await store.enableAddon('store.addon')
 
     expect(store.enabledAddons).toHaveLength(1)
-    expect(store.contributionCount).toBe(1)
+    expect(store.contributionCount).toBe(2)
     expect(store.getContributions(ADDON_EXTENSION_POINTS.sidebarItems)).toEqual([
       {
         addonId: 'store.addon',
         contribution: { id: 'store-sidebar', title: 'Store Sidebar' }
       }
     ])
+  })
+
+  it('runs actions through the manager bridge', async () => {
+    const run = vi.fn(() => 'ok')
+    const manager = new ElephantAddonManager()
+    manager.register(createAddon(run))
+
+    const store = useAddonsStore()
+    store.install(manager)
+    await store.enableAddon('store.addon')
+
+    await expect(store.runAction('store.action', { source: 'test' })).resolves.toBe('ok')
+    expect(run).toHaveBeenCalledOnce()
+    expect(store.lastError).toBe(null)
   })
 
   it('removes contributions when an addon is disabled', async () => {

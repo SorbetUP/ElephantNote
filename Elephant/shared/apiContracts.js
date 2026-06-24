@@ -16,8 +16,8 @@ const optionalNumber = (value) => value === undefined || Number.isFinite(Number(
 
 const optionalObject = (value) => value === undefined || isPlainObject(value)
 
-const optionalStringArray = (value) =>
-  value === undefined || (Array.isArray(value) && value.every((item) => typeof item === 'string'))
+const optionalSyncOperationArray = (value) =>
+  value === undefined || (Array.isArray(value) && value.every((item) => SYNC_OPERATION_IDS.includes(item)))
 
 const optionalEnum = (allowed) => (value) => value === undefined || allowed.includes(value)
 
@@ -71,7 +71,7 @@ export const schema = Object.freeze({
   optionalBoolean,
   optionalNumber,
   optionalObject,
-  optionalStringArray,
+  optionalSyncOperationArray,
   optionalEnum,
   requiredEnum
 })
@@ -104,7 +104,7 @@ const aiConfigPayload = schema.strictObject({
 
 const syncRunPayload = schema.object({
   remotePath: optionalString,
-  operations: optionalStringArray,
+  operations: optionalSyncOperationArray,
   init: optionalObject,
   snapshot: optionalObject,
   sync: optionalObject,

@@ -75,9 +75,10 @@ pub async fn tauri_rag_chat(app: AppHandle, payload: Value) -> R<Value> {
   let model = selected_chat_model(&payload);
 
   eprintln!(
-    "[tauri-rag] local GGUF chat request message_len={} selected_chat_model={}",
+    "[tauri-rag] local GGUF chat request message_len={} selected_chat_model={} mobile={}",
     message.chars().count(),
-    if model.is_empty() { "<none>" } else { model.as_str() }
+    if model.is_empty() { "<none>" } else { model.as_str() },
+    cfg!(mobile)
   );
 
   if message.trim().is_empty() {
@@ -103,39 +104,78 @@ pub async fn tauri_rag_chat(app: AppHandle, payload: Value) -> R<Value> {
     }));
   }
 
-  let messages = with_system_prompt(&payload);
-  match local_llama_runtime::chat_with_selected_model(&app, &model, &messages, &payload).await {
-    Ok(Some(local)) => Ok(json!({
-      "answer": local.answer,
+  #[cfg(mobile)]
+  {
+    let _ = app;
+    let warning = "Bundled llama.cpp local inference is desktop-only in this build.";
+    eprintln!("[tauri-rag][warn] {warning}");
+    return Ok(json!({
+      "answer": "Le runtime local GGUF embarqué n’est pas disponible sur Android. Utilise un fournisseur externe compatible OpenAI, Ollama/llama.cpp sur une machine du réseau, ou la version desktop macOS/Linux pour l’inférence locale.",
       "sources": [],
-      "runtime": "tauri-rust-local-llama.cpp",
-      "provider": local.provider,
-      "model": local.model,
-      "baseUrl": local.base_url,
-      "selectedLocalModel": model
-    })),
-    Ok(None) => {
-      let warning = "Selected local GGUF model resolved to no model path.";
-      eprintln!("[tauri-rag][warn] {warning}");
-      Ok(json!({
-        "answer": warning,
+      "runtime": "tauri-rust-mobile",
+      "provider": "local-llama.cpp",
+      "model": model,
+      "warning": warning
+    }));
+  }
+
+  #[cfg(not(mobile))]
+  {
+    let messages = with_system_prompt(&payload);
+    match local_llama_runtime::chat_with_selected_model(&app, &model, &messages, &payload).await {
+      Ok(Some(local)) => Ok(json!({
+        "answer": local.answer,
         "sources": [],
         "runtime": "tauri-rust-local-llama.cpp",
-        "provider": "local-llama.cpp",
-        "model": model,
-        "warning": warning
-      }))
-    },
-    Err(error) => {
-      eprintln!("[tauri-rag][warn] local GGUF generation failed: {error}");
-      Ok(json!({
-        "answer": format!("Le modèle local « {model} » est sélectionné, mais Tauri n’a pas pu lancer ou joindre le runtime llama.cpp embarqué.\n\nDétail technique : {error}"),
-        "sources": [],
-        "runtime": "tauri-rust-local-llama.cpp",
-        "provider": "local-llama.cpp",
-        "model": model,
-        "warning": error
-      }))
-    },
+        "provider": local.provider,
+        "model": local.model,
+        "baseUrl": local.base_url,
+        "selectedLocalModel": model
+      })),
+      Ok(None) => {
+        let warning = "Selected local GGUF model resolved to no model path.";
+        eprintln!("[tauri-rag][warn] {warning}");
+        Ok(json!({
+          "answer": warning,
+          "sources": [],
+          "runtime": "tauri-rust-local-llama.cpp",
+          "provider": "local-llama.cpp",
+          "model": model,
+          "warning": warning
+        }))
+      },
+      Err(error) => {
+        eprintln!("[tauri-rag][warn] local GGUF generation failed: {error}");
+        Ok(json!({
+          "answer": format!("Le modèle local « {model} » est sélectionné, mais Tauri n’a pas pu lancer ou joindre le runtime llama.cpp embarqué.\n\nDétail technique : {error}"),
+          "sources": [],
+          "runtime": "tauri-rust-local-llama.cpp",
+          "provider": "local-llama.cpp",
+          "model": model,
+          "warning": error
+        }))
+      },
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn selects_chat_model_from_route() {
+    let payload = json!({ "aiConfig": { "routes": { "chat": { "model": "tiny.gguf" } } } });
+    assert_eq!(selected_chat_model(&payload), "tiny.gguf");
+  }
+
+  #[test]
+  fn extracts_last_user_message() {
+    let payload = json!({ "messages": [
+      { "role": "user", "content": "first" },
+      { "role": "assistant", "content": "answer" },
+      { "role": "user", "content": "second" }
+    ] });
+    assert_eq!(last_user_message(&payload), "second");
   }
 }

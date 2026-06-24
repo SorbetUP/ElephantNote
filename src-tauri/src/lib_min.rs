@@ -21,6 +21,8 @@ mod debug_commands;
 
 #[cfg(test)]
 mod sync_contract_tests;
+#[cfg(test)]
+mod platform_contract_tests;
 
 #[tauri::command]
 fn healthcheck() -> &'static str {

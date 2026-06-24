@@ -41,9 +41,14 @@ for (const file of [
   'Elephant/front/app/utils/noteCardView.js',
   'Elephant/shared/apiContracts.js',
   'Elephant/shared/sync.js',
+  'Elephant/front/app/services/elephantnoteClient/apiRuntime.js',
   'Elephant/front/app/services/elephantnoteClient/domainClients.js',
+  'Elephant/front/app/services/elephantnoteClient/legacyCalls.js',
   'test/unit/specs/main/elephantnote/apiContracts.spec.js',
+  'test/unit/specs/main/elephantnote/apiRuntime.spec.js',
+  'test/unit/specs/main/elephantnote/legacyCalls.spec.js',
   'test/unit/specs/main/elephantnote/markdownDocument.spec.js',
+  'test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js',
   'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
   'test/unit/specs/main/elephantnote/syncPlan.spec.js',
   'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
@@ -134,6 +139,28 @@ ordered('test/unit/specs/main/elephantnote/apiContracts.spec.js', [
   'rejects unknown sync.plan operations instead of falling back to the default plan',
   'rejects non-array sync.plan operations'
 ], 'API contract tests must reject unsafe sync plan operations payloads')
+ordered('Elephant/front/app/services/elephantnoteClient/apiRuntime.js', [
+  "import { validateApiPayload } from 'common/elephantnote/apiContracts'",
+  'const plainPayload = toPlainObject(payload)',
+  'const validatedPayload = validateApiPayload(action, plainPayload)',
+  'requireElephantNoteApi().call(action, validatedPayload)',
+  'return legacyCall(validatedPayload)'
+], 'renderer API runtime must validate payloads before public bridge and legacy fallback dispatch')
+ordered('test/unit/specs/main/elephantnote/apiRuntime.spec.js', [
+  'validates payloads before dispatching to the public bridge API',
+  'rejects invalid payloads before they can reach the public bridge API',
+  'rejects invalid payloads before they can reach legacy fallback calls'
+], 'API runtime tests must cover validation before dispatch')
+ordered('test/unit/specs/main/elephantnote/legacyCalls.spec.js', [
+  'routes sync.plan to the bridge when Tauri invoke is unavailable',
+  'disableTauriInvoke()',
+  'passes sync.plan payloads directly to the Tauri command when available',
+  'normalizes non-object sync.plan payloads before dispatching to Tauri'
+], 'legacy sync.plan tests must be isolated from leaked Tauri globals')
+ordered('test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js', [
+  'routes direct sync plan payloads to the Rust command',
+  'routes public API sync.plan payloads to the Rust command'
+], 'Tauri bridge tests must cover direct and public sync.plan routing')
 ordered('Elephant/front/app/services/elephantnoteClient/domainClients.js', [
   'notes: {',
   'read: (relativePath) => call(API.NOTES_READ',

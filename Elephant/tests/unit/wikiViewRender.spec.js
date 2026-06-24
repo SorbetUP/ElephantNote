@@ -239,6 +239,73 @@ describe('WikiView library root', () => {
     container.remove()
   })
 
+  it('clears stale wiki root entries before a wiki folder load resolves', async() => {
+    const deferred = createDeferred()
+    listDirectory
+      .mockResolvedValueOnce([
+        {
+          kind: 'folder',
+          path: '.elephantnote/wiki/Cluster',
+          title: 'Cluster',
+          tags: [],
+          noteCount: 1,
+          updatedAt: '2026-06-24T07:00:00.000Z'
+        },
+        {
+          kind: 'note',
+          path: '.elephantnote/wiki/StaleRoot.md',
+          title: 'StaleRoot',
+          tags: [],
+          updatedAt: '2026-06-24T07:00:00.000Z'
+        }
+      ])
+      .mockReturnValueOnce(deferred.promise)
+
+    const { useVaultStore } = await import('../../front/app/stores/vaultStore.js')
+    const WikiView = (await import('../../front/app/components/views/WikiView.vue')).default
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const store = useVaultStore()
+    store.applyPayload({
+      vaults: [createVault()],
+      activeVaultId: 'vault-1',
+      activeVault: createVault(),
+      workspace: { sidebar: [] },
+      entries: []
+    })
+
+    const app = createApp({ render: () => h(WikiView) })
+    app.use(pinia)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    app.mount(container)
+    await flush()
+
+    container.querySelector('.en-note-card')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await nextTick()
+
+    expect(listDirectory).toHaveBeenLastCalledWith('.elephantnote/wiki/Cluster')
+    expect(store.currentPath).toBe('.elephantnote/wiki/Cluster')
+    expect(store.entries).toEqual([])
+    expect(container.textContent).not.toContain('StaleRoot')
+
+    deferred.resolve([
+      {
+        kind: 'note',
+        path: '.elephantnote/wiki/Cluster/Index.md',
+        title: 'Index',
+        tags: [],
+        updatedAt: '2026-06-24T07:01:00.000Z'
+      }
+    ])
+    await flush()
+
+    expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Cluster/Index.md'])
+
+    app.unmount()
+    container.remove()
+  })
+
   it('resets an already-open wiki subfolder to the wiki root from the rail button', async() => {
     listDirectory.mockResolvedValueOnce([
       {

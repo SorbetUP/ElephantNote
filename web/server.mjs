@@ -8,11 +8,28 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const publicDir = path.join(__dirname, 'public')
 const vaultRoot = path.resolve(process.env.ELEPHANTNOTE_VAULT || '/data/vault')
 const port = Number(process.env.PORT || 8787)
+const autoSyncRemote = String(process.env.ELEPHANTNOTE_SYNC_REMOTE || '')
+const autoSyncRemoteName = String(process.env.ELEPHANTNOTE_SYNC_REMOTE_NAME || 'origin')
+const autoSyncBranch = String(process.env.ELEPHANTNOTE_SYNC_BRANCH || '')
+const autoSyncMode = String(process.env.ELEPHANTNOTE_SYNC_AUTO_MODE || 'pull')
+const autoSyncIntervalMs = Number(process.env.ELEPHANTNOTE_SYNC_AUTO_INTERVAL_MS || 0)
 
 const pathExists = async(target) => fs.access(target).then(() => true, () => false)
 const ensureDir = async(target) => fs.mkdir(target, { recursive: true })
 
 const syncEngine = new WebGitSyncEngine({ cwd: vaultRoot })
+const autoSyncState = {
+  enabled: Boolean(autoSyncRemote && autoSyncIntervalMs > 0),
+  mode: autoSyncMode,
+  intervalMs: autoSyncIntervalMs,
+  running: false,
+  attempts: 0,
+  successes: 0,
+  failures: 0,
+  lastAttemptAt: '',
+  lastSuccessAt: '',
+  lastError: ''
+}
 
 const send = (res, status, body, type = 'application/json') => {
   res.writeHead(status, { 'content-type': type })
@@ -67,10 +84,53 @@ const createNote = async({ title = 'Untitled', body = '' } = {}) => {
   return { path: path.relative(vaultRoot, target), title: base }
 }
 
+const createAutoSyncPayload = () => {
+  const init = {
+    remote: autoSyncRemote,
+    remoteName: autoSyncRemoteName,
+    branch: autoSyncBranch
+  }
+  const pull = {
+    remoteName: autoSyncRemoteName,
+    branch: autoSyncBranch
+  }
+  if (autoSyncMode === 'send-receive') {
+    return {
+      init,
+      snapshot: { message: `ElephantNote auto sync ${new Date().toISOString()}` },
+      pull,
+      push: pull
+    }
+  }
+  return { init, pull }
+}
+
+const runAutoSyncOnce = async(reason = 'interval') => {
+  if (!autoSyncState.enabled || autoSyncState.running) return autoSyncState
+  autoSyncState.running = true
+  autoSyncState.attempts += 1
+  autoSyncState.lastAttemptAt = new Date().toISOString()
+  try {
+    await syncEngine.run(createAutoSyncPayload())
+    autoSyncState.successes += 1
+    autoSyncState.lastSuccessAt = new Date().toISOString()
+    autoSyncState.lastError = ''
+  } catch (error) {
+    autoSyncState.failures += 1
+    autoSyncState.lastError = error.message || 'Auto sync failed.'
+    console.warn('[elephantnote:auto-sync] failed', { reason, error: autoSyncState.lastError })
+  } finally {
+    autoSyncState.running = false
+  }
+  return autoSyncState
+}
+
 const routeApi = async(req, res, url) => {
   if (req.method === 'GET' && url.pathname === '/api/notes') return send(res, 200, await listNotes())
   if (req.method === 'POST' && url.pathname === '/api/notes') return send(res, 201, await createNote(await readBody(req)))
   if (req.method === 'GET' && url.pathname === '/api/sync/status') return send(res, 200, syncEngine.status())
+  if (req.method === 'GET' && url.pathname === '/api/sync/auto/status') return send(res, 200, autoSyncState)
+  if (req.method === 'POST' && url.pathname === '/api/sync/auto/run') return send(res, 200, await runAutoSyncOnce('api'))
   if (req.method === 'POST' && url.pathname === '/api/sync/run') return send(res, 200, await syncEngine.run(await readBody(req)))
   return false
 }
@@ -96,3 +156,13 @@ http.createServer(async(req, res) => {
   console.log(`ElephantNote web listening on http://0.0.0.0:${port}`)
 })
 
+if (autoSyncState.enabled) {
+  console.log('[elephantnote:auto-sync] enabled', {
+    mode: autoSyncMode,
+    intervalMs: autoSyncIntervalMs,
+    remote: autoSyncRemote,
+    branch: autoSyncBranch
+  })
+  setTimeout(() => runAutoSyncOnce('startup'), 250).unref?.()
+  setInterval(() => runAutoSyncOnce('interval'), autoSyncIntervalMs).unref?.()
+}

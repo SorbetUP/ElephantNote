@@ -108,7 +108,10 @@ export const installGraphRuntimeFixes = () => {
     }
   }
 
-  const forceRepair = () => repairGraphIfNeeded({ force: true })
+  const runRepair = (options) => repairGraphIfNeeded(options).catch((error) => {
+    pushDiagnosticLog('error', 'graph repair event failed', error)
+  })
+  const forceRepair = () => runRepair({ force: true })
   const scheduleLazyRepair = () => scheduleRepairCheck(repairGraphIfNeeded, 250)
 
   window.addEventListener('elephantnote:repair-graph', forceRepair)

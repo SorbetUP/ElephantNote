@@ -30,6 +30,11 @@ const requireString = (value, label) => {
   return value.trim()
 }
 
+const getContributionId = (entry) => {
+  const id = entry?.contribution?.id
+  return typeof id === 'string' ? id.trim() : ''
+}
+
 export class ElephantAddonManager {
   constructor(context = {}) {
     this.context = Object.freeze({ ...context, addons: this })
@@ -169,6 +174,32 @@ export class ElephantAddonManager {
     return Object.fromEntries(
       [...this.contributions.entries()].map(([area, entries]) => [area, [...entries]])
     )
+  }
+
+  getActions() {
+    return this.getContributions(ADDON_EXTENSION_POINTS.actions)
+      .filter((entry) => getContributionId(entry))
+  }
+
+  getAction(actionId) {
+    const normalizedActionId = requireString(actionId, 'actionId')
+    return this.getActions().find((entry) => getContributionId(entry) === normalizedActionId) || null
+  }
+
+  async runAction(actionId, payload = undefined) {
+    const entry = this.getAction(actionId)
+    if (!entry) throw new Error(`Unknown addon action: ${actionId}`)
+
+    const run = entry.contribution?.run
+    if (typeof run !== 'function') {
+      throw new TypeError(`Addon action is not executable: ${actionId}`)
+    }
+
+    return await run(payload, {
+      addonId: entry.addonId,
+      actionId,
+      addons: this
+    })
   }
 
   on(eventName, listener) {

@@ -29,6 +29,22 @@ const asRelativePathPayload = (payload = {}) => {
   return normalizePayload(payload)
 }
 const asMarkdownPayload = (payload = '') => (typeof payload === 'string' ? { markdown: payload } : normalizePayload(payload))
+const optionalInteger = (value) => {
+  const number = Number(value)
+  return Number.isFinite(number) ? Math.max(0, Math.trunc(number)) : undefined
+}
+const normalizeDirectoryListPayload = (payload = '') => {
+  const next = typeof payload === 'string' ? { relativePath: payload } : normalizePayload(payload)
+  const normalized = {
+    relativePath: next.relativePath || next.path || ''
+  }
+  const offset = optionalInteger(next.offset)
+  const limit = optionalInteger(next.limit)
+  if (offset !== undefined) normalized.offset = offset
+  if (limit !== undefined && limit > 0) normalized.limit = limit
+  if (next.includePreview === false) normalized.includePreview = false
+  return normalized
+}
 
 const normalizeModelSearchPayload = (payload = {}) => {
   const next = { ...normalizePayload(payload) }
@@ -117,7 +133,7 @@ const dispatchApiAction = async(bridge, action, payload = {}) => {
     case 'vaults.setIcon': return bridge.setVaultIcon(payload)
     case 'vaults.setName': return bridge.setVaultName(payload)
     case 'vaults.remove': return bridge.removeVault(payload)
-    case 'directory.list': return bridge.listDirectory(payload.relativePath || '')
+    case 'directory.list': return bridge.listDirectory(payload)
     case 'notes.create': return bridge.createNote(payload)
     case 'notes.read': return bridge.notes.read(payload)
     case 'notes.write': return bridge.notes.write(payload)
@@ -263,7 +279,7 @@ const createBridge = (target) => {
     setVaultName: (payload = {}) => invoke(target, 'tauri_vaults_set_name', normalizePayload(payload)),
     removeVault: (payload = {}) => invoke(target, 'tauri_vaults_remove', normalizePayload(payload)),
 
-    listDirectory: (relativePath = '') => invoke(target, 'tauri_directory_list', { relativePath }),
+    listDirectory: (payload = '') => invoke(target, 'tauri_directory_list', normalizeDirectoryListPayload(payload)),
     createNote: (payload = {}) => invoke(target, 'tauri_notes_create', asRelativePathPayload(payload)),
     readNote: (payload = {}) => invoke(target, 'tauri_notes_read', asRelativePathPayload(payload)),
     writeNote: (payload = {}) => invoke(target, 'tauri_notes_write', normalizePayload(payload)),

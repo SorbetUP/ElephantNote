@@ -121,15 +121,24 @@ const { platform } = storeToRefs(mainStore)
 const { sourceCode, textDirection } = storeToRefs(preferencesStore)
 const { currentFile } = storeToRefs(editorStore)
 
-const AUTOSAVE_POLL_MS = 1000
-const AUTOSAVE_DELAY_MS = 180
-const HEAVY_NOTE_AUTOSAVE_DELAY_MS = 700
-const HEAVY_NOTE_BYTES = 512 * 1024
+const AUTOSAVE_POLL_MS = 500
+const AUTOSAVE_DELAY_MS = 160
+const LARGE_EDIT_AUTOSAVE_DELAY_MS = 60
+const HUGE_EDIT_AUTOSAVE_DELAY_MS = 20
+const LARGE_EDIT_BYTES = 8 * 1024
+const HUGE_EDIT_BYTES = 64 * 1024
 const isAutosaveDebugEnabled = () => window.localStorage.getItem('elephantnote:debugAutosave') === 'true'
-const autosaveDelayFor = (value, requestedDelay = AUTOSAVE_DELAY_MS) => {
+const estimateEditDelta = (previousMarkdown = '', nextMarkdown = '') => {
+  if (typeof nextMarkdown !== 'string') return 0
+  if (typeof previousMarkdown !== 'string') return nextMarkdown.length
+  return Math.abs(nextMarkdown.length - previousMarkdown.length)
+}
+const autosaveDelayFor = (_value, requestedDelay = AUTOSAVE_DELAY_MS, editDelta = 0) => {
   if (requestedDelay === 0) return 0
-  const length = typeof value === 'string' ? value.length : 0
-  return length >= HEAVY_NOTE_BYTES ? Math.max(requestedDelay, HEAVY_NOTE_AUTOSAVE_DELAY_MS) : requestedDelay
+  const delta = Math.abs(Number(editDelta) || 0)
+  if (delta >= HUGE_EDIT_BYTES) return Math.min(requestedDelay, HUGE_EDIT_AUTOSAVE_DELAY_MS)
+  if (delta >= LARGE_EDIT_BYTES) return Math.min(requestedDelay, LARGE_EDIT_AUTOSAVE_DELAY_MS)
+  return requestedDelay
 }
 const logAutosave = (level, message, details) => {
   if (!isAutosaveDebugEnabled()) return
@@ -337,12 +346,12 @@ const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.
   }
 }
 
-const scheduleNoteSave = (notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, delay = AUTOSAVE_DELAY_MS, reason = 'unknown') => {
+const scheduleNoteSave = (notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, delay = AUTOSAVE_DELAY_MS, reason = 'unknown', editDelta = 0) => {
   if (!notePath || typeof nextMarkdown !== 'string') return
   if (lastSavedNotePath === notePath && lastSavedMarkdown === nextMarkdown) return
   if (noteSaveTimer) window.clearTimeout(noteSaveTimer)
-  const effectiveDelay = autosaveDelayFor(nextMarkdown, delay)
-  logAutosave('info', '[elephantnote:save] schedule', { notePath, length: nextMarkdown.length, delay: effectiveDelay, reason })
+  const effectiveDelay = autosaveDelayFor(nextMarkdown, delay, editDelta)
+  logAutosave('info', '[elephantnote:save] schedule', { notePath, length: nextMarkdown.length, editDelta, delay: effectiveDelay, reason })
   noteSaveTimer = window.setTimeout(() => {
     noteSaveTimer = null
     void persistNoteMarkdown(notePath, nextMarkdown, file, reason)
@@ -370,8 +379,9 @@ const pollActiveMarkdownSave = (reason = 'poll') => {
     return
   }
   if (lastSeenMarkdown === nextMarkdown) return
+  const editDelta = estimateEditDelta(lastSeenMarkdown, nextMarkdown)
   lastSeenMarkdown = nextMarkdown
-  scheduleNoteSave(notePath, nextMarkdown, file, AUTOSAVE_DELAY_MS, reason)
+  scheduleNoteSave(notePath, nextMarkdown, file, AUTOSAVE_DELAY_MS, reason, editDelta)
 }
 
 const flushActiveNoteSave = async(reason = 'flush') => {
@@ -411,15 +421,17 @@ watch(
       return
     }
     if (previous?.markdown === nextMarkdown) return
+    const editDelta = estimateEditDelta(previous?.markdown, nextMarkdown)
     lastSeenNotePath = notePath
     lastSeenMarkdown = nextMarkdown
-    scheduleNoteSave(notePath, nextMarkdown, file, AUTOSAVE_DELAY_MS, 'vue-watch')
+    scheduleNoteSave(notePath, nextMarkdown, file, AUTOSAVE_DELAY_MS, 'vue-watch', editDelta)
   }
 )
 
 const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {
   const file = activeNoteFile.value || currentFile.value
   if (!file) return
+  const previousMarkdown = file.markdown || markdown.value || ''
   file.markdown = nextMarkdown
   file.isSaved = false
   if (currentFile.value && file.id === currentFile.value.id) {
@@ -434,7 +446,7 @@ const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {
     }
     lastSeenNotePath = notePath
     lastSeenMarkdown = nextMarkdown
-    scheduleNoteSave(notePath, nextMarkdown, file, 0, 'toolbar-edit')
+    scheduleNoteSave(notePath, nextMarkdown, file, 0, 'toolbar-edit', estimateEditDelta(previousMarkdown, nextMarkdown))
   }
 }
 

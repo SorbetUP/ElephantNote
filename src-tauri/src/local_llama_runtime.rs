@@ -434,8 +434,38 @@ mod tests {
   }
 
   #[test]
-  fn runtime_base_url_overrides_environment_fallback() {
+  fn configured_server_path_prefers_payload_over_ai_config() {
+    let payload = json!({
+      "llamaServerPath": "/tmp/payload-llama-server",
+      "aiConfig": { "localRuntime": { "llamaServerPath": "/tmp/config-llama-server" } }
+    });
+    assert_eq!(configured_server_path(&payload), "/tmp/payload-llama-server");
+  }
+
+  #[test]
+  fn configured_server_path_reads_ai_config() {
+    let payload = json!({ "aiConfig": { "localRuntime": { "llamaServerPath": "/tmp/config-llama-server" } } });
+    assert_eq!(configured_server_path(&payload), "/tmp/config-llama-server");
+  }
+
+  #[test]
+  fn runtime_base_url_prefers_payload_over_ai_config() {
+    let payload = json!({
+      "llamaBaseUrl": "http://127.0.0.1:50000/v1/",
+      "aiConfig": { "localRuntime": { "llamaBaseUrl": "http://127.0.0.1:49999/v1/" } }
+    });
+    assert_eq!(base_url_from_env_or_payload(&payload), "http://127.0.0.1:50000/v1");
+  }
+
+  #[test]
+  fn runtime_base_url_reads_ai_config() {
     let value = json!({ "aiConfig": { "localRuntime": { "llamaBaseUrl": "http://127.0.0.1:49999/v1/" } } });
     assert_eq!(base_url_from_env_or_payload(&value), "http://127.0.0.1:49999/v1");
+  }
+
+  #[test]
+  fn context_size_rejects_too_small_values() {
+    assert_eq!(context_size_from_payload(&json!({ "ctxSize": 128 })), "4096");
+    assert_eq!(context_size_from_payload(&json!({ "ctxSize": 2048 })), "2048");
   }
 }

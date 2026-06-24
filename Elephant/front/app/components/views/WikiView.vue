@@ -59,14 +59,6 @@ const loadWikiDirectory = async (relativePath = WIKI_ROOT) => {
 
 onMounted(() => loadWikiDirectory(WIKI_ROOT))
 watch(() => store.activeVaultId, () => loadWikiDirectory(WIKI_ROOT))
-watch(
-  () => store.activeWorkspaceView,
-  (view) => {
-    if (view === 'wiki' && !store.openedNotePath) {
-      loadWikiDirectory(WIKI_ROOT)
-    }
-  }
-)
 </script>
 
 <style scoped>

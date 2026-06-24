@@ -1,4 +1,5 @@
 import {
+  createConceptProfile,
   normalizeKnowledgeText,
   scoreChunkAgainstConcept,
   tokenizeKnowledgeText
@@ -31,6 +32,40 @@ export const createQueryProfile = (query = '') => {
     isAmbiguousCandidate: isShort && !isQuestion
   }
 }
+
+const normalizeRecordCitation = (citation = {}) => [
+  citation.title,
+  citation.path,
+  citation.excerpt,
+  ...(Array.isArray(citation.tags) ? citation.tags : [])
+].filter(Boolean).join(' ')
+
+export const createConceptProfilesFromWikiRecords = (records = []) => records
+  .filter((record) => record && ['proposed', 'accepted'].includes(String(record.status || 'proposed')))
+  .map((record) => {
+    const citations = Array.isArray(record.citations) ? record.citations : []
+    const citationTexts = citations.map(normalizeRecordCitation).filter(Boolean)
+    const aliases = unique([
+      record.topic,
+      record.title,
+      record.notePath,
+      ...citations.map((citation) => citation.title)
+    ]).filter((value) => normalizeKnowledgeText(value) !== normalizeKnowledgeText(record.title || record.topic || ''))
+
+    return createConceptProfile({
+      id: record.id || `wiki:${normalizeKnowledgeText(record.title || record.topic || 'concept').replace(/\s+/g, '-')}`,
+      title: String(record.title || record.topic || 'Wiki concept'),
+      aliases,
+      positiveTerms: [
+        record.topic,
+        record.summary,
+        ...citationTexts
+      ],
+      negativeTerms: [],
+      positivePrototypeTexts: citationTexts.slice(0, 8),
+      negativePrototypeTexts: []
+    })
+  })
 
 const scoreQueryAgainstConcept = (queryProfile, concept) => {
   const queryTerms = new Set(queryProfile.terms)

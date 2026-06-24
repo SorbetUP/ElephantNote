@@ -12,15 +12,20 @@ const installTauriInvoke = (invoke) => {
   globalThis.window.__TAURI__ = { core: { invoke } }
 }
 
+const disableTauriInvoke = () => {
+  globalThis.window.__TAURI__ = null
+}
+
 afterEach(() => {
   globalThis.window.elephantnote = originalBridge
   globalThis.window.__TAURI__ = originalTauri
 })
 
 describe('LEGACY_CALLS', () => {
-  it('routes sync.plan to the bridge instead of dropping it', () => {
+  it('routes sync.plan to the bridge when Tauri invoke is unavailable', () => {
     const payload = { operations: ['init', 'pull'], pull: { remoteName: 'origin' } }
     const plan = vi.fn((value) => ({ ok: true, value }))
+    disableTauriInvoke()
     installBridge({ sync: { plan } })
 
     expect(LEGACY_CALLS['sync.plan'](payload)).toEqual({ ok: true, value: payload })
@@ -37,5 +42,16 @@ describe('LEGACY_CALLS', () => {
       value: { payloadByOperation: payload }
     })
     expect(invoke).toHaveBeenCalledWith('tauri_sync_plan', { payloadByOperation: payload })
+  })
+
+  it('normalizes non-object sync.plan payloads before dispatching to Tauri', () => {
+    const invoke = vi.fn((command, value) => ({ command, value }))
+    installTauriInvoke(invoke)
+
+    expect(LEGACY_CALLS['sync.plan']('pull')).toEqual({
+      command: 'tauri_sync_plan',
+      value: { payloadByOperation: {} }
+    })
+    expect(invoke).toHaveBeenCalledWith('tauri_sync_plan', { payloadByOperation: {} })
   })
 })

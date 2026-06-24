@@ -120,6 +120,74 @@ const isBroadFsScope = (scopePath) => {
   ))
 }
 
+const cspDirectiveValue = (csp, directive) => {
+  if (!csp) return ''
+  if (typeof csp === 'object' && typeof csp[directive] === 'string') return csp[directive]
+  if (typeof csp !== 'string') return ''
+
+  const match = csp
+    .split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${directive} `))
+
+  return match ? match.slice(directive.length).trim() : ''
+}
+
+const scanTauriConfig = (root, findings) => {
+  const configFile = path.join(root, 'src-tauri', 'tauri.conf.json')
+  if (!exists(configFile)) return
+
+  const file = toRepoPath(root, configFile)
+  let config
+  try {
+    config = readJson(configFile)
+  } catch (error) {
+    findings.push(makeFinding({
+      id: 'TAURI_CONFIG_INVALID_JSON',
+      file,
+      value: error.message,
+      message: 'Tauri config JSON must be parseable so production security settings can be audited.'
+    }))
+    return
+  }
+
+  if (config?.app?.withGlobalTauri === true) {
+    findings.push(makeFinding({
+      id: 'TAURI_GLOBAL_API_ENABLED',
+      file,
+      value: 'withGlobalTauri: true',
+      message: 'Production Tauri builds must not expose the global window.__TAURI__ bridge; use explicit imports from @tauri-apps/api instead.'
+    }))
+  }
+
+  const csp = config?.app?.security?.csp
+  const scriptSrc = cspDirectiveValue(csp, 'script-src')
+  const connectSrc = cspDirectiveValue(csp, 'connect-src')
+
+  for (const unsafeToken of ["'unsafe-inline'", "'unsafe-eval'"]) {
+    if (scriptSrc.includes(unsafeToken)) {
+      findings.push(makeFinding({
+        id: 'TAURI_CSP_UNSAFE_SCRIPT_SOURCE',
+        file,
+        value: `script-src ${unsafeToken}`,
+        message: 'Production script-src must not allow unsafe inline scripts or eval. Keep WASM exceptions separate and documented when required.'
+      }))
+    }
+  }
+
+  for (const broadLocalhost of ['http://localhost:*', 'http://127.0.0.1:*']) {
+    if (connectSrc.includes(broadLocalhost)) {
+      findings.push(makeFinding({
+        severity: WARNING,
+        id: 'TAURI_CSP_BROAD_LOCALHOST_CONNECT',
+        file,
+        value: `connect-src ${broadLocalhost}`,
+        message: 'Prefer exact local runtime ports instead of wildcard localhost connect-src entries in production.'
+      }))
+    }
+  }
+}
+
 const scanTauriCapabilities = (root, findings) => {
   const capabilityDirectory = path.join(root, 'src-tauri', 'capabilities')
   const capabilityFiles = listFiles(capabilityDirectory, (filePath) => filePath.endsWith('.json'))
@@ -440,6 +508,7 @@ const scanCommittedSecrets = (root, findings) => {
 
 export const collectSecurityFindings = (root = process.cwd()) => {
   const findings = []
+  scanTauriConfig(root, findings)
   scanTauriCapabilities(root, findings)
   scanElectronHardening(root, findings)
   scanGitHubWorkflows(root, findings)

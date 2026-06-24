@@ -171,17 +171,22 @@ ordered('Elephant/front/app/utils/noteCardView.js', [
 has('test/unit/specs/main/elephantnote/markdownDocument.spec.js', 'hides compact inline frontmatter when no body preview exists', 'note card preview regression test')
 
 ordered('Elephant/shared/sync.js', [
+  "export const SYNC_METADATA_DIR = '.elephantnote/sync'",
+  "export const SYNC_LEGACY_METADATA_DIR = '.elephantnote'",
   'export const createDefaultSyncPlan = (payloadByOperation = {}) => {',
   'const explicitOperations = normalizeExplicitOperations',
   'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PULL)',
   'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PUSH)'
-], 'shared sync plan must keep explicit pull/push operations for multi-device sync')
+], 'shared sync plan must keep explicit pull/push operations and Tauri-compatible metadata layout')
 has('test/unit/specs/main/elephantnote/syncPlan.spec.js', 'can pull into a second device without creating a local snapshot first', 'sync plan second-device pull regression test')
 has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'preserves direct string enqueue operations', 'web sync direct enqueue regression test')
-has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', "expect(calls).toContainEqual(['rm', '--cached', '--ignore-unmatch'", 'web sync metadata untracking test')
+has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'canonical tauri-compatible sync directory', 'web sync canonical metadata layout test')
+has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'migrates legacy root sync config into the canonical sync directory', 'web sync legacy metadata migration test')
 has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'compacts completed queue items so periodic auto-sync cannot grow memory forever', 'web sync queue compaction regression test')
 has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', "expect(config.backend).toBe('git')", 'web sync git backend regression test')
 has('web/sync/WebGitSyncEngine.mjs', 'normalizeQueueInput', 'web sync queue input normalization')
+has('web/sync/WebGitSyncEngine.mjs', 'readMetadataJson', 'web sync legacy metadata reader')
+has('web/sync/WebGitSyncEngine.mjs', 'ALL_LOCAL_METADATA_FILES', 'web sync canonical and legacy metadata untracking')
 has('web/sync/WebGitSyncEngine.mjs', 'untrackSyncMetadata', 'web sync metadata untracking')
 has('web/sync/WebGitSyncEngine.mjs', 'compactQueue()', 'web sync queue compaction')
 has('web/sync/WebGitSyncEngine.mjs', 'backend: SYNC_BACKENDS.GIT', 'web sync reports the git backend')

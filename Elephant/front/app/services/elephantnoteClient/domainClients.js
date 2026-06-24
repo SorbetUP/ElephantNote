@@ -1,6 +1,10 @@
 import { toPlainObject } from '../../../../shared/plainObject.js'
 import { ELEPHANTNOTE_API_ACTIONS as API } from 'common/elephantnote/apiActions'
 
+const CHAT_REBUILD_COOLDOWN_MS = 60_000
+const searchVaultInitializedForChat = new Map()
+const chatSearchRebuiltAt = new Map()
+
 const getBridge = () => globalThis.window?.elephantnote
 
 const callModelBridge = (method, payload) => {
@@ -9,11 +13,22 @@ const callModelBridge = (method, payload) => {
   return bridgeMethod(toPlainObject(payload))
 }
 
+const shouldRebuildChatSearch = (vaultPath, now = Date.now()) => {
+  if (!vaultPath) return false
+  const lastRebuildAt = chatSearchRebuiltAt.get(vaultPath) || 0
+  if (now - lastRebuildAt < CHAT_REBUILD_COOLDOWN_MS) return false
+  chatSearchRebuiltAt.set(vaultPath, now)
+  return true
+}
+
 const ensureSearchVaultForChat = async (call) => {
   const vaultPayload = await call(API.VAULTS_GET).catch(() => null)
   const vaultPath = String(vaultPayload?.activeVault?.path || '').trim()
   if (!vaultPath) return ''
-  await call(API.SEARCH_INIT_VAULT, { vaultPath }).catch(() => null)
+  if (!searchVaultInitializedForChat.has(vaultPath)) {
+    await call(API.SEARCH_INIT_VAULT, { vaultPath }).catch(() => null)
+    searchVaultInitializedForChat.set(vaultPath, true)
+  }
   return vaultPath
 }
 
@@ -24,7 +39,7 @@ const callRagChat = async (call, message, limit = 6) => {
   const payload = { message, limit }
   const result = await call(API.RAG_CHAT, payload)
 
-  if (hasCitations(result) || !vaultPath) {
+  if (hasCitations(result) || !shouldRebuildChatSearch(vaultPath)) {
     return result
   }
 
@@ -39,7 +54,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     select: () => call(API.VAULTS_SELECT),
     setActive: (vaultId) => call(API.VAULTS_SET_ACTIVE, { vaultId }),
     setIcon: (vaultId, icon) => call(API.VAULTS_SET_ICON, { vaultId, icon }),
-    setName: (vaultId, name) => call(API.VAULTS_SET_NAME, { vaultId, name }),
+    setName: (vaultId, name) => call(API.VAULTS_SET_NAME, { vaultId }),
     remove: (vaultId) => call(API.VAULTS_REMOVE, { vaultId })
   },
   directory: {

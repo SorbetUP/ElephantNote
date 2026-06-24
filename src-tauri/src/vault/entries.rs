@@ -11,7 +11,14 @@ use super::metadata::{read_json_or, write_json};
 use super::types::VaultDescriptor;
 
 type R<T> = Result<T, String>;
-const MARKDOWN_PREVIEW_LIMIT: usize = 64 * 1024;
+const MARKDOWN_PREVIEW_LIMIT: usize = 16 * 1024;
+
+struct DirectorySeed {
+  name: String,
+  path: PathBuf,
+  metadata: fs::Metadata,
+  child_relative: String,
+}
 
 pub fn normalize_relative_path(path: &str) -> String {
   path.replace('\\', "/")
@@ -186,10 +193,8 @@ fn direct_markdown_note_count(path: &Path) -> usize {
     .unwrap_or(0)
 }
 
-pub fn list_directory(vault: &VaultDescriptor, relative_path: &str) -> R<Vec<Value>> {
-  let mut entries = Vec::new();
-  let directory = existing_path_inside_vault(&vault.path, relative_path)?;
-
+fn collect_directory_seeds(directory: &Path, relative_path: &str) -> R<Vec<DirectorySeed>> {
+  let mut seeds = Vec::new();
   for item in fs::read_dir(directory).map_err(|e| e.to_string())? {
     let item = item.map_err(|e| e.to_string())?;
     let name = item.file_name().to_string_lossy().to_string();
@@ -202,41 +207,73 @@ pub fn list_directory(vault: &VaultDescriptor, relative_path: &str) -> R<Vec<Val
     if metadata.file_type().is_symlink() {
       continue;
     }
-    let child_relative = normalize_relative_path(&format!("{}/{}", relative_path, name));
-
-    if metadata.is_dir() {
-      entries.push(json!({
-        "kind": "folder",
-        "title": name,
-        "path": child_relative,
-        "noteCount": direct_markdown_note_count(&path),
-        "updatedAt": metadata_updated_at(&metadata),
-        "type": "folder",
-        "tags": [],
-        "createdAt": "",
-        "excerpt": "",
-        "coverImage": ""
-      }));
-    } else if metadata.is_file() && name.to_ascii_lowercase().ends_with(".md") {
-      let preview = read_text_prefix(&path, MARKDOWN_PREVIEW_LIMIT).unwrap_or_default();
-      let title = markdown_title(&preview, &name);
-      let excerpt = markdown_excerpt(&preview);
-      entries.push(json!({
-        "kind": "note",
-        "title": title,
-        "path": child_relative,
-        "filename": name,
-        "updatedAt": metadata_updated_at(&metadata),
-        "type": "note",
-        "tags": [],
-        "createdAt": "",
-        "excerpt": excerpt,
-        "coverImage": ""
-      }));
+    if !metadata.is_dir() && !(metadata.is_file() && name.to_ascii_lowercase().ends_with(".md")) {
+      continue;
     }
+    let child_relative = normalize_relative_path(&format!("{}/{}", relative_path, name));
+    seeds.push(DirectorySeed { name, path, metadata, child_relative });
+  }
+  seeds.sort_by(|a, b| {
+    let a_is_dir = a.metadata.is_dir();
+    let b_is_dir = b.metadata.is_dir();
+    b_is_dir
+      .cmp(&a_is_dir)
+      .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+  });
+  Ok(seeds)
+}
+
+fn entry_from_seed(seed: DirectorySeed, include_preview: bool) -> Value {
+  if seed.metadata.is_dir() {
+    return json!({
+      "kind": "folder",
+      "title": seed.name,
+      "path": seed.child_relative,
+      "noteCount": direct_markdown_note_count(&seed.path),
+      "updatedAt": metadata_updated_at(&seed.metadata),
+      "type": "folder",
+      "tags": [],
+      "createdAt": "",
+      "excerpt": "",
+      "coverImage": ""
+    });
   }
 
-  Ok(entries)
+  let preview = if include_preview {
+    read_text_prefix(&seed.path, MARKDOWN_PREVIEW_LIMIT).unwrap_or_default()
+  } else {
+    String::new()
+  };
+  let title = if include_preview { markdown_title(&preview, &seed.name) } else { seed.name.trim_end_matches(".md").to_string() };
+  let excerpt = if include_preview { markdown_excerpt(&preview) } else { String::new() };
+  json!({
+    "kind": "note",
+    "title": title,
+    "path": seed.child_relative,
+    "filename": seed.name,
+    "updatedAt": metadata_updated_at(&seed.metadata),
+    "type": "note",
+    "tags": [],
+    "createdAt": "",
+    "excerpt": excerpt,
+    "coverImage": ""
+  })
+}
+
+pub fn list_directory_page(vault: &VaultDescriptor, relative_path: &str, offset: usize, limit: Option<usize>, include_preview: bool) -> R<Vec<Value>> {
+  let directory = existing_path_inside_vault(&vault.path, relative_path)?;
+  let seeds = collect_directory_seeds(&directory, relative_path)?;
+  let limit = limit.unwrap_or(usize::MAX);
+  Ok(seeds
+    .into_iter()
+    .skip(offset)
+    .take(limit)
+    .map(|seed| entry_from_seed(seed, include_preview))
+    .collect())
+}
+
+pub fn list_directory(vault: &VaultDescriptor, relative_path: &str) -> R<Vec<Value>> {
+  list_directory_page(vault, relative_path, 0, None, true)
 }
 
 fn next_available_name(directory: &Path, base: &str) -> String {
@@ -428,5 +465,33 @@ mod tests {
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].get("excerpt").and_then(Value::as_str), Some("Visible preview."));
     assert_eq!(entries[0].get("title").and_then(Value::as_str), Some("Noteh"));
+  }
+
+  #[test]
+  fn list_directory_page_respects_offset_limit_and_preview_flag() {
+    let unique = std::time::SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .unwrap()
+      .as_nanos();
+    let root = std::env::temp_dir().join(format!("elephantnote-page-test-{unique}"));
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("A.md"), "---\ntitle: \"A title\"\n---\n\nA body.").unwrap();
+    fs::write(root.join("B.md"), "---\ntitle: \"B title\"\n---\n\nB body.").unwrap();
+    fs::write(root.join("C.md"), "---\ntitle: \"C title\"\n---\n\nC body.").unwrap();
+
+    let vault = VaultDescriptor {
+      id: "test".to_string(),
+      name: "Test".to_string(),
+      path: root.to_string_lossy().to_string(),
+      icon: String::new(),
+      last_opened_at: "0".to_string(),
+    };
+
+    let entries = list_directory_page(&vault, "", 1, Some(1), false).unwrap();
+    fs::remove_dir_all(&root).ok();
+
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].get("title").and_then(Value::as_str), Some("B"));
+    assert_eq!(entries[0].get("excerpt").and_then(Value::as_str), Some(""));
   }
 }

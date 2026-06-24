@@ -6,11 +6,17 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
+use tauri::{AppHandle, Manager};
 
 type R<T> = Result<T, String>;
 const MODEL_PROVIDER: &str = "node-llama-cpp";
 const DEFAULT_PORT: u16 = 39281;
 const DEFAULT_BASE_URL: &str = "http://127.0.0.1:39281/v1";
+
+#[cfg(windows)]
+const LLAMA_SERVER_BIN: &str = "llama-server.exe";
+#[cfg(not(windows))]
+const LLAMA_SERVER_BIN: &str = "llama-server";
 
 pub struct LocalChatResult {
   pub answer: String,
@@ -150,8 +156,52 @@ fn local_port_from_base_url(base_url: &str) -> Option<u16> {
   None
 }
 
-fn server_binary_candidates() -> Vec<String> {
+#[cfg(unix)]
+fn ensure_executable(path: &Path) {
+  use std::os::unix::fs::PermissionsExt;
+  if let Ok(metadata) = fs::metadata(path) {
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(permissions.mode() | 0o755);
+    let _ = fs::set_permissions(path, permissions);
+  }
+}
+
+#[cfg(not(unix))]
+fn ensure_executable(_path: &Path) {}
+
+fn push_if_file(out: &mut Vec<String>, path: PathBuf) {
+  if path.is_file() {
+    ensure_executable(&path);
+    out.push(path.to_string_lossy().to_string());
+  }
+}
+
+fn app_managed_binary_candidates(app: &AppHandle) -> Vec<String> {
   let mut out = Vec::new();
+  if let Ok(resource_dir) = app.path().resource_dir() {
+    push_if_file(&mut out, resource_dir.join(LLAMA_SERVER_BIN));
+    push_if_file(&mut out, resource_dir.join("bin").join(LLAMA_SERVER_BIN));
+  }
+  if let Ok(local_data_dir) = app.path().app_local_data_dir() {
+    push_if_file(&mut out, local_data_dir.join("llama.cpp").join(LLAMA_SERVER_BIN));
+  }
+  for root in [
+    PathBuf::from("bin"),
+    PathBuf::from("src-tauri").join("bin"),
+    PathBuf::from("..").join("src-tauri").join("bin"),
+  ] {
+    push_if_file(&mut out, root.join(LLAMA_SERVER_BIN));
+  }
+  out
+}
+
+fn server_binary_candidates(app: &AppHandle, payload: &Value) -> Vec<String> {
+  let mut out = Vec::new();
+  let from_payload = text(payload, &["llamaServerPath", "serverPath", "llamaBinary"]);
+  if !from_payload.trim().is_empty() {
+    out.push(from_payload);
+  }
+  out.extend(app_managed_binary_candidates(app));
   for key in ["ELEPHANTNOTE_LLAMA_SERVER", "LLAMA_SERVER", "LLAMA_CPP_SERVER"] {
     if let Ok(value) = env::var(key) {
       if !value.trim().is_empty() {
@@ -160,7 +210,7 @@ fn server_binary_candidates() -> Vec<String> {
     }
   }
   out.extend([
-    "llama-server".to_string(),
+    LLAMA_SERVER_BIN.to_string(),
     "llama.cpp-server".to_string(),
     "llama-cpp-server".to_string(),
     "/opt/homebrew/bin/llama-server".to_string(),
@@ -193,7 +243,7 @@ async fn wait_until_ready(base_url: &str) -> bool {
   false
 }
 
-async fn start_server_if_needed(model_path: &Path, base_url: &str, payload: &Value) -> R<()> {
+async fn start_server_if_needed(app: &AppHandle, model_path: &Path, base_url: &str, payload: &Value) -> R<()> {
   if server_ready(base_url).await {
     return Ok(());
   }
@@ -202,8 +252,8 @@ async fn start_server_if_needed(model_path: &Path, base_url: &str, payload: &Val
   let context = context_size_from_payload(payload);
   let mut errors = Vec::new();
 
-  eprintln!("[tauri-rag] starting llama server for model={} base={}", model_path_string, base_url);
-  for binary in server_binary_candidates() {
+  eprintln!("[tauri-rag] starting bundled llama server for model={} base={}", model_path_string, base_url);
+  for binary in server_binary_candidates(app, payload) {
     eprintln!("[tauri-rag] trying llama server binary: {}", binary);
     match Command::new(&binary)
       .arg("-m")
@@ -227,15 +277,15 @@ async fn start_server_if_needed(model_path: &Path, base_url: &str, payload: &Val
       Err(error) => errors.push(format!("{}: {}", binary, error)),
     }
   }
-  Err(format!("Unable to start local llama server. Attempts: {}", errors.join(" | ")))
+  Err(format!("Unable to start bundled local llama server. Attempts: {}", errors.join(" | ")))
 }
 
-pub async fn chat_with_selected_model(selection: &str, messages: &[Value], payload: &Value) -> R<Option<LocalChatResult>> {
+pub async fn chat_with_selected_model(app: &AppHandle, selection: &str, messages: &[Value], payload: &Value) -> R<Option<LocalChatResult>> {
   let Some(model_path) = resolve_model_path(selection)? else {
     return Ok(None);
   };
   let base_url = base_url_from_env_or_payload(payload);
-  start_server_if_needed(&model_path, &base_url, payload).await?;
+  start_server_if_needed(app, &model_path, &base_url, payload).await?;
 
   let model_name = model_path.file_name().and_then(|name| name.to_str()).unwrap_or("local.gguf").to_string();
   let temperature = payload.get("temperature").and_then(Value::as_f64).unwrap_or(0.2);
@@ -273,7 +323,7 @@ pub async fn chat_with_selected_model(selection: &str, messages: &[Value], paylo
   }
   Ok(Some(LocalChatResult {
     answer,
-    provider: "local-llama.cpp".to_string(),
+    provider: "local-llama.cpp-bundled".to_string(),
     model: model_name,
     base_url,
   }))

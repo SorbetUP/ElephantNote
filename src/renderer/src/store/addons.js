@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { markRaw } from 'vue'
 
 const ADDON_STORE_EVENTS = [
   'registered',
@@ -39,7 +40,7 @@ export const useAddonsStore = defineStore('addons', {
     install(manager) {
       if (!manager) throw new TypeError('Addon manager is required')
       this.uninstall()
-      this.manager = manager
+      this.manager = markRaw(manager)
       this.installed = true
       this.refresh()
 

@@ -156,7 +156,7 @@
         type="button"
         title="Wiki"
         :class="{ active: store.activeWorkspaceView === 'wiki' }"
-        @click="store.setWorkspaceView('wiki')"
+        @click="openWikiRoot"
       >
         <BookOpenText class="en-rail-icon-svg" />
       </button>
@@ -255,6 +255,7 @@ import {
 
 const emit = defineEmits(['open-settings', 'search', 'toggle-sidebar'])
 const store = useVaultStore()
+const WIKI_ROOT = '.elephantnote/wiki'
 
 const featureFlags = ref({ askAi: true })
 const editingVaultId = ref('')
@@ -326,6 +327,26 @@ const toggleIconPicker = (vaultId) => {
 const setVaultIcon = async (vaultId, icon) => {
   await store.setVaultIcon(vaultId, icon)
   editingVaultId.value = ''
+}
+
+const openWikiRoot = async () => {
+  const wasAlreadyInWiki = store.activeWorkspaceView === 'wiki'
+  store.currentPath = WIKI_ROOT
+  store.openedNotePath = ''
+  store.setWorkspaceView('wiki')
+
+  if (!wasAlreadyInWiki) return
+  if (!store.activeVault?.path) {
+    store.entries = []
+    return
+  }
+
+  try {
+    const entries = await elephantnoteClient.directory.list(WIKI_ROOT)
+    store.entries = Array.isArray(entries) ? entries : []
+  } catch {
+    store.entries = []
+  }
 }
 
 const handleAiClick = () => {

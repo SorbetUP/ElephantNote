@@ -92,6 +92,7 @@ export class WebGitSyncEngine {
       }
       await this.refresh()
       this.lastRunAt = new Date().toISOString()
+      this.compactQueue()
       return this.status()
     } catch (error) {
       this.lastError = error.message || 'Sync failed.'

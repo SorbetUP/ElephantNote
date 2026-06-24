@@ -26,6 +26,8 @@ const EMPTY_INSPECTION = Object.freeze({
   generatedAt: ''
 })
 
+const documentSearchCache = new WeakMap()
+
 const clampQueryLimit = (value) => {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 20
@@ -91,19 +93,52 @@ const normalizeBackendResult = (result = {}) => ({
   path: normalizeRelativePath(result.path || result.relativePath || '')
 })
 
+const getDocumentSearchMeta = (document) => {
+  const cached = documentSearchCache.get(document)
+  if (cached) return cached
+
+  const path = String(getDocumentPath(document)).toLowerCase()
+  const title = String(document.title || '').toLowerCase()
+  const tags = Array.isArray(document.tags) ? document.tags.join(' ').toLowerCase() : ''
+  const body = String(document.body || document.content || document.excerpt || '').toLowerCase()
+  const meta = {
+    path,
+    title,
+    tags,
+    body,
+    sortTitle: String(document.title || '')
+  }
+  documentSearchCache.set(document, meta)
+  return meta
+}
+
 const scoreDocument = (document, query = '') => {
   const needle = String(query || '').trim().toLowerCase()
   if (!needle) return 0
 
-  const title = String(document.title || '').toLowerCase()
-  const path = String(getDocumentPath(document)).toLowerCase()
-  const body = String(document.body || document.content || document.excerpt || '').toLowerCase()
-  const tags = Array.isArray(document.tags) ? document.tags.join(' ').toLowerCase() : ''
+  const meta = getDocumentSearchMeta(document)
+  return (meta.title.includes(needle) ? 10 : 0) +
+    (meta.tags.includes(needle) ? 6 : 0) +
+    (meta.path.includes(needle) ? 4 : 0) +
+    (meta.body.includes(needle) ? 2 : 0)
+}
 
-  return (title.includes(needle) ? 10 : 0) +
-    (tags.includes(needle) ? 6 : 0) +
-    (path.includes(needle) ? 4 : 0) +
-    (body.includes(needle) ? 2 : 0)
+const compareRankedSearchResult = (a, b) => {
+  const scoreDiff = b.score - a.score
+  if (scoreDiff) return scoreDiff
+  return getDocumentSearchMeta(a.document).sortTitle.localeCompare(getDocumentSearchMeta(b.document).sortTitle)
+}
+
+const addRankedSearchResult = (ranked, item, limit) => {
+  if (ranked.length < limit) {
+    ranked.push(item)
+    ranked.sort(compareRankedSearchResult)
+    return
+  }
+  const last = ranked[ranked.length - 1]
+  if (compareRankedSearchResult(item, last) >= 0) return
+  ranked[ranked.length - 1] = item
+  ranked.sort(compareRankedSearchResult)
 }
 
 const toSearchResult = (document, score = 0) => ({
@@ -134,7 +169,8 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     showVisualizationLabels: loadBooleanSearchPreference('showVisualizationLabels'),
     showFolderClusters: loadBooleanSearchPreference('showFolderClusters'),
     autoRefreshInspection: loadBooleanSearchPreference('autoRefreshInspection'),
-    polling: false
+    polling: false,
+    lastStatusRefreshAt: 0
   }),
 
   actions: {
@@ -147,6 +183,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
         this.indexInspection = emptyInspection()
         this.results = []
         this.status = await elephantnoteClient.search.initVault(vaultPath)
+        this.lastStatusRefreshAt = Date.now()
       }
       return this.status
     },
@@ -157,7 +194,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       this.isOpen = true
       this.error = ''
       this.mode = this.defaultMode
-      this.ensureActiveVault().then(() => this.refreshStatus())
+      this.ensureActiveVault().then(() => this.refreshStatus({ throttleMs: 2000 }))
     },
 
     close() {
@@ -213,22 +250,26 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
 
     localSearch(query = this.query, limit = this.queryLimit) {
       const documents = Array.isArray(this.indexInspection.documents) ? this.indexInspection.documents : []
-      return documents
-        .map((document) => ({ document, score: scoreDocument(document, query) }))
-        .filter((item) => item.score > 0)
-        .sort((a, b) => {
-          const scoreDiff = b.score - a.score
-          if (scoreDiff) return scoreDiff
-          return String(a.document.title || '').localeCompare(String(b.document.title || ''))
-        })
-        .slice(0, clampQueryLimit(limit))
-        .map((item) => toSearchResult(item.document, item.score))
+      const maxResults = clampQueryLimit(limit)
+      const ranked = []
+      for (const document of documents) {
+        const score = scoreDocument(document, query)
+        if (score > 0) {
+          addRankedSearchResult(ranked, { document, score }, maxResults)
+        }
+      }
+      return ranked.map((item) => toSearchResult(item.document, item.score))
     },
 
-    async refreshStatus() {
+    async refreshStatus({ throttleMs = 0 } = {}) {
+      const now = Date.now()
+      if (throttleMs > 0 && now - this.lastStatusRefreshAt < throttleMs) {
+        return this.status
+      }
       try {
         await this.ensureActiveVault()
         this.status = await elephantnoteClient.search.status()
+        this.lastStatusRefreshAt = Date.now()
       } catch (error) {
         this.status = {
           ...DEFAULT_STATUS,
@@ -236,6 +277,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
           error: error?.message || 'Unable to fetch search status.',
           message: error?.message || 'Unable to fetch search status.'
         }
+        this.lastStatusRefreshAt = Date.now()
       }
       return this.status
     },
@@ -320,7 +362,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       }
       if (!query) {
         this.results = []
-        await this.refreshStatus()
+        await this.refreshStatus({ throttleMs: 2000 })
         return []
       }
 
@@ -360,7 +402,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
         return []
       } finally {
         this.busy = false
-        await this.refreshStatus()
+        void this.refreshStatus({ throttleMs: 2000 })
       }
     },
 
@@ -369,7 +411,9 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       this.busy = true
       try {
         this.status = await elephantnoteClient.search.rebuild()
+        this.lastStatusRefreshAt = Date.now()
         this.pollIndexBuild()
+        return this.status
       } finally {
         this.busy = false
       }
@@ -393,6 +437,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       this.busy = true
       try {
         this.status = await elephantnoteClient.search.clear()
+        this.lastStatusRefreshAt = Date.now()
         this.results = []
         this.indexInspection = emptyInspection()
         await this.refreshStatus()
@@ -403,15 +448,18 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
 
     async disable() {
       this.status = await elephantnoteClient.search.disable()
+      this.lastStatusRefreshAt = Date.now()
     },
 
     async enable() {
       this.status = await elephantnoteClient.search.enable()
+      this.lastStatusRefreshAt = Date.now()
       const vaultStore = useVaultStore()
       const vaultPath = vaultStore.activeVault?.path || this.vaultPath
       if (vaultPath) {
         this.vaultPath = vaultPath
         this.status = await elephantnoteClient.search.initVault(vaultPath)
+        this.lastStatusRefreshAt = Date.now()
       }
       await this.refreshStatus()
     },

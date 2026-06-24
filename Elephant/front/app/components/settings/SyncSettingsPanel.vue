@@ -16,10 +16,10 @@
         </label>
       </div>
       <div class="en-settings-actions-row">
-        <button type="button" :disabled="discoveryRunning" @click="startDiscovery">
+        <button type="button" :disabled="discoveryRunning || loading" @click="startDiscovery">
           {{ discoveryRunning ? 'Searching...' : 'Find devices' }}
         </button>
-        <button type="button" :disabled="!canPair" @click="allowPairing">
+        <button type="button" :disabled="!canPair || loading" @click="allowPairing">
           Allow pairing
         </button>
         <button type="button" :disabled="loading" @click="refreshStatus">
@@ -39,7 +39,7 @@
             <strong>{{ device.name }}</strong>
             <p>{{ device.address }}</p>
           </div>
-          <button type="button" :disabled="!canPair">Connect</button>
+          <button type="button" :disabled="!canPair || loading" @click="connectDevice(device)">Connect</button>
         </article>
       </div>
     </section>
@@ -140,6 +140,21 @@ const providerKey = 'elephantnote:sync:providers'
 const canPair = computed(() => pairingPassword.value.length >= 8 && selectedVaultIds.value.length > 0)
 const vaultKey = (vault) => String(vault?.id || vault?.path || vault?.name || '')
 const isVaultSelected = (vault) => selectedVaultIds.value.includes(vaultKey(vault))
+const normalizeDevice = (peer = {}, index = 0) => {
+  const id = String(peer.deviceId || peer.id || peer.name || `peer-${index}`)
+  const address = String(peer.address || peer.peerAddress || peer.endpoint || 'dynamic')
+  return {
+    id,
+    name: String(peer.name || peer.label || id),
+    address
+  }
+}
+const syncInitPayload = (extra = {}) => ({
+  backend: 'syncthing-git',
+  vaultIds: [...selectedVaultIds.value],
+  remotePath: activeRemotePath.value,
+  ...extra
+})
 
 const saveSelectedVaults = () => window.localStorage.setItem(selectedVaultKey, JSON.stringify(selectedVaultIds.value))
 const toggleVault = (vault) => {
@@ -177,7 +192,9 @@ const addProvider = () => {
   saveProviders()
 }
 const removeProvider = (id) => {
+  const removed = providers.value.find((provider) => provider.id === id)
   providers.value = providers.value.filter((provider) => provider.id !== id)
+  if (removed?.remotePath === activeRemotePath.value) activeRemotePath.value = ''
   saveProviders()
   providerMessage.value = 'Provider removed.'
 }
@@ -185,23 +202,54 @@ const useProvider = (provider) => {
   activeRemotePath.value = provider.remotePath
   providerMessage.value = `${provider.name} selected.`
 }
-const startDiscovery = () => {
+const startDiscovery = async () => {
   discoveryRunning.value = true
   syncMessage.value = 'Searching for devices...'
-  setTimeout(() => {
+  try {
+    const status = await elephantnoteClient.sync.status()
+    devices.value = Array.isArray(status?.peers) ? status.peers.map(normalizeDevice) : []
+    syncMessage.value = devices.value.length ? `${devices.value.length} device${devices.value.length === 1 ? '' : 's'} found.` : 'No device found yet.'
+  } catch (error) {
+    syncMessage.value = error instanceof Error ? error.message : 'Unable to search for devices.'
+  } finally {
     discoveryRunning.value = false
-    if (!devices.value.length) syncMessage.value = 'No device found yet.'
-  }, 2500)
+  }
 }
-const allowPairing = () => {
-  if (!canPair.value) return
-  syncMessage.value = 'Pairing allowed. Connect from the other device.'
+const allowPairing = async () => {
+  if (!canPair.value || loading.value) return
+  loading.value = true
+  syncMessage.value = 'Preparing local pairing endpoint...'
+  try {
+    await elephantnoteClient.sync.run({ init: syncInitPayload() })
+    syncMessage.value = 'Pairing allowed. Connect from the other device.'
+  } catch (error) {
+    syncMessage.value = error instanceof Error ? error.message : 'Unable to allow pairing.'
+  } finally {
+    loading.value = false
+  }
+}
+const connectDevice = async (device) => {
+  if (!canPair.value || loading.value || !device?.id) return
+  loading.value = true
+  syncMessage.value = `Connecting ${device.name}...`
+  try {
+    const status = await elephantnoteClient.sync.run({
+      init: syncInitPayload({ peerDeviceId: device.id, peerAddress: device.address || 'dynamic' })
+    })
+    devices.value = Array.isArray(status?.peers) ? status.peers.map(normalizeDevice) : devices.value
+    syncMessage.value = status.lastError || `${device.name} connected.`
+  } catch (error) {
+    syncMessage.value = error instanceof Error ? error.message : 'Unable to connect device.'
+  } finally {
+    loading.value = false
+  }
 }
 const refreshStatus = async () => {
   loading.value = true
   try {
     const status = await elephantnoteClient.sync.status()
     activeRemotePath.value = status.remotePath || activeRemotePath.value
+    devices.value = Array.isArray(status?.peers) ? status.peers.map(normalizeDevice) : devices.value
     syncMessage.value = status.lastError || ''
   } catch (error) {
     syncMessage.value = error instanceof Error ? error.message : 'Unable to load sync status.'

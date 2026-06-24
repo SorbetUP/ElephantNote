@@ -57,16 +57,13 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
-      - name: Rust formatting diagnostic
-        continue-on-error: true
+      - name: Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
-      - name: Cargo check all targets diagnostic
-        continue-on-error: true
+      - name: Cargo check all targets
         run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features
 
-      - name: Cargo tests diagnostic
-        continue-on-error: true
+      - name: Cargo tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib --no-default-features
 
       - name: Install coverage tool

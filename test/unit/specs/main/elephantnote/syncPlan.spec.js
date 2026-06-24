@@ -3,6 +3,10 @@ import {
   SYNC_OPERATIONS,
   createDefaultSyncPlan
 } from '../../../../../Elephant/shared/sync.js'
+import {
+  ELEPHANTNOTE_API_ACTIONS as API,
+  validateApiPayload
+} from '../../../../../Elephant/shared/apiContracts.js'
 
 const operations = (plan) => plan.map((item) => item.operation)
 
@@ -12,6 +16,14 @@ describe('createDefaultSyncPlan', () => {
       SYNC_OPERATIONS.INIT,
       SYNC_OPERATIONS.SNAPSHOT
     ])
+  })
+
+  it('exposes and validates sync plan payloads through the public API contract', () => {
+    const payload = { operations: ['init', 'pull'], pull: { remoteName: 'origin' } }
+
+    expect(API.SYNC_PLAN).toBe('sync.plan')
+    expect(validateApiPayload(API.SYNC_PLAN, payload)).toBe(payload)
+    expect(validateApiPayload(API.SYNC_RUN, payload)).toBe(payload)
   })
 
   it('ignores invalid explicit operation payload shapes instead of throwing', () => {

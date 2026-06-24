@@ -11,8 +11,9 @@ import { installCodexProviderBridge } from './platform/providerInterface'
 import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'
 import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
-import { installRendererDiagnostics, pushDiagnosticLog, showDiagnosticOverlay } from './platform/rendererDiagnostics'
+import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
+import { installAddonSystem } from './addons'
 import { appDataDir } from '@tauri-apps/api/path'
 
 // Element Plus instead of Element UI for Vue 3
@@ -141,6 +142,17 @@ app.use(ElementPlus, { locale: en })
 app.use(i18nPlugin)
 app.config.globalProperties.$http = axios
 app.config.globalProperties.$services = services
+installAddonSystem(app, {
+  router,
+  pinia,
+  services,
+  runtime,
+  logger: {
+    info: (message, payload) => pushDiagnosticLog('info', message, payload),
+    warn: (message, payload) => pushDiagnosticLog('warn', message, payload),
+    error: (message, payload) => pushDiagnosticLog('error', message, payload)
+  }
+})
 app.mount('#app')
 
 installGraphRuntimeFixes()

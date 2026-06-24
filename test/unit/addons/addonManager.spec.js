@@ -43,6 +43,42 @@ describe('ElephantAddonManager', () => {
     expect(manager.getContributionMap()[ADDON_EXTENSION_POINTS.actions]).toHaveLength(1)
   })
 
+  it('runs executable addon actions', async () => {
+    const manager = new ElephantAddonManager()
+    const run = vi.fn((payload, meta) => ({ payload, meta }))
+
+    manager.register(createTestAddon({
+      activate: vi.fn((ctx) => {
+        ctx.addAction({ id: 'test.run', title: 'Run test', run })
+      })
+    }))
+
+    await manager.enable('test.addon')
+    const result = await manager.runAction('test.run', { value: 42 })
+
+    expect(run).toHaveBeenCalledOnce()
+    expect(result.payload).toEqual({ value: 42 })
+    expect(result.meta).toMatchObject({
+      addonId: 'test.addon',
+      actionId: 'test.run',
+      addons: manager
+    })
+  })
+
+  it('rejects unknown or non executable actions', async () => {
+    const manager = new ElephantAddonManager()
+    manager.register(createTestAddon({
+      activate: vi.fn((ctx) => {
+        ctx.addAction({ id: 'test.not-executable', title: 'No run' })
+      })
+    }))
+
+    await manager.enable('test.addon')
+
+    await expect(manager.runAction('missing.action')).rejects.toThrow(/Unknown addon action/)
+    await expect(manager.runAction('test.not-executable')).rejects.toThrow(/not executable/)
+  })
+
   it('emits contribution changes when entries are added and removed', async () => {
     const manager = new ElephantAddonManager()
     const changed = vi.fn()

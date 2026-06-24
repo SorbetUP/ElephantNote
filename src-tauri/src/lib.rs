@@ -1,7 +1,10 @@
 mod vault_backend;
 
 use serde::Serialize;
+use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 
 #[derive(Serialize)]
@@ -15,6 +18,51 @@ struct ShellExecResult {
 #[tauri::command]
 fn healthcheck() -> &'static str {
   "ok"
+}
+
+#[tauri::command]
+fn tauri_debug_log(level: String, message: String, details: Option<Value>) -> Result<(), String> {
+  let normalized_level = match level.as_str() {
+    "error" | "warn" | "info" | "debug" | "trace" => level.as_str(),
+    _ => "info",
+  };
+  match details {
+    Some(value) => eprintln!("[tauri:{normalized_level}] {message} {value}"),
+    None => eprintln!("[tauri:{normalized_level}] {message}"),
+  }
+  Ok(())
+}
+
+#[derive(Serialize)]
+struct MarkTextWriteResult {
+  ok: bool,
+  pathname: String,
+  bytes: usize,
+}
+
+#[tauri::command]
+fn tauri_marktext_write_file(pathname: String, content: String) -> Result<MarkTextWriteResult, String> {
+  let trimmed = pathname.trim();
+  if trimmed.is_empty() {
+    return Err("tauri_marktext_write_file requires a pathname.".to_string());
+  }
+
+  let path = PathBuf::from(trimmed);
+  if path.is_dir() {
+    return Err(format!("Cannot write markdown content to a directory: {}", path.to_string_lossy()));
+  }
+  if let Some(parent) = path.parent() {
+    fs::create_dir_all(parent).map_err(|error| format!("Unable to create parent directory {}: {error}", parent.to_string_lossy()))?;
+  }
+
+  let bytes = content.as_bytes().len();
+  fs::write(&path, content).map_err(|error| format!("Unable to write {}: {error}", path.to_string_lossy()))?;
+  eprintln!("[tauri:info] marktext_write_file:done path={} bytes={}", path.to_string_lossy(), bytes);
+  Ok(MarkTextWriteResult {
+    ok: true,
+    pathname: path.to_string_lossy().to_string(),
+    bytes,
+  })
 }
 
 fn allowed_shell_command(command: &str) -> bool {
@@ -89,6 +137,8 @@ pub fn run() {
   builder
     .invoke_handler(tauri::generate_handler![
       healthcheck,
+      tauri_debug_log,
+      tauri_marktext_write_file,
       shell_exec,
       vault_backend::tauri_vaults_get,
       vault_backend::tauri_vaults_select_path,

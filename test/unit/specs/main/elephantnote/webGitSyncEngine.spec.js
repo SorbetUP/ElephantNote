@@ -18,6 +18,8 @@ const createNoopGitExecutor = (calls = []) => async(_command, args) => {
   return { stdout: '' }
 }
 
+const pathExists = async(target) => fs.access(target).then(() => true, () => false)
+
 afterEach(async() => {
   while (tempRoots.length) await fs.rm(tempRoots.pop(), { recursive: true, force: true })
 })
@@ -88,6 +90,21 @@ describe('WebGitSyncEngine', () => {
     expect(migrated.remoteName).toBe('backup')
     expect(migrated.remote).toBe('/git/legacy.git')
     expect(migrated.branch).toBe('notes')
+  })
+
+  it('writes sync history into the canonical sync directory only', async() => {
+    const cwd = await createTempVault()
+    const engine = new WebGitSyncEngine({ cwd, executor: createNoopGitExecutor() })
+
+    await engine.run({ init: {} })
+
+    const canonicalHistoryPath = path.join(cwd, '.elephantnote', 'sync', 'sync-log.json')
+    const legacyHistoryPath = path.join(cwd, '.elephantnote', 'sync-log.json')
+    const history = JSON.parse(await fs.readFile(canonicalHistoryPath, 'utf8'))
+
+    expect(history.history.some((item) => item.operation === 'init' && item.status === 'done')).toBe(true)
+    expect(await pathExists(canonicalHistoryPath)).toBe(true)
+    expect(await pathExists(legacyHistoryPath)).toBe(false)
   })
 
   it('returns a completed status after a successful sync run', async() => {

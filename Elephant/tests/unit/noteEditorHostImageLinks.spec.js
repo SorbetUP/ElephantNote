@@ -22,7 +22,14 @@ describe('NoteEditorHost Excalidraw image link formatting', () => {
     expect(source).toContain('const scenePath = getExcalidrawScenePath(previewPath)')
     expect(source).toContain("await readLocalBlob(scenePath, 'application/vnd.excalidraw+json')")
     expect(source).toContain("insertOnSave: false")
+    expect(source).toContain('excalidrawTargetPath.value = previewPath')
     expect(source).toContain("bus.on('open-excalidraw-from-image', openExcalidrawFromImage)")
     expect(source).toContain("bus.off('open-excalidraw-from-image', openExcalidrawFromImage)")
+  })
+
+  it('preserves the original preview directory when saving an edited drawing', () => {
+    expect(source).toContain('const targetDirectory = excalidrawTargetPath.value')
+    expect(source).toContain('? window.path.dirname(excalidrawTargetPath.value)')
+    expect(source).toContain('const targetPath = window.path.join(targetDirectory, resolvedName)')
   })
 })

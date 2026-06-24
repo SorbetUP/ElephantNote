@@ -149,6 +149,14 @@ const toSearchResult = (document, score = 0) => ({
   score
 })
 
+const normalizeConceptCandidate = (candidate = {}) => ({
+  ...candidate,
+  id: String(candidate.id || ''),
+  title: String(candidate.title || candidate.id || 'Concept'),
+  score: Number(candidate.score || 0),
+  evidenceChunks: Array.isArray(candidate.evidenceChunks) ? candidate.evidenceChunks : []
+})
+
 const emptyInspection = () => ({ ...EMPTY_INSPECTION })
 
 export const useSearchStore = defineStore('elephantnoteSearch', {
@@ -158,6 +166,8 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     query: '',
     mode: 'exact',
     results: [],
+    conceptResults: [],
+    conceptRoute: null,
     status: { ...DEFAULT_STATUS },
     indexInspection: emptyInspection(),
     busy: false,
@@ -182,6 +192,8 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       if (this.status.vaultPath !== vaultPath && this.status.status !== 'disabled') {
         this.indexInspection = emptyInspection()
         this.results = []
+        this.conceptResults = []
+        this.conceptRoute = null
         this.status = await elephantnoteClient.search.initVault(vaultPath)
         this.lastStatusRefreshAt = Date.now()
       }
@@ -351,6 +363,36 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       await this.inspect()
     },
 
+    async searchConcepts(query = this.query) {
+      const normalizedQuery = String(query || '').trim()
+      if (!normalizedQuery || !this.vaultPath) {
+        this.conceptResults = []
+        this.conceptRoute = null
+        return null
+      }
+      try {
+        const route = await withTimeout(
+          elephantnoteClient.search.concepts({
+            query: normalizedQuery,
+            limit: 5,
+            evidenceLimit: 4
+          }),
+          8000,
+          'Concept routing timed out.'
+        )
+        this.conceptRoute = route || null
+        this.conceptResults = Array.isArray(route?.candidates)
+          ? route.candidates.map(normalizeConceptCandidate)
+          : []
+        return this.conceptRoute
+      } catch (error) {
+        log.warn('[search] concept routing unavailable', error)
+        this.conceptRoute = null
+        this.conceptResults = []
+        return null
+      }
+    },
+
     async search() {
       const query = this.query.trim()
       if (!this.vaultPath) {
@@ -358,16 +400,21 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       }
       if (!this.vaultPath) {
         this.results = []
+        this.conceptResults = []
+        this.conceptRoute = null
         return []
       }
       if (!query) {
         this.results = []
+        this.conceptResults = []
+        this.conceptRoute = null
         await this.refreshStatus({ throttleMs: 2000 })
         return []
       }
 
       this.busy = true
       this.error = ''
+      const conceptPromise = this.searchConcepts(query)
       try {
         const results = await withTimeout(
           elephantnoteClient.search.query({
@@ -401,6 +448,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
         this.results = []
         return []
       } finally {
+        conceptPromise.catch(() => null)
         this.busy = false
         void this.refreshStatus({ throttleMs: 2000 })
       }
@@ -439,6 +487,8 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
         this.status = await elephantnoteClient.search.clear()
         this.lastStatusRefreshAt = Date.now()
         this.results = []
+        this.conceptResults = []
+        this.conceptRoute = null
         this.indexInspection = emptyInspection()
         await this.refreshStatus()
       } finally {

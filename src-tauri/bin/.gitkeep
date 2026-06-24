@@ -1,0 +1,2 @@
+# This directory is populated by scripts/ensure-tauri-llama-server.mjs.
+# It is kept in git so Tauri resource resolution works before the binary is installed.

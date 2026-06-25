@@ -10,14 +10,14 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const electronLogShim = resolve(__dirname, 'src/renderer/src/platform/electronLogShim.js')
-const nativeRuntimeExternals = [
-  'native-keymap',
-  /native-keymap/,
-  /keymapping/,
-  'node-llama-cpp',
-  /node-llama-cpp/,
-  /@node-llama-cpp\//
-]
+const isNativeRuntimeExternal = (id = '') => (
+  id === 'native-keymap' ||
+  id.includes('native-keymap') ||
+  id.includes('keymapping') ||
+  id === 'node-llama-cpp' ||
+  id.includes('node-llama-cpp') ||
+  id.startsWith('@node-llama-cpp/')
+)
 
 export default defineConfig({
   main: {
@@ -31,7 +31,7 @@ export default defineConfig({
         include: ['native-keymap', 'node-llama-cpp']
       },
       rollupOptions: {
-        external: nativeRuntimeExternals
+        external: isNativeRuntimeExternal
       }
     },
     define: {
@@ -58,7 +58,7 @@ export default defineConfig({
     // --> Bundled as CommonJS
     build: {
       rollupOptions: {
-        external: nativeRuntimeExternals
+        external: isNativeRuntimeExternal
       }
     },
     resolve: {

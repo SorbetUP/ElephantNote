@@ -2,6 +2,7 @@ export const EXCALIDRAW_MIME = 'application/vnd.excalidraw+json'
 
 export const EXCALIDRAW_LIGHT_BACKGROUND = '#ffffff'
 export const EXCALIDRAW_DARK_BACKGROUND = '#121212'
+export const ELEPHANTNOTE_ASSETS_DIR = '.assets'
 
 export const ensurePngName = (name) => {
   const base = (name || 'excalidraw').trim() || 'excalidraw'
@@ -47,6 +48,28 @@ export const joinPath = (...parts) => parts
   .filter((part) => part !== undefined && part !== null && String(part).length > 0)
   .join('/')
   .replace(/\/+/g, '/')
+
+export const sanitizeAssetName = (value = '', fallback = 'asset') => {
+  const cleaned = String(value || '')
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter(Boolean)
+    .pop() || fallback
+  return cleaned
+    .replace(/[<>:"|?*\u0000-\u001f]/g, '-')
+    .replace(/^\.+/, '')
+    .trim() || fallback
+}
+
+export const getVaultAssetRelativePath = (fileName = 'asset') => joinPath(
+  ELEPHANTNOTE_ASSETS_DIR,
+  sanitizeAssetName(fileName, 'asset')
+)
+
+export const isHiddenAssetPath = (pathname = '') => String(pathname || '')
+  .replace(/\\/g, '/')
+  .split('/')
+  .includes(ELEPHANTNOTE_ASSETS_DIR)
 
 export const getExcalidrawScenePath = (pathname) => {
   if (!pathname) return ''

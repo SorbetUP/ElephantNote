@@ -347,10 +347,8 @@ onBeforeUnmount(() => {
   font-size: 16px;
   line-height: 1.42;
   overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 5;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  white-space: normal;
+  overflow: visible;
 }
 
 .en-tags {

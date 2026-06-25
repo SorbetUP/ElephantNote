@@ -1,9 +1,12 @@
 use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+  collections::HashMap,
+  fs,
+  net::{TcpStream, ToSocketAddrs},
+  path::{Path, PathBuf},
+  process::Command,
+  time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
 use tauri::{AppHandle, Manager};
 
 use crate::vault::config as vault_config;
@@ -13,6 +16,14 @@ type R<T> = Result<T, String>;
 const META_DIR: &str = vault_layout::HIDDEN_ROOT;
 const AI_CONFIG_FILE: &str = "tauri-ai-config.json";
 const FEATURES_FILE: &str = "tauri-features.json";
+const PROVIDER_CONFIG_CATEGORY: &str = "provider";
+const PROVIDER_CONFIG_FILE: &str = "provider.json";
+const FEATURES_CONFIG_CATEGORY: &str = "features";
+const FEATURES_CONFIG_FILE: &str = "flags.json";
+const MODELS_CONFIG_CATEGORY: &str = "models";
+const MODEL_SELECTION_FILE: &str = "selection.json";
+const SEARCH_INDEX_FILE: &str = "search-index.json";
+const CONNECT_TIMEOUT_MS: u64 = 1200;
 
 fn now() -> String {
   SystemTime::now()
@@ -74,6 +85,25 @@ fn app_json_path(app: &AppHandle, file_name: &str) -> R<PathBuf> {
   Ok(dir.join(file_name))
 }
 
+fn vault_config_path(app: &AppHandle, category: &str, file_name: &str, fallback_file: &str) -> R<PathBuf> {
+  match active_vault_root(app) {
+    Ok(root) if !root.trim().is_empty() => Ok(vault_layout::portable_config_file(root, category, file_name)),
+    _ => app_json_path(app, fallback_file),
+  }
+}
+
+fn provider_config_path(app: &AppHandle) -> R<PathBuf> {
+  vault_config_path(app, PROVIDER_CONFIG_CATEGORY, PROVIDER_CONFIG_FILE, AI_CONFIG_FILE)
+}
+
+fn features_config_path(app: &AppHandle) -> R<PathBuf> {
+  vault_config_path(app, FEATURES_CONFIG_CATEGORY, FEATURES_CONFIG_FILE, FEATURES_FILE)
+}
+
+fn model_selection_path(app: &AppHandle) -> R<PathBuf> {
+  vault_config_path(app, MODELS_CONFIG_CATEGORY, MODEL_SELECTION_FILE, "tauri-model-selection.json")
+}
+
 fn canonical_root(root: &Path) -> R<PathBuf> {
   fs::create_dir_all(root).map_err(|e| e.to_string())?;
   fs::canonicalize(root).map_err(|e| e.to_string())
@@ -109,6 +139,10 @@ fn writable_relative_path(root: &str, relative_path: &str) -> R<PathBuf> {
   writable_path_inside_root(Path::new(root), Path::new(&normalized))
 }
 
+fn ignored_name(name: &str) -> bool {
+  name == META_DIR || name == ".git" || name == "node_modules" || name.starts_with('.') || name.ends_with('~') || name.ends_with(".tmp")
+}
+
 fn file_summary(root: &Path, path: &Path) -> Value {
   let relative = path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/");
   let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("").to_string();
@@ -126,7 +160,7 @@ fn scan_files(root: &Path, current: &Path, out: &mut Vec<Value>, extension: Opti
     let item = item.map_err(|e| e.to_string())?;
     let path = item.path();
     let name = item.file_name().to_string_lossy().to_string();
-    if name == META_DIR || name == ".git" || name == "node_modules" || name.starts_with('.') {
+    if ignored_name(&name) {
       continue;
     }
     let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
@@ -143,6 +177,175 @@ fn scan_files(root: &Path, current: &Path, out: &mut Vec<Value>, extension: Opti
     }
   }
   Ok(())
+}
+
+fn markdown_title(markdown: &str, fallback: &str) -> String {
+  markdown
+    .lines()
+    .find_map(|line| line.trim().strip_prefix("# ").map(|value| value.trim().to_string()))
+    .filter(|title| !title.is_empty())
+    .unwrap_or_else(|| fallback.trim_end_matches(".md").to_string())
+}
+
+fn markdown_excerpt(markdown: &str) -> String {
+  markdown
+    .lines()
+    .map(|line| line.trim().trim_start_matches('#').trim())
+    .filter(|line| !line.is_empty() && *line != "---")
+    .take(3)
+    .collect::<Vec<_>>()
+    .join(" ")
+}
+
+fn scan_markdown_notes(root: &Path, current: &Path, out: &mut Vec<(String, PathBuf, String)>) -> R<()> {
+  for item in fs::read_dir(current).map_err(|e| e.to_string())? {
+    let item = item.map_err(|e| e.to_string())?;
+    let name = item.file_name().to_string_lossy().to_string();
+    if ignored_name(&name) {
+      continue;
+    }
+    let path = item.path();
+    let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+    if metadata.file_type().is_symlink() {
+      continue;
+    }
+    if metadata.is_dir() {
+      scan_markdown_notes(root, &path, out)?;
+    } else if metadata.is_file() && name.to_ascii_lowercase().ends_with(".md") {
+      let relative = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+      let content = fs::read_to_string(&path).unwrap_or_default();
+      out.push((relative, path, content));
+    }
+  }
+  Ok(())
+}
+
+fn extract_wikilinks(markdown: &str) -> Vec<String> {
+  let mut links = Vec::new();
+  let mut rest = markdown;
+  while let Some(start) = rest.find("[[") {
+    let after = &rest[start + 2..];
+    let Some(end) = after.find("]]" ) else { break; };
+    let target = after[..end].split('|').next().unwrap_or("").trim();
+    if !target.is_empty() {
+      links.push(target.to_string());
+    }
+    rest = &after[end + 2..];
+  }
+  links
+}
+
+fn build_search_index(root: &Path) -> R<Value> {
+  let mut notes = Vec::new();
+  scan_markdown_notes(root, root, &mut notes)?;
+  notes.sort_by(|a, b| a.0.cmp(&b.0));
+
+  let documents = notes.iter().map(|(relative_path, full_path, markdown)| {
+    let file_name = full_path.file_name().and_then(|name| name.to_str()).unwrap_or(relative_path);
+    json!({
+      "id": relative_path,
+      "path": relative_path,
+      "relativePath": relative_path,
+      "fullPath": full_path.to_string_lossy(),
+      "title": markdown_title(markdown, file_name),
+      "excerpt": markdown_excerpt(markdown),
+      "kind": "note"
+    })
+  }).collect::<Vec<Value>>();
+
+  let mut edges = Vec::new();
+  for (source_path, _full_path, markdown) in &notes {
+    for target in extract_wikilinks(markdown) {
+      let normalized_target = normalize_relative_path(&target);
+      let matching = documents.iter().find(|document| {
+        let title = document.get("title").and_then(Value::as_str).unwrap_or("");
+        let path = document.get("relativePath").and_then(Value::as_str).unwrap_or("");
+        title.eq_ignore_ascii_case(&target) || path.eq_ignore_ascii_case(&normalized_target) || path.trim_end_matches(".md").eq_ignore_ascii_case(&normalized_target)
+      });
+      if let Some(document) = matching {
+        if let Some(target_path) = document.get("relativePath").and_then(Value::as_str) {
+          edges.push(json!({ "source": source_path, "target": target_path, "kind": "wikilink" }));
+        }
+      }
+    }
+  }
+
+  let nodes = documents.iter().map(|document| json!({
+    "id": document.get("relativePath").cloned().unwrap_or(json!("")),
+    "label": document.get("title").cloned().unwrap_or(json!("Untitled")),
+    "title": document.get("title").cloned().unwrap_or(json!("Untitled")),
+    "path": document.get("relativePath").cloned().unwrap_or(json!("")),
+    "relativePath": document.get("relativePath").cloned().unwrap_or(json!("")),
+    "kind": "note",
+    "type": "note"
+  })).collect::<Vec<Value>>();
+
+  Ok(json!({
+    "provider": "tauri-rust",
+    "engine": "portable-markdown-index",
+    "embedding": { "status": "not-configured", "reason": "No embedding provider is configured in this Tauri runtime; this index is lexical and link-based, not a fake vector index." },
+    "documents": documents,
+    "notesIndexed": documents.len(),
+    "lastIndexedAt": now(),
+    "graph": { "nodes": nodes, "edges": edges, "clusters": [] }
+  }))
+}
+
+fn endpoint_socket(endpoint: &str) -> Option<String> {
+  let value = endpoint.trim();
+  let (scheme, rest) = value.split_once("://")?;
+  if scheme != "http" && scheme != "https" {
+    return None;
+  }
+  let authority = rest.split('/').next().unwrap_or("").split('@').last().unwrap_or("");
+  if authority.is_empty() {
+    return None;
+  }
+  if authority.contains(':') {
+    Some(authority.to_string())
+  } else if scheme == "https" {
+    Some(format!("{authority}:443"))
+  } else {
+    Some(format!("{authority}:80"))
+  }
+}
+
+fn test_tcp_endpoint(config: &Value, started: Instant) -> Value {
+  let endpoint = config.get("endpoint").and_then(Value::as_str).unwrap_or("");
+  let Some(socket) = endpoint_socket(endpoint) else {
+    return json!({ "ok": false, "runtime": "tauri-rust", "latencyMs": started.elapsed().as_millis() as u64, "config": config, "error": "No HTTP endpoint was provided for a real connectivity test." });
+  };
+  let timeout = Duration::from_millis(CONNECT_TIMEOUT_MS);
+  let addresses = match socket.to_socket_addrs() {
+    Ok(addresses) => addresses.collect::<Vec<_>>(),
+    Err(error) => return json!({ "ok": false, "runtime": "tauri-rust", "latencyMs": started.elapsed().as_millis() as u64, "config": config, "endpoint": endpoint, "error": format!("Cannot resolve endpoint: {error}") }),
+  };
+  for address in addresses {
+    if TcpStream::connect_timeout(&address, timeout).is_ok() {
+      return json!({ "ok": true, "runtime": "tauri-rust", "latencyMs": started.elapsed().as_millis() as u64, "config": config, "endpoint": endpoint, "checked": "tcp-connect" });
+    }
+  }
+  json!({ "ok": false, "runtime": "tauri-rust", "latencyMs": started.elapsed().as_millis() as u64, "config": config, "endpoint": endpoint, "error": "Endpoint TCP connection failed." })
+}
+
+fn test_codex_cli(config: &Value, started: Instant) -> Value {
+  match Command::new("codex").arg("--version").output() {
+    Ok(output) => {
+      let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+      let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+      json!({
+        "ok": output.status.success(),
+        "runtime": "tauri-rust",
+        "latencyMs": started.elapsed().as_millis() as u64,
+        "config": config,
+        "transport": "codex-cli",
+        "version": stdout,
+        "stderr": stderr,
+        "error": if output.status.success() { Value::Null } else { json!("codex --version failed") }
+      })
+    }
+    Err(error) => json!({ "ok": false, "runtime": "tauri-rust", "latencyMs": started.elapsed().as_millis() as u64, "config": config, "transport": "codex-cli", "error": format!("codex CLI was not found or could not be executed: {error}") }),
+  }
 }
 
 #[tauri::command]
@@ -184,6 +387,13 @@ pub fn tauri_notes_read(app: AppHandle, relative_path: String) -> R<Value> {
   let root = active_vault_root(&app)?;
   let normalized = normalize_relative_path(&relative_path);
   let path = assert_existing_path_inside_root(Path::new(&root), &inside(&root, &normalized))?;
+  let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
+  if metadata.is_dir() {
+    return Err(format!("Cannot open a folder as a note: {}", normalized));
+  }
+  if !metadata.is_file() {
+    return Err(format!("Cannot open a non-file path as a note: {}", normalized));
+  }
   let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
   Ok(json!({ "path": normalized, "fullPath": path.to_string_lossy(), "content": content }))
 }
@@ -199,8 +409,6 @@ pub fn tauri_notes_write(app: AppHandle, relative_path: String, content: Option<
 
 #[tauri::command]
 pub fn tauri_marktext_write_file(app: AppHandle, pathname: String, content: String) -> R<Value> {
-  // Critical-flow guard invariant for the historical public writer shape:
-  // pub fn tauri_marktext_write_file(pathname: String, content: String) -> R<Value> {
   if pathname.trim().is_empty() {
     return Err("Cannot save MarkText file without a pathname.".to_string());
   }
@@ -238,12 +446,12 @@ pub fn tauri_attachments_write_text(app: AppHandle, relative_path: String, conte
 pub fn tauri_drawings_list(app: AppHandle) -> R<Vec<Value>> {
   let root = active_vault_root(&app)?;
   let root_path = PathBuf::from(&root);
-  let drawings = root_path.join("Drawings");
-  if !drawings.exists() {
+  let assets = vault_layout::assets_dir(&root_path);
+  if !assets.exists() {
     return Ok(Vec::new());
   }
   let mut out = Vec::new();
-  scan_files(&root_path, &drawings, &mut out, Some(".json"))?;
+  scan_files(&root_path, &assets, &mut out, Some(".excalidraw"))?;
   Ok(out)
 }
 
@@ -252,11 +460,13 @@ pub fn tauri_drawings_create(app: AppHandle, title: Option<String>) -> R<Value> 
   let root = active_vault_root(&app)?;
   let title = title.filter(|value| !value.trim().is_empty()).unwrap_or_else(|| "Untitled Drawing".to_string());
   let safe_title = title.replace('/', "-").replace('\\', "-");
-  let relative_path = normalize_relative_path(&format!("Drawings/{}.drawing.json", safe_title));
-  let path = writable_relative_path(&root, &relative_path)?;
-  let scene = json!({ "kind": "drawing", "version": 1, "title": title, "items": [] });
+  let assets = vault_layout::assets_dir(&root);
+  let relative_path = normalize_relative_path(&format!("{}.excalidraw", safe_title));
+  let path = writable_path_inside_root(&assets, Path::new(&relative_path))?;
+  let scene = json!({ "kind": "excalidraw", "type": "excalidraw", "version": 1, "title": title, "elements": [], "files": {} });
   write_json(path.clone(), &scene)?;
-  Ok(json!({ "path": relative_path, "fullPath": path.to_string_lossy(), "scene": scene }))
+  let public_path = path.strip_prefix(&root).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+  Ok(json!({ "path": public_path, "fullPath": path.to_string_lossy(), "scene": scene }))
 }
 
 #[tauri::command]
@@ -264,7 +474,7 @@ pub fn tauri_drawings_read(app: AppHandle, relative_path: String) -> R<Value> {
   let root = active_vault_root(&app)?;
   let normalized = normalize_relative_path(&relative_path);
   let path = assert_existing_path_inside_root(Path::new(&root), &inside(&root, &normalized))?;
-  Ok(read_json(path, json!({ "kind": "drawing", "items": [] })))
+  Ok(read_json(path, json!({ "kind": "excalidraw", "elements": [], "files": {} })))
 }
 
 #[tauri::command]
@@ -277,7 +487,7 @@ pub fn tauri_drawings_write(app: AppHandle, relative_path: String, scene: Value)
 
 #[tauri::command]
 pub fn tauri_models_get_selection(app: AppHandle) -> R<Value> {
-  let path = app_json_path(&app, "tauri-model-selection.json")?;
+  let path = model_selection_path(&app)?;
   Ok(read_json(path, json!({ "embedding": "", "chat": "", "ocr": "" })))
 }
 
@@ -288,14 +498,14 @@ pub fn tauri_models_set_selection(app: AppHandle, selection: Value) -> R<Value> 
     "chat": selection.get("chat").and_then(Value::as_str).unwrap_or(""),
     "ocr": selection.get("ocr").and_then(Value::as_str).unwrap_or("")
   });
-  let path = app_json_path(&app, "tauri-model-selection.json")?;
+  let path = model_selection_path(&app)?;
   write_json(path, &normalized)?;
   Ok(normalized)
 }
 
 #[tauri::command]
 pub fn tauri_ai_config_get(app: AppHandle) -> R<Value> {
-  let path = app_json_path(&app, AI_CONFIG_FILE)?;
+  let path = provider_config_path(&app)?;
   Ok(read_json(path, json!({
     "localAi": { "enabled": true, "showModelLibraryInSidebar": true },
     "localRuntime": { "llamaServerMode": "bundled", "llamaServerPath": "", "llamaBaseUrl": "" },
@@ -307,25 +517,31 @@ pub fn tauri_ai_config_get(app: AppHandle) -> R<Value> {
 
 #[tauri::command]
 pub fn tauri_ai_config_set(app: AppHandle, config: Value) -> R<Value> {
-  let path = app_json_path(&app, AI_CONFIG_FILE)?;
+  let path = provider_config_path(&app)?;
   write_json(path, &config)?;
   Ok(config)
 }
 
 #[tauri::command]
 pub fn tauri_ai_config_test(_app: AppHandle, config: Value) -> R<Value> {
-  Ok(json!({ "ok": true, "runtime": "tauri-rust", "latencyMs": 0, "config": config }))
+  let started = Instant::now();
+  let transport = config.get("transport").or_else(|| config.get("preset")).and_then(Value::as_str).unwrap_or("");
+  let endpoint = config.get("endpoint").and_then(Value::as_str).unwrap_or("");
+  if transport.eq_ignore_ascii_case("codex") || endpoint.starts_with("codex://") {
+    return Ok(test_codex_cli(&config, started));
+  }
+  Ok(test_tcp_endpoint(&config, started))
 }
 
 #[tauri::command]
 pub fn tauri_features_get(app: AppHandle) -> R<Value> {
-  let path = app_json_path(&app, FEATURES_FILE)?;
+  let path = features_config_path(&app)?;
   Ok(read_json(path, json!({ "askAi": true, "sitePreview": false, "gitSync": false })))
 }
 
 #[tauri::command]
 pub fn tauri_features_set(app: AppHandle, key: String, enabled: bool) -> R<Value> {
-  let path = app_json_path(&app, FEATURES_FILE)?;
+  let path = features_config_path(&app)?;
   let mut config = read_json(path.clone(), json!({ "askAi": true, "sitePreview": false, "gitSync": false }));
   if let Some(object) = config.as_object_mut() {
     object.insert(key, Value::Bool(enabled));
@@ -335,19 +551,17 @@ pub fn tauri_features_set(app: AppHandle, key: String, enabled: bool) -> R<Value
 }
 
 #[tauri::command]
-pub fn tauri_search_inspect() -> R<Value> {
-  Ok(json!({
-    "provider": "tauri-rust",
-    "engine": "portable-index",
-    "embedding": { "status": "not-implemented" },
-    "documents": 0,
-    "lastIndexedAt": null
-  }))
+pub fn tauri_search_inspect(app: AppHandle) -> R<Value> {
+  let root = active_vault_root(&app)?;
+  build_search_index(Path::new(&root))
 }
 
 #[tauri::command]
-pub fn tauri_search_rebuild() -> R<Value> {
-  Ok(json!({ "ok": true, "provider": "tauri-rust", "documents": 0 }))
+pub fn tauri_search_rebuild(app: AppHandle) -> R<Value> {
+  let root = active_vault_root(&app)?;
+  let index = build_search_index(Path::new(&root))?;
+  write_json(vault_layout::index_file(&root, SEARCH_INDEX_FILE), &index)?;
+  Ok(json!({ "ok": true, "provider": "tauri-rust", "documents": index.get("notesIndexed").cloned().unwrap_or(json!(0)), "indexPath": vault_layout::index_file(&root, SEARCH_INDEX_FILE).to_string_lossy() }))
 }
 
 #[tauri::command]
@@ -446,5 +660,29 @@ mod tests {
 
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&outside);
+  }
+
+  #[test]
+  fn search_index_builds_documents_and_wikilink_edges() {
+    let root = temp_test_root("search-index");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("A.md"), "# A\n\nSee [[B]]").unwrap();
+    fs::write(root.join("B.md"), "# B\n\nTarget").unwrap();
+    fs::create_dir_all(root.join(".assets")).unwrap();
+    fs::write(root.join(".assets").join("hidden.md"), "# Hidden").unwrap();
+
+    let index = build_search_index(&root).unwrap();
+
+    assert_eq!(index["notesIndexed"], json!(2));
+    assert_eq!(index["graph"]["edges"].as_array().unwrap().len(), 1);
+
+    let _ = fs::remove_dir_all(&root);
+  }
+
+  #[test]
+  fn endpoint_socket_adds_default_ports() {
+    assert_eq!(endpoint_socket("http://127.0.0.1/v1").as_deref(), Some("127.0.0.1:80"));
+    assert_eq!(endpoint_socket("https://api.example.com/v1").as_deref(), Some("api.example.com:443"));
+    assert_eq!(endpoint_socket("codex://account"), None);
   }
 }

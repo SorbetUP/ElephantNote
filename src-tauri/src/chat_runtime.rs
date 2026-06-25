@@ -28,7 +28,9 @@ fn extract_messages(payload: &Value) -> Vec<Value> {
       .filter_map(|message| {
         let role = text(message, &["role"]);
         let content = text(message, &["content", "text", "message"]);
-        if role.is_empty() || content.is_empty() { None } else { Some(json!({ "role": role, "content": content })) }
+        if role.is_empty() { return None; }
+        if content.is_empty() { return None; }
+        Some(json!({ "role": role, "content": content }))
       })
       .collect::<Vec<_>>();
     if !out.is_empty() {
@@ -64,6 +66,7 @@ fn selected_chat_model(payload: &Value) -> String {
   .unwrap_or_default()
 }
 
+#[cfg(not(mobile))]
 fn with_system_prompt(payload: &Value) -> Vec<Value> {
   let mut messages = vec![json!({
     "role": "system",

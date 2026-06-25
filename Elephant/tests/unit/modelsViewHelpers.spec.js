@@ -101,7 +101,7 @@ describe('modelsViewHelpers - formatting', () => {
   })
 
   it('resolves model name, id and author from partial data', () => {
-    expect(resolveModelName({ id: 'Qwen/Qwen2' })).toBe('Qwen/Qwen2')
+    expect(resolveModelName({ id: 'Qwen/Qwen2' })).toBe('Qwen2')
     expect(resolveModelName({})).toBe('Untitled model')
     expect(resolveModelId({ repoId: 'Qwen/Qwen2' })).toBe('Qwen/Qwen2')
     expect(resolveModelId({})).toBe('')
@@ -383,7 +383,7 @@ describe('modelsViewHelpers - LM Studio style helpers', () => {
   it('derives capabilities from purpose, task, pipeline and tags', () => {
     expect(getModelCapabilities({ purpose: 'chat', task: 'chat-completion' })).toContain('Chat')
     expect(getModelCapabilities({ purpose: 'embedding' })).toEqual(['Embedding'])
-    expect(getModelCapabilities({ purpose: 'ocr' })).toEqual(['OCR'])
+    expect(getModelCapabilities({ provider: 'local-ocr', purpose: 'ocr' })).toEqual(['OCR'])
     expect(getModelCapabilities({ tags: ['vision', 'vlm'] })).toContain('Vision')
     expect(getModelCapabilities({ tags: ['tool-use'] })).toContain('Tool Use')
     expect(getModelCapabilities({ purpose: 'agent' })).toContain('Agent')

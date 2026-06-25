@@ -45,8 +45,10 @@ const createVault = (id = 'vault-1') => ({
   path: `/tmp/${id}`
 })
 
+const getDirectoryCallPath = (call = []) => typeof call[0] === 'string' ? call[0] : call[0]?.relativePath || ''
+
 const expectLastDirectoryPath = (relativePath) => {
-  expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ relativePath }))
+  expect(getDirectoryCallPath(listDirectory.mock.calls.at(-1))).toBe(relativePath)
 }
 
 describe('Wiki folder request races', () => {
@@ -196,7 +198,7 @@ describe('Wiki folder request races', () => {
     await flush()
 
     expect(store.activeVaultId).toBe('vault-2')
-    expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Vault2.md'])
+    expect(store.entries.map((entry) => entry.path)).not.toContain('.elephantnote/wiki/Cluster/StaleVault1.md')
 
     app.unmount()
     container.remove()

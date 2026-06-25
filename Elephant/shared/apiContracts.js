@@ -213,7 +213,7 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
     action('MCP_TOOLS_CALL', 'mcp.tools.call', validateMcpToolsCallPayload),
     action('TASKS_LIST', 'tasks.list'),
     action('TASKS_SET', 'tasks.set', schema.object({ id: requiredString, enabled: optionalBoolean })),
-    action('TASKS_RUN', 'tasks.run'),
+    action('TASKS_RUN', 'tasks.run', schema.object({ id: requiredString })),
     action('PROGRAMS_LIST', 'programs.list'),
     action('PROGRAMS_SET', 'programs.set', schema.object({ environments: optionalObject })),
     action('PROGRAMS_RUN', 'programs.run', schema.object({ id: requiredString, command: requiredString, cwd: optionalString }))

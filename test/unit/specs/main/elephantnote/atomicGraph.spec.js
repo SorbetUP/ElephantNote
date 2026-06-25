@@ -142,7 +142,7 @@ describe('Graph view helpers', () => {
       edges: [{ source: 'a', target: 'b' }]
     }
 
-    const neighborhood = buildSemanticNeighborhood({ graph, nodeId: 'a' })
+    const neighborhood = buildSemanticNeighborhood({ graph, centerId: 'a' })
 
     expect(neighborhood.nodes.map((node) => node.id).sort()).toEqual(['a', 'b'])
     expect(neighborhood.edges).toHaveLength(1)
@@ -154,22 +154,31 @@ describe('Graph view helpers', () => {
         nodes: [{ id: 'folder', kind: 'folder' }, { id: 'note.md', kind: 'note' }],
         edges: [{ source: 'folder', target: 'note.md', type: 'folder' }]
       },
-      showStructural: false
+      includeStructure: false
     })
 
-    expect(surface.nodes).toEqual([{ id: 'note.md', kind: 'note' }])
+    expect(surface.nodes).toHaveLength(1)
+    expect(surface.nodes[0]).toMatchObject({ id: 'note.md', kind: 'note' })
     expect(surface.edges).toEqual([])
   })
 
   it('detects sparse graph state and substantial vaults', () => {
-    expect(hasSparseGraph({ nodes: [], edges: [] })).toBe(true)
-    expect(hasSparseGraph({ nodes: [{ id: 'a' }], edges: [] })).toBe(true)
-    expect(hasSparseGraph({ nodes: [{ id: 'a' }, { id: 'b' }], edges: [{ source: 'a', target: 'b' }] })).toBe(false)
-    expect(hasSubstantialVault([{ path: 'a.md' }, { path: 'b.md' }, { path: 'c.md' }], 3)).toBe(true)
+    expect(hasSparseGraph({ indexInspection: { graph: { nodes: [], edges: [] } } })).toBe(true)
+    expect(hasSparseGraph({ indexInspection: { graph: { nodes: [{ id: 'a' }], edges: [] } } })).toBe(true)
+    expect(hasSparseGraph({ indexInspection: { graph: { nodes: [{ id: 'a' }, { id: 'b' }], edges: [{ source: 'a', target: 'b' }] } } })).toBe(false)
+    expect(hasSubstantialVault({ rootEntries: [{ path: 'folder', kind: 'folder' }] })).toBe(true)
   })
 
   it('repairs only graph views with sparse graphs and non-empty vaults', () => {
-    expect(shouldRepairSparseGraph({ view: 'graph', graph: { nodes: [], edges: [] }, entries: [{ path: 'a.md' }] })).toBe(true)
-    expect(shouldRepairSparseGraph({ view: 'search', graph: { nodes: [], edges: [] }, entries: [{ path: 'a.md' }] })).toBe(false)
+    expect(shouldRepairSparseGraph({
+      vaultStore: { activeWorkspaceView: 'graph', rootEntries: [{ path: 'folder', kind: 'folder' }] },
+      searchStore: { indexInspection: { graph: { nodes: [], edges: [] } } },
+      vaultPath: '/vault'
+    })).toBe(true)
+    expect(shouldRepairSparseGraph({
+      vaultStore: { activeWorkspaceView: 'search', rootEntries: [{ path: 'folder', kind: 'folder' }] },
+      searchStore: { indexInspection: { graph: { nodes: [], edges: [] } } },
+      vaultPath: '/vault'
+    })).toBe(false)
   })
 })

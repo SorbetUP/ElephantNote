@@ -26,8 +26,6 @@ const summarizeLayout = (store) => ({
 })
 
 export const installStoreDiagnostics = () => {
-  if (!isDiagnosticVerbose()) return
-
   const projectStore = useProjectStore()
   const editorStore = useEditorStore()
   const layoutStore = useLayoutStore()
@@ -39,14 +37,24 @@ export const installStoreDiagnostics = () => {
   })
 
   projectStore.$subscribe((mutation) => {
+    if (!isDiagnosticVerbose()) return
     pushDiagnosticLog('info', 'pinia:project', {
       type: mutation.type,
-      events: mutation.events,
       project: summarizeProject(projectStore)
     })
   })
 
   editorStore.$subscribe((mutation) => {
+    const currentId = editorStore.currentFile?.id
+    const activeTab = currentId ? editorStore.tabs.find((tab) => tab.id === currentId) : null
+    if (activeTab && activeTab !== editorStore.currentFile) {
+      editorStore.currentFile = activeTab
+      pushDiagnosticLog('info', 'editor-state:current-file-synced-from-tab', {
+        id: currentId,
+        pathname: activeTab.pathname || null,
+        markdownLength: typeof activeTab.markdown === 'string' ? activeTab.markdown.length : 0
+      })
+    }
     pushDiagnosticLog('info', 'pinia:editor', {
       type: mutation.type,
       editor: summarizeEditor(editorStore)
@@ -54,6 +62,7 @@ export const installStoreDiagnostics = () => {
   })
 
   layoutStore.$subscribe((mutation) => {
+    if (!isDiagnosticVerbose()) return
     pushDiagnosticLog('info', 'pinia:layout', {
       type: mutation.type,
       layout: summarizeLayout(layoutStore)

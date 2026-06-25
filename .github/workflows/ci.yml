@@ -84,7 +84,7 @@ jobs:
           USE_ELECTRON_CLANG: '0'
 
       - name: Build Electron reference bundles
-        run: pnpm run build
+        run: pnpm run build:unpack
 
       - name: Build Tauri web bundle
         run: pnpm tauri:web:build

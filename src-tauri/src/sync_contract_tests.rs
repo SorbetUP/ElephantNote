@@ -1,7 +1,6 @@
 use serde_json::{json, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::vault::sync::{sync_enqueue, sync_run, sync_status};
@@ -28,17 +27,6 @@ fn vault(root: &Path) -> VaultDescriptor {
 fn write_note(root: &Path, name: &str, body: &str) {
   fs::create_dir_all(root).unwrap();
   fs::write(root.join(name), body).unwrap();
-}
-
-fn git(cwd: &Path, args: &[&str]) -> String {
-  let output = Command::new("git").args(args).current_dir(cwd).output().unwrap();
-  assert!(
-    output.status.success(),
-    "git {} failed: {}",
-    args.join(" "),
-    String::from_utf8_lossy(&output.stderr)
-  );
-  String::from_utf8_lossy(&output.stdout).to_string()
 }
 
 fn history_has(status: &Value, operation: &str) -> bool {
@@ -73,6 +61,31 @@ fn status_without_active_vault_is_safe_and_descriptive() {
 }
 
 #[test]
+fn tauri_sync_runtime_is_embedded_local_and_external_free() {
+  let root = unique_temp_dir("external-free");
+  write_note(&root, "First.md", "# First\n\nBody");
+
+  let status = sync_run(vault(&root), Some(json!({ "snapshot": { "message": "contract snapshot" } }))).unwrap();
+
+  assert_eq!(status["runtime"], "tauri-rust");
+  assert_eq!(status["backend"], "elephant-local");
+  assert_eq!(status["queued"], 0);
+  assert_eq!(status["dirty"], false);
+  assert_eq!(status["capabilities"]["embeddedBackend"], true);
+  assert_eq!(status["capabilities"]["requiresExternalBinary"], false);
+  assert_eq!(status["capabilities"]["mobileRcloneBinary"], false);
+  assert_eq!(status["capabilities"]["mobileSyncRequiresBackend"], false);
+  assert!(root.join(".elephantnote/sync/sync-config.json").exists());
+  assert!(root.join(".elephantnote/sync/sync-log.json").exists());
+  assert!(root.join(".elephantnote/sync/sync-manifest.json").exists());
+  assert!(!root.join(".git").exists(), "embedded local sync must not create a git repository");
+  assert_history(&status, "init");
+  assert_history(&status, "snapshot");
+
+  fs::remove_dir_all(root).ok();
+}
+
+#[test]
 fn enqueue_persists_visible_queue_status() {
   let root = unique_temp_dir("enqueue");
   let vault = vault(&root);
@@ -90,85 +103,43 @@ fn enqueue_persists_visible_queue_status() {
 }
 
 #[test]
-fn run_init_and_snapshot_creates_clean_git_repository() {
-  let root = unique_temp_dir("snapshot");
-  write_note(&root, "First.md", "# First\n\nBody");
-  let vault = vault(&root);
-
-  let status = sync_run(vault.clone(), Some(json!({
-    "snapshot": { "message": "contract snapshot" }
-  }))).unwrap();
-
-  assert_eq!(status["runtime"], "tauri-rust");
-  assert_eq!(status["queued"], 0);
-  assert_eq!(status["dirty"], false);
-  assert!(status["deviceId"].as_str().unwrap().starts_with("en-"));
-  assert!(status["folderId"].as_str().unwrap().starts_with("vault-"));
-  assert!(root.join(".git").exists());
-  assert!(root.join(".elephantnote/sync/sync-config.json").exists());
-  assert!(root.join(".elephantnote/sync/sync-log.json").exists());
-  assert_history(&status, "init");
-  assert_history(&status, "snapshot");
-
-  let log = git(&root, &["log", "--oneline", "-1"]);
-  assert!(log.contains("contract snapshot"));
-
-  let second = sync_run(vault, Some(json!({
-    "snapshot": { "message": "noop snapshot" }
-  }))).unwrap();
-  assert_eq!(second["queued"], 0);
-  assert_eq!(second["dirty"], false);
-
-  fs::remove_dir_all(root).ok();
-}
-
-#[test]
-fn sync_operation_expands_to_git_remote_sequence_and_skips_missing_remote() {
+fn sync_operation_runs_embedded_local_pair_flow() {
   let root = unique_temp_dir("sync-operation");
+  let remote = unique_temp_dir("sync-remote");
   write_note(&root, "Sync.md", "# Sync\n\nBody");
-  let vault = vault(&root);
 
-  let status = sync_run(vault, Some(json!({
-    "sync": { "message": "single sync operation" }
+  let status = sync_run(vault(&root), Some(json!({
+    "sync": { "remotePath": remote.to_string_lossy().replace('\\', "/") }
   }))).unwrap();
 
   assert_eq!(status["queued"], 0);
-  assert_eq!(status["dirty"], false);
+  assert_eq!(status["backend"], "elephant-local");
   assert_history(&status, "init");
-  assert_history(&status, "snapshot");
-  assert_history(&status, "pull");
-  assert_history(&status, "push");
-  assert_no_history(&status, "sync");
-  assert!(root.join(".git").exists());
+  assert_history(&status, "sync");
+  assert_no_history(&status, "pull");
+  assert_no_history(&status, "push");
+  assert_eq!(fs::read_to_string(remote.join("Sync.md")).unwrap(), "# Sync\n\nBody");
 
   fs::remove_dir_all(root).ok();
+  fs::remove_dir_all(remote).ok();
 }
 
 #[test]
-fn push_uses_configured_local_git_remote() {
+fn push_uses_configured_local_folder_target() {
   let root = unique_temp_dir("push-vault");
-  let remote = unique_temp_dir("push-remote.git");
-  fs::create_dir_all(remote.parent().unwrap()).unwrap();
-  let output = Command::new("git").args(["init", "--bare", remote.to_str().unwrap()]).output().unwrap();
-  assert!(output.status.success(), "git init --bare failed: {}", String::from_utf8_lossy(&output.stderr));
-
+  let remote = unique_temp_dir("push-remote");
   write_note(&root, "Remote.md", "# Remote\n\nBody");
-  let vault = vault(&root);
   let remote_path = remote.to_string_lossy().replace('\\', "/");
 
-  let status = sync_run(vault, Some(json!({
-    "init": { "remote": remote_path },
-    "snapshot": { "message": "push snapshot" },
+  let status = sync_run(vault(&root), Some(json!({
+    "init": { "remotePath": remote_path },
     "push": {}
   }))).unwrap();
 
   assert_eq!(status["queued"], 0);
-  assert_eq!(status["dirty"], false);
-  assert_eq!(status["remote"], remote.to_string_lossy().replace('\\', "/"));
+  assert_eq!(status["remotePath"], remote.to_string_lossy().replace('\\', "/"));
   assert_history(&status, "push");
-
-  let refs = Command::new("git").args(["--git-dir", remote.to_str().unwrap(), "show-ref"]).output().unwrap();
-  assert!(refs.status.success(), "remote should contain pushed refs");
+  assert_eq!(fs::read_to_string(remote.join("Remote.md")).unwrap(), "# Remote\n\nBody");
 
   fs::remove_dir_all(root).ok();
   fs::remove_dir_all(remote).ok();
@@ -178,22 +149,18 @@ fn push_uses_configured_local_git_remote() {
 fn second_device_can_pull_without_creating_local_snapshot() {
   let root_a = unique_temp_dir("pull-device-a");
   let root_b = unique_temp_dir("pull-device-b");
-  let remote = unique_temp_dir("pull-remote.git");
-  fs::create_dir_all(remote.parent().unwrap()).unwrap();
-  let output = Command::new("git").args(["init", "--bare", remote.to_str().unwrap()]).output().unwrap();
-  assert!(output.status.success(), "git init --bare failed: {}", String::from_utf8_lossy(&output.stderr));
+  let remote = unique_temp_dir("pull-remote");
 
   write_note(&root_a, "FromA.md", "# From A\n\nPulled by B");
   let remote_path = remote.to_string_lossy().replace('\\', "/");
   let status_a = sync_run(vault(&root_a), Some(json!({
-    "init": { "remote": remote_path },
-    "snapshot": { "message": "device A snapshot" },
+    "init": { "remotePath": remote_path },
     "push": {}
   }))).unwrap();
   assert_history(&status_a, "push");
 
   let status_b = sync_run(vault(&root_b), Some(json!({
-    "init": { "remote": remote_path },
+    "init": { "remotePath": remote.to_string_lossy().replace('\\', "/") },
     "pull": {}
   }))).unwrap();
 
@@ -208,65 +175,37 @@ fn second_device_can_pull_without_creating_local_snapshot() {
 }
 
 #[test]
-fn sync_metadata_stays_local_and_is_not_tracked_by_git() {
-  let root = unique_temp_dir("metadata-exclude");
-  write_note(&root, "Tracked.md", "# Tracked\n");
+fn sync_preserves_both_versions_when_two_devices_changed_same_note() {
+  let root = unique_temp_dir("conflict-root");
+  let remote = unique_temp_dir("conflict-remote");
+  write_note(&root, "Conflict.md", "local edit");
+  write_note(&remote, "Conflict.md", "remote edit");
 
   let status = sync_run(vault(&root), Some(json!({
-    "snapshot": { "message": "metadata exclusion baseline" }
+    "init": { "remotePath": remote.to_string_lossy().replace('\\', "/") },
+    "sync": {}
   }))).unwrap();
-  assert_history(&status, "snapshot");
 
-  let exclude = fs::read_to_string(root.join(".git/info/exclude")).unwrap();
-  assert!(exclude.contains("/.elephantnote/sync/sync-config.json"));
-  assert!(exclude.contains("/.elephantnote/sync/sync-log.json"));
-  assert!(exclude.contains("/.elephantnote/sync/sync-queue.json"));
-  assert!(exclude.contains("/.elephantnote/sync/sync-state.json"));
-
-  let tracked_sync_files = git(&root, &["ls-files", ".elephantnote/sync"]);
-  assert!(tracked_sync_files.trim().is_empty(), "sync metadata must not be tracked: {tracked_sync_files}");
+  assert!(status["lastError"].as_str().unwrap_or("").contains("kept both versions"));
+  assert!(!status["conflicts"].as_array().unwrap().is_empty());
+  assert!(fs::read_dir(&root).unwrap().filter_map(Result::ok).any(|entry| entry.file_name().to_string_lossy().contains("remote-conflict")));
+  assert!(fs::read_dir(&remote).unwrap().filter_map(Result::ok).any(|entry| entry.file_name().to_string_lossy().contains("local-conflict")));
 
   fs::remove_dir_all(root).ok();
+  fs::remove_dir_all(remote).ok();
 }
 
 #[test]
-fn legacy_tracked_sync_metadata_is_removed_from_git_index() {
-  let root = unique_temp_dir("legacy-metadata");
-  write_note(&root, "Tracked.md", "# Tracked\n");
-  git(&root, &["init"]);
-  git(&root, &["config", "user.name", "Legacy Sync"]);
-  git(&root, &["config", "user.email", "legacy@example.test"]);
-  fs::create_dir_all(root.join(".elephantnote/sync")).unwrap();
-  fs::write(root.join(".elephantnote/sync/sync-config.json"), "{\"deviceId\":\"legacy\"}\n").unwrap();
-  git(&root, &["add", "-f", ".elephantnote/sync/sync-config.json"]);
-  git(&root, &["commit", "-m", "legacy tracked metadata"]);
-  assert!(git(&root, &["ls-files", ".elephantnote/sync"]).contains("sync-config.json"));
-
-  let status = sync_run(vault(&root), Some(json!({
-    "snapshot": { "message": "remove legacy metadata from index" }
-  }))).unwrap();
-  assert_history(&status, "snapshot");
-
-  let tracked_sync_files = git(&root, &["ls-files", ".elephantnote/sync"]);
-  assert!(tracked_sync_files.trim().is_empty(), "legacy sync metadata must be untracked: {tracked_sync_files}");
-  assert!(root.join(".elephantnote/sync/sync-config.json").exists());
-
-  fs::remove_dir_all(root).ok();
-}
-
-#[test]
-fn status_reports_dirty_repository_after_uncommitted_note_change() {
+fn status_stays_clean_after_unpushed_note_change_because_backend_is_not_git() {
   let root = unique_temp_dir("dirty");
   write_note(&root, "Clean.md", "# Clean\n");
   let vault = vault(&root);
 
-  sync_run(vault.clone(), Some(json!({
-    "snapshot": { "message": "clean baseline" }
-  }))).unwrap();
+  sync_run(vault.clone(), Some(json!({ "snapshot": { "message": "baseline" } }))).unwrap();
   write_note(&root, "Dirty.md", "# Dirty\n");
 
   let status = sync_status(Some(vault)).unwrap();
-  assert_eq!(status["dirty"], true);
+  assert_eq!(status["dirty"], false);
   assert_eq!(status["queued"], 0);
 
   fs::remove_dir_all(root).ok();

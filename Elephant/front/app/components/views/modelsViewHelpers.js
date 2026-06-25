@@ -64,11 +64,13 @@ export const formatCompactCount = (value) => {
 export const resolveModelId = (model) =>
   String(model?.id || model?.repoId || model?.modelId || model?.modelPath || model?.path || model?.name || '').trim()
 
-export const resolveModelName = (model = {}) => {
-  const explicitName = String(model?.name || '').trim()
-  if (explicitName) return explicitName.replace(/^.*[/\\]([^/\\]+)$/u, '$1')
-  const raw = String(model?.id || model?.repoId || model?.modelId || '').trim()
-  return raw || 'Untitled model'
+export const resolveModelName = (model) => {
+  const raw = String(model?.name || model?.id || model?.repoId || model?.modelId || 'Untitled model').trim()
+  const repoParts = getRepoParts(model)
+  if (repoParts.length >= 2 && (raw === repoParts.join('/') || raw === model?.repoId || raw === model?.id)) {
+    return repoParts.slice(1).join('/')
+  }
+  return raw.replace(/^.*[/\\]([^/\\]+)$/u, '$1')
 }
 
 export const resolveModelAuthor = (model) => {
@@ -340,7 +342,7 @@ export const getModelCapabilities = (model = {}) => {
       task.includes('chat') ||
       task.includes('text-generation') ||
       pipeline.includes('text-generation') ||
-      getModelFormat(model) === 'GGUF')
+      (Boolean(name) && getModelFormat(model) === 'GGUF'))
   ) {
     caps.add('Chat')
   }

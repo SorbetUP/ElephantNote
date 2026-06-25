@@ -24,6 +24,7 @@ const libMin = readText('src-tauri/src/lib_min.rs')
 for (const script of [
   'tauri:check',
   'tauri:platform:check',
+  'tauri:mac:smoke',
   'tauri:linux:build',
   'tauri:android:init',
   'tauri:android:dev',
@@ -48,6 +49,8 @@ assert(androidConfig.bundle?.icon?.includes('../static/icon.png'), 'Android conf
 
 assert(packageJson.scripts['tauri:android:init'].includes('tauri.android.conf.json'), 'Android init script must use the Android config')
 assert(packageJson.scripts['tauri:android:dev'].includes('tauri.android.conf.json'), 'Android dev script must use the Android config')
+assert(packageJson.scripts['tauri:mac:smoke'] === 'node scripts/tauri-macos-window-smoke.mjs', 'macOS smoke script must run the packaged window verifier')
+assert(existsSync(resolve(root, 'scripts/tauri-macos-window-smoke.mjs')), 'macOS Tauri window smoke verifier must exist')
 assert(buildDev.includes('tauri.linux.conf.json'), 'Linux dev must use the Linux Tauri config override')
 assert(!buildDev.includes('TAURI_ARGS'), 'Tauri dev script must not use an empty Bash array under set -u')
 assert(buildDev.includes('cargo tauri dev "$@"'), 'macOS Tauri dev must run without config args while preserving CLI passthrough')

@@ -62,8 +62,8 @@ pub fn assets_dir(vault_root: impl AsRef<Path>) -> PathBuf {
   vault_root.as_ref().join(HIDDEN_ASSETS_ROOT)
 }
 
-pub fn required_hidden_dirs() -> [&'static str; 10] {
-  [HIDDEN_CONFIG_ROOT, HIDDEN_ASSETS_ROOT, CONFIG_DIR, WIKI_DIR, MODELS_DIR, SYNC_DIR, INDEX_DIR, CACHE_DIR, STATE_DIR, TRASH_DIR]
+pub fn required_hidden_dirs() -> [&'static str; 9] {
+  [HIDDEN_CONFIG_ROOT, HIDDEN_ASSETS_ROOT, CONFIG_DIR, MODELS_DIR, SYNC_DIR, INDEX_DIR, CACHE_DIR, STATE_DIR, TRASH_DIR]
 }
 
 pub fn is_hidden_vault_path(relative_path: &str) -> bool {
@@ -99,12 +99,12 @@ mod tests {
   }
 
   #[test]
-  fn exposes_required_hidden_dirs() {
+  fn exposes_required_hidden_dirs_without_wiki() {
     let dirs = required_hidden_dirs();
     assert!(dirs.contains(&HIDDEN_CONFIG_ROOT));
     assert!(dirs.contains(&HIDDEN_ASSETS_ROOT));
     assert!(dirs.contains(&CONFIG_DIR));
-    assert!(dirs.contains(&WIKI_DIR));
+    assert!(!dirs.contains(&WIKI_DIR));
     assert!(dirs.contains(&MODELS_DIR));
     assert!(dirs.contains(&SYNC_DIR));
   }

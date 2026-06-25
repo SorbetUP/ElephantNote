@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'fs/promises'
+import { fileURLToPath } from 'node:url'
 
 import {
   createConceptProfile,
@@ -12,7 +13,7 @@ import {
 
 const fixtureRoot = new URL('../fixtures/knowledge/apple/', import.meta.url)
 
-const readFixture = async (filename) => fs.readFile(new URL(filename, fixtureRoot), 'utf8')
+const readFixture = async (filename) => fs.readFile(fileURLToPath(new URL(filename, fixtureRoot)), 'utf8')
 
 const createAppleConcepts = () => [
   createConceptProfile({

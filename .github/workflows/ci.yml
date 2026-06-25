@@ -60,6 +60,13 @@ jobs:
       - name: Unit suite
         run: pnpm test:unit
 
+      - name: Run Electron postinstall before reference build
+        run: node scripts/postinstall.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_user_agent: 'pnpm'
+          USE_ELECTRON_CLANG: '0'
+
       - name: Build Electron reference bundles
         run: pnpm run build
 

@@ -3,110 +3,119 @@ import os from 'os'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { RcloneVaultEngine } from '../../back/app/sync/rcloneVaultEngine.js'
-import { RcloneManager } from '../../back/app/sync/RcloneManager.js'
+import { SYNC_BACKENDS } from '../../shared/sync.js'
 
-const createFakeRclone = (calls = [], { fail = false } = {}) => new RcloneManager({
-  executor: async(binary, args, options) => {
-    calls.push({ binary, args, options })
-    if (fail) throw new Error('rclone exploded')
-    return { stdout: 'ok', stderr: '' }
-  }
-})
+const createTempVault = async(prefix = 'elephant-local-sync-') => fs.mkdtemp(path.join(os.tmpdir(), prefix))
+const readText = async(root, relativePath) => fs.readFile(path.join(root, relativePath), 'utf8')
 
-const createTempVault = async() => fs.mkdtemp(path.join(os.tmpdir(), 'elephant-rclone-'))
-
-describe('RcloneVaultEngine', () => {
-  it('reports a simple idle status', async() => {
+describe('RcloneVaultEngine embedded local sync compatibility wrapper', () => {
+  it('reports an embedded local backend without external binaries', async() => {
     const vaultPath = await createTempVault()
-    const engine = new RcloneVaultEngine({ cwd: vaultPath, rclone: createFakeRclone() })
-    expect(engine.status().cwd).toBe(vaultPath)
-    expect(engine.status().running).toBe(false)
+    const engine = new RcloneVaultEngine({ cwd: vaultPath })
+
+    expect(engine.status()).toMatchObject({
+      cwd: vaultPath,
+      running: false,
+      backend: SYNC_BACKENDS.ELEPHANT_LOCAL,
+      capabilities: {
+        embeddedBackend: true,
+        requiresExternalBinary: false,
+        requiresCloudAccount: false,
+        encryptionRequired: true,
+        desktopRclone: false,
+        mobileRcloneBinary: false,
+        mobileSyncRequiresBackend: false
+      }
+    })
   })
 
-  it('maps legacy snapshot runs to rclone bisync', async() => {
+  it('copies local notes to a shared folder target', async() => {
     const vaultPath = await createTempVault()
-    const calls = []
-    const engine = new RcloneVaultEngine({ cwd: vaultPath, rclone: createFakeRclone(calls) })
-    await engine.run({ init: { remotePath: 'remote:vault' }, snapshot: {} })
-    expect(calls).toHaveLength(1)
-    expect(calls[0].args.slice(0, 3)).toEqual(['bisync', vaultPath, 'remote:vault'])
-    expect(engine.status().history.map((item) => item.status)).toEqual(['done', 'done'])
+    const remotePath = await createTempVault('elephant-local-remote-')
+    await fs.writeFile(path.join(vaultPath, 'Daily.md'), '# Daily\n\nCreated locally.\n')
+
+    const engine = new RcloneVaultEngine({ cwd: vaultPath })
+    const status = await engine.run({ init: { remotePath }, push: {} })
+
+    expect(status).toMatchObject({
+      configured: true,
+      remotePath,
+      firstRunDone: true,
+      backend: SYNC_BACKENDS.ELEPHANT_LOCAL
+    })
+    expect(await readText(remotePath, 'Daily.md')).toContain('Created locally.')
+    expect(status.history.map((item) => item.operation)).toEqual(['init', 'push'])
   })
 
-  it('exposes the exact rclone execution plan before enqueueing', async() => {
+  it('pulls remote notes into the local vault', async() => {
     const vaultPath = await createTempVault()
-    const engine = new RcloneVaultEngine({ cwd: vaultPath, rclone: createFakeRclone() })
+    const remotePath = await createTempVault('elephant-local-remote-')
+    await fs.writeFile(path.join(remotePath, 'Remote.md'), '# Remote\n\nCreated remotely.\n')
 
-    expect(engine.plan({ operations: ['init', 'sync'], init: { remotePath: 'remote:vault' }, sync: {} }))
-      .toEqual([
-        { operation: 'init', payload: { remotePath: 'remote:vault' } },
-        { operation: 'sync', payload: {} }
-      ])
-    expect(engine.status().queued).toBe(0)
+    const engine = new RcloneVaultEngine({ cwd: vaultPath })
+    const status = await engine.run({ init: { remotePath }, pull: {} })
+
+    expect(await readText(vaultPath, 'Remote.md')).toContain('Created remotely.')
+    expect(status.queued).toBe(0)
+    expect(status.history.map((item) => item.operation)).toEqual(['init', 'pull'])
   })
 
-  it('deduplicates identical queued sync operations', async() => {
+  it('keeps both versions when local and remote changed the same note', async() => {
     const vaultPath = await createTempVault()
-    const engine = new RcloneVaultEngine({ cwd: vaultPath, rclone: createFakeRclone() })
+    const remotePath = await createTempVault('elephant-local-remote-')
+    await fs.writeFile(path.join(vaultPath, 'Conflict.md'), '# Conflict\n\nLocal edit.\n')
+    await fs.writeFile(path.join(remotePath, 'Conflict.md'), '# Conflict\n\nRemote edit.\n')
 
-    engine.enqueuePlan({ sync: { remotePath: 'remote:vault' } })
-    engine.enqueuePlan({ sync: { remotePath: 'remote:vault' } })
+    const engine = new RcloneVaultEngine({ cwd: vaultPath })
+    const status = await engine.run({ init: { remotePath }, sync: {} })
+    const localFiles = await fs.readdir(vaultPath)
+    const remoteFiles = await fs.readdir(remotePath)
 
-    expect(engine.status().queued).toBe(1)
-    expect(engine.status().operations.map((item) => item.operation)).toEqual(['sync'])
+    expect(status.lastError).toContain('kept both versions')
+    expect(status.conflicts).toHaveLength(2)
+    expect(localFiles.some((file) => file.includes('remote-conflict'))).toBe(true)
+    expect(remoteFiles.some((file) => file.includes('local-conflict'))).toBe(true)
+    expect(await readText(vaultPath, 'Conflict.md')).toContain('Local edit.')
+    expect(await readText(remotePath, 'Conflict.md')).toContain('Remote edit.')
   })
 
-  it('persists remote, first-run state, peers and history across engine instances', async() => {
+  it('persists target, first-run state, peers and history across engine instances', async() => {
     const vaultPath = await createTempVault()
-    const calls = []
-    const engine = new RcloneVaultEngine({ cwd: vaultPath, rclone: createFakeRclone(calls) })
+    const remotePath = await createTempVault('elephant-local-remote-')
+    const engine = new RcloneVaultEngine({ cwd: vaultPath })
 
     await engine.run({
       init: {
-        remotePath: 'remote:vault',
-        peerDeviceId: 'phone-1',
-        peerAddress: 'tcp://192.168.1.40:22000',
+        remotePath,
+        peerDeviceId: 'peer-1',
+        peerAddress: 'local-peer',
         vaultIds: ['vault-a']
       },
       sync: {}
     })
 
-    const restored = new RcloneVaultEngine({ cwd: vaultPath, rclone: createFakeRclone() })
+    const restored = new RcloneVaultEngine({ cwd: vaultPath })
     await restored.loadConfig({ force: true })
     const status = restored.status()
 
-    expect(calls).toHaveLength(1)
     expect(status).toMatchObject({
       configured: true,
-      remotePath: 'remote:vault',
+      remotePath,
       firstRunDone: true,
-      peers: [{ deviceId: 'phone-1', address: 'tcp://192.168.1.40:22000', vaultIds: ['vault-a'] }]
+      peers: [{ deviceId: 'peer-1', address: 'local-peer', vaultIds: ['vault-a'] }]
     })
     expect(status.history.map((item) => item.operation)).toEqual(['init', 'sync'])
   })
 
-  it('records a missing remote as an actionable error without leaving stale queued work', async() => {
+  it('records a missing target as an actionable error without leaving stale queued work', async() => {
     const vaultPath = await createTempVault()
-    const calls = []
-    const engine = new RcloneVaultEngine({ cwd: vaultPath, rclone: createFakeRclone(calls) })
+    const engine = new RcloneVaultEngine({ cwd: vaultPath })
 
     await engine.run({ sync: {} })
     const status = engine.status()
 
-    expect(calls).toHaveLength(0)
     expect(status.queued).toBe(0)
-    expect(status.lastError).toContain('remote')
+    expect(status.lastError).toContain('target')
     expect(status.history.at(-1)).toMatchObject({ operation: 'sync', status: 'error' })
-  })
-
-  it('preserves failed rclone attempts in history and clears the running flag', async() => {
-    const vaultPath = await createTempVault()
-    const engine = new RcloneVaultEngine({ cwd: vaultPath, rclone: createFakeRclone([], { fail: true }) })
-
-    await expect(engine.run({ init: { remotePath: 'remote:vault' }, sync: {} })).rejects.toThrow('rclone exploded')
-
-    expect(engine.status().running).toBe(false)
-    expect(engine.status().lastError).toBe('rclone exploded')
-    expect(engine.status().history.map((item) => item.status)).toEqual(['done', 'error'])
   })
 })

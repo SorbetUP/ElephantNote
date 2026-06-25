@@ -58,7 +58,6 @@ pub fn initialize_vault(vault_root: &str) -> R<Value> {
   write_json_if_missing(vault_layout::index_file(vault_root, vault_layout::INDEX_FILE), json!({ "version": 1, "updatedAt": now_string(), "entries": [] }))?;
   write_json_if_missing(vault_layout::config_file(vault_root, vault_layout::CALENDAR_FILE), json!({ "version": 1, "updatedAt": now_string(), "events": [] }))?;
   write_json_if_missing(vault_layout::config_file(vault_root, vault_layout::SOURCES_FILE), json!({ "version": 1, "updatedAt": now_string(), "sources": [] }))?;
-  write_json_if_missing(vault_layout::wiki_file(vault_root, vault_layout::WIKI_FILE), json!({ "version": 1, "updatedAt": now_string(), "records": [] }))?;
   write_json_if_missing(vault_layout::models_file(vault_root, vault_layout::MODELS_FILE), json!({ "provider": "none", "modelId": "", "local": false }))?;
   write_json_if_missing(vault_layout::sync_file(vault_root, vault_layout::SYNC_FILE), json!({ "version": 1, "queue": [], "lastRunAt": null }))?;
 

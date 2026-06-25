@@ -118,6 +118,7 @@ const aiConfigPayload = schema.strictObject({
   codexLinkEnabled: optionalBoolean,
   defaultProvider: optionalString,
   localAi: optionalObject,
+  localRuntime: optionalObject,
   providers: optionalObject,
   routes: optionalObject,
   localModelSelection: optionalObject,

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import fs from 'node:fs'
 import {
   collectSecurityFindings,
   loadSecurityBaseline,
@@ -12,6 +13,12 @@ const baseline = loadSecurityBaseline(root)
 const findings = collectSecurityFindings(root)
 const result = splitFindingsByBaseline(findings, baseline)
 const summary = summarizeFindings(result)
+
+fs.writeFileSync('security-guardrails-report.json', `${JSON.stringify({
+  summary,
+  acceptedFindings: result.acceptedFindings,
+  newFindings: result.newFindings
+}, null, 2)}\n`)
 
 const printFinding = (finding) => {
   console.error(`- [${finding.severity}] ${finding.id} in ${finding.file}`)

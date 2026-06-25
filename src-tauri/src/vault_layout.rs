@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
 pub const HIDDEN_ROOT: &str = ".elephantnote";
+pub const HIDDEN_ASSETS_ROOT: &str = ".assets";
+pub const HIDDEN_CONFIG_ROOT: &str = ".config";
 pub const CONFIG_DIR: &str = "config";
 pub const WIKI_DIR: &str = "wiki";
 pub const MODELS_DIR: &str = "models";
@@ -9,7 +11,7 @@ pub const INDEX_DIR: &str = "index";
 pub const CACHE_DIR: &str = "cache";
 pub const STATE_DIR: &str = "state";
 pub const TRASH_DIR: &str = "trash";
-pub const ASSETS_DIR: &str = "assets";
+pub const ASSETS_DIR: &str = HIDDEN_ASSETS_ROOT;
 
 pub const WORKSPACE_FILE: &str = "workspace.json";
 pub const VAULT_FILE: &str = "vault.json";
@@ -24,12 +26,20 @@ pub fn hidden_root(vault_root: impl AsRef<Path>) -> PathBuf {
   vault_root.as_ref().join(HIDDEN_ROOT)
 }
 
+pub fn hidden_config_root(vault_root: impl AsRef<Path>) -> PathBuf {
+  vault_root.as_ref().join(HIDDEN_CONFIG_ROOT)
+}
+
 pub fn hidden_dir(vault_root: impl AsRef<Path>, name: &str) -> PathBuf {
   hidden_root(vault_root).join(name)
 }
 
 pub fn config_file(vault_root: impl AsRef<Path>, file: &str) -> PathBuf {
   hidden_dir(vault_root, CONFIG_DIR).join(file)
+}
+
+pub fn portable_config_file(vault_root: impl AsRef<Path>, category: &str, file: &str) -> PathBuf {
+  hidden_config_root(vault_root).join(category).join(file)
 }
 
 pub fn wiki_file(vault_root: impl AsRef<Path>, file: &str) -> PathBuf {
@@ -49,11 +59,11 @@ pub fn index_file(vault_root: impl AsRef<Path>, file: &str) -> PathBuf {
 }
 
 pub fn assets_dir(vault_root: impl AsRef<Path>) -> PathBuf {
-  hidden_dir(vault_root, ASSETS_DIR)
+  vault_root.as_ref().join(HIDDEN_ASSETS_ROOT)
 }
 
-pub fn required_hidden_dirs() -> [&'static str; 8] {
-  [CONFIG_DIR, WIKI_DIR, MODELS_DIR, SYNC_DIR, INDEX_DIR, CACHE_DIR, STATE_DIR, TRASH_DIR]
+pub fn required_hidden_dirs() -> [&'static str; 10] {
+  [HIDDEN_CONFIG_ROOT, HIDDEN_ASSETS_ROOT, CONFIG_DIR, WIKI_DIR, MODELS_DIR, SYNC_DIR, INDEX_DIR, CACHE_DIR, STATE_DIR, TRASH_DIR]
 }
 
 pub fn is_hidden_vault_path(relative_path: &str) -> bool {
@@ -61,7 +71,7 @@ pub fn is_hidden_vault_path(relative_path: &str) -> bool {
     .replace('\\', "/")
     .split('/')
     .next()
-    .is_some_and(|first| first == HIDDEN_ROOT || first.starts_with('.'))
+    .is_some_and(|first| first == HIDDEN_ROOT || first == HIDDEN_ASSETS_ROOT || first == HIDDEN_CONFIG_ROOT || first.starts_with('.'))
 }
 
 pub fn is_visible_vault_path(relative_path: &str) -> bool {
@@ -80,15 +90,19 @@ mod tests {
   #[test]
   fn builds_canonical_metadata_paths() {
     assert!(config_file("vault", WORKSPACE_FILE).ends_with("vault/.elephantnote/config/workspace.json"));
+    assert!(portable_config_file("vault", "provider", "provider.json").ends_with("vault/.config/provider/provider.json"));
     assert!(wiki_file("vault", WIKI_FILE).ends_with("vault/.elephantnote/wiki/wiki.json"));
     assert!(models_file("vault", MODELS_FILE).ends_with("vault/.elephantnote/models/models.json"));
     assert!(sync_file("vault", SYNC_FILE).ends_with("vault/.elephantnote/sync/sync.json"));
     assert!(index_file("vault", INDEX_FILE).ends_with("vault/.elephantnote/index/index.json"));
+    assert!(assets_dir("vault").ends_with("vault/.assets"));
   }
 
   #[test]
   fn exposes_required_hidden_dirs() {
     let dirs = required_hidden_dirs();
+    assert!(dirs.contains(&HIDDEN_CONFIG_ROOT));
+    assert!(dirs.contains(&HIDDEN_ASSETS_ROOT));
     assert!(dirs.contains(&CONFIG_DIR));
     assert!(dirs.contains(&WIKI_DIR));
     assert!(dirs.contains(&MODELS_DIR));
@@ -98,6 +112,8 @@ mod tests {
   #[test]
   fn distinguishes_hidden_and_visible_paths() {
     assert!(is_hidden_vault_path(".elephantnote/config/workspace.json"));
+    assert!(is_hidden_vault_path(".config/provider/provider.json"));
+    assert!(is_hidden_vault_path(".assets/excalidraw.png"));
     assert!(is_hidden_vault_path(".git/config"));
     assert!(is_visible_vault_path("Projects/note.md"));
   }

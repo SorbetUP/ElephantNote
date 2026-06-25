@@ -64,13 +64,11 @@ export const formatCompactCount = (value) => {
 export const resolveModelId = (model) =>
   String(model?.id || model?.repoId || model?.modelId || model?.modelPath || model?.path || model?.name || '').trim()
 
-export const resolveModelName = (model) => {
-  const raw = String(model?.name || model?.id || model?.repoId || model?.modelId || 'Untitled model').trim()
-  const repoParts = getRepoParts(model)
-  if (repoParts.length >= 2 && (raw === repoParts.join('/') || raw === model?.repoId || raw === model?.id)) {
-    return repoParts.slice(1).join('/')
-  }
-  return raw.replace(/^.*[/\\]([^/\\]+)$/u, '$1')
+export const resolveModelName = (model = {}) => {
+  const explicitName = String(model?.name || '').trim()
+  if (explicitName) return explicitName.replace(/^.*[/\\]([^/\\]+)$/u, '$1')
+  const raw = String(model?.id || model?.repoId || model?.modelId || '').trim()
+  return raw || 'Untitled model'
 }
 
 export const resolveModelAuthor = (model) => {
@@ -312,7 +310,7 @@ export const getDownloadOption = (model = {}) => {
   }
 }
 
-export const getModelCapabilities = (model) => {
+export const getModelCapabilities = (model = {}) => {
   const caps = new Set()
   const purpose = String(model?.purpose || '').toLowerCase()
   const task = String(model?.task || '').toLowerCase()
@@ -324,6 +322,11 @@ export const getModelCapabilities = (model) => {
   const tags = Array.isArray(model?.tags) ? model.tags.map((tag) => String(tag).toLowerCase()) : []
   const all = [name, pipeline, purpose, task, ...tags].join(' ')
 
+  if (purpose === 'ocr' || task.includes('ocr')) caps.add('OCR')
+  if (purpose === 'agent' || task.includes('agent') || pipeline.includes('agent') || tags.includes('agent')) caps.add('Agent')
+  if (tags.some((tag) => ['vision', 'vlm', 'image'].includes(tag))) caps.add('Vision')
+  if (tags.some((tag) => ['tool-use', 'tools', 'function-calling'].includes(tag))) caps.add('Tool Use')
+
   if (
     /embedding|embed|sentence-transformers|all-minilm|bge-|bge_|e5-|gte-|nomic-embed|gte|jina-embeddings/.test(all) ||
     purpose === 'embedding' ||
@@ -332,21 +335,17 @@ export const getModelCapabilities = (model) => {
   ) {
     caps.add('Embedding')
   } else if (
-    purpose === 'chat' ||
-    task.includes('chat') ||
-    task.includes('text-generation') ||
-    pipeline.includes('text-generation') ||
-    getModelFormat(model) === 'GGUF'
+    !caps.size &&
+    (purpose === 'chat' ||
+      task.includes('chat') ||
+      task.includes('text-generation') ||
+      pipeline.includes('text-generation') ||
+      getModelFormat(model) === 'GGUF')
   ) {
     caps.add('Chat')
   }
 
-  if (purpose === 'agent' || task.includes('agent') || pipeline.includes('agent') || tags.includes('agent')) caps.add('Agent')
-  if (purpose === 'ocr' || task.includes('ocr')) caps.add('OCR')
-  if (tags.some((tag) => ['vision', 'vlm', 'image'].includes(tag))) caps.add('Vision')
-  if (tags.some((tag) => ['tool-use', 'tools', 'function-calling'].includes(tag))) caps.add('Tool Use')
   if (!caps.size && isRunnableModel(model)) caps.add('Chat')
-
   return [...caps]
 }
 

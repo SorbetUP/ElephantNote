@@ -11,6 +11,7 @@ describe('ProgramRuntime', () => {
     const environments = normalizeProgramEnvironments({
       python: {
         commandPrefix: ['uv', 'run'],
+        allowRun: true,
         env: { TOKEN: 42 }
       }
     })

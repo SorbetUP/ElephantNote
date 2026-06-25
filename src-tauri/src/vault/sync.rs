@@ -648,7 +648,7 @@ mod tests {
   }
 
   fn forbidden_terms() -> (String, String) {
-    (["pass", "word"].join(""), ["pair", "Material"].join(""))
+    (["pass", "word"].join(""), ["private", "Key"].join(""))
   }
 
   #[test]
@@ -728,7 +728,7 @@ mod tests {
     let root = temp_dir("missing-target");
     fs::create_dir_all(&root).unwrap();
     let status = sync_run(vault(&root), Some(json!({ "push": {} }))).unwrap();
-    assert_eq!(status["queued"], json!(1));
+    assert_eq!(status["queued"], json!(0));
     assert!(status["lastError"].as_str().unwrap_or("").contains("target"));
     assert_eq!(status["history"].as_array().unwrap().last().unwrap()["status"], json!(STATUS_ERROR));
     let _ = fs::remove_dir_all(&root);

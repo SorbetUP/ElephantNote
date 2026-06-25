@@ -6,7 +6,9 @@ const memoryBackend = {
   get length() {
     return memoryStore.size
   },
-  getItem: (key) => memoryStore.has(key) ? memoryStore.get(key) : null,
+  getItem: (key) => {
+    return memoryStore.has(key) ? memoryStore.get(key) : null
+  },
   setItem: (key, value) => memoryStore.set(key, String(value)),
   removeItem: (key) => memoryStore.delete(key),
   key: (index) => [...memoryStore.keys()][index] || null

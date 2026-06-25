@@ -1,6 +1,9 @@
 const getBridge = () => globalThis.window?.elephantnote
 const getTauriInvoke = () => globalThis.window?.__TAURI__?.core?.invoke
 const normalizePayload = (payload = {}) => (payload && typeof payload === 'object' ? payload : {})
+const directoryListPayload = (payload = '') => typeof payload === 'string'
+  ? { relativePath: payload }
+  : normalizePayload(payload)
 
 const callTauriSyncPlan = (payload = {}) => {
   const normalizedPayload = normalizePayload(payload)
@@ -18,7 +21,7 @@ export const LEGACY_CALLS = {
   'vaults.setIcon': (payload) => getBridge()?.setVaultIcon?.(payload),
   'vaults.setName': (payload) => getBridge()?.setVaultName?.(payload),
   'vaults.remove': (payload) => getBridge()?.removeVault?.(payload),
-  'directory.list': ({ relativePath = '' }) => getBridge()?.listDirectory?.(relativePath),
+  'directory.list': (payload = '') => getBridge()?.listDirectory?.(directoryListPayload(payload)),
   'notes.create': (payload = {}) => {
     const normalizedPayload = typeof payload === 'string' ? { relativePath: payload } : payload
     return getBridge()?.createNote?.(normalizedPayload)

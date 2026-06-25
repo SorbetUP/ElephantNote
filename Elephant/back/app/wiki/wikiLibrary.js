@@ -62,12 +62,14 @@ export const buildWikiProposalsFromGraph = ({
     const clusterPaths = Array.isArray(cluster?.paths) ? cluster.paths.map((relativePath) => String(relativePath || '')) : []
     const clusterPathSet = new Set(clusterPaths)
     const clusterNodes = clusterPaths.map((relativePath) => byPath.get(relativePath)).filter(Boolean)
-    if (!clusterNodes.length) continue
+    if (clusterNodes.length < 2) continue
 
     const citations = clusterNodes
       .slice(0, 8)
       .map(createCitation)
       .filter((citation) => citation.path)
+    if (citations.length < 2) continue
+
     const topic = String(cluster.label || cluster.id || citations[0]?.title || 'Wiki topic').trim()
     const sourceCount = clusterNodes.reduce((total, node) => total + Number(node.sourceCount || node.sources?.length || 0), 0)
     const semanticLinkCount = semanticEdges.filter((edge) =>

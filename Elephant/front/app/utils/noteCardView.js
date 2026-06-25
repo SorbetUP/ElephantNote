@@ -31,7 +31,7 @@ const stripInlineFrontmatterPrefix = (value = '') => {
 
   const knownKeyPattern = Array.from(FRONTMATTER_KEYS).join('|')
   const metadataPairPattern = new RegExp(
-    `(?:^|\\s)(?:${knownKeyPattern}):\\s*(?:"[^"]*"|'[^']*'|\\[[^\\]]*\\]|[^\\s]+)`,
+    `(?:^|\s)(?:${knownKeyPattern}):\s*(?:"[^"]*"|'[^']*'|\[[^\]]*\]|[^\s]+)`,
     'gi'
   )
   const matches = [...raw.matchAll(metadataPairPattern)]
@@ -59,8 +59,9 @@ const stripLeadingDocumentTitle = (value = '') => {
   if (!raw) return ''
 
   const lines = raw.split(/\r?\n/)
-  if (/^#\s+\S/.test(lines[0] || '') && lines.slice(1).some((line) => line.trim())) {
-    return lines.slice(1).join('\n').trim()
+  if (/^#\s+\S/.test(lines[0] || '')) {
+    const rest = lines.slice(1).join('\n').trim()
+    return rest || ''
   }
 
   return raw.replace(/^#{1,6}\s+/, '').trim()

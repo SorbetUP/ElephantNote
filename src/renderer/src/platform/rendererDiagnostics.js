@@ -26,7 +26,6 @@ const normalizeDetails = (details) => {
 }
 
 const forwardToTauriTerminal = (entry) => {
-  if (!shouldEmitDiagnostic(entry.level)) return
   const invoke = globalThis.window?.__TAURI__?.core?.invoke
   if (!invoke) return
   try {

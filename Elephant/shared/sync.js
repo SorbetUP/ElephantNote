@@ -50,6 +50,22 @@ const compactHash = (value = '') => {
   return Math.abs(hash >>> 0).toString(36)
 }
 
+const normalizeIsoDate = (value = '', fallback = new Date()) => {
+  const text = String(value || '').trim()
+  if (text && !Number.isNaN(Date.parse(text))) return new Date(text).toISOString()
+  return fallback.toISOString()
+}
+
+const normalizeStringList = (value = []) => {
+  const list = Array.isArray(value) ? value : []
+  return [...new Set(list.map((item) => {
+    if (typeof item === 'string') return item.trim()
+    return String(item?.id || item?.name || item?.path || '').trim()
+  }).filter(Boolean))]
+}
+
+const normalizePeerId = (peer = {}) => String(peer.deviceId || peer.id || '').trim()
+
 export const normalizeSyncOperation = (operation = '') => {
   const normalized = String(operation || '').trim()
   return SYNC_OPERATION_IDS.includes(normalized) ? normalized : ''
@@ -139,6 +155,52 @@ export const createSyncIdentity = ({ cwd = '', hostname = '', now = new Date() }
   }
 }
 
+export const normalizeSyncPeer = (peer = {}, now = new Date()) => {
+  const deviceId = normalizePeerId(peer)
+  const address = String(peer.address || peer.peerAddress || peer.endpoint || '').trim()
+  const name = String(peer.name || peer.deviceName || peer.label || deviceId || 'Elephant device').trim()
+  const fallbackIdSeed = `${name}|${address}|${peer.publicKey || ''}`
+  const id = deviceId || (fallbackIdSeed.trim() ? `peer-${compactHash(fallbackIdSeed)}` : '')
+  if (!id) return null
+  const pairedAt = peer.pairedAt ? normalizeIsoDate(peer.pairedAt, now) : ''
+  return {
+    id,
+    deviceId: deviceId || id,
+    name: name || id,
+    address,
+    endpoint: String(peer.endpoint || address || '').trim(),
+    vaultIds: normalizeStringList(peer.vaultIds || peer.vaults),
+    online: Boolean(peer.online),
+    pairedAt,
+    lastSeenAt: normalizeIsoDate(peer.lastSeenAt || peer.announcedAt, now)
+  }
+}
+
+export const mergeSyncPeers = (currentPeers = [], incomingPeers = [], now = new Date()) => {
+  const peers = new Map()
+  const upsertPeer = (peer, incoming = false) => {
+    const normalized = normalizeSyncPeer(peer, now)
+    if (!normalized) return
+    const previous = peers.get(normalized.id)
+    if (!previous) {
+      peers.set(normalized.id, normalized)
+      return
+    }
+    peers.set(normalized.id, {
+      ...previous,
+      ...normalized,
+      vaultIds: [...new Set([...(previous.vaultIds || []), ...(normalized.vaultIds || [])])],
+      pairedAt: normalized.pairedAt || previous.pairedAt,
+      online: incoming ? normalized.online : previous.online || normalized.online,
+      lastSeenAt: incoming ? normalized.lastSeenAt : previous.lastSeenAt || normalized.lastSeenAt
+    })
+  }
+
+  for (const peer of Array.isArray(currentPeers) ? currentPeers : []) upsertPeer(peer, false)
+  for (const peer of Array.isArray(incomingPeers) ? incomingPeers : []) upsertPeer(peer, true)
+  return [...peers.values()].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+}
+
 export const createSyncConfig = ({
   cwd = '',
   hostname = '',
@@ -159,7 +221,7 @@ export const createSyncConfig = ({
   remote,
   remotePath,
   branch,
-  peers: Array.isArray(peers) ? peers : [],
+  peers: mergeSyncPeers([], peers, now),
   updatedAt: now.toISOString()
 })
 
@@ -186,10 +248,10 @@ export const createSyncStatus = ({
   running,
   deviceId: config?.deviceId || '',
   folderId: config?.folderId || '',
-  backend: config?.backend || SYNC_BACKENDS.GIT,
+  backend: config?.backend || SYNC_BACKENDS.RCLONE,
   remote: config?.remote || '',
   remotePath: config?.remotePath || '',
-  peers: config?.peers || [],
+  peers: mergeSyncPeers([], config?.peers || []),
   branch: repository.branch || config?.branch || '',
   ahead: repository.ahead || 0,
   behind: repository.behind || 0,

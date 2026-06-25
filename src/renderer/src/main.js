@@ -26,7 +26,8 @@ import i18nPlugin from './i18n'
 
 // something is wrong here! \/
 import services from './services/index'
-import routes from './router'
+import createRoutes from './router'
+import { resolveRendererRoutes } from './router/resolveRendererRoutes'
 import Main from './Main.vue'
 import { installGraphRuntimeFixes } from 'elephant-front/runtime/graphRuntimeFixes'
 
@@ -117,45 +118,62 @@ const bootstrapTauriRuntime = async() => {
   })
 }
 
-// -----------------------------------------------
-// Be careful when changing code before this line!
-
-const runtime = window.__MARKTEXT_RUNTIME__ || (window.__TAURI__ ? 'tauri' : 'electron')
-window.__MARKTEXT_RUNTIME__ = runtime
-
-if (runtime === 'tauri') {
-  bootstrapTauriRuntime()
-} else {
-  bootstrapRenderer()
+const bootstrapForRuntime = async(runtime) => {
+  if (runtime === 'tauri') {
+    await bootstrapTauriRuntime()
+  } else {
+    bootstrapRenderer()
+  }
+  return globalThis.marktext?.env?.type || window.__MARKTEXT_WINDOW_TYPE__ || 'editor'
 }
 
-const router = createRouter({
-  history: createWebHashHistory(),
-  routes
-})
+const mountRendererApp = (runtime, windowType) => {
+  const router = createRouter({
+    history: createWebHashHistory(),
+    routes: resolveRendererRoutes(createRoutes, windowType)
+  })
 
-const app = createApp(Main)
-app.use(pinia)
-app.use(router)
-app.use(ElementPlus, { locale: en })
-app.use(i18nPlugin)
-app.config.globalProperties.$http = axios
-app.config.globalProperties.$services = services
-installAddonSystem(app, {
-  router,
-  pinia,
-  services,
-  runtime,
-  logger: {
-    info: (message, payload) => pushDiagnosticLog('info', message, payload),
-    warn: (message, payload) => pushDiagnosticLog('warn', message, payload),
-    error: (message, payload) => pushDiagnosticLog('error', message, payload)
-  }
-})
-app.mount('#app')
+  const app = createApp(Main)
+  app.use(pinia)
+  app.use(router)
+  app.use(ElementPlus, { locale: en })
+  app.use(i18nPlugin)
+  app.config.globalProperties.$http = axios
+  app.config.globalProperties.$services = services
+  installAddonSystem(app, {
+    router,
+    pinia,
+    services,
+    runtime,
+    logger: {
+      info: (message, payload) => pushDiagnosticLog('info', message, payload),
+      warn: (message, payload) => pushDiagnosticLog('warn', message, payload),
+      error: (message, payload) => pushDiagnosticLog('error', message, payload)
+    }
+  })
+  app.mount('#app')
 
-installGraphRuntimeFixes()
-installStoreDiagnostics()
+  installGraphRuntimeFixes()
+  installStoreDiagnostics()
+}
+
+const startRendererApp = async() => {
+  // -----------------------------------------------
+  // Be careful when changing code before this line!
+
+  const runtime = window.__MARKTEXT_RUNTIME__ || (window.__TAURI__ ? 'tauri' : 'electron')
+  window.__MARKTEXT_RUNTIME__ = runtime
+
+  const windowType = await bootstrapForRuntime(runtime)
+  mountRendererApp(runtime, windowType)
+}
+
+void startRendererApp().catch((error) => {
+  pushDiagnosticLog('error', 'renderer startup failed', error)
+  setTimeout(() => {
+    throw error
+  }, 0)
+})
 
 if (import.meta.hot) {
   import.meta.hot.accept()

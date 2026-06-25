@@ -22,7 +22,7 @@ export default [
       'blinko-offline/**',
       'src/muya/lib/assets/libs/**',
       'src/muya/lib/parser/marked/urlify.js',
-      'src/renderer/src/assets/symbolIcon/index.js',
+      'src/renderer/src/assets/symbolIcon/index.js'
     ]
   },
 
@@ -67,7 +67,7 @@ export default [
       'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off',
       'require-atomic-updates': 'off',
       'prefer-const': 'off',
-      'no-prototype-builtins': 'off',
+      'no-prototype-builtins': 'off'
     },
     ignores: ['node_modules', 'src/muya/dist/**/*', 'src/muya/webpack.config.js']
   },
@@ -80,7 +80,7 @@ export default [
     },
     rules: {
       'vue/multi-word-component-names': 'off',
-      'vue/require-default-prop': 'off',
+      'vue/require-default-prop': 'off'
     }
   },
 
@@ -89,6 +89,9 @@ export default [
     files: ['test/**/*.js', 'Elephant/tests/**/*.js'],
     languageOptions: {
       globals: { ...globals.vitest }
+    },
+    rules: {
+      'no-confusing-arrow': 'off'
     }
   },
 
@@ -100,7 +103,7 @@ export default [
       'no-unused-expressions': 'off',
       'no-return-assign': 'off',
       eqeqeq: 'warn',
-      'no-var': 'warn',
+      'no-var': 'warn'
     }
   },
 

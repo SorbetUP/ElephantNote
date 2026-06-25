@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="static/logo-small.png" alt="ElephantNote logo" width="96" height="96">
+  <img src="static/icon.png" alt="ElephantNote icon" width="96" height="96">
 </p>
 
 <h1 align="center">ElephantNote</h1>
@@ -18,7 +18,7 @@
 
 ElephantNote is a local-first Markdown notes application. It is designed for personal knowledge bases that need fast editing, file-based storage, search, graph navigation, sync, and optional local AI workflows.
 
-The repository is under active development. The Electron app remains available, while the Tauri app is the main direction for a lighter desktop and mobile version.
+The project is under active development. The Electron app remains available, while the Tauri app is the main direction for a lighter desktop and mobile version.
 
 ## Goals
 

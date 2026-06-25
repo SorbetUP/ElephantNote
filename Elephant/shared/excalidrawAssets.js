@@ -55,10 +55,15 @@ export const sanitizeAssetName = (value = '', fallback = 'asset') => {
     .split('/')
     .filter(Boolean)
     .pop() || fallback
-  return cleaned
-    .replace(/[<>:"|?*\u0000-\u001f]/g, '-')
+  const safe = [...cleaned]
+    .map((char) => {
+      if ('<>:"|?*'.includes(char) || char.charCodeAt(0) < 32) return '-'
+      return char
+    })
+    .join('')
     .replace(/^\.+/, '')
-    .trim() || fallback
+    .trim()
+  return safe || fallback
 }
 
 export const getVaultAssetRelativePath = (fileName = 'asset') => joinPath(

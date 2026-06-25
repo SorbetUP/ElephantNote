@@ -84,7 +84,10 @@ jobs:
           USE_ELECTRON_CLANG: '0'
 
       - name: Build Electron reference bundles
-        run: pnpm run build:unpack
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm run build:unpack 2>&1 | tee build-output.txt
 
       - name: Build Tauri web bundle
         run: pnpm tauri:web:build
@@ -103,6 +106,7 @@ jobs:
             docs/parity/index.md
             security-guardrails-report.json
             eslint-output.txt
+            build-output.txt
           if-no-files-found: ignore
           retention-days: 14
 

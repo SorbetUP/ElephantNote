@@ -4,7 +4,7 @@ import pathShim, { basename, dirname, extname, isAbsolute, join, normalize, rela
 describe('nodePathShim', () => {
   it('resolves relative image paths without the Node path module', () => {
     expect(resolve('/vault/notes', 'images/picture.png')).toBe('/vault/notes/images/picture.png')
-    expect(resolve('/vault/notes/current.md', '../assets/picture.png')).toBe('/vault/assets/picture.png')
+    expect(resolve('/vault/notes', '../assets/picture.png')).toBe('/vault/assets/picture.png')
   })
 
   it('provides the path API shape used by Muya image rendering', () => {

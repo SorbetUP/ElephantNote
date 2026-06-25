@@ -78,6 +78,71 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  tauri-macos-packaged-smoke:
+    name: Tauri macOS packaged window smoke
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      CARGO_TERM_COLOR: always
+      TAURI_MACOS_SMOKE_TIMEOUT_MS: 120000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-tauri
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-tauri-macos-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-tauri-macos-
+            ${{ runner.os }}-cargo-
+
+      - name: Install Tauri CLI
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! cargo tauri --version >/dev/null 2>&1; then
+            cargo install tauri-cli --version '^2' --locked
+          fi
+          cargo tauri --version
+
+      - name: Cargo check macOS Apple Silicon target
+        shell: bash
+        run: cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-apple-darwin --all-targets --no-default-features
+
+      - name: Build packaged Tauri macOS app
+        shell: bash
+        run: |
+          set -euxo pipefail
+          pnpm tauri:llama:install
+          pnpm tauri:web:build
+          cd src-tauri
+          cargo tauri build --bundles app
+
+      - name: Launch packaged app and verify visible window
+        run: pnpm tauri:mac:smoke
+
+      - name: Upload macOS bundle diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-macos-packaged-smoke-diagnostics
+          path: |
+            src-tauri/target/release/bundle/macos/
+          if-no-files-found: ignore
+          retention-days: 7
+
   tauri-rust:
     name: Tauri Rust check
     runs-on: ubuntu-latest

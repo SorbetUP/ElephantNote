@@ -23,8 +23,12 @@ cd "$ROOT_DIR"
 node scripts/ensure-tauri-llama-server.mjs
 
 cd "$ROOT_DIR/src-tauri"
+# The bundled llama-server lives under src-tauri/bin. Running it during chat can
+# update filesystem metadata and Tauri's Rust watcher restarts the app mid-chat.
+# Vite still provides renderer hot reload; restart pnpm tauri:dev manually after
+# Rust-side edits.
 if [ "$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then
-  cargo tauri dev --config tauri.linux.conf.json "$@"
+  cargo tauri dev --no-watch --config tauri.linux.conf.json "$@"
 else
-  cargo tauri dev "$@"
+  cargo tauri dev --no-watch "$@"
 fi

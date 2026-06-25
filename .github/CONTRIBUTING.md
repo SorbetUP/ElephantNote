@@ -1,92 +1,106 @@
-# MarkText Contributing Guide
+# Contributing to ElephantNote
 
-We are really excited that you are interested in contributing to MarkText :tada:. Before submitting your contribution, please make sure to take a moment and read through the following guidelines.
+Thank you for your interest in ElephantNote.
 
-- [Code of Conduct](docs/dev/CODE_OF_CONDUCT.md)
-- [Philosophy](#philosophy)
-- [Issue reporting guidelines](#issue-reporting-guidelines)
-- [Pull request guidelines](#pull-request-guidelines)
-  - [Where should I start?](#where-should-i-start)
-- [Quick start](#quick-start)
-  - [Build instructions](#build-instructions)
-  - [Style guide](#style-guide)
-- [Developer documentation](#developer-documentation)
+ElephantNote is a local-first Markdown notes application focused on personal knowledge management, search, graph navigation, sync, and optional AI workflows. The project is moving fast, so contributions should prioritize correctness, tests, maintainability, and user safety.
 
-## Philosophy
+## Current contribution status
 
-🔑 Our philosophy is to keep things clean, simple and minimal. 
-MarkText is constantly changing and we want these improvements to align with our philosophy. For example, look at the side bar and tabs; these two panels provide awesome functionality *and* aren't distracting to the user. We'll continue adding more features (like plugins) that can be activated via 'settings' to improve MarkText. This will allow everyone to customize MarkText for their needs and provide a minimal default interface.
+ElephantNote is not yet a broad open-contribution project. Small, focused pull requests are welcome when they improve an existing area, fix a bug, add a test, improve documentation, or reduce technical risk.
 
-## Issue Reporting Guidelines
+Large features should be discussed before implementation. This is especially important for sync, security, AI providers, storage, plugin APIs, mobile support, and licensing-related changes.
 
-Please search for similar issues before opening an issue and always follow the [issue template](.github/ISSUE_TEMPLATE/). Please review the following Pull Request guidelines before making your own PR. 
+## Development principles
 
-## Pull Request Guidelines
+- Keep notes as normal Markdown files.
+- Avoid mandatory cloud dependencies for core personal workflows.
+- Prefer local-first behavior and explicit user consent for external services.
+- Do not hide broken behavior with skipped tests or fake green checks.
+- Add or update tests when changing behavior.
+- Keep logs useful for Electron, Tauri, sync, AI, and storage failures.
+- Preserve third-party notices and license obligations.
 
-**In *all* Pull Requests:** provide a detailed description of the problem, as well as a demonstration with screen recordings and/or screenshots.
+## Before opening a pull request
 
-Please make sure the following is done before submitting a PR:
+Please make sure your change is focused and understandable. A good pull request should include:
 
-- Submit PRs directly to the `develop` branch.
-- Reference the related issue in the PR comment.
-- Utilize [JSDoc](https://github.com/jsdoc/jsdoc) for better code documentation.
-- Ensure all tests pass.
-- Please lint (`pnpm run lint`) your PR.
-- All PRs need to pass the **CI** before merged. If it fails, please try to solve the issue(s) and feel free to ask for any help.
+- a clear description of the problem;
+- the solution implemented;
+- screenshots or screen recordings for UI changes;
+- tests for behavior changes;
+- notes about risks, limitations, or follow-up work.
 
-If you add new feature:
+## Useful commands
 
-- Open a suggestion issue first.
-- Provide your reasoning on why you want to add this feature.
-- Submit your PR.
+Install dependencies:
 
-If you fix a bug:
+```bash
+pnpm install
+```
 
-- If you are resolving a special issue, please add `fix: #<issue number> <short message>` in your PR title (e.g.`fix: #3899 update entities encoding/decoding`).
-- Provide a detailed description of the bug in your PR and/or link to the issue. 
+Run the Electron app:
 
-### Where should I start?
+```bash
+pnpm dev
+```
 
-A good way to start is to find an [issue](https://github.com/marktext/marktext/issues) labeled as `bug`, `help wanted` or `feature request`. The `good first issue` issues are good for newcomers. Please discuss the solution for larger issues first and after the final solution is approved by the MarkText members, you can submit/work on the PR. For small changes you can directly open a PR.
+Run the Tauri app:
 
-Other ways to help:
+```bash
+pnpm tauri:dev
+```
 
-- Documentation
-- Translation (currently unavailable)
-- Design icons and logos
-- Improve the UI
-- Write tests for MarkText
-- Share your thoughts! We want to hear about features you think are missing, any bugs you find, and why you :heart: MarkText.
+Run tests and checks:
 
-## Quick start
+```bash
+pnpm test:unit
+pnpm test
+pnpm coverage
+pnpm test:e2e
+pnpm security:guard
+pnpm tauri:check
+pnpm tauri:platform:check
+pnpm prod:check
+```
 
-1. Fork the repository.
-2. Clone your fork: `git clone git@github.com:<username>/marktext.git`
-3. Create a feature branch: `git checkout -b feature`
-4. Make your changes and push your branch.
-5. Create a PR against `develop` and describe your changes.
+Sync smoke tests:
 
-**Rebase your PR:**
+```bash
+pnpm test:sync:docker
+pnpm test:sync:docker:pair
+```
 
-If there are conflicts or you want to update your local branch, please do the following:
+## Pull request rules
 
-1. `git fetch upstream`
-2. `git rebase upstream/develop`
-3. Please [resolve](https://help.github.com/articles/resolving-merge-conflicts-after-a-git-rebase/) all conflicts and force push your feature branch: `git push -f`
+- Target the active development branch unless maintainers say otherwise.
+- Keep pull requests small enough to review.
+- Do not mix unrelated refactors with feature work.
+- Do not remove security checks to make CI pass.
+- Do not skip tests unless the skip is justified, temporary, and clearly documented.
+- Do not change the license model without explicit approval from the project owner.
+- Preserve attribution for MarkText, Muya, and other third-party code.
 
-### Build Instructions
+## Bug fixes
 
-🔗 [Build Instructions](docs/dev/BUILD.md)
+A bug-fix pull request should explain:
 
-### Style Guide
+- what was broken;
+- how to reproduce it;
+- why the fix is correct;
+- what test now protects against regression.
 
-You can run ESLint (`pnpm run lint`) to help you to follow the style guide.
+## Feature work
 
-- ES6 and "best practices"
-- 2 space indent
-- no semicolons
-- documentation: [JSDoc](https://github.com/jsdoc/jsdoc) 
+Feature pull requests should explain:
 
-## Developer Documentation
+- the user workflow being improved;
+- the expected behavior;
+- edge cases;
+- how the feature behaves on Electron, Tauri, and supported platforms when relevant;
+- what remains experimental.
 
-Please [click here](docs/dev/README.md) for more details.
+## License note
+
+ElephantNote project-specific code is distributed under the PolyForm Noncommercial License 1.0.0. Contributions to ElephantNote project-specific code are expected to follow that license model unless explicitly agreed otherwise.
+
+Third-party code keeps its own license and attribution requirements.

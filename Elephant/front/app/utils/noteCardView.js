@@ -31,7 +31,7 @@ const stripInlineFrontmatterPrefix = (value = '') => {
 
   const knownKeyPattern = Array.from(FRONTMATTER_KEYS).join('|')
   const metadataPairPattern = new RegExp(
-    `(?:^|\s)(?:${knownKeyPattern}):\s*(?:"[^"]*"|'[^']*'|\[[^\]]*\]|[^\s]+)`,
+    `(?:^|\\s)(?:${knownKeyPattern}):\\s*(?:"[^"]*"|'[^']*'|\\[[^\\]]*\\]|[^\\s]+)`,
     'gi'
   )
   const matches = [...raw.matchAll(metadataPairPattern)]

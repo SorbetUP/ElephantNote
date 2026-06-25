@@ -27,6 +27,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Linux build dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gnome-keyring \
+            graphicsmagick \
+            icnsutils \
+            libfontconfig-dev \
+            libsecret-1-dev \
+            libx11-dev \
+            libxkbfile-dev \
+            rpm \
+            xz-utils
+
       - uses: ./.github/actions/setup
 
       - name: Generate parity backlog docs

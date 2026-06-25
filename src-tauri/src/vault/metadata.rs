@@ -30,6 +30,19 @@ pub fn write_json_if_missing(path: PathBuf, value: Value) -> R<()> {
   write_json(path, &value)
 }
 
+fn remove_empty_obsolete_wiki_dir(vault_root: impl AsRef<Path>) {
+  let wiki_dir = vault_layout::hidden_dir(vault_root, vault_layout::WIKI_DIR);
+  if !wiki_dir.exists() {
+    return;
+  }
+  let is_empty = fs::read_dir(&wiki_dir)
+    .map(|mut entries| entries.next().is_none())
+    .unwrap_or(false);
+  if is_empty {
+    let _ = fs::remove_dir(&wiki_dir);
+  }
+}
+
 pub fn workspace_json(vault_root: impl AsRef<Path>) -> Value {
   json!({
     "version": 1,
@@ -50,6 +63,7 @@ pub fn initialize_vault(vault_root: &str) -> R<Value> {
   for dir in vault_layout::required_hidden_dirs() {
     fs::create_dir_all(vault_layout::hidden_dir(&root_path, dir)).map_err(|e| e.to_string())?;
   }
+  remove_empty_obsolete_wiki_dir(&root_path);
 
   fs::create_dir_all(root_path.join("Getting Started")).map_err(|e| e.to_string())?;
   let workspace = workspace_json(&root_path);

@@ -13,6 +13,9 @@ const NOTE_OPEN_EVENTS = new Set([
   'mt::open-file-by-window-id'
 ])
 
+const ASSET_EXTENSION_RE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico|pdf|excalidraw)$/i
+const MARKDOWN_EXTENSION_RE = /\.md$/i
+
 const normalizePath = (value = '') => String(value || '').replace(/\\/g, '/').replace(/\/+/g, '/')
 
 const trimTrailingSlash = (value = '') => normalizePath(value).replace(/\/+$/g, '')
@@ -21,6 +24,9 @@ const isAbsolutePath = (value = '') => {
   const normalized = normalizePath(value)
   return normalized.startsWith('/') || /^[a-zA-Z]:\//.test(normalized)
 }
+
+const isMarkdownPath = (value = '') => MARKDOWN_EXTENSION_RE.test(normalizePath(value))
+const isAssetPath = (value = '') => ASSET_EXTENSION_RE.test(normalizePath(value))
 
 const fallbackRelativePath = (vaultRoot = '', filePath = '') => {
   const root = trimTrailingSlash(vaultRoot)
@@ -57,15 +63,39 @@ const readVaultNote = async(target, relativePath) => {
   return null
 }
 
+const openAssetExternally = async(target, filePath, channel) => {
+  console.info('[tauri:local-ipc] open-file ignored non-markdown asset', { channel, filePath: normalizePath(filePath) })
+  const opener = target.__TAURI__?.opener?.openUrl || target.electron?.shell?.openPath || target.electron?.shell?.openExternal
+  if (typeof opener === 'function') {
+    try {
+      await opener(filePath)
+    } catch (error) {
+      console.warn('[tauri:local-ipc] external asset open failed', {
+        channel,
+        filePath: normalizePath(filePath),
+        error: error?.message || String(error)
+      })
+    }
+  }
+  return true
+}
+
 const openVaultNoteWithBackend = async(target, channel, args) => {
   const filePath = args[0]
   if (!filePath || typeof target.elephantnote?.getVaults !== 'function') return false
+
+  if (isAssetPath(filePath) || !isMarkdownPath(filePath)) {
+    return openAssetExternally(target, filePath, channel)
+  }
 
   try {
     const payload = await target.elephantnote.getVaults()
     const vaultRoot = payload?.activeVault?.path || ''
     const relativePath = getRelativeVaultPath(target, vaultRoot, filePath)
     if (!relativePath) return false
+    if (!isMarkdownPath(relativePath)) {
+      return openAssetExternally(target, filePath, channel)
+    }
 
     const note = await readVaultNote(target, relativePath)
     const markdown = typeof note?.markdown === 'string'
@@ -90,7 +120,7 @@ const openVaultNoteWithBackend = async(target, channel, args) => {
     ])
     return true
   } catch (error) {
-    console.error('[tauri:local-ipc] open-file notes.read failed; falling back to native open', {
+    console.error('[tauri:local-ipc] open-file notes.read failed', {
       channel,
       filePath,
       error: error?.message || String(error)

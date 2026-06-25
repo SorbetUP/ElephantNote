@@ -17,14 +17,19 @@ const ALLOWED_LICENSES = new Set([
   'MPL-2.0',
   'CC0-1.0',
   'CC-BY-4.0',
-  'CC-BY-3.0'
+  'CC-BY-3.0',
+  'BlueOak-1.0.0',
+  'Python-2.0',
+  'ODC-By-1.0'
 ])
 
 const LICENSE_OPERATORS = new Set(['AND', 'OR', 'WITH'])
 const LICENSE_EXCEPTIONS = new Set(['LLVM-exception'])
 
+const normalizeLicenseValue = (licenses = '') => Array.isArray(licenses) ? licenses.join(' OR ') : String(licenses || '')
+
 const getLicenseTokens = (licenses = '') => {
-  const value = Array.isArray(licenses) ? licenses.join(' OR ') : String(licenses || '')
+  const value = normalizeLicenseValue(licenses)
   return value
     .replace(/[(),]/g, ' ')
     .split(/\s+/)
@@ -32,6 +37,8 @@ const getLicenseTokens = (licenses = '') => {
     .filter(Boolean)
     .filter((token) => !LICENSE_OPERATORS.has(token))
 }
+
+const hasLicenseFileReference = (licenses = '') => /^SEE LICENSE IN /i.test(normalizeLicenseValue(licenses).trim())
 
 const isAllowedLicenseToken = (token = '') => {
   if (ALLOWED_LICENSES.has(token) || LICENSE_EXCEPTIONS.has(token)) return true
@@ -41,6 +48,7 @@ const isAllowedLicenseToken = (token = '') => {
 }
 
 const isAllowedLicenseExpression = (licenses = '') => {
+  if (hasLicenseFileReference(licenses)) return true
   const tokens = getLicenseTokens(licenses)
   return tokens.length > 0 && tokens.every(isAllowedLicenseToken)
 }

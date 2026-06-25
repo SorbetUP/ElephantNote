@@ -45,12 +45,14 @@ const createVault = () => ({
   path: '/tmp/vault-1'
 })
 
+const getDirectoryCallPath = (call = []) => typeof call[0] === 'string' ? call[0] : call[0]?.relativePath || ''
+
 const expectDirectoryPath = (relativePath) => {
-  expect(listDirectory).toHaveBeenCalledWith(expect.objectContaining({ relativePath }))
+  expect(listDirectory.mock.calls.some((call) => getDirectoryCallPath(call) === relativePath)).toBe(true)
 }
 
 const expectLastDirectoryPath = (relativePath) => {
-  expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ relativePath }))
+  expect(getDirectoryCallPath(listDirectory.mock.calls.at(-1))).toBe(relativePath)
 }
 
 describe('WikiView library root', () => {

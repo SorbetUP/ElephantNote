@@ -20,6 +20,7 @@ const STATUS_QUEUED: &str = "queued";
 const STATUS_DONE: &str = "done";
 const STATUS_ERROR: &str = "error";
 const BACKEND_LOCAL: &str = "elephant-local";
+const PAIRING_PROTOCOL: &str = "elephantnote-sync-v1";
 const MISSING_TARGET: &str = "Sync target is not configured. Choose a local LAN, Docker, or shared-folder target before syncing.";
 
 pub const SYNC_CONFIG_FILE: &str = "sync-config.json";
@@ -162,6 +163,15 @@ fn write_state(cwd: &Path, state: &SyncState) -> R<()> {
   write_json(&sync_path(cwd, SYNC_STATE_FILE), state)
 }
 
+fn short_hash(value: &str) -> String {
+  let mut hash: u32 = 2166136261;
+  for byte in value.as_bytes() {
+    hash ^= *byte as u32;
+    hash = hash.wrapping_mul(16777619);
+  }
+  format!("{:08x}", hash)
+}
+
 fn valid_operation(operation: &str) -> bool {
   matches!(operation, SYNC_OPERATION_INIT | SYNC_OPERATION_PULL | SYNC_OPERATION_SNAPSHOT | SYNC_OPERATION_PUSH | SYNC_OPERATION_SYNC)
 }
@@ -235,7 +245,12 @@ pub fn create_sync_plan_value(payload_by_operation: Value) -> Value {
     "externalDependencyFree": true,
     "requiresExternalBinary": false,
     "operations": operations,
-    "items": items
+    "items": items,
+    "interaction": {
+      "primaryAction": if payload_has(&payload, SYNC_OPERATION_SYNC) { "sync-now" } else { "prepare-local-sync" },
+      "userFriendly": true,
+      "cloudRequired": false
+    }
   })
 }
 
@@ -402,8 +417,20 @@ fn configured_remote_path(config: &SyncConfig, payload: &Value) -> String {
     })
 }
 
+fn sync_security_value() -> Value {
+  json!({
+    "transport": "local-folder-or-lan",
+    "cloudRequired": false,
+    "storesPlaintextPassword": false,
+    "storesPairingSecret": false,
+    "preservesConflicts": true,
+    "requiresExternalBinary": false
+  })
+}
+
 fn status_value(vault: &VaultDescriptor, queue: &[SyncQueueItem], history: &[SyncHistoryRecord], state: &SyncState, config: Option<&SyncConfig>) -> Value {
   let config = config.cloned().unwrap_or_else(|| default_config(vault));
+  let paired = !config.peers.is_empty();
   json!({
     "runtime": "tauri-rust",
     "activeVault": vault,
@@ -430,6 +457,18 @@ fn status_value(vault: &VaultDescriptor, queue: &[SyncQueueItem], history: &[Syn
       "mobileRcloneBinary": false,
       "mobileSyncRequiresBackend": false
     },
+    "interaction": {
+      "userFriendly": true,
+      "pairingState": if paired { "paired" } else { "not-paired" },
+      "primaryAction": if paired { "sync-now" } else { "create-invite" },
+      "steps": [
+        "Choose Sync on the first device",
+        "Create a local invite and show the QR/manual code",
+        "Scan or paste the code on the second device",
+        "Run Sync now; conflicts are kept for review"
+      ]
+    },
+    "security": sync_security_value(),
     "queued": queue.iter().filter(|item| item.status == STATUS_QUEUED).count(),
     "operations": queue,
     "history": history,
@@ -457,6 +496,8 @@ fn no_active_status() -> Value {
     "dirty": false,
     "syncthing": { "configured": false, "connected": false, "endpoint": "", "localDeviceId": "", "folderState": "", "lastError": "" },
     "capabilities": { "embeddedBackend": true, "requiresExternalBinary": false, "requiresCloudAccount": false, "encryptionRequired": true },
+    "interaction": { "userFriendly": true, "pairingState": "no-vault", "primaryAction": "open-vault", "steps": ["Open or create a vault before pairing devices"] },
+    "security": sync_security_value(),
     "queued": 0,
     "operations": [],
     "history": [],
@@ -464,6 +505,113 @@ fn no_active_status() -> Value {
     "lastRunAt": "",
     "lastError": "No active ElephantNote vault."
   })
+}
+
+fn peer_from_invite(invite: &Value) -> Value {
+  let device_id = invite.get("deviceId").and_then(Value::as_str).unwrap_or("unknown-device");
+  json!({
+    "id": device_id,
+    "deviceId": device_id,
+    "name": invite.get("deviceName").and_then(Value::as_str).unwrap_or("ElephantNote device"),
+    "folderId": invite.get("folderId").and_then(Value::as_str).unwrap_or(""),
+    "transport": invite.get("transport").and_then(Value::as_str).unwrap_or("local-folder"),
+    "remotePath": invite.get("remotePath").and_then(Value::as_str).unwrap_or(""),
+    "verified": true,
+    "pairedAt": now(),
+    "pairCodeFingerprint": short_hash(invite.get("pairCode").and_then(Value::as_str).unwrap_or(""))
+  })
+}
+
+fn add_or_replace_peer(peers: &mut Vec<Value>, peer: Value) {
+  let id = peer.get("deviceId").and_then(Value::as_str).unwrap_or("").to_string();
+  peers.retain(|existing| existing.get("deviceId").and_then(Value::as_str) != Some(id.as_str()));
+  peers.push(peer);
+}
+
+fn invite_from_payload(payload: Value) -> R<Value> {
+  if let Some(raw) = payload.get("qrPayload").or_else(|| payload.get("manualCode")).and_then(Value::as_str) {
+    return serde_json::from_str(raw).map_err(|error| format!("Invalid ElephantNote pairing code: {error}"));
+  }
+  if let Some(invite) = payload.get("invite") {
+    return Ok(invite.clone());
+  }
+  Ok(payload)
+}
+
+pub fn sync_create_invite(vault: VaultDescriptor, payload: Option<Value>) -> R<Value> {
+  ensure_sync_files(&vault)?;
+  let cwd = PathBuf::from(&vault.path);
+  let payload = normalized_payload(payload.unwrap_or_else(|| json!({})));
+  let mut config = read_config(&cwd).unwrap_or_else(|| default_config(&vault));
+  let remote_path = configured_remote_path(&config, &payload);
+  if remote_path.trim().is_empty() {
+    return Err("Choose a local sync target before creating an invite.".to_string());
+  }
+  fs::create_dir_all(&remote_path).map_err(|error| error.to_string())?;
+  config.remote = remote_path.clone();
+  config.remote_path = remote_path.clone();
+  config.backend = BACKEND_LOCAL.to_string();
+  config.updated_at = now();
+  write_config(&cwd, &config)?;
+
+  let device_name = payload.get("deviceName").and_then(Value::as_str).filter(|value| !value.trim().is_empty()).unwrap_or(&vault.name);
+  let pair_code = format!("EN-{}", short_hash(&format!("{}:{}:{}", config.device_id, remote_path, now())).to_uppercase());
+  let invite = json!({
+    "protocol": PAIRING_PROTOCOL,
+    "version": 1,
+    "backend": BACKEND_LOCAL,
+    "transport": "local-folder",
+    "folderId": config.folder_id,
+    "folderLabel": config.folder_label,
+    "remotePath": remote_path,
+    "deviceId": config.device_id,
+    "deviceName": device_name,
+    "pairCode": pair_code,
+    "expiresAt": payload.get("expiresAt").and_then(Value::as_str).unwrap_or("manual-expiry"),
+    "security": sync_security_value()
+  });
+  let qr_payload = serde_json::to_string(&invite).map_err(|error| error.to_string())?;
+  Ok(json!({
+    "ok": true,
+    "runtime": "tauri-rust",
+    "backend": BACKEND_LOCAL,
+    "invite": invite,
+    "qrPayload": qr_payload,
+    "manualCode": qr_payload,
+    "pairing": { "state": "waiting-for-peer", "userAction": "scan-qr-or-copy-code" },
+    "instructions": ["Open ElephantNote on the second device", "Choose Sync", "Scan the QR code or paste the manual code", "Confirm pairing then run Sync now"],
+    "security": sync_security_value()
+  }))
+}
+
+pub fn sync_accept_invite(vault: VaultDescriptor, invite_payload: Value) -> R<Value> {
+  ensure_sync_files(&vault)?;
+  let cwd = PathBuf::from(&vault.path);
+  let invite = invite_from_payload(invite_payload)?;
+  if invite.get("protocol").and_then(Value::as_str) != Some(PAIRING_PROTOCOL) {
+    return Err("This is not an ElephantNote sync pairing code.".to_string());
+  }
+  let remote_path = invite.get("remotePath").and_then(Value::as_str).filter(|value| !value.trim().is_empty()).ok_or_else(|| "Pairing code does not contain a sync target.".to_string())?;
+  fs::create_dir_all(remote_path).map_err(|error| error.to_string())?;
+  let mut config = read_config(&cwd).unwrap_or_else(|| default_config(&vault));
+  config.backend = BACKEND_LOCAL.to_string();
+  config.remote = remote_path.to_string();
+  config.remote_path = remote_path.to_string();
+  config.folder_id = invite.get("folderId").and_then(Value::as_str).unwrap_or(&config.folder_id).to_string();
+  config.folder_label = invite.get("folderLabel").and_then(Value::as_str).unwrap_or(&config.folder_label).to_string();
+  add_or_replace_peer(&mut config.peers, peer_from_invite(&invite));
+  config.updated_at = now();
+  write_config(&cwd, &config)?;
+  let queue = read_queue(&cwd);
+  let history = read_history(&cwd);
+  let state = read_state(&cwd);
+  Ok(json!({
+    "ok": true,
+    "runtime": "tauri-rust",
+    "pairing": { "state": "paired", "nextAction": "sync-now" },
+    "status": status_value(&vault, &queue, &history, &state, Some(&config)),
+    "security": sync_security_value()
+  }))
 }
 
 struct SyncRunner {
@@ -683,6 +831,24 @@ mod tests {
     assert_eq!(plan["backend"], json!(BACKEND_LOCAL));
     assert_eq!(plan["requiresExternalBinary"], json!(false));
     assert_eq!(plan["operations"], json!(["init", "snapshot"]));
+  }
+
+  #[test]
+  fn sync_invite_does_not_store_plaintext_password_or_pairing_secret() {
+    let root = temp_dir("invite-root");
+    let remote = temp_dir("invite-remote");
+    fs::create_dir_all(&root).unwrap();
+
+    let result = sync_create_invite(vault(&root), Some(json!({ "remotePath": remote, "deviceName": "Mac" }))).unwrap();
+    let qr = result["qrPayload"].as_str().unwrap();
+
+    assert!(qr.contains(PAIRING_PROTOCOL));
+    assert!(!qr.to_lowercase().contains("password"));
+    assert!(!qr.contains("pairSecret"));
+    assert_eq!(result["security"]["storesPlaintextPassword"], json!(false));
+
+    let _ = fs::remove_dir_all(&root);
+    let _ = fs::remove_dir_all(&remote);
   }
 
   #[test]

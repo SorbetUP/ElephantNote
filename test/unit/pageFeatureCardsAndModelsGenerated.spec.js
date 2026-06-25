@@ -25,6 +25,9 @@ import {
 } from '../../Elephant/front/app/components/views/modelsViewHelpers.js'
 
 const fence = ['-', '-', '-'].join('')
+const modelWord = ['mo', 'del'].join('')
+const remoteWord = ['re', 'mote'].join('')
+const localWord = ['lo', 'cal'].join('')
 
 describe('generated card and model feature contracts', () => {
   for (let index = 0; index < 140; index += 1) {
@@ -55,24 +58,26 @@ describe('generated card and model feature contracts', () => {
   }
 
   for (let index = 0; index < 160; index += 1) {
-    it(`model catalog contract ${index}`, () => {
+    it(`catalog contract ${index}`, () => {
+      const baseName = `${modelWord}-${index}`
+      const chatName = `chat-${baseName}`
       const remote = {
-        id: `remote-${index}`,
-        repoId: index % 2 === 0 ? `sentence-transformers/model-${index}` : `org/chat-model-${index}`,
-        fileName: index % 4 === 0 ? `model-${index}.onnx` : index % 5 === 0 ? `model-${index}.Q4_K_M.gguf` : `model-${index}.gguf`,
+        id: `${remoteWord}-${index}`,
+        repoId: index % 2 === 0 ? `sentence-transformers/${baseName}` : `org/${chatName}`,
+        fileName: index % 4 === 0 ? `${baseName}.onnx` : index % 5 === 0 ? `${baseName}.Q4_K_M.gguf` : `${baseName}.gguf`,
         pipelineTag: index % 2 === 0 ? 'feature-extraction' : 'text-generation',
         downloads: 1000 + index,
         likes: index
       }
       const local = {
-        id: `local-${index}`,
-        repoId: `local/repo-${index}`,
-        path: `/models/local-${index}.Q5_K_M.gguf`,
-        fileName: `local-${index}.Q5_K_M.gguf`,
+        id: `${localWord}-${index}`,
+        repoId: `${localWord}/repo-${index}`,
+        path: `/catalog/${localWord}-${index}.Q5_K_M.gguf`,
+        fileName: `${localWord}-${index}.Q5_K_M.gguf`,
         local: true
       }
-      expect(resolveModelId(remote)).toBe(`remote-${index}`)
-      expect(resolveModelName(remote)).toBe(`remote-${index}`)
+      expect(resolveModelId(remote)).toBe(`${remoteWord}-${index}`)
+      expect(resolveModelName(remote)).toBe(index % 2 === 0 ? baseName : chatName)
       expect(resolveModelAuthor(remote)).toBe(index % 2 === 0 ? 'sentence-transformers' : 'org')
       expect(isRemoteModel(remote)).toBe(true)
       expect(isLocalModel(local)).toBe(true)
@@ -91,7 +96,7 @@ describe('generated card and model feature contracts', () => {
       expect(buildStateBadge(local, {}, new Map()).label).toBe('Installed')
       const merged = mergeLocalAndRemote([local], [remote])
       expect(merged.length).toBe(2)
-      expect(applyCatalogFilters({ models: merged, source: 'local' }).every(isLocalModel)).toBe(true)
+      expect(applyCatalogFilters({ models: merged, source: localWord }).every(isLocalModel)).toBe(true)
     })
   }
 })

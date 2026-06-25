@@ -222,16 +222,7 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   aiRuntime: Object.freeze([
     action('AI_CONFIG_GET', 'ai.config.get'),
     action('AI_CONFIG_SET', 'ai.config.set', aiConfigPayload),
-    action('AI_CONFIG_TEST', 'ai.config.test', schema.object({
-      preset: optionalString,
-      name: optionalString,
-      provider: optionalString,
-      transport: optionalString,
-      endpoint: optionalString,
-      model: optionalString,
-      apiKey: optionalString,
-      codexLinkEnabled: optionalBoolean
-    })),
+    action('AI_CONFIG_TEST', 'ai.config.test', aiConfigPayload),
     action('FEATURES_GET', 'features.get'),
     action('FEATURES_SET', 'features.set', schema.object({ key: requiredString, enabled: optionalBoolean })),
     action('ATOMIC_CATALOG_GET', 'atomic.catalog.get'),

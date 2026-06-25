@@ -1,0 +1,20 @@
+ElephantNote Notices
+
+This repository includes project-specific ElephantNote code and may include upstream or third-party code, assets, and dependencies under their own license terms.
+
+Upstream Markdown editor attribution
+
+Parts of this repository are derived from or include work from MarkText and Muya-era code.
+
+Original MarkText MIT notice for upstream-derived material:
+
+MIT License
+
+Copyright (c) 2017-present Luo Ran
+Copyright (c) 2018-present MarkText Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this upstream software and associated documentation files to deal in that upstream software without restriction, subject to the full MIT License terms applicable to the upstream material.
+
+Third-party dependencies
+
+Node, Rust, and bundled dependencies remain subject to their own license terms. Generated third-party license files, dependency manifests, package metadata, and upstream source notices should be consulted before redistribution.

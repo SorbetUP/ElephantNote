@@ -10,10 +10,13 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const electronLogShim = resolve(__dirname, 'src/renderer/src/platform/electronLogShim.js')
-const nativeKeymapExternals = [
+const nativeRuntimeExternals = [
   'native-keymap',
   /native-keymap/,
-  /keymapping/
+  /keymapping/,
+  'node-llama-cpp',
+  /node-llama-cpp/,
+  /@node-llama-cpp\//
 ]
 
 export default defineConfig({
@@ -25,10 +28,10 @@ export default defineConfig({
     build: {
       externalizeDeps: {
         exclude: ['electron-store'],
-        include: ['native-keymap']
+        include: ['native-keymap', 'node-llama-cpp']
       },
       rollupOptions: {
-        external: nativeKeymapExternals
+        external: nativeRuntimeExternals
       }
     },
     define: {
@@ -55,7 +58,7 @@ export default defineConfig({
     // --> Bundled as CommonJS
     build: {
       rollupOptions: {
-        external: nativeKeymapExternals
+        external: nativeRuntimeExternals
       }
     },
     resolve: {

@@ -14,6 +14,7 @@ import LibraryToolbar from '../library/LibraryToolbar.vue'
 import LibraryGrid from '../library/LibraryGrid.vue'
 
 const WIKI_ROOT = '.elephantnote/wiki'
+const WIKI_PAGE_LIMIT = 121
 const store = useVaultStore()
 
 const normalizeWikiPath = (relativePath = WIKI_ROOT) => {
@@ -24,6 +25,13 @@ const normalizeWikiPath = (relativePath = WIKI_ROOT) => {
   if (!normalized || normalized === WIKI_ROOT) return WIKI_ROOT
   return normalized.startsWith(`${WIKI_ROOT}/`) ? normalized : WIKI_ROOT
 }
+
+const wikiDirectoryPayload = (relativePath) => ({
+  relativePath,
+  offset: 0,
+  limit: WIKI_PAGE_LIMIT,
+  includePreview: true
+})
 
 const shouldApplyWikiDirectoryResult = (wikiPath, vaultId) => {
   return store.activeWorkspaceView === 'wiki' &&
@@ -44,7 +52,7 @@ const loadWikiDirectory = async (relativePath = WIKI_ROOT) => {
   }
 
   try {
-    const entries = await elephantnoteClient.directory.list(wikiPath)
+    const entries = await elephantnoteClient.directory.list(wikiDirectoryPayload(wikiPath))
     if (!shouldApplyWikiDirectoryResult(wikiPath, vaultId)) return
     store.entries = Array.isArray(entries) ? entries : []
     store.currentPath = wikiPath

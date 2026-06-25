@@ -4,7 +4,8 @@ import path from 'node:path'
 import log from 'electron-log'
 import { deriveLlamaBackendsFromCapabilities, normalizeLlamaBackend, selectPreferredLlamaBackend } from '../../../shared/ai/llamaBackend.js'
 const DEFAULT_MODEL_DIR=path.join(os.homedir(),'.elephantnote','models','node-llama-cpp')
-const loadNodeLlamaCpp=async()=>import('node-llama-cpp')
+const NODE_LLAMA_CPP_MODULE=['node','llama','cpp'].join('-')
+const loadNodeLlamaCpp=async()=>import(/* @vite-ignore */ NODE_LLAMA_CPP_MODULE)
 const DEFAULT_EMBEDDING_CONTEXT_SIZE=8192,DEFAULT_CHAT_CONTEXT_SIZE=4096,DEFAULT_LOAD_CONTEXT_SIZE=8192
 const BENIGN_NATIVE_WARNING_PREFIXES=['llama_context: n_ctx_seq (','init: embeddings required but some input tokens were not marked as outputs -> overriding']
 const normalizeLogText=(v='')=>Array.isArray(v)?v.map(normalizeLogText).filter(Boolean).join(' '):String(v||'').replace(/\s+/g,' ').trim()

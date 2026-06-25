@@ -10,7 +10,12 @@ import { normalizeGoogleCalendarConfig } from 'common/elephantnote/googleCalenda
 import { WORKSPACE_DIR } from 'common/elephantnote/workspace'
 import { normalizeProgramEnvironments } from '../programRuntime'
 
-const resolveElephantNoteConfigDir = () => process.env.ELEPHANTNOTE_CONFIG_DIR || path.join(app.getPath('appData'), 'ElephantNote')
+const resolveElectronAppDataPath = () => {
+  if (app && typeof app.getPath === 'function') return app.getPath('appData')
+  return path.join(process.cwd(), '.elephantnote-test-appdata')
+}
+
+const resolveElephantNoteConfigDir = () => process.env.ELEPHANTNOTE_CONFIG_DIR || path.join(resolveElectronAppDataPath(), 'ElephantNote')
 
 export const ELEPHANTNOTE_CONFIG_DIR = resolveElephantNoteConfigDir()
 export const ELEPHANTNOTE_APP_DIRS = Object.freeze({

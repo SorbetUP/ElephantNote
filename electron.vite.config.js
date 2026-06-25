@@ -10,17 +10,25 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const electronLogShim = resolve(__dirname, 'src/renderer/src/platform/electronLogShim.js')
+const nativeKeymapExternals = [
+  'native-keymap',
+  /native-keymap/,
+  /keymapping/
+]
 
 export default defineConfig({
   main: {
     // --> Bundled as CommonJS
     // externalizeDepsPlugin() basically externises all the dependencies from being bundled during build - treating them as runtime dependencies
     // electron-vite still builds the main and preload processes into commonJS
-    // hence, we need to "exclude" (in order to NOT externalise) ESonly modules so that they can be converted to commonJS and can be required() afterwards correctly
+    // hence, we need to "exclude" (in order to NOT externalise) ESonly modules so that they can be converted to CommonJS and can be required() afterwards correctly
     build: {
       externalizeDeps: {
         exclude: ['electron-store'],
         include: ['native-keymap']
+      },
+      rollupOptions: {
+        external: nativeKeymapExternals
       }
     },
     define: {
@@ -45,6 +53,11 @@ export default defineConfig({
   },
   preload: {
     // --> Bundled as CommonJS
+    build: {
+      rollupOptions: {
+        external: nativeKeymapExternals
+      }
+    },
     resolve: {
       alias: {
         'electron-log/renderer': electronLogShim,

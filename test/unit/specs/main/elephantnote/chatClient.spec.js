@@ -32,7 +32,7 @@ describe('RAG chat client', () => {
   it('rebuilds once and retries when no citations are found', async () => {
     let ragCalls = 0
     const { calls, clients } = makeClient((action) => {
-      if (action === API.VAULTS_GET) return { activeVault: { path: '/vault' } }
+      if (action === API.VAULTS_GET) return { activeVault: { path: '/vault-retry' } }
       if (action === API.SEARCH_INIT_VAULT) return { status: 'ready' }
       if (action === API.SEARCH_REBUILD) return { status: 'ready' }
       if (action === API.RAG_CHAT) {

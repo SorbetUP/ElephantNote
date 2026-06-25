@@ -170,7 +170,7 @@ export class WebGitSyncEngine {
     return this.executor('git', args, { cwd: this.cwd })
   }
 
-  async init({ remote = '', remoteName = SYNC_DEFAULT_REMOTE, branch = '' } = {}) {
+  async init({ remote = '', remoteName = '', branch = '' } = {}) {
     await ensureDir(this.cwd)
     if (!await pathExists(path.join(this.cwd, '.git'))) await this.git(['init'])
     await this.ensureGitIdentity()

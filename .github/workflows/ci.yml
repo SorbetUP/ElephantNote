@@ -75,6 +75,7 @@ jobs:
             coverage/
             docs/parity/generated/
             docs/parity/index.md
+            security-guardrails-report.json
           if-no-files-found: ignore
           retention-days: 14
 

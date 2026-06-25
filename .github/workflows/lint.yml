@@ -18,14 +18,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
-      - name: Run ESLint diagnostic
-        id: eslint
+      - name: Run ESLint
         shell: bash
         run: |
-          set +e
-          pnpm lint > eslint-output.txt 2>&1
-          code=$?
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
-          echo "ESLint diagnostic exit code: $code"
-          tail -n 200 eslint-output.txt
-          exit 0
+          set -o pipefail
+          pnpm lint 2>&1 | tee eslint-output.txt
+
+      - name: Upload ESLint output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eslint-output
+          path: eslint-output.txt
+          if-no-files-found: ignore

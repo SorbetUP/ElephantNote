@@ -43,7 +43,7 @@
     "start": "electron-vite dev",
     "preview": "cross-env PERF_TESTING=true electron-vite preview",
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "node scripts/strictElectronBuild.mjs",
     "build:unpack": "node scripts/minify-locales.mjs && electron-vite build",
     "tauri:llama:install": "node scripts/ensure-tauri-llama-server.mjs",
     "tauri:web:dev": "vite --config vite.tauri.config.js --host 127.0.0.1 --port 1420 --strictPort",

@@ -48,17 +48,21 @@ const callRagChat = async (call, message, limit = 6) => {
   return retry?.answer || hasCitations(retry) ? retry : result
 }
 
+const directoryListPayload = (payload = '') => typeof payload === 'string'
+  ? { relativePath: payload }
+  : toPlainObject(payload)
+
 export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   vaults: {
     get: () => call(API.VAULTS_GET),
     select: () => call(API.VAULTS_SELECT),
     setActive: (vaultId) => call(API.VAULTS_SET_ACTIVE, { vaultId }),
     setIcon: (vaultId, icon) => call(API.VAULTS_SET_ICON, { vaultId, icon }),
-    setName: (vaultId, name) => call(API.VAULTS_SET_NAME, { vaultId }),
+    setName: (vaultId, name) => call(API.VAULTS_SET_NAME, { vaultId, name }),
     remove: (vaultId) => call(API.VAULTS_REMOVE, { vaultId })
   },
   directory: {
-    list: (relativePath = '') => call(API.DIRECTORY_LIST, { relativePath })
+    list: (payload = '') => call(API.DIRECTORY_LIST, directoryListPayload(payload))
   },
   notes: {
     create: (payload = '') => {

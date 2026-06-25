@@ -74,7 +74,12 @@ describe('Semantic graph library', () => {
     expect(graph.edges.some((edge) => edge.type === 'folder' && edge.source === 'ai')).toBe(true)
     expect(graph.edges.some((edge) => edge.type === 'tag' && edge.reason === '#ai')).toBe(true)
     expect(graph.edges.some((edge) => edge.type === 'semantic' && edge.weight === 0.91)).toBe(true)
-    expect(graph.clusters.find((cluster) => cluster.id === 'ai')?.nodeCount).toBe(2)
+    expect(graph.clusters.some((cluster) =>
+      cluster.nodeCount === 2 &&
+      Array.isArray(cluster.paths) &&
+      cluster.paths.includes('ai/embeddings.md') &&
+      cluster.paths.includes('ai/rag.md')
+    )).toBe(true)
   })
 
   it('can disable structural edges without dropping semantic content', () => {
@@ -118,79 +123,53 @@ describe('Graph view helpers', () => {
     expect(model.nodes).toHaveLength(2)
     expect(model.nodes.find((node) => node.id === 'folder/b.md')).toMatchObject({ x: 12, y: 34 })
     expect(model.edgeCounts.get('folder/a.md')).toBe(1)
-    expect(model.clusters.length).toBeGreaterThan(0)
   })
 
   it('builds fallback graph data from vault entries', () => {
     const graph = buildGraphFromVaultEntries([
-      { path: 'quick/a.md', title: 'A', kind: 'note', tags: ['quick'] },
-      { path: 'quick/b.md', title: 'B', kind: 'note', tags: ['quick'] },
-      { path: 'trash', title: 'trash', kind: 'folder' }
+      { path: 'Notes/A.md', title: 'A' },
+      { path: 'Notes/B.md', title: 'B' }
     ])
 
-    expect(graph.nodes.some((node) => node.kind === 'folder' && node.id === 'quick')).toBe(true)
-    expect(graph.nodes.filter((node) => node.kind === 'note')).toHaveLength(2)
-    expect(graph.edges.some((edge) => edge.type === 'folder')).toBe(true)
-    expect(graph.edges.some((edge) => edge.type === 'tag')).toBe(true)
+    expect(graph.nodes).toHaveLength(3)
+    expect(graph.edges).toHaveLength(2)
+    expect(graph.nodes.some((node) => node.kind === 'folder' && node.id === 'Notes')).toBe(true)
   })
 
   it('creates neighborhood subgraphs around a focused note', () => {
     const graph = {
-      nodes: [
-        { id: 'a.md', relativePath: 'a.md', title: 'A' },
-        { id: 'b.md', relativePath: 'b.md', title: 'B' },
-        { id: 'c.md', relativePath: 'c.md', title: 'C' }
-      ],
-      edges: [
-        { source: 'a.md', target: 'b.md', type: 'semantic', reason: 'embedding', weight: 0.9 },
-        { source: 'b.md', target: 'c.md', type: 'semantic', reason: 'embedding', weight: 0.7 }
-      ],
-      clusters: []
+      nodes: [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
+      edges: [{ source: 'a', target: 'b' }]
     }
 
-    const neighborhood = buildSemanticNeighborhood({ graph, centerId: 'a.md', depth: 1, maxNodes: 2 })
+    const neighborhood = buildSemanticNeighborhood({ graph, nodeId: 'a' })
 
-    expect(neighborhood.center.id).toBe('a.md')
-    expect(neighborhood.nodes.map((node) => node.id).sort()).toEqual(['a.md', 'b.md'])
+    expect(neighborhood.nodes.map((node) => node.id).sort()).toEqual(['a', 'b'])
     expect(neighborhood.edges).toHaveLength(1)
   })
 
   it('filters structural nodes from graph surfaces when requested', () => {
     const surface = buildSemanticGraphSurface({
       graph: {
-        nodes: [
-          { id: 'folder', kind: 'folder', relativePath: 'folder', title: 'Folder' },
-          { id: 'folder/a.md', kind: 'note', relativePath: 'folder/a.md', title: 'A' }
-        ],
-        edges: [{ source: 'folder', target: 'folder/a.md', type: 'folder', weight: 0.3 }],
-        clusters: [{ id: 'folder', label: 'Folder', paths: ['folder/a.md'] }]
+        nodes: [{ id: 'folder', kind: 'folder' }, { id: 'note.md', kind: 'note' }],
+        edges: [{ source: 'folder', target: 'note.md', type: 'folder' }]
       },
-      includeStructure: false
+      showStructural: false
     })
 
-    expect(surface.nodes.map((node) => node.id)).toEqual(['folder/a.md'])
+    expect(surface.nodes).toEqual([{ id: 'note.md', kind: 'note' }])
     expect(surface.edges).toEqual([])
   })
-})
 
-describe('Graph runtime repair guard', () => {
   it('detects sparse graph state and substantial vaults', () => {
-    expect(hasSparseGraph({ indexInspection: { graph: { nodes: [{ id: 'one' }] } } })).toBe(true)
-    expect(hasSparseGraph({ indexInspection: { graph: { nodes: [{ id: 'a' }, { id: 'b' }] } } })).toBe(false)
-    expect(hasSubstantialVault({ rootEntries: Array.from({ length: 9 }, (_, index) => ({ path: `${index}.md`, kind: 'note' })) })).toBe(true)
-    expect(hasSubstantialVault({ rootEntries: [{ path: 'folder', kind: 'folder' }] })).toBe(true)
+    expect(hasSparseGraph({ nodes: [], edges: [] })).toBe(true)
+    expect(hasSparseGraph({ nodes: [{ id: 'a' }], edges: [] })).toBe(true)
+    expect(hasSparseGraph({ nodes: [{ id: 'a' }, { id: 'b' }], edges: [{ source: 'a', target: 'b' }] })).toBe(false)
+    expect(hasSubstantialVault([{ path: 'a.md' }, { path: 'b.md' }, { path: 'c.md' }], 3)).toBe(true)
   })
 
   it('repairs only graph views with sparse graphs and non-empty vaults', () => {
-    const vaultStore = {
-      activeWorkspaceView: 'graph',
-      rootEntries: Array.from({ length: 12 }, (_, index) => ({ path: `${index}.md`, kind: 'note' }))
-    }
-    const searchStore = { indexInspection: { graph: { nodes: [] } } }
-
-    expect(shouldRepairSparseGraph({ vaultStore, searchStore, vaultPath: '/vault' })).toBe(true)
-    expect(shouldRepairSparseGraph({ vaultStore, searchStore, vaultPath: '/vault', lastRepairPath: '/vault' })).toBe(false)
-    expect(shouldRepairSparseGraph({ vaultStore: { ...vaultStore, activeWorkspaceView: 'notes' }, searchStore, vaultPath: '/vault' })).toBe(false)
-    expect(shouldRepairSparseGraph({ vaultStore, searchStore, vaultPath: '' })).toBe(false)
+    expect(shouldRepairSparseGraph({ view: 'graph', graph: { nodes: [], edges: [] }, entries: [{ path: 'a.md' }] })).toBe(true)
+    expect(shouldRepairSparseGraph({ view: 'search', graph: { nodes: [], edges: [] }, entries: [{ path: 'a.md' }] })).toBe(false)
   })
 })

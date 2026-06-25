@@ -26,6 +26,7 @@ fn bn(path: impl AsRef<Path>) -> String {
 fn no_md(value: &str) -> String {
   value.strip_suffix(".md").or_else(|| value.strip_suffix(".MD")).unwrap_or(value).to_string()
 }
+fn is_markdown_path(value: &str) -> bool { value.to_ascii_lowercase().ends_with(".md") }
 fn id(value: &str) -> String {
   let mut output = String::new();
   let mut dash = false;
@@ -76,24 +77,34 @@ fn default_features() -> Value { json!({ "askAi": true, "sitePreview": false, "g
 fn default_ai_config() -> Value {
   json!({ "localAi": { "enabled": true, "showModelLibraryInSidebar": true }, "providers": { "list": [], "codex": { "connected": false, "mode": "account", "model": "" } }, "routes": {}, "localModelSelection": {} })
 }
+fn remove_generated_wiki_metadata(root_path: &Path) {
+  let wiki_dir = root_path.join(META).join("wiki");
+  let wiki_file = root_path.join(META).join("wiki.json");
+  let _ = fs::remove_file(wiki_file);
+  let entries = fs::read_dir(&wiki_dir)
+    .map(|items| items.filter_map(Result::ok).map(|entry| entry.path()).collect::<Vec<_>>())
+    .unwrap_or_default();
+  if entries.is_empty() {
+    let _ = fs::remove_dir(&wiki_dir);
+  }
+}
 fn init(root: &str) -> R<Value> {
   let root_path = PathBuf::from(root);
   let meta_path = root_path.join(META);
   let dirs = vec![
     meta_path.clone(),
     root_path.join("Getting Started"),
-    meta_path.join("wiki"),
     meta_path.join("attachments"),
     meta_path.join("drawings"),
   ];
   for dir in dirs {
     fs::create_dir_all(dir).map_err(|error| error.to_string())?;
   }
+  remove_generated_wiki_metadata(&root_path);
   ensure_json(wp(root, "workspace.json"), workspace_default(root))?;
   ensure_json(wp(root, "index.json"), json!({ "version": 1, "updatedAt": ts(), "entries": [] }))?;
   ensure_json(wp(root, "calendar.json"), json!({ "version": 1, "updatedAt": ts(), "events": [] }))?;
   ensure_json(wp(root, "sources.json"), json!({ "version": 1, "updatedAt": ts(), "sources": [] }))?;
-  ensure_json(wp(root, "wiki.json"), json!({ "version": 1, "updatedAt": ts(), "records": [] }))?;
   let welcome_path = root_path.join("Getting Started").join("Welcome.md");
   if !welcome_path.exists() {
     fs::write(welcome_path, format!("---\ntitle: \"Welcome\"\ntype: \"note\"\ntags: [\"getting-started\"]\ncreatedAt: \"{}\"\nupdatedAt: \"{}\"\n---\n\n# Welcome to ElephantNote\n", ts(), ts())).map_err(|error| error.to_string())?;
@@ -241,9 +252,9 @@ fn search_result(relative_path: String, full_path: PathBuf, markdown: &str, scor
 #[tauri::command] pub fn tauri_vaults_set_name(app: AppHandle, vault_id: String, name: String) -> R<Value> { let mut config = rc(&app)?; if let Some(vaults) = config.get_mut("vaults").and_then(Value::as_array_mut) { for vault in vaults { if vault.get("id").and_then(Value::as_str) == Some(vault_id.as_str()) { vault["name"] = json!(name.trim()); } } } let vault = av(&config); wc(&app, &config)?; payload(&app, vault) }
 #[tauri::command] pub fn tauri_vaults_remove(app: AppHandle, vault_id: String) -> R<Value> { let mut config = rc(&app)?; if let Some(vaults) = config.get_mut("vaults").and_then(Value::as_array_mut) { vaults.retain(|vault| vault.get("id").and_then(Value::as_str) != Some(vault_id.as_str())); } if config.get("activeVaultId").and_then(Value::as_str) == Some(vault_id.as_str()) { config["activeVaultId"] = config.get("vaults").and_then(Value::as_array).and_then(|vaults| vaults.first()).and_then(|vault| vault.get("id")).cloned().unwrap_or(Value::Null); } let vault = av(&config); wc(&app, &config)?; payload(&app, vault) }
 #[tauri::command] pub fn tauri_directory_list(app: AppHandle, relative_path: Option<String>) -> R<Vec<Value>> { list(&active(&app)?, relative_path.as_deref().unwrap_or("")) }
-#[tauri::command] pub fn tauri_notes_create(app: AppHandle, relative_path: Option<String>, filename: Option<String>, title: Option<String>) -> R<Value> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); let relative_dir = relative_path.unwrap_or_default(); let dir = inside(root, &relative_dir); fs::create_dir_all(&dir).map_err(|error| error.to_string())?; let filename = filename.filter(|name| !name.trim().is_empty()).unwrap_or_else(|| next_available_name(&dir, "Untitled.md")); let path = dir.join(&filename); let title = title.filter(|title| !title.trim().is_empty()).unwrap_or_else(|| no_md(&filename)); if !path.exists() { fs::write(&path, format!("---\ntitle: \"{}\"\ntype: \"note\"\ntags: []\ncreatedAt: \"{}\"\nupdatedAt: \"{}\"\n---\n\n# {}\n", title.replace('"', "\\\""), ts(), ts(), title)).map_err(|error| error.to_string())?; } Ok(json!({ "note": { "path": rel(&format!("{}/{}", relative_dir, filename)), "fullPath": path.to_string_lossy(), "title": title, "kind": "note", "type": "note" }, "entries": list(&vault, &relative_dir)? })) }
-#[tauri::command] pub fn tauri_notes_read(app: AppHandle, relative_path: String) -> R<Value> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); let path = inside(root, &relative_path); let markdown = fs::read_to_string(&path).map_err(|error| error.to_string())?; Ok(note_payload(&vault, &relative_path, markdown)) }
-#[tauri::command] pub fn tauri_notes_write(app: AppHandle, relative_path: String, markdown: String) -> R<Value> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); let path = inside(root, &relative_path); if let Some(parent) = path.parent() { fs::create_dir_all(parent).map_err(|error| error.to_string())?; } fs::write(&path, &markdown).map_err(|error| error.to_string())?; let parent = Path::new(&relative_path).parent().and_then(|path| path.to_str()).unwrap_or(""); Ok(json!({ "note": note_payload(&vault, &relative_path, markdown), "entries": list(&vault, parent)? })) }
+#[tauri::command] pub fn tauri_notes_create(app: AppHandle, relative_path: Option<String>, filename: Option<String>, title: Option<String>) -> R<Value> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); let relative_dir = relative_path.unwrap_or_default(); let dir = inside(root, &relative_dir); fs::create_dir_all(&dir).map_err(|error| error.to_string())?; let filename = filename.filter(|name| !name.trim().is_empty()).unwrap_or_else(|| next_available_name(&dir, "Untitled.md")); if !is_markdown_path(&filename) { return Err(format!("Only markdown notes can be created through notes.create, got `{filename}`.")); } let path = dir.join(&filename); let title = title.filter(|title| !title.trim().is_empty()).unwrap_or_else(|| no_md(&filename)); if !path.exists() { fs::write(&path, format!("---\ntitle: \"{}\"\ntype: \"note\"\ntags: []\ncreatedAt: \"{}\"\nupdatedAt: \"{}\"\n---\n\n# {}\n", title.replace('"', "\\\""), ts(), ts(), title)).map_err(|error| error.to_string())?; } Ok(json!({ "note": { "path": rel(&format!("{}/{}", relative_dir, filename)), "fullPath": path.to_string_lossy(), "title": title, "kind": "note", "type": "note" }, "entries": list(&vault, &relative_dir)? })) }
+#[tauri::command] pub fn tauri_notes_read(app: AppHandle, relative_path: String) -> R<Value> { if !is_markdown_path(&relative_path) { return Err(format!("Refusing to read non-markdown file as a note: {relative_path}")); } let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); let path = inside(root, &relative_path); let markdown = fs::read_to_string(&path).map_err(|error| error.to_string())?; Ok(note_payload(&vault, &relative_path, markdown)) }
+#[tauri::command] pub fn tauri_notes_write(app: AppHandle, relative_path: String, markdown: String) -> R<Value> { if !is_markdown_path(&relative_path) { return Err(format!("Refusing to write markdown content into a non-markdown file: {relative_path}")); } let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); let path = inside(root, &relative_path); if let Some(parent) = path.parent() { fs::create_dir_all(parent).map_err(|error| error.to_string())?; } fs::write(&path, &markdown).map_err(|error| error.to_string())?; let parent = Path::new(&relative_path).parent().and_then(|path| path.to_str()).unwrap_or(""); Ok(json!({ "note": note_payload(&vault, &relative_path, markdown), "entries": list(&vault, parent)? })) }
 #[tauri::command] pub fn tauri_folders_create(app: AppHandle, relative_path: Option<String>) -> R<Value> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); let relative_dir = relative_path.unwrap_or_default(); let dir = inside(root, &relative_dir); fs::create_dir_all(&dir).map_err(|error| error.to_string())?; let filename = next_available_name(&dir, "New Folder"); let path = dir.join(&filename); fs::create_dir_all(&path).map_err(|error| error.to_string())?; Ok(json!({ "folder": { "path": rel(&format!("{}/{}", relative_dir, filename)), "fullPath": path.to_string_lossy() }, "entries": list(&vault, &relative_dir)? })) }
 #[tauri::command] pub fn tauri_sidebar_attach(app: AppHandle, relative_path: String, title: Option<String>, entry_type: Option<String>) -> R<Value> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); let path = rel(&relative_path); let mut workspace = read_json(wp(root, "workspace.json"), workspace_default(root)); let mut sidebar = workspace.get("sidebar").and_then(Value::as_array).cloned().unwrap_or_default(); sidebar.retain(|entry| entry.get("path").and_then(Value::as_str) != Some(path.as_str())); sidebar.push(json!({ "id": id(&path), "title": title.unwrap_or_else(|| no_md(&bn(Path::new(&path)))), "type": entry_type.unwrap_or_else(|| if path.ends_with(".md") { "note".into() } else { "folder".into() }), "path": path, "collapsed": false })); workspace["sidebar"] = json!(sidebar); write_json(wp(root, "workspace.json"), &workspace)?; Ok(json!({ "workspace": workspace, "entries": list(&vault, "")? })) }
 #[tauri::command] pub fn tauri_sidebar_detach(app: AppHandle, relative_path: String) -> R<Value> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); let path = rel(&relative_path); let mut workspace = read_json(wp(root, "workspace.json"), workspace_default(root)); let mut sidebar = workspace.get("sidebar").and_then(Value::as_array).cloned().unwrap_or_default(); sidebar.retain(|entry| entry.get("path").and_then(Value::as_str) != Some(path.as_str())); workspace["sidebar"] = json!(sidebar); write_json(wp(root, "workspace.json"), &workspace)?; Ok(json!({ "workspace": workspace, "entries": list(&vault, "")? })) }
@@ -252,30 +263,36 @@ fn search_result(relative_path: String, full_path: PathBuf, markdown: &str, scor
 #[tauri::command] pub fn tauri_entries_delete(app: AppHandle, relative_path: String) -> R<Value> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); let target = inside(root, &relative_path); if target.is_dir() { fs::remove_dir_all(&target).map_err(|error| error.to_string())?; } else if target.is_file() { fs::remove_file(&target).map_err(|error| error.to_string())?; } payload(&app, Some(vault)) }
 #[tauri::command] pub fn tauri_calendar_list(app: AppHandle) -> R<Vec<Value>> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); Ok(read_json(wp(root, "calendar.json"), json!({ "events": [] })).get("events").and_then(Value::as_array).cloned().unwrap_or_default()) }
 #[tauri::command] pub fn tauri_sources_list(app: AppHandle) -> R<Vec<Value>> { let vault = active(&app)?; let root = vault.get("path").and_then(Value::as_str).unwrap_or(""); Ok(read_json(wp(root, "sources.json"), json!({ "sources": [] })).get("sources").and_then(Value::as_array).cloned().unwrap_or_default()) }
-#[tauri::command] pub fn tauri_wiki_list(app: AppHandle) -> R<Vec<Value>> { let vault = active(&app)?; list(&vault, &format!("{}/wiki", META)) }
+#[tauri::command] pub fn tauri_wiki_list(_app: AppHandle) -> R<Vec<Value>> { Ok(Vec::new()) }
 
 #[tauri::command]
 pub fn tauri_search_query(app: AppHandle, params: Option<Value>) -> R<Vec<Value>> {
+  let started = Instant::now();
   let vault = active(&app)?;
-  let query = params
-    .and_then(|value| value.get("query").or_else(|| value.get("q")).and_then(Value::as_str).map(|value| value.to_lowercase()))
-    .unwrap_or_default();
-  if query.trim().is_empty() { return Ok(Vec::new()); }
+  let params = params.unwrap_or_else(|| json!({}));
+  let query = params.get("query").or_else(|| params.get("q")).and_then(Value::as_str).map(|value| value.to_lowercase()).unwrap_or_default();
+  let mode = params.get("mode").and_then(Value::as_str).unwrap_or("exact");
+  let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(50).clamp(1, 200) as usize;
+  eprintln!("[search:query:start] mode={mode} limit={limit} query_len={}", query.len());
+  if query.trim().is_empty() { eprintln!("[search:query:done] empty=true results=0 elapsed_ms={}", started.elapsed().as_millis()); return Ok(Vec::new()); }
 
   let mut results = Vec::new();
   for (relative_path, full_path, markdown) in all_notes(&vault)? {
+    if results.len() >= limit { break; }
     if markdown.to_lowercase().contains(&query) || relative_path.to_lowercase().contains(&query) {
       results.push(search_result(relative_path, full_path, &markdown, 1.0));
     }
   }
+  eprintln!("[search:query:done] mode={mode} results={} elapsed_ms={}", results.len(), started.elapsed().as_millis());
   Ok(results)
 }
 
-#[tauri::command] pub fn tauri_search_status(app: AppHandle) -> R<Value> { let active_vault = av(&rc(&app)?); let indexed_notes = match active_vault.as_ref() { Some(vault) => all_notes(vault).map(|notes| notes.len()).unwrap_or(0), None => 0 }; Ok(json!({ "enabled": true, "runtime": "tauri-rust", "activeVault": active_vault, "indexedNotes": indexed_notes, "notesIndexed": indexed_notes, "status": "ready" })) }
-#[tauri::command] pub fn tauri_search_rebuild(app: AppHandle) -> R<Value> { tauri_search_status(app) }
+#[tauri::command] pub fn tauri_search_status(app: AppHandle) -> R<Value> { let active_vault = av(&rc(&app)?); let indexed_notes = match active_vault.as_ref() { Some(vault) => all_notes(vault).map(|notes| notes.len()).unwrap_or(0), None => 0 }; Ok(json!({ "enabled": true, "runtime": "tauri-rust", "activeVault": active_vault, "indexedNotes": indexed_notes, "notesIndexed": indexed_notes, "status": "ready", "semantic": false, "realEmbedding": false, "embeddingProvider": "disabled", "message": "Exact lexical search is active. Semantic embeddings are disabled until a real embedding runtime is connected." })) }
+#[tauri::command] pub fn tauri_search_rebuild(app: AppHandle) -> R<Value> { let mut status = tauri_search_status(app)?; status["ok"] = json!(true); status["provider"] = json!("lexical-only"); status["indexKind"] = json!("lexical"); status["semantic"] = json!(false); status["realEmbedding"] = json!(false); status["message"] = json!("Rebuilt lexical index only. No fake embeddings were generated."); eprintln!("[search:rebuild:done] provider=lexical-only fake_embeddings=false notes={}", status.get("notesIndexed").and_then(Value::as_u64).unwrap_or(0)); Ok(status) }
 
 #[tauri::command]
 pub fn tauri_search_inspect(app: AppHandle) -> R<Value> {
+  let started = Instant::now();
   let active_vault = active(&app)?;
   let notes = all_notes(&active_vault)?;
   let documents = notes.iter().map(|(path, full_path, markdown)| {
@@ -300,14 +317,15 @@ pub fn tauri_search_inspect(app: AppHandle) -> R<Value> {
     "kind": "note",
     "type": "note"
   })).collect::<Vec<Value>>();
-  Ok(json!({ "runtime": "tauri-rust", "notesIndexed": documents.len(), "documents": documents, "folders": [], "semanticLinks": [], "graph": { "nodes": nodes, "edges": [], "clusters": [] } }))
+  eprintln!("[search:inspect:done] documents={} semantic_links=0 elapsed_ms={}", documents.len(), started.elapsed().as_millis());
+  Ok(json!({ "runtime": "tauri-rust", "notesIndexed": documents.len(), "documents": documents, "folders": [], "semanticLinks": [], "semantic": false, "realEmbedding": false, "graph": { "nodes": nodes, "edges": [], "clusters": [] } }))
 }
 
 #[tauri::command] pub fn tauri_features_get(app: AppHandle) -> R<Value> { app_json(&app, FEATURES_CFG, default_features()) }
 #[tauri::command] pub fn tauri_features_set(app: AppHandle, key: String, enabled: Option<bool>) -> R<Value> { let mut features = app_json(&app, FEATURES_CFG, default_features())?; if !features.is_object() { features = default_features(); } features[key.as_str()] = json!(enabled.unwrap_or(true)); write_app_json(&app, FEATURES_CFG, &features)?; Ok(features) }
 #[tauri::command] pub fn tauri_ai_config_get(app: AppHandle) -> R<Value> { app_json(&app, AI_CFG, default_ai_config()) }
 #[tauri::command] pub fn tauri_ai_config_set(app: AppHandle, config: Value) -> R<Value> { let normalized = if config.is_object() { config } else { default_ai_config() }; write_app_json(&app, AI_CFG, &normalized)?; Ok(normalized) }
-#[tauri::command] pub fn tauri_ai_config_test(config: Option<Value>) -> R<Value> { let started = Instant::now(); Ok(json!({ "ok": true, "runtime": "tauri-rust", "latencyMs": started.elapsed().as_millis() as u64, "message": "Tauri bridge configuration is reachable.", "config": config.unwrap_or(json!({})) })) }
+#[tauri::command] pub fn tauri_ai_config_test(config: Option<Value>) -> R<Value> { let started = Instant::now(); let config = config.unwrap_or(json!({})); let name = config.get("name").and_then(Value::as_str).unwrap_or(""); let endpoint = config.get("endpoint").and_then(Value::as_str).unwrap_or(""); let transport = config.get("transport").and_then(Value::as_str).unwrap_or(""); if name == "embedding" && (transport == "node-llama-cpp" || endpoint.starts_with("node-llama-cpp://")) { return Ok(json!({ "ok": false, "runtime": "tauri-rust", "latencyMs": started.elapsed().as_millis() as u64, "error": "No real local embedding runtime is wired yet. Refusing to report fake embedding connectivity.", "config": config })); } Ok(json!({ "ok": true, "runtime": "tauri-rust", "latencyMs": started.elapsed().as_millis() as u64, "message": "Tauri bridge configuration is reachable.", "config": config })) }
 #[tauri::command] pub fn tauri_models_get_selection(app: AppHandle) -> R<Value> { app_json(&app, MODEL_SELECTION_CFG, json!({})) }
 #[tauri::command] pub fn tauri_models_set_selection(app: AppHandle, selection: Value) -> R<Value> { let normalized = if selection.is_object() { selection } else { json!({}) }; write_app_json(&app, MODEL_SELECTION_CFG, &normalized)?; let mut ai_config = app_json(&app, AI_CFG, default_ai_config())?; if ai_config.is_object() { ai_config["localModelSelection"] = normalized.clone(); let _ = write_app_json(&app, AI_CFG, &ai_config); } Ok(normalized) }
 #[tauri::command] pub fn tauri_models_list() -> R<Vec<Value>> { Ok(Vec::new()) }
@@ -330,6 +348,7 @@ pub fn tauri_rag_chat(app: AppHandle, payload: Option<Value>) -> R<Value> {
   let limit = payload.get("limit").and_then(Value::as_u64).unwrap_or(6).max(1).min(20) as usize;
   let active_vault = active(&app)?;
   let query = message.to_lowercase();
+  eprintln!("[rag:chat:start] message_len={} limit={} fallback=lexical-only", message.len(), limit);
   let mut citations = Vec::new();
   if !query.trim().is_empty() {
     for (relative_path, full_path, markdown) in all_notes(&active_vault)? {
@@ -339,11 +358,14 @@ pub fn tauri_rag_chat(app: AppHandle, payload: Option<Value>) -> R<Value> {
       }
     }
   }
+  eprintln!("[rag:chat:done] citations={} fallback=lexical-only", citations.len());
   Ok(json!({
-    "answer": if citations.is_empty() { "Le runtime RAG Tauri est joignable, mais aucun contexte local correspondant n'a été trouvé." } else { "Le runtime RAG Tauri est joignable. J'ai trouvé du contexte local correspondant dans la vault." },
+    "answer": if citations.is_empty() { "Le chat local Tauri n'a pas encore de modèle réellement connecté dans ce backend; aucun contexte local correspondant n'a été trouvé." } else { "Le chat local Tauri utilise seulement le fallback lexical dans ce backend. J'ai trouvé du contexte local correspondant dans la vault." },
     "citations": citations,
     "runtime": "tauri-rust",
-    "model": "tauri-local-search-fallback"
+    "model": "tauri-local-search-fallback",
+    "fallback": true,
+    "realChatModel": false
   }))
 }
 

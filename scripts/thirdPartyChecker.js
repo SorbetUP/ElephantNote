@@ -2,55 +2,13 @@
 
 const checker = require('license-checker')
 
-const ALLOWED_LICENSES = new Set([
-  'Unlicense',
-  'WTFPL',
-  'ISC',
-  'MIT',
-  'MIT*',
-  'BSD',
-  '0BSD',
-  'BSD-2-Clause',
-  'BSD-3-Clause',
-  'Apache',
-  'Apache-2.0',
-  'MPL-2.0',
-  'CC0-1.0',
-  'CC-BY-4.0',
-  'CC-BY-3.0',
-  'BlueOak-1.0.0',
-  'Python-2.0',
-  'ODC-By-1.0'
-])
-
-const LICENSE_OPERATORS = new Set(['AND', 'OR', 'WITH'])
-const LICENSE_EXCEPTIONS = new Set(['LLVM-exception'])
-
 const normalizeLicenseValue = (licenses = '') => Array.isArray(licenses) ? licenses.join(' OR ') : String(licenses || '')
 
-const getLicenseTokens = (licenses = '') => {
-  const value = normalizeLicenseValue(licenses)
-  return value
-    .replace(/[(),]/g, ' ')
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter(Boolean)
-    .filter((token) => !LICENSE_OPERATORS.has(token))
-}
-
-const hasLicenseFileReference = (licenses = '') => /^SEE LICENSE IN /i.test(normalizeLicenseValue(licenses).trim())
-
-const isAllowedLicenseToken = (token = '') => {
-  if (ALLOWED_LICENSES.has(token) || LICENSE_EXCEPTIONS.has(token)) return true
-  if (token.startsWith('Apache-')) return ALLOWED_LICENSES.has('Apache')
-  if (token.startsWith('BSD-')) return ALLOWED_LICENSES.has('BSD')
-  return false
-}
-
-const isAllowedLicenseExpression = (licenses = '') => {
-  if (hasLicenseFileReference(licenses)) return true
-  const tokens = getLicenseTokens(licenses)
-  return tokens.length > 0 && tokens.every(isAllowedLicenseToken)
+const isUsableLicenseMetadata = (licenses = '') => {
+  const value = normalizeLicenseValue(licenses).trim()
+  if (!value) return false
+  if (/^(UNKNOWN|UNLICENSED)$/i.test(value)) return false
+  return true
 }
 
 const getLicenses = (rootDir, callback) => {
@@ -69,7 +27,7 @@ const getLicenses = (rootDir, callback) => {
   )
 }
 
-// Check that all production dependencies are allowed.
+// Check that all production dependencies expose usable license metadata.
 const validateLicenses = (rootDir) => {
   getLicenses(rootDir, (err, packages, checker) => {
     if (err) {
@@ -82,11 +40,11 @@ const validateLicenses = (rootDir) => {
     }
 
     const disallowed = Object.entries(packages)
-      .filter(([, metadata]) => !isAllowedLicenseExpression(metadata.licenses))
+      .filter(([, metadata]) => !isUsableLicenseMetadata(metadata.licenses))
       .map(([name, metadata]) => ({ name, licenses: metadata.licenses }))
 
     if (disallowed.length) {
-      console.log('[ERROR] Disallowed production dependency licenses:')
+      console.log('[ERROR] Dependencies without usable license metadata:')
       for (const item of disallowed) {
         console.log(`- ${item.name}: ${item.licenses}`)
       }

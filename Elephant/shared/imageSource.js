@@ -19,6 +19,8 @@ const safeDecodeURIComponent = (value = '') => {
     return String(value || '')
   }
 }
+const encodeMarkdownSegment = (value = '') => encodeURIComponent(safeDecodeURIComponent(value))
+  .replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
 const stripLocalQueryOrHash = (value = '') => String(value || '').split(/[?#]/)[0]
 const isWindowsAbsolutePath = (value = '') => windowsAbsolutePattern.test(normalizeLocalPath(value))
 const isAbsoluteLocalPath = (value = '') => path.isAbsolute(String(value || '')) || isWindowsAbsolutePath(value)
@@ -53,7 +55,7 @@ const pathToFileUrl = (value = '') => {
 
 const encodeMarkdownPath = (value = '') => normalizeLocalPath(value)
   .split('/')
-  .map((segment) => encodeURIComponent(safeDecodeURIComponent(segment)))
+  .map((segment) => encodeMarkdownSegment(segment))
   .join('/')
 
 const getSafeRelativePath = (targetPath = '', baseDirectory = '') => {

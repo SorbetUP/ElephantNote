@@ -51,6 +51,7 @@
     "tauri:platform:check": "node scripts/verify-tauri-platforms.mjs",
     "tauri:dev": "./build_dev.sh",
     "tauri:build": "pnpm tauri:llama:install && cd src-tauri && cargo tauri build",
+    "tauri:mac:smoke": "node scripts/tauri-macos-window-smoke.mjs",
     "tauri:linux:build": "pnpm tauri:llama:install && cd src-tauri && cargo tauri build --config tauri.linux.conf.json",
     "tauri:android:init": "cd src-tauri && cargo tauri android init --config tauri.android.conf.json",
     "tauri:android:dev": "cd src-tauri && cargo tauri android dev --config tauri.android.conf.json",
@@ -157,7 +158,6 @@
   "devDependencies": {
     "@babel/eslint-parser": "^7.28.6",
     "@electron/rebuild": "^4.0.4",
-    "@playwright/test": "^1.60.0",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vitest/coverage-v8": "^4.1.6",
     "cross-env": "^10.1.0",

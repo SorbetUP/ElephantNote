@@ -5,6 +5,7 @@ import vue from '@vitejs/plugin-vue'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+const apiContractsRuntime = resolve(__dirname, 'Elephant/shared/apiContractsRuntime.js')
 
 export default defineConfig({
   test: {
@@ -35,6 +36,7 @@ export default defineConfig({
       'elephant-back': resolve(__dirname, 'Elephant/back/app'),
       'elephant-front': resolve(__dirname, 'Elephant/front/app'),
       'elephant-shared': resolve(__dirname, 'Elephant/shared'),
+      'common/elephantnote/apiContracts': apiContractsRuntime,
       'common/elephantnote': resolve(__dirname, 'Elephant/shared'),
       '@/elephantnote': resolve(__dirname, 'Elephant/front/app'),
       'main_renderer/elephantnote': resolve(__dirname, 'Elephant/back/app'),

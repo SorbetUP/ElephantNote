@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'fs/promises'
-import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 
 import {
   createConceptProfile,
@@ -10,9 +10,9 @@ import {
   scoreChunkAgainstConcept
 } from '../../Elephant/shared/knowledge/knowledgeIndex.js'
 
-const fixtureRoot = new URL('../fixtures/knowledge/apple/', import.meta.url)
+const fixtureRoot = path.join(process.cwd(), 'test/fixtures/knowledge/apple')
 
-const readFixture = async (filename) => fs.readFile(fileURLToPath(new URL(filename, fixtureRoot)), 'utf8')
+const readFixture = async (filename) => fs.readFile(path.join(fixtureRoot, filename), 'utf8')
 
 const createAppleConcepts = () => ({
   inc: createConceptProfile({

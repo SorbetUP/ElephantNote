@@ -2,25 +2,48 @@
 
 const checker = require('license-checker')
 
-const ALLOWED_LICENSES = [
+const ALLOWED_LICENSES = new Set([
   'Unlicense',
   'WTFPL',
   'ISC',
   'MIT',
   'MIT*',
   'BSD',
-  'BSD*',
   '0BSD',
   'BSD-2-Clause',
   'BSD-3-Clause',
   'Apache',
-  'Apache*',
   'Apache-2.0',
   'MPL-2.0',
   'CC0-1.0',
   'CC-BY-4.0',
   'CC-BY-3.0'
-].join(';')
+])
+
+const LICENSE_OPERATORS = new Set(['AND', 'OR', 'WITH'])
+const LICENSE_EXCEPTIONS = new Set(['LLVM-exception'])
+
+const getLicenseTokens = (licenses = '') => {
+  const value = Array.isArray(licenses) ? licenses.join(' OR ') : String(licenses || '')
+  return value
+    .replace(/[(),]/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .filter((token) => !LICENSE_OPERATORS.has(token))
+}
+
+const isAllowedLicenseToken = (token = '') => {
+  if (ALLOWED_LICENSES.has(token) || LICENSE_EXCEPTIONS.has(token)) return true
+  if (token.startsWith('Apache-')) return ALLOWED_LICENSES.has('Apache')
+  if (token.startsWith('BSD-')) return ALLOWED_LICENSES.has('BSD')
+  return false
+}
+
+const isAllowedLicenseExpression = (licenses = '') => {
+  const tokens = getLicenseTokens(licenses)
+  return tokens.length > 0 && tokens.every(isAllowedLicenseToken)
+}
 
 const getLicenses = (rootDir, callback) => {
   checker.init(
@@ -30,8 +53,7 @@ const getLicenses = (rootDir, callback) => {
       development: false,
       direct: true,
       excludePackages: '@marktext/file-icons', // MIT licensed but license-checker may not detect it
-      json: true,
-      onlyAllow: ALLOWED_LICENSES
+      json: true
     },
     function(err, packages) {
       callback(err, packages, checker)
@@ -50,6 +72,19 @@ const validateLicenses = (rootDir) => {
       console.log('[ERROR] No packages found — check your start path and filters.')
       process.exit(1)
     }
+
+    const disallowed = Object.entries(packages)
+      .filter(([, metadata]) => !isAllowedLicenseExpression(metadata.licenses))
+      .map(([name, metadata]) => ({ name, licenses: metadata.licenses }))
+
+    if (disallowed.length) {
+      console.log('[ERROR] Disallowed production dependency licenses:')
+      for (const item of disallowed) {
+        console.log(`- ${item.name}: ${item.licenses}`)
+      }
+      process.exit(1)
+    }
+
     console.log(checker.asSummary(packages))
   })
 }

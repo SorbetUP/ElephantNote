@@ -45,6 +45,14 @@ const createVault = () => ({
   path: '/tmp/vault-1'
 })
 
+const expectDirectoryPath = (relativePath) => {
+  expect(listDirectory).toHaveBeenCalledWith(expect.objectContaining({ relativePath }))
+}
+
+const expectLastDirectoryPath = (relativePath) => {
+  expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ relativePath }))
+}
+
 describe('WikiView library root', () => {
   beforeEach(() => {
     listDirectory.mockReset()
@@ -88,7 +96,7 @@ describe('WikiView library root', () => {
     app.mount(container)
     await flush()
 
-    expect(listDirectory).toHaveBeenCalledWith('.elephantnote/wiki')
+    expectDirectoryPath('.elephantnote/wiki')
     expect(store.activeWorkspaceView).toBe('wiki')
     expect(store.currentPath).toBe('.elephantnote/wiki')
     expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Cluster.md'])
@@ -131,7 +139,7 @@ describe('WikiView library root', () => {
     app.mount(container)
     await nextTick()
 
-    expect(listDirectory).toHaveBeenCalledWith('.elephantnote/wiki')
+    expectDirectoryPath('.elephantnote/wiki')
     expect(store.currentPath).toBe('.elephantnote/wiki')
     expect(store.entries).toEqual([])
     expect(container.textContent).not.toContain('Normal')
@@ -230,7 +238,7 @@ describe('WikiView library root', () => {
     container.querySelector('.en-note-card')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flush()
 
-    expect(listDirectory).toHaveBeenLastCalledWith('.elephantnote/wiki/Cluster')
+    expectLastDirectoryPath('.elephantnote/wiki/Cluster')
     expect(store.activeWorkspaceView).toBe('wiki')
     expect(store.currentPath).toBe('.elephantnote/wiki/Cluster')
     expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Cluster/Index.md'])
@@ -284,7 +292,7 @@ describe('WikiView library root', () => {
     container.querySelector('.en-note-card')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await nextTick()
 
-    expect(listDirectory).toHaveBeenLastCalledWith('.elephantnote/wiki/Cluster')
+    expectLastDirectoryPath('.elephantnote/wiki/Cluster')
     expect(store.currentPath).toBe('.elephantnote/wiki/Cluster')
     expect(store.entries).toEqual([])
     expect(container.textContent).not.toContain('StaleRoot')
@@ -342,7 +350,7 @@ describe('WikiView library root', () => {
     container.querySelector('button[title="Wiki"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flush()
 
-    expect(listDirectory).toHaveBeenCalledWith('.elephantnote/wiki')
+    expectDirectoryPath('.elephantnote/wiki')
     expect(store.activeWorkspaceView).toBe('wiki')
     expect(store.currentPath).toBe('.elephantnote/wiki')
     expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Root.md'])
@@ -389,7 +397,7 @@ describe('WikiView library root', () => {
     container.querySelector('button[title="Wiki"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await nextTick()
 
-    expect(listDirectory).toHaveBeenCalledWith('.elephantnote/wiki')
+    expectDirectoryPath('.elephantnote/wiki')
     expect(store.currentPath).toBe('.elephantnote/wiki')
     expect(store.entries).toEqual([])
 

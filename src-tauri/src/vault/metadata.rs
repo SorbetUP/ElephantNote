@@ -30,15 +30,24 @@ pub fn write_json_if_missing(path: PathBuf, value: Value) -> R<()> {
   write_json(path, &value)
 }
 
-fn remove_empty_obsolete_wiki_dir(vault_root: impl AsRef<Path>) {
+fn remove_obsolete_wiki_metadata(vault_root: impl AsRef<Path>) {
   let wiki_dir = vault_layout::hidden_dir(vault_root, vault_layout::WIKI_DIR);
   if !wiki_dir.exists() {
     return;
   }
-  let is_empty = fs::read_dir(&wiki_dir)
-    .map(|mut entries| entries.next().is_none())
-    .unwrap_or(false);
-  if is_empty {
+
+  let wiki_file = wiki_dir.join(vault_layout::WIKI_FILE);
+  let entries = fs::read_dir(&wiki_dir)
+    .map(|items| {
+      items
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .collect::<Vec<_>>()
+    })
+    .unwrap_or_default();
+  let only_generated_wiki_file = entries.is_empty() || (entries.len() == 1 && entries[0] == wiki_file);
+  if only_generated_wiki_file {
+    let _ = fs::remove_file(&wiki_file);
     let _ = fs::remove_dir(&wiki_dir);
   }
 }
@@ -63,7 +72,7 @@ pub fn initialize_vault(vault_root: &str) -> R<Value> {
   for dir in vault_layout::required_hidden_dirs() {
     fs::create_dir_all(vault_layout::hidden_dir(&root_path, dir)).map_err(|e| e.to_string())?;
   }
-  remove_empty_obsolete_wiki_dir(&root_path);
+  remove_obsolete_wiki_metadata(&root_path);
 
   fs::create_dir_all(root_path.join("Getting Started")).map_err(|e| e.to_string())?;
   let workspace = workspace_json(&root_path);

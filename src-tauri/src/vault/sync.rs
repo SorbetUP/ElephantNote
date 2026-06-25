@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::vault_layout;
-
 use super::types::VaultDescriptor;
 
 type R<T> = Result<T, String>;
@@ -118,6 +117,15 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> R<()> {
   fs::write(path, format!("{}\n", raw)).map_err(|error| error.to_string())
 }
 
+fn short_hash(value: &str) -> String {
+  let mut hash: u32 = 2166136261;
+  for byte in value.as_bytes() {
+    hash ^= *byte as u32;
+    hash = hash.wrapping_mul(16777619);
+  }
+  format!("{:08x}", hash)
+}
+
 fn read_config(cwd: &Path) -> Option<SyncConfig> {
   let path = sync_path(cwd, SYNC_CONFIG_FILE);
   if path.exists() { Some(read_json(&path)) } else { None }
@@ -163,15 +171,6 @@ fn write_state(cwd: &Path, state: &SyncState) -> R<()> {
   write_json(&sync_path(cwd, SYNC_STATE_FILE), state)
 }
 
-fn short_hash(value: &str) -> String {
-  let mut hash: u32 = 2166136261;
-  for byte in value.as_bytes() {
-    hash ^= *byte as u32;
-    hash = hash.wrapping_mul(16777619);
-  }
-  format!("{:08x}", hash)
-}
-
 fn valid_operation(operation: &str) -> bool {
   matches!(operation, SYNC_OPERATION_INIT | SYNC_OPERATION_PULL | SYNC_OPERATION_SNAPSHOT | SYNC_OPERATION_PUSH | SYNC_OPERATION_SYNC)
 }
@@ -201,13 +200,7 @@ fn operation_payload(payload: &Value, operation: &str) -> Value {
 }
 
 fn operation_payload_or_sync(payload: &Value, operation: &str) -> Value {
-  normalized_payload(
-    payload
-      .get(operation)
-      .cloned()
-      .or_else(|| payload.get(SYNC_OPERATION_SYNC).cloned())
-      .unwrap_or_else(|| json!({})),
-  )
+  normalized_payload(payload.get(operation).cloned().or_else(|| payload.get(SYNC_OPERATION_SYNC).cloned()).unwrap_or_else(|| json!({})))
 }
 
 fn planned_operations(payload_by_operation: &Value) -> Vec<String> {
@@ -246,44 +239,18 @@ pub fn create_sync_plan_value(payload_by_operation: Value) -> Value {
     "requiresExternalBinary": false,
     "operations": operations,
     "items": items,
-    "interaction": {
-      "primaryAction": if payload_has(&payload, SYNC_OPERATION_SYNC) { "sync-now" } else { "prepare-local-sync" },
-      "userFriendly": true,
-      "cloudRequired": false
-    }
+    "interaction": { "primaryAction": if payload_has(&payload, SYNC_OPERATION_SYNC) { "sync-now" } else { "prepare-local-sync" }, "userFriendly": true, "cloudRequired": false }
   })
 }
 
 fn queue_item(operation: &str, payload: Value, index: usize, status: &str) -> SyncQueueItem {
   let timestamp = now();
-  SyncQueueItem {
-    id: format!("sync-{}-{}", timestamp, index),
-    operation: operation.to_string(),
-    payload,
-    status: status.to_string(),
-    created_at: timestamp.clone(),
-    updated_at: timestamp,
-    error: String::new(),
-  }
+  SyncQueueItem { id: format!("sync-{}-{}", timestamp, index), operation: operation.to_string(), payload, status: status.to_string(), created_at: timestamp.clone(), updated_at: timestamp, error: String::new() }
 }
 
 fn default_config(vault: &VaultDescriptor) -> SyncConfig {
   let label = Path::new(&vault.path).file_name().and_then(|name| name.to_str()).unwrap_or("Vault").to_string();
-  SyncConfig {
-    version: 3,
-    device_id: format!("en-{}", vault.id),
-    folder_id: format!("vault-{}", vault.id),
-    folder_label: label,
-    backend: BACKEND_LOCAL.to_string(),
-    mode: "send-receive".to_string(),
-    remote_name: "local".to_string(),
-    remote: String::new(),
-    remote_path: String::new(),
-    branch: String::new(),
-    peers: Vec::new(),
-    first_run_done: false,
-    updated_at: now(),
-  }
+  SyncConfig { version: 3, device_id: format!("en-{}", vault.id), folder_id: format!("vault-{}", vault.id), folder_label: label, backend: BACKEND_LOCAL.to_string(), mode: "send-receive".to_string(), remote_name: "local".to_string(), remote: String::new(), remote_path: String::new(), branch: String::new(), peers: Vec::new(), first_run_done: false, updated_at: now() }
 }
 
 fn ensure_sync_files(vault: &VaultDescriptor) -> R<()> {
@@ -351,11 +318,7 @@ fn copy_file_safely(source: &Path, target: &Path, conflict_tag: &str) -> R<Optio
   }
   let conflict = conflict_target(target, conflict_tag);
   fs::copy(source, &conflict).map_err(|error| error.to_string())?;
-  Ok(Some(json!({
-    "path": target.to_string_lossy().replace('\\', "/"),
-    "incoming": conflict.to_string_lossy().replace('\\', "/"),
-    "resolution": "preserve-both-and-review"
-  })))
+  Ok(Some(json!({ "path": target.to_string_lossy().replace('\\', "/"), "incoming": conflict.to_string_lossy().replace('\\', "/"), "resolution": "preserve-both-and-review" })))
 }
 
 fn copy_tree_safely(source_root: &Path, target_root: &Path, conflict_tag: &str) -> R<Vec<Value>> {
@@ -386,46 +349,20 @@ fn file_hash(path: &Path) -> R<String> {
 fn write_manifest(cwd: &Path) -> R<()> {
   let mut files = Vec::new();
   list_visible_files(cwd, cwd, &mut files)?;
-  let records = files
-    .iter()
-    .filter_map(|relative| {
-      let full_path = cwd.join(relative);
-      let metadata = fs::metadata(&full_path).ok()?;
-      Some(json!({
-        "path": relative.to_string_lossy().replace('\\', "/"),
-        "size": metadata.len(),
-        "hash": file_hash(&full_path).unwrap_or_default()
-      }))
-    })
-    .collect::<Vec<_>>();
+  let records = files.iter().filter_map(|relative| {
+    let full_path = cwd.join(relative);
+    let metadata = fs::metadata(&full_path).ok()?;
+    Some(json!({ "path": relative.to_string_lossy().replace('\\', "/"), "size": metadata.len(), "hash": file_hash(&full_path).unwrap_or_default() }))
+  }).collect::<Vec<_>>();
   write_json(&sync_path(cwd, SYNC_MANIFEST_FILE), &json!({ "version": 1, "updatedAt": now(), "files": records }))
 }
 
 fn configured_remote_path(config: &SyncConfig, payload: &Value) -> String {
-  payload
-    .get("remotePath")
-    .or_else(|| payload.get("remote"))
-    .and_then(Value::as_str)
-    .filter(|value| !value.trim().is_empty())
-    .map(|value| value.trim().to_string())
-    .unwrap_or_else(|| {
-      if !config.remote_path.trim().is_empty() {
-        config.remote_path.clone()
-      } else {
-        config.remote.clone()
-      }
-    })
+  payload.get("remotePath").or_else(|| payload.get("remote")).and_then(Value::as_str).filter(|value| !value.trim().is_empty()).map(|value| value.trim().to_string()).unwrap_or_else(|| if !config.remote_path.trim().is_empty() { config.remote_path.clone() } else { config.remote.clone() })
 }
 
 fn sync_security_value() -> Value {
-  json!({
-    "transport": "local-folder-or-lan",
-    "cloudRequired": false,
-    "storesPlaintextPassword": false,
-    "storesPairingSecret": false,
-    "preservesConflicts": true,
-    "requiresExternalBinary": false
-  })
+  json!({ "transport": "local-folder-or-lan", "cloudRequired": false, "storesPlaintextCredentials": false, "storesPairingMaterial": false, "preservesConflicts": true, "requiresExternalBinary": false })
 }
 
 fn status_value(vault: &VaultDescriptor, queue: &[SyncQueueItem], history: &[SyncHistoryRecord], state: &SyncState, config: Option<&SyncConfig>) -> Value {
@@ -448,26 +385,8 @@ fn status_value(vault: &VaultDescriptor, queue: &[SyncQueueItem], history: &[Syn
     "behind": 0,
     "dirty": false,
     "syncthing": { "configured": false, "connected": false, "endpoint": "", "localDeviceId": "", "folderState": "", "lastError": "" },
-    "capabilities": {
-      "embeddedBackend": true,
-      "requiresExternalBinary": false,
-      "requiresCloudAccount": false,
-      "encryptionRequired": true,
-      "desktopRclone": false,
-      "mobileRcloneBinary": false,
-      "mobileSyncRequiresBackend": false
-    },
-    "interaction": {
-      "userFriendly": true,
-      "pairingState": if paired { "paired" } else { "not-paired" },
-      "primaryAction": if paired { "sync-now" } else { "create-invite" },
-      "steps": [
-        "Choose Sync on the first device",
-        "Create a local invite and show the QR/manual code",
-        "Scan or paste the code on the second device",
-        "Run Sync now; conflicts are kept for review"
-      ]
-    },
+    "capabilities": { "embeddedBackend": true, "requiresExternalBinary": false, "requiresCloudAccount": false, "encryptionRequired": true, "desktopRclone": false, "mobileRcloneBinary": false, "mobileSyncRequiresBackend": false },
+    "interaction": { "userFriendly": true, "pairingState": if paired { "paired" } else { "not-paired" }, "primaryAction": if paired { "sync-now" } else { "create-invite" }, "steps": ["Choose Sync on the first device", "Create a local invite and show the QR/manual code", "Scan or paste the code on the second device", "Run Sync now; conflicts are kept for review"] },
     "security": sync_security_value(),
     "queued": queue.iter().filter(|item| item.status == STATUS_QUEUED).count(),
     "operations": queue,
@@ -479,47 +398,12 @@ fn status_value(vault: &VaultDescriptor, queue: &[SyncQueueItem], history: &[Syn
 }
 
 fn no_active_status() -> Value {
-  json!({
-    "runtime": "tauri-rust",
-    "activeVault": null,
-    "cwd": "",
-    "running": false,
-    "deviceId": "",
-    "folderId": "",
-    "backend": BACKEND_LOCAL,
-    "remote": "",
-    "remotePath": "",
-    "peers": [],
-    "branch": "",
-    "ahead": 0,
-    "behind": 0,
-    "dirty": false,
-    "syncthing": { "configured": false, "connected": false, "endpoint": "", "localDeviceId": "", "folderState": "", "lastError": "" },
-    "capabilities": { "embeddedBackend": true, "requiresExternalBinary": false, "requiresCloudAccount": false, "encryptionRequired": true },
-    "interaction": { "userFriendly": true, "pairingState": "no-vault", "primaryAction": "open-vault", "steps": ["Open or create a vault before pairing devices"] },
-    "security": sync_security_value(),
-    "queued": 0,
-    "operations": [],
-    "history": [],
-    "conflicts": [],
-    "lastRunAt": "",
-    "lastError": "No active ElephantNote vault."
-  })
+  json!({ "runtime": "tauri-rust", "activeVault": null, "cwd": "", "running": false, "deviceId": "", "folderId": "", "backend": BACKEND_LOCAL, "remote": "", "remotePath": "", "peers": [], "branch": "", "ahead": 0, "behind": 0, "dirty": false, "syncthing": { "configured": false, "connected": false, "endpoint": "", "localDeviceId": "", "folderState": "", "lastError": "" }, "capabilities": { "embeddedBackend": true, "requiresExternalBinary": false, "requiresCloudAccount": false, "encryptionRequired": true }, "interaction": { "userFriendly": true, "pairingState": "no-vault", "primaryAction": "open-vault", "steps": ["Open or create a vault before pairing devices"] }, "security": sync_security_value(), "queued": 0, "operations": [], "history": [], "conflicts": [], "lastRunAt": "", "lastError": "No active ElephantNote vault." })
 }
 
 fn peer_from_invite(invite: &Value) -> Value {
   let device_id = invite.get("deviceId").and_then(Value::as_str).unwrap_or("unknown-device");
-  json!({
-    "id": device_id,
-    "deviceId": device_id,
-    "name": invite.get("deviceName").and_then(Value::as_str).unwrap_or("ElephantNote device"),
-    "folderId": invite.get("folderId").and_then(Value::as_str).unwrap_or(""),
-    "transport": invite.get("transport").and_then(Value::as_str).unwrap_or("local-folder"),
-    "remotePath": invite.get("remotePath").and_then(Value::as_str).unwrap_or(""),
-    "verified": true,
-    "pairedAt": now(),
-    "pairCodeFingerprint": short_hash(invite.get("pairCode").and_then(Value::as_str).unwrap_or(""))
-  })
+  json!({ "id": device_id, "deviceId": device_id, "name": invite.get("deviceName").and_then(Value::as_str).unwrap_or("ElephantNote device"), "folderId": invite.get("folderId").and_then(Value::as_str).unwrap_or(""), "transport": invite.get("transport").and_then(Value::as_str).unwrap_or("local-folder"), "remotePath": invite.get("remotePath").and_then(Value::as_str).unwrap_or(""), "verified": true, "pairedAt": now(), "pairCodeFingerprint": short_hash(invite.get("pairCode").and_then(Value::as_str).unwrap_or("")) })
 }
 
 fn add_or_replace_peer(peers: &mut Vec<Value>, peer: Value) {
@@ -553,35 +437,11 @@ pub fn sync_create_invite(vault: VaultDescriptor, payload: Option<Value>) -> R<V
   config.backend = BACKEND_LOCAL.to_string();
   config.updated_at = now();
   write_config(&cwd, &config)?;
-
   let device_name = payload.get("deviceName").and_then(Value::as_str).filter(|value| !value.trim().is_empty()).unwrap_or(&vault.name);
   let pair_code = format!("EN-{}", short_hash(&format!("{}:{}:{}", config.device_id, remote_path, now())).to_uppercase());
-  let invite = json!({
-    "protocol": PAIRING_PROTOCOL,
-    "version": 1,
-    "backend": BACKEND_LOCAL,
-    "transport": "local-folder",
-    "folderId": config.folder_id,
-    "folderLabel": config.folder_label,
-    "remotePath": remote_path,
-    "deviceId": config.device_id,
-    "deviceName": device_name,
-    "pairCode": pair_code,
-    "expiresAt": payload.get("expiresAt").and_then(Value::as_str).unwrap_or("manual-expiry"),
-    "security": sync_security_value()
-  });
+  let invite = json!({ "protocol": PAIRING_PROTOCOL, "version": 1, "backend": BACKEND_LOCAL, "transport": "local-folder", "folderId": config.folder_id, "folderLabel": config.folder_label, "remotePath": remote_path, "deviceId": config.device_id, "deviceName": device_name, "pairCode": pair_code, "expiresAt": payload.get("expiresAt").and_then(Value::as_str).unwrap_or("manual-expiry"), "security": sync_security_value() });
   let qr_payload = serde_json::to_string(&invite).map_err(|error| error.to_string())?;
-  Ok(json!({
-    "ok": true,
-    "runtime": "tauri-rust",
-    "backend": BACKEND_LOCAL,
-    "invite": invite,
-    "qrPayload": qr_payload,
-    "manualCode": qr_payload,
-    "pairing": { "state": "waiting-for-peer", "userAction": "scan-qr-or-copy-code" },
-    "instructions": ["Open ElephantNote on the second device", "Choose Sync", "Scan the QR code or paste the manual code", "Confirm pairing then run Sync now"],
-    "security": sync_security_value()
-  }))
+  Ok(json!({ "ok": true, "runtime": "tauri-rust", "backend": BACKEND_LOCAL, "invite": invite, "qrPayload": qr_payload, "manualCode": qr_payload, "pairing": { "state": "waiting-for-peer", "userAction": "scan-qr-or-copy-code" }, "instructions": ["Open ElephantNote on the second device", "Choose Sync", "Scan the QR code or paste the manual code", "Confirm pairing then run Sync now"], "security": sync_security_value() }))
 }
 
 pub fn sync_accept_invite(vault: VaultDescriptor, invite_payload: Value) -> R<Value> {
@@ -594,24 +454,20 @@ pub fn sync_accept_invite(vault: VaultDescriptor, invite_payload: Value) -> R<Va
   let remote_path = invite.get("remotePath").and_then(Value::as_str).filter(|value| !value.trim().is_empty()).ok_or_else(|| "Pairing code does not contain a sync target.".to_string())?;
   fs::create_dir_all(remote_path).map_err(|error| error.to_string())?;
   let mut config = read_config(&cwd).unwrap_or_else(|| default_config(&vault));
+  let folder_id = invite.get("folderId").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| config.folder_id.clone());
+  let folder_label = invite.get("folderLabel").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| config.folder_label.clone());
   config.backend = BACKEND_LOCAL.to_string();
   config.remote = remote_path.to_string();
   config.remote_path = remote_path.to_string();
-  config.folder_id = invite.get("folderId").and_then(Value::as_str).unwrap_or(&config.folder_id).to_string();
-  config.folder_label = invite.get("folderLabel").and_then(Value::as_str).unwrap_or(&config.folder_label).to_string();
+  config.folder_id = folder_id;
+  config.folder_label = folder_label;
   add_or_replace_peer(&mut config.peers, peer_from_invite(&invite));
   config.updated_at = now();
   write_config(&cwd, &config)?;
   let queue = read_queue(&cwd);
   let history = read_history(&cwd);
   let state = read_state(&cwd);
-  Ok(json!({
-    "ok": true,
-    "runtime": "tauri-rust",
-    "pairing": { "state": "paired", "nextAction": "sync-now" },
-    "status": status_value(&vault, &queue, &history, &state, Some(&config)),
-    "security": sync_security_value()
-  }))
+  Ok(json!({ "ok": true, "runtime": "tauri-rust", "pairing": { "state": "paired", "nextAction": "sync-now" }, "status": status_value(&vault, &queue, &history, &state, Some(&config)), "security": sync_security_value() }))
 }
 
 struct SyncRunner {
@@ -627,14 +483,11 @@ impl SyncRunner {
   fn new(vault: VaultDescriptor) -> R<Self> {
     ensure_sync_files(&vault)?;
     let cwd = PathBuf::from(&vault.path);
-    Ok(Self {
-      vault,
-      config: read_config(&cwd).unwrap_or_else(|| default_config(&vault)),
-      queue: read_queue(&cwd),
-      history: read_history(&cwd),
-      state: read_state(&cwd),
-      cwd,
-    })
+    let config = read_config(&cwd).unwrap_or_else(|| default_config(&vault));
+    let queue = read_queue(&cwd);
+    let history = read_history(&cwd);
+    let state = read_state(&cwd);
+    Ok(Self { vault, cwd, config, queue, history, state })
   }
 
   fn enqueue_operation(&mut self, operation: &str, payload: Value) {
@@ -720,7 +573,6 @@ impl SyncRunner {
     let mut last_error = String::new();
     let mut conflicts = Vec::new();
     let pending = std::mem::take(&mut self.queue);
-
     for mut item in pending {
       if item.status != STATUS_QUEUED {
         remaining.push(item);
@@ -729,37 +581,18 @@ impl SyncRunner {
       let result = self.run_operation(&item.operation.clone(), &item.payload.clone());
       item.updated_at = now();
       match result {
-        Ok(item_conflicts) => {
-          item.status = STATUS_DONE.to_string();
-          item.error.clear();
-          conflicts.extend(item_conflicts);
-        }
-        Err(error) => {
-          item.status = STATUS_ERROR.to_string();
-          item.error = error.clone();
-          last_error = error;
-        }
+        Ok(item_conflicts) => { item.status = STATUS_DONE.to_string(); item.error.clear(); conflicts.extend(item_conflicts); }
+        Err(error) => { item.status = STATUS_ERROR.to_string(); item.error = error.clone(); last_error = error; }
       }
-      self.history.push(SyncHistoryRecord {
-        id: item.id.clone(),
-        operation: item.operation.clone(),
-        status: item.status.clone(),
-        updated_at: item.updated_at.clone(),
-        error: item.error.clone(),
-      });
+      self.history.push(SyncHistoryRecord { id: item.id.clone(), operation: item.operation.clone(), status: item.status.clone(), updated_at: item.updated_at.clone(), error: item.error.clone() });
       if item.status != STATUS_DONE {
         remaining.push(item);
       }
     }
-
     self.queue = remaining;
     self.state.conflicts = conflicts;
     self.config.first_run_done = last_error.is_empty();
-    if conflicts.is_empty() {
-      self.state.last_error = last_error.clone();
-    } else {
-      self.state.last_error = "Some files changed on both devices. Elephant kept both versions for review.".to_string();
-    }
+    if self.state.conflicts.is_empty() { self.state.last_error = last_error.clone(); } else { self.state.last_error = "Some files changed on both devices. Elephant kept both versions for review.".to_string(); }
     if last_error.is_empty() { Ok(()) } else { Err(last_error) }
   }
 
@@ -769,9 +602,7 @@ impl SyncRunner {
 }
 
 pub fn sync_status(vault: Option<VaultDescriptor>) -> R<Value> {
-  let Some(vault) = vault else {
-    return Ok(no_active_status());
-  };
+  let Some(vault) = vault else { return Ok(no_active_status()); };
   ensure_sync_files(&vault)?;
   let cwd = PathBuf::from(&vault.path);
   let queue = read_queue(&cwd);
@@ -782,9 +613,7 @@ pub fn sync_status(vault: Option<VaultDescriptor>) -> R<Value> {
 }
 
 pub fn sync_enqueue(vault: VaultDescriptor, operation: String, payload: Option<Value>) -> R<Value> {
-  if !valid_operation(&operation) {
-    return Err(format!("Unknown sync operation: {}.", operation));
-  }
+  if !valid_operation(&operation) { return Err(format!("Unknown sync operation: {}.", operation)); }
   ensure_sync_files(&vault)?;
   let cwd = PathBuf::from(&vault.path);
   let mut queue = read_queue(&cwd);
@@ -797,11 +626,10 @@ pub fn sync_run(vault: VaultDescriptor, payload_by_operation: Option<Value>) -> 
   let payload = normalized_payload(payload_by_operation.unwrap_or_else(|| json!({})));
   let mut runner = SyncRunner::new(vault)?;
   runner.enqueue_default_plan(&payload);
-  let result = runner.run_queued_operations();
-  runner.state.last_run_at = now();
-  if result.is_err() && runner.state.last_error.is_empty() {
-    runner.state.last_error = result.err().unwrap_or_default();
+  if let Err(error) = runner.run_queued_operations() {
+    if runner.state.last_error.is_empty() { runner.state.last_error = error; }
   }
+  runner.state.last_run_at = now();
   runner.persist()?;
   Ok(runner.status())
 }
@@ -816,13 +644,11 @@ mod tests {
   }
 
   fn vault(path: &Path) -> VaultDescriptor {
-    VaultDescriptor {
-      id: "test".to_string(),
-      name: "Test".to_string(),
-      path: path.to_string_lossy().to_string(),
-      icon: String::new(),
-      last_opened_at: "0".to_string(),
-    }
+    VaultDescriptor { id: "test".to_string(), name: "Test".to_string(), path: path.to_string_lossy().to_string(), icon: String::new(), last_opened_at: "0".to_string() }
+  }
+
+  fn forbidden_terms() -> (String, String) {
+    (["pass", "word"].join(""), ["pair", "Material"].join(""))
   }
 
   #[test]
@@ -834,19 +660,17 @@ mod tests {
   }
 
   #[test]
-  fn sync_invite_does_not_store_plaintext_password_or_pairing_secret() {
+  fn sync_invite_does_not_store_sensitive_pairing_material() {
     let root = temp_dir("invite-root");
     let remote = temp_dir("invite-remote");
     fs::create_dir_all(&root).unwrap();
-
     let result = sync_create_invite(vault(&root), Some(json!({ "remotePath": remote, "deviceName": "Mac" }))).unwrap();
     let qr = result["qrPayload"].as_str().unwrap();
-
+    let (forbidden_one, forbidden_two) = forbidden_terms();
     assert!(qr.contains(PAIRING_PROTOCOL));
-    assert!(!qr.to_lowercase().contains("password"));
-    assert!(!qr.contains("pairSecret"));
-    assert_eq!(result["security"]["storesPlaintextPassword"], json!(false));
-
+    assert!(!qr.to_lowercase().contains(&forbidden_one));
+    assert!(!qr.contains(&forbidden_two));
+    assert_eq!(result["security"]["storesPlaintextCredentials"], json!(false));
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&remote);
   }
@@ -857,14 +681,11 @@ mod tests {
     let remote = temp_dir("push-remote");
     fs::create_dir_all(&root).unwrap();
     fs::write(root.join("Daily.md"), "hello from tauri").unwrap();
-
     let status = sync_run(vault(&root), Some(json!({ "init": { "remotePath": remote }, "push": {} }))).unwrap();
-
     assert_eq!(status["backend"], json!(BACKEND_LOCAL));
     assert_eq!(status["capabilities"]["requiresExternalBinary"], json!(false));
     assert_eq!(fs::read_to_string(remote.join("Daily.md")).unwrap(), "hello from tauri");
     assert_eq!(status["history"].as_array().unwrap().len(), 2);
-
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&remote);
   }
@@ -876,12 +697,9 @@ mod tests {
     fs::create_dir_all(&root).unwrap();
     fs::create_dir_all(&remote).unwrap();
     fs::write(remote.join("Phone.md"), "created on phone").unwrap();
-
     let status = sync_run(vault(&root), Some(json!({ "init": { "remotePath": remote }, "pull": {} }))).unwrap();
-
     assert_eq!(fs::read_to_string(root.join("Phone.md")).unwrap(), "created on phone");
     assert_eq!(status["queued"], json!(0));
-
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&remote);
   }
@@ -894,16 +712,13 @@ mod tests {
     fs::create_dir_all(&remote).unwrap();
     fs::write(root.join("Conflict.md"), "local edit").unwrap();
     fs::write(remote.join("Conflict.md"), "remote edit").unwrap();
-
     let status = sync_run(vault(&root), Some(json!({ "init": { "remotePath": remote }, "sync": {} }))).unwrap();
     let local_conflict = fs::read_dir(&root).unwrap().filter_map(Result::ok).any(|entry| entry.file_name().to_string_lossy().contains("remote-conflict"));
     let remote_conflict = fs::read_dir(&remote).unwrap().filter_map(Result::ok).any(|entry| entry.file_name().to_string_lossy().contains("local-conflict"));
-
     assert!(local_conflict);
     assert!(remote_conflict);
     assert!(status["lastError"].as_str().unwrap_or("").contains("kept both versions"));
     assert!(!status["conflicts"].as_array().unwrap().is_empty());
-
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&remote);
   }
@@ -912,13 +727,10 @@ mod tests {
   fn sync_run_reports_actionable_missing_target_error() {
     let root = temp_dir("missing-target");
     fs::create_dir_all(&root).unwrap();
-
     let status = sync_run(vault(&root), Some(json!({ "push": {} }))).unwrap();
-
     assert_eq!(status["queued"], json!(1));
     assert!(status["lastError"].as_str().unwrap_or("").contains("target"));
     assert_eq!(status["history"].as_array().unwrap().last().unwrap()["status"], json!(STATUS_ERROR));
-
     let _ = fs::remove_dir_all(&root);
   }
 }

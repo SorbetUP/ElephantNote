@@ -134,6 +134,7 @@ const mountRendererApp = (runtime, windowType) => {
   })
 
   const app = createApp(Main)
+  installRendererDiagnostics(app)
   app.use(pinia)
   app.use(router)
   app.use(ElementPlus, { locale: en })

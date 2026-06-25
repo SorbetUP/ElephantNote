@@ -3,6 +3,7 @@
   "productName": "Elephant",
   "version": "0.18.9",
   "description": "ElephantNote",
+  "license": "MIT",
   "main": "./out/main/index.js",
   "author": {
     "name": "Jocs",

@@ -24,6 +24,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      path: resolve(__dirname, 'src/renderer/src/platform/nodePathShim.js'),
+      'node:path': resolve(__dirname, 'src/renderer/src/platform/nodePathShim.js'),
       '@electron/remote': resolve(__dirname, 'src/renderer/src/platform/electronRemoteShim.js'),
       'electron-log/renderer': resolve(__dirname, 'src/renderer/src/platform/electronLogShim.js'),
       'electron-log': resolve(__dirname, 'src/renderer/src/platform/electronLogShim.js'),

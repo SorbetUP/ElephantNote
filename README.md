@@ -1,4 +1,20 @@
-# ElephantNote
+<p align="center">
+  <img src="static/logo-small.png" alt="ElephantNote logo" width="96" height="96">
+</p>
+
+<h1 align="center">ElephantNote</h1>
+
+<p align="center">
+  <strong>Local-first Markdown notes, knowledge search, graph navigation, sync, and optional AI assistance.</strong>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-orange" alt="License: PolyForm Noncommercial 1.0.0"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows%20%7C%20Android-lightgrey" alt="Platforms">
+  <img src="https://img.shields.io/badge/runtime-Electron%20%7C%20Tauri-blue" alt="Runtime: Electron and Tauri">
+</p>
+
+## Overview
 
 ElephantNote is a local-first Markdown notes application. It is designed for personal knowledge bases that need fast editing, file-based storage, search, graph navigation, sync, and optional local AI workflows.
 

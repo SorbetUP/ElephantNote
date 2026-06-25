@@ -110,6 +110,12 @@ import {
   resolveLocalImageSource,
   toMarkdownImageSource
 } from '../../../../shared/imageSource.js'
+import {
+  ELEPHANTNOTE_ASSETS_DIR,
+  getVaultAssetRelativePath,
+  isHiddenAssetPath,
+  sanitizeAssetName
+} from '../../../../shared/excalidrawAssets.js'
 
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
@@ -127,7 +133,19 @@ const LARGE_EDIT_AUTOSAVE_DELAY_MS = 60
 const HUGE_EDIT_AUTOSAVE_DELAY_MS = 20
 const LARGE_EDIT_BYTES = 8 * 1024
 const HUGE_EDIT_BYTES = 64 * 1024
+const LOCAL_ASSET_EXTENSION_RE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico|excalidraw)(?:[?#].*)?$/i
+const MARKDOWN_IMAGE_RE = /(!\[[^\]]*\]\()([^)]*)(\))/g
 const isAutosaveDebugEnabled = () => window.localStorage.getItem('elephantnote:debugAutosave') === 'true'
+const pushEditorLog = (level, message, details = {}) => {
+  const entry = { at: new Date().toISOString(), level, message, details }
+  window.__ELEPHANT_DEBUG_LOGS__ = Array.isArray(window.__ELEPHANT_DEBUG_LOGS__) ? window.__ELEPHANT_DEBUG_LOGS__ : []
+  window.__ELEPHANT_DEBUG_LOGS__.push(entry)
+  if (window.__ELEPHANT_DEBUG_LOGS__.length > 1000) {
+    window.__ELEPHANT_DEBUG_LOGS__.splice(0, window.__ELEPHANT_DEBUG_LOGS__.length - 1000)
+  }
+  const logger = console[level] || console.log
+  logger.call(console, message, details)
+}
 const estimateEditDelta = (previousMarkdown = '', nextMarkdown = '') => {
   if (typeof nextMarkdown !== 'string') return 0
   if (typeof previousMarkdown !== 'string') return nextMarkdown.length
@@ -141,6 +159,7 @@ const autosaveDelayFor = (_value, requestedDelay = AUTOSAVE_DELAY_MS, editDelta 
   return requestedDelay
 }
 const logAutosave = (level, message, details) => {
+  pushEditorLog(level, message, details)
   if (!isAutosaveDebugEnabled()) return
   console[level]?.(message, details)
 }
@@ -243,6 +262,9 @@ const currentNoteDirectory = computed(() => {
   }
   return ''
 })
+const vaultAssetsDirectory = computed(() => store.activeVault?.path
+  ? window.path.join(store.activeVault.path, ELEPHANTNOTE_ASSETS_DIR)
+  : '')
 
 const applyNoteMetadata = (entry, pathname, metadata = {}) => {
   if (!entry || entry.path !== pathname) return entry
@@ -300,37 +322,152 @@ const refreshSavedEntries = async(notePath, result) => {
       store.entries = await elephantnoteClient.directory.list({ relativePath: store.currentPath, limit: 121, includePreview: true })
     }
   } catch (error) {
-    console.warn('[elephantnote:save] unable to refresh entries after save', error)
+    pushEditorLog('warn', '[elephantnote:save] unable to refresh entries after save', { error: error?.message || String(error) })
   }
+}
+
+const pathExists = (pathname) => !!pathname && !!window.fileUtils?.pathExistsSync?.(pathname)
+const normalizeSlashPath = (pathname = '') => String(pathname || '').replace(/\\/g, '/')
+const isExternalAssetReference = (value = '') => /^(?:https?:|data:|blob:|#)/i.test(String(value || '').trim())
+const isVaultAssetAbsolutePath = (pathname = '') => {
+  const root = store.activeVault?.path
+  if (!root || !pathname) return false
+  const relative = normalizeSlashPath(window.path.relative(root, pathname))
+  return isHiddenAssetPath(relative) && relative.split('/')[0] === ELEPHANTNOTE_ASSETS_DIR
+}
+const ensureVaultAssetsDirectory = async() => {
+  if (!vaultAssetsDirectory.value) throw new Error('Cannot resolve vault .assets directory without an active vault.')
+  await window.fileUtils.ensureDir(vaultAssetsDirectory.value)
+  return vaultAssetsDirectory.value
+}
+const uniqueVaultAssetPath = async(preferredName = 'asset') => {
+  const directory = await ensureVaultAssetsDirectory()
+  const safeName = sanitizeAssetName(preferredName, 'asset')
+  const extension = window.path.extname(safeName)
+  const baseName = extension ? safeName.slice(0, -extension.length) : safeName
+  let index = 0
+  let candidate = window.path.join(directory, safeName)
+  while (pathExists(candidate)) {
+    index += 1
+    candidate = window.path.join(directory, `${baseName}-${index}${extension}`)
+  }
+  return candidate
+}
+const assetMarkdownSource = (targetPath) => toMarkdownImageSource(targetPath, store.activeVault?.path || currentNoteDirectory.value)
+const copyLocalFile = async(sourcePath, targetPath, type = '') => {
+  await window.fileUtils.ensureDir(window.path.dirname(targetPath))
+  if (normalizeSlashPath(sourcePath) === normalizeSlashPath(targetPath)) return targetPath
+  if (typeof window.fileUtils?.copyFile === 'function') {
+    await window.fileUtils.copyFile(sourcePath, targetPath)
+    return targetPath
+  }
+  const blob = await readLocalBlob(sourcePath, type)
+  await window.fileUtils.writeFile(targetPath, blob)
+  return targetPath
+}
+const copyLocalAssetIntoVault = async(sourcePath, preferredName = '') => {
+  if (!sourcePath || isExternalAssetReference(sourcePath)) return ''
+  if (isVaultAssetAbsolutePath(sourcePath)) return sourcePath
+  if (!pathExists(sourcePath)) {
+    pushEditorLog('warn', '[elephantnote:assets] source missing, cannot copy to .assets', { sourcePath })
+    return ''
+  }
+  const targetPath = await uniqueVaultAssetPath(preferredName || window.path.basename(sourcePath))
+  await copyLocalFile(sourcePath, targetPath)
+  pushEditorLog('info', '[elephantnote:assets] copied asset into hidden vault .assets', { sourcePath, targetPath })
+  const sourceScenePath = getExcalidrawScenePath(sourcePath)
+  if (sourceScenePath && sourceScenePath !== sourcePath && pathExists(sourceScenePath)) {
+    const targetScenePath = getExcalidrawScenePath(targetPath)
+    await copyLocalFile(sourceScenePath, targetScenePath, 'application/vnd.excalidraw+json')
+    pushEditorLog('info', '[elephantnote:assets] copied excalidraw sidecar into hidden vault .assets', { sourceScenePath, targetScenePath })
+  }
+  return targetPath
+}
+const parseMarkdownDestination = (raw = '') => {
+  const value = String(raw || '').trim()
+  if (!value) return { source: '', suffix: '' }
+  if (value.startsWith('<')) {
+    const end = value.indexOf('>')
+    if (end > 0) return { source: value.slice(1, end), suffix: value.slice(end + 1) }
+  }
+  const match = value.match(/^(\S+)(.*)$/)
+  return { source: match?.[1] || value, suffix: match?.[2] || '' }
+}
+const rewriteMarkdownAssetReferences = async(markdownText, notePath) => {
+  if (!store.activeVault?.path || typeof markdownText !== 'string' || !markdownText.includes('](')) return markdownText
+  const replacements = []
+  for (const match of markdownText.matchAll(MARKDOWN_IMAGE_RE)) {
+    const rawDestination = match[2]
+    const { source, suffix } = parseMarkdownDestination(rawDestination)
+    if (!source || isExternalAssetReference(source) || isHiddenAssetPath(source) || !LOCAL_ASSET_EXTENSION_RE.test(source)) continue
+    const sourcePath = resolveLocalImageSource(source, currentNoteDirectory.value)
+    if (!sourcePath || isVaultAssetAbsolutePath(sourcePath)) continue
+    const targetPath = await copyLocalAssetIntoVault(sourcePath, window.path.basename(sourcePath))
+    if (!targetPath) continue
+    replacements.push({
+      start: match.index + match[1].length,
+      end: match.index + match[1].length + rawDestination.length,
+      replacement: `${assetMarkdownSource(targetPath)}${suffix}`,
+      source,
+      targetPath
+    })
+  }
+  if (!replacements.length) return markdownText
+  let next = markdownText
+  for (const replacement of replacements.reverse()) {
+    next = `${next.slice(0, replacement.start)}${replacement.replacement}${next.slice(replacement.end)}`
+  }
+  pushEditorLog('info', '[elephantnote:assets] rewrote markdown asset references to .assets', { notePath, count: replacements.length })
+  return next
+}
+const syncAssetRewrittenMarkdown = (file, rewrittenMarkdown) => {
+  if (!file || typeof rewrittenMarkdown !== 'string') return
+  if (file.markdown !== rewrittenMarkdown) {
+    file.markdown = rewrittenMarkdown
+    file.isSaved = false
+  }
+  if (currentFile.value?.id === file.id && currentFile.value.markdown !== rewrittenMarkdown) {
+    currentFile.value.markdown = rewrittenMarkdown
+    currentFile.value.isSaved = false
+  }
+  lastSeenMarkdown = rewrittenMarkdown
 }
 
 const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.value || currentFile.value, reason = 'unknown') => {
   if (!store.activeVault?.path || !notePath || typeof nextMarkdown !== 'string') return false
   if (noteSaveInFlight) {
     pendingSaveAfterFlight = { notePath, nextMarkdown, file, reason }
+    pushEditorLog('info', '[elephantnote:save] write queued while another save is in flight', { notePath, reason })
     return false
   }
   noteSaveInFlight = true
   logAutosave('info', '[elephantnote:save] write:start', { notePath, length: nextMarkdown.length, reason })
+  let markdownToWrite = nextMarkdown
+  try {
+    markdownToWrite = await rewriteMarkdownAssetReferences(nextMarkdown, notePath)
+    if (markdownToWrite !== nextMarkdown) syncAssetRewrittenMarkdown(file, markdownToWrite)
+  } catch (assetError) {
+    pushEditorLog('error', '[elephantnote:assets] markdown asset relocation failed before save', { notePath, error: assetError?.message || String(assetError) })
+  }
   try {
     const result = await elephantnoteClient.notes.write({
       relativePath: notePath,
-      markdown: nextMarkdown
+      markdown: markdownToWrite
     })
     await refreshSavedEntries(notePath, result)
-    markFileSavedIfCurrent(file, notePath, nextMarkdown)
-    logAutosave('info', '[elephantnote:save] write:done', { notePath, length: nextMarkdown.length, via: 'notes.write' })
+    markFileSavedIfCurrent(file, notePath, markdownToWrite)
+    logAutosave('info', '[elephantnote:save] write:done', { notePath, length: markdownToWrite.length, via: 'notes.write' })
     return true
   } catch (apiError) {
-    console.warn('[elephantnote:save] notes.write failed; trying direct file write', { notePath, error: apiError?.message || String(apiError) })
+    pushEditorLog('warn', '[elephantnote:save] notes.write failed; trying direct file write', { notePath, error: apiError?.message || String(apiError) })
     try {
-      await window.fileUtils.writeFile(window.path.join(store.activeVault.path, notePath), nextMarkdown)
+      await window.fileUtils.writeFile(window.path.join(store.activeVault.path, notePath), markdownToWrite)
       await refreshSavedEntries(notePath, null)
-      markFileSavedIfCurrent(file, notePath, nextMarkdown)
-      logAutosave('info', '[elephantnote:save] write:done', { notePath, length: nextMarkdown.length, via: 'fileUtils.writeFile' })
+      markFileSavedIfCurrent(file, notePath, markdownToWrite)
+      logAutosave('info', '[elephantnote:save] write:done', { notePath, length: markdownToWrite.length, via: 'fileUtils.writeFile' })
       return true
     } catch (fileError) {
-      console.error('[elephantnote:save] write:failed', { notePath, apiError, fileError })
+      pushEditorLog('error', '[elephantnote:save] write:failed', { notePath, apiError: apiError?.message || String(apiError), fileError: fileError?.message || String(fileError) })
       if (file?.id) {
         window.electron?.ipcRenderer?.send?.('mt::tab-save-failure', file.id, fileError?.message || apiError?.message || 'Unable to save note.')
       }
@@ -361,6 +498,7 @@ const scheduleNoteSave = (notePath, nextMarkdown, file = activeNoteFile.value ||
 const rememberObservedMarkdown = (notePath, nextMarkdown, file, reason = 'observe') => {
   lastSeenNotePath = notePath
   lastSeenMarkdown = nextMarkdown
+  pushEditorLog('info', '[elephantnote:save] observed active markdown', { notePath, length: nextMarkdown.length, reason, isSaved: file?.isSaved })
   if (file?.isSaved === false) {
     scheduleNoteSave(notePath, nextMarkdown, file, 0, `${reason}:first-unsaved`)
     return
@@ -394,6 +532,7 @@ const flushActiveNoteSave = async(reason = 'flush') => {
   const nextMarkdown = file?.markdown
   if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return false
   if (lastSavedNotePath === notePath && lastSavedMarkdown === nextMarkdown) return true
+  pushEditorLog('info', '[elephantnote:save] flush active note', { notePath, reason, length: nextMarkdown.length })
   return persistNoteMarkdown(notePath, nextMarkdown, file, reason)
 }
 
@@ -446,6 +585,7 @@ const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {
     }
     lastSeenNotePath = notePath
     lastSeenMarkdown = nextMarkdown
+    pushEditorLog('info', '[elephantnote:editor] markdown updated from UI action', { notePath, length: nextMarkdown.length, metadata })
     scheduleNoteSave(notePath, nextMarkdown, file, 0, 'toolbar-edit', estimateEditDelta(previousMarkdown, nextMarkdown))
   }
 }
@@ -515,11 +655,16 @@ const readLocalBlob = async(pathname, type = '') => {
   return new Blob([content], type ? { type } : undefined)
 }
 
+const targetAssetName = (fileName = '') => sanitizeAssetName(fileName || `excalidraw-${Date.now()}.png`, `excalidraw-${Date.now()}.png`)
+const targetAssetPath = async(fileName = '') => {
+  await ensureVaultAssetsDirectory()
+  return window.path.join(store.activeVault.path, getVaultAssetRelativePath(targetAssetName(fileName)))
+}
 const openExcalidraw = async({ markdown, fileName, title, saveMode, insertOnSave }) => {
-  const baseDir = currentNoteDirectory.value
-  const targetName = fileName || `drawing-${Date.now()}.png`
-  const targetPath = window.path.join(baseDir, targetName)
+  const targetName = targetAssetName(fileName || `excalidraw-${Date.now()}.png`)
+  const targetPath = await targetAssetPath(targetName)
   const scenePath = getExcalidrawScenePath(targetPath)
+  pushEditorLog('info', '[elephantnote:excalidraw] open dialog with .assets target', { targetPath, scenePath, insertOnSave })
   excalidrawTitle.value = title || 'Excalidraw'
   excalidrawFileName.value = targetName
   excalidrawSaveMode.value = saveMode || 'png'
@@ -535,13 +680,17 @@ const openExcalidrawFromImage = async(src) => {
     const baseDir = currentNoteDirectory.value
     const imagePath = resolveLocalImageSource(src, baseDir)
     if (!imagePath) return
-    const previewPath = window.path.extname(imagePath).toLowerCase() === '.excalidraw'
+    const rawPreviewPath = window.path.extname(imagePath).toLowerCase() === '.excalidraw'
       ? getExcalidrawPreviewPath(imagePath)
       : imagePath
+    const previewPath = isVaultAssetAbsolutePath(rawPreviewPath)
+      ? rawPreviewPath
+      : await copyLocalAssetIntoVault(rawPreviewPath, window.path.basename(rawPreviewPath))
+    if (!previewPath) return
     const scenePath = getExcalidrawScenePath(previewPath)
-    const initialBlob = window.fileUtils?.pathExistsSync?.(scenePath)
+    const initialBlob = pathExists(scenePath)
       ? await readLocalBlob(scenePath, 'application/vnd.excalidraw+json')
-      : window.fileUtils?.pathExistsSync?.(previewPath)
+      : pathExists(previewPath)
         ? await readLocalBlob(previewPath)
         : null
 
@@ -554,26 +703,25 @@ const openExcalidrawFromImage = async(src) => {
     })
     excalidrawTargetPath.value = previewPath
     excalidrawScenePath.value = scenePath
+    pushEditorLog('info', '[elephantnote:excalidraw] opened image-backed drawing from .assets', { source: src, previewPath, scenePath })
   } catch (error) {
-    console.error('[elephantnote:excalidraw] failed to open image-backed drawing', error)
+    pushEditorLog('error', '[elephantnote:excalidraw] failed to open image-backed drawing', { error: error?.message || String(error) })
   }
 }
 
 const closeExcalidraw = () => {
+  pushEditorLog('info', '[elephantnote:excalidraw] close dialog', { targetPath: excalidrawTargetPath.value })
   isExcalidrawOpen.value = false
   excalidrawInitialBlob.value = null
 }
 const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {
   const writableImage = imageBlob || blob
   if (!writableImage) {
-    console.error('[elephantnote:excalidraw] save failed: missing image payload')
+    pushEditorLog('error', '[elephantnote:excalidraw] save failed: missing image payload')
     return
   }
-  const resolvedName = fileName || excalidrawFileName.value
-  const targetDirectory = excalidrawTargetPath.value
-    ? window.path.dirname(excalidrawTargetPath.value)
-    : currentNoteDirectory.value
-  const targetPath = window.path.join(targetDirectory, resolvedName)
+  const resolvedName = targetAssetName(fileName || excalidrawFileName.value)
+  const targetPath = await targetAssetPath(resolvedName)
   const scenePath = getExcalidrawScenePath(targetPath)
   await window.fileUtils.ensureDir(window.path.dirname(targetPath))
   await window.fileUtils.writeFile(targetPath, writableImage)
@@ -581,8 +729,9 @@ const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {
   excalidrawFileName.value = resolvedName
   excalidrawTargetPath.value = targetPath
   excalidrawScenePath.value = scenePath
+  pushEditorLog('info', '[elephantnote:excalidraw] saved drawing into hidden .assets', { targetPath, scenePath, hasScene: !!sceneBlob })
   if (excalidrawInsertOnSave.value) {
-    const source = toMarkdownImageSource(targetPath, currentNoteDirectory.value)
+    const source = assetMarkdownSource(targetPath)
     const imageMarkdown = `![${resolvedName}](${source})`
     const nextMarkdown = [markdown.value.trimEnd(), imageMarkdown].filter(Boolean).join('\n\n')
     updateCurrentFileMarkdown(nextMarkdown)
@@ -591,12 +740,14 @@ const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {
 }
 
 onMounted(() => {
+  pushEditorLog('info', '[elephantnote:editor] mounted', { notePath: currentNoteRelativePath.value, vault: store.activeVault?.path })
   bus.on('ELEPHANT::open-excalidraw', openExcalidraw)
   bus.on('open-excalidraw-from-image', openExcalidrawFromImage)
   pollActiveMarkdownSave('mount')
   noteSaveInterval = window.setInterval(() => pollActiveMarkdownSave('interval'), AUTOSAVE_POLL_MS)
 })
 onBeforeUnmount(() => {
+  pushEditorLog('info', '[elephantnote:editor] before unmount', { notePath: currentNoteRelativePath.value })
   bus.off('ELEPHANT::open-excalidraw', openExcalidraw)
   bus.off('open-excalidraw-from-image', openExcalidrawFromImage)
   if (noteSaveInterval) {

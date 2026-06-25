@@ -1,4 +1,7 @@
 const normalizePath = (value = '') => String(value || '').replace(/\\/g, '/')
+const MARKDOWN_EXTENSION_RE = /\.md$/i
+
+const isMarkdownPath = (value = '') => MARKDOWN_EXTENSION_RE.test(normalizePath(value))
 
 const getSaveTarget = (target, record = {}) => {
   if (record.pathname) return record.pathname
@@ -37,6 +40,13 @@ const writeRecord = async(target, ipc, record = {}, reason = 'save') => {
   if (!pathname) {
     const message = 'Cannot save this note because no path was provided.'
     console.error('[tauri:marktext-save] write:failed', { reason, id, message })
+    ipc.send('mt::tab-save-failure', id, message)
+    return false
+  }
+
+  if (!isMarkdownPath(pathname)) {
+    const message = `Refusing to save markdown content into a non-markdown file: ${normalizePath(pathname)}`
+    console.error('[tauri:marktext-save] write:blocked-non-markdown', { reason, id, pathname: normalizePath(pathname) })
     ipc.send('mt::tab-save-failure', id, message)
     return false
   }

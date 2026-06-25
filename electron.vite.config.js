@@ -10,18 +10,16 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const electronLogShim = resolve(__dirname, 'src/renderer/src/platform/electronLogShim.js')
-const isNativeRuntimeExternal = (id = '') => (
-  id === 'native-keymap' ||
-  id.includes('native-keymap') ||
-  id.includes('keymapping') ||
-  id === 'node-llama-cpp' ||
-  id.includes('node-llama-cpp') ||
-  id.startsWith('@node-llama-cpp/')
-)
+const isNativeRuntimeExternal = (id = '', importer = '') => {
+  const target = `${id} ${importer || ''}`
+  return target.includes('native-keymap') ||
+    target.includes('keymapping') ||
+    target.includes('node-llama-cpp')
+}
 const nativeRuntimeExternalPlugin = {
   name: 'native-runtime-external',
-  resolveId(source = '') {
-    if (!isNativeRuntimeExternal(source)) return null
+  resolveId(source = '', importer = '') {
+    if (!isNativeRuntimeExternal(source, importer)) return null
     return { id: source, external: true }
   }
 }

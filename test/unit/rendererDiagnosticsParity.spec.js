@@ -5,9 +5,10 @@ import { getDiagnosticLogs, installRendererDiagnostics, pushDiagnosticLog, showD
 
 describe('renderer diagnostics parity', () => {
   beforeEach(() => {
-    const dom = new JSDOM('<body></body>')
+    const dom = new JSDOM('<body></body>', { url: 'http://localhost/' })
     globalThis.window = dom.window
     globalThis.document = dom.window.document
+    globalThis.localStorage = dom.window.localStorage
   })
 
   it('stores logs in a bounded renderer-visible buffer', () => {

@@ -274,6 +274,14 @@ const emit = defineEmits(['open-settings', 'search', 'toggle-sidebar'])
 const store = useVaultStore()
 const addonsStore = useAddonsStore()
 const WIKI_ROOT = '.elephantnote/wiki'
+const WIKI_PAGE_LIMIT = 121
+
+const wikiDirectoryPayload = (relativePath) => ({
+  relativePath,
+  offset: 0,
+  limit: WIKI_PAGE_LIMIT,
+  includePreview: true
+})
 
 const featureFlags = ref({ askAi: true })
 const editingVaultId = ref('')
@@ -368,7 +376,7 @@ const openWikiRoot = async () => {
   }
 
   try {
-    const entries = await elephantnoteClient.directory.list(WIKI_ROOT)
+    const entries = await elephantnoteClient.directory.list(wikiDirectoryPayload(WIKI_ROOT))
     if (!shouldApplyWikiRootResult(vaultId)) return
     store.entries = Array.isArray(entries) ? entries : []
   } catch {

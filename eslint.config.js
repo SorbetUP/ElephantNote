@@ -48,6 +48,7 @@ export default [
       '**/test-results/**',
       '**/playwright-report/**',
       '**/*.min.json',
+      'package.json',
       'out/**',
       'blinko-offline/**',
       'src/muya/lib/assets/libs/**',

@@ -5,6 +5,7 @@ import {
   SYNC_STATUSES,
   createSyncHistoryRecord,
   createSyncQueueItem,
+  createUnknownSyncOperationError,
   mergeSyncPeers
 } from 'common/elephantnote/sync'
 
@@ -13,9 +14,10 @@ const CONFIG_DIR = '.elephantnote'
 const CONFIG_FILE = 'sync-config.json'
 const HISTORY_FILE = 'sync-log.json'
 const MANIFEST_FILE = 'sync-manifest.json'
+const RCLONE_FILTER_FILE = 'rclone-filter.txt'
 const RUN_OPERATIONS = ['snapshot', 'pull', 'push', 'sync']
 const PLAN_OPERATIONS = ['init', ...RUN_OPERATIONS]
-const MISSING_REMOTE_MESSAGE = 'Sync target is not configured. Choose a local LAN, Docker, or shared-folder target before syncing.'
+const MISSING_REMOTE_MESSAGE = 'Sync remote is not configured. Choose a local LAN, Docker, or shared-folder target before syncing.'
 const IGNORED_NAMES = new Set(['.git', '.elephantnote', 'node_modules', '.DS_Store'])
 
 const hasOwnPayload = (payloadByOperation = {}, operation) => (
@@ -136,8 +138,9 @@ const createManifest = async(root) => {
 }
 
 export class RcloneVaultEngine {
-  constructor({ cwd = '' } = {}) {
+  constructor({ cwd = '', rclone = null } = {}) {
     this.cwd = cwd
+    this.rclone = rclone
     this.queue = []
     this.history = []
     this.running = false
@@ -148,6 +151,10 @@ export class RcloneVaultEngine {
     this.peers = []
     this.lastConfigLoadedFor = ''
     this.lastConflicts = []
+  }
+
+  get legacyRcloneMode() {
+    return Boolean(this.rclone)
   }
 
   setCwd(cwd) {
@@ -177,6 +184,10 @@ export class RcloneVaultEngine {
     return path.join(this.syncDir(), MANIFEST_FILE)
   }
 
+  filterPath() {
+    return path.join(this.syncDir(), RCLONE_FILTER_FILE)
+  }
+
   historyPath() {
     return path.join(this.syncDir(), HISTORY_FILE)
   }
@@ -188,7 +199,15 @@ export class RcloneVaultEngine {
   async ensureSupportFiles() {
     if (!this.cwd) return {}
     await fs.ensureDir(this.syncDir())
-    return { manifestFile: this.manifestPath() }
+    if (this.legacyRcloneMode) {
+      await fs.writeFile(this.filterPath(), [
+        '- .git/**',
+        '- .elephantnote/**',
+        '- node_modules/**',
+        '- .DS_Store'
+      ].join('\n'))
+    }
+    return { manifestFile: this.manifestPath(), filterFile: this.filterPath() }
   }
 
   applyConfig(config = {}) {
@@ -213,7 +232,7 @@ export class RcloneVaultEngine {
     await fs.ensureDir(path.dirname(target))
     await fs.writeJson(target, {
       version: 3,
-      backend: SYNC_BACKENDS.ELEPHANT_LOCAL,
+      backend: this.legacyRcloneMode ? SYNC_BACKENDS.RCLONE : SYNC_BACKENDS.ELEPHANT_LOCAL,
       remotePath: this.remotePath,
       firstRunDone: this.firstRunDone,
       peers: this.peers,
@@ -237,7 +256,7 @@ export class RcloneVaultEngine {
   }
 
   enqueue(operation) {
-    const item = createSyncQueueItem(operation)
+    const item = createSyncQueueItem(operation, new Date(), { strict: false })
     const duplicate = this.queue.find((entry) =>
       entry.status === SYNC_STATUSES.QUEUED &&
       entry.operation === item.operation &&
@@ -262,9 +281,11 @@ export class RcloneVaultEngine {
   }
 
   status() {
+    const backend = this.legacyRcloneMode ? SYNC_BACKENDS.RCLONE : SYNC_BACKENDS.ELEPHANT_LOCAL
+    const rcloneStatus = this.rclone?.status?.() || { configured: false, lastError: '' }
     return {
-      runtime: 'elephant-local',
-      backend: SYNC_BACKENDS.ELEPHANT_LOCAL,
+      runtime: backend,
+      backend,
       cwd: this.cwd,
       running: this.running,
       configured: this.configured(),
@@ -278,15 +299,20 @@ export class RcloneVaultEngine {
       lastError: this.lastError,
       conflicts: this.lastConflicts.slice(-20),
       capabilities: {
-        embeddedBackend: true,
-        requiresExternalBinary: false,
+        embeddedBackend: !this.legacyRcloneMode,
+        requiresExternalBinary: this.legacyRcloneMode,
         requiresCloudAccount: false,
         encryptionRequired: true,
-        desktopRclone: false,
+        desktopRclone: this.legacyRcloneMode,
         mobileRcloneBinary: false,
-        mobileSyncRequiresBackend: false
+        mobileSyncRequiresBackend: this.legacyRcloneMode
       },
-      rclone: { installed: false, running: false, lastError: '' }
+      rclone: {
+        ...rcloneStatus,
+        installed: this.legacyRcloneMode,
+        running: this.running,
+        lastError: rcloneStatus.lastError || ''
+      }
     }
   }
 
@@ -314,7 +340,7 @@ export class RcloneVaultEngine {
       this.lastRunAt = nowIso()
       return this.status()
     } catch (error) {
-      this.lastError = error?.message || 'Elephant local sync failed.'
+      this.lastError = error?.message || 'Elephant sync failed.'
       throw error
     } finally {
       this.running = false
@@ -384,7 +410,8 @@ export class RcloneVaultEngine {
         await this.persistConfig()
       } else if (RUN_OPERATIONS.includes(item.operation)) {
         if (item.payload.remotePath || item.payload.remote) this.remotePath = String(item.payload.remotePath || item.payload.remote).trim()
-        if (item.operation === 'snapshot') await this.snapshot()
+        if (this.legacyRcloneMode) await this.rcloneBisync(item.payload)
+        else if (item.operation === 'snapshot') await this.snapshot()
         else {
           if (!this.remotePath) {
             this.lastError = MISSING_REMOTE_MESSAGE
@@ -393,7 +420,7 @@ export class RcloneVaultEngine {
           await this.sync(item.operation, item.payload)
         }
       } else {
-        throw new Error(`Unknown sync operation: ${item.operation}.`)
+        throw createUnknownSyncOperationError(item.operation)
       }
       await this.recordQueueItem(item, SYNC_STATUSES.DONE)
       return item
@@ -411,7 +438,30 @@ export class RcloneVaultEngine {
     return this.status()
   }
 
-  async sync(operation = 'sync', { remotePath = this.remotePath, remote = '' } = {}) {
+  async rcloneBisync(payload = {}) {
+    if (!this.cwd) throw new Error('Elephant rclone sync requires an active vault path.')
+    if (payload.remotePath || payload.remote) this.remotePath = String(payload.remotePath || payload.remote).trim()
+    if (!this.remotePath) {
+      this.lastError = MISSING_REMOTE_MESSAGE
+      return this.status()
+    }
+    await this.ensureSupportFiles()
+    const args = ['bisync', this.cwd, this.remotePath, '--filters-file', this.filterPath()]
+    if (!this.firstRunDone) args.push('--resync')
+    await this.rclone.run(args, { cwd: this.cwd })
+    this.firstRunDone = true
+    this.lastError = ''
+    await this.persistConfig()
+    return this.status()
+  }
+
+  async sync(operation = 'sync', payload = {}) {
+    if (typeof operation === 'object' && operation !== null) {
+      payload = operation
+      operation = 'sync'
+    }
+    if (this.legacyRcloneMode) return this.rcloneBisync(payload)
+    const { remotePath = this.remotePath, remote = '' } = payload || {}
     this.remotePath = String(remotePath || remote || this.remotePath || '').trim()
     if (!this.cwd) throw new Error('Elephant local sync requires an active vault path.')
     if (!this.remotePath) {

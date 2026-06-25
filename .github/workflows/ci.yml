@@ -49,7 +49,10 @@ jobs:
         run: pnpm tauri:platform:check
 
       - name: Lint
-        run: pnpm lint
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm lint 2>&1 | tee eslint-output.txt
 
       - name: ElephantNote contract tests
         run: pnpm exec vitest run test/unit/specs/main/elephantnote
@@ -76,6 +79,7 @@ jobs:
             docs/parity/generated/
             docs/parity/index.md
             security-guardrails-report.json
+            eslint-output.txt
           if-no-files-found: ignore
           retention-days: 14
 

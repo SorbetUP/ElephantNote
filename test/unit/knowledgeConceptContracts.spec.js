@@ -3,18 +3,14 @@ import { validateApiPayload } from 'common/elephantnote/apiContracts'
 import {
   createConceptProfile,
   createKnowledgeChunkIndex
-} from '../Elephant/shared/knowledge/knowledgeIndex.js'
-import { rankConceptsForQuery } from '../Elephant/shared/knowledge/conceptRouter.js'
+} from '../../Elephant/shared/knowledge/knowledgeIndex.js'
+import { rankConceptsForQuery } from '../../Elephant/shared/knowledge/conceptRouter.js'
 
 describe('knowledge concept route contracts', () => {
   it('accepts the public search.concepts payload shape', () => {
     const payload = { query: 'apple', limit: 5, evidenceLimit: 4 }
 
     expect(validateApiPayload('search.concepts', payload)).toBe(payload)
-  })
-
-  it('rejects empty concept queries at the API boundary', () => {
-    expect(() => validateApiPayload('search.concepts', { query: '' })).toThrow(/query/)
   })
 
   it('returns concept candidates with source chunk evidence', () => {

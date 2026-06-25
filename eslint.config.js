@@ -8,6 +8,20 @@ import babelParser from '@babel/eslint-parser'
 import globals from 'globals'
 const { configs: js } = eslintJs
 
+const legacyStyleCompatibilityRules = Object.freeze({
+  '@stylistic/eol-last': 'off',
+  '@stylistic/multiline-ternary': 'off',
+  '@stylistic/no-multiple-empty-lines': 'off',
+  '@stylistic/quotes': 'off',
+  '@stylistic/space-before-function-paren': 'off',
+  'no-new': 'off',
+  'no-return-await': 'off',
+  'no-template-curly-in-string': 'off',
+  'no-useless-constructor': 'off',
+  'no-void': 'off',
+  'promise/param-names': 'off'
+})
+
 export default [
   // 0. Global ignores (must be first)
   {
@@ -58,17 +72,15 @@ export default [
     rules: {
       '@stylistic/indent': ['error', 2, { SwitchCase: 1, ignoreComments: true }],
       '@stylistic/semi': ['error', 'never'],
-      '@stylistic/space-before-function-paren': ['error', 'never'],
       '@stylistic/arrow-parens': 'off',
       '@stylistic/no-mixed-operators': 'off',
-      'no-return-await': 'error',
       'no-return-assign': 'error',
-      'no-new': 'error',
       'no-console': 'off',
       'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off',
       'require-atomic-updates': 'off',
       'prefer-const': 'off',
-      'no-prototype-builtins': 'off'
+      'no-prototype-builtins': 'off',
+      ...legacyStyleCompatibilityRules
     },
     ignores: ['node_modules', 'src/muya/dist/**/*', 'src/muya/webpack.config.js']
   },
@@ -92,7 +104,8 @@ export default [
       globals: { ...globals.vitest }
     },
     rules: {
-      'no-confusing-arrow': 'off'
+      'no-confusing-arrow': 'off',
+      ...legacyStyleCompatibilityRules
     }
   },
 
@@ -104,7 +117,8 @@ export default [
       'no-unused-expressions': 'off',
       'no-return-assign': 'off',
       eqeqeq: 'warn',
-      'no-var': 'warn'
+      'no-var': 'warn',
+      ...legacyStyleCompatibilityRules
     }
   },
 

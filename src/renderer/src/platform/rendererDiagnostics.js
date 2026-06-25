@@ -1,6 +1,9 @@
-const MAX_LOGS = 200
+const MAX_LOGS = 1000
 
 const DIAGNOSTIC_VERBOSE_STORAGE_KEY = 'elephantnote:diagnostics:verbose'
+
+let consoleForwardingInstalled = false
+let forwardingConsole = false
 
 export const isDiagnosticVerbose = () => {
   const target = globalThis.window || globalThis
@@ -25,6 +28,23 @@ const normalizeDetails = (details) => {
   return details
 }
 
+const safeJson = (value) => {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+const normalizeConsoleArgs = (args = []) => {
+  const [first, ...rest] = args
+  const message = typeof first === 'string' ? first : safeJson(normalizeDetails(first))
+  const details = rest.length === 0
+    ? null
+    : rest.map((item) => normalizeDetails(item))
+  return { message, details }
+}
+
 const forwardToTauriTerminal = (entry) => {
   const invoke = globalThis.window?.__TAURI__?.core?.invoke
   if (!invoke) return
@@ -35,6 +55,32 @@ const forwardToTauriTerminal = (entry) => {
       details: entry.details || null
     }).catch(() => {})
   } catch {}
+}
+
+const installConsoleForwarding = () => {
+  const targetConsole = globalThis.console
+  if (consoleForwardingInstalled || !targetConsole) return
+  consoleForwardingInstalled = true
+  for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
+    const original = targetConsole[level]?.bind(targetConsole)
+    if (typeof original !== 'function') continue
+    targetConsole[level] = (...args) => {
+      original(...args)
+      if (forwardingConsole) return
+      forwardingConsole = true
+      try {
+        const normalized = normalizeConsoleArgs(args)
+        forwardToTauriTerminal({
+          time: new Date().toISOString(),
+          level: level === 'log' ? 'info' : level,
+          message: normalized.message,
+          details: normalized.details
+        })
+      } finally {
+        forwardingConsole = false
+      }
+    }
+  }
 }
 
 export const pushDiagnosticLog = (level, message, details = null) => {
@@ -81,6 +127,7 @@ export const showDiagnosticOverlay = (title, error) => {
 }
 
 export const installRendererDiagnostics = (app = null) => {
+  installConsoleForwarding()
   pushDiagnosticLog('info', 'renderer diagnostics installed')
 
   globalThis.window?.addEventListener?.('error', (event) => {

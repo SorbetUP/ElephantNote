@@ -18,6 +18,17 @@ const isNativeRuntimeExternal = (id = '') => (
   id.includes('node-llama-cpp') ||
   id.startsWith('@node-llama-cpp/')
 )
+const nativeRuntimeExternalPlugin = {
+  name: 'native-runtime-external',
+  resolveId(source = '') {
+    if (!isNativeRuntimeExternal(source)) return null
+    return { id: source, external: true }
+  }
+}
+const nativeRuntimeRollupOptions = {
+  external: isNativeRuntimeExternal,
+  plugins: [nativeRuntimeExternalPlugin]
+}
 
 export default defineConfig({
   main: {
@@ -30,9 +41,7 @@ export default defineConfig({
         exclude: ['electron-store'],
         include: ['native-keymap', 'node-llama-cpp']
       },
-      rollupOptions: {
-        external: isNativeRuntimeExternal
-      }
+      rollupOptions: nativeRuntimeRollupOptions
     },
     define: {
       MARKTEXT_VERSION: JSON.stringify(packageJson.version),
@@ -57,9 +66,7 @@ export default defineConfig({
   preload: {
     // --> Bundled as CommonJS
     build: {
-      rollupOptions: {
-        external: isNativeRuntimeExternal
-      }
+      rollupOptions: nativeRuntimeRollupOptions
     },
     resolve: {
       alias: {

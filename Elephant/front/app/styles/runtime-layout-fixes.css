@@ -10,6 +10,59 @@
   margin-left: 180px;
 }
 
+.en-topstrip:not(.en-topstrip-sidebar-hidden) .en-topstrip-drag {
+  margin-left: 0 !important;
+}
+
+.en-ai-settings .en-ai-top-actions {
+  display: none !important;
+}
+
+.en-app-logo,
+.en-app-logo img,
+.en-topstrip-logo,
+.en-topstrip-logo img,
+.en-titlebar-logo,
+.en-titlebar-logo img,
+.en-window-logo,
+.en-window-logo img,
+.en-brand-logo,
+.en-brand-logo img,
+.en-sidebar-logo,
+.en-sidebar-logo img {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.en-app-logo::before,
+.en-app-logo::after,
+.en-topstrip-logo::before,
+.en-topstrip-logo::after,
+.en-titlebar-logo::before,
+.en-titlebar-logo::after,
+.en-window-logo::before,
+.en-window-logo::after,
+.en-brand-logo::before,
+.en-brand-logo::after,
+.en-sidebar-logo::before,
+.en-sidebar-logo::after {
+  display: none !important;
+}
+
+.en-app-shell,
+.en-workspace-shell,
+.en-workspace-main,
+.en-main-shell,
+.en-main-content,
+.en-library-shell,
+.en-library-main,
+.en-library-content,
+.en-settings-content {
+  min-width: 0 !important;
+}
+
 .en-graph-premium,
 .en-graph-stage,
 .en-sigma-canvas,

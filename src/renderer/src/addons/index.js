@@ -1,10 +1,10 @@
 import { inject } from 'vue'
-import { ElephantAddonManager } from './AddonManager'
+import { ElephantAddonManager } from './AddonManagerWithState'
 import { builtinAddons } from './builtin'
 import { useAddonsStore } from '@/store/addons'
 export { ADDON_EXTENSION_POINTS } from './extensionPoints'
 export { ADDON_API_VERSION, ADDON_STATUS, normalizeAddonManifest } from './manifest'
-export { ElephantAddonManager } from './AddonManager'
+export { ElephantAddonManager } from './AddonManagerWithState'
 export {
   getAddonActions,
   getAddonContributions,

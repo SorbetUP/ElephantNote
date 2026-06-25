@@ -12,6 +12,7 @@ import {
   searchAtomicSemanticIndex
 } from 'common/elephantnote/atomicAiEngine'
 import { createKnowledgeChunkIndex } from 'common/elephantnote/knowledge/knowledgeIndex'
+import { buildAutomaticOrganizationPlan } from 'common/elephantnote/knowledge/organizationPlanner'
 import { createSemanticGraph } from './graphLibrary'
 
 const normalizeVaultRoot = (vaultRoot) => path.resolve(vaultRoot || '')
@@ -459,6 +460,7 @@ export const createSearchLibrary = ({ embeddingProvider = null } = {}) => {
         documents: index?.documents || [],
         semanticLinks: index?.semanticLinks || []
       })
+      const organization = buildAutomaticOrganizationPlan({ graph })
       return {
         status,
         indexPath: '',
@@ -474,12 +476,15 @@ export const createSearchLibrary = ({ embeddingProvider = null } = {}) => {
         folders: graph.nodes.filter((node) => node.kind === 'folder'),
         semanticLinks: index?.semanticLinks || [],
         graph,
+        organization,
         features: {
           embeddings: true,
           embeddingSource: index?.embeddingSource || 'deterministic-local',
           semanticLinks: true,
+          semanticClusters: graph.clusters.some((cluster) => cluster.kind === 'semantic'),
           automaticSources: true,
           autoTags: true,
+          automaticOrganization: organization.proposals.length > 0,
           chunkLevelKnowledgeIndex: Boolean(index?.knowledgeChunkIndex)
         },
         generatedAt: index?.generatedAt || new Date().toISOString()

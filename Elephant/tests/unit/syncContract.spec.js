@@ -10,7 +10,9 @@ import {
   createSyncHistoryRecord,
   createSyncQueueItem,
   createSyncStatus,
-  normalizeSyncOperation
+  mergeSyncPeers,
+  normalizeSyncOperation,
+  normalizeSyncPeer
 } from 'common/elephantnote/sync'
 
 describe('ElephantNote sync contract', () => {
@@ -44,6 +46,48 @@ describe('ElephantNote sync contract', () => {
     expect(() => createSyncQueueItem({ operation: 'missing' })).toThrow('Unknown sync operation')
   })
 
+  it('normalizes sync peers for portable device pairing state', () => {
+    const peer = normalizeSyncPeer({
+      deviceId: ' phone-1 ',
+      deviceName: 'Phone',
+      peerAddress: ' tcp://192.168.1.40:22000 ',
+      vaultIds: ['vault-a', '', 'vault-a'],
+      online: true,
+      pairedAt: '2026-06-14T00:00:00.000Z'
+    }, new Date('2026-06-14T00:05:00.000Z'))
+
+    expect(peer).toMatchObject({
+      id: 'phone-1',
+      deviceId: 'phone-1',
+      name: 'Phone',
+      address: 'tcp://192.168.1.40:22000',
+      vaultIds: ['vault-a'],
+      online: true,
+      pairedAt: '2026-06-14T00:00:00.000Z',
+      lastSeenAt: '2026-06-14T00:05:00.000Z'
+    })
+  })
+
+  it('merges sync peers without duplicating re-discovered devices', () => {
+    const peers = mergeSyncPeers(
+      [{ deviceId: 'phone-1', name: 'Phone', vaultIds: ['vault-a'], pairedAt: '2026-06-14T00:00:00.000Z' }],
+      [{ id: 'phone-1', label: 'Phone LAN', peerAddress: 'dynamic', vaultIds: ['vault-b'], online: true }],
+      new Date('2026-06-14T00:10:00.000Z')
+    )
+
+    expect(peers).toHaveLength(1)
+    expect(peers[0]).toMatchObject({
+      id: 'phone-1',
+      deviceId: 'phone-1',
+      name: 'Phone LAN',
+      address: 'dynamic',
+      online: true,
+      pairedAt: '2026-06-14T00:00:00.000Z',
+      lastSeenAt: '2026-06-14T00:10:00.000Z'
+    })
+    expect(peers[0].vaultIds).toEqual(['vault-a', 'vault-b'])
+  })
+
   it('creates portable status, history and error shapes', () => {
     const item = {
       id: 'sync-1',
@@ -59,12 +103,17 @@ describe('ElephantNote sync contract', () => {
       updatedAt: '2026-06-14T00:00:00.000Z',
       error: ''
     })
-    expect(createSyncStatus({ cwd: '/vault', queue: [{ status: 'queued' }, { status: 'done' }] }))
+    expect(createSyncStatus({
+      cwd: '/vault',
+      queue: [{ status: 'queued' }, { status: 'done' }],
+      config: { peers: [{ deviceId: 'phone-1', online: true }] }
+    }))
       .toMatchObject({
         cwd: '/vault',
         backend: SYNC_BACKENDS.RCLONE,
         queued: 1,
         running: false,
+        peers: [{ deviceId: 'phone-1', online: true }],
         syncthing: {
           configured: false,
           connected: false

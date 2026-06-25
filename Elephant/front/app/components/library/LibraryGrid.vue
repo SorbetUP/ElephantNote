@@ -16,15 +16,6 @@
       @rename="renameEntry"
       @delete="deleteEntry"
     />
-    <button
-      v-if="canShowMore"
-      type="button"
-      class="en-library-load-more"
-      :disabled="loadingMoreEntries"
-      @click="loadMoreVisibleEntries"
-    >
-      {{ loadingMoreEntries ? 'Loading…' : 'Load more' }}
-    </button>
     <form
       v-if="renamingEntry"
       class="en-library-rename-form"
@@ -60,6 +51,7 @@ import { elephantnoteClient } from '../../services/elephantnoteClient'
 import NoteCard from './NoteCard.vue'
 import {
   canDropEntryOnDirectory,
+  getEntryKind,
   parseDraggedEntry
 } from '../../utils/entryDragDrop'
 
@@ -85,7 +77,6 @@ const isLegacyRootWikiEntry = (entry) => {
 
 const filteredEntries = computed(() => store.activeEntries.filter((entry) => !isLegacyRootWikiEntry(entry)))
 const visibleEntries = computed(() => filteredEntries.value.slice(0, visibleEntryLimit.value))
-const canShowMore = computed(() => visibleEntryLimit.value < filteredEntries.value.length || directoryMayHaveMore.value)
 
 const resetVisibleWindow = () => {
   visibleEntryLimit.value = RENDER_CHUNK_SIZE
@@ -199,7 +190,7 @@ const handleGridScroll = (event) => {
 }
 
 const openEntry = async (entry) => {
-  if (entry.kind === 'folder') {
+  if (getEntryKind(entry) === 'folder') {
     await openFolderInCurrentView(entry.path)
   } else {
     store.openNote(entry)
@@ -296,18 +287,6 @@ const handleRootDrop = async (event) => {
 .en-library-grid.list {
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
-}
-
-.en-library-load-more {
-  min-height: 44px;
-  border: 1px solid var(--en-border);
-  border-radius: 12px;
-  color: var(--en-muted);
-  background: color-mix(in srgb, var(--en-surface) 60%, transparent);
-}
-
-.en-library-grid.list .en-library-load-more {
-  width: 100%;
 }
 
 .en-library-rename-form {

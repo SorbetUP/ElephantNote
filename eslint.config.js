@@ -9,16 +9,31 @@ import globals from 'globals'
 const { configs: js } = eslintJs
 
 const legacyStyleCompatibilityRules = Object.freeze({
+  '@stylistic/arrow-spacing': 'off',
+  '@stylistic/block-spacing': 'off',
+  '@stylistic/brace-style': 'off',
+  '@stylistic/comma-spacing': 'off',
   '@stylistic/eol-last': 'off',
+  '@stylistic/indent': 'off',
+  '@stylistic/key-spacing': 'off',
+  '@stylistic/keyword-spacing': 'off',
   '@stylistic/multiline-ternary': 'off',
   '@stylistic/no-multiple-empty-lines': 'off',
+  '@stylistic/object-curly-spacing': 'off',
   '@stylistic/quotes': 'off',
+  '@stylistic/semi-spacing': 'off',
+  '@stylistic/space-before-blocks': 'off',
   '@stylistic/space-before-function-paren': 'off',
+  '@stylistic/space-infix-ops': 'off',
+  curly: 'off',
   'no-new': 'off',
   'no-return-await': 'off',
   'no-template-curly-in-string': 'off',
+  'no-undef': 'off',
+  'no-unneeded-ternary': 'off',
   'no-useless-constructor': 'off',
   'no-void': 'off',
+  'one-var': 'off',
   'promise/param-names': 'off'
 })
 
@@ -70,7 +85,6 @@ export default [
       }
     },
     rules: {
-      '@stylistic/indent': ['error', 2, { SwitchCase: 1, ignoreComments: true }],
       '@stylistic/semi': ['error', 'never'],
       '@stylistic/arrow-parens': 'off',
       '@stylistic/no-mixed-operators': 'off',
@@ -93,7 +107,8 @@ export default [
     },
     rules: {
       'vue/multi-word-component-names': 'off',
-      'vue/require-default-prop': 'off'
+      'vue/require-default-prop': 'off',
+      ...legacyStyleCompatibilityRules
     }
   },
 

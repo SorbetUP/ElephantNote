@@ -15,6 +15,7 @@ export default [
       '**/node_modules/**',
       '**/dist/**',
       '**/build/**',
+      '**/.build/**',
       '**/test-results/**',
       '**/playwright-report/**',
       '**/*.min.json',

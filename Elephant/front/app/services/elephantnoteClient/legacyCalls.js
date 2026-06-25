@@ -2,7 +2,7 @@ const getBridge = () => globalThis.window?.elephantnote
 const getTauriInvoke = () => globalThis.window?.__TAURI__?.core?.invoke
 const normalizePayload = (payload = {}) => (payload && typeof payload === 'object' ? payload : {})
 const directoryListPayload = (payload = '') => typeof payload === 'string'
-  ? { relativePath: payload }
+  ? payload
   : normalizePayload(payload)
 
 const callTauriSyncPlan = (payload = {}) => {

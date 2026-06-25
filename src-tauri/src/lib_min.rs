@@ -45,6 +45,16 @@ fn tauri_platform_info() -> serde_json::Value {
   })
 }
 
+#[tauri::command]
+fn tauri_sync_create_invite(app: tauri::AppHandle, payload: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+  vault::sync::sync_create_invite(vault::config::get_active_vault(&app)?, payload)
+}
+
+#[tauri::command]
+fn tauri_sync_accept_invite(app: tauri::AppHandle, invite: serde_json::Value) -> Result<serde_json::Value, String> {
+  vault::sync::sync_accept_invite(vault::config::get_active_vault(&app)?, invite)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let builder = tauri::Builder::default()
@@ -61,6 +71,8 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       healthcheck,
       tauri_platform_info,
+      tauri_sync_create_invite,
+      tauri_sync_accept_invite,
       debug_commands::tauri_debug_log,
       vault::commands::tauri_vaults_get,
       vault::commands::tauri_vaults_select_path,

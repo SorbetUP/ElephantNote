@@ -206,7 +206,7 @@ const createFolderClusters = (documentNodes = []) => {
       : 'root'
     if (!byFolder.has(folderPath)) {
       byFolder.set(folderPath, {
-        id: `folder:${folderPath}`,
+        id: folderPath,
         kind: 'folder',
         type: 'folder',
         label: folderPath === 'root' ? 'Root' : folderPath.split('/').pop() || folderPath,
@@ -257,11 +257,7 @@ export const createSemanticGraph = ({
 
   const semanticClusters = createSemanticClusters({ documentNodes, edges })
   const folderClusters = createFolderClusters(documentNodes)
-  const semanticCoveredPaths = new Set(semanticClusters.flatMap((cluster) => cluster.paths))
-  const fallbackFolderClusters = folderClusters.filter((cluster) =>
-    cluster.paths.some((path) => !semanticCoveredPaths.has(path)) || !semanticClusters.length
-  )
-  const clusters = [...semanticClusters, ...fallbackFolderClusters]
+  const clusters = [...semanticClusters, ...folderClusters]
 
   return {
     nodes,

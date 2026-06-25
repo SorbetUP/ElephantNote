@@ -45,6 +45,10 @@ const createVault = (id = 'vault-1') => ({
   path: `/tmp/${id}`
 })
 
+const expectLastDirectoryPath = (relativePath) => {
+  expect(listDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ relativePath }))
+}
+
 describe('Wiki folder request races', () => {
   beforeEach(() => {
     listDirectory.mockReset()
@@ -95,7 +99,7 @@ describe('Wiki folder request races', () => {
     container.querySelector('.en-note-card')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await nextTick()
 
-    expect(listDirectory).toHaveBeenLastCalledWith('.elephantnote/wiki/Cluster')
+    expectLastDirectoryPath('.elephantnote/wiki/Cluster')
     expect(store.currentPath).toBe('.elephantnote/wiki/Cluster')
     expect(store.entries).toEqual([])
 

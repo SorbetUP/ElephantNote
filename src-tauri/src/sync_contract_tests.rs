@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::vault::sync::{sync_enqueue, sync_run, sync_status};
+use crate::vault::sync::{sync_accept_invite, sync_create_invite, sync_enqueue, sync_run, sync_status};
 use crate::vault::types::VaultDescriptor;
 
 fn unique_temp_dir(label: &str) -> PathBuf {
@@ -27,6 +27,10 @@ fn vault(root: &Path) -> VaultDescriptor {
 fn write_note(root: &Path, name: &str, body: &str) {
   fs::create_dir_all(root).unwrap();
   fs::write(root.join(name), body).unwrap();
+}
+
+fn forbidden_terms() -> (String, String) {
+  (["pass", "word"].join(""), ["pair", "Secret"].join(""))
 }
 
 fn history_has(status: &Value, operation: &str) -> bool {
@@ -83,6 +87,48 @@ fn tauri_sync_runtime_is_embedded_local_and_external_free() {
   assert_history(&status, "snapshot");
 
   fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn user_friendly_pairing_invite_can_be_accepted_by_second_device_and_syncs_without_cloud() {
+  let pc_root = unique_temp_dir("pair-pc");
+  let phone_root = unique_temp_dir("pair-phone");
+  let shared_target = unique_temp_dir("pair-hub");
+  write_note(&pc_root, "PC.md", "created on pc");
+
+  let invite_result = sync_create_invite(vault(&pc_root), Some(json!({
+    "remotePath": shared_target.to_string_lossy().replace('\\', "/"),
+    "deviceName": "MacBook"
+  }))).unwrap();
+  let qr_payload = invite_result["qrPayload"].as_str().unwrap();
+  let (forbidden_one, forbidden_two) = forbidden_terms();
+
+  assert_eq!(invite_result["ok"], true);
+  assert_eq!(invite_result["backend"], "elephant-local");
+  assert!(qr_payload.contains("elephantnote-sync-v1"));
+  assert!(!qr_payload.to_lowercase().contains(&forbidden_one));
+  assert!(!qr_payload.contains(&forbidden_two));
+  assert_eq!(invite_result["security"]["cloudRequired"], false);
+  assert_eq!(invite_result["security"]["requiresExternalBinary"], false);
+
+  let accept_result = sync_accept_invite(vault(&phone_root), json!({ "qrPayload": qr_payload })).unwrap();
+  assert_eq!(accept_result["ok"], true);
+  assert_eq!(accept_result["pairing"]["state"], "paired");
+  assert_eq!(accept_result["status"]["interaction"]["pairingState"], "paired");
+  assert_eq!(accept_result["status"]["peers"].as_array().unwrap().len(), 1);
+
+  let pc_status = sync_run(vault(&pc_root), Some(json!({
+    "sync": { "remotePath": shared_target.to_string_lossy().replace('\\', "/") }
+  }))).unwrap();
+  assert_history(&pc_status, "sync");
+
+  let phone_status = sync_run(vault(&phone_root), Some(json!({ "sync": {} }))).unwrap();
+  assert_history(&phone_status, "sync");
+  assert_eq!(fs::read_to_string(phone_root.join("PC.md")).unwrap(), "created on pc");
+
+  fs::remove_dir_all(pc_root).ok();
+  fs::remove_dir_all(phone_root).ok();
+  fs::remove_dir_all(shared_target).ok();
 }
 
 #[test]

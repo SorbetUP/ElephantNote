@@ -17,6 +17,7 @@
     @dragover="handleDragOver"
     @dragleave="handleDragLeave"
     @drop="handleDrop"
+    @contextmenu.stop.prevent="openContextMenu"
     @click="$emit('open', entry)"
   >
     <div class="en-card-actions">
@@ -24,8 +25,8 @@
         class="en-card-pin-button"
         type="button"
         :class="{ visible: isPinned || isHovering }"
-        :title="isPinned ? 'Unpin note' : 'Pin note'"
-        :aria-label="isPinned ? 'Unpin note' : 'Pin note'"
+        :title="isPinned ? 'Unpin entry' : 'Pin entry'"
+        :aria-label="isPinned ? 'Unpin entry' : 'Pin entry'"
         @click.stop.prevent="togglePin"
       >
         <Pin
@@ -35,8 +36,8 @@
       <button
         class="en-card-menu"
         type="button"
-        title="Delete note"
-        aria-label="Delete note"
+        :title="isFolder ? 'Folder actions' : 'Note actions'"
+        :aria-label="isFolder ? 'Folder actions' : 'Note actions'"
         @click.stop.prevent="toggleMenu"
       >
         <MoreHorizontal class="en-icon" />
@@ -47,6 +48,12 @@
       class="en-card-popover"
       @click.stop
     >
+      <button
+        type="button"
+        @click="renameEntry"
+      >
+        Rename
+      </button>
       <button
         type="button"
         class="danger"
@@ -132,6 +139,10 @@ const toggleMenu = () => {
   isMenuOpen.value = !isMenuOpen.value
 }
 
+const openContextMenu = () => {
+  isMenuOpen.value = true
+}
+
 const closeMenu = (event) => {
   if (!isMenuOpen.value) return
   if (event?.target?.closest?.('.en-note-card')) return
@@ -188,6 +199,7 @@ const handleDrop = async (event) => {
   const canDrop = canDropEntryOnDirectory(draggedEntry, props.entry.path)
   isDropTarget.value = false
   isDropDisabled.value = false
+  console.info('[library:dnd] folder drop', { draggedEntry, target: props.entry.path, canDrop })
   if (!canDrop) return
   await store.moveEntry(draggedEntry, props.entry.path)
 }
@@ -314,6 +326,10 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
+.en-card-popover button.danger {
+  color: var(--en-danger, #ef4444);
+}
+
 .en-note-card h3 {
   min-width: 0;
   max-width: calc(100% - 42px);
@@ -338,59 +354,5 @@ onBeforeUnmount(() => {
   height: 26px;
   flex: 0 0 auto;
   margin-top: 4px;
-  color: var(--en-primary);
-}
-
-.en-note-card p {
-  margin: 22px 0 0;
-  color: color-mix(in srgb, var(--en-text) 90%, transparent);
-  font-size: 16px;
-  line-height: 1.42;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  overflow: visible;
-}
-
-.en-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.en-tags span {
-  color: var(--en-primary);
-  font-size: 13px;
-}
-
-.en-note-card footer {
-  margin-top: auto;
-  padding-top: 22px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--en-muted);
-  font-size: 15px;
-  font-weight: 700;
-  min-width: 0;
-}
-
-.en-note-card footer span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.en-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: var(--en-primary);
-}
-
-.en-icon {
-  width: 20px;
-  height: 20px;
 }
 </style>

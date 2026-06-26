@@ -1,5 +1,3 @@
-import bus from '@/bus'
-
 const SLASH_LOG_PREFIX = '[slash-menu]'
 
 const describeElement = (element) => {
@@ -25,13 +23,13 @@ const findSlashMenuContainer = (target) => {
 const findSlashMenuItem = (target) => {
   const container = findSlashMenuContainer(target)
   if (!container || !target?.closest) return null
-  const item = target.closest('.item, [role="menuitem"], button, li, .sub-title, a')
+  const item = target.closest('.item, [role="menuitem"], .sub-title, a, button, li')
   return item && container.contains(item) ? item : null
 }
 
-const findSlashMenuTarget = (target) => {
-  if (!target?.closest) return null
-  return target.closest('.ag-quick-insert, .ag-front-menu, [role="menuitem"], button, li')
+const isEditorOrMenuTarget = (target) => {
+  if (!target?.closest) return false
+  return Boolean(target.closest('.editor-component, .ag-editor, .ag-content, .ag-paragraph, .ag-quick-insert, .ag-front-menu'))
 }
 
 const activeEditorSnapshot = () => {
@@ -59,23 +57,14 @@ const isExcalidrawMenuChoice = (item, rawTarget) => {
     itemLabel === 'elephant-command excalidraw'
 }
 
-const openExcalidrawFromSlashMenu = () => {
-  const fileName = `excalidraw-${Date.now()}.png`
-  bus.emit('ELEPHANT::open-excalidraw', {
-    fileName,
-    title: 'Excalidraw',
-    saveMode: 'png',
-    insertOnSave: true
-  })
-}
-
 export const installSlashMenuDiagnostics = (target = globalThis) => {
   if (!target?.document || target.__ELEPHANT_SLASH_MENU_DIAGNOSTICS__) return false
   target.__ELEPHANT_SLASH_MENU_DIAGNOSTICS__ = true
 
   const keydown = (event) => {
     if (event.key !== '/' && event.key !== 'Enter' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-    const slashLike = event.key === '/' || Boolean(document.querySelector('.ag-quick-insert, .ag-front-menu'))
+    const hasMenu = Boolean(document.querySelector('.ag-quick-insert, .ag-front-menu'))
+    const slashLike = (event.key === '/' && isEditorOrMenuTarget(event.target)) || hasMenu
     if (!slashLike) return
     console.info(`${SLASH_LOG_PREFIX} keydown`, {
       key: event.key,
@@ -101,18 +90,17 @@ export const installSlashMenuDiagnostics = (target = globalThis) => {
 
   const handleSlashMenuClick = (event) => {
     const menuItem = findSlashMenuItem(event.target)
-    const menuContainer = findSlashMenuContainer(event.target)
-    if (!menuItem || !menuContainer || !isExcalidrawMenuChoice(menuItem, event.target)) return
+    if (!menuItem || !isExcalidrawMenuChoice(menuItem, event.target)) return
     console.info(`${SLASH_LOG_PREFIX} excalidraw-command`, {
       item: describeElement(menuItem),
       rawTarget: describeElement(event.target),
+      source: 'quick-insert-native-command',
       ...activeEditorSnapshot()
     })
-    window.setTimeout(openExcalidrawFromSlashMenu, 0)
   }
 
   const pointer = (event) => {
-    const menuTarget = findSlashMenuTarget(event.target)
+    const menuTarget = findSlashMenuContainer(event.target)
     if (!menuTarget) return
     console.info(`${SLASH_LOG_PREFIX} ${event.type}`, {
       target: describeElement(menuTarget),

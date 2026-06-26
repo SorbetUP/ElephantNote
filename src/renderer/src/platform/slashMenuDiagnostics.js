@@ -15,6 +15,17 @@ const describeElement = (element) => {
   }
 }
 
+const findSlashMenuContainer = (target) => {
+  if (!target?.closest) return null
+  return target.closest('.ag-quick-insert, .ag-front-menu, [class*="quick"], [class*="front"]')
+}
+
+const findSlashMenuItem = (target) => {
+  const container = findSlashMenuContainer(target)
+  if (!container || !target?.closest) return null
+  return target.closest('.item, [role="menuitem"], button, li, .sub-title')
+}
+
 const findSlashMenuTarget = (target) => {
   if (!target?.closest) return null
   return target.closest([
@@ -56,6 +67,19 @@ export const installSlashMenuDiagnostics = (target = globalThis) => {
     })
   }
 
+  const preserveSelectionBeforeMenuClick = (event) => {
+    const menuItem = findSlashMenuItem(event.target)
+    if (!menuItem) return
+    event.preventDefault()
+    console.info(`${SLASH_LOG_PREFIX} preserve-selection`, {
+      eventType: event.type,
+      item: describeElement(menuItem),
+      rawTarget: describeElement(event.target),
+      defaultPrevented: event.defaultPrevented,
+      ...activeEditorSnapshot()
+    })
+  }
+
   const pointer = (event) => {
     const menuTarget = findSlashMenuTarget(event.target)
     if (!menuTarget) return
@@ -84,6 +108,8 @@ export const installSlashMenuDiagnostics = (target = globalThis) => {
   })
 
   document.addEventListener('keydown', keydown, true)
+  document.addEventListener('pointerdown', preserveSelectionBeforeMenuClick, true)
+  document.addEventListener('mousedown', preserveSelectionBeforeMenuClick, true)
   document.addEventListener('pointerdown', pointer, true)
   document.addEventListener('click', pointer, true)
   mutationObserver.observe(document.documentElement, { childList: true, subtree: true })

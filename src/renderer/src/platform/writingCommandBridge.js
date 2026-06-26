@@ -1,8 +1,18 @@
 import bus from '@/bus'
 
 const COMMAND_LOG_PREFIX = '[writing-command]'
+const DUPLICATE_COMMAND_WINDOW_MS = 350
+
+let lastCommand = { name: '', at: 0 }
 
 const normalizeCommand = (command = '') => String(command || '').trim().toLowerCase()
+
+const shouldSkipDuplicateCommand = (command) => {
+  const now = Date.now()
+  const duplicate = lastCommand.name === command && now - lastCommand.at < DUPLICATE_COMMAND_WINDOW_MS
+  lastCommand = { name: command, at: now }
+  return duplicate
+}
 
 const openExcalidraw = () => {
   bus.emit('ELEPHANT::open-excalidraw', {
@@ -15,6 +25,12 @@ const openExcalidraw = () => {
 
 const runWritingCommand = (command) => {
   const normalized = normalizeCommand(command)
+  if (!normalized) return false
+  if (shouldSkipDuplicateCommand(normalized)) {
+    console.info(`${COMMAND_LOG_PREFIX} duplicate ignored`, { command: normalized })
+    return true
+  }
+  console.info(`${COMMAND_LOG_PREFIX} run`, { command: normalized })
   switch (normalized) {
     case 'heading-2':
       bus.emit('paragraph', 'heading 2')

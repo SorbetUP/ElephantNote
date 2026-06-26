@@ -1,6 +1,6 @@
-export const DASHBOARD_NOTE_DIRECTORY = ''
+export const DASHBOARD_NOTE_DIRECTORY = '.dashboard'
 export const DASHBOARD_NOTE_FILENAME = 'Dashboard.md'
-export const DASHBOARD_NOTE_RELATIVE_PATH = DASHBOARD_NOTE_FILENAME
+export const DASHBOARD_NOTE_RELATIVE_PATH = `${DASHBOARD_NOTE_DIRECTORY}/${DASHBOARD_NOTE_FILENAME}`
 
 export const buildDashboardNoteCreatePayload = () => ({
   relativePath: DASHBOARD_NOTE_DIRECTORY,

@@ -195,15 +195,18 @@ const openedNoteAbsolutePath = computed(() => {
   if (!store.activeVault?.path || !store.openedNotePath) return ''
   return window.path.join(store.activeVault.path, store.openedNotePath)
 })
+const findTabByPath = (pathname) => editorStore.tabs.find((tab) => (
+  tab?.pathname && window.fileUtils.isSamePathSync(tab.pathname, pathname)
+)) || null
 const getActiveNoteFile = () => {
   const pathname = openedNoteAbsolutePath.value
   if (!pathname) return currentFile.value
+  const tab = findTabByPath(pathname)
+  if (tab) return tab
   if (currentFile.value?.pathname && window.fileUtils.isSamePathSync(currentFile.value.pathname, pathname)) {
     return currentFile.value
   }
-  return editorStore.tabs.find((tab) => (
-    tab?.pathname && window.fileUtils.isSamePathSync(tab.pathname, pathname)
-  )) || null
+  return null
 }
 const activeNoteFile = computed(() => getActiveNoteFile() || (openedNoteAbsolutePath.value ? null : currentFile.value))
 const markdown = computed(() => activeNoteFile.value?.markdown || '')
@@ -255,7 +258,7 @@ const isPinned = computed(() => {
   return !!pathname && store.pinnedNotePaths.includes(pathname)
 })
 const currentNoteDirectory = computed(() => {
-  const pathname = currentFile.value?.pathname || openedNoteAbsolutePath.value
+  const pathname = activeNoteFile.value?.pathname || currentFile.value?.pathname || openedNoteAbsolutePath.value
   if (pathname) return window.path.dirname(pathname)
   if (store.activeVault?.path) {
     return window.path.join(store.activeVault.path, store.currentPath || '')
@@ -757,30 +760,3 @@ onBeforeUnmount(() => {
   void flushActiveNoteSave('unmount')
 })
 </script>
-
-<style scoped>
-.en-editor-layer {
-  height: 100%;
-  display: flex;
-  flex: 1;
-  min-width: 0;
-}
-.en-editor-panel {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  background: var(--editorBgColor);
-  color: var(--editorColor);
-}
-.en-note-editor-shell {
-  min-height: 0;
-  overflow: hidden;
-  padding: 0 var(--en-note-editor-gutter-right) 0 var(--en-note-editor-gutter-left);
-}
-.en-editor-host {
-  height: 100%;
-  min-width: 0;
-}
-</style>

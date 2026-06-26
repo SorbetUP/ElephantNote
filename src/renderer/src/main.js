@@ -10,6 +10,7 @@ import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBrid
 import { installPiProviderBridge } from './platform/piProviderInterface'
 import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'
 import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
+import { installSlashMenuDiagnostics } from './platform/slashMenuDiagnostics'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
 import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
@@ -207,6 +208,7 @@ installTauriSearchConceptFallback()
 installPiProviderBridge()
 installTauriMarkTextSaveBridge()
 installTauriLocalIpcBridge()
+installSlashMenuDiagnostics()
 void autostartLlamaRuntime()
 
 const bootstrapTauriRuntime = async() => {

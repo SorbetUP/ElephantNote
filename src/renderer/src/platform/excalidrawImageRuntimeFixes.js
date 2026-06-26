@@ -1,4 +1,5 @@
 import bus from '@/bus'
+import { convertFileSrc } from '@tauri-apps/api/core'
 
 const LOCAL_FILE_PREFIX = 'local-file://'
 const EXCALIDRAW_ASSET_RE = /(?:^|\/)\.assets\/excalidraw-[^/?#]+\.png(?:[?#].*)?$/i
@@ -20,7 +21,22 @@ const decodeSafe = (value = '') => {
 const localSourceToPath = (value = '') => {
   const text = stripQueryAndHash(value)
   if (text.startsWith(LOCAL_FILE_PREFIX)) return decodeSafe(text.slice(LOCAL_FILE_PREFIX.length))
+  if (/^file:/i.test(text)) {
+    try {
+      return decodeSafe(new URL(text).pathname)
+    } catch {
+      return decodeSafe(text.replace(/^file:\/\//i, ''))
+    }
+  }
   return decodeSafe(text)
+}
+
+const pathToDisplayUrl = (pathname) => {
+  try {
+    return convertFileSrc(pathname)
+  } catch {
+    return `${LOCAL_FILE_PREFIX}${pathname}`
+  }
 }
 
 const imageSource = (img) => {
@@ -53,7 +69,8 @@ const refreshImageSource = (img, source) => {
   const token = `${pathname}:${cacheBustSerial}`
   if (img.getAttribute(CACHE_BUST_ATTR) === token) return
   img.setAttribute(CACHE_BUST_ATTR, token)
-  const nextSrc = `${LOCAL_FILE_PREFIX}${pathname}?v=${cacheBustSerial}`
+  img.dataset.elephantExcalidrawPath = pathname
+  const nextSrc = `${pathToDisplayUrl(pathname)}?v=${cacheBustSerial}`
   if (img.getAttribute('src') !== nextSrc) {
     img.setAttribute('src', nextSrc)
   }
@@ -82,13 +99,13 @@ const ensureEditButton = (img, source) => {
   button.addEventListener('click', (event) => {
     event.preventDefault()
     event.stopPropagation()
-    bus.emit('open-excalidraw-from-image', localSourceToPath(source))
+    bus.emit('open-excalidraw-from-image', img.dataset.elephantExcalidrawPath || localSourceToPath(source))
   }, true)
   container.appendChild(button)
 }
 
 const repairImage = (img) => {
-  const source = imageSource(img)
+  const source = imageSource(img) || img.dataset.elephantExcalidrawPath || ''
   if (!source) return false
   removeLocalImageLoaders(img)
   refreshImageSource(img, source)
@@ -134,6 +151,9 @@ export const installExcalidrawImageRuntimeFixes = (target = globalThis) => {
   })
   observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'data-src', 'class'] })
   document.addEventListener('load', (event) => {
+    if (event.target?.tagName === 'IMG') repairImage(event.target)
+  }, true)
+  document.addEventListener('error', (event) => {
     if (event.target?.tagName === 'IMG') repairImage(event.target)
   }, true)
   bus.on('invalidate-image-cache', refreshAllDrawings)

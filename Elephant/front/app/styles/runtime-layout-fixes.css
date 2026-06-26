@@ -103,19 +103,14 @@
   color: #fff;
   font-size: 12px;
   line-height: 1;
-  opacity: 0;
-  transform: translateY(-2px);
-  transition: opacity 120ms ease, transform 120ms ease;
+  opacity: 1;
+  transform: translateY(0);
+  transition: background 120ms ease;
   cursor: pointer;
   backdrop-filter: blur(10px);
 }
 
-.en-excalidraw-image-container:hover .en-excalidraw-edit-button,
+.en-excalidraw-edit-button:hover,
 .en-excalidraw-edit-button:focus-visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.en-excalidraw-edit-button:hover {
   background: rgba(37, 99, 235, 0.92);
 }

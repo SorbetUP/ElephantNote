@@ -12,6 +12,7 @@ import { installPiProviderBridge } from './platform/piProviderInterface'
 import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'
 import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
 import { installSlashMenuDiagnostics } from './platform/slashMenuDiagnostics'
+import { installWritingCommandBridge } from './platform/writingCommandBridge'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
 import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
@@ -211,6 +212,7 @@ installPiProviderBridge()
 installTauriMarkTextSaveBridge()
 installTauriLocalIpcBridge()
 installSlashMenuDiagnostics()
+installWritingCommandBridge()
 void autostartLlamaRuntime()
 
 const bootstrapTauriRuntime = async() => {

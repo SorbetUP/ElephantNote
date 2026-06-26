@@ -1,4 +1,5 @@
-import { resolve, dirname } from 'path'
+import { createReadStream, existsSync, mkdirSync, statSync, cpSync } from 'fs'
+import { resolve, dirname, join, normalize, extname } from 'path'
 import { fileURLToPath } from 'url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -8,6 +9,68 @@ import packageJson from './package.json' with { type: 'json' }
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+const excalidrawDistDir = resolve(__dirname, 'node_modules/@excalidraw/excalidraw/dist')
+const excalidrawAssetFolders = ['excalidraw-assets', 'excalidraw-assets-dev']
+const contentTypes = {
+  '.css': 'text/css; charset=utf-8',
+  '.gif': 'image/gif',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.wasm': 'application/wasm',
+  '.webp': 'image/webp'
+}
+
+const decodeRequestPath = (value = '') => {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+const resolveExcalidrawAssetRequest = (requestUrl = '') => {
+  const [pathname] = String(requestUrl || '').split('?')
+  const decodedPathname = decodeRequestPath(pathname || '')
+  if (!decodedPathname.startsWith('/excalidraw-assets/')) return ''
+  const relativePath = decodedPathname.replace(/^\/excalidraw-assets\//, '')
+  const assetPath = resolve(excalidrawDistDir, relativePath)
+  const normalizedRoot = normalize(`${excalidrawDistDir}/`)
+  if (!normalize(assetPath).startsWith(normalizedRoot)) return ''
+  return assetPath
+}
+
+const excalidrawAssetsPlugin = () => ({
+  name: 'elephantnote-excalidraw-assets',
+  configureServer(server) {
+    server.middlewares.use((request, response, next) => {
+      const assetPath = resolveExcalidrawAssetRequest(request.url || '')
+      if (!assetPath) return next()
+      try {
+        if (!existsSync(assetPath) || !statSync(assetPath).isFile()) return next()
+        response.setHeader('Content-Type', contentTypes[extname(assetPath).toLowerCase()] || 'application/octet-stream')
+        response.setHeader('Cache-Control', 'no-store')
+        return createReadStream(assetPath).pipe(response)
+      } catch (error) {
+        return next(error)
+      }
+    })
+  },
+  writeBundle() {
+    const targetRoot = resolve(__dirname, 'out/renderer/excalidraw-assets')
+    mkdirSync(targetRoot, { recursive: true })
+    for (const folderName of excalidrawAssetFolders) {
+      const source = join(excalidrawDistDir, folderName)
+      if (existsSync(source)) {
+        cpSync(source, join(targetRoot, folderName), { recursive: true, force: true })
+      }
+    }
+  }
+})
 
 export default defineConfig({
   root: resolve(__dirname, 'src/renderer'),
@@ -40,7 +103,7 @@ export default defineConfig({
     },
     extensions: ['.mjs', '.js', '.json', '.vue']
   },
-  plugins: [vue(), svgLoader()],
+  plugins: [vue(), svgLoader(), excalidrawAssetsPlugin()],
   css: {
     postcss: {
       plugins: [

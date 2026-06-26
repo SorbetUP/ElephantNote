@@ -2,9 +2,42 @@ import bus from '@/bus'
 import { useEditorStore } from '@/store/editor'
 
 const QUICK_INSERT_QUERY_LINE_RE = /^\/[\p{L}\p{N}_-]*$/u
+const QUICK_INSERT_SUFFIX_RE = /^\s*\/[\p{L}\p{N}_-]*\s*$/u
 const EXCALIDRAW_IMAGE_RE = /!\[[^\]]*\]\([^)]*\.assets\/excalidraw-[^)]+\.png[^)]*\)/i
 
 const cleanedTabs = new Map()
+
+const normalizeMarkdown = (value = '') => String(value || '').replace(/\r\n?/g, '\n')
+
+const isTransientRollback = (previousMarkdown = '', nextMarkdown = '') => {
+  const previous = normalizeMarkdown(previousMarkdown)
+  const next = normalizeMarkdown(nextMarkdown)
+  if (!previous || previous.length <= next.length) return false
+  if (previous.startsWith(next) && QUICK_INSERT_SUFFIX_RE.test(previous.slice(next.length))) return true
+  return EXCALIDRAW_IMAGE_RE.test(previous) && !EXCALIDRAW_IMAGE_RE.test(next)
+}
+
+const installStaleContentGuard = (editorStore) => {
+  if (editorStore.__ELEPHANT_EXCALIDRAW_STALE_CONTENT_GUARD__) return
+  const original = editorStore.LISTEN_FOR_CONTENT_CHANGE?.bind(editorStore)
+  if (typeof original !== 'function') return
+  editorStore.__ELEPHANT_EXCALIDRAW_STALE_CONTENT_GUARD__ = true
+  editorStore.LISTEN_FOR_CONTENT_CHANGE = (change = {}) => {
+    const tab = change.id ? editorStore.tabs.find((item) => item.id === change.id) : null
+    const previousMarkdown = typeof tab?.markdown === 'string' ? tab.markdown : ''
+    const nextMarkdown = typeof change.markdown === 'string' ? change.markdown : ''
+    if (nextMarkdown && isTransientRollback(previousMarkdown, nextMarkdown)) {
+      console.warn('[excalidraw-cleanup] ignored stale editor rollback', {
+        id: change.id || '',
+        pathname: tab?.pathname || '',
+        previousLength: previousMarkdown.length,
+        nextLength: nextMarkdown.length
+      })
+      return
+    }
+    return original(change)
+  }
+}
 
 const nextMeaningfulLine = (lines, startIndex) => {
   for (let index = startIndex + 1; index < lines.length; index += 1) {
@@ -74,6 +107,7 @@ export const installExcalidrawMarkdownCleanup = () => {
   const editorStore = useEditorStore()
   if (editorStore.__ELEPHANT_EXCALIDRAW_MARKDOWN_CLEANUP__) return false
   editorStore.__ELEPHANT_EXCALIDRAW_MARKDOWN_CLEANUP__ = true
+  installStaleContentGuard(editorStore)
   cleanCurrentTab(editorStore)
   editorStore.$subscribe(() => {
     cleanCurrentTab(editorStore)

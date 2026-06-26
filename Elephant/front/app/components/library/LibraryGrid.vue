@@ -70,8 +70,10 @@ const loadingMoreEntries = ref(false)
 const directoryMayHaveMore = ref(true)
 const directoryGeneration = ref(0)
 
+const isMarkdownNotePath = (path = '') => /\.md$/i.test(String(path || ''))
+
 const isLegacyRootWikiEntry = (entry) => {
-  const pathname = String(entry?.path || '').replace(/\\/g, '/').replace(/\/+$/g, '')
+  const pathname = String(entry?.path || '').replace(/\/g, '/').replace(/\/+$/g, '')
   return store.activeWorkspaceView === 'notes' && store.currentPath === '' && /^wiki$/i.test(pathname)
 }
 
@@ -190,11 +192,20 @@ const handleGridScroll = (event) => {
 }
 
 const openEntry = async (entry) => {
-  if (getEntryKind(entry) === 'folder') {
+  const kind = getEntryKind(entry)
+  if (kind === 'folder') {
     await openFolderInCurrentView(entry.path)
-  } else {
-    store.openNote(entry)
+    return
   }
+  if (kind === 'note' || isMarkdownNotePath(entry?.path)) {
+    store.openNote(entry)
+    return
+  }
+  log.warn('[library] ignored non-markdown entry open request', {
+    path: entry?.path || '',
+    type: entry?.type || '',
+    kind
+  })
 }
 
 const renameEntry = async (entry) => {
@@ -221,28 +232,24 @@ const submitRenameEntry = async () => {
 }
 
 const deleteEntry = async (entry) => {
-  if (!window.confirm(`Delete "${entry.title}"? This cannot be undone.`)) return
   await store.deleteEntry(entry)
   resetVisibleWindow()
 }
 
 const handleRootDragOver = (event) => {
-  if (event.target?.closest?.('.en-card')) return
-  const entry = parseDraggedEntry(event)
-  isRootDropTarget.value = !!entry && canDropEntryOnDirectory(entry, store.currentPath)
+  const entry = parseDraggedEntry(event.dataTransfer)
+  isRootDropTarget.value = canDropEntryOnDirectory(entry, '')
 }
 
-const handleRootDragLeave = (event) => {
-  if (event.currentTarget?.contains?.(event.relatedTarget)) return
+const handleRootDragLeave = () => {
   isRootDropTarget.value = false
 }
 
-const handleRootDrop = async (event) => {
-  if (event.target?.closest?.('.en-card')) return
-  const entry = parseDraggedEntry(event)
+const handleRootDrop = async(event) => {
+  const entry = parseDraggedEntry(event.dataTransfer)
   isRootDropTarget.value = false
-  if (!entry || !canDropEntryOnDirectory(entry, store.currentPath)) return
-  await store.moveEntry(entry, store.currentPath)
+  if (!canDropEntryOnDirectory(entry, '')) return
+  await store.moveEntry(entry, '')
   resetVisibleWindow()
 }
 </script>
@@ -250,58 +257,41 @@ const handleRootDrop = async (event) => {
 <style scoped>
 .en-library-grid {
   min-height: 0;
-  flex: 1;
+  overflow: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
-  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 18px;
+  padding: 20px;
   align-content: start;
-  gap: 22px;
-  padding: 0 34px 40px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
 }
-
-.en-library-grid::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
-.en-library-grid.is-drop-target {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--en-primary) 9%, transparent),
-      transparent 160px
-    );
-}
-
-.en-library-grid :deep(.en-card) {
-  width: 100%;
-  min-width: 0;
-  display: flex;
-}
-
 .en-library-grid.list {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 1fr;
 }
-
+.en-library-grid.is-drop-target {
+  outline: 2px dashed var(--en-accent);
+  outline-offset: -8px;
+}
 .en-library-rename-form {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  gap: 8px;
   border: 1px solid var(--en-border);
-  border-radius: 8px;
-  padding: 12px;
-  color: var(--en-text);
+  border-radius: 16px;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
   background: var(--en-surface);
-  transform: translate(-50%, -50%);
+  color: var(--en-text);
+}
+.en-library-rename-form input {
+  border: 1px solid var(--en-border);
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: var(--en-input-bg);
+  color: var(--en-text);
+}
+.en-library-rename-form button {
+  border: 1px solid var(--en-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--en-chip-bg);
+  color: var(--en-text);
 }
 </style>

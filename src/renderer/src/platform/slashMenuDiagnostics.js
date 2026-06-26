@@ -19,27 +19,19 @@ const describeElement = (element) => {
 
 const findSlashMenuContainer = (target) => {
   if (!target?.closest) return null
-  return target.closest('.ag-quick-insert, .ag-front-menu, [class*="quick"], [class*="front"]')
+  return target.closest('.ag-quick-insert, .ag-front-menu')
 }
 
 const findSlashMenuItem = (target) => {
   const container = findSlashMenuContainer(target)
   if (!container || !target?.closest) return null
-  return target.closest('.item, [role="menuitem"], button, li, .sub-title, a, div')
+  const item = target.closest('.item, [role="menuitem"], button, li, .sub-title, a')
+  return item && container.contains(item) ? item : null
 }
 
 const findSlashMenuTarget = (target) => {
   if (!target?.closest) return null
-  return target.closest([
-    '[class*="quick"]',
-    '[class*="insert"]',
-    '[class*="front"]',
-    '[class*="menu"]',
-    '[class*="ag-"]',
-    '[role="menuitem"]',
-    'button',
-    'li'
-  ].join(','))
+  return target.closest('.ag-quick-insert, .ag-front-menu, [role="menuitem"], button, li')
 }
 
 const activeEditorSnapshot = () => {
@@ -57,12 +49,14 @@ const isExcalidrawMenuChoice = (item, rawTarget) => {
   const targetText = String(rawTarget?.textContent || '').trim().toLowerCase()
   const itemClass = String(item?.getAttribute?.('class') || '').toLowerCase()
   const targetClass = String(rawTarget?.getAttribute?.('class') || '').toLowerCase()
-  return itemText === 'insert drawing' ||
-    itemText === 'excalidraw' ||
-    targetText === 'insert drawing' ||
-    targetText === 'excalidraw' ||
+  const itemLabel = String(item?.dataset?.label || '').toLowerCase()
+  return itemText.includes('insert drawing') ||
+    itemText.includes('excalidraw') ||
+    targetText.includes('insert drawing') ||
+    targetText.includes('excalidraw') ||
     itemClass.includes('excalidraw') ||
-    targetClass.includes('excalidraw')
+    targetClass.includes('excalidraw') ||
+    itemLabel === 'elephant-command excalidraw'
 }
 
 const openExcalidrawFromSlashMenu = () => {
@@ -81,7 +75,7 @@ export const installSlashMenuDiagnostics = (target = globalThis) => {
 
   const keydown = (event) => {
     if (event.key !== '/' && event.key !== 'Enter' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-    const slashLike = event.key === '/' || Boolean(document.querySelector('[class*="quick"], [class*="front"], [class*="menu"]'))
+    const slashLike = event.key === '/' || Boolean(document.querySelector('.ag-quick-insert, .ag-front-menu'))
     if (!slashLike) return
     console.info(`${SLASH_LOG_PREFIX} keydown`, {
       key: event.key,
@@ -134,9 +128,9 @@ export const installSlashMenuDiagnostics = (target = globalThis) => {
       for (const node of record.addedNodes || []) {
         if (node.nodeType !== Node.ELEMENT_NODE) continue
         const element = node
-        const match = element.matches?.('[class*="quick"], [class*="front"], [class*="menu"]')
+        const match = element.matches?.('.ag-quick-insert, .ag-front-menu')
           ? element
-          : element.querySelector?.('[class*="quick"], [class*="front"], [class*="menu"]')
+          : element.querySelector?.('.ag-quick-insert, .ag-front-menu')
         if (match) {
           console.info(`${SLASH_LOG_PREFIX} mounted`, { target: describeElement(match) })
         }

@@ -259,10 +259,468 @@ fn local_models() -> R<Vec<Value>> {
   for entry in fs::read_dir(&dir).map_err(|error| error.to_string())? {
     let entry = entry.map_err(|error| error.to_string())?;
     let path = entry.path();
-    if path.extension().and_then(|ext| ext.to_str()).map(|ext| ext.eq_ignore_ascii_case("gguf")).unwrap_or(false) {
+    if path.is_file() && file_name(&path.to_string_lossy()).to_lowercase().ends_with(".gguf") {
       out.push(model_record(&path));
     }
   }
-  out.sort_by_key(|item| item.get("name").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase());
+  out.sort_by(|a, b| text(a, &["name"]).cmp(&text(b, &["name"])));
   Ok(out)
+}
+
+fn write_index(models: Vec<Value>) -> R<Value> {
+  let index = json!({
+    "version": 1,
+    "updatedAt": now(),
+    "models": models,
+    "hfSearchCache": {},
+    "runtime": {
+      "provider": MODEL_PROVIDER,
+      "available": true,
+      "modelDir": model_dir().to_string_lossy().to_string(),
+      "message": "Tauri Rust model library ready. Inference is delegated to the selected local runtime."
+    }
+  });
+  write_json(&index_path(), &index)?;
+  Ok(index)
+}
+
+fn refresh_index() -> R<Value> {
+  write_index(local_models()?)
+}
+
+fn listing() -> R<Value> {
+  let index = refresh_index()?;
+  let models = index.get("models").cloned().unwrap_or_else(|| json!([]));
+  let count = models.as_array().map(|items| items.len()).unwrap_or(0);
+  Ok(json!({
+    "provider": MODEL_PROVIDER,
+    "available": true,
+    "modelDir": model_dir().to_string_lossy().to_string(),
+    "gpuTypes": [],
+    "supportedBackends": ["cpu"],
+    "selectedBackend": "cpu",
+    "preferredBackends": ["cpu"],
+    "version": "tauri-rust",
+    "models": models,
+    "indexUpdatedAt": index.get("updatedAt").cloned().unwrap_or_else(|| json!("")),
+    "runtime": index.get("runtime").cloned().unwrap_or_else(|| json!(null)),
+    "message": format!("{count} local GGUF model{} discovered.", if count == 1 { "" } else { "s" })
+  }))
+}
+
+fn map_hf(data: &Value) -> Value {
+  let id = text(data, &["id", "modelId"]);
+  let siblings = data
+    .get("siblings")
+    .and_then(Value::as_array)
+    .map(|items| {
+      items
+        .iter()
+        .map(|item| json!({
+          "rfilename": text(item, &["rfilename", "path", "name"]),
+          "size": number(item, &["size", "sizeBytes"]),
+          "blobId": text(item, &["blobId"]),
+          "lfs": item.get("lfs").cloned().unwrap_or_else(|| json!(null))
+        }))
+        .collect::<Vec<_>>()
+    })
+    .unwrap_or_default();
+  json!({
+    "id": id.clone(),
+    "name": id.clone(),
+    "provider": "huggingface",
+    "repoId": id.clone(),
+    "modelId": id.clone(),
+    "pipelineTag": text(data, &["pipeline_tag", "pipelineTag"]),
+    "libraryName": text(data, &["library_name", "libraryName"]),
+    "tags": data.get("tags").cloned().unwrap_or_else(|| json!([])),
+    "likes": number(data, &["likes"]),
+    "downloads": number(data, &["downloads"]),
+    "sha": text(data, &["sha"]),
+    "private": boolean(data, &["private"]),
+    "gated": data.get("gated").cloned().unwrap_or_else(|| json!(false)),
+    "disabled": boolean(data, &["disabled"]),
+    "author": text(data, &["author"]),
+    "createdAt": text(data, &["createdAt", "created_at"]),
+    "updatedAt": text(data, &["lastModified", "last_modified", "updatedAt"]),
+    "cardData": data.get("cardData").or_else(|| data.get("card_data")).cloned().unwrap_or_else(|| json!(null)),
+    "siblings": siblings
+  })
+}
+
+async fn hf_info(repo_id: &str) -> R<Value> {
+  if repo_id.trim().is_empty() {
+    return Err("Hugging Face repo id is required.".to_string());
+  }
+  let response = reqwest::Client::new()
+    .get(format!("{HF_API_BASE_URL}/api/models/{}?blobs=true", repo_id.trim()))
+    .header("accept", "application/json")
+    .send()
+    .await
+    .map_err(|error| error.to_string())?;
+  let status = response.status();
+  let data = response.json::<Value>().await.unwrap_or_else(|_| json!({}));
+  if !status.is_success() {
+    return Err(text_or(&data, &["error"], format!("Hugging Face info returned HTTP {status}.")));
+  }
+  Ok(map_hf(&data))
+}
+
+fn resolve_download(payload: &Value) -> R<(String, String, String)> {
+  let uri = text(payload, &["uri", "modelUri", "pull", "model"]);
+  let repo_hint = text(payload, &["repoId", "originalRepoId"]);
+  let file_hint = text(payload, &["fileName", "filename"]);
+  if let Some(raw) = uri.strip_prefix("hf:") {
+    let parts = raw.split('/').filter(|part| !part.is_empty()).collect::<Vec<_>>();
+    if parts.len() < 3 {
+      return Err("Hugging Face URI must look like hf:owner/repo/file.gguf.".to_string());
+    }
+    let repo_id = format!("{}/{}", parts[0], parts[1]);
+    let file = parts[2..].join("/");
+    ensure_gguf_file_name(&file)?;
+    let url = format!("{HF_API_BASE_URL}/{repo_id}/resolve/main/{file}?download=true");
+    validate_download_url(&url)?;
+    return Ok((url, repo_id, file));
+  }
+  if uri.starts_with("http://") || uri.starts_with("https://") {
+    let url = validate_download_url(&uri)?;
+    let remote_file = text_or(payload, &["fileName", "filename"], file_name_from_url(url.as_str()));
+    ensure_gguf_file_name(&remote_file)?;
+    return Ok((url.to_string(), repo_hint, remote_file));
+  }
+  if repo_hint.contains('/') && !file_hint.is_empty() {
+    ensure_gguf_file_name(&file_hint)?;
+    let url = format!("{HF_API_BASE_URL}/{repo_hint}/resolve/main/{file_hint}?download=true");
+    validate_download_url(&url)?;
+    return Ok((url, repo_hint, file_hint));
+  }
+  Err("Only hf: and HTTPS Hugging Face .gguf model downloads are supported by the Tauri model backend.".to_string())
+}
+
+fn set_progress(download_id: &str, payload: Value) {
+  let mut guard = downloads().lock().expect("download state mutex poisoned");
+  let cancelled = guard.get(download_id).map(|state| state.cancelled).unwrap_or(false);
+  guard.insert(download_id.to_string(), DownloadState { payload, cancelled });
+}
+
+fn emit_progress(app: &AppHandle, download_id: &str, payload: Value) {
+  set_progress(download_id, payload.clone());
+  let _ = app.emit("elephantnote:models:download:progress", payload);
+}
+
+fn download_id(payload: &Value) -> String {
+  text_or(payload, &["downloadId", "id", "modelId"], format!("download-{}", now()))
+}
+
+fn cancelled(download_id: &str) -> bool {
+  downloads()
+    .lock()
+    .ok()
+    .and_then(|guard| guard.get(download_id).map(|state| state.cancelled))
+    .unwrap_or(false)
+}
+
+async fn download_file(app: AppHandle, payload: Value) -> R<Value> {
+  let download_id = download_id(&payload);
+  let id = text_or(&payload, &["id", "modelId", "repoId", "uri", "pull"], download_id.clone());
+  let name = text_or(&payload, &["name", "fileName", "filename", "id"], id.clone());
+  let (url, repo_id, remote_file) = resolve_download(&payload)?;
+  let file_name = safe_file_name(&remote_file);
+  ensure_gguf_file_name(&file_name)?;
+  let dir = model_dir();
+  fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+  let destination = dir.join(&file_name);
+  let tmp = dir.join(format!(".{file_name}.{download_id}.tmp"));
+  let max_bytes = MAX_MODEL_DOWNLOAD_BYTES;
+
+  emit_progress(&app, &download_id, json!({
+    "downloadId": download_id.clone(), "id": id.clone(), "modelId": id.clone(),
+    "phase": "downloading", "percent": 5, "message": format!("Downloading {name}…"),
+    "fileName": file_name.clone(), "repoId": repo_id.clone(), "maxSizeBytes": max_bytes
+  }));
+
+  let response = reqwest::Client::new()
+    .get(&url)
+    .header("accept", "application/octet-stream")
+    .send()
+    .await
+    .map_err(|error| error.to_string())?;
+  let status = response.status();
+  if !status.is_success() {
+    return Err(format!("Model download returned HTTP {status}."));
+  }
+  let total = response.content_length().or_else(|| {
+    let value = number(&payload, &["sizeBytes", "size"]);
+    if value > 0 { Some(value) } else { None }
+  }).unwrap_or(0);
+  if total > max_bytes {
+    return Err(format!("Model download is too large: {total} bytes exceeds the {max_bytes} byte limit."));
+  }
+  let mut downloaded = 0_u64;
+  let mut file = fs::File::create(&tmp).map_err(|error| error.to_string())?;
+  let mut stream = response.bytes_stream();
+  while let Some(chunk) = stream.next().await {
+    if cancelled(&download_id) {
+      let _ = fs::remove_file(&tmp);
+      return Err("Download cancelled.".to_string());
+    }
+    let chunk = chunk.map_err(|error| error.to_string())?;
+    let next_downloaded = downloaded.saturating_add(chunk.len() as u64);
+    if next_downloaded > max_bytes {
+      let _ = fs::remove_file(&tmp);
+      return Err(format!("Model download exceeded the {max_bytes} byte limit."));
+    }
+    file.write_all(&chunk).map_err(|error| error.to_string())?;
+    downloaded = next_downloaded;
+    let percent = if total > 0 { (downloaded.saturating_mul(94) / total).min(94) + 5 } else { 50 };
+    emit_progress(&app, &download_id, json!({
+      "downloadId": download_id.clone(), "id": id.clone(), "modelId": id.clone(),
+      "phase": "downloading", "percent": percent, "downloadedSize": downloaded, "totalSize": total,
+      "message": format!("Downloading {name}…"), "fileName": file_name.clone(), "repoId": repo_id.clone(), "maxSizeBytes": max_bytes
+    }));
+  }
+  file.flush().map_err(|error| error.to_string())?;
+  drop(file);
+  fs::rename(&tmp, &destination).map_err(|error| error.to_string())?;
+
+  let manifest = write_manifest(&destination, &json!({
+    "id": id.clone(), "name": name.clone(), "source": "huggingface",
+    "provider": MODEL_PROVIDER, "repoId": repo_id.clone(), "sourceUrl": url.clone(),
+    "originalRepoId": text_or(&payload, &["originalRepoId"], text(&payload, &["repoId"])),
+    "filename": file_name.clone(), "fileName": file_name.clone(),
+    "modelPath": destination.to_string_lossy().to_string(), "installedAt": now(), "downloadedAt": now(),
+    "downloadId": download_id.clone(), "downloadedSize": downloaded, "declaredSize": total,
+    "maxSizeBytes": max_bytes
+  }))?;
+  refresh_index()?;
+  let result = json!({
+    "id": id.clone(), "provider": MODEL_PROVIDER, "downloaded": true,
+    "modelPath": destination.to_string_lossy().to_string(), "modelDir": dir.to_string_lossy().to_string(),
+    "manifest": manifest, "source": "huggingface", "repoId": repo_id.clone(), "downloadId": download_id.clone(),
+    "message": format!("{name} downloaded for Tauri.")
+  });
+  emit_progress(&app, &download_id, json!({
+    "downloadId": download_id.clone(), "id": id.clone(), "modelId": id.clone(),
+    "phase": "complete", "percent": 100, "downloadedSize": downloaded, "totalSize": total,
+    "message": result.get("message").and_then(Value::as_str).unwrap_or("Download complete."),
+    "fileName": file_name.clone(), "repoId": repo_id.clone()
+  }));
+  Ok(result)
+}
+
+fn find_local(model_ref: &Value) -> R<Value> {
+  let lookup = [
+    text(model_ref, &["modelRef"]),
+    text(model_ref, &["path", "modelPath"]),
+    text(model_ref, &["id"]),
+    text(model_ref, &["name"]),
+    text(model_ref, &["fileName", "filename"]),
+    text(model_ref, &["repoId", "originalRepoId"]),
+  ]
+  .into_iter()
+  .filter(|value| !value.is_empty())
+  .collect::<Vec<_>>();
+  if lookup.is_empty() {
+    return Err("Model reference is required.".to_string());
+  }
+  for value in &lookup {
+    let path = PathBuf::from(value);
+    if path.is_absolute() && path.exists() {
+      return Ok(model_record(&path));
+    }
+  }
+  for model in local_models()? {
+    let mut values = vec![
+      text(&model, &["id"]), text(&model, &["name"]), text(&model, &["fileName", "filename"]),
+      text(&model, &["repoId", "originalRepoId"]), text(&model, &["path", "modelPath"]),
+    ];
+    let aliases = values.iter().map(|value| file_name(value)).collect::<Vec<_>>();
+    values.extend(aliases);
+    if lookup.iter().any(|item| values.iter().any(|value| value == item)) {
+      return Ok(model);
+    }
+  }
+  Err(format!("Model not found locally: {}.", lookup.first().cloned().unwrap_or_else(|| "unknown".to_string())))
+}
+
+#[tauri::command]
+pub fn tauri_models_list() -> R<Value> {
+  listing()
+}
+
+#[tauri::command]
+pub fn tauri_models_list_local() -> R<Value> {
+  listing()
+}
+
+#[tauri::command]
+pub async fn tauri_models_search_hugging_face(payload: Value) -> R<Value> {
+  let query = text(&payload, &["query"]);
+  let limit = number(&payload, &["limit"]);
+  let sort = text_or(&payload, &["sort"], "downloads");
+  let direction = text_or(&payload, &["direction"], "-1");
+  let pipeline_tag = text(&payload, &["pipelineTag", "pipeline_tag"]);
+  let library_name = text(&payload, &["libraryName", "library"]);
+  let author = text(&payload, &["author"]);
+  let mut url = reqwest::Url::parse(&format!("{HF_API_BASE_URL}/api/models")).map_err(|error| error.to_string())?;
+  {
+    let mut pairs = url.query_pairs_mut();
+    if !query.is_empty() { pairs.append_pair("search", &query); }
+    if limit > 0 { pairs.append_pair("limit", &limit.to_string()); }
+    if !sort.is_empty() { pairs.append_pair("sort", &sort); }
+    if !direction.is_empty() { pairs.append_pair("direction", &direction); }
+    if !pipeline_tag.is_empty() { pairs.append_pair("pipeline_tag", &pipeline_tag); }
+    if !library_name.is_empty() { pairs.append_pair("library", &library_name); }
+    if !author.is_empty() { pairs.append_pair("author", &author); }
+  }
+  let response = reqwest::Client::new().get(url).header("accept", "application/json").send().await.map_err(|error| error.to_string())?;
+  let status = response.status();
+  let data = response.json::<Value>().await.unwrap_or_else(|_| json!([]));
+  if !status.is_success() {
+    return Err(text_or(&data, &["error"], format!("Hugging Face search returned HTTP {status}.")));
+  }
+  let models = data.as_array().map(|items| items.iter().map(map_hf).collect::<Vec<_>>()).unwrap_or_default();
+  let total = models.len();
+  Ok(json!({
+    "provider": "huggingface", "source": "huggingface", "query": query, "limit": limit,
+    "total": total, "models": models, "cached": false,
+    "message": format!("Found {total} models.")
+  }))
+}
+
+#[tauri::command]
+pub async fn tauri_models_info(payload: Value) -> R<Value> {
+  let model_ref = payload.get("modelRef").cloned().unwrap_or_else(|| payload.clone());
+  let ref_text = text(&model_ref, &["modelRef", "repoId", "id", "path", "modelPath"]);
+  if model_ref.get("provider").and_then(Value::as_str) == Some("huggingface") || text(&model_ref, &["repoId"]).contains('/') {
+    return hf_info(&text(&model_ref, &["repoId", "id"])).await;
+  }
+  if ref_text.contains('/') && !PathBuf::from(&ref_text).is_absolute() && !ref_text.to_lowercase().ends_with(".gguf") {
+    return hf_info(&ref_text).await;
+  }
+  find_local(&model_ref)
+}
+
+#[tauri::command]
+pub async fn tauri_models_download(app: AppHandle, payload: Value) -> R<Value> {
+  download_file(app, payload).await
+}
+
+#[tauri::command]
+pub fn tauri_models_cancel_download(payload: Value) -> R<Value> {
+  let id = download_id(&payload);
+  let mut guard = downloads().lock().expect("download state mutex poisoned");
+  let mut status = guard.get(&id).map(|state| state.payload.clone()).unwrap_or_else(|| json!({}));
+  if let Some(object) = status.as_object_mut() {
+    object.insert("downloadId".into(), json!(id.clone()));
+    object.insert("cancelled".into(), json!(true));
+    object.insert("phase".into(), json!("cancelled"));
+    object.insert("message".into(), json!("Download cancelled."));
+  }
+  guard.insert(id, DownloadState { payload: status.clone(), cancelled: true });
+  Ok(status)
+}
+
+#[tauri::command]
+pub fn tauri_models_download_status(payload: Value) -> R<Value> {
+  let id = download_id(&payload);
+  Ok(downloads().lock().ok().and_then(|guard| guard.get(&id).map(|state| state.payload.clone())).unwrap_or_else(|| json!({
+    "downloadId": id, "phase": "idle", "percent": 0, "message": "No active download."
+  })))
+}
+
+#[tauri::command]
+pub fn tauri_models_activate(payload: Value) -> R<Value> {
+  let model = payload.get("model").cloned().unwrap_or_else(|| payload.clone());
+  let mut record = find_local(&model)?;
+  if let Some(object) = record.as_object_mut() {
+    object.insert("active".into(), json!(true));
+    object.insert("activatedAt".into(), json!(now()));
+    object.insert("message".into(), json!("Model activated in the Tauri model registry."));
+  }
+  write_json(&active_path(), &record)?;
+  refresh_index()?;
+  Ok(record)
+}
+
+#[tauri::command]
+pub fn tauri_models_deactivate(payload: Value) -> R<Value> {
+  let model_ref = payload.get("modelRef").cloned().unwrap_or_else(|| payload.clone());
+  let model_path = find_local(&model_ref).ok().map(|model| text(&model, &["path", "modelPath"])).unwrap_or_else(|| text(&model_ref, &["modelRef", "path", "modelPath"]));
+  if active_model_path_value() == model_path || model_path.is_empty() {
+    let _ = fs::remove_file(active_path());
+  }
+  refresh_index()?;
+  Ok(json!({ "unloaded": true, "modelPath": model_path, "message": "Model deactivated in the Tauri model registry." }))
+}
+
+#[tauri::command]
+pub fn tauri_models_delete(payload: Value) -> R<Value> {
+  let model_ref = payload.get("modelRef").cloned().unwrap_or_else(|| payload.get("model").cloned().unwrap_or_else(|| payload.clone()));
+  let model = find_local(&model_ref)?;
+  let model_path = text(&model, &["path", "modelPath"]);
+  if model_path.is_empty() {
+    return Err("Model path is required to delete a model.".to_string());
+  }
+  let path = PathBuf::from(&model_path);
+  let _ = fs::remove_file(manifest_path(&path));
+  let _ = fs::remove_file(&path);
+  if active_model_path_value() == model_path {
+    let _ = fs::remove_file(active_path());
+  }
+  refresh_index()?;
+  Ok(json!({ "deleted": true, "modelPath": model_path, "id": text(&model, &["id", "name"]), "message": "Model deleted." }))
+}
+
+#[tauri::command]
+pub fn tauri_models_active() -> R<Value> {
+  Ok(active_record().unwrap_or_else(|| json!(null)))
+}
+
+#[tauri::command]
+pub fn tauri_models_refresh_index() -> R<Value> {
+  refresh_index()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn sanitizes_model_file_names() {
+    assert_eq!(safe_file_name("folder/model.gguf"), "model.gguf");
+    assert_eq!(safe_file_name("bad:name?.gguf"), "bad-name-.gguf");
+  }
+
+  #[test]
+  fn parses_hugging_face_uri() {
+    let value = json!({ "uri": "hf:owner/repo/model.Q4_K_M.gguf" });
+    let (_url, repo, file) = resolve_download(&value).unwrap();
+    assert_eq!(repo, "owner/repo");
+    assert_eq!(file, "model.Q4_K_M.gguf");
+  }
+
+  #[test]
+  fn rejects_http_downloads() {
+    let value = json!({ "uri": "http://huggingface.co/owner/repo/resolve/main/model.gguf" });
+    assert!(resolve_download(&value).is_err());
+  }
+
+  #[test]
+  fn rejects_localhost_downloads() {
+    let value = json!({ "uri": "https://localhost/owner/repo/resolve/main/model.gguf" });
+    assert!(resolve_download(&value).is_err());
+  }
+
+  #[test]
+  fn rejects_non_hugging_face_downloads() {
+    let value = json!({ "uri": "https://example.com/model.gguf" });
+    assert!(resolve_download(&value).is_err());
+  }
+
+  #[test]
+  fn rejects_non_gguf_model_names() {
+    let value = json!({ "uri": "hf:owner/repo/model.bin" });
+    assert!(resolve_download(&value).is_err());
+  }
 }

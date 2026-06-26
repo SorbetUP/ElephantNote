@@ -22,6 +22,23 @@ const isWindowsDrivePath = (value = '') => {
   return isLetter && text[1] === ':' && text[2] === '/'
 }
 
+const resolveSegments = (body = '', absolute = false) => {
+  const resolved = []
+  for (const segment of String(body || '').split('/')) {
+    if (!segment || segment === '.') continue
+    if (segment === '..') {
+      if (resolved.length && resolved[resolved.length - 1] !== '..') {
+        resolved.pop()
+      } else if (!absolute) {
+        resolved.push('..')
+      }
+      continue
+    }
+    resolved.push(segment)
+  }
+  return resolved
+}
+
 const createPathFacade = () => {
   const join = (...parts) => normalize(joinedPath(parts))
   const normalize = (pathname) => {
@@ -29,20 +46,22 @@ const createPathFacade = () => {
     if (!value) return '.'
     const isDrive = isWindowsDrivePath(value)
     const prefix = value.startsWith('//') ? '//' : isDrive ? value.slice(0, 3) : value.startsWith('/') ? '/' : ''
-    const rawBody = trimTrailingForwardSlashes(collapseForwardSlashes(value.slice(prefix.length)))
-    if (!rawBody) return prefix || '.'
-    if (!prefix) return rawBody
+    const absolute = !!prefix
+    const body = trimTrailingForwardSlashes(collapseForwardSlashes(value.slice(prefix.length)))
+    const segments = resolveSegments(body, absolute)
+    if (!segments.length) return prefix || '.'
+    if (!prefix) return segments.join('/')
     const cleanPrefix = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix
-    return collapseForwardSlashes(`${cleanPrefix}/${rawBody}`)
+    return collapseForwardSlashes(`${cleanPrefix}/${segments.join('/')}`)
   }
   const dirname = (pathname) => {
     const normalized = normalize(pathname)
     if (normalized === '/' || isWindowsDrivePath(normalized)) return normalized
     const index = normalized.lastIndexOf('/')
-    return index > 0 ? normalized.slice(0, index) : '.'
+    return index > 0 ? normalized.slice(0, index) : normalized.startsWith('/') ? '/' : '.'
   }
   const basename = (pathname, ext = '') => {
-    const value = trimTrailingForwardSlashes(normalizeSlashes(pathname))
+    const value = trimTrailingForwardSlashes(normalize(pathname))
     const index = value.lastIndexOf('/')
     const base = index >= 0 ? value.slice(index + 1) : value
     return ext && base.endsWith(ext) ? base.slice(0, -ext.length) : base
@@ -113,8 +132,8 @@ const createFileUtilsFallback = () => ({
 
 const installBootstrapGlobals = (target = globalThis) => {
   if (!target.path) target.path = createPathFacade()
-  if (!target.fileUtils && !target.__TAURI__) target.fileUtils = createFileUtilsFallback()
   if (target.fileUtils?.__elephantnoteBootstrapFallback && target.__TAURI__) delete target.fileUtils
+  if (!target.fileUtils && !target.__TAURI__) target.fileUtils = createFileUtilsFallback()
   if (!target.rgPath) target.rgPath = ''
   if (!target.global) target.global = target
   installGlobalMuyaRuntimeBridge(target)

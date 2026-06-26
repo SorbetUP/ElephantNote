@@ -4,7 +4,8 @@ import { useLayoutStore } from '@/store/layout'
 import { useProjectStore } from '@/store/project'
 import { isDiagnosticVerbose, pushDiagnosticLog } from './rendererDiagnostics'
 
-const EXCALIDRAW_ASSET_RE = /!\[[^\]]*\]\([^)]*\.assets\/excalidraw-[^)]+\.png[^)]*\)/i
+const EXCALIDRAW_ASSET_RE = /!\[[^\]]*\]\([^)]*(?:^|\/)\.assets\/excalidraw-[^)]+\.png[^)]*\)/i
+const ROOT_ASSET_REFERENCE_RE = /(!\[[^\]]*\]\()(\.assets\/[^)\s]+)([^)]*)(\))/g
 const PROGRAMMATIC_MARKDOWN_PROTECTION_MS = 5_000
 const tabMarkdownSnapshots = new Map()
 const protectedProgrammaticMarkdown = new Map()
@@ -31,7 +32,12 @@ const summarizeLayout = (store) => ({
   rightColumn: store.rightColumn
 })
 
+const normalizeSlashPath = (value = '') => String(value || '').replace(/\\/g, '/')
 const trimForStaleComparison = (value = '') => String(value || '').trim()
+const encodeMarkdownAssetPath = (value = '') => normalizeSlashPath(value)
+  .split('/')
+  .map((segment) => encodeURIComponent(segment).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`))
+  .join('/')
 
 const shouldIgnoreProgrammaticStaleEcho = (change = {}) => {
   const protection = protectedProgrammaticMarkdown.get(change.id)
@@ -67,8 +73,56 @@ const installEditorContentGuard = (editorStore) => {
   }
 }
 
-const protectProgrammaticMarkdownIfNeeded = (tab) => {
+const noteRelativeRootAssetPath = (assetSource, tab, projectStore) => {
+  const vaultRoot = projectStore.projectTree?.pathname || ''
+  const notePath = tab?.pathname || ''
+  const pathApi = globalThis.window?.path
+  if (!assetSource || !vaultRoot || !notePath || !pathApi?.join || !pathApi?.dirname || !pathApi?.relative) {
+    return assetSource
+  }
+  const noteDirectory = pathApi.dirname(notePath)
+  const assetPath = pathApi.join(vaultRoot, assetSource)
+  const relativePath = normalizeSlashPath(pathApi.relative(noteDirectory, assetPath))
+  if (!relativePath || pathApi.isAbsolute?.(relativePath)) return assetSource
+  return encodeMarkdownAssetPath(relativePath)
+}
+
+const rewriteRootAssetMarkdownReferencesIfNeeded = (tab, projectStore) => {
+  if (!tab?.id || typeof tab.markdown !== 'string' || !tab.markdown.includes('](.assets/')) return false
+  let rewrittenCount = 0
+  const nextMarkdown = tab.markdown.replace(ROOT_ASSET_REFERENCE_RE, (full, prefix, source, suffix, close) => {
+    const replacement = noteRelativeRootAssetPath(source, tab, projectStore)
+    if (replacement !== source) rewrittenCount += 1
+    return `${prefix}${replacement}${suffix}${close}`
+  })
+  if (!rewrittenCount || nextMarkdown === tab.markdown) return false
+  tab.markdown = nextMarkdown
+  tab.isSaved = false
+  protectedProgrammaticMarkdown.set(tab.id, {
+    markdown: nextMarkdown,
+    until: Date.now() + PROGRAMMATIC_MARKDOWN_PROTECTION_MS
+  })
+  bus.emit('file-changed', {
+    id: tab.id,
+    markdown: nextMarkdown,
+    cursor: tab.cursor || null,
+    muyaIndexCursor: tab.muyaIndexCursor || null,
+    renderCursor: false,
+    history: tab.history,
+    blocks: tab.blocks
+  })
+  pushDiagnosticLog('info', 'editor-state:rewrote-root-vault-assets-relative-to-note', {
+    id: tab.id,
+    pathname: tab.pathname || null,
+    rewrittenCount,
+    markdownLength: nextMarkdown.length
+  })
+  return true
+}
+
+const protectProgrammaticMarkdownIfNeeded = (tab, projectStore) => {
   if (!tab?.id || typeof tab.markdown !== 'string') return
+  rewriteRootAssetMarkdownReferencesIfNeeded(tab, projectStore)
   const previousMarkdown = tabMarkdownSnapshots.get(tab.id) || ''
   const nextMarkdown = tab.markdown
   tabMarkdownSnapshots.set(tab.id, nextMarkdown)
@@ -111,6 +165,10 @@ export const installStoreDiagnostics = () => {
     layout: summarizeLayout(layoutStore)
   })
 
+  const initialId = editorStore.currentFile?.id
+  const initialTab = initialId ? editorStore.tabs.find((tab) => tab.id === initialId) : null
+  if (initialTab) protectProgrammaticMarkdownIfNeeded(initialTab, projectStore)
+
   projectStore.$subscribe((mutation) => {
     if (!isDiagnosticVerbose()) return
     pushDiagnosticLog('info', 'pinia:project', {
@@ -122,7 +180,7 @@ export const installStoreDiagnostics = () => {
   editorStore.$subscribe((mutation) => {
     const currentId = editorStore.currentFile?.id
     const activeTab = currentId ? editorStore.tabs.find((tab) => tab.id === currentId) : null
-    if (activeTab) protectProgrammaticMarkdownIfNeeded(activeTab)
+    if (activeTab) protectProgrammaticMarkdownIfNeeded(activeTab, projectStore)
     if (activeTab && activeTab !== editorStore.currentFile) {
       editorStore.currentFile = activeTab
       pushDiagnosticLog('info', 'editor-state:current-file-synced-from-tab', {

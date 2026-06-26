@@ -1,6 +1,6 @@
 import { chmodSync, copyFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
@@ -29,9 +29,24 @@ if (process.env.ELEPHANTNOTE_SKIP_LLAMA_BUNDLE === '1') {
 
 mkdirSync(binDir, { recursive: true })
 
-if (existsSync(targetPath)) {
+const requiredSupportFiles = () => {
+  if (process.platform === 'darwin') return ['libllama-server-impl.dylib']
+  return []
+}
+
+const hasRequiredRuntimeFiles = () => {
+  if (!existsSync(targetPath)) return false
+  return requiredSupportFiles().every((name) => existsSync(join(binDir, name)))
+}
+
+if (hasRequiredRuntimeFiles()) {
   log(`already installed: ${targetPath}`)
   process.exit(0)
+}
+
+if (existsSync(targetPath)) {
+  warn(`existing ${targetPath} is incomplete; reinstalling bundled llama-server runtime`)
+  rmSync(targetPath, { force: true })
 }
 
 const platformTokens = {
@@ -117,6 +132,30 @@ const findBinary = (dir) => {
   return null
 }
 
+const supportExtensions = new Set(process.platform === 'win32' ? ['.dll'] : process.platform === 'darwin' ? ['.dylib'] : ['.so'])
+const collectSupportLibraries = (dir, out = []) => {
+  for (const entry of readdirSync(dir)) {
+    const path = join(dir, entry)
+    const stat = statSync(path)
+    if (stat.isDirectory()) {
+      collectSupportLibraries(path, out)
+    } else if (supportExtensions.has(extname(path).toLowerCase()) || /\.so(?:\.\d+)*$/i.test(path)) {
+      out.push(path)
+    }
+  }
+  return out
+}
+
+const copyRuntimeSupport = (extractDir) => {
+  const libraries = collectSupportLibraries(extractDir)
+  for (const source of libraries) {
+    const destination = join(binDir, basename(source))
+    copyFileSync(source, destination)
+    if (process.platform !== 'win32') chmodSync(destination, 0o755)
+    log(`installed support library ${destination}`)
+  }
+}
+
 const main = async() => {
   log(`installing ${binaryName} for ${process.platform}/${process.arch}`)
   const release = await requestJson('https://api.github.com/repos/ggerganov/llama.cpp/releases/latest')
@@ -140,6 +179,9 @@ const main = async() => {
     if (!extracted) throw new Error(`Downloaded archive does not contain ${binaryName}`)
     copyFileSync(extracted, targetPath)
     if (process.platform !== 'win32') chmodSync(targetPath, 0o755)
+    copyRuntimeSupport(extractDir)
+    const missing = requiredSupportFiles().filter((name) => !existsSync(join(binDir, name)))
+    if (missing.length) throw new Error(`Downloaded llama-server is missing required runtime libraries: ${missing.join(', ')}`)
     log(`installed ${targetPath}`)
   } finally {
     rmSync(workDir, { recursive: true, force: true })

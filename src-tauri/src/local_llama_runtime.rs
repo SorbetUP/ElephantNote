@@ -34,12 +34,7 @@ fn home_dir() -> PathBuf {
 fn model_dir() -> PathBuf {
   env::var_os("ELEPHANTNOTE_MODEL_DIR")
     .map(PathBuf::from)
-    .unwrap_or_else(|| {
-      home_dir()
-        .join(".elephantnote")
-        .join("models")
-        .join(MODEL_PROVIDER)
-    })
+    .unwrap_or_else(|| home_dir().join(".elephantnote").join("models").join(MODEL_PROVIDER))
 }
 
 fn text(value: &Value, keys: &[&str]) -> String {
@@ -63,13 +58,8 @@ fn local_runtime_config(payload: &Value) -> &Value {
 }
 
 fn runtime_mode(payload: &Value) -> String {
-  let config = local_runtime_config(payload);
-  let mode = text(config, &["llamaServerMode", "serverMode", "mode"]);
-  if mode.trim().is_empty() {
-    "bundled".to_string()
-  } else {
-    mode.to_lowercase()
-  }
+  let mode = text(local_runtime_config(payload), &["llamaServerMode", "serverMode", "mode"]);
+  if mode.trim().is_empty() { "bundled".to_string() } else { mode.to_lowercase() }
 }
 
 fn selected_model_candidates(selection: &str) -> Vec<String> {
@@ -102,14 +92,9 @@ fn manifest_matches(manifest_path: &Path, candidates: &[String]) -> bool {
     text(&manifest, &["repoId"]),
     text(&manifest, &["originalRepoId"]),
   ];
-  fields
-    .iter()
-    .filter(|value| !value.trim().is_empty())
-    .any(|value| {
-      candidates
-        .iter()
-        .any(|candidate| value == candidate || value.ends_with(candidate))
-    })
+  fields.iter().filter(|value| !value.trim().is_empty()).any(|value| {
+    candidates.iter().any(|candidate| value == candidate || value.ends_with(candidate))
+  })
 }
 
 fn resolve_model_path(selection: &str) -> R<Option<PathBuf>> {
@@ -126,10 +111,7 @@ fn resolve_model_path(selection: &str) -> R<Option<PathBuf>> {
   let dir = model_dir();
   let candidates = selected_model_candidates(selection);
   if !dir.exists() {
-    return Err(format!(
-      "Local GGUF model directory does not exist: {}.",
-      dir.to_string_lossy()
-    ));
+    return Err(format!("Local GGUF model directory does not exist: {}.", dir.to_string_lossy()));
   }
 
   for item in fs::read_dir(&dir).map_err(|error| error.to_string())? {
@@ -138,35 +120,24 @@ fn resolve_model_path(selection: &str) -> R<Option<PathBuf>> {
     if !path.is_file() {
       continue;
     }
-    let filename = path
-      .file_name()
-      .and_then(|name| name.to_str())
-      .unwrap_or("")
-      .to_string();
+    let filename = path.file_name().and_then(|name| name.to_str()).unwrap_or("").to_string();
     if !filename.to_lowercase().ends_with(".gguf") {
       continue;
     }
     let full = path.to_string_lossy().to_string();
     let manifest_path = PathBuf::from(format!("{}.model.json", full));
-    if candidates
-      .iter()
-      .any(|candidate| candidate == &filename || full.ends_with(candidate))
-      || manifest_matches(&manifest_path, &candidates)
-    {
+    if candidates.iter().any(|candidate| candidate == &filename || full.ends_with(candidate)) || manifest_matches(&manifest_path, &candidates) {
       return Ok(Some(path));
     }
   }
 
-  Err(format!(
-    "Selected chat model `{selection}` is not installed in {}.",
-    dir.to_string_lossy()
-  ))
+  Err(format!("Selected chat model `{selection}` is not installed in {}.", dir.to_string_lossy()))
 }
 
 fn base_url_from_env_or_payload(payload: &Value) -> String {
   let runtime = local_runtime_config(payload);
-  let from_runtime = text(runtime, &["llamaBaseUrl", "baseUrl"]);
   let from_payload = text(payload, &["llamaBaseUrl", "baseUrl"]);
+  let from_runtime = text(runtime, &["llamaBaseUrl", "baseUrl"]);
   if !from_payload.trim().is_empty() {
     return from_payload.trim_end_matches('/').to_string();
   }
@@ -176,11 +147,7 @@ fn base_url_from_env_or_payload(payload: &Value) -> String {
   env::var("ELEPHANTNOTE_LLAMA_BASE_URL")
     .ok()
     .filter(|value| !value.trim().is_empty())
-    .or_else(|| {
-      env::var("LLAMA_CPP_BASE_URL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-    })
+    .or_else(|| env::var("LLAMA_CPP_BASE_URL").ok().filter(|value| !value.trim().is_empty()))
     .unwrap_or_else(|| DEFAULT_BASE_URL.to_string())
     .trim_end_matches('/')
     .to_string()
@@ -200,8 +167,7 @@ fn local_port_from_base_url(base_url: &str) -> Option<u16> {
   let cleaned = base_url.trim_end_matches('/').trim_end_matches("/v1");
   for prefix in ["http://127.0.0.1:", "http://localhost:"] {
     if let Some(rest) = cleaned.strip_prefix(prefix) {
-      let port = rest.split('/').next().unwrap_or(rest);
-      return port.parse::<u16>().ok();
+      return rest.split('/').next().unwrap_or(rest).parse::<u16>().ok();
     }
   }
   None
@@ -233,19 +199,15 @@ fn app_managed_binary_candidates(app: &AppHandle) -> Vec<String> {
     push_if_file(&mut out, resource_dir.join(LLAMA_SERVER_BIN));
     push_if_file(&mut out, resource_dir.join("bin").join(LLAMA_SERVER_BIN));
   }
-  if let Ok(local_data_dir) = app.path().app_local_data_dir() {
-    push_if_file(
-      &mut out,
-      local_data_dir.join("llama.cpp").join(LLAMA_SERVER_BIN),
-    );
-  }
   for root in [
-    PathBuf::from("bin"),
     PathBuf::from("src-tauri").join("bin"),
     PathBuf::from("..").join("src-tauri").join("bin"),
+    PathBuf::from("bin"),
   ] {
     push_if_file(&mut out, root.join(LLAMA_SERVER_BIN));
   }
+  out.sort();
+  out.dedup();
   out
 }
 
@@ -255,17 +217,11 @@ fn configured_server_path(payload: &Value) -> String {
   if !from_payload.trim().is_empty() {
     return from_payload;
   }
-  text(
-    runtime,
-    &["llamaServerPath", "serverPath", "llamaBinary", "path"],
-  )
+  text(runtime, &["llamaServerPath", "serverPath", "llamaBinary", "path"])
 }
 
 fn is_path_mode(payload: &Value) -> bool {
-  matches!(
-    runtime_mode(payload).as_str(),
-    "path" | "custom" | "external" | "existing"
-  )
+  matches!(runtime_mode(payload).as_str(), "path" | "custom" | "external" | "existing")
 }
 
 fn server_binary_candidates(app: &AppHandle, payload: &Value) -> Vec<String> {
@@ -275,29 +231,9 @@ fn server_binary_candidates(app: &AppHandle, payload: &Value) -> Vec<String> {
     out.push(configured_path);
   }
 
-  if is_path_mode(payload) {
-    out.sort();
-    out.dedup();
-    return out;
+  if !is_path_mode(payload) {
+    out.extend(app_managed_binary_candidates(app));
   }
-
-  out.extend(app_managed_binary_candidates(app));
-
-  for key in ["ELEPHANTNOTE_LLAMA_SERVER", "LLAMA_SERVER", "LLAMA_CPP_SERVER"] {
-    if let Ok(value) = env::var(key) {
-      if !value.trim().is_empty() {
-        out.push(value);
-      }
-    }
-  }
-
-  out.extend([
-    LLAMA_SERVER_BIN.to_string(),
-    "llama.cpp-server".to_string(),
-    "llama-cpp-server".to_string(),
-    "/opt/homebrew/bin/llama-server".to_string(),
-    "/usr/local/bin/llama-server".to_string(),
-  ]);
 
   out.sort();
   out.dedup();
@@ -319,25 +255,6 @@ fn llama_server_args(model_path: &str, port: u16, context: &str, model_name: &st
   ]
 }
 
-fn models_response_has_model(data: &Value, model_name: &str) -> bool {
-  let model_name = model_name.trim().to_lowercase();
-  if model_name.is_empty() {
-    return false;
-  }
-  if let Some(models) = data.get("data").and_then(Value::as_array) {
-    return models.iter().any(|model| {
-      ["id", "name", "model"].iter().any(|key| {
-        model
-          .get(*key)
-          .and_then(Value::as_str)
-          .map(|value| value.to_lowercase().contains(&model_name))
-          .unwrap_or(false)
-      })
-    });
-  }
-  data.to_string().to_lowercase().contains(&model_name)
-}
-
 async fn server_ready(base_url: &str) -> bool {
   let Ok(client) = Client::builder().timeout(Duration::from_secs(2)).build() else {
     return false;
@@ -350,114 +267,75 @@ async fn server_ready(base_url: &str) -> bool {
     .unwrap_or(false)
 }
 
-async fn server_has_model(base_url: &str, model_name: &str) -> bool {
-  let Ok(client) = Client::builder().timeout(Duration::from_secs(2)).build() else {
-    return false;
-  };
-  let Ok(response) = client.get(format!("{}/models", base_url)).send().await else {
-    return false;
-  };
-  let Ok(data) = response.json::<Value>().await else {
-    return false;
-  };
-  models_response_has_model(&data, model_name)
-}
-
 async fn wait_until_ready(base_url: &str) -> bool {
-  for _ in 0..80 {
+  for attempt in 0..160 {
     if server_ready(base_url).await {
+      eprintln!("[tauri-rag] llama server ready after {} checks", attempt + 1);
       return true;
     }
-    let _ = tauri::async_runtime::spawn_blocking(|| {
-      std::thread::sleep(Duration::from_millis(250));
-    })
-    .await;
+    let _ = tauri::async_runtime::spawn_blocking(|| std::thread::sleep(Duration::from_millis(250))).await;
   }
   false
 }
 
-async fn start_server_if_needed(
-  app: &AppHandle,
-  model_path: &Path,
-  model_name: &str,
-  base_url: &str,
-  payload: &Value,
-) -> R<()> {
+async fn start_server_if_needed(app: &AppHandle, model_path: &Path, model_name: &str, base_url: &str, payload: &Value) -> R<()> {
   if server_ready(base_url).await {
-    if server_has_model(base_url, model_name).await {
-      return Ok(());
-    }
-    return Err(format!(
-      "Local llama.cpp endpoint at {base_url} is already running, but it does not report the selected model `{model_name}`. Stop the existing llama-server process or configure another local runtime base URL."
-    ));
+    eprintln!("[tauri-rag] llama server already reachable at {base_url}");
+    return Ok(());
   }
+
   let port = local_port_from_base_url(base_url).unwrap_or(DEFAULT_PORT);
   let model_path_string = model_path.to_string_lossy().to_string();
   let context = context_size_from_payload(payload);
   let candidates = server_binary_candidates(app, payload);
-  if candidates.is_empty() && is_path_mode(payload) {
-    return Err(
-      "Local llama runtime is set to `path`, but no llama-server path is configured.".to_string(),
-    );
+  if candidates.is_empty() {
+    if is_path_mode(payload) {
+      return Err("Local llama runtime is set to `path`, but no llama-server path is configured.".to_string());
+    }
+    return Err("Bundled llama-server is missing. ElephantNote expects it in src-tauri/bin/llama-server or as a bundled Tauri resource.".to_string());
   }
-  let mut errors = Vec::new();
 
   eprintln!(
-    "[tauri-rag] starting llama server for model={} base={} mode={}",
+    "[tauri-rag] starting bundled llama server model={} base={} mode={} candidates={}",
     model_path_string,
     base_url,
-    runtime_mode(payload)
+    runtime_mode(payload),
+    candidates.join(", ")
   );
   let args = llama_server_args(&model_path_string, port, &context, model_name);
+  let mut errors = Vec::new();
   for binary in candidates {
-    eprintln!("[tauri-rag] trying llama server binary: {}", binary);
+    eprintln!("[tauri-rag] trying bundled llama server binary: {} args={}", binary, args.join(" "));
     match Command::new(&binary)
       .args(&args)
-      .stdout(Stdio::null())
-      .stderr(Stdio::null())
+      .stdout(Stdio::inherit())
+      .stderr(Stdio::inherit())
       .spawn()
     {
       Ok(mut child) => {
-        if wait_until_ready(base_url).await && server_has_model(base_url, model_name).await {
+        if wait_until_ready(base_url).await {
           return Ok(());
         }
         let _ = child.kill();
         let _ = child.wait();
-        errors.push(format!(
-          "{}: endpoint did not become ready with selected model `{model_name}`",
-          binary
-        ));
+        errors.push(format!("{}: endpoint did not become ready at {base_url}", binary));
       }
       Err(error) => errors.push(format!("{}: {}", binary, error)),
     }
   }
-  Err(format!(
-    "Unable to start local llama server. Attempts: {}",
-    errors.join(" | ")
-  ))
+
+  Err(format!("Unable to start ElephantNote bundled llama server. Attempts: {}", errors.join(" | ")))
 }
 
-pub async fn chat_with_selected_model(
-  app: &AppHandle,
-  selection: &str,
-  messages: &[Value],
-  payload: &Value,
-) -> R<Option<LocalChatResult>> {
+pub async fn chat_with_selected_model(app: &AppHandle, selection: &str, messages: &[Value], payload: &Value) -> R<Option<LocalChatResult>> {
   let Some(model_path) = resolve_model_path(selection)? else {
     return Ok(None);
   };
   let base_url = base_url_from_env_or_payload(payload);
-  let model_name = model_path
-    .file_name()
-    .and_then(|name| name.to_str())
-    .unwrap_or("local.gguf")
-    .to_string();
+  let model_name = model_path.file_name().and_then(|name| name.to_str()).unwrap_or("local.gguf").to_string();
   start_server_if_needed(app, &model_path, &model_name, &base_url, payload).await?;
 
-  let temperature = payload
-    .get("temperature")
-    .and_then(Value::as_f64)
-    .unwrap_or(0.2);
+  let temperature = payload.get("temperature").and_then(Value::as_f64).unwrap_or(0.2);
   let max_tokens = payload
     .get("maxTokens")
     .or_else(|| payload.get("max_tokens"))
@@ -482,10 +360,7 @@ pub async fn chat_with_selected_model(
   let status = response.status();
   let data = response.json::<Value>().await.unwrap_or_else(|_| json!({}));
   if !status.is_success() {
-    return Err(error_text(
-      &data,
-      format!("Local llama.cpp server returned HTTP {status}."),
-    ));
+    return Err(error_text(&data, format!("Local llama.cpp server returned HTTP {status}.")));
   }
   let answer = data
     .pointer("/choices/0/message/content")
@@ -499,11 +374,7 @@ pub async fn chat_with_selected_model(
   }
   Ok(Some(LocalChatResult {
     answer,
-    provider: if is_path_mode(payload) {
-      "local-llama.cpp-path".to_string()
-    } else {
-      "local-llama.cpp-bundled".to_string()
-    },
+    provider: if is_path_mode(payload) { "local-llama.cpp-path".to_string() } else { "local-llama.cpp-bundled".to_string() },
     model: model_name,
     base_url,
   }))
@@ -570,10 +441,7 @@ mod tests {
       "llamaBaseUrl": "http://127.0.0.1:50000/v1/",
       "aiConfig": { "localRuntime": { "llamaBaseUrl": "http://127.0.0.1:49999/v1/" } }
     });
-    assert_eq!(
-      base_url_from_env_or_payload(&payload),
-      "http://127.0.0.1:50000/v1"
-    );
+    assert_eq!(base_url_from_env_or_payload(&payload), "http://127.0.0.1:50000/v1");
   }
 
   #[test]
@@ -581,10 +449,7 @@ mod tests {
     let value = json!({
       "aiConfig": { "localRuntime": { "llamaBaseUrl": "http://127.0.0.1:49999/v1/" } }
     });
-    assert_eq!(
-      base_url_from_env_or_payload(&value),
-      "http://127.0.0.1:49999/v1"
-    );
+    assert_eq!(base_url_from_env_or_payload(&value), "http://127.0.0.1:49999/v1");
   }
 
   #[test]
@@ -601,21 +466,30 @@ mod tests {
   }
 
   #[test]
-  fn models_response_detects_selected_model() {
-    let response = json!({ "data": [{ "id": "smol.gguf" }] });
-    assert!(models_response_has_model(&response, "smol.gguf"));
-    assert!(!models_response_has_model(&response, "other.gguf"));
+  fn bundled_runtime_does_not_add_global_shell_candidates() {
+    let payload = json!({});
+    let candidates = server_binary_candidates_for_test(&payload);
+    assert!(!candidates.contains(&"llama-server".to_string()));
+    assert!(!candidates.contains(&"/opt/homebrew/bin/llama-server".to_string()));
   }
 
   #[test]
-  fn models_response_supports_name_and_model_fields() {
-    assert!(models_response_has_model(
-      &json!({ "data": [{ "name": "Qwen2.5.gguf" }] }),
-      "qwen2.5.gguf"
-    ));
-    assert!(models_response_has_model(
-      &json!({ "data": [{ "model": "/tmp/TinyLlama.gguf" }] }),
-      "tinyllama.gguf"
-    ));
+  fn path_mode_uses_configured_binary_only() {
+    let payload = json!({ "localRuntime": { "llamaServerMode": "path", "llamaServerPath": "/tmp/llama-server" } });
+    let mut out = Vec::new();
+    let configured = configured_server_path(&payload);
+    if !configured.is_empty() { out.push(configured); }
+    assert_eq!(out, vec!["/tmp/llama-server".to_string()]);
+  }
+
+  fn server_binary_candidates_for_test(payload: &Value) -> Vec<String> {
+    let mut out = Vec::new();
+    let configured_path = configured_server_path(payload);
+    if !configured_path.trim().is_empty() {
+      out.push(configured_path);
+    }
+    out.sort();
+    out.dedup();
+    out
   }
 }

@@ -6,6 +6,7 @@ import axios from './axios'
 import pinia from './store'
 import './assets/symbolIcon'
 import { installRuntimeBridge } from './platform/runtimeBridge'
+import { installTauriFileUtilsPathGuards } from './platform/tauriFileUtilsPathGuards'
 import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
 import { installTauriSearchRuntimeGuards } from './platform/tauriSearchRuntimeGuards'
 import { installPiProviderBridge } from './platform/piProviderInterface'
@@ -205,6 +206,7 @@ globalThis.marktext = {}
 clearBootstrapFileUtilsFallbackForTauri()
 installRuntimeBridge()
 ensurePathResolve()
+installTauriFileUtilsPathGuards()
 installTauriElephantNoteBridge()
 installTauriSearchRuntimeGuards()
 installTauriSearchConceptFallback()

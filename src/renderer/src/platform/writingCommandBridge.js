@@ -2,6 +2,7 @@ import bus from '@/bus'
 
 const COMMAND_LOG_PREFIX = '[writing-command]'
 const DUPLICATE_COMMAND_WINDOW_MS = 350
+const QUICK_INSERT_QUERY_RE = /^\/[\p{L}\p{N}_-]*$/u
 
 let lastCommand = { name: '', at: 0 }
 
@@ -12,6 +13,60 @@ const shouldSkipDuplicateCommand = (command) => {
   const duplicate = lastCommand.name === command && now - lastCommand.at < DUPLICATE_COMMAND_WINDOW_MS
   lastCommand = { name: command, at: now }
   return duplicate
+}
+
+const textNodeBeforeSelection = (range) => {
+  const node = range?.startContainer
+  if (!node) return null
+  if (node.nodeType === Node.TEXT_NODE) return { node, offset: range.startOffset }
+  if (node.nodeType !== Node.ELEMENT_NODE) return null
+  const child = node.childNodes[Math.max(0, range.startOffset - 1)]
+  if (child?.nodeType === Node.TEXT_NODE) return { node: child, offset: child.textContent.length }
+  const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+  let current = null
+  let last = null
+  while ((current = walker.nextNode())) last = current
+  return last ? { node: last, offset: last.textContent.length } : null
+}
+
+const removeActiveQuickInsertQuery = () => {
+  const selection = window.getSelection?.()
+  if (!selection?.rangeCount) return false
+  const range = selection.getRangeAt(0)
+  if (!range.collapsed) return false
+  const textInfo = textNodeBeforeSelection(range)
+  if (!textInfo?.node) return false
+
+  const text = String(textInfo.node.textContent || '')
+  const beforeCursor = text.slice(0, textInfo.offset)
+  const slashIndex = beforeCursor.lastIndexOf('/')
+  if (slashIndex < 0) return false
+  const query = beforeCursor.slice(slashIndex)
+  if (!QUICK_INSERT_QUERY_RE.test(query)) return false
+
+  const deleteRange = document.createRange()
+  deleteRange.setStart(textInfo.node, slashIndex)
+  deleteRange.setEnd(textInfo.node, textInfo.offset)
+  selection.removeAllRanges()
+  selection.addRange(deleteRange)
+
+  let removed = false
+  try {
+    removed = document.execCommand('delete') === true
+  } catch {
+    removed = false
+  }
+  if (!removed) {
+    textInfo.node.textContent = `${text.slice(0, slashIndex)}${text.slice(textInfo.offset)}`
+    const nextRange = document.createRange()
+    nextRange.setStart(textInfo.node, slashIndex)
+    nextRange.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(nextRange)
+    removed = true
+  }
+  console.info(`${COMMAND_LOG_PREFIX} removed quick insert query`, { query })
+  return removed
 }
 
 const openExcalidraw = () => {
@@ -30,6 +85,7 @@ const runWritingCommand = (command) => {
     console.info(`${COMMAND_LOG_PREFIX} duplicate ignored`, { command: normalized })
     return true
   }
+  removeActiveQuickInsertQuery()
   console.info(`${COMMAND_LOG_PREFIX} run`, { command: normalized })
   switch (normalized) {
     case 'heading-2':

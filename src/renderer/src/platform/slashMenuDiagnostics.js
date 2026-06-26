@@ -20,8 +20,20 @@ const findSlashMenuContainer = (target) => {
   return target.closest('.ag-quick-insert, .ag-front-menu')
 }
 
+const findQuickInsertContainer = (target) => {
+  if (!target?.closest) return null
+  return target.closest('.ag-quick-insert')
+}
+
 const findSlashMenuItem = (target) => {
   const container = findSlashMenuContainer(target)
+  if (!container || !target?.closest) return null
+  const item = target.closest('.item, [role="menuitem"], .sub-title, a, button, li')
+  return item && container.contains(item) ? item : null
+}
+
+const findQuickInsertItem = (target) => {
+  const container = findQuickInsertContainer(target)
   if (!container || !target?.closest) return null
   const item = target.closest('.item, [role="menuitem"], .sub-title, a, button, li')
   return item && container.contains(item) ? item : null
@@ -75,8 +87,8 @@ export const installSlashMenuDiagnostics = (target = globalThis) => {
     })
   }
 
-  const preserveSelectionBeforeMenuClick = (event) => {
-    const menuItem = findSlashMenuItem(event.target)
+  const preserveSelectionBeforeQuickInsertClick = (event) => {
+    const menuItem = findQuickInsertItem(event.target)
     if (!menuItem) return
     event.preventDefault()
     console.info(`${SLASH_LOG_PREFIX} preserve-selection`, {
@@ -127,8 +139,8 @@ export const installSlashMenuDiagnostics = (target = globalThis) => {
   })
 
   document.addEventListener('keydown', keydown, true)
-  document.addEventListener('pointerdown', preserveSelectionBeforeMenuClick, true)
-  document.addEventListener('mousedown', preserveSelectionBeforeMenuClick, true)
+  document.addEventListener('pointerdown', preserveSelectionBeforeQuickInsertClick, true)
+  document.addEventListener('mousedown', preserveSelectionBeforeQuickInsertClick, true)
   document.addEventListener('pointerdown', pointer, true)
   document.addEventListener('click', handleSlashMenuClick, true)
   document.addEventListener('click', pointer, true)

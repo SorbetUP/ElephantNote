@@ -20,13 +20,17 @@ export const serializeDraggedEntry = (entry) => JSON.stringify({
   title: entry?.title || entry?.filename?.replace(/\.md$/i, '') || ''
 })
 
-export const parseDraggedEntry = (event) => {
-  const raw = event?.dataTransfer?.getData(ELEPHANTNOTE_ENTRY_DRAG_TYPE)
+const getTransfer = (value) => value?.dataTransfer || value || null
+
+export const parseDraggedEntry = (eventOrTransfer) => {
+  const transfer = getTransfer(eventOrTransfer)
+  const raw = transfer?.getData?.(ELEPHANTNOTE_ENTRY_DRAG_TYPE)
   if (!raw) return activeDraggedEntry
   try {
     const parsed = JSON.parse(raw)
-    return parsed?.path ? parsed : null
-  } catch {
+    return parsed?.path ? parsed : activeDraggedEntry
+  } catch (error) {
+    console.warn('[library:dnd] failed to parse dragged entry payload', { error: error?.message || String(error) })
     return activeDraggedEntry
   }
 }
@@ -42,9 +46,11 @@ export const writeDraggedEntry = (event, entry) => {
   event.dataTransfer.effectAllowed = 'move'
   event.dataTransfer.dropEffect = 'move'
   event.dataTransfer.setData(ELEPHANTNOTE_ENTRY_DRAG_TYPE, serializeDraggedEntry(activeDraggedEntry))
+  console.info('[library:dnd] drag:start', activeDraggedEntry)
 }
 
 export const clearDraggedEntry = () => {
+  console.info('[library:dnd] drag:clear', activeDraggedEntry)
   activeDraggedEntry = null
 }
 

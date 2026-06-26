@@ -36,25 +36,21 @@ const normalizeCreatedDashboard = (result) => {
 
 const openDashboardNote = async () => {
   try {
-    console.info('[dashboard] open root note:start', { path: DASHBOARD_NOTE_RELATIVE_PATH })
+    console.info('[dashboard] open hidden dashboard note:start', { path: DASHBOARD_NOTE_RELATIVE_PATH })
     statusMessage.value = 'Opening Dashboard.md...'
 
     let dashboardNote = findExistingDashboard()
     if (!dashboardNote) {
       const result = await elephantnoteClient.notes.create(buildDashboardNoteCreatePayload())
-      if (Array.isArray(result?.entries)) {
-        store.entries = result.entries
-        store.rootEntries = result.entries
-      }
       dashboardNote = normalizeCreatedDashboard(result)
     }
 
     store.openNote(dashboardNote, { record: false })
     statusMessage.value = 'Dashboard.md opened.'
-    console.info('[dashboard] open root note:done', { path: dashboardNote.path })
+    console.info('[dashboard] open hidden dashboard note:done', { path: dashboardNote.path })
   } catch (error) {
     statusMessage.value = error instanceof Error ? error.message : 'Failed to open Dashboard.md.'
-    console.error('[dashboard] open root note:failed', error)
+    console.error('[dashboard] open hidden dashboard note:failed', error)
   }
 }
 

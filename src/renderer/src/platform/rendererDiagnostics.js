@@ -45,7 +45,14 @@ const normalizeConsoleArgs = (args = []) => {
   return { message, details }
 }
 
+const isNoisyElementPlusWarning = (entry) => {
+  if (entry.level !== 'warn') return false
+  const text = `${entry.message || ''} ${safeJson(entry.details || '')}`
+  return text.includes('[el-dialog] [API] the title slot is about to be deprecated')
+}
+
 const forwardToTauriTerminal = (entry) => {
+  if (isNoisyElementPlusWarning(entry) && !isDiagnosticVerbose()) return
   const invoke = globalThis.window?.__TAURI__?.core?.invoke
   if (!invoke) return
   try {
@@ -98,7 +105,12 @@ export const pushDiagnosticLog = (level, message, details = null) => {
   }
   if (shouldEmitDiagnostic(level)) {
     const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'
-    console[method](`[elephant:${level}] ${message}`, entry.details || '')
+    forwardingConsole = true
+    try {
+      console[method](`[elephant:${level}] ${message}`, entry.details || '')
+    } finally {
+      forwardingConsole = false
+    }
   }
   forwardToTauriTerminal(entry)
   return entry

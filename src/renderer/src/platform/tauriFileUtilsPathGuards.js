@@ -1,6 +1,7 @@
 const KNOWN_EXISTING_PATHS = new Set()
 const HIDDEN_VAULT_ASSET_RE = /(?:^|\/)\.assets\//i
 const IMAGE_ASSET_RE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico)(?:[?#].*)?$/i
+const EXCALIDRAW_SCENE_RE = /(?:^|\/)\.assets\/excalidraw-[^/]+\.excalidraw(?:[?#].*)?$/i
 
 const normalizeSlashes = (value = '') => String(value || '').replace(/\\/g, '/')
 
@@ -52,7 +53,7 @@ const rememberPath = (pathname, isDirectory = false) => {
 
 const shouldTrustHiddenAssetPath = (pathname = '') => {
   const normalized = normalizeFilePath(pathname)
-  return HIDDEN_VAULT_ASSET_RE.test(normalized) && IMAGE_ASSET_RE.test(normalized)
+  return HIDDEN_VAULT_ASSET_RE.test(normalized) && (IMAGE_ASSET_RE.test(normalized) || EXCALIDRAW_SCENE_RE.test(normalized))
 }
 
 const wrapPathMethod = (fileUtils, name, pathIndexes = [0], afterSuccess = null) => {

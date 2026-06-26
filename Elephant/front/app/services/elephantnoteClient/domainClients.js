@@ -33,19 +33,20 @@ const ensureSearchVaultForChat = async (call) => {
 }
 
 const hasCitations = (result) => Array.isArray(result?.citations) && result.citations.length > 0
+const hasAnswer = (result) => typeof result?.answer === 'string' && result.answer.trim().length > 0
 
 const callRagChat = async (call, message, limit = 6) => {
   const vaultPath = await ensureSearchVaultForChat(call)
   const payload = { message, limit }
   const result = await call(API.RAG_CHAT, payload)
 
-  if (hasCitations(result) || !shouldRebuildChatSearch(vaultPath)) {
+  if (hasAnswer(result) || hasCitations(result) || !shouldRebuildChatSearch(vaultPath)) {
     return result
   }
 
   await call(API.SEARCH_REBUILD, {}).catch(() => null)
   const retry = await call(API.RAG_CHAT, payload).catch(() => null)
-  return retry?.answer || hasCitations(retry) ? retry : result
+  return hasAnswer(retry) || hasCitations(retry) ? retry : result
 }
 
 const directoryListPayload = (payload = '') => typeof payload === 'string'

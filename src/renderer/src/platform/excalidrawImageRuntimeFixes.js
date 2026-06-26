@@ -3,9 +3,12 @@ import bus from '@/bus'
 const LOCAL_FILE_PREFIX = 'local-file://'
 const EXCALIDRAW_ASSET_RE = /(?:^|\/)\.assets\/excalidraw-[^/?#]+\.png(?:[?#].*)?$/i
 const INSTALLED_ATTR = 'data-elephant-excalidraw-edit-installed'
+const CACHE_BUST_ATTR = 'data-elephant-excalidraw-cache-bust'
+
+let cacheBustSerial = Date.now()
 
 const normalizeSlashes = (value = '') => String(value || '').replace(/\\/g, '/')
-
+const stripQueryAndHash = (value = '') => String(value || '').split(/[?#]/)[0]
 const decodeSafe = (value = '') => {
   try {
     return decodeURIComponent(String(value || ''))
@@ -14,16 +17,10 @@ const decodeSafe = (value = '') => {
   }
 }
 
-const localFileUrlToPath = (value = '') => {
-  const text = String(value || '')
+const localSourceToPath = (value = '') => {
+  const text = stripQueryAndHash(value)
   if (text.startsWith(LOCAL_FILE_PREFIX)) return decodeSafe(text.slice(LOCAL_FILE_PREFIX.length))
-  if (!/^file:/i.test(text)) return text
-  try {
-    const url = new URL(text)
-    return decodeSafe(url.pathname)
-  } catch {
-    return text.replace(/^file:\/\//i, '')
-  }
+  return decodeSafe(text)
 }
 
 const imageSource = (img) => {
@@ -34,7 +31,7 @@ const imageSource = (img) => {
     img.getAttribute('src'),
     img.currentSrc
   ].filter(Boolean)
-  return candidates.find((candidate) => EXCALIDRAW_ASSET_RE.test(normalizeSlashes(localFileUrlToPath(candidate)))) || ''
+  return candidates.find((candidate) => EXCALIDRAW_ASSET_RE.test(normalizeSlashes(localSourceToPath(candidate)))) || ''
 }
 
 const removeLocalImageLoaders = (img) => {
@@ -47,6 +44,18 @@ const removeLocalImageLoaders = (img) => {
     loader.style.opacity = '0'
     loader.style.pointerEvents = 'none'
     loader.setAttribute('aria-hidden', 'true')
+  }
+}
+
+const refreshImageSource = (img, source) => {
+  const pathname = normalizeSlashes(localSourceToPath(source))
+  if (!pathname || !EXCALIDRAW_ASSET_RE.test(pathname)) return
+  const token = `${pathname}:${cacheBustSerial}`
+  if (img.getAttribute(CACHE_BUST_ATTR) === token) return
+  img.setAttribute(CACHE_BUST_ATTR, token)
+  const nextSrc = `${LOCAL_FILE_PREFIX}${pathname}?v=${cacheBustSerial}`
+  if (img.getAttribute('src') !== nextSrc) {
+    img.setAttribute('src', nextSrc)
   }
 }
 
@@ -73,7 +82,7 @@ const ensureEditButton = (img, source) => {
   button.addEventListener('click', (event) => {
     event.preventDefault()
     event.stopPropagation()
-    bus.emit('open-excalidraw-from-image', localFileUrlToPath(source))
+    bus.emit('open-excalidraw-from-image', localSourceToPath(source))
   }, true)
   container.appendChild(button)
 }
@@ -82,6 +91,7 @@ const repairImage = (img) => {
   const source = imageSource(img)
   if (!source) return false
   removeLocalImageLoaders(img)
+  refreshImageSource(img, source)
   ensureEditButton(img, source)
   return true
 }
@@ -95,6 +105,11 @@ const repairAllImages = () => {
   return repaired
 }
 
+const refreshAllDrawings = () => {
+  cacheBustSerial = Date.now()
+  repairAllImages()
+}
+
 export const installExcalidrawImageRuntimeFixes = (target = globalThis) => {
   if (!target?.document || target.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__) return false
   target.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__ = true
@@ -102,12 +117,26 @@ export const installExcalidrawImageRuntimeFixes = (target = globalThis) => {
   const repairSoon = () => {
     window.requestAnimationFrame(() => repairAllImages())
   }
-  const observer = new MutationObserver(repairSoon)
+  const observer = new MutationObserver((records) => {
+    let closedDialog = false
+    for (const record of records) {
+      for (const node of record.removedNodes || []) {
+        if (node.nodeType === Node.ELEMENT_NODE && (node.matches?.('.en-excalidraw-overlay') || node.querySelector?.('.en-excalidraw-overlay'))) {
+          closedDialog = true
+        }
+      }
+    }
+    if (closedDialog) {
+      window.setTimeout(refreshAllDrawings, 80)
+      return
+    }
+    repairSoon()
+  })
   observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'data-src', 'class'] })
   document.addEventListener('load', (event) => {
     if (event.target?.tagName === 'IMG') repairImage(event.target)
   }, true)
-  bus.on('invalidate-image-cache', repairSoon)
+  bus.on('invalidate-image-cache', refreshAllDrawings)
   repairSoon()
   console.info('[excalidraw-image] runtime fixes installed')
   return true

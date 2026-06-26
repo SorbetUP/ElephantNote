@@ -70,10 +70,11 @@ const loadingMoreEntries = ref(false)
 const directoryMayHaveMore = ref(true)
 const directoryGeneration = ref(0)
 
-const isMarkdownNotePath = (path = '') => /\.md$/i.test(String(path || ''))
+const normalizeSlashPath = (value = '') => String(value || '').split(String.fromCharCode(92)).join('/')
+const isMarkdownNotePath = (path = '') => /[.]md$/i.test(String(path || ''))
 
 const isLegacyRootWikiEntry = (entry) => {
-  const pathname = String(entry?.path || '').replace(/\/g, '/').replace(/\/+$/g, '')
+  const pathname = normalizeSlashPath(entry?.path).replace(/\/+$/g, '')
   return store.activeWorkspaceView === 'notes' && store.currentPath === '' && /^wiki$/i.test(pathname)
 }
 

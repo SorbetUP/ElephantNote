@@ -1,3 +1,5 @@
+import bus from '@/bus'
+
 const SLASH_LOG_PREFIX = '[slash-menu]'
 
 const describeElement = (element) => {
@@ -23,7 +25,7 @@ const findSlashMenuContainer = (target) => {
 const findSlashMenuItem = (target) => {
   const container = findSlashMenuContainer(target)
   if (!container || !target?.closest) return null
-  return target.closest('.item, [role="menuitem"], button, li, .sub-title')
+  return target.closest('.item, [role="menuitem"], button, li, .sub-title, a, div')
 }
 
 const findSlashMenuTarget = (target) => {
@@ -48,6 +50,29 @@ const activeEditorSnapshot = () => {
     selectionTextLength: String(selection?.toString?.() || '').length,
     rangeCount: selection?.rangeCount || 0
   }
+}
+
+const isExcalidrawMenuChoice = (item, rawTarget) => {
+  const itemText = String(item?.textContent || '').trim().toLowerCase()
+  const targetText = String(rawTarget?.textContent || '').trim().toLowerCase()
+  const itemClass = String(item?.getAttribute?.('class') || '').toLowerCase()
+  const targetClass = String(rawTarget?.getAttribute?.('class') || '').toLowerCase()
+  return itemText === 'insert drawing' ||
+    itemText === 'excalidraw' ||
+    targetText === 'insert drawing' ||
+    targetText === 'excalidraw' ||
+    itemClass.includes('excalidraw') ||
+    targetClass.includes('excalidraw')
+}
+
+const openExcalidrawFromSlashMenu = () => {
+  const fileName = `excalidraw-${Date.now()}.png`
+  bus.emit('ELEPHANT::open-excalidraw', {
+    fileName,
+    title: 'Excalidraw',
+    saveMode: 'png',
+    insertOnSave: true
+  })
 }
 
 export const installSlashMenuDiagnostics = (target = globalThis) => {
@@ -78,6 +103,18 @@ export const installSlashMenuDiagnostics = (target = globalThis) => {
       defaultPrevented: event.defaultPrevented,
       ...activeEditorSnapshot()
     })
+  }
+
+  const handleSlashMenuClick = (event) => {
+    const menuItem = findSlashMenuItem(event.target)
+    const menuContainer = findSlashMenuContainer(event.target)
+    if (!menuItem || !menuContainer || !isExcalidrawMenuChoice(menuItem, event.target)) return
+    console.info(`${SLASH_LOG_PREFIX} excalidraw-command`, {
+      item: describeElement(menuItem),
+      rawTarget: describeElement(event.target),
+      ...activeEditorSnapshot()
+    })
+    window.setTimeout(openExcalidrawFromSlashMenu, 0)
   }
 
   const pointer = (event) => {
@@ -111,6 +148,7 @@ export const installSlashMenuDiagnostics = (target = globalThis) => {
   document.addEventListener('pointerdown', preserveSelectionBeforeMenuClick, true)
   document.addEventListener('mousedown', preserveSelectionBeforeMenuClick, true)
   document.addEventListener('pointerdown', pointer, true)
+  document.addEventListener('click', handleSlashMenuClick, true)
   document.addEventListener('click', pointer, true)
   mutationObserver.observe(document.documentElement, { childList: true, subtree: true })
   console.info(`${SLASH_LOG_PREFIX} diagnostics:installed`)

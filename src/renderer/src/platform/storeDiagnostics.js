@@ -2,7 +2,7 @@ import bus from '@/bus'
 import { useEditorStore } from '@/store/editor'
 import { useLayoutStore } from '@/store/layout'
 import { useProjectStore } from '@/store/project'
-import { useVaultStore } from '@/elephantnote/stores/vaultStore'
+import { useVaultStore } from '../../../../Elephant/front/app/stores/vaultStore'
 import { isDiagnosticVerbose, pushDiagnosticLog } from './rendererDiagnostics'
 
 const EXCALIDRAW_ASSET_RE = /!\[[^\]]*\]\([^)]*(?:^|\/)\.assets\/excalidraw-[^)]+\.png[^)]*\)/i

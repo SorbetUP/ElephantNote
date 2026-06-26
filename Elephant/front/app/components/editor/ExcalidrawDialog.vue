@@ -226,6 +226,7 @@ onBeforeUnmount(() => {
   background: var(--en-bg, #0f172a);
   color: var(--en-text, #eef2ff);
   position: relative;
+  padding-top: 28px;
   -webkit-app-region: no-drag;
 }
 
@@ -241,9 +242,9 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 0 8px 0 86px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.08);
-  background: color-mix(in srgb, var(--en-bg, #0f172a) 92%, transparent);
+  background: color-mix(in srgb, var(--en-bg, #0f172a) 94%, transparent);
   backdrop-filter: blur(16px);
-  z-index: 2;
+  z-index: 4;
 }
 
 .en-excalidraw-name-wrap {
@@ -304,5 +305,7 @@ onBeforeUnmount(() => {
 .en-excalidraw-canvas {
   flex: 1;
   min-height: 0;
+  height: calc(100vh - 28px);
+  background: #fff;
 }
 </style>

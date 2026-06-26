@@ -14,6 +14,8 @@ import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBrid
 import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
 import { installSlashMenuDiagnostics } from './platform/slashMenuDiagnostics'
 import { installWritingCommandBridge } from './platform/writingCommandBridge'
+import { installExcalidrawMarkdownCleanup } from './platform/excalidrawMarkdownCleanup'
+import { installExcalidrawImageRuntimeFixes } from './platform/excalidrawImageRuntimeFixes'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
 import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
@@ -284,6 +286,8 @@ const mountRendererApp = (runtime, windowType) => {
 
   installGraphRuntimeFixes()
   installStoreDiagnostics()
+  installExcalidrawMarkdownCleanup()
+  installExcalidrawImageRuntimeFixes()
 }
 
 const startRendererApp = async() => {

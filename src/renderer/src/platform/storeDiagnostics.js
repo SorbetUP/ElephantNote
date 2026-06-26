@@ -2,6 +2,7 @@ import bus from '@/bus'
 import { useEditorStore } from '@/store/editor'
 import { useLayoutStore } from '@/store/layout'
 import { useProjectStore } from '@/store/project'
+import { useVaultStore } from '@/elephantnote/stores/vaultStore'
 import { isDiagnosticVerbose, pushDiagnosticLog } from './rendererDiagnostics'
 
 const EXCALIDRAW_ASSET_RE = /!\[[^\]]*\]\([^)]*(?:^|\/)\.assets\/excalidraw-[^)]+\.png[^)]*\)/i
@@ -73,8 +74,15 @@ const installEditorContentGuard = (editorStore) => {
   }
 }
 
-const noteRelativeRootAssetPath = (assetSource, tab, projectStore) => {
-  const vaultRoot = projectStore.projectTree?.pathname || ''
+const getVaultRootPath = (vaultStore, projectStore) => {
+  return vaultStore?.activeVault?.path ||
+    vaultStore?.vaults?.find?.((vault) => vault.id === vaultStore.activeVaultId)?.path ||
+    projectStore?.projectTree?.pathname ||
+    ''
+}
+
+const noteRelativeRootAssetPath = (assetSource, tab, vaultStore, projectStore) => {
+  const vaultRoot = getVaultRootPath(vaultStore, projectStore)
   const notePath = tab?.pathname || ''
   const pathApi = globalThis.window?.path
   if (!assetSource || !vaultRoot || !notePath || !pathApi?.join || !pathApi?.dirname || !pathApi?.relative) {
@@ -87,11 +95,11 @@ const noteRelativeRootAssetPath = (assetSource, tab, projectStore) => {
   return encodeMarkdownAssetPath(relativePath)
 }
 
-const rewriteRootAssetMarkdownReferencesIfNeeded = (tab, projectStore) => {
+const rewriteRootAssetMarkdownReferencesIfNeeded = (tab, vaultStore, projectStore) => {
   if (!tab?.id || typeof tab.markdown !== 'string' || !tab.markdown.includes('](.assets/')) return false
   let rewrittenCount = 0
   const nextMarkdown = tab.markdown.replace(ROOT_ASSET_REFERENCE_RE, (full, prefix, source, suffix, close) => {
-    const replacement = noteRelativeRootAssetPath(source, tab, projectStore)
+    const replacement = noteRelativeRootAssetPath(source, tab, vaultStore, projectStore)
     if (replacement !== source) rewrittenCount += 1
     return `${prefix}${replacement}${suffix}${close}`
   })
@@ -114,15 +122,16 @@ const rewriteRootAssetMarkdownReferencesIfNeeded = (tab, projectStore) => {
   pushDiagnosticLog('info', 'editor-state:rewrote-root-vault-assets-relative-to-note', {
     id: tab.id,
     pathname: tab.pathname || null,
+    vaultRoot: getVaultRootPath(vaultStore, projectStore) || null,
     rewrittenCount,
     markdownLength: nextMarkdown.length
   })
   return true
 }
 
-const protectProgrammaticMarkdownIfNeeded = (tab, projectStore) => {
+const protectProgrammaticMarkdownIfNeeded = (tab, vaultStore, projectStore) => {
   if (!tab?.id || typeof tab.markdown !== 'string') return
-  rewriteRootAssetMarkdownReferencesIfNeeded(tab, projectStore)
+  rewriteRootAssetMarkdownReferencesIfNeeded(tab, vaultStore, projectStore)
   const previousMarkdown = tabMarkdownSnapshots.get(tab.id) || ''
   const nextMarkdown = tab.markdown
   tabMarkdownSnapshots.set(tab.id, nextMarkdown)
@@ -156,6 +165,7 @@ export const installStoreDiagnostics = () => {
   const projectStore = useProjectStore()
   const editorStore = useEditorStore()
   const layoutStore = useLayoutStore()
+  const vaultStore = useVaultStore()
 
   installEditorContentGuard(editorStore)
 
@@ -167,7 +177,7 @@ export const installStoreDiagnostics = () => {
 
   const initialId = editorStore.currentFile?.id
   const initialTab = initialId ? editorStore.tabs.find((tab) => tab.id === initialId) : null
-  if (initialTab) protectProgrammaticMarkdownIfNeeded(initialTab, projectStore)
+  if (initialTab) protectProgrammaticMarkdownIfNeeded(initialTab, vaultStore, projectStore)
 
   projectStore.$subscribe((mutation) => {
     if (!isDiagnosticVerbose()) return
@@ -177,10 +187,16 @@ export const installStoreDiagnostics = () => {
     })
   })
 
+  vaultStore.$subscribe(() => {
+    const currentId = editorStore.currentFile?.id
+    const activeTab = currentId ? editorStore.tabs.find((tab) => tab.id === currentId) : null
+    if (activeTab) protectProgrammaticMarkdownIfNeeded(activeTab, vaultStore, projectStore)
+  })
+
   editorStore.$subscribe((mutation) => {
     const currentId = editorStore.currentFile?.id
     const activeTab = currentId ? editorStore.tabs.find((tab) => tab.id === currentId) : null
-    if (activeTab) protectProgrammaticMarkdownIfNeeded(activeTab, projectStore)
+    if (activeTab) protectProgrammaticMarkdownIfNeeded(activeTab, vaultStore, projectStore)
     if (activeTab && activeTab !== editorStore.currentFile) {
       editorStore.currentFile = activeTab
       pushDiagnosticLog('info', 'editor-state:current-file-synced-from-tab', {

@@ -1,7 +1,11 @@
 <template>
   <div
     class="en-library-grid"
-    :class="{ list: store.viewMode === 'list', 'is-drop-target': isRootDropTarget }"
+    :class="{
+      list: store.viewMode === 'list',
+      'is-drop-target': isRootDropTarget,
+      'is-empty': !visibleEntries.length && !renamingEntry
+    }"
     @scroll.passive="handleGridScroll"
     @dragover.prevent="handleRootDragOver"
     @dragleave="handleRootDragLeave"
@@ -267,6 +271,11 @@ const handleRootDrop = async(event) => {
 }
 .en-library-grid.list {
   grid-template-columns: 1fr;
+}
+.en-library-grid.is-empty {
+  display: block;
+  padding: 0;
+  background: transparent;
 }
 .en-library-grid.is-drop-target {
   outline: 2px dashed var(--en-accent);

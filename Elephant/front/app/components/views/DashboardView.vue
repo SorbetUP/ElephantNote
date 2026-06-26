@@ -22,15 +22,25 @@ const findExistingDashboard = () => [
   ...(store.openedNotes || [])
 ].find((entry) => entry?.path === DASHBOARD_NOTE_RELATIVE_PATH)
 
-const normalizeCreatedDashboard = (result) => {
+const normalizeDashboardNote = (result) => {
   const note = result?.note || result || {}
   return {
     ...note,
     path: note.path || DASHBOARD_NOTE_RELATIVE_PATH,
+    fullPath: note.fullPath || (store.activeVault?.path ? `${store.activeVault.path}/${DASHBOARD_NOTE_RELATIVE_PATH}` : ''),
     title: note.title || 'Dashboard',
     kind: 'note',
     type: 'note',
     updatedAt: note.updatedAt || new Date().toISOString()
+  }
+}
+
+const readExistingHiddenDashboard = async () => {
+  try {
+    const result = await elephantnoteClient.notes.read(DASHBOARD_NOTE_RELATIVE_PATH)
+    return normalizeDashboardNote(result)
+  } catch {
+    return null
   }
 }
 
@@ -39,10 +49,10 @@ const openDashboardNote = async () => {
     console.info('[dashboard] open hidden dashboard note:start', { path: DASHBOARD_NOTE_RELATIVE_PATH })
     statusMessage.value = 'Opening Dashboard.md...'
 
-    let dashboardNote = findExistingDashboard()
+    let dashboardNote = findExistingDashboard() || await readExistingHiddenDashboard()
     if (!dashboardNote) {
       const result = await elephantnoteClient.notes.create(buildDashboardNoteCreatePayload())
-      dashboardNote = normalizeCreatedDashboard(result)
+      dashboardNote = normalizeDashboardNote(result)
     }
 
     store.openNote(dashboardNote, { record: false })

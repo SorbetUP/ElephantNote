@@ -37,6 +37,35 @@ fn model_dir() -> PathBuf {
     .unwrap_or_else(|| home_dir().join(".elephantnote").join("models").join(MODEL_PROVIDER))
 }
 
+fn sibling_model_dir(dir: &Path) -> Option<PathBuf> {
+  let file_name = dir.file_name()?.to_str()?;
+  let sibling = match file_name {
+    "tauri-rust" => "node-llama-cpp",
+    "node-llama-cpp" => "tauri-rust",
+    _ => return None,
+  };
+  Some(dir.parent()?.join(sibling))
+}
+
+fn model_dirs() -> Vec<PathBuf> {
+  let mut dirs = Vec::new();
+  if let Some(override_dir) = env::var_os("ELEPHANTNOTE_MODEL_DIR").map(PathBuf::from) {
+    dirs.push(override_dir.clone());
+    if let Some(sibling) = sibling_model_dir(&override_dir) {
+      dirs.push(sibling);
+    }
+  } else {
+    let default_dir = model_dir();
+    dirs.push(default_dir.clone());
+    if let Some(sibling) = sibling_model_dir(&default_dir) {
+      dirs.push(sibling);
+    }
+  }
+  dirs.sort();
+  dirs.dedup();
+  dirs
+}
+
 fn text(value: &Value, keys: &[&str]) -> String {
   if let Some(raw) = value.as_str() {
     return raw.trim().to_string();
@@ -108,30 +137,44 @@ fn resolve_model_path(selection: &str) -> R<Option<PathBuf>> {
     return Ok(Some(direct));
   }
 
-  let dir = model_dir();
   let candidates = selected_model_candidates(selection);
-  if !dir.exists() {
-    return Err(format!("Local GGUF model directory does not exist: {}.", dir.to_string_lossy()));
+  let dirs = model_dirs();
+  for dir in &dirs {
+    let _ = fs::create_dir_all(dir);
   }
 
-  for item in fs::read_dir(&dir).map_err(|error| error.to_string())? {
-    let item = item.map_err(|error| error.to_string())?;
-    let path = item.path();
-    if !path.is_file() {
+  for dir in dirs {
+    if !dir.exists() {
       continue;
     }
-    let filename = path.file_name().and_then(|name| name.to_str()).unwrap_or("").to_string();
-    if !filename.to_lowercase().ends_with(".gguf") {
-      continue;
-    }
-    let full = path.to_string_lossy().to_string();
-    let manifest_path = PathBuf::from(format!("{}.model.json", full));
-    if candidates.iter().any(|candidate| candidate == &filename || full.ends_with(candidate)) || manifest_matches(&manifest_path, &candidates) {
-      return Ok(Some(path));
+    for item in fs::read_dir(&dir).map_err(|error| error.to_string())? {
+      let item = item.map_err(|error| error.to_string())?;
+      let path = item.path();
+      if !path.is_file() {
+        continue;
+      }
+      let filename = path.file_name().and_then(|name| name.to_str()).unwrap_or("").to_string();
+      if !filename.to_lowercase().ends_with(".gguf") {
+        continue;
+      }
+      let full = path.to_string_lossy().to_string();
+      let manifest_path = PathBuf::from(format!("{}.model.json", full));
+      if candidates.iter().any(|candidate| candidate == &filename || full.ends_with(candidate))
+        || manifest_matches(&manifest_path, &candidates)
+      {
+        return Ok(Some(path));
+      }
     }
   }
 
-  Err(format!("Selected chat model `{selection}` is not installed in {}.", dir.to_string_lossy()))
+  Err(format!(
+    "Selected chat model `{selection}` is not installed in any local GGUF model directory: {}.",
+    model_dirs()
+      .into_iter()
+      .map(|dir| dir.to_string_lossy().to_string())
+      .collect::<Vec<_>>()
+      .join(", ")
+  ))
 }
 
 fn base_url_from_env_or_payload(payload: &Value) -> String {
@@ -154,10 +197,19 @@ fn base_url_from_env_or_payload(payload: &Value) -> String {
 }
 
 fn context_size_from_payload(payload: &Value) -> String {
-  payload
-    .get("contextWindow")
-    .or_else(|| payload.get("ctxSize"))
-    .and_then(Value::as_u64)
+  payload_u64(
+    payload,
+    &[
+      "/contextWindow",
+      "/ctxSize",
+      "/aiConfig/routes/chat/contextWindow",
+      "/aiConfig/routes/chat/ctxSize",
+      "/config/routes/chat/contextWindow",
+      "/config/routes/chat/ctxSize",
+      "/localRuntime/contextWindow",
+      "/localRuntime/ctxSize",
+    ],
+  )
     .filter(|value| *value >= 512)
     .unwrap_or(4096)
     .to_string()
@@ -218,6 +270,12 @@ fn configured_server_path(payload: &Value) -> String {
     return from_payload;
   }
   text(runtime, &["llamaServerPath", "serverPath", "llamaBinary", "path"])
+}
+
+fn payload_u64(payload: &Value, paths: &[&str]) -> Option<u64> {
+  paths
+    .iter()
+    .find_map(|path| payload.pointer(path).and_then(Value::as_u64))
 }
 
 fn is_path_mode(payload: &Value) -> bool {
@@ -459,6 +517,14 @@ mod tests {
   }
 
   #[test]
+  fn context_size_reads_nested_chat_route() {
+    let payload = json!({
+      "aiConfig": { "routes": { "chat": { "contextWindow": 8192 } } }
+    });
+    assert_eq!(context_size_from_payload(&payload), "8192");
+  }
+
+  #[test]
   fn llama_server_args_set_model_alias() {
     let args = llama_server_args("/models/smol.gguf", 39281, "4096", "smol.gguf");
     assert!(args.windows(2).any(|window| window == ["--alias", "smol.gguf"]));
@@ -482,6 +548,30 @@ mod tests {
     assert_eq!(out, vec!["/tmp/llama-server".to_string()]);
   }
 
+  #[test]
+  fn sibling_model_directory_prefers_legacy_fallback() {
+    let root = std::env::temp_dir().join(format!(
+      "elephant-local-llama-runtime-{}",
+      std::process::id()
+    ));
+    let tauri_dir = root.join("tauri-rust");
+    let legacy_dir = root.join("node-llama-cpp");
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&legacy_dir).unwrap();
+    let model_path = legacy_dir.join("smollm2-node-llama-cpp-chat.gguf");
+    fs::write(&model_path, "fake model").unwrap();
+
+    let resolved = resolve_model_path_in_dirs(
+      "smollm2-node-llama-cpp-chat",
+      &[tauri_dir.clone(), legacy_dir.clone()]
+    )
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(resolved, model_path);
+    let _ = fs::remove_dir_all(&root);
+  }
+
   fn server_binary_candidates_for_test(payload: &Value) -> Vec<String> {
     let mut out = Vec::new();
     let configured_path = configured_server_path(payload);
@@ -491,5 +581,48 @@ mod tests {
     out.sort();
     out.dedup();
     out
+  }
+
+  fn resolve_model_path_in_dirs(selection: &str, dirs: &[PathBuf]) -> R<Option<PathBuf>> {
+    let selection = selection.trim();
+    if selection.is_empty() {
+      return Ok(None);
+    }
+
+    let direct = PathBuf::from(selection);
+    if direct.is_file() {
+      return Ok(Some(direct));
+    }
+
+    let candidates = selected_model_candidates(selection);
+    for dir in dirs {
+      let _ = fs::create_dir_all(dir);
+    }
+
+    for dir in dirs {
+      if !dir.exists() {
+        continue;
+      }
+      for item in fs::read_dir(dir).map_err(|error| error.to_string())? {
+        let item = item.map_err(|error| error.to_string())?;
+        let path = item.path();
+        if !path.is_file() {
+          continue;
+        }
+        let filename = path.file_name().and_then(|name| name.to_str()).unwrap_or("").to_string();
+        if !filename.to_lowercase().ends_with(".gguf") {
+          continue;
+        }
+        let full = path.to_string_lossy().to_string();
+        let manifest_path = PathBuf::from(format!("{}.model.json", full));
+        if candidates.iter().any(|candidate| candidate == &filename || full.ends_with(candidate))
+          || manifest_matches(&manifest_path, &candidates)
+        {
+          return Ok(Some(path));
+        }
+      }
+    }
+
+    Ok(None)
   }
 }

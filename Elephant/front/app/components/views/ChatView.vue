@@ -1,16 +1,8 @@
 <template>
   <section class="en-chat">
-    <div
-      v-if="historyOpen"
-      class="en-chat-backdrop"
-      @click="store.toggleChatHistory()"
-    />
+    <div v-if="historyOpen" class="en-chat-backdrop" @click="store.toggleChatHistory()" />
 
-    <aside
-      class="en-chat-history"
-      :class="{ 'is-open': historyOpen }"
-      aria-label="Chat history"
-    >
+    <aside class="en-chat-history" :class="{ 'is-open': historyOpen }" aria-label="Chat history">
       <header class="en-chat-history-head">
         <button
           type="button"
@@ -39,14 +31,11 @@
           type="search"
           placeholder="Search conversations"
           spellcheck="false"
-        >
+        />
       </div>
 
       <div class="en-chat-history-scroll">
-        <p
-          v-if="!chatStore.groupedConversations.length"
-          class="en-chat-history-empty"
-        >
+        <p v-if="!chatStore.groupedConversations.length" class="en-chat-history-empty">
           No conversations yet.
         </p>
         <section
@@ -67,10 +56,7 @@
           >
             <MessageSquare class="en-icon" />
             <span class="en-chat-history-conversation-title">{{ conversation.title }}</span>
-            <span
-              class="en-chat-history-conversation-actions"
-              @click.stop
-            >
+            <span class="en-chat-history-conversation-actions" @click.stop>
               <button
                 type="button"
                 class="en-icon-btn en-icon-btn-ghost"
@@ -117,15 +103,8 @@
         </div>
       </header>
 
-      <div
-        ref="scrollRef"
-        class="en-chat-scroll"
-        @scroll="onScroll"
-      >
-        <section
-          v-if="!chatStore.activeMessages.length"
-          class="en-chat-empty"
-        >
+      <div ref="scrollRef" class="en-chat-scroll" @scroll="onScroll">
+        <section v-if="!chatStore.activeMessages.length" class="en-chat-empty">
           <div class="en-chat-empty-head">
             <h1>Ask</h1>
             <p>Grounded answers from the active vault and semantic graph.</p>
@@ -138,26 +117,11 @@
               class="en-chat-quick-row"
               @click="sendQuickPrompt(prompt.prompt)"
             >
-              <span
-                class="en-chat-quick-icon"
-                :data-icon="prompt.icon"
-              >
-                <Sparkles
-                  v-if="prompt.icon === 'graph'"
-                  class="en-icon"
-                />
-                <Link
-                  v-else-if="prompt.icon === 'link'"
-                  class="en-icon"
-                />
-                <FileText
-                  v-else-if="prompt.icon === 'doc'"
-                  class="en-icon"
-                />
-                <BookOpen
-                  v-else
-                  class="en-icon"
-                />
+              <span class="en-chat-quick-icon" :data-icon="prompt.icon">
+                <Sparkles v-if="prompt.icon === 'graph'" class="en-icon" />
+                <Link v-else-if="prompt.icon === 'link'" class="en-icon" />
+                <FileText v-else-if="prompt.icon === 'doc'" class="en-icon" />
+                <BookOpen v-else class="en-icon" />
               </span>
               <span class="en-chat-quick-text">
                 <strong>{{ prompt.label }}</strong>
@@ -167,10 +131,7 @@
           </div>
         </section>
 
-        <section
-          v-else
-          class="en-chat-thread"
-        >
+        <section v-else class="en-chat-thread">
           <article
             v-for="message in chatStore.activeMessages"
             :key="message.id"
@@ -178,10 +139,7 @@
             :class="[message.role]"
           >
             <header class="en-chat-message-head">
-              <span
-                class="en-chat-message-avatar"
-                :data-role="message.role"
-              >
+              <span class="en-chat-message-avatar" :data-role="message.role">
                 {{ message.role === 'user' ? 'U' : 'A' }}
               </span>
               <div class="en-chat-message-meta">
@@ -191,18 +149,12 @@
             </header>
 
             <div class="en-chat-message-body">
-              <p
-                v-for="(paragraph, index) in splitParagraphs(message.content)"
-                :key="index"
-              >
+              <p v-for="(paragraph, index) in splitParagraphs(message.content)" :key="index">
                 {{ paragraph }}
               </p>
             </div>
 
-            <section
-              v-if="message.toolCalls?.length"
-              class="en-chat-tools"
-            >
+            <section v-if="message.toolCalls?.length" class="en-chat-tools">
               <button
                 v-for="tool in message.toolCalls"
                 :key="tool.id"
@@ -212,29 +164,17 @@
                 @click="toggleTool(tool.id)"
               >
                 <header class="en-chat-tool-head">
-                  <span
-                    class="en-chat-tool-status"
-                    :data-status="tool.status"
-                  />
+                  <span class="en-chat-tool-status" :data-status="tool.status" />
                   <span class="en-chat-tool-name">{{ tool.label }}</span>
                   <span class="en-chat-tool-summary">{{ tool.summary }}</span>
                   <ChevronDown class="en-icon en-chat-tool-chevron" />
                 </header>
-                <div
-                  v-if="expandedTools[tool.id]"
-                  class="en-chat-tool-detail"
-                >
+                <div v-if="expandedTools[tool.id]" class="en-chat-tool-detail">
                   <p class="en-chat-tool-detail-meta">
                     Tool: <code>{{ tool.name }}</code>
                   </p>
-                  <ul
-                    v-if="tool.sources?.length"
-                    class="en-chat-tool-sources"
-                  >
-                    <li
-                      v-for="source in tool.sources"
-                      :key="source.path"
-                    >
+                  <ul v-if="tool.sources?.length" class="en-chat-tool-sources">
+                    <li v-for="source in tool.sources" :key="source.path">
                       <button
                         type="button"
                         class="en-chat-citation"
@@ -248,10 +188,7 @@
               </button>
             </section>
 
-            <div
-              v-if="message.citations?.length"
-              class="en-chat-citations"
-            >
+            <div v-if="message.citations?.length" class="en-chat-citations">
               <button
                 v-for="(citation, index) in message.citations"
                 :key="citation.path"
@@ -267,10 +204,7 @@
         </section>
       </div>
 
-      <form
-        class="en-chat-composer"
-        @submit.prevent="send"
-      >
+      <form class="en-chat-composer" @submit.prevent="send">
         <div class="en-chat-composer-capsule">
           <textarea
             ref="composerRef"
@@ -282,15 +216,8 @@
             @input="autoGrowComposer"
           />
           <div class="en-chat-composer-controls">
-            <button
-              type="button"
-              class="en-chat-composer-mode"
-              @click="cycleChatMode"
-            >
-              {{ chatModeLabel }} <span
-                class="en-chat-composer-caret"
-                aria-hidden="true"
-              >▾</span>
+            <button type="button" class="en-chat-composer-mode" @click="cycleChatMode">
+              {{ chatModeLabel }} <span class="en-chat-composer-caret" aria-hidden="true">▾</span>
             </button>
             <button
               type="submit"
@@ -384,7 +311,10 @@ const toggleTool = (id) => {
 
 const splitParagraphs = (content) => {
   if (!content) return ['']
-  return String(content).split(/\n{2,}/).map((line) => line.trim()).filter(Boolean)
+  return String(content)
+    .split(/\n{2,}/)
+    .map((line) => line.trim())
+    .filter(Boolean)
 }
 
 const autoGrowComposer = () => {
@@ -452,7 +382,15 @@ const send = async () => {
 
   try {
     const limit = store.chatMode === 'simple' ? 4 : 8
-    const result = await elephantnoteClient.rag.chat(question, limit)
+    const messages = chatStore.activeMessages.map((message) => ({
+      role: message.role,
+      content: message.content
+    }))
+    const result = await elephantnoteClient.rag.chat({
+      message: question,
+      limit,
+      messages
+    })
     const toolCalls = shapeToolCallsForAssistant(result)
     chatStore.setRuntimeMessage('Answered with local RAG.')
     chatStore.addMessage({
@@ -511,7 +449,14 @@ onMounted(() => {
   background: var(--en-bg);
   color: var(--en-text);
   overflow: hidden;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
   --chat-surface: color-mix(in srgb, var(--en-surface) 96%, var(--en-bg));
   --chat-surface-hover: var(--en-soft);
   --chat-surface-active: color-mix(in srgb, var(--en-soft) 80%, var(--en-border));
@@ -718,8 +663,15 @@ onMounted(() => {
 }
 
 @keyframes en-chat-pulse {
-  0%, 100% { opacity: 0.35; transform: scale(0.85); }
-  50% { opacity: 1; transform: scale(1.1); }
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
 }
 
 .en-icon-btn {
@@ -1148,7 +1100,9 @@ onMounted(() => {
   color: #ffffff;
   background: var(--chat-surface-active);
   cursor: pointer;
-  transition: background 0.18s ease, transform 0.18s ease;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease;
 }
 
 .en-chat-composer-send.is-ready {

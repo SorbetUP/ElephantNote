@@ -35,23 +35,37 @@ const ensureSearchVaultForChat = async (call) => {
 const hasCitations = (result) => Array.isArray(result?.citations) && result.citations.length > 0
 const hasAnswer = (result) => typeof result?.answer === 'string' && result.answer.trim().length > 0
 
-const callRagChat = async (call, message, limit = 6) => {
+const normalizeRagChatPayload = (payload, limit = 6) => {
+  if (payload && typeof payload === 'object') {
+    return {
+      message: String(payload.message || '').trim(),
+      limit: Number.isFinite(Number(payload.limit)) ? Number(payload.limit) : limit,
+      messages: Array.isArray(payload.messages) ? payload.messages : []
+    }
+  }
+  return {
+    message: String(payload || '').trim(),
+    limit,
+    messages: []
+  }
+}
+
+const callRagChat = async (call, payload, limit = 6) => {
   const vaultPath = await ensureSearchVaultForChat(call)
-  const payload = { message, limit }
-  const result = await call(API.RAG_CHAT, payload)
+  const request = normalizeRagChatPayload(payload, limit)
+  const result = await call(API.RAG_CHAT, request)
 
   if (hasAnswer(result) || hasCitations(result) || !shouldRebuildChatSearch(vaultPath)) {
     return result
   }
 
   await call(API.SEARCH_REBUILD, {}).catch(() => null)
-  const retry = await call(API.RAG_CHAT, payload).catch(() => null)
+  const retry = await call(API.RAG_CHAT, request).catch(() => null)
   return hasAnswer(retry) || hasCitations(retry) ? retry : result
 }
 
-const directoryListPayload = (payload = '') => typeof payload === 'string'
-  ? { relativePath: payload }
-  : toPlainObject(payload)
+const directoryListPayload = (payload = '') =>
+  typeof payload === 'string' ? { relativePath: payload } : toPlainObject(payload)
 
 export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   vaults: {
@@ -72,7 +86,8 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
       }
       return call(API.NOTES_CREATE, payload)
     },
-    read: (relativePath) => call(API.NOTES_READ, typeof relativePath === 'string' ? { relativePath } : relativePath),
+    read: (relativePath) =>
+      call(API.NOTES_READ, typeof relativePath === 'string' ? { relativePath } : relativePath),
     write: (payload = {}) => call(API.NOTES_WRITE, payload),
     autotag: (relativePath) => call(API.NOTES_AUTOTAG, { relativePath })
   },
@@ -118,7 +133,8 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   search: {
     initVault: (vaultPath) => call(API.SEARCH_INIT_VAULT, { vaultPath }),
     query: (params) => call(API.SEARCH_QUERY, params),
-    concepts: (params) => getBridge()?.search?.concepts?.(toPlainObject(params)) || call(API.SEARCH_CONCEPTS, params),
+    concepts: (params) =>
+      getBridge()?.search?.concepts?.(toPlainObject(params)) || call(API.SEARCH_CONCEPTS, params),
     status: () => call(API.SEARCH_STATUS),
     inspect: () => call(API.SEARCH_INSPECT),
     rebuild: () => call(API.SEARCH_REBUILD),
@@ -177,42 +193,25 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
         id:
           typeof payload === 'string'
             ? payload
-            : payload?.id ||
-              payload?.repoId ||
-              payload?.uri ||
-              payload?.pull ||
-              ''
+            : payload?.id || payload?.repoId || payload?.uri || payload?.pull || ''
       }),
     searchHuggingFace: (payload = {}) =>
       callModelBridge('searchHuggingFace', payload) ||
       call(API.MODELS_SEARCH_HUGGING_FACE, payload),
-    info: (payload = {}) =>
-      callModelBridge('info', payload) ||
-      call(API.MODELS_INFO, payload),
+    info: (payload = {}) => callModelBridge('info', payload) || call(API.MODELS_INFO, payload),
     activate: (payload = {}) =>
-      callModelBridge('activate', payload) ||
-      call(API.MODELS_ACTIVATE, payload),
+      callModelBridge('activate', payload) || call(API.MODELS_ACTIVATE, payload),
     deactivate: (payload = {}) =>
-      callModelBridge('deactivate', payload) ||
-      call(API.MODELS_DEACTIVATE, payload),
+      callModelBridge('deactivate', payload) || call(API.MODELS_DEACTIVATE, payload),
     remove: (payload = {}) =>
-      callModelBridge('remove', payload) ||
-      call(API.MODELS_DELETE, payload),
-    active: () =>
-      callModelBridge('active') ||
-      call(API.MODELS_ACTIVE),
-    list: () =>
-      callModelBridge('list') ||
-      call(API.MODELS_LIST),
+      callModelBridge('remove', payload) || call(API.MODELS_DELETE, payload),
+    active: () => callModelBridge('active') || call(API.MODELS_ACTIVE),
+    list: () => callModelBridge('list') || call(API.MODELS_LIST),
     cancelDownload: (payload = {}) =>
-      callModelBridge('cancelDownload', payload) ||
-      call(API.MODELS_CANCEL_DOWNLOAD, payload),
+      callModelBridge('cancelDownload', payload) || call(API.MODELS_CANCEL_DOWNLOAD, payload),
     downloadStatus: (payload = {}) =>
-      callModelBridge('downloadStatus', payload) ||
-      call(API.MODELS_DOWNLOAD_STATUS, payload),
-    refreshIndex: () =>
-      callModelBridge('refreshIndex') ||
-      call(API.MODELS_REFRESH_INDEX),
+      callModelBridge('downloadStatus', payload) || call(API.MODELS_DOWNLOAD_STATUS, payload),
+    refreshIndex: () => callModelBridge('refreshIndex') || call(API.MODELS_REFRESH_INDEX),
     onDownloadProgress: (listener) =>
       getBridge()?.models?.onDownloadProgress?.(listener) || (() => {})
   },
@@ -226,7 +225,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     run: (payloadByOperation = {}) => call(API.SYNC_RUN, payloadByOperation)
   },
   rag: {
-    chat: (message, limit = 6) => callRagChat(call, message, limit)
+    chat: (payload, limit = 6) => callRagChat(call, payload, limit)
   },
   agents: {
     list: () => call(API.AGENTS_LIST),

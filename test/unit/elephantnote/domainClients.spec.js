@@ -29,10 +29,11 @@ const createCall = ({ chatResults = [] } = {}) => {
 
 const countAction = (call, action) => call.mock.calls.filter(([name]) => name === action).length
 
-const createClients = (call) => createDomainClients(call, () => ({
-  describeApi: vi.fn(),
-  callApi: vi.fn()
-}))
+const createClients = (call) =>
+  createDomainClients(call, () => ({
+    describeApi: vi.fn(),
+    callApi: vi.fn()
+  }))
 
 describe('domain clients chat search behavior', () => {
   it('initializes chat search once for the same vault', async () => {
@@ -63,5 +64,31 @@ describe('domain clients chat search behavior', () => {
     await clients.rag.chat('second')
 
     expect(countAction(call, API.SEARCH_REBUILD)).toBe(0)
+  })
+
+  it('forwards conversation history to rag chat requests', async () => {
+    const { call } = createCall({
+      chatResults: [{ answer: 'context aware answer', citations: [] }]
+    })
+    const clients = createClients(call)
+
+    await clients.rag.chat({
+      message: 'What about the follow-up?',
+      limit: 6,
+      messages: [
+        { role: 'user', content: 'What is the plan?' },
+        { role: 'assistant', content: 'Ship the semantic graph.' },
+        { role: 'user', content: 'What about the follow-up?' }
+      ]
+    })
+
+    expect(call).toHaveBeenCalledWith(
+      API.RAG_CHAT,
+      expect.objectContaining({
+        message: 'What about the follow-up?',
+        limit: 6,
+        messages: expect.any(Array)
+      })
+    )
   })
 })

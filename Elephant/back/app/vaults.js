@@ -1058,10 +1058,13 @@ const proposeWikiRecords = async (windowId = null) => {
     await searchService.rebuildIndex(windowId)
     inspection = await searchService.inspectIndex(windowId)
   }
-  const records = mergeWikiProposals(wiki.records, buildWikiProposalsFromGraph({
-    graph: inspection?.graph,
-    now: new Date()
-  }))
+  const records = mergeWikiProposals(
+    wiki.records,
+    buildWikiProposalsFromGraph({
+      graph: inspection?.graph,
+      now: new Date()
+    })
+  )
   await writeWiki(vault.path, records)
   return readWiki(vault.path)
 }
@@ -1162,7 +1165,10 @@ const createWikiPageFromRecord = async ({ record = {}, windowId = null } = {}) =
   }
 }
 
-const inspectWikiSource = async ({ path: sourcePath = '', record = null } = {}, windowId = null) => {
+const inspectWikiSource = async (
+  { path: sourcePath = '', record = null } = {},
+  windowId = null
+) => {
   const vault = getActiveVault()
   if (!vault) throw new Error('No active ElephantNote vault.')
   await initializeVault(vault.path)
@@ -1174,7 +1180,10 @@ const inspectWikiSource = async ({ path: sourcePath = '', record = null } = {}, 
   })
 }
 
-const inspectWikiContext = async ({ path: sourcePath = '', record = null, limit = 12 } = {}, windowId = null) => {
+const inspectWikiContext = async (
+  { path: sourcePath = '', record = null, limit = 12 } = {},
+  windowId = null
+) => {
   const vault = getActiveVault()
   if (!vault) throw new Error('No active ElephantNote vault.')
   await initializeVault(vault.path)
@@ -1254,8 +1263,7 @@ export const createNodeLlamaCppEmbeddingProvider = (deps = {}) =>
     ...deps,
     getSelectedModel: deps.getSelectedModel || getSelectedModelForPurpose,
     resolveLocalModel:
-      deps.resolveLocalModel ||
-      ((config) => modelRuntime.modelLibrary.resolveLocalModel(config)),
+      deps.resolveLocalModel || ((config) => modelRuntime.modelLibrary.resolveLocalModel(config)),
     resolveConfiguredLocalModel: deps.resolveConfiguredLocalModel || resolveConfiguredLocalModel,
     runtime: deps.runtime || modelRuntime,
     logger: deps.logger || log
@@ -1384,16 +1392,20 @@ const readCitedSearchResults = async ({ query, limit, context }) => {
   return citations
 }
 
-const chatWithRag = async ({ message, limit = 6 } = {}, context = {}) => {
+const chatWithRag = async ({ message, limit = 6, messages = [] } = {}, context = {}) => {
   const citations = await readCitedSearchResults({ query: message, limit, context })
   const wikiContext = citations[0]?.path
-    ? await inspectWikiContext({
-      path: citations[0].path,
-      limit: Math.max(3, Number(limit) || 6)
-    }, getApiWindowId(context)).catch(() => null)
+    ? await inspectWikiContext(
+        {
+          path: citations[0].path,
+          limit: Math.max(3, Number(limit) || 6)
+        },
+        getApiWindowId(context)
+      ).catch(() => null)
     : null
   const { systemMessage, prompt } = buildRagChatPrompt({
     message,
+    messages,
     citations,
     wikiContext
   })
@@ -1489,7 +1501,10 @@ const listMcpTools = () => [
   { name: 'wiki.propose', description: 'Generate cited wiki proposals.' },
   { name: 'wiki.createPage', description: 'Create a wiki page from a cited proposal.' },
   { name: 'wiki.sourceInfo', description: 'Inspect a source note inside the semantic graph.' },
-  { name: 'wiki.context', description: 'Inspect a source note with compact graph context for chat.' },
+  {
+    name: 'wiki.context',
+    description: 'Inspect a source note with compact graph context for chat.'
+  },
   { name: 'rag.chat', description: 'Ask a cited RAG question over local notes.' }
 ]
 

@@ -6,6 +6,7 @@ This folder contains repository-local agent skills for ElephantNote.
 
 - `apex/` — structured Analyze → Plan → Execute → eXamine workflow.
 - `ponytail/` — upstream clean-code/minimal-diff skill.
+- `clean-code-ponytail/` — adapter that routes clean-code requests to Ponytail.
 - `real-verification/` — prove features work with real commands, logs, and UI/runtime checks.
 - `root-cause-debugging/` — diagnose from code paths and logs before patching.
 - `ci-repair/` — fix CI honestly without skips or fake green gates.
@@ -26,6 +27,8 @@ APEX step prompts live in `apex/steps/`:
 - `step-09-verify.md`
 - `step-10-finish.md`
 
+APEX saved-run template: `apex/templates/run-report.md`.
+
 ## ElephantNote project skills
 
 - `elephantnote-project/` — default project rules.
@@ -39,3 +42,5 @@ APEX step prompts live in `apex/steps/`:
 - `elephantnote-ui-parity/` — Electron/Tauri/mobile UI parity.
 - `elephantnote-ci/` — workflows, tests, build gates.
 - `elephantnote-debugging/` — logs, async races, loading loops.
+- `elephantnote-addons/` — addons/plugins and capability prompts.
+- `elephantnote-mobile/` — Android/mobile behavior and desktop parity.

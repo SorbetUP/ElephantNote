@@ -13,10 +13,24 @@ Use this skill for GitHub Actions, failing tests, build scripts, lint/typecheck,
 ## Invariants
 
 - CI passing must mean the relevant behavior is actually checked.
-- No skipped tests, `test.todo`, loosened assertions, or always-pass quality gates to get green.
-- Fix the implementation before weakening a test.
+- Tests must keep meaningful assertions and useful coverage.
+- Fix the implementation before changing a test expectation.
 - Keep CI commands close to local developer commands.
 - Mac/Tauri window/build confidence requires a real build/bootstrap check, not just JS unit tests.
+- When GitHub Actions is available, final validation must include the workflow state for the head commit.
+
+## GitHub CI loop
+
+For repository changes, use GitHub Actions as the default validation source:
+
+1. Record the head commit SHA.
+2. Inspect workflow runs for that commit.
+3. Inspect failed jobs and the failing step.
+4. Repair the real cause with the smallest clean change.
+5. Let the next commit trigger CI and inspect it again.
+6. Report green, failed, pending, running, or blocked honestly.
+
+Do not hand the user a local command checklist as the only validation when GitHub CI can be inspected.
 
 ## CI skill stack
 
@@ -32,6 +46,7 @@ Load these narrower skills when the task matches their surface:
 - `../runtime-ci-hardening/SKILL.md` for generated files, logs, cache scope, and runtime behavior.
 - `../supply-chain-verifier/SKILL.md` for dependencies, lockfiles, license gates, and scanners.
 - `../artifact-release-gate/SKILL.md` for bundle, checksum, diagnostics, and release evidence.
+- `../ci-repair/SKILL.md` for the GitHub CI repair loop.
 
 ## Read first
 
@@ -43,13 +58,14 @@ Load these narrower skills when the task matches their surface:
 
 ## Procedure
 
-1. Reproduce the failing command locally when possible.
+1. Reproduce the failing command locally when useful.
 2. Identify whether the failure is test bug, implementation bug, environment bug, or workflow bug.
 3. Load the narrow CI skill that covers the failing surface.
-4. Fix the smallest real cause.
-5. Re-run the exact failing command.
-6. If CI must wait, report the run state honestly.
+4. Apply Ponytail before coding: smallest correct diff, reuse existing helpers, no speculative abstractions.
+5. Fix the smallest real cause.
+6. Inspect GitHub Actions for the pushed commit.
+7. If CI must wait, report the run state honestly.
 
 ## Anti-slop
 
-No broad ignore, no deleting coverage, no replacing a real e2e check with a smoke mount test.
+No broad ignore, no deleting coverage, no replacing a real e2e check with a weaker check.

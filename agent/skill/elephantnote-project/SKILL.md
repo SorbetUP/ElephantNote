@@ -27,7 +27,13 @@ ElephantNote is a local-first Markdown notes app with Electron and Tauri runtime
 - Sync/mobile/desktop pairing → `elephantnote-sync`.
 - Search/embedding/wiki/graph → `elephantnote-search-wiki-graph`.
 - AI/model provider/runtime/OCR → `elephantnote-ai-runtime`.
+- UI parity/layout/window chrome → `elephantnote-ui-parity`.
 - CI/build/test workflows → `elephantnote-ci`.
+- Loading loop/logging/async race → `elephantnote-debugging`.
+- Addons/plugins → `elephantnote-addons`.
+- Android/mobile behavior → `elephantnote-mobile`.
+- Clean code/maintainability → `clean-code-ponytail`.
+- Verification/proof → `real-verification`.
 
 ## Done means
 

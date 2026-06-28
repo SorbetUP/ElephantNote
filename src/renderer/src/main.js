@@ -5,7 +5,7 @@ import bootstrapRenderer from './bootstrap'
 import axios from './axios'
 import pinia from './store'
 import './assets/symbolIcon'
-import { installRuntimeBridge } from './platform/runtimeBridge'
+import { installTauriRuntimeBridge } from './platform/tauriRuntimeBridge'
 import { installTauriFileUtilsPathGuards } from './platform/tauriFileUtilsPathGuards'
 import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
 import { installTauriSearchRuntimeGuards } from './platform/tauriSearchRuntimeGuards'
@@ -206,7 +206,7 @@ const autostartLlamaRuntime = async(target = globalThis) => {
 installRendererDiagnostics()
 globalThis.marktext = {}
 clearBootstrapFileUtilsFallbackForTauri()
-installRuntimeBridge()
+installTauriRuntimeBridge()
 ensurePathResolve()
 installTauriFileUtilsPathGuards()
 installTauriElephantNoteBridge()

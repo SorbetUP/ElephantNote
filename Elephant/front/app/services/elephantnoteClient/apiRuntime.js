@@ -23,7 +23,7 @@ export const unwrapApiEnvelope = async(promise) => {
   return response?.data ?? response
 }
 
-export const createApiCaller = (legacyCalls = {}) => (action, payload = {}) => {
+export const createApiCaller = (localFallbackCalls = {}) => (action, payload = {}) => {
   const plainPayload = toPlainObject(payload)
   const validatedPayload = validateApiPayload(action, plainPayload)
 
@@ -31,9 +31,9 @@ export const createApiCaller = (legacyCalls = {}) => (action, payload = {}) => {
     return unwrapApiEnvelope(requireElephantNoteApi().call(action, validatedPayload))
   }
 
-  const legacyCall = legacyCalls[action]
-  if (!legacyCall) {
+  const localFallbackCall = localFallbackCalls[action]
+  if (!localFallbackCall) {
     throw new Error(`ElephantNote API is not available for action: ${action}`)
   }
-  return legacyCall(validatedPayload)
+  return localFallbackCall(validatedPayload)
 }

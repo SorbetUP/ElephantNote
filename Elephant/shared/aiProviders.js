@@ -15,7 +15,7 @@ export const ELEPHANTNOTE_AI_PRESETS = Object.freeze({
   },
   nodeLlamaCpp: {
     id: 'nodeLlamaCpp',
-    label: 'node-llama-cpp (legacy alias)',
+    label: 'node-llama-cpp (compatibility alias)',
     transport: 'tauri-rust',
     endpoint: 'tauri-rust://local',
     model: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M'
@@ -165,7 +165,7 @@ const resolveFeatureRouteRuntime = ({ config = {}, localAi, preset } = {}) => {
 }
 
 export const normalizeAiConfig = (config = {}) => {
-  const { enabled: _legacyEnabled, ...restConfig } = getObject(config)
+  const { enabled: _compatibilityEnabled, ...restConfig } = getObject(config)
   const rawLocalAi = getObject(restConfig.localAi)
   const localAi = normalizeLocalAiConfig(rawLocalAi)
   const rawProvider = String(restConfig.preset || restConfig.provider || 'tauriRustLocal')

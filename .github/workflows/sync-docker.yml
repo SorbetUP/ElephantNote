@@ -29,4 +29,4 @@ jobs:
           git --version
 
       - name: Run two-device Docker sync smoke
-        run: node scripts/sync-two-docker-smoke.mjs
+        run: node build/scripts/sync-two-docker-smoke.mjs

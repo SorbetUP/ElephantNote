@@ -51,12 +51,12 @@ jobs:
       - name: Verify generated parity backlog size
         shell: bash
         run: |
-          lines=$(cat docs/parity/generated/*.md docs/parity/index.md | wc -l | tr -d ' ')
+          lines=$(cat agent/docs/project/parity/generated/*.md agent/docs/project/parity/index.md | wc -l | tr -d ' ')
           echo "Generated parity documentation lines: $lines"
           test "$lines" -ge 10000
 
       - name: Critical ElephantNote flow guard
-        run: node scripts/verify-critical-flows.mjs
+        run: node build/scripts/verify-critical-flows.mjs
 
       - name: Security guardrails
         run: pnpm security:guard
@@ -71,13 +71,13 @@ jobs:
           pnpm lint 2>&1 | tee eslint-output.txt
 
       - name: ElephantNote contract tests
-        run: pnpm exec vitest run test/unit/specs/main/elephantnote
+        run: pnpm exec vitest run tests/app/unit/specs/main/elephantnote
 
       - name: Unit suite
         run: pnpm test:unit
 
       - name: Run postinstall before reference build
-        run: node scripts/postinstall.js
+        run: node build/scripts/postinstall.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           npm_config_user_agent: 'pnpm'
@@ -95,15 +95,15 @@ jobs:
       - name: Validate licenses
         run: pnpm run validate-licenses
 
-      - name: Upload coverage and generated docs
+      - name: Upload build/coverage and generated docs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: quality-artifacts
           path: |
-            coverage/
-            docs/parity/generated/
-            docs/parity/index.md
+            build/coverage/
+            agent/docs/project/parity/generated/
+            agent/docs/project/parity/index.md
             security-guardrails-report.json
             eslint-output.txt
             build-output.txt
@@ -134,8 +134,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/bin/cargo-tauri
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-tauri-macos-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml') }}
+            Elephant/backend/tauri/target
+          key: ${{ runner.os }}-cargo-tauri-macos-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-tauri-macos-
             ${{ runner.os }}-cargo-
@@ -151,7 +151,7 @@ jobs:
 
       - name: Cargo check macOS Apple Silicon target
         shell: bash
-        run: cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-apple-darwin --all-targets --no-default-features
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --target aarch64-apple-darwin --all-targets --no-default-features
 
       - name: Build packaged Tauri macOS app
         shell: bash
@@ -159,7 +159,7 @@ jobs:
           set -euxo pipefail
           pnpm tauri:llama:install
           pnpm tauri:web:build
-          cd src-tauri
+          cd Elephant/backend/tauri
           cargo tauri build --bundles app
 
       - name: Launch packaged app and verify visible window
@@ -171,7 +171,7 @@ jobs:
         with:
           name: tauri-macos-packaged-smoke-diagnostics
           path: |
-            src-tauri/target/release/bundle/macos/
+            Elephant/backend/tauri/target/release/bundle/macos/
           if-no-files-found: ignore
           retention-days: 7
 
@@ -213,17 +213,17 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml') }}
+            Elephant/backend/tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
       - name: Rust formatting diagnostic
         continue-on-error: true
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
 
       - name: Cargo check
-        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
 
       - name: Cargo tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml --lib --no-default-features
+        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features

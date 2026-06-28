@@ -5,11 +5,17 @@ This folder contains repository-local agent skills for ElephantNote.
 ## Core skills
 
 - `apex/` — structured Analyze → Plan → Execute → eXamine workflow.
+- `repo-skill-router/` — detect repo languages, frameworks, runtimes, tools, and missing skills before implementation.
 - `ponytail/` — upstream clean-code/minimal-diff skill.
 - `clean-code-ponytail/` — adapter that routes clean-code requests to Ponytail.
 - `real-verification/` — prove features work with real commands, logs, and UI/runtime checks.
 - `root-cause-debugging/` — diagnose from code paths and logs before patching.
-- `ci-repair/` — fix CI honestly without skips or fake green gates.
+- `ci-repair/` — fix CI honestly without fake green gates.
+
+## Language and runtime skills
+
+- `javascript-vue-runtime/` — JavaScript, Vue, Vite, Vitest, Playwright, renderer bridges, stores, and async UI flows.
+- `rust-tauri-runtime/` — Rust, Cargo, Tauri commands, capabilities, path safety, serde payloads, and desktop/mobile boundaries.
 
 ## APEX subskills
 

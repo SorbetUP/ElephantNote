@@ -76,12 +76,18 @@
 .editor-wrapper img[src^="local-file://"] + .ag-image-loading,
 .editor-wrapper img[src^="local-file://"] ~ .image-loading,
 .editor-wrapper img[src^="local-file://"] + .image-loading,
+.editor-wrapper img[data-local-path] ~ .ag-image-loading,
+.editor-wrapper img[data-local-path] + .ag-image-loading,
+.editor-wrapper img[data-local-path] ~ .image-loading,
+.editor-wrapper img[data-local-path] + .image-loading,
 .editor-wrapper .ag-image[data-src*=".assets/excalidraw-"] .ag-image-loading,
 .editor-wrapper .ag-image-container[data-src*=".assets/excalidraw-"] .ag-image-loading,
 .editor-wrapper .ag-image[data-src*=".assets/excalidraw-"] .image-loading,
 .editor-wrapper .ag-image-container[data-src*=".assets/excalidraw-"] .image-loading,
 .editor-wrapper .ag-image-loading:has(+ img[src^="local-file://"]),
-.editor-wrapper .image-loading:has(+ img[src^="local-file://"]) {
+.editor-wrapper .image-loading:has(+ img[src^="local-file://"]),
+.editor-wrapper .ag-image-loading:has(+ img[data-local-path]),
+.editor-wrapper .image-loading:has(+ img[data-local-path]) {
   display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;

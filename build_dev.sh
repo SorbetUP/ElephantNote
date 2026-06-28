@@ -15,9 +15,11 @@ kill_port_1420() {
   fi
 }
 
+pkill -f 'target/debug/Elephant' 2>/dev/null || true
 pkill -f 'target/debug/elephantnote-tauri' 2>/dev/null || true
 pkill -f 'vite --config vite.tauri.config.js' 2>/dev/null || true
 kill_port_1420
+rm -rf "$ROOT_DIR/src-tauri/target/debug/bundle/macos/Elephant.app" 2>/dev/null || true
 
 cd "$ROOT_DIR"
 node scripts/ensure-tauri-llama-server.mjs

@@ -87,14 +87,35 @@ const addImageToContainer = (imageText, img, className) => {
   }
 }
 
-const readLocalImageObjectUrl = async (pathname = '') => {
+const bytesToBase64 = (bytes) => {
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
+  }
+  return btoa(binary)
+}
+
+const readLocalImageDataUrl = async (pathname = '') => {
   if (!pathname) throw new Error('empty-local-image-path')
   if (!window.fileUtils?.pathExistsSync?.(pathname)) {
     throw new Error('local-file-not-found')
   }
   const data = await window.fileUtils.readFile(pathname)
-  const blob = new Blob([data], { type: mimeFromPath(pathname) })
-  return URL.createObjectURL(blob)
+  if (data instanceof Blob) {
+    const buffer = new Uint8Array(await data.arrayBuffer())
+    return `data:${mimeFromPath(pathname)};base64,${bytesToBase64(buffer)}`
+  }
+  if (data instanceof ArrayBuffer) {
+    return `data:${mimeFromPath(pathname)};base64,${bytesToBase64(new Uint8Array(data))}`
+  }
+  if (ArrayBuffer.isView(data)) {
+    return `data:${mimeFromPath(pathname)};base64,${bytesToBase64(new Uint8Array(data.buffer, data.byteOffset, data.byteLength))}`
+  }
+  if (typeof data === 'string') {
+    return `data:${mimeFromPath(pathname)};base64,${btoa(unescape(encodeURIComponent(data)))}`
+  }
+  return `data:${mimeFromPath(pathname)};base64,${bytesToBase64(new Uint8Array([]))}`
 }
 
 export default function loadImageAsync(imageInfo, attrs, className, imageClass) {
@@ -122,9 +143,10 @@ export default function loadImageAsync(imageInfo, attrs, className, imageClass) 
     const img = document.createElement('img')
     let dispMsec = Date.now()
     let touchMsec = dispMsec
-    domsrc = localPath ? `local-file://${localPath}` : createDomImageSrc(src, dispMsec)
+    domsrc = createDomImageSrc(src, dispMsec)
     img.dataset.originalSrc = src
     img.dataset.localPath = localPath
+    img.dataset.localResolvedPath = localPath
     img.dataset.resolvedSrc = domsrc
     if (attrs.alt) img.alt = attrs.alt.replace(/[`*{}[\]()#+\-.!_>~:|<>$]/g, '')
     if (attrs.title) img.setAttribute('title', attrs.title)
@@ -176,13 +198,15 @@ export default function loadImageAsync(imageInfo, attrs, className, imageClass) 
     img.onerror = () => fail(localPath ? 'local-object-url-load-error' : 'image-load-error')
 
     if (localPath) {
-      readLocalImageObjectUrl(localPath)
-        .then((objectUrl) => {
-          domsrc = objectUrl
-          img.dataset.resolvedSrc = objectUrl
-          img.src = objectUrl
+      readLocalImageDataUrl(localPath)
+        .then((dataUrl) => {
+          domsrc = dataUrl
+          img.dataset.localImageLoaded = 'true'
+          img.dataset.resolvedSrc = dataUrl
+          img.src = dataUrl
         })
         .catch((error) => fail(error?.message || 'local-file-read-error'))
+      img.dataset.resolvedSrc = localPath
     } else {
       img.src = domsrc
     }

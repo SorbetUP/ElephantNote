@@ -6,7 +6,8 @@ const source = readFileSync('Elephant/front/app/components/editor/NoteEditorHost
 describe('NoteEditorHost Excalidraw image link formatting', () => {
   it('inserts Excalidraw previews through the markdown image source formatter', () => {
     expect(source).toContain('toMarkdownImageSource')
-    expect(source).toContain('const source = toMarkdownImageSource(targetPath, currentNoteDirectory.value)')
+    expect(source).toContain('const assetMarkdownSource = (targetPath) => toMarkdownImageSource(targetPath, store.activeVault?.path || currentNoteDirectory.value)')
+    expect(source).toContain('const source = assetMarkdownSource(targetPath)')
     expect(source).toContain('const imageMarkdown = `![${resolvedName}](${source})`')
     expect(source).toContain("filter(Boolean).join('\\n\\n')")
   })
@@ -27,9 +28,9 @@ describe('NoteEditorHost Excalidraw image link formatting', () => {
     expect(source).toContain("bus.off('open-excalidraw-from-image', openExcalidrawFromImage)")
   })
 
-  it('preserves the original preview directory when saving an edited drawing', () => {
-    expect(source).toContain('const targetDirectory = excalidrawTargetPath.value')
-    expect(source).toContain('? window.path.dirname(excalidrawTargetPath.value)')
-    expect(source).toContain('const targetPath = window.path.join(targetDirectory, resolvedName)')
+  it('writes edited drawings back to the resolved .assets preview path', () => {
+    expect(source).toContain('const targetPath = await targetAssetPath(resolvedName)')
+    expect(source).toContain('const scenePath = getExcalidrawScenePath(targetPath)')
+    expect(source).toContain('excalidrawTargetPath.value = targetPath')
   })
 })

@@ -15,6 +15,9 @@ const read = (relativePath) => {
 const has = (relativePath, needle, description = needle) => {
   if (!read(relativePath).includes(needle)) failures.push(`${relativePath}: missing ${description}`)
 }
+const lacks = (relativePath, needle, description = needle) => {
+  if (read(relativePath).includes(needle)) failures.push(`${relativePath}: unexpected ${description}`)
+}
 const ordered = (relativePath, needles, description) => {
   const content = read(relativePath)
   let cursor = -1
@@ -54,8 +57,6 @@ for (const file of [
   'agent/skill/ci-stability/SKILL.md',
   'agent/skill/supply-chain-verifier/SKILL.md',
   'agent/skill/artifact-release-gate/SKILL.md',
-  'src/main/config.js',
-  'src/preload/index.js',
   'src/renderer/src/main.js',
   'src/renderer/src/platform/bootstrapGlobals.js',
   'src/renderer/src/platform/tauriElephantNoteBridge.js',
@@ -83,6 +84,7 @@ for (const file of [
   'test/unit/specs/main/elephantnote/syncPlan.spec.js',
   'test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js',
   'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
+  'test/unit/specs/main/elephantnote/tauriOnlyRuntime.spec.js',
   'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
   'test/unit/realComponentImportSmoke.spec.js',
   'test/unit/specs/main/elephantnote/agentSkills.spec.js',
@@ -132,9 +134,11 @@ has('agent/skill/tauri-ci-verifier/SKILL.md', 'A successful web build alone is n
 has('agent/skill/cross-platform-paths/SKILL.md', 'Hidden app folders must not show as normal notes in the main tree', 'hidden-folder path invariant')
 has('agent/skill/artifact-release-gate/SKILL.md', 'The expected artifact exists at the expected path', 'artifact existence rule')
 
-ordered('src/main/config.js', ['contextIsolation: true', 'nodeIntegration: false', 'webSecurity: true', 'webPreferences: { ...secureWebPreferences }'], 'secure Electron window preferences')
-ordered('src/preload/index.js', ["contextBridge.exposeInMainWorld('electron'", "contextBridge.exposeInMainWorld('fileUtils'", "contextBridge.exposeInMainWorld('elephantnote'"], 'preload bridge exposure')
 ordered('src/renderer/src/main.js', ['clearBootstrapFileUtilsFallbackForTauri()', 'installRuntimeBridge()', 'installTauriElephantNoteBridge()', 'installPiProviderBridge()', 'installTauriMarkTextSaveBridge()', 'installTauriLocalIpcBridge()'], 'renderer runtime bridge installation order')
+has('src/renderer/src/main.js', "const runtime = 'tauri'", 'Tauri-only renderer runtime selection')
+has('src/renderer/src/main.js', 'unsupported runtime', 'explicit unsupported runtime failure')
+lacks('src/renderer/src/main.js', 'tauri-compatible', 'legacy compatible renderer runtime')
+has('test/unit/specs/main/elephantnote/tauriOnlyRuntime.spec.js', 'does not silently bootstrap a browser or Electron-compatible renderer fallback', 'Tauri-only runtime regression test')
 ordered('src/renderer/src/platform/tauriLocalIpcBridge.js', ["'mt::response-file-save'", "'mt::response-file-save-as'", "'mt::open-file'", 'target.elephantnote.notes.read({ relativePath })', "dispatchLocalIpcEvent(target, 'mt::open-new-tab'"], 'Tauri local IPC routing')
 ordered('src/renderer/src/platform/tauriMarkTextSaveBridge.js', ['const writeViaRustBackend = async(target, pathname, markdown) => {', "return invoke('tauri_marktext_write_file', { pathname, content: markdown })", "ipc.send('mt::tab-saved', id)", "ipc.send('mt::tab-save-failure', id, message)"], 'Tauri save bridge result reporting')
 has('src-tauri/src/lib_min.rs', 'tauri_extra_commands::tauri_marktext_write_file', 'registered MarkText backend writer')

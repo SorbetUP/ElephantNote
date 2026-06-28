@@ -97,7 +97,7 @@ jobs:
 
       - name: Upload coverage and generated docs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: quality-artifacts
           path: |
@@ -167,7 +167,7 @@ jobs:
 
       - name: Upload macOS bundle diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-macos-packaged-smoke-diagnostics
           path: |

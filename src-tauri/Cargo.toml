@@ -39,7 +39,7 @@ notify = "6"
 rusqlite = { version = "0.32", features = ["bundled", "bundled-full"] }
 fuzzy-matcher = "0.3"
 tiny_http = "0.12"
-which = "6"
+which = "8"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

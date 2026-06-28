@@ -49,6 +49,20 @@ Lowercase turns a flag on; uppercase in a user request turns it off.
 
 When this workflow asks for clean code, maintainability, or over-engineering review, use `../ponytail/SKILL.md` as the standard: smallest working diff, deletion over addition, no unrequested abstractions, stdlib/native platform first, and no fake or speculative scaffolding.
 
+## CI and verification routing
+
+When the task touches CI, tests, Tauri, filesystem behavior, packaging, or release confidence, load the narrow skill that matches the APEX phase:
+
+| APEX phase | Load these skills when relevant |
+|---|---|
+| Analyze | `../ci-architect/SKILL.md`, `../github-actions-linter/SKILL.md`, `../cross-platform-paths/SKILL.md` |
+| Plan | `../ci-architect/SKILL.md`, `../anti-fake-tests/SKILL.md`, `../tauri-ci-verifier/SKILL.md` |
+| Execute | `../github-actions-linter/SKILL.md`, `../runtime-ci-hardening/SKILL.md`, `../supply-chain-verifier/SKILL.md` |
+| Validate | `../anti-fake-tests/SKILL.md`, `../tauri-ci-verifier/SKILL.md`, `../ci-stability/SKILL.md` |
+| eXamine | `../github-actions-security/SKILL.md`, `../artifact-release-gate/SKILL.md`, `../real-verification/SKILL.md` |
+
+For ElephantNote, a green CI is not enough by itself: the selected gate must prove the user-visible or runtime contract touched by the change.
+
 ## A — Analyze
 
 Gather just enough context to act with confidence:

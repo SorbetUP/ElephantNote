@@ -24,8 +24,8 @@ describe('agent CI verification skills', () => {
 
       expect(content).toContain('---\nname: ')
       expect(content).toContain('description: >')
+      expect(content).toContain('argument-hint:')
       expect(content).toContain('# ')
-      expect(content).toContain('APEX integration')
     }
   })
 

@@ -23,6 +23,9 @@ Use these local skills before editing this repository. They are project instruct
 | UI parity Electron/Tauri/mobile | `agent/skill/elephantnote-ui-parity/SKILL.md` |
 | CI failures and GitHub workflows | `agent/skill/elephantnote-ci/SKILL.md` |
 | Logs, loop bugs, async races | `agent/skill/elephantnote-debugging/SKILL.md` |
+| Addons/plugins | `agent/skill/elephantnote-addons/SKILL.md` |
+| Android/mobile behavior | `agent/skill/elephantnote-mobile/SKILL.md` |
+| Clean code / maintainability | `agent/skill/clean-code-ponytail/SKILL.md` |
 | Proving a feature really works | `agent/skill/real-verification/SKILL.md` |
 
 ## Non-negotiables

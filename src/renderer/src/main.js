@@ -249,11 +249,12 @@ const bootstrapTauriRuntime = async() => {
 }
 
 const bootstrapForRuntime = async(runtime) => {
-  if (runtime === 'tauri') {
-    await bootstrapTauriRuntime()
-  } else {
-    bootstrapRenderer()
+  if (runtime !== 'tauri') {
+    const message = `ElephantNote renderer is Tauri-only; unsupported runtime "${runtime}"`
+    pushDiagnosticLog('error', 'bootstrapTauriRuntime:unsupported-runtime', { runtime })
+    throw new Error(message)
   }
+  await bootstrapTauriRuntime()
   return globalThis.marktext?.env?.type || window.__MARKTEXT_WINDOW_TYPE__ || 'editor'
 }
 
@@ -291,9 +292,8 @@ const mountRendererApp = (runtime, windowType) => {
 }
 
 const startRendererApp = async() => {
-  const runtime = window.__MARKTEXT_RUNTIME__ || (window.__TAURI__ ? 'tauri' : 'tauri-compatible')
+  const runtime = 'tauri'
   window.__MARKTEXT_RUNTIME__ = runtime
-
   const windowType = await bootstrapForRuntime(runtime)
   mountRendererApp(runtime, windowType)
 }

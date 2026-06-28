@@ -59,6 +59,7 @@ for (const file of [
   'agent/skill/artifact-release-gate/SKILL.md',
   'src/renderer/src/main.js',
   'src/renderer/src/platform/bootstrapGlobals.js',
+  'src/renderer/src/platform/tauriRuntimeBridge.js',
   'src/renderer/src/platform/tauriElephantNoteBridge.js',
   'src/renderer/src/platform/tauriLocalIpcBridge.js',
   'src/renderer/src/platform/tauriMarkTextSaveBridge.js',
@@ -134,11 +135,14 @@ has('agent/skill/tauri-ci-verifier/SKILL.md', 'A successful web build alone is n
 has('agent/skill/cross-platform-paths/SKILL.md', 'Hidden app folders must not show as normal notes in the main tree', 'hidden-folder path invariant')
 has('agent/skill/artifact-release-gate/SKILL.md', 'The expected artifact exists at the expected path', 'artifact existence rule')
 
-ordered('src/renderer/src/main.js', ['clearBootstrapFileUtilsFallbackForTauri()', 'installRuntimeBridge()', 'installTauriElephantNoteBridge()', 'installPiProviderBridge()', 'installTauriMarkTextSaveBridge()', 'installTauriLocalIpcBridge()'], 'renderer runtime bridge installation order')
+ordered('src/renderer/src/main.js', ['clearBootstrapFileUtilsFallbackForTauri()', 'installTauriRuntimeBridge()', 'installTauriElephantNoteBridge()', 'installPiProviderBridge()', 'installTauriMarkTextSaveBridge()', 'installTauriLocalIpcBridge()'], 'renderer runtime bridge installation order')
+has('src/renderer/src/main.js', "import { installTauriRuntimeBridge } from './platform/tauriRuntimeBridge'", 'strict Tauri runtime bridge import')
 has('src/renderer/src/main.js', "const runtime = 'tauri'", 'Tauri-only renderer runtime selection')
 has('src/renderer/src/main.js', 'unsupported runtime', 'explicit unsupported runtime failure')
 lacks('src/renderer/src/main.js', 'tauri-compatible', 'legacy compatible renderer runtime')
-has('test/unit/specs/main/elephantnote/tauriOnlyRuntime.spec.js', 'does not silently bootstrap a browser or Electron-compatible renderer fallback', 'Tauri-only runtime regression test')
+has('src/renderer/src/platform/tauriRuntimeBridge.js', 'export const installTauriRuntimeBridge', 'strict Tauri runtime bridge export')
+has('src/renderer/src/platform/tauriRuntimeBridge.js', 'requires the Tauri runtime bridge', 'strict Tauri runtime bridge unavailable-runtime error')
+has('test/unit/specs/main/elephantnote/tauriOnlyRuntime.spec.js', 'keeps the public renderer entrypoint guarded by a strict Tauri bridge wrapper', 'Tauri-only runtime wrapper regression test')
 ordered('src/renderer/src/platform/tauriLocalIpcBridge.js', ["'mt::response-file-save'", "'mt::response-file-save-as'", "'mt::open-file'", 'target.elephantnote.notes.read({ relativePath })', "dispatchLocalIpcEvent(target, 'mt::open-new-tab'"], 'Tauri local IPC routing')
 ordered('src/renderer/src/platform/tauriMarkTextSaveBridge.js', ['const writeViaRustBackend = async(target, pathname, markdown) => {', "return invoke('tauri_marktext_write_file', { pathname, content: markdown })", "ipc.send('mt::tab-saved', id)", "ipc.send('mt::tab-save-failure', id, message)"], 'Tauri save bridge result reporting')
 has('src-tauri/src/lib_min.rs', 'tauri_extra_commands::tauri_marktext_write_file', 'registered MarkText backend writer')
@@ -153,7 +157,7 @@ ordered('Elephant/front/app/services/elephantnoteClient/domainClients.js', ['con
 has('test/unit/elephantnote/domainClients.spec.js', 'does not rebuild chat search when the model already produced an answer', 'chat search rebuild throttling test')
 
 ordered('Elephant/front/app/components/editor/NoteEditorHost.vue', ["import { elephantnoteClient } from '../../services/elephantnoteClient'", 'const AUTOSAVE_POLL_MS', 'const autosaveDelayFor', 'elephantnoteClient.notes.write({', 'noteSaveInterval = window.setInterval'], 'editor autosave persistence')
-ordered('Elephant/front/app/components/editor/NoteEditorHost.vue', ['const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {', 'const writableImage = imageBlob || blob', 'await window.fileUtils.writeFile(targetPath, writableImage)', 'if (excalidrawInsertOnSave.value) {'], 'Excalidraw byte persistence')
+ordered('Elephant/front/app/components/editor/NoteEditorHost.vue', ['const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {', 'const writableImage = imageBlob || blob', 'await window.fileUtils.writeFile(targetPath)', 'if (excalidrawInsertOnSave.value) {'], 'Excalidraw byte persistence')
 ordered('Elephant/front/app/components/editor/ExcalidrawDialog.vue', ['const blobToBytes = async(blob) => new Uint8Array(await blob.arrayBuffer())', 'imageBlob: await blobToBytes(blob)', 'sceneBlob: await sceneBlob.text()'], 'Excalidraw writable payload')
 ordered('Elephant/front/app/utils/noteCardView.js', ['const stripInlineFrontmatterPrefix', 'const metadataPairPattern = new RegExp', 'export const getNoteCardExcerpt = (entry) => cleanPreview'], 'note-card preview frontmatter cleanup')
 

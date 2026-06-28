@@ -26,12 +26,12 @@ describe('ElephantNote API runtime', () => {
     expect(bridgeCall).not.toHaveBeenCalled()
   })
 
-  it('rejects invalid payloads before they can reach legacy fallback calls', () => {
-    const legacyPlan = vi.fn()
+  it('rejects invalid payloads before they can reach local fallback calls', () => {
+    const fallbackPlan = vi.fn()
     globalThis.window.elephantnote = null
-    const call = createApiCaller({ 'sync.plan': legacyPlan })
+    const call = createApiCaller({ 'sync.plan': fallbackPlan })
 
     expect(() => call('sync.plan', { operations: 'pull' })).toThrow(/operations/)
-    expect(legacyPlan).not.toHaveBeenCalled()
+    expect(fallbackPlan).not.toHaveBeenCalled()
   })
 })

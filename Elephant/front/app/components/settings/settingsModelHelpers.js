@@ -18,9 +18,9 @@ export const createNodeLlamaCppTestConfig = ({
 
   return normalizeAiConfig({
     ...clonePlainObject(aiConfig),
-    preset: 'nodeLlamaCpp',
-    transport: 'node-llama-cpp',
-    endpoint: 'node-llama-cpp://local',
+    preset: 'tauriRustLocal',
+    transport: 'tauri-rust',
+    endpoint: 'tauri-rust://local',
     model: String(model || '').trim()
   })
 }

@@ -152,10 +152,10 @@ export const usePreferencesStore = defineStore('preferences', {
         })
         return
       }
-      window.electron.ipcRenderer.send('mt::ask-for-user-preference')
-      window.electron.ipcRenderer.send('mt::ask-for-user-data')
+      window.tauri.ipcRenderer.send('mt::ask-for-user-preference')
+      window.tauri.ipcRenderer.send('mt::ask-for-user-data')
 
-      window.electron.ipcRenderer.on('mt::user-preference', (e, preferences) => {
+      window.tauri.ipcRenderer.on('mt::user-preference', (e, preferences) => {
         this.SET_USER_PREFERENCE(preferences)
       })
     },
@@ -169,12 +169,12 @@ export const usePreferencesStore = defineStore('preferences', {
         setLanguage(value)
       }
 
-      // save to electron-store
+// Persist to the runtime-backed preference store.
       persistPortablePreference(type, value)
       if (isPortableRuntime()) {
         return
       }
-      window.electron.ipcRenderer.send('mt::set-user-preference', { [type]: value })
+      window.tauri.ipcRenderer.send('mt::set-user-preference', { [type]: value })
     },
 
     SET_USER_DATA({ type, value }) {
@@ -183,7 +183,7 @@ export const usePreferencesStore = defineStore('preferences', {
       if (isPortableRuntime()) {
         return
       }
-      window.electron.ipcRenderer.send('mt::set-user-data', { [type]: value })
+      window.tauri.ipcRenderer.send('mt::set-user-data', { [type]: value })
     },
 
     SET_IMAGE_FOLDER_PATH(value) {
@@ -192,21 +192,21 @@ export const usePreferencesStore = defineStore('preferences', {
         persistPortableUserData('imageFolderPath', value)
         return
       }
-      window.electron.ipcRenderer.send('mt::ask-for-modify-image-folder-path', value)
+      window.tauri.ipcRenderer.send('mt::ask-for-modify-image-folder-path', value)
     },
 
     SELECT_DEFAULT_DIRECTORY_TO_OPEN() {
       if (isPortableRuntime()) {
         return
       }
-      window.electron.ipcRenderer.send('mt::select-default-directory-to-open')
+      window.tauri.ipcRenderer.send('mt::select-default-directory-to-open')
     },
 
     LISTEN_FOR_VIEW() {
-      window.electron?.ipcRenderer?.on('mt::show-command-palette', () => {
+      window.tauri?.ipcRenderer?.on('mt::show-command-palette', () => {
         bus.emit('show-command-palette')
       })
-      window.electron?.ipcRenderer?.on('mt::toggle-view-mode-entry', (event, entryName) => {
+      window.tauri?.ipcRenderer?.on('mt::toggle-view-mode-entry', (event, entryName) => {
         this.TOGGLE_VIEW_MODE(entryName)
         this.DISPATCH_EDITOR_VIEW_STATE({ [entryName]: this[entryName] })
       })
@@ -222,7 +222,7 @@ export const usePreferencesStore = defineStore('preferences', {
 
     DISPATCH_EDITOR_VIEW_STATE(viewState) {
       const { windowId } = global.marktext.env
-      window.electron.ipcRenderer.send('mt::view-layout-changed', windowId, viewState)
+      window.tauri.ipcRenderer.send('mt::view-layout-changed', windowId, viewState)
     }
   }
 })

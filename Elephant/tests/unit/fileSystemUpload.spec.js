@@ -4,7 +4,7 @@ import { uploadImage } from '../../../src/renderer/src/util/fileSystem.js'
 
 describe('file system uploads', () => {
   beforeEach(() => {
-    window.electron = {
+    window.tauri = {
       shell: {
         exec: vi.fn()
       }
@@ -27,7 +27,7 @@ describe('file system uploads', () => {
   })
 
   it('uses the Tauri shell exec bridge for cliScript uploads', async() => {
-    window.electron.shell.exec.mockResolvedValue({
+    window.tauri.shell.exec.mockResolvedValue({
       success: true,
       stdout: 'https://example.com/uploaded.png',
       stderr: '',
@@ -46,7 +46,7 @@ describe('file system uploads', () => {
     )
 
     expect(result).toBe('https://example.com/uploaded.png')
-    expect(window.electron.shell.exec).toHaveBeenCalledWith(
+    expect(window.tauri.shell.exec).toHaveBeenCalledWith(
       'pic-upload',
       ['/tmp/image.png'],
       expect.objectContaining({ env: expect.objectContaining({ PATH: expect.any(String) }) })

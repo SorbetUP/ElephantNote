@@ -48,7 +48,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import log from 'electron-log/renderer'
+import log from '@/platform/runtimeLogShim'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'

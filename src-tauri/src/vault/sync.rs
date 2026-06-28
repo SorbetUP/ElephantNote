@@ -195,10 +195,6 @@ fn explicit_operations(payload: &Value) -> Vec<String> {
     .unwrap_or_default()
 }
 
-fn operation_payload(payload: &Value, operation: &str) -> Value {
-  normalized_payload(payload.get(operation).cloned().unwrap_or_else(|| json!({})))
-}
-
 fn operation_payload_or_sync(payload: &Value, operation: &str) -> Value {
   normalized_payload(payload.get(operation).cloned().or_else(|| payload.get(SYNC_OPERATION_SYNC).cloned()).unwrap_or_else(|| json!({})))
 }

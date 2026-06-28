@@ -5,7 +5,7 @@ export const MUYA_RUNTIME_FLAGS = Object.freeze({
 })
 
 export const defaultMuyaRuntimeMode = (source = globalThis) => {
-  if (source.__MARKTEXT_RUNTIME__ && source.__MARKTEXT_RUNTIME__ !== 'electron') return 'shadow'
+  if (source.__MARKTEXT_RUNTIME__) return 'shadow'
   return 'disabled'
 }
 

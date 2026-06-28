@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { updateMarkdownTitle } from 'elephant-back/markdown'
+import { updateMarkdownTitle } from '../../../../../Elephant/back/app/markdown.js'
 
 describe('updateMarkdownTitle', () => {
   it('updates the frontmatter title and first heading', () => {

@@ -5,7 +5,7 @@ export const useAutoUpdatesStore = defineStore('autoUpdates', {
   state: () => ({}),
   actions: {
     LISTEN_FOR_UPDATE() {
-      window.electron.ipcRenderer.on('mt::UPDATE_ERROR', (_, message) => {
+      window.tauri.ipcRenderer.on('mt::UPDATE_ERROR', (_, message) => {
         notice.notify({
           title: 'Update',
           type: 'error',
@@ -13,21 +13,21 @@ export const useAutoUpdatesStore = defineStore('autoUpdates', {
           message
         })
       })
-      window.electron.ipcRenderer.on('mt::UPDATE_NOT_AVAILABLE', (_, message) => {
+      window.tauri.ipcRenderer.on('mt::UPDATE_NOT_AVAILABLE', (_, message) => {
         notice.notify({
           title: 'Update not Available',
           type: 'primary',
           message
         })
       })
-      window.electron.ipcRenderer.on('mt::UPDATE_DOWNLOADED', (_, message) => {
+      window.tauri.ipcRenderer.on('mt::UPDATE_DOWNLOADED', (_, message) => {
         notice.notify({
           title: 'Update Downloaded',
           type: 'info',
           message
         })
       })
-      window.electron.ipcRenderer.on('mt::UPDATE_AVAILABLE', (_, message) => {
+      window.tauri.ipcRenderer.on('mt::UPDATE_AVAILABLE', (_, message) => {
         notice
           .notify({
             title: 'Update Available',
@@ -37,11 +37,11 @@ export const useAutoUpdatesStore = defineStore('autoUpdates', {
           })
           .then(() => {
             const needUpdate = true
-            window.electron.ipcRenderer.send('mt::NEED_UPDATE', { needUpdate })
+            window.tauri.ipcRenderer.send('mt::NEED_UPDATE', { needUpdate })
           })
           .catch(() => {
             const needUpdate = false
-            window.electron.ipcRenderer.send('mt::NEED_UPDATE', { needUpdate })
+            window.tauri.ipcRenderer.send('mt::NEED_UPDATE', { needUpdate })
           })
       })
     }

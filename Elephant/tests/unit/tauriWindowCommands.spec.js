@@ -32,7 +32,7 @@ describe('tauri window commands', () => {
     windowApi.setFullscreen.mockReset()
     windowApi.isFullscreen.mockReset()
     window.__TAURI__ = {}
-    delete window.electron
+    delete window.tauri
     window.path = {
       join: (...parts) => parts.filter(Boolean).join('/')
     }

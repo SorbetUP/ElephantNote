@@ -79,7 +79,7 @@ export const useSitePreviewStore = defineStore('elephantnoteSitePreview', {
 
     async openBuildExternal() {
       if (!this.lastBuild?.outputDir) return
-      await window.electron.shell.openPath(this.lastBuild.outputDir)
+      await window.tauri.shell.openPath(this.lastBuild.outputDir)
     },
 
     clear() {

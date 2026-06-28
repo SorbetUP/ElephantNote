@@ -1,4 +1,4 @@
-import log from '@/platform/electronLogShim'
+import log from '@/platform/runtimeLogShim'
 import RendererPaths from './node/paths'
 import { createConsoleMirror } from '../../common/logging'
 
@@ -11,7 +11,7 @@ const configureLogger = () => {
   consoleMirror = createConsoleMirror({
     enabled: process.env.NODE_ENV === 'development',
     emit: (entry) => {
-      window.electron?.ipcRenderer?.send('mt::renderer-log', entry)
+      window.tauri?.ipcRenderer?.send('mt::renderer-log', entry)
     }
   })
 
@@ -94,7 +94,7 @@ const handleRendererError = (event) => {
     exceptionLogger(event.error)
 
     // Pass exception to main process exception handler to show a error dialog.
-    window.electron?.ipcRenderer?.send('mt::handle-renderer-error', copy)
+    window.tauri?.ipcRenderer?.send('mt::handle-renderer-error', copy)
   } else {
     log.error('[renderer] uncaught non-error event', event)
   }

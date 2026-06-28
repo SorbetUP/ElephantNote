@@ -5,7 +5,7 @@ import {
   createTextEmbedding,
   searchAtomicSemanticIndex
 } from 'common/elephantnote/atomicAiEngine'
-import { createSemanticGraph } from 'elephant-back/search/graphLibrary'
+import { createSemanticGraph } from '../../../../../Elephant/back/app/search/graphLibrary.js'
 import {
   buildGraphFromVaultEntries,
   buildSemanticGraphSurface,

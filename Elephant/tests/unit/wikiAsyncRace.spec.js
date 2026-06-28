@@ -64,7 +64,7 @@ describe('wiki async navigation races', () => {
   beforeEach(() => {
     listDirectory.mockReset()
     window.localStorage.clear()
-    window.electron = {
+    window.tauri = {
       ipcRenderer: {
         send: vi.fn()
       }

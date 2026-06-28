@@ -119,7 +119,7 @@ const faceClick = (name) => {
 }
 
 const reportViaGithub = () => {
-  window.electron.shell.openExternal('https://github.com/marktext/marktext/issues/new')
+  window.tauri.shell.openExternal('https://github.com/marktext/marktext/issues/new')
 }
 
 const reportViaTwitter = () => {
@@ -136,7 +136,7 @@ const reportViaTwitter = () => {
     params.hashtags = 'happyMarkText'
   }
 
-  window.electron.shell.openExternal(
+  window.tauri.shell.openExternal(
     `${origin}?${Object.keys(params)
       .map((key) => `${key}=${params[key]}`)
       .join('&')}`

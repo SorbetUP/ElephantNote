@@ -6,11 +6,18 @@ export const ELEPHANTNOTE_AI_PRESETS = Object.freeze({
     endpoint: '',
     model: ''
   },
+  tauriRustLocal: {
+    id: 'tauriRustLocal',
+    label: 'Tauri Rust local',
+    transport: 'tauri-rust',
+    endpoint: 'tauri-rust://local',
+    model: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M'
+  },
   nodeLlamaCpp: {
     id: 'nodeLlamaCpp',
-    label: 'node-llama-cpp',
-    transport: 'node-llama-cpp',
-    endpoint: 'node-llama-cpp://local',
+    label: 'node-llama-cpp (legacy alias)',
+    transport: 'tauri-rust',
+    endpoint: 'tauri-rust://local',
     model: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M'
   },
   mlx: {
@@ -45,7 +52,7 @@ export const ELEPHANTNOTE_AI_PRESETS = Object.freeze({
 
 const LOCALHOST_PATTERN = /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\d{1,3}(?:\.\d{1,3}){3}|\[[^\]]+\]):\d+(?:\/.*)?$/i
 
-const LOCAL_APP_SOURCE_IDS = new Set(['app-local', 'node-llama-cpp', 'nodeLlamaCpp'])
+const LOCAL_APP_SOURCE_IDS = new Set(['app-local', 'node-llama-cpp', 'nodeLlamaCpp', 'tauri-rust', 'tauriRustLocal'])
 const HTTP_COMPATIBLE_SOURCE_IDS = new Set([
   'api',
   'openai-compatible',
@@ -104,7 +111,7 @@ const normalizeSourceId = (value = '') => String(value || '').trim()
 
 const sourceToTransport = (source = '') => {
   const value = normalizeSourceId(source)
-  if (LOCAL_APP_SOURCE_IDS.has(value)) return 'node-llama-cpp'
+  if (LOCAL_APP_SOURCE_IDS.has(value)) return 'tauri-rust'
   if (value === 'ollama') return 'ollama'
   if (HTTP_COMPATIBLE_SOURCE_IDS.has(value)) return 'openai-compatible'
   if (value === 'codex') return 'openai-compatible'
@@ -161,12 +168,14 @@ export const normalizeAiConfig = (config = {}) => {
   const { enabled: _legacyEnabled, ...restConfig } = getObject(config)
   const rawLocalAi = getObject(restConfig.localAi)
   const localAi = normalizeLocalAiConfig(rawLocalAi)
-  const rawProvider = String(restConfig.preset || restConfig.provider || 'nodeLlamaCpp')
-  const presetId = rawProvider === 'disabled' ? (localAi.enabled ? 'nodeLlamaCpp' : 'custom') : rawProvider
+  const rawProvider = String(restConfig.preset || restConfig.provider || 'tauriRustLocal')
+  const presetId = rawProvider === 'disabled'
+    ? (localAi.enabled ? 'tauriRustLocal' : 'custom')
+    : (rawProvider === 'nodeLlamaCpp' ? 'tauriRustLocal' : rawProvider)
   const preset = ELEPHANTNOTE_AI_PRESETS[presetId] || ELEPHANTNOTE_AI_PRESETS.custom
   const routeRuntime = resolveFeatureRouteRuntime({ config: restConfig, localAi, preset })
   const rawTransport = String(routeRuntime?.transport || restConfig.transport || preset.transport)
-  const transport = rawTransport === 'disabled' ? (localAi.enabled ? 'node-llama-cpp' : 'openai-compatible') : rawTransport
+  const transport = rawTransport === 'disabled' ? (localAi.enabled ? 'tauri-rust' : 'openai-compatible') : rawTransport
   const endpoint = normalizeAiEndpointForTransport(routeRuntime?.endpoint || restConfig.endpoint || preset.endpoint, transport)
   const model = String(routeRuntime?.model || restConfig.model || preset.model || '')
   const apiKey = String(routeRuntime?.apiKey || restConfig.apiKey || '')

@@ -65,7 +65,7 @@ const readVaultNote = async(target, relativePath) => {
 
 const openAssetExternally = async(target, filePath, channel) => {
   console.info('[tauri:local-ipc] open-file ignored non-markdown asset', { channel, filePath: normalizePath(filePath) })
-  const opener = target.__TAURI__?.opener?.openUrl || target.electron?.shell?.openPath || target.electron?.shell?.openExternal
+  const opener = target.__TAURI__?.opener?.openUrl || target.tauri?.shell?.openPath || target.tauri?.shell?.openExternal
   if (typeof opener === 'function') {
     try {
       await opener(filePath)
@@ -131,7 +131,7 @@ const openVaultNoteWithBackend = async(target, channel, args) => {
 
 export const installTauriLocalIpcBridge = (target = globalThis) => {
   if (!target?.__TAURI__ || target.__TAURI_LOCAL_IPC_BRIDGE_INSTALLED__) return false
-  const ipc = target.electron?.ipcRenderer
+  const ipc = target.tauri?.ipcRenderer
   if (!ipc?.send) return false
 
   const nativeSend = ipc.send.bind(ipc)

@@ -29,7 +29,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   window.localStorage.clear()
   window.path = { join: (...parts) => parts.join('/') }
-  window.electron = { ipcRenderer: { send: vi.fn() } }
+  window.tauri = { ipcRenderer: { send: vi.fn() } }
 })
 
 describe('editor runtime regression coverage', () => {

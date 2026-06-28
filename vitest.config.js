@@ -33,7 +33,6 @@ export default defineConfig({
     alias: {
       'electron-log/renderer': resolve(__dirname, 'test/unit/stubs/electronLog.js'),
       'electron-log': resolve(__dirname, 'test/unit/stubs/electronLog.js'),
-      'elephant-back': resolve(__dirname, 'Elephant/back/app'),
       'elephant-front': resolve(__dirname, 'Elephant/front/app'),
       'elephant-shared': resolve(__dirname, 'Elephant/shared'),
       'common/elephantnote/apiContracts': apiContractsRuntime,
@@ -42,8 +41,7 @@ export default defineConfig({
       'main_renderer/elephantnote': resolve(__dirname, 'Elephant/back/app'),
       '@': resolve(__dirname, 'src/renderer/src'),
       common: resolve(__dirname, 'src/common'),
-      muya: resolve(__dirname, 'src/muya'),
-      main_renderer: resolve(__dirname, 'src/main')
+      muya: resolve(__dirname, 'src/muya')
     },
     extensions: ['.mjs', '.js', '.json', '.vue']
   }

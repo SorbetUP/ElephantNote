@@ -18,7 +18,7 @@ const features = [
       'Tauri must not require Electron-only packages in the renderer bundle.',
       'Vitest aliases can hide missing production dependencies if not audited separately.'
     ],
-    files: ['package.json', 'pnpm-lock.yaml', 'electron.vite.config.js', 'vite.tauri.config.js', 'src/main/**', 'src/preload/**'],
+    files: ['package.json', 'pnpm-lock.yaml', 'vite.tauri.config.js', 'src-tauri/**', 'src/renderer/src/**'],
     verbs: ['audit', 'resolve', 'externalize', 'declare', 'lock', 'validate', 'document', 'test', 'log', 'fail fast']
   },
   {

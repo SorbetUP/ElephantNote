@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import log from 'electron-log'
+import log from '@/platform/runtimeLogShim'
 import { useVaultStore } from './vaultStore'
 import { elephantnoteClient } from '../services/elephantnoteClient'
 import {
@@ -623,7 +623,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       if (typeof vaultStore.openNote === 'function') {
         vaultStore.openNote(noteEntry)
       } else {
-        window.electron.ipcRenderer.send('mt::open-file', window.path.join(vaultPath, relativePath), {})
+        window.tauri.ipcRenderer.send('mt::open-file', window.path.join(vaultPath, relativePath), {})
       }
       searchLog('openResult:done', { relativePath })
       this.close()

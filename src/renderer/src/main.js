@@ -291,7 +291,7 @@ const mountRendererApp = (runtime, windowType) => {
 }
 
 const startRendererApp = async() => {
-  const runtime = window.__MARKTEXT_RUNTIME__ || (window.__TAURI__ ? 'tauri' : 'electron')
+  const runtime = window.__MARKTEXT_RUNTIME__ || (window.__TAURI__ ? 'tauri' : 'tauri-compatible')
   window.__MARKTEXT_RUNTIME__ = runtime
 
   const windowType = await bootstrapForRuntime(runtime)

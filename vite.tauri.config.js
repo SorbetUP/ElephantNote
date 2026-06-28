@@ -89,10 +89,6 @@ export default defineConfig({
     alias: {
       path: resolve(__dirname, 'src/renderer/src/platform/nodePathShim.js'),
       'node:path': resolve(__dirname, 'src/renderer/src/platform/nodePathShim.js'),
-      '@electron/remote': resolve(__dirname, 'src/renderer/src/platform/electronRemoteShim.js'),
-      'electron-log/renderer': resolve(__dirname, 'src/renderer/src/platform/electronLogShim.js'),
-      'electron-log': resolve(__dirname, 'src/renderer/src/platform/electronLogShim.js'),
-      'elephant-back': resolve(__dirname, 'Elephant/back/app'),
       'elephant-front': resolve(__dirname, 'Elephant/front/app'),
       'elephant-shared': resolve(__dirname, 'Elephant/shared'),
       'common/elephantnote': resolve(__dirname, 'Elephant/shared'),

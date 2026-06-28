@@ -70,7 +70,7 @@ watch(
 
 const handleMoreClick = () => {
   if (typeof props.more === 'string') {
-    window.electron.shell.openExternal(props.more)
+    window.tauri.shell.openExternal(props.more)
   }
 }
 

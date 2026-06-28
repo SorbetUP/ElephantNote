@@ -8,9 +8,9 @@ export const useMainStore = defineStore('main', {
   state: () => ({
     platform: isPortableRuntime()
       ? window.navigator.platform || 'portable'
-      : window.electron?.process?.platform || window.navigator.platform || 'portable', // platform of system `darwin` | `win32` | `linux`
+    : window.tauri?.process?.platform || window.navigator.platform || 'portable', // platform of system `darwin` | `win32` | `linux`
     appVersion: window.__MARKTEXT_VERSION_STRING__ ||
-      window.electron?.process?.env?.MARKTEXT_VERSION_STRING || '', // MarkText version string
+      window.tauri?.process?.env?.MARKTEXT_VERSION_STRING || '', // MarkText version string
     windowActive: true, // whether current window is active or focused
     init: false // whether MarkText is initialized
   }),
@@ -29,7 +29,7 @@ export const useMainStore = defineStore('main', {
     },
 
     LISTEN_WIN_STATUS() {
-      window.electron?.ipcRenderer?.on('mt::window-active-status', (e, { status }) => {
+      window.tauri?.ipcRenderer?.on('mt::window-active-status', (e, { status }) => {
         this.windowActive = status
       })
     }

@@ -97,7 +97,7 @@ const relativeDirectoryNamePlaceholder = computed(
 
 // methods
 const openImageFolder = () => {
-  window.electron.shell.openPath(imageFolderPath.value)
+  window.tauri.shell.openPath(imageFolderPath.value)
 }
 
 const modifyImageFolderPath = (value) => {

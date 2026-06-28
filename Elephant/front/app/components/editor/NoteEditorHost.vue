@@ -302,7 +302,7 @@ const markFileSavedIfCurrent = (file, notePath, savedMarkdown) => {
     currentFile.value.isSaved = true
   }
   if (file.id) {
-    window.electron?.ipcRenderer?.send?.('mt::tab-saved', file.id)
+    window.tauri?.ipcRenderer?.send?.('mt::tab-saved', file.id)
   }
   lastSavedNotePath = notePath
   lastSavedMarkdown = savedMarkdown
@@ -472,7 +472,7 @@ const persistNoteMarkdown = async(notePath, nextMarkdown, file = activeNoteFile.
     } catch (fileError) {
       pushEditorLog('error', '[elephantnote:save] write:failed', { notePath, apiError: apiError?.message || String(apiError), fileError: fileError?.message || String(fileError) })
       if (file?.id) {
-        window.electron?.ipcRenderer?.send?.('mt::tab-save-failure', file.id, fileError?.message || apiError?.message || 'Unable to save note.')
+        window.tauri?.ipcRenderer?.send?.('mt::tab-save-failure', file.id, fileError?.message || apiError?.message || 'Unable to save note.')
       }
       return false
     }

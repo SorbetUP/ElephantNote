@@ -136,7 +136,7 @@
 
 <script setup>
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Menu as RemoteMenu } from '@/platform/electronRemoteShim'
+import { Menu as RemoteMenu } from '@/platform/tauriRemoteShim'
 import { usePreferencesStore } from '@/store/preferences.js'
 import { useLayoutStore } from '@/store/layout.js'
 import { ref, computed, watch, onBeforeUnmount, onMounted } from 'vue'

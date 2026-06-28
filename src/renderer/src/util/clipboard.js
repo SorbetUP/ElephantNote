@@ -1,16 +1,23 @@
 import { isLinux, isOsx, isWindows } from './index'
-import plist from 'plist'
-import { clipboard as remoteClipboard } from '@/platform/electronRemoteShim'
+import { clipboard as remoteClipboard } from '@/platform/tauriRemoteShim'
 
 const hasClipboardFiles = () => {
-  return remoteClipboard.has('NSFilenamesPboardType')
+  return typeof remoteClipboard?.has === 'function' && remoteClipboard.has('NSFilenamesPboardType')
 }
 
 const getClipboardFiles = () => {
   if (!hasClipboardFiles()) {
     return []
   }
-  return plist.parse(remoteClipboard.read('NSFilenamesPboardType'))
+  const rawValue = typeof remoteClipboard?.read === 'function'
+    ? remoteClipboard.read('NSFilenamesPboardType')
+    : ''
+  if (Array.isArray(rawValue)) return rawValue
+  if (typeof rawValue !== 'string' || !rawValue.trim()) return []
+  return rawValue
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .filter(Boolean)
 }
 
 export const guessClipboardFilePath = () => {

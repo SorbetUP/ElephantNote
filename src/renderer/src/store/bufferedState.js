@@ -1,5 +1,5 @@
 import debounce from 'lodash/debounce'
-import log from '@/platform/electronLogShim'
+import log from '@/platform/runtimeLogShim'
 import { toPlainObject } from '../../../../Elephant/shared/plainObject.js'
 import { useEditorStore } from './editor'
 import { useProjectStore } from './project'
@@ -39,7 +39,7 @@ export const createBufferedState = () => {
 export const sendBufferedState = () => {
   const snapshot = createBufferedState()
   if (snapshot) {
-    return window.electron.ipcRenderer.invoke('update-buffer-state', toPlainObject(snapshot))
+    return window.tauri.ipcRenderer.invoke('update-buffer-state', toPlainObject(snapshot))
   }
 
   return Promise.resolve(false)

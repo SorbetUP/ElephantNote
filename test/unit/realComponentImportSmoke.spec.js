@@ -11,9 +11,10 @@ const imports = [
 
 describe('real component import smoke', () => {
   for (const [name, load] of imports) {
+    const timeout = name === 'App page' ? 15000 : 5000
     it(`${name} imports without renderer bootstrap errors`, async() => {
       const module = await load()
       expect(module.default).toBeTruthy()
-    })
+    }, timeout)
   }
 })

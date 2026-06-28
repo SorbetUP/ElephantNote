@@ -87,7 +87,7 @@
 
 <script setup>
 import { ref, reactive, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import log from '@/platform/electronLogShim'
+import log from '@/platform/runtimeLogShim'
 import Muya from 'muya/lib'
 import TablePicker from 'muya/lib/ui/tablePicker'
 import QuickInsert from 'muya/lib/ui/quickInsert'
@@ -553,7 +553,7 @@ watch(sourceCode, (value, oldValue) => {
 
 // Methods
 const photoCreatorClick = (url) => {
-  window.electron.shell.openExternal(url)
+  window.tauri.shell.openExternal(url)
 }
 
 const jumpClick = (linkInfo) => {

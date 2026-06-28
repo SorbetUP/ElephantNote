@@ -8,7 +8,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
 type R<T> = Result<T, String>;
-const MODEL_PROVIDER: &str = "node-llama-cpp";
+const MODEL_PROVIDER: &str = "tauri-rust";
 const DEFAULT_PORT: u16 = 39281;
 const DEFAULT_BASE_URL: &str = "http://127.0.0.1:39281/v1";
 
@@ -374,7 +374,7 @@ pub async fn chat_with_selected_model(app: &AppHandle, selection: &str, messages
   }
   Ok(Some(LocalChatResult {
     answer,
-    provider: if is_path_mode(payload) { "local-llama.cpp-path".to_string() } else { "local-llama.cpp-bundled".to_string() },
+    provider: if is_path_mode(payload) { "tauri-rust-local-path".to_string() } else { "tauri-rust-local-bundled".to_string() },
     model: model_name,
     base_url,
   }))

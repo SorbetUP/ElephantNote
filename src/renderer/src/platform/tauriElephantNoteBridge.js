@@ -459,7 +459,7 @@ const createBridge = (target) => {
       buildFolder: async() => createDesktopOnlyResult('site build'),
       stop: async() => ({ ok: true }),
       status: async() => null,
-      openExternal: async(url) => target.electron?.shell?.openExternal?.(url)
+    openExternal: async(url) => target.tauri?.shell?.openExternal?.(url)
     },
 
     atomicFeatures: {
@@ -499,8 +499,8 @@ const createBridge = (target) => {
     programs: { list: async() => [], set: async(payload) => payload, run: async() => null },
     ocr: { extract: async() => createDesktopOnlyResult('OCR extraction') },
     clipboard: {
-      writeText: async(text) => target.electron?.clipboard?.writeText?.(text),
-      readText: async() => target.electron?.clipboard?.readText?.()
+      writeText: async(text) => target.tauri?.clipboard?.writeText?.(text),
+      readText: async() => target.tauri?.clipboard?.readText?.()
     }
   }
 

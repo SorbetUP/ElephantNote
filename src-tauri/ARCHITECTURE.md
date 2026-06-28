@@ -26,9 +26,7 @@ Active modules:
 - model_domain.rs: model selection primitives.
 - search_logic.rs: search query and scoring primitives.
 
-Legacy modules:
-
-- vault_min.rs: old monolithic vault command glue. It is no longer imported by lib_min.rs and should be deleted after the modular backend survives local testing.
+Legacy modules: none. Dead duplicate glue (`lib.rs`, `vault_backend.rs`, `vault_min.rs`, `chat_runtime_local.rs`, `model_safety.rs`, `sync_safety.rs`, `vault_lib.rs`) was deleted during the Rust-only migration.
 
 Rule: new behavior goes into a small domain module with tests first. Tauri commands should only call those modules.
 

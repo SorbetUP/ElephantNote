@@ -29,7 +29,7 @@ defineProps({
 
 const openUrl = (link) => {
   if (link) {
-    window.electron.shell.openExternal(link)
+    window.tauri.shell.openExternal(link)
   }
 }
 </script>

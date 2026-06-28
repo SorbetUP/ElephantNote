@@ -1,5 +1,5 @@
-import schema from '../../../src/main/preferences/schema.json'
-import DEFAULT_PREFERENCES, { createDefaultPreferences } from '../../../src/main/preferences/defaults'
+import schema from '../../../src/common/preferences/schema.json'
+import DEFAULT_PREFERENCES, { createDefaultPreferences } from '../../../src/common/preferences/defaults'
 
 describe('main preference defaults', () => {
   it('provides bundled defaults without static/preference.json', () => {

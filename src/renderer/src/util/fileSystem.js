@@ -3,7 +3,7 @@ import crypto from 'crypto'
 import * as fs from 'fs'
 import * as childProcess from 'child_process'
 import * as os from 'os'
-import dayjs from 'dayjs'
+import dayjs from '@/util/day'
 import { Octokit } from '@octokit/rest'
 
 export const create = async(pathname, type) => {
@@ -211,8 +211,8 @@ export const uploadImage = async(pathname, image, preferences) => {
       else rejectPromise(`PicGo upload error: cannot parse output\n${text.slice(0, 400)}`)
     }
     const execWithRuntime = async(command, args, options = {}) => {
-      if (window.electron?.shell?.exec) {
-        const result = await window.electron.shell.exec(command, args, options)
+      if (window.tauri?.shell?.exec) {
+        const result = await window.tauri.shell.exec(command, args, options)
         const text = `${result?.stdout || ''}${result?.stderr ? `\n${result.stderr}` : ''}`
         if (!result?.success) {
           throw new Error(text || `Command exited with ${result?.status ?? 'unknown status'}`)

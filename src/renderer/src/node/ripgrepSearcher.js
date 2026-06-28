@@ -22,7 +22,7 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import * as childProcess from 'child_process'
-import log from '@/platform/electronLogShim'
+import log from '@/platform/runtimeLogShim'
 
 function cleanResultLine(resultLine) {
   resultLine = getText(resultLine)

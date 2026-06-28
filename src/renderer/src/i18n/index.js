@@ -277,7 +277,7 @@ export const getCurrentLanguage = () => i18n.global.locale.value
 export { i18n }
 export default i18n
 
-if (window.electron && window.electron.ipcRenderer) {
+if (window.tauri && window.tauri.ipcRenderer) {
   if (isPortableRuntime()) {
     const language = readPortablePreference('language')
     if (language) {
@@ -285,13 +285,13 @@ if (window.electron && window.electron.ipcRenderer) {
       bus.emit('language-changed', language)
     }
   }
-  window.electron.ipcRenderer.on('language-changed', (event, newLocale) => {
+  window.tauri.ipcRenderer.on('language-changed', (event, newLocale) => {
     setLanguage(newLocale)
     bus.emit('language-changed', newLocale)
   })
 
-  window.electron.ipcRenderer.send('mt::get-current-language')
-  window.electron.ipcRenderer.on('mt::current-language', (event, language) => {
+  window.tauri.ipcRenderer.send('mt::get-current-language')
+  window.tauri.ipcRenderer.on('mt::current-language', (event, language) => {
     setLanguage(language)
     bus.emit('language-changed', language)
   })

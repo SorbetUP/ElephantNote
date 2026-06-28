@@ -66,7 +66,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import log from 'electron-log/renderer'
+import log from '@/platform/runtimeLogShim'
 import { Download, Moon, SunMedium, X } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import { ELEPHANTNOTE_THEME_FAMILIES, getOppositeThemeVariant, getThemeFamily, getThemeLabel, getThemeMode, getThemeTokens, getThemeVariant } from 'common/elephantnote/appearance'

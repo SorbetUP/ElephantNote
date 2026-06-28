@@ -13,7 +13,7 @@ import {
 describe('advanced Muya runtime behavior', () => {
   it('uses shadow mode by default in Tauri while the runtime is stabilizing', () => {
     expect(defaultMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('shadow')
-    expect(defaultMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'electron' })).toBe('disabled')
+    expect(defaultMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'electron' })).toBe('shadow')
     expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('shadow')
   })
 

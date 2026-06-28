@@ -24,7 +24,7 @@ export const isUpdatable = () => {
     fileUtils.isFile(pathApi.join(resourcesPath, 'md.ico'))
   ) {
     // Windows is a little but tricky. The update resource file is always available and
-    // there is no way to check the target type at runtime (electron-builder#4119).
+// There is no reliable runtime check for the packaged target type here.
     // As workaround we check whether "md.ico" exists that is only included in the setup.
     return true
   }

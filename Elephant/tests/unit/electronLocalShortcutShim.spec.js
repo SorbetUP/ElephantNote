@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   getAcceleratorFromKeyboardEvent,
   isCompositionEvent,
-  isValidElectronAccelerator,
+  isValidAccelerator,
   setKeyboardLayout
-} from '../../../src/renderer/src/platform/electronLocalShortcutShim.js'
+} from '../../../src/renderer/src/platform/runtimeLocalShortcutShim.js'
 
-describe('electron local shortcut shim', () => {
-  it('normalizes keyboard events into electron-style accelerators', () => {
+describe('runtime local shortcut shim', () => {
+  it('normalizes keyboard events into accelerators', () => {
     const result = getAcceleratorFromKeyboardEvent({
       key: 's',
       ctrlKey: true,
@@ -23,8 +23,8 @@ describe('electron local shortcut shim', () => {
   })
 
   it('validates and detects composition state', () => {
-    expect(isValidElectronAccelerator('Cmd+Shift+P')).toBe(true)
-    expect(isValidElectronAccelerator('Shift')).toBe(false)
+    expect(isValidAccelerator('Cmd+Shift+P')).toBe(true)
+    expect(isValidAccelerator('Shift')).toBe(false)
     expect(isCompositionEvent({ isComposing: true })).toBe(true)
     expect(isCompositionEvent({ keyCode: 229 })).toBe(true)
     expect(isCompositionEvent({ key: 'a' })).toBe(false)

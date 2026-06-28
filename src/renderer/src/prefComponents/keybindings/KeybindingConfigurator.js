@@ -74,7 +74,7 @@ export default class KeybindingConfigurator {
     }
 
     const userKeybindings = this._getUserKeybindingMap()
-    const result = await window.electron.ipcRenderer.invoke(
+    const result = await window.tauri.ipcRenderer.invoke(
       'mt::keybinding-save-user-keybindings',
       userKeybindings
     )

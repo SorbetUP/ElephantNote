@@ -7,7 +7,7 @@
 
 <script setup>
 import { onMounted, watch } from 'vue'
-import log from 'electron-log/renderer'
+import log from '@/platform/runtimeLogShim'
 import { useVaultStore } from '../../stores/vaultStore'
 import LibraryToolbar from '../library/LibraryToolbar.vue'
 import LibraryGrid from '../library/LibraryGrid.vue'

@@ -2,8 +2,8 @@ import fs from 'fs-extra'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createSearchLibrary } from 'elephant-back/search/searchLibrary'
-import { SEARCH_MODES } from 'elephant-back/search/searchTypes'
+import { createSearchLibrary } from '../../../../../Elephant/back/app/search/searchLibrary.js'
+import { SEARCH_MODES } from '../../../../../Elephant/back/app/search/searchTypes.js'
 
 const writeNote = async (root, relativePath, markdown) => {
   const absolutePath = path.join(root, relativePath)

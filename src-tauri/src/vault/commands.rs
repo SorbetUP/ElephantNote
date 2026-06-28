@@ -183,6 +183,23 @@ pub fn tauri_search_query(app: AppHandle, params: Option<Value>) -> R<Vec<Value>
     .unwrap_or(SEARCH_FILE_READ_LIMIT);
 
   let root = std::path::PathBuf::from(&vault.path);
+  if let Ok(index) = crate::fts::FtsIndex::open(&root) {
+    let hits = index.search(&query, limit).unwrap_or_default();
+    if !hits.is_empty() || index.count(&vault.id).unwrap_or(0) > 0 {
+      return Ok(hits
+        .into_iter()
+        .map(|hit| json!({
+          "path": hit.path,
+          "fullPath": hit.full_path,
+          "title": hit.title,
+          "excerpt": hit.excerpt,
+          "tags": hit.tags,
+          "score": hit.score,
+        }))
+        .collect());
+    }
+  }
+
   let mut results = Vec::with_capacity(limit.min(SEARCH_RESULT_LIMIT));
   scan_notes(&root, &root, &mut results, &query, limit, max_file_bytes)?;
   Ok(results)

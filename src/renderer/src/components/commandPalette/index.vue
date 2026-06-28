@@ -66,7 +66,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, nextTick, onBeforeUpdate, computed } from 'vue'
 import { useCommandCenterStore } from '@/store/commandCenter'
-import log from '@/platform/electronLogShim'
+import log from '@/platform/runtimeLogShim'
 import bus from '../../bus'
 import loading from '../loading'
 import { useI18n } from 'vue-i18n'

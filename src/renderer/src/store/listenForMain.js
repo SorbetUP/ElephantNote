@@ -17,7 +17,7 @@ export const useListenForMainStore = defineStore('listenForMain', {
     },
 
     LISTEN_FOR_EDIT() {
-      window.electron.ipcRenderer.on('mt::editor-edit-action', (e, type) => {
+      window.tauri.ipcRenderer.on('mt::editor-edit-action', (e, type) => {
         this.EDITOR_EDIT_ACTION(type)
       })
       bus.on('mt::editor-edit-action', (type) => {
@@ -26,19 +26,19 @@ export const useListenForMainStore = defineStore('listenForMain', {
     },
 
     LISTEN_FOR_SHOW_DIALOG() {
-      window.electron.ipcRenderer.on('mt::about-dialog', () => {
+      window.tauri.ipcRenderer.on('mt::about-dialog', () => {
         bus.emit('aboutDialog')
       })
-      window.electron.ipcRenderer.on('mt::show-export-dialog', (e, type) => {
+      window.tauri.ipcRenderer.on('mt::show-export-dialog', (e, type) => {
         bus.emit('showExportDialog', type)
       })
     },
 
     LISTEN_FOR_PARAGRAPH_INLINE_STYLE() {
-      window.electron.ipcRenderer.on('mt::editor-paragraph-action', (e, { type }) => {
+      window.tauri.ipcRenderer.on('mt::editor-paragraph-action', (e, { type }) => {
         bus.emit('paragraph', type)
       })
-      window.electron.ipcRenderer.on('mt::editor-format-action', (e, { type }) => {
+      window.tauri.ipcRenderer.on('mt::editor-format-action', (e, { type }) => {
         bus.emit('format', type)
       })
     }

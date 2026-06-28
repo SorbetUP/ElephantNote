@@ -216,7 +216,7 @@ export const mergeLocalAndRemote = (localModels = [], remoteModels = []) =>
 export const getPopularModels = ({ catalog = ATOMIC_MODEL_CATALOG, remote = [], limit = 12 } = {}) =>
   sortByPopularity(mergeLocalAndRemote(catalog.filter(isRunnableModel), remote)).slice(0, Number(limit) || 12)
 
-export const getRecommendedModelId = (role = '') => (AI_SETUP_RECOMMENDED_IDS['node-llama-cpp'] || {})[role] || ''
+export const getRecommendedModelId = (role = '') => (AI_SETUP_RECOMMENDED_IDS['tauri-rust'] || AI_SETUP_RECOMMENDED_IDS['node-llama-cpp'] || {})[role] || ''
 
 export const getRecommendedModel = (role = '', catalog = ATOMIC_MODEL_CATALOG) =>
   catalog.find((model) => model.id === getRecommendedModelId(role)) || null
@@ -378,6 +378,7 @@ export const getModelLicense = (model) => String(model?.cardData?.license || mod
 export const getModelRuntime = (model) => {
   const provider = String(model?.provider || '').toLowerCase()
   const engine = String(model?.engine || '').toLowerCase()
+  if (provider === 'tauri-rust') return 'Tauri Rust'
   if (provider === 'node-llama-cpp') return 'llama.cpp'
   if (provider === 'browser-webllm' || provider === 'webllm' || engine === 'webllm') return 'WebLLM'
   if (provider === 'local-ocr' || engine === 'tesseract') return 'Tesseract'

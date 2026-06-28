@@ -7,7 +7,7 @@ describe('portable preferences runtime', () => {
     setActivePinia(createPinia())
     window.__TAURI__ = {}
     window.__MARKTEXT_VERSION_STRING__ = 'v0.18.9'
-    delete window.electron
+    delete window.tauri
     vi.resetModules()
   })
 

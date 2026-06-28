@@ -105,8 +105,8 @@ import Separator from '../common/separator'
 import KeyInputDialog from './key-input-dialog.vue'
 import KeybindingConfigurator from './KeybindingConfigurator'
 import notice from '@/services/notification'
-import log from '@/platform/electronLogShim'
-import { setKeyboardLayout } from '@/platform/electronLocalShortcutShim'
+import log from '@/platform/runtimeLogShim'
+import { setKeyboardLayout } from '@/platform/runtimeLocalShortcutShim'
 import { Edit, RefreshRight, Delete } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
@@ -130,7 +130,7 @@ watch(locale, () => {
 })
 
 onMounted(() => {
-  window.electron.ipcRenderer
+  window.tauri.ipcRenderer
     .invoke('mt::keybinding-get-keyboard-info')
     .then(({ layout, keymap }) => {
       // Update the key mapper to prevent problems on non-US keyboards.
@@ -138,7 +138,7 @@ onMounted(() => {
     })
     .catch((error) => log.error('Error while loading keyboard information for settings:', error))
 
-  window.electron.ipcRenderer
+  window.tauri.ipcRenderer
     .invoke('mt::keybinding-get-pref-keybindings')
     .then(({ defaultKeybindings, userKeybindings }) => {
       keybindingConfigurator.value = new KeybindingConfigurator(defaultKeybindings, userKeybindings)
@@ -157,7 +157,7 @@ onUnmounted(() => {
 })
 
 const openKeybindingWiki = () => {
-  window.electron.shell.openExternal(
+  window.tauri.shell.openExternal(
     'https://github.com/marktext/marktext/blob/master/docs/KEYBINDINGS.md'
   )
 }
@@ -232,7 +232,7 @@ const handleDuplicateShortcut = (id, accelerator) => {
 }
 
 const dumpKeyboardInformation = () => {
-  window.electron.ipcRenderer.send('mt::keybinding-debug-dump-keyboard-info')
+  window.tauri.ipcRenderer.send('mt::keybinding-debug-dump-keyboard-info')
 }
 </script>
 

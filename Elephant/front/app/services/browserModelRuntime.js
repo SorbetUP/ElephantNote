@@ -1,4 +1,4 @@
-import log from 'electron-log/renderer'
+import log from '@/platform/runtimeLogShim'
 
 const STORAGE_KEY = 'elephantnote:browserModelRuntime'
 const DEFAULT_CHAT_MODEL_ID = 'onnx-community/Qwen2.5-0.5B-Instruct'

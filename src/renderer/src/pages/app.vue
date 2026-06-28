@@ -53,7 +53,7 @@ import { debouncedSendBufferedState } from '@/store/bufferedState'
 import { MuyaRuntimeEditor, isMuyaRuntimeActive, isMuyaRuntimeEnabled, readMuyaRuntimeMode } from '@/muya'
 import AppShell from 'elephant-front/components/shell/AppShell.vue'
 
-const isTauriRuntime = window.__MARKTEXT_RUNTIME__ && window.__MARKTEXT_RUNTIME__ !== 'electron'
+const isTauriRuntime = Boolean(window.__TAURI__ || window.__MARKTEXT_RUNTIME__)
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
 const preferencesStore = usePreferencesStore()

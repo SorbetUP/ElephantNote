@@ -9,7 +9,7 @@ const createTarget = ({ vaultRoot = '/Users/sorbet/Documents/New project 2', not
   const read = vi.fn(async() => notePayload)
 
   target.__TAURI__ = { core: { invoke: vi.fn() } }
-  target.electron = { ipcRenderer: { send: nativeSend } }
+  target.tauri = { ipcRenderer: { send: nativeSend } }
   target.elephantnote = {
     getVaults: vi.fn(async() => ({ activeVault: { path: vaultRoot } })),
     notes: { read }
@@ -25,7 +25,7 @@ describe('Tauri local IPC bridge', () => {
     target.addEventListener('mt::open-new-tab', (event) => opened.push(event.detail))
 
     expect(installTauriLocalIpcBridge(target)).toBe(true)
-    target.electron.ipcRenderer.send('mt::open-file', '/Users/sorbet/Documents/New project 2/test_keep/Note.md', {})
+    target.tauri.ipcRenderer.send('mt::open-file', '/Users/sorbet/Documents/New project 2/test_keep/Note.md', {})
     await flushPromises()
 
     expect(nativeSend).not.toHaveBeenCalled()
@@ -45,7 +45,7 @@ describe('Tauri local IPC bridge', () => {
     target.addEventListener('mt::open-new-tab', (event) => opened.push(event.detail))
 
     installTauriLocalIpcBridge(target)
-    target.electron.ipcRenderer.send('mt::open-file', '/Users/sorbet/Documents/Other/Note.md', { flag: true })
+    target.tauri.ipcRenderer.send('mt::open-file', '/Users/sorbet/Documents/Other/Note.md', { flag: true })
     await flushPromises()
 
     expect(read).not.toHaveBeenCalled()
@@ -59,7 +59,7 @@ describe('Tauri local IPC bridge', () => {
     target.addEventListener('mt::response-file-save', (event) => dispatched.push(event.detail))
 
     installTauriLocalIpcBridge(target)
-    target.electron.ipcRenderer.send('mt::response-file-save', 'tab-1', 'Note.md', '/vault/Note.md', 'body')
+    target.tauri.ipcRenderer.send('mt::response-file-save', 'tab-1', 'Note.md', '/vault/Note.md', 'body')
 
     expect(nativeSend).not.toHaveBeenCalled()
     expect(dispatched).toEqual([['tab-1', 'Note.md', '/vault/Note.md', 'body']])

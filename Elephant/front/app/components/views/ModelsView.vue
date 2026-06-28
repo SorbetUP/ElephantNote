@@ -160,7 +160,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
-import log from 'electron-log/renderer'
+import log from '@/platform/runtimeLogShim'
 import { Box, Copy, Download, ExternalLink, RefreshCw, Search, X } from '@lucide/vue'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
 import {
@@ -423,9 +423,9 @@ const buildDownloadPayload = async(model = {}) => {
   const file = await resolveGgufFileInfo(model)
   if (repoId.includes('/')) {
     if (!file.name) throw new Error(`No GGUF file found in ${repoId}.`)
-    return { id: file.name, name: file.name, provider: 'node-llama-cpp', source: 'remote', uri: `hf:${repoId}/${file.name}`, fileName: file.name, filename: file.name, sizeBytes: file.sizeBytes, originalRepoId: repoId }
+    return { id: file.name, name: file.name, provider: 'tauri-rust', source: 'remote', uri: `hf:${repoId}/${file.name}`, fileName: file.name, filename: file.name, sizeBytes: file.sizeBytes, originalRepoId: repoId }
   }
-  return { ...asModel(model), id: resolveModelId(asModel(model)), repoId: model.repoId || model.id, provider: model.provider || 'node-llama-cpp', source: model.source || 'local', fileName: file.name || firstGgufFile(model) }
+  return { ...asModel(model), id: resolveModelId(asModel(model)), repoId: model.repoId || model.id, provider: model.provider || 'tauri-rust', source: model.source || 'local', fileName: file.name || firstGgufFile(model) }
 }
 const download = async(model) => {
   if (!model) return null

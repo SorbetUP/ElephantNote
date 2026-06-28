@@ -154,7 +154,7 @@ onMounted(() => {
   if (route.name) {
     currentCategory.value = route.name
   }
-  window.electron.ipcRenderer.on('settings::change-tab', onIpcCategoryChange)
+  window.tauri.ipcRenderer.on('settings::change-tab', onIpcCategoryChange)
   // Listen for language changes and refresh the search index
   const languageChanged = () => {
     restaurants.value = loadAll()
@@ -165,7 +165,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.electron.ipcRenderer.removeAllListeners('settings::change-tab', onIpcCategoryChange)
+  window.tauri.ipcRenderer.removeAllListeners('settings::change-tab', onIpcCategoryChange)
 })
 </script>
 

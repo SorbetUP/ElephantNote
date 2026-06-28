@@ -143,14 +143,14 @@ const rename = (tabId) => {
 const copyPath = (tabId) => {
   const tab = tabs.value.find((f) => f.id === tabId)
   if (tab && tab.pathname) {
-    window.electron.clipboard.writeText(tab.pathname)
+    window.tauri.clipboard.writeText(tab.pathname)
   }
 }
 
 const showInFolder = (tabId) => {
   const tab = tabs.value.find((f) => f.id === tabId)
   if (tab && tab.pathname) {
-    window.electron.shell.showItemInFolder(tab.pathname)
+    window.tauri.shell.showItemInFolder(tab.pathname)
   }
 }
 

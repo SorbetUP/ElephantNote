@@ -1,10 +1,11 @@
 use serde_json::json;
+#[allow(unused_imports)]
+use tauri::Manager;
 
 pub mod markdown_engine;
 pub mod markdown;
 pub mod path_utils;
 pub mod vault_layout;
-pub mod vault_lib;
 pub mod vault;
 pub mod note_domain;
 pub mod folder_domain;
@@ -19,6 +20,25 @@ pub mod search_logic;
 
 mod tauri_extra_commands;
 mod debug_commands;
+
+pub mod infra;
+pub mod preferences;
+pub mod data_center;
+pub mod buffer_store;
+pub mod state;
+pub mod filesystem;
+pub mod watcher;
+pub mod recents;
+pub mod keybindings;
+pub mod fts;
+pub mod embeddings;
+pub mod sync;
+pub mod wiki;
+pub mod rag_prompt;
+pub mod atomic_features;
+pub mod ollama;
+pub mod site_preview;
+pub mod ocr;
 
 #[cfg(test)]
 mod sync_contract_tests;
@@ -68,12 +88,67 @@ pub fn run() {
   let builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
 
   builder
+    .setup(|app| {
+      let handle = app.handle().clone();
+      app.manage(state::AppState::new(&handle));
+      app.manage(watcher::WatcherState::new());
+      Ok(())
+    })
     .invoke_handler(tauri::generate_handler![
       healthcheck,
       tauri_platform_info,
       tauri_sync_create_invite,
       tauri_sync_accept_invite,
       debug_commands::tauri_debug_log,
+      state::tauri_prefs_get,
+      state::tauri_prefs_all,
+      state::tauri_prefs_set,
+      state::tauri_prefs_set_many,
+      state::tauri_user_data_get,
+      state::tauri_user_data_all,
+      state::tauri_user_data_set,
+      state::tauri_user_data_set_many,
+      state::tauri_secret_set,
+      state::tauri_secret_get,
+      state::tauri_secret_delete,
+      state::tauri_buffer_save,
+      state::tauri_buffer_load,
+      state::tauri_buffer_clear,
+      filesystem::tauri_fs_read_markdown,
+      filesystem::tauri_fs_write_markdown,
+      filesystem::tauri_fs_resolve_path,
+      filesystem::tauri_fs_detect_encoding,
+      filesystem::tauri_fs_trash_item,
+      watcher::tauri_watcher_watch_file,
+      watcher::tauri_watcher_watch_directory,
+      watcher::tauri_watcher_unwatch_file,
+      watcher::tauri_watcher_unwatch_directory,
+      watcher::tauri_watcher_unwatch_all,
+      watcher::tauri_watcher_ignore_next,
+      state::tauri_recents_list,
+      state::tauri_recents_add,
+      state::tauri_recents_clear,
+      state::tauri_keybindings_get,
+      state::tauri_keybindings_save,
+      embeddings::tauri_embeddings_embed,
+      embeddings::tauri_embeddings_store,
+      embeddings::tauri_embeddings_search,
+      embeddings::tauri_embeddings_count,
+      embeddings::tauri_embeddings_clear_vault,
+      wiki::tauri_wiki_proposals,
+      rag_prompt::tauri_rag_build_prompt,
+      state::tauri_atomic_features_list,
+      state::tauri_atomic_features_get,
+      state::tauri_atomic_features_toggle,
+      state::tauri_atomic_features_set,
+      ollama::tauri_ollama_status,
+      ollama::tauri_ollama_list,
+      ollama::tauri_ollama_generate,
+      ollama::tauri_ollama_embed,
+      site_preview::tauri_site_preview_open,
+      site_preview::tauri_site_preview_status,
+      ocr::tauri_ocr_status,
+      ocr::tauri_ocr_image,
       vault::commands::tauri_vaults_get,
       vault::commands::tauri_vaults_select_path,
       vault::commands::tauri_vaults_set_active,

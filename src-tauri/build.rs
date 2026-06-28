@@ -79,7 +79,7 @@ fn generate_tauri_parity_tests() {
     push_test(&mut out, &format!("generated_case_whitespace_query_case_{index:03}"), &format!("assert_eq!(normalize_query(\"\\tMixed   CASE {index}\\n\"), \"mixed case {index}\"); assert!(score_text(\"mixed case {index}\", \"MIXED CASE {index}\", \"\") > 0);"));
   }
 
-  push_test(&mut out, "generated_required_hidden_dirs_contract", "let dirs = required_hidden_dirs(); assert!(dirs.len() >= 8); assert!(dirs.contains(&\"config\")); assert!(dirs.contains(&\"wiki\")); assert!(dirs.contains(&\"models\")); assert!(dirs.contains(&\"sync\"));");
+  push_test(&mut out, "generated_required_hidden_dirs_contract", "let dirs = required_hidden_dirs(); assert!(dirs.len() >= 8); assert!(dirs.contains(&\"config\")); assert!(!dirs.contains(&\"wiki\")); assert!(dirs.contains(&\"models\")); assert!(dirs.contains(&\"sync\"));");
   push_test(&mut out, "generated_active_vault_contract", "let config = VaultConfig { vaults: vec![vault_descriptor(\"main\", \"Main\", \"/vault/main\")], active_vault_id: Some(String::from(\"main\")) }; let active = active_vault(&config).unwrap(); assert_eq!(active.name, \"Main\"); assert_eq!(active.path, \"/vault/main\");");
   push_test(&mut out, "generated_next_vault_id_contract", "let existing = vec![vault_descriptor(\"work\", \"Work\", \"/vault/work\"), vault_descriptor(\"work-2\", \"Work 2\", \"/vault/work2\"), vault_descriptor(\"work-3\", \"Work 3\", \"/vault/work3\")]; assert_eq!(next_vault_id(&existing, \"Work\"), \"work-4\");");
   push_test(&mut out, "generated_hidden_root_constant_contract", "assert_eq!(HIDDEN_ROOT, \".elephantnote\");");

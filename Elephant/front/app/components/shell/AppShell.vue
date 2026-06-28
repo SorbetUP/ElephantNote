@@ -247,7 +247,7 @@ const handleAiConfigChanged = (event) => {
 onMounted(() => {
   window.addEventListener('keydown', handleShortcut)
   window.addEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
-  window.electron.ipcRenderer.on('mt::tab-saved', handleTabSaved)
+  window.tauri.ipcRenderer.on('mt::tab-saved', handleTabSaved)
   setTheme(theme.value)
   const storedWidth = Number(window.localStorage.getItem('elephantnote:sidebarWidth'))
   if (storedWidth && storedWidth <= 260) {
@@ -269,7 +269,7 @@ onBeforeUnmount(() => {
     window.cancelAnimationFrame(sidebarResizeFrame)
     sidebarResizeFrame = null
   }
-  const ipcRenderer = window.electron.ipcRenderer
+  const ipcRenderer = window.tauri.ipcRenderer
   if (ipcRenderer.off) {
     ipcRenderer.off('mt::tab-saved', handleTabSaved)
   } else {

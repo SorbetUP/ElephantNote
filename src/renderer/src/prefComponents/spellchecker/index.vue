@@ -82,7 +82,7 @@
 </template>
 
 <script setup>
-import log from '@/platform/electronLogShim'
+import log from '@/platform/runtimeLogShim'
 import { usePreferencesStore } from '@/store/preferences'
 import { ref, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -113,7 +113,7 @@ onMounted(async () => {
 
   availableDictionaries.value = await getAvailableDictionaries()
 
-  window.electron.ipcRenderer
+  window.tauri.ipcRenderer
     .invoke('mt::spellchecker-get-custom-dictionary-words')
     .then((words) => {
       wordsInCustomDictionary.value = words.map((word) => {
@@ -136,7 +136,7 @@ const getAvailableDictionaries = async () => {
 const handleSpellcheckerLanguage = async (languageCode) => {
   onSelectChange('spellcheckerLanguage', languageCode)
 
-  await window.electron.ipcRenderer.invoke('mt::spellchecker-switch-language', languageCode)
+  await window.tauri.ipcRenderer.invoke('mt::spellchecker-switch-language', languageCode)
 }
 
 const handleSpellcheckerEnabled = (isEnabled) => {
@@ -149,7 +149,7 @@ const onSelectChange = (type, value) => {
 
 const handleDeleteClick = (selectedItem) => {
   if (selectedItem && typeof selectedItem.word === 'string') {
-    window.electron.ipcRenderer
+    window.tauri.ipcRenderer
       .invoke('mt::spellchecker-remove-word', selectedItem.word)
       .then((success) => {
         if (success) {

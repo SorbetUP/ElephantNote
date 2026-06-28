@@ -11,14 +11,14 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-orange" alt="License: PolyForm Noncommercial 1.0.0"></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows%20%7C%20Android-lightgrey" alt="Platforms">
-  <img src="https://img.shields.io/badge/runtime-Electron%20%7C%20Tauri-blue" alt="Runtime: Electron and Tauri">
+  <img src="https://img.shields.io/badge/runtime-Tauri-blue" alt="Runtime: Tauri">
 </p>
 
 ## Overview
 
 ElephantNote is a local-first Markdown notes application. It is designed for personal knowledge bases that need fast editing, file-based storage, search, graph navigation, sync, and optional local AI workflows.
 
-The project is under active development. The Electron app remains available, while the Tauri app is the main direction for a lighter desktop and mobile version.
+The project is under active development. Tauri is the desktop and mobile runtime.
 
 ## Goals
 
@@ -39,7 +39,6 @@ The project is under active development. The Electron app remains available, whi
 - Smart search with lexical and semantic routing.
 - Graph data with note, folder, tag, and semantic edges.
 - Optional local model support for chat, embeddings, OCR, and retrieval.
-- Electron desktop runtime.
 - Tauri desktop runtime for macOS, Linux, and Windows.
 - Tauri Android development scripts.
 - Docker/web mode for local experiments.
@@ -49,7 +48,7 @@ The project is under active development. The Electron app remains available, whi
 - Node.js >= 20.19.0
 - pnpm >= 10
 - Rust toolchain for Tauri builds
-- Platform dependencies required by Electron or Tauri
+- Platform dependencies required by Tauri
 - Optional: Docker for web and sync smoke tests
 
 ## Quick start
@@ -58,12 +57,6 @@ The project is under active development. The Electron app remains available, whi
 git clone https://github.com/SorbetUP/ElephantNote.git
 cd ElephantNote
 pnpm install
-```
-
-Run Electron:
-
-```bash
-pnpm dev
 ```
 
 Run Tauri:
@@ -75,8 +68,8 @@ pnpm tauri:dev
 ## Build
 
 ```bash
-pnpm build
 pnpm tauri:build
+pnpm build
 pnpm build:mac
 pnpm build:linux
 pnpm build:win
@@ -116,7 +109,7 @@ pnpm prod:check
 
 ## Status
 
-This branch moves quickly. Tauri, sync, addon support, local AI, graph features, and search features are being integrated and tested progressively. Do not assume every experimental feature is production-ready.
+This branch moves quickly. The backend is Rust-only (Tauri); the legacy Electron main process and `Elephant/back/app/` JS backend were retired. Tauri, sync, addon support, local AI, graph features, and search features are being integrated and tested progressively. Do not assume every experimental feature is production-ready.
 
 ## Project structure
 

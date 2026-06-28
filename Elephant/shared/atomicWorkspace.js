@@ -58,8 +58,8 @@ export const ATOMIC_MODEL_CATALOG = Object.freeze([
     name: 'SmolLM2 135M GGUF',
     purpose: 'embedding',
     category: 'embedding',
-    provider: 'node-llama-cpp',
-    engine: 'node-llama-cpp',
+    provider: 'tauri-rust',
+    engine: 'tauri-rust',
     task: 'embedding',
     model: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
     uri: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
@@ -68,15 +68,15 @@ export const ATOMIC_MODEL_CATALOG = Object.freeze([
     pull: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
     size: '~100 MB',
     quality: 'smoke',
-    notes: 'Local GGUF model downloaded and loaded through node-llama-cpp. Used to prove note embedding search end-to-end.'
+    notes: 'Local GGUF model downloaded and loaded through the Tauri Rust llama runtime. Used to prove note embedding search end-to-end.'
   },
   {
     id: 'smollm2-node-llama-cpp-chat',
     name: 'SmolLM2 135M GGUF Chat',
     purpose: 'chat',
     category: 'chat',
-    provider: 'node-llama-cpp',
-    engine: 'node-llama-cpp',
+    provider: 'tauri-rust',
+    engine: 'tauri-rust',
     task: 'chat-completion',
     model: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
     uri: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
@@ -85,7 +85,7 @@ export const ATOMIC_MODEL_CATALOG = Object.freeze([
     pull: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
     size: '~100 MB',
     quality: 'local',
-    notes: 'Local chat response through node-llama-cpp. Small model selected for fast install and validation.'
+    notes: 'Local chat response through the Tauri Rust llama runtime. Small model selected for fast install and validation.'
   },
   {
     id: 'local-tesseract-ocr',
@@ -127,7 +127,7 @@ export const ATOMIC_MODEL_CATALOG = Object.freeze([
     pull: '',
     size: '~879 MB VRAM',
     quality: 'webgpu',
-    notes: 'Reference-only browser target kept out of the default local AI setup. Current local text runtime is node-llama-cpp.'
+    notes: 'Reference-only browser target kept out of the default local AI setup. Current local text runtime is Tauri Rust llama.cpp.'
   },
   {
     id: 'whisper-tiny-browser',

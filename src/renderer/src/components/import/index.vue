@@ -63,7 +63,7 @@ const dragLeaveHandler = () => {
 }
 
 const getDroppedPath = (file) => {
-  return window.electron?.webUtils?.getPathForFile?.(file) ||
+  return window.tauri?.webUtils?.getPathForFile?.(file) ||
     file?.path ||
     file?.webkitRelativePath ||
     file?.name ||
@@ -84,7 +84,7 @@ const dropHandler = (e) => {
       }
     }
   }
-  window.electron?.ipcRenderer?.send('mt::window::drop', fileList)
+  window.tauri?.ipcRenderer?.send('mt::window::drop', fileList)
 }
 
 onMounted(() => {

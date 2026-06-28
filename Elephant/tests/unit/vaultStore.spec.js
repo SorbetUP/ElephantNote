@@ -50,7 +50,7 @@ describe('ElephantNote vault store pinned notes', () => {
       workspace: { sidebar: [] },
       entries: []
     })
-    window.electron = {
+    window.tauri = {
       ipcRenderer: {
         send: vi.fn()
       }
@@ -269,7 +269,7 @@ describe('ElephantNote vault store pinned notes', () => {
 
     expect(dashboard.path).toBe(DASHBOARD_NOTE_RELATIVE_PATH)
     expect(store.openedNotePath).toBe(DASHBOARD_NOTE_RELATIVE_PATH)
-    expect(window.electron.ipcRenderer.send).toHaveBeenCalledWith(
+    expect(window.tauri.ipcRenderer.send).toHaveBeenCalledWith(
       'mt::open-file',
       '/tmp/vault-1/.elephantnote/Dashboard.md',
       {}

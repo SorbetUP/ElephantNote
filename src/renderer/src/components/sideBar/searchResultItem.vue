@@ -158,7 +158,7 @@ const handleSearchResultClick = (searchMatch) => {
       })
     }
   } else {
-    window.electron.ipcRenderer.send('mt::open-file', filePath, {
+    window.tauri.ipcRenderer.send('mt::open-file', filePath, {
       cursor
     })
   }

@@ -86,7 +86,7 @@ const normalizeRecords = (records = []) => Array.isArray(records) ? records : [r
 
 export const installTauriMarkTextSaveBridge = (target = globalThis) => {
   if (!target?.__TAURI__ || target.__TAURI_MARKTEXT_SAVE_BRIDGE_INSTALLED__) return false
-  const ipc = target.electron?.ipcRenderer
+  const ipc = target.tauri?.ipcRenderer
   if (!ipc?.on || !ipc?.send) return false
   target.__TAURI_MARKTEXT_SAVE_BRIDGE_INSTALLED__ = true
 

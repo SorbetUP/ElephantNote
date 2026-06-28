@@ -630,7 +630,7 @@ const getServiceNameById = (id) => {
 }
 
 const open = (link) => {
-  window.electron.shell.openExternal(link)
+  window.tauri.shell.openExternal(link)
 }
 
 const save = (type) => {
@@ -818,7 +818,7 @@ const testPicgo = () => {
     debugMessages.push(`检测时间: ${new Date().toLocaleString()}`)
 
     // Add environment information
-    debugMessages.push(`平台: ${window.electron?.process?.platform || 'unknown'}`)
+    debugMessages.push(`平台: ${window.tauri?.process?.platform || 'unknown'}`)
     debugMessages.push('进程类型: renderer')
 
     if (typeof window.commandExists === 'undefined') {

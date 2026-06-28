@@ -13,17 +13,17 @@ export const useNotificationStore = defineStore('notification', {
         message: t('notifications.defaultMessage')
       }
 
-      window.electron?.ipcRenderer?.on('mt::show-notification', (e, opts) => {
+      window.tauri?.ipcRenderer?.on('mt::show-notification', (e, opts) => {
         const options = Object.assign(DEFAULT_OPTS, opts)
 
         notice.notify(options)
       })
 
-      window.electron?.ipcRenderer?.on('mt::pandoc-not-exists', async(e, opts) => {
+      window.tauri?.ipcRenderer?.on('mt::pandoc-not-exists', async(e, opts) => {
         const options = Object.assign(DEFAULT_OPTS, opts)
         options.showConfirm = true
         await notice.notify(options)
-        window.electron?.shell?.openExternal('http://pandoc.org')
+        window.tauri?.shell?.openExternal('http://pandoc.org')
       })
     }
   }

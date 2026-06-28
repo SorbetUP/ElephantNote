@@ -39,8 +39,6 @@ for (const file of [
   'scripts/security-guardrails-core.mjs',
   'scripts/verify-security-guardrails.mjs',
   'scripts/sync-two-docker-smoke.mjs',
-  'src/main/config.js',
-  'src/preload/index.js',
   'src/renderer/src/main.js',
   'src/renderer/src/platform/bootstrapGlobals.js',
   'src/renderer/src/platform/tauriElephantNoteBridge.js',
@@ -69,6 +67,7 @@ for (const file of [
   'test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js',
   'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
   'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
+  'test/unit/realComponentImportSmoke.spec.js',
   'vitest.config.js'
 ]) read(file)
 
@@ -85,8 +84,6 @@ has('.github/workflows/codeql.yml', 'github/codeql-action/analyze@v3', 'CodeQL w
 has('.github/dependabot.yml', 'package-ecosystem: cargo', 'Cargo dependency monitoring')
 has('package.json', '"security:guard": "node scripts/verify-security-guardrails.mjs"', 'security guard script')
 
-ordered('src/main/config.js', ['contextIsolation: true', 'nodeIntegration: false', 'webSecurity: true', 'webPreferences: { ...secureWebPreferences }'], 'secure Electron window preferences')
-ordered('src/preload/index.js', ["contextBridge.exposeInMainWorld('electron'", "contextBridge.exposeInMainWorld('fileUtils'", "contextBridge.exposeInMainWorld('elephantnote'"], 'preload bridge exposure')
 ordered('src/renderer/src/main.js', ['clearBootstrapFileUtilsFallbackForTauri()', 'installRuntimeBridge()', 'installTauriElephantNoteBridge()', 'installPiProviderBridge()', 'installTauriMarkTextSaveBridge()', 'installTauriLocalIpcBridge()'], 'renderer runtime bridge installation order')
 ordered('src/renderer/src/platform/tauriLocalIpcBridge.js', ["'mt::response-file-save'", "'mt::response-file-save-as'", "'mt::open-file'", 'target.elephantnote.notes.read({ relativePath })', "dispatchLocalIpcEvent(target, 'mt::open-new-tab'"], 'Tauri local IPC routing')
 ordered('src/renderer/src/platform/tauriMarkTextSaveBridge.js', ['const writeViaRustBackend = async(target, pathname, markdown) => {', "return invoke('tauri_marktext_write_file', { pathname, content: markdown })", "ipc.send('mt::tab-saved', id)", "ipc.send('mt::tab-save-failure', id, message)"], 'Tauri save bridge result reporting')
@@ -99,7 +96,7 @@ has('vitest.config.js', "'common/elephantnote/apiContracts': apiContractsRuntime
 ordered('test/unit/specs/main/elephantnote/apiContracts.spec.js', ['accepts explicit valid sync.plan operations', 'rejects unknown sync.plan operations instead of falling back to the default plan', 'rejects non-array sync.plan operations', 'accepts local runtime AI config payloads used by the Tauri bridge'], 'API contract regression tests')
 ordered('Elephant/front/app/services/elephantnoteClient/apiRuntime.js', ["import { validateApiPayload } from 'common/elephantnote/apiContracts'", 'const validatedPayload = validateApiPayload(action, plainPayload)', 'requireElephantNoteApi().call(action, validatedPayload)', 'return legacyCall(validatedPayload)'], 'renderer API validation path')
 ordered('Elephant/front/app/services/elephantnoteClient/domainClients.js', ['const CHAT_REBUILD_COOLDOWN_MS', 'const searchVaultInitializedForChat', 'const shouldRebuildChatSearch', 'notes: {', 'read: (relativePath) => call(API.NOTES_READ', 'write: (payload = {}) => call(API.NOTES_WRITE, payload)'], 'front client note methods and chat search throttling')
-has('test/unit/elephantnote/domainClients.spec.js', 'does not repeatedly rebuild chat search when citations are still empty', 'chat search rebuild throttling test')
+has('test/unit/elephantnote/domainClients.spec.js', 'does not rebuild chat search when the model already produced an answer', 'chat search rebuild throttling test')
 
 ordered('Elephant/front/app/components/editor/NoteEditorHost.vue', ["import { elephantnoteClient } from '../../services/elephantnoteClient'", 'const AUTOSAVE_POLL_MS', 'const autosaveDelayFor', 'elephantnoteClient.notes.write({', 'noteSaveInterval = window.setInterval'], 'editor autosave persistence')
 ordered('Elephant/front/app/components/editor/NoteEditorHost.vue', ['const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {', 'const writableImage = imageBlob || blob', 'await window.fileUtils.writeFile(targetPath, writableImage)', 'if (excalidrawInsertOnSave.value) {'], 'Excalidraw byte persistence')

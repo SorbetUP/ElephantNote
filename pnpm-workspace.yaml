@@ -4,3 +4,7 @@ allowBuilds:
   esbuild: true
   keytar: true
   native-keymap: true
+  node-llama-cpp: set this to true or false
+  onnxruntime-node: set this to true or false
+  protobufjs: set this to true or false
+  sharp: set this to true or false

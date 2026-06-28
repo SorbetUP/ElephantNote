@@ -28,7 +28,7 @@ cd "$ROOT_DIR/src-tauri"
 # Vite still provides renderer hot reload; restart pnpm tauri:dev manually after
 # Rust-side edits.
 if [ "$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then
-  cargo tauri dev --no-watch --config tauri.linux.conf.json "$@"
+  cargo tauri dev "$@" --no-watch --config tauri.linux.conf.json
 else
-  cargo tauri dev --no-watch "$@"
+  cargo tauri dev "$@" --no-watch
 fi

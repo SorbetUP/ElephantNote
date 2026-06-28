@@ -161,6 +161,6 @@ describe('generated interface parity suite', () => {
 
   it('runtime mode contract keeps Tauri in shadow by default', () => {
     expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('shadow')
-    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'electron' })).toBe('disabled')
+    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'electron' })).toBe('shadow')
   })
 })

@@ -527,6 +527,16 @@ pub fn tauri_ai_config_test(_app: AppHandle, config: Value) -> R<Value> {
   let started = Instant::now();
   let transport = config.get("transport").or_else(|| config.get("preset")).and_then(Value::as_str).unwrap_or("");
   let endpoint = config.get("endpoint").and_then(Value::as_str).unwrap_or("");
+  if transport.eq_ignore_ascii_case("tauri-rust") || transport.eq_ignore_ascii_case("tauriRustLocal") || endpoint.starts_with("tauri-rust://") {
+    return Ok(json!({
+      "ok": true,
+      "runtime": "tauri-rust",
+      "latencyMs": started.elapsed().as_millis() as u64,
+      "config": config,
+      "transport": "tauri-rust",
+      "checked": "tauri-local-runtime"
+    }));
+  }
   if transport.eq_ignore_ascii_case("codex") || endpoint.starts_with("codex://") {
     return Ok(test_codex_cli(&config, started));
   }
@@ -561,7 +571,26 @@ pub fn tauri_search_rebuild(app: AppHandle) -> R<Value> {
   let root = active_vault_root(&app)?;
   let index = build_search_index(Path::new(&root))?;
   write_json(vault_layout::index_file(&root, SEARCH_INDEX_FILE), &index)?;
-  Ok(json!({ "ok": true, "provider": "tauri-rust", "documents": index.get("notesIndexed").cloned().unwrap_or(json!(0)), "indexPath": vault_layout::index_file(&root, SEARCH_INDEX_FILE).to_string_lossy() }))
+
+  let fts_index = crate::fts::FtsIndex::open(Path::new(&root)).map_err(|e| e.to_string())?;
+  let vault_id = crate::vault::config::get_active_vault(&app).ok().map(|v| v.id).unwrap_or_else(|| "active".into());
+  let _ = fts_index.clear_vault(&vault_id);
+  let notes = crate::fts::scan_markdown_files(Path::new(&root));
+  let mut fts_count = 0;
+  for (relative, full_path, content) in &notes {
+    let title = full_path.file_stem().and_then(|n| n.to_str()).unwrap_or(relative);
+    if fts_index.upsert_note(&vault_id, relative, &full_path.to_string_lossy(), title, content, 0).is_ok() {
+      fts_count += 1;
+    }
+  }
+
+  Ok(json!({
+    "ok": true,
+    "provider": "tauri-rust",
+    "documents": index.get("notesIndexed").cloned().unwrap_or(json!(0)),
+    "ftsDocuments": fts_count,
+    "indexPath": vault_layout::index_file(&root, SEARCH_INDEX_FILE).to_string_lossy()
+  }))
 }
 
 #[tauri::command]

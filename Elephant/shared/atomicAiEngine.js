@@ -41,7 +41,7 @@ export const ATOMIC_AI_FEATURES = Object.freeze([
     id: 'local-model-runtimes',
     label: 'Local model runtimes',
     status: 'adapter',
-    description: 'node-llama-cpp, local OCR, API and Codex slots are exposed through provider configuration.'
+    description: 'Tauri Rust llama.cpp, local OCR, API and Codex slots are exposed through provider configuration.'
   },
   {
     id: 'mcp-tools',

@@ -108,7 +108,7 @@ export const useEditorStore = defineStore('editor', {
       const item = this.listToc.find((i) => i.slug === key)
 
       if (item) {
-        window.electron.clipboard.writeText(`#${item.githubSlug}`)
+        window.tauri.clipboard.writeText(`#${item.githubSlug}`)
         notice.notify({
           title: i18n.global.t('store.editor.anchorLinkCopied'),
           type: 'primary',
@@ -283,11 +283,11 @@ export const useEditorStore = defineStore('editor', {
         return
       }
 
-      window.electron.ipcRenderer.send('mt::format-link-click', { data, dirname })
+      window.tauri.ipcRenderer.send('mt::format-link-click', { data, dirname })
     },
 
     LISTEN_SCREEN_SHOT() {
-      window.electron.ipcRenderer.on('mt::screenshot-captured', () => {
+      window.tauri.ipcRenderer.on('mt::screenshot-captured', () => {
         bus.emit('screenshot-captured')
       })
     },
@@ -301,10 +301,10 @@ export const useEditorStore = defineStore('editor', {
           rs = resolve
         })
         const id = getUniqueId()
-        window.electron.ipcRenderer.once(`mt::response-of-image-path-${id}`, (_, files) => {
+        window.tauri.ipcRenderer.once(`mt::response-of-image-path-${id}`, (_, files) => {
           rs(files)
         })
-        window.electron.ipcRenderer.send('mt::ask-for-image-auto-path', {
+        window.tauri.ipcRenderer.send('mt::ask-for-image-auto-path', {
           pathname,
           src,
           id,
@@ -329,7 +329,7 @@ export const useEditorStore = defineStore('editor', {
           time: 20000
         })
         .then(() => {
-          window.electron.clipboard.writeText(deletionUrl)
+          window.tauri.clipboard.writeText(deletionUrl)
         })
     },
 
@@ -338,7 +338,7 @@ export const useEditorStore = defineStore('editor', {
       const { lineEnding } = this.currentFile
       if (lineEnding) {
         const { windowId } = global.marktext.env
-        window.electron.ipcRenderer.send('mt::update-line-ending-menu', windowId, lineEnding)
+        window.tauri.ipcRenderer.send('mt::update-line-ending-menu', windowId, lineEnding)
       }
     },
 
@@ -348,7 +348,7 @@ export const useEditorStore = defineStore('editor', {
       const options = getOptionsFromState(this.currentFile)
       const defaultPath = getRootFolderFromState(projectStore)
       if (id) {
-        window.electron.ipcRenderer.send(
+        window.tauri.ipcRenderer.send(
           'mt::response-file-save',
           id,
           filename,
@@ -362,7 +362,7 @@ export const useEditorStore = defineStore('editor', {
 
     // need pass some data to main process when `save` menu item clicked
     LISTEN_FOR_SAVE() {
-      window.electron.ipcRenderer.on('mt::editor-ask-file-save', () => {
+      window.tauri.ipcRenderer.on('mt::editor-ask-file-save', () => {
         this.FILE_SAVE()
       })
       bus.on('mt::editor-ask-file-save', () => {
@@ -377,7 +377,7 @@ export const useEditorStore = defineStore('editor', {
       const defaultPath = getRootFolderFromState(projectStore)
 
       if (id) {
-        window.electron.ipcRenderer.send(
+        window.tauri.ipcRenderer.send(
           'mt::response-file-save-as',
           id,
           filename,
@@ -391,7 +391,7 @@ export const useEditorStore = defineStore('editor', {
 
     // need pass some data to main process when `save as` menu item clicked
     LISTEN_FOR_SAVE_AS() {
-      window.electron.ipcRenderer.on('mt::editor-ask-file-save-as', () => {
+      window.tauri.ipcRenderer.on('mt::editor-ask-file-save-as', () => {
         this.FILE_SAVE_AS()
       })
       bus.on('mt::editor-ask-file-save-as', () => {
@@ -400,7 +400,7 @@ export const useEditorStore = defineStore('editor', {
     },
 
     LISTEN_FOR_SET_PATHNAME() {
-      window.electron.ipcRenderer.on('mt::set-pathname', (_, fileInfo) => {
+      window.tauri.ipcRenderer.on('mt::set-pathname', (_, fileInfo) => {
         const { tabs } = this
         const { pathname, id } = fileInfo
         const tab = tabs.find((f) => f.id === id)
@@ -429,7 +429,7 @@ export const useEditorStore = defineStore('editor', {
         }
       })
 
-      window.electron.ipcRenderer.on('mt::tab-saved', (_, tabId) => {
+      window.tauri.ipcRenderer.on('mt::tab-saved', (_, tabId) => {
         const tab = this.tabs.find((f) => f.id === tabId)
         if (tab) {
           if (
@@ -443,7 +443,7 @@ export const useEditorStore = defineStore('editor', {
         }
       })
 
-      window.electron.ipcRenderer.on('mt::tab-save-failure', (_, tabId, msg) => {
+      window.tauri.ipcRenderer.on('mt::tab-save-failure', (_, tabId, msg) => {
         const tab = this.tabs.find((t) => t.id === tabId)
         if (!tab) {
           notice.notify({
@@ -469,7 +469,7 @@ export const useEditorStore = defineStore('editor', {
     LISTEN_FOR_CLOSE() {
       const projectStore = useProjectStore()
       const preferencesStore = usePreferencesStore()
-      window.electron.ipcRenderer.on('mt::ask-for-close', () => {
+      window.tauri.ipcRenderer.on('mt::ask-for-close', () => {
         sendBufferedState()
           .catch((err) => {
             console.error('Failed to update buffered state before closing', err)
@@ -492,16 +492,16 @@ export const useEditorStore = defineStore('editor', {
 
             if (unsavedFiles.length && preferencesStore.startUpAction !== 'restoreAll') {
               // Ignore unsaved files when user has chosen to restore all on startup, as they will be restored anyway.
-              window.electron.ipcRenderer.send('mt::close-window-confirm', deepClone(unsavedFiles))
+              window.tauri.ipcRenderer.send('mt::close-window-confirm', deepClone(unsavedFiles))
             } else {
-              window.electron.ipcRenderer.send('mt::close-window')
+              window.tauri.ipcRenderer.send('mt::close-window')
             }
           })
       })
     },
 
     LISTEN_FOR_SAVE_CLOSE() {
-      window.electron.ipcRenderer.on('mt::force-close-tabs-by-id', (_, tabIdList) => {
+      window.tauri.ipcRenderer.on('mt::force-close-tabs-by-id', (_, tabIdList) => {
         if (Array.isArray(tabIdList) && tabIdList.length) {
           this.CLOSE_TABS(tabIdList)
         }
@@ -529,12 +529,12 @@ export const useEditorStore = defineStore('editor', {
       if (closeTabs) {
         if (unsavedFiles.length) {
           this.CLOSE_TABS(tabs.filter((f) => f.isSaved).map((f) => f.id))
-          window.electron.ipcRenderer.send('mt::save-and-close-tabs', deepClone(unsavedFiles))
+          window.tauri.ipcRenderer.send('mt::save-and-close-tabs', deepClone(unsavedFiles))
         } else {
           this.CLOSE_TABS(tabs.map((f) => f.id))
         }
       } else {
-        window.electron.ipcRenderer.send('mt::save-tabs', deepClone(unsavedFiles))
+        window.tauri.ipcRenderer.send('mt::save-tabs', deepClone(unsavedFiles))
       }
     },
 
@@ -546,7 +546,7 @@ export const useEditorStore = defineStore('editor', {
       if (!id) return
       if (!pathname) {
         // if current file is a newly created file, just save it!
-        window.electron.ipcRenderer.send(
+        window.tauri.ipcRenderer.send(
           'mt::response-file-save',
           id,
           filename,
@@ -557,12 +557,12 @@ export const useEditorStore = defineStore('editor', {
         )
       } else {
         // if not, move to a new(maybe) folder
-        window.electron.ipcRenderer.send('mt::response-file-move-to', { id, pathname })
+        window.tauri.ipcRenderer.send('mt::response-file-move-to', { id, pathname })
       }
     },
 
     LISTEN_FOR_MOVE_TO() {
-      window.electron.ipcRenderer.on('mt::editor-move-file', () => {
+      window.tauri.ipcRenderer.on('mt::editor-move-file', () => {
         this.MOVE_FILE_TO()
       })
       bus.on('mt::editor-move-file', () => {
@@ -571,7 +571,7 @@ export const useEditorStore = defineStore('editor', {
     },
 
     LISTEN_FOR_RENAME() {
-      window.electron.ipcRenderer.on('mt::editor-rename-file', () => {
+      window.tauri.ipcRenderer.on('mt::editor-rename-file', () => {
         this.RESPONSE_FOR_RENAME()
       })
       bus.on('mt::editor-rename-file', () => {
@@ -587,7 +587,7 @@ export const useEditorStore = defineStore('editor', {
       if (!id) return
       if (!pathname) {
         // if current file is a newly created file, just save it!
-        window.electron.ipcRenderer.send(
+        window.tauri.ipcRenderer.send(
           'mt::response-file-save',
           id,
           filename,
@@ -606,7 +606,7 @@ export const useEditorStore = defineStore('editor', {
       const { id, pathname, filename } = this.currentFile
       if (typeof filename === 'string' && filename !== newFilename) {
         const newPathname = window.path.join(window.path.dirname(pathname), newFilename)
-        window.electron.ipcRenderer.send('mt::rename', {
+        window.tauri.ipcRenderer.send('mt::rename', {
           id,
           pathname,
           newPathname,
@@ -670,12 +670,12 @@ export const useEditorStore = defineStore('editor', {
         bus.emit('cmd::register-command', new TrailingNewlineCommand(this))
 
         setTimeout(() => {
-          window.electron.ipcRenderer.send('mt::request-keybindings')
+      window.tauri.ipcRenderer.send('mt::request-keybindings')
           bus.emit('cmd::sort-commands')
         }, 100)
       }, 400)
 
-      window.electron.ipcRenderer.on('mt::bootstrap-editor', (_, config) => {
+      window.tauri.ipcRenderer.on('mt::bootstrap-editor', (_, config) => {
         const {
           addBlankTab,
           markdownList,
@@ -685,7 +685,7 @@ export const useEditorStore = defineStore('editor', {
           sourceCodeModeEnabled
         } = config
 
-        window.electron.ipcRenderer.send('mt::window-initialized')
+      window.tauri.ipcRenderer.send('mt::window-initialized')
         mainStore.SET_INITIALIZED()
         preferencesStore.SET_USER_PREFERENCE({ endOfLine: lineEnding })
         layoutStore.SET_LAYOUT({
@@ -713,7 +713,7 @@ export const useEditorStore = defineStore('editor', {
 
     // Open a new tab, optionally with content.
     LISTEN_FOR_NEW_TAB() {
-      window.electron.ipcRenderer.on(
+      window.tauri.ipcRenderer.on(
         'mt::open-new-tab',
         (_, markdownDocument, options = {}, selected = true) => {
           if (markdownDocument) {
@@ -726,7 +726,7 @@ export const useEditorStore = defineStore('editor', {
         }
       )
 
-      window.electron.ipcRenderer.on(
+      window.tauri.ipcRenderer.on(
         'mt::new-untitled-tab',
         (_, selected = true, markdown = '') => {
           // Create a blank tab
@@ -752,7 +752,7 @@ export const useEditorStore = defineStore('editor', {
     },
 
     LISTEN_FOR_CLOSE_TAB() {
-      window.electron.ipcRenderer.on('mt::editor-close-tab', () => {
+      window.tauri.ipcRenderer.on('mt::editor-close-tab', () => {
         this.CLOSE_TAB()
       })
       bus.on('mt::editor-close-tab', () => {
@@ -761,10 +761,10 @@ export const useEditorStore = defineStore('editor', {
     },
 
     LISTEN_FOR_TAB_CYCLE() {
-      window.electron.ipcRenderer.on('mt::tabs-cycle-left', () => {
+      window.tauri.ipcRenderer.on('mt::tabs-cycle-left', () => {
         this.CYCLE_TABS(false)
       })
-      window.electron.ipcRenderer.on('mt::tabs-cycle-right', () => {
+      window.tauri.ipcRenderer.on('mt::tabs-cycle-right', () => {
         this.CYCLE_TABS(true)
       })
       bus.on('mt::tabs-cycle-left', () => {
@@ -776,10 +776,10 @@ export const useEditorStore = defineStore('editor', {
     },
 
     LISTEN_FOR_SWITCH_TABS() {
-      window.electron.ipcRenderer.on('mt::switch-tab-by-index', (_, index) => {
+      window.tauri.ipcRenderer.on('mt::switch-tab-by-index', (_, index) => {
         this.SWITCH_TAB_BY_INDEX(index)
       })
-      window.electron.ipcRenderer.on('mt::switch-tab-by-file_path', (_, filePath) => {
+      window.tauri.ipcRenderer.on('mt::switch-tab-by-file_path', (_, filePath) => {
         this.SWITCH_TAB_BY_FILEPATH(filePath)
       })
     },
@@ -829,7 +829,7 @@ export const useEditorStore = defineStore('editor', {
 
       const { pathname } = file
       if (pathname) {
-        window.electron.ipcRenderer.send('mt::window-tab-closed', pathname)
+      window.tauri.ipcRenderer.send('mt::window-tab-closed', pathname)
       }
       debouncedSendBufferedState()
     },
@@ -837,7 +837,7 @@ export const useEditorStore = defineStore('editor', {
     CLOSE_UNSAVED_TAB(file) {
       const { id, pathname, filename, markdown } = file
       const options = getOptionsFromState(file)
-      window.electron.ipcRenderer.send('mt::save-and-close-tabs', [
+      window.tauri.ipcRenderer.send('mt::save-and-close-tabs', [
         { id, pathname, filename, markdown, options: deepClone(options) }
       ])
     },
@@ -875,7 +875,7 @@ export const useEditorStore = defineStore('editor', {
         const { pathname } = this.tabs[index]
 
         if (pathname) {
-          window.electron.ipcRenderer.send('mt::window-tab-closed', pathname)
+      window.tauri.ipcRenderer.send('mt::window-tab-closed', pathname)
         }
 
         this.tabs.splice(index, 1)
@@ -1224,7 +1224,7 @@ export const useEditorStore = defineStore('editor', {
         const tab = this.tabs.find((t) => t.id === id)
         if (tab && !tab.isSaved) {
           const defaultPath = getRootFolderFromState(projectStore)
-          window.electron.ipcRenderer.send(
+        window.tauri.ipcRenderer.send(
             'mt::response-file-save',
             id,
             filename,
@@ -1250,7 +1250,7 @@ export const useEditorStore = defineStore('editor', {
       }
 
       const { windowId } = global.marktext.env
-      window.electron.ipcRenderer.send(
+      window.tauri.ipcRenderer.send(
         'mt::editor-selection-changed',
         windowId,
         createApplicationMenuState(changes)
@@ -1259,7 +1259,7 @@ export const useEditorStore = defineStore('editor', {
 
     SELECTION_FORMATS(formats) {
       const { windowId } = global.marktext.env
-      window.electron.ipcRenderer.send(
+      window.tauri.ipcRenderer.send(
         'mt::update-format-menu',
         windowId,
         createSelectionFormatState(formats)
@@ -1285,7 +1285,7 @@ export const useEditorStore = defineStore('editor', {
       }
 
       const { filename, pathname } = this.currentFile
-      window.electron.ipcRenderer.send('mt::response-export', {
+      window.tauri.ipcRenderer.send('mt::response-export', {
         type,
         title,
         content,
@@ -1296,7 +1296,7 @@ export const useEditorStore = defineStore('editor', {
     },
 
     LINTEN_FOR_EXPORT_SUCCESS() {
-      window.electron.ipcRenderer.on('mt::export-success', (_, { filePath }) => {
+      window.tauri.ipcRenderer.on('mt::export-success', (_, { filePath }) => {
         notice
           .notify({
             title: i18n.global.t('store.editor.exportSuccessTitle'),
@@ -1306,17 +1306,17 @@ export const useEditorStore = defineStore('editor', {
             showConfirm: true
           })
           .then(() => {
-            window.electron.shell.showItemInFolder(filePath)
+            window.tauri.shell.showItemInFolder(filePath)
           })
       })
     },
 
     PRINT_RESPONSE() {
-      window.electron.ipcRenderer.send('mt::response-print')
+      window.tauri.ipcRenderer.send('mt::response-print')
     },
 
     LINTEN_FOR_PRINT_SERVICE_CLEARUP() {
-      window.electron.ipcRenderer.on('mt::print-service-clearup', () => {
+      window.tauri.ipcRenderer.on('mt::print-service-clearup', () => {
         bus.emit('print-service-clearup')
       })
     },
@@ -1333,7 +1333,7 @@ export const useEditorStore = defineStore('editor', {
     },
 
     LINTEN_FOR_SET_LINE_ENDING() {
-      window.electron.ipcRenderer.on('mt::set-line-ending', (_, lineEnding) => {
+      window.tauri.ipcRenderer.on('mt::set-line-ending', (_, lineEnding) => {
         this.SET_LINE_ENDING(lineEnding)
       })
       bus.on('mt::set-line-ending', (lineEnding) => {
@@ -1366,7 +1366,7 @@ export const useEditorStore = defineStore('editor', {
 
     LISTEN_FOR_FILE_CHANGE() {
       const preferencesStore = usePreferencesStore()
-      window.electron.ipcRenderer.on('mt::update-file', (_, { type, change }) => {
+      window.tauri.ipcRenderer.on('mt::update-file', (_, { type, change }) => {
         const { tabs } = this
         const { pathname } = change
         const tab = tabs.find((t) => window.fileUtils.isSamePathSync(t.pathname, pathname))
@@ -1426,11 +1426,11 @@ export const useEditorStore = defineStore('editor', {
     },
 
     ASK_FOR_IMAGE_PATH() {
-      return window.electron.ipcRenderer.invoke('mt::ask-for-image-path')
+      return window.tauri.ipcRenderer.invoke('mt::ask-for-image-path')
     },
 
     ASK_FOR_EXCALIDRAW_SOURCE_PATH() {
-      return window.electron.ipcRenderer.invoke('mt::ask-for-excalidraw-source-path')
+      return window.tauri.ipcRenderer.invoke('mt::ask-for-excalidraw-source-path')
     },
 
     EDIT_ZOOM(zoomFactor) {
@@ -1440,11 +1440,11 @@ export const useEditorStore = defineStore('editor', {
       if (zoom !== zoomFactor) {
         preferencesStore.SET_SINGLE_PREFERENCE({ type: 'zoom', value: zoomFactor })
       }
-      window.electron.webFrame.setZoomFactor(zoomFactor)
+      window.tauri.webFrame.setZoomFactor(zoomFactor)
     },
 
     LISTEN_WINDOW_ZOOM() {
-      window.electron.ipcRenderer.on('mt::window-zoom', (_, zoomFactor) => {
+      window.tauri.ipcRenderer.on('mt::window-zoom', (_, zoomFactor) => {
         this.EDIT_ZOOM(zoomFactor)
       })
       bus.on('mt::window-zoom', (zoomFactor) => {
@@ -1453,37 +1453,37 @@ export const useEditorStore = defineStore('editor', {
     },
 
     LISTEN_FOR_RELOAD_IMAGES() {
-      window.electron.ipcRenderer.on('mt::invalidate-image-cache', () => {
+      window.tauri.ipcRenderer.on('mt::invalidate-image-cache', () => {
         bus.emit('invalidate-image-cache')
       })
     },
 
     LISTEN_FOR_CONTEXT_MENU() {
       // General context menu
-      window.electron.ipcRenderer.on('mt::cm-copy-as-rich', () => {
+      window.tauri.ipcRenderer.on('mt::cm-copy-as-rich', () => {
         bus.emit('copyAsRich', 'copyAsRich')
       })
-      window.electron.ipcRenderer.on('mt::cm-copy-as-html', () => {
+      window.tauri.ipcRenderer.on('mt::cm-copy-as-html', () => {
         bus.emit('copyAsHtml', 'copyAsHtml')
       })
-      window.electron.ipcRenderer.on('mt::cm-paste-as-plain-text', () => {
+      window.tauri.ipcRenderer.on('mt::cm-paste-as-plain-text', () => {
         bus.emit('pasteAsPlainText', 'pasteAsPlainText')
       })
-      window.electron.ipcRenderer.on('mt::cm-insert-paragraph', (_, location) => {
+      window.tauri.ipcRenderer.on('mt::cm-insert-paragraph', (_, location) => {
         bus.emit('insertParagraph', location)
       })
 
       // Spelling
-      window.electron.ipcRenderer.on('mt::spelling-replace-misspelling', (_, info) => {
+      window.tauri.ipcRenderer.on('mt::spelling-replace-misspelling', (_, info) => {
         bus.emit('replace-misspelling', info)
       })
-      window.electron.ipcRenderer.on('mt::spelling-show-switch-language', () => {
+      window.tauri.ipcRenderer.on('mt::spelling-show-switch-language', () => {
         bus.emit('open-command-spellchecker-switch-language')
       })
     },
 
     LISTEN_FOR_STATE_REPLACE() {
-      window.electron.ipcRenderer.on('mt::load-state', (_, state) => {
+      window.tauri.ipcRenderer.on('mt::load-state', (_, state) => {
         this.RESTORE_BUFFERED_STATE(state)
       })
     }

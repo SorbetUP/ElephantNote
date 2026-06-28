@@ -49,19 +49,19 @@ const commands = [
   {
     id: 'file.new-window',
     execute: async() => {
-      window.electron.ipcRenderer.send('mt::cmd-new-editor-window')
+      window.tauri.ipcRenderer.send('mt::cmd-new-editor-window')
     }
   },
   {
     id: 'file.open-file',
     execute: async() => {
-      window.electron.ipcRenderer.send('mt::cmd-open-file')
+      window.tauri.ipcRenderer.send('mt::cmd-open-file')
     }
   },
   {
     id: 'file.open-folder',
     execute: async() => {
-      window.electron.ipcRenderer.send('mt::cmd-open-folder')
+      window.tauri.ipcRenderer.send('mt::cmd-open-folder')
     }
   },
   {
@@ -92,14 +92,14 @@ const commands = [
   {
     id: 'file.close-window',
     execute: async() => {
-      window.electron.ipcRenderer.send('mt::cmd-close-window')
+      window.tauri.ipcRenderer.send('mt::cmd-close-window')
     }
   },
 
   {
     id: 'file.toggle-auto-save',
     execute: async() => {
-      window.electron.ipcRenderer.send('mt::cmd-toggle-autosave')
+      window.tauri.ipcRenderer.send('mt::cmd-toggle-autosave')
     }
   },
   {
@@ -118,7 +118,7 @@ const commands = [
   {
     id: 'file.import-file',
     execute: async() => {
-      window.electron.ipcRenderer.send('mt::cmd-import-file')
+      window.tauri.ipcRenderer.send('mt::cmd-import-file')
     }
   },
   {
@@ -434,7 +434,7 @@ const commands = [
   {
     id: 'window.toggle-always-on-top',
     execute: async() => {
-      window.electron.ipcRenderer.send('mt::window-toggle-always-on-top')
+      window.tauri.ipcRenderer.send('mt::window-toggle-always-on-top')
     }
   },
   {
@@ -622,19 +622,19 @@ const commands = [
   {
     id: 'file.preferences',
     execute: async() => {
-      window.electron.ipcRenderer.send('mt::open-setting-window')
+      window.tauri.ipcRenderer.send('mt::open-setting-window')
     }
   },
   {
     id: 'file.quit',
     execute: async() => {
-      window.electron.ipcRenderer.send('mt::app-try-quit')
+      window.tauri.ipcRenderer.send('mt::app-try-quit')
     }
   },
   {
     id: 'docs.user-guide',
     execute: async() => {
-      window.electron.shell.openExternal(
+      window.tauri.shell.openExternal(
         'https://github.com/marktext/marktext/blob/trunk/docs/BASICS.md'
       )
     }
@@ -642,7 +642,7 @@ const commands = [
   {
     id: 'docs.markdown-syntax',
     execute: async() => {
-      window.electron.shell.openExternal(
+      window.tauri.shell.openExternal(
         'https://github.com/marktext/marktext/blob/trunk/docs/MARKDOWN_SYNTAX.md'
       )
     }
@@ -672,7 +672,7 @@ if (isUpdatable()) {
   commands.push({
     id: 'file.check-update',
     execute: async() => {
-      window.electron.ipcRenderer.send('mt::check-for-update')
+      window.tauri.ipcRenderer.send('mt::check-for-update')
     }
   })
 }
@@ -681,7 +681,7 @@ if (isOsx) {
   commands.push({
     id: 'edit.screenshot',
     execute: async() => {
-      window.electron.ipcRenderer.send('mt::make-screenshot')
+      window.tauri.ipcRenderer.send('mt::make-screenshot')
     }
   })
 }

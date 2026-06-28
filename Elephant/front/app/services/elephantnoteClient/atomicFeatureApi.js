@@ -1,7 +1,7 @@
 import { toPlainObject } from '../../../../shared/plainObject.js'
 
 const getBridge = () => globalThis.window?.elephantnote
-const getElectronIpc = () => globalThis.window?.electron?.ipcRenderer
+const getElectronIpc = () => globalThis.window?.tauri?.ipcRenderer
 
 export const requireAtomicFeatureApi = () => {
   const atomicFeatures = getBridge()?.atomicFeatures

@@ -110,7 +110,7 @@ beforeEach(() => {
     dirname: (pathname) => String(pathname).includes('/') ? String(pathname).split('/').slice(0, -1).join('/') : '.',
     isAbsolute: (pathname) => String(pathname).startsWith('/')
   }
-  window.electron = {
+  window.tauri = {
     ipcRenderer: {
       send: (...args) => sentMessages.push(args),
       on: vi.fn(),

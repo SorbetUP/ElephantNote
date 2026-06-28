@@ -50,12 +50,11 @@ describe('domain clients chat search behavior', () => {
     expect(countAction(call, API.SEARCH_INIT_VAULT)).toBe(1)
   })
 
-  it('does not repeatedly rebuild chat search when citations are still empty', async () => {
+  it('does not rebuild chat search when the model already produced an answer', async () => {
     const { call } = createCall({
       chatResults: [
-        { answer: 'empty first', citations: [] },
-        { answer: 'empty retry', citations: [] },
-        { answer: 'empty second', citations: [] }
+        { answer: 'first answer', citations: [] },
+        { answer: 'second answer', citations: [] }
       ]
     })
     const clients = createClients(call)
@@ -63,6 +62,6 @@ describe('domain clients chat search behavior', () => {
     await clients.rag.chat('first')
     await clients.rag.chat('second')
 
-    expect(countAction(call, API.SEARCH_REBUILD)).toBe(1)
+    expect(countAction(call, API.SEARCH_REBUILD)).toBe(0)
   })
 })

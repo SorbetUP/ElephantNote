@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import log from 'electron-log'
+import log from '@/platform/runtimeLogShim'
 import { elephantnoteClient } from '../services/elephantnoteClient'
 import { useSearchStore } from './searchStore'
 import {
@@ -430,7 +430,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
           title: result.note.path.split('/').pop()?.replace(/\.md$/i, '') || 'Wiki',
           updatedAt: new Date().toISOString()
         })
-        window.electron.ipcRenderer.send('mt::open-file', result.note.fullPath, {})
+        window.tauri.ipcRenderer.send('mt::open-file', result.note.fullPath, {})
       }
     },
 
@@ -491,7 +491,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       if (this.openedNotePath === entry.path) return
       this.openedNotePath = entry.path
       this.rememberNote(entry)
-      window.electron.ipcRenderer.send('mt::open-file', `${this.activeVault.path}/${entry.path}`, {})
+      window.tauri.ipcRenderer.send('mt::open-file', `${this.activeVault.path}/${entry.path}`, {})
       if (options.record !== false) {
         useNavigationStore().push({
           type: 'note',
@@ -581,7 +581,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       }
       this.openedNotePath = result.note.path
       this.rememberNote(result.note)
-      window.electron.ipcRenderer.send('mt::open-file', result.note.fullPath, {})
+      window.tauri.ipcRenderer.send('mt::open-file', result.note.fullPath, {})
       useNavigationStore().push({
         type: 'note',
         id: result.note.path,
@@ -686,7 +686,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.rootEntries = await elephantnoteClient.directory.list('')
 
       if (oldOpenedNotePath && oldOpenedNotePath !== this.openedNotePath && this.openedNotePath) {
-        window.electron.ipcRenderer.send('mt::open-file', `${this.activeVault.path}/${this.openedNotePath}`, {})
+        window.tauri.ipcRenderer.send('mt::open-file', `${this.activeVault.path}/${this.openedNotePath}`, {})
       }
 
       return true
@@ -710,14 +710,14 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     },
 
     notifyAiUnavailable() {
-      window.electron.ipcRenderer.send('mt::show-notification', {
+      window.tauri.ipcRenderer.send('mt::show-notification', {
         title: 'AI features are not available yet.',
         type: 'info'
       })
     },
 
     openSettings() {
-      window.electron.ipcRenderer.send('mt::open-setting-window')
+      window.tauri.ipcRenderer.send('mt::open-setting-window')
     }
   }
 })

@@ -45,7 +45,7 @@ describe('runtime bridge', () => {
     vi.clearAllMocks()
     webviewWindowCtor.calls = []
     window.localStorage.clear()
-    delete window.electron
+    delete window.tauri
     delete window.path
     delete window.commandExists
     delete window.fileUtils
@@ -75,44 +75,28 @@ describe('runtime bridge', () => {
     expect(path.isAbsolute('/tmp/vault/notes/note.md')).toBe(true)
   })
 
-  it('installs a minimal compatibility surface when electron is missing', async() => {
+  it('installs a minimal compatibility surface when tauri is missing', async() => {
     const surface = installRuntimeBridge(window)
 
     expect(surface).toEqual({ mode: 'tauri-compatible', installed: true })
-    expect(window.electron).toBeDefined()
+    expect(window.tauri).toBeDefined()
     expect(window.path).toBeDefined()
     expect(window.commandExists.exists('node')).toBe(false)
     expect(window.webUtils).toBeUndefined()
 
     const listener = vi.fn()
-    const unlisten = window.electron.ipcRenderer.on('mt::bridge-test', listener)
+    const unlisten = window.tauri.ipcRenderer.on('mt::bridge-test', listener)
 
-    window.electron.ipcRenderer.send('mt::bridge-test', 'payload', { id: 1 })
+    window.tauri.ipcRenderer.send('mt::bridge-test', 'payload', { id: 1 })
     expect(listener).toHaveBeenCalledWith(expect.any(Object), 'payload', { id: 1 })
 
     unlisten()
-    window.electron.ipcRenderer.send('mt::bridge-test', 'ignored')
+    window.tauri.ipcRenderer.send('mt::bridge-test', 'ignored')
     expect(listener).toHaveBeenCalledTimes(1)
 
-    await expect(window.electron.clipboard.writeText('hello')).resolves.toBeUndefined()
-    expect(window.electron.webUtils.getPathForFile({ path: '/tmp/example.md' }))
+    await expect(window.tauri.clipboard.writeText('hello')).resolves.toBeUndefined()
+    expect(window.tauri.webUtils.getPathForFile({ path: '/tmp/example.md' }))
       .toBe('/tmp/example.md')
-  })
-
-  it('preserves an existing electron preload surface', () => {
-    const send = vi.fn()
-    window.electron = {
-      ipcRenderer: {
-        send
-      }
-    }
-    window.path = { sentinel: true }
-
-    const surface = installRuntimeBridge(window)
-
-    expect(surface).toEqual({ mode: 'electron', installed: false })
-    expect(window.electron.ipcRenderer.send).toBe(send)
-    expect(window.path).toEqual({ sentinel: true })
   })
 
   it('prefers a tauri runtime when available', async() => {
@@ -151,28 +135,28 @@ describe('runtime bridge', () => {
 
     expect(surface).toEqual({ mode: 'tauri', installed: true })
     const listener = vi.fn()
-    window.electron.ipcRenderer.on('mt::bridge-local', listener)
-    window.electron.ipcRenderer.send('mt::bridge-local', 'payload')
+    window.tauri.ipcRenderer.on('mt::bridge-local', listener)
+    window.tauri.ipcRenderer.send('mt::bridge-local', 'payload')
     await vi.waitFor(() => {
       expect(listener).toHaveBeenCalledWith(expect.any(Object), 'payload')
     })
 
     const openNewTab = vi.fn()
-    window.electron.ipcRenderer.on('mt::open-new-tab', openNewTab)
+    window.tauri.ipcRenderer.on('mt::open-new-tab', openNewTab)
     const openDirectory = vi.fn()
-    window.electron.ipcRenderer.on('mt::open-directory', openDirectory)
+    window.tauri.ipcRenderer.on('mt::open-directory', openDirectory)
     const notificationListener = vi.fn()
     const updateListener = vi.fn()
-    window.electron.ipcRenderer.on('mt::show-notification', notificationListener)
-    window.electron.ipcRenderer.on('mt::UPDATE_NOT_AVAILABLE', updateListener)
+    window.tauri.ipcRenderer.on('mt::show-notification', notificationListener)
+    window.tauri.ipcRenderer.on('mt::UPDATE_NOT_AVAILABLE', updateListener)
 
-    await expect(window.electron.ipcRenderer.invoke('example', { id: 1 }))
+    await expect(window.tauri.ipcRenderer.invoke('example', { id: 1 }))
       .resolves.toEqual({ id: 1 })
-    await expect(window.electron.shell.openExternal('https://example.com'))
+    await expect(window.tauri.shell.openExternal('https://example.com'))
       .resolves.toBeUndefined()
     expect(tauriOpener.openUrl).toHaveBeenCalledWith('https://example.com')
-    await expect(window.electron.clipboard.writeText('hello')).resolves.toBeUndefined()
-    await expect(window.electron.shell.exec('picgo', ['u', '/tmp/image.png']))
+    await expect(window.tauri.clipboard.writeText('hello')).resolves.toBeUndefined()
+    await expect(window.tauri.shell.exec('picgo', ['u', '/tmp/image.png']))
       .resolves.toEqual({
         command: 'picgo',
         args: ['u', '/tmp/image.png'],
@@ -186,13 +170,13 @@ describe('runtime bridge', () => {
       env: null
     })
 
-    window.electron.ipcRenderer.send('mt::cmd-open-file')
-    window.electron.ipcRenderer.send('mt::ask-for-open-project-in-sidebar')
-    window.electron.ipcRenderer.send('mt::window-toggle-always-on-top')
-    window.electron.ipcRenderer.send('mt::cmd-new-editor-window')
-    window.electron.ipcRenderer.send('mt::cmd-close-window')
-    window.electron.ipcRenderer.send('mt::check-for-update')
-    window.electron.ipcRenderer.send('mt::make-screenshot')
+    window.tauri.ipcRenderer.send('mt::cmd-open-file')
+    window.tauri.ipcRenderer.send('mt::ask-for-open-project-in-sidebar')
+    window.tauri.ipcRenderer.send('mt::window-toggle-always-on-top')
+    window.tauri.ipcRenderer.send('mt::cmd-new-editor-window')
+    window.tauri.ipcRenderer.send('mt::cmd-close-window')
+    window.tauri.ipcRenderer.send('mt::check-for-update')
+    window.tauri.ipcRenderer.send('mt::make-screenshot')
 
     await vi.waitFor(() => {
       expect(tauriDialog.open).toHaveBeenCalled()
@@ -252,38 +236,38 @@ describe('runtime bridge', () => {
       JSON.stringify({ 'file.save': 'Ctrl+Alt+S' })
     )
 
-    await expect(window.electron.ipcRenderer.invoke('mt::get-current-language')).resolves.toBe('fr')
+    await expect(window.tauri.ipcRenderer.invoke('mt::get-current-language')).resolves.toBe('fr')
 
-    const keybindings = await window.electron.ipcRenderer.invoke('mt::keybinding-get-pref-keybindings')
+    const keybindings = await window.tauri.ipcRenderer.invoke('mt::keybinding-get-pref-keybindings')
     expect(keybindings.defaultKeybindings.get('file.save')).toBeTruthy()
     expect(keybindings.userKeybindings.get('file.save')).toBe('Ctrl+Alt+S')
 
     await expect(
-      window.electron.ipcRenderer.invoke('mt::keybinding-save-user-keybindings', new Map([['file.save', 'Ctrl+S']]))
+      window.tauri.ipcRenderer.invoke('mt::keybinding-save-user-keybindings', new Map([['file.save', 'Ctrl+S']]))
     ).resolves.toBe(true)
     expect(JSON.parse(window.localStorage.getItem('elephantnote:tauri:user-keybindings'))).toEqual({
       'file.save': 'Ctrl+S'
     })
 
-    await expect(window.electron.ipcRenderer.invoke('mt::spellchecker-set-enabled', true))
+    await expect(window.tauri.ipcRenderer.invoke('mt::spellchecker-set-enabled', true))
       .resolves.toBe(true)
-    await expect(window.electron.ipcRenderer.invoke('mt::spellchecker-switch-language', 'de-DE'))
+    await expect(window.tauri.ipcRenderer.invoke('mt::spellchecker-switch-language', 'de-DE'))
       .resolves.toBeNull()
-    await expect(window.electron.ipcRenderer.invoke('mt::spellchecker-get-available-dictionaries'))
+    await expect(window.tauri.ipcRenderer.invoke('mt::spellchecker-get-available-dictionaries'))
       .resolves.toEqual(['en-US'])
-    await expect(window.electron.ipcRenderer.invoke('mt::spellchecker-get-custom-dictionary-words'))
+    await expect(window.tauri.ipcRenderer.invoke('mt::spellchecker-get-custom-dictionary-words'))
       .resolves.toEqual([])
 
     tauriDialog.open.mockResolvedValue('/tmp/image.png')
-    await expect(window.electron.ipcRenderer.invoke('mt::ask-for-image-path'))
+    await expect(window.tauri.ipcRenderer.invoke('mt::ask-for-image-path'))
       .resolves.toBe('/tmp/image.png')
 
     const openNewTab = vi.fn()
-    window.electron.ipcRenderer.on('mt::open-new-tab', openNewTab)
+    window.tauri.ipcRenderer.on('mt::open-new-tab', openNewTab)
 
     tauriDialog.open.mockResolvedValueOnce('/tmp/import.docx')
-    window.electron.ipcRenderer.send('mt::cmd-import-file')
-    window.electron.ipcRenderer.send('mt::window::drop', ['/tmp/import.docx', '/tmp/notes.md'])
+    window.tauri.ipcRenderer.send('mt::cmd-import-file')
+    window.tauri.ipcRenderer.send('mt::window::drop', ['/tmp/import.docx', '/tmp/notes.md'])
 
     await vi.waitFor(() => {
       expect(openNewTab).toHaveBeenCalledWith(
@@ -318,14 +302,14 @@ describe('runtime bridge', () => {
 
     const preferenceListener = vi.fn()
     const languageListener = vi.fn()
-    window.electron.ipcRenderer.on('mt::user-preference', preferenceListener)
-    window.electron.ipcRenderer.on('language-changed', languageListener)
+    window.tauri.ipcRenderer.on('mt::user-preference', preferenceListener)
+    window.tauri.ipcRenderer.on('language-changed', languageListener)
 
-    window.electron.ipcRenderer.send('mt::set-user-preference', {
+    window.tauri.ipcRenderer.send('mt::set-user-preference', {
       language: 'de',
       theme: 'dark'
     })
-    window.electron.ipcRenderer.send('mt::ask-for-user-preference')
+    window.tauri.ipcRenderer.send('mt::ask-for-user-preference')
 
     expect(
       JSON.parse(
@@ -342,7 +326,7 @@ describe('runtime bridge', () => {
     })
     expect(languageListener).toHaveBeenCalledWith(expect.any(Object), 'de')
 
-    window.electron.ipcRenderer.send('mt::cmd-toggle-autosave')
+    window.tauri.ipcRenderer.send('mt::cmd-toggle-autosave')
     expect(
       JSON.parse(
         window.localStorage.getItem('elephantnote:tauri:preferences') ||
@@ -364,7 +348,7 @@ describe('runtime bridge', () => {
     installRuntimeBridge(window)
 
     await expect(
-      window.electron.ipcRenderer.invoke('update-buffer-state', {
+      window.tauri.ipcRenderer.invoke('update-buffer-state', {
         version: 1,
         editor: { tabs: [] }
       })

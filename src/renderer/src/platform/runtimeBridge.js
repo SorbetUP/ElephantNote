@@ -3,9 +3,6 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { confirm as confirmDialog, open as openDialog } from '@tauri-apps/plugin-dialog'
 import { openUrl, openPath, revealItemInDir } from '@tauri-apps/plugin-opener'
 import { writeText as clipboardWriteText, readText as clipboardReadText } from '@tauri-apps/plugin-clipboard-manager'
-import keybindingsDarwin from '../../../main/keyboard/keybindingsDarwin.js'
-import keybindingsLinux from '../../../main/keyboard/keybindingsLinux.js'
-import keybindingsWindows from '../../../main/keyboard/keybindingsWindows.js'
 
 const normalizeSlashes = (value) => String(value || '').replace(/\\/g, '/')
 
@@ -171,6 +168,14 @@ const createClipboardFallback = () => ({
   readText: async() => navigator.clipboard?.readText?.()
 })
 
+const createWebFrameFallback = () => ({
+  setZoomFactor: (zoomFactor) => {
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.style.zoom = `${zoomFactor * 100}%`
+    }
+  }
+})
+
 const createWebUtilsFallback = () => ({
   getPathForFile: (file) => file?.path || file?.webkitRelativePath || file?.name || ''
 })
@@ -220,11 +225,37 @@ const writeStoredJson = (target, key, value) => {
   }
 }
 
+const createKeybindingsMap = (entries) => new Map(Object.entries(entries))
+
+const createMacosDefaultKeybindings = () => createKeybindingsMap({
+  'file.save': 'CmdOrCtrl+S',
+  'file.save-as': 'CmdOrCtrl+Shift+S',
+  'edit.undo': 'CmdOrCtrl+Z',
+  'edit.redo': 'CmdOrCtrl+Shift+Z',
+  'edit.find': 'CmdOrCtrl+F',
+  'file.quick-open': 'CmdOrCtrl+P',
+  'view.toggle-sidebar': 'CmdOrCtrl+J',
+  'app.preferences': 'CmdOrCtrl+,'
+})
+
+const createWindowsDefaultKeybindings = () => createKeybindingsMap({
+  'file.save': 'CmdOrCtrl+S',
+  'file.save-as': 'CmdOrCtrl+Shift+S',
+  'edit.undo': 'CmdOrCtrl+Z',
+  'edit.redo': 'CmdOrCtrl+Y',
+  'edit.find': 'CmdOrCtrl+F',
+  'file.quick-open': 'CmdOrCtrl+P',
+  'view.toggle-sidebar': 'CmdOrCtrl+J',
+  'app.preferences': 'CmdOrCtrl+,'
+})
+
+const createLinuxDefaultKeybindings = () => createWindowsDefaultKeybindings()
+
 const getDefaultKeybindings = (target) => {
   const platform = String(target?.navigator?.platform || target?.navigator?.userAgent || '').toLowerCase()
-  if (platform.includes('mac')) return keybindingsDarwin
-  if (platform.includes('linux')) return keybindingsLinux
-  return keybindingsWindows
+  if (platform.includes('mac')) return createMacosDefaultKeybindings()
+  if (platform.includes('linux')) return createLinuxDefaultKeybindings()
+  return createWindowsDefaultKeybindings()
 }
 
 const getCurrentLanguage = (target) => {
@@ -455,7 +486,7 @@ const createTauriElectronFacade = (target, tauri) => {
   const importPandocDocument = async(pathname) => {
     if (!pathname) return false
     try {
-      const result = await target.electron.shell.exec('pandoc', ['-s', pathname, '-t', 'gfm'])
+      const result = await target.tauri.shell.exec('pandoc', ['-s', pathname, '-t', 'gfm'])
       if (!result?.success) return false
       const filename = target.path?.basename?.(pathname) || pathname.split('/').pop() || pathname
       eventBus.send('mt::open-new-tab', {
@@ -822,6 +853,7 @@ const createTauriElectronFacade = (target, tauri) => {
       writeText: async(text) => clipboardWriteText(text),
       readText: async() => clipboardReadText()
     },
+    webFrame: createWebFrameFallback(),
     webUtils: {
       getPathForFile: (file) => file?.path || file?.webkitRelativePath || file?.name || ''
     },
@@ -834,7 +866,6 @@ const createTauriElectronFacade = (target, tauri) => {
 }
 
 export const installRuntimeBridge = (target = globalThis) => {
-  const hasElectron = !!target?.electron?.ipcRenderer
   const hasTauri = !!target?.__TAURI__
   const markRuntime = (mode) => {
     target.__MARKTEXT_RUNTIME__ = mode
@@ -845,17 +876,12 @@ export const installRuntimeBridge = (target = globalThis) => {
   if (!target.i18nUtils) target.i18nUtils = {}
   if (!target.elephantnote) target.elephantnote = {}
 
-  if (hasElectron) {
-    if (!target.fileUtils) target.fileUtils = createFileUtilsFallback()
-    return { mode: markRuntime('electron'), installed: false }
-  }
-
   if (hasTauri) {
-    const electron = createTauriElectronFacade(target, target.__TAURI__)
+    const tauri = createTauriElectronFacade(target, target.__TAURI__)
     if (!target.fileUtils) {
       target.fileUtils = createTauriFileUtilsFacade(target.__TAURI__?.fs)
     }
-    target.electron = electron
+    target.tauri = tauri
     return { mode: markRuntime('tauri'), installed: true }
   }
 
@@ -863,18 +889,21 @@ export const installRuntimeBridge = (target = globalThis) => {
   const ipcRenderer = createEventBus(target)
   const shell = createShellFallback()
   const clipboard = createClipboardFallback()
+  const webFrame = createWebFrameFallback()
   const webUtils = createWebUtilsFallback()
 
-  target.electron = {
+  const fallback = {
     ipcRenderer,
     shell,
     clipboard,
+    webFrame,
     webUtils,
     process: {
       platform: target.navigator?.userAgentData?.platform || target.navigator?.platform || 'tauri',
       env: { MARKTEXT_VERSION_STRING: target.__MARKTEXT_VERSION_STRING__ || '' }
     }
   }
+  target.tauri = fallback
 
   return { mode: markRuntime('tauri-compatible'), installed: true }
 }

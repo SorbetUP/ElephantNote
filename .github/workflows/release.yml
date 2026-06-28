@@ -49,20 +49,19 @@ jobs:
         if: matrix.platform == 'linux'
         run: sudo apt-get update && sudo apt-get install -y icnsutils graphicsmagick xz-utils libx11-dev libxkbfile-dev gnome-keyring libsecret-1-dev libfontconfig-dev rpm
 
-      # --ignore-scripts so we can set env vars before postinstall runs electron-rebuild
+      # --ignore-scripts so we can set env vars before postinstall runs
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Must be set before postinstall runs electron-rebuild
+      # Must be set before postinstall runs
       - name: Set C++20 for MacOS
         if: matrix.platform == 'macos'
         run: |
           echo "CXXFLAGS=-std=gnu++20 -stdlib=libc++" >> $GITHUB_ENV
 
-      # Run the full postinstall: Electron binary download, patch-package,
-      # electron-rebuild, and minify-locales.
+      # Run the full postinstall and locale minification.
       - name: Run postinstall
         run: node scripts/postinstall.js
         env:

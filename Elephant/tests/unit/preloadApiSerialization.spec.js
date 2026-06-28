@@ -41,7 +41,7 @@ describe('preload api serialization', () => {
 
   it('serializes atomic feature payloads before invoking IPC', async() => {
     const invoke = vi.fn(async(_channel, payload) => payload)
-    window.electron = {
+    window.tauri = {
       ipcRenderer: {
         invoke
       }

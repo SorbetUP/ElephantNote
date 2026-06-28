@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import log from '@/platform/electronLogShim'
+import log from '@/platform/runtimeLogShim'
 import { addFile, unlinkFile, addDirectory, unlinkDirectory } from './treeCtrl'
 import bus from '../bus'
 import { create, paste, rename } from '../util/fileSystem'
@@ -99,13 +99,13 @@ export const useProjectStore = defineStore('project', {
     },
 
     LISTEN_FOR_LOAD_PROJECT() {
-      window.electron.ipcRenderer.on('mt::open-directory', (e, pathname) => {
+      window.tauri.ipcRenderer.on('mt::open-directory', (e, pathname) => {
         this.OPEN_PROJECT(pathname)
       })
     },
 
     LISTEN_FOR_UPDATE_PROJECT() {
-      window.electron.ipcRenderer.on('mt::update-object-tree', (e, { type, change }) => {
+      window.tauri.ipcRenderer.on('mt::update-object-tree', (e, { type, change }) => {
         // Buffer events if projectTree is not initialized yet
         if (!this.projectTree) {
           this.pendingTreeEvents.push({ type, change })
@@ -157,13 +157,13 @@ export const useProjectStore = defineStore('project', {
     },
 
     ASK_FOR_OPEN_PROJECT() {
-      window.electron.ipcRenderer.send('mt::ask-for-open-project-in-sidebar')
+      window.tauri.ipcRenderer.send('mt::ask-for-open-project-in-sidebar')
     },
 
     LISTEN_FOR_SIDEBAR_CONTEXT_MENU() {
       bus.on('SIDEBAR::show-in-folder', () => {
         const { pathname } = this.activeItem
-        window.electron.shell.showItemInFolder(pathname)
+        window.tauri.shell.showItemInFolder(pathname)
       })
       bus.on('SIDEBAR::new', (type) => {
         const { pathname, isDirectory } = this.activeItem
@@ -173,7 +173,7 @@ export const useProjectStore = defineStore('project', {
       })
       bus.on('SIDEBAR::remove', () => {
         const { pathname } = this.activeItem
-        window.electron.ipcRenderer.invoke('mt::fs-trash-item', pathname).catch((err) => {
+        window.tauri.ipcRenderer.invoke('mt::fs-trash-item', pathname).catch((err) => {
           notice.notify({
             title: 'Error while deleting',
             type: 'error',
@@ -257,7 +257,7 @@ export const useProjectStore = defineStore('project', {
     },
 
     OPEN_SETTING_WINDOW() {
-      window.electron.ipcRenderer.send('mt::open-setting-window')
+      window.tauri.ipcRenderer.send('mt::open-setting-window')
     }
   }
 })

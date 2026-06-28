@@ -36,4 +36,16 @@ describe('Tauri-only renderer runtime', () => {
     expect(facade).toContain('scope.path.resolve')
     expect(facade).toContain('scope.path.relative')
   })
+
+  it('keeps search concept fallback out of the renderer bootstrap entrypoint', () => {
+    const main = read('src/renderer/src/main.js')
+    const fallback = read('src/renderer/src/platform/tauriSearchConceptFallback.js')
+
+    expect(main).toContain("import { installTauriSearchConceptFallback } from './platform/tauriSearchConceptFallback'")
+    expect(main).toContain('installTauriSearchConceptFallback()')
+    expect(main).not.toContain('const normalizeSearchPath =')
+    expect(main).not.toContain('const titleFromPath =')
+    expect(fallback).toContain('export const installTauriSearchConceptFallback')
+    expect(fallback).toContain('rust-search-concepts-command-unavailable')
+  })
 })

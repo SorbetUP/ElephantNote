@@ -24,4 +24,16 @@ describe('Tauri-only renderer runtime', () => {
     expect(bridge).toContain("mode !== 'tauri'")
     expect(bridge).not.toContain('tauri-compatible')
   })
+
+  it('keeps renderer path helpers extracted from the Tauri bootstrap entrypoint', () => {
+    const main = read('src/renderer/src/main.js')
+    const facade = read('src/renderer/src/platform/rendererPathFacade.js')
+
+    expect(main).toContain("import { ensureRendererPathFacade } from './platform/rendererPathFacade'")
+    expect(main).toContain('ensureRendererPathFacade()')
+    expect(main).not.toContain('const ensurePathResolve =')
+    expect(facade).toContain('export const ensureRendererPathFacade')
+    expect(facade).toContain('scope.path.resolve')
+    expect(facade).toContain('scope.path.relative')
+  })
 })

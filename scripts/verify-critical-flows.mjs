@@ -64,6 +64,7 @@ for (const file of [
   'src/renderer/src/platform/tauriElephantNoteBridge.js',
   'src/renderer/src/platform/tauriLocalIpcBridge.js',
   'src/renderer/src/platform/tauriMarkTextSaveBridge.js',
+  'src/renderer/src/platform/tauriSearchConceptFallback.js',
   'src/renderer/src/platform/piProviderInterface.js',
   'src/renderer/src/store/editor.js',
   'src-tauri/src/lib_min.rs',
@@ -136,18 +137,22 @@ has('agent/skill/tauri-ci-verifier/SKILL.md', 'A successful web build alone is n
 has('agent/skill/cross-platform-paths/SKILL.md', 'Hidden app folders must not show as normal notes in the main tree', 'hidden-folder path invariant')
 has('agent/skill/artifact-release-gate/SKILL.md', 'The expected artifact exists at the expected path', 'artifact existence rule')
 
-ordered('src/renderer/src/main.js', ['clearBootstrapFileUtilsFallbackForTauri()', 'installTauriRuntimeBridge()', 'ensureRendererPathFacade()', 'installTauriElephantNoteBridge()', 'installPiProviderBridge()', 'installTauriMarkTextSaveBridge()', 'installTauriLocalIpcBridge()'], 'renderer runtime bridge installation order')
+ordered('src/renderer/src/main.js', ['clearBootstrapFileUtilsFallbackForTauri()', 'installTauriRuntimeBridge()', 'ensureRendererPathFacade()', 'installTauriElephantNoteBridge()', 'installTauriSearchRuntimeGuards()', 'installTauriSearchConceptFallback()', 'installPiProviderBridge()', 'installTauriMarkTextSaveBridge()', 'installTauriLocalIpcBridge()'], 'renderer runtime bridge installation order')
 has('src/renderer/src/main.js', "import { installTauriRuntimeBridge } from './platform/tauriRuntimeBridge'", 'strict Tauri runtime bridge import')
 has('src/renderer/src/main.js', "import { ensureRendererPathFacade } from './platform/rendererPathFacade'", 'renderer path facade import')
+has('src/renderer/src/main.js', "import { installTauriSearchConceptFallback } from './platform/tauriSearchConceptFallback'", 'Tauri search concept fallback import')
 has('src/renderer/src/main.js', "const runtime = 'tauri'", 'Tauri-only renderer runtime selection')
 has('src/renderer/src/main.js', 'unsupported runtime', 'explicit unsupported runtime failure')
 lacks('src/renderer/src/main.js', 'tauri-compatible', 'legacy compatible renderer runtime')
 lacks('src/renderer/src/main.js', 'const ensurePathResolve =', 'inline renderer path facade')
+lacks('src/renderer/src/main.js', 'const normalizeSearchPath =', 'inline search concept path normalization')
 has('src/renderer/src/platform/rendererPathFacade.js', 'export const ensureRendererPathFacade', 'renderer path facade export')
 has('src/renderer/src/platform/rendererPathFacade.js', 'scope.path.resolve', 'renderer path resolve helper')
 has('src/renderer/src/platform/tauriRuntimeBridge.js', 'export const installTauriRuntimeBridge', 'strict Tauri runtime bridge export')
 has('src/renderer/src/platform/tauriRuntimeBridge.js', 'requires the Tauri runtime bridge', 'strict Tauri runtime bridge unavailable-runtime error')
-has('test/unit/specs/main/elephantnote/tauriOnlyRuntime.spec.js', 'keeps renderer path helpers extracted from the Tauri bootstrap entrypoint', 'renderer path facade regression test')
+has('src/renderer/src/platform/tauriSearchConceptFallback.js', 'export const installTauriSearchConceptFallback', 'Tauri search concept fallback export')
+has('src/renderer/src/platform/tauriSearchConceptFallback.js', 'rust-search-concepts-command-unavailable', 'Tauri search concept fallback reason')
+has('test/unit/specs/main/elephantnote/tauriOnlyRuntime.spec.js', 'keeps search concept fallback out of the renderer bootstrap entrypoint', 'Tauri search concept fallback regression test')
 ordered('src/renderer/src/platform/tauriLocalIpcBridge.js', ["'mt::response-file-save'", "'mt::response-file-save-as'", "'mt::open-file'", 'target.elephantnote.notes.read({ relativePath })', "dispatchLocalIpcEvent(target, 'mt::open-new-tab'"], 'Tauri local IPC routing')
 ordered('src/renderer/src/platform/tauriMarkTextSaveBridge.js', ['const writeViaRustBackend = async(target, pathname, markdown) => {', "return invoke('tauri_marktext_write_file', { pathname, content: markdown })", "ipc.send('mt::tab-saved', id)", "ipc.send('mt::tab-save-failure', id, message)"], 'Tauri save bridge result reporting')
 has('src-tauri/src/lib_min.rs', 'tauri_extra_commands::tauri_marktext_write_file', 'registered MarkText backend writer')

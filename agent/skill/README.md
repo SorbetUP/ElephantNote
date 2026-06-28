@@ -29,6 +29,21 @@ APEX step prompts live in `apex/steps/`:
 
 APEX saved-run template: `apex/templates/run-report.md`.
 
+## CI and verification skills
+
+Use these together with APEX whenever a change touches GitHub Actions, Tauri CI, tests, packaging, artifacts, dependencies, or runtime confidence:
+
+- `ci-architect/` — workflow topology, job boundaries, runner strategy, cache and artifact policy.
+- `github-actions-linter/` — workflow syntax, contexts, triggers, shell snippets, and reusable actions.
+- `github-actions-security/` — workflow permissions, PR safety, third-party actions, and CI security posture.
+- `runtime-ci-hardening/` — runtime behavior, generated files, logs, and cache boundaries.
+- `anti-fake-tests/` — tests must prove observable behavior and fail for real regressions.
+- `tauri-ci-verifier/` — Tauri build, Rust command, bridge, window, bundle, and platform checks.
+- `cross-platform-paths/` — path behavior across macOS, Linux, Windows, Android, Docker, Electron, and Tauri.
+- `ci-stability/` — intermittent CI failures, readiness checks, isolated temp data, and cleanup.
+- `supply-chain-verifier/` — dependencies, lockfiles, licenses, CodeQL, Dependabot, and generated artifacts.
+- `artifact-release-gate/` — bundle existence, launch evidence, checksums, artifact size, and diagnostics.
+
 ## ElephantNote project skills
 
 - `elephantnote-project/` — default project rules.

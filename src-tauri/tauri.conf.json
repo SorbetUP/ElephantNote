@@ -42,7 +42,8 @@
       "bin"
     ],
     "icon": [
-      "icons/icon.png"
+      "icons/icon.png",
+      "../static/icon.ico"
     ]
   },
   "plugins": {

@@ -6,6 +6,7 @@ import axios from './axios'
 import pinia from './store'
 import './assets/symbolIcon'
 import { installTauriRuntimeBridge } from './platform/tauriRuntimeBridge'
+import { ensureRendererPathFacade } from './platform/rendererPathFacade'
 import { installTauriFileUtilsPathGuards } from './platform/tauriFileUtilsPathGuards'
 import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
 import { installTauriSearchRuntimeGuards } from './platform/tauriSearchRuntimeGuards'
@@ -37,42 +38,6 @@ import { installGraphRuntimeFixes } from 'elephant-front/runtime/graphRuntimeFix
 import './assets/styles/index.css'
 import './assets/styles/printService.css'
 import 'elephant-front/styles/runtime-layout-fixes.css'
-
-const ensurePathResolve = () => {
-  window.path = window.path || {}
-  const normalize = window.path.normalize || ((value = '') => String(value || '').split('\\').join('/'))
-  const join = window.path.join || ((...parts) => normalize(parts.filter(Boolean).join('/')))
-  if (typeof window.path.normalize !== 'function') window.path.normalize = normalize
-  if (typeof window.path.join !== 'function') window.path.join = join
-  if (typeof window.path.resolve !== 'function') window.path.resolve = (...parts) => join(...parts)
-  if (typeof window.path.basename !== 'function') {
-    window.path.basename = (value = '') => {
-      const parts = normalize(value).split('/').filter(Boolean)
-      return parts.at(-1) || ''
-    }
-  }
-  if (typeof window.path.dirname !== 'function') {
-    window.path.dirname = (value = '') => {
-      const parts = normalize(value).split('/').filter(Boolean)
-      if (parts.length <= 1) return normalize(value).startsWith('/') ? '/' : '.'
-      return `${normalize(value).startsWith('/') ? '/' : ''}${parts.slice(0, -1).join('/')}`
-    }
-  }
-  if (typeof window.path.isAbsolute !== 'function') {
-    window.path.isAbsolute = (value = '') => normalize(value).startsWith('/')
-  }
-  if (typeof window.path.relative !== 'function') {
-    window.path.relative = (from = '', to = '') => {
-      const fromParts = normalize(from).split('/').filter(Boolean)
-      const toParts = normalize(to).split('/').filter(Boolean)
-      while (fromParts.length && toParts.length && fromParts[0] === toParts[0]) {
-        fromParts.shift()
-        toParts.shift()
-      }
-      return [...fromParts.map(() => '..'), ...toParts].join('/') || ''
-    }
-  }
-}
 
 const clearBootstrapFileUtilsFallbackForTauri = () => {
   if (window.__TAURI__ && window.fileUtils?.__elephantnoteBootstrapFallback) {
@@ -207,7 +172,7 @@ installRendererDiagnostics()
 globalThis.marktext = {}
 clearBootstrapFileUtilsFallbackForTauri()
 installTauriRuntimeBridge()
-ensurePathResolve()
+ensureRendererPathFacade()
 installTauriFileUtilsPathGuards()
 installTauriElephantNoteBridge()
 installTauriSearchRuntimeGuards()

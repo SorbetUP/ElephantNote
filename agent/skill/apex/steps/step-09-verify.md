@@ -1,14 +1,18 @@
 # APEX Step 09 — Verify
 
-Prove the feature works at the surface where the user experiences it. Verification is stronger than validation: it connects the passing checks to real user/runtime evidence.
+Prove the feature works at the surface where the user experiences it. Verification is stronger than validation: it connects passing checks to real user, runtime, workflow, or CI evidence.
+
+## Repository CI verification
+
+For repository changes, inspect remote workflow runs for the head commit when available. The verification report must name the commit, workflows checked, failed job or step when present, and the current state: green, failed, pending, running, or blocked.
 
 ## Procedure
 
-1. Launch the smallest relevant runtime: unit runner, Electron dev app, Tauri dev app, Android/mobile flow, Docker pair, or packaged app.
-2. Exercise the real user action or command path.
+1. Launch the smallest relevant runtime: unit runner, Electron dev app, Tauri dev app, Android/mobile flow, Docker pair, packaged app, or remote CI run.
+2. Exercise the real user action or command path when runtime behavior is in scope.
 3. Inspect logs when the feature involves async loading, IPC, filesystem, sync, local AI, packaging, or background jobs.
 4. Confirm the result persists across reload when persistence is part of the feature.
-5. Capture exact commands and observed evidence.
+5. Capture exact commands, workflow names, job status, and observed evidence.
 6. For skill-system work, verify the skill is indexed, routed from APEX, guarded by tests, and specific to the repo stack.
 
 ## ElephantNote examples
@@ -23,6 +27,7 @@ Prove the feature works at the surface where the user experiences it. Verificati
 
 ## CI verification skills
 
+- `../../ci-repair/SKILL.md` for the remote CI feedback loop.
 - `../../real-verification/SKILL.md` for final evidence reports.
 - `../../artifact-release-gate/SKILL.md` for bundle and release artifact evidence.
 - `../../runtime-ci-hardening/SKILL.md` for runtime command side effects and generated outputs.
@@ -35,14 +40,15 @@ Prove the feature works at the surface where the user experiences it. Verificati
 Report each claim as one of:
 
 - proven: command/evidence included;
-- partially proven: exact missing runtime or platform named;
+- partially proven: exact missing runtime, workflow, or platform named;
 - not proven: blocker named;
 - out of scope: reason named.
 
 ## Rules
 
-- Do not claim browser/app verification when only unit tests ran.
-- Report skipped verification and the concrete reason.
-- Do not claim CI proves a behavior unless the relevant job or script directly covers that behavior.
-- Do not claim artifact readiness without checking the actual generated path or diagnostics.
-- Do not claim skill integration without proving index, route, and guard coverage.
+- Browser/app verification needs browser/app evidence.
+- Unit tests alone do not prove a window opens or a packaged app works.
+- CI proof must name the relevant workflow, job, or script.
+- Artifact readiness needs the actual generated path or diagnostics.
+- Skill integration needs index, route, and guard coverage.
+- Pending or running CI remains unproven until it finishes.

@@ -39,6 +39,23 @@ for (const file of [
   'scripts/security-guardrails-core.mjs',
   'scripts/verify-security-guardrails.mjs',
   'scripts/sync-two-docker-smoke.mjs',
+  'agent/skill/README.md',
+  'agent/skill/apex/SKILL.md',
+  'agent/skill/apex/steps/step-05-validate.md',
+  'agent/skill/apex/steps/step-09-verify.md',
+  'agent/skill/elephantnote-ci/SKILL.md',
+  'agent/skill/ci-architect/SKILL.md',
+  'agent/skill/github-actions-linter/SKILL.md',
+  'agent/skill/github-actions-security/SKILL.md',
+  'agent/skill/runtime-ci-hardening/SKILL.md',
+  'agent/skill/anti-fake-tests/SKILL.md',
+  'agent/skill/tauri-ci-verifier/SKILL.md',
+  'agent/skill/cross-platform-paths/SKILL.md',
+  'agent/skill/ci-stability/SKILL.md',
+  'agent/skill/supply-chain-verifier/SKILL.md',
+  'agent/skill/artifact-release-gate/SKILL.md',
+  'src/main/config.js',
+  'src/preload/index.js',
   'src/renderer/src/main.js',
   'src/renderer/src/platform/bootstrapGlobals.js',
   'src/renderer/src/platform/tauriElephantNoteBridge.js',
@@ -68,6 +85,7 @@ for (const file of [
   'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
   'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
   'test/unit/realComponentImportSmoke.spec.js',
+  'test/unit/specs/main/elephantnote/agentSkills.spec.js',
   'vitest.config.js'
 ]) read(file)
 
@@ -84,6 +102,38 @@ has('.github/workflows/codeql.yml', 'github/codeql-action/analyze@v3', 'CodeQL w
 has('.github/dependabot.yml', 'package-ecosystem: cargo', 'Cargo dependency monitoring')
 has('package.json', '"security:guard": "node scripts/verify-security-guardrails.mjs"', 'security guard script')
 
+ordered('agent/skill/README.md', [
+  '## CI and verification skills',
+  '`ci-architect/`',
+  '`github-actions-linter/`',
+  '`github-actions-security/`',
+  '`anti-fake-tests/`',
+  '`tauri-ci-verifier/`',
+  '`artifact-release-gate/`'
+], 'CI verification skills listed in skill index')
+ordered('agent/skill/apex/SKILL.md', [
+  '## CI and verification routing',
+  '../ci-architect/SKILL.md',
+  '../anti-fake-tests/SKILL.md',
+  '../tauri-ci-verifier/SKILL.md',
+  '../artifact-release-gate/SKILL.md',
+  'the selected gate must prove the user-visible or runtime contract touched by the change'
+], 'APEX routes CI work to narrow verification skills')
+ordered('agent/skill/elephantnote-ci/SKILL.md', [
+  '## CI skill stack',
+  '../ci-architect/SKILL.md',
+  '../github-actions-linter/SKILL.md',
+  '../anti-fake-tests/SKILL.md',
+  '../tauri-ci-verifier/SKILL.md',
+  '../artifact-release-gate/SKILL.md'
+], 'ElephantNote CI skill routes to the new CI skill stack')
+has('agent/skill/anti-fake-tests/SKILL.md', 'A test is valid only if it checks an observable contract', 'anti-fake observable contract rule')
+has('agent/skill/tauri-ci-verifier/SKILL.md', 'A successful web build alone is not proof that the packaged app opens', 'Tauri packaged-app proof rule')
+has('agent/skill/cross-platform-paths/SKILL.md', 'Hidden app folders must not show as normal notes in the main tree', 'hidden-folder path invariant')
+has('agent/skill/artifact-release-gate/SKILL.md', 'The expected artifact exists at the expected path', 'artifact existence rule')
+
+ordered('src/main/config.js', ['contextIsolation: true', 'nodeIntegration: false', 'webSecurity: true', 'webPreferences: { ...secureWebPreferences }'], 'secure Electron window preferences')
+ordered('src/preload/index.js', ["contextBridge.exposeInMainWorld('electron'", "contextBridge.exposeInMainWorld('fileUtils'", "contextBridge.exposeInMainWorld('elephantnote'"], 'preload bridge exposure')
 ordered('src/renderer/src/main.js', ['clearBootstrapFileUtilsFallbackForTauri()', 'installRuntimeBridge()', 'installTauriElephantNoteBridge()', 'installPiProviderBridge()', 'installTauriMarkTextSaveBridge()', 'installTauriLocalIpcBridge()'], 'renderer runtime bridge installation order')
 ordered('src/renderer/src/platform/tauriLocalIpcBridge.js', ["'mt::response-file-save'", "'mt::response-file-save-as'", "'mt::open-file'", 'target.elephantnote.notes.read({ relativePath })', "dispatchLocalIpcEvent(target, 'mt::open-new-tab'"], 'Tauri local IPC routing')
 ordered('src/renderer/src/platform/tauriMarkTextSaveBridge.js', ['const writeViaRustBackend = async(target, pathname, markdown) => {', "return invoke('tauri_marktext_write_file', { pathname, content: markdown })", "ipc.send('mt::tab-saved', id)", "ipc.send('mt::tab-save-failure', id, message)"], 'Tauri save bridge result reporting')

@@ -1,7 +1,7 @@
 ---
 name: anti-fake-tests
 description: >
-  Design and review tests so they prove real behavior instead of fake, smoke-only,
+  Design and review tests so they prove real behavior instead of surface-only,
   placeholder, skipped, or misleading success. Use for every ElephantNote feature
   gate and APEX Tests/Validate phases.
 argument-hint: "<feature-or-test-change>"
@@ -9,7 +9,7 @@ argument-hint: "<feature-or-test-change>"
 
 # Anti-Fake Tests
 
-Use this skill whenever tests are added, changed, skipped, mocked, or used as proof that a feature works.
+Use this skill whenever tests are added, changed, skipped, mocked, or used as proof that a feature works. Also load `../test-integrity/SKILL.md` for any non-trivial test change.
 
 ## Test validity rule
 
@@ -42,10 +42,18 @@ Good evidence includes:
 - Sync: assert the second vault receives the real file and conflict behavior is explicit.
 - Search: assert the indexed note is returned by the intended exact or semantic path.
 
+## Required review questions
+
+- What exact product behavior is protected?
+- Would the test fail if the real implementation was disconnected?
+- Which mocks are present and why are they not replacing the behavior under test?
+- What assertion proves the observable contract?
+- Which CI job or local command runs the test?
+
 ## APEX integration
 
 - Analyze: identify the real observable contract.
 - Plan: write the failing test before or beside the implementation.
 - Execute: do not loosen assertions to match broken behavior.
 - Validate: run the narrow test and then the relevant suite.
-- eXamine: try to make the test pass with a fake implementation; if it still passes, rewrite it.
+- eXamine: try to make the test pass with a disconnected implementation; if it still passes, rewrite it.

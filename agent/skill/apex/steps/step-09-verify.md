@@ -17,8 +17,19 @@ Prove the feature works at the surface where the user experiences it.
 - Tauri: build or dev launch opens the window and exposes required commands.
 - Sync: mutate vault A, sync, verify vault B receives the real file and conflict behavior is explicit.
 - Search/wiki/graph: create notes, index, query, verify exact and semantic paths return real notes.
+- CI: show which workflow/job/script proves the changed contract and which artifact/log records the result.
+
+## CI verification skills
+
+- `../../real-verification/SKILL.md` for final evidence reports.
+- `../../artifact-release-gate/SKILL.md` for bundle and release artifact evidence.
+- `../../runtime-ci-hardening/SKILL.md` for runtime command side effects and generated outputs.
+- `../../supply-chain-verifier/SKILL.md` for dependency, lockfile, license, and scanner evidence.
+- `../../github-actions-security/SKILL.md` for workflow security review during eXamine.
 
 ## Rules
 
 - Do not claim browser/app verification when only unit tests ran.
 - Report skipped verification and the concrete reason.
+- Do not claim CI proves a behavior unless the relevant job or script directly covers that behavior.
+- Do not claim artifact readiness without checking the actual generated path or diagnostics.

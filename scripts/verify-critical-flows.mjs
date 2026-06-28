@@ -39,6 +39,21 @@ for (const file of [
   'scripts/security-guardrails-core.mjs',
   'scripts/verify-security-guardrails.mjs',
   'scripts/sync-two-docker-smoke.mjs',
+  'agent/skill/README.md',
+  'agent/skill/apex/SKILL.md',
+  'agent/skill/apex/steps/step-05-validate.md',
+  'agent/skill/apex/steps/step-09-verify.md',
+  'agent/skill/elephantnote-ci/SKILL.md',
+  'agent/skill/ci-architect/SKILL.md',
+  'agent/skill/github-actions-linter/SKILL.md',
+  'agent/skill/github-actions-security/SKILL.md',
+  'agent/skill/runtime-ci-hardening/SKILL.md',
+  'agent/skill/anti-fake-tests/SKILL.md',
+  'agent/skill/tauri-ci-verifier/SKILL.md',
+  'agent/skill/cross-platform-paths/SKILL.md',
+  'agent/skill/ci-stability/SKILL.md',
+  'agent/skill/supply-chain-verifier/SKILL.md',
+  'agent/skill/artifact-release-gate/SKILL.md',
   'src/main/config.js',
   'src/preload/index.js',
   'src/renderer/src/main.js',
@@ -69,6 +84,7 @@ for (const file of [
   'test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js',
   'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
   'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
+  'test/unit/specs/main/elephantnote/agentSkills.spec.js',
   'vitest.config.js'
 ]) read(file)
 
@@ -84,6 +100,36 @@ has('.github/workflows/tauri-ci.yml', 'cargo check --manifest-path src-tauri/Car
 has('.github/workflows/codeql.yml', 'github/codeql-action/analyze@v3', 'CodeQL workflow')
 has('.github/dependabot.yml', 'package-ecosystem: cargo', 'Cargo dependency monitoring')
 has('package.json', '"security:guard": "node scripts/verify-security-guardrails.mjs"', 'security guard script')
+
+ordered('agent/skill/README.md', [
+  '## CI and verification skills',
+  '`ci-architect/`',
+  '`github-actions-linter/`',
+  '`github-actions-security/`',
+  '`anti-fake-tests/`',
+  '`tauri-ci-verifier/`',
+  '`artifact-release-gate/`'
+], 'CI verification skills listed in skill index')
+ordered('agent/skill/apex/SKILL.md', [
+  '## CI and verification routing',
+  '../ci-architect/SKILL.md',
+  '../anti-fake-tests/SKILL.md',
+  '../tauri-ci-verifier/SKILL.md',
+  '../artifact-release-gate/SKILL.md',
+  'the selected gate must prove the user-visible or runtime contract touched by the change'
+], 'APEX routes CI work to narrow verification skills')
+ordered('agent/skill/elephantnote-ci/SKILL.md', [
+  '## CI skill stack',
+  '../ci-architect/SKILL.md',
+  '../github-actions-linter/SKILL.md',
+  '../anti-fake-tests/SKILL.md',
+  '../tauri-ci-verifier/SKILL.md',
+  '../artifact-release-gate/SKILL.md'
+], 'ElephantNote CI skill routes to the new CI skill stack')
+has('agent/skill/anti-fake-tests/SKILL.md', 'A test is valid only if it checks an observable contract', 'anti-fake observable contract rule')
+has('agent/skill/tauri-ci-verifier/SKILL.md', 'A successful web build alone is not proof that the packaged app opens', 'Tauri packaged-app proof rule')
+has('agent/skill/cross-platform-paths/SKILL.md', 'Hidden app folders must not show as normal notes in the main tree', 'hidden-folder path invariant')
+has('agent/skill/artifact-release-gate/SKILL.md', 'The expected artifact exists at the expected path', 'artifact existence rule')
 
 ordered('src/main/config.js', ['contextIsolation: true', 'nodeIntegration: false', 'webSecurity: true', 'webPreferences: { ...secureWebPreferences }'], 'secure Electron window preferences')
 ordered('src/preload/index.js', ["contextBridge.exposeInMainWorld('electron'", "contextBridge.exposeInMainWorld('fileUtils'", "contextBridge.exposeInMainWorld('elephantnote'"], 'preload bridge exposure')

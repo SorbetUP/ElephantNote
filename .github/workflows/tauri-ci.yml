@@ -28,7 +28,7 @@ jobs:
       CARGO_TERM_COLOR: always
       DEBIAN_FRONTEND: noninteractive
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Tauri Linux dependencies
         shell: bash

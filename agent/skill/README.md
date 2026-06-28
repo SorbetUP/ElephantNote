@@ -10,7 +10,17 @@ This folder contains repository-local agent skills for ElephantNote.
 - `clean-code-ponytail/` — adapter that routes clean-code requests to Ponytail.
 - `real-verification/` — prove features work with real commands, logs, and UI/runtime checks.
 - `root-cause-debugging/` — diagnose from code paths and logs before patching.
-- `ci-repair/` — fix CI honestly without fake green gates.
+- `ci-repair/` — fix CI honestly with real evidence and meaningful gates.
+- `connector-retry-discipline/` — diagnose connector write failures and retry with a different safer strategy.
+
+## Delivery integrity skills
+
+Use these before reporting success, changing tests, claiming a feature works, or marking an APEX run complete:
+
+- `truthful-delivery/` — classify claims as proven, partially proven, not proven, blocked, or out of scope.
+- `real-implementation/` — require real UI/API/backend/runtime/persistence wiring before claiming implementation.
+- `test-integrity/` — tests must fail for the broken behavior they claim to protect.
+- `completion-audit/` — classify every acceptance criterion before final delivery.
 
 ## Language and runtime skills
 

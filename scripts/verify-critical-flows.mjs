@@ -157,7 +157,7 @@ ordered('Elephant/front/app/services/elephantnoteClient/domainClients.js', ['con
 has('test/unit/elephantnote/domainClients.spec.js', 'does not rebuild chat search when the model already produced an answer', 'chat search rebuild throttling test')
 
 ordered('Elephant/front/app/components/editor/NoteEditorHost.vue', ["import { elephantnoteClient } from '../../services/elephantnoteClient'", 'const AUTOSAVE_POLL_MS', 'const autosaveDelayFor', 'elephantnoteClient.notes.write({', 'noteSaveInterval = window.setInterval'], 'editor autosave persistence')
-ordered('Elephant/front/app/components/editor/NoteEditorHost.vue', ['const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {', 'const writableImage = imageBlob || blob', 'await window.fileUtils.writeFile(targetPath)', 'if (excalidrawInsertOnSave.value) {'], 'Excalidraw byte persistence')
+ordered('Elephant/front/app/components/editor/NoteEditorHost.vue', ['const saveExcalidraw = async({ imageBlob, blob, sceneBlob, fileName } = {}) => {', 'const writableImage = imageBlob || blob', 'await window.fileUtils.writeFile(targetPath, writableImage)', 'if (excalidrawInsertOnSave.value) {'], 'Excalidraw byte persistence')
 ordered('Elephant/front/app/components/editor/ExcalidrawDialog.vue', ['const blobToBytes = async(blob) => new Uint8Array(await blob.arrayBuffer())', 'imageBlob: await blobToBytes(blob)', 'sceneBlob: await sceneBlob.text()'], 'Excalidraw writable payload')
 ordered('Elephant/front/app/utils/noteCardView.js', ['const stripInlineFrontmatterPrefix', 'const metadataPairPattern = new RegExp', 'export const getNoteCardExcerpt = (entry) => cleanPreview'], 'note-card preview frontmatter cleanup')
 

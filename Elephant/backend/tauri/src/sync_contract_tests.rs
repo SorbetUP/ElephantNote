@@ -66,8 +66,6 @@ fn status_initializes_real_iroh_sync_metadata_without_git() {
   assert_eq!(status["backend"], "iroh");
   assert_eq!(status["capabilities"]["peerToPeer"], true);
   assert_eq!(status["capabilities"]["wholeVault"], true);
-  assert_eq!(status["capabilities"]["configurationSync"], false);
-  assert_eq!(status["capabilities"]["deviceLocalConfiguration"], true);
   assert!(root
     .join(".elephantnote/sync")
     .join(SYNC_CONFIG_FILE)

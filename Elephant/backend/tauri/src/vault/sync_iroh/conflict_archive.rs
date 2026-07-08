@@ -206,6 +206,14 @@ fn conflict_settings_value(
   }))
 }
 
+pub fn sync_conflict_settings_peek(
+  vault: super::types::VaultDescriptor,
+) -> Result<serde_json::Value, String> {
+  let cwd = std::path::PathBuf::from(&vault.path);
+  let settings = read_conflict_settings(&cwd);
+  conflict_settings_value(&vault, &settings, &ConflictCleanupReport::default())
+}
+
 pub fn sync_conflict_settings_get(
   vault: super::types::VaultDescriptor,
 ) -> Result<serde_json::Value, String> {
@@ -254,6 +262,16 @@ mod conflict_archive_tests {
     ))
   }
 
+  fn test_vault(root: &std::path::Path) -> crate::vault::types::VaultDescriptor {
+    crate::vault::types::VaultDescriptor {
+      id: "conflict-archive-test".to_string(),
+      name: "Conflict Archive Test".to_string(),
+      path: root.to_string_lossy().to_string(),
+      icon: String::new(),
+      last_opened_at: "0".to_string(),
+    }
+  }
+
   #[test]
   fn retention_defaults_to_three_days_and_is_device_local() {
     let root = temp_root();
@@ -283,6 +301,20 @@ mod conflict_archive_tests {
     assert_eq!(report.deleted_files, 0);
     assert_eq!(report.remaining_files, 1);
     assert!(recent.exists());
+    let _ = std::fs::remove_dir_all(root);
+  }
+
+  #[test]
+  fn read_only_peek_lists_archive_without_removing_files() {
+    let root = temp_root();
+    let archive = conflict_archive_root(&root);
+    std::fs::create_dir_all(&archive).unwrap();
+    let file = archive.join("Note.device-conflict.md");
+    std::fs::write(&file, "conflict").unwrap();
+    let value = sync_conflict_settings_peek(test_vault(&root)).unwrap();
+    assert_eq!(value["storedFiles"].as_u64(), Some(1));
+    assert_eq!(value["deletedFiles"].as_u64(), Some(0));
+    assert!(file.exists());
     let _ = std::fs::remove_dir_all(root);
   }
 

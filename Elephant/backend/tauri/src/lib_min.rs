@@ -103,6 +103,8 @@ pub fn run() {
       sync_commands::iroh_sync_run,
       sync_commands::iroh_sync_conflict_settings_get,
       sync_commands::iroh_sync_conflict_settings_set,
+      sync_commands::iroh_sync_conflict_restore,
+      sync_commands::iroh_sync_conflict_delete,
       debug_commands::tauri_debug_log,
       state::tauri_prefs_get,
       state::tauri_prefs_all,

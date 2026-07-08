@@ -131,8 +131,11 @@ pub async fn receive_file(
   let mut total = 0_u64;
   loop {
     let read = recv.read(&mut buffer).await.map_err(|error| error.to_string())?;
-    if read == 0 {
+    let Some(read) = read else {
       break;
+    };
+    if read == 0 {
+      continue;
     }
     file.write_all(&buffer[..read]).await.map_err(|error| error.to_string())?;
     total += read as u64;

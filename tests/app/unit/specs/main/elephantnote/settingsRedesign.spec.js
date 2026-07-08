@@ -38,7 +38,7 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('aiInitialPage.value = result.subpage')
   })
 
-  it('uses a minimal flat navigation and treats Sites as its own service', () => {
+  it('uses a minimal flat navigation and keeps Sites separate from Import', () => {
     const source = readSettings()
 
     expect(source).toContain("{ id: 'sites', label: 'Sites', icon: Globe2 }")

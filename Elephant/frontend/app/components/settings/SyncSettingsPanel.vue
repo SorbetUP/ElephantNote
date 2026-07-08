@@ -117,7 +117,8 @@
 
       <p class="en-conflict-note">
         This setting is local to each device. The <code>.conflit/</code> folder is excluded from normal manifests, so
-        automatic cleanup never deletes a note or a conflict copy on another device.
+        automatic cleanup never deletes a note or a conflict copy on another device. Restoring a copy never overwrites
+        the current note: ElephantNote creates a separate restored file when the original path already exists.
       </p>
 
       <div class="en-sync-list">
@@ -132,7 +133,23 @@
             <strong>{{ entry.path }}</strong>
             <p>{{ formatBytes(entry.size) }} · archived {{ formatTimestamp(entry.modifiedMs) }}</p>
           </div>
-          <span class="en-settings-pill">Temporary</span>
+          <div class="en-sync-row-actions">
+            <button
+              type="button"
+              :disabled="loading || conflictActionPath === entry.path"
+              @click="restoreConflict(entry)"
+            >
+              {{ conflictActionPath === entry.path ? 'Working…' : 'Restore' }}
+            </button>
+            <button
+              type="button"
+              class="danger"
+              :disabled="loading || conflictActionPath === entry.path"
+              @click="deleteConflict(entry)"
+            >
+              Delete
+            </button>
+          </div>
         </article>
       </div>
     </section>
@@ -179,6 +196,7 @@ const conflictMessage = ref('')
 const loading = ref(false)
 const syncing = ref(false)
 const copied = ref(false)
+const conflictActionPath = ref('')
 let refreshTimer = null
 
 const hasVault = computed(() => Boolean(props.activeVaultPath))
@@ -343,6 +361,40 @@ const saveRetention = async () => {
   }
 }
 
+const restoreConflict = async (entry) => {
+  if (!entry?.path || loading.value) return
+  loading.value = true
+  conflictActionPath.value = entry.path
+  conflictMessage.value = `Restoring ${entry.path}…`
+  try {
+    const result = await irohSyncClient.restoreConflict(entry.path)
+    conflictSettings.value = result
+    conflictMessage.value = `Restored as ${result?.restoredPath || 'a separate vault file'}.`
+  } catch (error) {
+    conflictMessage.value = errorMessage(error, 'Unable to restore this conflict copy.')
+  } finally {
+    conflictActionPath.value = ''
+    loading.value = false
+  }
+}
+
+const deleteConflict = async (entry) => {
+  if (!entry?.path || loading.value) return
+  if (!window.confirm(`Delete the temporary conflict copy "${entry.path}"?`)) return
+  loading.value = true
+  conflictActionPath.value = entry.path
+  conflictMessage.value = `Deleting ${entry.path}…`
+  try {
+    conflictSettings.value = await irohSyncClient.deleteConflict(entry.path)
+    conflictMessage.value = 'Temporary conflict copy deleted from this device.'
+  } catch (error) {
+    conflictMessage.value = errorMessage(error, 'Unable to delete this conflict copy.')
+  } finally {
+    conflictActionPath.value = ''
+    loading.value = false
+  }
+}
+
 watch(() => props.activeVaultPath, () => {
   inviteCode.value = ''
   incomingInvite.value = ''
@@ -377,6 +429,7 @@ onBeforeUnmount(() => {
 .en-sync-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 14px; background: var(--en-surface, #fff); }
 .en-sync-row.muted { opacity: 0.72; }
 .en-sync-row p { margin: 4px 0 0; color: var(--en-muted, #475467); word-break: break-word; }
+.en-sync-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .en-conflict-settings { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
 .en-conflict-settings label { display: flex; flex-direction: column; gap: 7px; }
 .en-inline-number { display: flex; align-items: center; gap: 8px; }
@@ -387,5 +440,6 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 @media (max-width: 820px) {
   .en-sync-summary, .en-pair-grid { grid-template-columns: 1fr; }
   .en-sync-heading, .en-sync-row { align-items: flex-start; flex-direction: column; }
+  .en-sync-row-actions { width: 100%; }
 }
 </style>

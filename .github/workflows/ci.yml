@@ -223,7 +223,19 @@ jobs:
         run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
 
       - name: Cargo check
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features 2>&1 | tee cargo-check-output.txt
+
+      - name: Upload Cargo check diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-check-output
+          path: cargo-check-output.txt
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Cargo tests
         run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features

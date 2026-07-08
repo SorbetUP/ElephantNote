@@ -173,10 +173,74 @@
 .en-theme-card-check { position: absolute; top: 7px; right: 7px; width: 19px; height: 19px; display: grid; place-items: center; border-radius: 99px; background: var(--en-primary, #2563eb); color: #fff; }
 .en-theme-card-check svg { width: 11px; height: 11px; }
 
-.en-switch { width: 42px; height: 24px; flex: 0 0 auto; padding: 2px; border: 0; border-radius: 99px; background: var(--en-border-strong, #aebacd); cursor: pointer; transition: background 140ms ease; }
-.en-switch span { width: 20px; height: 20px; display: block; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(2, 6, 23, 0.24); transition: transform 170ms ease; }
-.en-switch.active { background: var(--en-primary, #2563eb); }
-.en-switch.active span { transform: translateX(18px); }
+/* One rendered switch implementation for the root page and every nested settings panel. */
+.en-settings-panel .en-switch,
+.en-settings-panel :deep(.en-ai-switch) {
+  position: relative !important;
+  display: block !important;
+  box-sizing: border-box !important;
+  width: 42px !important;
+  min-width: 42px !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  flex: 0 0 42px !important;
+  padding: 2px !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--en-border-strong, #aebacd) !important;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.en-settings-panel .en-switch > span,
+.en-settings-panel :deep(.en-ai-switch > span) {
+  position: absolute !important;
+  top: 2px !important;
+  left: 2px !important;
+  display: block !important;
+  width: 20px !important;
+  height: 20px !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+  box-shadow: 0 1px 4px rgba(2, 6, 23, 0.24) !important;
+  transform: translateX(0) !important;
+  transition: transform 170ms ease !important;
+}
+
+.en-settings-panel .en-switch.active,
+.en-settings-panel :deep(.en-ai-switch.active) {
+  background: var(--en-primary, #2563eb) !important;
+}
+
+.en-settings-panel .en-switch.active > span,
+.en-settings-panel :deep(.en-ai-switch.active > span) {
+  transform: translateX(18px) !important;
+}
+
+.en-settings-panel :deep(.en-ai-switch.small) {
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  flex-basis: 34px !important;
+}
+
+.en-settings-panel :deep(.en-ai-switch.small > span) {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.en-settings-panel :deep(.en-ai-switch.small.active > span) {
+  transform: translateX(14px) !important;
+}
+
+.en-settings-panel .en-switch:disabled,
+.en-settings-panel :deep(.en-ai-switch:disabled) {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
 
 .en-range-control { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 .en-range-control input { width: 156px; accent-color: var(--en-primary, #2563eb); }

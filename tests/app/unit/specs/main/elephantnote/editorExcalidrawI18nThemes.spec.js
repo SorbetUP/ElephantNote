@@ -13,6 +13,7 @@ const i18n = () => read('Elephant/frontend/src/renderer/src/i18n/index.js')
 const settings = () => read('Elephant/frontend/app/components/settings/SettingsPanel.vue')
 const appShell = () => read('Elephant/frontend/app/components/shell/AppShell.vue')
 const excalidrawDialog = () => read('Elephant/frontend/app/components/editor/ExcalidrawDialog.vue')
+const graphView = () => read('Elephant/frontend/app/components/views/AtomicGraphView.vue')
 const imageToolbar = () => read('Elephant/frontend/src/muya/lib/ui/imageToolbar/config.js')
 const noteTopBar = () => read('Elephant/frontend/app/components/editor/NoteEditorTopBar.vue')
 const noteFooter = () => read('Elephant/frontend/app/components/editor/NoteEditorFooter.vue')
@@ -113,16 +114,26 @@ describe('expanded ElephantNote experience', () => {
     expect(source).not.toContain('fill="#6C63FF"')
   })
 
-  it('normalizes every app theme to Excalidraw light/dark and adds real save shortcuts', () => {
+  it('keeps Excalidraw synchronized with the app light or dark mode', () => {
     const source = excalidrawDialog()
 
-    expect(source).toContain('getThemeMode(props.theme)')
-    expect(source).toContain('useI18n')
+    expect(source).toContain('const excalidrawTheme = computed(() => getThemeMode(props.theme))')
+    expect(source).toContain('theme: excalidrawTheme.value')
+    expect(source).toContain('watch(excalidrawTheme, (theme) =>')
+    expect(source).toContain('api.updateScene({')
+    expect(source).toContain('viewBackgroundColor: getExcalidrawBackgroundColor(theme)')
+    expect(source).toContain('toggleTheme: false')
     expect(source).toContain("event.key.toLowerCase() === 's'")
     expect(source).toContain("event.key === 'Escape'")
-    expect(source).toContain('class="en-excalidraw-mark"')
-    expect(source).toContain('class="en-excalidraw-hint"')
     expect(source).toContain('exportExcalidrawSceneBlob')
+  })
+
+  it('keeps graph settings hidden until the user opens them', () => {
+    const source = graphView()
+
+    expect(source).toContain('const panelOpen = ref(false)')
+    expect(source).toContain('@click="panelOpen = !panelOpen"')
+    expect(source).toContain('v-if="panelOpen"')
   })
 
   it('keeps note behavior intact while centralizing visual and translated chrome', () => {

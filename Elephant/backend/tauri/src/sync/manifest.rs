@@ -67,6 +67,10 @@ pub fn safe_join(root: &Path, relative: &str) -> Result<PathBuf, String> {
   Ok(root.join(path))
 }
 
+fn path_is_or_is_below(normalized: &str, root: &str) -> bool {
+  normalized == root || normalized.starts_with(&format!("{root}/"))
+}
+
 fn excluded(relative: &Path, name: &str) -> bool {
   if matches!(name, ".git" | "node_modules" | ".DS_Store" | "Thumbs.db") {
     return true;
@@ -80,12 +84,18 @@ fn excluded(relative: &Path, name: &str) -> bool {
   }
 
   let normalized = normalize_relative(relative);
-  normalized == ".elephantnote/sync"
-    || normalized.starts_with(".elephantnote/sync/")
-    || normalized == ".elephantnote/cache"
-    || normalized.starts_with(".elephantnote/cache/")
-    || normalized == ".elephantnote/index"
-    || normalized.starts_with(".elephantnote/index/")
+
+  // Device-local configuration must never cross between desktop and mobile.
+  // `.config` contains provider/runtime settings, while the ElephantNote
+  // config, model selection, and state directories depend on the device UI
+  // and locally available runtimes.
+  path_is_or_is_below(&normalized, ".config")
+    || path_is_or_is_below(&normalized, ".elephantnote/config")
+    || path_is_or_is_below(&normalized, ".elephantnote/models")
+    || path_is_or_is_below(&normalized, ".elephantnote/state")
+    || path_is_or_is_below(&normalized, ".elephantnote/sync")
+    || path_is_or_is_below(&normalized, ".elephantnote/cache")
+    || path_is_or_is_below(&normalized, ".elephantnote/index")
 }
 
 pub fn hash_file(path: &Path) -> Result<String, String> {
@@ -179,16 +189,41 @@ mod tests {
   }
 
   #[test]
-  fn manifest_includes_assets_but_excludes_sync_runtime() {
-    let root = std::env::temp_dir().join(format!("elephant-manifest-{}", std::process::id()));
+  fn manifest_includes_assets_but_excludes_device_local_data() {
+    let root = std::env::temp_dir().join(format!(
+      "elephant-manifest-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+    ));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join(".assets")).unwrap();
+    fs::create_dir_all(root.join(".config/provider")).unwrap();
+    fs::create_dir_all(root.join(".elephantnote/config")).unwrap();
+    fs::create_dir_all(root.join(".elephantnote/models")).unwrap();
+    fs::create_dir_all(root.join(".elephantnote/state")).unwrap();
     fs::create_dir_all(root.join(".elephantnote/sync")).unwrap();
     fs::write(root.join(".assets/image.png"), b"image").unwrap();
-    fs::write(root.join(".elephantnote/sync/state.json"), b"state").unwrap();
+    fs::write(root.join(".config/provider/provider.json"), b"provider").unwrap();
+    fs::write(root.join(".elephantnote/config/workspace.json"), b"workspace").unwrap();
+    fs::write(root.join(".elephantnote/models/models.json"), b"models").unwrap();
+    fs::write(root.join(".elephantnote/state/ui.json"), b"state").unwrap();
+    fs::write(root.join(".elephantnote/sync/state.json"), b"sync").unwrap();
+
     let manifest = scan_vault(&root).unwrap();
+
     assert!(manifest.files.contains_key(".assets/image.png"));
+    assert!(!manifest.files.contains_key(".config/provider/provider.json"));
+    assert!(!manifest.files.contains_key(".elephantnote/config/workspace.json"));
+    assert!(!manifest.files.contains_key(".elephantnote/models/models.json"));
+    assert!(!manifest.files.contains_key(".elephantnote/state/ui.json"));
     assert!(!manifest.files.contains_key(".elephantnote/sync/state.json"));
+    assert!(!manifest.directories.contains(".config"));
+    assert!(!manifest.directories.contains(".elephantnote/config"));
+    assert!(!manifest.directories.contains(".elephantnote/models"));
+    assert!(!manifest.directories.contains(".elephantnote/state"));
     let _ = fs::remove_dir_all(root);
   }
 

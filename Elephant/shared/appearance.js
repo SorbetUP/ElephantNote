@@ -1,3 +1,4 @@
+/* eslint-disable @stylistic/object-property-newline */
 export const ELEPHANTNOTE_THEME_STORAGE_KEY = 'elephantnote:theme'
 export const ELEPHANTNOTE_DEFAULT_THEME = 'light'
 

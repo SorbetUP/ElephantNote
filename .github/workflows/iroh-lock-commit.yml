@@ -1,0 +1,33 @@
+name: Commit Iroh Cargo Lock
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  commit-lock:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Resolve Cargo lockfile
+        run: cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
+      - name: Commit resolved lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- Elephant/backend/tauri/Cargo.lock; then
+            echo "Cargo.lock is already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Elephant/backend/tauri/Cargo.lock
+          git commit -m "build: lock Iroh sync dependencies"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}

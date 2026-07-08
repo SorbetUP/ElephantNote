@@ -12,8 +12,9 @@ const appMessages = () => read('Elephant/frontend/app/i18n/appMessages.js')
 const i18n = () => read('Elephant/frontend/src/renderer/src/i18n/index.js')
 const settings = () => read('Elephant/frontend/app/components/settings/SettingsPanel.vue')
 const appShell = () => read('Elephant/frontend/app/components/shell/AppShell.vue')
+const mainContent = () => read('Elephant/frontend/app/components/shell/MainContent.vue')
 const excalidrawDialog = () => read('Elephant/frontend/app/components/editor/ExcalidrawDialog.vue')
-const graphView = () => read('Elephant/frontend/app/components/views/AtomicGraphView.vue')
+const graphHost = () => read('Elephant/frontend/app/components/views/GraphViewHost.vue')
 const imageToolbar = () => read('Elephant/frontend/src/muya/lib/ui/imageToolbar/config.js')
 const noteTopBar = () => read('Elephant/frontend/app/components/editor/NoteEditorTopBar.vue')
 const noteFooter = () => read('Elephant/frontend/app/components/editor/NoteEditorFooter.vue')
@@ -128,12 +129,15 @@ describe('expanded ElephantNote experience', () => {
     expect(source).toContain('exportExcalidrawSceneBlob')
   })
 
-  it('keeps graph settings hidden until the user opens them', () => {
-    const source = graphView()
+  it('keeps graph settings hidden until the user explicitly opens them', () => {
+    const host = graphHost()
+    const content = mainContent()
 
-    expect(source).toContain('const panelOpen = ref(false)')
-    expect(source).toContain('@click="panelOpen = !panelOpen"')
-    expect(source).toContain('v-if="panelOpen"')
+    expect(content).toContain('<graph-view-host v-else-if=')
+    expect(content).toContain("import GraphViewHost from '../views/GraphViewHost.vue'")
+    expect(host).toContain("root?.querySelector?.('.en-graph-settings-panel')")
+    expect(host).toContain("root.querySelector?.('.en-graph-floating-icon.active')?.click()")
+    expect(host).toContain('without bypassing or duplicating the component\'s state machine')
   })
 
   it('keeps note behavior intact while centralizing visual and translated chrome', () => {

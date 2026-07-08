@@ -101,6 +101,8 @@ pub fn run() {
       sync_commands::iroh_sync_status,
       sync_commands::iroh_sync_enqueue,
       sync_commands::iroh_sync_run,
+      sync_commands::iroh_sync_conflict_settings_get,
+      sync_commands::iroh_sync_conflict_settings_set,
       debug_commands::tauri_debug_log,
       state::tauri_prefs_get,
       state::tauri_prefs_all,

@@ -64,14 +64,30 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Run two-endpoint Iroh vault synchronization
+        id: iroh-smoke
         shell: bash
         run: |
-          set -euxo pipefail
-          log_file="$(mktemp)"
+          set -uo pipefail
+          log_file="iroh-smoke-output.txt"
+          set +e
           cargo test \
             --manifest-path Elephant/backend/tauri/Cargo.toml \
             --lib \
             --no-default-features \
             two_real_iroh_endpoints_exchange_modify_and_delete_vault_content \
             -- --nocapture 2>&1 | tee "$log_file"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$test_status" -ne 0 ]; then
+            exit "$test_status"
+          fi
           grep -Eq 'test result: ok\. 1 passed; 0 failed' "$log_file"
+
+      - name: Upload Iroh smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iroh-two-device-smoke-output
+          path: iroh-smoke-output.txt
+          if-no-files-found: error
+          retention-days: 14

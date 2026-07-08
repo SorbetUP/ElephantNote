@@ -1,4 +1,5 @@
 import { createI18n } from 'vue-i18n'
+import englishLocaleCatalog from '../../../../../assets/static/locales/en.min.json'
 import bus from '../bus'
 import { isPortableRuntime, readPortablePreference } from '../platform/preferenceStorage'
 import {
@@ -126,12 +127,9 @@ const createFallbackEnglishTranslations = () => ({
 
 const loadLocaleMessages = (locale) => {
   const normalized = normalizeAppLocale(locale)
+  if (normalized === APP_DEFAULT_LOCALE) return {}
   try {
-    const exact = globalThis.window?.i18nUtils?.loadTranslations?.(normalized) || {}
-    const base = normalized.includes('-')
-      ? globalThis.window?.i18nUtils?.loadTranslations?.(normalized.split('-')[0]) || {}
-      : {}
-    return mergeMessages(base, exact)
+    return globalThis.window?.i18nUtils?.loadTranslations?.(normalized) || {}
   } catch (error) {
     console.warn(`⚠️ Failed to load ${normalized} translations, using fallback messages`, error)
     return {}
@@ -140,14 +138,16 @@ const loadLocaleMessages = (locale) => {
 
 const englishFallback = mergeMessages(
   createFallbackEnglishTranslations(),
-  mergeMessages(loadLocaleMessages('en'), getAppMessages('en'))
+  mergeMessages(englishLocaleCatalog, getAppMessages('en'))
 )
 const initialPreference = globalThis.localStorage?.getItem(APP_LANGUAGE_STORAGE_KEY) || 'system'
 const initialLocale = resolveStoredLocale(initialPreference)
-const initialMessages = mergeMessages(
-  englishFallback,
-  mergeMessages(loadLocaleMessages(initialLocale), getAppMessages(initialLocale))
-)
+const initialMessages = initialLocale === APP_DEFAULT_LOCALE
+  ? englishFallback
+  : mergeMessages(
+      englishFallback,
+      mergeMessages(loadLocaleMessages(initialLocale), getAppMessages(initialLocale))
+    )
 const loadedLocales = new Set(['en', initialLocale])
 
 const i18n = createI18n({

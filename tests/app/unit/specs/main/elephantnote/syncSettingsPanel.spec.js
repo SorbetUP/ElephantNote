@@ -8,6 +8,7 @@ const readSyncSettingsPanel = () => read('Elephant/frontend/app/components/setti
 const readIrohClient = () => read('Elephant/frontend/app/services/irohSyncClient.js')
 const readNavigationBar = () => read('Elephant/frontend/app/components/navigation/NavigationBar.vue')
 const readNavigationStore = () => read('Elephant/frontend/app/stores/navigationStore.js')
+const readPackage = () => JSON.parse(read('package.json'))
 
 describe('ElephantNote Iroh UI integration', () => {
   it('uses the real Iroh pairing and synchronization commands', () => {
@@ -23,6 +24,55 @@ describe('ElephantNote Iroh UI integration', () => {
     expect(client).toContain("invoke('tauri_sync_create_invite'")
     expect(client).toContain("invoke('tauri_sync_accept_invite'")
     expect(client).toContain("invoke('tauri_sync_run'")
+  })
+
+  it('presents synchronization as one understandable page instead of a nested settings dashboard', () => {
+    const panel = readSyncSettingsPanel()
+
+    expect(panel).toContain('Last synchronization completed')
+    expect(panel).toContain('<h4>Devices</h4>')
+    expect(panel).toContain('<h4>Conflict protection</h4>')
+    expect(panel).toContain('Settings2 aria-hidden="true" /> Advanced')
+    expect(panel).not.toContain('activeSyncPage')
+    expect(panel).not.toContain('en-sync-tabs')
+    expect(panel).not.toContain('Iroh EndpointId</p>')
+    expect(panel).not.toContain('button.primary {')
+    expect(panel).not.toContain('.en-sync-card {')
+  })
+
+  it('generates a real local QR code from the backend invitation payload', () => {
+    const panel = readSyncSettingsPanel()
+    const pkg = readPackage()
+
+    expect(pkg.dependencies.qrcode).toBe('^1.5.4')
+    expect(panel).toContain("import QRCodeGenerator from 'qrcode'")
+    expect(panel).toContain('QRCodeGenerator.toDataURL(inviteCode.value')
+    expect(panel).toContain(':src="inviteQrDataUrl"')
+    expect(panel).toContain('errorCorrectionLevel: \'L\'')
+  })
+
+  it('supports real invitation file export, native sharing and file import', () => {
+    const panel = readSyncSettingsPanel()
+
+    expect(panel).toContain("const INVITE_EXTENSION = '.elephantnote-invite'")
+    expect(panel).toContain("const INVITE_MIME = 'application/vnd.elephantnote.sync-invite+json'")
+    expect(panel).toContain('new File([inviteCode.value]')
+    expect(panel).toContain('navigator.canShare({ files: [file] })')
+    expect(panel).toContain('await navigator.share(sharePayload)')
+    expect(panel).toContain('@click="downloadInviteFile"')
+    expect(panel).toContain('@change="importInviteFile"')
+    expect(panel).toContain('@drop.prevent="handleInviteDrop"')
+    expect(panel).toContain('WhatsApp, Messages, Mail')
+  })
+
+  it('validates the protocol, required fields and expiry before pairing', () => {
+    const panel = readSyncSettingsPanel()
+
+    expect(panel).toContain("const INVITE_PROTOCOL = 'elephantnote-iroh-sync-v1'")
+    expect(panel).toContain('value.protocol !== INVITE_PROTOCOL')
+    expect(panel).toContain('!value.inviteId || !value.inviteToken || !value.endpointAddr || !value.folderId')
+    expect(panel).toContain('This invitation has expired')
+    expect(panel).toContain(':disabled="loading || !hasVault || !incomingInviteValid"')
   })
 
   it('does not retain the legacy rclone or shared-folder controls', () => {

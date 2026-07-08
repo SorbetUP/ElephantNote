@@ -85,11 +85,11 @@ fn excluded(relative: &Path, name: &str) -> bool {
 
   let normalized = normalize_relative(relative);
 
-  // Device-local configuration must never cross between desktop and mobile.
-  // `.config` contains provider/runtime settings, while the ElephantNote
-  // config, model selection, and state directories depend on the device UI
-  // and locally available runtimes.
+  // Device-local configuration and temporary conflict archives must never
+  // enter a content manifest. In particular, deleting an expired conflict on
+  // one device must not propagate as a deletion to another device.
   path_is_or_is_below(&normalized, ".config")
+    || path_is_or_is_below(&normalized, ".conflit")
     || path_is_or_is_below(&normalized, ".elephantnote/config")
     || path_is_or_is_below(&normalized, ".elephantnote/models")
     || path_is_or_is_below(&normalized, ".elephantnote/state")
@@ -201,12 +201,14 @@ mod tests {
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join(".assets")).unwrap();
     fs::create_dir_all(root.join(".config/provider")).unwrap();
+    fs::create_dir_all(root.join(".conflit/Notes")).unwrap();
     fs::create_dir_all(root.join(".elephantnote/config")).unwrap();
     fs::create_dir_all(root.join(".elephantnote/models")).unwrap();
     fs::create_dir_all(root.join(".elephantnote/state")).unwrap();
     fs::create_dir_all(root.join(".elephantnote/sync")).unwrap();
     fs::write(root.join(".assets/image.png"), b"image").unwrap();
     fs::write(root.join(".config/provider/provider.json"), b"provider").unwrap();
+    fs::write(root.join(".conflit/Notes/note-conflict.md"), b"conflict").unwrap();
     fs::write(root.join(".elephantnote/config/workspace.json"), b"workspace").unwrap();
     fs::write(root.join(".elephantnote/models/models.json"), b"models").unwrap();
     fs::write(root.join(".elephantnote/state/ui.json"), b"state").unwrap();
@@ -216,11 +218,13 @@ mod tests {
 
     assert!(manifest.files.contains_key(".assets/image.png"));
     assert!(!manifest.files.contains_key(".config/provider/provider.json"));
+    assert!(!manifest.files.contains_key(".conflit/Notes/note-conflict.md"));
     assert!(!manifest.files.contains_key(".elephantnote/config/workspace.json"));
     assert!(!manifest.files.contains_key(".elephantnote/models/models.json"));
     assert!(!manifest.files.contains_key(".elephantnote/state/ui.json"));
     assert!(!manifest.files.contains_key(".elephantnote/sync/state.json"));
     assert!(!manifest.directories.contains(".config"));
+    assert!(!manifest.directories.contains(".conflit"));
     assert!(!manifest.directories.contains(".elephantnote/config"));
     assert!(!manifest.directories.contains(".elephantnote/models"));
     assert!(!manifest.directories.contains(".elephantnote/state"));

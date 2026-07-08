@@ -69,8 +69,10 @@ fn write_conflict_settings(
   let temporary = path.with_extension("json.tmp");
   let raw = serde_json::to_vec_pretty(settings).map_err(|error| error.to_string())?;
   std::fs::write(&temporary, raw).map_err(|error| error.to_string())?;
-  if path.exists() {
-    std::fs::remove_file(&path).map_err(|error| error.to_string())?;
+  match std::fs::remove_file(&path) {
+    Ok(()) => {}
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+    Err(error) => return Err(error.to_string()),
   }
   std::fs::rename(temporary, path).map_err(|error| error.to_string())
 }
@@ -79,13 +81,23 @@ fn collect_conflict_files(
   directory: &std::path::Path,
   files: &mut Vec<std::path::PathBuf>,
 ) -> Result<(), String> {
-  if !directory.exists() {
-    return Ok(());
-  }
-  for entry in std::fs::read_dir(directory).map_err(|error| error.to_string())? {
-    let entry = entry.map_err(|error| error.to_string())?;
+  let entries = match std::fs::read_dir(directory) {
+    Ok(entries) => entries,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+    Err(error) => return Err(error.to_string()),
+  };
+  for entry in entries {
+    let entry = match entry {
+      Ok(entry) => entry,
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+      Err(error) => return Err(error.to_string()),
+    };
     let path = entry.path();
-    let metadata = std::fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+    let metadata = match std::fs::symlink_metadata(&path) {
+      Ok(metadata) => metadata,
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+      Err(error) => return Err(error.to_string()),
+    };
     if metadata.file_type().is_symlink() {
       continue;
     }
@@ -102,25 +114,47 @@ fn remove_empty_conflict_directories(
   directory: &std::path::Path,
   root: &std::path::Path,
 ) -> Result<(), String> {
-  if !directory.is_dir() {
+  let metadata = match std::fs::symlink_metadata(directory) {
+    Ok(metadata) => metadata,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+    Err(error) => return Err(error.to_string()),
+  };
+  if metadata.file_type().is_symlink() || !metadata.is_dir() {
     return Ok(());
   }
-  let children = std::fs::read_dir(directory)
-    .map_err(|error| error.to_string())?
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|error| error.to_string())?;
+
+  let children = match std::fs::read_dir(directory) {
+    Ok(entries) => entries
+      .collect::<Result<Vec<_>, _>>()
+      .map_err(|error| error.to_string())?,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+    Err(error) => return Err(error.to_string()),
+  };
   for child in children {
-    if child.path().is_dir() {
-      remove_empty_conflict_directories(&child.path(), root)?;
+    let path = child.path();
+    if std::fs::symlink_metadata(&path)
+      .map(|metadata| metadata.is_dir() && !metadata.file_type().is_symlink())
+      .unwrap_or(false)
+    {
+      remove_empty_conflict_directories(&path, root)?;
     }
   }
-  if directory != root
-    && std::fs::read_dir(directory)
-      .map_err(|error| error.to_string())?
-      .next()
-      .is_none()
-  {
-    std::fs::remove_dir(directory).map_err(|error| error.to_string())?;
+
+  let is_empty = match std::fs::read_dir(directory) {
+    Ok(mut entries) => entries.next().is_none(),
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+    Err(error) => return Err(error.to_string()),
+  };
+  if directory != root && is_empty {
+    match std::fs::remove_dir(directory) {
+      Ok(()) => {}
+      Err(error)
+        if matches!(
+          error.kind(),
+          std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
+        ) => {}
+      Err(error) => return Err(error.to_string()),
+    }
   }
   Ok(())
 }
@@ -131,10 +165,6 @@ fn cleanup_conflict_archive(
 ) -> Result<ConflictCleanupReport, String> {
   let retention_days = normalized_retention_days(retention_days)?;
   let root = conflict_archive_root(cwd);
-  if !root.exists() {
-    return Ok(ConflictCleanupReport::default());
-  }
-
   let cutoff = std::time::SystemTime::now()
     .checked_sub(std::time::Duration::from_secs(
       u64::from(retention_days) * 24 * 60 * 60,
@@ -145,11 +175,18 @@ fn cleanup_conflict_archive(
   let mut report = ConflictCleanupReport::default();
 
   for path in files {
-    let metadata = std::fs::metadata(&path).map_err(|error| error.to_string())?;
+    let metadata = match std::fs::metadata(&path) {
+      Ok(metadata) => metadata,
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+      Err(error) => return Err(error.to_string()),
+    };
     let expired = metadata.modified().map(|modified| modified <= cutoff).unwrap_or(false);
     if expired {
-      std::fs::remove_file(&path).map_err(|error| error.to_string())?;
-      report.deleted_files += 1;
+      match std::fs::remove_file(&path) {
+        Ok(()) => report.deleted_files += 1,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.to_string()),
+      }
     } else {
       report.remaining_files += 1;
     }
@@ -159,32 +196,34 @@ fn cleanup_conflict_archive(
 }
 
 fn conflict_archive_entries(cwd: &std::path::Path) -> Result<Vec<serde_json::Value>, String> {
-  let root = conflict_archive_root(cwd);
   let mut files = Vec::new();
-  collect_conflict_files(&root, &mut files)?;
+  collect_conflict_files(&conflict_archive_root(cwd), &mut files)?;
   files.sort();
-  files
-    .into_iter()
-    .map(|path| {
-      let metadata = std::fs::metadata(&path).map_err(|error| error.to_string())?;
-      let modified_ms = metadata
-        .modified()
-        .ok()
-        .and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|value| value.as_millis() as u64)
-        .unwrap_or_default();
-      let relative = path
-        .strip_prefix(cwd)
-        .unwrap_or(&path)
-        .to_string_lossy()
-        .replace('\\', "/");
-      Ok(serde_json::json!({
-        "path": relative,
-        "size": metadata.len(),
-        "modifiedMs": modified_ms
-      }))
-    })
-    .collect()
+  let mut entries = Vec::new();
+  for path in files {
+    let metadata = match std::fs::metadata(&path) {
+      Ok(metadata) => metadata,
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+      Err(error) => return Err(error.to_string()),
+    };
+    let modified_ms = metadata
+      .modified()
+      .ok()
+      .and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok())
+      .map(|value| value.as_millis() as u64)
+      .unwrap_or_default();
+    let relative = path
+      .strip_prefix(cwd)
+      .unwrap_or(&path)
+      .to_string_lossy()
+      .replace('\\', "/");
+    entries.push(serde_json::json!({
+      "path": relative,
+      "size": metadata.len(),
+      "modifiedMs": modified_ms
+    }));
+  }
+  Ok(entries)
 }
 
 fn conflict_settings_value(
@@ -301,6 +340,15 @@ mod conflict_archive_tests {
     assert_eq!(report.deleted_files, 0);
     assert_eq!(report.remaining_files, 1);
     assert!(recent.exists());
+    let _ = std::fs::remove_dir_all(root);
+  }
+
+  #[test]
+  fn cleanup_is_idempotent_when_archive_is_missing() {
+    let root = temp_root();
+    std::fs::create_dir_all(&root).unwrap();
+    cleanup_conflict_archive(&root, 3).unwrap();
+    cleanup_conflict_archive(&root, 3).unwrap();
     let _ = std::fs::remove_dir_all(root);
   }
 

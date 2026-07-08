@@ -3,7 +3,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::vault::sync::{sync_accept_invite, sync_create_invite, sync_enqueue, sync_run, sync_status};
+use crate::sync::manifest::{scan_vault, FileRecord, VaultManifest};
+use crate::sync::plan::build_plan;
+use crate::vault::sync::{
+  create_sync_plan_value, sync_enqueue_iroh, sync_status_iroh, SYNC_CONFIG_FILE,
+  SYNC_MANIFEST_FILE,
+};
 use crate::vault::types::VaultDescriptor;
 
 fn unique_temp_dir(label: &str) -> PathBuf {
@@ -11,7 +16,10 @@ fn unique_temp_dir(label: &str) -> PathBuf {
     .duration_since(UNIX_EPOCH)
     .map(|duration| duration.as_nanos())
     .unwrap_or_default();
-  std::env::temp_dir().join(format!("elephantnote-tauri-sync-{label}-{}-{nonce}", std::process::id()))
+  std::env::temp_dir().join(format!(
+    "elephantnote-iroh-contract-{label}-{}-{nonce}",
+    std::process::id()
+  ))
 }
 
 fn vault(root: &Path) -> VaultDescriptor {
@@ -24,235 +32,148 @@ fn vault(root: &Path) -> VaultDescriptor {
   }
 }
 
-fn write_note(root: &Path, name: &str, body: &str) {
-  fs::create_dir_all(root).unwrap();
-  fs::write(root.join(name), body).unwrap();
-}
-
-fn forbidden_terms() -> (String, String) {
-  (["pass", "word"].join(""), ["pair", "Secret"].join(""))
-}
-
-fn history_has(status: &Value, operation: &str) -> bool {
-  status
-    .get("history")
-    .and_then(Value::as_array)
-    .expect("history array")
-    .iter()
-    .any(|entry| {
-      entry.get("operation").and_then(Value::as_str) == Some(operation)
-        && entry.get("status").and_then(Value::as_str) == Some("done")
-    })
-}
-
-fn assert_history(status: &Value, operation: &str) {
-  let history = status.get("history").and_then(Value::as_array).expect("history array");
-  assert!(history_has(status, operation), "missing completed {operation} entry in {history:?}");
-}
-
-fn assert_no_history(status: &Value, operation: &str) {
-  let history = status.get("history").and_then(Value::as_array).expect("history array");
-  assert!(!history_has(status, operation), "unexpected completed {operation} entry in {history:?}");
+fn manifest(path: &str, hash: &str) -> VaultManifest {
+  let mut manifest = VaultManifest::default();
+  manifest.files.insert(
+    path.to_string(),
+    FileRecord {
+      path: path.to_string(),
+      size: 1,
+      modified_ms: 0,
+      hash: hash.to_string(),
+    },
+  );
+  manifest
 }
 
 #[test]
 fn status_without_active_vault_is_safe_and_descriptive() {
-  let status = sync_status(None).unwrap();
-  assert_eq!(status["runtime"], "tauri-rust");
-  assert_eq!(status["queued"], 0);
+  let status = sync_status_iroh(None, "endpoint-id").unwrap();
+  assert_eq!(status["runtime"], "tauri-rust-iroh");
+  assert_eq!(status["backend"], "iroh");
   assert_eq!(status["activeVault"], Value::Null);
   assert_eq!(status["lastError"], "No active ElephantNote vault.");
 }
 
 #[test]
-fn tauri_sync_runtime_is_embedded_local_and_external_free() {
-  let root = unique_temp_dir("external-free");
-  write_note(&root, "First.md", "# First\n\nBody");
+fn status_initializes_real_iroh_sync_metadata_without_git() {
+  let root = unique_temp_dir("metadata");
+  fs::create_dir_all(&root).unwrap();
+  fs::write(root.join("First.md"), "# First").unwrap();
 
-  let status = sync_run(vault(&root), Some(json!({ "snapshot": { "message": "contract snapshot" } }))).unwrap();
+  let status = sync_status_iroh(Some(vault(&root)), "endpoint-id").unwrap();
 
-  assert_eq!(status["runtime"], "tauri-rust");
-  assert_eq!(status["backend"], "elephant-local");
-  assert_eq!(status["queued"], 0);
-  assert_eq!(status["dirty"], false);
-  assert_eq!(status["capabilities"]["embeddedBackend"], true);
-  assert_eq!(status["capabilities"]["requiresExternalBinary"], false);
-  assert_eq!(status["capabilities"]["mobileRcloneBinary"], false);
-  assert_eq!(status["capabilities"]["mobileSyncRequiresBackend"], false);
-  assert!(root.join(".elephantnote/sync/sync-config.json").exists());
-  assert!(root.join(".elephantnote/sync/sync-log.json").exists());
-  assert!(root.join(".elephantnote/sync/sync-manifest.json").exists());
-  assert!(!root.join(".git").exists(), "embedded local sync must not create a git repository");
-  assert_history(&status, "init");
-  assert_history(&status, "snapshot");
-
+  assert_eq!(status["backend"], "iroh");
+  assert_eq!(status["capabilities"]["peerToPeer"], true);
+  assert_eq!(status["capabilities"]["wholeVault"], true);
+  assert!(root
+    .join(".elephantnote/sync")
+    .join(SYNC_CONFIG_FILE)
+    .exists());
+  assert!(!root.join(".git").exists());
   fs::remove_dir_all(root).ok();
 }
 
 #[test]
-fn user_friendly_pairing_invite_can_be_accepted_by_second_device_and_syncs_without_cloud() {
-  let pc_root = unique_temp_dir("pair-pc");
-  let phone_root = unique_temp_dir("pair-phone");
-  let shared_target = unique_temp_dir("pair-hub");
-  write_note(&pc_root, "PC.md", "created on pc");
+fn whole_vault_manifest_includes_content_but_excludes_device_configuration() {
+  let root = unique_temp_dir("whole-vault");
+  fs::create_dir_all(root.join(".assets")).unwrap();
+  fs::create_dir_all(root.join(".config/provider")).unwrap();
+  fs::create_dir_all(root.join(".elephantnote/config")).unwrap();
+  fs::create_dir_all(root.join(".elephantnote/models")).unwrap();
+  fs::create_dir_all(root.join(".elephantnote/state")).unwrap();
+  fs::create_dir_all(root.join(".elephantnote/sync")).unwrap();
+  fs::write(root.join("Note.md"), "note").unwrap();
+  fs::write(root.join(".assets/image.png"), b"image").unwrap();
+  fs::write(root.join(".config/provider/provider.json"), "{}").unwrap();
+  fs::write(root.join(".elephantnote/config/workspace.json"), "{}").unwrap();
+  fs::write(root.join(".elephantnote/models/models.json"), "{}").unwrap();
+  fs::write(root.join(".elephantnote/state/ui.json"), "{}").unwrap();
+  fs::write(root.join(".elephantnote/sync/private.json"), "{}").unwrap();
 
-  let invite_result = sync_create_invite(vault(&pc_root), Some(json!({
-    "remotePath": shared_target.to_string_lossy().replace('\\', "/"),
-    "deviceName": "MacBook"
-  }))).unwrap();
-  let qr_payload = invite_result["qrPayload"].as_str().unwrap();
-  let (forbidden_one, forbidden_two) = forbidden_terms();
-
-  assert_eq!(invite_result["ok"], true);
-  assert_eq!(invite_result["backend"], "elephant-local");
-  assert!(qr_payload.contains("elephantnote-sync-v1"));
-  assert!(!qr_payload.to_lowercase().contains(&forbidden_one));
-  assert!(!qr_payload.contains(&forbidden_two));
-  assert_eq!(invite_result["security"]["cloudRequired"], false);
-  assert_eq!(invite_result["security"]["requiresExternalBinary"], false);
-
-  let accept_result = sync_accept_invite(vault(&phone_root), json!({ "qrPayload": qr_payload })).unwrap();
-  assert_eq!(accept_result["ok"], true);
-  assert_eq!(accept_result["pairing"]["state"], "paired");
-  assert_eq!(accept_result["status"]["interaction"]["pairingState"], "paired");
-  assert_eq!(accept_result["status"]["peers"].as_array().unwrap().len(), 1);
-
-  let pc_status = sync_run(vault(&pc_root), Some(json!({
-    "sync": { "remotePath": shared_target.to_string_lossy().replace('\\', "/") }
-  }))).unwrap();
-  assert_history(&pc_status, "sync");
-
-  let phone_status = sync_run(vault(&phone_root), Some(json!({ "sync": {} }))).unwrap();
-  assert_history(&phone_status, "sync");
-  assert_eq!(fs::read_to_string(phone_root.join("PC.md")).unwrap(), "created on pc");
-
-  fs::remove_dir_all(pc_root).ok();
-  fs::remove_dir_all(phone_root).ok();
-  fs::remove_dir_all(shared_target).ok();
+  let manifest = scan_vault(&root).unwrap();
+  assert!(manifest.files.contains_key("Note.md"));
+  assert!(manifest.files.contains_key(".assets/image.png"));
+  assert!(!manifest
+    .files
+    .contains_key(".config/provider/provider.json"));
+  assert!(!manifest
+    .files
+    .contains_key(".elephantnote/config/workspace.json"));
+  assert!(!manifest
+    .files
+    .contains_key(".elephantnote/models/models.json"));
+  assert!(!manifest
+    .files
+    .contains_key(".elephantnote/state/ui.json"));
+  assert!(!manifest
+    .files
+    .contains_key(".elephantnote/sync/private.json"));
+  fs::remove_dir_all(root).ok();
 }
 
 #[test]
-fn enqueue_persists_visible_queue_status() {
-  let root = unique_temp_dir("enqueue");
-  let vault = vault(&root);
-  let status = sync_enqueue(vault, "snapshot".to_string(), Some(json!({ "message": "queued snapshot" }))).unwrap();
+fn excluded_configuration_cannot_be_uploaded_deleted_or_conflicted() {
+  let root = unique_temp_dir("config-plan");
+  fs::create_dir_all(root.join(".config/provider")).unwrap();
+  fs::create_dir_all(root.join(".elephantnote/config")).unwrap();
+  fs::write(root.join(".config/provider/provider.json"), "desktop-provider").unwrap();
+  fs::write(root.join(".elephantnote/config/workspace.json"), "desktop-layout").unwrap();
 
+  let local = scan_vault(&root).unwrap();
+  let remote = VaultManifest::default();
+  let old_baseline = manifest(".config/provider/provider.json", "old-config-hash");
+  let plan = build_plan(&local, &remote, &old_baseline, "desktop", "phone");
+
+  assert!(local.files.is_empty());
+  assert!(plan.uploads.is_empty());
+  assert!(plan.downloads.is_empty());
+  assert!(plan.delete_files_local.is_empty());
+  assert!(plan.delete_files_remote.is_empty());
+  assert!(plan.conflicts.is_empty());
+  fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn enqueue_persists_operation_for_async_iroh_runner() {
+  let root = unique_temp_dir("queue");
+  fs::create_dir_all(&root).unwrap();
+  let status = sync_enqueue_iroh(
+    vault(&root),
+    "endpoint-id",
+    "sync".to_string(),
+    Some(json!({ "reason": "manual" })),
+  )
+  .unwrap();
   assert_eq!(status["queued"], 1);
-  assert_eq!(status["operations"][0]["operation"], "snapshot");
-  assert_eq!(status["operations"][0]["payload"]["message"], "queued snapshot");
-
-  let queue_path = root.join(".elephantnote/sync/sync-queue.json");
-  let queue = fs::read_to_string(queue_path).unwrap();
-  assert!(queue.contains("queued snapshot"));
-
+  assert_eq!(status["operations"][0]["operation"], "sync");
   fs::remove_dir_all(root).ok();
 }
 
 #[test]
-fn sync_operation_runs_embedded_local_pair_flow() {
-  let root = unique_temp_dir("sync-operation");
-  let remote = unique_temp_dir("sync-remote");
-  write_note(&root, "Sync.md", "# Sync\n\nBody");
+fn three_way_plan_propagates_deletion_and_preserves_concurrent_edits() {
+  let base = manifest("Conflict.md", "base");
+  let local = manifest("Conflict.md", "local");
+  let remote = manifest("Conflict.md", "remote");
+  let conflict = build_plan(&local, &remote, &base, "aaa", "bbb");
+  assert_eq!(conflict.conflicts, vec!["Conflict.md"]);
+  assert_eq!(conflict.uploads.len(), 1);
+  assert_eq!(conflict.downloads.len(), 1);
 
-  let status = sync_run(vault(&root), Some(json!({
-    "sync": { "remotePath": remote.to_string_lossy().replace('\\', "/") }
-  }))).unwrap();
-
-  assert_eq!(status["queued"], 0);
-  assert_eq!(status["backend"], "elephant-local");
-  assert_history(&status, "init");
-  assert_history(&status, "sync");
-  assert_no_history(&status, "pull");
-  assert_no_history(&status, "push");
-  assert_eq!(fs::read_to_string(remote.join("Sync.md")).unwrap(), "# Sync\n\nBody");
-
-  fs::remove_dir_all(root).ok();
-  fs::remove_dir_all(remote).ok();
+  let deletion = build_plan(&base, &VaultManifest::default(), &base, "aaa", "bbb");
+  assert_eq!(deletion.delete_files_local, vec!["Conflict.md"]);
 }
 
 #[test]
-fn push_uses_configured_local_folder_target() {
-  let root = unique_temp_dir("push-vault");
-  let remote = unique_temp_dir("push-remote");
-  write_note(&root, "Remote.md", "# Remote\n\nBody");
-  let remote_path = remote.to_string_lossy().replace('\\', "/");
-
-  let status = sync_run(vault(&root), Some(json!({
-    "init": { "remotePath": remote_path },
-    "push": {}
-  }))).unwrap();
-
-  assert_eq!(status["queued"], 0);
-  assert_eq!(status["remotePath"], remote.to_string_lossy().replace('\\', "/"));
-  assert_history(&status, "push");
-  assert_eq!(fs::read_to_string(remote.join("Remote.md")).unwrap(), "# Remote\n\nBody");
-
-  fs::remove_dir_all(root).ok();
-  fs::remove_dir_all(remote).ok();
+fn public_sync_plan_declares_iroh_without_external_binary() {
+  let plan = create_sync_plan_value(json!({}));
+  assert_eq!(plan["backend"], "iroh");
+  assert_eq!(plan["requiresExternalBinary"], false);
+  assert_eq!(plan["externalDependencyFree"], true);
+  assert_eq!(plan["operations"], json!(["init", "snapshot"]));
 }
 
 #[test]
-fn second_device_can_pull_without_creating_local_snapshot() {
-  let root_a = unique_temp_dir("pull-device-a");
-  let root_b = unique_temp_dir("pull-device-b");
-  let remote = unique_temp_dir("pull-remote");
-
-  write_note(&root_a, "FromA.md", "# From A\n\nPulled by B");
-  let remote_path = remote.to_string_lossy().replace('\\', "/");
-  let status_a = sync_run(vault(&root_a), Some(json!({
-    "init": { "remotePath": remote_path },
-    "push": {}
-  }))).unwrap();
-  assert_history(&status_a, "push");
-
-  let status_b = sync_run(vault(&root_b), Some(json!({
-    "init": { "remotePath": remote.to_string_lossy().replace('\\', "/") },
-    "pull": {}
-  }))).unwrap();
-
-  assert_history(&status_b, "init");
-  assert_history(&status_b, "pull");
-  assert_no_history(&status_b, "snapshot");
-  assert_eq!(fs::read_to_string(root_b.join("FromA.md")).unwrap(), "# From A\n\nPulled by B");
-
-  fs::remove_dir_all(root_a).ok();
-  fs::remove_dir_all(root_b).ok();
-  fs::remove_dir_all(remote).ok();
-}
-
-#[test]
-fn sync_preserves_both_versions_when_two_devices_changed_same_note() {
-  let root = unique_temp_dir("conflict-root");
-  let remote = unique_temp_dir("conflict-remote");
-  write_note(&root, "Conflict.md", "local edit");
-  write_note(&remote, "Conflict.md", "remote edit");
-
-  let status = sync_run(vault(&root), Some(json!({
-    "init": { "remotePath": remote.to_string_lossy().replace('\\', "/") },
-    "sync": {}
-  }))).unwrap();
-
-  assert!(status["lastError"].as_str().unwrap_or("").contains("kept both versions"));
-  assert!(!status["conflicts"].as_array().unwrap().is_empty());
-  assert!(fs::read_dir(&root).unwrap().filter_map(Result::ok).any(|entry| entry.file_name().to_string_lossy().contains("remote-conflict")));
-  assert!(fs::read_dir(&remote).unwrap().filter_map(Result::ok).any(|entry| entry.file_name().to_string_lossy().contains("local-conflict")));
-
-  fs::remove_dir_all(root).ok();
-  fs::remove_dir_all(remote).ok();
-}
-
-#[test]
-fn status_stays_clean_after_unpushed_note_change_because_backend_is_not_git() {
-  let root = unique_temp_dir("dirty");
-  write_note(&root, "Clean.md", "# Clean\n");
-  let vault = vault(&root);
-
-  sync_run(vault.clone(), Some(json!({ "snapshot": { "message": "baseline" } }))).unwrap();
-  write_note(&root, "Dirty.md", "# Dirty\n");
-
-  let status = sync_status(Some(vault)).unwrap();
-  assert_eq!(status["dirty"], false);
-  assert_eq!(status["queued"], 0);
-
-  fs::remove_dir_all(root).ok();
+fn sync_runtime_manifest_filename_is_stable() {
+  assert_eq!(SYNC_MANIFEST_FILE, "sync-manifest.json");
 }

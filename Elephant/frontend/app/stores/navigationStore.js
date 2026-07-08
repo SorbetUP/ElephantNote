@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { createDefaultSyncPlan } from 'common/elephantnote/sync'
+import { irohSyncClient } from '../services/irohSyncClient'
 
 const isSameEntry = (a, b) => {
   if (!a || !b) return false
@@ -9,18 +9,26 @@ const isSameEntry = (a, b) => {
   return a.type === b.type
 }
 
+const peersFromStatus = (status) => Array.isArray(status?.peers) ? status.peers : []
+
 export const useNavigationStore = defineStore('elephantnoteNavigation', {
   state: () => ({
     history: [],
     index: -1,
     syncStatus: 'idle',
-    syncError: ''
+    syncError: '',
+    syncDetails: null,
+    syncChecked: false
   }),
 
   getters: {
     canGoBack: (state) => state.index > 0,
     canGoForward: (state) => state.index < state.history.length - 1,
-    current: (state) => state.history[state.index] || null
+    current: (state) => state.history[state.index] || null,
+    syncPeers: (state) => peersFromStatus(state.syncDetails),
+    hasPairedSyncDevice() {
+      return this.syncPeers.length > 0
+    }
   },
 
   actions: {
@@ -61,30 +69,83 @@ export const useNavigationStore = defineStore('elephantnoteNavigation', {
       return null
     },
 
+    applySyncStatus(status, { preserveRunning = false } = {}) {
+      this.syncDetails = status && typeof status === 'object' ? status : null
+      this.syncChecked = true
+      const backendRunning = Boolean(status?.running)
+      const hasExplicitRunning = typeof status?.running === 'boolean'
+      const preserveLegacyRunning = preserveRunning &&
+        !hasExplicitRunning &&
+        this.syncStatus === 'syncing'
+      if (backendRunning || preserveLegacyRunning) {
+        this.syncStatus = 'syncing'
+        this.syncError = ''
+        return this.syncDetails
+      }
+      const lastError = String(status?.lastError || '').trim()
+      if (lastError) {
+        this.syncStatus = 'error'
+        this.syncError = lastError
+      } else if (Number(status?.lastRunAt || 0) > 0) {
+        this.syncStatus = 'synced'
+        this.syncError = ''
+      } else {
+        this.syncStatus = 'idle'
+        this.syncError = ''
+      }
+      return this.syncDetails
+    },
+
+    clearSyncStatus() {
+      this.syncStatus = 'idle'
+      this.syncError = ''
+      this.syncDetails = null
+      this.syncChecked = false
+    },
+
+    async refreshSyncStatus({ preserveRunning = false } = {}) {
+      try {
+        const status = await irohSyncClient.status()
+        return this.applySyncStatus(status, { preserveRunning })
+      } catch (error) {
+        this.syncChecked = true
+        this.syncStatus = 'error'
+        this.syncError = error?.message || 'Unable to read Iroh synchronization status.'
+        throw error
+      }
+    },
+
     async syncWorkspace(vaultPath = '') {
-      if (this.syncStatus === 'syncing') return
+      if (this.syncStatus === 'syncing') return this.syncDetails
+      if (!this.syncChecked) await this.refreshSyncStatus()
+      if (!this.hasPairedSyncDevice) {
+        const error = new Error('No paired Iroh device is available for this vault.')
+        this.syncStatus = 'error'
+        this.syncError = error.message
+        throw error
+      }
+
       this.syncStatus = 'syncing'
       this.syncError = ''
       try {
-        const { elephantnoteClient } = await import('../services/elephantnoteClient')
-        for (const { operation, payload } of createDefaultSyncPlan()) {
-          await elephantnoteClient.sync.enqueue(operation, payload)
+        const result = await irohSyncClient.run()
+        const lastError = String(result?.lastError || '').trim()
+        if (lastError) throw new Error(lastError)
+        if (!Array.isArray(result?.peers) || result.peers.length === 0) {
+          throw new Error('Synchronization completed without a paired Iroh device.')
         }
-        await elephantnoteClient.sync.run()
-        if (vaultPath) {
+        this.applySyncStatus(result)
+        this.syncStatus = 'synced'
+        if (vaultPath && Number(result?.transferredFiles || 0) > 0) {
+          const { elephantnoteClient } = await import('../services/elephantnoteClient')
           await elephantnoteClient.search.initVault(vaultPath)
           await elephantnoteClient.search.rebuild()
         }
-        this.syncStatus = 'synced'
+        return result
       } catch (error) {
         this.syncStatus = 'error'
-        this.syncError = error?.message || 'Sync failed'
-        setTimeout(() => {
-          if (this.syncStatus === 'error') {
-            this.syncStatus = 'idle'
-            this.syncError = ''
-          }
-        }, 4000)
+        this.syncError = error?.message || 'Iroh synchronization failed.'
+        throw error
       }
     }
   }

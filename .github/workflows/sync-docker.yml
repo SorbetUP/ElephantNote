@@ -67,9 +67,11 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          log_file="$(mktemp)"
           cargo test \
             --manifest-path Elephant/backend/tauri/Cargo.toml \
             --lib \
             --no-default-features \
             two_real_iroh_endpoints_exchange_modify_and_delete_vault_content \
-            -- --exact --nocapture
+            -- --nocapture 2>&1 | tee "$log_file"
+          grep -Eq 'test result: ok\. 1 passed; 0 failed' "$log_file"

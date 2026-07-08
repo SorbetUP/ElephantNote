@@ -1,4 +1,4 @@
-name: Iroh Two-Device Smoke
+name: Iroh Sync Validation
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: iroh-two-device-smoke-${{ github.ref }}
+  group: iroh-sync-validation-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -91,3 +91,19 @@ jobs:
           path: iroh-smoke-output.txt
           if-no-files-found: error
           retention-days: 14
+
+  sync-toolbar-contracts:
+    name: Active-vault toolbar states
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Run focused synchronization UI tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          pnpm exec vitest run \
+            tests/app/unit/specs/main/elephantnote/syncSettingsPanel.spec.js \
+            tests/elephant/unit/navigationStore.spec.js

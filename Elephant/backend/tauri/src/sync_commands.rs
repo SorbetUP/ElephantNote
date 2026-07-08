@@ -99,3 +99,23 @@ pub async fn iroh_sync_conflict_settings_set(
     conflict_retention_days,
   )
 }
+
+#[tauri::command(rename = "tauri_sync_conflict_restore")]
+pub async fn iroh_sync_conflict_restore(
+  app: AppHandle,
+  state: State<'_, IrohSyncState>,
+  relative_path: String,
+) -> R<Value> {
+  let _operation = state.lock_operation().await;
+  sync::sync_conflict_restore(config::get_active_vault(&app)?, relative_path)
+}
+
+#[tauri::command(rename = "tauri_sync_conflict_delete")]
+pub async fn iroh_sync_conflict_delete(
+  app: AppHandle,
+  state: State<'_, IrohSyncState>,
+  relative_path: String,
+) -> R<Value> {
+  let _operation = state.lock_operation().await;
+  sync::sync_conflict_delete(config::get_active_vault(&app)?, relative_path)
+}

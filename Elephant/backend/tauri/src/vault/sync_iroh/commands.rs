@@ -281,7 +281,7 @@ mod tests {
     let saved = read_queue(&root);
     assert_eq!(saved.len(), 1);
     assert_eq!(saved[0].status, STATUS_QUEUED);
-    assert_eq!(status["queued"].as_array().map(Vec::len), Some(1));
+    assert_eq!(status["queued"].as_u64(), Some(1));
     let _ = fs::remove_dir_all(root);
   }
 

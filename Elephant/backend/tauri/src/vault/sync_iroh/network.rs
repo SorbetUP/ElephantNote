@@ -107,7 +107,7 @@ pub async fn sync_accept_invite(
   let (mut send, mut recv) = connection
     .open_bi()
     .await
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| format!("failed to open pairing control stream: {error}"))?;
   write_control(
     &mut send,
     &ControlMessage::PairRequest(PairRequest {
@@ -131,6 +131,11 @@ pub async fn sync_accept_invite(
     return Err("Paired device returned an inconsistent Iroh identity.".to_string());
   }
   send.finish().map_err(|error| error.to_string())?;
+  recv
+    .read_to_end(0)
+    .await
+    .map_err(|error| format!("pairing response did not close cleanly: {error}"))?;
+  connection.close(0_u32.into(), b"pairing-complete");
 
   let cwd = PathBuf::from(&vault.path);
   let mut config = ensure_sync_files(&vault, &runtime.endpoint_id().to_string())?;
@@ -171,7 +176,7 @@ async fn client_sync_peer(
   let (mut send, mut recv) = connection
     .open_bi()
     .await
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| format!("failed to open sync control stream: {error}"))?;
   write_control(
     &mut send,
     &ControlMessage::SyncOpen(SyncOpen {
@@ -248,16 +253,38 @@ async fn client_sync_peer(
     },
   )
   .await?;
-  let remote_final = match expect_control(read_control(&mut recv).await?, "syncComplete")? {
-    ControlMessage::SyncComplete { manifest } => manifest,
+  let (remote_final, acknowledged) = match expect_control(
+    read_control(&mut recv).await?,
+    "syncComplete",
+  )? {
+    ControlMessage::SyncComplete {
+      manifest,
+      acknowledged,
+    } => (manifest, acknowledged),
     _ => unreachable!(),
   };
+  if acknowledged {
+    return Err("peer sent a final acknowledgement before the client validated the manifest".to_string());
+  }
   if !final_manifest.content_equals(&remote_final) {
     return Err("vault manifests still differ after transfer; no baseline was advanced".to_string());
   }
   write_baseline(&cwd, &peer.endpoint_id, &final_manifest)?;
   write_manifest(&cwd, &final_manifest)?;
+  write_control(
+    &mut send,
+    &ControlMessage::SyncComplete {
+      manifest: final_manifest,
+      acknowledged: true,
+    },
+  )
+  .await?;
   send.finish().map_err(|error| error.to_string())?;
+  recv
+    .read_to_end(0)
+    .await
+    .map_err(|error| format!("sync completion stream did not close cleanly: {error}"))?;
+  connection.close(0_u32.into(), b"sync-complete");
   Ok(result)
 }
 
@@ -371,11 +398,25 @@ async fn server_sync_session(
   write_control(
     &mut send,
     &ControlMessage::SyncComplete {
-      manifest: final_manifest,
+      manifest: final_manifest.clone(),
+      acknowledged: false,
     },
   )
   .await?;
-  send.finish().map_err(|error| error.to_string())?;
+
+  let (ack_manifest, acknowledged) = match expect_control(
+    read_control(&mut recv).await?,
+    "syncComplete",
+  )? {
+    ControlMessage::SyncComplete {
+      manifest,
+      acknowledged,
+    } => (manifest, acknowledged),
+    _ => unreachable!(),
+  };
+  if !acknowledged || !final_manifest.content_equals(&ack_manifest) {
+    return Err("peer did not acknowledge the verified final manifest".to_string());
+  }
 
   if let Some(peer) = config.peers.iter_mut().find(|peer| peer.endpoint_id == peer_id) {
     peer.last_seen_at = now();
@@ -402,7 +443,11 @@ async fn server_sync_session(
     updated_at: now(),
     error: String::new(),
   });
-  write_history(&cwd, &history)
+  write_history(&cwd, &history)?;
+
+  send.finish().map_err(|error| error.to_string())?;
+  connection.closed().await;
+  Ok(())
 }
 
 async fn handle_pair_request(
@@ -460,7 +505,9 @@ async fn handle_pair_request(
     }),
   )
   .await?;
-  send.finish().map_err(|error| error.to_string())
+  send.finish().map_err(|error| error.to_string())?;
+  connection.closed().await;
+  Ok(())
 }
 
 pub async fn handle_incoming_connection(app: AppHandle, connection: Connection) -> R<()> {

@@ -1,9 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const importFromRoot = (relativePath) => import(pathToFileURL(path.join(root, relativePath)).href)
 
 const appearance = () => read('Elephant/shared/appearance.js')
 const appMessages = () => read('Elephant/frontend/app/i18n/appMessages.js')
@@ -17,17 +19,46 @@ const noteFooter = () => read('Elephant/frontend/app/components/editor/NoteEdito
 const noteStyles = () => read('Elephant/frontend/app/styles/note-editor-redesign.css')
 
 describe('expanded ElephantNote experience', () => {
-  it('registers beige, pastel and gamer violet as full light/dark theme families', () => {
+  it('resolves beige, pastel and gamer violet as real light/dark themes', async () => {
+    const module = await importFromRoot('Elephant/shared/appearance.js')
+
+    for (const familyId of ['beige', 'pastel', 'gamer-violet']) {
+      const family = module.ELEPHANTNOTE_THEME_FAMILIES.find((item) => item.id === familyId)
+      expect(family).toBeTruthy()
+      expect(module.getThemeVariant(familyId, 'light')).toBe(`${familyId}-light`)
+      expect(module.getThemeVariant(familyId, 'dark')).toBe(`${familyId}-dark`)
+      expect(module.getThemeMode(`${familyId}-light`)).toBe('light')
+      expect(module.getThemeMode(`${familyId}-dark`)).toBe('dark')
+      expect(module.getThemeTokens(`${familyId}-light`)['--en-primary']).toMatch(/^#/)
+      expect(module.getThemeTokens(`${familyId}-dark`)['--editorBgColor']).toMatch(/^#/)
+    }
+  })
+
+  it('keeps declarative theme registrations complete', () => {
     const source = appearance()
 
     for (const family of ['beige', 'pastel', 'gamer-violet']) {
       expect(source).toContain(`id: '${family}'`)
-      expect(source).toContain(`light: '${family}-light'`)
-      expect(source).toContain(`dark: '${family}-dark'`)
       expect(source).toContain(`'${family}-light': createThemeTokens`)
       expect(source).toContain(`'${family}-dark': createThemeTokens`)
     }
     expect(source).toContain("floatShadow: '0 0 34px rgba(168, 85, 247, 0.24)")
+  })
+
+  it('returns every ISO language, English fallback and RTL behavior', async () => {
+    const module = await importFromRoot('Elephant/frontend/app/i18n/appMessages.js')
+    const options = module.getSupportedLanguageOptions('en')
+    const codes = options.map((option) => option.code)
+
+    expect(options.length).toBeGreaterThan(180)
+    expect(new Set(codes).size).toBe(codes.length)
+    expect(codes).toEqual(expect.arrayContaining(['system', 'en', 'fr', 'de', 'es', 'ja', 'ar', 'he']))
+    expect(module.getAppMessages('fr').common.settings).toBe('Paramètres')
+    expect(module.getAppMessages('ja').common.settings).toBe('Settings')
+    expect(module.normalizeAppLocale('zh-Hant-TW')).toBe('zh-TW')
+    expect(module.normalizeAppLocale('pt_BR')).toBe('pt')
+    expect(module.isRtlLocale('ar-SA')).toBe(true)
+    expect(module.isRtlLocale('fr-FR')).toBe(false)
   })
 
   it('centralizes app messages and exposes every ISO 639-1 language with fallback', () => {
@@ -68,7 +99,7 @@ describe('expanded ElephantNote experience', () => {
 
     expect(source).toContain("normalizedKey === 'f' || normalizedKey === 'k'")
     expect(source).toContain('searchStore.open()')
-    expect(source).toContain('if (isSettingsOpen.value || document.body.classList.contains(\'en-excalidraw-open\')) return')
+    expect(source).toContain("if (isSettingsOpen.value || document.body.classList.contains('en-excalidraw-open')) return")
     expect(source).toContain("import '../../styles/note-editor-redesign.css'")
   })
 
@@ -86,7 +117,7 @@ describe('expanded ElephantNote experience', () => {
     const source = excalidrawDialog()
 
     expect(source).toContain('getThemeMode(props.theme)')
-    expect(source).toContain("useI18n")
+    expect(source).toContain('useI18n')
     expect(source).toContain("event.key.toLowerCase() === 's'")
     expect(source).toContain("event.key === 'Escape'")
     expect(source).toContain('class="en-excalidraw-mark"')
@@ -99,7 +130,7 @@ describe('expanded ElephantNote experience', () => {
     const footer = noteFooter()
     const styles = noteStyles()
 
-    expect(topBar).toContain("useI18n")
+    expect(topBar).toContain('useI18n')
     expect(topBar).toContain("t('note.titleLabel')")
     expect(topBar).toContain("$emit('update-title'")
     expect(topBar).toContain("$emit('toggle-pin')")

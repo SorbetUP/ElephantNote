@@ -6,8 +6,10 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const readSyncSettingsPanel = () => read('Elephant/frontend/app/components/settings/SyncSettingsPanel.vue')
 const readIrohClient = () => read('Elephant/frontend/app/services/irohSyncClient.js')
+const readNavigationBar = () => read('Elephant/frontend/app/components/navigation/NavigationBar.vue')
+const readNavigationStore = () => read('Elephant/frontend/app/stores/navigationStore.js')
 
-describe('SyncSettingsPanel Iroh interactions', () => {
+describe('ElephantNote Iroh UI integration', () => {
   it('uses the real Iroh pairing and synchronization commands', () => {
     const panel = readSyncSettingsPanel()
     const client = readIrohClient()
@@ -25,12 +27,15 @@ describe('SyncSettingsPanel Iroh interactions', () => {
 
   it('does not retain the legacy rclone or shared-folder controls', () => {
     const source = readSyncSettingsPanel()
+    const navigationStore = readNavigationStore()
 
     expect(source).not.toContain('rclone')
     expect(source).not.toContain('syncthing-git')
     expect(source).not.toContain('remotePath')
     expect(source).not.toContain('Pairing password')
     expect(source).not.toContain('setTimeout(() => {')
+    expect(navigationStore).not.toContain('createDefaultSyncPlan')
+    expect(navigationStore).not.toContain('elephantnoteClient.sync.enqueue')
   })
 
   it('exposes configurable temporary conflict retention', () => {
@@ -55,5 +60,40 @@ describe('SyncSettingsPanel Iroh interactions', () => {
     expect(panel).toContain('Restored as ${result?.restoredPath')
     expect(client).toContain("invoke('tauri_sync_conflict_restore'")
     expect(client).toContain("invoke('tauri_sync_conflict_delete'")
+  })
+
+  it('connects the top navigation icon to the active vault Iroh synchronization', () => {
+    const navigation = readNavigationBar()
+    const store = readNavigationStore()
+
+    expect(navigation).toContain('@click.stop="syncWorkspace"')
+    expect(navigation).toContain('await nav.syncWorkspace(activeVaultPath.value)')
+    expect(navigation).toContain("nav.syncStatus === 'syncing'")
+    expect(navigation).toContain('!nav.hasPairedSyncDevice')
+    expect(navigation).toContain("nav.syncStatus === 'error' || nav.syncStatus === 'synced'")
+    expect(navigation).toContain('class="en-sync-dot"')
+    expect(navigation).not.toContain('navigator.onLine')
+    expect(store).toContain('const result = await irohSyncClient.run()')
+  })
+
+  it('never reports a resolved backend failure as a successful toolbar sync', () => {
+    const store = readNavigationStore()
+
+    expect(store).toContain("const lastError = String(result?.lastError || '').trim()")
+    expect(store).toContain('if (lastError) throw new Error(lastError)')
+    expect(store).toContain("this.syncStatus = 'error'")
+    expect(store).toContain("this.syncStatus = 'synced'")
+    expect(store).toContain('Number(result?.transferredFiles || 0) > 0')
+  })
+
+  it('broadcasts status changes so settings and toolbar cannot drift apart', () => {
+    const client = readIrohClient()
+    const navigation = readNavigationBar()
+
+    expect(client).toContain("export const IROH_SYNC_STATUS_EVENT = 'elephantnote:iroh-sync-status'")
+    expect(client).toContain('window.dispatchEvent(new CustomEvent')
+    expect(client).toContain('publishStatus(await invoke')
+    expect(navigation).toContain('window.addEventListener(IROH_SYNC_STATUS_EVENT, handleSyncStatus)')
+    expect(navigation).toContain('nav.applySyncStatus(event.detail, { preserveRunning: true })')
   })
 })

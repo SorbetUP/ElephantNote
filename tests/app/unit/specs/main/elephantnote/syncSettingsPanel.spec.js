@@ -7,7 +7,6 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 const readSyncSettingsPanel = () => read('Elephant/frontend/app/components/settings/SyncSettingsPanel.vue')
 const readIrohClient = () => read('Elephant/frontend/app/services/irohSyncClient.js')
 
-
 describe('SyncSettingsPanel Iroh interactions', () => {
   it('uses the real Iroh pairing and synchronization commands', () => {
     const panel = readSyncSettingsPanel()

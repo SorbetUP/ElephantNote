@@ -10,29 +10,54 @@ const readSync = () => read('Elephant/frontend/app/components/settings/SyncSetti
 const readAi = () => read('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
 
 describe('ElephantNote settings redesign', () => {
-  it('keeps the floating settings scene while introducing grouped navigation and search', () => {
+  it('keeps the floating scene with theme-aware blur and native platform chrome', () => {
     const source = readSettings()
     const styles = readSettingsStyles()
 
     expect(source).toContain('class="en-settings-backdrop"')
     expect(source).toContain('class="en-settings-panel"')
-    expect(source).toContain('v-model.trim="settingsQuery"')
-    expect(source).toContain("label: 'Workspace'")
-    expect(source).toContain("label: 'Services'")
-    expect(source).toContain("label: 'Data'")
-    expect(styles).toContain('backdrop-filter: blur(18px)')
-    expect(styles).toContain('border-radius: 24px')
+    expect(source).toContain("'is-macos': isMacOS")
+    expect(source).toContain('aria-modal="true"')
+    expect(source).not.toContain('en-settings-app-mark')
+    expect(styles).toContain('backdrop-filter: blur(30px)')
+    expect(styles).toContain('var(--en-primary')
+    expect(styles).toContain('grid-template-areas: "close title search"')
   })
 
-  it('uses semantic controls instead of text buttons for binary preferences', () => {
+  it('searches individual settings across every section and opens nested pages', () => {
+    const source = readSettings()
+
+    expect(source).toContain('placeholder="Search all settings"')
+    expect(source).toContain('const settingsIndex = [')
+    expect(source).toContain("label: 'Quick insert trigger'")
+    expect(source).toContain("label: 'Conflict retention'")
+    expect(source).toContain("label: 'Semantic search and embeddings'")
+    expect(source).toContain('const openSearchResult = (result) =>')
+    expect(source).toContain('syncInitialPage.value = result.subpage')
+    expect(source).toContain('aiInitialPage.value = result.subpage')
+  })
+
+  it('uses a minimal flat navigation and treats Sites as its own service', () => {
+    const source = readSettings()
+
+    expect(source).toContain("{ id: 'sites', label: 'Sites', icon: Globe2 }")
+    expect(source).toContain("{ id: 'import', label: 'Import', icon: Download }")
+    expect(source).not.toContain("label: 'Workspace'")
+    expect(source).not.toContain("label: 'Services'")
+    expect(source).not.toContain("label: 'Data'")
+    expect(source).not.toContain('Import & sites')
+  })
+
+  it('uses semantic controls and exposes real quick-insert preferences', () => {
     const source = readSettings()
 
     expect(source).toContain('role="switch"')
     expect(source).toContain(':aria-checked="preferences.showEditorFooter"')
-    expect(source).toContain(':aria-checked="preferences.showTagHashInEditor"')
+    expect(source).toContain(':aria-checked="!preferences.hideQuickInsertHint"')
+    expect(source).toContain("setPreference('quickInsertTrigger'")
+    expect(source).toContain("setPreference('autoPairBracket'")
+    expect(source).toContain("setPreference('spellcheckerEnabled'")
     expect(source).toContain(':aria-checked="featureFlags.sitePreview"')
-    expect(source).not.toContain("preferences.showEditorFooter ? 'Visible' : 'Hidden'")
-    expect(source).not.toContain("preferences.showTagHashInEditor ? 'Show #' : 'Hide #'")
   })
 
   it('retains real vault, import and generated-site actions', () => {
@@ -46,17 +71,34 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('sitePreviewStore.openPreviewExternal')
   })
 
-  it('presents Iroh sync as overview, devices and conflicts without replacing real commands', () => {
+  it('keeps Sync navigation at the top and makes retention directly editable', () => {
     const source = readSync()
 
+    expect(source).toContain('class="en-sync-toolbar"')
     expect(source).toContain("activeSyncPage === 'overview'")
     expect(source).toContain("activeSyncPage === 'devices'")
     expect(source).toContain("activeSyncPage === 'conflicts'")
+    expect(source).toContain('v-model.number="retentionDays"')
+    expect(source).toContain('@click="saveRetention"')
+    expect(source).toContain('initialPage: { type: String')
     expect(source).toContain('irohSyncClient.createInvite')
     expect(source).toContain('irohSyncClient.acceptInvite')
     expect(source).toContain('irohSyncClient.run()')
     expect(source).toContain('irohSyncClient.restoreConflict')
     expect(source).toContain('irohSyncClient.deleteConflict')
+  })
+
+  it('removes the redundant AI hero, provider action and Codex duplication', () => {
+    const source = readAi()
+    const addProviderButtons = source.match(/@click="addProvider"/g) || []
+
+    expect(source).toContain('class="en-ai-toolbar"')
+    expect(source).not.toContain('en-ai-hero')
+    expect(source).not.toContain('Elephant AI')
+    expect(addProviderButtons).toHaveLength(1)
+    expect(source).toContain('class="en-ai-setting-row en-codex-row"')
+    expect(source).not.toContain('Codex account')
+    expect(source).toContain('initialPage: { type: String')
   })
 
   it('separates common AI controls from advanced technical tuning', () => {

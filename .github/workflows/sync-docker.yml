@@ -88,6 +88,10 @@ jobs:
         run: |
           set -euxo pipefail
           log_file="iroh-smoke-output.txt"
+          grep -F '[Sync] run:start' "$log_file"
+          grep -F '[Sync] operation:start' "$log_file"
+          grep -F '[Sync] operation:complete' "$log_file"
+          grep -F '[Sync] run:complete' "$log_file"
           grep -F '[Sync] session:start' "$log_file"
           grep -F '[Sync] manifest' "$log_file"
           grep -F '[Sync] baseline' "$log_file"

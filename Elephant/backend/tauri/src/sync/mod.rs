@@ -35,6 +35,12 @@ impl IrohSyncState {
     self.operation.lock().await
   }
 
+  pub fn try_lock_operation(&self) -> Result<MutexGuard<'_, ()>, String> {
+    self.operation
+      .try_lock()
+      .map_err(|_| "Another ElephantNote synchronization is already running on this device.".to_string())
+  }
+
   pub async fn runtime(&self, app: &AppHandle) -> Result<Arc<IrohRuntime>, String> {
     let mut guard = self.runtime.lock().await;
     if let Some(runtime) = guard.as_ref() {

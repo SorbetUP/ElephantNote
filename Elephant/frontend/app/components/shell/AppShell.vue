@@ -83,6 +83,7 @@ import ChatSidebar from './ChatSidebar.vue'
 import SettingsPanel from '../settings/SettingsPanel.vue'
 import SearchModal from '../../search/SearchModal.vue'
 import '../../styles/app-shell.css'
+import '../../styles/note-editor-redesign.css'
 
 const store = useVaultStore()
 const preferences = usePreferencesStore()
@@ -204,13 +205,19 @@ const handleShortcut = (event) => {
     return
   }
 
-  const isSearchShortcut =
+  const isCommandShortcut =
     (event.ctrlKey || event.metaKey) &&
     !event.altKey &&
-    !event.shiftKey &&
-    key.toLowerCase() === 'k'
+    !event.shiftKey
+  const normalizedKey = key.toLowerCase()
+  const isSearchShortcut = isCommandShortcut && (normalizedKey === 'f' || normalizedKey === 'k')
 
   if (!isSearchShortcut || !store.hasVault) return
+
+  // Settings owns Cmd/Ctrl+F while open, and Excalidraw should never open a
+  // search modal behind its full-screen workspace.
+  if (isSettingsOpen.value || document.body.classList.contains('en-excalidraw-open')) return
+
   event.preventDefault()
   openSearch()
 }

@@ -154,8 +154,9 @@ impl ProtocolHandler for VaultSyncProtocol {
   async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
     if let Ok(config) = crate::vault::config::read_config(&self.app) {
       for vault in config.vaults {
-        crate::vault::sync::cleanup_conflicts_for_vault(&vault)
-          .map_err(|error| AcceptError::from_err(io::Error::other(error)))?;
+        // Cleanup is best-effort per vault. An unavailable secondary vault
+        // must never prevent another paired vault from accepting a session.
+        let _ = crate::vault::sync::cleanup_conflicts_for_vault(&vault);
       }
     }
     crate::vault::sync::handle_incoming_connection(self.app.clone(), connection)

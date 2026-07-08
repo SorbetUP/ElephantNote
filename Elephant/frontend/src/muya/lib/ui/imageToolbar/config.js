@@ -15,7 +15,7 @@ const excalidrawIcon = `data:image/svg+xml,${encodeURIComponent(`
     <path d="M20 17 47 44"/>
     <path d="m43 48 5-5 3 9-9-3Z"/>
   </g>
-</svg>`)} `
+</svg>`)}`
 
 export const getIcons = (translateFn) => {
   const t = typeof translateFn === 'function' ? translateFn : (k) => k

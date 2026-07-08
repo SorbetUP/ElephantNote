@@ -3,7 +3,7 @@ mod iroh_two_endpoint_tests {
   use super::*;
   use iroh::endpoint::{presets, Connection};
   use iroh::protocol::{AcceptError, ProtocolHandler, Router};
-  use iroh::Endpoint;
+  use iroh::{Endpoint, EndpointAddr};
   use std::fmt;
   use std::io;
   use std::path::{Path, PathBuf};
@@ -87,15 +87,15 @@ mod iroh_two_endpoint_tests {
   fn configure_peer(
     vault: &VaultDescriptor,
     local_endpoint: &Endpoint,
-    remote_endpoint: &Endpoint,
+    remote_addr: EndpointAddr,
     remote_name: &str,
   ) -> SyncConfig {
     let cwd = PathBuf::from(&vault.path);
     let mut config = ensure_sync_files(vault, &local_endpoint.id().to_string()).unwrap();
     config.folder_id = "vault-shared-smoke-vault".to_string();
     config.peers = vec![PeerConfig {
-      endpoint_id: remote_endpoint.id().to_string(),
-      endpoint_addr: Some(remote_endpoint.addr()),
+      endpoint_id: remote_addr.id.to_string(),
+      endpoint_addr: Some(remote_addr),
       name: remote_name.to_string(),
       folder_id: config.folder_id.clone(),
       verified: true,
@@ -157,6 +157,8 @@ mod iroh_two_endpoint_tests {
     let vault_b = descriptor(&root_b, "Device B");
     let endpoint_a = Endpoint::builder(presets::Minimal).bind().await.unwrap();
     let endpoint_b = Endpoint::builder(presets::Minimal).bind().await.unwrap();
+    let addr_a = crate::sync::wait_for_endpoint_addr(&endpoint_a).await.unwrap();
+    let addr_b = crate::sync::wait_for_endpoint_addr(&endpoint_b).await.unwrap();
     let server_errors = Arc::new(Mutex::new(Vec::new()));
     let client_errors = Arc::new(Mutex::new(Vec::new()));
 
@@ -180,8 +182,8 @@ mod iroh_two_endpoint_tests {
       .spawn();
     let runtime_a = IrohRuntime::from_test_parts(endpoint_a.clone(), client_router);
 
-    let config_a = configure_peer(&vault_a, &endpoint_a, &endpoint_b, "Device B");
-    let _config_b = configure_peer(&vault_b, &endpoint_b, &endpoint_a, "Device A");
+    let config_a = configure_peer(&vault_a, &endpoint_a, addr_b, "Device B");
+    let _config_b = configure_peer(&vault_b, &endpoint_b, addr_a, "Device A");
 
     let first = expect_session(
       run_client_session(&vault_a, &config_a, &runtime_a).await,

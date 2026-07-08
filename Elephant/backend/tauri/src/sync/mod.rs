@@ -1,6 +1,6 @@
 use iroh::endpoint::{presets, Connection};
 use iroh::protocol::{AcceptError, ProtocolHandler, Router};
-use iroh::{Endpoint, EndpointAddr, EndpointId, SecretKey};
+use iroh::{Endpoint, EndpointAddr, EndpointId, SecretKey, Watcher as _};
 use iroh_mdns_address_lookup::MdnsAddressLookup;
 use std::fmt;
 use std::fs;
@@ -8,6 +8,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -18,6 +19,7 @@ pub mod transfer;
 
 const IDENTITY_FILE: &str = "iroh-endpoint.key";
 const MDNS_SERVICE: &str = "elephantnote-v1";
+const ENDPOINT_ADDRESS_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct SyncActivityGuard<'a> {
   running: &'a AtomicBool,
@@ -92,6 +94,24 @@ pub struct IrohRuntime {
   router: Router,
 }
 
+pub(crate) async fn wait_for_endpoint_addr(endpoint: &Endpoint) -> Result<EndpointAddr, String> {
+  let mut watcher = endpoint.watch_addr();
+  tokio::time::timeout(ENDPOINT_ADDRESS_TIMEOUT, async {
+    loop {
+      let addr = watcher.get();
+      if addr.ip_addrs().next().is_some() || addr.relay_urls().next().is_some() {
+        return Ok(addr);
+      }
+      watcher
+        .updated()
+        .await
+        .map_err(|_| "Iroh endpoint address watcher disconnected.".to_string())?;
+    }
+  })
+  .await
+  .map_err(|_| "Iroh endpoint did not publish a dialable address within ten seconds.".to_string())?
+}
+
 impl IrohRuntime {
   async fn start(app: AppHandle) -> Result<Self, String> {
     let key_path = identity_path(&app)?;
@@ -102,6 +122,11 @@ impl IrohRuntime {
       .bind()
       .await
       .map_err(|error| format!("failed to start Iroh endpoint: {error}"))?;
+
+    // Endpoint::addr() may initially contain only the identity. With the
+    // Minimal preset there is no relay fallback, so publishing an invitation
+    // before a direct address exists creates an undialable invite.
+    wait_for_endpoint_addr(&endpoint).await?;
 
     let router = Router::builder(endpoint.clone())
       .accept(protocol::ALPN, VaultSyncProtocol { app })
@@ -229,5 +254,13 @@ mod tests {
       assert!(state.begin_activity().is_err());
     }
     assert!(!state.is_running());
+  }
+
+  #[tokio::test]
+  async fn bound_endpoint_publishes_a_dialable_address() {
+    let endpoint = Endpoint::builder(presets::Minimal).bind().await.unwrap();
+    let addr = wait_for_endpoint_addr(&endpoint).await.unwrap();
+    assert!(addr.ip_addrs().next().is_some() || addr.relay_urls().next().is_some());
+    endpoint.close().await;
   }
 }

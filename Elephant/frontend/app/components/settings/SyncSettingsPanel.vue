@@ -168,7 +168,7 @@
             <QrCode aria-hidden="true" /> Invite another device
           </button>
           <button type="button" role="tab" :aria-selected="pairingMode === 'join'" :class="{ active: pairingMode === 'join' }" @click="pairingMode = 'join'">
-            <FileUp aria-hidden="true" /> Join with an invitation
+            <ScanLine aria-hidden="true" /> Scan or open an invitation
           </button>
         </div>
 
@@ -191,7 +191,7 @@
               <figure class="en-pair-qr">
                 <img v-if="inviteQrDataUrl" :src="inviteQrDataUrl" alt="QR code containing the ElephantNote pairing invitation">
                 <div v-else class="en-pair-qr-error"><AlertTriangle aria-hidden="true" /><span>QR generation failed. Use the invitation file instead.</span></div>
-                <figcaption>Scan this code on the other device, or send the invitation file.</figcaption>
+                <figcaption>On the other device, open ElephantNote → Settings → Sync → Scan or open an invitation.</figcaption>
               </figure>
 
               <div class="en-pair-share">
@@ -220,6 +220,13 @@
         </div>
 
         <div v-else class="en-pair-pane">
+          <SyncQrScanner
+            :active="pairingOpen && pairingMode === 'join'"
+            @decoded="handleScannedInvite"
+            @error="handleScannerError"
+          />
+
+          <div class="en-pair-divider"><span>or open an invitation file</span></div>
           <div class="en-invite-drop" :class="{ ready: incomingInviteValid }" @dragover.prevent @drop.prevent="handleInviteDrop">
             <input ref="inviteFileInput" class="visually-hidden" type="file" :accept="INVITE_FILE_ACCEPT" @change="importInviteFile">
             <span class="en-pair-intro-icon"><FileUp aria-hidden="true" /></span>
@@ -249,7 +256,6 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import QRCodeGenerator from 'qrcode'
 import {
   AlertTriangle,
   Archive,
@@ -268,6 +274,7 @@ import {
   QrCode,
   RefreshCw,
   RotateCw,
+  ScanLine,
   Send,
   Settings2,
   ShieldCheck,
@@ -275,12 +282,18 @@ import {
   Undo2,
   X
 } from '@lucide/vue'
+import SyncQrScanner from './SyncQrScanner.vue'
 import { irohSyncClient } from '../../services/irohSyncClient'
-
-const INVITE_PROTOCOL = 'elephantnote-iroh-sync-v1'
-const INVITE_MIME = 'application/vnd.elephantnote.sync-invite+json'
-const INVITE_EXTENSION = '.elephantnote-invite'
-const INVITE_FILE_ACCEPT = `${INVITE_EXTENSION},${INVITE_MIME},application/json`
+import {
+  INVITE_FILE_ACCEPT,
+  INVITE_MIME,
+  MAX_INVITE_FILE_BYTES,
+  buildSyncInviteFileName,
+  createSyncInviteFile,
+  generateSyncInviteQrDataUrl,
+  parseSyncInvite,
+  validateSyncInvitePayload
+} from '../../services/syncInvite'
 
 const props = defineProps({
   vaults: { type: Array, default: () => [] },
@@ -365,7 +378,7 @@ const syncDescription = computed(() => {
   if (hasCompletedSync.value) return `${pairedDevices.value.length} paired device${pairedDevices.value.length === 1 ? '' : 's'} for this vault.`
   return 'Your paired devices are ready for the first synchronization.'
 })
-const inviteDetails = computed(() => parseInvite(inviteCode.value))
+const inviteDetails = computed(() => parseSyncInvite(inviteCode.value))
 const inviteExpiresAt = computed(() => Number(inviteDetails.value?.expiresAt || 0))
 const inviteSecondsRemaining = computed(() => Math.max(0, inviteExpiresAt.value - nowSeconds.value))
 const inviteExpiryLabel = computed(() => {
@@ -383,15 +396,10 @@ const incomingInviteSummary = computed(() => {
   const expires = formatEpochSeconds(details.expiresAt, 'soon')
   return `${label} · valid until ${expires}`
 })
-const inviteFileName = computed(() => {
-  const safeVault = String(activeVaultName.value || 'vault')
-    .normalize('NFKD')
-    .replace(/[^a-zA-Z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'vault'
-  const inviteId = String(inviteDetails.value?.inviteId || 'pairing').replace(/[^a-zA-Z0-9_-]+/g, '-')
-  return `ElephantNote-${safeVault}-${inviteId}${INVITE_EXTENSION}`
-})
+const inviteFileName = computed(() => buildSyncInviteFileName(
+  activeVaultName.value,
+  inviteDetails.value?.inviteId
+))
 
 const shortId = (value) => {
   const text = String(value || '')
@@ -422,43 +430,12 @@ const formatBytes = (value) => {
 
 const errorMessage = (error, fallback) => error instanceof Error ? error.message : fallback
 
-const parseInvite = (raw) => {
-  if (!String(raw || '').trim()) return null
-  try {
-    const value = JSON.parse(String(raw).trim())
-    if (!value || typeof value !== 'object') return null
-    return value
-  } catch {
-    return null
-  }
-}
-
-const validateInvitePayload = (raw) => {
-  let value
-  try {
-    value = JSON.parse(String(raw || '').trim())
-  } catch {
-    throw new Error('This invitation is not valid JSON.')
-  }
-  if (!value || typeof value !== 'object' || value.protocol !== INVITE_PROTOCOL) {
-    throw new Error('This is not an ElephantNote synchronization invitation.')
-  }
-  if (!value.inviteId || !value.inviteToken || !value.endpointAddr || !value.folderId) {
-    throw new Error('The invitation is incomplete.')
-  }
-  const expiresAt = Number(value.expiresAt || 0)
-  if (!Number.isFinite(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000)) {
-    throw new Error('This invitation has expired. Create a new one on the other device.')
-  }
-  return value
-}
-
 const validateIncomingInvite = () => {
   incomingInviteDetails.value = null
   incomingInviteError.value = ''
   if (!incomingInvite.value) return
   try {
-    incomingInviteDetails.value = validateInvitePayload(incomingInvite.value)
+    incomingInviteDetails.value = validateSyncInvitePayload(incomingInvite.value)
   } catch (error) {
     incomingInviteError.value = errorMessage(error, 'This invitation cannot be used.')
   }
@@ -514,12 +491,7 @@ const createInvite = async () => {
     const result = await irohSyncClient.createInvite({ deviceName: activeVaultName.value })
     inviteCode.value = String(result?.manualCode || result?.qrPayload || '')
     if (!inviteCode.value) throw new Error('The synchronization backend returned an empty invitation.')
-    inviteQrDataUrl.value = await QRCodeGenerator.toDataURL(inviteCode.value, {
-      errorCorrectionLevel: 'L',
-      width: 280,
-      margin: 2,
-      color: { dark: '#101828ff', light: '#ffffffff' }
-    })
+    inviteQrDataUrl.value = await generateSyncInviteQrDataUrl(inviteCode.value)
     nowSeconds.value = Math.floor(Date.now() / 1000)
     copied.value = false
     statusMessage.value = 'Invitation created. Keep ElephantNote open until the other device accepts it.'
@@ -543,7 +515,7 @@ const copyInvite = async () => {
   }
 }
 
-const createInviteFile = () => new File([inviteCode.value], inviteFileName.value, { type: INVITE_MIME })
+const createInviteFile = () => createSyncInviteFile(inviteCode.value, inviteFileName.value)
 
 const downloadInviteFile = () => {
   if (!inviteCode.value || inviteSecondsRemaining.value <= 0) return false
@@ -589,7 +561,7 @@ const shareInviteFile = async () => {
 
 const readInviteFile = async (file) => {
   if (!file) return
-  if (file.size > 1024 * 1024) {
+  if (file.size > MAX_INVITE_FILE_BYTES) {
     incomingInviteError.value = 'This file is too large to be an ElephantNote invitation.'
     incomingInviteDetails.value = null
     return
@@ -612,6 +584,18 @@ const importInviteFile = async (event) => {
 
 const handleInviteDrop = async (event) => {
   await readInviteFile(event?.dataTransfer?.files?.[0])
+}
+
+const handleScannedInvite = (payload) => {
+  incomingInvite.value = String(payload || '').trim()
+  validateIncomingInvite()
+  if (incomingInviteValid.value) {
+    statusMessage.value = 'QR invitation decoded and validated. Confirm to pair this device.'
+  }
+}
+
+const handleScannerError = (message) => {
+  statusMessage.value = String(message || 'Unable to scan this QR code.')
 }
 
 const acceptInvite = async () => {

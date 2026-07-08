@@ -12,6 +12,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use tokio::sync::{Mutex, MutexGuard};
 
+pub mod logging;
 pub mod manifest;
 pub mod plan;
 pub mod protocol;
@@ -114,6 +115,7 @@ pub(crate) async fn wait_for_endpoint_addr(endpoint: &Endpoint) -> Result<Endpoi
 
 impl IrohRuntime {
   async fn start(app: AppHandle) -> Result<Self, String> {
+    logging::log_global("runtime:start", format!("mdns_service={MDNS_SERVICE}"));
     let key_path = identity_path(&app)?;
     let secret_key = load_or_create_secret_key(&key_path)?;
     let endpoint = Endpoint::builder(presets::Minimal)
@@ -126,7 +128,16 @@ impl IrohRuntime {
     // Endpoint::addr() may initially contain only the identity. With the
     // Minimal preset there is no relay fallback, so publishing an invitation
     // before a direct address exists creates an undialable invite.
-    wait_for_endpoint_addr(&endpoint).await?;
+    let addr = wait_for_endpoint_addr(&endpoint).await?;
+    logging::log_global(
+      "runtime:ready",
+      format!(
+        "endpoint_id={} direct_addresses={} relay_urls={}",
+        logging::short_peer_id(&endpoint.id().to_string()),
+        addr.ip_addrs().count(),
+        addr.relay_urls().count()
+      ),
+    );
 
     let router = Router::builder(endpoint.clone())
       .accept(protocol::ALPN, VaultSyncProtocol { app })
@@ -153,10 +164,23 @@ impl IrohRuntime {
   }
 
   pub async fn connect(&self, addr: EndpointAddr) -> Result<Connection, String> {
-    self.endpoint
+    logging::log_global(
+      "connect:start",
+      format!("peer_id={}", logging::short_peer_id(&addr.id.to_string())),
+    );
+    let connection = self
+      .endpoint
       .connect(addr, protocol::ALPN)
       .await
-      .map_err(|error| format!("failed to connect to Iroh peer: {error}"))
+      .map_err(|error| format!("failed to connect to Iroh peer: {error}"))?;
+    logging::log_global(
+      "connect:complete",
+      format!(
+        "peer_id={}",
+        logging::short_peer_id(&connection.remote_id().to_string())
+      ),
+    );
+    Ok(connection)
   }
 }
 
@@ -172,6 +196,7 @@ fn load_or_create_secret_key(path: &Path) -> Result<SecretKey, String> {
     let bytes: [u8; 32] = bytes
       .try_into()
       .map_err(|_| "invalid ElephantNote Iroh identity file".to_string())?;
+    logging::log_global("identity:loaded", format!("path={}", path.display()));
     return Ok(SecretKey::from_bytes(&bytes));
   }
 
@@ -181,6 +206,7 @@ fn load_or_create_secret_key(path: &Path) -> Result<SecretKey, String> {
   set_private_permissions(&temporary)?;
   fs::rename(&temporary, path).map_err(|error| error.to_string())?;
   set_private_permissions(path)?;
+  logging::log_global("identity:created", format!("path={}", path.display()));
   Ok(key)
 }
 
@@ -209,6 +235,13 @@ impl fmt::Debug for VaultSyncProtocol {
 
 impl ProtocolHandler for VaultSyncProtocol {
   async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+    logging::log_global(
+      "incoming:connection",
+      format!(
+        "peer_id={}",
+        logging::short_peer_id(&connection.remote_id().to_string())
+      ),
+    );
     if let Ok(config) = crate::vault::config::read_config(&self.app) {
       for vault in config.vaults {
         // Cleanup is best-effort per vault. An unavailable secondary vault
@@ -218,7 +251,10 @@ impl ProtocolHandler for VaultSyncProtocol {
     }
     crate::vault::sync::handle_incoming_connection(self.app.clone(), connection)
       .await
-      .map_err(|error| AcceptError::from_err(io::Error::other(error)))
+      .map_err(|error| {
+        logging::log_global_error("incoming:error", &error);
+        AcceptError::from_err(io::Error::other(error))
+      })
   }
 }
 

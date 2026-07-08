@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const readSyncSettingsPanel = () => read('Elephant/frontend/app/components/settings/SyncSettingsPanel.vue')
+const readSyncQrScanner = () => read('Elephant/frontend/app/components/settings/SyncQrScanner.vue')
+const readSyncInvite = () => read('Elephant/frontend/app/services/syncInvite.js')
 const readIrohClient = () => read('Elephant/frontend/app/services/irohSyncClient.js')
 const readNavigationBar = () => read('Elephant/frontend/app/components/navigation/NavigationBar.vue')
 const readNavigationStore = () => read('Elephant/frontend/app/stores/navigationStore.js')
@@ -40,23 +42,27 @@ describe('ElephantNote Iroh UI integration', () => {
     expect(panel).not.toContain('.en-sync-card {')
   })
 
-  it('generates a real local QR code from the backend invitation payload', () => {
+  it('generates a high-resolution local QR code from the exact backend invitation payload', () => {
     const panel = readSyncSettingsPanel()
+    const invite = readSyncInvite()
     const pkg = readPackage()
 
     expect(pkg.dependencies.qrcode).toBe('^1.5.4')
-    expect(panel).toContain("import QRCodeGenerator from 'qrcode'")
-    expect(panel).toContain('QRCodeGenerator.toDataURL(inviteCode.value')
+    expect(panel).toContain('generateSyncInviteQrDataUrl(inviteCode.value)')
     expect(panel).toContain(':src="inviteQrDataUrl"')
-    expect(panel).toContain('errorCorrectionLevel: \'L\'')
+    expect(invite).toContain("import QRCodeGenerator from 'qrcode'")
+    expect(invite).toContain("errorCorrectionLevel: 'L'")
+    expect(invite).toContain('width: 640')
+    expect(invite).toContain('margin: 4')
   })
 
   it('supports real invitation file export, native sharing and file import', () => {
     const panel = readSyncSettingsPanel()
+    const invite = readSyncInvite()
 
-    expect(panel).toContain("const INVITE_EXTENSION = '.elephantnote-invite'")
-    expect(panel).toContain("const INVITE_MIME = 'application/vnd.elephantnote.sync-invite+json'")
-    expect(panel).toContain('new File([inviteCode.value]')
+    expect(invite).toContain("export const INVITE_EXTENSION = '.elephantnote-invite'")
+    expect(invite).toContain("export const INVITE_MIME = 'application/vnd.elephantnote.sync-invite+json'")
+    expect(invite).toContain('return new File([normalized], fileName')
     expect(panel).toContain('navigator.canShare({ files: [file] })')
     expect(panel).toContain('await navigator.share(sharePayload)')
     expect(panel).toContain('@click="downloadInviteFile"')
@@ -65,13 +71,31 @@ describe('ElephantNote Iroh UI integration', () => {
     expect(panel).toContain('WhatsApp, Messages, Mail')
   })
 
+  it('has a real live-camera scanner and a system camera/image fallback', () => {
+    const panel = readSyncSettingsPanel()
+    const scanner = readSyncQrScanner()
+    const pkg = readPackage()
+
+    expect(pkg.dependencies['@zxing/browser']).toBe('^0.2.1')
+    expect(pkg.dependencies['@zxing/library']).toBe('^0.23.0')
+    expect(panel).toContain('<SyncQrScanner')
+    expect(panel).toContain('@decoded="handleScannedInvite"')
+    expect(scanner).toContain("import('@zxing/browser')")
+    expect(scanner).toContain('decodeFromConstraints(')
+    expect(scanner).toContain("facingMode: { ideal: 'environment' }")
+    expect(scanner).toContain('capture="environment"')
+    expect(scanner).toContain('decodeFromImageUrl(objectUrl)')
+    expect(scanner).toContain('validateSyncInvitePayload(normalized)')
+  })
+
   it('validates the protocol, required fields and expiry before pairing', () => {
     const panel = readSyncSettingsPanel()
+    const invite = readSyncInvite()
 
-    expect(panel).toContain("const INVITE_PROTOCOL = 'elephantnote-iroh-sync-v1'")
-    expect(panel).toContain('value.protocol !== INVITE_PROTOCOL')
-    expect(panel).toContain('!value.inviteId || !value.inviteToken || !value.endpointAddr || !value.folderId')
-    expect(panel).toContain('This invitation has expired')
+    expect(invite).toContain("export const INVITE_PROTOCOL = 'elephantnote-iroh-sync-v1'")
+    expect(invite).toContain('value.protocol !== INVITE_PROTOCOL')
+    expect(invite).toContain('!value.inviteId || !value.inviteToken || !value.endpointAddr || !value.folderId')
+    expect(invite).toContain('This invitation has expired')
     expect(panel).toContain(':disabled="loading || !hasVault || !incomingInviteValid"')
   })
 

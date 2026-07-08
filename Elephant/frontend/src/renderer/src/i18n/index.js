@@ -1,5 +1,4 @@
 import { createI18n } from 'vue-i18n'
-import englishLocaleCatalog from '../../../../../assets/static/locales/en.min.json'
 import bus from '../bus'
 import { isPortableRuntime, readPortablePreference } from '../platform/preferenceStorage'
 import {
@@ -136,10 +135,7 @@ const loadLocaleMessages = (locale) => {
   }
 }
 
-const englishFallback = mergeMessages(
-  createFallbackEnglishTranslations(),
-  mergeMessages(englishLocaleCatalog, getAppMessages('en'))
-)
+const englishFallback = mergeMessages(createFallbackEnglishTranslations(), getAppMessages('en'))
 const initialPreference = globalThis.localStorage?.getItem(APP_LANGUAGE_STORAGE_KEY) || 'system'
 const initialLocale = resolveStoredLocale(initialPreference)
 const initialMessages = initialLocale === APP_DEFAULT_LOCALE

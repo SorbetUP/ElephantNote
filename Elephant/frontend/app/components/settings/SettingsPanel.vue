@@ -11,22 +11,28 @@
       :style="settingsStyle"
       role="dialog"
       aria-modal="true"
-      aria-label="ElephantNote settings"
+      :aria-label="t('common.settings')"
     >
       <header class="en-settings-header">
-        <button class="en-icon-button en-settings-close" type="button" aria-label="Close settings" @click="emit('close')">
+        <button class="en-icon-button en-settings-close" type="button" :aria-label="t('common.close')" @click="emit('close')">
           <X aria-hidden="true" />
         </button>
-        <h2>Settings</h2>
+        <h2>{{ t('common.settings') }}</h2>
         <label class="en-settings-search">
           <Search aria-hidden="true" />
-          <input ref="searchInput" v-model="settingsQuery" type="search" placeholder="Search all settings" aria-label="Search all settings">
+          <input
+            ref="searchInput"
+            v-model="settingsQuery"
+            type="search"
+            :placeholder="t('settings.searchPlaceholder')"
+            :aria-label="t('settings.searchPlaceholder')"
+          >
           <kbd v-if="!settingsQuery">{{ isMacOS ? '⌘' : 'Ctrl' }} F</kbd>
         </label>
       </header>
 
       <div class="en-settings-grid">
-        <aside class="en-settings-nav" aria-label="Settings sections">
+        <aside class="en-settings-nav" :aria-label="t('common.settings')">
           <button
             v-for="item in sections"
             :key="item.id"
@@ -39,7 +45,7 @@
             <ChevronRight class="en-settings-nav-chevron" aria-hidden="true" />
           </button>
           <footer class="en-settings-nav-footer">
-            <span>Local-first</span>
+            <span>{{ t('common.localFirst') }}</span>
             <span>v0.18.9</span>
           </footer>
         </aside>
@@ -47,8 +53,8 @@
         <main ref="settingsContent" class="en-settings-content">
           <template v-if="settingsQuery.trim()">
             <div class="en-settings-page-title">
-              <h1>Search</h1>
-              <span>{{ searchResults.length }} result{{ searchResults.length === 1 ? '' : 's' }}</span>
+              <h1>{{ t('common.search') }}</h1>
+              <span>{{ searchResults.length }}</span>
             </div>
             <section v-if="searchResults.length" class="en-settings-search-results">
               <button v-for="result in searchResults" :key="result.id" type="button" @click="openSearchResult(result)">
@@ -63,8 +69,8 @@
             </section>
             <div v-else class="en-settings-empty-state en-settings-search-empty">
               <Search aria-hidden="true" />
-              <strong>No setting found</strong>
-              <span>Try another word, feature name or control.</span>
+              <strong>{{ t('settings.searchEmptyTitle') }}</strong>
+              <span>{{ t('settings.searchEmptyDescription') }}</span>
             </div>
           </template>
 
@@ -74,15 +80,30 @@
             <template v-if="activeSection === 'appearance'">
               <section class="en-settings-group">
                 <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Color mode</strong><span>Use the light or dark variant of the selected theme.</span></div>
-                  <div class="en-segmented" aria-label="Color mode">
-                    <button type="button" :class="{ active: themeMode === 'light' }" @click="emit('update-theme', getThemeVariant(activeThemeFamily.id, 'light'))"><SunMedium aria-hidden="true" /> Light</button>
-                    <button type="button" :class="{ active: themeMode === 'dark' }" @click="emit('update-theme', getThemeVariant(activeThemeFamily.id, 'dark'))"><Moon aria-hidden="true" /> Dark</button>
+                  <div class="en-settings-row-copy">
+                    <strong>{{ t('settings.language') }}</strong>
+                    <span>{{ t('settings.languageDescription') }}</span>
+                  </div>
+                  <label class="en-language-control">
+                    <Languages aria-hidden="true" />
+                    <select v-model="languagePreference" class="en-compact-select" @change="changeLanguage">
+                      <option v-for="option in languageOptions" :key="option.code" :value="option.code">
+                        {{ languageOptionLabel(option) }}
+                      </option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>{{ t('settings.colorMode') }}</strong><span>{{ t('settings.colorModeDescription') }}</span></div>
+                  <div class="en-segmented" :aria-label="t('settings.colorMode')">
+                    <button type="button" :class="{ active: themeMode === 'light' }" @click="emit('update-theme', getThemeVariant(activeThemeFamily.id, 'light'))"><SunMedium aria-hidden="true" /> {{ t('settings.light') }}</button>
+                    <button type="button" :class="{ active: themeMode === 'dark' }" @click="emit('update-theme', getThemeVariant(activeThemeFamily.id, 'dark'))"><Moon aria-hidden="true" /> {{ t('settings.dark') }}</button>
                   </div>
                 </div>
 
                 <div class="en-settings-row en-settings-row-stacked">
-                  <div class="en-settings-row-copy"><strong>Theme</strong><span>Choose the visual family used throughout ElephantNote.</span></div>
+                  <div class="en-settings-row-copy"><strong>{{ t('settings.theme') }}</strong><span>{{ t('settings.themeDescription') }}</span></div>
                   <div class="en-theme-grid">
                     <button
                       v-for="family in themeFamilies"
@@ -106,7 +127,7 @@
                 </div>
 
                 <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Sidebar width</strong><span>Resize the main navigation rail.</span></div>
+                  <div class="en-settings-row-copy"><strong>{{ t('settings.sidebarWidth') }}</strong><span>{{ t('settings.sidebarWidthDescription') }}</span></div>
                   <label class="en-range-control">
                     <input type="range" min="184" max="320" :value="sidebarWidth" @input="emit('update-sidebar-width', Number($event.target.value))">
                     <output>{{ sidebarWidth }} px</output>
@@ -187,7 +208,7 @@
                   <article v-for="vault in vaults" :key="vault.id" class="en-vault-row">
                     <span class="en-vault-icon"><FolderOpen aria-hidden="true" /></span>
                     <div><strong>{{ vault.name }}</strong><p>{{ vault.path }}</p></div>
-                    <button type="button" class="en-danger-button" :disabled="removingVaultId === vault.id" @click="removeVaultFromApp(vault)">{{ removingVaultId === vault.id ? 'Removing…' : 'Remove' }}</button>
+                    <button type="button" class="en-danger-button" :disabled="removingVaultId === vault.id" @click="removeVaultFromApp(vault)">{{ removingVaultId === vault.id ? 'Removing…' : t('common.remove') }}</button>
                   </article>
                 </div>
                 <div v-else class="en-settings-empty-state"><FolderOpen aria-hidden="true" /><strong>No vault registered</strong><span>Open a folder from the main workspace to add it.</span></div>
@@ -242,6 +263,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import log from '@/platform/runtimeLogShim'
 import {
   Check,
@@ -251,6 +273,7 @@ import {
   FolderOpen,
   Globe2,
   HardDrive,
+  Languages,
   Moon,
   Palette,
   PenLine,
@@ -260,7 +283,15 @@ import {
   X
 } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
-import { ELEPHANTNOTE_THEME_FAMILIES, getThemeFamily, getThemeLabel, getThemeMode, getThemeTokens, getThemeVariant } from 'common/elephantnote/appearance'
+import { getLanguageOptions, getLanguagePreference, setLanguage } from '@/i18n'
+import {
+  ELEPHANTNOTE_THEME_FAMILIES,
+  getThemeFamily,
+  getThemeLabel,
+  getThemeMode,
+  getThemeTokens,
+  getThemeVariant
+} from 'common/elephantnote/appearance'
 import AiProviderSettingsPanel from './AiProviderSettingsPanel.vue'
 import SyncSettingsPanel from './SyncSettingsPanel.vue'
 import { useSitePreviewStore } from '../../sitePreview/sitePreviewStore'
@@ -275,20 +306,23 @@ const props = defineProps({
   activeVaultPath: { type: String, default: '' }
 })
 const emit = defineEmits(['close', 'update-theme', 'update-sidebar-width'])
+const { t, locale } = useI18n()
 
-const sections = [
-  { id: 'appearance', label: 'Appearance', icon: Palette },
-  { id: 'editor', label: 'Editor', icon: PenLine },
-  { id: 'vaults', label: 'Vaults', icon: FolderOpen },
-  { id: 'sync', label: 'Sync', icon: Cloud },
-  { id: 'ai', label: 'AI', icon: Sparkles },
-  { id: 'sites', label: 'Sites', icon: Globe2 },
-  { id: 'import', label: 'Import', icon: Download }
+const sectionDefinitions = [
+  { id: 'appearance', labelKey: 'navigation.appearance', icon: Palette },
+  { id: 'editor', labelKey: 'navigation.editor', icon: PenLine },
+  { id: 'vaults', labelKey: 'navigation.vaults', icon: FolderOpen },
+  { id: 'sync', labelKey: 'navigation.sync', icon: Cloud },
+  { id: 'ai', labelKey: 'navigation.ai', icon: Sparkles },
+  { id: 'sites', labelKey: 'navigation.sites', icon: Globe2 },
+  { id: 'import', labelKey: 'navigation.import', icon: Download }
 ]
-const sectionById = Object.fromEntries(sections.map((section) => [section.id, section]))
-const settingsIndex = [
+const sections = computed(() => sectionDefinitions.map((section) => ({ ...section, label: t(section.labelKey) })))
+const sectionById = computed(() => Object.fromEntries(sections.value.map((section) => [section.id, section])))
+const settingsIndexDefinitions = [
+  { id: 'appearance-language', section: 'appearance', label: 'Language', description: 'Application language and direction.' },
   { id: 'appearance-mode', section: 'appearance', label: 'Color mode', description: 'Light and dark appearance.' },
-  { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Apple, Graphite, Nord, Solar and Forest themes.' },
+  { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Beige, Pastel, Gamer Violet and other themes.' },
   { id: 'appearance-sidebar', section: 'appearance', label: 'Sidebar width', description: 'Resize the main navigation rail.' },
   { id: 'editor-footer', section: 'editor', label: 'Editor footer', description: 'Word count and typography controls.' },
   { id: 'editor-tags', section: 'editor', label: 'Tag prefix', description: 'Show or hide the # before tags.' },
@@ -315,7 +349,7 @@ const settingsIndex = [
   { id: 'import-keep', section: 'import', label: 'Google Keep import', description: 'Convert a Keep archive into Markdown.' },
   { id: 'import-web', section: 'import', label: 'Web page import', description: 'Save a URL into the active vault.' },
   { id: 'import-rss', section: 'import', label: 'RSS import', description: 'Import feed items into local notes.' }
-].map((entry) => ({ ...entry, sectionLabel: sectionById[entry.section].label, icon: sectionById[entry.section].icon }))
+]
 
 const activeSection = ref('appearance')
 const settingsQuery = ref('')
@@ -323,15 +357,25 @@ const syncInitialPage = ref('overview')
 const aiInitialPage = ref('provider')
 const searchInput = ref(null)
 const settingsContent = ref(null)
+const languagePreference = ref(getLanguagePreference())
 const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
-const activeSectionMeta = computed(() => sectionById[activeSection.value] || sections[0])
+const activeSectionMeta = computed(() => sectionById.value[activeSection.value] || sections.value[0])
+const settingsIndex = computed(() => settingsIndexDefinitions.map((entry) => ({
+  ...entry,
+  sectionLabel: sectionById.value[entry.section]?.label || entry.section,
+  icon: sectionById.value[entry.section]?.icon
+})))
 const searchResults = computed(() => {
   const terms = settingsQuery.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean)
   if (!terms.length) return []
-  return settingsIndex.filter((entry) => {
+  return settingsIndex.value.filter((entry) => {
     const haystack = `${entry.label} ${entry.description} ${entry.sectionLabel}`.toLocaleLowerCase()
     return terms.every((term) => haystack.includes(term))
   })
+})
+const languageOptions = computed(() => {
+  void locale.value
+  return getLanguageOptions()
 })
 
 const vaults = computed(() => props.vaults)
@@ -367,6 +411,17 @@ const isImporting = ref(false)
 const isImportingSource = ref(false)
 const siteStatusLabel = computed(() => sitePreviewStore.previewUrl ? 'Preview running' : sitePreviewStore.lastBuild?.outputDir ? 'Static build ready' : 'No generated site active')
 
+const languageOptionLabel = (option) => {
+  if (option.code === 'system') return t('settings.systemLanguage')
+  return option.nativeName === option.displayName
+    ? option.nativeName
+    : `${option.nativeName} · ${option.displayName}`
+}
+const changeLanguage = () => {
+  const resolved = setLanguage(languagePreference.value)
+  preferences.SET_SINGLE_PREFERENCE({ type: 'language', value: languagePreference.value })
+  log.info('[settings] language:changed', { preference: languagePreference.value, resolved })
+}
 const scrollContentToTop = () => nextTick(() => settingsContent.value?.scrollTo({ top: 0, behavior: 'instant' }))
 const selectSection = (section) => {
   activeSection.value = section
@@ -476,15 +531,13 @@ const handleKeyboard = (event) => {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyboard)
-  log.info('[settings] mounted:start')
   try {
     featureFlags.value = await elephantnoteClient.features.get()
-    log.info('[settings] featureFlags:loaded', featureFlags.value)
   } catch (error) {
     log.warn('[settings] featureFlags:failed', error)
   }
   sitePreviewStore.refresh?.()
-  log.info('[settings] mounted:done', { theme: activeThemeLabel.value })
+  log.info('[settings] mounted:done', { theme: activeThemeLabel.value, locale: locale.value })
 })
 
 onBeforeUnmount(() => window.removeEventListener('keydown', handleKeyboard))

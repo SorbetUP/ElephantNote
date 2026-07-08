@@ -61,12 +61,15 @@ pub async fn send_file(connection: &Connection, root: &Path, spec: &TransferSpec
   if !metadata.is_file() {
     return Err(format!("sync source is not a regular file: {}", spec.source_path));
   }
+  if metadata.len() != spec.size {
+    return Err(format!("file changed before sync transfer: {}", spec.source_path));
+  }
   let mut send = connection.open_uni().await.map_err(|error| error.to_string())?;
   let header = FileHeader {
     transfer_id: spec.transfer_id.clone(),
     source_path: spec.source_path.clone(),
     target_path: spec.target_path.clone(),
-    size: metadata.len(),
+    size: spec.size,
     hash: spec.hash.clone(),
   };
   write_file_header(&mut send, &header).await?;
@@ -88,15 +91,38 @@ pub async fn send_file(connection: &Connection, root: &Path, spec: &TransferSpec
   Ok(total)
 }
 
-pub async fn receive_file(connection: &Connection, root: &Path) -> Result<(FileHeader, u64), String> {
+fn validate_header(header: &FileHeader, expected: &TransferSpec) -> Result<(), String> {
+  if header.transfer_id != expected.transfer_id
+    || header.source_path != expected.source_path
+    || header.target_path != expected.target_path
+    || header.size != expected.size
+    || header.hash != expected.hash
+  {
+    return Err(format!(
+      "incoming file stream does not match negotiated transfer {}",
+      expected.transfer_id
+    ));
+  }
+  Ok(())
+}
+
+pub async fn receive_file(
+  connection: &Connection,
+  root: &Path,
+  expected: &TransferSpec,
+) -> Result<(FileHeader, u64), String> {
   let mut recv = connection.accept_uni().await.map_err(|error| error.to_string())?;
   let header = read_file_header(&mut recv).await?;
+  validate_header(&header, expected)?;
   let target = safe_join(root, &header.target_path)?;
   if let Some(parent) = target.parent() {
     tokio::fs::create_dir_all(parent).await.map_err(|error| error.to_string())?;
   }
   if target.is_dir() {
-    tokio::fs::remove_dir_all(&target).await.map_err(|error| error.to_string())?;
+    return Err(format!(
+      "cannot replace directory with incoming file without resolving namespace conflict: {}",
+      header.target_path
+    ));
   }
   let filename = target.file_name().and_then(|value| value.to_str()).unwrap_or("incoming");
   let temporary = target.with_file_name(format!(".{filename}.{}.syncpart", header.transfer_id));
@@ -131,4 +157,28 @@ pub async fn receive_file(connection: &Connection, root: &Path) -> Result<(FileH
   }
   tokio::fs::rename(&temporary, &target).await.map_err(|error| error.to_string())?;
   Ok((header, total))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn rejects_a_file_header_outside_the_negotiated_plan() {
+    let expected = TransferSpec {
+      transfer_id: "one".to_string(),
+      source_path: "A.md".to_string(),
+      target_path: "A.md".to_string(),
+      size: 10,
+      hash: "abcd".to_string(),
+    };
+    let header = FileHeader {
+      transfer_id: "one".to_string(),
+      source_path: "A.md".to_string(),
+      target_path: "Other.md".to_string(),
+      size: 10,
+      hash: "abcd".to_string(),
+    };
+    assert!(validate_header(&header, &expected).is_err());
+  }
 }

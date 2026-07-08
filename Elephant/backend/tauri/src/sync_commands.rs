@@ -6,8 +6,8 @@ use crate::vault::{config, sync};
 
 type R<T> = Result<T, String>;
 
-#[tauri::command]
-pub async fn tauri_sync_create_invite(
+#[tauri::command(rename = "tauri_sync_create_invite")]
+pub async fn iroh_sync_create_invite(
   app: AppHandle,
   state: State<'_, IrohSyncState>,
   payload: Option<Value>,
@@ -17,8 +17,8 @@ pub async fn tauri_sync_create_invite(
   sync::sync_create_invite(config::get_active_vault(&app)?, payload, runtime).await
 }
 
-#[tauri::command]
-pub async fn tauri_sync_accept_invite(
+#[tauri::command(rename = "tauri_sync_accept_invite")]
+pub async fn iroh_sync_accept_invite(
   app: AppHandle,
   state: State<'_, IrohSyncState>,
   invite: Value,
@@ -28,8 +28,8 @@ pub async fn tauri_sync_accept_invite(
   sync::sync_accept_invite(config::get_active_vault(&app)?, invite, runtime).await
 }
 
-#[tauri::command]
-pub async fn tauri_sync_status(
+#[tauri::command(rename = "tauri_sync_status")]
+pub async fn iroh_sync_status(
   app: AppHandle,
   state: State<'_, IrohSyncState>,
 ) -> R<Value> {
@@ -41,8 +41,8 @@ pub async fn tauri_sync_status(
   )
 }
 
-#[tauri::command]
-pub async fn tauri_sync_enqueue(
+#[tauri::command(rename = "tauri_sync_enqueue")]
+pub async fn iroh_sync_enqueue(
   app: AppHandle,
   state: State<'_, IrohSyncState>,
   operation: String,
@@ -58,8 +58,8 @@ pub async fn tauri_sync_enqueue(
   )
 }
 
-#[tauri::command]
-pub async fn tauri_sync_run(
+#[tauri::command(rename = "tauri_sync_run")]
+pub async fn iroh_sync_run(
   app: AppHandle,
   state: State<'_, IrohSyncState>,
   payload_by_operation: Option<Value>,

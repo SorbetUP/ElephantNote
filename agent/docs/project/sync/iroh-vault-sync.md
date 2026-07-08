@@ -35,12 +35,47 @@ The Sync settings panel calls the real Tauri commands directly. It does not expo
 1. Device A creates a ten-minute invitation from Settings → Sync.
 2. The invitation contains Device A's `EndpointAddr`, vault identifier, invitation identifier, and a random one-time token.
 3. Only the BLAKE3 hash of the one-time token is persisted by Device A.
-4. Device B pastes the invitation from its own Sync settings panel.
-5. Device B connects over Iroh and sends the token on the encrypted connection.
-6. Both devices persist the authenticated remote `EndpointId` as a trusted peer for that vault.
-7. Either device can run **Sync now**.
+4. The invitation can be moved to Device B in four equivalent forms:
+   - a locally generated QR code containing the exact invitation payload;
+   - a `.elephantnote-invite` file;
+   - the native operating-system share sheet, which can expose WhatsApp, Messages, Mail, or another installed application when file sharing is supported;
+   - manual copy and paste as a fallback.
+5. Device B imports the invitation file or pastes the invitation code from its own Sync settings panel.
+6. The frontend validates the protocol name, required fields, file size, and expiration before invoking the backend.
+7. Device B connects over Iroh and sends the token on the encrypted connection.
+8. Both devices persist the authenticated remote `EndpointId` as a trusted peer for that vault.
+9. Either device can run **Sync now**.
 
-The invitation is a temporary bearer credential and must not be logged or committed.
+The QR code is produced locally from the payload with the `qrcode` JavaScript package. No QR payload is uploaded to a third-party service.
+
+The invitation file uses:
+
+```text
+Extension: .elephantnote-invite
+MIME: application/vnd.elephantnote.sync-invite+json
+Content: the exact JSON invitation accepted by tauri_sync_accept_invite
+```
+
+A native share action always shares the file rather than publishing the credential at a web URL. When the Web Share API or file sharing is unavailable, ElephantNote downloads the same invitation file instead.
+
+ElephantNote does not currently register an `elephantnote://` deep-link scheme. The UI must therefore not claim that an invitation URL can open the application automatically. A future link flow requires an explicitly registered and tested desktop/mobile protocol handler before it can replace the file fallback.
+
+The invitation is a temporary bearer credential and must not be logged, committed, indexed, or synchronized. Anyone who obtains it before expiration can attempt to pair, so the UI displays the remaining lifetime and clears the visible payload when the pairing dialog closes.
+
+## Sync settings information architecture
+
+Settings → Sync is a single vertical page rather than a second settings application with `Overview`, `Devices`, and `Conflicts` tabs.
+
+The order reflects the questions a normal user asks:
+
+1. current synchronization result and the main action;
+2. paired devices;
+3. conflict protection and recovered copies;
+4. advanced identifiers for diagnostics.
+
+The page deliberately distinguishes **paired** from **online**. A stored peer is labeled `Paired`; it is not shown as connected or available unless the backend provides a real reachability signal. Iroh EndpointIds remain under the collapsed Advanced section.
+
+Adding a device opens a dedicated pairing dialog. Creating and accepting invitations are separate modes, and file import supports both a file picker and drag and drop. No device removal or renaming control is displayed until corresponding backend commands exist.
 
 ## Synchronization algorithm
 
@@ -103,4 +138,4 @@ For edit-versus-delete conflicts, the edited content is preserved because the cu
 
 ## Important implementation rule
 
-Do not replace this protocol with a shared-folder copy, fake success response, or smoke-only implementation. A successful sync result requires an authenticated Iroh peer connection and matching final content manifests.
+Do not replace this protocol with a shared-folder copy, fake success response, unregistered deep link, or smoke-only implementation. A successful sync result requires an authenticated Iroh peer connection and matching final content manifests.

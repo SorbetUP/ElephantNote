@@ -1,46 +1,35 @@
 <template>
   <section class="en-ai-settings">
-    <header class="en-ai-hero">
-      <div class="en-ai-hero-copy">
-        <span class="en-ai-hero-icon"><Sparkles aria-hidden="true" /></span>
-        <div>
-          <div class="en-ai-title-row">
-            <h3>Elephant AI</h3>
-            <span class="en-ai-save-status" :class="{ saving: autosaveMessage === 'Saving...' }">
-              <span />{{ autosaveMessage || 'Autosave enabled' }}
-            </span>
-          </div>
-          <p>Choose where each capability runs. Local models and external providers remain optional and independently configurable.</p>
-        </div>
+    <div class="en-ai-toolbar">
+      <nav class="en-ai-tabs" aria-label="AI settings pages">
+        <button v-for="page in aiPages" :key="page.id" type="button" :class="{ active: activePage === page.id }" @click="activePage = page.id">
+          <component :is="page.icon" aria-hidden="true" />
+          <span>{{ page.label }}</span>
+        </button>
+      </nav>
+      <div class="en-ai-toolbar-actions">
+        <span class="en-ai-save-status" :class="{ saving: autosaveMessage === 'Saving...' }"><span />{{ autosaveMessage || 'Saved' }}</span>
+        <button class="secondary compact icon-only" type="button" title="Reload AI settings" :disabled="loading" @click="loadConfig"><RotateCw aria-hidden="true" /></button>
+        <button class="primary compact" type="button" :disabled="saving" @click="saveConfig"><Save aria-hidden="true" />{{ saving ? 'Saving…' : 'Save' }}</button>
       </div>
-      <div class="en-ai-top-actions">
-        <button class="secondary" type="button" :disabled="loading" @click="loadConfig"><RotateCw aria-hidden="true" />{{ loading ? 'Loading…' : 'Reload' }}</button>
-        <button class="primary" type="button" :disabled="saving" @click="saveConfig"><Save aria-hidden="true" />{{ saving ? 'Saving…' : 'Save now' }}</button>
-      </div>
-    </header>
-
-    <nav class="en-ai-tabs" aria-label="AI settings pages">
-      <button v-for="page in aiPages" :key="page.id" type="button" :class="{ active: activePage === page.id }" @click="activePage = page.id">
-        <component :is="page.icon" aria-hidden="true" />
-        <span>{{ page.label }}</span>
-      </button>
-    </nav>
+    </div>
 
     <template v-if="activePage === 'provider'">
       <section class="en-ai-card">
-        <header class="en-ai-card-header">
-          <div><h4>Local runtime</h4><p>Run compatible downloaded models directly through the Rust/Tauri runtime.</p></div>
-          <span class="en-ai-badge" :class="{ active: form.localAi.enabled }"><Cpu aria-hidden="true" />{{ form.localAi.enabled ? `${localModels.length} model${localModels.length === 1 ? '' : 's'}` : 'Off' }}</span>
-        </header>
         <div class="en-ai-setting-row">
-          <div class="en-ai-setting-copy"><strong>App Local</strong><span>Enable local chat, embedding and OCR candidates without sending content to a remote API.</span></div>
-          <button class="en-ai-switch" type="button" role="switch" :aria-checked="form.localAi.enabled" :class="{ active: form.localAi.enabled }" @click="toggleLocalAi"><span /></button>
+          <span class="en-ai-row-icon"><Cpu aria-hidden="true" /></span>
+          <div class="en-ai-setting-copy">
+            <strong>App Local</strong>
+            <span>Run compatible downloaded models directly on this device.</span>
+          </div>
+          <span class="en-ai-badge" :class="{ active: form.localAi.enabled }">{{ form.localAi.enabled ? `${localModels.length} model${localModels.length === 1 ? '' : 's'}` : 'Off' }}</span>
+          <button class="en-ai-switch" type="button" role="switch" aria-label="Enable local AI" :aria-checked="form.localAi.enabled" :class="{ active: form.localAi.enabled }" @click="toggleLocalAi"><span /></button>
         </div>
       </section>
 
       <section class="en-ai-card">
         <header class="en-ai-card-header">
-          <div><h4>External providers</h4><p>Add OpenAI-compatible APIs and local servers used by one or more AI capabilities.</p></div>
+          <h4>External providers</h4>
           <button class="secondary compact" type="button" title="Add provider" @click="addProvider"><Plus aria-hidden="true" /> Add provider</button>
         </header>
 
@@ -67,7 +56,7 @@
               <div class="en-provider-footer">
                 <div class="en-provider-footer-left">
                   <button class="en-ai-switch small" type="button" role="switch" :aria-checked="provider.enabled" :class="{ active: provider.enabled }" @click="toggleProvider(provider)"><span /></button>
-                  <span>{{ provider.enabled ? 'Provider available to routes' : 'Provider excluded from model choices' }}</span>
+                  <span>{{ provider.enabled ? 'Available to model routes' : 'Excluded from model routes' }}</span>
                 </div>
                 <div class="en-ai-actions">
                   <button class="secondary compact" type="button" @click="testProvider(provider)"><Activity aria-hidden="true" /> Test</button>
@@ -77,21 +66,29 @@
             </div>
           </article>
         </div>
-        <div v-else class="en-ai-empty"><Server aria-hidden="true" /><div><strong>No external provider</strong><p>Local AI can still work independently. Add a provider when you need a remote model or local server.</p></div><button class="primary compact" type="button" @click="addProvider"><Plus aria-hidden="true" /> Add provider</button></div>
+        <div v-else class="en-ai-empty"><Server aria-hidden="true" /><div><strong>No external provider</strong><p>Local AI continues to work independently. Add a provider from the button above when needed.</p></div></div>
       </section>
 
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>Codex account</h4><p>Use an authenticated Codex connection as a chat route.</p></div><span class="en-ai-badge" :class="{ active: form.codex.connected }"><TerminalSquare aria-hidden="true" />{{ form.codex.connected ? 'Connected' : 'Disconnected' }}</span></header>
-        <div class="en-ai-setting-row">
-          <div class="en-ai-setting-copy"><strong>Codex connection</strong><span>Connect or disconnect the account-backed Codex provider.</span><small v-if="providerMessage">{{ providerMessage }}</small></div>
-          <div class="en-ai-actions"><button class="secondary" type="button" :class="{ active: form.codex.connected }" @click="connectCodex"><Link2 aria-hidden="true" />{{ form.codex.connected ? 'Disconnect' : 'Connect' }}</button><button class="secondary" type="button" :disabled="!form.codex.connected || testing" @click="testCodex"><Activity aria-hidden="true" /> Test</button></div>
+        <div class="en-ai-setting-row en-codex-row">
+          <span class="en-ai-row-icon"><TerminalSquare aria-hidden="true" /></span>
+          <div class="en-ai-setting-copy">
+            <strong>Codex</strong>
+            <span>Use the authenticated Codex account as a chat route.</span>
+            <small v-if="providerMessage">{{ providerMessage }}</small>
+          </div>
+          <span class="en-ai-badge" :class="{ active: form.codex.connected }">{{ form.codex.connected ? 'Connected' : 'Disconnected' }}</span>
+          <div class="en-ai-actions">
+            <button class="secondary compact" type="button" :class="{ active: form.codex.connected }" @click="connectCodex"><Link2 aria-hidden="true" />{{ form.codex.connected ? 'Disconnect' : 'Connect' }}</button>
+            <button class="secondary compact" type="button" :disabled="!form.codex.connected || testing" @click="testCodex"><Activity aria-hidden="true" /> Test</button>
+          </div>
         </div>
       </section>
     </template>
 
     <template v-else-if="activePage === 'chat'">
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>Chat model</h4><p>Select the route used by chat, RAG and agent answers.</p></div><span class="en-ai-badge active"><MessageSquare aria-hidden="true" />{{ routeProviderLabel(form.routes.chat.source) }}</span></header>
+        <header class="en-ai-card-header"><h4>Chat model</h4><span class="en-ai-badge active"><MessageSquare aria-hidden="true" />{{ routeProviderLabel(form.routes.chat.source) }}</span></header>
         <div class="en-ai-model-row">
           <label class="en-ai-full"><span>Model</span><input v-model.trim="form.routes.chat.modelRef" list="chat-model-candidates" type="text" placeholder="Choose or type a model" @change="applyModelChoice('chat')"></label>
           <datalist id="chat-model-candidates"><option v-for="candidate in chatCandidates" :key="candidate.ref" :value="candidate.ref">{{ candidate.label }}</option></datalist>
@@ -100,14 +97,13 @@
       </section>
 
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>Capabilities</h4><p>Enable only the behavior you expect from the selected chat route.</p></div></header>
         <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Retrieval-augmented answers</strong><span>Search relevant notes and include them in the model context.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.chat.enableRag" :class="{ active: form.routes.chat.enableRag }" @click="form.routes.chat.enableRag = !form.routes.chat.enableRag"><span /></button></div>
-        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Tools</strong><span>Allow the chat route to use supported ElephantNote actions.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.chat.enableTools" :class="{ active: form.routes.chat.enableTools }" @click="form.routes.chat.enableTools = !form.routes.chat.enableTools"><span /></button></div>
-        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Streaming</strong><span>Display generated text progressively instead of waiting for the complete answer.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.chat.stream" :class="{ active: form.routes.chat.stream }" @click="form.routes.chat.stream = !form.routes.chat.stream"><span /></button></div>
+        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Tools</strong><span>Allow supported ElephantNote actions.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.chat.enableTools" :class="{ active: form.routes.chat.enableTools }" @click="form.routes.chat.enableTools = !form.routes.chat.enableTools"><span /></button></div>
+        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Streaming</strong><span>Display generated text progressively.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.chat.stream" :class="{ active: form.routes.chat.stream }" @click="form.routes.chat.stream = !form.routes.chat.stream"><span /></button></div>
       </section>
 
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>Instructions</h4><p>Define the default behavior shared by chat, RAG and agent responses.</p></div></header>
+        <header class="en-ai-card-header"><h4>Instructions</h4></header>
         <div class="en-ai-form-body"><label class="en-ai-full"><span>System prompt</span><textarea v-model="form.routes.chat.systemPrompt" rows="6" placeholder="Instructions for chat, RAG and agent answers."></textarea></label></div>
         <details class="en-ai-advanced">
           <summary><SlidersHorizontal aria-hidden="true" /><span><strong>Advanced generation settings</strong><small>Temperature, context, output length and RAG limit</small></span><ChevronDown aria-hidden="true" /></summary>
@@ -119,7 +115,7 @@
 
     <template v-else-if="activePage === 'embedding'">
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>Embedding model</h4><p>Select the model used to index notes and perform semantic retrieval.</p></div><span class="en-ai-badge active"><Database aria-hidden="true" />{{ routeProviderLabel(form.routes.embedding.source) }}</span></header>
+        <header class="en-ai-card-header"><h4>Embedding model</h4><span class="en-ai-badge active"><Database aria-hidden="true" />{{ routeProviderLabel(form.routes.embedding.source) }}</span></header>
         <div class="en-ai-model-row">
           <label class="en-ai-full"><span>Model</span><input v-model.trim="form.routes.embedding.modelRef" list="embedding-model-candidates" type="text" placeholder="Choose or type an embedding model" @change="applyModelChoice('embedding')"></label>
           <datalist id="embedding-model-candidates"><option v-for="candidate in embeddingCandidates" :key="candidate.ref" :value="candidate.ref">{{ candidate.label }}</option></datalist>
@@ -128,13 +124,12 @@
       </section>
 
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>Automatic indexing</h4><p>Keep the semantic index synchronized with changes in the vault.</p></div></header>
         <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Index new and edited notes</strong><span>Queue notes automatically after content changes.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.embedding.autoIndex" :class="{ active: form.routes.embedding.autoIndex }" @click="form.routes.embedding.autoIndex = !form.routes.embedding.autoIndex"><span /></button></div>
         <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Background processing</strong><span>Run pending indexing without blocking the editor.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.embedding.backgroundIndex" :class="{ active: form.routes.embedding.backgroundIndex }" @click="form.routes.embedding.backgroundIndex = !form.routes.embedding.backgroundIndex"><span /></button></div>
       </section>
 
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>Search behavior</h4><p>Configure the main retrieval strategy. Technical tuning remains collapsed by default.</p></div></header>
+        <header class="en-ai-card-header"><h4>Search behavior</h4></header>
         <div class="en-ai-form-body en-ai-grid"><label><span>Chunk strategy</span><select v-model="form.routes.embedding.chunkStrategy"><option value="markdown-heading">Markdown headings</option><option value="paragraph">Paragraphs</option><option value="fixed">Fixed size</option><option value="hybrid">Hybrid</option></select></label><label><span>Search result limit</span><input v-model.number="form.routes.embedding.searchTopK" type="number" min="1" max="100"></label><label><span>Distance metric</span><select v-model="form.routes.embedding.distance"><option value="cosine">Cosine</option><option value="dot">Dot product</option><option value="euclidean">Euclidean</option></select></label><label><span>Semantic threshold</span><input v-model.number="form.routes.embedding.threshold" type="number" min="0" max="1" step="0.01"></label></div>
         <details class="en-ai-advanced">
           <summary><SlidersHorizontal aria-hidden="true" /><span><strong>Advanced indexing settings</strong><small>Dimensions, chunk sizing, overlap and hybrid weights</small></span><ChevronDown aria-hidden="true" /></summary>
@@ -146,7 +141,7 @@
 
     <template v-else-if="activePage === 'ocr'">
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>OCR model</h4><p>Select the route used to extract text from images and PDF pages.</p></div><span class="en-ai-badge active"><ScanText aria-hidden="true" />{{ routeProviderLabel(form.routes.ocr.source) }}</span></header>
+        <header class="en-ai-card-header"><h4>OCR model</h4><span class="en-ai-badge active"><ScanText aria-hidden="true" />{{ routeProviderLabel(form.routes.ocr.source) }}</span></header>
         <div class="en-ai-model-row">
           <label class="en-ai-full"><span>Model</span><input v-model.trim="form.routes.ocr.modelRef" list="ocr-model-candidates" type="text" placeholder="Choose or type an OCR model" @change="applyModelChoice('ocr')"></label>
           <datalist id="ocr-model-candidates"><option v-for="candidate in ocrCandidates" :key="candidate.ref" :value="candidate.ref">{{ candidate.label }}</option></datalist>
@@ -155,15 +150,14 @@
       </section>
 
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>Automatic processing</h4><p>Control when OCR runs and which image corrections are applied first.</p></div></header>
         <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>OCR new images automatically</strong><span>Start text extraction when a supported image is added.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.ocr.autoOcr" :class="{ active: form.routes.ocr.autoOcr }" @click="form.routes.ocr.autoOcr = !form.routes.ocr.autoOcr"><span /></button></div>
-        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Straighten pages</strong><span>Correct rotated or skewed document scans before recognition.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.ocr.deskew" :class="{ active: form.routes.ocr.deskew }" @click="form.routes.ocr.deskew = !form.routes.ocr.deskew"><span /></button></div>
-        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Reduce image noise</strong><span>Clean compression artifacts and scan noise before recognition.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.ocr.denoise" :class="{ active: form.routes.ocr.denoise }" @click="form.routes.ocr.denoise = !form.routes.ocr.denoise"><span /></button></div>
-        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Upscale small images</strong><span>Increase image resolution before OCR when source text is too small.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.ocr.upscale" :class="{ active: form.routes.ocr.upscale }" @click="form.routes.ocr.upscale = !form.routes.ocr.upscale"><span /></button></div>
+        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Straighten pages</strong><span>Correct rotated or skewed scans.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.ocr.deskew" :class="{ active: form.routes.ocr.deskew }" @click="form.routes.ocr.deskew = !form.routes.ocr.deskew"><span /></button></div>
+        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Reduce image noise</strong><span>Clean compression artifacts before recognition.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.ocr.denoise" :class="{ active: form.routes.ocr.denoise }" @click="form.routes.ocr.denoise = !form.routes.ocr.denoise"><span /></button></div>
+        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Upscale small images</strong><span>Increase source resolution before OCR.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.ocr.upscale" :class="{ active: form.routes.ocr.upscale }" @click="form.routes.ocr.upscale = !form.routes.ocr.upscale"><span /></button></div>
       </section>
 
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>Recognition output</h4><p>Choose languages, PDF behavior and the format written into notes.</p></div></header>
+        <header class="en-ai-card-header"><h4>Recognition output</h4></header>
         <div class="en-ai-form-body en-ai-grid"><label><span>Languages</span><input v-model.trim="form.routes.ocr.languages" type="text" placeholder="eng,fra,heb"></label><label><span>PDF mode</span><select v-model="form.routes.ocr.pdfMode"><option value="missing-text-only">Only pages without text</option><option value="all-pages">All pages</option><option value="skip-text-pdf">Skip text PDFs</option></select></label><label><span>Output format</span><select v-model="form.routes.ocr.output"><option value="markdown">Markdown</option><option value="plain-text">Plain text</option><option value="layout-markdown">Layout Markdown</option></select></label><label><span>Confidence threshold</span><input v-model.number="form.routes.ocr.confidenceThreshold" type="number" min="0" max="1" step="0.01"></label></div>
         <div class="en-ai-card-footer"><span>{{ message }}</span><button class="primary" type="button" :disabled="testing" @click="testRoute('ocr')"><Activity aria-hidden="true" />{{ testing ? 'Testing…' : 'Test OCR route' }}</button></div>
       </section>
@@ -187,7 +181,6 @@ import {
   ScanText,
   Server,
   SlidersHorizontal,
-  Sparkles,
   TerminalSquare,
   Trash2
 } from '@lucide/vue'
@@ -197,6 +190,7 @@ import { elephantnoteClient } from '../../services/elephantnoteClient'
 import { clonePlainObject } from './settingsModelHelpers'
 import { getModelCapabilities, resolveModelId, resolveModelName } from '../views/modelsViewHelpers'
 
+const props = defineProps({ initialPage: { type: String, default: 'provider' } })
 const CACHE_KEY = 'elephantnote:ai-settings-draft'
 const aiPages = Object.freeze([
   { id: 'provider', label: 'Providers', icon: Server },
@@ -204,7 +198,8 @@ const aiPages = Object.freeze([
   { id: 'embedding', label: 'Search', icon: Database },
   { id: 'ocr', label: 'OCR', icon: ScanText }
 ])
-const activePage = ref('provider')
+const validPages = new Set(aiPages.map((page) => page.id))
+const activePage = ref(validPages.has(props.initialPage) ? props.initialPage : 'provider')
 const loading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
@@ -292,46 +287,46 @@ const loadSearchStatus = async () => { embeddingMessage.value = 'Loading index s
 const rebuildEmbeddings = async () => { indexing.value = true; embeddingMessage.value = 'Rebuilding embedding base...'; log.info('[ai-settings] embedding-rebuild:start'); try { const result = await elephantnoteClient.search.rebuild?.(); embeddingMessage.value = 'Embedding rebuild started.'; log.info('[ai-settings] embedding-rebuild:done', result) } catch (error) { log.error('[ai-settings] embedding-rebuild:failed', error); embeddingMessage.value = error instanceof Error ? error.message : 'Embedding rebuild failed.' } finally { indexing.value = false } }
 watch(form, () => scheduleAutosave('form-watch'), { deep: true })
 watch(() => form.value.localAi.enabled, (enabled) => { if (!enabled) localModels.value = [] })
+watch(() => props.initialPage, (page) => { if (validPages.has(page)) activePage.value = page })
 onMounted(loadConfig)
 onBeforeUnmount(() => { window.clearTimeout(autosaveTimer); if (hydrated.value) saveConfig({ silent: true, reason: 'settings-close' }) })
 </script>
 
 <style scoped>
-.en-ai-settings { display: grid; gap: 18px; color: var(--en-text, #101828); }
-h3, h4, p { margin: 0; }
-h3 { font-size: 16px; letter-spacing: -0.02em; }
-h4 { font-size: 14px; letter-spacing: -0.01em; }
-.en-ai-hero, .en-ai-card { overflow: hidden; border: 1px solid var(--en-border, #c5cfdd); border-radius: 15px; background: var(--en-surface, #fff); box-shadow: 0 1px 2px rgba(2, 6, 23, 0.03); }
-.en-ai-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 20px; background: linear-gradient(135deg, color-mix(in srgb, var(--en-primary, #2563eb) 8%, var(--en-surface, #fff)), var(--en-surface, #fff) 62%); }
-.en-ai-hero-copy { min-width: 0; display: flex; align-items: flex-start; gap: 13px; }
-.en-ai-hero-icon { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 11px; background: var(--en-primary, #2563eb); color: #fff; box-shadow: 0 8px 22px color-mix(in srgb, var(--en-primary, #2563eb) 24%, transparent); }
-.en-ai-hero-icon svg { width: 19px; height: 19px; }
-.en-ai-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
-.en-ai-hero-copy p, .en-ai-card-header p, .en-ai-setting-copy span, .en-ai-setting-copy small, .en-ai-empty p { margin-top: 4px; color: var(--en-muted, #667085); font-size: 12px; line-height: 1.45; }
-.en-ai-save-status { display: inline-flex; align-items: center; gap: 6px; min-height: 25px; padding: 0 8px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 99px; color: var(--en-muted, #667085); font-size: 10.5px; }
+.en-ai-settings { display: grid; gap: 14px; color: var(--en-text, #101828); }
+h4, p { margin: 0; }
+h4 { font-size: 13px; letter-spacing: -0.01em; }
+.en-ai-toolbar { position: sticky; top: -28px; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 12px; background: color-mix(in srgb, var(--en-surface, #fff) 94%, transparent); backdrop-filter: blur(14px); }
+.en-ai-tabs { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.en-ai-tabs button { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--en-muted, #667085); cursor: pointer; }
+.en-ai-tabs button.active { border-color: var(--en-border, #c5cfdd); background: var(--en-surface, #fff); color: var(--en-text, #101828); box-shadow: 0 1px 4px rgba(2, 6, 23, 0.08); }
+.en-ai-tabs svg, button svg { width: 14px; height: 14px; }
+.en-ai-toolbar-actions, .en-ai-actions, .en-provider-footer, .en-provider-footer-left, .en-ai-card-footer { display: flex; align-items: center; gap: 7px; }
+.en-ai-save-status { display: inline-flex; align-items: center; gap: 6px; min-height: 27px; padding: 0 8px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 99px; color: var(--en-muted, #667085); font-size: 9.5px; }
 .en-ai-save-status > span { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
 .en-ai-save-status.saving > span { background: #f59e0b; animation: pulse 1s ease-in-out infinite; }
-.en-ai-top-actions, .en-ai-actions, .en-provider-footer, .en-provider-footer-left, .en-ai-card-footer { display: flex; align-items: center; gap: 8px; }
-button { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: var(--en-surface, #fff); color: var(--en-text, #101828); cursor: pointer; transition: 140ms ease; }
-button svg { width: 15px; height: 15px; }
+.en-ai-card { overflow: hidden; border: 1px solid var(--en-border, #c5cfdd); border-radius: 14px; background: var(--en-surface, #fff); box-shadow: 0 1px 2px rgba(2, 6, 23, 0.03); }
+.en-ai-card-header { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--en-border, #c5cfdd); background: color-mix(in srgb, var(--en-surface, #fff) 94%, var(--en-soft, #e9eff7)); }
+button { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 11px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: var(--en-surface, #fff); color: var(--en-text, #101828); cursor: pointer; transition: 140ms ease; }
 button:hover:not(:disabled) { border-color: var(--en-primary, #2563eb); }
 button:disabled { opacity: 0.48; cursor: not-allowed; }
 button.primary { border-color: var(--en-primary, #2563eb); background: var(--en-primary, #2563eb); color: #fff; }
 button.secondary { background: var(--en-bg, #f7f9fc); }
 button.danger { border-color: color-mix(in srgb, var(--en-danger, #dc2626) 35%, var(--en-border, #c5cfdd)); color: var(--en-danger, #dc2626); }
-button.compact { min-height: 31px; padding: 0 9px; font-size: 11.5px; }
-.en-ai-tabs { display: flex; gap: 5px; padding: 5px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 12px; background: color-mix(in srgb, var(--en-surface, #fff) 88%, var(--en-bg, #f7f9fc)); }
-.en-ai-tabs button { flex: 1; border-color: transparent; background: transparent; color: var(--en-muted, #667085); }
-.en-ai-tabs button.active { border-color: var(--en-border, #c5cfdd); background: var(--en-surface, #fff); color: var(--en-text, #101828); box-shadow: 0 1px 4px rgba(2, 6, 23, 0.08); }
-.en-ai-card-header { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--en-border, #c5cfdd); background: color-mix(in srgb, var(--en-surface, #fff) 94%, var(--en-soft, #e9eff7)); }
-.en-ai-badge, .en-provider-state { display: inline-flex; align-items: center; gap: 5px; min-height: 27px; padding: 0 8px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 99px; color: var(--en-muted, #667085); font-size: 10.5px; white-space: nowrap; }
-.en-ai-badge.active, .en-provider-state.active { border-color: color-mix(in srgb, #16a34a 28%, var(--en-border, #c5cfdd)); color: #15803d; }
-.en-ai-badge svg { width: 13px; height: 13px; }
-.en-ai-setting-row { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 18px; }
+button.compact { min-height: 29px; padding: 0 8px; font-size: 10.5px; }
+button.icon-only { width: 29px; padding: 0; }
+.en-ai-setting-row { min-height: 66px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 12px 16px; }
 .en-ai-setting-row + .en-ai-setting-row { border-top: 1px solid var(--en-border, #c5cfdd); }
+.en-ai-setting-row:has(.en-ai-row-icon) { grid-template-columns: 32px minmax(0, 1fr) auto auto; }
+.en-ai-row-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: var(--en-soft, #e9eff7); color: var(--en-primary, #2563eb); }
+.en-ai-row-icon svg { width: 15px; height: 15px; }
 .en-ai-setting-copy { min-width: 0; display: grid; gap: 2px; }
-.en-ai-setting-copy strong { font-size: 13px; }
+.en-ai-setting-copy strong { font-size: 12.5px; }
+.en-ai-setting-copy span, .en-ai-setting-copy small, .en-ai-empty p { color: var(--en-muted, #667085); font-size: 10.5px; line-height: 1.42; }
 .en-ai-setting-copy small { color: var(--en-primary, #2563eb); }
+.en-ai-badge, .en-provider-state { display: inline-flex; align-items: center; gap: 5px; min-height: 25px; padding: 0 7px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 99px; color: var(--en-muted, #667085); font-size: 9.5px; white-space: nowrap; }
+.en-ai-badge.active, .en-provider-state.active { border-color: color-mix(in srgb, #16a34a 28%, var(--en-border, #c5cfdd)); color: #15803d; }
+.en-ai-badge svg { width: 12px; height: 12px; }
 .en-ai-switch { width: 42px; height: 24px; min-height: 24px; flex: 0 0 auto; padding: 2px; border: 0; border-radius: 99px; background: var(--en-border-strong, #aebacd); }
 .en-ai-switch > span { width: 20px; height: 20px; display: block; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(2, 6, 23, 0.24); transition: transform 170ms ease; }
 .en-ai-switch.active { background: var(--en-primary, #2563eb); }
@@ -341,59 +336,67 @@ button.compact { min-height: 31px; padding: 0 9px; font-size: 11.5px; }
 .en-ai-switch.small.active > span { transform: translateX(14px); }
 .en-provider-list { display: grid; }
 .en-provider-row + .en-provider-row { border-top: 1px solid var(--en-border, #c5cfdd); }
-.en-provider-summary { width: 100%; min-height: 66px; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto 18px; align-items: center; gap: 11px; padding: 12px 18px; border: 0; border-radius: 0; background: transparent; text-align: left; }
+.en-provider-summary { width: 100%; min-height: 62px; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto 17px; align-items: center; gap: 10px; padding: 10px 16px; border: 0; border-radius: 0; background: transparent; text-align: left; }
 .en-provider-summary:hover:not(:disabled) { background: color-mix(in srgb, var(--en-soft, #e9eff7) 55%, transparent); }
-.en-provider-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; background: var(--en-soft, #e9eff7); color: var(--en-primary, #2563eb); }
-.en-provider-icon svg { width: 16px; height: 16px; }
+.en-provider-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: var(--en-soft, #e9eff7); color: var(--en-primary, #2563eb); }
+.en-provider-icon svg { width: 15px; height: 15px; }
 .en-provider-copy { min-width: 0; display: grid; gap: 3px; }
 .en-provider-copy strong, .en-provider-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.en-provider-copy strong { font-size: 13px; }
-.en-provider-copy small { color: var(--en-muted, #667085); font-size: 11px; }
-.en-provider-summary > svg { width: 16px; height: 16px; color: var(--en-muted, #667085); transition: transform 150ms ease; }
+.en-provider-copy strong { font-size: 12.5px; }
+.en-provider-copy small { color: var(--en-muted, #667085); font-size: 10.5px; }
+.en-provider-summary > svg { width: 15px; height: 15px; color: var(--en-muted, #667085); transition: transform 150ms ease; }
 .en-provider-summary > svg.rotated { transform: rotate(180deg); }
-.en-provider-details { padding: 0 18px 16px 63px; }
-.en-provider-form, .en-ai-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.en-provider-form { padding: 14px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 10px 10px 0 0; background: var(--en-bg, #f7f9fc); }
+.en-provider-details { padding: 0 16px 14px 58px; }
+.en-provider-form, .en-ai-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.en-provider-form { padding: 12px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px 9px 0 0; background: var(--en-bg, #f7f9fc); }
 .en-provider-form .wide { grid-column: 1 / -1; }
-.en-provider-footer { justify-content: space-between; padding: 10px 12px; border: 1px solid var(--en-border, #c5cfdd); border-top: 0; border-radius: 0 0 10px 10px; }
-.en-provider-footer-left span { color: var(--en-muted, #667085); font-size: 11px; }
-.en-ai-empty { min-height: 92px; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 16px 18px; color: var(--en-muted, #667085); }
-.en-ai-empty > svg { width: 20px; height: 20px; }
-.en-ai-empty strong { color: var(--en-text, #101828); font-size: 13px; }
-.en-ai-model-row, .en-ai-form-body { display: grid; gap: 13px; padding: 18px; }
-.en-ai-route-summary { display: flex; flex-wrap: wrap; gap: 8px; }
-.en-ai-route-summary span { min-height: 27px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 99px; background: var(--en-bg, #f7f9fc); color: var(--en-muted, #667085); font-size: 10.5px; }
+.en-provider-footer { justify-content: space-between; padding: 9px 10px; border: 1px solid var(--en-border, #c5cfdd); border-top: 0; border-radius: 0 0 9px 9px; }
+.en-provider-footer-left span { color: var(--en-muted, #667085); font-size: 10px; }
+.en-ai-empty { min-height: 78px; display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 11px; padding: 14px 16px; color: var(--en-muted, #667085); }
+.en-ai-empty > svg { width: 19px; height: 19px; }
+.en-ai-empty strong { color: var(--en-text, #101828); font-size: 12.5px; }
+.en-ai-model-row, .en-ai-form-body { display: grid; gap: 11px; padding: 16px; }
+.en-ai-route-summary { display: flex; flex-wrap: wrap; gap: 7px; }
+.en-ai-route-summary span { min-height: 25px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 99px; background: var(--en-bg, #f7f9fc); color: var(--en-muted, #667085); font-size: 9.5px; }
 .en-ai-route-summary strong { color: var(--en-text, #101828); font-weight: 650; }
-.en-ai-full, .en-ai-grid label, .en-provider-form label { min-width: 0; display: grid; gap: 6px; color: var(--en-muted, #667085); font-size: 11.5px; }
-input, select, textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: var(--en-bg, #f7f9fc); color: var(--en-text, #101828); font: inherit; }
-input, select { height: 39px; padding: 0 11px; }
-textarea { min-height: 110px; padding: 10px 11px; resize: vertical; line-height: 1.5; }
+.en-ai-full, .en-ai-grid label, .en-provider-form label { min-width: 0; display: grid; gap: 5px; color: var(--en-muted, #667085); font-size: 10.5px; }
+input, select, textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--en-border, #c5cfdd); border-radius: 8px; background: var(--en-bg, #f7f9fc); color: var(--en-text, #101828); font: inherit; }
+input, select { height: 37px; padding: 0 10px; }
+textarea { min-height: 105px; padding: 9px 10px; resize: vertical; line-height: 1.5; }
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid color-mix(in srgb, var(--en-primary, #2563eb) 42%, transparent); outline-offset: 1px; }
 .en-ai-advanced { border-top: 1px solid var(--en-border, #c5cfdd); }
-.en-ai-advanced summary { min-height: 58px; display: grid; grid-template-columns: 24px minmax(0, 1fr) 18px; align-items: center; gap: 10px; padding: 0 18px; cursor: pointer; list-style: none; }
+.en-ai-advanced summary { min-height: 54px; display: grid; grid-template-columns: 22px minmax(0, 1fr) 17px; align-items: center; gap: 9px; padding: 0 16px; cursor: pointer; list-style: none; }
 .en-ai-advanced summary::-webkit-details-marker { display: none; }
-.en-ai-advanced summary > svg:first-child { width: 17px; height: 17px; color: var(--en-primary, #2563eb); }
-.en-ai-advanced summary > svg:last-child { width: 16px; height: 16px; color: var(--en-muted, #667085); transition: transform 150ms ease; }
+.en-ai-advanced summary > svg:first-child { width: 16px; height: 16px; color: var(--en-primary, #2563eb); }
+.en-ai-advanced summary > svg:last-child { width: 15px; height: 15px; color: var(--en-muted, #667085); transition: transform 150ms ease; }
 .en-ai-advanced[open] summary > svg:last-child { transform: rotate(180deg); }
 .en-ai-advanced summary span { display: grid; gap: 2px; }
-.en-ai-advanced summary strong { font-size: 12.5px; }
-.en-ai-advanced summary small { color: var(--en-muted, #667085); font-size: 11px; }
-.en-ai-advanced .en-ai-grid { padding: 4px 18px 18px 52px; }
-.en-ai-card-footer { justify-content: space-between; min-height: 57px; padding: 10px 18px; border-top: 1px solid var(--en-border, #c5cfdd); }
-.en-ai-card-footer > span { color: var(--en-muted, #667085); font-size: 11.5px; }
+.en-ai-advanced summary strong { font-size: 12px; }
+.en-ai-advanced summary small { color: var(--en-muted, #667085); font-size: 10px; }
+.en-ai-advanced .en-ai-grid { padding: 3px 16px 16px 47px; }
+.en-ai-card-footer { justify-content: space-between; min-height: 52px; padding: 9px 16px; border-top: 1px solid var(--en-border, #c5cfdd); }
+.en-ai-card-footer > span { color: var(--en-muted, #667085); font-size: 10.5px; }
 @keyframes pulse { 50% { opacity: 0.35; } }
-@media (max-width: 760px) {
-  .en-ai-hero { grid-template-columns: 1fr; }
-  .en-ai-top-actions { width: 100%; }
-  .en-ai-top-actions button { flex: 1; }
-  .en-ai-tabs button span { display: none; }
-  .en-ai-setting-row { align-items: flex-start; flex-direction: column; }
+@media (max-width: 780px) {
+  .en-ai-toolbar { align-items: stretch; flex-direction: column; }
+  .en-ai-toolbar-actions { justify-content: flex-end; }
+  .en-ai-setting-row:has(.en-ai-row-icon) { grid-template-columns: 30px minmax(0, 1fr) auto; }
+  .en-ai-setting-row:has(.en-ai-row-icon) > .en-ai-switch, .en-codex-row > .en-ai-actions { grid-column: 2 / -1; justify-self: start; }
   .en-provider-form, .en-ai-grid { grid-template-columns: 1fr; }
   .en-provider-form .wide { grid-column: auto; }
-  .en-provider-details { padding-left: 18px; }
+  .en-provider-details { padding-left: 16px; }
   .en-provider-footer, .en-ai-card-footer { align-items: flex-start; flex-direction: column; }
-  .en-ai-empty { grid-template-columns: 30px minmax(0, 1fr); }
-  .en-ai-empty button { grid-column: 2; justify-self: start; }
-  .en-ai-advanced .en-ai-grid { padding-left: 18px; }
+  .en-ai-advanced .en-ai-grid { padding-left: 16px; }
+}
+@media (max-width: 560px) {
+  .en-ai-tabs { width: 100%; }
+  .en-ai-tabs button { flex: 1; }
+  .en-ai-tabs button span { display: none; }
+  .en-ai-toolbar-actions { flex-wrap: wrap; }
+  .en-ai-save-status { margin-right: auto; }
+  .en-ai-setting-row { align-items: flex-start; grid-template-columns: 1fr; }
+  .en-ai-switch { justify-self: start; }
+  .en-provider-summary { grid-template-columns: 30px minmax(0, 1fr) 16px; }
+  .en-provider-state { display: none; }
 }
 </style>

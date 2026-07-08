@@ -238,16 +238,30 @@ mod iroh_two_endpoint_tests {
     tokio::task::yield_now().await;
     assert!(!server_router.is_shutdown());
     assert!(!client_router.is_shutdown());
-    let runtime_a = IrohRuntime::from_test_parts(endpoint_a.clone(), client_router);
+    let runtime_a = Arc::new(IrohRuntime::from_test_parts(endpoint_a.clone(), client_router));
 
-    let config_a = configure_peer(&vault_a, &endpoint_a, addr_b, "Device B");
+    configure_peer(&vault_a, &endpoint_a, addr_b, "Device B");
     let _config_b = configure_peer(&vault_b, &endpoint_b, addr_a, "Device A");
 
-    let first = expect_session(
-      run_client_session(&vault_a, &config_a, &runtime_a).await,
-      &server_events,
-    );
-    assert_eq!(first.transferred_files, 2);
+    // Exercise the exact async command path used by Settings and the toolbar,
+    // including run/operation logs, queue handling, state persistence, and the
+    // real Iroh client/server exchange.
+    let first_status = tokio::time::timeout(
+      Duration::from_secs(20),
+      sync_run_iroh(
+        vault_a.clone(),
+        Some(json!({ "sync": {} })),
+        runtime_a.clone(),
+      ),
+    )
+    .await
+    .expect("application sync command timed out")
+    .expect("application sync command failed");
+    assert_eq!(first_status["transferredFiles"].as_u64(), Some(2));
+    assert_eq!(first_status["transferredBytes"].as_u64(), Some(26));
+    assert_eq!(first_status["lastError"].as_str(), Some(""));
+
+    let config_a = read_config(&root_a).unwrap();
     assert_eq!(std::fs::read_to_string(root_a.join("B.md")).unwrap(), "from device B");
     assert_eq!(std::fs::read_to_string(root_b.join("A.md")).unwrap(), "from device A");
     assert_eq!(
@@ -261,7 +275,7 @@ mod iroh_two_endpoint_tests {
 
     std::fs::write(root_a.join("A.md"), "updated on device A").unwrap();
     let second = expect_session(
-      run_client_session(&vault_a, &config_a, &runtime_a).await,
+      run_client_session(&vault_a, &config_a, runtime_a.as_ref()).await,
       &server_events,
     );
     assert_eq!(second.transferred_files, 1);
@@ -272,7 +286,7 @@ mod iroh_two_endpoint_tests {
 
     std::fs::remove_file(root_a.join("B.md")).unwrap();
     let third = expect_session(
-      run_client_session(&vault_a, &config_a, &runtime_a).await,
+      run_client_session(&vault_a, &config_a, runtime_a.as_ref()).await,
       &server_events,
     );
     assert_eq!(third.transferred_files, 0);
@@ -281,7 +295,7 @@ mod iroh_two_endpoint_tests {
     std::fs::write(root_a.join("A.md"), "concurrent version A").unwrap();
     std::fs::write(root_b.join("A.md"), "concurrent version B").unwrap();
     let fourth = expect_session(
-      run_client_session(&vault_a, &config_a, &runtime_a).await,
+      run_client_session(&vault_a, &config_a, runtime_a.as_ref()).await,
       &server_events,
     );
     assert_eq!(fourth.conflicts, vec!["A.md"]);

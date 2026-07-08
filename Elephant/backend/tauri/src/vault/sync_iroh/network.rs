@@ -1,3 +1,36 @@
+use crate::sync::logging::{log_global, log_global_error, short_peer_id, SyncLogger};
+use crate::sync::transfer::{
+  create_directories_logged, delete_directories_logged, delete_files_logged,
+  preserve_paths_logged, receive_file_logged, send_file_logged,
+};
+
+fn quoted(value: &str) -> String {
+  serde_json::to_string(value).unwrap_or_else(|_| "\"<invalid>\"".to_string())
+}
+
+fn conflict_archive_path<'a>(plan: &'a SyncPlan, path: &str) -> Option<&'a str> {
+  plan
+    .preserve_local
+    .iter()
+    .chain(plan.preserve_remote.iter())
+    .find(|item| item.source_path == path)
+    .map(|item| item.target_path.as_str())
+    .or_else(|| {
+      plan
+        .uploads
+        .iter()
+        .chain(plan.downloads.iter())
+        .find(|item| item.target_path.starts_with(".conflit/") && item.source_path.contains(path))
+        .map(|item| item.target_path.as_str())
+    })
+}
+
+fn log_conflicts(logger: &SyncLogger, plan: &SyncPlan) {
+  for path in &plan.conflicts {
+    logger.conflict(path, conflict_archive_path(plan, path));
+  }
+}
+
 pub async fn sync_create_invite(
   vault: VaultDescriptor,
   payload: Option<Value>,
@@ -27,6 +60,17 @@ pub async fn sync_create_invite(
     .and_then(Value::as_str)
     .filter(|value| !value.trim().is_empty())
     .unwrap_or(&vault.name);
+  log_global(
+    "invite:create",
+    format!(
+      "invite_id={} vault={} device={} expires_at={} endpoint_id={}",
+      invite_id,
+      quoted(&vault.name),
+      quoted(device_name),
+      expires_at,
+      short_peer_id(&endpoint_id)
+    ),
+  );
   let invite = json!({
     "protocol": PROTOCOL_NAME,
     "version": 1,
@@ -100,6 +144,15 @@ pub async fn sync_accept_invite(
   )
   .map_err(|error| format!("invalid Iroh endpoint address: {error}"))?;
 
+  log_global(
+    "pairing:start",
+    format!(
+      "invite_id={} vault={} peer_id={}",
+      invite_id,
+      quoted(&vault.name),
+      short_peer_id(&remote_addr.id.to_string())
+    ),
+  );
   let connection = runtime.connect(remote_addr.clone()).await?;
   if connection.remote_id() != remote_addr.id {
     return Err("Iroh peer identity did not match the invite.".to_string());
@@ -108,6 +161,7 @@ pub async fn sync_accept_invite(
     .open_bi()
     .await
     .map_err(|error| format!("failed to open pairing control stream: {error}"))?;
+  log_global("pairing:request", format!("invite_id={invite_id}"));
   write_control(
     &mut send,
     &ControlMessage::PairRequest(PairRequest {
@@ -141,6 +195,8 @@ pub async fn sync_accept_invite(
   let mut config = ensure_sync_files(&vault, &runtime.endpoint_id().to_string())?;
   config.folder_id = folder_id.to_string();
   config.folder_label = folder_label.to_string();
+  let peer_name = accepted.device_name.clone();
+  let peer_id = accepted.endpoint_addr.id.to_string();
   upsert_peer(
     &mut config.peers,
     peer_from_pair(
@@ -151,6 +207,15 @@ pub async fn sync_accept_invite(
   );
   config.updated_at = now();
   write_config(&cwd, &config)?;
+  log_global(
+    "pairing:complete",
+    format!(
+      "vault={} peer={} peer_id={}",
+      quoted(&vault.name),
+      quoted(&peer_name),
+      short_peer_id(&peer_id)
+    ),
+  );
   Ok(json!({
     "ok": true,
     "runtime": "tauri-rust-iroh",
@@ -166,17 +231,46 @@ async fn client_sync_peer(
   peer: &PeerConfig,
   runtime: &IrohRuntime,
 ) -> R<SessionResult> {
+  let logger = SyncLogger::start("client", &peer.name, &peer.endpoint_id, &vault.name);
+  let result = client_sync_peer_logged(vault, config, peer, runtime, &logger).await;
+  match &result {
+    Ok(summary) => logger.complete(
+      summary.transferred_files,
+      summary.transferred_bytes,
+      summary.conflicts.len(),
+    ),
+    Err(error) => logger.error("session:error", error, format!("duration_ms={}", logger.elapsed_ms())),
+  }
+  result
+}
+
+async fn client_sync_peer_logged(
+  vault: &VaultDescriptor,
+  config: &SyncConfig,
+  peer: &PeerConfig,
+  runtime: &IrohRuntime,
+  logger: &SyncLogger,
+) -> R<SessionResult> {
   let cwd = PathBuf::from(&vault.path);
+  logger.event("scan:start", "side=local");
   let local_manifest = scan(cwd.clone()).await?;
+  logger.manifest("local", &local_manifest);
   let local_baseline = read_baseline(&cwd, &peer.endpoint_id);
+  logger.baseline(&local_baseline);
+  logger.event("connect:start", format!("peer={}", quoted(&peer.name)));
   let connection = connect_peer(runtime, peer).await?;
   if connection.remote_id().to_string() != peer.endpoint_id {
     return Err("connected Iroh identity does not match paired device".to_string());
   }
+  logger.event(
+    "connect:complete",
+    format!("peer_id={}", short_peer_id(&peer.endpoint_id)),
+  );
   let (mut send, mut recv) = connection
     .open_bi()
     .await
     .map_err(|error| format!("failed to open sync control stream: {error}"))?;
+  logger.event("control:send", "type=syncOpen");
   write_control(
     &mut send,
     &ControlMessage::SyncOpen(SyncOpen {
@@ -192,7 +286,17 @@ async fn client_sync_peer(
     ControlMessage::SyncHello(hello) => hello,
     _ => unreachable!(),
   };
+  logger.event("control:receive", "type=syncHello");
+  logger.manifest("remote", &hello.manifest);
   let baseline = common_baseline(&local_baseline, &hello.baseline);
+  logger.event(
+    "baseline:common",
+    format!(
+      "files={} directories={}",
+      baseline.files.len(),
+      baseline.directories.len()
+    ),
+  );
   let plan = build_plan(
     &local_manifest,
     &hello.manifest,
@@ -200,15 +304,20 @@ async fn client_sync_peer(
     &runtime.endpoint_id().to_string(),
     &peer.endpoint_id,
   );
+  logger.plan(&plan);
+  log_conflicts(logger, &plan);
 
-  preserve_paths(&cwd, &plan.preserve_local)?;
-  create_directories(&cwd, &plan.create_dirs_local)?;
-  delete_files(&cwd, &plan.delete_files_local)?;
-  delete_directories(&cwd, &plan.delete_dirs_local)?;
+  preserve_paths_logged(&cwd, &plan.preserve_local, Some(logger), "local")?;
+  create_directories_logged(&cwd, &plan.create_dirs_local, Some(logger), "local")?;
+  delete_files_logged(&cwd, &plan.delete_files_local, Some(logger), "local")?;
+  delete_directories_logged(&cwd, &plan.delete_dirs_local, Some(logger), "local")?;
+  logger.event("control:send", "type=syncPlan");
   write_control(&mut send, &ControlMessage::SyncPlan(plan.clone())).await?;
 
   match expect_control(read_control(&mut recv).await?, "readyForUploads")? {
-    ControlMessage::ReadyForUploads { count } if count == plan.uploads.len() => {}
+    ControlMessage::ReadyForUploads { count } if count == plan.uploads.len() => {
+      logger.event("control:receive", format!("type=readyForUploads count={count}"));
+    }
     ControlMessage::ReadyForUploads { count } => {
       return Err(format!("peer expected {count} uploads, plan contains {}", plan.uploads.len()));
     }
@@ -220,12 +329,22 @@ async fn client_sync_peer(
     ..SessionResult::default()
   };
   for upload in &plan.uploads {
-    result.transferred_bytes += send_file(&connection, &cwd, upload).await?;
-    result.transferred_files += 1;
+    match send_file_logged(&connection, &cwd, upload, Some(logger), "upload").await {
+      Ok(bytes) => {
+        result.transferred_bytes += bytes;
+        result.transferred_files += 1;
+      }
+      Err(error) => {
+        logger.error("upload:error", &error, format!("path={}", quoted(&upload.source_path)));
+        return Err(error);
+      }
+    }
   }
 
   match expect_control(read_control(&mut recv).await?, "uploadsApplied")? {
-    ControlMessage::UploadsApplied { count } if count == plan.uploads.len() => {}
+    ControlMessage::UploadsApplied { count } if count == plan.uploads.len() => {
+      logger.event("control:receive", format!("type=uploadsApplied count={count}"));
+    }
     ControlMessage::UploadsApplied { count } => {
       return Err(format!("peer applied {count} uploads instead of {}", plan.uploads.len()));
     }
@@ -233,19 +352,35 @@ async fn client_sync_peer(
   }
 
   for download in &plan.downloads {
-    let (_, bytes) = receive_file(&connection, &cwd, download).await?;
-    result.transferred_bytes += bytes;
-    result.transferred_files += 1;
+    match receive_file_logged(&connection, &cwd, download, Some(logger), "download").await {
+      Ok((_, bytes)) => {
+        result.transferred_bytes += bytes;
+        result.transferred_files += 1;
+      }
+      Err(error) => {
+        logger.error(
+          "download:error",
+          &error,
+          format!("path={}", quoted(&download.target_path)),
+        );
+        return Err(error);
+      }
+    }
   }
   match expect_control(read_control(&mut recv).await?, "transfersComplete")? {
-    ControlMessage::TransfersComplete { count } if count == plan.downloads.len() => {}
+    ControlMessage::TransfersComplete { count } if count == plan.downloads.len() => {
+      logger.event("control:receive", format!("type=transfersComplete count={count}"));
+    }
     ControlMessage::TransfersComplete { count } => {
       return Err(format!("peer sent {count} downloads instead of {}", plan.downloads.len()));
     }
     _ => unreachable!(),
   }
 
+  logger.event("scan:start", "side=final-local");
   let final_manifest = scan(cwd.clone()).await?;
+  logger.manifest("final-local", &final_manifest);
+  logger.event("control:send", "type=syncFinish");
   write_control(
     &mut send,
     &ControlMessage::SyncFinish {
@@ -263,14 +398,22 @@ async fn client_sync_peer(
     } => (manifest, acknowledged),
     _ => unreachable!(),
   };
+  logger.event("control:receive", "type=syncComplete acknowledged=false");
+  logger.manifest("final-remote", &remote_final);
   if acknowledged {
     return Err("peer sent a final acknowledgement before the client validated the manifest".to_string());
   }
   if !final_manifest.content_equals(&remote_final) {
     return Err("vault manifests still differ after transfer; no baseline was advanced".to_string());
   }
+  logger.event("verify:manifest", "status=ok");
   write_baseline(&cwd, &peer.endpoint_id, &final_manifest)?;
   write_manifest(&cwd, &final_manifest)?;
+  logger.event(
+    "baseline:saved",
+    format!("files={} peer_id={}", final_manifest.files.len(), short_peer_id(&peer.endpoint_id)),
+  );
+  logger.event("control:send", "type=syncComplete acknowledged=true");
   write_control(
     &mut send,
     &ControlMessage::SyncComplete {
@@ -285,6 +428,7 @@ async fn client_sync_peer(
     .await
     .map_err(|error| format!("sync completion stream did not close cleanly: {error}"))?;
   connection.close(0_u32.into(), b"sync-complete");
+  logger.event("connection:closed", "reason=sync-complete");
   Ok(result)
 }
 
@@ -293,11 +437,11 @@ async fn server_sync_session(
   peer_id: String,
   open: SyncOpen,
   connection: Connection,
-  mut send: iroh::endpoint::SendStream,
-  mut recv: iroh::endpoint::RecvStream,
+  send: iroh::endpoint::SendStream,
+  recv: iroh::endpoint::RecvStream,
 ) -> R<()> {
   let cwd = PathBuf::from(&vault.path);
-  let mut config = ensure_sync_files(&vault, "")?;
+  let config = ensure_sync_files(&vault, "")?;
   let peer = config
     .peers
     .iter()
@@ -307,9 +451,47 @@ async fn server_sync_session(
   if open.folder_id != config.folder_id || peer.folder_id != config.folder_id {
     return Err("Iroh endpoint is paired for another vault.".to_string());
   }
+  let logger = SyncLogger::start("server", &open.device_name, &peer_id, &vault.name);
+  let result = server_sync_session_logged(
+    vault,
+    peer_id,
+    open,
+    connection,
+    send,
+    recv,
+    config,
+    &logger,
+  )
+  .await;
+  match &result {
+    Ok(summary) => logger.complete(
+      summary.transferred_files,
+      summary.transferred_bytes,
+      summary.conflicts.len(),
+    ),
+    Err(error) => logger.error("session:error", error, format!("duration_ms={}", logger.elapsed_ms())),
+  }
+  result.map(|_| ())
+}
 
+async fn server_sync_session_logged(
+  vault: VaultDescriptor,
+  peer_id: String,
+  open: SyncOpen,
+  connection: Connection,
+  mut send: iroh::endpoint::SendStream,
+  mut recv: iroh::endpoint::RecvStream,
+  mut config: SyncConfig,
+  logger: &SyncLogger,
+) -> R<SessionResult> {
+  let cwd = PathBuf::from(&vault.path);
+  logger.manifest("remote-open", &open.manifest);
+  logger.event("scan:start", "side=local");
   let local_manifest = scan(cwd.clone()).await?;
+  logger.manifest("local", &local_manifest);
   let local_baseline = read_baseline(&cwd, &peer_id);
+  logger.baseline(&local_baseline);
+  logger.event("control:send", "type=syncHello");
   write_control(
     &mut send,
     &ControlMessage::SyncHello(SyncHello {
@@ -323,6 +505,7 @@ async fn server_sync_session(
     ControlMessage::SyncPlan(plan) => plan,
     _ => unreachable!(),
   };
+  logger.event("control:receive", "type=syncPlan");
   let baseline = common_baseline(&open.baseline, &local_baseline);
   let expected_plan = build_plan(
     &open.manifest,
@@ -332,6 +515,7 @@ async fn server_sync_session(
     &config.device_id,
   );
   if plan != expected_plan {
+    logger.error("plan:rejected", "peer plan differs from independently computed plan", "");
     write_control(
       &mut send,
       &ControlMessage::Error {
@@ -341,11 +525,18 @@ async fn server_sync_session(
     .await?;
     return Err("peer sync plan does not match the independently computed plan".to_string());
   }
+  logger.event("plan:verified", "status=ok");
+  logger.plan(&plan);
+  log_conflicts(logger, &plan);
 
-  preserve_paths(&cwd, &plan.preserve_remote)?;
-  create_directories(&cwd, &plan.create_dirs_remote)?;
-  delete_files(&cwd, &plan.delete_files_remote)?;
-  delete_directories(&cwd, &plan.delete_dirs_remote)?;
+  preserve_paths_logged(&cwd, &plan.preserve_remote, Some(logger), "local")?;
+  create_directories_logged(&cwd, &plan.create_dirs_remote, Some(logger), "local")?;
+  delete_files_logged(&cwd, &plan.delete_files_remote, Some(logger), "local")?;
+  delete_directories_logged(&cwd, &plan.delete_dirs_remote, Some(logger), "local")?;
+  logger.event(
+    "control:send",
+    format!("type=readyForUploads count={}", plan.uploads.len()),
+  );
   write_control(
     &mut send,
     &ControlMessage::ReadyForUploads {
@@ -356,9 +547,22 @@ async fn server_sync_session(
 
   let mut transferred_bytes = 0_u64;
   for upload in &plan.uploads {
-    let (_, bytes) = receive_file(&connection, &cwd, upload).await?;
-    transferred_bytes += bytes;
+    match receive_file_logged(&connection, &cwd, upload, Some(logger), "receive-upload").await {
+      Ok((_, bytes)) => transferred_bytes += bytes,
+      Err(error) => {
+        logger.error(
+          "receive-upload:error",
+          &error,
+          format!("path={}", quoted(&upload.target_path)),
+        );
+        return Err(error);
+      }
+    }
   }
+  logger.event(
+    "control:send",
+    format!("type=uploadsApplied count={}", plan.uploads.len()),
+  );
   write_control(
     &mut send,
     &ControlMessage::UploadsApplied {
@@ -368,8 +572,22 @@ async fn server_sync_session(
   .await?;
 
   for download in &plan.downloads {
-    transferred_bytes += send_file(&connection, &cwd, download).await?;
+    match send_file_logged(&connection, &cwd, download, Some(logger), "send-download").await {
+      Ok(bytes) => transferred_bytes += bytes,
+      Err(error) => {
+        logger.error(
+          "send-download:error",
+          &error,
+          format!("path={}", quoted(&download.source_path)),
+        );
+        return Err(error);
+      }
+    }
   }
+  logger.event(
+    "control:send",
+    format!("type=transfersComplete count={}", plan.downloads.len()),
+  );
   write_control(
     &mut send,
     &ControlMessage::TransfersComplete {
@@ -382,8 +600,13 @@ async fn server_sync_session(
     ControlMessage::SyncFinish { manifest } => manifest,
     _ => unreachable!(),
   };
+  logger.event("control:receive", "type=syncFinish");
+  logger.manifest("final-remote", &client_final);
+  logger.event("scan:start", "side=final-local");
   let final_manifest = scan(cwd.clone()).await?;
+  logger.manifest("final-local", &final_manifest);
   if !final_manifest.content_equals(&client_final) {
+    logger.error("verify:manifest", "vault manifests differ after applying the sync plan", "status=failed");
     write_control(
       &mut send,
       &ControlMessage::Error {
@@ -393,8 +616,14 @@ async fn server_sync_session(
     .await?;
     return Err("vault manifests differ after applying the sync plan".to_string());
   }
+  logger.event("verify:manifest", "status=ok");
   write_baseline(&cwd, &peer_id, &final_manifest)?;
   write_manifest(&cwd, &final_manifest)?;
+  logger.event(
+    "baseline:saved",
+    format!("files={} peer_id={}", final_manifest.files.len(), short_peer_id(&peer_id)),
+  );
+  logger.event("control:send", "type=syncComplete acknowledged=false");
   write_control(
     &mut send,
     &ControlMessage::SyncComplete {
@@ -414,9 +643,14 @@ async fn server_sync_session(
     } => (manifest, acknowledged),
     _ => unreachable!(),
   };
+  logger.event(
+    "control:receive",
+    format!("type=syncComplete acknowledged={acknowledged}"),
+  );
   if !acknowledged || !final_manifest.content_equals(&ack_manifest) {
     return Err("peer did not acknowledge the verified final manifest".to_string());
   }
+  logger.event("verify:acknowledgement", "status=ok");
 
   if let Some(peer) = config.peers.iter_mut().find(|peer| peer.endpoint_id == peer_id) {
     peer.last_seen_at = now();
@@ -447,7 +681,12 @@ async fn server_sync_session(
 
   send.finish().map_err(|error| error.to_string())?;
   connection.closed().await;
-  Ok(())
+  logger.event("connection:closed", "reason=peer-closed-after-ack");
+  Ok(SessionResult {
+    conflicts: plan.conflicts,
+    transferred_files: (plan.uploads.len() + plan.downloads.len()) as u64,
+    transferred_bytes,
+  })
 }
 
 async fn handle_pair_request(
@@ -456,6 +695,15 @@ async fn handle_pair_request(
   request: PairRequest,
   mut send: iroh::endpoint::SendStream,
 ) -> R<()> {
+  log_global(
+    "pairing:incoming",
+    format!(
+      "invite_id={} peer={} peer_id={}",
+      request.invite_id,
+      quoted(&request.device_name),
+      short_peer_id(&connection.remote_id().to_string())
+    ),
+  );
   if request.endpoint_addr.id != connection.remote_id() {
     return Err("pair request endpoint address does not match authenticated Iroh identity".to_string());
   }
@@ -482,6 +730,8 @@ async fn handle_pair_request(
   let cwd = PathBuf::from(&vault.path);
   config.pending_invites.retain(|invite| invite.id != request.invite_id);
   let paired_folder_id = config.folder_id.clone();
+  let peer_name = request.device_name.clone();
+  let peer_id = request.endpoint_addr.id.to_string();
   upsert_peer(
     &mut config.peers,
     peer_from_pair(
@@ -500,13 +750,22 @@ async fn handle_pair_request(
     &ControlMessage::PairAccepted(PairAccepted {
       folder_id: config.folder_id,
       folder_label: config.folder_label,
-      device_name: vault.name,
+      device_name: vault.name.clone(),
       endpoint_addr: runtime.endpoint_addr(),
     }),
   )
   .await?;
   send.finish().map_err(|error| error.to_string())?;
   connection.closed().await;
+  log_global(
+    "pairing:accepted",
+    format!(
+      "vault={} peer={} peer_id={}",
+      quoted(&vault.name),
+      quoted(&peer_name),
+      short_peer_id(&peer_id)
+    ),
+  );
   Ok(())
 }
 
@@ -520,10 +779,19 @@ pub async fn handle_incoming_connection(app: AppHandle, connection: Connection) 
   let first = read_control(&mut recv).await?;
   match first {
     ControlMessage::PairRequest(request) => {
+      log_global("incoming:dispatch", "type=pairRequest");
       handle_pair_request(&app, connection, request, send).await
     }
     ControlMessage::SyncOpen(open) => {
       let peer_id = connection.remote_id().to_string();
+      log_global(
+        "incoming:dispatch",
+        format!(
+          "type=syncOpen peer={} peer_id={}",
+          quoted(&open.device_name),
+          short_peer_id(&peer_id)
+        ),
+      );
       let vault = super::config::read_config(&app)?
         .vaults
         .into_iter()
@@ -534,6 +802,10 @@ pub async fn handle_incoming_connection(app: AppHandle, connection: Connection) 
         .ok_or_else(|| "No local vault matches this sync request.".to_string())?;
       server_sync_session(vault, peer_id, open, connection, send, recv).await
     }
-    _ => Err("first ElephantNote Iroh message must be pairRequest or syncOpen".to_string()),
+    _ => {
+      let error = "first ElephantNote Iroh message must be pairRequest or syncOpen".to_string();
+      log_global_error("incoming:rejected", &error);
+      Err(error)
+    }
   }
 }

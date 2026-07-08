@@ -105,5 +105,5 @@ jobs:
         run: |
           set -euxo pipefail
           pnpm exec vitest run \
-            tests/app/unit/specs/main/elephantnote/syncSettingsPanel.spec.js \
-            tests/elephant/unit/navigationStore.spec.js
+            tests/app/unit/specs/main/elephantnote/navigationIrohSync.spec.js \
+            tests/app/unit/specs/main/elephantnote/syncSettingsPanel.spec.js

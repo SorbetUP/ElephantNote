@@ -2,14 +2,22 @@
 
 ## Scope
 
-The Iroh backend synchronizes the complete portable vault between explicitly paired ElephantNote devices. It includes normal notes, folders, `.assets`, `.config`, and portable `.elephantnote` data.
+The Iroh backend synchronizes vault content between explicitly paired ElephantNote devices. It includes normal notes, folders, `.assets`, and other non-device-specific content.
+
+Configuration is intentionally local to each device. A phone and a desktop can therefore use different providers, models, layouts, runtime settings, and local UI state without overwriting each other.
 
 The following local/runtime paths are intentionally excluded:
 
+- `.config/` — provider and runtime configuration
+- `.elephantnote/config/` — workspace, vault, calendar, sources, and other application configuration
+- `.elephantnote/models/` — local model/provider selection and locally available runtime information
+- `.elephantnote/state/` — device-specific application and UI state
 - `.elephantnote/sync/` — peer identities, baselines, queues, and transfer state
 - `.elephantnote/cache/` — rebuildable cache
 - `.elephantnote/index/` — rebuildable search index
 - `.git/`, `node_modules/`, OS metadata, editor temporary files, and symlinks
+
+These exclusions happen when the manifest is built. Consequently, excluded files cannot be uploaded, downloaded, deleted remotely, or turned into synchronization conflicts. An older baseline that still mentions a configuration file also cannot cause that local configuration file to be deleted.
 
 ## Transport and identity
 
@@ -39,9 +47,9 @@ Each peer pair keeps its own last common manifest under:
 
 A synchronization compares:
 
-- current local manifest;
-- current remote manifest;
-- last common manifest.
+- current local content manifest;
+- current remote content manifest;
+- last common content manifest.
 
 This three-way comparison handles:
 
@@ -66,4 +74,4 @@ For concurrent file modifications, the original path gets a deterministic winner
 
 ## Important implementation rule
 
-Do not replace this protocol with a shared-folder copy, fake success response, or smoke-only implementation. A successful sync result requires an authenticated Iroh peer connection and matching final manifests.
+Do not replace this protocol with a shared-folder copy, fake success response, or smoke-only implementation. A successful sync result requires an authenticated Iroh peer connection and matching final content manifests.

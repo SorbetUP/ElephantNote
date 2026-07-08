@@ -13,7 +13,7 @@
     <dashboard-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'dashboard'" />
     <wiki-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'wiki'" />
     <chat-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'chat'" />
-    <atomic-graph-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'graph'" />
+    <graph-view-host v-else-if="!hasOpenNote && store.activeWorkspaceView === 'graph'" />
     <models-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'models'" />
     <sigma-canvas v-else-if="!hasOpenNote && store.activeWorkspaceView === 'canvas'" />
     <calendar-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'calendar'" />
@@ -37,7 +37,7 @@ import WikiView from '../views/WikiView.vue'
 import ChatView from '../views/ChatView.vue'
 import ModelsView from '../views/ModelsView.vue'
 import SigmaCanvas from '../views/SigmaCanvas.vue'
-import AtomicGraphView from '../views/AtomicGraphView.vue'
+import GraphViewHost from '../views/GraphViewHost.vue'
 import CalendarView from '../views/CalendarView.vue'
 
 const store = useVaultStore()

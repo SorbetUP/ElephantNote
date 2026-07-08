@@ -166,6 +166,28 @@ mod iroh_two_endpoint_tests {
       .unwrap()
   }
 
+  fn collect_archive_contents(directory: &Path, contents: &mut Vec<String>) {
+    if !directory.exists() {
+      return;
+    }
+    for entry in std::fs::read_dir(directory).unwrap() {
+      let path = entry.unwrap().path();
+      let metadata = std::fs::symlink_metadata(&path).unwrap();
+      if metadata.is_dir() && !metadata.file_type().is_symlink() {
+        collect_archive_contents(&path, contents);
+      } else if metadata.is_file() {
+        contents.push(std::fs::read_to_string(path).unwrap());
+      }
+    }
+  }
+
+  fn archive_contents(root: &Path) -> Vec<String> {
+    let mut contents = Vec::new();
+    collect_archive_contents(&root.join(CONFLICT_ARCHIVE_DIR), &mut contents);
+    contents.sort();
+    contents
+  }
+
   #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
   async fn two_real_iroh_endpoints_exchange_modify_and_delete_vault_content() {
     let root = temp_root();
@@ -256,10 +278,37 @@ mod iroh_two_endpoint_tests {
     assert_eq!(third.transferred_files, 0);
     assert!(!root_b.join("B.md").exists());
 
+    std::fs::write(root_a.join("A.md"), "concurrent version A").unwrap();
+    std::fs::write(root_b.join("A.md"), "concurrent version B").unwrap();
+    let fourth = expect_session(
+      run_client_session(&vault_a, &config_a, &runtime_a).await,
+      &server_events,
+    );
+    assert_eq!(fourth.conflicts, vec!["A.md"]);
+    assert_eq!(fourth.transferred_files, 2);
+
+    let main_a = std::fs::read_to_string(root_a.join("A.md")).unwrap();
+    let main_b = std::fs::read_to_string(root_b.join("A.md")).unwrap();
+    assert_eq!(main_a, main_b);
+    let archived_a = archive_contents(&root_a);
+    let archived_b = archive_contents(&root_b);
+    assert_eq!(archived_a, archived_b);
+    assert_eq!(archived_a.len(), 1);
+    let mut preserved_versions = vec![main_a, archived_a[0].clone()];
+    preserved_versions.sort();
+    assert_eq!(
+      preserved_versions,
+      vec![
+        "concurrent version A".to_string(),
+        "concurrent version B".to_string(),
+      ]
+    );
+
     let manifest_a = scan_vault(&root_a).unwrap();
     let manifest_b = scan_vault(&root_b).unwrap();
     assert!(manifest_a.content_equals(&manifest_b));
     assert!(!manifest_a.files.contains_key(".config/provider/provider.json"));
+    assert!(!manifest_a.files.keys().any(|path| path.starts_with(".conflit/")));
 
     drop(runtime_a);
     server_router.shutdown().await.unwrap();

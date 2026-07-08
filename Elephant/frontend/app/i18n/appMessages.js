@@ -1,3 +1,4 @@
+/* eslint-disable @stylistic/object-property-newline */
 import ISO6391 from 'iso-639-1'
 
 export const APP_LANGUAGE_STORAGE_KEY = 'elephantnote:tauri:language'

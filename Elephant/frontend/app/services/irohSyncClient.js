@@ -2,9 +2,12 @@ import { invoke } from '@tauri-apps/api/core'
 
 export const IROH_SYNC_STATUS_EVENT = 'elephantnote:iroh-sync-status'
 
+let lastPublishedStatus = null
+
 const normalizeObject = (value) => (value && typeof value === 'object' ? value : {})
 
 const publishStatus = (status) => {
+  if (status && typeof status === 'object') lastPublishedStatus = status
   if (typeof window !== 'undefined' && status && typeof status === 'object') {
     window.dispatchEvent(new CustomEvent(IROH_SYNC_STATUS_EVENT, { detail: status }))
   }
@@ -21,9 +24,25 @@ const acceptInvite = async (manualCode) => {
   return result
 }
 
-const run = async () => publishStatus(await invoke('tauri_sync_run', {
-  payloadByOperation: { sync: {} }
-}))
+const run = async () => {
+  if (lastPublishedStatus) {
+    publishStatus({ ...lastPublishedStatus, running: true, lastError: '' })
+  }
+  try {
+    return publishStatus(await invoke('tauri_sync_run', {
+      payloadByOperation: { sync: {} }
+    }))
+  } catch (error) {
+    if (lastPublishedStatus) {
+      publishStatus({
+        ...lastPublishedStatus,
+        running: false,
+        lastError: error?.message || 'Iroh synchronization failed.'
+      })
+    }
+    throw error
+  }
+}
 
 export const irohSyncClient = {
   status: readStatus,

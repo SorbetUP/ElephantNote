@@ -6,6 +6,7 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const readSettings = () => read('Elephant/frontend/app/components/settings/SettingsPanel.vue')
 const readSettingsStyles = () => read('Elephant/frontend/app/components/settings/settings-redesign.css')
+const readSettingsPrimitives = () => read('Elephant/frontend/app/components/settings/settings-primitives.css')
 const readSync = () => read('Elephant/frontend/app/components/settings/SyncSettingsPanel.vue')
 const readAi = () => read('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
 const readPreferences = () => read('Elephant/frontend/src/renderer/src/store/preferences.js')
@@ -65,15 +66,32 @@ describe('ElephantNote settings redesign', () => {
     expect(preferences).toContain('autoPairBracket: true')
   })
 
+  it('imports one shared visual primitive layer', () => {
+    const styles = readSettingsStyles()
+    const primitives = readSettingsPrimitives()
+
+    expect(styles).toContain("@import './settings-primitives.css';")
+    expect(styles).toContain('Reusable control chrome lives in settings-primitives.css')
+    expect(primitives).toContain('--en-ui-control-height: 34px')
+    expect(primitives).toContain('--en-ui-card-radius: 14px')
+    expect(primitives).toContain(':where(.en-ai-card, .en-sync-card)')
+    expect(primitives).toContain(':where(.en-ai-toolbar, .en-sync-toolbar)')
+    expect(primitives).toContain(':where(.en-ai-settings button, .en-sync-panel button)')
+    expect(primitives).toContain(':where(.en-ai-badge, .en-provider-state, .en-sync-status')
+    expect(primitives).toContain(':where(.en-ai-settings input, .en-ai-settings select, .en-ai-settings textarea')
+  })
+
   it('uses one switch geometry for root and nested settings panels', () => {
     const styles = readSettingsStyles()
+    const primitives = readSettingsPrimitives()
 
-    expect(styles).toContain('.en-settings-panel .en-switch,')
-    expect(styles).toContain('.en-settings-panel :deep(.en-ai-switch)')
-    expect(styles).toContain('display: block !important')
-    expect(styles).toContain('transform: translateX(0) !important')
-    expect(styles).toContain('transform: translateX(18px) !important')
-    expect(styles).toContain('.en-settings-panel :deep(.en-ai-switch.small.active > span)')
+    expect(styles).not.toContain('.en-settings-panel .en-switch,')
+    expect(primitives).toContain('.en-settings-panel .en-switch,')
+    expect(primitives).toContain('.en-settings-panel :deep(.en-ai-switch)')
+    expect(primitives).toContain('display: block !important')
+    expect(primitives).toContain('transform: translateX(0) !important')
+    expect(primitives).toContain('transform: translateX(18px) !important')
+    expect(primitives).toContain('.en-settings-panel :deep(.en-ai-switch.small.active > span)')
   })
 
   it('retains real vault, import and generated-site actions', () => {

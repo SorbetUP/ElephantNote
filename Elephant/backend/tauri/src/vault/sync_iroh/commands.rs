@@ -32,6 +32,15 @@ pub fn sync_enqueue_iroh(
     queue.len(),
   ));
   write_queue(&cwd, &queue)?;
+  crate::sync::logging::log_global(
+    "queue:add",
+    format!(
+      "vault={} operation={} queued={}",
+      serde_json::to_string(&vault.name).unwrap_or_default(),
+      operation,
+      queue.len()
+    ),
+  );
   Ok(status_value(
     &vault,
     &queue,
@@ -51,6 +60,15 @@ async fn run_operation(
   match operation {
     OPERATION_INIT | OPERATION_SNAPSHOT => {
       let manifest = scan(cwd.to_path_buf()).await?;
+      crate::sync::logging::log_global(
+        "snapshot",
+        format!(
+          "operation={operation} files={} directories={} bytes={}",
+          manifest.files.len(),
+          manifest.directories.len(),
+          manifest.files.values().map(|record| record.size).sum::<u64>()
+        ),
+      );
       write_manifest(cwd, &manifest)?;
       Ok(SessionResult::default())
     }
@@ -60,7 +78,25 @@ async fn run_operation(
       }
       let mut aggregate = SessionResult::default();
       for peer in config.peers.clone() {
+        crate::sync::logging::log_global(
+          "peer:start",
+          format!(
+            "operation={operation} peer={} peer_id={}",
+            serde_json::to_string(&peer.name).unwrap_or_default(),
+            crate::sync::logging::short_peer_id(&peer.endpoint_id)
+          ),
+        );
         let session = client_sync_peer(vault, config, &peer, runtime).await?;
+        crate::sync::logging::log_global(
+          "peer:complete",
+          format!(
+            "operation={operation} peer={} files={} bytes={} conflicts={}",
+            serde_json::to_string(&peer.name).unwrap_or_default(),
+            session.transferred_files,
+            session.transferred_bytes,
+            session.conflicts.len()
+          ),
+        );
         aggregate.conflicts.extend(session.conflicts);
         aggregate.transferred_files += session.transferred_files;
         aggregate.transferred_bytes += session.transferred_bytes;
@@ -83,6 +119,7 @@ pub async fn sync_run_iroh(
   payload_by_operation: Option<Value>,
   runtime: Arc<IrohRuntime>,
 ) -> R<Value> {
+  let run_started = std::time::Instant::now();
   let cwd = PathBuf::from(&vault.path);
   let endpoint_id = runtime.endpoint_id().to_string();
   let mut config = ensure_sync_files(&vault, &endpoint_id)?;
@@ -95,6 +132,21 @@ pub async fn sync_run_iroh(
       queue.push(queue_item(&operation, item_payload, queue.len()));
     }
   }
+
+  crate::sync::logging::log_global(
+    "run:start",
+    format!(
+      "vault={} device_id={} peers={} operations={}",
+      serde_json::to_string(&vault.name).unwrap_or_default(),
+      crate::sync::logging::short_peer_id(&endpoint_id),
+      config.peers.len(),
+      queue
+        .iter()
+        .map(|item| item.operation.as_str())
+        .collect::<Vec<_>>()
+        .join(",")
+    ),
+  );
 
   let mut history = read_history(&cwd);
   let mut state = read_state(&cwd);
@@ -109,6 +161,11 @@ pub async fn sync_run_iroh(
     if item.status != STATUS_QUEUED {
       continue;
     }
+    let operation_started = std::time::Instant::now();
+    crate::sync::logging::log_global(
+      "operation:start",
+      format!("id={} operation={}", item.id, item.operation),
+    );
     let result = run_operation(
       &item.operation,
       &vault,
@@ -123,6 +180,18 @@ pub async fn sync_run_iroh(
       Ok(session) => {
         item.status = STATUS_DONE.to_string();
         item.error.clear();
+        crate::sync::logging::log_global(
+          "operation:complete",
+          format!(
+            "id={} operation={} files={} bytes={} conflicts={} duration_ms={}",
+            item.id,
+            item.operation,
+            session.transferred_files,
+            session.transferred_bytes,
+            session.conflicts.len(),
+            operation_started.elapsed().as_millis()
+          ),
+        );
         all_conflicts.extend(session.conflicts);
         total_files += session.transferred_files;
         total_bytes += session.transferred_bytes;
@@ -130,6 +199,16 @@ pub async fn sync_run_iroh(
       Err(error) => {
         item.status = STATUS_ERROR.to_string();
         item.error = error.clone();
+        crate::sync::logging::log_global_error(
+          "operation:error",
+          format!(
+            "id={} operation={} duration_ms={} error={}",
+            item.id,
+            item.operation,
+            operation_started.elapsed().as_millis(),
+            serde_json::to_string(&error).unwrap_or_default()
+          ),
+        );
         last_error = error;
       }
     }
@@ -162,6 +241,17 @@ pub async fn sync_run_iroh(
   write_queue(&cwd, &remaining)?;
   write_history(&cwd, &history)?;
   write_state(&cwd, &state)?;
+  let status = if state.last_error.is_empty() { "ok" } else { "error" };
+  crate::sync::logging::log_global(
+    "run:complete",
+    format!(
+      "vault={} status={status} files={total_files} bytes={total_bytes} conflicts={} remaining={} duration_ms={}",
+      serde_json::to_string(&vault.name).unwrap_or_default(),
+      all_conflicts.len(),
+      remaining.len(),
+      run_started.elapsed().as_millis()
+    ),
+  );
   Ok(status_value(&vault, &remaining, &history, &state, &config))
 }
 

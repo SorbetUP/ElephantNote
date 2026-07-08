@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod iroh_two_endpoint_tests {
   use super::*;
-  use iroh::endpoint::{presets, Connection};
+  use iroh::endpoint::{presets, Accepting, Connection};
   use iroh::protocol::{AcceptError, ProtocolHandler, Router};
   use iroh::{Endpoint, EndpointAddr};
   use std::fmt;
@@ -13,7 +13,7 @@ mod iroh_two_endpoint_tests {
   #[derive(Clone)]
   struct TestVaultProtocol {
     vault: VaultDescriptor,
-    errors: Arc<Mutex<Vec<String>>>,
+    events: Arc<Mutex<Vec<String>>>,
   }
 
   impl fmt::Debug for TestVaultProtocol {
@@ -26,15 +26,22 @@ mod iroh_two_endpoint_tests {
   }
 
   impl TestVaultProtocol {
+    fn record(&self, event: impl Into<String>) {
+      self.events.lock().unwrap().push(event.into());
+    }
+
     async fn handle(&self, connection: Connection) -> Result<(), String> {
+      self.record("accept:start");
       let peer_id = connection.remote_id().to_string();
       let (send, mut recv) = connection
         .accept_bi()
         .await
         .map_err(|error| format!("accept_bi failed: {error}"))?;
+      self.record("accept_bi:ok");
       let first = read_control(&mut recv)
         .await
         .map_err(|error| format!("read first control failed: {error}"))?;
+      self.record("sync_open:read");
       let ControlMessage::SyncOpen(open) = first else {
         return Err("test server expected syncOpen".to_string());
       };
@@ -52,11 +59,28 @@ mod iroh_two_endpoint_tests {
   }
 
   impl ProtocolHandler for TestVaultProtocol {
+    async fn on_accepting(&self, accepting: Accepting) -> Result<Connection, AcceptError> {
+      self.record("on_accepting:start");
+      match accepting.await {
+        Ok(connection) => {
+          self.record("on_accepting:ok");
+          Ok(connection)
+        }
+        Err(error) => {
+          self.record(format!("on_accepting:error:{error}"));
+          Err(error.into())
+        }
+      }
+    }
+
     async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
       match self.handle(connection).await {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+          self.record("accept:done");
+          Ok(())
+        }
         Err(error) => {
-          self.errors.lock().unwrap().push(error.clone());
+          self.record(format!("accept:error:{error}"));
           Err(AcceptError::from_err(io::Error::other(error)))
         }
       }
@@ -121,16 +145,25 @@ mod iroh_two_endpoint_tests {
 
   fn expect_session(
     result: Result<SessionResult, String>,
-    server_errors: &Arc<Mutex<Vec<String>>>,
+    server_events: &Arc<Mutex<Vec<String>>>,
   ) -> SessionResult {
     match result {
       Ok(result) => result,
       Err(error) => {
         std::thread::sleep(Duration::from_millis(100));
-        let errors = server_errors.lock().unwrap().clone();
-        panic!("Iroh synchronization failed: {error}; server errors: {errors:?}");
+        let events = server_events.lock().unwrap().clone();
+        panic!("Iroh synchronization failed: {error}; server events: {events:?}");
       }
     }
+  }
+
+  async fn loopback_endpoint() -> Endpoint {
+    Endpoint::builder(presets::Minimal)
+      .bind_addr("127.0.0.1:0")
+      .unwrap()
+      .bind()
+      .await
+      .unwrap()
   }
 
   #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -155,19 +188,19 @@ mod iroh_two_endpoint_tests {
 
     let vault_a = descriptor(&root_a, "Device A");
     let vault_b = descriptor(&root_b, "Device B");
-    let endpoint_a = Endpoint::builder(presets::Minimal).bind().await.unwrap();
-    let endpoint_b = Endpoint::builder(presets::Minimal).bind().await.unwrap();
+    let endpoint_a = loopback_endpoint().await;
+    let endpoint_b = loopback_endpoint().await;
     let addr_a = crate::sync::wait_for_endpoint_addr(&endpoint_a).await.unwrap();
     let addr_b = crate::sync::wait_for_endpoint_addr(&endpoint_b).await.unwrap();
-    let server_errors = Arc::new(Mutex::new(Vec::new()));
-    let client_errors = Arc::new(Mutex::new(Vec::new()));
+    let server_events = Arc::new(Mutex::new(Vec::new()));
+    let client_events = Arc::new(Mutex::new(Vec::new()));
 
     let server_router = Router::builder(endpoint_b.clone())
       .accept(
         crate::sync::protocol::ALPN,
         TestVaultProtocol {
           vault: vault_b.clone(),
-          errors: server_errors.clone(),
+          events: server_events.clone(),
         },
       )
       .spawn();
@@ -176,10 +209,13 @@ mod iroh_two_endpoint_tests {
         crate::sync::protocol::ALPN,
         TestVaultProtocol {
           vault: vault_a.clone(),
-          errors: client_errors,
+          events: client_events,
         },
       )
       .spawn();
+    tokio::task::yield_now().await;
+    assert!(!server_router.is_shutdown());
+    assert!(!client_router.is_shutdown());
     let runtime_a = IrohRuntime::from_test_parts(endpoint_a.clone(), client_router);
 
     let config_a = configure_peer(&vault_a, &endpoint_a, addr_b, "Device B");
@@ -187,7 +223,7 @@ mod iroh_two_endpoint_tests {
 
     let first = expect_session(
       run_client_session(&vault_a, &config_a, &runtime_a).await,
-      &server_errors,
+      &server_events,
     );
     assert_eq!(first.transferred_files, 2);
     assert_eq!(std::fs::read_to_string(root_a.join("B.md")).unwrap(), "from device B");
@@ -204,7 +240,7 @@ mod iroh_two_endpoint_tests {
     std::fs::write(root_a.join("A.md"), "updated on device A").unwrap();
     let second = expect_session(
       run_client_session(&vault_a, &config_a, &runtime_a).await,
-      &server_errors,
+      &server_events,
     );
     assert_eq!(second.transferred_files, 1);
     assert_eq!(
@@ -215,7 +251,7 @@ mod iroh_two_endpoint_tests {
     std::fs::remove_file(root_a.join("B.md")).unwrap();
     let third = expect_session(
       run_client_session(&vault_a, &config_a, &runtime_a).await,
-      &server_errors,
+      &server_events,
     );
     assert_eq!(third.transferred_files, 0);
     assert!(!root_b.join("B.md").exists());
@@ -226,7 +262,7 @@ mod iroh_two_endpoint_tests {
     assert!(!manifest_a.files.contains_key(".config/provider/provider.json"));
 
     drop(runtime_a);
-    drop(server_router);
+    server_router.shutdown().await.unwrap();
     let _ = std::fs::remove_dir_all(root);
   }
 }

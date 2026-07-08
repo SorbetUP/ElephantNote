@@ -69,6 +69,7 @@ pub enum ControlMessage {
   TransfersComplete { count: usize },
   SyncFinish { manifest: VaultManifest },
   SyncComplete { manifest: VaultManifest },
+  SyncAck,
   Error { message: String },
 }
 

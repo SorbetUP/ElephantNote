@@ -68,8 +68,10 @@ pub enum ControlMessage {
   UploadsApplied { count: usize },
   TransfersComplete { count: usize },
   SyncFinish { manifest: VaultManifest },
-  SyncComplete { manifest: VaultManifest },
-  SyncAck,
+  SyncComplete {
+    manifest: VaultManifest,
+    acknowledged: bool,
+  },
   Error { message: String },
 }
 
@@ -117,6 +119,6 @@ pub async fn read_file_header(recv: &mut RecvStream) -> Result<FileHeader, Strin
     return Err(format!("invalid file header length: {length}"));
   }
   let mut bytes = vec![0_u8; length];
-  recv.read_exact(&mut bytes).await.map_err(|error| error.to_string())?;
+  recv.read_exact(&mut bytes).await.map_err(|error| format!("invalid file header: {error}"))?;
   serde_json::from_slice(&bytes).map_err(|error| format!("invalid file header: {error}"))
 }

@@ -29,8 +29,8 @@ describe('ElephantNote settings redesign', () => {
   it('searches individual settings across every section and opens nested pages', () => {
     const source = readSettings()
 
-    expect(source).toContain('placeholder="Search all settings"')
-    expect(source).toContain('const settingsIndex = [')
+    expect(source).toContain(':placeholder="t(\'settings.searchPlaceholder\')"')
+    expect(source).toContain('const settingsIndex = computed(')
     expect(source).toContain("label: 'Quick insert trigger'")
     expect(source).toContain("label: 'Conflict retention'")
     expect(source).toContain("label: 'Semantic search and embeddings'")
@@ -39,11 +39,12 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('aiInitialPage.value = result.subpage')
   })
 
-  it('uses a minimal flat navigation and keeps Sites separate from Import', () => {
+  it('uses a minimal translated navigation and keeps Sites separate from Import', () => {
     const source = readSettings()
 
-    expect(source).toContain("{ id: 'sites', label: 'Sites', icon: Globe2 }")
-    expect(source).toContain("{ id: 'import', label: 'Import', icon: Download }")
+    expect(source).toContain("{ id: 'sites', labelKey: 'navigation.sites', icon: Globe2 }")
+    expect(source).toContain("{ id: 'import', labelKey: 'navigation.import', icon: Download }")
+    expect(source).toContain('sectionDefinitions.map((section) => ({ ...section, label: t(section.labelKey) }))')
     expect(source).not.toContain("label: 'Workspace'")
     expect(source).not.toContain("label: 'Services'")
     expect(source).not.toContain("label: 'Data'")

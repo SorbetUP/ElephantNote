@@ -14,7 +14,9 @@ pub async fn iroh_sync_create_invite(
 ) -> R<Value> {
   let runtime = state.runtime(&app).await?;
   let _operation = state.lock_operation().await;
-  sync::sync_create_invite(config::get_active_vault(&app)?, payload, runtime).await
+  let vault = config::get_active_vault(&app)?;
+  sync::cleanup_conflicts_for_vault(&vault)?;
+  sync::sync_create_invite(vault, payload, runtime).await
 }
 
 #[tauri::command(rename = "tauri_sync_accept_invite")]
@@ -25,7 +27,9 @@ pub async fn iroh_sync_accept_invite(
 ) -> R<Value> {
   let runtime = state.runtime(&app).await?;
   let _operation = state.lock_operation().await;
-  sync::sync_accept_invite(config::get_active_vault(&app)?, invite, runtime).await
+  let vault = config::get_active_vault(&app)?;
+  sync::cleanup_conflicts_for_vault(&vault)?;
+  sync::sync_accept_invite(vault, invite, runtime).await
 }
 
 #[tauri::command(rename = "tauri_sync_status")]
@@ -34,11 +38,12 @@ pub async fn iroh_sync_status(
   state: State<'_, IrohSyncState>,
 ) -> R<Value> {
   let runtime = state.runtime(&app).await?;
-  let vault = config::read_config(&app)?;
-  sync::sync_status_iroh(
-    crate::vault::types::active_vault(&vault),
-    &runtime.endpoint_id().to_string(),
-  )
+  let vault_config = config::read_config(&app)?;
+  if let Some(vault) = crate::vault::types::active_vault(&vault_config) {
+    sync::cleanup_conflicts_for_vault(&vault)?;
+    return sync::sync_status_iroh(Some(vault), &runtime.endpoint_id().to_string());
+  }
+  sync::sync_status_iroh(None, &runtime.endpoint_id().to_string())
 }
 
 #[tauri::command(rename = "tauri_sync_enqueue")]
@@ -50,8 +55,10 @@ pub async fn iroh_sync_enqueue(
 ) -> R<Value> {
   let runtime = state.runtime(&app).await?;
   let _operation = state.lock_operation().await;
+  let vault = config::get_active_vault(&app)?;
+  sync::cleanup_conflicts_for_vault(&vault)?;
   sync::sync_enqueue_iroh(
-    config::get_active_vault(&app)?,
+    vault,
     &runtime.endpoint_id().to_string(),
     operation,
     payload,
@@ -66,10 +73,29 @@ pub async fn iroh_sync_run(
 ) -> R<Value> {
   let runtime = state.runtime(&app).await?;
   let _operation = state.lock_operation().await;
-  sync::sync_run_iroh(
+  let vault = config::get_active_vault(&app)?;
+  sync::cleanup_conflicts_for_vault(&vault)?;
+  sync::sync_run_iroh(vault, payload_by_operation, runtime).await
+}
+
+#[tauri::command(rename = "tauri_sync_conflict_settings_get")]
+pub async fn iroh_sync_conflict_settings_get(
+  app: AppHandle,
+  state: State<'_, IrohSyncState>,
+) -> R<Value> {
+  let _operation = state.lock_operation().await;
+  sync::sync_conflict_settings_get(config::get_active_vault(&app)?)
+}
+
+#[tauri::command(rename = "tauri_sync_conflict_settings_set")]
+pub async fn iroh_sync_conflict_settings_set(
+  app: AppHandle,
+  state: State<'_, IrohSyncState>,
+  conflict_retention_days: u32,
+) -> R<Value> {
+  let _operation = state.lock_operation().await;
+  sync::sync_conflict_settings_set(
     config::get_active_vault(&app)?,
-    payload_by_operation,
-    runtime,
+    conflict_retention_days,
   )
-  .await
 }

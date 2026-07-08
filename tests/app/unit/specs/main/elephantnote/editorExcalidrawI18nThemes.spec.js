@@ -9,6 +9,7 @@ const importFromRoot = (relativePath) => import(pathToFileURL(path.join(root, re
 
 const appearance = () => read('Elephant/shared/appearance.js')
 const appMessages = () => read('Elephant/frontend/app/i18n/appMessages.js')
+const additionalAppLocales = () => read('Elephant/frontend/app/i18n/additionalAppLocales.js')
 const i18n = () => read('Elephant/frontend/src/renderer/src/i18n/index.js')
 const settings = () => read('Elephant/frontend/app/components/settings/SettingsPanel.vue')
 const appShell = () => read('Elephant/frontend/app/components/shell/AppShell.vue')
@@ -47,16 +48,20 @@ describe('expanded ElephantNote experience', () => {
     expect(source).toContain("floatShadow: '0 0 34px rgba(168, 85, 247, 0.24)")
   })
 
-  it('returns every ISO language, English fallback and RTL behavior', async () => {
+  it('returns every ISO language, broad built-in translations and RTL behavior', async () => {
     const module = await importFromRoot('Elephant/frontend/app/i18n/appMessages.js')
     const options = module.getSupportedLanguageOptions('en')
     const codes = options.map((option) => option.code)
+    const translatedCodes = options.filter((option) => option.hasBuiltInAppMessages).map((option) => option.code)
 
     expect(options.length).toBeGreaterThan(180)
     expect(new Set(codes).size).toBe(codes.length)
-    expect(codes).toEqual(expect.arrayContaining(['system', 'en', 'fr', 'de', 'es', 'ja', 'ar', 'he']))
+    expect(codes).toEqual(expect.arrayContaining(['system', 'en', 'fr', 'de', 'es', 'it', 'pt', 'nl', 'pl', 'ru', 'uk', 'tr', 'ja', 'ko', 'zh', 'ar', 'he']))
+    expect(translatedCodes).toEqual(expect.arrayContaining(['en', 'fr', 'de', 'es', 'it', 'pt', 'nl', 'pl', 'ru', 'uk', 'tr', 'ja', 'ko', 'zh', 'ar']))
     expect(module.getAppMessages('fr').common.settings).toBe('Paramètres')
-    expect(module.getAppMessages('ja').common.settings).toBe('Settings')
+    expect(module.getAppMessages('ja').common.settings).toBe('設定')
+    expect(module.getAppMessages('ar').settings.language).toBe('اللغة')
+    expect(module.getAppMessages('he').common.settings).toBe('Settings')
     expect(module.normalizeAppLocale('zh-Hant-TW')).toBe('zh-TW')
     expect(module.normalizeAppLocale('pt_BR')).toBe('pt')
     expect(module.isRtlLocale('ar-SA')).toBe(true)
@@ -65,13 +70,19 @@ describe('expanded ElephantNote experience', () => {
 
   it('centralizes app messages and exposes every ISO 639-1 language with fallback', () => {
     const source = appMessages()
+    const expanded = additionalAppLocales()
 
     expect(source).toContain("import ISO6391 from 'iso-639-1'")
+    expect(source).toContain("import { additionalAppLocales } from './additionalAppLocales'")
     expect(source).toContain('ISO6391.getAllCodes()')
     expect(source).toContain('new Intl.DisplayNames')
+    expect(source).toContain('...additionalAppLocales')
     expect(source).toContain('mergeMessages(english, builtInMessages[normalized] || {})')
     expect(source).toContain("['ar', 'fa', 'he', 'ur', 'ps', 'sd', 'ug', 'yi']")
     expect(source).toContain("code: 'system'")
+    expect(expanded).toContain("'zh-CN':")
+    expect(expanded).toContain("'zh-TW':")
+    expect(expanded).toContain('export const additionalAppLocales')
   })
 
   it('uses the central locale registry in the renderer and applies RTL direction', () => {

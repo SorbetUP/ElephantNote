@@ -64,9 +64,9 @@ const nav = useNavigationStore()
 const vaultStore = useVaultStore()
 const activeVaultPath = computed(() => vaultStore.activeVault?.path || '')
 const syncDisabled = computed(() => (
-  nav.syncStatus === 'syncing'
-  || !activeVaultPath.value
-  || !nav.hasPairedSyncDevice
+  nav.syncStatus === 'syncing' ||
+  !activeVaultPath.value ||
+  !nav.hasPairedSyncDevice
 ))
 
 const syncClass = computed(() => ({

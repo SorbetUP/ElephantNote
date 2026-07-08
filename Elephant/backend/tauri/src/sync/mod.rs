@@ -152,6 +152,12 @@ impl fmt::Debug for VaultSyncProtocol {
 
 impl ProtocolHandler for VaultSyncProtocol {
   async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+    if let Ok(config) = crate::vault::config::read_config(&self.app) {
+      for vault in config.vaults {
+        crate::vault::sync::cleanup_conflicts_for_vault(&vault)
+          .map_err(|error| AcceptError::from_err(io::Error::other(error)))?;
+      }
+    }
     crate::vault::sync::handle_incoming_connection(self.app.clone(), connection)
       .await
       .map_err(|error| AcceptError::from_err(io::Error::other(error)))

@@ -20,6 +20,7 @@ pub mod search_logic;
 
 mod tauri_extra_commands;
 mod debug_commands;
+mod sync_commands;
 
 pub mod infra;
 pub mod preferences;
@@ -65,16 +66,6 @@ fn tauri_platform_info() -> serde_json::Value {
   })
 }
 
-#[tauri::command]
-fn tauri_sync_create_invite(app: tauri::AppHandle, payload: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
-  vault::sync::sync_create_invite(vault::config::get_active_vault(&app)?, payload)
-}
-
-#[tauri::command]
-fn tauri_sync_accept_invite(app: tauri::AppHandle, invite: serde_json::Value) -> Result<serde_json::Value, String> {
-  vault::sync::sync_accept_invite(vault::config::get_active_vault(&app)?, invite)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let builder = tauri::Builder::default()
@@ -92,13 +83,24 @@ pub fn run() {
       let handle = app.handle().clone();
       app.manage(state::AppState::new(&handle));
       app.manage(watcher::WatcherState::new());
+      app.manage(sync::IrohSyncState::new());
+      let sync_handle = handle.clone();
+      tauri::async_runtime::spawn(async move {
+        let state = sync_handle.state::<sync::IrohSyncState>();
+        if let Err(error) = state.runtime(&sync_handle).await {
+          eprintln!("[ElephantNote Sync] Failed to start Iroh runtime: {error}");
+        }
+      });
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
       healthcheck,
       tauri_platform_info,
-      tauri_sync_create_invite,
-      tauri_sync_accept_invite,
+      sync_commands::tauri_sync_create_invite,
+      sync_commands::tauri_sync_accept_invite,
+      sync_commands::tauri_sync_status,
+      sync_commands::tauri_sync_enqueue,
+      sync_commands::tauri_sync_run,
       debug_commands::tauri_debug_log,
       state::tauri_prefs_get,
       state::tauri_prefs_all,
@@ -168,9 +170,6 @@ pub fn run() {
       vault::commands::tauri_wiki_list,
       vault::commands::tauri_search_query,
       vault::commands::tauri_search_status,
-      vault::commands::tauri_sync_status,
-      vault::commands::tauri_sync_enqueue,
-      vault::commands::tauri_sync_run,
       markdown::commands::tauri_markdown_parse,
       markdown::commands::tauri_markdown_render_html,
       markdown::commands::tauri_markdown_to_text,
@@ -247,6 +246,9 @@ mod tests {
     let info = tauri_platform_info();
     assert!(info.get("os").and_then(|value| value.as_str()).is_some());
     assert!(info.get("arch").and_then(|value| value.as_str()).is_some());
-    assert_eq!(info.get("desktop").and_then(|value| value.as_bool()), Some(!cfg!(mobile)));
+    assert_eq!(
+      info.get("desktop").and_then(|value| value.as_bool()),
+      Some(!cfg!(mobile))
+    );
   }
 }

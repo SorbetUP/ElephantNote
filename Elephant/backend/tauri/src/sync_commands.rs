@@ -79,11 +79,7 @@ pub async fn iroh_sync_run(
 }
 
 #[tauri::command(rename = "tauri_sync_conflict_settings_get")]
-pub async fn iroh_sync_conflict_settings_get(
-  app: AppHandle,
-  state: State<'_, IrohSyncState>,
-) -> R<Value> {
-  let _operation = state.lock_operation().await;
+pub async fn iroh_sync_conflict_settings_get(app: AppHandle) -> R<Value> {
   sync::sync_conflict_settings_get(config::get_active_vault(&app)?)
 }
 

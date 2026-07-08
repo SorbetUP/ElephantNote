@@ -56,6 +56,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { ChevronLeft, ChevronRight, RefreshCw } from '@lucide/vue'
+import { IROH_SYNC_STATUS_EVENT } from '../../services/irohSyncClient'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { useVaultStore } from '../../stores/vaultStore'
 
@@ -119,6 +120,10 @@ const handleWindowFocus = () => {
   refreshSyncStatus()
 }
 
+const handleSyncStatus = (event) => {
+  if (event?.detail) nav.applySyncStatus(event.detail, { preserveRunning: true })
+}
+
 watch(activeVaultPath, (nextPath, previousPath) => {
   if (nextPath === previousPath) return
   nav.clearSyncStatus()
@@ -128,10 +133,12 @@ watch(activeVaultPath, (nextPath, previousPath) => {
 onMounted(() => {
   refreshSyncStatus()
   window.addEventListener('focus', handleWindowFocus)
+  window.addEventListener(IROH_SYNC_STATUS_EVENT, handleSyncStatus)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('focus', handleWindowFocus)
+  window.removeEventListener(IROH_SYNC_STATUS_EVENT, handleSyncStatus)
 })
 </script>
 

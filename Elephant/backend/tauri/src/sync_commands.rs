@@ -86,9 +86,9 @@ pub async fn iroh_sync_run(
   let runtime = state.runtime(&app).await?;
   let _operation = state.lock_operation().await;
   let vault = config::get_active_vault(&app)?;
-  sync::cleanup_conflicts_for_vault(&vault)?;
   let result = {
     let _activity = state.begin_activity()?;
+    sync::cleanup_conflicts_for_vault(&vault)?;
     sync::sync_run_iroh(vault, payload_by_operation, runtime).await
   }?;
   Ok(with_running(result, false))

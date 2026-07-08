@@ -83,6 +83,22 @@ jobs:
           fi
           grep -Eq 'test result: ok\. 1 passed; 0 failed' "$log_file"
 
+      - name: Verify structured terminal synchronization logs
+        shell: bash
+        run: |
+          set -euxo pipefail
+          log_file="iroh-smoke-output.txt"
+          grep -F '[Sync] session:start' "$log_file"
+          grep -F '[Sync] manifest' "$log_file"
+          grep -F '[Sync] baseline' "$log_file"
+          grep -F '[Sync] plan' "$log_file"
+          grep -E '\[Sync\] (upload|receive-upload|send-download|download):start' "$log_file"
+          grep -F '[Sync] verify:hash' "$log_file"
+          grep -F '[Sync] conflict:preserved' "$log_file"
+          grep -F '[Sync] verify:manifest' "$log_file"
+          grep -F '[Sync] baseline:saved' "$log_file"
+          grep -F '[Sync] complete' "$log_file"
+
       - name: Upload Iroh smoke diagnostics
         if: always()
         uses: actions/upload-artifact@v4

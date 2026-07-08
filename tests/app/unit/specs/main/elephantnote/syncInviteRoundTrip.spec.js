@@ -13,7 +13,7 @@ import {
   createSyncInviteFile,
   generateSyncInviteQrDataUrl,
   validateSyncInvitePayload
-} from '../../../../../Elephant/frontend/app/services/syncInvite'
+} from '../../../../../../Elephant/frontend/app/services/syncInvite'
 
 const NOW = 1_800_000_000
 

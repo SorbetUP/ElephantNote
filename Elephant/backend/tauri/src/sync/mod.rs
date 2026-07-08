@@ -110,6 +110,11 @@ impl IrohRuntime {
     Ok(Self { endpoint, router })
   }
 
+  #[cfg(test)]
+  pub(crate) fn from_test_parts(endpoint: Endpoint, router: Router) -> Self {
+    Self { endpoint, router }
+  }
+
   pub fn endpoint(&self) -> &Endpoint {
     &self.endpoint
   }

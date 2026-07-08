@@ -1,186 +1,193 @@
 <template>
   <div class="en-sync-panel">
-    <section class="en-settings-section stacked">
-      <div class="en-sync-heading">
-        <div>
-          <h3>Peer-to-peer vault sync</h3>
-          <p>Encrypted Iroh synchronization for the active vault. No cloud account or shared folder is required.</p>
-        </div>
-        <span class="en-settings-pill" :class="{ active: pairedDevices.length > 0 }">
-          {{ connectionLabel }}
+    <div class="en-sync-toolbar">
+      <nav class="en-sync-tabs" aria-label="Synchronization settings pages">
+        <button type="button" :class="{ active: activeSyncPage === 'overview' }" @click="activeSyncPage = 'overview'">
+          <Gauge aria-hidden="true" /> Overview
+        </button>
+        <button type="button" :class="{ active: activeSyncPage === 'devices' }" @click="activeSyncPage = 'devices'">
+          <Laptop aria-hidden="true" /> Devices
+          <span v-if="pairedDevices.length" class="en-sync-tab-count">{{ pairedDevices.length }}</span>
+        </button>
+        <button type="button" :class="{ active: activeSyncPage === 'conflicts' }" @click="activeSyncPage = 'conflicts'">
+          <Archive aria-hidden="true" /> Conflicts
+          <span v-if="archiveEntries.length || reportedConflicts.length" class="en-sync-tab-count warning">{{ archiveEntries.length + reportedConflicts.length }}</span>
+        </button>
+      </nav>
+
+      <div class="en-sync-toolbar-actions">
+        <span class="en-sync-status" :class="{ active: pairedDevices.length > 0, error: hasError }">
+          <span class="en-sync-status-dot" />{{ connectionLabel }}
         </span>
+        <button class="secondary compact icon-only" type="button" title="Refresh status" :disabled="loading || !hasVault" @click="refreshAll()"><RotateCw aria-hidden="true" /></button>
+        <button class="primary compact" type="button" :disabled="loading || !hasVault || !pairedDevices.length" @click="syncNow"><RefreshCw aria-hidden="true" :class="{ spinning: syncing }" />{{ syncing ? 'Syncing…' : 'Sync now' }}</button>
       </div>
+    </div>
 
-      <div class="en-sync-summary">
-        <div>
-          <span>Active vault</span>
-          <strong>{{ activeVaultName }}</strong>
-          <small>{{ activeVaultPath || 'Open a vault to configure sync.' }}</small>
+    <p v-if="statusMessage" class="en-sync-message" :class="{ error: hasError }">{{ statusMessage }}</p>
+
+    <template v-if="activeSyncPage === 'overview'">
+      <section class="en-sync-card">
+        <div class="en-sync-summary">
+          <article>
+            <span class="en-sync-summary-icon"><FolderSync aria-hidden="true" /></span>
+            <div><small>Active vault</small><strong>{{ activeVaultName }}</strong><p>{{ activeVaultPath || 'Open a vault to configure sync.' }}</p></div>
+          </article>
+          <article>
+            <span class="en-sync-summary-icon"><Fingerprint aria-hidden="true" /></span>
+            <div><small>Device identity</small><strong>{{ shortDeviceId }}</strong><p>Iroh EndpointId</p></div>
+          </article>
+          <article>
+            <span class="en-sync-summary-icon"><Clock3 aria-hidden="true" /></span>
+            <div><small>Last synchronization</small><strong>{{ lastRunLabel }}</strong><p>{{ transferLabel }}</p></div>
+          </article>
         </div>
-        <div>
-          <span>Device identity</span>
-          <strong>{{ shortDeviceId }}</strong>
-          <small>Iroh EndpointId</small>
+      </section>
+
+      <section class="en-sync-card">
+        <header class="en-sync-card-header">
+          <h4>Devices</h4>
+          <button class="secondary compact" type="button" @click="activeSyncPage = 'devices'"><Link2 aria-hidden="true" /> Pair a device</button>
+        </header>
+        <div class="en-sync-list flush">
+          <article v-if="!pairedDevices.length" class="en-sync-empty">
+            <Laptop aria-hidden="true" />
+            <div><strong>No paired device</strong><p>Pair another ElephantNote installation to begin synchronizing.</p></div>
+            <button type="button" class="primary compact" @click="activeSyncPage = 'devices'">Start pairing</button>
+          </article>
+          <article v-for="device in pairedDevices" :key="device.endpointId" class="en-sync-device-row">
+            <span class="en-device-avatar"><Laptop aria-hidden="true" /></span>
+            <div><strong>{{ device.name }}</strong><p>{{ shortId(device.endpointId) }} · last seen {{ formatEpochSeconds(device.lastSeenAt) }}</p></div>
+            <span class="en-verified-badge"><ShieldCheck aria-hidden="true" /> Verified</span>
+          </article>
         </div>
-        <div>
-          <span>Last synchronization</span>
-          <strong>{{ lastRunLabel }}</strong>
-          <small>{{ transferLabel }}</small>
+      </section>
+
+      <section class="en-sync-card">
+        <header class="en-sync-card-header"><h4>Conflict protection</h4><button class="secondary compact" type="button" @click="activeSyncPage = 'conflicts'"><Archive aria-hidden="true" /> View copies</button></header>
+        <div class="en-sync-setting-row">
+          <div><strong>Temporary copies</strong><p>Older conflicting versions stay in <code>.conflit/</code> on this device.</p></div>
+          <div class="en-retention-control">
+            <label>
+              <input v-model.number="retentionDays" type="number" :min="conflictSettings.minimumRetentionDays || 1" :max="conflictSettings.maximumRetentionDays || 365" step="1" aria-label="Conflict retention days">
+              <span>days</span>
+            </label>
+            <button class="primary compact" type="button" :disabled="loading || !hasVault || !validRetention" @click="saveRetention">Save</button>
+          </div>
         </div>
-      </div>
+        <p v-if="conflictMessage" class="en-sync-inline-message">{{ conflictMessage }}</p>
+      </section>
+    </template>
 
-      <div class="en-settings-actions-row">
-        <button type="button" :disabled="loading || !hasVault" @click="refreshAll()">Refresh</button>
-        <button type="button" :disabled="loading || !hasVault || !pairedDevices.length" @click="syncNow">
-          {{ syncing ? 'Synchronizing…' : 'Sync now' }}
-        </button>
-        <span class="en-settings-message" :class="{ error: hasError }">{{ statusMessage }}</span>
-      </div>
-    </section>
+    <template v-else-if="activeSyncPage === 'devices'">
+      <section class="en-sync-card">
+        <header class="en-sync-card-header"><h4>Pair a device</h4><span>Invitations expire after ten minutes.</span></header>
+        <div class="en-pair-flow">
+          <article class="en-pair-step">
+            <div class="en-pair-step-heading"><span>1</span><div><strong>Create invitation</strong><p>Keep ElephantNote open until the second device accepts it.</p></div></div>
+            <button class="primary" type="button" :disabled="loading || !hasVault" @click="createInvite"><Link2 aria-hidden="true" /> Create invitation</button>
+            <div v-if="inviteCode" class="en-invite-box">
+              <textarea :value="inviteCode" readonly rows="5" aria-label="Iroh pairing invitation"></textarea>
+              <button class="secondary" type="button" @click="copyInvite"><Copy aria-hidden="true" />{{ copied ? 'Copied' : 'Copy invitation' }}</button>
+            </div>
+          </article>
 
-    <section class="en-settings-section stacked">
-      <div>
-        <h3>Pair a device</h3>
-        <p>Create an invitation on one device, then paste it on the other device within ten minutes.</p>
-      </div>
+          <span class="en-pair-connector"><ArrowRight aria-hidden="true" /></span>
 
-      <div class="en-pair-grid">
-        <div class="en-pair-card">
-          <div>
-            <strong>1. Create invitation</strong>
-            <p>Keep ElephantNote open while the second device accepts the invitation.</p>
-          </div>
-          <button type="button" :disabled="loading || !hasVault" @click="createInvite">Create invitation</button>
-          <template v-if="inviteCode">
-            <textarea :value="inviteCode" readonly rows="5" aria-label="Iroh pairing invitation"></textarea>
-            <button type="button" @click="copyInvite">{{ copied ? 'Copied' : 'Copy invitation' }}</button>
-          </template>
+          <article class="en-pair-step">
+            <div class="en-pair-step-heading"><span>2</span><div><strong>Accept invitation</strong><p>Paste the complete invitation generated by the first device.</p></div></div>
+            <textarea v-model.trim="incomingInvite" rows="5" placeholder="Paste the ElephantNote Iroh invitation here"></textarea>
+            <button class="primary" type="button" :disabled="loading || !hasVault || !incomingInvite" @click="acceptInvite"><ShieldCheck aria-hidden="true" /> Pair this device</button>
+          </article>
         </div>
+      </section>
 
-        <div class="en-pair-card">
-          <div>
-            <strong>2. Accept invitation</strong>
-            <p>Paste the complete invitation generated by the first device.</p>
-          </div>
-          <textarea v-model.trim="incomingInvite" rows="5" placeholder="Paste the ElephantNote Iroh invitation here"></textarea>
-          <button type="button" :disabled="loading || !hasVault || !incomingInvite" @click="acceptInvite">
-            Pair this device
-          </button>
+      <section class="en-sync-card">
+        <header class="en-sync-card-header"><h4>Paired devices</h4><span>{{ pairedDevices.length }}</span></header>
+        <div class="en-sync-list flush">
+          <article v-if="!pairedDevices.length" class="en-sync-empty compact-empty"><Laptop aria-hidden="true" /><div><strong>No paired device</strong><p>Create or accept an invitation above.</p></div></article>
+          <article v-for="device in pairedDevices" :key="device.endpointId" class="en-sync-device-row">
+            <span class="en-device-avatar"><Laptop aria-hidden="true" /></span>
+            <div><strong>{{ device.name }}</strong><p>{{ shortId(device.endpointId) }} · last seen {{ formatEpochSeconds(device.lastSeenAt) }}</p></div>
+            <span class="en-verified-badge"><ShieldCheck aria-hidden="true" /> Verified</span>
+          </article>
         </div>
-      </div>
+      </section>
+    </template>
 
-      <div class="en-sync-list">
-        <article v-if="!pairedDevices.length" class="en-sync-row muted">
-          <div>
-            <strong>No paired device</strong>
-            <p>Create or accept an invitation to start synchronizing this vault.</p>
+    <template v-else>
+      <section class="en-sync-card">
+        <header class="en-sync-card-header"><h4>Retention</h4><span>{{ archiveEntries.length }} temporary cop{{ archiveEntries.length === 1 ? 'y' : 'ies' }}</span></header>
+        <div class="en-sync-setting-row">
+          <div><strong>Keep conflict copies for</strong><p>Cleanup is local and never removes a note or a copy from another device.</p></div>
+          <div class="en-retention-control">
+            <label><input v-model.number="retentionDays" type="number" :min="conflictSettings.minimumRetentionDays || 1" :max="conflictSettings.maximumRetentionDays || 365" step="1"><span>days</span></label>
+            <button class="primary compact" type="button" :disabled="loading || !hasVault || !validRetention" @click="saveRetention">Save retention</button>
           </div>
-        </article>
-        <article v-for="device in pairedDevices" :key="device.endpointId" class="en-sync-row">
-          <div>
-            <strong>{{ device.name }}</strong>
-            <p>{{ shortId(device.endpointId) }} · last seen {{ formatEpochSeconds(device.lastSeenAt) }}</p>
-          </div>
-          <span class="en-settings-pill">Verified</span>
-        </article>
-      </div>
-    </section>
+        </div>
+        <div class="en-security-note"><ShieldCheck aria-hidden="true" /><p>Restoring a copy never overwrites the current note. ElephantNote creates a separate restored file when the original path already exists.</p></div>
+        <p v-if="conflictMessage" class="en-sync-inline-message">{{ conflictMessage }}</p>
+      </section>
 
-    <section class="en-settings-section stacked">
-      <div>
-        <h3>Conflict retention</h3>
-        <p>
-          When both devices edit the same file, the newest modification keeps the original path. The older version is
-          copied to <code>.conflit/</code> on both devices before synchronization continues.
-        </p>
-      </div>
+      <section class="en-sync-card">
+        <header class="en-sync-card-header"><h4>Archived versions</h4><span>{{ archiveEntries.length }}</span></header>
+        <div class="en-sync-list flush">
+          <article v-if="!archiveEntries.length" class="en-sync-empty compact-empty"><Archive aria-hidden="true" /><div><strong>No temporary conflict copy</strong><p>Archived versions appear here and expire after {{ retentionDays }} day(s).</p></div></article>
+          <article v-for="entry in archiveEntries" :key="entry.path" class="en-conflict-row">
+            <span class="en-conflict-icon"><FileClock aria-hidden="true" /></span>
+            <div><strong>{{ entry.path }}</strong><p>{{ formatBytes(entry.size) }} · archived {{ formatTimestamp(entry.modifiedMs) }}</p></div>
+            <div class="en-conflict-actions">
+              <button class="secondary compact" type="button" :disabled="loading || conflictActionPath === entry.path" @click="restoreConflict(entry)"><Undo2 aria-hidden="true" />{{ conflictActionPath === entry.path ? 'Working…' : 'Restore' }}</button>
+              <button class="danger compact" type="button" :disabled="loading || conflictActionPath === entry.path" @click="deleteConflict(entry)"><Trash2 aria-hidden="true" />Delete</button>
+            </div>
+          </article>
+        </div>
+      </section>
 
-      <div class="en-conflict-settings">
-        <label>
-          <span>Keep conflict copies for</span>
-          <div class="en-inline-number">
-            <input
-              v-model.number="retentionDays"
-              type="number"
-              :min="conflictSettings.minimumRetentionDays || 1"
-              :max="conflictSettings.maximumRetentionDays || 365"
-              step="1"
-            >
-            <span>days</span>
-          </div>
-        </label>
-        <button type="button" :disabled="loading || !hasVault || !validRetention" @click="saveRetention">
-          Save retention
-        </button>
-        <span class="en-settings-message">{{ conflictMessage }}</span>
-      </div>
-
-      <p class="en-conflict-note">
-        This setting is local to each device. The <code>.conflit/</code> folder is excluded from normal manifests, so
-        automatic cleanup never deletes a note or a conflict copy on another device. Restoring a copy never overwrites
-        the current note: ElephantNote creates a separate restored file when the original path already exists.
-      </p>
-
-      <div class="en-sync-list">
-        <article v-if="!archiveEntries.length" class="en-sync-row muted">
-          <div>
-            <strong>No temporary conflict copy</strong>
-            <p>Archived versions will appear here and will be removed automatically after {{ retentionDays }} day(s).</p>
-          </div>
-        </article>
-        <article v-for="entry in archiveEntries" :key="entry.path" class="en-sync-row">
-          <div>
-            <strong>{{ entry.path }}</strong>
-            <p>{{ formatBytes(entry.size) }} · archived {{ formatTimestamp(entry.modifiedMs) }}</p>
-          </div>
-          <div class="en-sync-row-actions">
-            <button
-              type="button"
-              :disabled="loading || conflictActionPath === entry.path"
-              @click="restoreConflict(entry)"
-            >
-              {{ conflictActionPath === entry.path ? 'Working…' : 'Restore' }}
-            </button>
-            <button
-              type="button"
-              class="danger"
-              :disabled="loading || conflictActionPath === entry.path"
-              @click="deleteConflict(entry)"
-            >
-              Delete
-            </button>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <section v-if="reportedConflicts.length" class="en-settings-section stacked">
-      <div>
-        <h3>Conflicts from the last sync</h3>
-        <p>The main file contains the most recently modified version. Older versions are available in `.conflit/`.</p>
-      </div>
-      <div class="en-sync-list">
-        <article v-for="conflict in reportedConflicts" :key="conflict.path" class="en-sync-row">
-          <div>
-            <strong>{{ conflict.path }}</strong>
-            <p>Both devices modified this path.</p>
-          </div>
-          <span class="en-settings-pill">Preserved</span>
-        </article>
-      </div>
-    </section>
+      <section v-if="reportedConflicts.length" class="en-sync-card warning-card">
+        <header class="en-sync-card-header"><h4>Last synchronization</h4><AlertTriangle aria-hidden="true" /></header>
+        <div class="en-sync-list flush">
+          <article v-for="conflict in reportedConflicts" :key="conflict.path" class="en-conflict-row">
+            <span class="en-conflict-icon warning"><AlertTriangle aria-hidden="true" /></span>
+            <div><strong>{{ conflict.path }}</strong><p>Both devices modified this path.</p></div>
+            <span class="en-preserved-badge">Preserved</span>
+          </article>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  AlertTriangle,
+  Archive,
+  ArrowRight,
+  Clock3,
+  Copy,
+  FileClock,
+  Fingerprint,
+  FolderSync,
+  Gauge,
+  Laptop,
+  Link2,
+  RefreshCw,
+  RotateCw,
+  ShieldCheck,
+  Trash2,
+  Undo2
+} from '@lucide/vue'
 import { irohSyncClient } from '../../services/irohSyncClient'
 
 const props = defineProps({
   vaults: { type: Array, default: () => [] },
-  activeVaultPath: { type: String, default: '' }
+  activeVaultPath: { type: String, default: '' },
+  initialPage: { type: String, default: 'overview' }
 })
 
+const validPages = new Set(['overview', 'devices', 'conflicts'])
+const activeSyncPage = ref(validPages.has(props.initialPage) ? props.initialPage : 'overview')
 const status = ref({})
 const conflictSettings = ref({
   retentionDays: 3,
@@ -395,6 +402,10 @@ const deleteConflict = async (entry) => {
   }
 }
 
+watch(() => props.initialPage, (page) => {
+  if (validPages.has(page)) activeSyncPage.value = page
+})
+
 watch(() => props.activeVaultPath, () => {
   inviteCode.value = ''
   incomingInvite.value = ''
@@ -414,32 +425,91 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.en-sync-panel { display: flex; flex-direction: column; gap: 18px; }
-.en-sync-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.en-settings-pill.active { border-color: var(--en-active-border, #2563eb); color: var(--en-active-text, #2563eb); }
-.en-sync-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.en-sync-summary > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 14px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 14px; background: var(--en-surface, #fff); }
-.en-sync-summary span, .en-sync-summary small { color: var(--en-muted, #475467); }
-.en-sync-summary strong, .en-sync-summary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.en-pair-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.en-pair-card { display: flex; flex-direction: column; align-items: stretch; gap: 12px; padding: 14px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 14px; background: var(--en-surface, #fff); }
-.en-pair-card p { margin: 5px 0 0; color: var(--en-muted, #475467); }
-.en-pair-card textarea { width: 100%; min-height: 112px; resize: vertical; box-sizing: border-box; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.en-sync-list { display: flex; flex-direction: column; gap: 12px; }
-.en-sync-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 14px; background: var(--en-surface, #fff); }
-.en-sync-row.muted { opacity: 0.72; }
-.en-sync-row p { margin: 4px 0 0; color: var(--en-muted, #475467); word-break: break-word; }
-.en-sync-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.en-conflict-settings { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
-.en-conflict-settings label { display: flex; flex-direction: column; gap: 7px; }
-.en-inline-number { display: flex; align-items: center; gap: 8px; }
-.en-inline-number input { width: 96px; }
-.en-conflict-note { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--en-card, #f2f4f7); color: var(--en-muted, #475467); }
-.en-settings-message.error { color: #b42318; }
+.en-sync-panel { display: grid; gap: 14px; color: var(--en-text, #101828); }
+.en-sync-toolbar { position: sticky; top: -28px; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 12px; background: color-mix(in srgb, var(--en-surface, #fff) 94%, transparent); backdrop-filter: blur(14px); }
+.en-sync-tabs { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.en-sync-tabs button { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--en-muted, #667085); cursor: pointer; }
+.en-sync-tabs button.active { border-color: var(--en-border, #c5cfdd); background: var(--en-surface, #fff); color: var(--en-text, #101828); box-shadow: 0 1px 4px rgba(2, 6, 23, 0.08); }
+.en-sync-tabs svg, button svg { width: 14px; height: 14px; }
+.en-sync-tab-count { min-width: 17px; height: 17px; display: inline-grid; place-items: center; padding: 0 4px; border-radius: 99px; background: color-mix(in srgb, var(--en-primary, #2563eb) 12%, transparent); color: var(--en-primary, #2563eb); font-size: 9px; }
+.en-sync-tab-count.warning { background: rgba(245, 158, 11, 0.13); color: #b45309; }
+.en-sync-toolbar-actions, .en-conflict-actions, .en-retention-control { display: flex; align-items: center; gap: 7px; }
+.en-sync-status { display: inline-flex; align-items: center; gap: 6px; min-height: 27px; padding: 0 8px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 99px; color: var(--en-muted, #667085); font-size: 9.5px; font-weight: 650; }
+.en-sync-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--en-muted, #667085); }
+.en-sync-status.active { border-color: color-mix(in srgb, #16a34a 30%, var(--en-border, #c5cfdd)); color: #15803d; }
+.en-sync-status.active .en-sync-status-dot { background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.13); }
+.en-sync-status.error { color: #b42318; }
+.en-sync-status.error .en-sync-status-dot { background: #ef4444; }
+.en-sync-card { overflow: hidden; border: 1px solid var(--en-border, #c5cfdd); border-radius: 14px; background: var(--en-surface, #fff); box-shadow: 0 1px 2px rgba(2, 6, 23, 0.03); }
+.en-sync-card-header { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--en-border, #c5cfdd); background: color-mix(in srgb, var(--en-surface, #fff) 94%, var(--en-soft, #e9eff7)); }
+h4, p { margin: 0; }
+h4 { font-size: 13px; }
+.en-sync-card-header > span, .en-sync-summary p, .en-sync-device-row p, .en-conflict-row p, .en-pair-step p, .en-sync-empty p, .en-sync-setting-row p { color: var(--en-muted, #667085); font-size: 10.5px; line-height: 1.42; }
+button { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 11px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: var(--en-surface, #fff); color: var(--en-text, #101828); cursor: pointer; transition: 140ms ease; }
+button:hover:not(:disabled) { border-color: var(--en-primary, #2563eb); }
+button:disabled { opacity: 0.48; cursor: not-allowed; }
+button.primary { border-color: var(--en-primary, #2563eb); background: var(--en-primary, #2563eb); color: #fff; }
+button.secondary { background: var(--en-bg, #f7f9fc); }
+button.danger { border-color: color-mix(in srgb, var(--en-danger, #dc2626) 35%, var(--en-border, #c5cfdd)); color: var(--en-danger, #dc2626); }
+button.compact { min-height: 29px; padding: 0 8px; font-size: 10.5px; }
+button.icon-only { width: 29px; padding: 0; }
+.spinning { animation: spin 0.9s linear infinite; }
+.en-sync-message, .en-sync-inline-message { padding: 9px 12px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: color-mix(in srgb, var(--en-soft, #e9eff7) 42%, transparent); color: var(--en-muted, #667085); font-size: 10.5px; }
+.en-sync-message.error { color: #b42318; }
+.en-sync-inline-message { margin: 0 16px 14px; }
+.en-sync-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.en-sync-summary article { min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 15px 16px; }
+.en-sync-summary article + article { border-left: 1px solid var(--en-border, #c5cfdd); }
+.en-sync-summary-icon, .en-device-avatar, .en-conflict-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 8px; background: var(--en-soft, #e9eff7); color: var(--en-primary, #2563eb); }
+.en-sync-summary-icon svg, .en-device-avatar svg, .en-conflict-icon svg { width: 15px; height: 15px; }
+.en-sync-summary div, .en-sync-device-row div, .en-conflict-row div { min-width: 0; }
+.en-sync-summary small { display: block; margin-bottom: 3px; color: var(--en-muted, #667085); font-size: 9.5px; }
+.en-sync-summary strong, .en-sync-summary p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.en-sync-list { display: grid; }
+.en-sync-device-row, .en-conflict-row, .en-sync-empty { min-height: 62px; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 10px 16px; }
+.en-sync-device-row + .en-sync-device-row, .en-conflict-row + .en-conflict-row { border-top: 1px solid var(--en-border, #c5cfdd); }
+.en-verified-badge, .en-preserved-badge { display: inline-flex; align-items: center; gap: 5px; min-height: 25px; padding: 0 7px; border: 1px solid color-mix(in srgb, #16a34a 28%, var(--en-border, #c5cfdd)); border-radius: 99px; color: #15803d; font-size: 9.5px; }
+.en-verified-badge svg { width: 12px; height: 12px; }
+.en-preserved-badge { border-color: color-mix(in srgb, #d97706 28%, var(--en-border, #c5cfdd)); color: #b45309; }
+.en-sync-empty { color: var(--en-muted, #667085); }
+.en-sync-empty > svg { width: 19px; height: 19px; }
+.compact-empty { grid-template-columns: 30px minmax(0, 1fr); }
+.en-sync-setting-row { min-height: 70px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 13px 16px; }
+.en-retention-control label { display: flex; align-items: center; gap: 6px; }
+.en-retention-control input { width: 66px; height: 33px; padding: 0 8px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 8px; background: var(--en-bg, #f7f9fc); color: var(--en-text, #101828); }
+.en-retention-control span { color: var(--en-muted, #667085); font-size: 10.5px; }
+.en-pair-flow { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr); align-items: stretch; gap: 9px; padding: 16px; }
+.en-pair-step { display: flex; flex-direction: column; gap: 11px; padding: 13px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 10px; background: var(--en-bg, #f7f9fc); }
+.en-pair-step-heading { display: flex; align-items: flex-start; gap: 9px; }
+.en-pair-step-heading > span { width: 23px; height: 23px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: var(--en-primary, #2563eb); color: #fff; font-size: 10px; font-weight: 700; }
+.en-pair-step textarea, .en-invite-box textarea { width: 100%; min-height: 98px; padding: 9px; resize: vertical; box-sizing: border-box; border: 1px solid var(--en-border, #c5cfdd); border-radius: 8px; background: var(--en-surface, #fff); color: var(--en-text, #101828); font: 10.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.en-invite-box { display: grid; gap: 7px; }
+.en-pair-connector { display: grid; place-items: center; color: var(--en-muted, #667085); }
+.en-pair-connector svg { width: 17px; height: 17px; }
+.en-security-note { display: flex; align-items: flex-start; gap: 8px; margin: 0 16px 14px; padding: 10px 11px; border: 1px solid color-mix(in srgb, var(--en-primary, #2563eb) 18%, var(--en-border, #c5cfdd)); border-radius: 9px; background: color-mix(in srgb, var(--en-primary, #2563eb) 5%, var(--en-bg, #f7f9fc)); color: var(--en-muted, #667085); }
+.en-security-note svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--en-primary, #2563eb); }
+.en-security-note p { font-size: 10.5px; line-height: 1.45; }
+.en-conflict-icon.warning { color: #b45309; background: rgba(245, 158, 11, 0.12); }
+.warning-card { border-color: color-mix(in srgb, #f59e0b 32%, var(--en-border, #c5cfdd)); }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-@media (max-width: 820px) {
-  .en-sync-summary, .en-pair-grid { grid-template-columns: 1fr; }
-  .en-sync-heading, .en-sync-row { align-items: flex-start; flex-direction: column; }
-  .en-sync-row-actions { width: 100%; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 900px) {
+  .en-sync-toolbar { align-items: stretch; flex-direction: column; }
+  .en-sync-toolbar-actions { justify-content: flex-end; }
+  .en-sync-summary { grid-template-columns: 1fr; }
+  .en-sync-summary article + article { border-top: 1px solid var(--en-border, #c5cfdd); border-left: 0; }
+  .en-pair-flow { grid-template-columns: 1fr; }
+  .en-pair-connector { transform: rotate(90deg); }
+}
+@media (max-width: 620px) {
+  .en-sync-tabs { width: 100%; }
+  .en-sync-tabs button { flex: 1; font-size: 0; }
+  .en-sync-tabs button svg, .en-sync-tab-count { font-size: initial; }
+  .en-sync-toolbar-actions { flex-wrap: wrap; }
+  .en-sync-status { margin-right: auto; }
+  .en-sync-setting-row { align-items: flex-start; flex-direction: column; }
+  .en-retention-control { width: 100%; flex-wrap: wrap; }
+  .en-sync-device-row, .en-conflict-row { grid-template-columns: 32px minmax(0, 1fr); }
+  .en-verified-badge, .en-preserved-badge, .en-conflict-actions { grid-column: 2; justify-self: start; }
 }
 </style>

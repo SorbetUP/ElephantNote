@@ -25,6 +25,7 @@ pub fn sync_enqueue_iroh(
   let cwd = PathBuf::from(&vault.path);
   let config = ensure_sync_files(&vault, endpoint_id)?;
   let mut queue = read_queue(&cwd);
+  queue.retain(|item| item.status == STATUS_QUEUED);
   queue.push(queue_item(
     &operation,
     normalize_payload(payload),
@@ -87,7 +88,8 @@ pub async fn sync_run_iroh(
   let mut config = ensure_sync_files(&vault, &endpoint_id)?;
   let payload = normalize_payload(payload_by_operation);
   let mut queue = read_queue(&cwd);
-  if !queue.iter().any(|item| item.status == STATUS_QUEUED) {
+  queue.retain(|item| item.status == STATUS_QUEUED);
+  if queue.is_empty() {
     for operation in planned_operations(&payload, !config.peers.is_empty()) {
       let item_payload = operation_payload(&payload, &operation);
       queue.push(queue_item(&operation, item_payload, queue.len()));
@@ -105,7 +107,6 @@ pub async fn sync_run_iroh(
 
   for mut item in pending {
     if item.status != STATUS_QUEUED {
-      remaining.push(item);
       continue;
     }
     let result = run_operation(
@@ -153,13 +154,10 @@ pub async fn sync_run_iroh(
     .iter()
     .map(|path| json!({ "path": path, "resolution": "preserve-both" }))
     .collect();
-  state.last_error = if !last_error.is_empty() {
-    last_error
-  } else if !state.conflicts.is_empty() {
-    "Concurrent changes were detected. ElephantNote kept both versions.".to_string()
-  } else {
-    String::new()
-  };
+  // Preserved conflicts are a successful, lossless result and are reported
+  // separately through `conflicts`. Only an actual failed operation belongs in
+  // `lastError`, which drives the toolbar's red error indicator.
+  state.last_error = last_error;
   write_config(&cwd, &config)?;
   write_queue(&cwd, &remaining)?;
   write_history(&cwd, &history)?;
@@ -259,6 +257,31 @@ mod tests {
     let status = sync_status_iroh(Some(vault(&root)), "endpoint").unwrap();
     assert_eq!(status["backend"], BACKEND_IROH);
     assert_eq!(status["capabilities"]["peerToPeer"], true);
+    let _ = fs::remove_dir_all(root);
+  }
+
+  #[test]
+  fn enqueue_discards_terminal_queue_entries_but_keeps_history_separate() {
+    let root = temp_dir("queue-cleanup");
+    fs::create_dir_all(&root).unwrap();
+    let descriptor = vault(&root);
+    ensure_sync_files(&descriptor, "endpoint").unwrap();
+    let mut queue = vec![queue_item(OPERATION_SYNC, json!({}), 0)];
+    queue[0].status = STATUS_ERROR.to_string();
+    queue[0].error = "old failure".to_string();
+    write_queue(&root, &queue).unwrap();
+
+    let status = sync_enqueue_iroh(
+      descriptor,
+      "endpoint",
+      OPERATION_SYNC.to_string(),
+      Some(json!({})),
+    )
+    .unwrap();
+    let saved = read_queue(&root);
+    assert_eq!(saved.len(), 1);
+    assert_eq!(saved[0].status, STATUS_QUEUED);
+    assert_eq!(status["queued"].as_array().map(Vec::len), Some(1));
     let _ = fs::remove_dir_all(root);
   }
 

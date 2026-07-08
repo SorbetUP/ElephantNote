@@ -111,10 +111,9 @@
 .en-range-control { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
 .en-range-control input { width: 170px; accent-color: var(--en-primary, #2563eb); }
 .en-range-control output { min-width: 57px; padding: 6px 8px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 8px; background: var(--en-bg, #f7f9fc); color: var(--en-muted, #667085); font-size: 11.5px; text-align: center; }
-
-.en-compact-select, .en-form-grid input, .en-form-grid select, .en-settings-content :deep(input), .en-settings-content :deep(select), .en-settings-content :deep(textarea) { box-sizing: border-box; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: var(--en-bg, #f7f9fc); color: var(--en-text, #101828); }
+.en-compact-select, .en-form-grid input, .en-form-grid select { box-sizing: border-box; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: var(--en-bg, #f7f9fc); color: var(--en-text, #101828); }
 .en-compact-select { min-width: 176px; height: 38px; padding: 0 34px 0 11px; }
-.en-compact-select:focus-visible, .en-form-grid input:focus-visible, .en-settings-content :deep(input:focus-visible), .en-settings-content :deep(select:focus-visible), .en-settings-content :deep(textarea:focus-visible) { outline: 2px solid color-mix(in srgb, var(--en-primary, #2563eb) 45%, transparent); outline-offset: 1px; }
+.en-compact-select:focus-visible, .en-form-grid input:focus-visible, .en-form-grid select:focus-visible { outline: 2px solid color-mix(in srgb, var(--en-primary, #2563eb) 45%, transparent); outline-offset: 1px; }
 
 .en-status-badge { min-height: 31px; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 99px; background: var(--en-bg, #f7f9fc); color: var(--en-muted, #667085); font-size: 11.5px; }
 .en-status-badge.active { border-color: color-mix(in srgb, var(--en-primary, #2563eb) 28%, var(--en-border, #c5cfdd)); color: var(--en-primary, #2563eb); }
@@ -129,10 +128,10 @@
 .en-vault-row strong { font-size: 13px; }
 .en-vault-row p { margin: 4px 0 0; overflow: hidden; color: var(--en-muted, #667085); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 
-.en-primary-button, .en-danger-button, .en-settings-inline-actions button, .en-settings-content :deep(.en-settings-actions-row button), .en-settings-content :deep(.en-ai-settings button) { min-height: 35px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: var(--en-surface, #fff); color: var(--en-text, #101828); cursor: pointer; transition: 140ms ease; }
+.en-primary-button, .en-danger-button, .en-settings-inline-actions button { min-height: 35px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: var(--en-surface, #fff); color: var(--en-text, #101828); cursor: pointer; transition: 140ms ease; }
 .en-primary-button { border-color: var(--en-primary, #2563eb); background: var(--en-primary, #2563eb); color: #fff; }
 .en-danger-button { border-color: color-mix(in srgb, var(--en-danger, #dc2626) 34%, var(--en-border, #c5cfdd)); color: var(--en-danger, #dc2626); }
-.en-primary-button:hover:not(:disabled), .en-settings-inline-actions button:hover:not(:disabled), .en-settings-content :deep(.en-settings-actions-row button:hover:not(:disabled)), .en-settings-content :deep(.en-ai-settings button:hover:not(:disabled)) { border-color: var(--en-primary, #2563eb); }
+.en-primary-button:hover:not(:disabled), .en-settings-inline-actions button:hover:not(:disabled) { border-color: var(--en-primary, #2563eb); }
 .en-danger-button:hover:not(:disabled) { background: color-mix(in srgb, var(--en-danger, #dc2626) 8%, transparent); }
 .en-primary-button:disabled, .en-danger-button:disabled, .en-settings-inline-actions button:disabled { opacity: 0.48; cursor: not-allowed; }
 .en-primary-button svg, .en-settings-inline-actions svg { width: 15px; height: 15px; }
@@ -147,20 +146,6 @@
 .en-settings-empty-state svg { width: 24px; height: 24px; }
 .en-settings-empty-state strong { color: var(--en-text, #101828); font-size: 13px; }
 .en-settings-empty-state span { font-size: 11.5px; }
-
-.en-settings-content :deep(.en-sync-panel), .en-settings-content :deep(.en-ai-settings) { gap: 20px; }
-.en-settings-content :deep(.en-settings-section), .en-settings-content :deep(.en-ai-block) { margin: 0; padding: 18px 20px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 15px; background: var(--en-surface, #fff); box-shadow: 0 1px 2px rgba(2, 6, 23, 0.03); }
-.en-settings-content :deep(.en-settings-section h3), .en-settings-content :deep(.en-ai-block h4) { margin: 0; font-size: 14px; }
-.en-settings-content :deep(.en-settings-section p), .en-settings-content :deep(.en-ai-block label), .en-settings-content :deep(.en-ai-route-summary), .en-settings-content :deep(.en-provider-summary span), .en-settings-content :deep(.en-provider-summary small) { color: var(--en-muted, #667085); font-size: 12px; }
-.en-settings-content :deep(.en-sync-summary > div), .en-settings-content :deep(.en-pair-card), .en-settings-content :deep(.en-sync-row), .en-settings-content :deep(.en-provider-details) { border-color: var(--en-border, #c5cfdd); border-radius: 10px; background: var(--en-bg, #f7f9fc); }
-.en-settings-content :deep(.en-sync-summary > div) { padding: 12px; }
-.en-settings-content :deep(.en-ai-tabs) { position: sticky; top: -34px; z-index: 2; gap: 4px; padding: 8px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 12px; background: color-mix(in srgb, var(--en-surface, #fff) 94%, transparent); backdrop-filter: blur(12px); }
-.en-settings-content :deep(.en-ai-tabs button) { border: 0; background: transparent; color: var(--en-muted, #667085); }
-.en-settings-content :deep(.en-ai-tabs button.active) { background: var(--en-primary, #2563eb); color: #fff; }
-.en-settings-content :deep(.en-ai-top-actions) { min-height: 35px; }
-.en-settings-content :deep(.en-ai-grid input), .en-settings-content :deep(.en-ai-grid select), .en-settings-content :deep(.en-ai-full input), .en-settings-content :deep(.en-ai-full textarea), .en-settings-content :deep(.en-provider-details input), .en-settings-content :deep(.en-provider-details select), .en-settings-content :deep(.en-pair-card textarea), .en-settings-content :deep(.en-inline-number input) { background: var(--en-bg, #f7f9fc); border-radius: 9px; }
-.en-settings-content :deep(.en-settings-pill) { display: inline-flex; align-items: center; min-height: 28px; padding: 0 9px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 99px; background: var(--en-bg, #f7f9fc); color: var(--en-muted, #667085); font-size: 11px; }
-.en-settings-content :deep(.en-conflict-note) { border: 1px solid var(--en-border, #c5cfdd); background: var(--en-bg, #f7f9fc); }
 
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--en-primary, #2563eb); outline-offset: 2px; }
 

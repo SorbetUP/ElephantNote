@@ -26,6 +26,20 @@ describe('ElephantNote settings redesign', () => {
     expect(styles).toContain('grid-template-areas: "close title search"')
   })
 
+  it('uses a touch-first full-screen layout on phones', () => {
+    const styles = readSettingsStyles()
+
+    expect(styles).toContain('height: 100dvh')
+    expect(styles).toContain('env(safe-area-inset-top)')
+    expect(styles).toContain('env(safe-area-inset-bottom)')
+    expect(styles).toContain('grid-template-areas: "content" "nav"')
+    expect(styles).toContain('scroll-snap-type: x proximity')
+    expect(styles).toContain('min-height: 44px')
+    expect(styles).toContain('overscroll-behavior: contain')
+    expect(styles).toContain('@media (hover: none) and (pointer: coarse)')
+    expect(styles).not.toContain('.en-settings-grid { grid-template-columns: 54px')
+  })
+
   it('searches individual settings across every section and opens nested pages', () => {
     const source = readSettings()
 

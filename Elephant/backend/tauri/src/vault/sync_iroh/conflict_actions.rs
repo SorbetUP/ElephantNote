@@ -9,10 +9,18 @@ fn validated_conflict_path(
     return Err("Only files inside the local .conflit archive can be managed.".to_string());
   }
   let path = crate::sync::manifest::safe_join(cwd, &normalized)?;
-  if !path.is_file() {
-    return Err(format!("Conflict copy does not exist: {normalized}"));
+  let metadata = std::fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+  if metadata.file_type().is_symlink() || !metadata.is_file() {
+    return Err(format!("Conflict copy is not a regular file: {normalized}"));
   }
-  Ok(path)
+  let canonical_root = std::fs::canonicalize(cwd).map_err(|error| error.to_string())?;
+  let canonical_archive = std::fs::canonicalize(conflict_archive_root(cwd))
+    .map_err(|error| error.to_string())?;
+  let canonical_path = std::fs::canonicalize(&path).map_err(|error| error.to_string())?;
+  if !canonical_archive.starts_with(&canonical_root) || !canonical_path.starts_with(&canonical_archive) {
+    return Err("Conflict copy resolves outside the active vault archive.".to_string());
+  }
+  Ok(canonical_path)
 }
 
 fn restored_file_name(archive_path: &std::path::Path) -> Result<(String, String), String> {
@@ -30,7 +38,7 @@ fn restored_file_name(archive_path: &std::path::Path) -> Result<(String, String)
     .and_then(|value| value.to_str())
     .unwrap_or("conflict");
   let before_conflict = stem
-    .split_once("-conflict-")
+    .rsplit_once("-conflict-")
     .map(|(value, _)| value)
     .unwrap_or(stem);
   let original_stem = before_conflict
@@ -49,13 +57,20 @@ fn unique_restore_path(
   cwd: &std::path::Path,
   archive_path: &std::path::Path,
 ) -> Result<std::path::PathBuf, String> {
-  let archive_root = conflict_archive_root(cwd);
+  let canonical_root = std::fs::canonicalize(cwd).map_err(|error| error.to_string())?;
+  let archive_root = std::fs::canonicalize(conflict_archive_root(cwd))
+    .map_err(|error| error.to_string())?;
   let archive_relative = archive_path
     .strip_prefix(&archive_root)
     .map_err(|_| "Conflict copy is outside the local archive.".to_string())?;
   let parent = archive_relative.parent().unwrap_or_else(|| std::path::Path::new(""));
   let destination_directory = cwd.join(parent);
   std::fs::create_dir_all(&destination_directory).map_err(|error| error.to_string())?;
+  let destination_directory = std::fs::canonicalize(destination_directory)
+    .map_err(|error| error.to_string())?;
+  if !destination_directory.starts_with(&canonical_root) {
+    return Err("Conflict restore directory resolves outside the active vault.".to_string());
+  }
   let (stem, extension) = restored_file_name(archive_path)?;
   let original_name = if extension.is_empty() {
     stem.clone()
@@ -99,7 +114,7 @@ pub fn sync_conflict_restore(
   let destination = unique_restore_path(&cwd, &source)?;
   std::fs::copy(&source, &destination).map_err(|error| error.to_string())?;
   let restored_path = destination
-    .strip_prefix(&cwd)
+    .strip_prefix(std::fs::canonicalize(&cwd).map_err(|error| error.to_string())?)
     .unwrap_or(&destination)
     .to_string_lossy()
     .replace('\\', "/");
@@ -171,6 +186,22 @@ mod conflict_action_tests {
     std::fs::create_dir_all(&root).unwrap();
     std::fs::write(root.join("Note.md"), "note").unwrap();
     assert!(sync_conflict_delete(test_vault(&root), "Note.md".to_string()).is_err());
+    let _ = std::fs::remove_dir_all(root);
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn conflict_actions_reject_symlinked_archive_files() {
+    use std::os::unix::fs::symlink;
+    let root = temp_root();
+    std::fs::create_dir_all(root.join(".conflit")).unwrap();
+    std::fs::write(root.join("secret.md"), "secret").unwrap();
+    symlink(root.join("secret.md"), root.join(".conflit/link.md")).unwrap();
+    assert!(sync_conflict_restore(
+      test_vault(&root),
+      ".conflit/link.md".to_string()
+    )
+    .is_err());
     let _ = std::fs::remove_dir_all(root);
   }
 }

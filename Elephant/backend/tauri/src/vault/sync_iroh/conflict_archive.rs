@@ -69,6 +69,9 @@ fn write_conflict_settings(
   let temporary = path.with_extension("json.tmp");
   let raw = serde_json::to_vec_pretty(settings).map_err(|error| error.to_string())?;
   std::fs::write(&temporary, raw).map_err(|error| error.to_string())?;
+  if path.exists() {
+    std::fs::remove_file(&path).map_err(|error| error.to_string())?;
+  }
   std::fs::rename(temporary, path).map_err(|error| error.to_string())
 }
 
@@ -225,10 +228,15 @@ pub fn sync_conflict_settings_set(
   conflict_settings_value(&vault, &settings, &cleanup)
 }
 
-fn cleanup_conflicts_for_vault(vault: &super::types::VaultDescriptor) -> Result<(), String> {
-  let cwd = std::path::PathBuf::from(&vault.path);
-  let settings = read_conflict_settings(&cwd);
-  cleanup_conflict_archive(&cwd, settings.retention_days).map(|_| ())
+pub(crate) fn cleanup_conflicts_for_root(cwd: &std::path::Path) -> Result<(), String> {
+  let settings = read_conflict_settings(cwd);
+  cleanup_conflict_archive(cwd, settings.retention_days).map(|_| ())
+}
+
+pub(crate) fn cleanup_conflicts_for_vault(
+  vault: &super::types::VaultDescriptor,
+) -> Result<(), String> {
+  cleanup_conflicts_for_root(std::path::Path::new(&vault.path))
 }
 
 #[cfg(test)]

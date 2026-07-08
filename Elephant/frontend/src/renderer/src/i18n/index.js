@@ -138,7 +138,10 @@ const loadLocaleMessages = (locale) => {
   }
 }
 
-const englishFallback = mergeMessages(createFallbackEnglishTranslations(), getAppMessages('en'))
+const englishFallback = mergeMessages(
+  createFallbackEnglishTranslations(),
+  mergeMessages(loadLocaleMessages('en'), getAppMessages('en'))
+)
 const initialPreference = globalThis.localStorage?.getItem(APP_LANGUAGE_STORAGE_KEY) || 'system'
 const initialLocale = resolveStoredLocale(initialPreference)
 const initialMessages = mergeMessages(

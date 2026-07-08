@@ -127,8 +127,8 @@ pub fn sync_conflict_delete(
 mod conflict_action_tests {
   use super::*;
 
-  fn test_vault(root: &std::path::Path) -> super::types::VaultDescriptor {
-    super::types::VaultDescriptor {
+  fn test_vault(root: &std::path::Path) -> crate::vault::types::VaultDescriptor {
+    crate::vault::types::VaultDescriptor {
       id: "conflict-test".to_string(),
       name: "Conflict Test".to_string(),
       path: root.to_string_lossy().to_string(),

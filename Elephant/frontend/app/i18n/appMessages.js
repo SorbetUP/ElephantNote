@@ -1,5 +1,6 @@
 /* eslint-disable @stylistic/object-property-newline */
 import ISO6391 from 'iso-639-1'
+import { additionalAppLocales } from './additionalAppLocales'
 
 export const APP_LANGUAGE_STORAGE_KEY = 'elephantnote:tauri:language'
 export const APP_DEFAULT_LOCALE = 'en'
@@ -130,7 +131,8 @@ const builtInMessages = {
   en: english,
   fr: french,
   es: spanish,
-  de: german
+  de: german,
+  ...additionalAppLocales
 }
 
 const isPlainObject = (value) => Object.prototype.toString.call(value) === '[object Object]'
@@ -179,7 +181,7 @@ export const getSupportedLanguageOptions = (displayLocale = APP_DEFAULT_LOCALE) 
     code,
     nativeName: ISO6391.getNativeName(code) || ISO6391.getName(code) || code,
     displayName: displayNames?.of(code) || ISO6391.getName(code) || code,
-    hasBuiltInAppMessages: Boolean(builtInMessages[code])
+    hasBuiltInAppMessages: Boolean(builtInMessages[normalizeAppLocale(code)])
   }))
   options.sort((a, b) => a.displayName.localeCompare(b.displayName, normalizeAppLocale(displayLocale)))
   return [

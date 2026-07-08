@@ -105,4 +105,45 @@ const store = useVaultStore()
   width: 22px;
   height: 22px;
 }
+
+@media (max-width: 760px), (pointer: coarse) {
+  .en-library-toolbar {
+    min-height: 64px;
+    padding: 10px 12px 0;
+    justify-content: stretch;
+  }
+
+  .en-library-toolbar-left {
+    display: none;
+  }
+
+  .en-library-actions {
+    width: 100%;
+    gap: 10px;
+  }
+
+  .en-select {
+    min-width: 0;
+    flex: 1;
+    height: 44px;
+    border-radius: 14px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+
+  .en-view-toggle {
+    height: 44px;
+    border-radius: 14px;
+    flex: 0 0 auto;
+  }
+
+  .en-view-toggle button {
+    width: 46px;
+  }
+
+  .en-icon {
+    width: 20px;
+    height: 20px;
+  }
+}
 </style>

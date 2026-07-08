@@ -22,6 +22,7 @@ fn read_text(path: &str) -> String {
 #[test]
 fn desktop_tauri_config_keeps_desktop_runtime_resources() {
   let config = read_json("Elephant/backend/tauri/tauri.conf.json");
+  assert_eq!(config.pointer("/build/frontendDist").and_then(Value::as_str), Some("../../../build/out/renderer"), "desktop frontendDist must point at the repository build output");
   let resources = config.pointer("/bundle/resources").and_then(Value::as_array).expect("desktop resources must be an array");
   assert!(resources.iter().any(|item| item.as_str() == Some("bin")), "desktop Tauri bundle must keep bin resources for llama-server");
 
@@ -46,7 +47,10 @@ fn linux_override_does_not_reuse_macos_window_chrome() {
 #[test]
 fn android_override_is_mobile_only_and_never_bundles_llama_server() {
   let config = read_json("Elephant/backend/tauri/tauri.android.conf.json");
-  assert_eq!(config.pointer("/build/beforeBuildCommand").and_then(Value::as_str), Some("pnpm tauri:web:build"));
+  assert_eq!(config.pointer("/build/beforeBuildCommand").and_then(Value::as_str), Some("cd ../.. && pnpm tauri:web:build"));
+  assert_eq!(config.pointer("/build/frontendDist").and_then(Value::as_str), Some("../../../build/out/renderer"), "Android frontendDist must point at the repository build output");
+  assert_eq!(config.pointer("/app/withGlobalTauri").and_then(Value::as_bool), Some(true), "Android must inject window.__TAURI__ for the renderer bridge");
+  assert_eq!(config.pointer("/app/windows/0/title").and_then(Value::as_str), Some("ElephantNote"), "Android launcher/window title must use the product name");
 
   let resources = config.pointer("/bundle/resources").and_then(Value::as_array).expect("Android resources must be explicit");
   assert!(resources.is_empty(), "Android must not include desktop bin resources");
@@ -79,4 +83,16 @@ fn bundled_llama_runtime_is_desktop_only() {
   let chat_runtime = read_text("Elephant/backend/tauri/src/chat_runtime.rs");
   assert!(chat_runtime.contains("#[cfg(not(mobile))]\nuse crate::local_llama_runtime;"), "chat runtime must import local_llama_runtime only on desktop");
   assert!(chat_runtime.contains("#[cfg(not(mobile))]\nfn with_system_prompt"), "desktop-only prompt assembly must not be required by the mobile chat path");
+}
+
+#[test]
+fn android_first_run_uses_explicit_phone_vault_creation() {
+  let vault_config = read_text("Elephant/backend/tauri/src/vault/config.rs");
+  assert!(vault_config.contains("fn normalize_config"), "vault config must normalize saved vaults");
+  assert!(!vault_config.contains("MOBILE_DEFAULT_VAULT_ID"), "first run must not invent a hidden mobile vault before the UI can ask");
+  assert!(!vault_config.contains("app_data_dir().ok().map"), "read_config must not silently create an app data vault");
+
+  let tauri_bridge = read_text("Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js");
+  assert!(tauri_bridge.contains("createLocalVault"), "mobile bridge must expose explicit phone vault creation");
+  assert!(tauri_bridge.contains("/vaults/Personal"), "explicit phone vault must use the app data vaults/Personal path");
 }

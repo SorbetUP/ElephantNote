@@ -40,6 +40,18 @@ import './assets/styles/index.css'
 import './assets/styles/printService.css'
 import 'elephant-front/styles/runtime-layout-fixes.css'
 
+const showStartupError = (error) => {
+  const root = document.getElementById('app')
+  if (!root || root.childElementCount) return
+  const message = error?.message || String(error || 'Unknown startup error')
+  root.innerHTML = `
+    <main style="min-height:100vh;box-sizing:border-box;padding:24px;background:#0f141d;color:#eef3fb;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+      <h1 style="margin:0 0 12px;font-size:22px">ElephantNote startup failed</h1>
+      <pre style="white-space:pre-wrap;overflow:auto;padding:12px;border:1px solid #334155;border-radius:8px;background:#111827;color:#fecaca">${message.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char])}</pre>
+    </main>
+  `
+}
+
 const clearBootstrapFileUtilsFallbackForTauri = () => {
   if (window.__TAURI__ && window.fileUtils?.__elephantnoteBootstrapFallback) {
     delete window.fileUtils
@@ -105,19 +117,22 @@ const autostartLlamaRuntime = async(target = globalThis) => {
 
 installRendererDiagnostics()
 globalThis.marktext = {}
-clearBootstrapFileUtilsFallbackForTauri()
-installTauriRuntimeBridge()
-ensureRendererPathFacade()
-installTauriFileUtilsPathGuards()
-installTauriElephantNoteBridge()
-installTauriSearchRuntimeGuards()
-installTauriSearchConceptFallback()
-installPiProviderBridge()
-installTauriMarkTextSaveBridge()
-installTauriLocalIpcBridge()
-installSlashMenuDiagnostics()
-installWritingCommandBridge()
-void autostartLlamaRuntime()
+
+const installRendererRuntime = () => {
+  clearBootstrapFileUtilsFallbackForTauri()
+  installTauriRuntimeBridge()
+  ensureRendererPathFacade()
+  installTauriFileUtilsPathGuards()
+  installTauriElephantNoteBridge()
+  installTauriSearchRuntimeGuards()
+  installTauriSearchConceptFallback()
+  installPiProviderBridge()
+  installTauriMarkTextSaveBridge()
+  installTauriLocalIpcBridge()
+  installSlashMenuDiagnostics()
+  installWritingCommandBridge()
+  void autostartLlamaRuntime()
+}
 
 const bootstrapTauriRuntime = async() => {
   pushDiagnosticLog('info', 'bootstrapTauriRuntime:start', { runtime: window.__MARKTEXT_RUNTIME__ })
@@ -194,12 +209,14 @@ const mountRendererApp = (runtime, windowType) => {
 const startRendererApp = async() => {
   const runtime = 'tauri'
   window.__MARKTEXT_RUNTIME__ = runtime
+  installRendererRuntime()
   const windowType = await bootstrapForRuntime(runtime)
   mountRendererApp(runtime, windowType)
 }
 
 void startRendererApp().catch((error) => {
   pushDiagnosticLog('error', 'renderer startup failed', error)
+  showStartupError(error)
   setTimeout(() => {
     throw error
   }, 0)

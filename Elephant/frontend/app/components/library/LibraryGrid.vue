@@ -58,6 +58,7 @@ import {
   getEntryKind,
   parseDraggedEntry
 } from '../../utils/entryDragDrop'
+import { getNoteCardTitle } from '../../utils/noteCardView'
 
 const DIRECTORY_PAGE_SIZE = 120
 const RENDER_CHUNK_SIZE = 72
@@ -215,7 +216,7 @@ const openEntry = async (entry) => {
 
 const renameEntry = async (entry) => {
   renamingEntry.value = entry
-  renameEntryTitle.value = entry.title
+  renameEntryTitle.value = getNoteCardTitle(entry)
   await nextTick()
   renameEntryInput.value?.focus()
   renameEntryInput.value?.select()
@@ -268,6 +269,43 @@ const handleRootDrop = async(event) => {
   gap: 18px;
   padding: 20px;
   align-content: start;
+}
+
+@media (max-width: 760px), (pointer: coarse) {
+  .en-library-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 14px 12px calc(108px + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: 120px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .en-library-grid.list {
+    grid-template-columns: 1fr;
+  }
+
+  .en-library-rename-form {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom, 0px) + 12px);
+    z-index: 80;
+    border-radius: 20px;
+    padding: 16px;
+    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.42);
+  }
+
+  .en-library-rename-form input,
+  .en-library-rename-form button {
+    min-height: 46px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 390px) {
+  .en-library-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .en-library-grid.list {
   grid-template-columns: 1fr;

@@ -32,6 +32,12 @@ if [ ! -d "$TAURI_DIR/gen/android" ]; then
   cargo tauri android init --config "$ANDROID_CONFIG"
 fi
 
+MAIN_ACTIVITY="$TAURI_DIR/gen/android/app/src/main/java/com/elephantnote/app/MainActivity.kt"
+MAIN_ACTIVITY_TEMPLATE="$ROOT_DIR/build/android/MainActivity.kt"
+if [ -f "$MAIN_ACTIVITY" ]; then
+  cp "$MAIN_ACTIVITY_TEMPLATE" "$MAIN_ACTIVITY"
+fi
+
 cd "$TAURI_DIR"
 ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1 cargo tauri android build --debug --apk --config "$ANDROID_CONFIG"
 

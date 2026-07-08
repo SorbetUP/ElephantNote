@@ -16,8 +16,10 @@ const linuxConfig = readJson('Elephant/backend/tauri/tauri.linux.conf.json')
 const androidConfig = readJson('Elephant/backend/tauri/tauri.android.conf.json')
 const buildDev = readText('build/scripts/build_dev.sh')
 const buildAndroid = readText('build/scripts/build_dev_apk.sh')
+const androidActivity = readText('build/android/MainActivity.kt')
 const chatRuntime = readText('Elephant/backend/tauri/src/chat_runtime.rs')
 const vaultConfig = readText('Elephant/backend/tauri/src/vault/config.rs')
+const tauriBridge = readText('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
 const tauriExtra = readText('Elephant/backend/tauri/src/tauri_extra_commands.rs')
 const libMin = readText('Elephant/backend/tauri/src/lib_min.rs')
 
@@ -45,6 +47,10 @@ assert(
   baseConfig.bundle?.resources?.includes('bin'),
   'desktop Tauri config must keep bin resources for bundled llama-server'
 )
+assert(
+  baseConfig.build?.frontendDist === '../../../build/out/renderer',
+  'desktop frontendDist must point at the repository build output'
+)
 
 assert(
   Array.isArray(linuxConfig.bundle?.targets),
@@ -61,8 +67,20 @@ assert(
 )
 
 assert(
-  androidConfig.build?.beforeBuildCommand === 'pnpm tauri:web:build',
+  androidConfig.build?.beforeBuildCommand === 'cd ../.. && pnpm tauri:web:build',
   'Android build must not run the desktop llama-server installer'
+)
+assert(
+  androidConfig.build?.frontendDist === '../../../build/out/renderer',
+  'Android frontendDist must point at the repository build output'
+)
+assert(
+  androidConfig.app?.withGlobalTauri === true,
+  'Android must inject window.__TAURI__ for the renderer bridge'
+)
+assert(
+  androidConfig.app?.windows?.[0]?.title === 'ElephantNote',
+  'Android app title must use the ElephantNote product name'
 )
 assert(
   Array.isArray(androidConfig.bundle?.resources),
@@ -122,6 +140,14 @@ assert(
   'Android build must skip bundled llama-server'
 )
 assert(
+  buildAndroid.includes('build/android/MainActivity.kt') && buildAndroid.includes('cp "$MAIN_ACTIVITY_TEMPLATE" "$MAIN_ACTIVITY"'),
+  'Android build must copy the tracked immersive MainActivity template'
+)
+assert(
+  androidActivity.includes('enterImmersiveMode') && androidActivity.includes('WindowInsetsController'),
+  'Android MainActivity template must hide status and navigation bars'
+)
+assert(
   buildAndroid.includes('cargo tauri android init --config "$ANDROID_CONFIG"'),
   'Android build script must initialize the generated Android project with the Android config'
 )
@@ -148,12 +174,12 @@ assert(
   'Bundled local llama runtime module must be desktop-only'
 )
 assert(
-  vaultConfig.includes('MOBILE_DEFAULT_VAULT_ID'),
-  'Vault config must define a mobile fallback vault'
+  vaultConfig.includes('fn normalize_config') && vaultConfig.includes('VaultConfig::default()'),
+  'Vault config must normalize existing config without inventing a first-run vault'
 )
 assert(
-  vaultConfig.includes('app_data_dir'),
-  'Mobile fallback vault must use the app data directory'
+  tauriBridge.includes('/vaults/Personal') && tauriBridge.includes('createLocalVault'),
+  'Android bridge must create the explicit local phone vault under app data vaults/Personal'
 )
 assert(
   tauriExtra.includes('vault_config::get_active_vault'),

@@ -1,6 +1,7 @@
 <template>
   <empty-vault-picker
     v-if="!store.hasVault"
+    @create-local="store.createLocalVault"
     @choose="store.chooseVault"
   />
   <div
@@ -11,18 +12,60 @@
       `en-theme-${themeClassId}`,
       {
         'en-pinned-card-halo': preferences.pinnedCardHalo,
-        'en-local-ai-disabled': !showLocalModelLibrary
+        'en-local-ai-disabled': !showLocalModelLibrary,
+        'en-mobile-shell': isMobileShell,
+        'en-mobile-drawer-open': isMobileShell && sidebarVisible
       }
     ]"
     :style="shellStyle"
   >
     <div class="en-shell-main">
-      <top-vault-bar :sidebar-visible="sidebarVisible" />
+      <top-vault-bar
+        v-if="!isMobileShell"
+        :sidebar-visible="sidebarVisible"
+      />
+      <header
+        v-else
+        class="en-mobile-topbar"
+      >
+        <button
+          class="en-mobile-icon-button"
+          type="button"
+          aria-label="Open navigation"
+          @click="openMobileSidebar"
+        >
+          <Menu class="en-mobile-icon" />
+        </button>
+        <button
+          class="en-mobile-search"
+          type="button"
+          @click="openSearch"
+        >
+          <Search class="en-mobile-icon" />
+          <span>Search notes</span>
+        </button>
+        <button
+          class="en-mobile-icon-button"
+          type="button"
+          aria-label="Settings"
+          @click="openSettings"
+        >
+          <Settings class="en-mobile-icon" />
+        </button>
+      </header>
       <div class="en-layout">
         <icon-rail
+          v-if="!isMobileShell"
           @open-settings="openSettings"
           @search="openSearch"
           @toggle-sidebar="toggleSidebar"
+        />
+        <button
+          v-if="isMobileShell && sidebarVisible"
+          class="en-mobile-scrim"
+          type="button"
+          aria-label="Close navigation"
+          @click="closeMobileSidebar"
         />
         <div
           class="en-body"
@@ -31,9 +74,10 @@
           <sidebar-nav
             v-if="sidebarVisible"
             @search="openSearch"
+            @click.capture="handleMobileSidebarClick"
           />
           <div
-            v-if="sidebarVisible"
+            v-if="sidebarVisible && !isMobileShell"
             class="en-sidebar-resizer"
             role="separator"
             aria-orientation="vertical"
@@ -42,6 +86,15 @@
           <main-content class="en-body-main" />
         </div>
       </div>
+      <button
+        v-if="isMobileShell && !store.openedNotePath"
+        class="en-mobile-fab"
+        type="button"
+        aria-label="New note"
+        @click="store.createNote?.()"
+      >
+        <Plus class="en-mobile-fab-icon" />
+      </button>
     </div>
     <ChatSidebar v-if="store.chatSidebarOpen" />
     <search-modal />
@@ -61,6 +114,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { Menu, Plus, Search, Settings } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { usePreferencesStore } from '@/store/preferences'
@@ -94,6 +148,7 @@ const isSettingsOpen = ref(false)
 const theme = ref(normalizeThemeId(window.localStorage.getItem(ELEPHANTNOTE_THEME_STORAGE_KEY)))
 const sidebarWidth = ref(232)
 const sidebarVisible = ref(true)
+const isMobileShell = ref(false)
 const localAi = ref({ enabled: true, showModelLibraryInSidebar: true })
 let sidebarResizeFrame = null
 let pendingSidebarWidth = null
@@ -125,6 +180,32 @@ const openSearch = () => {
 
 const toggleSidebar = () => {
   sidebarVisible.value = !sidebarVisible.value
+}
+
+const openMobileSidebar = () => {
+  sidebarVisible.value = true
+}
+
+const closeMobileSidebar = () => {
+  if (isMobileShell.value) sidebarVisible.value = false
+}
+
+const handleMobileSidebarClick = (event) => {
+  if (!isMobileShell.value) return
+  if (event.target?.closest?.('button')) {
+    window.setTimeout(closeMobileSidebar, 80)
+  }
+}
+
+const updateMobileShell = () => {
+  const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches
+  const narrowViewport = window.matchMedia?.('(max-width: 760px)').matches
+  isMobileShell.value = !!(coarsePointer || narrowViewport)
+  if (isMobileShell.value) {
+    sidebarVisible.value = false
+  } else if (!sidebarVisible.value) {
+    sidebarVisible.value = true
+  }
 }
 
 const setTheme = (value) => {
@@ -245,6 +326,9 @@ const handleAiConfigChanged = (event) => {
 }
 
 onMounted(() => {
+  updateMobileShell()
+  window.addEventListener('resize', updateMobileShell)
+  window.screen?.orientation?.addEventListener?.('change', updateMobileShell)
   window.addEventListener('keydown', handleShortcut)
   window.addEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
   window.tauri.ipcRenderer.on('mt::tab-saved', handleTabSaved)
@@ -263,6 +347,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateMobileShell)
+  window.screen?.orientation?.removeEventListener?.('change', updateMobileShell)
   window.removeEventListener('keydown', handleShortcut)
   window.removeEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
   if (sidebarResizeFrame) {
@@ -289,6 +375,7 @@ onBeforeUnmount(() => {
   --en-muted: #98a3b6;
   --en-primary: #5ea1ff;
   height: 100vh;
+  height: 100dvh;
   color: var(--en-text);
   background: var(--en-bg);
   overflow: hidden;
@@ -336,6 +423,12 @@ onBeforeUnmount(() => {
   cursor: col-resize;
 }
 
+.en-mobile-topbar,
+.en-mobile-scrim,
+.en-mobile-fab {
+  display: none;
+}
+
 :global(.en-local-ai-disabled .en-rail-icon[title="Models"]) {
   display: none !important;
 }
@@ -352,5 +445,138 @@ onBeforeUnmount(() => {
 :global(.en-settings-close .en-icon) {
   width: 17px !important;
   height: 17px !important;
+}
+
+@media (max-width: 760px), (pointer: coarse) {
+  .en-shell.en-mobile-shell {
+    --en-mobile-topbar-height: 72px;
+    width: 100vw;
+    max-width: 100vw;
+    min-height: 100dvh;
+    overflow: hidden;
+    touch-action: manipulation;
+  }
+
+  .en-mobile-topbar {
+    min-height: calc(var(--en-mobile-topbar-height) + env(safe-area-inset-top, 0px));
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 48px;
+    align-items: end;
+    gap: 10px;
+    padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 10px;
+    border-bottom: 1px solid var(--en-border);
+    background: var(--en-bg);
+    flex: 0 0 auto;
+    z-index: 30;
+  }
+
+  .en-mobile-icon-button,
+  .en-mobile-search {
+    min-height: 48px;
+    border: 0;
+    color: var(--en-text);
+    background: var(--en-soft);
+    font: inherit;
+  }
+
+  .en-mobile-icon-button {
+    width: 48px;
+    border-radius: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .en-mobile-search {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 999px;
+    padding: 0 16px;
+    color: var(--en-muted);
+    text-align: left;
+  }
+
+  .en-mobile-search span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .en-mobile-icon {
+    width: 23px;
+    height: 23px;
+    flex: 0 0 auto;
+  }
+
+  .en-layout,
+  .en-body,
+  .en-body-main {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .en-body,
+  .en-body.en-sidebar-hidden {
+    display: block;
+    grid-template-columns: none;
+  }
+
+  .en-body-main {
+    display: block;
+    height: 100%;
+  }
+
+  .en-mobile-shell :deep(.en-sidebar) {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(82vw, 340px);
+    max-width: calc(100vw - 28px);
+    z-index: 50;
+    border-right: 1px solid var(--en-border);
+    transform: translateX(-104%);
+    transition: transform 0.2s ease;
+    padding-top: env(safe-area-inset-top, 0px);
+    box-shadow: 18px 0 44px rgba(0, 0, 0, 0.38);
+  }
+
+  .en-mobile-shell.en-mobile-drawer-open :deep(.en-sidebar) {
+    transform: translateX(0);
+  }
+
+  .en-mobile-scrim {
+    position: fixed;
+    inset: 0;
+    display: block;
+    z-index: 45;
+    border: 0;
+    background: rgba(0, 0, 0, 0.46);
+  }
+
+  .en-mobile-fab {
+    position: fixed;
+    right: max(18px, env(safe-area-inset-right, 0px) + 18px);
+    bottom: max(22px, env(safe-area-inset-bottom, 0px) + 22px);
+    z-index: 35;
+    width: 72px;
+    height: 72px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 22px;
+    color: #fff;
+    background: var(--en-primary);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.32);
+  }
+
+  .en-mobile-fab-icon {
+    width: 34px;
+    height: 34px;
+  }
 }
 </style>

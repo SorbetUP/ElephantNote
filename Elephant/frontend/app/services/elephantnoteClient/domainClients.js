@@ -71,6 +71,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   vaults: {
     get: () => call(API.VAULTS_GET),
     select: () => call(API.VAULTS_SELECT),
+    createLocal: () => getBridge()?.createLocalVault?.() || call(API.VAULTS_SELECT),
     setActive: (vaultId) => call(API.VAULTS_SET_ACTIVE, { vaultId }),
     setIcon: (vaultId, icon) => call(API.VAULTS_SET_ICON, { vaultId, icon }),
     setName: (vaultId, name) => call(API.VAULTS_SET_NAME, { vaultId, name }),
@@ -222,6 +223,9 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     status: () => call(API.SYNC_STATUS),
     plan: (payloadByOperation = {}) => call(API.SYNC_PLAN, payloadByOperation),
     enqueue: (operation, payload = {}) => call(API.SYNC_ENQUEUE, { operation, payload }),
+    createInvite: (payload = {}) => call(API.SYNC_CREATE_INVITE, payload),
+    acceptInvite: (payload = {}) => call(API.SYNC_ACCEPT_INVITE, payload),
+    discoverPeers: (payload = {}) => call(API.SYNC_DISCOVER_PEERS, payload),
     run: (payloadByOperation = {}) => call(API.SYNC_RUN, payloadByOperation)
   },
   rag: {

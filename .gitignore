@@ -3,6 +3,7 @@ Elephant/node_modules/
 dist
 build/out/
 build/coverage/
+build/rust-target/
 .DS_Store
 .prettierignore
 .eslintcache

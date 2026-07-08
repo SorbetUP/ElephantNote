@@ -9,7 +9,7 @@
       'is-drop-target': isDropTarget,
       'is-drop-disabled': isDropDisabled
     }"
-    draggable="true"
+    :draggable="canUseNativeDrag"
     @mouseenter="isHovering = true"
     @mouseleave="isHovering = false"
     @dragstart="handleDragStart"
@@ -27,6 +27,7 @@
         :class="{ visible: isPinned || isHovering }"
         :title="isPinned ? 'Unpin entry' : 'Pin entry'"
         :aria-label="isPinned ? 'Unpin entry' : 'Pin entry'"
+        @pointerup.stop.prevent="togglePin"
         @click.stop.prevent="togglePin"
       >
         <Pin
@@ -38,7 +39,8 @@
         type="button"
         :title="isFolder ? 'Folder actions' : 'Note actions'"
         :aria-label="isFolder ? 'Folder actions' : 'Note actions'"
-        @click.stop.prevent="toggleMenu"
+        @pointerup.stop.prevent="toggleMenu"
+        @click.stop.prevent
       >
         <MoreHorizontal class="en-icon" />
       </button>
@@ -50,14 +52,16 @@
     >
       <button
         type="button"
-        @click="renameEntry"
+        @pointerup.stop.prevent="renameEntry"
+        @click.stop.prevent="renameEntry"
       >
         Rename
       </button>
       <button
         type="button"
         class="danger"
-        @click="deleteEntry"
+        @pointerup.stop.prevent="deleteEntry"
+        @click.stop.prevent="deleteEntry"
       >
         Delete
       </button>
@@ -126,6 +130,7 @@ const isHovering = ref(false)
 const isDragging = ref(false)
 const isDropTarget = ref(false)
 const isDropDisabled = ref(false)
+const canUseNativeDrag = ref(false)
 
 const title = computed(() => getNoteCardTitle(props.entry))
 const updated = computed(() => getNoteCardUpdatedLabel(props.entry))
@@ -145,8 +150,12 @@ const openContextMenu = () => {
 
 const closeMenu = (event) => {
   if (!isMenuOpen.value) return
-  if (event?.target?.closest?.('.en-note-card')) return
+  if (event?.target?.closest?.('.en-note-card, .en-card-popover')) return
   isMenuOpen.value = false
+}
+
+const closeMenuOnEscape = (event) => {
+  if (event.key === 'Escape') isMenuOpen.value = false
 }
 
 const togglePin = () => {
@@ -156,6 +165,10 @@ const togglePin = () => {
 }
 
 const handleDragStart = (event) => {
+  if (!canUseNativeDrag.value) {
+    event.preventDefault()
+    return
+  }
   isDragging.value = true
   writeDraggedEntry(event, {
     ...props.entry,
@@ -215,11 +228,14 @@ const deleteEntry = () => {
 }
 
 onMounted(() => {
-  window.addEventListener('click', closeMenu)
+  canUseNativeDrag.value = window.matchMedia?.('(pointer: fine)').matches !== false
+  window.addEventListener('pointerdown', closeMenu)
+  window.addEventListener('keydown', closeMenuOnEscape)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('click', closeMenu)
+  window.removeEventListener('pointerdown', closeMenu)
+  window.removeEventListener('keydown', closeMenuOnEscape)
 })
 </script>
 
@@ -354,5 +370,79 @@ onBeforeUnmount(() => {
   height: 26px;
   flex: 0 0 auto;
   margin-top: 4px;
+}
+
+@media (max-width: 760px), (pointer: coarse) {
+  .en-card {
+    min-height: 164px;
+    border-radius: 18px;
+    padding: 16px;
+    contain-intrinsic-size: 164px 240px;
+  }
+
+  .en-card.is-featured {
+    min-height: 164px;
+    contain-intrinsic-size: 164px 240px;
+  }
+
+  .en-card-actions {
+    top: 10px;
+    right: 10px;
+    gap: 4px;
+  }
+
+  .en-card-pin-button,
+  .en-card-menu {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--en-bg) 62%, transparent);
+    opacity: 1;
+  }
+
+  .en-card-pin-button:not(.visible) {
+    opacity: 1;
+  }
+
+  .en-card-popover {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: max(12px, env(safe-area-inset-bottom, 0px) + 12px);
+    z-index: 90;
+    min-width: 0;
+    border-radius: 18px;
+    padding: 10px;
+    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.42);
+  }
+
+  .en-card-popover button {
+    min-height: 50px;
+    border-radius: 12px;
+    padding: 0 14px;
+    font-size: 16px;
+  }
+
+  .en-note-card h3 {
+    max-width: calc(100% - 54px);
+    font-size: clamp(18px, 5vw, 24px);
+    line-height: 1.14;
+    -webkit-line-clamp: 3;
+  }
+
+  .en-note-document-icon {
+    width: 21px;
+    height: 21px;
+  }
+
+  .en-note-card p {
+    font-size: 14px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 }
 </style>

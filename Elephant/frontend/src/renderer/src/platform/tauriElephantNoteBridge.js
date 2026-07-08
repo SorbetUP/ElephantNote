@@ -10,7 +10,18 @@ const invoke = (target, command, payload = {}) => {
 
 const openVaultDirectory = async() => {
   const dialog = await import('@tauri-apps/plugin-dialog')
-  return dialog.open({ multiple: false, directory: true, createDirectory: true })
+  try {
+    return await dialog.open({ multiple: false, directory: true, createDirectory: true })
+  } catch (error) {
+    console.warn('[vault] native directory picker unavailable, using app data vault fallback', error)
+    return null
+  }
+}
+
+const defaultMobileVaultPath = async() => {
+  const pathApi = await import('@tauri-apps/api/path')
+  const base = await pathApi.appDataDir()
+  return `${String(base || '').replace(/[\\/]+$/g, '')}/vaults/Personal`
 }
 
 const listenToTauriEvent = async(eventName, handler) => {
@@ -207,6 +218,9 @@ const dispatchApiAction = async(bridge, action, payload = {}) => {
     case 'sync.status': return bridge.sync.status()
     case 'sync.plan': return bridge.sync.plan(payload)
     case 'sync.enqueue': return bridge.sync.enqueue(payload.operation, payload.payload || {})
+    case 'sync.createInvite': return bridge.sync.createInvite(payload)
+    case 'sync.acceptInvite': return bridge.sync.acceptInvite(payload)
+    case 'sync.discoverPeers': return bridge.sync.discoverPeers(payload)
     case 'sync.run': return bridge.sync.run(payload)
     case 'models.getSelection':
     case 'models.selection.get': return bridge.models.getSelection()
@@ -260,7 +274,7 @@ const apiActions = [
   'vaults.get', 'vaults.select', 'vaults.setActive', 'vaults.setIcon', 'vaults.setName', 'vaults.remove',
   'directory.list', 'notes.create', 'notes.read', 'notes.write', 'folders.create', 'sidebar.attach', 'sidebar.detach', 'entries.rename', 'entries.move', 'entries.delete',
   'calendar.list', 'sources.list', 'wiki.list', 'search.query', 'search.status', 'search.rebuild', 'search.inspect',
-  'sync.status', 'sync.plan', 'sync.enqueue', 'sync.run',
+  'sync.status', 'sync.plan', 'sync.enqueue', 'sync.createInvite', 'sync.acceptInvite', 'sync.discoverPeers', 'sync.run',
   'models.getSelection', 'models.setSelection', 'models.selection.get', 'models.selection.set', 'models.local.list', 'models.list', 'models.searchHuggingFace', 'models.info', 'models.download', 'models.cancelDownload', 'models.downloadStatus', 'models.activate', 'models.deactivate', 'models.remove', 'models.active', 'models.refreshIndex',
   'rag.chat', 'ai.config.get', 'ai.config.set', 'ai.config.test', 'features.get', 'features.set', 'ocr.extract'
 ]
@@ -268,10 +282,13 @@ const apiActions = [
 const createBridge = (target) => {
   const bridge = {
     getVaults: () => invoke(target, 'tauri_vaults_get'),
+    createLocalVault: async() => invoke(target, 'tauri_vaults_select_path', { vaultPath: await defaultMobileVaultPath() }),
     selectVault: async() => {
       const folder = await openVaultDirectory()
       const vaultPath = Array.isArray(folder) ? folder[0] : folder
-      if (!vaultPath) return invoke(target, 'tauri_vaults_get')
+      if (!vaultPath) {
+        return invoke(target, 'tauri_vaults_select_path', { vaultPath: await defaultMobileVaultPath() })
+      }
       return invoke(target, 'tauri_vaults_select_path', { vaultPath })
     },
     setActiveVault: (vaultId) => invoke(target, 'tauri_vaults_set_active', { vaultId }),
@@ -391,6 +408,18 @@ const createBridge = (target) => {
       status: () => invoke(target, 'tauri_sync_status'),
       plan: (payloadByOperation = {}) => invoke(target, 'tauri_sync_plan', { payloadByOperation }),
       enqueue: (operation, payload = {}) => invoke(target, 'tauri_sync_enqueue', { operation, payload }),
+      createInvite: (payload = {}) => invoke(target, 'tauri_sync_create_invite', { payload }),
+      acceptInvite: (payload = {}) => invoke(target, 'tauri_sync_accept_invite', { invite: payload }),
+      discoverPeers: async() => {
+        const status = await invoke(target, 'tauri_sync_status')
+        return {
+          ok: true,
+          runtime: 'tauri-rust',
+          peers: Array.isArray(status?.peers) ? status.peers : [],
+          status,
+          warning: 'LAN multicast discovery is not available in this Android build; use the pairing code when the phone is USB-tethered or isolated by the network.'
+        }
+      },
       run: (payloadByOperation = {}) => invoke(target, 'tauri_sync_run', { payloadByOperation })
     },
 

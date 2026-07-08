@@ -50,6 +50,13 @@ describe('ElephantNote vault store pinned notes', () => {
       workspace: { sidebar: [] },
       entries: []
     })
+    window.elephantnote.createLocalVault = async() => ({
+      vaults: [{ ...createVault('phone-vault', '/data/user/0/com.elephantnote.app/files/vaults/Personal'), name: 'Personal' }],
+      activeVaultId: 'phone-vault',
+      activeVault: { ...createVault('phone-vault', '/data/user/0/com.elephantnote.app/files/vaults/Personal'), name: 'Personal' },
+      workspace: { sidebar: [] },
+      entries: []
+    })
     window.tauri = {
       ipcRenderer: {
         send: vi.fn()
@@ -373,6 +380,17 @@ describe('ElephantNote vault store pinned notes', () => {
     await expect(store.removeVault('vault-1')).resolves.toBe(true)
     expect(store.activeVaultId).toBe('vault-2')
     expect(store.vaults.map((vault) => vault.id)).toEqual(['vault-2'])
+  })
+
+  it('creates a local phone vault and applies the selected payload', async() => {
+    const store = useVaultStore()
+
+    await expect(store.createLocalVault()).resolves.toBe(true)
+
+    expect(store.activeVaultId).toBe('phone-vault')
+    expect(store.activeVault.path).toContain('/vaults/Personal')
+    expect(store.vaults.map((vault) => vault.id)).toEqual(['phone-vault'])
+    expect(store.error).toBe('')
   })
 
   it('navigates back and forward through app history entries', async() => {

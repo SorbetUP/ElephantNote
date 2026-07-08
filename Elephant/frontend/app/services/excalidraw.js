@@ -138,7 +138,6 @@ const createSceneFromImageBlob = async(blob, theme) => {
         seed,
         version: 1,
         versionNonce,
-        index: null,
         isDeleted: false,
         groupIds: [],
         frameId: null,

@@ -1,4 +1,5 @@
 import fs from 'fs-extra'
+import os from 'node:os'
 import path from 'path'
 import {
   SYNC_BACKENDS,
@@ -8,6 +9,8 @@ import {
   createUnknownSyncOperationError,
   mergeSyncPeers
 } from 'common/elephantnote/sync'
+import { buildBisyncArgs, buildRcloneFilterRules } from './rcloneArgs.js'
+import { discoverLanPeers } from './lanPeerDiscovery.js'
 
 const nowIso = () => new Date().toISOString()
 const CONFIG_DIR = '.elephantnote'
@@ -19,12 +22,22 @@ const RUN_OPERATIONS = ['snapshot', 'pull', 'push', 'sync']
 const PLAN_OPERATIONS = ['init', ...RUN_OPERATIONS]
 const MISSING_REMOTE_MESSAGE = 'Sync remote is not configured. Choose a local LAN, Docker, or shared-folder target before syncing.'
 const IGNORED_NAMES = new Set(['.git', '.elephantnote', 'node_modules', '.DS_Store'])
+const PAIRING_PROTOCOL = 'elephantnote-local-sync-pairing'
 
 const hasOwnPayload = (payloadByOperation = {}, operation) => (
   Object.prototype.hasOwnProperty.call(payloadByOperation || {}, operation)
 )
 
 const samePayload = (left = {}, right = {}) => JSON.stringify(left || {}) === JSON.stringify(right || {})
+
+const shortHash = (value = '') => {
+  let hash = 2166136261
+  for (const char of String(value)) {
+    hash ^= char.charCodeAt(0)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
 
 const normalizePlanOperation = (operation = '') => {
   const normalized = String(operation || '').trim()
@@ -66,6 +79,21 @@ const createPeerFromPayload = (payload = {}) => {
     encrypted: payload.encrypted !== false,
     pairedAt: payload.pairedAt || nowIso()
   }
+}
+
+const peerFromInvite = (invite = {}) => createPeerFromPayload({
+  peerDeviceId: invite.deviceId,
+  peerName: invite.deviceName,
+  peerAddress: invite.remotePath,
+  endpoint: invite.remotePath,
+  vaultIds: invite.vaultIds || []
+})
+
+const inviteFromPayload = (payload = {}) => {
+  const raw = payload?.qrPayload || payload?.manualCode
+  if (typeof raw === 'string' && raw.trim()) return JSON.parse(raw)
+  if (payload?.invite && typeof payload.invite === 'object') return payload.invite
+  return payload
 }
 
 const isIgnoredRelativePath = (relativePath = '') => String(relativePath).split(/[\\/]/).some((part) => IGNORED_NAMES.has(part))
@@ -137,6 +165,37 @@ const createManifest = async(root) => {
   return { version: 1, updatedAt: nowIso(), files }
 }
 
+const readManifest = async(filePath) => {
+  if (!(await fs.pathExists(filePath))) return { files: [] }
+  const manifest = await fs.readJson(filePath).catch(() => ({ files: [] }))
+  return { files: Array.isArray(manifest?.files) ? manifest.files : [] }
+}
+
+const manifestByPath = (manifest = {}) => new Map((manifest.files || []).map((file) => [file.path, file]))
+
+const deleteTreeEntries = async({ previousManifest, sourceRoot, targetRoot }) => {
+  const deleted = []
+  const conflicts = []
+  const previousFiles = manifestByPath(previousManifest)
+
+  for (const [relativePath, previous] of previousFiles.entries()) {
+    const source = path.join(sourceRoot, relativePath)
+    const target = path.join(targetRoot, relativePath)
+    const [sourceExists, targetExists] = await Promise.all([fs.pathExists(source), fs.pathExists(target)])
+    if (sourceExists || !targetExists) continue
+
+    if ((await fileHash(target)) === previous.hash) {
+      await fs.remove(target)
+      deleted.push(relativePath)
+      continue
+    }
+
+    conflicts.push({ path: relativePath, preserved: target, deletedOn: sourceRoot })
+  }
+
+  return { deleted, conflicts }
+}
+
 export class RcloneVaultEngine {
   constructor({ cwd = '', rclone = null } = {}) {
     this.cwd = cwd
@@ -200,12 +259,7 @@ export class RcloneVaultEngine {
     if (!this.cwd) return {}
     await fs.ensureDir(this.syncDir())
     if (this.compatibilityRcloneMode) {
-      await fs.writeFile(this.filterPath(), [
-        '- .git/**',
-        '- .elephantnote/**',
-        '- node_modules/**',
-        '- .DS_Store'
-      ].join('\n'))
+      await fs.writeFile(this.filterPath(), buildRcloneFilterRules().join('\n'))
     }
     return { manifestFile: this.manifestPath(), filterFile: this.filterPath() }
   }
@@ -313,6 +367,87 @@ export class RcloneVaultEngine {
         running: this.running,
         lastError: rcloneStatus.lastError || ''
       }
+    }
+  }
+
+  deviceId() {
+    return `desktop-${shortHash(this.cwd || process.cwd())}`
+  }
+
+  deviceName() {
+    return path.basename(this.cwd || '') || os.hostname?.() || 'ElephantNote desktop'
+  }
+
+  async discoverPeers(payload = {}) {
+    await this.loadConfig({ force: true })
+    const result = await discoverLanPeers({
+      timeoutMs: payload.timeoutMs,
+      self: {
+        deviceId: this.deviceId(),
+        deviceName: payload.deviceName || this.deviceName(),
+        vaults: this.cwd ? [{ id: `folder-${shortHash(this.cwd)}`, name: path.basename(this.cwd) || 'Vault' }] : []
+      }
+    })
+    this.peers = mergeSyncPeers(this.peers, result.peers || [])
+    await this.persistConfig()
+    return {
+      ...result,
+      status: this.status()
+    }
+  }
+
+  async createInvite(payload = {}) {
+    await this.loadConfig({ force: true })
+    this.mergeRemoteFromPayload(payload)
+    if (!this.remotePath) throw new Error('Choose a local sync target before creating an invite.')
+    await fs.ensureDir(this.remotePath)
+    const invite = {
+      protocol: PAIRING_PROTOCOL,
+      version: 1,
+      backend: this.compatibilityRcloneMode ? SYNC_BACKENDS.RCLONE : SYNC_BACKENDS.ELEPHANT_LOCAL,
+      transport: 'local-folder',
+      folderId: `folder-${shortHash(this.cwd || this.remotePath)}`,
+      folderLabel: path.basename(this.cwd || this.remotePath) || 'ElephantNote',
+      remotePath: this.remotePath,
+      deviceId: this.deviceId(),
+      deviceName: payload.deviceName || path.basename(this.cwd || '') || 'ElephantNote desktop',
+      pairCode: `EN-${shortHash(`${this.deviceId()}:${this.remotePath}:${nowIso()}`).toUpperCase()}`,
+      expiresAt: payload.expiresAt || 'manual-expiry',
+      security: {
+        encryptionRequired: true,
+        externalRelayRequired: false
+      }
+    }
+    await this.persistConfig()
+    const manualCode = JSON.stringify(invite)
+    return {
+      ok: true,
+      runtime: this.compatibilityRcloneMode ? SYNC_BACKENDS.RCLONE : SYNC_BACKENDS.ELEPHANT_LOCAL,
+      backend: invite.backend,
+      invite,
+      qrPayload: manualCode,
+      manualCode,
+      pairing: { state: 'waiting-for-peer', userAction: 'copy-code' }
+    }
+  }
+
+  async acceptInvite(payload = {}) {
+    await this.loadConfig({ force: true })
+    const invite = inviteFromPayload(payload)
+    if (invite?.protocol !== PAIRING_PROTOCOL) {
+      throw new Error('This is not an ElephantNote sync pairing code.')
+    }
+    if (!invite.remotePath) throw new Error('Pairing code does not contain a sync target.')
+    this.remotePath = String(invite.remotePath).trim()
+    await fs.ensureDir(this.remotePath)
+    const peer = peerFromInvite(invite)
+    if (peer) this.peers = mergeSyncPeers(this.peers, [peer])
+    await this.persistConfig()
+    return {
+      ok: true,
+      runtime: this.compatibilityRcloneMode ? SYNC_BACKENDS.RCLONE : SYNC_BACKENDS.ELEPHANT_LOCAL,
+      pairing: { state: 'paired', nextAction: 'sync-now' },
+      status: this.status()
     }
   }
 
@@ -446,8 +581,12 @@ export class RcloneVaultEngine {
       return this.status()
     }
     await this.ensureSupportFiles()
-    const args = ['bisync', this.cwd, this.remotePath, '--filters-file', this.filterPath()]
-    if (!this.firstRunDone) args.push('--resync')
+    const args = buildBisyncArgs({
+      localPath: this.cwd,
+      remotePath: this.remotePath,
+      resync: !this.firstRunDone,
+      filtersFile: this.filterPath()
+    })
     await this.rclone.run(args, { cwd: this.cwd })
     this.firstRunDone = true
     this.lastError = ''
@@ -471,13 +610,26 @@ export class RcloneVaultEngine {
     await this.ensureSupportFiles()
     await this.persistConfig()
     await fs.ensureDir(this.remotePath)
+    const previousManifest = await readManifest(this.manifestPath())
 
     const conflicts = []
     if (operation === 'pull' || operation === 'sync') {
+      const deleteResult = await deleteTreeEntries({
+        previousManifest,
+        sourceRoot: this.remotePath,
+        targetRoot: this.cwd
+      })
+      conflicts.push(...deleteResult.conflicts)
       const pullResult = await copyTreeSafely({ sourceRoot: this.remotePath, targetRoot: this.cwd, conflictTag: 'remote' })
       conflicts.push(...pullResult.conflicts)
     }
     if (operation === 'push' || operation === 'sync') {
+      const deleteResult = await deleteTreeEntries({
+        previousManifest,
+        sourceRoot: this.cwd,
+        targetRoot: this.remotePath
+      })
+      conflicts.push(...deleteResult.conflicts)
       const pushResult = await copyTreeSafely({ sourceRoot: this.cwd, targetRoot: this.remotePath, conflictTag: 'local' })
       conflicts.push(...pushResult.conflicts)
     }

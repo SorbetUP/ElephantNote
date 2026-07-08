@@ -70,7 +70,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import {
@@ -111,11 +111,12 @@ const props = defineProps({
 const emit = defineEmits(['close', 'save'])
 
 const mountEl = ref(null)
-const apiRef = ref(null)
-const root = ref(null)
+const apiRef = shallowRef(null)
+const root = shallowRef(null)
 const isSaving = ref(false)
-const initialData = ref(null)
+const initialData = shallowRef(null)
 const errorMessage = ref('')
+let mounted = true
 
 const stripKnownExtensions = (value) => {
   return String(value || '')
@@ -133,36 +134,75 @@ const normalizedBaseName = computed(() => {
 })
 const resolvedFileName = computed(() => ensurePngName(normalizedBaseName.value))
 
+class ExcalidrawErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+
+  componentDidCatch(error) {
+    this.setState({ error })
+    this.props.onError?.(error)
+  }
+
+  render() {
+    if (this.state.error) return null
+    return this.props.children
+  }
+}
+
 const handleClose = () => {
   emit('close')
 }
 
+const waitForCanvasMount = async () => {
+  await nextTick()
+  await new Promise((resolve) => requestAnimationFrame(() => resolve()))
+  await new Promise((resolve) => requestAnimationFrame(() => resolve()))
+  const rect = mountEl.value?.getBoundingClientRect?.()
+  if (!rect || rect.width < 1 || rect.height < 1) {
+    throw new Error('Excalidraw canvas is not visible yet.')
+  }
+}
+
 const renderCanvas = async () => {
+  await waitForCanvasMount()
+  if (!mounted) return
   const mod = await loadExcalidrawModule()
-  initialData.value = await createInitialExcalidrawData({
+  initialData.value = markRaw(await createInitialExcalidrawData({
     blob: props.initialBlob,
     theme: props.theme
-  })
+  }))
 
   if (!mountEl.value) throw new Error('Excalidraw mount element is missing.')
-  root.value = createRoot(mountEl.value)
-  root.value.render(
-    React.createElement(mod.Excalidraw, {
-      initialData: initialData.value,
-      theme: props.theme,
-      excalidrawAPI: (api) => {
-        apiRef.value = api
-      },
-      UIOptions: {
-        canvasActions: {
-          saveToActiveFile: false,
-          loadScene: false,
-          export: false,
-          clearCanvas: true,
-          toggleTheme: false
+  const reactRoot = root.value || markRaw(createRoot(mountEl.value))
+  root.value = reactRoot
+  reactRoot.render(
+    React.createElement(
+      ExcalidrawErrorBoundary,
+      {
+        onError: (error) => {
+          console.error('Excalidraw runtime failed:', error)
+          errorMessage.value = error?.message || 'The drawing canvas could not be initialized.'
         }
-      }
-    })
+      },
+      React.createElement(mod.Excalidraw, {
+        initialData: initialData.value,
+        theme: props.theme,
+        excalidrawAPI: (api) => {
+          apiRef.value = api ? markRaw(api) : null
+        },
+        UIOptions: {
+          canvasActions: {
+            saveToActiveFile: false,
+            loadScene: false,
+            export: false,
+            clearCanvas: true,
+            toggleTheme: false
+          }
+        }
+      })
+    )
   )
 }
 
@@ -203,8 +243,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  mounted = false
   document.body.classList.remove('en-excalidraw-open')
   root.value?.unmount?.()
+  root.value = null
 })
 </script>
 
@@ -306,6 +348,40 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   height: calc(100vh - 28px);
+  height: calc(100dvh - 28px);
   background: #fff;
+}
+
+@media (max-width: 760px), (pointer: coarse) {
+  .en-excalidraw-shell {
+    padding-top: calc(58px + env(safe-area-inset-top, 0px));
+  }
+
+  .en-excalidraw-header {
+    height: calc(58px + env(safe-area-inset-top, 0px));
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 10px 8px;
+    gap: 10px;
+  }
+
+  .en-excalidraw-name-wrap {
+    max-width: none;
+  }
+
+  .en-excalidraw-name-input {
+    height: 42px;
+    border-radius: 14px;
+    padding: 0 12px;
+    font-size: 16px;
+  }
+
+  .en-excalidraw-button {
+    width: 42px;
+    height: 42px;
+    font-size: 18px;
+  }
+
+  .en-excalidraw-canvas {
+    height: calc(100dvh - 58px - env(safe-area-inset-top, 0px));
+  }
 }
 </style>

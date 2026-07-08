@@ -428,6 +428,9 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
       'sync.enqueue',
       schema.object({ operation: requiredEnum(SYNC_OPERATION_IDS), payload: optionalObject })
     ),
+    action('SYNC_CREATE_INVITE', 'sync.createInvite', optionalObject),
+    action('SYNC_ACCEPT_INVITE', 'sync.acceptInvite', optionalObject),
+    action('SYNC_DISCOVER_PEERS', 'sync.discoverPeers', optionalObject),
     action('SYNC_RUN', 'sync.run', syncRunPayload)
   ])
 })

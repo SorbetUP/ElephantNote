@@ -9,32 +9,35 @@ const readSyncSettingsPanel = () => fs.readFileSync(
 )
 
 describe('SyncSettingsPanel critical interactions', () => {
-  it('wires device connection buttons to the backend pairing action', () => {
+  it('creates manual pairing codes through the sync backend', () => {
     const source = readSyncSettingsPanel()
 
-    expect(source).toContain('@click="connectDevice(device)"')
-    expect(source).toContain('const connectDevice = async (device) => {')
-    expect(source).toContain("peerDeviceId: device.id")
-    expect(source).toContain("peerAddress: device.address || 'dynamic'")
-    expect(source).toContain('elephantnoteClient.sync.run({')
+    expect(source).toContain('@click="createPairingCode"')
+    expect(source).toContain('const createPairingCode = async () => {')
+    expect(source).toContain('elephantnoteClient.sync.createInvite')
+    expect(source).toContain('createdPairingCode.value')
+    expect(source).toContain("remotePath: activeRemotePath.value")
   })
 
-  it('does not fake device discovery with a UI-only timeout', () => {
+  it('accepts pasted pairing codes through the sync backend', () => {
     const source = readSyncSettingsPanel()
 
-    expect(source).toContain('const startDiscovery = async () => {')
-    expect(source).toContain('const status = await elephantnoteClient.sync.status()')
+    expect(source).toContain('@click="acceptPairingCode"')
+    expect(source).toContain('const acceptPairingCode = async () => {')
+    expect(source).toContain('elephantnoteClient.sync.acceptInvite')
+    expect(source).toContain('manualCode: pairingCodeInput.value.trim()')
     expect(source).toContain('devices.value = Array.isArray(status?.peers)')
-    expect(source).not.toContain('setTimeout(() => {')
   })
 
-  it('calls the sync backend when allowing pairing', () => {
+  it('uses real sync discovery without the old fake device flow', () => {
     const source = readSyncSettingsPanel()
 
-    expect(source).toContain('const allowPairing = async () => {')
-    expect(source).toContain("backend: 'syncthing-git'")
-    expect(source).toContain('await elephantnoteClient.sync.run({ init: syncInitPayload() })')
-    expect(source).not.toContain("syncMessage.value = 'Pairing allowed. Connect from the other device.'\n}")
+    expect(source).toContain('elephantnoteClient.sync.discoverPeers')
+    expect(source).toContain('@click="discoverPeers"')
+    expect(source).toContain('Scan network')
+    expect(source).not.toContain('setTimeout(() => {')
+    expect(source).not.toContain('const startDiscovery = async () => {')
+    expect(source).not.toContain('@click="connectDevice(device)"')
   })
 
   it('clears the active remote when removing the selected provider', () => {

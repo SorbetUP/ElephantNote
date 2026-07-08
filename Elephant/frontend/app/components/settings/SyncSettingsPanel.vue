@@ -3,12 +3,12 @@
     <section class="en-settings-section stacked">
       <div>
         <h3>Devices</h3>
-        <p>Add computers or phones found on the local network.</p>
+        <p>Scan the local network for ElephantNote devices, or pair with a manual code when Android USB/network isolation blocks discovery.</p>
       </div>
       <div class="en-form-grid">
         <label>
-          <span>Pairing password</span>
-          <input v-model="pairingPassword" type="password" placeholder="At least 8 characters">
+          <span>Shared sync target</span>
+          <input v-model.trim="activeRemotePath" type="text" placeholder="/Volumes/ElephantSync or webdav:ElephantNote">
         </label>
         <label>
           <span>Selected vaults</span>
@@ -16,30 +16,42 @@
         </label>
       </div>
       <div class="en-settings-actions-row">
-        <button type="button" :disabled="discoveryRunning || loading" @click="startDiscovery">
-          {{ discoveryRunning ? 'Searching...' : 'Find devices' }}
+        <button type="button" :disabled="!canCreateInvite || loading" @click="createPairingCode">
+          {{ loadingAction === 'create' ? 'Creating...' : 'Create pairing code' }}
         </button>
-        <button type="button" :disabled="!canPair || loading" @click="allowPairing">
-          Allow pairing
+        <button type="button" :disabled="!pairingCodeInput.trim() || loading" @click="acceptPairingCode">
+          {{ loadingAction === 'accept' ? 'Pairing...' : 'Accept pasted code' }}
         </button>
         <button type="button" :disabled="loading" @click="refreshStatus">
           Refresh
         </button>
+        <button type="button" :disabled="loading" @click="discoverPeers">
+          {{ loadingAction === 'discover' ? 'Scanning...' : 'Scan network' }}
+        </button>
         <span class="en-settings-message">{{ syncMessage }}</span>
+      </div>
+      <div class="en-pairing-grid">
+        <label>
+          <span>Code from this device</span>
+          <textarea readonly :value="createdPairingCode" placeholder="Create a pairing code, then paste it on the other device." />
+        </label>
+        <label>
+          <span>Paste code from another device</span>
+          <textarea v-model.trim="pairingCodeInput" placeholder="Paste ElephantNote pairing code here." />
+        </label>
       </div>
       <div class="en-sync-list">
         <article v-if="!devices.length" class="en-sync-row muted">
           <div>
-            <strong>No device found</strong>
-            <p>Open Elephant Note on another device, then search again.</p>
+            <strong>No device found yet</strong>
+            <p>Tap Scan network, or create a code on one device and accept it on the other.</p>
           </div>
         </article>
         <article v-for="device in devices" :key="device.id" class="en-sync-row">
           <div>
             <strong>{{ device.name }}</strong>
-            <p>{{ device.address }}</p>
+            <p>{{ device.address }} · {{ device.online ? 'online' : 'paired' }}</p>
           </div>
-          <button type="button" :disabled="!canPair || loading" @click="connectDevice(device)">Connect</button>
         </article>
       </div>
     </section>
@@ -118,10 +130,11 @@ const props = defineProps({
 })
 
 const selectedVaultIds = ref([])
-const pairingPassword = ref('')
+const createdPairingCode = ref('')
+const pairingCodeInput = ref('')
 const devices = ref([])
-const discoveryRunning = ref(false)
 const loading = ref(false)
+const loadingAction = ref('')
 const syncMessage = ref('')
 const providerMessage = ref('')
 const activeRemotePath = ref('')
@@ -137,16 +150,17 @@ const providerTypes = [
 ]
 const selectedVaultKey = 'elephantnote:sync:selectedVaults'
 const providerKey = 'elephantnote:sync:providers'
-const canPair = computed(() => pairingPassword.value.length >= 8 && selectedVaultIds.value.length > 0)
+const canCreateInvite = computed(() => activeRemotePath.value.trim().length > 0 && selectedVaultIds.value.length > 0)
 const vaultKey = (vault) => String(vault?.id || vault?.path || vault?.name || '')
 const isVaultSelected = (vault) => selectedVaultIds.value.includes(vaultKey(vault))
 const normalizeDevice = (peer = {}, index = 0) => {
   const id = String(peer.deviceId || peer.id || peer.name || `peer-${index}`)
-  const address = String(peer.address || peer.peerAddress || peer.endpoint || 'dynamic')
+  const address = String(peer.address || peer.peerAddress || peer.endpoint || peer.host || 'dynamic')
   return {
     id,
-    name: String(peer.name || peer.label || id),
-    address
+    name: String(peer.deviceName || peer.name || peer.label || id),
+    address,
+    online: peer.online === true
   }
 }
 const syncInitPayload = (extra = {}) => ({
@@ -202,46 +216,41 @@ const useProvider = (provider) => {
   activeRemotePath.value = provider.remotePath
   providerMessage.value = `${provider.name} selected.`
 }
-const startDiscovery = async () => {
-  discoveryRunning.value = true
-  syncMessage.value = 'Searching for devices...'
-  try {
-    const status = await elephantnoteClient.sync.status()
-    devices.value = Array.isArray(status?.peers) ? status.peers.map(normalizeDevice) : []
-    syncMessage.value = devices.value.length ? `${devices.value.length} device${devices.value.length === 1 ? '' : 's'} found.` : 'No device found yet.'
-  } catch (error) {
-    syncMessage.value = error instanceof Error ? error.message : 'Unable to search for devices.'
-  } finally {
-    discoveryRunning.value = false
-  }
-}
-const allowPairing = async () => {
-  if (!canPair.value || loading.value) return
+const createPairingCode = async () => {
+  if (!canCreateInvite.value || loading.value) return
   loading.value = true
-  syncMessage.value = 'Preparing local pairing endpoint...'
+  loadingAction.value = 'create'
+  syncMessage.value = 'Creating pairing code...'
   try {
-    await elephantnoteClient.sync.run({ init: syncInitPayload() })
-    syncMessage.value = 'Pairing allowed. Connect from the other device.'
+    const result = await elephantnoteClient.sync.createInvite(syncInitPayload({
+      deviceName: 'ElephantNote',
+      remotePath: activeRemotePath.value
+    }))
+    createdPairingCode.value = result?.manualCode || result?.qrPayload || JSON.stringify(result?.invite || {})
+    syncMessage.value = 'Pairing code created. Paste it on the other device.'
   } catch (error) {
-    syncMessage.value = error instanceof Error ? error.message : 'Unable to allow pairing.'
+    syncMessage.value = error instanceof Error ? error.message : 'Unable to create pairing code.'
   } finally {
     loading.value = false
+    loadingAction.value = ''
   }
 }
-const connectDevice = async (device) => {
-  if (!canPair.value || loading.value || !device?.id) return
+const acceptPairingCode = async () => {
+  if (!pairingCodeInput.value.trim() || loading.value) return
   loading.value = true
-  syncMessage.value = `Connecting ${device.name}...`
+  loadingAction.value = 'accept'
+  syncMessage.value = 'Accepting pairing code...'
   try {
-    const status = await elephantnoteClient.sync.run({
-      init: syncInitPayload({ peerDeviceId: device.id, peerAddress: device.address || 'dynamic' })
-    })
+    const result = await elephantnoteClient.sync.acceptInvite({ manualCode: pairingCodeInput.value.trim() })
+    const status = result?.status || await elephantnoteClient.sync.status()
+    activeRemotePath.value = status.remotePath || activeRemotePath.value
     devices.value = Array.isArray(status?.peers) ? status.peers.map(normalizeDevice) : devices.value
-    syncMessage.value = status.lastError || `${device.name} connected.`
+    syncMessage.value = status.lastError || 'Device paired. Run Sync now on both devices.'
   } catch (error) {
-    syncMessage.value = error instanceof Error ? error.message : 'Unable to connect device.'
+    syncMessage.value = error instanceof Error ? error.message : 'Unable to accept pairing code.'
   } finally {
     loading.value = false
+    loadingAction.value = ''
   }
 }
 const refreshStatus = async () => {
@@ -255,6 +264,24 @@ const refreshStatus = async () => {
     syncMessage.value = error instanceof Error ? error.message : 'Unable to load sync status.'
   } finally {
     loading.value = false
+  }
+}
+const discoverPeers = async () => {
+  if (loading.value) return
+  loading.value = true
+  loadingAction.value = 'discover'
+  syncMessage.value = 'Scanning local network...'
+  try {
+    const result = await elephantnoteClient.sync.discoverPeers({ timeoutMs: 1400 })
+    const status = result?.status || await elephantnoteClient.sync.status()
+    const peers = Array.isArray(result?.peers) && result.peers.length ? result.peers : status?.peers
+    devices.value = Array.isArray(peers) ? peers.map(normalizeDevice) : []
+    syncMessage.value = result?.warning || (devices.value.length ? `${devices.value.length} device found.` : 'No device found. Use the manual pairing code if the phone is isolated by USB or Wi-Fi settings.')
+  } catch (error) {
+    syncMessage.value = error instanceof Error ? error.message : 'Network scan failed. Use the manual pairing code.'
+  } finally {
+    loading.value = false
+    loadingAction.value = ''
   }
 }
 const syncNow = async () => {
@@ -291,4 +318,16 @@ onMounted(() => {
 .en-sync-check-row span { display: flex; flex-direction: column; gap: 4px; }
 .en-sync-check-row small { color: var(--en-muted, #475467); word-break: break-all; }
 .en-form-grid label.wide { grid-column: 1 / -1; }
+.en-pairing-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.en-pairing-grid label { display: flex; flex-direction: column; gap: 8px; }
+.en-pairing-grid textarea { min-height: 116px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.45; border: 1px solid var(--en-border, #c5cfdd); border-radius: 12px; padding: 12px; background: var(--en-surface, #fff); color: var(--en-text, #101828); }
+
+@media (max-width: 760px), (pointer: coarse) {
+  .en-sync-panel { gap: 14px; }
+  .en-sync-row, .en-sync-check-row { align-items: stretch; flex-direction: column; gap: 12px; padding: 12px; border-radius: 12px; }
+  .en-sync-row-actions { width: 100%; }
+  .en-sync-row-actions button, .en-sync-row button { min-height: 44px; flex: 1; }
+  .en-pairing-grid { grid-template-columns: 1fr; }
+  .en-pairing-grid textarea { min-height: 132px; font-size: 12px; }
+}
 </style>

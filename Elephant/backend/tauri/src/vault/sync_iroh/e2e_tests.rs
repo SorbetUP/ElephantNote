@@ -7,11 +7,13 @@ mod iroh_two_endpoint_tests {
   use std::fmt;
   use std::io;
   use std::path::{Path, PathBuf};
+  use std::sync::{Arc, Mutex};
   use std::time::Duration;
 
   #[derive(Clone)]
   struct TestVaultProtocol {
     vault: VaultDescriptor,
+    errors: Arc<Mutex<Vec<String>>>,
   }
 
   impl fmt::Debug for TestVaultProtocol {
@@ -23,20 +25,18 @@ mod iroh_two_endpoint_tests {
     }
   }
 
-  impl ProtocolHandler for TestVaultProtocol {
-    async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+  impl TestVaultProtocol {
+    async fn handle(&self, connection: Connection) -> Result<(), String> {
       let peer_id = connection.remote_id().to_string();
       let (send, mut recv) = connection
         .accept_bi()
         .await
-        .map_err(|error| AcceptError::from_err(io::Error::other(error.to_string())))?;
+        .map_err(|error| format!("accept_bi failed: {error}"))?;
       let first = read_control(&mut recv)
         .await
-        .map_err(|error| AcceptError::from_err(io::Error::other(error)))?;
+        .map_err(|error| format!("read first control failed: {error}"))?;
       let ControlMessage::SyncOpen(open) = first else {
-        return Err(AcceptError::from_err(io::Error::other(
-          "test server expected syncOpen",
-        )));
+        return Err("test server expected syncOpen".to_string());
       };
       server_sync_session(
         self.vault.clone(),
@@ -47,7 +47,19 @@ mod iroh_two_endpoint_tests {
         recv,
       )
       .await
-      .map_err(|error| AcceptError::from_err(io::Error::other(error)))
+      .map_err(|error| format!("server sync session failed: {error}"))
+    }
+  }
+
+  impl ProtocolHandler for TestVaultProtocol {
+    async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+      match self.handle(connection).await {
+        Ok(()) => Ok(()),
+        Err(error) => {
+          self.errors.lock().unwrap().push(error.clone());
+          Err(AcceptError::from_err(io::Error::other(error)))
+        }
+      }
     }
   }
 
@@ -98,14 +110,27 @@ mod iroh_two_endpoint_tests {
     vault: &VaultDescriptor,
     config: &SyncConfig,
     runtime: &IrohRuntime,
-  ) -> SessionResult {
+  ) -> Result<SessionResult, String> {
     tokio::time::timeout(
       Duration::from_secs(20),
       client_sync_peer(vault, config, &config.peers[0], runtime),
     )
     .await
-    .expect("Iroh synchronization timed out")
-    .expect("Iroh synchronization failed")
+    .map_err(|_| "Iroh synchronization timed out".to_string())?
+  }
+
+  fn expect_session(
+    result: Result<SessionResult, String>,
+    server_errors: &Arc<Mutex<Vec<String>>>,
+  ) -> SessionResult {
+    match result {
+      Ok(result) => result,
+      Err(error) => {
+        std::thread::sleep(Duration::from_millis(100));
+        let errors = server_errors.lock().unwrap().clone();
+        panic!("Iroh synchronization failed: {error}; server errors: {errors:?}");
+      }
+    }
   }
 
   #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -132,23 +157,24 @@ mod iroh_two_endpoint_tests {
     let vault_b = descriptor(&root_b, "Device B");
     let endpoint_a = Endpoint::builder(presets::Minimal).bind().await.unwrap();
     let endpoint_b = Endpoint::builder(presets::Minimal).bind().await.unwrap();
+    let server_errors = Arc::new(Mutex::new(Vec::new()));
+    let client_errors = Arc::new(Mutex::new(Vec::new()));
 
     let server_router = Router::builder(endpoint_b.clone())
       .accept(
         crate::sync::protocol::ALPN,
         TestVaultProtocol {
           vault: vault_b.clone(),
+          errors: server_errors.clone(),
         },
       )
       .spawn();
-    // A Router owns the endpoint's accept loop. Register the same production
-    // ALPN on the initiating endpoint too, exactly as the application does,
-    // so its router remains alive while it opens outgoing sessions.
     let client_router = Router::builder(endpoint_a.clone())
       .accept(
         crate::sync::protocol::ALPN,
         TestVaultProtocol {
           vault: vault_a.clone(),
+          errors: client_errors,
         },
       )
       .spawn();
@@ -157,7 +183,10 @@ mod iroh_two_endpoint_tests {
     let config_a = configure_peer(&vault_a, &endpoint_a, &endpoint_b, "Device B");
     let _config_b = configure_peer(&vault_b, &endpoint_b, &endpoint_a, "Device A");
 
-    let first = run_client_session(&vault_a, &config_a, &runtime_a).await;
+    let first = expect_session(
+      run_client_session(&vault_a, &config_a, &runtime_a).await,
+      &server_errors,
+    );
     assert_eq!(first.transferred_files, 2);
     assert_eq!(std::fs::read_to_string(root_a.join("B.md")).unwrap(), "from device B");
     assert_eq!(std::fs::read_to_string(root_b.join("A.md")).unwrap(), "from device A");
@@ -171,7 +200,10 @@ mod iroh_two_endpoint_tests {
     );
 
     std::fs::write(root_a.join("A.md"), "updated on device A").unwrap();
-    let second = run_client_session(&vault_a, &config_a, &runtime_a).await;
+    let second = expect_session(
+      run_client_session(&vault_a, &config_a, &runtime_a).await,
+      &server_errors,
+    );
     assert_eq!(second.transferred_files, 1);
     assert_eq!(
       std::fs::read_to_string(root_b.join("A.md")).unwrap(),
@@ -179,7 +211,10 @@ mod iroh_two_endpoint_tests {
     );
 
     std::fs::remove_file(root_a.join("B.md")).unwrap();
-    let third = run_client_session(&vault_a, &config_a, &runtime_a).await;
+    let third = expect_session(
+      run_client_session(&vault_a, &config_a, &runtime_a).await,
+      &server_errors,
+    );
     assert_eq!(third.transferred_files, 0);
     assert!(!root_b.join("B.md").exists());
 

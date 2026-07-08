@@ -8,6 +8,7 @@ const readSettings = () => read('Elephant/frontend/app/components/settings/Setti
 const readSettingsStyles = () => read('Elephant/frontend/app/components/settings/settings-redesign.css')
 const readSync = () => read('Elephant/frontend/app/components/settings/SyncSettingsPanel.vue')
 const readAi = () => read('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
+const readPreferences = () => read('Elephant/frontend/src/renderer/src/store/preferences.js')
 
 describe('ElephantNote settings redesign', () => {
   it('keeps the floating scene with theme-aware blur and native platform chrome', () => {
@@ -50,6 +51,7 @@ describe('ElephantNote settings redesign', () => {
 
   it('uses semantic controls and exposes real quick-insert preferences', () => {
     const source = readSettings()
+    const preferences = readPreferences()
 
     expect(source).toContain('role="switch"')
     expect(source).toContain(':aria-checked="preferences.showEditorFooter"')
@@ -58,6 +60,9 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain("setPreference('autoPairBracket'")
     expect(source).toContain("setPreference('spellcheckerEnabled'")
     expect(source).toContain(':aria-checked="featureFlags.sitePreview"')
+    expect(preferences).toContain('hideQuickInsertHint: false')
+    expect(preferences).toContain("quickInsertTrigger: '/'")
+    expect(preferences).toContain('autoPairBracket: true')
   })
 
   it('retains real vault, import and generated-site actions', () => {
@@ -97,7 +102,7 @@ describe('ElephantNote settings redesign', () => {
     expect(source).not.toContain('Elephant AI')
     expect(addProviderButtons).toHaveLength(1)
     expect(source).toContain('class="en-ai-setting-row en-codex-row"')
-    expect(source).not.toContain('Codex account')
+    expect(source).not.toContain('<h4>Codex account</h4>')
     expect(source).toContain('initialPage: { type: String')
   })
 

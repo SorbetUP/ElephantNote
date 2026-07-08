@@ -1,0 +1,36 @@
+name: Sync Invite Lockfile
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/sync-invite-lockfile.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pnpm
+        run: npm install -g pnpm@10.33.4
+      - name: Regenerate lockfile only
+        run: pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
+      - name: Upload regenerated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-invite-pnpm-lock
+          path: pnpm-lock.yaml
+          retention-days: 1

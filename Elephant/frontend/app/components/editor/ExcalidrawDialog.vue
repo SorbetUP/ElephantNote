@@ -80,12 +80,13 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AlertTriangle, Check, LoaderCircle, X } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { getThemeMode, getThemeTokens } from 'common/elephantnote/appearance'
+import { getExcalidrawBackgroundColor } from 'elephant-shared/excalidrawAssets'
 import {
   loadExcalidrawModule,
   createInitialExcalidrawData,
@@ -108,10 +109,14 @@ const { t } = useI18n()
 const mountEl = ref(null)
 const apiRef = ref(null)
 const root = ref(null)
+const excalidrawModule = ref(null)
 const isSaving = ref(false)
 const initialData = ref(null)
 const errorMessage = ref('')
 const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
+
+// ElephantNote themes have full palettes; Excalidraw only accepts the two
+// canonical modes. Every app theme is therefore reduced to light or dark here.
 const excalidrawTheme = computed(() => getThemeMode(props.theme))
 const themeTokens = computed(() => getThemeTokens(props.theme))
 
@@ -127,17 +132,10 @@ const resolvedFileName = computed(() => ensurePngName(normalizedBaseName.value))
 
 const handleClose = () => emit('close')
 
-const renderCanvas = async () => {
-  const mod = await loadExcalidrawModule()
-  initialData.value = await createInitialExcalidrawData({
-    blob: props.initialBlob,
-    theme: excalidrawTheme.value
-  })
-
-  if (!mountEl.value) throw new Error('Excalidraw mount element is missing.')
-  root.value = createRoot(mountEl.value)
+const renderExcalidraw = () => {
+  if (!root.value || !excalidrawModule.value) return
   root.value.render(
-    React.createElement(mod.Excalidraw, {
+    React.createElement(excalidrawModule.value.Excalidraw, {
       initialData: initialData.value,
       theme: excalidrawTheme.value,
       name: normalizedBaseName.value,
@@ -156,6 +154,35 @@ const renderCanvas = async () => {
     })
   )
 }
+
+const applyExcalidrawTheme = (theme) => {
+  renderExcalidraw()
+  const api = apiRef.value
+  if (!api?.updateScene) return
+  api.updateScene({
+    appState: {
+      ...api.getAppState?.(),
+      theme,
+      viewBackgroundColor: getExcalidrawBackgroundColor(theme)
+    }
+  })
+}
+
+const renderCanvas = async () => {
+  excalidrawModule.value = await loadExcalidrawModule()
+  initialData.value = await createInitialExcalidrawData({
+    blob: props.initialBlob,
+    theme: excalidrawTheme.value
+  })
+
+  if (!mountEl.value) throw new Error('Excalidraw mount element is missing.')
+  root.value = createRoot(mountEl.value)
+  renderExcalidraw()
+}
+
+watch(excalidrawTheme, (theme) => {
+  applyExcalidrawTheme(theme)
+}, { flush: 'post' })
 
 const handleSave = async () => {
   if (!apiRef.value || isSaving.value) return

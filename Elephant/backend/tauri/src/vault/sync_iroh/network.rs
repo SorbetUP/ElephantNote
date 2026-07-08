@@ -227,8 +227,8 @@ async fn client_sync_peer(
     _ => unreachable!(),
   }
 
-  for _ in 0..plan.downloads.len() {
-    let (_, bytes) = receive_file(&connection, &cwd).await?;
+  for download in &plan.downloads {
+    let (_, bytes) = receive_file(&connection, &cwd, download).await?;
     result.transferred_bytes += bytes;
     result.transferred_files += 1;
   }
@@ -287,8 +287,8 @@ async fn server_sync_session(
     &mut send,
     &ControlMessage::SyncHello(SyncHello {
       device_name: vault.name.clone(),
-      manifest: local_manifest,
-      baseline: local_baseline,
+      manifest: local_manifest.clone(),
+      baseline: local_baseline.clone(),
     }),
   )
   .await?;
@@ -296,6 +296,24 @@ async fn server_sync_session(
     ControlMessage::SyncPlan(plan) => plan,
     _ => unreachable!(),
   };
+  let baseline = common_baseline(&open.baseline, &local_baseline);
+  let expected_plan = build_plan(
+    &open.manifest,
+    &local_manifest,
+    &baseline,
+    &peer_id,
+    &config.device_id,
+  );
+  if plan != expected_plan {
+    write_control(
+      &mut send,
+      &ControlMessage::Error {
+        message: "peer sync plan does not match the independently computed plan".to_string(),
+      },
+    )
+    .await?;
+    return Err("peer sync plan does not match the independently computed plan".to_string());
+  }
 
   preserve_paths(&cwd, &plan.preserve_remote)?;
   create_directories(&cwd, &plan.create_dirs_remote)?;
@@ -310,8 +328,8 @@ async fn server_sync_session(
   .await?;
 
   let mut transferred_bytes = 0_u64;
-  for _ in 0..plan.uploads.len() {
-    let (_, bytes) = receive_file(&connection, &cwd).await?;
+  for upload in &plan.uploads {
+    let (_, bytes) = receive_file(&connection, &cwd, upload).await?;
     transferred_bytes += bytes;
   }
   write_control(
@@ -447,7 +465,7 @@ async fn handle_pair_request(
 
 pub async fn handle_incoming_connection(app: AppHandle, connection: Connection) -> R<()> {
   let state = app.state::<IrohSyncState>();
-  let _operation = state.lock_operation().await;
+  let _operation = state.try_lock_operation()?;
   let (send, mut recv) = connection
     .accept_bi()
     .await
@@ -472,4 +490,3 @@ pub async fn handle_incoming_connection(app: AppHandle, connection: Connection) 
     _ => Err("first ElephantNote Iroh message must be pairRequest or syncOpen".to_string()),
   }
 }
-

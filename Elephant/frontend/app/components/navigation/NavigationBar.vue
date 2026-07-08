@@ -30,7 +30,9 @@
       type="button"
       class="en-nav-btn en-nav-sync"
       :class="syncClass"
-      :disabled="nav.syncStatus === 'syncing' || !isOnline"
+      :disabled="syncDisabled"
+      :aria-disabled="syncDisabled"
+      :aria-label="syncTitle"
       :title="syncTitle"
       @mousedown.stop.prevent
       @pointerdown.stop
@@ -42,37 +44,45 @@
         :class="{ spinning: nav.syncStatus === 'syncing' }"
       />
       <span
-        v-if="nav.syncStatus === 'error'"
+        v-if="nav.syncStatus === 'error' || nav.syncStatus === 'synced'"
         class="en-sync-dot"
+        :class="nav.syncStatus === 'error' ? 'error' : 'success'"
+        aria-hidden="true"
       />
     </button>
   </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { ChevronLeft, ChevronRight, RefreshCw } from '@lucide/vue'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { useVaultStore } from '../../stores/vaultStore'
 
 const nav = useNavigationStore()
 const vaultStore = useVaultStore()
-const isOnline = ref(typeof navigator === 'undefined' ? true : navigator.onLine)
+const activeVaultPath = computed(() => vaultStore.activeVault?.path || '')
+const syncDisabled = computed(() => (
+  nav.syncStatus === 'syncing'
+  || !activeVaultPath.value
+  || !nav.hasPairedSyncDevice
+))
 
 const syncClass = computed(() => ({
-  'is-offline': !isOnline.value,
-  'is-dirty': isOnline.value && !['synced', 'syncing'].includes(nav.syncStatus),
+  'is-unpaired': nav.syncChecked && !nav.hasPairedSyncDevice,
   'is-syncing': nav.syncStatus === 'syncing',
-  'is-error': isOnline.value && nav.syncStatus === 'error',
-  'is-synced': isOnline.value && nav.syncStatus === 'synced'
+  'is-error': nav.syncStatus === 'error',
+  'is-synced': nav.syncStatus === 'synced'
 }))
 
 const syncTitle = computed(() => {
-  if (!isOnline.value) return 'Hors ligne'
-  if (nav.syncStatus === 'syncing') return 'Syncing\u2026'
+  if (!activeVaultPath.value) return 'Ouvrez une vault pour synchroniser'
+  if (!nav.syncChecked) return 'Vérification de la synchronisation Iroh…'
+  if (!nav.hasPairedSyncDevice) return 'Aucun appareil Iroh appairé'
+  if (nav.syncStatus === 'syncing') return 'Synchronisation Iroh en cours…'
   if (nav.syncStatus === 'error') return `Erreur de synchronisation : ${nav.syncError}`
-  if (nav.syncStatus === 'synced') return 'Synchronisé'
-  return 'Non synchronisé'
+  if (nav.syncStatus === 'synced') return 'Synchronisé — cliquer pour relancer'
+  return 'Synchroniser la vault active'
 })
 
 const goBack = () => {
@@ -87,23 +97,41 @@ const goForward = () => {
   if (entry) vaultStore.navigateTo(entry)
 }
 
-const syncWorkspace = () => {
-  if (!isOnline.value) return
-  nav.syncWorkspace(vaultStore.activeVault?.path)
+const syncWorkspace = async () => {
+  if (syncDisabled.value) return
+  try {
+    await nav.syncWorkspace(activeVaultPath.value)
+  } catch {
+    // The navigation store keeps the durable error state and tooltip.
+  }
 }
 
-const updateOnlineStatus = () => {
-  isOnline.value = navigator.onLine
+const refreshSyncStatus = async () => {
+  if (!activeVaultPath.value || nav.syncStatus === 'syncing') return
+  try {
+    await nav.refreshSyncStatus()
+  } catch {
+    // The icon displays the real backend error returned by the store.
+  }
 }
+
+const handleWindowFocus = () => {
+  refreshSyncStatus()
+}
+
+watch(activeVaultPath, (nextPath, previousPath) => {
+  if (nextPath === previousPath) return
+  nav.clearSyncStatus()
+  if (nextPath) refreshSyncStatus()
+})
 
 onMounted(() => {
-  window.addEventListener('online', updateOnlineStatus)
-  window.addEventListener('offline', updateOnlineStatus)
+  refreshSyncStatus()
+  window.addEventListener('focus', handleWindowFocus)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('online', updateOnlineStatus)
-  window.removeEventListener('offline', updateOnlineStatus)
+  window.removeEventListener('focus', handleWindowFocus)
 })
 </script>
 
@@ -129,7 +157,7 @@ onBeforeUnmount(() => {
   color: var(--en-muted);
   background: transparent;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease;
   -webkit-app-region: no-drag !important;
   pointer-events: auto;
 }
@@ -139,8 +167,10 @@ onBeforeUnmount(() => {
   color: var(--en-text);
 }
 
-.en-nav-btn.disabled {
+.en-nav-btn.disabled,
+.en-nav-btn:disabled {
   opacity: 0.3;
+  cursor: default;
 }
 
 .en-nav-icon {
@@ -149,6 +179,7 @@ onBeforeUnmount(() => {
 }
 
 .en-nav-sync {
+  position: relative;
   margin-left: 0;
 }
 
@@ -161,7 +192,6 @@ onBeforeUnmount(() => {
   animation: en-spin 0.8s linear infinite;
 }
 
-.en-nav-sync.is-dirty,
 .en-nav-sync.is-error {
   color: var(--en-danger, #dc2626);
 }
@@ -170,23 +200,26 @@ onBeforeUnmount(() => {
   color: #16a34a;
 }
 
-.en-nav-sync.is-offline {
+.en-nav-sync.is-unpaired {
   color: var(--en-muted);
-  opacity: 0.45;
 }
 
 .en-sync-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--en-danger, #dc2626);
   position: absolute;
   bottom: 2px;
   right: 2px;
+  box-shadow: 0 0 0 1px var(--en-bg);
 }
 
-.en-nav-sync {
-  position: relative;
+.en-sync-dot.error {
+  background: var(--en-danger, #dc2626);
+}
+
+.en-sync-dot.success {
+  background: #16a34a;
 }
 
 @keyframes en-spin {

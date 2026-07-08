@@ -66,6 +66,8 @@ fn status_initializes_real_iroh_sync_metadata_without_git() {
   assert_eq!(status["backend"], "iroh");
   assert_eq!(status["capabilities"]["peerToPeer"], true);
   assert_eq!(status["capabilities"]["wholeVault"], true);
+  assert_eq!(status["capabilities"]["configurationSync"], false);
+  assert_eq!(status["capabilities"]["deviceLocalConfiguration"], true);
   assert!(root
     .join(".elephantnote/sync")
     .join(SYNC_CONFIG_FILE)
@@ -75,30 +77,62 @@ fn status_initializes_real_iroh_sync_metadata_without_git() {
 }
 
 #[test]
-fn whole_vault_manifest_includes_assets_and_portable_config() {
+fn whole_vault_manifest_includes_content_but_excludes_device_configuration() {
   let root = unique_temp_dir("whole-vault");
   fs::create_dir_all(root.join(".assets")).unwrap();
   fs::create_dir_all(root.join(".config/provider")).unwrap();
   fs::create_dir_all(root.join(".elephantnote/config")).unwrap();
+  fs::create_dir_all(root.join(".elephantnote/models")).unwrap();
+  fs::create_dir_all(root.join(".elephantnote/state")).unwrap();
   fs::create_dir_all(root.join(".elephantnote/sync")).unwrap();
   fs::write(root.join("Note.md"), "note").unwrap();
   fs::write(root.join(".assets/image.png"), b"image").unwrap();
   fs::write(root.join(".config/provider/provider.json"), "{}").unwrap();
   fs::write(root.join(".elephantnote/config/workspace.json"), "{}").unwrap();
+  fs::write(root.join(".elephantnote/models/models.json"), "{}").unwrap();
+  fs::write(root.join(".elephantnote/state/ui.json"), "{}").unwrap();
   fs::write(root.join(".elephantnote/sync/private.json"), "{}").unwrap();
 
   let manifest = scan_vault(&root).unwrap();
   assert!(manifest.files.contains_key("Note.md"));
   assert!(manifest.files.contains_key(".assets/image.png"));
-  assert!(manifest
+  assert!(!manifest
     .files
     .contains_key(".config/provider/provider.json"));
-  assert!(manifest
+  assert!(!manifest
     .files
     .contains_key(".elephantnote/config/workspace.json"));
   assert!(!manifest
     .files
+    .contains_key(".elephantnote/models/models.json"));
+  assert!(!manifest
+    .files
+    .contains_key(".elephantnote/state/ui.json"));
+  assert!(!manifest
+    .files
     .contains_key(".elephantnote/sync/private.json"));
+  fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn excluded_configuration_cannot_be_uploaded_deleted_or_conflicted() {
+  let root = unique_temp_dir("config-plan");
+  fs::create_dir_all(root.join(".config/provider")).unwrap();
+  fs::create_dir_all(root.join(".elephantnote/config")).unwrap();
+  fs::write(root.join(".config/provider/provider.json"), "desktop-provider").unwrap();
+  fs::write(root.join(".elephantnote/config/workspace.json"), "desktop-layout").unwrap();
+
+  let local = scan_vault(&root).unwrap();
+  let remote = VaultManifest::default();
+  let old_baseline = manifest(".config/provider/provider.json", "old-config-hash");
+  let plan = build_plan(&local, &remote, &old_baseline, "desktop", "phone");
+
+  assert!(local.files.is_empty());
+  assert!(plan.uploads.is_empty());
+  assert!(plan.downloads.is_empty());
+  assert!(plan.delete_files_local.is_empty());
+  assert!(plan.delete_files_remote.is_empty());
+  assert!(plan.conflicts.is_empty());
   fs::remove_dir_all(root).ok();
 }
 

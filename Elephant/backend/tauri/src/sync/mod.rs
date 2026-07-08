@@ -6,6 +6,7 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tokio::sync::{Mutex, MutexGuard};
@@ -18,9 +19,20 @@ pub mod transfer;
 const IDENTITY_FILE: &str = "iroh-endpoint.key";
 const MDNS_SERVICE: &str = "elephantnote-v1";
 
+pub struct SyncActivityGuard<'a> {
+  running: &'a AtomicBool,
+}
+
+impl Drop for SyncActivityGuard<'_> {
+  fn drop(&mut self) {
+    self.running.store(false, Ordering::Release);
+  }
+}
+
 pub struct IrohSyncState {
   runtime: Mutex<Option<Arc<IrohRuntime>>>,
   operation: Mutex<()>,
+  running: AtomicBool,
 }
 
 impl IrohSyncState {
@@ -28,6 +40,7 @@ impl IrohSyncState {
     Self {
       runtime: Mutex::new(None),
       operation: Mutex::new(()),
+      running: AtomicBool::new(false),
     }
   }
 
@@ -39,6 +52,20 @@ impl IrohSyncState {
     self.operation
       .try_lock()
       .map_err(|_| "Another ElephantNote synchronization is already running on this device.".to_string())
+  }
+
+  pub fn begin_activity(&self) -> Result<SyncActivityGuard<'_>, String> {
+    self
+      .running
+      .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+      .map_err(|_| "Another ElephantNote synchronization is already running on this device.".to_string())?;
+    Ok(SyncActivityGuard {
+      running: &self.running,
+    })
+  }
+
+  pub fn is_running(&self) -> bool {
+    self.running.load(Ordering::Acquire)
   }
 
   pub async fn runtime(&self, app: &AppHandle) -> Result<Arc<IrohRuntime>, String> {
@@ -185,5 +212,17 @@ mod tests {
     let second = load_or_create_secret_key(&path).unwrap();
     assert_eq!(first.public(), second.public());
     let _ = fs::remove_dir_all(root);
+  }
+
+  #[test]
+  fn activity_guard_resets_running_state_on_drop() {
+    let state = IrohSyncState::new();
+    assert!(!state.is_running());
+    {
+      let _activity = state.begin_activity().unwrap();
+      assert!(state.is_running());
+      assert!(state.begin_activity().is_err());
+    }
+    assert!(!state.is_running());
   }
 }

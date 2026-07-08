@@ -53,16 +53,52 @@ pub struct SyncPlan {
 }
 
 fn sanitized_peer(peer: &str) -> String {
-  peer.chars().filter(|ch| ch.is_ascii_alphanumeric()).take(12).collect()
+  let value = peer
+    .chars()
+    .filter(|ch| ch.is_ascii_alphanumeric())
+    .take(12)
+    .collect::<String>();
+  if value.is_empty() {
+    "device".to_string()
+  } else {
+    value
+  }
 }
 
-fn conflict_path(path: &str, loser_peer: &str, hash: &str) -> String {
+fn conflict_path(path: &str, loser_peer: &str, record: &FileRecord) -> String {
   let input = Path::new(path);
   let parent = input.parent().and_then(|value| value.to_str()).unwrap_or("");
   let stem = input.file_stem().and_then(|value| value.to_str()).unwrap_or("file");
-  let extension = input.extension().and_then(|value| value.to_str()).map(|value| format!(".{value}")).unwrap_or_default();
-  let filename = format!("{stem}.{}-conflict-{}{}", sanitized_peer(loser_peer), &hash[..hash.len().min(10)], extension);
-  if parent.is_empty() { filename } else { format!("{}/{}", parent.replace('\\', "/"), filename) }
+  let extension = input
+    .extension()
+    .and_then(|value| value.to_str())
+    .map(|value| format!(".{value}"))
+    .unwrap_or_default();
+  let filename = format!(
+    "{stem}.{}-conflict-{}-{}{}",
+    sanitized_peer(loser_peer),
+    &record.hash[..record.hash.len().min(10)],
+    record.modified_ms,
+    extension
+  );
+  if parent.is_empty() {
+    format!(".conflit/{filename}")
+  } else {
+    format!(".conflit/{}/{}", parent.replace('\\', "/"), filename)
+  }
+}
+
+fn local_wins_conflict(
+  local: &FileRecord,
+  remote: &FileRecord,
+  local_id: &str,
+  remote_id: &str,
+) -> bool {
+  match local.modified_ms.cmp(&remote.modified_ms) {
+    std::cmp::Ordering::Greater => true,
+    std::cmp::Ordering::Less => false,
+    std::cmp::Ordering::Equal => local_id <= remote_id,
+  }
 }
 
 fn plan_conflict(
@@ -74,16 +110,38 @@ fn plan_conflict(
   remote_id: &str,
 ) {
   plan.conflicts.push(path.to_string());
-  if local_id <= remote_id {
-    let remote_conflict = conflict_path(path, remote_id, &remote.hash);
-    plan.preserve_remote.push(PreserveSpec { source_path: path.to_string(), target_path: remote_conflict.clone() });
-    plan.downloads.push(TransferSpec::from_record(remote_conflict.clone(), remote_conflict, remote));
-    plan.uploads.push(TransferSpec::from_record(path.to_string(), path.to_string(), local));
+  if local_wins_conflict(local, remote, local_id, remote_id) {
+    let remote_conflict = conflict_path(path, remote_id, remote);
+    plan.preserve_remote.push(PreserveSpec {
+      source_path: path.to_string(),
+      target_path: remote_conflict.clone(),
+    });
+    plan.downloads.push(TransferSpec::from_record(
+      remote_conflict.clone(),
+      remote_conflict,
+      remote,
+    ));
+    plan.uploads.push(TransferSpec::from_record(
+      path.to_string(),
+      path.to_string(),
+      local,
+    ));
   } else {
-    let local_conflict = conflict_path(path, local_id, &local.hash);
-    plan.preserve_local.push(PreserveSpec { source_path: path.to_string(), target_path: local_conflict.clone() });
-    plan.uploads.push(TransferSpec::from_record(local_conflict.clone(), local_conflict, local));
-    plan.downloads.push(TransferSpec::from_record(path.to_string(), path.to_string(), remote));
+    let local_conflict = conflict_path(path, local_id, local);
+    plan.preserve_local.push(PreserveSpec {
+      source_path: path.to_string(),
+      target_path: local_conflict.clone(),
+    });
+    plan.uploads.push(TransferSpec::from_record(
+      local_conflict.clone(),
+      local_conflict,
+      local,
+    ));
+    plan.downloads.push(TransferSpec::from_record(
+      path.to_string(),
+      path.to_string(),
+      remote,
+    ));
   }
 }
 
@@ -174,19 +232,34 @@ mod tests {
   use super::*;
   use std::collections::BTreeMap;
 
-  fn manifest(path: &str, hash: &str) -> VaultManifest {
+  fn manifest_at(path: &str, hash: &str, modified_ms: u64) -> VaultManifest {
     VaultManifest {
       files: BTreeMap::from([(
         path.to_string(),
-        FileRecord { path: path.to_string(), size: 1, modified_ms: 0, hash: hash.to_string() },
+        FileRecord {
+          path: path.to_string(),
+          size: 1,
+          modified_ms,
+          hash: hash.to_string(),
+        },
       )]),
       directories: BTreeSet::new(),
     }
   }
 
+  fn manifest(path: &str, hash: &str) -> VaultManifest {
+    manifest_at(path, hash, 0)
+  }
+
   #[test]
   fn uploads_a_local_only_file() {
-    let plan = build_plan(&manifest("A.md", "aaaa"), &VaultManifest::default(), &VaultManifest::default(), "a", "b");
+    let plan = build_plan(
+      &manifest("A.md", "aaaa"),
+      &VaultManifest::default(),
+      &VaultManifest::default(),
+      "a",
+      "b",
+    );
     assert_eq!(plan.uploads.len(), 1);
     assert!(plan.downloads.is_empty());
   }
@@ -199,12 +272,40 @@ mod tests {
   }
 
   #[test]
-  fn preserves_both_versions_on_concurrent_edit() {
-    let base = manifest("A.md", "base");
-    let plan = build_plan(&manifest("A.md", "local"), &manifest("A.md", "remote"), &base, "a", "b");
-    assert_eq!(plan.conflicts, vec!["A.md"]);
-    assert_eq!(plan.uploads.len(), 1);
-    assert_eq!(plan.downloads.len(), 1);
+  fn newer_local_version_keeps_original_path_and_older_remote_is_archived() {
+    let base = manifest_at("Notes/A.md", "base", 10);
+    let local = manifest_at("Notes/A.md", "local", 300);
+    let remote = manifest_at("Notes/A.md", "remote", 200);
+    let plan = build_plan(&local, &remote, &base, "local", "remote");
+
+    assert_eq!(plan.conflicts, vec!["Notes/A.md"]);
     assert_eq!(plan.preserve_remote.len(), 1);
+    assert!(plan.preserve_local.is_empty());
+    assert_eq!(plan.uploads[0].target_path, "Notes/A.md");
+    assert!(plan.downloads[0].target_path.starts_with(".conflit/Notes/"));
+  }
+
+  #[test]
+  fn newer_remote_version_keeps_original_path_and_older_local_is_archived() {
+    let base = manifest_at("A.md", "base", 10);
+    let local = manifest_at("A.md", "local", 200);
+    let remote = manifest_at("A.md", "remote", 300);
+    let plan = build_plan(&local, &remote, &base, "local", "remote");
+
+    assert_eq!(plan.conflicts, vec!["A.md"]);
+    assert_eq!(plan.preserve_local.len(), 1);
+    assert!(plan.preserve_remote.is_empty());
+    assert!(plan.uploads[0].target_path.starts_with(".conflit/"));
+    assert_eq!(plan.downloads[0].target_path, "A.md");
+  }
+
+  #[test]
+  fn equal_dates_use_endpoint_id_as_deterministic_tiebreaker() {
+    let base = manifest_at("A.md", "base", 10);
+    let local = manifest_at("A.md", "local", 200);
+    let remote = manifest_at("A.md", "remote", 200);
+    let plan = build_plan(&local, &remote, &base, "aaa", "bbb");
+    assert_eq!(plan.preserve_remote.len(), 1);
+    assert_eq!(plan.uploads[0].target_path, "A.md");
   }
 }

@@ -6,6 +6,13 @@ use crate::vault::{config, sync};
 
 type R<T> = Result<T, String>;
 
+fn with_running(mut value: Value, running: bool) -> Value {
+  if let Some(object) = value.as_object_mut() {
+    object.insert("running".to_string(), Value::Bool(running));
+  }
+  value
+}
+
 #[tauri::command(rename = "tauri_sync_create_invite")]
 pub async fn iroh_sync_create_invite(
   app: AppHandle,
@@ -38,12 +45,17 @@ pub async fn iroh_sync_status(
   state: State<'_, IrohSyncState>,
 ) -> R<Value> {
   let runtime = state.runtime(&app).await?;
+  let running = state.is_running();
   let vault_config = config::read_config(&app)?;
-  if let Some(vault) = crate::vault::types::active_vault(&vault_config) {
-    sync::cleanup_conflicts_for_vault(&vault)?;
-    return sync::sync_status_iroh(Some(vault), &runtime.endpoint_id().to_string());
-  }
-  sync::sync_status_iroh(None, &runtime.endpoint_id().to_string())
+  let value = if let Some(vault) = crate::vault::types::active_vault(&vault_config) {
+    if !running {
+      sync::cleanup_conflicts_for_vault(&vault)?;
+    }
+    sync::sync_status_iroh(Some(vault), &runtime.endpoint_id().to_string())?
+  } else {
+    sync::sync_status_iroh(None, &runtime.endpoint_id().to_string())?
+  };
+  Ok(with_running(value, running))
 }
 
 #[tauri::command(rename = "tauri_sync_enqueue")]
@@ -75,12 +87,24 @@ pub async fn iroh_sync_run(
   let _operation = state.lock_operation().await;
   let vault = config::get_active_vault(&app)?;
   sync::cleanup_conflicts_for_vault(&vault)?;
-  sync::sync_run_iroh(vault, payload_by_operation, runtime).await
+  let result = {
+    let _activity = state.begin_activity()?;
+    sync::sync_run_iroh(vault, payload_by_operation, runtime).await
+  }?;
+  Ok(with_running(result, false))
 }
 
 #[tauri::command(rename = "tauri_sync_conflict_settings_get")]
-pub async fn iroh_sync_conflict_settings_get(app: AppHandle) -> R<Value> {
-  sync::sync_conflict_settings_get(config::get_active_vault(&app)?)
+pub async fn iroh_sync_conflict_settings_get(
+  app: AppHandle,
+  state: State<'_, IrohSyncState>,
+) -> R<Value> {
+  let vault = config::get_active_vault(&app)?;
+  if state.is_running() {
+    sync::sync_conflict_settings_peek(vault)
+  } else {
+    sync::sync_conflict_settings_get(vault)
+  }
 }
 
 #[tauri::command(rename = "tauri_sync_conflict_settings_set")]

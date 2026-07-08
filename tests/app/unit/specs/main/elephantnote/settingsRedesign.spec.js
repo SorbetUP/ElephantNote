@@ -65,6 +65,17 @@ describe('ElephantNote settings redesign', () => {
     expect(preferences).toContain('autoPairBracket: true')
   })
 
+  it('uses one switch geometry for root and nested settings panels', () => {
+    const styles = readSettingsStyles()
+
+    expect(styles).toContain('.en-settings-panel .en-switch,')
+    expect(styles).toContain('.en-settings-panel :deep(.en-ai-switch)')
+    expect(styles).toContain('display: block !important')
+    expect(styles).toContain('transform: translateX(0) !important')
+    expect(styles).toContain('transform: translateX(18px) !important')
+    expect(styles).toContain('.en-settings-panel :deep(.en-ai-switch.small.active > span)')
+  })
+
   it('retains real vault, import and generated-site actions', () => {
     const source = readSettings()
 

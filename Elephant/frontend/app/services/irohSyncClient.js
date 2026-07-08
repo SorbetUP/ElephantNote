@@ -15,5 +15,9 @@ export const irohSyncClient = {
   setConflictRetentionDays: (days) =>
     invoke('tauri_sync_conflict_settings_set', {
       conflictRetentionDays: Number(days)
-    })
+    }),
+  restoreConflict: (relativePath) =>
+    invoke('tauri_sync_conflict_restore', { relativePath: String(relativePath || '') }),
+  deleteConflict: (relativePath) =>
+    invoke('tauri_sync_conflict_delete', { relativePath: String(relativePath || '') })
 }

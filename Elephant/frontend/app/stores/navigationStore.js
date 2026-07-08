@@ -73,7 +73,11 @@ export const useNavigationStore = defineStore('elephantnoteNavigation', {
       this.syncDetails = status && typeof status === 'object' ? status : null
       this.syncChecked = true
       const backendRunning = Boolean(status?.running)
-      if ((preserveRunning && this.syncStatus === 'syncing') || backendRunning) {
+      const hasExplicitRunning = typeof status?.running === 'boolean'
+      const preserveLegacyRunning = preserveRunning
+        && !hasExplicitRunning
+        && this.syncStatus === 'syncing'
+      if (backendRunning || preserveLegacyRunning) {
         this.syncStatus = 'syncing'
         this.syncError = ''
         return this.syncDetails

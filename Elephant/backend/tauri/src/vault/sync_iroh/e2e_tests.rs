@@ -7,7 +7,6 @@ mod iroh_two_endpoint_tests {
   use std::fmt;
   use std::io;
   use std::path::{Path, PathBuf};
-  use std::sync::Arc;
   use std::time::Duration;
 
   #[derive(Clone)]
@@ -142,7 +141,17 @@ mod iroh_two_endpoint_tests {
         },
       )
       .spawn();
-    let client_router = Router::builder(endpoint_a.clone()).spawn();
+    // A Router owns the endpoint's accept loop. Register the same production
+    // ALPN on the initiating endpoint too, exactly as the application does,
+    // so its router remains alive while it opens outgoing sessions.
+    let client_router = Router::builder(endpoint_a.clone())
+      .accept(
+        crate::sync::protocol::ALPN,
+        TestVaultProtocol {
+          vault: vault_a.clone(),
+        },
+      )
+      .spawn();
     let runtime_a = IrohRuntime::from_test_parts(endpoint_a.clone(), client_router);
 
     let config_a = configure_peer(&vault_a, &endpoint_a, &endpoint_b, "Device B");

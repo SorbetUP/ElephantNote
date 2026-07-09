@@ -2,6 +2,15 @@ const normalizeSearchPath = (value = '') => String(value || '').replace(/\\/g, '
 
 const titleFromPath = (path = '') => (normalizeSearchPath(path).split('/').pop() || 'Concept').replace(/\.md$/i, '')
 
+const normalizeRustSearchResult = (result = {}) => ({
+  ...result,
+  relativePath: normalizeSearchPath(result.relativePath || result.relative_path || result.path || ''),
+  path: normalizeSearchPath(result.path || result.relativePath || result.relative_path || ''),
+  chunkId: result.chunkId || result.chunk_id || '',
+  startOffset: Number(result.startOffset ?? result.start_offset ?? 0) || 0,
+  endOffset: Number(result.endOffset ?? result.end_offset ?? 0) || 0
+})
+
 export const installTauriSearchConceptFallback = (target = globalThis) => {
   if (!target.__TAURI__ || !target.elephantnote?.search || typeof target.elephantnote.search.concepts === 'function') {
     return false
@@ -17,10 +26,10 @@ export const installTauriSearchConceptFallback = (target = globalThis) => {
     }
 
     const results = await target.elephantnote.search.query({ query, mode: 'exact', limit: Math.max(limit * evidenceLimit, limit) })
-    const items = Array.isArray(results) ? results : []
+    const items = Array.isArray(results) ? results.map(normalizeRustSearchResult) : []
     const groups = new Map()
     for (const result of items) {
-      const path = normalizeSearchPath(result.relativePath || result.path || '')
+      const path = result.relativePath
       if (!path) continue
       const parts = path.split('/').filter(Boolean)
       const id = parts.length > 1 ? parts[0] : titleFromPath(path)

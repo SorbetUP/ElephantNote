@@ -22,7 +22,7 @@ jobs:
         with:
           ref: feature/rust-knowledge-core
           fetch-depth: 0
-      - name: Remove generated Cargo artifacts
+      - name: Remove generated Cargo build artifacts
         shell: bash
         run: |
           git rm -r --ignore-unmatch Elephant/backend/knowledge-core/target

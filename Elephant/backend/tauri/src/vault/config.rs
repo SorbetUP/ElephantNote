@@ -7,9 +7,6 @@ use super::types::{active_vault, next_vault_id, VaultConfig, VaultDescriptor};
 
 pub const CONFIG_FILE: &str = "tauri-vaults.json";
 
-const MOBILE_DEFAULT_VAULT_ID: &str = "mobile-personal";
-const MOBILE_DEFAULT_VAULT_NAME: &str = "Personal";
-
 type R<T> = Result<T, String>;
 
 pub fn now_string() -> String {
@@ -33,29 +30,7 @@ pub fn config_path(app: &AppHandle) -> R<PathBuf> {
   Ok(dir.join(CONFIG_FILE))
 }
 
-fn mobile_default_vault(path: PathBuf) -> VaultDescriptor {
-  let normalized_path = path.to_string_lossy();
-  VaultDescriptor {
-    id: MOBILE_DEFAULT_VAULT_ID.to_string(),
-    name: MOBILE_DEFAULT_VAULT_NAME.to_string(),
-    path: normalize_absolute_path(normalized_path.as_ref()),
-    icon: String::new(),
-    last_opened_at: now_string(),
-  }
-}
-
-fn with_fallback_vault(mut config: VaultConfig, fallback_path: Option<PathBuf>) -> VaultConfig {
-  let Some(fallback_path) = fallback_path else {
-    return config;
-  };
-
-  if config.vaults.is_empty() {
-    let vault = mobile_default_vault(fallback_path);
-    config.active_vault_id = Some(vault.id.clone());
-    config.vaults.push(vault);
-    return config;
-  }
-
+fn normalize_config(mut config: VaultConfig) -> VaultConfig {
   if config.active_vault_id.as_deref().is_none()
     || active_vault(&config).is_none()
   {
@@ -63,20 +38,6 @@ fn with_fallback_vault(mut config: VaultConfig, fallback_path: Option<PathBuf>) 
   }
 
   config
-}
-
-#[cfg(mobile)]
-fn fallback_vault_path(app: &AppHandle) -> Option<PathBuf> {
-  app
-    .path()
-    .app_data_dir()
-    .ok()
-    .map(|dir| dir.join("vaults").join(MOBILE_DEFAULT_VAULT_NAME))
-}
-
-#[cfg(not(mobile))]
-fn fallback_vault_path(_app: &AppHandle) -> Option<PathBuf> {
-  None
 }
 
 pub fn read_config(app: &AppHandle) -> R<VaultConfig> {
@@ -88,11 +49,7 @@ pub fn read_config(app: &AppHandle) -> R<VaultConfig> {
     serde_json::from_str(&raw).unwrap_or_default()
   };
 
-  let fallback = fallback_vault_path(app);
-  if let Some(path) = fallback.as_ref() {
-    fs::create_dir_all(path).map_err(|e| e.to_string())?;
-  }
-  Ok(with_fallback_vault(config, fallback))
+  Ok(normalize_config(config))
 }
 
 pub fn write_config(app: &AppHandle, config: &VaultConfig) -> R<()> {
@@ -190,32 +147,32 @@ mod tests {
   }
 
   #[test]
-  fn desktop_config_does_not_invent_a_vault() {
-    let config = with_fallback_vault(VaultConfig::default(), None);
+  fn config_does_not_invent_a_vault() {
+    let config = normalize_config(VaultConfig::default());
     assert!(config.vaults.is_empty());
     assert!(config.active_vault_id.is_none());
   }
 
   #[test]
-  fn mobile_fallback_adds_an_internal_personal_vault() {
-    let config = with_fallback_vault(VaultConfig::default(), Some(PathBuf::from("/data/app/vaults/Personal")));
-    assert_eq!(config.vaults.len(), 1);
-    assert_eq!(config.vaults[0].id, MOBILE_DEFAULT_VAULT_ID);
-    assert_eq!(config.vaults[0].name, MOBILE_DEFAULT_VAULT_NAME);
-    assert_eq!(config.active_vault_id, Some(MOBILE_DEFAULT_VAULT_ID.to_string()));
-  }
-
-  #[test]
-  fn mobile_default_vault_normalizes_pathbuf_lossy_text_explicitly() {
-    let vault = mobile_default_vault(PathBuf::from("C:\\Users\\noam\\Vault"));
-    assert_eq!(vault.path, "C:/Users/noam/Vault");
-  }
-
-  #[test]
-  fn fallback_keeps_existing_desktop_vaults() {
+  fn config_selects_first_existing_vault_when_active_id_is_missing() {
     let mut config = VaultConfig::default();
     let existing = upsert_vault(&mut config, "/Users/noam/Documents/Vault".to_string());
-    let next = with_fallback_vault(config, Some(PathBuf::from("/data/app/vaults/Personal")));
+    config.active_vault_id = None;
+
+    let next = normalize_config(config);
+
+    assert_eq!(next.vaults.len(), 1);
+    assert_eq!(next.active_vault_id, Some(existing.id));
+  }
+
+  #[test]
+  fn config_replaces_invalid_active_id_with_first_existing_vault() {
+    let mut config = VaultConfig::default();
+    let existing = upsert_vault(&mut config, "/Users/noam/Documents/Vault".to_string());
+    config.active_vault_id = Some("missing".to_string());
+
+    let next = normalize_config(config);
+
     assert_eq!(next.vaults.len(), 1);
     assert_eq!(next.active_vault_id, Some(existing.id));
   }

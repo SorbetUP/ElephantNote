@@ -131,6 +131,23 @@ const createFileUtilsFallback = () => ({
 })
 
 const installBootstrapGlobals = (target = globalThis) => {
+  if (!target.process) {
+    target.process = {
+      env: {},
+      platform: 'browser',
+      versions: {},
+      cwd: () => '/'
+    }
+  }
+  if (!target.Buffer) {
+    target.Buffer = {
+      from: (value) => {
+        if (value instanceof ArrayBuffer) return new Uint8Array(value)
+        return new TextEncoder().encode(String(value || ''))
+      },
+      byteLength: (value) => new TextEncoder().encode(String(value || '')).byteLength
+    }
+  }
   if (!target.path) target.path = createPathFacade()
   if (target.fileUtils?.__elephantnoteBootstrapFallback && target.__TAURI__) delete target.fileUtils
   if (!target.fileUtils && !target.__TAURI__) target.fileUtils = createFileUtilsFallback()

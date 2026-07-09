@@ -11,41 +11,21 @@ const PROGRESS_INTERVAL: usize = 100;
 
 pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
     let started_at = Instant::now();
-    eprintln!(
-        "[Knowledge][Rebuild] start requested_vault={}",
-        vault_root.display()
-    );
-
+    eprintln!("[Knowledge][Rebuild] start requested_vault={}", vault_root.display());
     let canonical_root = fs::canonicalize(vault_root).map_err(|error| {
-        eprintln!(
-            "[Knowledge][Rebuild] error stage=canonicalize vault={} error={}",
-            vault_root.display(),
-            error
-        );
+        eprintln!("[Knowledge][Rebuild] error stage=canonicalize vault={} error={}", vault_root.display(), error);
         error.to_string()
     })?;
     let mut files = Vec::new();
     scan_markdown_files(&canonical_root, &canonical_root, &mut files).map_err(|error| {
-        eprintln!(
-            "[Knowledge][Rebuild] error stage=scan vault={} error={}",
-            canonical_root.display(),
-            error
-        );
+        eprintln!("[Knowledge][Rebuild] error stage=scan vault={} error={}", canonical_root.display(), error);
         error
     })?;
     files.sort();
-    eprintln!(
-        "[Knowledge][Rebuild] scan:complete vault={} markdown_files={}",
-        canonical_root.display(),
-        files.len()
-    );
+    eprintln!("[Knowledge][Rebuild] scan:complete vault={} markdown_files={}", canonical_root.display(), files.len());
 
     let mut store = KnowledgeStore::open(&canonical_root).map_err(|error| {
-        eprintln!(
-            "[Knowledge][Rebuild] error stage=open_store vault={} error={}",
-            canonical_root.display(),
-            error
-        );
+        eprintln!("[Knowledge][Rebuild] error stage=open_store vault={} error={}", canonical_root.display(), error);
         error
     })?;
     store.initialize_relations()?;
@@ -65,39 +45,23 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
         present_paths.insert(relative_path.clone());
 
         match index_path(&store, &absolute_path, &relative_path) {
-            Ok(IndexDecision::Unchanged) => {
-                let relation_result = store.inspect_document(&relative_path).and_then(|document| {
-                    document
-                        .as_ref()
-                        .map(|snapshot| store.sync_markdown_relations(snapshot))
-                        .transpose()
-                });
-                match relation_result {
-                    Ok(relation_count) => {
-                        report.unchanged += 1;
-                        log_file_outcome(
-                            "unchanged",
-                            &relative_path,
-                            report.scanned,
-                            total_files,
-                            file_started_at.elapsed().as_millis(),
-                            format!("relations={}", relation_count.unwrap_or(0)),
-                        );
-                    }
-                    Err(error) => {
-                        eprintln!(
-                            "[Knowledge][Rebuild] file:error path={} stage=relations duration_ms={} error={}",
-                            relative_path,
-                            file_started_at.elapsed().as_millis(),
-                            error
-                        );
-                        report.failed.push(RebuildFailure {
-                            relative_path,
-                            error,
-                        });
-                    }
+            Ok(IndexDecision::Unchanged(snapshot)) => match store.sync_markdown_relations(&snapshot) {
+                Ok(relation_count) => {
+                    report.unchanged += 1;
+                    log_file_outcome(
+                        "unchanged",
+                        &relative_path,
+                        report.scanned,
+                        total_files,
+                        file_started_at.elapsed().as_millis(),
+                        format!("relations={relation_count}"),
+                    );
                 }
-            }
+                Err(error) => {
+                    eprintln!("[Knowledge][Rebuild] file:error path={} stage=relations duration_ms={} error={}", relative_path, file_started_at.elapsed().as_millis(), error);
+                    report.failed.push(RebuildFailure { relative_path, error });
+                }
+            },
             Ok(IndexDecision::Changed(snapshot)) => {
                 let changed_path = snapshot.relative_path.clone();
                 let sections = snapshot.sections.len();
@@ -109,7 +73,6 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
                     let outdated_wikis = store.mark_wikis_outdated_for_source(&changed_path)?;
                     Ok::<_, String>((relations, outdated_wikis))
                 })();
-
                 match index_result {
                     Ok((relations, outdated_wikis)) => {
                         report.indexed += 1;
@@ -119,71 +82,31 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
                             report.scanned,
                             total_files,
                             file_started_at.elapsed().as_millis(),
-                            format!(
-                                "sections={} chunks={} explicit_links={} relations={} outdated_wikis={}",
-                                sections, chunks, explicit_links, relations, outdated_wikis
-                            ),
+                            format!("sections={} chunks={} explicit_links={} relations={} outdated_wikis={}", sections, chunks, explicit_links, relations, outdated_wikis),
                         );
                     }
                     Err(error) => {
-                        eprintln!(
-                            "[Knowledge][Rebuild] file:error path={} stage=index duration_ms={} error={}",
-                            relative_path,
-                            file_started_at.elapsed().as_millis(),
-                            error
-                        );
-                        report.failed.push(RebuildFailure {
-                            relative_path,
-                            error,
-                        });
+                        eprintln!("[Knowledge][Rebuild] file:error path={} stage=index duration_ms={} error={}", relative_path, file_started_at.elapsed().as_millis(), error);
+                        report.failed.push(RebuildFailure { relative_path, error });
                     }
                 }
             }
             Err(error) => {
-                eprintln!(
-                    "[Knowledge][Rebuild] file:error path={} stage=read duration_ms={} error={}",
-                    relative_path,
-                    file_started_at.elapsed().as_millis(),
-                    error
-                );
-                report.failed.push(RebuildFailure {
-                    relative_path,
-                    error,
-                });
+                eprintln!("[Knowledge][Rebuild] file:error path={} stage=read duration_ms={} error={}", relative_path, file_started_at.elapsed().as_millis(), error);
+                report.failed.push(RebuildFailure { relative_path, error });
             }
         }
 
         if report.scanned % PROGRESS_INTERVAL == 0 || report.scanned == total_files {
-            eprintln!(
-                "[Knowledge][Rebuild] progress scanned={} total={} indexed={} unchanged={} failed={} duration_ms={}",
-                report.scanned,
-                total_files,
-                report.indexed,
-                report.unchanged,
-                report.failed.len(),
-                started_at.elapsed().as_millis()
-            );
+            eprintln!("[Knowledge][Rebuild] progress scanned={} total={} indexed={} unchanged={} failed={} duration_ms={}", report.scanned, total_files, report.indexed, report.unchanged, report.failed.len(), started_at.elapsed().as_millis());
         }
     }
 
     report.removed = store.prune_documents(&present_paths).map_err(|error| {
-        eprintln!(
-            "[Knowledge][Rebuild] error stage=prune vault={} error={}",
-            canonical_root.display(),
-            error
-        );
+        eprintln!("[Knowledge][Rebuild] error stage=prune vault={} error={}", canonical_root.display(), error);
         error
     })?;
-    eprintln!(
-        "[Knowledge][Rebuild] complete vault={} scanned={} indexed={} unchanged={} removed={} failed={} duration_ms={}",
-        canonical_root.display(),
-        report.scanned,
-        report.indexed,
-        report.unchanged,
-        report.removed,
-        report.failed.len(),
-        started_at.elapsed().as_millis()
-    );
+    eprintln!("[Knowledge][Rebuild] complete vault={} scanned={} indexed={} unchanged={} removed={} failed={} duration_ms={}", canonical_root.display(), report.scanned, report.indexed, report.unchanged, report.removed, report.failed.len(), started_at.elapsed().as_millis());
     Ok(report)
 }
 
@@ -196,15 +119,12 @@ fn log_file_outcome(
     details: String,
 ) {
     if scanned <= DETAILED_FILE_LOG_LIMIT || scanned % PROGRESS_INTERVAL == 0 || scanned == total {
-        eprintln!(
-            "[Knowledge][Rebuild] file:{} path={} scanned={} total={} {} duration_ms={}",
-            outcome, relative_path, scanned, total, details, duration_ms
-        );
+        eprintln!("[Knowledge][Rebuild] file:{} path={} scanned={} total={} {} duration_ms={}", outcome, relative_path, scanned, total, details, duration_ms);
     }
 }
 
 enum IndexDecision {
-    Unchanged,
+    Unchanged(crate::model::DocumentSnapshot),
     Changed(crate::model::DocumentSnapshot),
 }
 
@@ -215,20 +135,17 @@ fn index_path(
 ) -> Result<IndexDecision, String> {
     let markdown = fs::read_to_string(absolute_path).map_err(|error| error.to_string())?;
     let content_hash = blake3::hash(markdown.as_bytes()).to_hex().to_string();
-    if store.existing_hash(relative_path)?.as_deref() == Some(content_hash.as_str()) {
-        return Ok(IndexDecision::Unchanged);
-    }
     let modified_at = fs::metadata(absolute_path)
         .and_then(|metadata| metadata.modified())
         .ok()
         .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
         .map(|duration| duration.as_secs() as i64)
         .unwrap_or(0);
-    Ok(IndexDecision::Changed(analyze_markdown(
-        relative_path,
-        &markdown,
-        modified_at,
-    )))
+    let snapshot = analyze_markdown(relative_path, &markdown, modified_at);
+    if store.existing_hash(relative_path)?.as_deref() == Some(content_hash.as_str()) {
+        return Ok(IndexDecision::Unchanged(snapshot));
+    }
+    Ok(IndexDecision::Changed(snapshot))
 }
 
 fn scan_markdown_files(root: &Path, current: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
@@ -237,18 +154,12 @@ fn scan_markdown_files(root: &Path, current: &Path, out: &mut Vec<PathBuf>) -> R
         let name = entry.file_name().to_string_lossy().to_string();
         let path = entry.path();
         if ignored_name(&name) {
-            eprintln!(
-                "[Knowledge][Rebuild] scan:skip reason=ignored path={}",
-                path.display()
-            );
+            eprintln!("[Knowledge][Rebuild] scan:skip reason=ignored path={}", path.display());
             continue;
         }
         let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
         if metadata.file_type().is_symlink() {
-            eprintln!(
-                "[Knowledge][Rebuild] scan:skip reason=symlink path={}",
-                path.display()
-            );
+            eprintln!("[Knowledge][Rebuild] scan:skip reason=symlink path={}", path.display());
             continue;
         }
         if metadata.is_dir() {
@@ -258,10 +169,7 @@ fn scan_markdown_files(root: &Path, current: &Path, out: &mut Vec<PathBuf>) -> R
             if canonical.starts_with(root) {
                 out.push(canonical);
             } else {
-                eprintln!(
-                    "[Knowledge][Rebuild] scan:skip reason=outside_vault path={}",
-                    canonical.display()
-                );
+                eprintln!("[Knowledge][Rebuild] scan:skip reason=outside_vault path={}", canonical.display());
             }
         }
     }
@@ -280,14 +188,8 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_vault(name: &str) -> PathBuf {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        std::env::temp_dir().join(format!(
-            "elephant-knowledge-{name}-{}-{stamp}",
-            std::process::id()
-        ))
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        std::env::temp_dir().join(format!("elephant-knowledge-{name}-{}-{stamp}", std::process::id()))
     }
 
     #[test]
@@ -297,16 +199,13 @@ mod tests {
         fs::create_dir_all(root.join(".assets")).unwrap();
         fs::write(root.join("Notes/A.md"), "# A\nalpha").unwrap();
         fs::write(root.join(".assets/hidden.md"), "# Hidden").unwrap();
-
         let first = rebuild_vault(&root).unwrap();
         assert_eq!(first.scanned, 1);
         assert_eq!(first.indexed, 1);
         assert_eq!(first.unchanged, 0);
-
         let second = rebuild_vault(&root).unwrap();
         assert_eq!(second.indexed, 0);
         assert_eq!(second.unchanged, 1);
-
         let store = KnowledgeStore::open(&root).unwrap();
         assert_eq!(store.status().unwrap().documents, 1);
         fs::remove_dir_all(root).ok();
@@ -318,32 +217,34 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join("A.md"), "# A\nSee [[B]].").unwrap();
         rebuild_vault(&root).unwrap();
-
         let store = KnowledgeStore::open(&root).unwrap();
-        let relations = store
-            .relations_for_node(
-                &KnowledgeNodeRef {
-                    kind: KnowledgeNodeKind::Document,
-                    id: "A.md".into(),
-                },
-                false,
-            )
-            .unwrap();
+        let node = KnowledgeNodeRef { kind: KnowledgeNodeKind::Document, id: "A.md".into() };
+        let relations = store.relations_for_node(&node, false).unwrap();
         assert_eq!(relations.len(), 1);
         assert_eq!(relations[0].target.id, "B");
-
         let second = rebuild_vault(&root).unwrap();
         assert_eq!(second.unchanged, 1);
-        let relations = store
-            .relations_for_node(
-                &KnowledgeNodeRef {
-                    kind: KnowledgeNodeKind::Document,
-                    id: "A.md".into(),
-                },
-                false,
-            )
-            .unwrap();
+        let relations = store.relations_for_node(&node, false).unwrap();
         assert_eq!(relations.len(), 1);
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn unchanged_rebuild_uses_current_wikilink_parser() {
+        let root = temp_vault("relations-code");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("A.md"), "# A\n```python\nvalues = [[0, 0], [0, 1]]\n```\nSee [[B]].").unwrap();
+        rebuild_vault(&root).unwrap();
+        let store = KnowledgeStore::open(&root).unwrap();
+        let node = KnowledgeNodeRef { kind: KnowledgeNodeKind::Document, id: "A.md".into() };
+        let relations = store.relations_for_node(&node, false).unwrap();
+        assert_eq!(relations.len(), 1);
+        assert_eq!(relations[0].target.id, "B");
+        let second = rebuild_vault(&root).unwrap();
+        assert_eq!(second.unchanged, 1);
+        let relations = store.relations_for_node(&node, false).unwrap();
+        assert_eq!(relations.len(), 1);
+        assert_eq!(relations[0].target.id, "B");
         fs::remove_dir_all(root).ok();
     }
 
@@ -356,14 +257,7 @@ mod tests {
         fs::remove_file(root.join("A.md")).unwrap();
         let report = rebuild_vault(&root).unwrap();
         assert_eq!(report.removed, 1);
-        assert_eq!(
-            KnowledgeStore::open(&root)
-                .unwrap()
-                .status()
-                .unwrap()
-                .documents,
-            0
-        );
+        assert_eq!(KnowledgeStore::open(&root).unwrap().status().unwrap().documents, 0);
         fs::remove_dir_all(root).ok();
     }
 }

@@ -1,3 +1,4 @@
+# One-off branch maintenance workflow. Remove after the generated hardening commit.
 name: Harden addon broker and refresh lockfile
 
 on:

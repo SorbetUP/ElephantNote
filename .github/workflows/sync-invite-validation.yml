@@ -1,0 +1,62 @@
+name: Sync Invitation Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'Elephant/frontend/app/components/settings/SyncQrScanner.vue'
+      - 'Elephant/frontend/app/components/settings/SyncSettingsPanel.vue'
+      - 'Elephant/frontend/app/services/syncInvite.js'
+      - 'Elephant/backend/tauri/Info.plist'
+      - 'build/scripts/build_dev.sh'
+      - 'build/scripts/ensure-dev-dependencies.mjs'
+      - 'tests/app/unit/specs/main/elephantnote/devDependenciesGuard.spec.js'
+      - 'tests/app/unit/specs/main/elephantnote/syncInviteRoundTrip.spec.js'
+      - 'tests/app/unit/specs/main/elephantnote/syncSettingsPanel.spec.js'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/sync-invite-validation.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'Elephant/frontend/app/components/settings/SyncQrScanner.vue'
+      - 'Elephant/frontend/app/components/settings/SyncSettingsPanel.vue'
+      - 'Elephant/frontend/app/services/syncInvite.js'
+      - 'Elephant/backend/tauri/Info.plist'
+      - 'build/scripts/build_dev.sh'
+      - 'build/scripts/ensure-dev-dependencies.mjs'
+      - 'tests/app/unit/specs/main/elephantnote/devDependenciesGuard.spec.js'
+      - 'tests/app/unit/specs/main/elephantnote/syncInviteRoundTrip.spec.js'
+      - 'tests/app/unit/specs/main/elephantnote/syncSettingsPanel.spec.js'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/sync-invite-validation.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qr-file-and-dev-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Validate QR, invitation file and branch dependency repair
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules \
+            Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/specs/main/elephantnote/devDependenciesGuard.spec.js \
+            tests/app/unit/specs/main/elephantnote/syncInviteRoundTrip.spec.js \
+            tests/app/unit/specs/main/elephantnote/syncSettingsPanel.spec.js \
+            2>&1 | tee sync-invite-validation-output.txt
+      - name: Upload focused validation output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-invite-validation-output
+          path: sync-invite-validation-output.txt
+          if-no-files-found: error
+          retention-days: 7

@@ -146,7 +146,7 @@ jobs:
             exit 1
           fi
 
-      - name: Run Tauri knowledge integration tests
+      - name: Run Tauri knowledge integration tests and verify terminal output
         shell: bash
         run: |
           set -o pipefail
@@ -155,6 +155,9 @@ jobs:
             --no-default-features \
             knowledge \
             -- --nocapture 2>&1 | tee tauri-knowledge-test.log
+          grep -F '[KnowledgeRuntime] contract:terminal' tauri-knowledge-test.log
+          grep -F '[Knowledge][Rebuild] start' tauri-knowledge-test.log
+          grep -F '[Knowledge][Rebuild] complete' tauri-knowledge-test.log
 
       - name: Upload Tauri diagnostics
         if: always()

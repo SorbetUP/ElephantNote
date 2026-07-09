@@ -110,3 +110,15 @@ fn chat_rejects_hidden_or_outside_paths() {
         assert!(!validation.valid, "unsafe path accepted: {relative_path}");
     }
 }
+
+#[test]
+fn knowledge_runtime_logs_reach_tauri_terminal() {
+    assert!(crate::debug_commands::tauri_debug_log(
+        "info".into(),
+        "[KnowledgeRuntime] contract:terminal".into(),
+        Some(serde_json::json!({
+            "command": "tauri_knowledge_status",
+            "durationMs": 1
+        })),
+    ));
+}

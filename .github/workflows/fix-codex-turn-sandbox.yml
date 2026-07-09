@@ -1,0 +1,61 @@
+name: Fix Codex turn sandbox contract
+
+on:
+  push:
+    branches:
+      - feature/real-codex-subscription
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/real-codex-subscription
+          fetch-depth: 0
+
+      - name: Patch turn sandbox payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs')
+          text = path.read_text()
+          const_old = 'const READ_ONLY_SANDBOX: &str = "read-only";'
+          const_new = 'const READ_ONLY_SANDBOX: &str = "read-only";\nconst TURN_READ_ONLY_SANDBOX: &str = "readOnly";'
+          type_old = '"type": READ_ONLY_SANDBOX,'
+          access_old = '''"access": {
+                  "type": "restricted",
+                  "includePlatformDefaults": true,
+                  "readableRoots": [cwd.to_string_lossy()]
+                }'''
+          if text.count(const_old) != 1:
+              raise SystemExit(f'constant count={text.count(const_old)}')
+          if text.count(type_old) != 1:
+              raise SystemExit(f'turn type count={text.count(type_old)}')
+          if text.count(access_old) != 1:
+              raise SystemExit(f'access block count={text.count(access_old)}')
+          text = text.replace(const_old, const_new, 1)
+          text = text.replace(type_old, '"type": TURN_READ_ONLY_SANDBOX,', 1)
+          text = text.replace(access_old, '"networkAccess": false', 1)
+          path.write_text(text)
+          PY
+          grep -F 'const READ_ONLY_SANDBOX: &str = "read-only";' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          grep -F 'const TURN_READ_ONLY_SANDBOX: &str = "readOnly";' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          grep -F '"type": TURN_READ_ONLY_SANDBOX' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          grep -F '"networkAccess": false' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          rm .github/workflows/fix-codex-turn-sandbox.yml
+
+      - name: Commit source fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs .github/workflows/fix-codex-turn-sandbox.yml
+          git commit -m "Fix Codex turn sandbox protocol value"
+          git push origin HEAD:feature/real-codex-subscription

@@ -6,16 +6,17 @@ import {
   fitCameraToNodes,
   focusCameraOnNode,
   layoutSemanticNeighborhood,
+  layoutWikiTerritories,
   pushSemanticHistory,
   zoomCameraAtPoint
 } from '../../../../Elephant/frontend/app/components/views/graphNavigationHelpers.js'
 
 const nodes = [
-  { id: 'A.md', title: 'A' },
-  { id: 'B.md', title: 'B' },
-  { id: 'C.md', title: 'C' },
-  { id: 'D.md', title: 'D' },
-  { id: 'E.md', title: 'E' }
+  { id: 'A.md', title: 'A', kind: 'note' },
+  { id: 'B.md', title: 'B', kind: 'note' },
+  { id: 'C.md', title: 'C', kind: 'note' },
+  { id: 'D.md', title: 'D', kind: 'note' },
+  { id: 'E.md', title: 'E', kind: 'note' }
 ]
 
 const edges = [
@@ -67,6 +68,92 @@ describe('graph semantic navigation', () => {
     const branched = pushSemanticHistory({ history: second.history, index: 0, nodeId: 'C.md' })
 
     expect(branched).toEqual({ history: ['A.md', 'C.md'], index: 1 })
+  })
+})
+
+describe('Wiki territory layout', () => {
+  const territoryNodes = [
+    { id: 'wiki:one', title: 'Wiki One', kind: 'wiki' },
+    { id: 'wiki:two', title: 'Wiki Two', kind: 'wiki' },
+    { id: 'A.md', title: 'A', kind: 'note' },
+    { id: 'Shared.md', title: 'Shared', kind: 'note' },
+    { id: 'B.md', title: 'B', kind: 'note' },
+    { id: 'Orphan.md', title: 'Orphan', kind: 'note' }
+  ]
+  const territoryEdges = [
+    { source: 'wiki:one', target: 'A.md', type: 'wiki-source', weight: 1 },
+    { source: 'wiki:one', target: 'Shared.md', type: 'wiki-source', weight: 1 },
+    { source: 'wiki:two', target: 'Shared.md', type: 'wiki-source', weight: 1 },
+    { source: 'wiki:two', target: 'B.md', type: 'wiki-source', weight: 1 },
+    { source: 'wiki:one', target: 'wiki:two', type: 'wiki-link', weight: 1 }
+  ]
+  const clusters = [
+    {
+      id: 'wiki:one',
+      label: 'Wiki One',
+      paths: ['wiki:one', 'A.md', 'Shared.md'],
+      tags: ['wiki-territory', 'status:accepted']
+    },
+    {
+      id: 'wiki:two',
+      label: 'Wiki Two',
+      paths: ['wiki:two', 'Shared.md', 'B.md'],
+      tags: ['wiki-territory', 'status:outdated']
+    },
+    {
+      id: 'unassigned',
+      label: 'Unassigned notes',
+      paths: ['Orphan.md'],
+      tags: ['unassigned-territory']
+    }
+  ]
+
+  it('creates one soft envelope per Wiki plus the unassigned zone', () => {
+    const layout = layoutWikiTerritories({ nodes: territoryNodes, edges: territoryEdges, clusters })
+
+    expect(layout.territories).toHaveLength(3)
+    expect(layout.stats).toMatchObject({
+      territoryCount: 2,
+      overlapNotes: 1,
+      unassignedNotes: 1,
+      bridgeCount: 1
+    })
+    for (const territory of layout.territories) {
+      expect(territory.path.startsWith('M ')).toBe(true)
+      expect(territory.bounds.maxX).toBeGreaterThan(territory.bounds.minX)
+      expect(territory.bounds.maxY).toBeGreaterThan(territory.bounds.minY)
+    }
+  })
+
+  it('places a shared note between both Wiki centers', () => {
+    const layout = layoutWikiTerritories({ nodes: territoryNodes, edges: territoryEdges, clusters })
+    const byId = new Map(layout.nodes.map((node) => [node.id, node]))
+    const one = byId.get('wiki:one')
+    const two = byId.get('wiki:two')
+    const shared = byId.get('Shared.md')
+    const midpoint = { x: (one.x + two.x) / 2, y: (one.y + two.y) / 2 }
+
+    expect(layout.memberships.get('Shared.md').sort()).toEqual(['wiki:one', 'wiki:two'])
+    expect(Math.hypot(shared.x - midpoint.x, shared.y - midpoint.y)).toBeLessThan(24)
+  })
+
+  it('keeps Wiki centers and all notes inside the viewport', () => {
+    const layout = layoutWikiTerritories({ nodes: territoryNodes, edges: territoryEdges, clusters })
+
+    for (const node of layout.nodes) {
+      expect(node.x).toBeGreaterThanOrEqual(0)
+      expect(node.x).toBeLessThanOrEqual(GRAPH_WIDTH)
+      expect(node.y).toBeGreaterThanOrEqual(0)
+      expect(node.y).toBeLessThanOrEqual(GRAPH_HEIGHT)
+    }
+  })
+
+  it('falls back cleanly when no Wiki territory exists', () => {
+    const layout = layoutWikiTerritories({ nodes, edges, clusters: [] })
+
+    expect(layout.nodes).toEqual([])
+    expect(layout.territories).toEqual([])
+    expect(layout.stats.territoryCount).toBe(0)
   })
 })
 

@@ -80,7 +80,7 @@ describe('knowledgeRuntimeClient logging', () => {
 })
 
 describe('knowledge runtime startup regressions', () => {
-  it('does not rebuild on vault initialization and bounds the renderer graph', async() => {
+  it('does not rebuild on vault initialization and preserves the complete renderer graph', async() => {
     const graphNodes = Array.from({ length: 400 }, (_, index) => ({
       id: `Note-${index}.md`,
       path: `Note-${index}.md`,
@@ -131,12 +131,12 @@ describe('knowledge runtime startup regressions', () => {
 
     const inspection = await globalThis.elephantnote.search.inspect()
     expect(inspection.graph).toMatchObject({
-      rendererLimited: true,
+      rendererLimited: false,
       totalNodeCount: 400,
-      hiddenNodeCount: 160
+      hiddenNodeCount: 0
     })
-    expect(inspection.graph.nodes).toHaveLength(240)
-    expect(inspection.documents).toHaveLength(240)
+    expect(inspection.graph.nodes).toHaveLength(400)
+    expect(inspection.documents).toHaveLength(400)
     expect(invoke.mock.calls.some(([command]) => command === 'tauri_knowledge_rebuild')).toBe(false)
   })
 })

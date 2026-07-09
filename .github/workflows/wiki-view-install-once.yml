@@ -1,0 +1,38 @@
+name: Wiki View Install Once
+
+on:
+  push:
+    branches:
+      - feature/rust-knowledge-core
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki-view-install-once
+  cancel-in-progress: true
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-knowledge-core
+          fetch-depth: 0
+      - name: Install functional Wiki view
+        run: |
+          cp Elephant/frontend/app/components/views/WikiView.knowledge.tmp.vue \
+             Elephant/frontend/app/components/views/WikiView.vue
+          rm Elephant/frontend/app/components/views/WikiView.knowledge.tmp.vue
+          rm .github/workflows/wiki-view-install-once.yml
+      - name: Commit Wiki view
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Elephant/frontend/app/components/views/WikiView.vue \
+                  Elephant/frontend/app/components/views/WikiView.knowledge.tmp.vue \
+                  .github/workflows/wiki-view-install-once.yml
+          git commit -m "feat(knowledge): connect Wiki view to cited draft lifecycle"
+          git push origin HEAD:feature/rust-knowledge-core

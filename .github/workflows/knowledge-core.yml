@@ -67,8 +67,8 @@ jobs:
           cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --list 2>&1 | tee knowledge-core-test-list.log
           test_count="$(grep -Ec ': test$' knowledge-core-test-list.log || true)"
           echo "Knowledge core tests discovered: ${test_count}"
-          if [ "${test_count}" -lt 30 ]; then
-            echo "Expected at least 30 knowledge-core tests, found ${test_count}." >&2
+          if [ "${test_count}" -lt 34 ]; then
+            echo "Expected at least 34 knowledge-core tests, found ${test_count}." >&2
             exit 1
           fi
 
@@ -107,6 +107,20 @@ jobs:
           grep -F '[Knowledge][Rebuild] file:unchanged' knowledge-runtime-log-smoke.log
           grep -F '[Knowledge][Rebuild] complete' knowledge-runtime-log-smoke.log
 
+      - name: Verify Wiki territory projection logs are really emitted
+        shell: bash
+        run: |
+          set -o pipefail
+          RUST_TEST_THREADS=1 cargo test \
+            --manifest-path Elephant/backend/knowledge-core/Cargo.toml \
+            graph::tests::graph_projection_includes_wiki_node_source_edge_and_territory \
+            -- --exact --nocapture 2>&1 | tee knowledge-wiki-graph-log-smoke.log
+          grep -F '[Knowledge][Graph] projection:start' knowledge-wiki-graph-log-smoke.log
+          grep -F '[Knowledge][Graph] data:loaded' knowledge-wiki-graph-log-smoke.log
+          grep -F '[Knowledge][Graph][Wiki] territory:projected' knowledge-wiki-graph-log-smoke.log
+          grep -F '[Knowledge][Graph][Wiki] projection:complete' knowledge-wiki-graph-log-smoke.log
+          grep -F '[Knowledge][Graph] projection:complete' knowledge-wiki-graph-log-smoke.log
+
       - name: Upload Rust diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -118,6 +132,7 @@ jobs:
             knowledge-core-test.log
             knowledge-core-coverage.log
             knowledge-runtime-log-smoke.log
+            knowledge-wiki-graph-log-smoke.log
           if-no-files-found: warn
           retention-days: 7
 
@@ -212,6 +227,7 @@ jobs:
             tests/app/unit/views/graphNavigationHelpers.spec.js \
             --reporter=verbose 2>&1 | tee knowledge-renderer-test.log
           grep -F 'graph semantic navigation' knowledge-renderer-test.log
+          grep -F 'Wiki territory layout' knowledge-renderer-test.log
           grep -F 'graph camera calculations' knowledge-renderer-test.log
 
       - name: Build renderer

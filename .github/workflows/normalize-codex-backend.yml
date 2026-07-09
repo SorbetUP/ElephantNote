@@ -1,6 +1,9 @@
 name: Normalize Codex backend patch
 
 on:
+  push:
+    branches:
+      - feature/real-codex-subscription
   pull_request:
     branches:
       - develop
@@ -10,7 +13,7 @@ permissions:
 
 jobs:
   normalize:
-    if: github.head_ref == 'feature/real-codex-subscription'
+    if: github.event_name == 'push' || github.head_ref == 'feature/real-codex-subscription'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

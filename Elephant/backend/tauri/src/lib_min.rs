@@ -17,6 +17,7 @@ pub mod model_library;
 pub mod local_llama_runtime;
 pub mod chat_runtime;
 pub mod search_logic;
+pub mod knowledge;
 
 mod tauri_extra_commands;
 mod debug_commands;
@@ -96,6 +97,11 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       healthcheck,
       tauri_platform_info,
+      knowledge::tauri_knowledge_rebuild,
+      knowledge::tauri_knowledge_status,
+      knowledge::tauri_knowledge_search,
+      knowledge::tauri_knowledge_inspect_note,
+      knowledge::tauri_knowledge_validate_chat_action,
       sync_commands::iroh_sync_create_invite,
       sync_commands::iroh_sync_accept_invite,
       sync_commands::iroh_sync_status,

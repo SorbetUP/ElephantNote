@@ -245,7 +245,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import log from '@/platform/runtimeLogShim'
 import {
   Check,
@@ -278,7 +278,8 @@ const props = defineProps({
   sidebarWidth: { type: Number, required: true },
   vaults: { type: Array, default: () => [] },
   activeVaultName: { type: String, default: 'No vault' },
-  activeVaultPath: { type: String, default: '' }
+  activeVaultPath: { type: String, default: '' },
+  initialSection: { type: String, default: 'appearance' }
 })
 const emit = defineEmits(['close', 'update-theme', 'update-sidebar-width'])
 
@@ -293,6 +294,7 @@ const sections = [
   { id: 'import', label: 'Import', icon: Download }
 ]
 const sectionById = Object.fromEntries(sections.map((section) => [section.id, section]))
+const normalizeSection = (section) => sectionById[section] ? section : 'appearance'
 const settingsIndex = [
   { id: 'appearance-mode', section: 'appearance', label: 'Color mode', description: 'Light and dark appearance.' },
   { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Apple, Graphite, Nord, Solar and Forest themes.' },
@@ -327,7 +329,7 @@ const settingsIndex = [
   { id: 'import-rss', section: 'import', label: 'RSS import', description: 'Import feed items into local notes.' }
 ].map((entry) => ({ ...entry, sectionLabel: sectionById[entry.section].label, icon: sectionById[entry.section].icon }))
 
-const activeSection = ref('appearance')
+const activeSection = ref(normalizeSection(props.initialSection))
 const settingsQuery = ref('')
 const syncInitialPage = ref('overview')
 const aiInitialPage = ref('provider')
@@ -342,6 +344,16 @@ const searchResults = computed(() => {
     const haystack = `${entry.label} ${entry.description} ${entry.sectionLabel}`.toLocaleLowerCase()
     return terms.every((term) => haystack.includes(term))
   })
+})
+
+watch(() => props.initialSection, (section) => {
+  const nextSection = normalizeSection(section)
+  if (activeSection.value !== nextSection) {
+    activeSection.value = nextSection
+    settingsQuery.value = ''
+    log.info('[settings] initial-section:changed', { section: nextSection })
+    scrollContentToTop()
+  }
 })
 
 const vaults = computed(() => props.vaults)
@@ -488,7 +500,10 @@ const handleKeyboard = (event) => {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyboard)
-  log.info('[settings] mounted:start', { sections: sections.map((section) => section.id) })
+  log.info('[settings] mounted:start', {
+    sections: sections.map((section) => section.id),
+    initialSection: activeSection.value
+  })
   try {
     featureFlags.value = await elephantnoteClient.features.get()
     log.info('[settings] featureFlags:loaded', featureFlags.value)

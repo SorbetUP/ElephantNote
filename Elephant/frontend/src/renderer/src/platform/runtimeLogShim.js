@@ -3,6 +3,29 @@ const levelToConsole = (level) => {
   return level || 'info'
 }
 
+const terminalSafeDetails = (args = []) => {
+  if (args.length < 2) return {}
+  const value = args[1]
+  if (value == null) return {}
+  if (value instanceof Error) {
+    return { error: value.message, name: value.name }
+  }
+  if (typeof value === 'object') return value
+  return { value: String(value) }
+}
+
+const forwardGraphLogToTauri = (level, args = []) => {
+  const message = typeof args[0] === 'string' ? args[0] : ''
+  if (!message.startsWith('[Graph]')) return
+  const invoke = globalThis.__TAURI__?.core?.invoke
+  if (typeof invoke !== 'function') return
+  Promise.resolve(invoke('tauri_debug_log', {
+    level,
+    message,
+    details: terminalSafeDetails(args)
+  })).catch(() => null)
+}
+
 const makeLogger = () => {
   const state = {
     errorHandler: null,
@@ -17,6 +40,7 @@ const makeLogger = () => {
     if (!level) return
     const fn = console[method] || console.log
     fn.apply(console, args)
+    forwardGraphLogToTauri(method, args)
   }
 
   return {

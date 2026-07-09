@@ -92,7 +92,10 @@ fn android_first_run_uses_explicit_phone_vault_creation() {
   assert!(!vault_config.contains("MOBILE_DEFAULT_VAULT_ID"), "first run must not invent a hidden mobile vault before the UI can ask");
   assert!(!vault_config.contains("app_data_dir().ok().map"), "read_config must not silently create an app data vault");
 
-  let tauri_bridge = read_text("Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js");
-  assert!(tauri_bridge.contains("createLocalVault"), "mobile bridge must expose explicit phone vault creation");
-  assert!(tauri_bridge.contains("/vaults/Personal"), "explicit phone vault must use the app data vaults/Personal path");
+  let mobile_bridge = read_text("Elephant/frontend/src/renderer/src/platform/mobileVaultBridge.js");
+  assert!(mobile_bridge.contains("createLocalVault"), "mobile bridge must expose explicit phone vault creation");
+  assert!(mobile_bridge.contains("/vaults/Personal"), "explicit phone vault must use the app data vaults/Personal path");
+
+  let renderer_html = read_text("Elephant/frontend/src/renderer/index.html");
+  assert!(renderer_html.contains("/src/platform/mobileVaultBridge.js"), "mobile vault bridge must install before renderer startup");
 }

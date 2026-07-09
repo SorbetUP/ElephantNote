@@ -29,14 +29,12 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
         let result = index_path(&store, &absolute_path, &relative_path);
         match result {
             Ok(IndexDecision::Unchanged) => {
-                let relation_result = store
-                    .inspect_document(&relative_path)
-                    .and_then(|document| {
-                        document
-                            .as_ref()
-                            .map(|snapshot| store.sync_markdown_relations(snapshot))
-                            .transpose()
-                    });
+                let relation_result = store.inspect_document(&relative_path).and_then(|document| {
+                    document
+                        .as_ref()
+                        .map(|snapshot| store.sync_markdown_relations(snapshot))
+                        .transpose()
+                });
                 match relation_result {
                     Ok(_) => report.unchanged += 1,
                     Err(error) => report.failed.push(RebuildFailure {

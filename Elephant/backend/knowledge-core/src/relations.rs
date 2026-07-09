@@ -308,8 +308,14 @@ mod tests {
         );
         let validation = relation.validate(None);
         assert!(!validation.valid);
-        assert!(validation.errors.iter().any(|error| error.contains("evidence")));
-        assert!(validation.errors.iter().any(|error| error.contains("model ID")));
+        assert!(validation
+            .errors
+            .iter()
+            .any(|error| error.contains("evidence")));
+        assert!(validation
+            .errors
+            .iter()
+            .any(|error| error.contains("model ID")));
     }
 
     #[test]

@@ -16,9 +16,7 @@ pub use extraction::{
     build_tagging_request, parse_tagging_response, ExtractionValidation, StructuredModelRequest,
     StructuredTask, TagSuggestion, TaggingExtraction,
 };
-pub use graph::{
-    KnowledgeGraph, KnowledgeGraphCluster, KnowledgeGraphEdge, KnowledgeGraphNode,
-};
+pub use graph::{KnowledgeGraph, KnowledgeGraphCluster, KnowledgeGraphEdge, KnowledgeGraphNode};
 pub use model::{
     DocumentSnapshot, ExplicitLink, KnowledgeChunk, KnowledgeSearchHit, KnowledgeSection,
     KnowledgeStatus, RebuildFailure, RebuildReport,

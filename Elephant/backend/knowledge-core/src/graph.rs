@@ -183,7 +183,9 @@ fn load_document_tags(conn: &Connection) -> Result<HashMap<String, Vec<String>>,
         )
         .map_err(|error| error.to_string())?;
     let rows = statement
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
         .map_err(|error| error.to_string())?;
     let mut output = HashMap::<String, Vec<String>>::new();
     for row in rows {
@@ -193,11 +195,7 @@ fn load_document_tags(conn: &Connection) -> Result<HashMap<String, Vec<String>>,
     Ok(output)
 }
 
-fn to_graph_edge(
-    relation: &KnowledgeRelation,
-    source: &str,
-    target: &str,
-) -> KnowledgeGraphEdge {
+fn to_graph_edge(relation: &KnowledgeRelation, source: &str, target: &str) -> KnowledgeGraphEdge {
     let explicit = matches!(relation.relation_type, RelationType::ExplicitLink);
     KnowledgeGraphEdge {
         id: relation.id.clone(),
@@ -210,7 +208,9 @@ fn to_graph_edge(
         },
         relation_type: relation_type_name(&relation.relation_type).into(),
         reason: relation.reason.clone(),
-        weight: relation.confidence.unwrap_or(if explicit { 1.0 } else { 0.5 }),
+        weight: relation
+            .confidence
+            .unwrap_or(if explicit { 1.0 } else { 0.5 }),
         origin: relation_origin_label(&relation.origin).into(),
         status: relation_status_label(&relation.status).into(),
         evidence_chunk_ids: relation.evidence_chunk_ids.clone(),
@@ -298,9 +298,7 @@ impl DocumentResolver {
         if self.exact.contains(&normalized) {
             return self.exact.get(&normalized).map(String::as_str);
         }
-        self.aliases
-            .get(&normalized)
-            .and_then(Option::as_deref)
+        self.aliases.get(&normalized).and_then(Option::as_deref)
     }
 }
 

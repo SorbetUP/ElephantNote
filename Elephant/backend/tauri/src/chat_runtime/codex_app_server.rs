@@ -1,7 +1,9 @@
+mod codex_runtime_installer;
 use serde_json::{json, Value};
 use std::{
   collections::{HashMap, HashSet},
   env,
+  fs,
   path::{Path, PathBuf},
   process::Stdio,
   sync::{
@@ -23,6 +25,7 @@ const TURN_TIMEOUT: Duration = Duration::from_secs(180);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(12);
 const SHELL_TIMEOUT: Duration = Duration::from_secs(8);
 const MAX_LOG_TEXT: usize = 900;
+const MAX_BUNDLE_SCAN_ENTRIES: usize = 20_000;
 
 type R<T> = Result<T, String>;
 
@@ -53,6 +56,7 @@ struct Probe {
   exists: bool,
   executable: bool,
   version: Option<String>,
+  app_server: bool,
   error: Option<String>,
 }
 
@@ -61,6 +65,7 @@ struct Resolution {
   runtime: Option<Runtime>,
   probes: Vec<Probe>,
   detected: bool,
+  install_error: Option<String>,
 }
 
 struct CodexClient {
@@ -134,7 +139,7 @@ fn binary_name() -> &'static str {
 }
 
 fn executable(path: &Path) -> bool {
-  let Ok(metadata) = std::fs::metadata(path) else {
+  let Ok(metadata) = fs::metadata(path) else {
     return false;
   };
   if !metadata.is_file() {
@@ -160,7 +165,7 @@ fn push_candidate(
   if path.as_os_str().is_empty() {
     return;
   }
-  let identity = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+  let identity = fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
   if seen.insert(identity) {
     candidates.push(Candidate { path, source: source.into() });
   }
@@ -169,12 +174,11 @@ fn push_candidate(
 fn package_roots(entry: &Path) -> Vec<PathBuf> {
   let mut roots = Vec::new();
   let mut variants = vec![entry.to_path_buf()];
-  if let Ok(canonical) = std::fs::canonicalize(entry) {
+  if let Ok(canonical) = fs::canonicalize(entry) {
     if canonical != entry {
       variants.push(canonical);
     }
   }
-
   for variant in variants {
     if variant.file_name().and_then(|value| value.to_str()) == Some("codex.js") {
       if let Some(root) = variant.parent().and_then(Path::parent) {
@@ -193,7 +197,6 @@ fn package_roots(entry: &Path) -> Vec<PathBuf> {
       }
     }
   }
-
   roots.sort();
   roots.dedup();
   roots
@@ -209,7 +212,6 @@ fn add_native_candidates(
     return;
   };
   let binary = binary_name();
-
   for root in package_roots(entry) {
     for (suffix, label) in [
       (PathBuf::from(triple).join("bin").join(binary), "bundled-current"),
@@ -223,7 +225,6 @@ fn add_native_candidates(
         format!("{source}:{label}"),
       );
     }
-
     let mut package_roots = vec![root.join("node_modules").join("@openai").join(package)];
     if let Some(node_modules) = root.parent().and_then(Path::parent) {
       package_roots.push(node_modules.join("@openai").join(package));
@@ -250,7 +251,7 @@ fn add_nvm_entrypoints(entrypoints: &mut Vec<Candidate>, seen: &mut HashSet<Path
     return;
   };
   let versions = home.join(".nvm").join("versions").join("node");
-  let Ok(read_dir) = std::fs::read_dir(versions) else {
+  let Ok(read_dir) = fs::read_dir(versions) else {
     return;
   };
   let mut paths = read_dir
@@ -261,6 +262,71 @@ fn add_nvm_entrypoints(entrypoints: &mut Vec<Candidate>, seen: &mut HashSet<Path
   paths.reverse();
   for path in paths {
     push_candidate(entrypoints, seen, path, "nvm-global-bin");
+  }
+}
+
+fn bundle_candidate_name(path: &Path) -> bool {
+  let name = path.file_name().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
+  if matches!(name.as_str(), "codex" | "codex-cli" | "codex-app-server") {
+    return true;
+  }
+  let text = path.to_string_lossy().to_ascii_lowercase();
+  name.starts_with("codex-") && text.contains("/vendor/")
+}
+
+fn scan_bundle_dir(
+  root: &Path,
+  depth: usize,
+  remaining: &mut usize,
+  candidates: &mut Vec<Candidate>,
+  seen: &mut HashSet<PathBuf>,
+) {
+  if depth == 0 || *remaining == 0 {
+    return;
+  }
+  let Ok(read_dir) = fs::read_dir(root) else {
+    return;
+  };
+  for entry in read_dir.filter_map(Result::ok) {
+    if *remaining == 0 {
+      return;
+    }
+    *remaining -= 1;
+    let path = entry.path();
+    let Ok(file_type) = entry.file_type() else {
+      continue;
+    };
+    if file_type.is_dir() {
+      scan_bundle_dir(&path, depth - 1, remaining, candidates, seen);
+    } else if file_type.is_file() && bundle_candidate_name(&path) {
+      push_candidate(candidates, seen, path, "codex-app-bundle-resource");
+    }
+  }
+}
+
+fn add_codex_app_resources(candidates: &mut Vec<Candidate>, seen: &mut HashSet<PathBuf>) {
+  #[cfg(target_os = "macos")]
+  {
+    let roots = [
+      PathBuf::from("/Applications/Codex.app/Contents/Resources"),
+      home_dir()
+        .unwrap_or_default()
+        .join("Applications")
+        .join("Codex.app")
+        .join("Contents")
+        .join("Resources"),
+    ];
+    for root in roots {
+      if root.is_dir() {
+        log("resolver", format!("bundle-scan:start root={}", path_string(&root)));
+        let mut remaining = MAX_BUNDLE_SCAN_ENTRIES;
+        scan_bundle_dir(&root, 12, &mut remaining, candidates, seen);
+        log(
+          "resolver",
+          format!("bundle-scan:complete root={} entries_scanned={}", path_string(&root), MAX_BUNDLE_SCAN_ENTRIES - remaining),
+        );
+      }
+    }
   }
 }
 
@@ -277,7 +343,6 @@ async fn shell_entrypoint() -> Option<PathBuf> {
         .output(),
     )
     .await;
-
     let output = match result {
       Err(_) => {
         log("resolver", "login-shell:timeout");
@@ -317,10 +382,13 @@ async fn shell_entrypoint() -> Option<PathBuf> {
   }
 }
 
-async fn candidates() -> Vec<Candidate> {
+async fn candidates(app: &AppHandle) -> Vec<Candidate> {
   let mut entrypoints = Vec::new();
   let mut entry_seen = HashSet::new();
 
+  if let Some(runtime) = codex_runtime_installer::existing(app) {
+    push_candidate(&mut entrypoints, &mut entry_seen, runtime.path, "elephantnote-managed");
+  }
   for key in ["ELEPHANTNOTE_CODEX_PATH", "CODEX_PATH"] {
     if let Some(value) = env::var_os(key) {
       push_candidate(&mut entrypoints, &mut entry_seen, PathBuf::from(value), format!("env:{key}"));
@@ -333,13 +401,8 @@ async fn candidates() -> Vec<Candidate> {
   if let Some(path) = shell_entrypoint().await {
     push_candidate(&mut entrypoints, &mut entry_seen, path, "login-shell");
   }
-
   #[cfg(target_os = "macos")]
-  for path in [
-    "/opt/homebrew/bin/codex",
-    "/usr/local/bin/codex",
-    "/Applications/Codex.app/Contents/MacOS/codex",
-  ] {
+  for path in ["/opt/homebrew/bin/codex", "/usr/local/bin/codex"] {
     push_candidate(&mut entrypoints, &mut entry_seen, PathBuf::from(path), "macos-common-path");
   }
   add_nvm_entrypoints(&mut entrypoints, &mut entry_seen);
@@ -350,7 +413,29 @@ async fn candidates() -> Vec<Candidate> {
     add_native_candidates(&mut result, &mut seen, &entry.path, &entry.source);
     push_candidate(&mut result, &mut seen, entry.path, entry.source);
   }
+  add_codex_app_resources(&mut result, &mut seen);
   result
+}
+
+async fn run_probe(path: &Path, args: &[&str]) -> Result<std::process::Output, String> {
+  match timeout(PROBE_TIMEOUT, Command::new(path).args(args).stdin(Stdio::null()).output()).await {
+    Err(_) => Err(format!("probe timed out for args={args:?}")),
+    Ok(Err(error)) => Err(format!("spawn failed for args={args:?}: {error}")),
+    Ok(Ok(output)) => Ok(output),
+  }
+}
+
+fn app_server_help_valid(output: &std::process::Output) -> bool {
+  if !output.status.success() {
+    return false;
+  }
+  let combined = format!(
+    "{}\n{}",
+    String::from_utf8_lossy(&output.stdout),
+    String::from_utf8_lossy(&output.stderr)
+  )
+  .to_ascii_lowercase();
+  combined.contains("app-server") && (combined.contains("--listen") || combined.contains("stdio://") || combined.contains("stdio"))
 }
 
 async fn probe(candidate: Candidate) -> Probe {
@@ -366,7 +451,6 @@ async fn probe(candidate: Candidate) -> Probe {
       is_executable
     ),
   );
-
   if !exists || !is_executable {
     return Probe {
       path: candidate.path,
@@ -374,90 +458,116 @@ async fn probe(candidate: Candidate) -> Probe {
       exists,
       executable: is_executable,
       version: None,
+      app_server: false,
       error: Some(if exists { "file is not executable" } else { "file does not exist" }.to_string()),
     };
   }
 
   let started = Instant::now();
-  let result = timeout(
-    PROBE_TIMEOUT,
-    Command::new(&candidate.path)
-      .arg("--version")
-      .stdin(Stdio::null())
-      .output(),
-  )
-  .await;
-
-  match result {
-    Err(_) => Probe {
-      path: candidate.path,
-      source: candidate.source,
-      exists,
-      executable: is_executable,
-      version: None,
-      error: Some("version probe timed out".to_string()),
-    },
-    Ok(Err(error)) => Probe {
-      path: candidate.path,
-      source: candidate.source,
-      exists,
-      executable: is_executable,
-      version: None,
-      error: Some(format!("spawn failed: {error}")),
-    },
-    Ok(Ok(output)) if output.status.success() => {
-      let stdout = short(String::from_utf8_lossy(&output.stdout));
-      let stderr = short(String::from_utf8_lossy(&output.stderr));
-      let version = if stdout.is_empty() { stderr } else { stdout };
-      log(
-        "resolver",
-        format!(
-          "accepted source={} path={} version={} duration_ms={}",
-          candidate.source,
-          path_string(&candidate.path),
-          version,
-          started.elapsed().as_millis()
-        ),
-      );
-      Probe {
-        path: candidate.path,
-        source: candidate.source,
-        exists,
-        executable: is_executable,
-        version: Some(version),
-        error: None,
-      }
-    }
-    Ok(Ok(output)) => {
+  let version_output = match run_probe(&candidate.path, &["--version"]).await {
+    Ok(output) if output.status.success() => output,
+    Ok(output) => {
       let error = format!(
-        "exit={} stdout={} stderr={}",
+        "--version exit={} stdout={} stderr={}",
         output.status,
         short(String::from_utf8_lossy(&output.stdout)),
         short(String::from_utf8_lossy(&output.stderr))
       );
-      log(
-        "resolver",
-        format!(
-          "rejected source={} path={} duration_ms={} error={}",
-          candidate.source,
-          path_string(&candidate.path),
-          started.elapsed().as_millis(),
-          error
-        ),
-      );
-      Probe {
+      log("resolver", format!("rejected source={} path={} error={error}", candidate.source, path_string(&candidate.path)));
+      return Probe {
         path: candidate.path,
         source: candidate.source,
         exists,
         executable: is_executable,
         version: None,
+        app_server: false,
         error: Some(error),
-      }
+      };
     }
+    Err(error) => {
+      log("resolver", format!("rejected source={} path={} error={error}", candidate.source, path_string(&candidate.path)));
+      return Probe {
+        path: candidate.path,
+        source: candidate.source,
+        exists,
+        executable: is_executable,
+        version: None,
+        app_server: false,
+        error: Some(error),
+      };
+    }
+  };
+  let stdout = short(String::from_utf8_lossy(&version_output.stdout));
+  let stderr = short(String::from_utf8_lossy(&version_output.stderr));
+  let version = if stdout.is_empty() { stderr } else { stdout };
+
+  let help_output = match run_probe(&candidate.path, &["app-server", "--help"]).await {
+    Ok(output) => output,
+    Err(error) => {
+      log(
+        "resolver",
+        format!("rejected source={} path={} reason=app-server-capability error={error}", candidate.source, path_string(&candidate.path)),
+      );
+      return Probe {
+        path: candidate.path,
+        source: candidate.source,
+        exists,
+        executable: is_executable,
+        version: Some(version),
+        app_server: false,
+        error: Some(error),
+      };
+    }
+  };
+  if !app_server_help_valid(&help_output) {
+    let error = format!(
+      "not a Codex CLI app-server runtime; help_exit={} stdout={} stderr={}",
+      help_output.status,
+      short(String::from_utf8_lossy(&help_output.stdout)),
+      short(String::from_utf8_lossy(&help_output.stderr))
+    );
+    log(
+      "resolver",
+      format!(
+        "rejected source={} path={} reason=app-server-capability error={}",
+        candidate.source,
+        path_string(&candidate.path),
+        error
+      ),
+    );
+    return Probe {
+      path: candidate.path,
+      source: candidate.source,
+      exists,
+      executable: is_executable,
+      version: Some(version),
+      app_server: false,
+      error: Some(error),
+    };
+  }
+
+  log(
+    "resolver",
+    format!(
+      "accepted source={} path={} version={} app_server=true duration_ms={}",
+      candidate.source,
+      path_string(&candidate.path),
+      version,
+      started.elapsed().as_millis()
+    ),
+  );
+  Probe {
+    path: candidate.path,
+    source: candidate.source,
+    exists,
+    executable: is_executable,
+    version: Some(version),
+    app_server: true,
+    error: None,
   }
 }
 
-async fn resolve() -> Resolution {
+async fn resolve_without_install(app: &AppHandle) -> Resolution {
   log(
     "resolver",
     format!(
@@ -469,54 +579,111 @@ async fn resolve() -> Resolution {
       env::var("PATH").unwrap_or_else(|_| "<unset>".to_string())
     ),
   );
-  let candidates = candidates().await;
+  let candidates = candidates(app).await;
   log("resolver", format!("candidate-count={}", candidates.len()));
   let mut probes = Vec::new();
   let mut detected = false;
   for candidate in candidates {
     let probe = probe(candidate).await;
     detected |= probe.exists;
-    if let Some(version) = probe.version.clone() {
+    if probe.app_server {
       let runtime = Runtime {
         path: probe.path.clone(),
         source: probe.source.clone(),
-        version,
+        version: probe.version.clone().unwrap_or_default(),
       };
       probes.push(probe);
       log(
         "resolver",
         format!("selected source={} path={}", runtime.source, path_string(&runtime.path)),
       );
-      return Resolution { runtime: Some(runtime), probes, detected: true };
+      return Resolution { runtime: Some(runtime), probes, detected: true, install_error: None };
     }
     probes.push(probe);
   }
-  log("resolver", format!("failed detected={detected} probes={}", probes.len()));
-  Resolution { runtime: None, probes, detected }
+  Resolution { runtime: None, probes, detected, install_error: None }
+}
+
+async fn resolve(app: &AppHandle) -> Resolution {
+  let mut resolution = resolve_without_install(app).await;
+  if resolution.runtime.is_some() {
+    return resolution;
+  }
+
+  log("installer", "no valid app-server runtime found; installing official managed Codex CLI");
+  let app_clone = app.clone();
+  let install_result = tokio::task::spawn_blocking(move || codex_runtime_installer::ensure_installed(app_clone)).await;
+  match install_result {
+    Ok(Ok(runtime)) => {
+      log(
+        "installer",
+        format!(
+          "installed path={} version={} release={} asset={}",
+          path_string(&runtime.path),
+          runtime.version,
+          runtime.release,
+          runtime.asset
+        ),
+      );
+      let managed_probe = probe(Candidate { path: runtime.path, source: "elephantnote-managed-download".to_string() }).await;
+      if managed_probe.app_server {
+        let selected = Runtime {
+          path: managed_probe.path.clone(),
+          source: managed_probe.source.clone(),
+          version: managed_probe.version.clone().unwrap_or(runtime.version),
+        };
+        resolution.probes.push(managed_probe);
+        resolution.runtime = Some(selected);
+        resolution.detected = true;
+      } else {
+        resolution.install_error = managed_probe.error.clone().or_else(|| Some("Downloaded Codex binary does not expose app-server.".to_string()));
+        resolution.probes.push(managed_probe);
+      }
+    }
+    Ok(Err(error)) => {
+      log("installer", format!("failed error={}", short(&error)));
+      resolution.install_error = Some(error);
+    }
+    Err(error) => {
+      let error = format!("Managed Codex installer task failed: {error}");
+      log("installer", &error);
+      resolution.install_error = Some(error);
+    }
+  }
+  resolution
 }
 
 fn resolution_error(resolution: &Resolution) -> String {
   let headline = if resolution.detected {
-    "Codex CLI was detected, but every discovered installation is unusable."
+    "Codex was detected, but no discovered executable provides the Codex app-server protocol."
   } else {
-    "Codex CLI was not found in PATH, the login shell, common macOS paths, or NVM installations."
+    "No Codex app-server runtime was found."
   };
   let details = resolution
     .probes
     .iter()
     .filter(|probe| probe.exists)
-    .take(10)
+    .take(12)
     .map(|probe| {
       format!(
         "- {} [{}]: {}",
         path_string(&probe.path),
         probe.source,
-        probe.error.as_deref().unwrap_or("unknown error")
+        probe.error.as_deref().unwrap_or("app-server capability unavailable")
       )
     })
     .collect::<Vec<_>>()
     .join("\n");
-  if details.is_empty() { headline.to_string() } else { format!("{headline}\n{details}") }
+  let install = resolution
+    .install_error
+    .as_ref()
+    .map(|error| format!("\nManaged runtime installation failed: {error}"))
+    .unwrap_or_default();
+  if details.is_empty() {
+    format!("{headline}{install}")
+  } else {
+    format!("{headline}\n{details}{install}")
+  }
 }
 
 fn probes_json(probes: &[Probe]) -> Vec<Value> {
@@ -529,6 +696,7 @@ fn probes_json(probes: &[Probe]) -> Vec<Value> {
         "exists": probe.exists,
         "executable": probe.executable,
         "version": probe.version.clone(),
+        "appServer": probe.app_server,
         "error": probe.error.clone()
       })
     })
@@ -644,8 +812,7 @@ impl CodexState {
       }
       log("state", "cached app-server exited; resolving again");
     }
-
-    let resolution = resolve().await;
+    let resolution = resolve(app).await;
     let runtime = match resolution.runtime.clone() {
       Some(runtime) => runtime,
       None => return Err(resolution_error(&resolution)),
@@ -882,28 +1049,26 @@ fn account_summary(result: Value, client: &CodexClient) -> Value {
 
 async fn status(app: &AppHandle) -> R<Value> {
   log("operation", "status:start");
-  let client = match state().client(app).await {
-    Ok(client) => client,
+  match state().client(app).await {
+    Ok(client) => {
+      let account = client.request("account/read", json!({ "refreshToken": false })).await?;
+      log("operation", "status:complete");
+      Ok(account_summary(account, &client))
+    }
     Err(error) => {
       log("operation", format!("status:error {}", short(&error)));
-      let resolution = resolve().await;
-      let runtime = resolution.runtime.as_ref();
-      return Ok(json!({
-        "installed": runtime.is_some(),
+      let resolution = resolve_without_install(app).await;
+      Ok(json!({
+        "installed": false,
         "detected": resolution.detected,
         "running": false,
         "connected": false,
         "error": error,
         "diagnostics": probes_json(&resolution.probes),
-        "runtimePath": runtime.map(|value| path_string(&value.path)),
-        "runtimeSource": runtime.map(|value| value.source.clone()),
-        "version": runtime.map(|value| value.version.clone())
-      }));
+        "installError": resolution.install_error
+      }))
     }
-  };
-  let account = client.request("account/read", json!({ "refreshToken": false })).await?;
-  log("operation", "status:complete");
-  Ok(account_summary(account, &client))
+  }
 }
 
 async fn login(app: &AppHandle, flow: Option<String>) -> R<Value> {
@@ -1125,22 +1290,9 @@ mod tests {
   }
 
   #[test]
-  fn broken_installation_is_reported_as_detected() {
-    let resolution = Resolution {
-      runtime: None,
-      probes: vec![Probe {
-        path: PathBuf::from("/tmp/codex"),
-        source: "test".to_string(),
-        exists: true,
-        executable: true,
-        version: None,
-        error: Some("ENOENT native binary".to_string()),
-      }],
-      detected: true,
-    };
-    let message = resolution_error(&resolution);
-    assert!(message.contains("detected"));
-    assert!(message.contains("ENOENT"));
+  fn gui_launcher_output_is_not_app_server_help() {
+    let combined = "Ouverture dans une session de navigateur existante.".to_ascii_lowercase();
+    assert!(!(combined.contains("app-server") && combined.contains("--listen")));
   }
 
   #[test]

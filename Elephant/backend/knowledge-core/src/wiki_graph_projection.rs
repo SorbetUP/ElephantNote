@@ -31,7 +31,8 @@ pub(crate) fn project_wiki_territories(
         .collect::<Vec<_>>();
     eprintln!(
         "[Knowledge][Graph][Wiki] drafts:loaded visible={} include_suggestions={}",
-        visible.len(), include_suggestions
+        visible.len(),
+        include_suggestions
     );
 
     let wiki_by_reference = build_wiki_reference_index(&visible);
@@ -168,9 +169,15 @@ pub(crate) fn project_wiki_territories(
         }
     }
 
-    projection.nodes.sort_by(|left, right| left.id.cmp(&right.id));
-    projection.edges.sort_by(|left, right| left.id.cmp(&right.id));
-    projection.clusters.sort_by(|left, right| left.id.cmp(&right.id));
+    projection
+        .nodes
+        .sort_by(|left, right| left.id.cmp(&right.id));
+    projection
+        .edges
+        .sort_by(|left, right| left.id.cmp(&right.id));
+    projection
+        .clusters
+        .sort_by(|left, right| left.id.cmp(&right.id));
     eprintln!(
         "[Knowledge][Graph][Wiki] projection:complete wiki_nodes={} wiki_edges={} territories={} assigned_documents={} duration_ms={}",
         projection.nodes.len(),
@@ -183,8 +190,10 @@ pub(crate) fn project_wiki_territories(
 }
 
 fn wiki_is_visible(status: &WikiDraftStatus, include_suggestions: bool) -> bool {
-    matches!(status, WikiDraftStatus::Accepted | WikiDraftStatus::Outdated)
-        || (include_suggestions && matches!(status, WikiDraftStatus::Proposed))
+    matches!(
+        status,
+        WikiDraftStatus::Accepted | WikiDraftStatus::Outdated
+    ) || (include_suggestions && matches!(status, WikiDraftStatus::Proposed))
 }
 
 fn wiki_node_id(draft: &WikiDraft) -> String {
@@ -229,7 +238,7 @@ fn parse_related_wiki_references(markdown: &str) -> Vec<String> {
         let mut remainder = trimmed;
         while let Some(start) = remainder.find("[[") {
             let after_start = &remainder[start + 2..];
-            let Some(end) = after_start.find("]]" ) else {
+            let Some(end) = after_start.find("]]") else {
                 break;
             };
             let raw = &after_start[..end];

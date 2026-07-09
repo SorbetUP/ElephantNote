@@ -194,10 +194,9 @@ impl KnowledgeStore {
             build_folder_clusters(&nodes)
         } else {
             let mut territories = wiki_projection.clusters;
-            if let Some(unassigned) = build_unassigned_cluster(
-                &nodes,
-                &wiki_projection.assigned_document_ids,
-            ) {
+            if let Some(unassigned) =
+                build_unassigned_cluster(&nodes, &wiki_projection.assigned_document_ids)
+            {
                 eprintln!(
                     "[Knowledge][Graph] territories:unassigned notes={}",
                     unassigned.node_count

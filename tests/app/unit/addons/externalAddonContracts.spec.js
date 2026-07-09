@@ -1,6 +1,12 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ElephantAddonManager } from '../../../../Elephant/frontend/src/renderer/src/addons/AddonManager.js'
+import { ExternalAddonController } from '../../../../Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js'
 import { normalizeAddonManifest } from '../../../../Elephant/frontend/src/renderer/src/addons/manifest.js'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 
 describe('external addon manifest contract', () => {
   it('normalizes structured capabilities without exposing mutable arrays', () => {
@@ -67,5 +73,50 @@ describe('dynamic addon lifecycle', () => {
     await manager.enable('com.example.running')
 
     expect(() => manager.unregister('com.example.running')).toThrow('Cannot unregister an active addon')
+  })
+})
+
+describe('community addon consent gate', () => {
+  it('does not restart an external addon when community addons are disabled', async () => {
+    const record = {
+      manifest: {
+        id: 'com.example.blocked',
+        name: 'Blocked addon',
+        version: '1.0.0',
+        apiVersion: 1,
+        runtime: { type: 'javascript-worker', entry: 'main.js' },
+        permissions: {
+          commands: true,
+          storage: false,
+          notes: { read: [], write: [] },
+          network: { hosts: [] }
+        }
+      },
+      enabled: true,
+      packageHash: 'abc123',
+      installedAt: '2026-07-09T00:00:00Z',
+      source: 'external'
+    }
+    const invoke = vi.fn(async (command, payload) => {
+      if (command === 'tauri_addons_list') return [record]
+      if (command === 'tauri_prefs_get') return false
+      if (command === 'tauri_addons_set_enabled') return { ...record, enabled: payload.enabled }
+      throw new Error(`Unexpected command: ${command}`)
+    })
+    vi.stubGlobal('__TAURI__', { core: { invoke } })
+
+    const manager = new ElephantAddonManager({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    })
+    const controller = new ExternalAddonController(manager, { logger: manager.logger })
+
+    await controller.load()
+
+    expect(manager.get(record.manifest.id)?.enabled).toBe(false)
+    expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', {
+      addonId: record.manifest.id,
+      enabled: false
+    })
+    await expect(manager.enable(record.manifest.id)).rejects.toThrow('Community addons are disabled')
   })
 })

@@ -18,7 +18,7 @@ describe('executable fenced code blocks', () => {
     expect(tauriLib).toContain('code_execution::tauri_programs_list')
     expect(tauriLib).toContain('code_execution::tauri_programs_set')
     expect(tauriLib).toContain('code_execution::tauri_programs_run')
-    expect(backend).toContain('tokio::process::Command')
+    expect(backend).toContain('use tokio::{io::AsyncWriteExt, process::Command, time::timeout};')
     expect(backend).toContain('.stdin(Stdio::piped())')
     expect(backend).toContain('child.wait_with_output()')
     expect(backend).not.toContain('fake')

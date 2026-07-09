@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../docs/addons/manifest.schema.json",
   "id": "com.elephantnote.examples.finance-notes",
   "name": "Finance Notes Example",
   "version": "0.1.0",

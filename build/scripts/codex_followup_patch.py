@@ -134,3 +134,10 @@ if '<h4>Codex subscription</h4>' in ui:
 if ui.index('<h4>Codex / ChatGPT subscription</h4>') < ui.index('<h4>External API providers</h4>'):
     raise SystemExit('Codex card is not below open providers')
 ui_path.write_text(ui)
+
+if os.environ.get('GITHUB_ACTIONS') == 'true':
+    subprocess.run([
+        'pnpm', 'exec', 'eslint',
+        'Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue',
+        '--fix'
+    ], check=True)

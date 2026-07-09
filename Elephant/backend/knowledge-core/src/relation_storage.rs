@@ -151,7 +151,10 @@ impl KnowledgeStore {
         };
         let mut statement = conn.prepare(sql).map_err(|error| error.to_string())?;
         let rows = statement
-            .query_map(params![node_kind_name(&node.kind), node.id], map_relation_row)
+            .query_map(
+                params![node_kind_name(&node.kind), node.id],
+                map_relation_row,
+            )
             .map_err(|error| error.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())
@@ -176,7 +179,10 @@ impl KnowledgeStore {
                 )
                 .map_err(|error| error.to_string())?;
             let rows = statement
-                .query_map(params![relation_status_name(&status), capped_limit], map_relation_row)
+                .query_map(
+                    params![relation_status_name(&status), capped_limit],
+                    map_relation_row,
+                )
                 .map_err(|error| error.to_string())?;
             return rows
                 .collect::<Result<Vec<_>, _>>()
@@ -201,7 +207,9 @@ impl KnowledgeStore {
         let conn = open_relation_connection(self.database_path())?;
         conn.execute_batch(RELATION_SCHEMA)
             .map_err(|error| error.to_string())?;
-        let transaction = conn.unchecked_transaction().map_err(|error| error.to_string())?;
+        let transaction = conn
+            .unchecked_transaction()
+            .map_err(|error| error.to_string())?;
         transaction
             .execute(
                 "DELETE FROM knowledge_relations

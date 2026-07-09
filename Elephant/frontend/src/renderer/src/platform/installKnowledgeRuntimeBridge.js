@@ -1,21 +1,110 @@
 import { knowledgeRuntimeClient, isKnowledgeRuntimeAvailable } from './knowledgeRuntimeClient'
 
-const graphDocuments = (graph) => (Array.isArray(graph?.nodes) ? graph.nodes : []).map((node) => ({
-  relativePath: node.relativePath || node.path || node.id || '',
-  path: node.path || node.relativePath || node.id || '',
-  title: node.title || node.id || 'Untitled',
-  excerpt: node.summary || '',
-  tags: Array.isArray(node.tags) ? node.tags : [],
-  chunkCount: Number(node.chunkCount || 0)
-}))
+const searchRuntimeState = {
+  vaultPath: '',
+  initializations: new Map(),
+  rebuilds: new Map()
+}
 
-const inspect = async () => {
+const documentCount = (status = {}) => Number(
+  status.indexedDocuments ?? status.notesIndexed ?? status.documents ?? 0
+) || 0
+
+export const normalizeKnowledgeSearchStatus = (status = {}, vaultPath = searchRuntimeState.vaultPath, forcedStatus = '') => {
+  const indexedDocuments = documentCount(status)
+  const resolvedStatus = forcedStatus || status.status || (status.enabled === false
+    ? 'disabled'
+    : indexedDocuments > 0
+      ? 'ready'
+      : 'empty')
+  return {
+    enabled: status.enabled !== false,
+    runtime: 'rust-knowledge-core',
+    ...status,
+    status: resolvedStatus,
+    vaultPath: String(status.vaultPath || vaultPath || ''),
+    indexedDocuments,
+    totalDocuments: Number(status.totalDocuments ?? indexedDocuments) || indexedDocuments,
+    message: String(status.message || '')
+  }
+}
+
+const graphDocuments = (graph) => (Array.isArray(graph?.nodes) ? graph.nodes : [])
+  .filter((node) => (node.kind || node.type) !== 'wiki')
+  .map((node) => ({
+    relativePath: node.relativePath || node.path || node.id || '',
+    path: node.path || node.relativePath || node.id || '',
+    title: node.title || node.id || 'Untitled',
+    excerpt: node.summary || '',
+    tags: Array.isArray(node.tags) ? node.tags : [],
+    chunkCount: Number(node.chunkCount || 0)
+  }))
+
+const currentSearchStatus = async() => {
+  const raw = await knowledgeRuntimeClient.status()
+  const rebuilding = searchRuntimeState.rebuilds.has(searchRuntimeState.vaultPath)
+  return normalizeKnowledgeSearchStatus(raw, searchRuntimeState.vaultPath, rebuilding ? 'indexing' : '')
+}
+
+const rebuildSearchIndex = (vaultPath = searchRuntimeState.vaultPath) => {
+  const path = String(vaultPath || '').trim()
+  const existing = searchRuntimeState.rebuilds.get(path)
+  if (existing) return existing
+
+  const rebuild = knowledgeRuntimeClient.rebuild()
+    .then(async(report) => ({
+      ...(await currentSearchStatus()),
+      rebuildReport: report
+    }))
+    .finally(() => {
+      if (searchRuntimeState.rebuilds.get(path) === rebuild) {
+        searchRuntimeState.rebuilds.delete(path)
+      }
+    })
+  searchRuntimeState.rebuilds.set(path, rebuild)
+  return rebuild
+}
+
+const initializeSearchVault = (vaultPath = '') => {
+  const path = String(vaultPath || '').trim()
+  searchRuntimeState.vaultPath = path
+  const existing = searchRuntimeState.initializations.get(path)
+  if (existing) return existing
+
+  const initialization = knowledgeRuntimeClient.status()
+    .then((rawStatus) => {
+      const status = normalizeKnowledgeSearchStatus(rawStatus, path)
+      if (status.enabled && status.indexedDocuments === 0 && !searchRuntimeState.rebuilds.has(path)) {
+        void rebuildSearchIndex(path).catch((error) => {
+          console.error('[KnowledgeRuntime] initial rebuild failed', {
+            vaultPath: path,
+            error: error?.message || String(error)
+          })
+        })
+        return {
+          ...status,
+          status: 'indexing',
+          message: 'Building the local knowledge index in the background.'
+        }
+      }
+      return status
+    })
+    .finally(() => {
+      if (searchRuntimeState.initializations.get(path) === initialization) {
+        searchRuntimeState.initializations.delete(path)
+      }
+    })
+  searchRuntimeState.initializations.set(path, initialization)
+  return initialization
+}
+
+const inspect = async() => {
   const [graph, status] = await Promise.all([
     knowledgeRuntimeClient.graph({ includeSuggestions: false }),
-    knowledgeRuntimeClient.status()
+    currentSearchStatus()
   ])
   return {
-    indexPath: status?.databasePath || '',
+    indexPath: status?.databasePath || status?.database_path || '',
     documents: graphDocuments(graph),
     folders: [],
     semanticLinks: Array.isArray(graph?.edges) ? graph.edges : [],
@@ -58,19 +147,19 @@ export const installKnowledgeRuntimeBridge = (target = globalThis) => {
     setRelationStatus: knowledgeRuntimeClient.setRelationStatus
   }
   bridge.search = {
-    initVault: async () => knowledgeRuntimeClient.rebuild(),
+    initVault: initializeSearchVault,
     query: ({ query = '', q = '', limit = 20 } = {}) => knowledgeRuntimeClient.search(query || q, limit),
-    status: async () => ({ enabled: true, runtime: 'rust-knowledge-core', ...(await knowledgeRuntimeClient.status()) }),
-    rebuild: knowledgeRuntimeClient.rebuild,
+    status: currentSearchStatus,
+    rebuild: rebuildSearchIndex,
     inspect
   }
   bridge.wiki = {
-    list: async () => ({ records: await knowledgeRuntimeClient.listWikiDrafts({ limit: 500 }) }),
+    list: async() => ({ records: await knowledgeRuntimeClient.listWikiDrafts({ limit: 500 }) }),
     propose: knowledgeRuntimeClient.generateWiki,
     accept: ({ id, draftId } = {}) => knowledgeRuntimeClient.acceptWikiDraft(draftId || id),
     dismiss: ({ id, draftId } = {}) => knowledgeRuntimeClient.rejectWikiDraft(draftId || id),
     sourceInfo: ({ id, draftId } = {}) => knowledgeRuntimeClient.getWikiDraft(draftId || id),
-    context: async () => ({ records: await knowledgeRuntimeClient.listWikiDrafts({ limit: 500 }), graph: await knowledgeRuntimeClient.graph() })
+    context: async() => ({ records: await knowledgeRuntimeClient.listWikiDrafts({ limit: 500 }), graph: await knowledgeRuntimeClient.graph() })
   }
   bridge.rag = { chat: knowledgeRuntimeClient.chat }
   return true

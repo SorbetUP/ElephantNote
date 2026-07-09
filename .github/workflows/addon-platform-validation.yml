@@ -1,0 +1,45 @@
+name: Addon Platform Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-addons:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Run focused addon and settings tests
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules \
+            Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/externalAddonContracts.spec.js \
+            tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
+            2>&1 | tee addon-tests.txt
+
+      - name: Build Tauri web bundle
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm tauri:web:build 2>&1 | tee addon-build.txt
+
+      - name: Upload addon validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: addon-platform-validation
+          path: |
+            addon-tests.txt
+            addon-build.txt
+          if-no-files-found: ignore

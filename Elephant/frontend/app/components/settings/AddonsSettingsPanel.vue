@@ -57,16 +57,55 @@
       <section class="en-addons-toolbar">
         <label class="en-addons-search">
           <Search aria-hidden="true" />
-          <input v-model.trim="query" type="search" placeholder="Search installed addons" aria-label="Search installed addons">
+          <input v-model.trim="query" type="search" placeholder="Search addons" aria-label="Search addons">
         </label>
+        <button class="en-secondary-button" type="button" :disabled="catalogLoading || operationInProgress" @click="refreshCatalog">
+          <RefreshCw aria-hidden="true" /> Refresh
+        </button>
         <button class="en-primary-button" type="button" :disabled="operationInProgress" @click="installAddonPackage">
-          <Plus aria-hidden="true" /> Install
+          <Plus aria-hidden="true" /> Install from file
         </button>
       </section>
 
       <section class="en-addons-list-section">
         <header>
-          <h3>Core addons</h3>
+          <h3>Available addons</h3>
+          <span>{{ availableCatalogAddons.length }}</span>
+        </header>
+        <div class="en-addons-card en-catalog-list">
+          <article v-for="addon in availableCatalogAddons" :key="addon.id" class="en-catalog-row">
+            <span class="en-catalog-icon"><Download aria-hidden="true" /></span>
+            <div class="en-catalog-copy">
+              <div>
+                <strong>{{ addon.name }}</strong>
+                <small>v{{ addon.version }}</small>
+              </div>
+              <p>{{ addon.description }}</p>
+              <span>{{ addon.author || 'Unknown author' }}</span>
+            </div>
+            <button
+              :class="addon.updateAvailable ? 'en-primary-button' : 'en-secondary-button'"
+              type="button"
+              :disabled="operationInProgress || (addon.installed && !addon.updateAvailable)"
+              @click="installCatalogAddon(addon)"
+            >
+              {{ addon.updateAvailable ? 'Update' : addon.installed ? 'Installed' : 'Install' }}
+            </button>
+          </article>
+          <div v-if="catalogLoading" class="en-addons-empty">Loading the official addon catalogue…</div>
+          <div v-else-if="catalogError" class="en-addons-empty error">
+            <strong>Catalogue unavailable</strong>
+            <span>{{ catalogError }}</span>
+          </div>
+          <div v-else-if="!availableCatalogAddons.length" class="en-addons-empty">
+            {{ query ? 'No catalogue addon matches this search.' : 'The official catalogue is empty.' }}
+          </div>
+        </div>
+      </section>
+
+      <section class="en-addons-list-section">
+        <header>
+          <h3>Installed addons</h3>
           <span>{{ filteredBuiltInAddons.length }}</span>
         </header>
         <div class="en-addons-card en-addons-list">
@@ -81,7 +120,7 @@
             @toggle-addon="toggleAddon(addon)"
             @run-action="runAction"
           />
-          <div v-if="!filteredBuiltInAddons.length" class="en-addons-empty">No core addon matches this search.</div>
+          <div v-if="!filteredBuiltInAddons.length" class="en-addons-empty">No installed addon matches this search.</div>
         </div>
       </section>
 
@@ -113,7 +152,7 @@
 </template>
 
 <script setup>
-import { Plus, Search, ShieldAlert } from '@lucide/vue'
+import { Download, Plus, RefreshCw, Search, ShieldAlert } from '@lucide/vue'
 import AddonSettingsRow from './AddonSettingsRow.vue'
 import { useAddonsSettings } from './useAddonsSettings'
 
@@ -123,17 +162,22 @@ const {
   expandedAddonId,
   message,
   messageIsError,
+  catalogLoading,
+  catalogError,
   communityAddonsEnabled,
   communityConsentLoaded,
   operationInProgress,
   lastError,
   filteredBuiltInAddons,
   filteredExternalAddons,
+  availableCatalogAddons,
   actionsForAddon,
   toggleDetails,
+  refreshCatalog,
   enableCommunityAddons,
   disableCommunityAddons,
   installAddonPackage,
+  installCatalogAddon,
   toggleAddon,
   uninstallAddon,
   runAction

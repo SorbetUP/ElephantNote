@@ -9,6 +9,7 @@ const readSettingsStyles = () => read('Elephant/frontend/app/components/settings
 const readSettingsPrimitives = () => read('Elephant/frontend/app/components/settings/settings-primitives.css')
 const readSync = () => read('Elephant/frontend/app/components/settings/SyncSettingsPanel.vue')
 const readAi = () => read('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
+const readAddons = () => read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
 const readPreferences = () => read('Elephant/frontend/src/renderer/src/store/preferences.js')
 
 describe('ElephantNote settings redesign', () => {
@@ -32,6 +33,7 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('placeholder="Search all settings"')
     expect(source).toContain('const settingsIndex = [')
     expect(source).toContain("label: 'Quick insert trigger'")
+    expect(source).toContain("label: 'Installed addons'")
     expect(source).toContain("label: 'Conflict retention'")
     expect(source).toContain("label: 'Semantic search and embeddings'")
     expect(source).toContain('const openSearchResult = (result) =>')
@@ -39,15 +41,33 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('aiInitialPage.value = result.subpage')
   })
 
-  it('uses a minimal flat navigation and keeps Sites separate from Import', () => {
+  it('uses a minimal flat navigation and keeps Addons, Sites and Import separate', () => {
     const source = readSettings()
 
+    expect(source).toContain("{ id: 'addons', label: 'Addons', icon: Package }")
     expect(source).toContain("{ id: 'sites', label: 'Sites', icon: Globe2 }")
     expect(source).toContain("{ id: 'import', label: 'Import', icon: Download }")
     expect(source).not.toContain("label: 'Workspace'")
     expect(source).not.toContain("label: 'Services'")
     expect(source).not.toContain("label: 'Data'")
     expect(source).not.toContain('Import & sites')
+  })
+
+  it('integrates the real addon manager into the active settings panel', () => {
+    const settings = readSettings()
+    const addons = readAddons()
+
+    expect(settings).toContain("activeSection === 'addons'")
+    expect(settings).toContain('<addons-settings-panel />')
+    expect(settings).toContain("import AddonsSettingsPanel from './AddonsSettingsPanel.vue'")
+    expect(addons).toContain('useAddonsStore()')
+    expect(addons).toContain('getAddonActions(contributions.value)')
+    expect(addons).toContain('setCommunityAddonsEnabled(true)')
+    expect(addons).toContain('installExternalAddon(selected)')
+    expect(addons).toContain('setAddonEnabled(addon.manifest.id')
+    expect(addons).toContain('runAction(action.id)')
+    expect(addons).toContain('.elephantnote/addons')
+    expect(addons).toContain("log.info('[settings:addons] mounted'")
   })
 
   it('uses semantic controls and exposes real quick-insert preferences', () => {

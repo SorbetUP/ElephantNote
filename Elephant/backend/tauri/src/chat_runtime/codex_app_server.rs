@@ -390,7 +390,17 @@ pub async fn chat(app: &AppHandle, model: &str, prompt: &str) -> R<CodexChatResu
       json!({
         "threadId": thread_id,
         "input": [{ "type": "text", "text": prompt }],
-        "model": model
+        "model": model,
+        "cwd": cwd.to_string_lossy(),
+        "approvalPolicy": "never",
+        "sandboxPolicy": {
+          "type": "readOnly",
+          "access": {
+            "type": "restricted",
+            "includePlatformDefaults": true,
+            "readableRoots": [cwd.to_string_lossy()]
+          }
+        }
       }),
     )
     .await?;

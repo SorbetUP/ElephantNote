@@ -93,6 +93,9 @@ export const useAddonsStore = defineStore('addons', {
     installed: false,
     items: [],
     contributions: {},
+    catalog: [],
+    catalogLoading: false,
+    catalogError: null,
     lastError: null,
     operationInProgress: false,
     communityAddonsEnabled: false,
@@ -138,6 +141,9 @@ export const useAddonsStore = defineStore('addons', {
       this.installed = false
       this.items = []
       this.contributions = {}
+      this.catalog = []
+      this.catalogLoading = false
+      this.catalogError = null
       this.lastError = null
       this.operationInProgress = false
       this.communityAddonsEnabled = false
@@ -148,6 +154,27 @@ export const useAddonsStore = defineStore('addons', {
       if (!this.manager) return
       this.items = this.manager.list()
       this.contributions = cloneContributionMap(this.manager.getContributionMap())
+    },
+
+    async loadAddonCatalog() {
+      this.catalogLoading = true
+      try {
+        const entries = await invokeTauri('tauri_addons_catalog_list')
+        this.catalog = Array.isArray(entries) ? entries : []
+        this.catalogError = null
+        this.manager?.logger?.info?.('[addons] catalog:loaded', {
+          count: this.catalog.length,
+          ids: this.catalog.map((entry) => entry.id)
+        })
+        return this.catalog
+      } catch (error) {
+        this.catalog = []
+        this.catalogError = error?.message || String(error)
+        this.manager?.logger?.error?.('[addons] catalog:failed', { error: this.catalogError })
+        throw error
+      } finally {
+        this.catalogLoading = false
+      }
     },
 
     async loadCommunityAddonsConsent() {
@@ -257,6 +284,35 @@ export const useAddonsStore = defineStore('addons', {
         return result
       } catch (error) {
         this.lastError = error?.message || String(error)
+        throw error
+      } finally {
+        this.operationInProgress = false
+        this.refresh()
+      }
+    },
+
+    async installCatalogAddon(id) {
+      if (!this.manager?.external) throw new Error('External addon runtime is not available')
+      if (!this.communityAddonsEnabled) throw new Error('Community addons must be enabled before installing from the catalogue')
+      this.operationInProgress = true
+      this.manager.logger?.info?.('[addons] catalog:install:start', { id })
+      try {
+        const record = await invokeTauri('tauri_addons_catalog_install', { addonId: id })
+        const existing = this.manager.get(record.manifest.id)
+        if (existing) {
+          await this.manager.disable(record.manifest.id).catch(() => {})
+          this.manager.unregister(record.manifest.id)
+        }
+        this.manager.external.register(record)
+        this.lastError = null
+        this.manager.logger?.info?.('[addons] catalog:install:done', {
+          id: record.manifest.id,
+          version: record.manifest.version
+        })
+        return record
+      } catch (error) {
+        this.lastError = error?.message || String(error)
+        this.manager.logger?.error?.('[addons] catalog:install:failed', { id, error: this.lastError })
         throw error
       } finally {
         this.operationInProgress = false

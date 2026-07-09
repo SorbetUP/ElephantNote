@@ -51,7 +51,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
 
       - name: Set up Rust Android targets
         uses: dtolnay/rust-toolchain@stable

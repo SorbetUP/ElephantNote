@@ -1,0 +1,71 @@
+name: Wiki View Fix Once
+
+on:
+  push:
+    branches:
+      - feature/rust-knowledge-core
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki-view-fix-once
+  cancel-in-progress: true
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-knowledge-core
+          fetch-depth: 0
+      - name: Wait for functional Wiki view installation
+        id: detect
+        shell: bash
+        run: |
+          if grep -q 'knowledge-wiki-view' Elephant/frontend/app/components/views/WikiView.vue; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Fix Vue conditional loop structure
+        if: steps.detect.outputs.ready == 'true'
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('Elephant/frontend/app/components/views/WikiView.vue')
+          text = path.read_text()
+          old = '''        <article
+          v-for="draft in filteredDrafts"
+          v-else
+          :key="draft.id"'''
+          new = '''        <template v-else>
+          <article
+            v-for="draft in filteredDrafts"
+            :key="draft.id"'''
+          if old not in text:
+              raise SystemExit('Expected Wiki card loop was not found')
+          text = text.replace(old, new, 1)
+          old_end = '''        </article>
+      </main>'''
+          new_end = '''          </article>
+        </template>
+      </main>'''
+          if old_end not in text:
+              raise SystemExit('Expected Wiki card closing block was not found')
+          path.write_text(text.replace(old_end, new_end, 1))
+          PY
+          rm .github/workflows/wiki-view-fix-once.yml
+      - name: Commit fix
+        if: steps.detect.outputs.ready == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Elephant/frontend/app/components/views/WikiView.vue \
+                  .github/workflows/wiki-view-fix-once.yml
+          git commit -m "fix(knowledge): use valid Wiki card conditional loop"
+          git push origin HEAD:feature/rust-knowledge-core

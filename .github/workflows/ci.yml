@@ -51,7 +51,7 @@ jobs:
       - name: Verify generated parity backlog size
         shell: bash
         run: |
-          lines=$(cat agent/docs/project/parity/generated/*.md agent/docs/project/parity/index.md | wc -l | tr -d ' ')
+          lines=$(cat docs/parity/generated/*.md docs/parity/index.md | wc -l | tr -d ' ')
           echo "Generated parity documentation lines: $lines"
           test "$lines" -ge 10000
 
@@ -102,8 +102,8 @@ jobs:
           name: quality-artifacts
           path: |
             build/coverage/
-            agent/docs/project/parity/generated/
-            agent/docs/project/parity/index.md
+            docs/parity/generated/
+            docs/parity/index.md
             security-guardrails-report.json
             eslint-output.txt
             build-output.txt

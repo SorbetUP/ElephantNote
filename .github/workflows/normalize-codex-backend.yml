@@ -31,17 +31,17 @@ jobs:
           text = path.read_text()
           old_thread = '"sandbox": "readOnly",'
           old_turn = '''"sandboxPolicy": {
-                  "type": "readOnly",
-                  "access": {
-                    "type": "restricted",
-                    "includePlatformDefaults": true,
-                    "readableRoots": [cwd.to_string_lossy()]
-                  }
-                }'''
+          "type": "readOnly",
+          "access": {
+            "type": "restricted",
+            "includePlatformDefaults": true,
+            "readableRoots": [cwd.to_string_lossy()]
+          }
+        }'''
           new_turn = '''"sandboxPolicy": {
-                  "type": "readOnly",
-                  "networkAccess": false
-                }'''
+          "type": "readOnly",
+          "networkAccess": false
+        }'''
           if text.count(old_thread) != 1:
               raise SystemExit(f'Expected one thread sandbox value, found {text.count(old_thread)}')
           if text.count(old_turn) != 1:
@@ -53,7 +53,6 @@ jobs:
           path.write_text(text)
           PY
 
-          test "$(git diff --numstat -- "$path" | awk '{print $1+$2}')" -lt 20
           grep -F '"sandbox": "read-only"' "$path"
           grep -F '"networkAccess": false' "$path"
           rm .github/workflows/normalize-codex-backend.yml

@@ -1,8 +1,7 @@
 name: Fix Codex turn sandbox contract
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened]
+  push:
     branches:
       - feature/real-codex-subscription
 
@@ -11,7 +10,6 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.pull_request.head.ref == 'internal/trigger-codex-turn-fix'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,6 +62,7 @@ jobs:
           path.write_text(text)
           PY
 
+          rm -f .github/codex-push-trigger
           rm .github/workflows/fix-codex-turn-sandbox.yml
 
       - name: Validate focused contract
@@ -81,6 +80,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs .github/workflows/fix-codex-turn-sandbox.yml
+          git add -A
           git commit -m "Fix Codex turn sandbox protocol contract"
           git push origin HEAD:feature/real-codex-subscription

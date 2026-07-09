@@ -4,12 +4,16 @@ import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const exists = (relativePath) => fs.existsSync(path.join(root, relativePath))
 const readSettings = () => read('Elephant/frontend/app/components/settings/SettingsPanel.vue')
 const readSettingsStyles = () => read('Elephant/frontend/app/components/settings/settings-redesign.css')
 const readSettingsPrimitives = () => read('Elephant/frontend/app/components/settings/settings-primitives.css')
 const readSync = () => read('Elephant/frontend/app/components/settings/SyncSettingsPanel.vue')
 const readAi = () => read('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
 const readAddons = () => read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
+const readAddonRow = () => read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
+const readAddonStore = () => read('Elephant/frontend/src/renderer/src/store/addons.js')
+const readRouter = () => read('Elephant/frontend/src/renderer/src/router/index.js')
 const readPreferences = () => read('Elephant/frontend/src/renderer/src/store/preferences.js')
 
 describe('ElephantNote settings redesign', () => {
@@ -53,21 +57,55 @@ describe('ElephantNote settings redesign', () => {
     expect(source).not.toContain('Import & sites')
   })
 
-  it('integrates the real addon manager into the active settings panel', () => {
+  it('uses one consent gate before rendering addon management', () => {
+    const addons = readAddons()
+
+    expect(addons).toContain('v-else-if="!communityAddonsEnabled"')
+    expect(addons).toContain('Turn on community addons')
+    expect(addons).toContain('v-model="riskAccepted"')
+    expect(addons).toContain('setCommunityAddonsEnabled(true)')
+    expect(addons).toContain('<template v-else>')
+    expect(addons).not.toContain('en-addons-summary')
+  })
+
+  it('integrates compact real addon controls into the active settings panel', () => {
     const settings = readSettings()
     const addons = readAddons()
+    const row = readAddonRow()
 
     expect(settings).toContain("activeSection === 'addons'")
     expect(settings).toContain('<addons-settings-panel />')
     expect(settings).toContain("import AddonsSettingsPanel from './AddonsSettingsPanel.vue'")
     expect(addons).toContain('useAddonsStore()')
     expect(addons).toContain('getAddonActions(contributions.value)')
-    expect(addons).toContain('setCommunityAddonsEnabled(true)')
     expect(addons).toContain('installExternalAddon(selected)')
     expect(addons).toContain('setAddonEnabled(addon.manifest.id')
     expect(addons).toContain('runAction(action.id)')
-    expect(addons).toContain('.elephantnote/addons')
+    expect(addons).toContain('<addon-settings-row')
+    expect(row).toContain('role="switch"')
+    expect(row).toContain("emit('run-action', action)")
+    expect(row).toContain("addon.manifest.source === 'external'")
     expect(addons).toContain("log.info('[settings:addons] mounted'")
+  })
+
+  it('refreshes the real vault and opens notes produced by addon commands', () => {
+    const store = readAddonStore()
+
+    expect(store).toContain('refreshVaultAfterAddonAction')
+    expect(store).toContain("import('elephant-front/stores/vaultStore')")
+    expect(store).toContain("import('elephant-front/services/elephantnoteClient')")
+    expect(store).toContain("elephantnoteClient.directory.list('')")
+    expect(store).toContain('vaultStore.openNote(createdEntry)')
+    expect(store).toContain("'[addons] action:start'")
+    expect(store).toContain("'[addons] action:done'")
+  })
+
+  it('removes the dead legacy Addons settings route and component', () => {
+    const router = readRouter()
+
+    expect(router).not.toContain("import AddonsSettings from '@/prefComponents/addons'")
+    expect(router).not.toContain("path: 'addons'")
+    expect(exists('Elephant/frontend/src/renderer/src/prefComponents/addons/index.vue')).toBe(false)
   })
 
   it('uses semantic controls and exposes real quick-insert preferences', () => {

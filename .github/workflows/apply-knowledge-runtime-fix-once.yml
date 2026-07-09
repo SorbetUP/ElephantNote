@@ -1,0 +1,189 @@
+name: Apply Knowledge Runtime Fix Once
+
+on:
+  push:
+    branches:
+      - feature/rust-knowledge-core
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-knowledge-runtime-fix-once
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-knowledge-core
+          fetch-depth: 0
+      - name: Remove every implicit knowledge rebuild path
+        shell: python
+        run: |
+          from pathlib import Path
+
+          bridge_path = Path('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
+          bridge = bridge_path.read_text()
+          old_search = """    search: {
+              initVault: () => invoke(target, 'tauri_knowledge_rebuild'),
+              query: (params = {}) => invoke(target, 'tauri_knowledge_search', { query: params.query || params.q || '', limit: params.limit || params.maxResults || 20 }),
+              status: async() => ({ enabled: true, runtime: 'rust-knowledge-core', ...(await invoke(target, 'tauri_knowledge_status')) }),
+              rebuild: () => invoke(target, 'tauri_knowledge_rebuild'),
+              inspect: async() => {
+                const [graph, status] = await Promise.all([
+                  invoke(target, 'tauri_knowledge_graph', { includeSuggestions: false }),
+                  invoke(target, 'tauri_knowledge_status')
+                ])
+                return { indexPath: status.databasePath || '', documents: graph.nodes || [], folders: [], semanticLinks: graph.edges || [], graph, generatedAt: new Date().toISOString() }
+              }
+            },"""
+          new_search = """    search: {
+              initVault: async(payload = '') => {
+                const vaultPath = typeof payload === 'string' ? payload : payload?.vaultPath || payload?.path || ''
+                const status = await invoke(target, 'tauri_knowledge_status')
+                const indexedDocuments = Number(status.documents || status.indexedDocuments || 0)
+                return {
+                  enabled: true,
+                  runtime: 'rust-knowledge-core',
+                  ...status,
+                  status: indexedDocuments > 0 ? 'ready' : 'empty',
+                  vaultPath,
+                  indexedDocuments,
+                  totalDocuments: indexedDocuments,
+                  databasePath: status.databasePath || status.database_path || ''
+                }
+              },
+              query: (params = {}) => invoke(target, 'tauri_knowledge_search', { query: params.query || params.q || '', limit: params.limit || params.maxResults || 20 }),
+              status: async() => {
+                const status = await invoke(target, 'tauri_knowledge_status')
+                const indexedDocuments = Number(status.documents || status.indexedDocuments || 0)
+                return {
+                  enabled: true,
+                  runtime: 'rust-knowledge-core',
+                  ...status,
+                  status: indexedDocuments > 0 ? 'ready' : 'empty',
+                  indexedDocuments,
+                  totalDocuments: indexedDocuments,
+                  databasePath: status.databasePath || status.database_path || ''
+                }
+              },
+              rebuild: () => invoke(target, 'tauri_knowledge_rebuild'),
+              inspect: async() => {
+                const [fullGraph, status] = await Promise.all([
+                  invoke(target, 'tauri_knowledge_graph', { includeSuggestions: false }),
+                  invoke(target, 'tauri_knowledge_status')
+                ])
+                const allNodes = Array.isArray(fullGraph.nodes) ? fullGraph.nodes : []
+                const nodes = allNodes.slice(0, 240)
+                const visibleIds = new Set(nodes.map((node) => node.id))
+                const edges = (Array.isArray(fullGraph.edges) ? fullGraph.edges : [])
+                  .filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+                const graph = {
+                  ...fullGraph,
+                  nodes,
+                  edges,
+                  totalNodeCount: allNodes.length,
+                  hiddenNodeCount: Math.max(0, allNodes.length - nodes.length),
+                  rendererLimited: allNodes.length > nodes.length
+                }
+                return {
+                  indexPath: status.databasePath || status.database_path || '',
+                  documents: nodes.filter((node) => (node.kind || node.type) === 'note'),
+                  folders: [],
+                  semanticLinks: edges,
+                  graph,
+                  generatedAt: new Date().toISOString()
+                }
+              }
+            },"""
+          if old_search not in bridge:
+              raise SystemExit('Expected legacy search block was not found in tauriElephantNoteBridge.js')
+          bridge_path.write_text(bridge.replace(old_search, new_search))
+
+          domain_path = Path('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
+          domain = domain_path.read_text()
+          old_prefix = """const CHAT_REBUILD_COOLDOWN_MS = 60_000
+          const searchVaultInitializedForChat = new Map()
+          const chatSearchRebuiltAt = new Map()
+
+          const getBridge = () => globalThis.window?.elephantnote
+
+          const callModelBridge = (method, payload) => {
+            const bridgeMethod = getBridge()?.models?.[method]
+            if (typeof bridgeMethod !== 'function') return undefined
+            return bridgeMethod(toPlainObject(payload))
+          }
+
+          const shouldRebuildChatSearch = (vaultPath, now = Date.now()) => {
+            if (!vaultPath) return false
+            const lastRebuildAt = chatSearchRebuiltAt.get(vaultPath) || 0
+            if (now - lastRebuildAt < CHAT_REBUILD_COOLDOWN_MS) return false
+            chatSearchRebuiltAt.set(vaultPath, now)
+            return true
+          }
+
+          const ensureSearchVaultForChat = async (call) => {
+            const vaultPayload = await call(API.VAULTS_GET).catch(() => null)
+            const vaultPath = String(vaultPayload?.activeVault?.path || '').trim()
+            if (!vaultPath) return ''
+            if (!searchVaultInitializedForChat.has(vaultPath)) {
+              await call(API.SEARCH_INIT_VAULT, { vaultPath }).catch(() => null)
+              searchVaultInitializedForChat.set(vaultPath, true)
+            }
+            return vaultPath
+          }
+
+          const hasCitations = (result) => Array.isArray(result?.citations) && result.citations.length > 0
+          const hasAnswer = (result) => typeof result?.answer === 'string' && result.answer.trim().length > 0
+          """
+          new_prefix = """const getBridge = () => globalThis.window?.elephantnote
+
+          const callModelBridge = (method, payload) => {
+            const bridgeMethod = getBridge()?.models?.[method]
+            if (typeof bridgeMethod !== 'function') return undefined
+            return bridgeMethod(toPlainObject(payload))
+          }
+          """
+          if old_prefix not in domain:
+              raise SystemExit('Expected implicit chat rebuild helpers were not found')
+          domain = domain.replace(old_prefix, new_prefix)
+          old_chat = """const callRagChat = async (call, payload, limit = 6) => {
+            const vaultPath = await ensureSearchVaultForChat(call)
+            const request = normalizeRagChatPayload(payload, limit)
+            const result = await call(API.RAG_CHAT, request)
+
+            if (hasAnswer(result) || hasCitations(result) || !shouldRebuildChatSearch(vaultPath)) {
+              return result
+            }
+
+            await call(API.SEARCH_REBUILD, {}).catch(() => null)
+            const retry = await call(API.RAG_CHAT, request).catch(() => null)
+            return hasAnswer(retry) || hasCitations(retry) ? retry : result
+          }"""
+          new_chat = """const callRagChat = (call, payload, limit = 6) =>
+            call(API.RAG_CHAT, normalizeRagChatPayload(payload, limit))"""
+          if old_chat not in domain:
+              raise SystemExit('Expected implicit chat rebuild function was not found')
+          domain_path.write_text(domain.replace(old_chat, new_chat))
+
+          workflow = Path('.github/workflows/apply-knowledge-runtime-fix-once.yml')
+          workflow.unlink()
+      - name: Verify implicit rebuilds are gone
+        shell: bash
+        run: |
+          ! grep -F "initVault: () => invoke(target, 'tauri_knowledge_rebuild')" Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js
+          ! grep -F "call(API.SEARCH_REBUILD" Elephant/frontend/app/services/elephantnoteClient/domainClients.js
+          grep -F "initVault: async(payload = '')" Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js
+      - name: Commit direct runtime safeguards
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js Elephant/frontend/app/services/elephantnoteClient/domainClients.js .github/workflows/apply-knowledge-runtime-fix-once.yml
+          git commit -m 'fix(knowledge): remove remaining implicit rebuild paths'
+          git push origin HEAD:feature/rust-knowledge-core

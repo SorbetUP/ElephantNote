@@ -69,7 +69,10 @@ fn frontmatter_title(markdown: &str) -> Option<String> {
             break;
         }
         if let Some(value) = trimmed.strip_prefix("title:") {
-            let title = value.trim().trim_matches(['\'', '"']).trim();
+            let title = value
+                .trim()
+                .trim_matches(|character| character == '\'' || character == '"')
+                .trim();
             if !title.is_empty() {
                 return Some(title.to_string());
             }
@@ -85,7 +88,7 @@ fn parse_heading(line: &str) -> Option<(u8, String)> {
         return None;
     }
     let rest = trimmed.get(level..)?;
-    if !rest.starts_with(char::is_whitespace) {
+    if !rest.chars().next().is_some_and(char::is_whitespace) {
         return None;
     }
     let heading = rest.trim().trim_end_matches('#').trim().to_string();
@@ -106,7 +109,8 @@ fn extract_sections(relative_path: &str, markdown: &str, document_title: &str) -
                 _ => {}
             }
         } else if fence.is_none() {
-            if let Some((level, heading)) = parse_heading(line.trim_end_matches(['\r', '\n'])) {
+            let heading_line = line.trim_end_matches(|character| character == '\r' || character == '\n');
+            if let Some((level, heading)) = parse_heading(heading_line) {
                 markers.push(HeadingMarker { start: offset, level, heading });
             }
         }
@@ -137,7 +141,9 @@ fn extract_sections(relative_path: &str, markdown: &str, document_title: &str) -
 }
 
 fn make_section(relative_path: &str, heading: &str, level: u8, start: usize, end: usize, ordinal: usize) -> KnowledgeSection {
-    let id = stable_id("section", &[relative_path, &start.to_string(), &end.to_string(), heading]);
+    let start_string = start.to_string();
+    let end_string = end.to_string();
+    let id = stable_id("section", &[relative_path, &start_string, &end_string, heading]);
     KnowledgeSection {
         id,
         heading: heading.to_string(),
@@ -172,7 +178,9 @@ fn chunk_sections(relative_path: &str, markdown: &str, sections: &[KnowledgeSect
                 continue;
             }
             let content_hash = blake3::hash(text.as_bytes()).to_hex().to_string();
-            let id = stable_id("chunk", &[relative_path, &start.to_string(), &end.to_string(), &content_hash]);
+            let start_string = start.to_string();
+            let end_string = end.to_string();
+            let id = stable_id("chunk", &[relative_path, &start_string, &end_string, &content_hash]);
             let token_estimate = (text.chars().count() + 3) / 4;
             chunks.push(KnowledgeChunk {
                 id,
@@ -216,9 +224,12 @@ fn extract_blocks(markdown: &str, start: usize, end: usize) -> Vec<TextBlock> {
                     blocks.push(TextBlock { start: begin, end: line_start });
                 }
             }
-        } else if fence.is_none() && parse_heading(line.trim_end_matches(['\r', '\n'])).is_some() {
-            if let Some(begin) = block_start.take() {
-                blocks.push(TextBlock { start: begin, end: line_end });
+        } else if fence.is_none() {
+            let heading_line = line.trim_end_matches(|character| character == '\r' || character == '\n');
+            if parse_heading(heading_line).is_some() {
+                if let Some(begin) = block_start.take() {
+                    blocks.push(TextBlock { start: begin, end: line_end });
+                }
             }
         }
         cursor = line_end;
@@ -249,7 +260,9 @@ fn pack_blocks(markdown: &str, blocks: &[TextBlock]) -> Vec<(usize, usize)> {
             None => current = Some((block.start, block.end)),
             Some((start, end)) => {
                 let combined_chars = markdown[start..block.end].chars().count();
-                if combined_chars > TARGET_CHUNK_CHARS && markdown[start..end].chars().count() >= TARGET_CHUNK_CHARS / 2 {
+                if combined_chars > TARGET_CHUNK_CHARS
+                    && markdown[start..end].chars().count() >= TARGET_CHUNK_CHARS / 2
+                {
                     packed.push((start, end));
                     current = Some((block.start, block.end));
                 } else if combined_chars > MAX_CHUNK_CHARS {
@@ -280,7 +293,11 @@ fn split_large_block(markdown: &str, start: usize, end: usize) -> Vec<(usize, us
             last_break = absolute + character.len_utf8();
         }
         if chars >= MAX_CHUNK_CHARS {
-            let split = if last_break > chunk_start { last_break } else { absolute + character.len_utf8() };
+            let split = if last_break > chunk_start {
+                last_break
+            } else {
+                absolute + character.len_utf8()
+            };
             result.push((chunk_start, split));
             chunk_start = split;
             last_break = split;
@@ -302,7 +319,7 @@ fn extract_wikilinks(markdown: &str) -> Vec<ExplicitLink> {
         let Some(relative_end) = markdown[content_start..].find("]]" ) else { break };
         let content_end = content_start + relative_end;
         let raw = markdown[content_start..content_end].trim();
-        let (target, label) = raw.split_once('|').map(|(target, label)| (target, label)).unwrap_or((raw, raw));
+        let (target, label) = raw.split_once('|').unwrap_or((raw, raw));
         let target = target.split('#').next().unwrap_or("").trim();
         if !target.is_empty() {
             links.push(ExplicitLink {
@@ -324,7 +341,8 @@ fn stable_id(namespace: &str, parts: &[&str]) -> String {
         hasher.update(&[0]);
         hasher.update(part.as_bytes());
     }
-    format!("{namespace}-{}", &hasher.finalize().to_hex()[..24])
+    let hex = hasher.finalize().to_hex().to_string();
+    format!("{namespace}-{}", &hex[..24])
 }
 
 #[cfg(test)]

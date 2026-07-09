@@ -38,6 +38,15 @@ export const installKnowledgeRuntimeBridge = (target = globalThis) => {
     generateTagging: (relativePath, payload = {}, maxTags = 8) =>
       knowledgeRuntimeClient.generateTagging(relativePath, payload, maxTags),
     validateChatAction: (action) => knowledgeRuntimeClient.validateChatAction(action),
+    chatActions: {
+      prepare: (action, rationale = '') =>
+        knowledgeRuntimeClient.prepareChatAction(action, rationale),
+      get: (proposalId) => knowledgeRuntimeClient.getChatAction(proposalId),
+      list: (options = {}) => knowledgeRuntimeClient.listChatActions(options),
+      approve: (proposalId) => knowledgeRuntimeClient.approveChatAction(proposalId),
+      reject: (proposalId) => knowledgeRuntimeClient.rejectChatAction(proposalId),
+      execute: (proposalId) => knowledgeRuntimeClient.executeChatAction(proposalId)
+    },
     listRelations: (options = {}) => knowledgeRuntimeClient.listRelations(options),
     relationsForNode: (node, includeRejected = false) =>
       knowledgeRuntimeClient.relationsForNode(node, includeRejected),

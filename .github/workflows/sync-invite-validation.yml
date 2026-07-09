@@ -42,6 +42,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
+      - name: Exercise the real development dependency guard
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -f Elephant/node_modules/.elephantnote-dev-dependencies.sha256
+          node build/scripts/ensure-dev-dependencies.mjs 2>&1 | tee dev-dependencies-guard-output.txt
+          node build/scripts/ensure-dev-dependencies.mjs 2>&1 | tee -a dev-dependencies-guard-output.txt
+          grep -F '[dev-deps] dependencies installed and verified' dev-dependencies-guard-output.txt
+          grep -F '[dev-deps] dependencies are current' dev-dependencies-guard-output.txt
       - name: Validate QR, invitation file and branch dependency repair
         shell: bash
         run: |
@@ -57,6 +66,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sync-invite-validation-output
-          path: sync-invite-validation-output.txt
+          path: |
+            dev-dependencies-guard-output.txt
+            sync-invite-validation-output.txt
           if-no-files-found: error
           retention-days: 7

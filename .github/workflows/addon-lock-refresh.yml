@@ -1,4 +1,4 @@
-name: Refresh addon Cargo lockfile
+name: Harden addon broker and refresh lockfile
 
 on:
   push:
@@ -21,20 +21,141 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
 
-      - name: Regenerate Cargo lockfile
-        run: cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
+      - name: Apply broker hardening
+        shell: python
+        run: |
+          from pathlib import Path
 
-      - name: Commit lockfile
+          path = Path('Elephant/backend/tauri/src/addons.rs')
+          source = path.read_text()
+
+          def replace_once(old: str, new: str) -> None:
+              global source
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected one match, found {count}: {old[:80]!r}')
+              source = source.replace(old, new, 1)
+
+          replace_once(
+              '''  fs::write(&temp, raw).map_err(|error| format!("Failed to write addon registry: {error}"))?;
+            fs::rename(&temp, &path).map_err(|error| format!("Failed to replace addon registry: {error}"))
+          }''',
+              '''  fs::write(&temp, raw).map_err(|error| format!("Failed to write addon registry: {error}"))?;
+            if path.exists() {
+              fs::remove_file(&path).map_err(|error| format!("Failed to replace addon registry: {error}"))?;
+            }
+            fs::rename(&temp, &path).map_err(|error| format!("Failed to replace addon registry: {error}"))
+          }'''
+          )
+
+          replace_once(
+              '''  let temp = path.with_extension("json.tmp");
+            fs::write(&temp, raw).map_err(|error| error.to_string())?;
+            fs::rename(temp, path).map_err(|error| error.to_string())
+          }''',
+              '''  let temp = path.with_extension("json.tmp");
+            fs::write(&temp, raw).map_err(|error| error.to_string())?;
+            if path.exists() {
+              fs::remove_file(&path).map_err(|error| error.to_string())?;
+            }
+            fs::rename(temp, path).map_err(|error| error.to_string())
+          }'''
+          )
+
+          replace_once(
+              '''    let file_name = candidate.file_name().ok_or_else(|| "Note path has no file name".to_string())?;
+              return Ok(canonical_parent.join(file_name));
+            }
+            let canonical = fs::canonicalize(candidate).map_err(|error| error.to_string())?;''',
+              '''    let file_name = candidate.file_name().ok_or_else(|| "Note path has no file name".to_string())?;
+              let resolved = canonical_parent.join(file_name);
+              if resolved.exists() {
+                let metadata = fs::symlink_metadata(&resolved).map_err(|error| error.to_string())?;
+                if metadata.file_type().is_symlink() {
+                  return Err("Refusing to write through a symbolic link".to_string());
+                }
+                let canonical_file = fs::canonicalize(&resolved).map_err(|error| error.to_string())?;
+                if !canonical_file.starts_with(&root) {
+                  return Err("Refusing to write outside the active vault".to_string());
+                }
+              }
+              return Ok(resolved);
+            }
+            let canonical = fs::canonicalize(candidate).map_err(|error| error.to_string())?;'''
+          )
+
+          replace_once(
+              '''  let host = url.host_str().ok_or_else(|| "URL has no host".to_string())?;
+            if !record.manifest.permissions.network.hosts.iter().any(|pattern| host_matches(pattern, host)) {
+              return Err(format!("Network access to {host} was not granted"));
+            }
+            let method_name = params.get("method").and_then(Value::as_str).unwrap_or("GET").to_ascii_uppercase();''',
+              '''  let host = url.host_str().ok_or_else(|| "URL has no host".to_string())?;
+            if host.eq_ignore_ascii_case("localhost") || host.ends_with(".localhost") {
+              return Err("External addons may not access localhost".to_string());
+            }
+            if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+              let forbidden = match ip {
+                std::net::IpAddr::V4(ip) => {
+                  ip.is_private()
+                    || ip.is_loopback()
+                    || ip.is_link_local()
+                    || ip.is_broadcast()
+                    || ip.is_unspecified()
+                    || ip.is_multicast()
+                }
+                std::net::IpAddr::V6(ip) => {
+                  ip.is_loopback()
+                    || ip.is_unspecified()
+                    || ip.is_multicast()
+                    || ip.is_unique_local()
+                    || ip.is_unicast_link_local()
+                }
+              };
+              if forbidden {
+                return Err("External addons may not access private or local IP addresses".to_string());
+              }
+            }
+            if !record.manifest.permissions.network.hosts.iter().any(|pattern| host_matches(pattern, host)) {
+              return Err(format!("Network access to {host} was not granted"));
+            }
+            let method_name = params.get("method").and_then(Value::as_str).unwrap_or("GET").to_ascii_uppercase();'''
+          )
+
+          replace_once(
+              '''    .timeout(Duration::from_secs(30))
+                .redirect(reqwest::redirect::Policy::limited(5))
+                .build()''',
+              '''    .timeout(Duration::from_secs(30))
+                .redirect(reqwest::redirect::Policy::none())
+                .build()'''
+          )
+
+          path.write_text(source)
+
+      - name: Format and regenerate Cargo lockfile
         shell: bash
         run: |
           set -euxo pipefail
-          if git diff --quiet -- Elephant/backend/tauri/Cargo.lock; then
-            echo "Cargo.lock is already current"
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+          cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
+
+      - name: Verify Rust addon backend
+        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features addons::tests
+
+      - name: Commit generated changes
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if git diff --quiet -- Elephant/backend/tauri/src/addons.rs Elephant/backend/tauri/Cargo.lock; then
+            echo "Addon backend and Cargo.lock are already current"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Elephant/backend/tauri/Cargo.lock
-          git commit -m "build(addons): refresh Cargo lockfile [skip ci]"
+          git add Elephant/backend/tauri/src/addons.rs Elephant/backend/tauri/Cargo.lock
+          git commit -m "fix(addons): harden broker and refresh lockfile [skip ci]"
           git push origin HEAD:feature/addon-runtime-platform

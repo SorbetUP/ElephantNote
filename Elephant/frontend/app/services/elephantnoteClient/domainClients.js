@@ -9,27 +9,6 @@ const callModelBridge = (method, payload) => {
   return bridgeMethod(toPlainObject(payload))
 }
 
-const shouldRebuildChatSearch = (vaultPath, now = Date.now()) => {
-  if (!vaultPath) return false
-  const lastRebuildAt = chatSearchRebuiltAt.get(vaultPath) || 0
-  if (now - lastRebuildAt < CHAT_REBUILD_COOLDOWN_MS) return false
-  chatSearchRebuiltAt.set(vaultPath, now)
-  return true
-}
-
-const ensureSearchVaultForChat = async (call) => {
-  const vaultPayload = await call(API.VAULTS_GET).catch(() => null)
-  const vaultPath = String(vaultPayload?.activeVault?.path || '').trim()
-  if (!vaultPath) return ''
-  if (!searchVaultInitializedForChat.has(vaultPath)) {
-    await call(API.SEARCH_INIT_VAULT, { vaultPath }).catch(() => null)
-    searchVaultInitializedForChat.set(vaultPath, true)
-  }
-  return vaultPath
-}
-
-const hasCitations = (result) => Array.isArray(result?.citations) && result.citations.length > 0
-const hasAnswer = (result) => typeof result?.answer === 'string' && result.answer.trim().length > 0
 
 const normalizeRagChatPayload = (payload, limit = 6) => {
   if (payload && typeof payload === 'object') {

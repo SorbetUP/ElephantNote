@@ -1,0 +1,40 @@
+name: Refresh addon Cargo lockfile
+
+on:
+  push:
+    branches:
+      - feature/addon-runtime-platform
+    paths:
+      - .github/workflows/addon-lock-refresh.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/addon-runtime-platform
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Regenerate Cargo lockfile
+        run: cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
+
+      - name: Commit lockfile
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if git diff --quiet -- Elephant/backend/tauri/Cargo.lock; then
+            echo "Cargo.lock is already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Elephant/backend/tauri/Cargo.lock
+          git commit -m "build(addons): refresh Cargo lockfile [skip ci]"
+          git push origin HEAD:feature/addon-runtime-platform

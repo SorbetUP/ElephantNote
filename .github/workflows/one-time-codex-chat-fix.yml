@@ -1,0 +1,305 @@
+name: One-time Codex chat fix
+
+on:
+  push:
+    branches:
+      - feature/real-codex-subscription
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/real-codex-subscription
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91
+          components: rustfmt
+
+      - name: Patch Codex protocol and settings UI
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          backend_path = Path('Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs')
+          backend = backend_path.read_text()
+
+          command_end = '''pub async fn command(app: &AppHandle, payload: &Value) -> R<Value> {
+            let operation = payload.get("codexOperation").and_then(Value::as_str).unwrap_or("");
+            log("command", format!("operation={operation}"));
+            match operation {
+              "status" => status(app).await,
+              "login" => login(app, payload.get("flow").and_then(Value::as_str).map(str::to_string)).await,
+              "logout" => logout(app).await,
+              "models" => models(app).await,
+              "rateLimits" => rate_limits(app).await,
+              "stop" => stop().await,
+              _ => Err(format!("Unsupported Codex operation: {operation}")),
+            }
+          }
+
+          '''
+          helpers = '''fn thread_start_params(model: &str, cwd: &Path) -> Value {
+            json!({
+              "model": model,
+              "cwd": cwd.to_string_lossy(),
+              "approvalPolicy": "never",
+              "sandbox": "read-only",
+              "serviceName": "elephantnote"
+            })
+          }
+
+          fn turn_start_params(thread_id: &str, model: &str, prompt: &str, cwd: &Path) -> Value {
+            json!({
+              "threadId": thread_id,
+              "input": [{ "type": "text", "text": prompt }],
+              "model": model,
+              "cwd": cwd.to_string_lossy(),
+              "approvalPolicy": "never",
+              "sandboxPolicy": {
+                "type": "readOnly",
+                "networkAccess": false
+              }
+            })
+          }
+
+          '''
+          if helpers not in backend:
+            if command_end not in backend:
+              raise SystemExit('Could not find Codex command insertion point')
+            backend = backend.replace(command_end, command_end + helpers, 1)
+
+          old_thread = '''      json!({
+                "model": model,
+                "cwd": cwd.to_string_lossy(),
+                "approvalPolicy": "never",
+                "sandbox": "readOnly",
+                "serviceName": "elephantnote"
+              }),'''
+          new_thread = '''      thread_start_params(model, &cwd),'''
+          if old_thread in backend:
+            backend = backend.replace(old_thread, new_thread, 1)
+          elif new_thread not in backend:
+            raise SystemExit('Could not replace thread/start payload')
+
+          old_turn = '''      json!({
+                "threadId": thread_id,
+                "input": [{ "type": "text", "text": prompt }],
+                "model": model,
+                "cwd": cwd.to_string_lossy(),
+                "approvalPolicy": "never",
+                "sandboxPolicy": {
+                  "type": "readOnly",
+                  "access": {
+                    "type": "restricted",
+                    "includePlatformDefaults": true,
+                    "readableRoots": [cwd.to_string_lossy()]
+                  }
+                }
+              }),'''
+          new_turn = '''      turn_start_params(&thread_id, model, prompt, &cwd),'''
+          if old_turn in backend:
+            backend = backend.replace(old_turn, new_turn, 1)
+          elif new_turn not in backend:
+            raise SystemExit('Could not replace turn/start payload')
+
+          test_anchor = '''  #[test]
+            fn turn_summary_does_not_log_prompt() {'''
+          protocol_test = '''  #[test]
+            fn builds_protocol_compatible_sandbox_payloads() {
+              let cwd = Path::new("/tmp/elephantnote-codex-test");
+              let thread = thread_start_params("gpt-test", cwd);
+              assert_eq!(thread.get("sandbox").and_then(Value::as_str), Some("read-only"));
+
+              let turn = turn_start_params("thread-1", "gpt-test", "hello", cwd);
+              assert_eq!(turn.pointer("/sandboxPolicy/type").and_then(Value::as_str), Some("readOnly"));
+              assert_eq!(turn.pointer("/sandboxPolicy/networkAccess").and_then(Value::as_bool), Some(false));
+              assert!(turn.pointer("/sandboxPolicy/access").is_none());
+            }
+
+          '''
+          if protocol_test not in backend:
+            if test_anchor not in backend:
+              raise SystemExit('Could not find backend test insertion point')
+            backend = backend.replace(test_anchor, protocol_test + test_anchor, 1)
+
+          backend_path.write_text(backend)
+
+          ui_path = Path('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
+          ui = ui_path.read_text()
+
+          codex_start_marker = '''      <section class="en-ai-card">
+                <header class="en-ai-card-header">
+                  <div>
+                    <h4>Codex subscription</h4>'''
+          app_local_marker = '''      <section class="en-ai-card">
+                <div class="en-ai-setting-row">
+                  <span class="en-ai-row-icon"><Cpu aria-hidden="true" /></span>'''
+          if codex_start_marker in ui:
+            start = ui.index(codex_start_marker)
+            end = ui.index(app_local_marker, start)
+            ui = ui[:start] + ui[end:]
+
+          codex_card = '''      <section class="en-ai-card en-codex-card">
+                <header class="en-ai-card-header">
+                  <div class="en-codex-heading">
+                    <span class="en-ai-row-icon"><TerminalSquare aria-hidden="true" /></span>
+                    <div>
+                      <h4>Codex / ChatGPT subscription</h4>
+                      <p>Use the Codex models included with your ChatGPT plan through the official app-server protocol.</p>
+                    </div>
+                  </div>
+                  <span class="en-ai-badge" :class="{ active: codexStatus.connected, warning: !codexStatus.installed }">
+                    {{ codexStatusLabel }}
+                  </span>
+                </header>
+
+                <div class="en-codex-body">
+                  <div class="en-codex-account">
+                    <div class="en-codex-account-main">
+                      <strong>{{ codexAccountLabel }}</strong>
+                      <span v-if="codexStatus.account?.email">{{ codexStatus.account.email }}</span>
+                    </div>
+                    <div class="en-codex-meta">
+                      <span v-if="codexStatus.version">{{ codexStatus.version }}</span>
+                      <span v-if="codexStatus.runtimeSource">{{ codexStatus.runtimeSource }}</span>
+                      <span v-if="codexStatus.connected">{{ codexModels.length }} models available</span>
+                    </div>
+                  </div>
+
+                  <p v-if="codexMessage" class="en-codex-message" :class="{ error: codexStatus.error }">
+                    {{ codexMessage }}
+                  </p>
+
+                  <div v-if="loginChallenge.userCode" class="en-login-challenge">
+                    <strong>Device code: {{ loginChallenge.userCode }}</strong>
+                    <button class="secondary compact" type="button" @click="openExternal(loginChallenge.verificationUrl)">
+                      Open authentication page
+                    </button>
+                  </div>
+
+                  <div v-if="codexRateLimit" class="en-codex-usage">
+                    <div class="en-codex-usage-head">
+                      <span>Current usage limit</span>
+                      <strong>{{ Math.round(codexRateLimit.usedPercent || 0) }}% used</strong>
+                      <small v-if="codexRateLimit.resetsAt">Resets {{ formatReset(codexRateLimit.resetsAt) }}</small>
+                    </div>
+                    <div class="en-codex-usage-track" role="progressbar" aria-label="Codex usage" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="Math.round(codexRateLimit.usedPercent || 0)">
+                      <span :style="{ width: `${Math.min(100, Math.max(0, codexRateLimit.usedPercent || 0))}%` }" />
+                    </div>
+                  </div>
+
+                  <div class="en-ai-actions en-codex-actions">
+                    <button class="secondary compact" type="button" :disabled="codexBusy" @click="refreshCodex">
+                      <RotateCw aria-hidden="true" /> Refresh
+                    </button>
+                    <button
+                      v-if="codexStatus.connected"
+                      class="danger compact"
+                      type="button"
+                      :disabled="codexBusy"
+                      @click="disconnectCodex"
+                    >
+                      <Unlink aria-hidden="true" /> Disconnect
+                    </button>
+                    <button
+                      v-else
+                      class="primary compact"
+                      type="button"
+                      :disabled="codexBusy || !codexStatus.installed"
+                      @click="connectCodex"
+                    >
+                      <Link2 aria-hidden="true" /> Connect with ChatGPT
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+          '''
+          provider_template_end = ui.index('    </template>', ui.index('<h4>External API providers</h4>'))
+          if 'class="en-ai-card en-codex-card"' not in ui:
+            ui = ui[:provider_template_end] + codex_card + ui[provider_template_end:]
+
+          ui = ui.replace("const providerMessage = ref('')\n", "const providerMessage = ref('')\nconst codexMessage = ref('')\n", 1)
+          ui = ui.replace('providerMessage.value = codexStatus.value.error || (codexStatus.value.connected', 'codexMessage.value = codexStatus.value.error || (codexStatus.value.connected', 1)
+          ui = ui.replace('    providerMessage.value = codexStatus.value.error\n', '    codexMessage.value = codexStatus.value.error\n', 1)
+          ui = ui.replace('    providerMessage.value = challenge?.userCode\n', '    codexMessage.value = challenge?.userCode\n', 1)
+          ui = ui.replace('    providerMessage.value = error instanceof Error ? error.message : String(error)\n  } finally {\n    codexBusy.value = false\n  }\n}\nconst disconnectCodex', '    codexMessage.value = error instanceof Error ? error.message : String(error)\n  } finally {\n    codexBusy.value = false\n  }\n}\nconst disconnectCodex', 1)
+
+          ui = ui.replace('.en-ai-toolbar, .en-ai-card-header, .en-ai-setting-row, .en-provider-footer, .en-ai-actions, .en-rate-limit { display: flex; align-items: center; gap: 10px; }', '.en-ai-toolbar, .en-ai-card-header, .en-ai-setting-row, .en-provider-footer, .en-ai-actions { display: flex; align-items: center; gap: 10px; }')
+          ui = ui.replace('''.en-codex-row { flex-wrap: wrap; }
+          .en-ai-actions-wrap { flex-wrap: wrap; justify-content: flex-end; }
+          .en-login-challenge, .en-rate-limit { margin: 0 16px 16px; padding: 10px 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); }
+          .en-login-challenge { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+          .en-rate-limit progress { flex: 1; min-width: 120px; }
+          ''', '''.en-codex-card { border-color: color-mix(in srgb, var(--en-primary) 22%, var(--en-border)); }
+          .en-codex-heading { min-width: 0; display: flex; align-items: center; gap: 10px; }
+          .en-codex-heading > div { min-width: 0; display: grid; gap: 4px; }
+          .en-codex-body { display: grid; gap: 12px; padding: 14px 16px 16px; }
+          .en-codex-account { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+          .en-codex-account-main { min-width: 0; display: grid; gap: 3px; }
+          .en-codex-account-main span, .en-codex-meta, .en-codex-message { color: var(--en-muted); font-size: 12px; }
+          .en-codex-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 10px; }
+          .en-codex-meta span { padding: 3px 7px; border-radius: 7px; background: var(--en-soft); }
+          .en-codex-message { margin: 0; }
+          .en-codex-message.error { color: #b42318; }
+          .en-codex-actions { justify-content: flex-end; }
+          .en-login-challenge { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); }
+          .en-codex-usage { display: grid; gap: 8px; padding: 11px 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); }
+          .en-codex-usage-head { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 8px; }
+          .en-codex-usage-head span, .en-codex-usage-head small { color: var(--en-muted); font-size: 11px; }
+          .en-codex-usage-head small { justify-self: end; }
+          .en-codex-usage-track { height: 6px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--en-muted) 18%, transparent); }
+          .en-codex-usage-track span { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: var(--en-primary); transition: width .2s ease; }
+          ''')
+          ui = ui.replace('''  .en-ai-toolbar, .en-login-challenge { align-items: stretch; flex-direction: column; }
+          ''', '''  .en-ai-toolbar, .en-login-challenge { align-items: stretch; flex-direction: column; }
+            .en-codex-account { flex-direction: column; }
+            .en-codex-meta { justify-content: flex-start; }
+            .en-codex-usage-head { grid-template-columns: 1fr auto; }
+            .en-codex-usage-head small { grid-column: 1 / -1; justify-self: start; }
+            .en-codex-actions { justify-content: stretch; }
+            .en-codex-actions button { flex: 1; }
+          ''')
+
+          if ui.count('class="en-ai-card en-codex-card"') != 1:
+            raise SystemExit('Codex card was not produced exactly once')
+          if ui.index('<h4>Codex / ChatGPT subscription</h4>') < ui.index('<h4>External API providers</h4>'):
+            raise SystemExit('Codex card is not below open/local providers')
+
+          ui_path.write_text(ui)
+
+          workflow = Path('.github/workflows/one-time-codex-chat-fix.yml')
+          workflow.unlink()
+          PY
+
+      - name: Format Rust
+        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+
+      - name: Validate Rust
+        run: |
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features builds_protocol_compatible_sandbox_payloads
+
+      - name: Validate settings component
+        run: |
+          pnpm exec eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue
+          pnpm tauri:web:build
+
+      - name: Commit validated fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue .github/workflows/one-time-codex-chat-fix.yml
+          git commit -m "Fix Codex chat sandbox contract and refine provider UI"
+          git push origin HEAD:feature/real-codex-subscription

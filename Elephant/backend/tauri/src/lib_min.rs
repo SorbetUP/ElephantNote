@@ -17,6 +17,7 @@ pub mod model_library;
 pub mod local_llama_runtime;
 pub mod chat_runtime;
 pub mod search_logic;
+pub mod ai_runtime;
 
 mod tauri_extra_commands;
 mod debug_commands;
@@ -84,6 +85,7 @@ pub fn run() {
       app.manage(state::AppState::new(&handle));
       app.manage(watcher::WatcherState::new());
       app.manage(sync::IrohSyncState::new());
+      app.manage(ai_runtime::AiRuntimeState::new());
       let sync_handle = handle.clone();
       tauri::async_runtime::spawn(async move {
         let state = sync_handle.state::<sync::IrohSyncState>();
@@ -96,6 +98,15 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       healthcheck,
       tauri_platform_info,
+      ai_runtime::tauri_ai_runtime_status,
+      ai_runtime::tauri_ai_auth_status,
+      ai_runtime::tauri_ai_auth_login_start,
+      ai_runtime::tauri_ai_auth_login_cancel,
+      ai_runtime::tauri_ai_auth_logout,
+      ai_runtime::tauri_ai_models_list,
+      ai_runtime::tauri_ai_thread_start,
+      ai_runtime::tauri_ai_turn_start,
+      ai_runtime::tauri_ai_turn_interrupt,
       sync_commands::iroh_sync_create_invite,
       sync_commands::iroh_sync_accept_invite,
       sync_commands::iroh_sync_status,

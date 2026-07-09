@@ -183,10 +183,7 @@ fn validate_note_path(value: &str, errors: &mut Vec<String>) {
 
 fn has_windows_drive_prefix(value: &str) -> bool {
     let bytes = value.as_bytes();
-    bytes.len() >= 3
-        && bytes[0].is_ascii_alphabetic()
-        && bytes[1] == b':'
-        && bytes[2] == b'/'
+    bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/'
 }
 
 #[cfg(test)]

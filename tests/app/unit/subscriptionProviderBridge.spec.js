@@ -63,9 +63,9 @@ describe('subscription provider bridge', () => {
     })
   })
 
-  it('throws when the Tauri command API is missing', async() => {
+  it('throws when the Tauri command API is missing', () => {
     const target = { elephantnote: { ai: {} } }
     installSubscriptionProviderBridge(target)
-    await expect(target.elephantnote.ai.codex.status()).rejects.toThrow('Tauri command API is unavailable')
+    expect(() => target.elephantnote.ai.codex.status()).toThrow('Tauri command API is unavailable')
   })
 })

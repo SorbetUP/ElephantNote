@@ -93,15 +93,23 @@ impl KnowledgeStore {
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
         let database_path = directory.join("knowledge.sqlite");
         let conn = Connection::open(&database_path).map_err(|error| error.to_string())?;
-        conn.execute_batch(SCHEMA).map_err(|error| error.to_string())?;
-        Ok(Self { conn, database_path })
+        conn.execute_batch(SCHEMA)
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            conn,
+            database_path,
+        })
     }
 
     #[cfg(test)]
     pub fn open_in_memory() -> Result<Self, String> {
         let conn = Connection::open_in_memory().map_err(|error| error.to_string())?;
-        conn.execute_batch(SCHEMA).map_err(|error| error.to_string())?;
-        Ok(Self { conn, database_path: PathBuf::from(":memory:") })
+        conn.execute_batch(SCHEMA)
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            conn,
+            database_path: PathBuf::from(":memory:"),
+        })
     }
 
     pub fn database_path(&self) -> &Path {
@@ -130,21 +138,38 @@ impl KnowledgeStore {
                    content_hash=excluded.content_hash,
                    modified_at=excluded.modified_at,
                    indexed_at=unixepoch()",
-                params![document.relative_path, document.title, document.content_hash, document.modified_at],
+                params![
+                    document.relative_path,
+                    document.title,
+                    document.content_hash,
+                    document.modified_at
+                ],
             )
             .map_err(|error| error.to_string())?;
 
         transaction
-            .execute("DELETE FROM chunk_search WHERE relative_path=?1", params![document.relative_path])
+            .execute(
+                "DELETE FROM chunk_search WHERE relative_path=?1",
+                params![document.relative_path],
+            )
             .map_err(|error| error.to_string())?;
         transaction
-            .execute("DELETE FROM wikilinks WHERE document_path=?1", params![document.relative_path])
+            .execute(
+                "DELETE FROM wikilinks WHERE document_path=?1",
+                params![document.relative_path],
+            )
             .map_err(|error| error.to_string())?;
         transaction
-            .execute("DELETE FROM chunks WHERE document_path=?1", params![document.relative_path])
+            .execute(
+                "DELETE FROM chunks WHERE document_path=?1",
+                params![document.relative_path],
+            )
             .map_err(|error| error.to_string())?;
         transaction
-            .execute("DELETE FROM sections WHERE document_path=?1", params![document.relative_path])
+            .execute(
+                "DELETE FROM sections WHERE document_path=?1",
+                params![document.relative_path],
+            )
             .map_err(|error| error.to_string())?;
 
         for section in &document.sections {
@@ -221,11 +246,13 @@ impl KnowledgeStore {
                 .conn
                 .prepare("SELECT relative_path FROM documents")
                 .map_err(|error| error.to_string())?;
-            statement
+            let rows = statement
                 .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|error| error.to_string())?
-                .filter_map(Result::ok)
-                .collect::<Vec<_>>()
+                .map_err(|error| error.to_string())?;
+            let collected = rows
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| error.to_string())?;
+            collected
         };
         let stale = paths
             .into_iter()
@@ -234,10 +261,16 @@ impl KnowledgeStore {
         let transaction = self.conn.transaction().map_err(|error| error.to_string())?;
         for path in &stale {
             transaction
-                .execute("DELETE FROM chunk_search WHERE relative_path=?1", params![path])
+                .execute(
+                    "DELETE FROM chunk_search WHERE relative_path=?1",
+                    params![path],
+                )
                 .map_err(|error| error.to_string())?;
             transaction
-                .execute("DELETE FROM documents WHERE relative_path=?1", params![path])
+                .execute(
+                    "DELETE FROM documents WHERE relative_path=?1",
+                    params![path],
+                )
                 .map_err(|error| error.to_string())?;
         }
         transaction.commit().map_err(|error| error.to_string())?;
@@ -262,13 +295,22 @@ impl KnowledgeStore {
         })
     }
 
-    pub fn inspect_document(&self, relative_path: &str) -> Result<Option<DocumentSnapshot>, String> {
+    pub fn inspect_document(
+        &self,
+        relative_path: &str,
+    ) -> Result<Option<DocumentSnapshot>, String> {
         let document = self
             .conn
             .query_row(
                 "SELECT title, content_hash, modified_at FROM documents WHERE relative_path=?1",
                 params![relative_path],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?)),
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                },
             )
             .optional()
             .map_err(|error| error.to_string())?;
@@ -324,13 +366,16 @@ impl KnowledgeStore {
                 })
             })
             .map_err(|error| error.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
     }
 }
 
 fn count(conn: &Connection, table: &str) -> Result<i64, String> {
-    conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))
-        .map_err(|error| error.to_string())
+    conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+        row.get(0)
+    })
+    .map_err(|error| error.to_string())
 }
 
 fn query_sections(conn: &Connection, path: &str) -> Result<Vec<KnowledgeSection>, String> {
@@ -352,7 +397,8 @@ fn query_sections(conn: &Connection, path: &str) -> Result<Vec<KnowledgeSection>
             })
         })
         .map_err(|error| error.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }
 
 fn query_chunks(conn: &Connection, path: &str) -> Result<Vec<KnowledgeChunk>, String> {
@@ -376,7 +422,8 @@ fn query_chunks(conn: &Connection, path: &str) -> Result<Vec<KnowledgeChunk>, St
             })
         })
         .map_err(|error| error.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }
 
 fn query_links(conn: &Connection, path: &str) -> Result<Vec<ExplicitLink>, String> {
@@ -396,7 +443,8 @@ fn query_links(conn: &Connection, path: &str) -> Result<Vec<ExplicitLink>, Strin
             })
         })
         .map_err(|error| error.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }
 
 fn to_fts_query(query: &str) -> String {
@@ -444,8 +492,12 @@ mod tests {
     #[test]
     fn prune_removes_missing_documents_and_search_rows() {
         let mut store = KnowledgeStore::open_in_memory().unwrap();
-        store.upsert_document(&analyze_markdown("a.md", "# A\nalpha", 1)).unwrap();
-        store.upsert_document(&analyze_markdown("b.md", "# B\nbeta", 1)).unwrap();
+        store
+            .upsert_document(&analyze_markdown("a.md", "# A\nalpha", 1))
+            .unwrap();
+        store
+            .upsert_document(&analyze_markdown("b.md", "# B\nbeta", 1))
+            .unwrap();
         let present = HashSet::from(["a.md".to_string()]);
         assert_eq!(store.prune_documents(&present).unwrap(), 1);
         assert_eq!(store.status().unwrap().documents, 1);

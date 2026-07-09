@@ -1,3 +1,5 @@
+const COMMUNITY_ADDONS_PREF_KEY = 'addons.communityEnabled'
+
 const getTauriCore = (target = globalThis) => target?.__TAURI__?.core || null
 
 const invoke = (command, payload = {}, target = globalThis) => {
@@ -12,7 +14,11 @@ const externalApi = Object.freeze({
   uninstall: (addonId) => invoke('tauri_addons_uninstall', { addonId }),
   setEnabled: (addonId, enabled) => invoke('tauri_addons_set_enabled', { addonId, enabled }),
   readEntry: (addonId) => invoke('tauri_addons_read_entry', { addonId }),
-  call: (addonId, method, params = {}) => invoke('tauri_addons_call', { addonId, method, params })
+  call: (addonId, method, params = {}) => invoke('tauri_addons_call', { addonId, method, params }),
+  getCommunityEnabled: async () => {
+    const value = await invoke('tauri_prefs_get', { key: COMMUNITY_ADDONS_PREF_KEY })
+    return value === true
+  }
 })
 
 const asError = (value, fallback = 'External addon operation failed') => {
@@ -297,6 +303,9 @@ const createExternalAddonDefinition = (record, logger) => {
       defaultEnabled: false
     },
     async activate(context) {
+      if (!await externalApi.getCommunityEnabled()) {
+        throw new Error('Community addons are disabled. Confirm the security warning in Settings → Addons before enabling third-party code.')
+      }
       session = new ExternalAddonSession(record, logger)
       try {
         await session.start(context)
@@ -326,9 +335,19 @@ export class ExternalAddonController {
 
   async load() {
     const records = await externalApi.list()
+    const communityEnabled = await externalApi.getCommunityEnabled()
     for (const record of records) this.register(record)
     for (const record of records) {
       if (!record.enabled) continue
+      if (!communityEnabled) {
+        await externalApi.setEnabled(record.manifest.id, false).catch((error) => {
+          this.logger?.warn?.('failed to clear external addon startup state', {
+            id: record.manifest.id,
+            error: error?.message || String(error)
+          })
+        })
+        continue
+      }
       try {
         await this.manager.enable(record.manifest.id)
       } catch (error) {

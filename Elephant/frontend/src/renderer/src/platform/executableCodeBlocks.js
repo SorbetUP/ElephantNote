@@ -191,8 +191,9 @@ const runBlock = async(target, pre, button) => {
 }
 
 const enhanceCodeBlock = (target, pre) => {
-  if (!(pre instanceof HTMLElement) || pre.hasAttribute(ENHANCED_ATTRIBUTE)) return
+  if (!(pre instanceof HTMLElement)) return
   if (!pre.querySelector('code')) return
+  if (pre.hasAttribute(ENHANCED_ATTRIBUTE) && pre.querySelector('.en-code-runner-toolbar')) return
   pre.setAttribute(ENHANCED_ATTRIBUTE, 'true')
 
   const toolbar = document.createElement('div')
@@ -266,7 +267,7 @@ const createSwitch = (checked, label, onChange) => {
 const renderEnvironmentSettings = (target, host, state) => {
   host.replaceChildren()
   host.setAttribute(SETTINGS_ATTRIBUTE, 'true')
-  host.className = 'en-code-settings'
+  host.className = 'en-settings-group en-code-settings-group en-code-settings'
 
   const heading = document.createElement('div')
   heading.className = 'en-code-settings-heading'
@@ -274,7 +275,7 @@ const renderEnvironmentSettings = (target, host, state) => {
   const title = document.createElement('strong')
   const description = document.createElement('span')
   title.textContent = 'Code execution'
-  description.textContent = 'Run fenced code blocks locally. Programs execute with your user permissions inside the active vault.'
+  description.textContent = 'Run fenced code blocks locally. The working directory is the active vault, but code keeps your normal user permissions.'
   copy.append(title, description)
   const globalSwitch = createSwitch(state.executionEnabled === true, 'Enable code execution', async() => {
     globalSwitch.disabled = true

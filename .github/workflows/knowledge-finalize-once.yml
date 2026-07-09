@@ -1,0 +1,126 @@
+name: Knowledge Finalize Once
+
+on:
+  push:
+    branches:
+      - feature/rust-knowledge-core
+
+permissions:
+  contents: write
+
+concurrency:
+  group: knowledge-finalize-once
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-knowledge-core
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Install Wiki view and apply idempotent fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          template = Path('Elephant/frontend/app/components/views/WikiView.knowledge.tmp.vue')
+          view = Path('Elephant/frontend/app/components/views/WikiView.vue')
+          if template.exists():
+              view.write_text(template.read_text())
+              template.unlink()
+
+          if view.exists() and 'knowledge-wiki-view' in view.read_text():
+              text = view.read_text()
+              old = '''        <article
+          v-for="draft in filteredDrafts"
+          v-else
+          :key="draft.id"'''
+              new = '''        <template v-else>
+          <article
+            v-for="draft in filteredDrafts"
+            :key="draft.id"'''
+              if old in text:
+                  text = text.replace(old, new, 1)
+              old_end = '''        </article>
+      </main>'''
+              new_end = '''          </article>
+        </template>
+      </main>'''
+              if '<template v-else>' in text and old_end in text:
+                  text = text.replace(old_end, new_end, 1)
+              view.write_text(text)
+
+          tauri = Path('Elephant/backend/tauri/src/knowledge_chat_actions.rs')
+          if tauri.exists():
+              text = tauri.read_text().replace(
+                  'if matches!(proposal.action, ChatKnowledgeAction::CreateWiki { .. }) {',
+                  'if matches!(&proposal.action, ChatKnowledgeAction::CreateWiki { .. }) {'
+              )
+              tauri.write_text(text)
+
+          core = Path('Elephant/backend/knowledge-core/src/chat_actions.rs')
+          if core.exists():
+              text = core.read_text()
+              old = '''        ChatKnowledgeAction::CreateWiki {
+            title,
+            topic,
+            source_paths,
+        } => json!({
+            "handoff": "wiki_draft_required",
+            "title": title,
+            "topic": topic,
+            "sourcePaths": source_paths
+        }),'''
+              new = '''        ChatKnowledgeAction::CreateWiki { .. } => {
+            return Err(
+                "Wiki actions require the model-backed wiki generator and cannot be completed by the generic file-action executor."
+                    .into(),
+            );
+        }'''
+              if old in text:
+                  text = text.replace(old, new)
+              core.write_text(text)
+
+          workflow = Path('.github/workflows/knowledge-core.yml')
+          if workflow.exists():
+              text = workflow.read_text()
+              text = text.replace('Apply rustfmt for validation', 'Check formatting')
+              text = text.replace(
+                  'cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml\n',
+                  'cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml -- --check\n'
+              )
+              workflow.write_text(text)
+          PY
+      - name: Apply Rust formatting
+        run: |
+          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+      - name: Check knowledge core
+        run: cargo check --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets
+      - name: Test knowledge core
+        run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets
+      - name: Check Tauri integration
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+      - name: Remove temporary workflows and commit
+        shell: bash
+        run: |
+          rm -f .github/workflows/knowledge-fix-once.yml
+          rm -f .github/workflows/wiki-view-install-once.yml
+          rm -f .github/workflows/wiki-view-fix-once.yml
+          rm -f .github/workflows/knowledge-finalize-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No finalization changes to commit."
+            exit 0
+          fi
+          git commit -m "feat(knowledge): finalize Rust core and Wiki UI integration"
+          git push origin HEAD:feature/rust-knowledge-core

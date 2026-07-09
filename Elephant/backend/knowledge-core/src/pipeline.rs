@@ -30,12 +30,18 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
             Ok(IndexDecision::Unchanged) => report.unchanged += 1,
             Ok(IndexDecision::Changed(snapshot)) => {
                 if let Err(error) = store.upsert_document(&snapshot) {
-                    report.failed.push(RebuildFailure { relative_path, error });
+                    report.failed.push(RebuildFailure {
+                        relative_path,
+                        error,
+                    });
                 } else {
                     report.indexed += 1;
                 }
             }
-            Err(error) => report.failed.push(RebuildFailure { relative_path, error }),
+            Err(error) => report.failed.push(RebuildFailure {
+                relative_path,
+                error,
+            }),
         }
     }
 
@@ -48,7 +54,11 @@ enum IndexDecision {
     Changed(crate::model::DocumentSnapshot),
 }
 
-fn index_path(store: &KnowledgeStore, absolute_path: &Path, relative_path: &str) -> Result<IndexDecision, String> {
+fn index_path(
+    store: &KnowledgeStore,
+    absolute_path: &Path,
+    relative_path: &str,
+) -> Result<IndexDecision, String> {
     let markdown = fs::read_to_string(absolute_path).map_err(|error| error.to_string())?;
     let content_hash = blake3::hash(markdown.as_bytes()).to_hex().to_string();
     if store.existing_hash(relative_path)?.as_deref() == Some(content_hash.as_str()) {
@@ -60,7 +70,11 @@ fn index_path(store: &KnowledgeStore, absolute_path: &Path, relative_path: &str)
         .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
         .map(|duration| duration.as_secs() as i64)
         .unwrap_or(0);
-    Ok(IndexDecision::Changed(analyze_markdown(relative_path, &markdown, modified_at)))
+    Ok(IndexDecision::Changed(analyze_markdown(
+        relative_path,
+        &markdown,
+        modified_at,
+    )))
 }
 
 fn scan_markdown_files(root: &Path, current: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
@@ -98,8 +112,14 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_vault(name: &str) -> PathBuf {
-        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        std::env::temp_dir().join(format!("elephant-knowledge-{name}-{}-{stamp}", std::process::id()))
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "elephant-knowledge-{name}-{}-{stamp}",
+            std::process::id()
+        ))
     }
 
     #[test]
@@ -133,7 +153,14 @@ mod tests {
         fs::remove_file(root.join("A.md")).unwrap();
         let report = rebuild_vault(&root).unwrap();
         assert_eq!(report.removed, 1);
-        assert_eq!(KnowledgeStore::open(&root).unwrap().status().unwrap().documents, 0);
+        assert_eq!(
+            KnowledgeStore::open(&root)
+                .unwrap()
+                .status()
+                .unwrap()
+                .documents,
+            0
+        );
         fs::remove_dir_all(root).ok();
     }
 }

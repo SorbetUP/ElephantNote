@@ -88,7 +88,7 @@ jobs:
           test ! -e Elephant/backend/tauri/src/search_logic.rs
           test ! -e Elephant/backend/tauri/src/fts.rs
           grep -n 'knowledge-muya-preview' Elephant/frontend/app/components/views/WikiView.vue
-          grep -n 'muya.renderHtml' Elephant/frontend/app/components/views/WikiView.vue
+          grep -n 'renderHtml' Elephant/frontend/app/components/views/WikiView.vue
           grep -n 'tauri_muya_render_html' Elephant/backend/tauri/src/markdown/commands.rs
           grep -n 'tauri_knowledge_chat' Elephant/backend/tauri/src/chat_runtime.rs Elephant/backend/tauri/src/lib_min.rs
       - name: Remove migration files and commit

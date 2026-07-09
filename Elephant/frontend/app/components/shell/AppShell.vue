@@ -52,6 +52,7 @@
       :vaults="store.vaults"
       :active-vault-name="store.activeVault?.name || 'No vault'"
       :active-vault-path="store.activeVault?.path || ''"
+      :initial-section="settingsInitialSection"
       @close="isSettingsOpen = false"
       @update-theme="setTheme"
       @update-sidebar-width="setSidebarWidth"
@@ -91,6 +92,7 @@ const searchStore = useSearchStore()
 const navigationStore = useNavigationStore()
 const canvasStore = useCanvasStore()
 const isSettingsOpen = ref(false)
+const settingsInitialSection = ref('appearance')
 const theme = ref(normalizeThemeId(window.localStorage.getItem(ELEPHANTNOTE_THEME_STORAGE_KEY)))
 const sidebarWidth = ref(232)
 const sidebarVisible = ref(true)
@@ -115,8 +117,13 @@ const applyThemeVariables = () => {
   root.dataset.elephantnoteTheme = theme.value
 }
 
-const openSettings = () => {
+const openSettings = (section = 'appearance') => {
+  settingsInitialSection.value = typeof section === 'string' && section ? section : 'appearance'
   isSettingsOpen.value = true
+}
+
+const handleOpenSettingsEvent = (event) => {
+  openSettings(event?.detail?.section || 'appearance')
 }
 
 const openSearch = () => {
@@ -247,6 +254,7 @@ const handleAiConfigChanged = (event) => {
 onMounted(() => {
   window.addEventListener('keydown', handleShortcut)
   window.addEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
+  window.addEventListener('elephantnote:open-settings', handleOpenSettingsEvent)
   window.tauri.ipcRenderer.on('mt::tab-saved', handleTabSaved)
   setTheme(theme.value)
   const storedWidth = Number(window.localStorage.getItem('elephantnote:sidebarWidth'))
@@ -265,6 +273,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleShortcut)
   window.removeEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
+  window.removeEventListener('elephantnote:open-settings', handleOpenSettingsEvent)
   if (sidebarResizeFrame) {
     window.cancelAnimationFrame(sidebarResizeFrame)
     sidebarResizeFrame = null

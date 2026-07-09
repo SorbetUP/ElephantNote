@@ -16,6 +16,9 @@ export const useAddonsSettings = () => {
   const {
     items,
     contributions,
+    catalog,
+    catalogLoading,
+    catalogError,
     communityAddonsEnabled,
     communityConsentLoaded,
     operationInProgress,
@@ -28,13 +31,24 @@ export const useAddonsSettings = () => {
   const normalizedQuery = computed(() => query.value.toLocaleLowerCase())
   const matchesQuery = (addon) => {
     if (!normalizedQuery.value) return true
-    const manifest = addon.manifest || {}
+    const manifest = addon.manifest || addon
     return `${manifest.name || ''} ${manifest.description || ''} ${manifest.author || ''} ${manifest.id || ''}`
       .toLocaleLowerCase()
       .includes(normalizedQuery.value)
   }
   const filteredBuiltInAddons = computed(() => builtInAddons.value.filter(matchesQuery))
   const filteredExternalAddons = computed(() => externalAddons.value.filter(matchesQuery))
+  const availableCatalogAddons = computed(() => catalog.value
+    .map((entry) => {
+      const installed = items.value.find((addon) => addon.manifest.id === entry.id)
+      return {
+        ...entry,
+        installed: Boolean(installed),
+        installedVersion: installed?.manifest?.version || '',
+        updateAvailable: Boolean(installed && installed.manifest.version !== entry.version)
+      }
+    })
+    .filter(matchesQuery))
   const actionsForAddon = (addonId) => actions.value.filter((action) => action.addonId === addonId)
 
   const showMessage = (text, error = false) => {
@@ -46,6 +60,14 @@ export const useAddonsSettings = () => {
     expandedAddonId.value = expandedAddonId.value === addonId ? '' : addonId
   }
 
+  const refreshCatalog = async () => {
+    try {
+      await addonsStore.loadAddonCatalog()
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : String(error), true)
+    }
+  }
+
   const enableCommunityAddons = async () => {
     if (!riskAccepted.value) return
     try {
@@ -53,6 +75,7 @@ export const useAddonsSettings = () => {
       riskAccepted.value = false
       showMessage('Community addons are available. Installed packages remain individually disabled until you enable them.')
       log.info('[settings:addons] community:enabled')
+      await refreshCatalog()
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
       log.error('[settings:addons] community:enable-failed', error)
@@ -86,6 +109,22 @@ export const useAddonsSettings = () => {
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
       log.error('[settings:addons] install:failed', error)
+    }
+  }
+
+  const installCatalogAddon = async (addon) => {
+    try {
+      log.info('[settings:addons] catalog-install:start', { id: addon.id, version: addon.version })
+      const result = await addonsStore.installCatalogAddon(addon.id)
+      expandedAddonId.value = result.manifest.id
+      showMessage(`${addon.updateAvailable ? 'Updated' : 'Installed'} ${result.manifest.name}. Review its permissions, then enable it.`)
+      log.info('[settings:addons] catalog-install:done', {
+        id: result.manifest.id,
+        version: result.manifest.version
+      })
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : String(error), true)
+      log.error('[settings:addons] catalog-install:failed', { id: addon.id, error })
     }
   }
 
@@ -128,10 +167,12 @@ export const useAddonsSettings = () => {
 
   onMounted(async () => {
     if (!communityConsentLoaded.value) await addonsStore.loadCommunityAddonsConsent()
+    if (communityAddonsEnabled.value) await refreshCatalog()
     log.info('[settings:addons] mounted', {
       registered: items.value.map((addon) => addon.manifest.id),
       enabled: items.value.filter((addon) => addon.enabled).map((addon) => addon.manifest.id),
-      communityEnabled: communityAddonsEnabled.value
+      communityEnabled: communityAddonsEnabled.value,
+      catalog: catalog.value.map((addon) => addon.id)
     })
   })
 
@@ -141,17 +182,22 @@ export const useAddonsSettings = () => {
     expandedAddonId,
     message,
     messageIsError,
+    catalogLoading,
+    catalogError,
     communityAddonsEnabled,
     communityConsentLoaded,
     operationInProgress,
     lastError,
     filteredBuiltInAddons,
     filteredExternalAddons,
+    availableCatalogAddons,
     actionsForAddon,
     toggleDetails,
+    refreshCatalog,
     enableCommunityAddons,
     disableCommunityAddons,
     installAddonPackage,
+    installCatalogAddon,
     toggleAddon,
     uninstallAddon,
     runAction

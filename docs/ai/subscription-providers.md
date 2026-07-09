@@ -8,9 +8,9 @@ Requirements:
 
 - Install the official `codex` CLI.
 - Keep `codex` available in `PATH`.
-- Connect from ElephantNote using the browser or device-code login flow.
+- Connect from ElephantNote using the browser login flow exposed in AI settings.
 
-ElephantNote starts `codex app-server --listen stdio://` and performs the required JSONL handshake:
+ElephantNote starts `codex app-server --listen stdio://` and performs the JSONL handshake:
 
 1. `initialize`
 2. `initialized`
@@ -19,6 +19,8 @@ ElephantNote starts `codex app-server --listen stdio://` and performs the requir
 5. `turn/start`
 
 The Codex process owns ChatGPT authentication and token refresh. ElephantNote only receives account status, plan metadata, model metadata, and conversation events.
+
+The settings page derives its connected state from `account/read`; it no longer toggles a local boolean. The chat model list comes from `model/list`; it no longer contains a hard-coded Codex model. Selecting one of those models routes `rag.chat` through a real Codex thread and subsequent turns reuse that thread for the conversation.
 
 Codex turns currently use a serialized app-server reader. The response and protocol events are real, but the renderer receives the completed turn rather than live deltas. Concurrent Codex interruption is therefore rejected explicitly until the backend has a dedicated event dispatcher. Approval requests are denied by default rather than being silently accepted.
 
@@ -30,7 +32,7 @@ Requirements:
 - Connect providers through OpenCode itself.
 - Use a loopback HTTP endpoint, normally `http://127.0.0.1:4096`.
 
-ElephantNote uses the documented OpenCode server endpoints:
+ElephantNote uses the OpenCode server endpoints:
 
 - `GET /global/health`
 - `GET /provider`
@@ -39,7 +41,7 @@ ElephantNote uses the documented OpenCode server endpoints:
 - `POST /session/:id/message`
 - `POST /session/:id/abort`
 
-Remote OpenCode endpoints are rejected by default. Optional OpenCode HTTP basic-auth credentials are sent only to the configured loopback server and are never written to logs.
+The OpenCode provider test verifies the local server and imports its real model catalog. Selecting an imported OpenCode model routes the ElephantNote chat through a real OpenCode session. Remote OpenCode endpoints are rejected by default. Optional OpenCode HTTP basic-auth credentials are sent only to the configured loopback server and are never written to logs.
 
 ## Renderer API
 
@@ -57,7 +59,7 @@ The Tauri bridge exposes:
 
 `ai.turns.interrupt` is functional for OpenCode. For Codex it currently returns an explicit unsupported-operation error instead of pretending that a serialized request can interrupt the active turn.
 
-Direct provider helpers are also available under `elephantnote.ai.codex` and `elephantnote.ai.opencode`.
+Direct provider helpers are available under `elephantnote.ai.codex` and `elephantnote.ai.opencode`. The existing `elephantnote.rag.chat` method dispatches to these runtimes when the selected chat route uses `codex` or `opencode`; all other providers continue through the pre-existing chat runtime.
 
 ## Development logs
 
@@ -76,3 +78,12 @@ Fields whose names contain token, API key, authorization, or password are redact
 ## Tests
 
 The Rust tests cover JSONL response correlation, notification handling, approval denial, text-delta assembly, loopback enforcement, model references, and log redaction. When the official Codex CLI is installed in the test environment, an additional test performs a real app-server handshake and `account/read` request.
+
+Renderer tests verify that:
+
+- the real Tauri provider commands are called;
+- Codex and OpenCode chats create real runtime threads and turns;
+- the same conversation reuses its runtime thread;
+- `api.call('rag.chat', ...)` reaches the subscription bridge rather than `tauri_rag_chat`;
+- non-subscription providers remain delegated to the existing runtime;
+- the former fake Codex toggle and hard-coded model do not return.

@@ -60,7 +60,7 @@
       </section>
 
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>External API providers</h4><p>Manual API endpoints. These are billed separately from ChatGPT subscriptions.</p></div><button class="secondary compact" type="button" @click="addProvider"><Plus aria-hidden="true" /> Add provider</button></header>
+        <header class="en-ai-card-header"><div><h4>External API providers</h4><p>Manual API endpoints are stored for features that explicitly support them. They are billed separately from ChatGPT subscriptions.</p></div><button class="secondary compact" type="button" @click="addProvider"><Plus aria-hidden="true" /> Add provider</button></header>
         <div v-if="form.providerRows.length" class="en-provider-list">
           <article v-for="provider in form.providerRows" :key="provider.id" class="en-provider-row">
             <div class="en-provider-form">
@@ -81,7 +81,7 @@
       <section class="en-ai-card">
         <header class="en-ai-card-header"><div><h4>Chat route</h4><p>Select the actual runtime used by ElephantNote chat.</p></div><span class="en-ai-badge active">{{ routeProviderLabel(form.routes.chat.source) }}</span></header>
         <div class="en-ai-card-body en-ai-grid">
-          <label><span>Provider</span><select v-model="form.routes.chat.source" @change="onChatSourceChanged"><option value="disabled">Disabled</option><option v-if="form.localAi.enabled" value="app-local">App Local</option><option value="codex" :disabled="!codexStatus.connected">Codex subscription</option><option v-for="provider in enabledProviderRows" :key="provider.id" :value="providerSource(provider)">{{ provider.label }}</option></select></label>
+          <label><span>Provider</span><select v-model="form.routes.chat.source" @change="onChatSourceChanged"><option value="disabled">Disabled</option><option v-if="form.localAi.enabled" value="app-local">App Local</option><option value="codex" :disabled="!codexStatus.connected">Codex subscription</option></select></label>
           <label><span>Model</span><select v-if="form.routes.chat.source === 'codex'" v-model="form.routes.chat.model"><option value="">Select a Codex model</option><option v-for="model in codexModels" :key="model.id || model.model" :value="model.model || model.id">{{ model.displayName || model.model || model.id }}</option></select><select v-else-if="form.routes.chat.source === 'app-local'" v-model="form.routes.chat.model"><option value="">Select a local model</option><option v-for="model in localModels" :key="resolveModelId(model)" :value="resolveModelId(model)">{{ resolveModelName(model) }}</option></select><input v-else v-model.trim="form.routes.chat.model" type="text" placeholder="Provider model id"></label>
           <label class="wide"><span>System prompt</span><textarea v-model="form.routes.chat.systemPrompt" rows="5"></textarea></label>
           <label><span>Temperature</span><input v-model.number="form.routes.chat.temperature" type="number" min="0" max="2" step="0.05"></label>
@@ -148,7 +148,7 @@ const providerSource = (provider) => provider.type === 'openai-compatible' ? 'ap
 const enabledProviderRows = computed(() => form.value.providerRows.filter((provider) => provider.enabled))
 const codexStatusLabel = computed(() => !codexStatus.value.installed ? 'Not installed' : codexStatus.value.connected ? 'Connected' : 'Disconnected')
 const codexAccountLabel = computed(() => codexStatus.value.connected ? `ChatGPT ${codexStatus.value.account?.planType || 'account'}` : codexStatus.value.installed ? 'Codex CLI detected' : 'Codex CLI required')
-const codexRateLimit = computed(() => codexRateLimits.value?.rateLimits || Object.values(codexRateLimits.value?.rateLimitsByLimitId || {})[0] || null)
+const codexRateLimit = computed(() => codexRateLimits.value?.rateLimits?.primary || Object.values(codexRateLimits.value?.rateLimitsByLimitId || {})[0]?.primary || null)
 const routeProviderLabel = (source = '') => ({ 'app-local': 'App Local', codex: 'Codex', api: 'API', openrouter: 'OpenRouter', mistral: 'Mistral', ollama: 'Ollama', lmstudio: 'LM Studio', llamacpp: 'llama.cpp', disabled: 'Disabled' }[source] || source || 'Disabled')
 const formatReset = (timestamp) => new Date(Number(timestamp) * 1000).toLocaleString()
 

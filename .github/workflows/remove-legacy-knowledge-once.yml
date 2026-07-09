@@ -28,6 +28,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
@@ -50,23 +56,42 @@ jobs:
           cargo check --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets
           cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets
       - name: Check Tauri integration
-        id: tauri_check
-        continue-on-error: true
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint changed frontend knowledge files
+        run: |
+          pnpm exec eslint \
+            Elephant/frontend/app/components/views/WikiView.vue \
+            Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \
+            Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \
+            Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js
+      - name: Build frontend
+        run: pnpm build
+      - name: Verify no legacy knowledge implementation remains
         shell: bash
         run: |
-          set -o pipefail
-          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features --message-format short 2>&1 | tee legacy-removal-tauri-check.log
-      - name: Upload Tauri diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: legacy-removal-tauri-diagnostics
-          path: |
-            legacy-removal-tauri-check.log
-            Elephant/backend/tauri/src/
-            Elephant/backend/knowledge-core/src/
-          if-no-files-found: error
-          retention-days: 3
-      - name: Enforce Tauri check
-        if: always()
-        run: test '${{ steps.tauri_check.outcome }}' = 'success'
+          if grep -R -n -E 'tauri_embeddings_|EmbeddingStore|tauri_wiki_proposals|tauri_rag_build_prompt|tauri_search_(inspect|rebuild|query|status)|legacyInspect|legacyRebuild|portable-markdown-index|tauri_rag_chat|crate::search_logic|pub mod search_logic|pub mod embeddings|pub mod rag_prompt|pub mod fts' Elephant --include='*.rs' --include='*.js' --include='*.ts' --include='*.vue'; then
+            echo 'Legacy knowledge implementation remains.' >&2
+            exit 1
+          fi
+          test ! -e Elephant/backend/tauri/src/embeddings.rs
+          test ! -e Elephant/backend/tauri/src/wiki.rs
+          test ! -e Elephant/backend/tauri/src/rag_prompt.rs
+          test ! -e Elephant/backend/tauri/src/search_logic.rs
+          test ! -e Elephant/backend/tauri/src/fts.rs
+          grep -n 'knowledge-muya-preview' Elephant/frontend/app/components/views/WikiView.vue
+          grep -n 'muya.renderHtml' Elephant/frontend/app/components/views/WikiView.vue
+          grep -n 'tauri_muya_render_html' Elephant/backend/tauri/src/markdown/commands.rs
+          grep -n 'tauri_knowledge_chat' Elephant/backend/tauri/src/chat_runtime.rs Elephant/backend/tauri/src/lib_min.rs
+      - name: Remove migration files and commit
+        shell: bash
+        run: |
+          rm -f build/scripts/remove_legacy_knowledge.py
+          rm -f build/scripts/fix_knowledge_graph.py
+          rm -f .github/workflows/remove-legacy-knowledge-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'refactor(knowledge): remove legacy backend and use Muya rendering'
+          git push origin HEAD:feature/rust-knowledge-core

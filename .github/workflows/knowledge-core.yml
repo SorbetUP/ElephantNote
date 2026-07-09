@@ -9,7 +9,11 @@ on:
       - 'Elephant/backend/tauri/src/knowledge*.rs'
       - 'Elephant/backend/tauri/src/lib_min.rs'
       - 'Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
+      - 'Elephant/frontend/app/components/views/GraphView.vue'
+      - 'Elephant/frontend/app/components/views/graphNavigationHelpers.js'
+      - 'Elephant/frontend/app/components/views/semanticGraphViewHelpers.js'
       - 'tests/app/unit/platform/knowledgeRuntimeClient.spec.js'
+      - 'tests/app/unit/views/graphNavigationHelpers.spec.js'
       - '.github/workflows/knowledge-core.yml'
   push:
     branches:
@@ -23,7 +27,11 @@ on:
       - 'Elephant/backend/tauri/src/knowledge*.rs'
       - 'Elephant/backend/tauri/src/lib_min.rs'
       - 'Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
+      - 'Elephant/frontend/app/components/views/GraphView.vue'
+      - 'Elephant/frontend/app/components/views/graphNavigationHelpers.js'
+      - 'Elephant/frontend/app/components/views/semanticGraphViewHelpers.js'
       - 'tests/app/unit/platform/knowledgeRuntimeClient.spec.js'
+      - 'tests/app/unit/views/graphNavigationHelpers.spec.js'
       - '.github/workflows/knowledge-core.yml'
   workflow_dispatch:
 
@@ -170,8 +178,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  renderer-logging:
-    name: Renderer runtime logging tests
+  renderer-interactions:
+    name: Renderer logging and graph interaction tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -184,21 +192,27 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
 
-      - name: Lint runtime logger and tests
+      - name: Lint runtime and graph files
         env:
           NODE_PATH: Elephant/node_modules
         run: |
           Elephant/node_modules/.bin/eslint \
             Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \
-            tests/app/unit/platform/knowledgeRuntimeClient.spec.js
+            Elephant/frontend/app/components/views/GraphView.vue \
+            Elephant/frontend/app/components/views/graphNavigationHelpers.js \
+            tests/app/unit/platform/knowledgeRuntimeClient.spec.js \
+            tests/app/unit/views/graphNavigationHelpers.spec.js
 
-      - name: Run runtime logging tests
+      - name: Run runtime and graph interaction tests
         shell: bash
         run: |
           set -o pipefail
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
             tests/app/unit/platform/knowledgeRuntimeClient.spec.js \
-            --reporter=verbose 2>&1 | tee knowledge-runtime-client-test.log
+            tests/app/unit/views/graphNavigationHelpers.spec.js \
+            --reporter=verbose 2>&1 | tee knowledge-renderer-test.log
+          grep -F 'graph semantic navigation' knowledge-renderer-test.log
+          grep -F 'graph camera calculations' knowledge-renderer-test.log
 
       - name: Build renderer
         run: pnpm tauri:web:build
@@ -208,6 +222,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: knowledge-renderer-diagnostics
-          path: knowledge-runtime-client-test.log
+          path: knowledge-renderer-test.log
           if-no-files-found: warn
           retention-days: 7

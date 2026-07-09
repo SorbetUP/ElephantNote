@@ -18,6 +18,7 @@ pub mod local_llama_runtime;
 pub mod chat_runtime;
 pub mod search_logic;
 pub mod knowledge;
+pub mod knowledge_relations;
 
 mod tauri_extra_commands;
 mod debug_commands;
@@ -114,6 +115,12 @@ pub fn run() {
       knowledge::tauri_knowledge_tagging_request,
       knowledge::tauri_knowledge_tagging_validate,
       knowledge::tauri_knowledge_tagging_generate,
+      knowledge_relations::tauri_knowledge_graph,
+      knowledge_relations::tauri_knowledge_relation_save,
+      knowledge_relations::tauri_knowledge_relation_status_set,
+      knowledge_relations::tauri_knowledge_relation_get,
+      knowledge_relations::tauri_knowledge_relations_for_node,
+      knowledge_relations::tauri_knowledge_relations_list,
       sync_commands::iroh_sync_create_invite,
       sync_commands::iroh_sync_accept_invite,
       sync_commands::iroh_sync_status,

@@ -39,19 +39,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - name: Apply rustfmt
-        run: cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+      - name: Check formatting
+        run: cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml -- --check
       - name: Check
-        id: check
-        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
           cargo check --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets --message-format short 2>&1 | tee knowledge-core-check.log
       - name: Test
-        id: test
-        if: steps.check.outcome == 'success'
-        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
@@ -62,14 +57,7 @@ jobs:
         with:
           name: knowledge-core-diagnostics
           path: |
-            Elephant/backend/knowledge-core/
             knowledge-core-check.log
             knowledge-core-test.log
           if-no-files-found: warn
           retention-days: 3
-      - name: Enforce result
-        if: always()
-        shell: bash
-        run: |
-          test '${{ steps.check.outcome }}' = 'success'
-          test '${{ steps.test.outcome }}' = 'success'

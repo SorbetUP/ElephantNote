@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('element-plus', () => ({
+  ElMessage: { success: vi.fn() }
+}))
+
 import { ElephantAddonManager } from '../../../../Elephant/frontend/src/renderer/src/addons/AddonManager.js'
 import { builtinAddons } from '../../../../Elephant/frontend/src/renderer/src/addons/builtin/index.js'
 import { ExternalAddonController } from '../../../../Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js'
@@ -72,6 +77,33 @@ describe('built-in starter addons', () => {
       'elephant.quick-capture.create',
       'elephant.vault-overview.generate'
     ])
+  })
+
+  it('executes Daily Notes through the registered Tauri read/write commands', async () => {
+    const invoke = vi.fn(async (command, payload) => {
+      if (command === 'tauri_notes_read') throw new Error('not found')
+      if (command === 'tauri_notes_write') {
+        return { path: payload.relativePath, changed: true, created: true }
+      }
+      throw new Error(`Unexpected command: ${command}`)
+    })
+    vi.stubGlobal('__TAURI__', { core: { invoke } })
+
+    const manager = new ElephantAddonManager({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    })
+    manager.register(builtinAddons.find((addon) => addon.manifest.id === 'elephant.daily-notes'))
+    await manager.enable('elephant.daily-notes')
+
+    const result = await manager.runAction('elephant.daily-notes.open-today')
+    const writeCall = invoke.mock.calls.find(([command]) => command === 'tauri_notes_write')
+
+    expect(result.created).toBe(true)
+    expect(result.path).toMatch(/^Daily\/\d{4}-\d{2}-\d{2}\.md$/)
+    expect(writeCall).toBeDefined()
+    expect(writeCall[1].relativePath).toBe(result.path)
+    expect(writeCall[1].content).toContain('# ')
+    expect(writeCall[1].content).toContain('## Tasks')
   })
 })
 

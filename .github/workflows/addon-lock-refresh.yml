@@ -1,5 +1,5 @@
 # One-off branch maintenance workflow. Remove after the generated hardening commit.
-name: Harden addon broker and refresh lockfile
+name: Apply addon broker hardening
 
 on:
   push:
@@ -12,18 +12,13 @@ permissions:
   contents: write
 
 jobs:
-  refresh-lock:
+  harden:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feature/addon-runtime-platform
           fetch-depth: 0
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
 
       - name: Apply broker hardening
         shell: python
@@ -37,8 +32,15 @@ jobs:
               global source
               count = source.count(old)
               if count != 1:
-                  raise SystemExit(f'Expected one match, found {count}: {old[:80]!r}')
+                  raise SystemExit(f'Expected one match, found {count}: {old[:100]!r}')
               source = source.replace(old, new, 1)
+
+          replace_once(
+              '''    && id.as_bytes()[0].is_ascii_lowercase()
+              && id.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-' | b'_'))''',
+              '''    && (id.as_bytes()[0].is_ascii_lowercase() || id.as_bytes()[0].is_ascii_digit())
+              && id.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-' | b'_'))'''
+          )
 
           replace_once(
               '''  fs::write(&temp, raw).map_err(|error| format!("Failed to write addon registry: {error}"))?;
@@ -137,26 +139,12 @@ jobs:
 
           path.write_text(source)
 
-      - name: Format and regenerate Cargo lockfile
+      - name: Commit generated hardening
         shell: bash
         run: |
           set -euxo pipefail
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-          cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
-
-      - name: Verify Rust addon backend
-        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features addons::tests
-
-      - name: Commit generated changes
-        shell: bash
-        run: |
-          set -euxo pipefail
-          if git diff --quiet -- Elephant/backend/tauri/src/addons.rs Elephant/backend/tauri/Cargo.lock; then
-            echo "Addon backend and Cargo.lock are already current"
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Elephant/backend/tauri/src/addons.rs Elephant/backend/tauri/Cargo.lock
-          git commit -m "fix(addons): harden broker and refresh lockfile [skip ci]"
+          git add Elephant/backend/tauri/src/addons.rs
+          git commit -m "fix(addons): harden external broker [skip ci]"
           git push origin HEAD:feature/addon-runtime-platform

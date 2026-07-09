@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "branch": "addon-catalog",
+  "updatedAt": "2026-07-10T00:00:00Z",
+  "addons": [
+    {
+      "id": "com.elephantnote.examples.platform-proof",
+      "slug": "platform-proof",
+      "name": "Addon Platform Proof",
+      "version": "1.0.0",
+      "description": "Verifies the external Worker, app broker, private storage and scoped note read/write APIs.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/platform-proof/manifest.json",
+      "entryPath": "addons/platform-proof/main.js",
+      "readmePath": "addons/platform-proof/README.md"
+    },
+    {
+      "id": "com.elephantnote.examples.finance-notes",
+      "slug": "finance-notes",
+      "name": "Finance Notes",
+      "version": "0.1.0",
+      "description": "Fetches a current market quote and writes a sourced Markdown note.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/finance-notes/manifest.json",
+      "entryPath": "addons/finance-notes/main.js",
+      "readmePath": "addons/finance-notes/README.md"
+    }
+  ]
+}

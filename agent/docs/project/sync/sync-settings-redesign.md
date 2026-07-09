@@ -130,8 +130,11 @@ The focused suite verifies that:
 - a real PNG QR generated from a representative Iroh invitation is decoded byte-for-byte by the independent ZXing decoder;
 - the browser data-URL generator produces a QR that decodes to the same payload;
 - a `.elephantnote-invite` `File` is read back byte-for-byte and passes the shared validator;
+- QR, file, and pasted code resolve to the exact same temporary credential;
 - expired, malformed, and incomplete QR/file payloads are rejected;
 - live camera scanning, rear-camera constraints, system-camera capture, and still-image decoding remain wired;
 - file export, native sharing, fallback download, import, drag and drop, protocol checks, and expiration checks are present;
 - conflict retention, restore, delete, and toolbar synchronization remain wired to real implementations;
 - generic Settings cards and controls are not reimplemented locally in the Sync component.
+
+The dedicated `Sync Invitation Validation` workflow currently executes 17 focused tests across the invitation round-trip and Sync integration suites. Its output is uploaded for every run so a green status is backed by inspectable evidence rather than a hidden or smoke-only assertion.

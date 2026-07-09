@@ -19,6 +19,7 @@ pub mod chat_runtime;
 pub mod search_logic;
 pub mod knowledge;
 pub mod knowledge_relations;
+pub mod knowledge_chat_actions;
 
 mod tauri_extra_commands;
 mod debug_commands;
@@ -121,6 +122,12 @@ pub fn run() {
       knowledge_relations::tauri_knowledge_relation_get,
       knowledge_relations::tauri_knowledge_relations_for_node,
       knowledge_relations::tauri_knowledge_relations_list,
+      knowledge_chat_actions::tauri_knowledge_chat_action_prepare,
+      knowledge_chat_actions::tauri_knowledge_chat_action_get,
+      knowledge_chat_actions::tauri_knowledge_chat_actions_list,
+      knowledge_chat_actions::tauri_knowledge_chat_action_approve,
+      knowledge_chat_actions::tauri_knowledge_chat_action_reject,
+      knowledge_chat_actions::tauri_knowledge_chat_action_execute,
       sync_commands::iroh_sync_create_invite,
       sync_commands::iroh_sync_accept_invite,
       sync_commands::iroh_sync_status,

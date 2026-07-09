@@ -137,4 +137,4 @@ The focused suite verifies that:
 - conflict retention, restore, delete, and toolbar synchronization remain wired to real implementations;
 - generic Settings cards and controls are not reimplemented locally in the Sync component.
 
-The dedicated `Sync Invitation Validation` workflow currently executes 17 focused tests across the invitation round-trip and Sync integration suites. Its output is uploaded for every run so a green status is backed by inspectable evidence rather than a hidden or smoke-only assertion.
+The dedicated `Sync Invitation Validation` workflow executes 17 focused tests across the invitation round-trip and Sync integration suites. Its output is uploaded for every run so a green status is backed by inspectable evidence rather than a hidden or smoke-only assertion.

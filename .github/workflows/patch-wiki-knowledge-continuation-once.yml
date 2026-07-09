@@ -21,17 +21,28 @@ jobs:
         with:
           ref: feature/wiki-knowledge-continuation
           fetch-depth: 0
-      - name: Report the failed Tauri check
+      - name: Report only compiler errors
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh run view 29057587121 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/wiki-check.log
-          test -s /tmp/wiki-check.log
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          lines = Path('/tmp/wiki-check.log').read_text(errors='replace').splitlines()
+          keep = set()
+          pattern = re.compile(r'(error\[|error:|could not compile|failed to|aborting due to)', re.I)
+          for i, line in enumerate(lines):
+              if pattern.search(line):
+                  keep.update(range(max(0, i - 5), min(len(lines), i + 9)))
+          selected = [lines[i] for i in sorted(keep)]
+          Path('/tmp/wiki-errors.txt').write_text('\n'.join(selected[-120:]) or 'No compiler error lines matched.')
+          PY
           {
-            echo '### Wiki continuation compile diagnostic'
+            echo '### Wiki continuation compiler errors'
             echo
             echo '```text'
-            tail -n 120 /tmp/wiki-check.log
+            cat /tmp/wiki-errors.txt
             echo '```'
           } > /tmp/wiki-check-comment.md
           gh pr comment 37 --repo "$GITHUB_REPOSITORY" --body-file /tmp/wiki-check-comment.md

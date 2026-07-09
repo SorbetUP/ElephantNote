@@ -111,7 +111,10 @@ impl KnowledgeStore {
                 )
                 .map_err(|error| error.to_string())?;
             let rows = statement
-                .query_map(params![wiki_status_name(&status), capped_limit], map_wiki_row)
+                .query_map(
+                    params![wiki_status_name(&status), capped_limit],
+                    map_wiki_row,
+                )
                 .map_err(|error| error.to_string())?;
             return rows
                 .collect::<Result<Vec<_>, _>>()
@@ -167,7 +170,10 @@ impl KnowledgeStore {
         let mut draft = self
             .wiki_draft(draft_id)?
             .ok_or_else(|| format!("Unknown wiki draft: {draft_id}"))?;
-        if !matches!(draft.status, WikiDraftStatus::Proposed | WikiDraftStatus::Outdated) {
+        if !matches!(
+            draft.status,
+            WikiDraftStatus::Proposed | WikiDraftStatus::Outdated
+        ) {
             return Err("Only proposed or outdated wiki drafts can be accepted.".into());
         }
         validate_draft(&draft)?;
@@ -186,10 +192,7 @@ impl KnowledgeStore {
         Ok((draft, target))
     }
 
-    pub fn mark_wikis_outdated_for_source(
-        &self,
-        document_path: &str,
-    ) -> Result<usize, String> {
+    pub fn mark_wikis_outdated_for_source(&self, document_path: &str) -> Result<usize, String> {
         let conn = open_wiki_connection(self.database_path())?;
         conn.execute_batch(WIKI_SCHEMA)
             .map_err(|error| error.to_string())?;
@@ -200,7 +203,9 @@ impl KnowledgeStore {
             )
             .map_err(|error| error.to_string())?;
         let rows = statement
-            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
             .map_err(|error| error.to_string())?;
         let mut ids = Vec::new();
         for row in rows {
@@ -305,11 +310,7 @@ fn parse_wiki_status(value: &str) -> WikiDraftStatus {
 }
 
 fn json_read_error(error: serde_json::Error) -> rusqlite::Error {
-    rusqlite::Error::FromSqlConversionFailure(
-        0,
-        rusqlite::types::Type::Text,
-        Box::new(error),
-    )
+    rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(error))
 }
 
 fn atomic_write(root: &Path, target: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -380,7 +381,9 @@ mod tests {
         assert_eq!(accepted.status, WikiDraftStatus::Accepted);
         assert!(path.starts_with(root.join(".elephantnote/wiki")));
         assert!(path.is_file());
-        assert!(fs::read_to_string(path).unwrap().contains("generated: true"));
+        assert!(fs::read_to_string(path)
+            .unwrap()
+            .contains("generated: true"));
         fs::remove_dir_all(root).ok();
     }
 

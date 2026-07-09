@@ -136,10 +136,7 @@ pub fn build_wiki_synthesis_request(
         .map(|source| {
             format!(
                 "<source chunk_id=\"{}\" document=\"{}\" heading=\"{}\">\n{}\n</source>",
-                source.chunk_id,
-                source.document_path,
-                source.heading,
-                source.text
+                source.chunk_id, source.document_path, source.heading, source.text
             )
         })
         .collect::<Vec<_>>()
@@ -496,7 +493,10 @@ mod tests {
         };
         let validation = synthesis.validate(&sources, 8);
         assert!(!validation.valid);
-        assert!(validation.errors.iter().any(|error| error.contains("unknown chunk")));
+        assert!(validation
+            .errors
+            .iter()
+            .any(|error| error.contains("unknown chunk")));
     }
 
     #[test]
@@ -540,6 +540,9 @@ mod tests {
         let first = render_wiki(&synthesis, "Iroh", &sources).unwrap();
         let second = render_wiki(&synthesis, "Iroh", &sources).unwrap();
         assert_eq!(first, second);
-        assert_eq!(slugify("  Iroh & Synchronisation  "), "iroh-synchronisation");
+        assert_eq!(
+            slugify("  Iroh & Synchronisation  "),
+            "iroh-synchronisation"
+        );
     }
 }

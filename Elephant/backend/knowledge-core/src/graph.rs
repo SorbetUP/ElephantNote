@@ -3,11 +3,11 @@ use crate::relations::{
     RelationType,
 };
 use crate::storage::KnowledgeStore;
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct KnowledgeGraph {
     pub nodes: Vec<KnowledgeGraphNode>,
     pub edges: Vec<KnowledgeGraphEdge>,

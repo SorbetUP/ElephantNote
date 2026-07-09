@@ -60,9 +60,7 @@ pub async fn tauri_knowledge_wiki_generate(
         &store,
         &topic,
         source_paths.unwrap_or_default(),
-        max_documents
-            .unwrap_or(DEFAULT_MAX_DOCUMENTS)
-            .clamp(1, 50),
+        max_documents.unwrap_or(DEFAULT_MAX_DOCUMENTS).clamp(1, 50),
     )?;
     let sources = select_source_chunks(
         collect_wiki_sources(&documents),
@@ -71,15 +69,8 @@ pub async fn tauri_knowledge_wiki_generate(
     if sources.is_empty() {
         return Err("No indexed source chunks are available for this wiki.".into());
     }
-    let max_sections = max_sections
-        .unwrap_or(DEFAULT_MAX_SECTIONS)
-        .clamp(1, 30);
-    let request = build_wiki_synthesis_request(
-        &topic,
-        title.as_deref(),
-        &sources,
-        max_sections,
-    );
+    let max_sections = max_sections.unwrap_or(DEFAULT_MAX_SECTIONS).clamp(1, 30);
+    let request = build_wiki_synthesis_request(&topic, title.as_deref(), &sources, max_sections);
     let route = selected_wiki_route(&payload)?;
 
     eprintln!(
@@ -134,10 +125,7 @@ pub fn tauri_knowledge_wikis_list(
 }
 
 #[tauri::command]
-pub fn tauri_knowledge_wiki_accept(
-    app: AppHandle,
-    draft_id: String,
-) -> Result<WikiDraft, String> {
+pub fn tauri_knowledge_wiki_accept(app: AppHandle, draft_id: String) -> Result<WikiDraft, String> {
     let root = active_vault_root(&app)?;
     let store = active_store(&root)?;
     let (draft, path) = store.accept_wiki_draft(&root, &draft_id)?;
@@ -150,10 +138,7 @@ pub fn tauri_knowledge_wiki_accept(
 }
 
 #[tauri::command]
-pub fn tauri_knowledge_wiki_reject(
-    app: AppHandle,
-    draft_id: String,
-) -> Result<WikiDraft, String> {
+pub fn tauri_knowledge_wiki_reject(app: AppHandle, draft_id: String) -> Result<WikiDraft, String> {
     let root = active_vault_root(&app)?;
     active_store(&root)?.set_wiki_draft_status(&draft_id, WikiDraftStatus::Rejected)
 }
@@ -338,7 +323,12 @@ async fn generate_structured_response(
             )
             .await?
             .map(|result| result.answer)
-            .ok_or_else(|| format!("Selected local model could not be resolved: {}", route.model));
+            .ok_or_else(|| {
+                format!(
+                    "Selected local model could not be resolved: {}",
+                    route.model
+                )
+            });
         }
     }
 

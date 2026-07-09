@@ -47,9 +47,7 @@ pub fn tauri_knowledge_inspect_note(
 }
 
 #[tauri::command]
-pub fn tauri_knowledge_validate_chat_action(
-    action: ChatKnowledgeAction,
-) -> ActionValidation {
+pub fn tauri_knowledge_validate_chat_action(action: ChatKnowledgeAction) -> ActionValidation {
     action.validate()
 }
 
@@ -59,18 +57,12 @@ pub fn tauri_knowledge_tags_list(app: AppHandle) -> Result<Vec<CanonicalTag>, St
 }
 
 #[tauri::command]
-pub fn tauri_knowledge_tag_upsert(
-    app: AppHandle,
-    tag: CanonicalTag,
-) -> Result<(), String> {
+pub fn tauri_knowledge_tag_upsert(app: AppHandle, tag: CanonicalTag) -> Result<(), String> {
     active_store(&app)?.upsert_canonical_tag(&tag)
 }
 
 #[tauri::command]
-pub fn tauri_knowledge_tag_alias_add(
-    app: AppHandle,
-    alias: TagAlias,
-) -> Result<(), String> {
+pub fn tauri_knowledge_tag_alias_add(app: AppHandle, alias: TagAlias) -> Result<(), String> {
     active_store(&app)?.add_tag_alias(&alias)
 }
 
@@ -198,8 +190,8 @@ fn build_request(
     max_tags: usize,
 ) -> Result<StructuredModelRequest, String> {
     let document = indexed_document(store, relative_path)?;
-    let taxonomy = serde_json::to_string(&store.list_canonical_tags()?)
-        .map_err(|error| error.to_string())?;
+    let taxonomy =
+        serde_json::to_string(&store.list_canonical_tags()?).map_err(|error| error.to_string())?;
     Ok(build_tagging_request(
         &document,
         &taxonomy,
@@ -226,7 +218,11 @@ fn selected_knowledge_route(payload: &Value) -> Result<KnowledgeModelRoute, Stri
         let Some(value) = payload.pointer(pointer) else {
             continue;
         };
-        if let Some(model) = value.as_str().map(str::trim).filter(|value| !value.is_empty()) {
+        if let Some(model) = value
+            .as_str()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
             return Ok(KnowledgeModelRoute {
                 provider: "local-llama.cpp".into(),
                 model: model.to_string(),
@@ -321,7 +317,12 @@ async fn generate_structured_response(
             )
             .await?
             .map(|result| result.answer)
-            .ok_or_else(|| format!("Selected local model could not be resolved: {}", route.model));
+            .ok_or_else(|| {
+                format!(
+                    "Selected local model could not be resolved: {}",
+                    route.model
+                )
+            });
         }
     }
 

@@ -191,7 +191,7 @@ const dispatchApiAction = async(bridge, action, payload = {}) => {
     case 'sources.ingestUrl': return bridge.sources.ingestUrl(payload)
     case 'sources.importRss': return bridge.sources.importRss(payload)
     case 'wiki.list': return bridge.wiki.list()
-    case 'wiki.propose': return bridge.wiki.propose()
+    case 'wiki.propose': return bridge.wiki.propose(payload)
     case 'wiki.accept': return bridge.wiki.accept(payload)
     case 'wiki.dismiss': return bridge.wiki.dismiss(payload)
     case 'wiki.sourceInfo': return bridge.wiki.sourceInfo(payload)
@@ -201,9 +201,6 @@ const dispatchApiAction = async(bridge, action, payload = {}) => {
     case 'search.status': return bridge.search.status()
     case 'search.inspect': return bridge.search.inspect()
     case 'search.rebuild': return bridge.search.rebuild()
-    case 'search.clear': return bridge.search.clear()
-    case 'search.disable': return bridge.search.disable()
-    case 'search.enable': return bridge.search.enable()
     case 'sync.status': return bridge.sync.status()
     case 'sync.plan': return bridge.sync.plan(payload)
     case 'sync.enqueue': return bridge.sync.enqueue(payload.operation, payload.payload || {})
@@ -299,7 +296,7 @@ const createBridge = (target) => {
     notes: {
       read: (payload = {}) => invoke(target, 'tauri_notes_read', asRelativePathPayload(payload)),
       write: (payload = {}) => invoke(target, 'tauri_notes_write', normalizePayload(payload)),
-      autotag: async() => ({ tags: [] })
+      autotag: async(payload = {}) => invoke(target, 'tauri_knowledge_tagging_generate', { relativePath: payload.relativePath || payload.path || '', payload, maxTags: payload.maxTags || 8 })
     },
 
     markdown: {
@@ -365,26 +362,26 @@ const createBridge = (target) => {
     },
 
     wiki: {
-      list: async() => {
-        const result = await invoke(target, 'tauri_wiki_list')
-        return Array.isArray(result) ? { records: result } : { records: Array.isArray(result?.records) ? result.records : [] }
-      },
-      propose: async() => [],
-      accept: async() => null,
-      dismiss: async() => null,
-      sourceInfo: async() => null,
-      context: async() => ({ records: [], notes: [] })
+      list: async() => ({ records: await invoke(target, 'tauri_knowledge_wikis_list', { limit: 500 }) }),
+      propose: (payload = {}) => invoke(target, 'tauri_knowledge_wiki_generate', normalizePayload(payload)),
+      accept: (payload = {}) => invoke(target, 'tauri_knowledge_wiki_accept', { draftId: payload.draftId || payload.id || payload }),
+      dismiss: (payload = {}) => invoke(target, 'tauri_knowledge_wiki_reject', { draftId: payload.draftId || payload.id || payload }),
+      sourceInfo: (payload = {}) => invoke(target, 'tauri_knowledge_wiki_get', { draftId: payload.draftId || payload.id || payload }),
+      context: async() => ({ records: await invoke(target, 'tauri_knowledge_wikis_list', { limit: 500 }), graph: await invoke(target, 'tauri_knowledge_graph', { includeSuggestions: false }) })
     },
 
     search: {
-      initVault: (vaultPath = '') => Promise.resolve({ ok: true, runtime: 'tauri-rust', vaultPath }),
-      query: (params = {}) => invoke(target, 'tauri_search_query', { params }),
-      status: () => invoke(target, 'tauri_search_status'),
-      rebuild: () => invoke(target, 'tauri_search_rebuild'),
-      inspect: () => invoke(target, 'tauri_search_inspect'),
-      clear: async() => ({ ok: true, runtime: 'tauri-rust' }),
-      disable: async() => ({ ok: true, runtime: 'tauri-rust' }),
-      enable: async() => ({ ok: true, runtime: 'tauri-rust' })
+      initVault: () => invoke(target, 'tauri_knowledge_rebuild'),
+      query: (params = {}) => invoke(target, 'tauri_knowledge_search', { query: params.query || params.q || '', limit: params.limit || params.maxResults || 20 }),
+      status: async() => ({ enabled: true, runtime: 'rust-knowledge-core', ...(await invoke(target, 'tauri_knowledge_status')) }),
+      rebuild: () => invoke(target, 'tauri_knowledge_rebuild'),
+      inspect: async() => {
+        const [graph, status] = await Promise.all([
+          invoke(target, 'tauri_knowledge_graph', { includeSuggestions: false }),
+          invoke(target, 'tauri_knowledge_status')
+        ])
+        return { indexPath: status.databasePath || '', documents: graph.nodes || [], folders: [], semanticLinks: graph.edges || [], graph, generatedAt: new Date().toISOString() }
+      }
     },
 
     sync: {
@@ -485,7 +482,7 @@ const createBridge = (target) => {
     rag: {
       chat: (payload = {}, limit = 6) => {
         const normalized = typeof payload === 'string' ? { message: payload, limit } : normalizePayload(payload)
-        return invoke(target, 'tauri_rag_chat', {
+        return invoke(target, 'tauri_knowledge_chat', {
           payload: {
             limit,
             ...normalized,

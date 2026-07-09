@@ -1,14 +1,5 @@
 import { knowledgeRuntimeClient, isKnowledgeRuntimeAvailable } from './knowledgeRuntimeClient'
 
-const emptyInspection = () => ({
-  indexPath: '',
-  documents: [],
-  folders: [],
-  semanticLinks: [],
-  graph: { nodes: [], edges: [], clusters: [] },
-  generatedAt: ''
-})
-
 const graphDocuments = (graph) => (Array.isArray(graph?.nodes) ? graph.nodes : []).map((node) => ({
   relativePath: node.relativePath || node.path || node.id || '',
   path: node.path || node.relativePath || node.id || '',
@@ -18,78 +9,69 @@ const graphDocuments = (graph) => (Array.isArray(graph?.nodes) ? graph.nodes : [
   chunkCount: Number(node.chunkCount || 0)
 }))
 
+const inspect = async () => {
+  const [graph, status] = await Promise.all([
+    knowledgeRuntimeClient.graph({ includeSuggestions: false }),
+    knowledgeRuntimeClient.status()
+  ])
+  return {
+    indexPath: status?.databasePath || '',
+    documents: graphDocuments(graph),
+    folders: [],
+    semanticLinks: Array.isArray(graph?.edges) ? graph.edges : [],
+    graph,
+    generatedAt: new Date().toISOString()
+  }
+}
+
 export const installKnowledgeRuntimeBridge = (target = globalThis) => {
   const bridge = target?.elephantnote
   if (!bridge || !isKnowledgeRuntimeAvailable(target)) return false
-  if (bridge.knowledge?.runtime === 'rust-knowledge-core') return true
-
-  const legacyInspect = typeof bridge.search?.inspect === 'function'
-    ? bridge.search.inspect.bind(bridge.search)
-    : null
-
   bridge.knowledge = {
     runtime: 'rust-knowledge-core',
-    rebuild: () => knowledgeRuntimeClient.rebuild(),
-    status: () => knowledgeRuntimeClient.status(),
-    search: (query, limit = 20) => knowledgeRuntimeClient.search(query, limit),
-    inspectNote: (relativePath) => knowledgeRuntimeClient.inspectNote(relativePath),
-    graph: (options = {}) => knowledgeRuntimeClient.graph(options),
-    listTags: () => knowledgeRuntimeClient.listTags(),
-    generateTagging: (relativePath, payload = {}, maxTags = 8) =>
-      knowledgeRuntimeClient.generateTagging(relativePath, payload, maxTags),
-    validateChatAction: (action) => knowledgeRuntimeClient.validateChatAction(action),
+    rebuild: knowledgeRuntimeClient.rebuild,
+    status: knowledgeRuntimeClient.status,
+    search: knowledgeRuntimeClient.search,
+    inspectNote: knowledgeRuntimeClient.inspectNote,
+    graph: knowledgeRuntimeClient.graph,
+    chat: knowledgeRuntimeClient.chat,
+    listTags: knowledgeRuntimeClient.listTags,
+    generateTagging: knowledgeRuntimeClient.generateTagging,
+    validateChatAction: knowledgeRuntimeClient.validateChatAction,
     chatActions: {
-      prepare: (action, rationale = '') =>
-        knowledgeRuntimeClient.prepareChatAction(action, rationale),
-      get: (proposalId) => knowledgeRuntimeClient.getChatAction(proposalId),
-      list: (options = {}) => knowledgeRuntimeClient.listChatActions(options),
-      approve: (proposalId) => knowledgeRuntimeClient.approveChatAction(proposalId),
-      reject: (proposalId) => knowledgeRuntimeClient.rejectChatAction(proposalId),
-      execute: (proposalId) => knowledgeRuntimeClient.executeChatAction(proposalId)
+      prepare: knowledgeRuntimeClient.prepareChatAction,
+      get: knowledgeRuntimeClient.getChatAction,
+      list: knowledgeRuntimeClient.listChatActions,
+      approve: knowledgeRuntimeClient.approveChatAction,
+      reject: knowledgeRuntimeClient.rejectChatAction,
+      execute: knowledgeRuntimeClient.executeChatAction
     },
-    listRelations: (options = {}) => knowledgeRuntimeClient.listRelations(options),
-    relationsForNode: (node, includeRejected = false) =>
-      knowledgeRuntimeClient.relationsForNode(node, includeRejected),
-    setRelationStatus: (relationId, status) =>
-      knowledgeRuntimeClient.setRelationStatus(relationId, status)
+    wikis: {
+      generate: knowledgeRuntimeClient.generateWiki,
+      get: knowledgeRuntimeClient.getWikiDraft,
+      list: knowledgeRuntimeClient.listWikiDrafts,
+      accept: knowledgeRuntimeClient.acceptWikiDraft,
+      reject: knowledgeRuntimeClient.rejectWikiDraft
+    },
+    listRelations: knowledgeRuntimeClient.listRelations,
+    relationsForNode: knowledgeRuntimeClient.relationsForNode,
+    setRelationStatus: knowledgeRuntimeClient.setRelationStatus
   }
-
-  bridge.search = bridge.search || {}
-  bridge.search.inspect = async () => {
-    const [legacyResult, graphResult, statusResult] = await Promise.allSettled([
-      legacyInspect ? legacyInspect() : Promise.resolve(emptyInspection()),
-      knowledgeRuntimeClient.graph({ includeSuggestions: false }),
-      knowledgeRuntimeClient.status()
-    ])
-    const legacy = legacyResult.status === 'fulfilled' && legacyResult.value
-      ? legacyResult.value
-      : emptyInspection()
-    if (graphResult.status !== 'fulfilled') return legacy
-
-    const graph = graphResult.value || emptyInspection().graph
-    const status = statusResult.status === 'fulfilled' ? statusResult.value : null
-    return {
-      ...legacy,
-      indexPath: status?.databasePath || legacy.indexPath || '',
-      documents: graphDocuments(graph),
-      semanticLinks: Array.isArray(graph?.edges) ? graph.edges : [],
-      graph,
-      generatedAt: new Date().toISOString()
-    }
+  bridge.search = {
+    initVault: async () => knowledgeRuntimeClient.rebuild(),
+    query: ({ query = '', q = '', limit = 20 } = {}) => knowledgeRuntimeClient.search(query || q, limit),
+    status: async () => ({ enabled: true, runtime: 'rust-knowledge-core', ...(await knowledgeRuntimeClient.status()) }),
+    rebuild: knowledgeRuntimeClient.rebuild,
+    inspect
   }
-
-  const legacyRebuild = typeof bridge.search.rebuild === 'function'
-    ? bridge.search.rebuild.bind(bridge.search)
-    : null
-  bridge.search.rebuild = async () => {
-    const report = await knowledgeRuntimeClient.rebuild()
-    await legacyRebuild?.().catch(() => null)
-    return {
-      ok: Array.isArray(report?.failed) ? report.failed.length === 0 : true,
-      runtime: 'rust-knowledge-core',
-      ...report
-    }
+  bridge.wiki = {
+    list: async () => ({ records: await knowledgeRuntimeClient.listWikiDrafts({ limit: 500 }) }),
+    propose: knowledgeRuntimeClient.generateWiki,
+    accept: ({ id, draftId } = {}) => knowledgeRuntimeClient.acceptWikiDraft(draftId || id),
+    dismiss: ({ id, draftId } = {}) => knowledgeRuntimeClient.rejectWikiDraft(draftId || id),
+    sourceInfo: ({ id, draftId } = {}) => knowledgeRuntimeClient.getWikiDraft(draftId || id),
+    context: async () => ({ records: await knowledgeRuntimeClient.listWikiDrafts({ limit: 500 }), graph: await knowledgeRuntimeClient.graph() })
   }
-
+  bridge.rag = { chat: knowledgeRuntimeClient.chat }
   return true
 }

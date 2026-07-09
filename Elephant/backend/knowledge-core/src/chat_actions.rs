@@ -111,16 +111,9 @@ pub fn execute_approved_chat_action(
             let hits = store.search(query, *limit)?;
             serde_json::to_value(hits).map_err(|error| error.to_string())?
         }
-        ChatKnowledgeAction::CreateWiki {
-            title,
-            topic,
-            source_paths,
-        } => json!({
-            "handoff": "wiki_draft_required",
-            "title": title,
-            "topic": topic,
-            "sourcePaths": source_paths
-        }),
+        ChatKnowledgeAction::CreateWiki { .. } => {
+            return Err("Wiki actions require the cited model-backed Wiki generator.".into());
+        }
         ChatKnowledgeAction::CreateNote {
             relative_path,
             title,
@@ -343,7 +336,9 @@ fn safe_note_path(root: &Path, relative_path: &str, must_exist: bool) -> Result<
         return Err(format!("Unsafe note path: {relative_path}"));
     }
     if !normalized.to_ascii_lowercase().ends_with(".md") {
-        return Err(format!("Only Markdown notes can be modified: {relative_path}"));
+        return Err(format!(
+            "Only Markdown notes can be modified: {relative_path}"
+        ));
     }
     if normalized.split('/').any(|part| part.starts_with('.')) {
         return Err(format!("Hidden paths cannot be modified: {relative_path}"));
@@ -356,7 +351,8 @@ fn safe_note_path(root: &Path, relative_path: &str, must_exist: bool) -> Result<
         if let Component::Normal(part) = component {
             ancestor.push(part);
             if ancestor.exists() {
-                let metadata = fs::symlink_metadata(&ancestor).map_err(|error| error.to_string())?;
+                let metadata =
+                    fs::symlink_metadata(&ancestor).map_err(|error| error.to_string())?;
                 if metadata.file_type().is_symlink() {
                     return Err(format!(
                         "Refusing to traverse a symbolic link: {}",
@@ -364,7 +360,10 @@ fn safe_note_path(root: &Path, relative_path: &str, must_exist: bool) -> Result<
                     ));
                 }
                 if !metadata.is_dir() {
-                    return Err(format!("Path parent is not a directory: {}", ancestor.display()));
+                    return Err(format!(
+                        "Path parent is not a directory: {}",
+                        ancestor.display()
+                    ));
                 }
             }
         }
@@ -376,7 +375,9 @@ fn safe_note_path(root: &Path, relative_path: &str, must_exist: bool) -> Result<
     if target.exists() {
         let metadata = fs::symlink_metadata(&target).map_err(|error| error.to_string())?;
         if metadata.file_type().is_symlink() {
-            return Err(format!("Refusing to modify a symbolic link: {relative_path}"));
+            return Err(format!(
+                "Refusing to modify a symbolic link: {relative_path}"
+            ));
         }
         let canonical = fs::canonicalize(&target).map_err(|error| error.to_string())?;
         if !canonical.starts_with(root) {
@@ -508,7 +509,10 @@ mod tests {
         proposal.status = ChatActionStatus::Approved;
         let store = KnowledgeStore::open(&root).unwrap();
         execute_approved_chat_action(&root, &store, &proposal).unwrap();
-        assert_eq!(fs::read_to_string(root.join("Note.md")).unwrap(), "# Note\nhello Rust");
+        assert_eq!(
+            fs::read_to_string(root.join("Note.md")).unwrap(),
+            "# Note\nhello Rust"
+        );
         fs::remove_dir_all(root).ok();
     }
 
@@ -527,7 +531,10 @@ mod tests {
         fs::write(root.join("Note.md"), "# Note\nUser edit").unwrap();
         let store = KnowledgeStore::open(&root).unwrap();
         assert!(execute_approved_chat_action(&root, &store, &proposal).is_err());
-        assert_eq!(fs::read_to_string(root.join("Note.md")).unwrap(), "# Note\nUser edit");
+        assert_eq!(
+            fs::read_to_string(root.join("Note.md")).unwrap(),
+            "# Note\nUser edit"
+        );
         fs::remove_dir_all(root).ok();
     }
 

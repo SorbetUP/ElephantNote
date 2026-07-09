@@ -2,7 +2,9 @@
   <section class="knowledge-wiki-view">
     <header class="knowledge-wiki-header">
       <div>
-        <p class="knowledge-wiki-eyebrow">Knowledge core</p>
+        <p class="knowledge-wiki-eyebrow">
+          Knowledge core
+        </p>
         <h1>Wikis</h1>
         <p class="knowledge-wiki-subtitle">
           Synthèses générées depuis les notes originales, avec citations vérifiables.
@@ -80,7 +82,10 @@
           </button>
         </form>
 
-        <nav class="knowledge-wiki-tabs" aria-label="États des wikis">
+        <nav
+          class="knowledge-wiki-tabs"
+          aria-label="États des wikis"
+        >
           <button
             v-for="tab in tabs"
             :key="tab.status"
@@ -123,104 +128,108 @@
           <span>Les notes originales ne sont jamais modifiées par cette vue.</span>
         </div>
 
-        <article
-          v-for="draft in filteredDrafts"
-          v-else
-          :key="draft.id"
-          :class="['knowledge-wiki-card', { selected: selectedDraft?.id === draft.id }]"
-        >
-          <button
-            class="knowledge-wiki-card-header"
-            type="button"
-            @click="toggleDraft(draft)"
+        <template v-else>
+          <article
+            v-for="draft in filteredDrafts"
+            :key="draft.id"
+            :class="['knowledge-wiki-card', { selected: selectedDraft?.id === draft.id }]"
           >
-            <div>
-              <div class="knowledge-wiki-card-title-row">
-                <h2>{{ draft.title }}</h2>
-                <span :class="['knowledge-status', `status-${draft.status}`]">
-                  {{ statusLabel(draft.status) }}
-                </span>
+            <button
+              class="knowledge-wiki-card-header"
+              type="button"
+              @click="toggleDraft(draft)"
+            >
+              <div>
+                <div class="knowledge-wiki-card-title-row">
+                  <h2>{{ draft.title }}</h2>
+                  <span :class="['knowledge-status', `status-${draft.status}`]">
+                    {{ statusLabel(draft.status) }}
+                  </span>
+                </div>
+                <p>{{ draft.topic }}</p>
               </div>
-              <p>{{ draft.topic }}</p>
+              <span class="knowledge-wiki-chevron">
+                {{ selectedDraft?.id === draft.id ? '−' : '+' }}
+              </span>
+            </button>
+
+            <div class="knowledge-wiki-meta">
+              <span>{{ draft.sourcePaths?.length || 0 }} notes</span>
+              <span>{{ draft.citations?.length || 0 }} citations</span>
+              <span>{{ draft.modelId || 'modèle inconnu' }}</span>
+              <span>{{ formatDate(draft.updatedAt) }}</span>
             </div>
-            <span class="knowledge-wiki-chevron">
-              {{ selectedDraft?.id === draft.id ? '−' : '+' }}
-            </span>
-          </button>
 
-          <div class="knowledge-wiki-meta">
-            <span>{{ draft.sourcePaths?.length || 0 }} notes</span>
-            <span>{{ draft.citations?.length || 0 }} citations</span>
-            <span>{{ draft.modelId || 'modèle inconnu' }}</span>
-            <span>{{ formatDate(draft.updatedAt) }}</span>
-          </div>
+            <div
+              v-if="selectedDraft?.id === draft.id"
+              class="knowledge-wiki-details"
+            >
+              <section class="knowledge-source-section">
+                <h3>Sources</h3>
+                <div class="knowledge-source-list">
+                  <button
+                    v-for="source in uniqueSources(draft)"
+                    :key="source"
+                    type="button"
+                    class="knowledge-source-chip"
+                    @click="openSource(source)"
+                  >
+                    {{ source }}
+                  </button>
+                </div>
+              </section>
 
-          <div
-            v-if="selectedDraft?.id === draft.id"
-            class="knowledge-wiki-details"
-          >
-            <section class="knowledge-source-section">
-              <h3>Sources</h3>
-              <div class="knowledge-source-list">
+              <section class="knowledge-citation-section">
+                <h3>Citations</h3>
+                <div class="knowledge-citation-list">
+                  <button
+                    v-for="citation in draft.citations || []"
+                    :key="citation.key"
+                    type="button"
+                    class="knowledge-citation-row"
+                    @click="openCitation(citation)"
+                  >
+                    <strong>{{ citation.key }}</strong>
+                    <span>{{ citation.documentTitle }} — {{ citation.heading }}</span>
+                    <small>octets {{ citation.startOffset }}–{{ citation.endOffset }}</small>
+                  </button>
+                </div>
+              </section>
+
+              <section class="knowledge-markdown-section">
+                <div class="knowledge-section-heading">
+                  <h3>Aperçu Muya</h3>
+                  <span>{{ draft.slug }}.md</span>
+                </div>
+                <div
+                  class="knowledge-muya-preview"
+                  v-html="renderedWikiHtml[draft.id] || ''"
+                />
+              </section>
+
+              <footer class="knowledge-wiki-actions">
                 <button
-                  v-for="source in uniqueSources(draft)"
-                  :key="source"
+                  v-if="draft.status === 'proposed' || draft.status === 'outdated'"
+                  class="knowledge-button knowledge-button-primary"
                   type="button"
-                  class="knowledge-source-chip"
-                  @click="openSource(source)"
+                  :disabled="busy"
+                  @click="acceptDraft(draft)"
                 >
-                  {{ source }}
+                  {{ draft.status === 'outdated' ? 'Accepter la nouvelle version' : 'Accepter le wiki' }}
                 </button>
-              </div>
-            </section>
-
-            <section class="knowledge-citation-section">
-              <h3>Citations</h3>
-              <div class="knowledge-citation-list">
                 <button
-                  v-for="citation in draft.citations || []"
-                  :key="citation.key"
+                  v-if="draft.status === 'proposed' || draft.status === 'outdated'"
+                  class="knowledge-button knowledge-button-danger"
                   type="button"
-                  class="knowledge-citation-row"
-                  @click="openCitation(citation)"
+                  :disabled="busy"
+                  @click="rejectDraft(draft)"
                 >
-                  <strong>{{ citation.key }}</strong>
-                  <span>{{ citation.documentTitle }} — {{ citation.heading }}</span>
-                  <small>octets {{ citation.startOffset }}–{{ citation.endOffset }}</small>
+                  Rejeter
                 </button>
-              </div>
-            </section>
-
-            <section class="knowledge-markdown-section">
-              <div class="knowledge-section-heading">
-                <h3>Aperçu Markdown</h3>
-                <span>{{ draft.slug }}.md</span>
-              </div>
-              <pre>{{ draft.markdown }}</pre>
-            </section>
-
-            <footer class="knowledge-wiki-actions">
-              <button
-                v-if="draft.status === 'proposed' || draft.status === 'outdated'"
-                class="knowledge-button knowledge-button-primary"
-                type="button"
-                :disabled="busy"
-                @click="acceptDraft(draft)"
-              >
-                {{ draft.status === 'outdated' ? 'Accepter la nouvelle version' : 'Accepter le wiki' }}
-              </button>
-              <button
-                v-if="draft.status === 'proposed' || draft.status === 'outdated'"
-                class="knowledge-button knowledge-button-danger"
-                type="button"
-                :disabled="busy"
-                @click="rejectDraft(draft)"
-              >
-                Rejeter
-              </button>
-            </footer>
-          </div>
-        </article>
+              </footer>
+            </div>
+          </article>
+        </template>
       </main>
     </div>
   </section>
@@ -242,6 +251,7 @@ const form = reactive({
   sourcePaths: ''
 })
 const drafts = ref([])
+const renderedWikiHtml = reactive({})
 const activeStatus = ref('proposed')
 const selectedDraft = ref(null)
 const loading = ref(false)
@@ -265,12 +275,18 @@ const sourcePathList = () => form.sourcePaths
   .map((value) => value.trim())
   .filter(Boolean)
 
+const renderDraftWithMuya = async (draft) => {
+  const result = await globalThis.elephantnote?.muya?.renderHtml?.({ markdown: draft.markdown || '' })
+  renderedWikiHtml[draft.id] = result?.html || ''
+}
+
 const refresh = async () => {
   if (runtimeUnavailable.value) return
   loading.value = true
   error.value = ''
   try {
     drafts.value = await runtime.value.wikis.list({ limit: 500 })
+    await Promise.all(drafts.value.map(renderDraftWithMuya))
     if (selectedDraft.value) {
       selectedDraft.value = drafts.value.find((draft) => draft.id === selectedDraft.value.id) || null
     }
@@ -720,7 +736,7 @@ onMounted(refresh)
   opacity: .55;
 }
 
-.knowledge-markdown-section pre {
+.knowledge-muya-preview {
   max-height: 520px;
   overflow: auto;
   border-radius: 10px;
@@ -729,7 +745,6 @@ onMounted(refresh)
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.55;
-  white-space: pre-wrap;
   word-break: break-word;
   background: color-mix(in srgb, currentColor 7%, transparent);
 }

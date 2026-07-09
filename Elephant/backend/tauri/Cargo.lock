@@ -1402,12 +1402,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 
 [[package]]
+name = "elephantnote-knowledge-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "pulldown-cmark",
+ "rusqlite",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "elephantnote-tauri"
 version = "0.18.9"
 dependencies = [
  "blake3",
  "chardetng",
  "chrono",
+ "elephantnote-knowledge-core",
  "encoding_rs",
  "futures-util",
  "fuzzy-matcher",

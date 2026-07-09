@@ -47,6 +47,6 @@ pub use taxonomy::{
 pub use taxonomy_storage::{DocumentTagAssignment, TagAssignmentOrigin, TagAssignmentStatus};
 pub use wiki_core::{
     build_wiki_synthesis_request, collect_wiki_sources, parse_and_render_wiki, render_wiki,
-    slugify, source_hash, wiki_draft_from_rendered, RenderedWiki, WikiCitation, WikiClaim, WikiDraft,
-    WikiDraftStatus, WikiSection, WikiSourceChunk, WikiSynthesis, WikiValidation,
+    slugify, source_hash, wiki_draft_from_rendered, RenderedWiki, WikiCitation, WikiClaim,
+    WikiDraft, WikiDraftStatus, WikiSection, WikiSourceChunk, WikiSynthesis, WikiValidation,
 };

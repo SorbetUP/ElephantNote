@@ -49,7 +49,11 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
                 let index_result = store
                     .upsert_document(&snapshot)
                     .and_then(|_| store.sync_markdown_relations(&snapshot).map(|_| ()))
-                    .and_then(|_| store.mark_wikis_outdated_for_source(&changed_path).map(|_| ()));
+                    .and_then(|_| {
+                        store
+                            .mark_wikis_outdated_for_source(&changed_path)
+                            .map(|_| ())
+                    });
                 if let Err(error) = index_result {
                     report.failed.push(RebuildFailure {
                         relative_path,

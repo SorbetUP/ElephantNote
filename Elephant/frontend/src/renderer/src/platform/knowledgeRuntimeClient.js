@@ -1,10 +1,7 @@
 const getCore = (target = globalThis) => target?.__TAURI__?.core || null
-
 const invoke = (command, payload = {}, target = globalThis) => {
   const core = getCore(target)
-  if (!core?.invoke) {
-    throw new Error(`Tauri knowledge command API is unavailable for ${command}`)
-  }
+  if (!core?.invoke) throw new Error(`Tauri knowledge command API is unavailable for ${command}`)
   return core.invoke(command, payload)
 }
 
@@ -13,30 +10,25 @@ export const knowledgeRuntimeClient = Object.freeze({
   status: () => invoke('tauri_knowledge_status'),
   search: (query, limit = 20) => invoke('tauri_knowledge_search', { query, limit }),
   inspectNote: (relativePath) => invoke('tauri_knowledge_inspect_note', { relativePath }),
-  graph: ({ includeSuggestions = false } = {}) =>
-    invoke('tauri_knowledge_graph', { includeSuggestions }),
+  graph: ({ includeSuggestions = false } = {}) => invoke('tauri_knowledge_graph', { includeSuggestions }),
+  chat: (payload = {}) => invoke('tauri_knowledge_chat', { payload }),
   listTags: () => invoke('tauri_knowledge_tags_list'),
-  generateTagging: (relativePath, payload = {}, maxTags = 8) =>
-    invoke('tauri_knowledge_tagging_generate', { relativePath, payload, maxTags }),
+  generateTagging: (relativePath, payload = {}, maxTags = 8) => invoke('tauri_knowledge_tagging_generate', { relativePath, payload, maxTags }),
   validateChatAction: (action) => invoke('tauri_knowledge_validate_chat_action', { action }),
-  prepareChatAction: (action, rationale = '') =>
-    invoke('tauri_knowledge_chat_action_prepare', { action, rationale }),
-  getChatAction: (proposalId) =>
-    invoke('tauri_knowledge_chat_action_get', { proposalId }),
-  listChatActions: ({ status = null, limit = 100 } = {}) =>
-    invoke('tauri_knowledge_chat_actions_list', { status, limit }),
-  approveChatAction: (proposalId) =>
-    invoke('tauri_knowledge_chat_action_approve', { proposalId }),
-  rejectChatAction: (proposalId) =>
-    invoke('tauri_knowledge_chat_action_reject', { proposalId }),
-  executeChatAction: (proposalId) =>
-    invoke('tauri_knowledge_chat_action_execute', { proposalId }),
-  listRelations: ({ status = null, limit = 1000 } = {}) =>
-    invoke('tauri_knowledge_relations_list', { status, limit }),
-  relationsForNode: (node, includeRejected = false) =>
-    invoke('tauri_knowledge_relations_for_node', { node, includeRejected }),
-  setRelationStatus: (relationId, status) =>
-    invoke('tauri_knowledge_relation_status_set', { relationId, status })
+  prepareChatAction: (action, rationale = '') => invoke('tauri_knowledge_chat_action_prepare', { action, rationale }),
+  getChatAction: (proposalId) => invoke('tauri_knowledge_chat_action_get', { proposalId }),
+  listChatActions: ({ status = null, limit = 100 } = {}) => invoke('tauri_knowledge_chat_actions_list', { status, limit }),
+  approveChatAction: (proposalId) => invoke('tauri_knowledge_chat_action_approve', { proposalId }),
+  rejectChatAction: (proposalId) => invoke('tauri_knowledge_chat_action_reject', { proposalId }),
+  executeChatAction: (proposalId) => invoke('tauri_knowledge_chat_action_execute', { proposalId }),
+  generateWiki: ({ topic, title = null, sourcePaths = [], payload = {}, maxDocuments = 12, maxChunks = 64, maxSections = 10 }) =>
+    invoke('tauri_knowledge_wiki_generate', { topic, title, sourcePaths, payload, maxDocuments, maxChunks, maxSections }),
+  getWikiDraft: (draftId) => invoke('tauri_knowledge_wiki_get', { draftId }),
+  listWikiDrafts: ({ status = null, limit = 100 } = {}) => invoke('tauri_knowledge_wikis_list', { status, limit }),
+  acceptWikiDraft: (draftId) => invoke('tauri_knowledge_wiki_accept', { draftId }),
+  rejectWikiDraft: (draftId) => invoke('tauri_knowledge_wiki_reject', { draftId }),
+  listRelations: ({ status = null, limit = 1000 } = {}) => invoke('tauri_knowledge_relations_list', { status, limit }),
+  relationsForNode: (node, includeRejected = false) => invoke('tauri_knowledge_relations_for_node', { node, includeRejected }),
+  setRelationStatus: (relationId, status) => invoke('tauri_knowledge_relation_status_set', { relationId, status })
 })
-
 export const isKnowledgeRuntimeAvailable = (target = globalThis) => !!getCore(target)?.invoke

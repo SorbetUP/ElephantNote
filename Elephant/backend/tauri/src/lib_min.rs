@@ -256,6 +256,7 @@ pub fn run() {
             model_library::tauri_models_active,
             model_library::tauri_models_refresh_index,
             chat_runtime::tauri_knowledge_chat,
+            chat_runtime::tauri_knowledge_chat,
             tauri_extra_commands::tauri_sync_plan
         ])
         .run(tauri::generate_context!())

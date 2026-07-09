@@ -26,15 +26,14 @@ impl KnowledgeStore {
             .map_err(|error| error.to_string())
     }
 
-    pub fn save_chat_action_proposal(
-        &self,
-        proposal: &ChatActionProposal,
-    ) -> Result<(), String> {
+    pub fn save_chat_action_proposal(&self, proposal: &ChatActionProposal) -> Result<(), String> {
         let conn = open_chat_action_connection(self.database_path())?;
         conn.execute_batch(CHAT_ACTION_SCHEMA)
             .map_err(|error| error.to_string())?;
-        let action_json = serde_json::to_string(&proposal.action).map_err(|error| error.to_string())?;
-        let preview_json = serde_json::to_string(&proposal.preview).map_err(|error| error.to_string())?;
+        let action_json =
+            serde_json::to_string(&proposal.action).map_err(|error| error.to_string())?;
+        let preview_json =
+            serde_json::to_string(&proposal.preview).map_err(|error| error.to_string())?;
         let result_json = proposal
             .result
             .as_ref()
@@ -107,7 +106,10 @@ impl KnowledgeStore {
                 )
                 .map_err(|error| error.to_string())?;
             let rows = statement
-                .query_map(params![chat_action_status_name(&status), capped_limit], map_proposal_row)
+                .query_map(
+                    params![chat_action_status_name(&status), capped_limit],
+                    map_proposal_row,
+                )
                 .map_err(|error| error.to_string())?;
             return rows
                 .collect::<Result<Vec<_>, _>>()
@@ -179,11 +181,7 @@ fn map_proposal_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ChatActionPropo
 }
 
 fn json_read_error(error: serde_json::Error) -> rusqlite::Error {
-    rusqlite::Error::FromSqlConversionFailure(
-        0,
-        rusqlite::types::Type::Text,
-        Box::new(error),
-    )
+    rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(error))
 }
 
 fn valid_transition(current: &ChatActionStatus, next: &ChatActionStatus) -> bool {

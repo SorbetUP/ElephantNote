@@ -8,11 +8,12 @@ use std::{
   sync::Mutex,
   time::Duration,
 };
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 use url::Url;
 use zip::ZipArchive;
 
 use crate::vault::config as vault_config;
+use crate::vault_layout;
 
 type R<T> = Result<T, String>;
 
@@ -134,7 +135,8 @@ fn now() -> String {
 }
 
 fn addons_root(app: &AppHandle) -> R<PathBuf> {
-  let root = app.path().app_data_dir().map_err(|error| error.to_string())?.join("addons");
+  let vault = vault_config::get_active_vault(app)?;
+  let root = vault_layout::addons_dir(&vault.path);
   fs::create_dir_all(root.join("packages")).map_err(|error| error.to_string())?;
   fs::create_dir_all(root.join("data")).map_err(|error| error.to_string())?;
   Ok(root)

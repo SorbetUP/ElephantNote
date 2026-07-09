@@ -29,6 +29,7 @@ const normalizeObject = (value) => {
 }
 
 const normalizePermissions = (value) => {
+  if (value == null || typeof value !== 'object') return Object.freeze([])
   if (Array.isArray(value)) return Object.freeze(normalizeStringArray(value))
   const permissions = normalizeObject(value)
   const notes = normalizeObject(permissions.notes)

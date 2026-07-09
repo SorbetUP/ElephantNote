@@ -133,7 +133,7 @@ describe('knowledge search bridge initialization', () => {
     expect(inspection.documents).toHaveLength(240)
   })
 
-  it('runs a rebuild only through the explicit search.rebuild action', async() => {
+  it('runs a rebuild only through the explicit search.rebuild action and then settles', async() => {
     const invoke = vi.fn(async(command) => {
       if (command === 'tauri_debug_log') return true
       if (command === 'tauri_knowledge_rebuild') {
@@ -144,12 +144,18 @@ describe('knowledge search bridge initialization', () => {
     })
     const bridge = await loadRealTauriBridge(invoke)
 
-    const envelope = await bridge.api.call('search.rebuild', { vaultPath: '/vault/A' })
+    const rebuildEnvelope = await bridge.api.call('search.rebuild', { vaultPath: '/vault/A' })
+    const settledEnvelope = await bridge.api.call('search.status', { vaultPath: '/vault/A' })
 
-    expect(envelope.data).toMatchObject({
-      status: 'ready',
+    expect(rebuildEnvelope.data).toMatchObject({
+      status: 'indexing',
       indexedDocuments: 10,
       rebuildReport: { scanned: 10, indexed: 2, unchanged: 8 }
+    })
+    expect(settledEnvelope.data).toMatchObject({
+      status: 'ready',
+      indexedDocuments: 10,
+      vaultPath: '/vault/A'
     })
     expect(invoke.mock.calls.filter(([command]) => command === 'tauri_knowledge_rebuild')).toHaveLength(1)
   })

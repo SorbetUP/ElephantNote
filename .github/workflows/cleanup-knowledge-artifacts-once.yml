@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/rust-knowledge-core
+  pull_request:
+    branches:
+      - develop
   workflow_dispatch:
 
 permissions:

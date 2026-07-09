@@ -38,6 +38,56 @@ const persistCommunityAddonsEnabled = (enabled) => {
   return invokeTauri('tauri_prefs_set', { key: COMMUNITY_ADDONS_PREF_KEY, value: enabled === true })
 }
 
+const parentDirectory = (relativePath = '') => {
+  const parts = String(relativePath || '').split('/').filter(Boolean)
+  return parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+}
+
+const refreshVaultAfterAddonAction = async (result, logger) => {
+  const relativePath = typeof result?.path === 'string' ? result.path : ''
+  if (!relativePath) return
+
+  const [{ useVaultStore }, { elephantnoteClient }] = await Promise.all([
+    import('elephant-front/stores/vaultStore'),
+    import('elephant-front/services/elephantnoteClient')
+  ])
+  const vaultStore = useVaultStore()
+  if (!vaultStore.activeVault?.path) return
+
+  const targetDirectory = parentDirectory(relativePath)
+  logger?.info?.('[addons] vault-refresh:start', {
+    path: relativePath,
+    targetDirectory,
+    currentDirectory: vaultStore.currentPath || ''
+  })
+
+  const rootEntries = await elephantnoteClient.directory.list('')
+  vaultStore.rootEntries = rootEntries
+
+  if (vaultStore.currentPath) {
+    vaultStore.entries = await elephantnoteClient.directory.list(vaultStore.currentPath)
+  } else {
+    vaultStore.entries = rootEntries
+  }
+
+  const targetEntries = targetDirectory === vaultStore.currentPath
+    ? vaultStore.entries
+    : targetDirectory
+      ? await elephantnoteClient.directory.list(targetDirectory)
+      : rootEntries
+  const createdEntry = targetEntries.find((entry) => entry?.path === relativePath)
+
+  if (createdEntry) {
+    vaultStore.openNote(createdEntry)
+  }
+
+  logger?.info?.('[addons] vault-refresh:done', {
+    path: relativePath,
+    found: Boolean(createdEntry),
+    rootEntries: rootEntries.length
+  })
+}
+
 export const useAddonsStore = defineStore('addons', {
   state: () => ({
     installed: false,
@@ -126,9 +176,13 @@ export const useAddonsStore = defineStore('addons', {
           const enabledExternalAddons = this.manager.list().filter(
             (addon) => addon.enabled && addon.manifest.source === 'external'
           )
+          this.manager.logger?.info?.('[addons] community:disable:start', {
+            addons: enabledExternalAddons.map((addon) => addon.manifest.id)
+          })
           for (const addon of enabledExternalAddons) {
             await this.manager.disable(addon.manifest.id)
           }
+          this.manager.logger?.info?.('[addons] community:disable:done')
         }
         this.lastError = null
       } catch (error) {
@@ -144,6 +198,8 @@ export const useAddonsStore = defineStore('addons', {
       if (!this.manager) throw new Error('Addon manager is not installed')
       const addon = this.manager.get(id)
       const external = addon?.manifest?.source === 'external'
+      this.operationInProgress = true
+      this.manager.logger?.info?.('[addons] enable:start', { id, external })
       try {
         if (external) {
           if (!this.communityConsentLoaded) await this.loadCommunityAddonsConsent()
@@ -152,26 +208,34 @@ export const useAddonsStore = defineStore('addons', {
           }
           await setExternalRegistryEnabled(id, true)
         }
-        await this.manager.enable(id)
+        const result = await this.manager.enable(id)
         this.lastError = null
+        this.manager.logger?.info?.('[addons] enable:done', { id, status: result.status })
       } catch (error) {
         if (external) await setExternalRegistryEnabled(id, false).catch(() => {})
         this.lastError = error?.message || String(error)
+        this.manager.logger?.error?.('[addons] enable:failed', { id, error: this.lastError })
         throw error
       } finally {
+        this.operationInProgress = false
         this.refresh()
       }
     },
 
     async disableAddon(id) {
       if (!this.manager) throw new Error('Addon manager is not installed')
+      this.operationInProgress = true
+      this.manager.logger?.info?.('[addons] disable:start', { id })
       try {
-        await this.manager.disable(id)
+        const result = await this.manager.disable(id)
         this.lastError = null
+        this.manager.logger?.info?.('[addons] disable:done', { id, status: result.status })
       } catch (error) {
         this.lastError = error?.message || String(error)
+        this.manager.logger?.error?.('[addons] disable:failed', { id, error: this.lastError })
         throw error
       } finally {
+        this.operationInProgress = false
         this.refresh()
       }
     },
@@ -217,14 +281,20 @@ export const useAddonsStore = defineStore('addons', {
 
     async runAction(id, payload = undefined) {
       if (!this.manager) throw new Error('Addon manager is not installed')
+      this.operationInProgress = true
+      this.manager.logger?.info?.('[addons] action:start', { id })
       try {
         const result = await this.manager.runAction(id, payload)
+        await refreshVaultAfterAddonAction(result, this.manager.logger)
         this.lastError = null
+        this.manager.logger?.info?.('[addons] action:done', { id, result })
         return result
       } catch (error) {
         this.lastError = error?.message || String(error)
+        this.manager.logger?.error?.('[addons] action:failed', { id, error: this.lastError })
         throw error
       } finally {
+        this.operationInProgress = false
         this.refresh()
       }
     }

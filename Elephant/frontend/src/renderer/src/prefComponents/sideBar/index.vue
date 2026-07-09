@@ -28,27 +28,11 @@
     </section>
     <section class="category">
       <div
-        class="item featured"
-        :class="{ active: currentCategory === 'addons' }"
-        @click="handleCategoryItemClick(addonsCategory)"
-      >
-        <Box width="28" height="28" />
-        <span>Addons</span>
-      </div>
-      <div
-        class="item featured"
-        :class="{ active: currentCategory === 'rclone' }"
-        @click="handleCategoryItemClick(syncCategory)"
-      >
-        <Connection width="28" height="28" />
-        <span>Sync</span>
-      </div>
-      <div class="category-separator" />
-      <div
-        v-for="c of getCategory()"
-        :key="c.name"
+        v-for="c of categories"
+        :key="c.label"
         class="item"
-        :class="{ active: c.label === currentCategory }"
+        :class="{ active: c.label === currentCategory, featured: c.featured }"
+        :data-settings-category="c.label"
         @click="handleCategoryItemClick(c)"
       >
         <component :is="c.icon" />
@@ -61,7 +45,7 @@
 import { getCategory, getTranslatedSearchContent } from './config'
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Box, Connection, Search } from '@element-plus/icons-vue'
+import { Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -69,11 +53,10 @@ const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 
+const categories = ref(getCategory())
 const currentCategory = ref('general')
 const restaurants = ref([])
 const state = ref('')
-const syncCategory = { name: 'Sync', label: 'rclone', path: '/preference/rclone' }
-const addonsCategory = { name: 'Addons', label: 'addons', path: '/preference/addons' }
 
 watch(
   () => route.name,
@@ -127,34 +110,44 @@ const loadAll = () => [
 const handleSelect = (item) => {
   const target =
     item && item.routeCategory ? item.routeCategory : (item?.category || 'general').toLowerCase()
-  router.push({ path: `/preference/${target}` }).catch(() => {})
+  router.push({ path: `/preference/${target}` }).catch((error) => {
+    console.error('[settings-sidebar] search navigation failed', { target, error })
+  })
 }
 
 const handleCategoryItemClick = (item) => {
+  console.info('[settings-sidebar] navigate', { label: item.label, path: item.path })
   if (item.label !== currentCategory.value) {
-    router.push({
-      path: item.path
-    }).catch(() => {})
+    router.push({ path: item.path }).catch((error) => {
+      console.error('[settings-sidebar] navigation failed', { item, error })
+    })
   }
 }
 
 const onIpcCategoryChange = (event, category) => {
   const validRoute =
-    category && router.getRoutes().findIndex((route) => route.path.endsWith(`/${category}`)) !== -1
+    category && router.getRoutes().findIndex((registeredRoute) => registeredRoute.path.endsWith(`/${category}`)) !== -1
   if (validRoute) {
-    router.push({
-      path: `/preference/${category}`
+    router.push({ path: `/preference/${category}` }).catch((error) => {
+      console.error('[settings-sidebar] ipc navigation failed', { category, error })
     })
   }
 }
 
 onMounted(() => {
+  categories.value = getCategory()
   restaurants.value = loadAll()
   if (route.name) {
     currentCategory.value = route.name
   }
+  console.info('[settings-sidebar] mounted', {
+    route: route.fullPath,
+    categories: categories.value.map(({ label, path }) => ({ label, path })),
+    addonsRouteRegistered: router.getRoutes().some((registeredRoute) => registeredRoute.path === '/preference/addons')
+  })
   window.tauri.ipcRenderer.on('settings::change-tab', onIpcCategoryChange)
   const languageChanged = () => {
+    categories.value = getCategory()
     restaurants.value = loadAll()
   }
   window.addEventListener('languageChanged', languageChanged)
@@ -238,13 +231,6 @@ onUnmounted(() => {
   min-height: 0;
   overflow-y: auto;
 
-  & .category-separator {
-    height: 1px;
-    margin: 8px 20px;
-    background: var(--floatBorderColor);
-    opacity: 0.6;
-  }
-
   & .item {
     width: 100%;
     height: 50px;
@@ -260,7 +246,7 @@ onUnmounted(() => {
     user-select: none;
 
     &.featured {
-      font-weight: 500;
+      font-weight: 600;
     }
 
     & > svg {

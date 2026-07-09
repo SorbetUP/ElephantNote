@@ -144,12 +144,7 @@ pub fn build_tagging_request(
     let chunks = document
         .chunks
         .iter()
-        .map(|chunk| {
-            format!(
-                "<chunk id=\"{}\">\n{}\n</chunk>",
-                chunk.id, chunk.text
-            )
-        })
+        .map(|chunk| format!("<chunk id=\"{}\">\n{}\n</chunk>", chunk.id, chunk.text))
         .collect::<Vec<_>>()
         .join("\n\n");
 
@@ -172,8 +167,8 @@ pub fn parse_tagging_response(
     document: &DocumentSnapshot,
     max_tags: usize,
 ) -> Result<TaggingExtraction, String> {
-    let output: TaggingExtraction = serde_json::from_str(json)
-        .map_err(|error| format!("Invalid tagging JSON: {error}"))?;
+    let output: TaggingExtraction =
+        serde_json::from_str(json).map_err(|error| format!("Invalid tagging JSON: {error}"))?;
     let validation = output.validate_with_limit(document, max_tags);
     if !validation.valid {
         return Err(validation.errors.join(" "));
@@ -231,8 +226,14 @@ mod tests {
         };
         let validation = output.validate(&document);
         assert!(!validation.valid);
-        assert!(validation.errors.iter().any(|error| error.contains("unknown evidence")));
-        assert!(validation.errors.iter().any(|error| error.contains("simultaneously")));
+        assert!(validation
+            .errors
+            .iter()
+            .any(|error| error.contains("unknown evidence")));
+        assert!(validation
+            .errors
+            .iter()
+            .any(|error| error.contains("simultaneously")));
     }
 
     #[test]

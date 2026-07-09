@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TAURI_DIR="$ROOT_DIR/Elephant/backend/tauri"
 ANDROID_CONFIG="tauri.android.conf.json"
+ANDROID_TARGET="${ANDROID_TARGET:-aarch64}"
+ANDROID_BUILD_PROFILE="${ANDROID_BUILD_PROFILE:-debug}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -26,6 +28,17 @@ if [ ! -f "$TAURI_DIR/$ANDROID_CONFIG" ]; then
   exit 1
 fi
 
+case "$ANDROID_BUILD_PROFILE" in
+  debug|release) ;;
+  *)
+    echo "ANDROID_BUILD_PROFILE must be 'debug' or 'release', got: $ANDROID_BUILD_PROFILE" >&2
+    exit 1
+    ;;
+esac
+
+cd "$ROOT_DIR"
+node build/scripts/ensure-dev-dependencies.mjs
+
 if [ ! -d "$TAURI_DIR/gen/android" ]; then
   echo "Tauri Android project is not initialized; running cargo tauri android init with $ANDROID_CONFIG."
   cd "$TAURI_DIR"
@@ -33,13 +46,14 @@ if [ ! -d "$TAURI_DIR/gen/android" ]; then
 fi
 
 cd "$TAURI_DIR"
-ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1 cargo tauri android build --debug --apk --config "$ANDROID_CONFIG"
+BUILD_ARGS=(android build --apk --target "$ANDROID_TARGET" --config "$ANDROID_CONFIG")
+if [ "$ANDROID_BUILD_PROFILE" = "debug" ]; then
+  BUILD_ARGS+=(--debug)
+fi
 
-for APK_DIR in \
-  "$TAURI_DIR/gen/android/app/build/outputs/apk/debug" \
-  "$TAURI_DIR/gen/android/app/build/outputs/apk"; do
-  if [ -d "$APK_DIR" ]; then
-    echo "APK generated in: $APK_DIR"
-    find "$APK_DIR" -maxdepth 3 -name '*.apk' -print
-  fi
-done
+printf '[android-apk] profile=%s target=%s\n' "$ANDROID_BUILD_PROFILE" "$ANDROID_TARGET"
+ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1 cargo tauri "${BUILD_ARGS[@]}"
+
+APK_ROOT="$TAURI_DIR/gen/android/app/build/outputs/apk"
+echo "APK output:"
+find "$APK_ROOT" -type f -name '*.apk' -print -exec du -h {} \; 2>/dev/null || true

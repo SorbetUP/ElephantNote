@@ -37,15 +37,17 @@ afterEach(() => {
 })
 
 describe('knowledge search bridge initialization', () => {
-  it('contains no implicit rebuild path in the native bridge or chat client', () => {
+  it('contains no implicit rebuild path in native init or chat helpers', () => {
     const nativeBridge = repositoryFile('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
     const domainClients = repositoryFile('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
+    const chatHelpers = domainClients.split('export const createDomainClients')[0]
 
     expect(nativeBridge).not.toContain("initVault: () => invoke(target, 'tauri_knowledge_rebuild')")
     expect(nativeBridge).toContain("initVault: async(payload = '')")
-    expect(domainClients).not.toContain('SEARCH_REBUILD')
-    expect(domainClients).not.toContain('shouldRebuildChatSearch')
-    expect(domainClients).not.toContain('ensureSearchVaultForChat')
+    expect(chatHelpers).not.toContain('SEARCH_REBUILD')
+    expect(chatHelpers).not.toContain('shouldRebuildChatSearch')
+    expect(chatHelpers).not.toContain('ensureSearchVaultForChat')
+    expect(chatHelpers).toContain('call(API.RAG_CHAT, normalizeRagChatPayload(payload, limit))')
   })
 
   it('normalizes initVault object payloads and does not rebuild automatically', async() => {

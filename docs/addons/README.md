@@ -140,7 +140,7 @@ if (!response.ok) throw new Error(`HTTP ${response.status}`)
 const data = JSON.parse(response.body)
 ```
 
-Every hostname must be declared exactly or with a subdomain wildcard:
+Every initial hostname must be declared exactly or with a subdomain wildcard:
 
 ```json
 {
@@ -148,7 +148,9 @@ Every hostname must be declared exactly or with a subdomain wildcard:
 }
 ```
 
-Only HTTPS is accepted. Localhost and private/local IP literals are rejected. Automatic redirects are disabled so a permitted host cannot silently redirect the broker to another host. The response body is limited to 5 MiB and requests time out after 30 seconds.
+Only HTTPS is accepted. The response body is limited to 5 MiB and requests time out after 30 seconds.
+
+The current preview broker still follows a limited number of redirects. Consequently, network permissions are not yet considered production-hardened: redirect targets, DNS resolution to private addresses and localhost access must be blocked before community network addons can be enabled by default. Until that hardening lands, install and enable only reviewed packages from trusted authors.
 
 ### Private storage
 

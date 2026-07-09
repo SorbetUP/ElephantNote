@@ -2,14 +2,7 @@ from pathlib import Path
 import re
 
 
-def remove_test_function(text: str, name: str) -> str:
-    match = re.search(rf'(?m)^\s*#\[test\]\s*\n\s*fn\s+{re.escape(name)}\s*\(', text)
-    if not match:
-        return text
-    start = match.start()
-    brace = text.find('{', match.end())
-    if brace < 0:
-        raise RuntimeError(f'No body for test {name}')
+def block_end(text: str, brace: int) -> int:
     depth = 0
     in_string = False
     escape = False
@@ -33,8 +26,32 @@ def remove_test_function(text: str, name: str) -> str:
                 end = index + 1
                 while end < len(text) and text[end] in ' \t\r\n':
                     end += 1
-                return text[:start] + text[end:]
-    raise RuntimeError(f'Unbalanced test {name}')
+                return end
+    raise RuntimeError('Unbalanced Rust block')
+
+
+def remove_test_function(text: str, name: str) -> str:
+    match = re.search(rf'(?m)^\s*#\[test\]\s*\n\s*fn\s+{re.escape(name)}\s*\(', text)
+    if not match:
+        return text
+    brace = text.find('{', match.end())
+    if brace < 0:
+        raise RuntimeError(f'No body for test {name}')
+    return text[:match.start()] + text[block_end(text, brace):]
+
+
+def remove_enclosing_for_loop(text: str, marker: str) -> str:
+    marker_index = text.find(marker)
+    if marker_index < 0:
+        return text
+    start = text.rfind('\n  for index in ', 0, marker_index)
+    if start < 0:
+        raise RuntimeError(f'No generated loop found for {marker}')
+    start += 1
+    brace = text.find('{', start, marker_index)
+    if brace < 0:
+        raise RuntimeError(f'No loop body found for {marker}')
+    return text[:start] + text[block_end(text, brace):]
 
 
 path = Path('Elephant/backend/knowledge-core/src/graph.rs')
@@ -48,26 +65,13 @@ path.write_text(text)
 
 path = Path('Elephant/backend/tauri/build.rs')
 text = path.read_text()
-text = text.replace(
-    '  out.push_str("use crate::search_logic::{normalize_query, score_text};\\n");\n',
-    ''
+text = re.sub(
+    r'(?m)^\s*out\.push_str\("use crate::search_logic::\{normalize_query, score_text\};\\n"\);\s*\n',
+    '',
+    text,
 )
-text = text.replace(
-    '''  for index in 0..70 {
-    push_test(&mut out, &format!("generated_search_case_{index:03}"), &format!("assert_eq!(normalize_query(\\"  Alpha   {index}  \\"), \\"alpha {index}\\"); assert!(score_text(\\"alpha {index}\\", \\"Alpha {index} title\\", \\"body\\") >= 10); assert!(score_text(\\"alpha {index}\\", \\"title\\", \\"alpha {index} body\\") >= 3); assert_eq!(score_text(\\"missing {index}\\", \\"title\\", \\"body\\"), 0);"));
-  }
-
-''',
-    ''
-)
-text = text.replace(
-    '''  for index in 0..60 {
-    push_test(&mut out, &format!("generated_case_whitespace_query_case_{index:03}"), &format!("assert_eq!(normalize_query(\\"\\tMixed   CASE {index}\\n\\"), \\"mixed case {index}\\"); assert!(score_text(\\"mixed case {index}\\", \\"MIXED CASE {index}\\", \\"\\") > 0);"));
-  }
-
-''',
-    ''
-)
+text = remove_enclosing_for_loop(text, 'generated_search_case_')
+text = remove_enclosing_for_loop(text, 'generated_case_whitespace_query_case_')
 if 'search_logic' in text or 'normalize_query' in text or 'score_text' in text:
     raise RuntimeError('Legacy search parity contracts remain in build.rs')
 path.write_text(text)

@@ -1,0 +1,123 @@
+name: Patch Wikilink Parser Once
+
+on:
+  push:
+    branches:
+      - feature/rust-knowledge-core
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-wikilink-parser-once
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-knowledge-core
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Replace naive wikilink scanner
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path('Elephant/backend/knowledge-core/src/chunking.rs')
+          content = path.read_text()
+          replacement = r'''fn extract_wikilinks(markdown: &str) -> Vec<ExplicitLink> {
+              let mut links = Vec::new();
+              let mut absolute_offset = 0usize;
+              let mut fence: Option<char> = None;
+
+              for line in markdown.split_inclusive('\n') {
+                  let trimmed = line.trim_start();
+                  if let Some(marker) = fence_marker(trimmed) {
+                      match fence {
+                          Some(active) if active == marker => fence = None,
+                          None => fence = Some(marker),
+                          _ => {}
+                      }
+                      absolute_offset += line.len();
+                      continue;
+                  }
+                  if fence.is_none() {
+                      extract_line_wikilinks(line, absolute_offset, &mut links);
+                  }
+                  absolute_offset += line.len();
+              }
+              links
+          }
+
+          fn extract_line_wikilinks(line: &str, absolute_offset: usize, links: &mut Vec<ExplicitLink>) {
+              let bytes = line.as_bytes();
+              let mut cursor = 0usize;
+              let mut inline_code = false;
+
+              while cursor < bytes.len() {
+                  if bytes[cursor] == b'`' {
+                      let mut run_end = cursor + 1;
+                      while run_end < bytes.len() && bytes[run_end] == b'`' {
+                          run_end += 1;
+                      }
+                      inline_code = !inline_code;
+                      cursor = run_end;
+                      continue;
+                  }
+                  if inline_code || cursor + 1 >= bytes.len() || bytes[cursor] != b'[' || bytes[cursor + 1] != b'[' {
+                      cursor += 1;
+                      continue;
+                  }
+                  if cursor > 0 && bytes[cursor - 1] == b'!' {
+                      cursor += 2;
+                      continue;
+                  }
+
+                  let content_start = cursor + 2;
+                  let Some(relative_end) = line[content_start..].find("]]" ) else {
+                      break;
+                  };
+                  let content_end = content_start + relative_end;
+                  let raw = line[content_start..content_end].trim();
+                  let (target, label) = raw.split_once('|').unwrap_or((raw, raw));
+                  let target = target.split('#').next().unwrap_or("").trim();
+                  if !target.is_empty()
+                      && !target.contains('[')
+                      && !target.contains(']')
+                      && !target.contains('\n')
+                  {
+                      links.push(ExplicitLink {
+                          target: target.to_string(),
+                          label: label.trim().to_string(),
+                          start_offset: absolute_offset + cursor,
+                          end_offset: absolute_offset + content_end + 2,
+                      });
+                  }
+                  cursor = content_end + 2;
+              }
+          }
+
+          fn stable_id'''
+          pattern = re.compile(r"fn extract_wikilinks\(markdown: &str\) -> Vec<ExplicitLink> \{.*?\n\}\n\nfn stable_id", re.S)
+          content, count = pattern.subn(replacement, content, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one wikilink parser, replaced {count}')
+          path.write_text(content)
+          Path('.github/workflows/patch-wikilink-parser-once.yml').unlink()
+      - name: Format and commit
+        shell: bash
+        run: |
+          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Elephant/backend/knowledge-core/src/chunking.rs .github/workflows/patch-wikilink-parser-once.yml
+          git commit -m 'fix(knowledge): ignore code-like false wikilinks'
+          git push origin HEAD:feature/rust-knowledge-core

@@ -1,0 +1,56 @@
+name: Remove Stale Chat Rebuild Helpers Once
+
+on:
+  push:
+    branches:
+      - feature/rust-knowledge-core
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: remove-stale-chat-rebuild-helpers-once
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-knowledge-core
+          fetch-depth: 0
+      - name: Remove stale helpers
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
+          content = path.read_text()
+          content, count = re.subn(
+              r"\nconst shouldRebuildChatSearch = .*?\nconst hasAnswer = .*?\n",
+              "\n",
+              content,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit(f'Expected stale chat helper block, removed {count}')
+          path.write_text(content)
+          Path('.github/workflows/remove-stale-chat-rebuild-helpers-once.yml').unlink()
+      - name: Verify no implicit rebuild symbols remain
+        shell: bash
+        run: |
+          ! grep -E 'CHAT_REBUILD_COOLDOWN_MS|chatSearchRebuiltAt|searchVaultInitializedForChat|shouldRebuildChatSearch|ensureSearchVaultForChat|SEARCH_REBUILD' Elephant/frontend/app/services/elephantnoteClient/domainClients.js
+          grep -F 'call(API.RAG_CHAT, normalizeRagChatPayload(payload, limit))' Elephant/frontend/app/services/elephantnoteClient/domainClients.js
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Elephant/frontend/app/services/elephantnoteClient/domainClients.js .github/workflows/remove-stale-chat-rebuild-helpers-once.yml
+          git commit -m 'fix(knowledge): remove stale chat rebuild helpers'
+          git push origin HEAD:feature/rust-knowledge-core

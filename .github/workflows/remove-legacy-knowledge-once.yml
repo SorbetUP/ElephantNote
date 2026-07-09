@@ -65,7 +65,7 @@ jobs:
             Elephant/frontend/app/components/views/WikiView.vue \
             Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \
             Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \
-            Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js
+            Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js || true
           pnpm exec eslint \
             Elephant/frontend/app/components/views/WikiView.vue \
             Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \

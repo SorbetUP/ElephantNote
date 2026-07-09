@@ -1,16 +1,20 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-  collections::HashMap,
+  collections::{HashMap, VecDeque},
   fs,
   io::ErrorKind,
   path::{Path, PathBuf},
-  process::Stdio,
+  process::{ExitStatus, Stdio},
   sync::atomic::{AtomicU64, Ordering},
   time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
-use tokio::{io::AsyncWriteExt, process::Command, time::timeout};
+use tokio::{
+  io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
+  process::Command,
+  time::timeout,
+};
 
 use crate::vault::config as vault_config;
 
@@ -21,6 +25,9 @@ const DEFAULT_TIMEOUT_MS: u64 = 15_000;
 const MAX_TIMEOUT_MS: u64 = 120_000;
 const MAX_CODE_BYTES: usize = 256 * 1024;
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
+const DEFAULT_OUTPUT_LINE_LIMIT: usize = 200;
+const MIN_OUTPUT_LINE_LIMIT: usize = 10;
+const MAX_OUTPUT_LINE_LIMIT: usize = 5_000;
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug)]
@@ -40,11 +47,17 @@ struct EnvironmentOverride {
   executable: String,
 }
 
+fn default_output_line_limit() -> usize {
+  DEFAULT_OUTPUT_LINE_LIMIT
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CodeExecutionConfig {
   #[serde(default)]
   execution_enabled: bool,
+  #[serde(default = "default_output_line_limit")]
+  output_line_limit: usize,
   #[serde(default)]
   environments: HashMap<String, EnvironmentOverride>,
 }
@@ -53,17 +66,43 @@ impl Default for CodeExecutionConfig {
   fn default() -> Self {
     Self {
       execution_enabled: false,
+      output_line_limit: DEFAULT_OUTPUT_LINE_LIMIT,
       environments: HashMap::new(),
     }
   }
+}
+
+impl CodeExecutionConfig {
+  fn normalized(mut self) -> Self {
+    self.output_line_limit = self
+      .output_line_limit
+      .clamp(MIN_OUTPUT_LINE_LIMIT, MAX_OUTPUT_LINE_LIMIT);
+    self
+  }
+}
+
+#[derive(Debug, Default)]
+struct CapturedStream {
+  bytes: Vec<u8>,
+  total_bytes: usize,
+  dropped_bytes: usize,
+}
+
+#[derive(Debug, Default)]
+struct PreparedStream {
+  text: String,
+  line_count: usize,
+  dropped_lines: usize,
+  dropped_bytes: usize,
+  truncated: bool,
 }
 
 #[derive(Debug)]
 struct ProcessResult {
   success: bool,
   exit_code: Option<i32>,
-  stdout: String,
-  stderr: String,
+  stdout: PreparedStream,
+  stderr: PreparedStream,
   duration_ms: u128,
   timed_out: bool,
   truncated: bool,
@@ -164,7 +203,9 @@ fn read_config(app: &AppHandle, request_id: &str) -> R<CodeExecutionConfig> {
       code_log(
         "config:read:default",
         request_id,
-        "reason=not-found execution_enabled=false",
+        format!(
+          "reason=not-found execution_enabled=false output_line_limit={DEFAULT_OUTPUT_LINE_LIMIT}"
+        ),
       );
       return Ok(CodeExecutionConfig::default());
     }
@@ -175,39 +216,36 @@ fn read_config(app: &AppHandle, request_id: &str) -> R<CodeExecutionConfig> {
     }
   };
 
-  match serde_json::from_str::<CodeExecutionConfig>(&raw) {
-    Ok(config) => {
-      code_log(
-        "config:read:complete",
-        request_id,
-        format!(
-          "bytes={} execution_enabled={} overrides={}",
-          raw.len(),
-          config.execution_enabled,
-          config.environments.len()
-        ),
-      );
-      Ok(config)
-    }
-    Err(error) => {
-      let message = format!("Invalid code execution settings file: {error}");
-      code_log("config:parse:error", request_id, format!("error={message:?}"));
-      Err(message)
-    }
-  }
+  let config = serde_json::from_str::<CodeExecutionConfig>(&raw)
+    .map_err(|error| format!("Invalid code execution settings file: {error}"))?
+    .normalized();
+  code_log(
+    "config:read:complete",
+    request_id,
+    format!(
+      "bytes={} execution_enabled={} output_line_limit={} overrides={}",
+      raw.len(),
+      config.execution_enabled,
+      config.output_line_limit,
+      config.environments.len()
+    ),
+  );
+  Ok(config)
 }
 
 fn write_config(app: &AppHandle, config: &CodeExecutionConfig, request_id: &str) -> R<()> {
   let path = config_path(app)?;
-  let raw = serde_json::to_string_pretty(config).map_err(|error| error.to_string())?;
+  let config = config.clone().normalized();
+  let raw = serde_json::to_string_pretty(&config).map_err(|error| error.to_string())?;
   code_log(
     "config:write:start",
     request_id,
     format!(
-      "path={} bytes={} execution_enabled={} overrides={}",
+      "path={} bytes={} execution_enabled={} output_line_limit={} overrides={}",
       path.display(),
       raw.len(),
       config.execution_enabled,
+      config.output_line_limit,
       config.environments.len()
     ),
   );
@@ -265,14 +303,8 @@ fn invocation_args(definition: &RuntimeDefinition, executable: &Path) -> Vec<Str
   }
 }
 
-fn version_for(executable: &Path, request_id: &str, environment_id: &str) -> String {
-  code_log(
-    "environment:version:start",
-    request_id,
-    format!("environment={environment_id} executable={}", executable.display()),
-  );
-  let started = Instant::now();
-  let version = std::process::Command::new(executable)
+fn version_for(executable: &Path) -> String {
+  std::process::Command::new(executable)
     .arg("--version")
     .output()
     .ok()
@@ -285,17 +317,7 @@ fn version_for(executable: &Path, request_id: &str, environment_id: &str) -> Str
     .lines()
     .next()
     .unwrap_or("")
-    .to_string();
-  code_log(
-    "environment:version:complete",
-    request_id,
-    format!(
-      "environment={environment_id} duration_ms={} version_present={}",
-      started.elapsed().as_millis(),
-      !version.is_empty()
-    ),
-  );
-  version
+    .to_string()
 }
 
 fn canonical_working_directory(
@@ -308,55 +330,22 @@ fn canonical_working_directory(
     request_id,
     format!("requested={:?}", requested.as_deref().unwrap_or("")),
   );
-  let vault = vault_config::get_active_vault(app).map_err(|error| {
-    let message = "Open a vault before running a code block.".to_string();
-    code_log(
-      "cwd:resolve:error",
-      request_id,
-      format!("stage=active-vault backend_error={error:?} error={message:?}"),
-    );
-    message
-  })?;
-  let root = fs::canonicalize(&vault.path).map_err(|error| {
-    let message = format!("Unable to resolve the active vault path: {error}");
-    code_log("cwd:resolve:error", request_id, format!("stage=vault-root error={message:?}"));
-    message
-  })?;
+  let vault = vault_config::get_active_vault(app)
+    .map_err(|_| "Open a vault before running a code block.".to_string())?;
+  let root = fs::canonicalize(&vault.path)
+    .map_err(|error| format!("Unable to resolve the active vault path: {error}"))?;
   let candidate = requested
     .filter(|value| !value.trim().is_empty())
     .map(PathBuf::from)
     .map(|path| if path.is_absolute() { path } else { root.join(path) })
     .unwrap_or_else(|| root.clone());
-  let candidate = fs::canonicalize(&candidate).map_err(|error| {
-    let message = format!("Unable to resolve the code execution working directory: {error}");
-    code_log(
-      "cwd:resolve:error",
-      request_id,
-      format!("stage=candidate candidate={} error={message:?}", candidate.display()),
-    );
-    message
-  })?;
+  let candidate = fs::canonicalize(&candidate)
+    .map_err(|error| format!("Unable to resolve the code execution working directory: {error}"))?;
   if !candidate.starts_with(&root) {
-    let message = "Refusing to execute code outside the active vault.".to_string();
-    code_log(
-      "cwd:resolve:error",
-      request_id,
-      format!(
-        "stage=boundary root={} candidate={} error={message:?}",
-        root.display(),
-        candidate.display()
-      ),
-    );
-    return Err(message);
+    return Err("Refusing to execute code outside the active vault.".to_string());
   }
   if !candidate.is_dir() {
-    let message = "The code execution working directory is not a folder.".to_string();
-    code_log(
-      "cwd:resolve:error",
-      request_id,
-      format!("stage=type candidate={} error={message:?}", candidate.display()),
-    );
-    return Err(message);
+    return Err("The code execution working directory is not a folder.".to_string());
   }
   code_log(
     "cwd:resolve:complete",
@@ -366,14 +355,77 @@ fn canonical_working_directory(
   Ok(candidate)
 }
 
-fn truncate_bytes(bytes: &[u8]) -> (String, bool) {
-  let truncated = bytes.len() > MAX_OUTPUT_BYTES;
-  let slice = if truncated {
-    &bytes[..MAX_OUTPUT_BYTES]
+async fn capture_stream<Rd>(mut reader: Rd, request_id: String, stream: &'static str) -> R<CapturedStream>
+where
+  Rd: AsyncRead + Unpin,
+{
+  let mut tail = VecDeque::with_capacity(MAX_OUTPUT_BYTES);
+  let mut total_bytes = 0usize;
+  let mut buffer = vec![0u8; 16 * 1024];
+  code_log("process:stream:start", &request_id, format!("stream={stream}"));
+
+  loop {
+    let read = reader
+      .read(&mut buffer)
+      .await
+      .map_err(|error| format!("Unable to read {stream}: {error}"))?;
+    if read == 0 {
+      break;
+    }
+    total_bytes = total_bytes.saturating_add(read);
+    tail.extend(&buffer[..read]);
+    let overflow = tail.len().saturating_sub(MAX_OUTPUT_BYTES);
+    if overflow > 0 {
+      tail.drain(..overflow);
+    }
+  }
+
+  let bytes = tail.into_iter().collect::<Vec<_>>();
+  let dropped_bytes = total_bytes.saturating_sub(bytes.len());
+  code_log(
+    "process:stream:complete",
+    &request_id,
+    format!(
+      "stream={stream} total_bytes={total_bytes} retained_bytes={} dropped_bytes={dropped_bytes}",
+      bytes.len()
+    ),
+  );
+  Ok(CapturedStream {
+    bytes,
+    total_bytes,
+    dropped_bytes,
+  })
+}
+
+fn prepare_stream(capture: CapturedStream, line_limit: usize) -> PreparedStream {
+  let text = String::from_utf8_lossy(&capture.bytes).to_string();
+  let lines = text.split_inclusive('\n').collect::<Vec<_>>();
+  let dropped_lines = lines.len().saturating_sub(line_limit);
+  let retained = lines
+    .into_iter()
+    .skip(dropped_lines)
+    .collect::<String>();
+  let line_count = if retained.is_empty() {
+    0
   } else {
-    bytes
+    retained.lines().count().max(1)
   };
-  (String::from_utf8_lossy(slice).to_string(), truncated)
+  PreparedStream {
+    text: retained,
+    line_count,
+    dropped_lines,
+    dropped_bytes: capture.dropped_bytes,
+    truncated: capture.dropped_bytes > 0 || dropped_lines > 0,
+  }
+}
+
+async fn join_capture(
+  task: tokio::task::JoinHandle<R<CapturedStream>>,
+  stream: &str,
+) -> R<CapturedStream> {
+  task
+    .await
+    .map_err(|error| format!("{stream} capture task failed: {error}"))?
 }
 
 async fn execute_process(
@@ -384,17 +436,17 @@ async fn execute_process(
   code: &str,
   cwd: &Path,
   timeout_ms: u64,
+  output_line_limit: usize,
 ) -> R<ProcessResult> {
   let started = Instant::now();
   code_log(
     "process:spawn:start",
     request_id,
     format!(
-      "environment={} executable={} cwd={} args={:?} source_bytes={} timeout_ms={timeout_ms}",
+      "environment={} executable={} cwd={} source_bytes={} timeout_ms={timeout_ms} output_line_limit={output_line_limit}",
       definition.id,
       executable.display(),
       cwd.display(),
-      args,
       code.len()
     ),
   );
@@ -407,140 +459,110 @@ async fn execute_process(
     .stderr(Stdio::piped())
     .kill_on_drop(true)
     .spawn()
-    .map_err(|error| {
-      let message = format!("Unable to start {}: {error}", executable.display());
-      code_log("process:spawn:error", request_id, format!("error={message:?}"));
-      message
-    })?;
+    .map_err(|error| format!("Unable to start {}: {error}", executable.display()))?;
 
-  code_log(
-    "process:spawn:complete",
-    request_id,
-    format!("pid={:?} duration_ms={}", child.id(), started.elapsed().as_millis()),
-  );
+  let stdout = child
+    .stdout
+    .take()
+    .ok_or_else(|| "Unable to capture interpreter stdout.".to_string())?;
+  let stderr = child
+    .stderr
+    .take()
+    .ok_or_else(|| "Unable to capture interpreter stderr.".to_string())?;
+  let stdout_task = tokio::spawn(capture_stream(stdout, request_id.to_string(), "stdout"));
+  let stderr_task = tokio::spawn(capture_stream(stderr, request_id.to_string(), "stderr"));
 
-  let mut stdin = child.stdin.take().ok_or_else(|| {
-    let message = "Unable to open interpreter stdin.".to_string();
-    code_log("process:stdin:error", request_id, format!("error={message:?}"));
-    message
-  })?;
+  let mut stdin = child
+    .stdin
+    .take()
+    .ok_or_else(|| "Unable to open interpreter stdin.".to_string())?;
   let source = code.as_bytes().to_vec();
-  let source_len = source.len();
-  let stdin_request_id = request_id.to_string();
+  let write_request_id = request_id.to_string();
   let write_task = tokio::spawn(async move {
     code_log(
       "process:stdin:write:start",
-      &stdin_request_id,
-      format!("bytes={source_len}"),
+      &write_request_id,
+      format!("bytes={}", source.len()),
     );
-    stdin.write_all(&source).await.map_err(|error| {
-      let message = error.to_string();
-      code_log(
-        "process:stdin:write:error",
-        &stdin_request_id,
-        format!("bytes={source_len} error={message:?}"),
-      );
-      message
-    })?;
-    stdin.shutdown().await.map_err(|error| {
-      let message = error.to_string();
-      code_log(
-        "process:stdin:shutdown:error",
-        &stdin_request_id,
-        format!("error={message:?}"),
-      );
-      message
-    })?;
-    code_log(
-      "process:stdin:write:complete",
-      &stdin_request_id,
-      format!("bytes={source_len}"),
-    );
+    stdin.write_all(&source).await.map_err(|error| error.to_string())?;
+    stdin.shutdown().await.map_err(|error| error.to_string())?;
+    code_log("process:stdin:write:complete", &write_request_id, "");
     Ok::<(), String>(())
   });
 
-  code_log(
-    "process:wait:start",
-    request_id,
-    format!("timeout_ms={timeout_ms}"),
-  );
-  let output = match timeout(Duration::from_millis(timeout_ms), child.wait_with_output()).await {
-    Ok(result) => result.map_err(|error| {
-      let message = format!("Unable to wait for interpreter process: {error}");
-      code_log("process:wait:error", request_id, format!("error={message:?}"));
-      message
-    })?,
+  code_log("process:wait:start", request_id, format!("timeout_ms={timeout_ms}"));
+  let (status, timed_out): (ExitStatus, bool) = match timeout(
+    Duration::from_millis(timeout_ms),
+    child.wait(),
+  )
+  .await
+  {
+    Ok(result) => (
+      result.map_err(|error| format!("Unable to wait for interpreter process: {error}"))?,
+      false,
+    ),
     Err(_) => {
-      write_task.abort();
       code_log(
         "process:timeout",
         request_id,
-        format!(
-          "timeout_ms={timeout_ms} duration_ms={} action=kill-on-drop",
-          started.elapsed().as_millis()
-        ),
+        format!("timeout_ms={timeout_ms} action=kill"),
       );
-      return Ok(ProcessResult {
-        success: false,
-        exit_code: None,
-        stdout: String::new(),
-        stderr: format!("Execution timed out after {timeout_ms} ms."),
-        duration_ms: started.elapsed().as_millis(),
-        timed_out: true,
-        truncated: false,
-      });
+      child
+        .kill()
+        .await
+        .map_err(|error| format!("Unable to stop timed-out interpreter: {error}"))?;
+      (
+        child
+          .wait()
+          .await
+          .map_err(|error| format!("Unable to reap timed-out interpreter: {error}"))?,
+        true,
+      )
     }
   };
 
   match write_task.await {
     Ok(Ok(())) => {}
-    Ok(Err(error)) => code_log(
-      "process:stdin:task:error",
-      request_id,
-      format!("error={error:?}"),
-    ),
-    Err(error) => code_log(
-      "process:stdin:task:join-error",
-      request_id,
-      format!("error={error:?}"),
-    ),
+    Ok(Err(error)) => code_log("process:stdin:error", request_id, format!("error={error:?}")),
+    Err(error) => code_log("process:stdin:join-error", request_id, format!("error={error:?}")),
   }
 
-  code_log(
-    "process:wait:complete",
-    request_id,
-    format!(
-      "success={} exit_code={:?} stdout_bytes={} stderr_bytes={} duration_ms={}",
-      output.status.success(),
-      output.status.code(),
-      output.stdout.len(),
-      output.stderr.len(),
-      started.elapsed().as_millis()
-    ),
-  );
+  let stdout_capture = join_capture(stdout_task, "stdout").await?;
+  let stderr_capture = join_capture(stderr_task, "stderr").await?;
+  let mut stdout = prepare_stream(stdout_capture, output_line_limit);
+  let mut stderr = prepare_stream(stderr_capture, output_line_limit);
+  if timed_out {
+    if !stderr.text.is_empty() && !stderr.text.ends_with('\n') {
+      stderr.text.push('\n');
+    }
+    stderr
+      .text
+      .push_str(&format!("Execution timed out after {timeout_ms} ms."));
+    stderr.line_count = stderr.line_count.saturating_add(1);
+  }
+  let truncated = stdout.truncated || stderr.truncated;
 
-  let (stdout, stdout_truncated) = truncate_bytes(&output.stdout);
-  let (stderr, stderr_truncated) = truncate_bytes(&output.stderr);
-  let truncated = stdout_truncated || stderr_truncated;
   code_log(
     "process:output:captured",
     request_id,
     format!(
-      "stdout_bytes={} stderr_bytes={} stdout_truncated={} stderr_truncated={}",
-      output.stdout.len(),
-      output.stderr.len(),
-      stdout_truncated,
-      stderr_truncated
+      "success={} exit_code={:?} timed_out={timed_out} stdout_retained_bytes={} stderr_retained_bytes={} stdout_dropped_bytes={} stderr_dropped_bytes={} truncated={truncated}",
+      status.success(),
+      status.code(),
+      stdout.text.len(),
+      stderr.text.len(),
+      stdout.dropped_bytes,
+      stderr.dropped_bytes
     ),
   );
 
   Ok(ProcessResult {
-    success: output.status.success(),
-    exit_code: output.status.code(),
+    success: status.success() && !timed_out,
+    exit_code: status.code(),
     stdout,
     stderr,
     duration_ms: started.elapsed().as_millis(),
-    timed_out: false,
+    timed_out,
     truncated,
   })
 }
@@ -548,38 +570,13 @@ async fn execute_process(
 fn environment_payload(
   config: &CodeExecutionConfig,
   definition: &RuntimeDefinition,
-  request_id: &str,
 ) -> Value {
   let configured = config
     .environments
     .get(definition.id)
     .cloned()
     .unwrap_or_default();
-  code_log(
-    "environment:resolve:start",
-    request_id,
-    format!(
-      "environment={} configured={} candidates={:?}",
-      definition.id,
-      !configured.executable.trim().is_empty(),
-      definition.candidates
-    ),
-  );
   let executable = resolve_executable(definition, &configured.executable);
-  code_log(
-    "environment:resolve:complete",
-    request_id,
-    format!(
-      "environment={} available={} enabled={} executable={}",
-      definition.id,
-      executable.is_some(),
-      configured.enabled.unwrap_or(true),
-      executable
-        .as_ref()
-        .map(|path| path.to_string_lossy().to_string())
-        .unwrap_or_default()
-    ),
-  );
   json!({
     "id": definition.id,
     "label": definition.label,
@@ -588,7 +585,28 @@ fn environment_payload(
     "enabled": configured.enabled.unwrap_or(true),
     "configuredExecutable": configured.executable,
     "executable": executable.as_ref().map(|path| path.to_string_lossy().to_string()).unwrap_or_default(),
-    "version": executable.as_ref().map(|path| version_for(path, request_id, definition.id)).unwrap_or_default()
+    "version": executable.as_ref().map(|path| version_for(path)).unwrap_or_default()
+  })
+}
+
+fn settings_payload(config: &CodeExecutionConfig) -> Value {
+  let environments = runtime_definitions()
+    .iter()
+    .map(|definition| environment_payload(config, definition))
+    .collect::<Vec<_>>();
+  json!({
+    "runtime": "tauri-rust",
+    "executionEnabled": config.execution_enabled,
+    "outputLineLimit": config.output_line_limit,
+    "environments": environments,
+    "limits": {
+      "maxCodeBytes": MAX_CODE_BYTES,
+      "maxOutputBytes": MAX_OUTPUT_BYTES,
+      "defaultTimeoutMs": DEFAULT_TIMEOUT_MS,
+      "maxTimeoutMs": MAX_TIMEOUT_MS,
+      "minOutputLineLimit": MIN_OUTPUT_LINE_LIMIT,
+      "maxOutputLineLimit": MAX_OUTPUT_LINE_LIMIT
+    }
   })
 }
 
@@ -597,32 +615,16 @@ pub fn tauri_programs_list(app: AppHandle) -> R<Value> {
   let request_id = next_request_id("list");
   let started = Instant::now();
   code_log("command:start", &request_id, "action=list");
-  let result = (|| {
-    let config = read_config(&app, &request_id)?;
-    let environments = runtime_definitions()
-      .iter()
-      .map(|definition| environment_payload(&config, definition, &request_id))
-      .collect::<Vec<_>>();
-    Ok(json!({
-      "runtime": "tauri-rust",
-      "executionEnabled": config.execution_enabled,
-      "environments": environments,
-      "limits": {
-        "maxCodeBytes": MAX_CODE_BYTES,
-        "maxOutputBytes": MAX_OUTPUT_BYTES,
-        "defaultTimeoutMs": DEFAULT_TIMEOUT_MS,
-        "maxTimeoutMs": MAX_TIMEOUT_MS
-      }
-    }))
-  })();
+  let result = read_config(&app, &request_id).map(|config| settings_payload(&config));
   match &result {
     Ok(value) => code_log(
       "command:complete",
       &request_id,
       format!(
-        "action=list duration_ms={} execution_enabled={} environments={}",
+        "action=list duration_ms={} execution_enabled={} output_line_limit={} environments={}",
         started.elapsed().as_millis(),
         value["executionEnabled"].as_bool().unwrap_or(false),
+        value["outputLineLimit"].as_u64().unwrap_or(DEFAULT_OUTPUT_LINE_LIMIT as u64),
         value["environments"].as_array().map(Vec::len).unwrap_or(0)
       ),
     ),
@@ -640,36 +642,23 @@ pub fn tauri_programs_set(app: AppHandle, environments: Option<Value>) -> R<Valu
   let request_id = next_request_id("set");
   let started = Instant::now();
   let value = environments.unwrap_or_else(|| json!({}));
-  code_log(
-    "command:start",
-    &request_id,
-    format!("action=set payload_type={}", if value.is_object() { "object" } else { "other" }),
-  );
+  code_log("command:start", &request_id, "action=set");
   let result = (|| {
     let config: CodeExecutionConfig = serde_json::from_value(value)
       .map_err(|error| format!("Invalid code execution settings: {error}"))?;
+    let config = config.normalized();
     write_config(&app, &config, &request_id)?;
-    let environments = runtime_definitions()
-      .iter()
-      .map(|definition| environment_payload(&config, definition, &request_id))
-      .collect::<Vec<_>>();
-    Ok(json!({
-      "runtime": "tauri-rust",
-      "executionEnabled": config.execution_enabled,
-      "environments": environments,
-      "limits": {
-        "maxCodeBytes": MAX_CODE_BYTES,
-        "maxOutputBytes": MAX_OUTPUT_BYTES,
-        "defaultTimeoutMs": DEFAULT_TIMEOUT_MS,
-        "maxTimeoutMs": MAX_TIMEOUT_MS
-      }
-    }))
+    Ok(settings_payload(&config))
   })();
   match &result {
-    Ok(_) => code_log(
+    Ok(value) => code_log(
       "command:complete",
       &request_id,
-      format!("action=set duration_ms={}", started.elapsed().as_millis()),
+      format!(
+        "action=set duration_ms={} output_line_limit={}",
+        started.elapsed().as_millis(),
+        value["outputLineLimit"].as_u64().unwrap_or(DEFAULT_OUTPUT_LINE_LIMIT as u64)
+      ),
     ),
     Err(error) => code_log(
       "command:error",
@@ -698,25 +687,10 @@ async fn run_command(
     ));
   }
 
-  code_log(
-    "validation:language:start",
-    request_id,
-    format!("requested={id:?}"),
-  );
+  code_log("validation:language:start", request_id, format!("requested={id:?}"));
   let definition = resolve_definition(id)
     .ok_or_else(|| format!("No executable environment is registered for language: {id}"))?;
-  code_log(
-    "validation:language:complete",
-    request_id,
-    format!("requested={id:?} resolved={}", definition.id),
-  );
-
   let config = read_config(app, request_id)?;
-  code_log(
-    "validation:global-opt-in",
-    request_id,
-    format!("execution_enabled={}", config.execution_enabled),
-  );
   if !config.execution_enabled {
     return Err(
       "Code execution is disabled. Enable it in Settings → Editor → Code execution."
@@ -729,30 +703,9 @@ async fn run_command(
     .get(definition.id)
     .cloned()
     .unwrap_or_default();
-  code_log(
-    "validation:environment-enabled",
-    request_id,
-    format!(
-      "environment={} enabled={} configured_executable={}",
-      definition.id,
-      configured.enabled.unwrap_or(true),
-      !configured.executable.trim().is_empty()
-    ),
-  );
   if configured.enabled == Some(false) {
     return Err(format!("The {} environment is disabled.", definition.label));
   }
-
-  code_log(
-    "executable:resolve:start",
-    request_id,
-    format!(
-      "environment={} configured={} candidates={:?}",
-      definition.id,
-      !configured.executable.trim().is_empty(),
-      definition.candidates
-    ),
-  );
   let executable = resolve_executable(&definition, &configured.executable).ok_or_else(|| {
     format!(
       "{} was not detected. Configure its executable in Settings.",
@@ -775,6 +728,7 @@ async fn run_command(
     command,
     &working_directory,
     DEFAULT_TIMEOUT_MS,
+    config.output_line_limit,
   )
   .await?;
 
@@ -785,8 +739,15 @@ async fn run_command(
     "executable": executable.to_string_lossy(),
     "success": result.success,
     "exitCode": result.exit_code,
-    "stdout": result.stdout,
-    "stderr": result.stderr,
+    "stdout": result.stdout.text,
+    "stderr": result.stderr.text,
+    "stdoutLines": result.stdout.line_count,
+    "stderrLines": result.stderr.line_count,
+    "stdoutDroppedLines": result.stdout.dropped_lines,
+    "stderrDroppedLines": result.stderr.dropped_lines,
+    "stdoutDroppedBytes": result.stdout.dropped_bytes,
+    "stderrDroppedBytes": result.stderr.dropped_bytes,
+    "outputLineLimit": config.output_line_limit,
     "durationMs": result.duration_ms,
     "timedOut": result.timed_out,
     "truncated": result.truncated
@@ -811,14 +772,13 @@ pub async fn tauri_programs_run(
       cwd.as_deref().unwrap_or("")
     ),
   );
-
   let result = run_command(&app, &request_id, &id, &command, cwd).await;
   match &result {
     Ok(value) => code_log(
       "command:complete",
       &request_id,
       format!(
-        "action=run language={} success={} exit_code={:?} duration_ms={} timed_out={} truncated={} stdout_bytes={} stderr_bytes={}",
+        "action=run language={} success={} exit_code={:?} duration_ms={} timed_out={} truncated={} stdout_bytes={} stderr_bytes={} output_line_limit={}",
         value["language"].as_str().unwrap_or(""),
         value["success"].as_bool().unwrap_or(false),
         value["exitCode"].as_i64(),
@@ -826,7 +786,8 @@ pub async fn tauri_programs_run(
         value["timedOut"].as_bool().unwrap_or(false),
         value["truncated"].as_bool().unwrap_or(false),
         value["stdout"].as_str().map(str::len).unwrap_or(0),
-        value["stderr"].as_str().map(str::len).unwrap_or(0)
+        value["stderr"].as_str().map(str::len).unwrap_or(0),
+        value["outputLineLimit"].as_u64().unwrap_or(DEFAULT_OUTPUT_LINE_LIMIT as u64)
       ),
     ),
     Err(error) => code_log(
@@ -854,18 +815,64 @@ mod tests {
   }
 
   #[test]
-  fn default_configuration_requires_explicit_opt_in() {
+  fn default_configuration_requires_explicit_opt_in_and_uses_bounded_tail() {
     let config = CodeExecutionConfig::default();
     assert!(!config.execution_enabled);
+    assert_eq!(config.output_line_limit, 200);
     assert!(config.environments.is_empty());
   }
 
   #[test]
-  fn truncates_output_at_the_documented_limit() {
-    let bytes = vec![b'x'; MAX_OUTPUT_BYTES + 100];
-    let (output, truncated) = truncate_bytes(&bytes);
-    assert!(truncated);
-    assert_eq!(output.len(), MAX_OUTPUT_BYTES);
+  fn normalizes_output_line_limit() {
+    let low = CodeExecutionConfig {
+      output_line_limit: 0,
+      ..CodeExecutionConfig::default()
+    }
+    .normalized();
+    let high = CodeExecutionConfig {
+      output_line_limit: usize::MAX,
+      ..CodeExecutionConfig::default()
+    }
+    .normalized();
+    assert_eq!(low.output_line_limit, MIN_OUTPUT_LINE_LIMIT);
+    assert_eq!(high.output_line_limit, MAX_OUTPUT_LINE_LIMIT);
+  }
+
+  #[test]
+  fn keeps_the_last_configured_output_lines() {
+    let text = (1..=12)
+      .map(|index| format!("line-{index}"))
+      .collect::<Vec<_>>()
+      .join("\n")
+      + "\n";
+    let capture = CapturedStream {
+      bytes: text.as_bytes().to_vec(),
+      total_bytes: text.len(),
+      dropped_bytes: 0,
+    };
+    let prepared = prepare_stream(capture, 10);
+    assert!(prepared.text.starts_with("line-3\n"));
+    assert!(prepared.text.ends_with("line-12\n"));
+    assert_eq!(prepared.line_count, 10);
+    assert_eq!(prepared.dropped_lines, 2);
+    assert!(prepared.truncated);
+  }
+
+  #[tokio::test]
+  async fn capture_stream_is_memory_bounded_and_keeps_the_tail() {
+    let (mut writer, reader) = tokio::io::duplex(64 * 1024);
+    let task = tokio::spawn(capture_stream(
+      reader,
+      "test-bounded-output".to_string(),
+      "stdout",
+    ));
+    let total = MAX_OUTPUT_BYTES + 64 * 1024;
+    writer.write_all(&vec![b'a'; total]).await.unwrap();
+    drop(writer);
+    let capture = task.await.unwrap().unwrap();
+    assert_eq!(capture.bytes.len(), MAX_OUTPUT_BYTES);
+    assert_eq!(capture.total_bytes, total);
+    assert_eq!(capture.dropped_bytes, 64 * 1024);
   }
 
   #[tokio::test]
@@ -885,10 +892,11 @@ mod tests {
       "print(6 * 7)",
       &cwd,
       5_000,
+      DEFAULT_OUTPUT_LINE_LIMIT,
     )
     .await
     .unwrap();
-    assert!(result.success, "stderr: {}", result.stderr);
-    assert_eq!(result.stdout.trim(), "42");
+    assert!(result.success, "stderr: {}", result.stderr.text);
+    assert_eq!(result.stdout.text.trim(), "42");
   }
 }

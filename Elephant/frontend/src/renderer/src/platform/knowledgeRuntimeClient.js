@@ -19,6 +19,18 @@ export const knowledgeRuntimeClient = Object.freeze({
   generateTagging: (relativePath, payload = {}, maxTags = 8) =>
     invoke('tauri_knowledge_tagging_generate', { relativePath, payload, maxTags }),
   validateChatAction: (action) => invoke('tauri_knowledge_validate_chat_action', { action }),
+  prepareChatAction: (action, rationale = '') =>
+    invoke('tauri_knowledge_chat_action_prepare', { action, rationale }),
+  getChatAction: (proposalId) =>
+    invoke('tauri_knowledge_chat_action_get', { proposalId }),
+  listChatActions: ({ status = null, limit = 100 } = {}) =>
+    invoke('tauri_knowledge_chat_actions_list', { status, limit }),
+  approveChatAction: (proposalId) =>
+    invoke('tauri_knowledge_chat_action_approve', { proposalId }),
+  rejectChatAction: (proposalId) =>
+    invoke('tauri_knowledge_chat_action_reject', { proposalId }),
+  executeChatAction: (proposalId) =>
+    invoke('tauri_knowledge_chat_action_execute', { proposalId }),
   listRelations: ({ status = null, limit = 1000 } = {}) =>
     invoke('tauri_knowledge_relations_list', { status, limit }),
   relationsForNode: (node, includeRejected = false) =>

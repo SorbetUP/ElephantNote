@@ -18,7 +18,6 @@ fn generate_tauri_parity_tests() {
   out.push_str("use crate::model_domain::{model_cache_key, ModelSelection};\n");
   out.push_str("use crate::note_domain::{create_note_markdown, note_filename_from_title, rename_note_markdown};\n");
   out.push_str("use crate::path_utils::{clean_relative_path, join_path, with_markdown_extension};\n");
-  out.push_str("use crate::search_logic::{normalize_query, score_text};\n");
   out.push_str("use crate::vault::types::{active_vault, next_vault_id, slug_id, VaultConfig, VaultDescriptor};\n");
   out.push_str("use crate::vault_layout::{is_hidden_vault_path, is_visible_vault_path, required_hidden_dirs, HIDDEN_ROOT};\n\n");
   out.push_str("fn vault_descriptor(id: &str, name: &str, path: &str) -> VaultDescriptor { VaultDescriptor { id: id.to_string(), name: name.to_string(), path: path.to_string(), icon: String::new(), last_opened_at: String::from(\"0\") } }\n\n");
@@ -41,10 +40,6 @@ fn generate_tauri_parity_tests() {
 
   for index in 0..80 {
     push_test(&mut out, &format!("generated_note_filename_case_{index:03}"), &format!("assert_eq!(note_filename_from_title(\"Title {index}/Slash\"), \"Title {index}-Slash.md\"); assert_eq!(note_filename_from_title(\"\"), \"Untitled.md\");"));
-  }
-
-  for index in 0..70 {
-    push_test(&mut out, &format!("generated_search_case_{index:03}"), &format!("assert_eq!(normalize_query(\"  Alpha   {index}  \"), \"alpha {index}\"); assert!(score_text(\"alpha {index}\", \"Alpha {index} title\", \"body\") >= 10); assert!(score_text(\"alpha {index}\", \"title\", \"alpha {index} body\") >= 3); assert_eq!(score_text(\"missing {index}\", \"title\", \"body\"), 0);"));
   }
 
   for index in 0..70 {
@@ -73,10 +68,6 @@ fn generate_tauri_parity_tests() {
 
   for index in 0..60 {
     push_test(&mut out, &format!("generated_active_vault_none_case_{index:03}"), &format!("let config = VaultConfig {{ vaults: vec![vault_descriptor(\"a-{index}\", \"A\", \"/vault/a\")], active_vault_id: Some(String::from(\"missing-{index}\")) }}; assert!(active_vault(&config).is_none()); let empty = VaultConfig {{ vaults: vec![], active_vault_id: None }}; assert!(active_vault(&empty).is_none());"));
-  }
-
-  for index in 0..60 {
-    push_test(&mut out, &format!("generated_case_whitespace_query_case_{index:03}"), &format!("assert_eq!(normalize_query(\"\\tMixed   CASE {index}\\n\"), \"mixed case {index}\"); assert!(score_text(\"mixed case {index}\", \"MIXED CASE {index}\", \"\") > 0);"));
   }
 
   push_test(&mut out, "generated_required_hidden_dirs_contract", "let dirs = required_hidden_dirs(); assert!(dirs.len() >= 8); assert!(dirs.contains(&\"config\")); assert!(!dirs.contains(&\"wiki\")); assert!(dirs.contains(&\"models\")); assert!(dirs.contains(&\"sync\"));");

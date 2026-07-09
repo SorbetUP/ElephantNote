@@ -28,6 +28,23 @@
     </section>
     <section class="category">
       <div
+        class="item featured"
+        :class="{ active: currentCategory === 'addons' }"
+        @click="handleCategoryItemClick(addonsCategory)"
+      >
+        <Box width="28" height="28" />
+        <span>Addons</span>
+      </div>
+      <div
+        class="item featured"
+        :class="{ active: currentCategory === 'rclone' }"
+        @click="handleCategoryItemClick(syncCategory)"
+      >
+        <Connection width="28" height="28" />
+        <span>Sync</span>
+      </div>
+      <div class="category-separator" />
+      <div
         v-for="c of getCategory()"
         :key="c.name"
         class="item"
@@ -37,22 +54,6 @@
         <component :is="c.icon" />
         <span>{{ c.name }}</span>
       </div>
-      <div
-        class="item"
-        :class="{ active: currentCategory === 'rclone' }"
-        @click="handleCategoryItemClick(syncCategory)"
-      >
-        <Search width="28" height="28" />
-        <span>Sync</span>
-      </div>
-      <div
-        class="item"
-        :class="{ active: currentCategory === 'addons' }"
-        @click="handleCategoryItemClick(addonsCategory)"
-      >
-        <Search width="28" height="28" />
-        <span>Addons</span>
-      </div>
     </section>
   </div>
 </template>
@@ -60,7 +61,7 @@
 import { getCategory, getTranslatedSearchContent } from './config'
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Search } from '@element-plus/icons-vue'
+import { Box, Connection, Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -93,7 +94,6 @@ const querySearch = (queryString, cb) => {
 const createFilter = (queryString) => {
   const q = queryString.toLowerCase()
   return (restaurant) => {
-    // Support both the current language and English keywords
     const fields = [
       restaurant.preference,
       restaurant.category,
@@ -125,7 +125,6 @@ const loadAll = () => [
 ]
 
 const handleSelect = (item) => {
-  // Use a safe routeCategory to avoid a blank screen caused by invalid categories
   const target =
     item && item.routeCategory ? item.routeCategory : (item?.category || 'general').toLowerCase()
   router.push({ path: `/preference/${target}` }).catch(() => {})
@@ -155,12 +154,10 @@ onMounted(() => {
     currentCategory.value = route.name
   }
   window.tauri.ipcRenderer.on('settings::change-tab', onIpcCategoryChange)
-  // Listen for language changes and refresh the search index
   const languageChanged = () => {
     restaurants.value = loadAll()
   }
   window.addEventListener('languageChanged', languageChanged)
-  // Remove listener on unmount
   onUnmounted(() => window.removeEventListener('languageChanged', languageChanged))
 })
 
@@ -237,7 +234,17 @@ onUnmounted(() => {
 }
 .category {
   -webkit-app-region: no-drag;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+
+  & .category-separator {
+    height: 1px;
+    margin: 8px 20px;
+    background: var(--floatBorderColor);
+    opacity: 0.6;
+  }
+
   & .item {
     width: 100%;
     height: 50px;
@@ -251,6 +258,11 @@ onUnmounted(() => {
     cursor: pointer;
     position: relative;
     user-select: none;
+
+    &.featured {
+      font-weight: 500;
+    }
+
     & > svg {
       width: 28px;
       height: 28px;

@@ -102,6 +102,18 @@ describe('ElephantNote synchronization invitation round trips', () => {
     expect(validateSyncInvitePayload(imported, NOW)).toEqual(invite)
   })
 
+  it('keeps QR, invitation file and pasted code as the exact same credential', async () => {
+    const payload = JSON.stringify(createInvite())
+    const dataUrl = await generateSyncInviteQrDataUrl(payload)
+    const qrDecoded = decodePngQr(Buffer.from(dataUrl.split(',')[1], 'base64'))
+    const inviteFile = createSyncInviteFile(payload, buildSyncInviteFileName('Round trip vault', 'invite-0123456789abcdef'))
+    const fileDecoded = await readFileText(inviteFile)
+
+    expect(qrDecoded).toBe(payload)
+    expect(fileDecoded).toBe(payload)
+    expect(validateSyncInvitePayload(qrDecoded, NOW)).toEqual(validateSyncInvitePayload(fileDecoded, NOW))
+  })
+
   it('rejects expired, malformed and incomplete QR or file payloads', () => {
     const expired = { ...createInvite(), expiresAt: NOW }
     const incomplete = { ...createInvite() }

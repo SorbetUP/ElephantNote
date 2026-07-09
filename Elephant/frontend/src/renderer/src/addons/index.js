@@ -1,6 +1,7 @@
 import { inject } from 'vue'
 import { ElephantAddonManager } from './AddonManagerWithState'
 import { builtinAddons } from './builtin'
+import { installExternalAddonRuntime } from './externalAddonRuntime'
 import { useAddonsStore } from '@/store/addons'
 export { ADDON_EXTENSION_POINTS } from './extensionPoints'
 export { ADDON_API_VERSION, ADDON_STATUS, normalizeAddonManifest } from './manifest'
@@ -51,6 +52,7 @@ export const installAddonSystem = (app, options = {}) => {
     manager.logger.error('default addon activation failed', error)
   })
 
+  installExternalAddonRuntime(manager, { logger: manager.logger })
   return manager
 }
 

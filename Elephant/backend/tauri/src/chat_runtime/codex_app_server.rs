@@ -27,6 +27,7 @@ const TURN_TIMEOUT: Duration = Duration::from_secs(180);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(12);
 const MAX_LOG_TEXT: usize = 900;
 const READ_ONLY_SANDBOX: &str = "read-only";
+const TURN_READ_ONLY_SANDBOX: &str = "readOnly";
 
 #[derive(Debug)]
 pub struct CodexChatResult {
@@ -1006,12 +1007,8 @@ pub async fn chat(app: &AppHandle, model: &str, prompt: &str) -> R<CodexChatResu
               "cwd": cwd_text,
               "approvalPolicy": "never",
               "sandboxPolicy": {
-                "type": READ_ONLY_SANDBOX,
-                "access": {
-                  "type": "restricted",
-                  "includePlatformDefaults": true,
-                  "readableRoots": [cwd.to_string_lossy()]
-                }
+                "type": TURN_READ_ONLY_SANDBOX,
+                "networkAccess": false
               }
             }),
         )
@@ -1090,6 +1087,7 @@ mod tests {
     #[test]
     fn uses_protocol_sandbox_variant() {
         assert_eq!(READ_ONLY_SANDBOX, "read-only");
+        assert_eq!(TURN_READ_ONLY_SANDBOX, "readOnly");
     }
 
     #[test]
@@ -1113,7 +1111,7 @@ mod tests {
 
     #[test]
     fn failed_turn_returns_message() {
-        let event = json!({ "method": "turn/completed", "params": { "turn": { "status": "failed", "error": { "message": "quota" } } } });
+        let event = json!({ "method": "turn/completed", "params": { "turn": { "status": "failed", "error": { "message": "quota" } } });
         assert_eq!(turn_failure(&event).as_deref(), Some("quota"));
     }
 

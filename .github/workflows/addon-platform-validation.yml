@@ -25,8 +25,20 @@ jobs:
           NODE_PATH=Elephant/node_modules \
             Elephant/node_modules/.bin/vitest run \
             tests/app/unit/addons/externalAddonContracts.spec.js \
+            tests/app/unit/addons/addonCatalogContracts.spec.js \
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
             2>&1 | tee addon-tests.txt
+
+      - name: Compile and test Rust addon catalogue
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test \
+            --manifest-path Elephant/backend/tauri/Cargo.toml \
+            --no-default-features \
+            addon_catalog::tests \
+            --lib \
+            2>&1 | tee addon-rust-tests.txt
 
       - name: Package installable external proof addon
         shell: bash
@@ -52,6 +64,7 @@ jobs:
           name: addon-platform-validation
           path: |
             addon-tests.txt
+            addon-rust-tests.txt
             addon-package.txt
             addon-build.txt
             build/addons/platform-proof.enaddon

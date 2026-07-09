@@ -9,6 +9,12 @@ const callModelBridge = (method, payload) => {
   return bridgeMethod(toPlainObject(payload))
 }
 
+const normalizeVaultPathPayload = (payload = '') => {
+  const vaultPath = typeof payload === 'string'
+    ? payload
+    : payload?.vaultPath || payload?.path || ''
+  return { vaultPath: String(vaultPath).trim() }
+}
 
 const normalizeRagChatPayload = (payload, limit = 6) => {
   if (payload && typeof payload === 'object') {
@@ -95,7 +101,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     context: (path, limit = 12) => call(API.WIKI_CONTEXT, { path, limit })
   },
   search: {
-    initVault: (vaultPath) => call(API.SEARCH_INIT_VAULT, { vaultPath }),
+    initVault: (payload = '') => call(API.SEARCH_INIT_VAULT, normalizeVaultPathPayload(payload)),
     query: (params) => call(API.SEARCH_QUERY, params),
     concepts: (params) =>
       getBridge()?.search?.concepts?.(toPlainObject(params)) || call(API.SEARCH_CONCEPTS, params),

@@ -1,5 +1,6 @@
 name: Repair Knowledge Runtime Freeze Once
 
+# One-shot branch repair. The job removes this workflow after applying the fixes.
 on:
   push:
     branches:

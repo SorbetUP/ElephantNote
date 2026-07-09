@@ -17,8 +17,10 @@ pub mod model_library;
 pub mod local_llama_runtime;
 pub mod chat_runtime;
 pub mod search_logic;
+pub mod managed_ai_runtime;
 pub mod ai_runtime;
 
+mod managed_ai_commands;
 mod tauri_extra_commands;
 mod debug_commands;
 mod sync_commands;
@@ -85,6 +87,9 @@ pub fn run() {
       app.manage(state::AppState::new(&handle));
       app.manage(watcher::WatcherState::new());
       app.manage(sync::IrohSyncState::new());
+      let managed_ai = managed_ai_commands::ManagedAiRuntimeState::new(&handle)
+        .map_err(std::io::Error::other)?;
+      app.manage(managed_ai);
       app.manage(ai_runtime::AiRuntimeState::new());
       let sync_handle = handle.clone();
       tauri::async_runtime::spawn(async move {
@@ -98,6 +103,10 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       healthcheck,
       tauri_platform_info,
+      managed_ai_commands::tauri_ai_managed_runtime_status,
+      managed_ai_commands::tauri_ai_managed_runtime_install,
+      managed_ai_commands::tauri_ai_managed_runtime_ensure,
+      managed_ai_commands::tauri_ai_managed_runtime_stop,
       ai_runtime::tauri_ai_runtime_status,
       ai_runtime::tauri_ai_auth_status,
       ai_runtime::tauri_ai_auth_login_start,

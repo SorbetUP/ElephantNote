@@ -82,6 +82,10 @@ const threadIdFrom = (result = {}) => text(
 )
 
 export const SUBSCRIPTION_PROVIDER_ACTIONS = Object.freeze([
+  'ai.runtimes.status',
+  'ai.runtimes.install',
+  'ai.runtimes.ensure',
+  'ai.runtimes.stop',
   'ai.providers.status',
   'ai.auth.status',
   'ai.auth.login.start',
@@ -94,6 +98,10 @@ export const SUBSCRIPTION_PROVIDER_ACTIONS = Object.freeze([
 ])
 
 const createProvider = (target, provider) => ({
+  managedStatus: () => invoke(target, 'tauri_ai_managed_runtime_status', { provider }),
+  install: () => invoke(target, 'tauri_ai_managed_runtime_install', { provider }),
+  ensure: (payload = {}) => invoke(target, 'tauri_ai_managed_runtime_ensure', providerPayload(provider, payload)),
+  stop: () => invoke(target, 'tauri_ai_managed_runtime_stop', { provider }),
   status: (payload = {}) => invoke(target, 'tauri_ai_runtime_status', providerPayload(provider, payload)),
   authStatus: (payload = {}) => invoke(target, 'tauri_ai_auth_status', providerPayload(provider, payload)),
   login: (payload = {}) => invoke(target, 'tauri_ai_auth_login_start', providerPayload(provider, payload)),
@@ -121,12 +129,14 @@ const createSubscriptionChat = (root, previousRagChat) => async(payload = {}) =>
   const model = chatModel(config, normalized)
   if (!model) throw new Error(`No ${provider} chat model is selected.`)
   const runtime = root.ai[provider]
-  if (!runtime?.startThread || !runtime?.startTurn) throw new Error(`The ${provider} runtime bridge is unavailable.`)
+  if (!runtime?.ensure || !runtime?.startThread || !runtime?.startTurn) throw new Error(`The ${provider} runtime bridge is unavailable.`)
 
   const providerConfig = runtimeProviderConfig(config, provider)
   const connection = provider === 'opencode'
     ? { endpoint: providerConfig.endpoint || chatRoute(config, normalized).endpoint, password: providerConfig.apiKey || providerConfig.password }
     : {}
+  await runtime.ensure(connection)
+
   const key = `${provider}:${conversationKey(normalized)}:${model}`
   let threadId = runtimeThreads.get(key) || ''
   let created = false
@@ -177,6 +187,13 @@ export const installSubscriptionProviderBridge = (target = globalThis) => {
 
   root.ai = root.ai || {}
   const previousTestConfig = root.ai.testConfig?.bind(root.ai)
+  root.ai.runtimes = {
+    ...(root.ai.runtimes || {}),
+    status: (payload = {}) => invoke(target, 'tauri_ai_managed_runtime_status', object(payload)),
+    install: (payload = {}) => invoke(target, 'tauri_ai_managed_runtime_install', object(payload)),
+    ensure: (payload = {}) => invoke(target, 'tauri_ai_managed_runtime_ensure', object(payload)),
+    stop: (payload = {}) => invoke(target, 'tauri_ai_managed_runtime_stop', object(payload))
+  }
   root.ai.providers = {
     ...(root.ai.providers || {}),
     status: (payload = {}) => invoke(target, 'tauri_ai_runtime_status', object(payload)),
@@ -199,17 +216,18 @@ export const installSubscriptionProviderBridge = (target = globalThis) => {
     const normalized = object(config)
     const provider = providerNameFromConfig(normalized)
     if (provider === 'codex') {
+      const managed = await codex.ensure()
       const runtime = await codex.status()
-      if (!runtime?.ok) throw new Error('Codex CLI is not installed or unavailable.')
       const auth = await codex.authStatus()
-      return { ok: true, provider: 'codex', runtime, auth }
+      return { ok: true, provider: 'codex', managed, runtime, auth }
     }
     if (provider === 'opencode') {
       const endpoint = normalized.endpoint || normalized.opencode?.endpoint
       const password = normalized.apiKey || normalized.password
+      const managed = await opencode.ensure({ endpoint })
       const runtime = await opencode.status({ endpoint, password })
       const auth = await opencode.authStatus({ endpoint, password })
-      return { ok: true, provider: 'opencode', runtime, auth }
+      return { ok: true, provider: 'opencode', managed, runtime, auth }
     }
     if (!previousTestConfig) throw new Error(`No runtime test is available for provider "${provider || 'unknown'}".`)
     return previousTestConfig(config)
@@ -234,6 +252,10 @@ export const installSubscriptionProviderBridge = (target = globalThis) => {
     call: async(action, payload = {}) => {
       const normalized = object(payload)
       switch (action) {
+        case 'ai.runtimes.status': return { ok: true, data: await root.ai.runtimes.status(normalized) }
+        case 'ai.runtimes.install': return { ok: true, data: await root.ai.runtimes.install(normalized) }
+        case 'ai.runtimes.ensure': return { ok: true, data: await root.ai.runtimes.ensure(normalized) }
+        case 'ai.runtimes.stop': return { ok: true, data: await root.ai.runtimes.stop(normalized) }
         case 'ai.providers.status': return { ok: true, data: await root.ai.providers.status(normalized) }
         case 'ai.auth.status': return { ok: true, data: await root.ai.providers.authStatus(normalized) }
         case 'ai.auth.login.start': return { ok: true, data: await root.ai.providers.login(normalized) }

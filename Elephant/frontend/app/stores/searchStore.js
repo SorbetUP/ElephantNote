@@ -27,6 +27,8 @@ const EMPTY_INSPECTION = Object.freeze({
 })
 
 const documentSearchCache = new WeakMap()
+let ensureActiveVaultPromise = null
+let inspectPromise = null
 
 const clampQueryLimit = (value) => {
   const parsed = Number(value)
@@ -63,10 +65,24 @@ const basenameTitle = (relativePath = '') => {
   return name.replace(/\.md$/i, '') || 'Untitled'
 }
 
-const getDocumentPath = (document) => normalizeRelativePath(document?.relativePath || document?.path || '')
+const getDocumentPath = (document) => normalizeRelativePath(document?.relativePath || document?.relative_path || document?.path || '')
 
 const searchLog = (event, details = {}) => {
   console.info(`[search] ${event}`, details)
+}
+
+const normalizeStatus = (status = {}, vaultPath = '') => {
+  const indexedDocuments = Number(status.indexedDocuments ?? status.notesIndexed ?? status.documents ?? 0) || 0
+  return {
+    ...DEFAULT_STATUS,
+    ...status,
+    vaultPath: String(status.vaultPath || vaultPath || ''),
+    indexedDocuments,
+    totalDocuments: Number(status.totalDocuments ?? status.documents ?? indexedDocuments) || indexedDocuments,
+    status: status.status || (indexedDocuments > 0 ? 'ready' : 'empty'),
+    message: String(status.message || ''),
+    error: String(status.error || '')
+  }
 }
 
 const normalizeDocumentForIndex = (relativePath = '', markdown = '', metadata = {}) => {
@@ -93,8 +109,8 @@ const normalizeDocumentForIndex = (relativePath = '', markdown = '', metadata = 
 
 const normalizeBackendResult = (result = {}) => ({
   ...result,
-  relativePath: normalizeRelativePath(result.relativePath || result.path || ''),
-  path: normalizeRelativePath(result.path || result.relativePath || '')
+  relativePath: normalizeRelativePath(result.relativePath || result.relative_path || result.path || ''),
+  path: normalizeRelativePath(result.path || result.relativePath || result.relative_path || '')
 })
 
 const getDocumentSearchMeta = (document) => {
@@ -197,15 +213,27 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
         return this.status
       }
       this.vaultPath = vaultPath
-      if (this.status.vaultPath !== vaultPath && this.status.status !== 'disabled') {
-        searchLog('ensureActiveVault:init:start', { vaultPath, previousVaultPath: this.status.vaultPath || '' })
-        this.indexInspection = emptyInspection()
-        this.results = []
-        this.conceptResults = []
-        this.conceptRoute = null
-        this.status = await elephantnoteClient.search.initVault(vaultPath)
+      if (this.status.vaultPath === vaultPath || this.status.status === 'disabled') {
+        return this.status
+      }
+      if (ensureActiveVaultPromise) {
+        searchLog('ensureActiveVault:join-inflight', { vaultPath, previousVaultPath: this.status.vaultPath || '' })
+        this.status = normalizeStatus(await ensureActiveVaultPromise, vaultPath)
+        return this.status
+      }
+
+      searchLog('ensureActiveVault:init:start', { vaultPath, previousVaultPath: this.status.vaultPath || '' })
+      this.indexInspection = emptyInspection()
+      this.results = []
+      this.conceptResults = []
+      this.conceptRoute = null
+      ensureActiveVaultPromise = elephantnoteClient.search.initVault({ vaultPath })
+      try {
+        this.status = normalizeStatus(await ensureActiveVaultPromise, vaultPath)
         this.lastStatusRefreshAt = Date.now()
-        searchLog('ensureActiveVault:init:done', { vaultPath, status: this.status?.status || '', indexedDocuments: this.status?.indexedDocuments || this.status?.notesIndexed || 0 })
+        searchLog('ensureActiveVault:init:done', { vaultPath, status: this.status?.status || '', indexedDocuments: this.status?.indexedDocuments || 0 })
+      } finally {
+        ensureActiveVaultPromise = null
       }
       return this.status
     },
@@ -303,9 +331,9 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       try {
         await this.ensureActiveVault()
         searchLog('status:start', { vaultPath: this.vaultPath })
-        this.status = await elephantnoteClient.search.status()
+        this.status = normalizeStatus(await elephantnoteClient.search.status(), this.vaultPath)
         this.lastStatusRefreshAt = Date.now()
-        searchLog('status:done', { status: this.status?.status || '', indexedDocuments: this.status?.indexedDocuments || this.status?.notesIndexed || 0, message: this.status?.message || '' })
+        searchLog('status:done', { status: this.status?.status || '', indexedDocuments: this.status?.indexedDocuments || 0, message: this.status?.message || '' })
       } catch (error) {
         this.status = {
           ...DEFAULT_STATUS,
@@ -320,39 +348,50 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     },
 
     async inspect() {
-      try {
-        await this.ensureActiveVault()
-        const startedAt = performance.now()
-        searchLog('inspect:start', { vaultPath: this.vaultPath || '' })
-        const inspection = await elephantnoteClient.search.inspect()
-        this.indexInspection = {
-          ...emptyInspection(),
-          ...(inspection || {}),
-          documents: Array.isArray(inspection?.documents)
-            ? inspection.documents.map((document) => ({
-              ...document,
-              relativePath: getDocumentPath(document),
-              path: getDocumentPath(document)
-            }))
-            : [],
-          folders: Array.isArray(inspection?.folders) ? inspection.folders : [],
-          semanticLinks: Array.isArray(inspection?.semanticLinks) ? inspection.semanticLinks : []
-        }
-        searchLog('inspect:done', {
-          documents: Array.isArray(this.indexInspection?.documents) ? this.indexInspection.documents.length : 0,
-          semanticLinks: Array.isArray(this.indexInspection?.semanticLinks) ? this.indexInspection.semanticLinks.length : 0,
-          hasGraph: !!this.indexInspection?.graph,
-          elapsedMs: Math.round(performance.now() - startedAt)
-        })
-      } catch (error) {
-        log.error('[search] inspect failed', error)
-        searchLog('inspect:failed', { error: error?.message || String(error) })
-        this.indexInspection = {
-          ...emptyInspection(),
-          generatedAt: new Date().toISOString()
-        }
+      if (inspectPromise) {
+        searchLog('inspect:join-inflight', { vaultPath: this.vaultPath || '' })
+        return inspectPromise
       }
-      return this.indexInspection
+      inspectPromise = (async() => {
+        try {
+          await this.ensureActiveVault()
+          const startedAt = performance.now()
+          searchLog('inspect:start', { vaultPath: this.vaultPath || '' })
+          const inspection = await elephantnoteClient.search.inspect()
+          this.indexInspection = {
+            ...emptyInspection(),
+            ...(inspection || {}),
+            documents: Array.isArray(inspection?.documents)
+              ? inspection.documents.map((document) => ({
+                ...document,
+                relativePath: getDocumentPath(document),
+                path: getDocumentPath(document)
+              }))
+              : [],
+            folders: Array.isArray(inspection?.folders) ? inspection.folders : [],
+            semanticLinks: Array.isArray(inspection?.semanticLinks) ? inspection.semanticLinks : []
+          }
+          searchLog('inspect:done', {
+            documents: Array.isArray(this.indexInspection?.documents) ? this.indexInspection.documents.length : 0,
+            semanticLinks: Array.isArray(this.indexInspection?.semanticLinks) ? this.indexInspection.semanticLinks.length : 0,
+            hasGraph: !!this.indexInspection?.graph,
+            rendererLimited: !!this.indexInspection?.graph?.rendererLimited,
+            hiddenNodeCount: Number(this.indexInspection?.graph?.hiddenNodeCount || 0),
+            elapsedMs: Math.round(performance.now() - startedAt)
+          })
+        } catch (error) {
+          log.error('[search] inspect failed', error)
+          searchLog('inspect:failed', { error: error?.message || String(error) })
+          this.indexInspection = {
+            ...emptyInspection(),
+            generatedAt: new Date().toISOString()
+          }
+        } finally {
+          inspectPromise = null
+        }
+        return this.indexInspection
+      })()
+      return inspectPromise
     },
 
     setQueryLimit(value) {
@@ -532,9 +571,9 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       this.busy = true
       try {
         searchLog('rebuild:start', { vaultPath: this.vaultPath })
-        this.status = await elephantnoteClient.search.rebuild()
+        this.status = normalizeStatus(await elephantnoteClient.search.rebuild({ vaultPath: this.vaultPath }), this.vaultPath)
         this.lastStatusRefreshAt = Date.now()
-        searchLog('rebuild:done', { status: this.status?.status || '', provider: this.status?.provider || '', documents: this.status?.documents || this.status?.notesIndexed || 0 })
+        searchLog('rebuild:done', { status: this.status?.status || '', provider: this.status?.provider || '', documents: this.status?.documents || this.status?.indexedDocuments || 0 })
         this.pollIndexBuild()
         return this.status
       } finally {
@@ -563,7 +602,7 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
       this.busy = true
       try {
         searchLog('clear:start')
-        this.status = await elephantnoteClient.search.clear()
+        this.status = normalizeStatus(await elephantnoteClient.search.clear(), this.vaultPath)
         this.lastStatusRefreshAt = Date.now()
         this.results = []
         this.conceptResults = []
@@ -577,19 +616,19 @@ export const useSearchStore = defineStore('elephantnoteSearch', {
     },
 
     async disable() {
-      this.status = await elephantnoteClient.search.disable()
+      this.status = normalizeStatus(await elephantnoteClient.search.disable(), this.vaultPath)
       this.lastStatusRefreshAt = Date.now()
       searchLog('disable:done', { status: this.status?.status || '' })
     },
 
     async enable() {
-      this.status = await elephantnoteClient.search.enable()
+      this.status = normalizeStatus(await elephantnoteClient.search.enable(), this.vaultPath)
       this.lastStatusRefreshAt = Date.now()
       const vaultStore = useVaultStore()
       const vaultPath = vaultStore.activeVault?.path || this.vaultPath
       if (vaultPath) {
         this.vaultPath = vaultPath
-        this.status = await elephantnoteClient.search.initVault(vaultPath)
+        this.status = normalizeStatus(await elephantnoteClient.search.initVault({ vaultPath }), vaultPath)
         this.lastStatusRefreshAt = Date.now()
       }
       await this.refreshStatus()

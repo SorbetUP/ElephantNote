@@ -1,7 +1,8 @@
 name: Fix Codex turn sandbox contract
 
 on:
-  push:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
     branches:
       - feature/real-codex-subscription
 
@@ -10,6 +11,7 @@ permissions:
 
 jobs:
   patch:
+    if: github.event.pull_request.head.ref == 'internal/trigger-codex-turn-fix'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +19,7 @@ jobs:
           ref: feature/real-codex-subscription
           fetch-depth: 0
 
-      - name: Patch turn sandbox payload
+      - name: Patch production payload and tests
         shell: bash
         run: |
           set -euo pipefail
@@ -26,36 +28,59 @@ jobs:
 
           path = Path('Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs')
           text = path.read_text()
-          const_old = 'const READ_ONLY_SANDBOX: &str = "read-only";'
-          const_new = 'const READ_ONLY_SANDBOX: &str = "read-only";\nconst TURN_READ_ONLY_SANDBOX: &str = "readOnly";'
-          type_old = '"type": READ_ONLY_SANDBOX,'
-          access_old = '''"access": {
+
+          constant = 'const READ_ONLY_SANDBOX: &str = "read-only";'
+          constants = constant + '\nconst TURN_READ_ONLY_SANDBOX: &str = "readOnly";'
+          turn_type = '"type": READ_ONLY_SANDBOX,'
+          access = '''"access": {
                   "type": "restricted",
                   "includePlatformDefaults": true,
                   "readableRoots": [cwd.to_string_lossy()]
                 }'''
-          if text.count(const_old) != 1:
-              raise SystemExit(f'constant count={text.count(const_old)}')
-          if text.count(type_old) != 1:
-              raise SystemExit(f'turn type count={text.count(type_old)}')
-          if text.count(access_old) != 1:
-              raise SystemExit(f'access block count={text.count(access_old)}')
-          text = text.replace(const_old, const_new, 1)
-          text = text.replace(type_old, '"type": TURN_READ_ONLY_SANDBOX,', 1)
-          text = text.replace(access_old, '"networkAccess": false', 1)
+          test = 'assert_eq!(READ_ONLY_SANDBOX, "read-only");'
+          tests = test + '\n        assert_eq!(TURN_READ_ONLY_SANDBOX, "readOnly");'
+
+          if text.count(constant) != 1:
+              raise SystemExit(f'constant count={text.count(constant)}')
+          if text.count(turn_type) != 1:
+              raise SystemExit(f'turn type count={text.count(turn_type)}')
+          if text.count(access) != 1:
+              raise SystemExit(f'access block count={text.count(access)}')
+          if text.count(test) != 1:
+              raise SystemExit(f'test assertion count={text.count(test)}')
+
+          text = text.replace(constant, constants, 1)
+          text = text.replace(turn_type, '"type": TURN_READ_ONLY_SANDBOX,', 1)
+          text = text.replace(access, '"networkAccess": false', 1)
+          text = text.replace(test, tests, 1)
+
+          if text.count('"sandbox": READ_ONLY_SANDBOX') != 1:
+              raise SystemExit('thread/start no longer uses the kebab-case sandbox constant')
+          if text.count('"type": TURN_READ_ONLY_SANDBOX') != 1:
+              raise SystemExit('turn/start does not use the camelCase sandbox constant')
+          if '"access": {' in text[text.index('"sandboxPolicy"'):text.index('"sandboxPolicy"') + 300]:
+              raise SystemExit('legacy sandboxPolicy.access remains')
+
           path.write_text(text)
           PY
-          grep -F 'const READ_ONLY_SANDBOX: &str = "read-only";' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
-          grep -F 'const TURN_READ_ONLY_SANDBOX: &str = "readOnly";' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
-          grep -F '"type": TURN_READ_ONLY_SANDBOX' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
-          grep -F '"networkAccess": false' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+
           rm .github/workflows/fix-codex-turn-sandbox.yml
 
-      - name: Commit source fix
+      - name: Validate focused contract
+        shell: bash
+        run: |
+          grep -F 'const READ_ONLY_SANDBOX: &str = "read-only";' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          grep -F 'const TURN_READ_ONLY_SANDBOX: &str = "readOnly";' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          grep -F '"sandbox": READ_ONLY_SANDBOX' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          grep -F '"type": TURN_READ_ONLY_SANDBOX' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          grep -F '"networkAccess": false' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          ! grep -A8 -F '"sandboxPolicy": {' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs | grep -F '"access": {'
+
+      - name: Commit production fix
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs .github/workflows/fix-codex-turn-sandbox.yml
-          git commit -m "Fix Codex turn sandbox protocol value"
+          git commit -m "Fix Codex turn sandbox protocol contract"
           git push origin HEAD:feature/real-codex-subscription

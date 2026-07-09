@@ -83,7 +83,10 @@ fn frontmatter_title(markdown: &str) -> Option<String> {
 
 fn parse_heading(line: &str) -> Option<(u8, String)> {
     let trimmed = line.trim_start();
-    let level = trimmed.chars().take_while(|character| *character == '#').count();
+    let level = trimmed
+        .chars()
+        .take_while(|character| *character == '#')
+        .count();
     if !(1..=6).contains(&level) {
         return None;
     }
@@ -95,7 +98,11 @@ fn parse_heading(line: &str) -> Option<(u8, String)> {
     Some((level as u8, heading))
 }
 
-fn extract_sections(relative_path: &str, markdown: &str, document_title: &str) -> Vec<KnowledgeSection> {
+fn extract_sections(
+    relative_path: &str,
+    markdown: &str,
+    document_title: &str,
+) -> Vec<KnowledgeSection> {
     let mut markers = Vec::new();
     let mut offset = 0usize;
     let mut fence: Option<char> = None;
@@ -109,25 +116,47 @@ fn extract_sections(relative_path: &str, markdown: &str, document_title: &str) -
                 _ => {}
             }
         } else if fence.is_none() {
-            let heading_line = line.trim_end_matches(|character| character == '\r' || character == '\n');
+            let heading_line =
+                line.trim_end_matches(|character| character == '\r' || character == '\n');
             if let Some((level, heading)) = parse_heading(heading_line) {
-                markers.push(HeadingMarker { start: offset, level, heading });
+                markers.push(HeadingMarker {
+                    start: offset,
+                    level,
+                    heading,
+                });
             }
         }
         offset += line.len();
     }
 
     if markers.is_empty() {
-        return vec![make_section(relative_path, document_title, 0, 0, markdown.len(), 0)];
+        return vec![make_section(
+            relative_path,
+            document_title,
+            0,
+            0,
+            markdown.len(),
+            0,
+        )];
     }
 
     let mut sections = Vec::new();
     if markers[0].start > 0 && !markdown[..markers[0].start].trim().is_empty() {
-        sections.push(make_section(relative_path, document_title, 0, 0, markers[0].start, 0));
+        sections.push(make_section(
+            relative_path,
+            document_title,
+            0,
+            0,
+            markers[0].start,
+            0,
+        ));
     }
 
     for (index, marker) in markers.iter().enumerate() {
-        let end = markers.get(index + 1).map(|next| next.start).unwrap_or(markdown.len());
+        let end = markers
+            .get(index + 1)
+            .map(|next| next.start)
+            .unwrap_or(markdown.len());
         sections.push(make_section(
             relative_path,
             &marker.heading,
@@ -140,10 +169,20 @@ fn extract_sections(relative_path: &str, markdown: &str, document_title: &str) -
     sections
 }
 
-fn make_section(relative_path: &str, heading: &str, level: u8, start: usize, end: usize, ordinal: usize) -> KnowledgeSection {
+fn make_section(
+    relative_path: &str,
+    heading: &str,
+    level: u8,
+    start: usize,
+    end: usize,
+    ordinal: usize,
+) -> KnowledgeSection {
     let start_string = start.to_string();
     let end_string = end.to_string();
-    let id = stable_id("section", &[relative_path, &start_string, &end_string, heading]);
+    let id = stable_id(
+        "section",
+        &[relative_path, &start_string, &end_string, heading],
+    );
     KnowledgeSection {
         id,
         heading: heading.to_string(),
@@ -164,7 +203,11 @@ fn fence_marker(trimmed: &str) -> Option<char> {
     }
 }
 
-fn chunk_sections(relative_path: &str, markdown: &str, sections: &[KnowledgeSection]) -> Vec<KnowledgeChunk> {
+fn chunk_sections(
+    relative_path: &str,
+    markdown: &str,
+    sections: &[KnowledgeSection],
+) -> Vec<KnowledgeChunk> {
     let mut chunks = Vec::new();
     for section in sections {
         let blocks = extract_blocks(markdown, section.start_offset, section.end_offset);
@@ -180,7 +223,10 @@ fn chunk_sections(relative_path: &str, markdown: &str, sections: &[KnowledgeSect
             let content_hash = blake3::hash(text.as_bytes()).to_hex().to_string();
             let start_string = start.to_string();
             let end_string = end.to_string();
-            let id = stable_id("chunk", &[relative_path, &start_string, &end_string, &content_hash]);
+            let id = stable_id(
+                "chunk",
+                &[relative_path, &start_string, &end_string, &content_hash],
+            );
             let token_estimate = (text.chars().count() + 3) / 4;
             chunks.push(KnowledgeChunk {
                 id,
@@ -221,14 +267,21 @@ fn extract_blocks(markdown: &str, start: usize, end: usize) -> Vec<TextBlock> {
         if fence.is_none() && trimmed.is_empty() {
             if let Some(begin) = block_start.take() {
                 if begin < line_start {
-                    blocks.push(TextBlock { start: begin, end: line_start });
+                    blocks.push(TextBlock {
+                        start: begin,
+                        end: line_start,
+                    });
                 }
             }
         } else if fence.is_none() {
-            let heading_line = line.trim_end_matches(|character| character == '\r' || character == '\n');
+            let heading_line =
+                line.trim_end_matches(|character| character == '\r' || character == '\n');
             if parse_heading(heading_line).is_some() {
                 if let Some(begin) = block_start.take() {
-                    blocks.push(TextBlock { start: begin, end: line_end });
+                    blocks.push(TextBlock {
+                        start: begin,
+                        end: line_end,
+                    });
                 }
             }
         }
@@ -351,7 +404,10 @@ mod tests {
 
     #[test]
     fn title_prefers_frontmatter_then_heading() {
-        assert_eq!(extract_title("x.md", "---\ntitle: 'Front'\n---\n# Heading"), "Front");
+        assert_eq!(
+            extract_title("x.md", "---\ntitle: 'Front'\n---\n# Heading"),
+            "Front"
+        );
         assert_eq!(extract_title("x.md", "# Heading\nBody"), "Heading");
         assert_eq!(extract_title("Folder/My note.md", "Body"), "My note");
     }
@@ -365,7 +421,9 @@ mod tests {
         for chunk in snapshot.chunks {
             assert!(chunk.start_offset < chunk.end_offset);
             assert!(chunk.end_offset <= markdown.len());
-            assert!(!markdown[chunk.start_offset..chunk.end_offset].trim().is_empty());
+            assert!(!markdown[chunk.start_offset..chunk.end_offset]
+                .trim()
+                .is_empty());
         }
     }
 
@@ -385,7 +443,10 @@ mod tests {
         assert_eq!(links.len(), 2);
         assert_eq!(links[0].target, "Iroh");
         assert_eq!(links[0].label, "Iroh relays");
-        assert_eq!(&markdown[links[0].start_offset..links[0].end_offset], "[[Iroh#Relays|Iroh relays]]");
+        assert_eq!(
+            &markdown[links[0].start_offset..links[0].end_offset],
+            "[[Iroh#Relays|Iroh relays]]"
+        );
     }
 
     #[test]

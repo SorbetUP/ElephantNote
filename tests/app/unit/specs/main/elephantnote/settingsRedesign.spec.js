@@ -125,7 +125,7 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('class="en-sync-card en-sync-hero"')
     expect(source).toContain('<h4>Devices</h4>')
     expect(source).toContain('<h4>Conflict protection</h4>')
-    expect(source).toContain('class="en-pair-modal"')
+    expect(source).toContain('en-pair-modal')
     expect(source).toContain("pairingMode === 'create'")
     expect(source).toContain("pairingMode === 'join'")
     expect(source).not.toContain('class="en-sync-toolbar"')

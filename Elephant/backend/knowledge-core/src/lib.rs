@@ -5,6 +5,7 @@ pub mod model;
 pub mod pipeline;
 pub mod storage;
 pub mod taxonomy;
+pub mod taxonomy_storage;
 
 pub use actions::{ActionValidation, ChatKnowledgeAction};
 pub use chunking::analyze_markdown;
@@ -21,4 +22,7 @@ pub use storage::KnowledgeStore;
 pub use taxonomy::{
     canonical_tag_key, clean_display_name, normalize_alias, stable_tag_id, CanonicalTag,
     NewTagCandidate, TagAlias, TagStatus,
+};
+pub use taxonomy_storage::{
+    DocumentTagAssignment, TagAssignmentOrigin, TagAssignmentStatus,
 };

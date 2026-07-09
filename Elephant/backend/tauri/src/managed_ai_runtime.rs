@@ -3,11 +3,12 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
+  collections::HashMap,
   fs,
   io::{Cursor, Read, Write},
   path::{Path, PathBuf},
   process::Command,
-  sync::{Arc, Mutex},
+  sync::{Arc, Mutex, OnceLock, RwLock},
   time::{SystemTime, UNIX_EPOCH},
 };
 use tar::Archive;
@@ -17,8 +18,9 @@ use zip::ZipArchive;
 pub type R<T> = Result<T, String>;
 const MAX_RELEASE_BYTES: u64 = 256 * 1024 * 1024;
 const GITHUB_API_VERSION: &str = "2022-11-28";
+static RUNTIME_EXECUTABLES: OnceLock<RwLock<HashMap<ManagedProvider, PathBuf>>> = OnceLock::new();
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ManagedProvider {
   Codex,
   OpenCode,
@@ -51,6 +53,29 @@ impl ManagedProvider {
   fn version_argument(self) -> &'static str {
     "--version"
   }
+}
+
+fn runtime_registry() -> &'static RwLock<HashMap<ManagedProvider, PathBuf>> {
+  RUNTIME_EXECUTABLES.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+pub fn register_runtime_executable(provider: ManagedProvider, path: PathBuf) {
+  if let Ok(mut registry) = runtime_registry().write() {
+    registry.insert(provider, path);
+  }
+}
+
+pub fn resolve_runtime_executable(provider: ManagedProvider) -> Option<PathBuf> {
+  let registered = runtime_registry()
+    .read()
+    .ok()
+    .and_then(|registry| registry.get(&provider).cloned())
+    .filter(|path| path.is_file() && executable_version(path, provider).is_some());
+  registered.or_else(|| {
+    which::which(provider.executable_name())
+      .ok()
+      .filter(|path| executable_version(path, provider).is_some())
+  })
 }
 
 #[derive(Clone)]
@@ -117,13 +142,24 @@ impl ManagedRuntimeInstaller {
       .map_err(|error| format!("Unable to resolve ElephantNote app data directory: {error}"))?
       .join("runtimes");
     fs::create_dir_all(&root).map_err(|error| format!("Unable to create runtime directory {}: {error}", root.display()))?;
-    Ok(Self { root, install_lock: Arc::new(Mutex::new(())) })
+    let installer = Self { root, install_lock: Arc::new(Mutex::new(())) };
+    installer.register_valid_managed_binaries();
+    Ok(installer)
   }
 
   #[cfg(test)]
   pub fn for_test(root: PathBuf) -> R<Self> {
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;
     Ok(Self { root, install_lock: Arc::new(Mutex::new(())) })
+  }
+
+  fn register_valid_managed_binaries(&self) {
+    for provider in [ManagedProvider::Codex, ManagedProvider::OpenCode] {
+      let path = self.managed_executable(provider);
+      if path.is_file() && executable_version(&path, provider).is_some() {
+        register_runtime_executable(provider, path);
+      }
+    }
   }
 
   pub fn managed_executable(&self, provider: ManagedProvider) -> PathBuf {
@@ -137,16 +173,26 @@ impl ManagedRuntimeInstaller {
   pub fn resolve_existing(&self, provider: ManagedProvider) -> Option<PathBuf> {
     let managed = self.managed_executable(provider);
     if managed.is_file() && executable_version(&managed, provider).is_some() {
+      register_runtime_executable(provider, managed.clone());
       return Some(managed);
     }
-    which::which(provider.executable_name()).ok().filter(|path| executable_version(path, provider).is_some())
+    resolve_runtime_executable(provider)
   }
 
   pub fn status(&self, provider: ManagedProvider) -> RuntimeStatus {
     let managed = self.managed_executable(provider);
     let managed_installed = managed.is_file() && executable_version(&managed, provider).is_some();
-    let system = which::which(provider.executable_name()).ok().filter(|path| executable_version(path, provider).is_some());
-    let executable = if managed_installed { Some(managed) } else { system.clone() };
+    if managed_installed {
+      register_runtime_executable(provider, managed.clone());
+    }
+    let system = which::which(provider.executable_name())
+      .ok()
+      .filter(|path| executable_version(path, provider).is_some());
+    let executable = if managed_installed {
+      Some(managed)
+    } else {
+      resolve_runtime_executable(provider)
+    };
     let manifest = read_manifest(&self.manifest_path(provider));
     RuntimeStatus {
       provider: provider.id().to_string(),
@@ -163,6 +209,7 @@ impl ManagedRuntimeInstaller {
     let _guard = self.install_lock.lock().map_err(|_| "AI runtime install lock is poisoned.".to_string())?;
     if let Some(path) = self.resolve_existing(provider) {
       let version = executable_version(&path, provider).unwrap_or_default();
+      register_runtime_executable(provider, path.clone());
       let manifest = read_manifest(&self.manifest_path(provider));
       return Ok(InstallOutcome {
         provider: provider.id().to_string(),
@@ -250,6 +297,7 @@ impl ManagedRuntimeInstaller {
       fs::remove_file(&executable).map_err(|error| format!("Unable to replace {}: {error}", executable.display()))?;
     }
     fs::rename(&temp, &executable).map_err(|error| format!("Unable to activate {}: {error}", executable.display()))?;
+    register_runtime_executable(provider, executable.clone());
 
     let manifest = InstallManifest {
       provider: provider.id().to_string(),
@@ -323,7 +371,13 @@ fn asset_score(provider: ManagedProvider, name: &str) -> i32 {
   if lower.contains("desktop") || lower.contains("source") || lower.ends_with(".sigstore") || lower.ends_with(".zst") {
     return 0;
   }
-  let archive_score = if lower.ends_with(".zip") { 30 } else if lower.ends_with(".tar.gz") { 25 } else { 0 };
+  let archive_score = if lower.ends_with(".zip") {
+    30
+  } else if lower.ends_with(".tar.gz") {
+    25
+  } else {
+    0
+  };
   if archive_score == 0 {
     return 0;
   }
@@ -351,7 +405,11 @@ fn asset_score(provider: ManagedProvider, name: &str) -> i32 {
   if arch_score == 0 {
     return 0;
   }
-  let libc_score = if provider == ManagedProvider::Codex && cfg!(target_os = "linux") && lower.contains("musl") { 20 } else { 0 };
+  let libc_score = if provider == ManagedProvider::Codex && cfg!(target_os = "linux") && lower.contains("musl") {
+    20
+  } else {
+    0
+  };
   let baseline_penalty = if lower.contains("baseline") { -5 } else { 0 };
   os_score + arch_score + archive_score + libc_score + baseline_penalty
 }

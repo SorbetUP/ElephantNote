@@ -10,7 +10,7 @@
       <div class="en-ai-toolbar-actions">
         <span class="en-ai-save-status" :class="{ saving: autosaveMessage === 'Saving...' }"><span />{{ autosaveMessage || 'Saved' }}</span>
         <button class="secondary compact icon-only" type="button" title="Reload AI settings" :disabled="loading" @click="loadConfig"><RotateCw aria-hidden="true" /></button>
-        <button class="primary compact" type="button" :disabled="saving" @click="saveConfig"><Save aria-hidden="true" />{{ saving ? 'Saving…' : 'Save' }}</button>
+        <button class="primary compact" type="button" :disabled="saving" @click="saveConfig()"><Save aria-hidden="true" />{{ saving ? 'Saving…' : 'Save' }}</button>
       </div>
     </div>
 
@@ -47,10 +47,22 @@
 
             <div v-if="provider.expanded" class="en-provider-details">
               <div class="en-provider-form">
-                <label><span>Provider type</span><select v-model="provider.type" @change="applyProviderDefaults(provider)"><option value="openai-compatible">OpenAI-compatible</option><option value="openrouter">OpenRouter</option><option value="mistral">Mistral</option><option value="ollama">Ollama</option><option value="lmstudio">LM Studio</option><option value="llamacpp">llama.cpp server</option><option value="atomic">Atomic</option></select></label>
+                <label>
+                  <span>Provider type</span>
+                  <select v-model="provider.type" @change="applyProviderDefaults(provider)">
+                    <option value="openai-compatible">OpenAI-compatible</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="mistral">Mistral</option>
+                    <option value="opencode">OpenCode server</option>
+                    <option value="ollama">Ollama</option>
+                    <option value="lmstudio">LM Studio</option>
+                    <option value="llamacpp">llama.cpp server</option>
+                    <option value="atomic">Atomic</option>
+                  </select>
+                </label>
                 <label><span>Display name</span><input v-model.trim="provider.label" type="text" placeholder="Provider name"></label>
                 <label class="wide"><span>Base URL</span><input v-model.trim="provider.endpoint" type="url" placeholder="https://api.openai.com/v1"></label>
-                <label><span>API key</span><input v-model.trim="provider.apiKey" type="password" autocomplete="off" placeholder="Optional API key"></label>
+                <label><span>API key / password</span><input v-model.trim="provider.apiKey" type="password" autocomplete="off" placeholder="Optional credential"></label>
                 <label><span>Headers JSON</span><input v-model.trim="provider.headersJson" type="text" placeholder='{"Header":"value"}'></label>
               </div>
               <div class="en-provider-footer">
@@ -59,7 +71,7 @@
                   <span>{{ provider.enabled ? 'Available to model routes' : 'Excluded from model routes' }}</span>
                 </div>
                 <div class="en-ai-actions">
-                  <button class="secondary compact" type="button" @click="testProvider(provider)"><Activity aria-hidden="true" /> Test</button>
+                  <button class="secondary compact" type="button" :disabled="provider.testing" @click="testProvider(provider)"><Activity aria-hidden="true" />{{ provider.testing ? 'Testing…' : 'Test' }}</button>
                   <button class="danger compact" type="button" @click="removeProvider(provider.id)"><Trash2 aria-hidden="true" /> Remove</button>
                 </div>
               </div>
@@ -74,12 +86,15 @@
           <span class="en-ai-row-icon"><TerminalSquare aria-hidden="true" /></span>
           <div class="en-ai-setting-copy">
             <strong>Codex</strong>
-            <span>Use the authenticated Codex account as a chat route.</span>
+            <span>Use the models available through the ChatGPT account authenticated by the official Codex runtime.</span>
             <small v-if="providerMessage">{{ providerMessage }}</small>
+            <small v-if="codexAccountLabel">{{ codexAccountLabel }}</small>
           </div>
-          <span class="en-ai-badge" :class="{ active: form.codex.connected }">{{ form.codex.connected ? 'Connected' : 'Disconnected' }}</span>
+          <span class="en-ai-badge" :class="{ active: form.codex.connected }">{{ form.codex.connected ? `${codexModels.length} model${codexModels.length === 1 ? '' : 's'}` : 'Disconnected' }}</span>
           <div class="en-ai-actions">
-            <button class="secondary compact" type="button" :class="{ active: form.codex.connected }" @click="connectCodex"><Link2 aria-hidden="true" />{{ form.codex.connected ? 'Disconnect' : 'Connect' }}</button>
+            <button v-if="codexAuthUrl && !form.codex.connected" class="primary compact" type="button" @click="openCodexLogin"><ExternalLink aria-hidden="true" /> Open login</button>
+            <button class="secondary compact" type="button" :disabled="codexBusy" :class="{ active: form.codex.connected }" @click="connectCodex"><Link2 aria-hidden="true" />{{ codexBusy ? 'Working…' : form.codex.connected ? 'Disconnect' : 'Connect' }}</button>
+            <button class="secondary compact icon-only" type="button" title="Refresh Codex account" :disabled="codexBusy" @click="refreshCodexAccount"><RotateCw aria-hidden="true" /></button>
             <button class="secondary compact" type="button" :disabled="!form.codex.connected || testing" @click="testCodex"><Activity aria-hidden="true" /> Test</button>
           </div>
         </div>
@@ -99,7 +114,7 @@
       <section class="en-ai-card">
         <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Retrieval-augmented answers</strong><span>Search relevant notes and include them in the model context.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.chat.enableRag" :class="{ active: form.routes.chat.enableRag }" @click="form.routes.chat.enableRag = !form.routes.chat.enableRag"><span /></button></div>
         <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Tools</strong><span>Allow supported ElephantNote actions.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.chat.enableTools" :class="{ active: form.routes.chat.enableTools }" @click="form.routes.chat.enableTools = !form.routes.chat.enableTools"><span /></button></div>
-        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Streaming</strong><span>Display generated text progressively.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.chat.stream" :class="{ active: form.routes.chat.stream }" @click="form.routes.chat.stream = !form.routes.chat.stream"><span /></button></div>
+        <div class="en-ai-setting-row"><div class="en-ai-setting-copy"><strong>Streaming</strong><span>Display generated text progressively when the selected runtime supports live deltas.</span></div><button class="en-ai-switch" type="button" role="switch" :aria-checked="form.routes.chat.stream" :class="{ active: form.routes.chat.stream }" @click="form.routes.chat.stream = !form.routes.chat.stream"><span /></button></div>
       </section>
 
       <section class="en-ai-card">
@@ -173,6 +188,7 @@ import {
   Cpu,
   Database,
   DatabaseZap,
+  ExternalLink,
   Link2,
   MessageSquare,
   Plus,
@@ -204,6 +220,7 @@ const loading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
 const indexing = ref(false)
+const codexBusy = ref(false)
 const message = ref('')
 const embeddingMessage = ref('')
 const providerMessage = ref('')
@@ -211,12 +228,28 @@ const autosaveMessage = ref('')
 const currentConfig = ref(normalizeAiConfig())
 const localSelection = ref({ embedding: '', chat: '', ocr: '' })
 const localModels = ref([])
+const codexModels = ref([])
+const codexAccount = ref(null)
+const codexAuthUrl = ref('')
+const codexLoginId = ref('')
+const providerModels = ref({})
 const hydrated = ref(false)
 const persisting = ref(false)
 let autosaveTimer = 0
+let codexPollTimer = 0
+let codexPollAttempts = 0
 
-const providerDefaults = { 'openai-compatible': { label: 'OpenAI-compatible API', endpoint: 'https://api.openai.com/v1' }, openrouter: { label: 'OpenRouter', endpoint: 'https://openrouter.ai/api/v1' }, mistral: { label: 'Mistral', endpoint: 'https://api.mistral.ai/v1' }, ollama: { label: 'Ollama', endpoint: 'http://127.0.0.1:11434' }, lmstudio: { label: 'LM Studio', endpoint: 'http://127.0.0.1:1234/v1' }, llamacpp: { label: 'llama.cpp server', endpoint: 'http://127.0.0.1:8080' }, atomic: { label: 'Atomic', endpoint: '' } }
-const createProvider = (type = 'openai-compatible') => ({ id: `provider-${Date.now()}-${Math.random().toString(16).slice(2)}`, type, label: providerDefaults[type]?.label || 'Provider', endpoint: providerDefaults[type]?.endpoint || '', apiKey: '', headersJson: '', enabled: true, expanded: true })
+const providerDefaults = {
+  'openai-compatible': { label: 'OpenAI-compatible API', endpoint: 'https://api.openai.com/v1' },
+  openrouter: { label: 'OpenRouter', endpoint: 'https://openrouter.ai/api/v1' },
+  mistral: { label: 'Mistral', endpoint: 'https://api.mistral.ai/v1' },
+  opencode: { label: 'OpenCode', endpoint: 'http://127.0.0.1:4096' },
+  ollama: { label: 'Ollama', endpoint: 'http://127.0.0.1:11434' },
+  lmstudio: { label: 'LM Studio', endpoint: 'http://127.0.0.1:1234/v1' },
+  llamacpp: { label: 'llama.cpp server', endpoint: 'http://127.0.0.1:8080' },
+  atomic: { label: 'Atomic', endpoint: '' }
+}
+const createProvider = (type = 'openai-compatible') => ({ id: `provider-${Date.now()}-${Math.random().toString(16).slice(2)}`, type, label: providerDefaults[type]?.label || 'Provider', endpoint: providerDefaults[type]?.endpoint || '', apiKey: '', headersJson: '', enabled: true, expanded: true, testing: false })
 const defaultRoute = () => ({ source: 'disabled', model: '', modelRef: '', endpoint: '', optionsJson: '' })
 const defaultChatRoute = () => ({ ...defaultRoute(), systemPrompt: '', temperature: 0.2, maxTokens: 2048, contextWindow: 8192, ragTopK: 6, enableRag: true, enableTools: true, stream: true })
 const defaultEmbeddingRoute = () => ({ ...defaultRoute(), autoIndex: true, backgroundIndex: true, debounceMs: 1500, distance: 'cosine', dimensions: 0, chunkStrategy: 'markdown-heading', chunkSize: 700, chunkOverlap: 80, searchTopK: 20, threshold: 0.35, semanticWeight: 0.75, lexicalWeight: 0.25 })
@@ -224,20 +257,35 @@ const defaultOcrRoute = () => ({ ...defaultRoute(), languages: 'eng,fra', pdfMod
 const defaultForm = () => ({ localAi: normalizeLocalAiConfig(), providerRows: [], codex: { connected: false, accountMode: true, model: '' }, routes: { chat: defaultChatRoute(), embedding: defaultEmbeddingRoute(), ocr: defaultOcrRoute() } })
 const form = ref(defaultForm())
 
-const routeProviderLabel = (source = '') => ({ 'app-local': 'App Local', api: 'API', openrouter: 'OpenRouter', mistral: 'Mistral', codex: 'Codex', ollama: 'Ollama', lmstudio: 'LM Studio', llamacpp: 'llama.cpp', atomic: 'Atomic', disabled: 'Disabled' }[source] || source || 'Disabled')
+const subscriptionProviders = () => globalThis.elephantnote?.ai || {}
+const routeProviderLabel = (source = '') => ({ 'app-local': 'App Local', api: 'API', openrouter: 'OpenRouter', mistral: 'Mistral', opencode: 'OpenCode', codex: 'Codex', ollama: 'Ollama', lmstudio: 'LM Studio', llamacpp: 'llama.cpp', atomic: 'Atomic', disabled: 'Disabled' }[source] || source || 'Disabled')
+const modelId = (model = {}) => String(model.id || model.slug || model.model || model.name || '').trim()
+const modelName = (model = {}) => String(model.displayName || model.display_name || model.name || modelId(model)).trim()
+const toRuntimeCandidate = (provider, model) => {
+  const id = modelId(model)
+  if (!id) return null
+  const prefix = provider === 'codex' ? 'Codex' : 'OpenCode'
+  const label = `${prefix} - ${modelName(model)}`
+  return { ref: label, label, source: provider, model: id, caps: ['chat'] }
+}
+const codexCandidates = computed(() => form.value.codex.connected ? codexModels.value.map((model) => toRuntimeCandidate('codex', model)).filter(Boolean) : [])
 const commonExternalCandidates = computed(() => {
   const rows = form.value.providerRows.filter((provider) => provider.enabled)
   const providerCandidates = rows.flatMap((provider) => {
     const type = provider.type === 'openai-compatible' ? 'api' : provider.type
+    if (type === 'opencode') return (providerModels.value[provider.id] || []).map((model) => toRuntimeCandidate('opencode', model)).filter(Boolean)
     const prefix = provider.label || routeProviderLabel(type)
     if (['ollama', 'lmstudio', 'llamacpp', 'atomic'].includes(type)) return []
     const chatModel = type === 'openrouter' ? 'anthropic/claude-3.5-sonnet' : type === 'mistral' ? 'mistral-small-latest' : 'gpt-4.1-mini'
     const embeddingModel = type === 'mistral' ? 'mistral-embed' : 'text-embedding-3-small'
     const ocrModel = type === 'mistral' ? 'mistral-ocr-latest' : 'vision-ocr'
-    return [{ ref: `${prefix} - ${chatModel}`, label: `${prefix} - ${chatModel}`, source: type, model: chatModel, caps: ['chat'] }, { ref: `${prefix} - ${embeddingModel}`, label: `${prefix} - ${embeddingModel}`, source: type, model: embeddingModel, caps: ['embedding'] }, { ref: `${prefix} - ${ocrModel}`, label: `${prefix} - ${ocrModel}`, source: type, model: ocrModel, caps: ['ocr'] }]
+    return [
+      { ref: `${prefix} - ${chatModel}`, label: `${prefix} - ${chatModel}`, source: type, model: chatModel, caps: ['chat'] },
+      { ref: `${prefix} - ${embeddingModel}`, label: `${prefix} - ${embeddingModel}`, source: type, model: embeddingModel, caps: ['embedding'] },
+      { ref: `${prefix} - ${ocrModel}`, label: `${prefix} - ${ocrModel}`, source: type, model: ocrModel, caps: ['ocr'] }
+    ]
   })
-  const codex = form.value.codex.connected ? [{ ref: 'Codex - gpt-5.1-codex', label: 'Codex - gpt-5.1-codex', source: 'codex', model: 'gpt-5.1-codex', caps: ['chat'] }] : []
-  return [...providerCandidates, ...codex, { ref: 'Ollama - nomic-embed-text', label: 'Ollama - nomic-embed-text', source: 'ollama', model: 'nomic-embed-text', caps: ['embedding'] }, { ref: 'Mistral - mistral-ocr-latest', label: 'Mistral - mistral-ocr-latest', source: 'mistral', model: 'mistral-ocr-latest', caps: ['ocr'] }, { ref: 'Local OCR - tesseract-local', label: 'Local OCR - tesseract-local', source: 'local-ocr', model: 'tesseract-local', caps: ['ocr'] }]
+  return [...providerCandidates, ...codexCandidates.value, { ref: 'Ollama - nomic-embed-text', label: 'Ollama - nomic-embed-text', source: 'ollama', model: 'nomic-embed-text', caps: ['embedding'] }, { ref: 'Mistral - mistral-ocr-latest', label: 'Mistral - mistral-ocr-latest', source: 'mistral', model: 'mistral-ocr-latest', caps: ['ocr'] }, { ref: 'Local OCR - tesseract-local', label: 'Local OCR - tesseract-local', source: 'local-ocr', model: 'tesseract-local', caps: ['ocr'] }]
 })
 const localCandidates = computed(() => form.value.localAi.enabled ? localModels.value.map((model) => ({ ref: `App Local - ${resolveModelName(model)}`, label: `App Local - ${resolveModelName(model)}`, source: 'app-local', model: resolveModelId(model), caps: getModelCapabilities(model).map((cap) => String(cap).toLowerCase()) })) : [])
 const allCandidates = computed(() => [...localCandidates.value, ...commonExternalCandidates.value])
@@ -245,21 +293,28 @@ const candidatesFor = (capability) => allCandidates.value.filter((candidate) => 
 const chatCandidates = computed(() => candidatesFor('chat'))
 const embeddingCandidates = computed(() => candidatesFor('embedding'))
 const ocrCandidates = computed(() => candidatesFor('ocr'))
+const codexAccountLabel = computed(() => {
+  const account = codexAccount.value
+  if (!account) return ''
+  const identity = account.email || account.name || account.id || account.type || 'ChatGPT account'
+  const plan = account.planType || account.plan || account.subscription || ''
+  return plan ? `${identity} · ${plan}` : identity
+})
 
 const parseJsonObject = (text = '') => { if (!String(text).trim()) return {}; try { const value = JSON.parse(text); return value && typeof value === 'object' && !Array.isArray(value) ? value : {} } catch (error) { log.warn('[ai-settings] invalid-json', error); return {} } }
 const stringifyOptions = (value) => value && typeof value === 'object' && Object.keys(value).length ? JSON.stringify(value) : ''
-const sanitizeProvider = (provider) => ({ ...provider, headers: parseJsonObject(provider.headersJson), headersJson: undefined, expanded: undefined })
+const sanitizeProvider = (provider) => ({ ...provider, headers: parseJsonObject(provider.headersJson), headersJson: undefined, expanded: undefined, testing: undefined })
 const normalizeProviderRows = (config = {}) => {
   const rows = Array.isArray(config.providerRows) ? config.providerRows : Array.isArray(config.providers?.list) ? config.providers.list : []
-  if (rows.length) return rows.map((row) => ({ ...createProvider(row.type || 'openai-compatible'), ...row, headersJson: stringifyOptions(row.headers) || row.headersJson || '', expanded: false }))
+  if (rows.length) return rows.map((row) => ({ ...createProvider(row.type || 'openai-compatible'), ...row, headersJson: stringifyOptions(row.headers) || row.headersJson || '', expanded: false, testing: false }))
   const compatibilityProviders = config.providers || {}
-  return Object.entries(compatibilityProviders).filter(([key, value]) => value?.endpoint && !['codex', 'pi'].includes(key)).map(([key, value]) => ({ ...createProvider(key === 'api' ? 'openai-compatible' : key), ...value, id: `provider-${key}`, type: key === 'api' ? 'openai-compatible' : key, label: value.label || value.name || providerDefaults[key]?.label || key, headersJson: stringifyOptions(value.headers) || value.headersJson || '', expanded: false }))
+  return Object.entries(compatibilityProviders).filter(([key, value]) => value?.endpoint && !['codex', 'pi'].includes(key)).map(([key, value]) => ({ ...createProvider(key === 'api' ? 'openai-compatible' : key), ...value, id: `provider-${key}`, type: key === 'api' ? 'openai-compatible' : key, label: value.label || value.name || providerDefaults[key]?.label || key, headersJson: stringifyOptions(value.headers) || value.headersJson || '', expanded: false, testing: false }))
 }
 const normalizeBaseRoute = (route = {}, fallback = defaultRoute()) => ({ ...fallback, ...route, modelRef: route.modelRef || route.displayName || (route.model ? `${routeProviderLabel(route.source || route.provider)} - ${route.model}` : ''), source: route.source || route.provider || fallback.source, optionsJson: stringifyOptions(route.options) || route.optionsJson || '' })
 const routePayload = (route = {}) => ({ ...route, provider: route.source, options: parseJsonObject(route.optionsJson), optionsJson: undefined })
 const primaryEndpoint = (source) => { const provider = form.value.providerRows.find((row) => row.type === source || (source === 'api' && row.type === 'openai-compatible')); return provider?.endpoint || (source === 'codex' ? 'codex://account' : source === 'app-local' ? 'tauri-rust://local' : '') }
 const sourceTransport = (source = '') => ['api', 'openrouter', 'mistral', 'lmstudio'].includes(source) ? 'openai-compatible' : source === 'app-local' ? 'tauri-rust' : source
-const runtimeTestPayload = ({ source = '', endpoint = '', model = '', apiKey = '', label = '' } = {}) => ({ preset: source === 'app-local' ? 'tauriRustLocal' : source === 'codex' ? 'codex' : 'custom', name: label || routeProviderLabel(source), transport: sourceTransport(source), endpoint: endpoint || primaryEndpoint(source), model: model || '', apiKey: apiKey || '', codexLinkEnabled: form.value.codex.connected !== false })
+const runtimeTestPayload = ({ source = '', endpoint = '', model = '', apiKey = '', label = '' } = {}) => ({ preset: source === 'app-local' ? 'tauriRustLocal' : source === 'codex' ? 'codex' : source === 'opencode' ? 'opencode' : 'custom', name: label || routeProviderLabel(source), provider: source, transport: sourceTransport(source), endpoint: endpoint || primaryEndpoint(source), model: model || '', apiKey: apiKey || '', codexLinkEnabled: form.value.codex.connected !== false })
 const readCachedConfig = () => { try { const raw = window.localStorage.getItem(CACHE_KEY); return raw ? JSON.parse(raw) : null } catch { return null } }
 const writeCachedConfig = (config) => { try { window.localStorage.setItem(CACHE_KEY, JSON.stringify(config)) } catch (error) { log.warn('[ai-settings] cache-write:failed', error) } }
 const hasExtendedConfig = (config = {}) => Boolean(config.localAi || config.providers?.list || Object.keys(config.routes || {}).length)
@@ -271,25 +326,184 @@ const loadLocalModels = async () => { if (!form.value.localAi.enabled) { localMo
 const dispatchAiConfigChanged = (config) => window.dispatchEvent(new CustomEvent('elephantnote:ai-config-changed', { detail: config }))
 const scheduleAutosave = (reason = 'change') => { if (!hydrated.value || loading.value) return; window.clearTimeout(autosaveTimer); autosaveMessage.value = 'Saving...'; autosaveTimer = window.setTimeout(() => saveConfig({ silent: true, reason }), 650) }
 const toggleLocalAi = () => { form.value.localAi.enabled = !form.value.localAi.enabled; form.value.localAi.showModelLibraryInSidebar = form.value.localAi.enabled; if (!form.value.localAi.enabled) { for (const route of Object.values(form.value.routes)) if (route.source === 'app-local') { route.source = 'disabled'; route.model = ''; route.modelRef = '' } } const config = buildConfig(); dispatchAiConfigChanged(config); log.info('[ai-settings] local-ai:toggled', form.value.localAi); loadLocalModels(); scheduleAutosave('local-ai-toggle') }
-const applyProviderDefaults = (provider) => { const defaults = providerDefaults[provider.type] || {}; provider.label = provider.label || defaults.label || 'Provider'; provider.endpoint = provider.endpoint || defaults.endpoint || ''; log.info('[ai-settings] provider:type-changed', { id: provider.id, type: provider.type }) }
-const addProvider = () => { const provider = createProvider(); form.value.providerRows.push(provider); log.info('[ai-settings] provider:add', provider); scheduleAutosave('provider-add') }
-const removeProvider = (id) => { form.value.providerRows = form.value.providerRows.filter((provider) => provider.id !== id); log.info('[ai-settings] provider:remove', { id }); scheduleAutosave('provider-remove') }
+const applyProviderDefaults = (provider) => { const defaults = providerDefaults[provider.type] || {}; provider.label = defaults.label || provider.label || 'Provider'; provider.endpoint = defaults.endpoint || provider.endpoint || ''; providerModels.value = { ...providerModels.value, [provider.id]: [] }; log.info('[ai-settings] provider:type-changed', { id: provider.id, type: provider.type }) }
+const addProvider = () => { const provider = createProvider(); form.value.providerRows.push(provider); log.info('[ai-settings] provider:add', { id: provider.id, type: provider.type }); scheduleAutosave('provider-add') }
+const removeProvider = (id) => { form.value.providerRows = form.value.providerRows.filter((provider) => provider.id !== id); const next = { ...providerModels.value }; delete next[id]; providerModels.value = next; log.info('[ai-settings] provider:remove', { id }); scheduleAutosave('provider-remove') }
 const toggleProvider = (provider) => { provider.enabled = !provider.enabled; log.info('[ai-settings] provider:toggle', { id: provider.id, enabled: provider.enabled }); scheduleAutosave('provider-toggle') }
-const connectCodex = () => { form.value.codex.connected = !form.value.codex.connected; log.info('[ai-settings] codex:connection-toggle', form.value.codex); providerMessage.value = form.value.codex.connected ? 'Codex connecté.' : 'Codex déconnecté.'; scheduleAutosave('codex-toggle') }
-const applyModelChoice = (routeName) => { const route = form.value.routes[routeName]; const candidate = allCandidates.value.find((item) => item.ref === route.modelRef); if (candidate) { route.source = candidate.source; route.model = candidate.model; log.info('[ai-settings] model-choice:matched', { routeName, candidate }) } else { route.model = route.modelRef; if (!route.source || route.source === 'disabled') route.source = form.value.localAi.enabled ? 'app-local' : 'api'; log.info('[ai-settings] model-choice:manual', { routeName, source: route.source, model: route.model }) } scheduleAutosave(`model-choice-${routeName}`) }
-const loadConfig = async () => { hydrated.value = false; loading.value = true; message.value = 'Loading AI config...'; log.info('[ai-settings] loadConfig:start'); try { await loadLocalSelection(); const config = await elephantnoteClient.ai.getConfig(); currentConfig.value = normalizeAiConfig(config); applyConfig(currentConfig.value); await loadLocalModels(); dispatchAiConfigChanged(buildConfig()); message.value = 'AI config loaded.'; log.info('[ai-settings] loadConfig:done', { localAi: form.value.localAi, routes: form.value.routes }) } catch (error) { log.error('[ai-settings] loadConfig:failed', error); applyConfig(readCachedConfig() || {}); message.value = error instanceof Error ? error.message : 'Unable to load AI config.' } finally { hydrated.value = true; loading.value = false } }
+const applyModelChoice = (routeName) => { const route = form.value.routes[routeName]; const candidate = allCandidates.value.find((item) => item.ref === route.modelRef); if (candidate) { route.source = candidate.source; route.model = candidate.model; route.endpoint = primaryEndpoint(candidate.source); log.info('[ai-settings] model-choice:matched', { routeName, source: candidate.source, model: candidate.model }) } else { route.model = route.modelRef; if (!route.source || route.source === 'disabled') route.source = form.value.localAi.enabled ? 'app-local' : 'api'; log.info('[ai-settings] model-choice:manual', { routeName, source: route.source, model: route.model }) } scheduleAutosave(`model-choice-${routeName}`) }
+
+const extractCodexAccount = (result = {}) => {
+  const payload = result.account || result
+  return payload?.account || (payload && (payload.email || payload.name || payload.type || payload.id) ? payload : null)
+}
+const clearCodexPolling = () => { if (codexPollTimer) window.clearInterval(codexPollTimer); codexPollTimer = 0; codexPollAttempts = 0 }
+const loadCodexModels = async () => {
+  const api = subscriptionProviders().codex
+  if (!api?.listModels) throw new Error('The Codex runtime bridge is unavailable.')
+  const result = await api.listModels()
+  codexModels.value = Array.isArray(result?.models) ? result.models : []
+  if (!form.value.codex.model && codexModels.value.length) form.value.codex.model = modelId(codexModels.value[0])
+  log.info('[ai-settings] codex-models:loaded', { count: codexModels.value.length })
+  return codexModels.value
+}
+const refreshCodexAccount = async ({ silent = false } = {}) => {
+  const api = subscriptionProviders().codex
+  if (!api?.authStatus) {
+    form.value.codex.connected = false
+    if (!silent) providerMessage.value = 'The Codex runtime bridge is unavailable.'
+    return false
+  }
+  try {
+    const status = await api.authStatus()
+    const account = extractCodexAccount(status)
+    codexAccount.value = account
+    form.value.codex.connected = Boolean(account)
+    if (form.value.codex.connected) {
+      codexAuthUrl.value = ''
+      codexLoginId.value = ''
+      clearCodexPolling()
+      await loadCodexModels()
+      if (!silent) providerMessage.value = `Codex connected · ${codexModels.value.length} accessible model${codexModels.value.length === 1 ? '' : 's'}.`
+      scheduleAutosave('codex-account-refresh')
+      return true
+    }
+    codexModels.value = []
+    if (!silent) providerMessage.value = 'Codex is installed but no ChatGPT account is connected.'
+    return false
+  } catch (error) {
+    form.value.codex.connected = false
+    codexModels.value = []
+    if (!silent) providerMessage.value = error instanceof Error ? error.message : 'Unable to read the Codex account.'
+    log.error('[ai-settings] codex-account:failed', error)
+    return false
+  }
+}
+const openCodexLogin = async () => {
+  if (!codexAuthUrl.value) return false
+  try {
+    if (globalThis.tauri?.shell?.openExternal) {
+      await globalThis.tauri.shell.openExternal(codexAuthUrl.value)
+    } else {
+      globalThis.open(codexAuthUrl.value, '_blank', 'noopener,noreferrer')
+    }
+    return true
+  } catch (error) {
+    providerMessage.value = `Open this login URL in a browser: ${codexAuthUrl.value}`
+    log.warn('[ai-settings] codex-login:open-failed', error)
+    return false
+  }
+}
+const startCodexPolling = () => {
+  clearCodexPolling()
+  codexPollTimer = window.setInterval(async() => {
+    codexPollAttempts += 1
+    const connected = await refreshCodexAccount({ silent: true })
+    if (connected) {
+      providerMessage.value = `Codex connected · ${codexModels.value.length} accessible model${codexModels.value.length === 1 ? '' : 's'}.`
+    } else if (codexPollAttempts >= 60) {
+      clearCodexPolling()
+      providerMessage.value = 'Codex login is still pending. Complete it in the browser, then press refresh.'
+    }
+  }, 2000)
+}
+const connectCodex = async () => {
+  const api = subscriptionProviders().codex
+  if (!api) { providerMessage.value = 'The Codex runtime bridge is unavailable.'; return }
+  codexBusy.value = true
+  try {
+    if (form.value.codex.connected) {
+      await api.logout()
+      clearCodexPolling()
+      codexModels.value = []
+      codexAccount.value = null
+      codexAuthUrl.value = ''
+      codexLoginId.value = ''
+      form.value.codex.connected = false
+      providerMessage.value = 'Codex disconnected.'
+      scheduleAutosave('codex-logout')
+      return
+    }
+    const runtime = await api.status()
+    if (!runtime?.ok || runtime?.installed === false) throw new Error('The official Codex CLI is not installed or is not available in PATH.')
+    const result = await api.login({ flow: 'chatgpt' })
+    const login = result?.login || result || {}
+    codexAuthUrl.value = String(login.authUrl || login.auth_url || login.url || '').trim()
+    codexLoginId.value = String(login.loginId || login.login_id || login.id || '').trim()
+    providerMessage.value = codexAuthUrl.value ? 'Complete the ChatGPT login in your browser.' : 'Codex login started. Complete the authentication requested by the Codex runtime.'
+    if (codexAuthUrl.value) await openCodexLogin()
+    startCodexPolling()
+  } catch (error) {
+    providerMessage.value = error instanceof Error ? error.message : 'Unable to start Codex login.'
+    log.error('[ai-settings] codex-login:failed', error)
+  } finally {
+    codexBusy.value = false
+  }
+}
+
+const loadConfig = async () => {
+  hydrated.value = false
+  loading.value = true
+  message.value = 'Loading AI config...'
+  log.info('[ai-settings] loadConfig:start')
+  try {
+    await loadLocalSelection()
+    const config = await elephantnoteClient.ai.getConfig()
+    currentConfig.value = normalizeAiConfig(config)
+    applyConfig(currentConfig.value)
+    await loadLocalModels()
+    await refreshCodexAccount({ silent: true })
+    dispatchAiConfigChanged(buildConfig())
+    message.value = 'AI config loaded.'
+    log.info('[ai-settings] loadConfig:done', { localAi: form.value.localAi, codexConnected: form.value.codex.connected, routes: form.value.routes })
+  } catch (error) {
+    log.error('[ai-settings] loadConfig:failed', error)
+    applyConfig(readCachedConfig() || {})
+    message.value = error instanceof Error ? error.message : 'Unable to load AI config.'
+  } finally {
+    hydrated.value = true
+    loading.value = false
+  }
+}
 const saveConfig = async ({ silent = false, reason = 'manual' } = {}) => { if (persisting.value) return; persisting.value = true; if (!silent) saving.value = true; const payload = buildConfig(); writeCachedConfig(payload); if (!silent) message.value = 'Saving AI config...'; log.info('[ai-settings] saveConfig:start', { reason, localAi: payload.localAi, provider: payload.provider, routes: payload.routes, providers: payload.providers }); try { const saved = await elephantnoteClient.ai.setConfig(clonePlainObject(payload)); currentConfig.value = normalizeAiConfig(saved || payload); writeCachedConfig(currentConfig.value); dispatchAiConfigChanged(currentConfig.value); if (!silent) message.value = 'AI config saved.'; autosaveMessage.value = 'Saved'; log.info('[ai-settings] saveConfig:done', { localAi: currentConfig.value.localAi, routes: currentConfig.value.routes }) } catch (error) { log.error('[ai-settings] saveConfig:failed', error); dispatchAiConfigChanged(payload); if (!silent) message.value = error instanceof Error ? error.message : 'Unable to save AI config.'; autosaveMessage.value = 'Saved locally' } finally { persisting.value = false; if (!silent) saving.value = false } }
 const testPayloadFor = (routeName) => { const route = form.value.routes?.[routeName] || {}; return runtimeTestPayload({ source: route.source, endpoint: route.endpoint, model: route.model, label: routeName }) }
-const testRoute = async (routeName) => { testing.value = true; const payload = testPayloadFor(routeName); message.value = `Testing ${routeName}...`; log.info('[ai-settings] route-test:start', { routeName, payload }); try { const result = await elephantnoteClient.ai.testConfig(clonePlainObject(payload)); message.value = `${routeName} OK · ${Math.round(result.latencyMs || 0)} ms`; if (routeName === 'embedding') embeddingMessage.value = message.value; log.info('[ai-settings] route-test:done', { routeName, result }) } catch (error) { log.error('[ai-settings] route-test:failed', { routeName, error }); message.value = error instanceof Error ? error.message : `${routeName} test failed.`; if (routeName === 'embedding') embeddingMessage.value = message.value } finally { testing.value = false } }
-const testProvider = async (provider) => { providerMessage.value = `Testing ${provider.label}...`; const source = provider.type === 'openai-compatible' ? 'api' : provider.type; const payload = runtimeTestPayload({ source, endpoint: provider.endpoint, model: provider.type === 'mistral' ? 'mistral-small-latest' : 'gpt-4.1-mini', apiKey: provider.apiKey, label: provider.label }); log.info('[ai-settings] provider-test:start', { provider: provider.id, payload }); try { const result = await elephantnoteClient.ai.testConfig(clonePlainObject(payload)); providerMessage.value = `${provider.label} OK · ${Math.round(result.latencyMs || 0)} ms`; log.info('[ai-settings] provider-test:done', { provider: provider.id, result }) } catch (error) { log.error('[ai-settings] provider-test:failed', { provider: provider.id, error }); providerMessage.value = error instanceof Error ? error.message : 'Provider test failed.' } }
-const testCodex = async () => { testing.value = true; providerMessage.value = 'Testing Codex...'; const payload = runtimeTestPayload({ source: 'codex', endpoint: 'codex://account', model: 'gpt-5.1-codex', label: 'Codex' }); log.info('[ai-settings] codex-test:start', payload); try { const result = await elephantnoteClient.ai.testConfig(clonePlainObject(payload)); providerMessage.value = `Codex OK · ${Math.round(result.latencyMs || 0)} ms`; log.info('[ai-settings] codex-test:done', result) } catch (error) { log.error('[ai-settings] codex-test:failed', error); providerMessage.value = error instanceof Error ? error.message : 'Codex test failed.' } finally { testing.value = false } }
+const testRoute = async (routeName) => { testing.value = true; const payload = testPayloadFor(routeName); message.value = `Testing ${routeName}...`; log.info('[ai-settings] route-test:start', { routeName, payload: { ...payload, apiKey: payload.apiKey ? '[redacted]' : '' } }); try { const result = await elephantnoteClient.ai.testConfig(clonePlainObject(payload)); message.value = `${routeName} OK${result.latencyMs ? ` · ${Math.round(result.latencyMs)} ms` : ''}`; if (routeName === 'embedding') embeddingMessage.value = message.value; log.info('[ai-settings] route-test:done', { routeName, result }) } catch (error) { log.error('[ai-settings] route-test:failed', { routeName, error }); message.value = error instanceof Error ? error.message : `${routeName} test failed.`; if (routeName === 'embedding') embeddingMessage.value = message.value } finally { testing.value = false } }
+const testProvider = async (provider) => {
+  provider.testing = true
+  providerMessage.value = `Testing ${provider.label}...`
+  try {
+    if (provider.type === 'opencode') {
+      const api = subscriptionProviders().opencode
+      if (!api?.status || !api?.listModels) throw new Error('The OpenCode runtime bridge is unavailable.')
+      const credentials = { endpoint: provider.endpoint, password: provider.apiKey || undefined }
+      await api.status(credentials)
+      const result = await api.listModels(credentials)
+      const models = Array.isArray(result?.models) ? result.models : []
+      providerModels.value = { ...providerModels.value, [provider.id]: models }
+      providerMessage.value = `${provider.label} connected · ${models.length} accessible model${models.length === 1 ? '' : 's'}.`
+      log.info('[ai-settings] opencode-test:done', { provider: provider.id, models: models.length })
+      return
+    }
+    const source = provider.type === 'openai-compatible' ? 'api' : provider.type
+    const payload = runtimeTestPayload({ source, endpoint: provider.endpoint, model: provider.type === 'mistral' ? 'mistral-small-latest' : 'gpt-4.1-mini', apiKey: provider.apiKey, label: provider.label })
+    const result = await elephantnoteClient.ai.testConfig(clonePlainObject(payload))
+    providerMessage.value = `${provider.label} OK${result.latencyMs ? ` · ${Math.round(result.latencyMs)} ms` : ''}`
+    log.info('[ai-settings] provider-test:done', { provider: provider.id, result })
+  } catch (error) {
+    log.error('[ai-settings] provider-test:failed', { provider: provider.id, error })
+    providerMessage.value = error instanceof Error ? error.message : 'Provider test failed.'
+  } finally {
+    provider.testing = false
+  }
+}
+const testCodex = async () => { testing.value = true; providerMessage.value = 'Testing the Codex account and model catalog...'; try { const connected = await refreshCodexAccount({ silent: true }); if (!connected) throw new Error('No ChatGPT account is connected to Codex.'); providerMessage.value = `Codex ready · ${codexModels.value.length} accessible model${codexModels.value.length === 1 ? '' : 's'}.`; log.info('[ai-settings] codex-test:done', { models: codexModels.value.length }) } catch (error) { log.error('[ai-settings] codex-test:failed', error); providerMessage.value = error instanceof Error ? error.message : 'Codex test failed.' } finally { testing.value = false } }
 const loadSearchStatus = async () => { embeddingMessage.value = 'Loading index status...'; log.info('[ai-settings] embedding-status:start'); try { const status = await elephantnoteClient.search.status?.(); embeddingMessage.value = `Index status loaded: ${status?.indexedNotes ?? status?.notesIndexed ?? 'unknown'} notes`; log.info('[ai-settings] embedding-status:done', status) } catch (error) { log.error('[ai-settings] embedding-status:failed', error); embeddingMessage.value = error instanceof Error ? error.message : 'Unable to load index status.' } }
 const rebuildEmbeddings = async () => { indexing.value = true; embeddingMessage.value = 'Rebuilding embedding base...'; log.info('[ai-settings] embedding-rebuild:start'); try { const result = await elephantnoteClient.search.rebuild?.(); embeddingMessage.value = 'Embedding rebuild started.'; log.info('[ai-settings] embedding-rebuild:done', result) } catch (error) { log.error('[ai-settings] embedding-rebuild:failed', error); embeddingMessage.value = error instanceof Error ? error.message : 'Embedding rebuild failed.' } finally { indexing.value = false } }
+
 watch(form, () => scheduleAutosave('form-watch'), { deep: true })
 watch(() => form.value.localAi.enabled, (enabled) => { if (!enabled) localModels.value = [] })
 watch(() => props.initialPage, (page) => { if (validPages.has(page)) activePage.value = page })
 onMounted(loadConfig)
-onBeforeUnmount(() => { window.clearTimeout(autosaveTimer); if (hydrated.value) saveConfig({ silent: true, reason: 'settings-close' }) })
+onBeforeUnmount(() => { window.clearTimeout(autosaveTimer); clearCodexPolling(); if (hydrated.value) saveConfig({ silent: true, reason: 'settings-close' }) })
 </script>
 
 <style scoped>
@@ -323,7 +537,7 @@ button.icon-only { width: 29px; padding: 0; }
 .en-ai-setting-copy { min-width: 0; display: grid; gap: 2px; }
 .en-ai-setting-copy strong { font-size: 12.5px; }
 .en-ai-setting-copy span, .en-ai-setting-copy small, .en-ai-empty p { color: var(--en-muted, #667085); font-size: 10.5px; line-height: 1.42; }
-.en-ai-setting-copy small { color: var(--en-primary, #2563eb); }
+.en-ai-setting-copy small { overflow-wrap: anywhere; color: var(--en-primary, #2563eb); }
 .en-ai-badge, .en-provider-state { display: inline-flex; align-items: center; gap: 5px; min-height: 25px; padding: 0 7px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 99px; color: var(--en-muted, #667085); font-size: 9.5px; white-space: nowrap; }
 .en-ai-badge.active, .en-provider-state.active { border-color: color-mix(in srgb, #16a34a 28%, var(--en-border, #c5cfdd)); color: #15803d; }
 .en-ai-badge svg { width: 12px; height: 12px; }

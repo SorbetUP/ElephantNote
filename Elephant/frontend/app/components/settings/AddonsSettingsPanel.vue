@@ -1,153 +1,229 @@
 <template>
   <div class="en-addons-panel">
-    <section class="en-addons-card en-addons-community" :class="{ enabled: communityAddonsEnabled }">
-      <div class="en-addons-community-copy">
-        <span class="en-addons-icon"><ShieldAlert aria-hidden="true" /></span>
+    <section v-if="!communityConsentLoaded" class="en-addons-card en-addons-loading">
+      <span>Loading addon settings…</span>
+    </section>
+
+    <section v-else-if="!communityAddonsEnabled" class="en-addons-card en-addons-gate">
+      <div class="en-addons-gate-heading">
+        <span class="en-addons-icon warning"><ShieldAlert aria-hidden="true" /></span>
         <div>
-          <strong>{{ communityAddonsEnabled ? 'Community addons enabled' : 'Community addons disabled' }}</strong>
+          <h3>Turn on community addons</h3>
           <p>
-            Third-party addons can contain bugs, modify permitted notes or transmit permitted data. ElephantNote isolates them and checks declared permissions, but cannot guarantee that every addon is safe.
+            Community addons run third-party code. ElephantNote isolates them and checks their declared permissions,
+            but no addon platform can guarantee that every package is safe.
           </p>
         </div>
       </div>
 
-      <template v-if="communityConsentLoaded && !communityAddonsEnabled">
-        <label class="en-addons-risk-check">
-          <input v-model="riskAccepted" type="checkbox">
-          <span>I understand the risk and I am responsible for the community addons I enable.</span>
-        </label>
-        <button class="en-danger-button" type="button" :disabled="!riskAccepted || operationInProgress" @click="enableCommunityAddons">
-          Enable community addons
-        </button>
-      </template>
+      <label class="en-addons-risk-check">
+        <input v-model="riskAccepted" type="checkbox">
+        <span>I understand that community addons may access the data and services allowed by their permissions.</span>
+      </label>
 
       <button
-        v-else-if="communityConsentLoaded"
-        class="en-secondary-button"
+        class="en-primary-button"
         type="button"
-        :disabled="operationInProgress"
-        @click="disableCommunityAddons"
+        :disabled="!riskAccepted || operationInProgress"
+        @click="enableCommunityAddons"
       >
-        Disable community addons
+        Turn on community addons
       </button>
+
+      <p v-if="lastError" class="en-addons-feedback error">{{ lastError }}</p>
     </section>
 
-    <p v-if="message" class="en-addons-feedback" :class="{ error: messageIsError }">{{ message }}</p>
-    <p v-if="lastError" class="en-addons-feedback error">{{ lastError }}</p>
-
-    <section class="en-addons-summary">
-      <article><strong>{{ items.length }}</strong><span>Installed</span></article>
-      <article><strong>{{ enabledAddons.length }}</strong><span>Enabled</span></article>
-      <article><strong>{{ externalAddons.length }}</strong><span>Community</span></article>
-      <article><strong>{{ actions.length }}</strong><span>Commands</span></article>
-    </section>
-
-    <section class="en-addons-card">
-      <header class="en-addons-card-header">
+    <template v-else>
+      <section class="en-addons-card en-addons-mode-row">
         <div>
-          <h3>Installed addons</h3>
-          <p>Built-in addons are shipped with ElephantNote. Community packages are stored in the active vault under <code>.elephantnote/addons</code>.</p>
+          <strong>Community addons</strong>
+          <p>Turning this off stops every community addon without uninstalling its package or deleting its data.</p>
         </div>
+        <button
+          class="en-switch"
+          type="button"
+          role="switch"
+          aria-label="Community addons enabled"
+          :aria-checked="communityAddonsEnabled"
+          :class="{ active: communityAddonsEnabled }"
+          :disabled="operationInProgress"
+          @click="disableCommunityAddons"
+        ><span /></button>
+      </section>
+
+      <p v-if="message" class="en-addons-feedback" :class="{ error: messageIsError }">{{ message }}</p>
+      <p v-if="lastError" class="en-addons-feedback error">{{ lastError }}</p>
+
+      <section class="en-addons-toolbar">
+        <label class="en-addons-search">
+          <Search aria-hidden="true" />
+          <input v-model.trim="query" type="search" placeholder="Search installed addons" aria-label="Search installed addons">
+        </label>
         <button class="en-primary-button" type="button" :disabled="operationInProgress" @click="installAddonPackage">
-          <Download aria-hidden="true" /> Install from file
+          <Plus aria-hidden="true" /> Install
         </button>
-      </header>
+      </section>
 
-      <div v-if="items.length" class="en-addons-list">
-        <article v-for="addon in items" :key="addon.manifest.id" class="en-addon-row">
-          <span class="en-addon-logo"><Package aria-hidden="true" /></span>
-          <div class="en-addon-copy">
-            <div class="en-addon-title">
-              <strong>{{ addon.manifest.name }}</strong>
-              <span :class="{ external: addon.manifest.source === 'external' }">
-                {{ addon.manifest.source === 'external' ? 'Community' : 'Built in' }}
-              </span>
-            </div>
-            <code>{{ addon.manifest.id }}</code>
-            <p>{{ addon.manifest.description || 'No description.' }}</p>
-            <div class="en-addon-meta">
-              <span>v{{ addon.manifest.version }}</span>
-              <span>{{ addon.status }}</span>
-              <span v-for="permission in permissionLabels(addon.manifest.permissions)" :key="permission">{{ permission }}</span>
-            </div>
-            <p v-if="addon.error" class="en-addon-error">{{ addon.error.message }}</p>
-          </div>
-          <div class="en-addon-actions">
-            <button
-              class="en-switch"
-              type="button"
-              role="switch"
-              :aria-label="`Enable ${addon.manifest.name}`"
-              :aria-checked="addon.enabled"
-              :class="{ active: addon.enabled }"
-              :disabled="operationInProgress || addon.status === 'activating' || (addon.manifest.source === 'external' && !communityAddonsEnabled)"
-              @click="toggleAddon(addon)"
-            ><span /></button>
-            <button
-              v-if="addon.manifest.source === 'external'"
-              class="en-icon-button danger"
-              type="button"
-              title="Uninstall addon"
-              :disabled="operationInProgress"
-              @click="uninstallAddon(addon)"
-            ><Trash2 aria-hidden="true" /></button>
-          </div>
-        </article>
-      </div>
-      <div v-else class="en-addons-empty">
-        <Package aria-hidden="true" />
-        <strong>No addon registered</strong>
-        <span>The addon runtime is installed, but no package is available.</span>
-      </div>
-    </section>
-
-    <section class="en-addons-card">
-      <header class="en-addons-card-header">
-        <div>
-          <h3>Addon commands</h3>
-          <p>Run the commands contributed by enabled addons.</p>
+      <section class="en-addons-list-section">
+        <header>
+          <h3>Core addons</h3>
+          <span>{{ filteredBuiltInAddons.length }}</span>
+        </header>
+        <div class="en-addons-card en-addons-list">
+          <addon-row
+            v-for="addon in filteredBuiltInAddons"
+            :key="addon.manifest.id"
+            :addon="addon"
+            :actions="actionsForAddon(addon.manifest.id)"
+            :expanded="expandedAddonId === addon.manifest.id"
+            :busy="operationInProgress"
+            @toggle-details="toggleDetails(addon.manifest.id)"
+            @toggle-addon="toggleAddon(addon)"
+            @run-action="runAction"
+          />
+          <div v-if="!filteredBuiltInAddons.length" class="en-addons-empty">No core addon matches this search.</div>
         </div>
-      </header>
-      <div v-if="actions.length" class="en-addon-command-list">
-        <article v-for="action in actions" :key="`${action.addonId}:${action.id}`">
-          <div>
-            <strong>{{ action.title }}</strong>
-            <code>{{ action.id }}</code>
-            <p v-if="action.description">{{ action.description }}</p>
+      </section>
+
+      <section class="en-addons-list-section">
+        <header>
+          <h3>Community addons</h3>
+          <span>{{ filteredExternalAddons.length }}</span>
+        </header>
+        <div class="en-addons-card en-addons-list">
+          <addon-row
+            v-for="addon in filteredExternalAddons"
+            :key="addon.manifest.id"
+            :addon="addon"
+            :actions="actionsForAddon(addon.manifest.id)"
+            :expanded="expandedAddonId === addon.manifest.id"
+            :busy="operationInProgress"
+            @toggle-details="toggleDetails(addon.manifest.id)"
+            @toggle-addon="toggleAddon(addon)"
+            @run-action="runAction"
+            @uninstall="uninstallAddon(addon)"
+          />
+          <div v-if="!filteredExternalAddons.length" class="en-addons-empty">
+            {{ query ? 'No community addon matches this search.' : 'No community addon is installed in this vault.' }}
           </div>
-          <button class="en-secondary-button" type="button" :disabled="operationInProgress || !action.enabled" @click="runAction(action)">
-            <Play aria-hidden="true" /> Run
-          </button>
-        </article>
-      </div>
-      <div v-else class="en-addons-empty compact">
-        <CheckCircle2 aria-hidden="true" />
-        <strong>No active command</strong>
-        <span>Enable an addon that contributes commands.</span>
-      </div>
-    </section>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
+
+<script>
+import { ChevronDown, Package, Play, Trash2 } from '@lucide/vue'
+
+export const AddonRow = {
+  name: 'AddonRow',
+  components: { ChevronDown, Package, Play, Trash2 },
+  props: {
+    addon: { type: Object, required: true },
+    actions: { type: Array, default: () => [] },
+    expanded: { type: Boolean, default: false },
+    busy: { type: Boolean, default: false }
+  },
+  emits: ['toggle-details', 'toggle-addon', 'run-action', 'uninstall'],
+  methods: {
+    permissionLabels(permissions) {
+      if (Array.isArray(permissions)) return permissions
+      if (!permissions || typeof permissions !== 'object') return []
+      const labels = []
+      for (const scope of permissions.notes?.read || []) labels.push(`Read ${scope}`)
+      for (const scope of permissions.notes?.write || []) labels.push(`Write ${scope}`)
+      for (const host of permissions.network?.hosts || []) labels.push(`HTTPS ${host}`)
+      if (permissions.storage) labels.push('Private storage')
+      if (permissions.commands) labels.push('Commands')
+      return labels
+    }
+  },
+  template: `
+    <article class="en-addon-row" :class="{ expanded }">
+      <button class="en-addon-summary" type="button" @click="$emit('toggle-details')">
+        <span class="en-addon-logo"><Package aria-hidden="true" /></span>
+        <span class="en-addon-copy">
+          <span class="en-addon-title">
+            <strong>{{ addon.manifest.name }}</strong>
+            <small>v{{ addon.manifest.version }}</small>
+          </span>
+          <span>{{ addon.manifest.description || 'No description.' }}</span>
+        </span>
+        <ChevronDown class="en-addon-chevron" :class="{ rotated: expanded }" aria-hidden="true" />
+      </button>
+
+      <div class="en-addon-controls">
+        <button
+          class="en-switch"
+          type="button"
+          role="switch"
+          :aria-label="\`Enable \${addon.manifest.name}\`"
+          :aria-checked="addon.enabled"
+          :class="{ active: addon.enabled }"
+          :disabled="busy || addon.status === 'activating'"
+          @click="$emit('toggle-addon')"
+        ><span /></button>
+      </div>
+
+      <div v-if="expanded" class="en-addon-details">
+        <div class="en-addon-details-meta">
+          <code>{{ addon.manifest.id }}</code>
+          <span>{{ addon.manifest.author || 'Unknown author' }}</span>
+          <span>{{ addon.status }}</span>
+        </div>
+
+        <div v-if="permissionLabels(addon.manifest.permissions).length" class="en-addon-permissions">
+          <span v-for="permission in permissionLabels(addon.manifest.permissions)" :key="permission">{{ permission }}</span>
+        </div>
+
+        <p v-if="addon.error" class="en-addon-error">{{ addon.error.message }}</p>
+
+        <div v-if="actions.length" class="en-addon-commands">
+          <button
+            v-for="action in actions"
+            :key="action.id"
+            class="en-secondary-button"
+            type="button"
+            :disabled="busy || !addon.enabled || !action.enabled"
+            @click="$emit('run-action', action)"
+          >
+            <Play aria-hidden="true" /> {{ action.title }}
+          </button>
+        </div>
+
+        <button
+          v-if="addon.manifest.source === 'external'"
+          class="en-danger-link"
+          type="button"
+          :disabled="busy"
+          @click="$emit('uninstall')"
+        ><Trash2 aria-hidden="true" /> Uninstall</button>
+      </div>
+    </article>
+  `
+}
+</script>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { CheckCircle2, Download, Package, Play, ShieldAlert, Trash2 } from '@lucide/vue'
+import { Plus, Search, ShieldAlert } from '@lucide/vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import log from '@/platform/runtimeLogShim'
 import { getAddonActions } from '@/addons'
 import { useAddonsStore } from '@/store/addons'
+import { AddonRow } from './AddonsSettingsPanel.vue'
 
 const addonsStore = useAddonsStore()
 const riskAccepted = ref(false)
+const query = ref('')
+const expandedAddonId = ref('')
 const message = ref('')
 const messageIsError = ref(false)
 
 const {
   items,
   contributions,
-  enabledAddons,
-  externalAddons,
   communityAddonsEnabled,
   communityConsentLoaded,
   operationInProgress,
@@ -155,22 +231,27 @@ const {
 } = storeToRefs(addonsStore)
 
 const actions = computed(() => getAddonActions(contributions.value))
-
-const permissionLabels = (permissions) => {
-  if (Array.isArray(permissions)) return permissions
-  if (!permissions || typeof permissions !== 'object') return []
-  const labels = []
-  for (const scope of permissions.notes?.read || []) labels.push(`Read ${scope}`)
-  for (const scope of permissions.notes?.write || []) labels.push(`Write ${scope}`)
-  for (const host of permissions.network?.hosts || []) labels.push(`HTTPS ${host}`)
-  if (permissions.storage) labels.push('Private storage')
-  if (permissions.commands) labels.push('Commands')
-  return labels
+const builtInAddons = computed(() => items.value.filter((addon) => addon.manifest.source !== 'external'))
+const externalAddons = computed(() => items.value.filter((addon) => addon.manifest.source === 'external'))
+const normalizedQuery = computed(() => query.value.toLocaleLowerCase())
+const matchesQuery = (addon) => {
+  if (!normalizedQuery.value) return true
+  const manifest = addon.manifest || {}
+  return `${manifest.name || ''} ${manifest.description || ''} ${manifest.author || ''} ${manifest.id || ''}`
+    .toLocaleLowerCase()
+    .includes(normalizedQuery.value)
 }
+const filteredBuiltInAddons = computed(() => builtInAddons.value.filter(matchesQuery))
+const filteredExternalAddons = computed(() => externalAddons.value.filter(matchesQuery))
+const actionsForAddon = (addonId) => actions.value.filter((action) => action.addonId === addonId)
 
 const showMessage = (text, error = false) => {
   message.value = text
   messageIsError.value = error
+}
+
+const toggleDetails = (addonId) => {
+  expandedAddonId.value = expandedAddonId.value === addonId ? '' : addonId
 }
 
 const enableCommunityAddons = async () => {
@@ -178,7 +259,7 @@ const enableCommunityAddons = async () => {
   try {
     await addonsStore.setCommunityAddonsEnabled(true)
     riskAccepted.value = false
-    showMessage('Community addons are enabled. Review each package before activating it.')
+    showMessage('Community addons are available. Installed packages remain individually disabled until you enable them.')
     log.info('[settings:addons] community:enabled')
   } catch (error) {
     showMessage(error instanceof Error ? error.message : String(error), true)
@@ -187,10 +268,11 @@ const enableCommunityAddons = async () => {
 }
 
 const disableCommunityAddons = async () => {
-  if (!window.confirm('Disable community addons? Every running community addon will be stopped.')) return
+  if (!window.confirm('Turn off community addons? Running community addons will stop, but installed packages and data will remain.')) return
   try {
     await addonsStore.setCommunityAddonsEnabled(false)
-    showMessage('Community addons are disabled.')
+    expandedAddonId.value = ''
+    showMessage('Community addons are turned off.')
     log.info('[settings:addons] community:disabled')
   } catch (error) {
     showMessage(error instanceof Error ? error.message : String(error), true)
@@ -206,8 +288,10 @@ const installAddonPackage = async () => {
       filters: [{ name: 'ElephantNote addon', extensions: ['enaddon', 'zip'] }]
     })
     if (typeof selected !== 'string' || !selected) return
+    log.info('[settings:addons] install:start', { packagePath: selected })
     const result = await addonsStore.installExternalAddon(selected)
-    showMessage(`Installed ${result.manifest.name}. It remains disabled until you enable it.`)
+    expandedAddonId.value = result.manifest.id
+    showMessage(`Installed ${result.manifest.name}. Review its permissions, then enable it.`)
     log.info('[settings:addons] install:done', { id: result.manifest.id, packagePath: selected })
   } catch (error) {
     showMessage(error instanceof Error ? error.message : String(error), true)
@@ -216,10 +300,12 @@ const installAddonPackage = async () => {
 }
 
 const toggleAddon = async (addon) => {
+  const nextEnabled = !addon.enabled
+  log.info('[settings:addons] toggle:start', { id: addon.manifest.id, enabled: nextEnabled })
   try {
-    await addonsStore.setAddonEnabled(addon.manifest.id, !addon.enabled)
-    showMessage(`${addon.manifest.name} ${addon.enabled ? 'disabled' : 'enabled'}.`)
-    log.info('[settings:addons] toggle:done', { id: addon.manifest.id, enabled: !addon.enabled })
+    await addonsStore.setAddonEnabled(addon.manifest.id, nextEnabled)
+    showMessage(`${addon.manifest.name} ${nextEnabled ? 'enabled' : 'disabled'}.`)
+    log.info('[settings:addons] toggle:done', { id: addon.manifest.id, enabled: nextEnabled })
   } catch (error) {
     showMessage(error instanceof Error ? error.message : String(error), true)
     log.error('[settings:addons] toggle:failed', { id: addon.manifest.id, error })
@@ -230,6 +316,7 @@ const uninstallAddon = async (addon) => {
   if (!window.confirm(`Uninstall ${addon.manifest.name}? Its private data will be kept.`)) return
   try {
     await addonsStore.uninstallExternalAddon(addon.manifest.id)
+    if (expandedAddonId.value === addon.manifest.id) expandedAddonId.value = ''
     showMessage(`Uninstalled ${addon.manifest.name}.`)
     log.info('[settings:addons] uninstall:done', { id: addon.manifest.id })
   } catch (error) {
@@ -239,6 +326,7 @@ const uninstallAddon = async (addon) => {
 }
 
 const runAction = async (action) => {
+  log.info('[settings:addons] action:start', { id: action.id, addonId: action.addonId })
   try {
     const result = await addonsStore.runAction(action.id)
     showMessage(`${action.title} completed${result?.path ? `: ${result.path}` : '.'}`)
@@ -253,8 +341,7 @@ onMounted(async () => {
   if (!communityConsentLoaded.value) await addonsStore.loadCommunityAddonsConsent()
   log.info('[settings:addons] mounted', {
     registered: items.value.map((addon) => addon.manifest.id),
-    enabled: enabledAddons.value.map((addon) => addon.manifest.id),
-    actions: actions.value.map((action) => action.id),
+    enabled: items.value.filter((addon) => addon.enabled).map((addon) => addon.manifest.id),
     communityEnabled: communityAddonsEnabled.value
   })
 })
@@ -262,56 +349,54 @@ onMounted(async () => {
 
 <style scoped>
 .en-addons-panel { display: grid; gap: 16px; }
-.en-addons-card { overflow: hidden; border: 1px solid var(--en-border, #c5cfdd); border-radius: 14px; background: var(--en-surface, #fff); }
-.en-addons-community { display: grid; gap: 14px; padding: 18px; border-color: color-mix(in srgb, #dc2626 55%, var(--en-border, #c5cfdd)); background: color-mix(in srgb, #dc2626 6%, var(--en-surface, #fff)); }
-.en-addons-community.enabled { border-color: color-mix(in srgb, #d97706 55%, var(--en-border, #c5cfdd)); background: color-mix(in srgb, #d97706 7%, var(--en-surface, #fff)); }
-.en-addons-community-copy { display: flex; gap: 12px; align-items: flex-start; }
-.en-addons-community-copy strong { font-size: 13px; }
-.en-addons-community-copy p, .en-addons-card-header p, .en-addon-copy p, .en-addon-command-list p { margin: 4px 0 0; color: var(--en-muted, #667085); font-size: 11.5px; line-height: 1.45; }
-.en-addons-icon, .en-addon-logo { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; background: var(--en-soft, #e9eff7); color: var(--en-primary, #2563eb); }
+.en-addons-card { overflow: hidden; border: 1px solid var(--en-border, #c5cfdd); border-radius: var(--en-ui-card-radius, 14px); background: var(--en-surface, #fff); }
+.en-addons-loading, .en-addons-empty { padding: 24px; color: var(--en-muted, #667085); font-size: 11.5px; text-align: center; }
+.en-addons-gate { display: grid; gap: 18px; max-width: 680px; padding: 22px; }
+.en-addons-gate-heading { display: flex; gap: 13px; align-items: flex-start; }
+.en-addons-gate h3, .en-addons-list-section h3 { margin: 0; font-size: 13px; }
+.en-addons-gate p, .en-addons-mode-row p { margin: 5px 0 0; color: var(--en-muted, #667085); font-size: 11.5px; line-height: 1.5; }
+.en-addons-icon, .en-addon-logo { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; background: var(--en-soft, #e9eff7); color: var(--en-primary, #2563eb); }
+.en-addons-icon.warning { color: #d97706; }
 .en-addons-icon svg, .en-addon-logo svg { width: 17px; height: 17px; }
-.en-addons-risk-check { display: flex; align-items: flex-start; gap: 9px; color: var(--en-text, #101828); font-size: 11.5px; line-height: 1.4; }
-.en-addons-risk-check input { margin-top: 2px; accent-color: #dc2626; }
-.en-addons-feedback { margin: 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, #16a34a 10%, var(--en-surface, #fff)); color: #15803d; font-size: 11.5px; }
-.en-addons-feedback.error { background: color-mix(in srgb, #dc2626 10%, var(--en-surface, #fff)); color: #b91c1c; }
-.en-addons-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.en-addons-summary article { display: grid; gap: 4px; padding: 13px 15px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 12px; background: var(--en-surface, #fff); }
-.en-addons-summary strong { font-size: 21px; line-height: 1; }
-.en-addons-summary span { color: var(--en-muted, #667085); font-size: 10.5px; }
-.en-addons-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; padding: 16px 18px; border-bottom: 1px solid var(--en-border, #c5cfdd); }
-.en-addons-card-header h3 { margin: 0; font-size: 13px; }
-.en-addons-card-header button, .en-addon-command-list button, .en-addons-community > button { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: var(--en-surface, #fff); color: var(--en-text, #101828); cursor: pointer; }
-.en-addons-card-header button svg, .en-addon-command-list button svg { width: 14px; height: 14px; }
-.en-primary-button { border-color: var(--en-primary, #2563eb) !important; background: var(--en-primary, #2563eb) !important; color: #fff !important; }
-.en-danger-button { border-color: color-mix(in srgb, #dc2626 55%, var(--en-border, #c5cfdd)) !important; color: #b91c1c !important; }
-.en-addons-list { display: grid; }
-.en-addon-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: flex-start; gap: 12px; padding: 15px 18px; }
+.en-addons-risk-check { display: flex; align-items: flex-start; gap: 9px; font-size: 11.5px; line-height: 1.45; }
+.en-addons-risk-check input { margin-top: 2px; accent-color: var(--en-primary, #2563eb); }
+.en-addons-gate .en-primary-button { justify-self: start; }
+.en-addons-mode-row { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 13px 18px; }
+.en-addons-mode-row strong { font-size: 13px; }
+.en-addons-feedback { margin: 0; padding: 9px 11px; border-radius: 9px; background: color-mix(in srgb, #16a34a 9%, var(--en-surface, #fff)); color: #15803d; font-size: 11px; }
+.en-addons-feedback.error { background: color-mix(in srgb, #dc2626 9%, var(--en-surface, #fff)); color: #b91c1c; }
+.en-addons-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.en-addons-search { min-width: 220px; flex: 1; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: var(--en-surface, #fff); color: var(--en-muted, #667085); }
+.en-addons-search svg { width: 15px; height: 15px; }
+.en-addons-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--en-text, #101828); font: inherit; }
+.en-addons-list-section { display: grid; gap: 8px; }
+.en-addons-list-section > header { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+.en-addons-list-section > header span { color: var(--en-muted, #667085); font-size: 10px; }
 .en-addon-row + .en-addon-row { border-top: 1px solid var(--en-border, #c5cfdd); }
-.en-addon-copy { min-width: 0; }
-.en-addon-title { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.en-addon-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.en-addon-summary { min-width: 0; display: grid; grid-template-columns: 34px minmax(0, 1fr) 16px; align-items: center; gap: 11px; padding: 13px 14px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.en-addon-summary:hover { background: color-mix(in srgb, var(--en-soft, #e9eff7) 52%, transparent); }
+.en-addon-copy { min-width: 0; display: grid; gap: 3px; }
+.en-addon-copy > span:last-child { overflow: hidden; color: var(--en-muted, #667085); font-size: 10.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.en-addon-title { display: flex; align-items: baseline; gap: 7px; }
 .en-addon-title strong { font-size: 12.5px; }
-.en-addon-title span { padding: 2px 7px; border-radius: 999px; background: var(--en-soft, #e9eff7); color: var(--en-muted, #667085); font-size: 9px; }
-.en-addon-title span.external { background: color-mix(in srgb, #d97706 12%, var(--en-surface, #fff)); color: #b45309; }
-.en-addon-copy > code, .en-addon-command-list code { display: block; margin-top: 3px; color: var(--en-muted, #667085); font-size: 9.5px; }
-.en-addon-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
-.en-addon-meta span { padding: 2px 6px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 999px; color: var(--en-muted, #667085); font-size: 9px; }
-.en-addon-error { color: #b91c1c !important; }
-.en-addon-actions { display: flex; align-items: center; gap: 7px; }
-.en-addon-actions .en-icon-button { color: #b91c1c; }
-.en-addon-command-list { display: grid; }
-.en-addon-command-list article { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; }
-.en-addon-command-list article + article { border-top: 1px solid var(--en-border, #c5cfdd); }
-.en-addon-command-list strong { font-size: 12px; }
-.en-addons-empty { min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 20px; color: var(--en-muted, #667085); text-align: center; }
-.en-addons-empty svg { width: 24px; height: 24px; }
-.en-addons-empty strong { color: var(--en-text, #101828); font-size: 12px; }
-.en-addons-empty span { font-size: 10.5px; }
-.en-addons-empty.compact { min-height: 90px; }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.en-addon-title small { color: var(--en-muted, #667085); font-size: 9.5px; }
+.en-addon-chevron { width: 15px; height: 15px; color: var(--en-muted, #667085); transition: transform 140ms ease; }
+.en-addon-chevron.rotated { transform: rotate(180deg); }
+.en-addon-controls { display: flex; align-items: center; padding: 0 14px 0 8px; }
+.en-addon-details { grid-column: 1 / -1; display: grid; gap: 10px; padding: 0 14px 14px 59px; }
+.en-addon-details-meta, .en-addon-permissions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.en-addon-details-meta code, .en-addon-details-meta span, .en-addon-permissions span { color: var(--en-muted, #667085); font-size: 9.5px; }
+.en-addon-permissions span { padding: 2px 6px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 999px; }
+.en-addon-error { margin: 0; color: #b91c1c; font-size: 10.5px; }
+.en-addon-commands { display: flex; flex-wrap: wrap; gap: 7px; }
+.en-addon-commands button, .en-danger-link { min-height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 8px; background: var(--en-surface, #fff); color: var(--en-text, #101828); font-size: 10.5px; cursor: pointer; }
+.en-addon-commands svg, .en-danger-link svg { width: 13px; height: 13px; }
+.en-danger-link { justify-self: start; color: #b91c1c; }
+button:disabled { opacity: 0.48; cursor: not-allowed; }
 @media (max-width: 720px) {
-  .en-addons-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .en-addons-card-header { flex-direction: column; }
-  .en-addon-row { grid-template-columns: 34px minmax(0, 1fr); }
-  .en-addon-actions { grid-column: 2; justify-content: space-between; }
+  .en-addons-toolbar { align-items: stretch; flex-direction: column; }
+  .en-addons-search { width: 100%; }
+  .en-addon-details { padding-left: 14px; }
 }
 </style>

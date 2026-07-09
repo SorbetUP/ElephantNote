@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/wiki-knowledge-continuation
+  pull_request:
+    branches:
+      - feature/rust-knowledge-core
   workflow_dispatch:
 
 permissions:
@@ -43,7 +46,6 @@ jobs:
           from pathlib import Path
           import subprocess
 
-          ROOT = Path('.')
           subprocess.run(
               ['git', 'fetch', 'origin', 'feature/real-codex-subscription'],
               check=True,
@@ -133,8 +135,7 @@ jobs:
 
           tests = '''\n    #[test]\n    fn wiki_route_accepts_codex_subscription_provider() {\n        let payload = json!({\n            "aiConfig": {\n                "routes": {\n                    "chat": { "provider": "codex", "model": "gpt-5.4-mini" }\n                }\n            }\n        });\n        let route = selected_wiki_route(&payload).unwrap();\n        assert_eq!(route.provider, "codex");\n        assert_eq!(route.model, "gpt-5.4-mini");\n        assert!(is_codex_provider(&route.provider));\n    }\n\n    #[test]\n    fn duplicate_topic_generation_is_rejected_until_guard_drops() {\n        let first = acquire_wiki_generation("Minecraft").unwrap();\n        assert!(acquire_wiki_generation(" minecraft ").is_err());\n        drop(first);\n        assert!(acquire_wiki_generation("Minecraft").is_ok());\n    }\n'''
           if 'wiki_route_accepts_codex_subscription_provider' not in wiki:
-              closing = '\n}\n'
-              pos = wiki.rfind(closing)
+              pos = wiki.rfind('\n}')
               if pos < 0:
                   raise SystemExit('wiki test module closing brace not found')
               wiki = wiki[:pos] + tests + wiki[pos:]
@@ -171,7 +172,7 @@ jobs:
           wiki_storage = read(wiki_storage_path)
           replace_pending = '''        if matches!(draft.status, WikiDraftStatus::Proposed) {\n            conn.execute(\n                "DELETE FROM wiki_drafts WHERE slug=?1 AND status='proposed' AND id!=?2",\n                params![draft.slug, draft.id],\n            )\n            .map_err(|error| error.to_string())?;\n        }\n'''
           schema_exec = '''        conn.execute_batch(WIKI_SCHEMA)\n            .map_err(|error| error.to_string())?;\n        let citations_json ='''
-          if 'DELETE FROM wiki_drafts WHERE slug=?1 AND status=' not in wiki_storage:
+          if "DELETE FROM wiki_drafts WHERE slug=?1 AND status='proposed'" not in wiki_storage:
               if schema_exec not in wiki_storage:
                   raise SystemExit('wiki proposal replacement marker not found')
               wiki_storage = wiki_storage.replace(
@@ -181,8 +182,7 @@ jobs:
               )
           write(wiki_storage_path, wiki_storage)
 
-          workflow = Path('.github/workflows/patch-wiki-knowledge-continuation-once.yml')
-          workflow.unlink()
+          Path('.github/workflows/patch-wiki-knowledge-continuation-once.yml').unlink()
 
       - name: Format Rust
         run: |

@@ -13,6 +13,7 @@ const readAi = () => read('Elephant/frontend/app/components/settings/AiProviderS
 const readAddons = () => read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
 const readAddonRow = () => read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
 const readAddonStore = () => read('Elephant/frontend/src/renderer/src/store/addons.js')
+const readAppShell = () => read('Elephant/frontend/app/components/shell/AppShell.vue')
 const readRouter = () => read('Elephant/frontend/src/renderer/src/router/index.js')
 const readPreferences = () => read('Elephant/frontend/src/renderer/src/store/preferences.js')
 
@@ -43,6 +44,18 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('const openSearchResult = (result) =>')
     expect(source).toContain('syncInitialPage.value = result.subpage')
     expect(source).toContain('aiInitialPage.value = result.subpage')
+  })
+
+  it('opens a requested section through the active modal instead of a legacy route', () => {
+    const settings = readSettings()
+    const shell = readAppShell()
+
+    expect(shell).toContain(':initial-section="settingsInitialSection"')
+    expect(shell).toContain("window.addEventListener('elephantnote:open-settings', handleOpenSettingsEvent)")
+    expect(settings).toContain("initialSection: { type: String, default: 'appearance' }")
+    expect(settings).toContain('const normalizeSection = (section) =>')
+    expect(settings).toContain('const activeSection = ref(normalizeSection(props.initialSection))')
+    expect(settings).toContain("watch(() => props.initialSection")
   })
 
   it('uses a minimal flat navigation and keeps Addons, Sites and Import separate', () => {
@@ -124,19 +137,23 @@ describe('ElephantNote settings redesign', () => {
     expect(preferences).toContain('autoPairBracket: true')
   })
 
-  it('imports one shared visual primitive layer', () => {
+  it('imports one shared visual primitive layer for AI, Sync and Addons', () => {
     const styles = readSettingsStyles()
     const primitives = readSettingsPrimitives()
+    const addons = readAddons()
+    const row = readAddonRow()
 
     expect(styles).toContain("@import './settings-primitives.css';")
     expect(styles).toContain('Reusable control chrome lives in settings-primitives.css')
     expect(primitives).toContain('--en-ui-control-height: 34px')
     expect(primitives).toContain('--en-ui-card-radius: 14px')
-    expect(primitives).toContain(':where(.en-ai-card, .en-sync-card)')
+    expect(primitives).toContain(':where(.en-ai-card, .en-sync-card, .en-addons-card)')
     expect(primitives).toContain(':where(.en-ai-toolbar, .en-sync-toolbar)')
-    expect(primitives).toContain(':where(.en-ai-settings button, .en-sync-panel button)')
+    expect(primitives).toContain('.en-addons-panel .en-primary-button')
+    expect(primitives).toContain('.en-addons-panel .en-switch')
     expect(primitives).toContain(':where(.en-ai-badge, .en-provider-state, .en-sync-status')
-    expect(primitives).toContain(':where(.en-ai-settings input, .en-ai-settings select, .en-ai-settings textarea')
+    expect(addons).not.toContain('.en-addons-mode-row .en-switch {')
+    expect(row).not.toContain('.en-switch {')
   })
 
   it('uses one switch geometry for root and nested settings panels', () => {
@@ -145,7 +162,7 @@ describe('ElephantNote settings redesign', () => {
 
     expect(styles).not.toContain('.en-settings-panel .en-switch,')
     expect(primitives).toContain('.en-settings-panel .en-switch,')
-    expect(primitives).toContain('.en-settings-panel :deep(.en-ai-switch)')
+    expect(primitives).toContain('.en-ai-switch, .en-addons-panel .en-switch')
     expect(primitives).toContain('display: block !important')
     expect(primitives).toContain('transform: translateX(0) !important')
     expect(primitives).toContain('transform: translateX(18px) !important')

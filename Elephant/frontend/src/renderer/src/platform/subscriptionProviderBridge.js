@@ -15,6 +15,9 @@ const providerNameFromConfig = (config = {}) => String(
   config.providers?.active ||
   ''
 ).trim().toLowerCase()
+const unsupportedCodexInterrupt = () => {
+  throw new Error('Codex turn interruption is not exposed yet because the current app-server reader is serialized. The turn remains real, but it must complete before another Codex request can run.')
+}
 
 export const SUBSCRIPTION_PROVIDER_ACTIONS = Object.freeze([
   'ai.providers.status',
@@ -37,7 +40,9 @@ const createProvider = (target, provider) => ({
   listModels: (payload = {}) => invoke(target, 'tauri_ai_models_list', providerPayload(provider, payload)),
   startThread: (payload = {}) => invoke(target, 'tauri_ai_thread_start', providerPayload(provider, payload)),
   startTurn: (payload = {}) => invoke(target, 'tauri_ai_turn_start', providerPayload(provider, payload)),
-  interruptTurn: (payload = {}) => invoke(target, 'tauri_ai_turn_interrupt', providerPayload(provider, payload))
+  interruptTurn: provider === 'codex'
+    ? unsupportedCodexInterrupt
+    : (payload = {}) => invoke(target, 'tauri_ai_turn_interrupt', providerPayload(provider, payload))
 })
 
 export const installSubscriptionProviderBridge = (target = globalThis) => {
@@ -59,7 +64,11 @@ export const installSubscriptionProviderBridge = (target = globalThis) => {
     listModels: (payload = {}) => invoke(target, 'tauri_ai_models_list', object(payload)),
     startThread: (payload = {}) => invoke(target, 'tauri_ai_thread_start', object(payload)),
     startTurn: (payload = {}) => invoke(target, 'tauri_ai_turn_start', object(payload)),
-    interruptTurn: (payload = {}) => invoke(target, 'tauri_ai_turn_interrupt', object(payload))
+    interruptTurn: (payload = {}) => {
+      const normalized = object(payload)
+      if (String(normalized.provider || '').toLowerCase() === 'codex') return unsupportedCodexInterrupt()
+      return invoke(target, 'tauri_ai_turn_interrupt', normalized)
+    }
   }
   root.ai.codex = { ...(root.ai.codex || {}), ...codex }
   root.ai.opencode = { ...(root.ai.opencode || {}), ...opencode }

@@ -24,6 +24,16 @@ Current package limits:
 
 External addons are installed disabled. The user reviews their declared capabilities before enabling them.
 
+## Community Addons mode
+
+Community Addons mode is disabled by default. Before any external addon can execute, the user must explicitly check the risk acknowledgement in **Settings → Addons** and enable Community Addons.
+
+The acknowledgement states that third-party addons can be unsafe, contain bugs, modify permitted notes or transmit permitted data, and that ElephantNote cannot guarantee the safety of every package. This consent is persisted on the device.
+
+Turning Community Addons mode off immediately stops every running external addon. Installed packages and their private storage remain available, but they cannot execute. At application startup, an addon previously marked as enabled is not restarted unless Community Addons mode is still enabled.
+
+The acknowledgement is a safety boundary, not a claim that an addon is safe. Users should still review the package author, source and requested capabilities.
+
 ## Minimal manifest
 
 ```json
@@ -183,11 +193,13 @@ All privileged operations are checked again in Rust. Worker isolation protects t
 
 - installation validates and extracts into a staging directory;
 - a package update replaces the previous package with rollback on registry failure;
+- Community Addons consent is required before activation and before startup restoration;
+- disabling Community Addons stops all running external addons;
 - activation has a 10-second timeout;
 - addon commands have a 30-second timeout;
 - a timed-out Worker is terminated;
 - activation errors are displayed in Settings → Addons;
-- enable/disable state is persisted across application restarts.
+- per-addon enable/disable state and global Community Addons consent are persisted.
 
 ## Build an addon
 
@@ -196,7 +208,7 @@ cd path/to/addon
 zip -r example.enaddon manifest.json main.js assets
 ```
 
-Then use **Settings → Addons → Install from file**.
+Then use **Settings → Addons → Install from file**. Review the requested capabilities, acknowledge the Community Addons warning, enable Community Addons mode and then enable the package.
 
 See `examples/addons/finance-notes` for a complete HTTP → transform → Markdown pipeline.
 

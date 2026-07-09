@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { markRaw } from 'vue'
 
+const COMMUNITY_ADDONS_PREF_KEY = 'addons.communityEnabled'
+
 const ADDON_STORE_EVENTS = [
   'registered',
   'unregistered',
@@ -17,10 +19,23 @@ const cloneContributionMap = (map = {}) => {
   )
 }
 
-const setExternalRegistryEnabled = async (id, enabled) => {
+const invokeTauri = (command, payload = {}) => {
   const invoke = globalThis?.__TAURI__?.core?.invoke
-  if (typeof invoke !== 'function') throw new Error('Tauri command API is unavailable for external addons')
-  return invoke('tauri_addons_set_enabled', { addonId: id, enabled })
+  if (typeof invoke !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
+  return invoke(command, payload)
+}
+
+const setExternalRegistryEnabled = (id, enabled) => {
+  return invokeTauri('tauri_addons_set_enabled', { addonId: id, enabled })
+}
+
+const readCommunityAddonsEnabled = async () => {
+  const value = await invokeTauri('tauri_prefs_get', { key: COMMUNITY_ADDONS_PREF_KEY })
+  return value === true
+}
+
+const persistCommunityAddonsEnabled = (enabled) => {
+  return invokeTauri('tauri_prefs_set', { key: COMMUNITY_ADDONS_PREF_KEY, value: enabled === true })
 }
 
 export const useAddonsStore = defineStore('addons', {
@@ -30,6 +45,8 @@ export const useAddonsStore = defineStore('addons', {
     contributions: {},
     lastError: null,
     operationInProgress: false,
+    communityAddonsEnabled: false,
+    communityConsentLoaded: false,
     manager: null,
     disposeListeners: []
   }),
@@ -52,6 +69,7 @@ export const useAddonsStore = defineStore('addons', {
       this.manager = markRaw(manager)
       this.installed = true
       this.refresh()
+      void this.loadCommunityAddonsConsent()
 
       const refresh = () => this.refresh()
       this.disposeListeners = ADDON_STORE_EVENTS.map((eventName) => manager.on(eventName, refresh))
@@ -72,6 +90,8 @@ export const useAddonsStore = defineStore('addons', {
       this.contributions = {}
       this.lastError = null
       this.operationInProgress = false
+      this.communityAddonsEnabled = false
+      this.communityConsentLoaded = false
     },
 
     refresh() {
@@ -80,12 +100,58 @@ export const useAddonsStore = defineStore('addons', {
       this.contributions = cloneContributionMap(this.manager.getContributionMap())
     },
 
+    async loadCommunityAddonsConsent() {
+      try {
+        this.communityAddonsEnabled = await readCommunityAddonsEnabled()
+        this.lastError = null
+      } catch (error) {
+        this.communityAddonsEnabled = false
+        this.lastError = error?.message || String(error)
+      } finally {
+        this.communityConsentLoaded = true
+      }
+      return this.communityAddonsEnabled
+    },
+
+    async setCommunityAddonsEnabled(enabled) {
+      if (!this.manager) throw new Error('Addon manager is not installed')
+      this.operationInProgress = true
+      try {
+        const nextEnabled = enabled === true
+        await persistCommunityAddonsEnabled(nextEnabled)
+        this.communityAddonsEnabled = nextEnabled
+        this.communityConsentLoaded = true
+
+        if (!nextEnabled) {
+          const enabledExternalAddons = this.manager.list().filter(
+            (addon) => addon.enabled && addon.manifest.source === 'external'
+          )
+          for (const addon of enabledExternalAddons) {
+            await this.manager.disable(addon.manifest.id)
+          }
+        }
+        this.lastError = null
+      } catch (error) {
+        this.lastError = error?.message || String(error)
+        throw error
+      } finally {
+        this.operationInProgress = false
+        this.refresh()
+      }
+    },
+
     async enableAddon(id) {
       if (!this.manager) throw new Error('Addon manager is not installed')
       const addon = this.manager.get(id)
       const external = addon?.manifest?.source === 'external'
       try {
-        if (external) await setExternalRegistryEnabled(id, true)
+        if (external) {
+          if (!this.communityConsentLoaded) await this.loadCommunityAddonsConsent()
+          if (!this.communityAddonsEnabled) {
+            throw new Error('Community addons are disabled. Confirm the security warning before enabling third-party code.')
+          }
+          await setExternalRegistryEnabled(id, true)
+        }
         await this.manager.enable(id)
         this.lastError = null
       } catch (error) {

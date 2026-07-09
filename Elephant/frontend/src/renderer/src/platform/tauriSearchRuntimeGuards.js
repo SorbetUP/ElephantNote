@@ -1,3 +1,8 @@
+const resolveVaultPath = (value = '') => {
+  if (typeof value === 'string') return value.trim()
+  return String(value?.vaultPath || value?.path || '').trim()
+}
+
 const normalizeStatus = (status = {}, vaultPath = '') => {
   const indexedDocuments = Number(
     status.indexedDocuments ??
@@ -8,9 +13,10 @@ const normalizeStatus = (status = {}, vaultPath = '') => {
   ) || 0
   return {
     ...status,
-    vaultPath: status.vaultPath || status.activeVault?.path || vaultPath || '',
+    vaultPath: status.vaultPath || status.activeVault?.path || resolveVaultPath(vaultPath) || '',
     indexedDocuments,
-    totalDocuments: Number(status.totalDocuments ?? status.totalNotes ?? indexedDocuments) || indexedDocuments
+    totalDocuments: Number(status.totalDocuments ?? status.totalNotes ?? status.documents ?? indexedDocuments) || indexedDocuments,
+    databasePath: status.databasePath || status.database_path || ''
   }
 }
 
@@ -21,17 +27,17 @@ export const installTauriSearchRuntimeGuards = (target = globalThis) => {
 
   let activeVaultPath = ''
   const rememberVaultPath = (value = '') => {
-    const path = String(value || '').trim()
+    const path = resolveVaultPath(value)
     if (path) activeVaultPath = path
     return activeVaultPath
   }
 
   const originalInitVault = search.initVault?.bind(search)
   if (typeof originalInitVault === 'function') {
-    search.initVault = async(vaultPath = '') => {
-      rememberVaultPath(vaultPath)
+    search.initVault = async(payload = '') => {
+      rememberVaultPath(payload)
       console.info('[search] bridge:initVault:start', { vaultPath: activeVaultPath })
-      const result = await originalInitVault(vaultPath)
+      const result = await originalInitVault(payload)
       const normalized = normalizeStatus(result, activeVaultPath)
       rememberVaultPath(normalized.vaultPath)
       console.info('[search] bridge:initVault:done', {
@@ -45,8 +51,9 @@ export const installTauriSearchRuntimeGuards = (target = globalThis) => {
 
   const originalStatus = search.status?.bind(search)
   if (typeof originalStatus === 'function') {
-    search.status = async() => {
-      const result = await originalStatus()
+    search.status = async(payload = activeVaultPath) => {
+      rememberVaultPath(payload)
+      const result = await originalStatus(payload)
       const normalized = normalizeStatus(result, activeVaultPath)
       rememberVaultPath(normalized.vaultPath)
       console.info('[search] bridge:status:done', {
@@ -62,9 +69,10 @@ export const installTauriSearchRuntimeGuards = (target = globalThis) => {
 
   const originalRebuild = search.rebuild?.bind(search)
   if (typeof originalRebuild === 'function') {
-    search.rebuild = async() => {
+    search.rebuild = async(payload = activeVaultPath) => {
+      rememberVaultPath(payload)
       console.info('[search] bridge:rebuild:start', { vaultPath: activeVaultPath })
-      const result = await originalRebuild()
+      const result = await originalRebuild(payload)
       const normalized = normalizeStatus(result, activeVaultPath)
       rememberVaultPath(normalized.vaultPath)
       console.info('[search] bridge:rebuild:done', {

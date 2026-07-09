@@ -1,0 +1,27 @@
+.en-addons-panel { display: grid; gap: 16px; }
+.en-addons-loading, .en-addons-empty { padding: 24px; color: var(--en-muted, #667085); font-size: 11.5px; text-align: center; }
+.en-addons-gate { display: grid; gap: 18px; max-width: 680px; padding: 22px; }
+.en-addons-gate-heading { display: flex; gap: 13px; align-items: flex-start; }
+.en-addons-gate h3, .en-addons-list-section h3 { margin: 0; font-size: 13px; }
+.en-addons-gate p, .en-addons-mode-row p { margin: 5px 0 0; color: var(--en-muted, #667085); font-size: 11.5px; line-height: 1.5; }
+.en-addons-icon { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; background: var(--en-soft, #e9eff7); color: var(--en-primary, #2563eb); }
+.en-addons-icon.warning { color: #d97706; }
+.en-addons-icon svg { width: 17px; height: 17px; }
+.en-addons-risk-check { display: flex; align-items: flex-start; gap: 9px; font-size: 11.5px; line-height: 1.45; }
+.en-addons-risk-check input { margin-top: 2px; accent-color: var(--en-primary, #2563eb); }
+.en-addons-gate .en-primary-button { justify-self: start; }
+.en-addons-mode-row { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 13px 18px; }
+.en-addons-mode-row strong { font-size: 13px; }
+.en-addons-feedback { margin: 0; padding: 9px 11px; border-radius: 9px; background: color-mix(in srgb, #16a34a 9%, var(--en-surface, #fff)); color: #15803d; font-size: 11px; }
+.en-addons-feedback.error { background: color-mix(in srgb, #dc2626 9%, var(--en-surface, #fff)); color: #b91c1c; }
+.en-addons-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.en-addons-search { min-width: 220px; flex: 1; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 9px; background: var(--en-surface, #fff); color: var(--en-muted, #667085); }
+.en-addons-search svg { width: 15px; height: 15px; }
+.en-addons-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--en-text, #101828); font: inherit; }
+.en-addons-list-section { display: grid; gap: 8px; }
+.en-addons-list-section > header { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+.en-addons-list-section > header span { color: var(--en-muted, #667085); font-size: 10px; }
+@media (max-width: 720px) {
+  .en-addons-toolbar { align-items: stretch; flex-direction: column; }
+  .en-addons-search { width: 100%; }
+}

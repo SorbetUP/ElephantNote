@@ -97,13 +97,6 @@ const loadAll = () => [
     preference: 'Link this device or phone',
     preferenceEn: 'Link this device or phone',
     routeCategory: 'rclone'
-  },
-  {
-    category: 'Addons',
-    categoryEn: 'Addons',
-    preference: 'Manage installed addons',
-    preferenceEn: 'Manage installed addons',
-    routeCategory: 'addons'
   }
 ]
 
@@ -142,8 +135,7 @@ onMounted(() => {
   }
   console.info('[settings-sidebar] mounted', {
     route: route.fullPath,
-    categories: categories.value.map(({ label, path }) => ({ label, path })),
-    addonsRouteRegistered: router.getRoutes().some((registeredRoute) => registeredRoute.path === '/preference/addons')
+    categories: categories.value.map(({ label, path }) => ({ label, path }))
   })
   window.tauri.ipcRenderer.on('settings::change-tab', onIpcCategoryChange)
   const languageChanged = () => {

@@ -9,6 +9,16 @@ const normalizeWeight = (edge = {}) => {
 }
 
 const edgeKey = (edge = {}) => `${edge.source}::${edge.target}::${edge.type || ''}::${edge.reason || ''}`
+const pairKey = (left, right) => [left, right].sort().join('::')
+
+const stableHash = (value = '') => {
+  let hash = 2166136261
+  for (const character of String(value)) {
+    hash ^= character.charCodeAt(0)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
 
 export const clampCameraScale = (scale) => Math.min(
   MAX_CAMERA_SCALE,
@@ -175,6 +185,302 @@ export const layoutSemanticNeighborhood = ({
     ...node,
     ...(positions.get(node.id) || { x: centerX, y: centerY, depth: distances.get(node.id) || 0 })
   }))
+}
+
+const isWikiTerritory = (cluster = {}) => cluster.id?.startsWith('wiki:') || cluster.tags?.includes('wiki-territory')
+const isUnassignedTerritory = (cluster = {}) => cluster.id === 'unassigned' || cluster.tags?.includes('unassigned-territory')
+
+const territoryStatus = (cluster = {}) => {
+  const tagged = (cluster.tags || []).find((tag) => String(tag).startsWith('status:'))
+  return tagged ? tagged.slice('status:'.length) : 'accepted'
+}
+
+const buildTerritoryMemberships = (territories = []) => {
+  const memberships = new Map()
+  for (const territory of territories) {
+    for (const nodeId of territory.paths || []) {
+      if (nodeId === territory.id) continue
+      if (!memberships.has(nodeId)) memberships.set(nodeId, [])
+      memberships.get(nodeId).push(territory.id)
+    }
+  }
+  return memberships
+}
+
+const buildTerritoryBridgeWeights = ({ edges, memberships, territoryIds }) => {
+  const weights = new Map()
+  const add = (left, right, weight) => {
+    if (!left || !right || left === right || !territoryIds.has(left) || !territoryIds.has(right)) return
+    const key = pairKey(left, right)
+    weights.set(key, (weights.get(key) || 0) + Math.max(0.1, weight))
+  }
+
+  for (const edge of edges) {
+    if (edge.type === 'wiki-link') {
+      add(edge.source, edge.target, 4 * Math.max(0.5, normalizeWeight(edge)))
+      continue
+    }
+    const sourceTerritories = memberships.get(edge.source) || []
+    const targetTerritories = memberships.get(edge.target) || []
+    for (const sourceTerritory of sourceTerritories) {
+      for (const targetTerritory of targetTerritories) {
+        add(sourceTerritory, targetTerritory, normalizeWeight(edge))
+      }
+    }
+  }
+  return weights
+}
+
+const normalizeCentersToViewport = ({ centers, width, height, margin = 110 }) => {
+  if (!centers.size) return centers
+  const values = [...centers.values()]
+  const minX = Math.min(...values.map((point) => point.x))
+  const maxX = Math.max(...values.map((point) => point.x))
+  const minY = Math.min(...values.map((point) => point.y))
+  const maxY = Math.max(...values.map((point) => point.y))
+  const spanX = Math.max(1, maxX - minX)
+  const spanY = Math.max(1, maxY - minY)
+  const scale = Math.min((width - margin * 2) / spanX, (height - margin * 2) / spanY, 1)
+  const sourceCenterX = (minX + maxX) / 2
+  const sourceCenterY = (minY + maxY) / 2
+  for (const point of centers.values()) {
+    point.x = width / 2 + (point.x - sourceCenterX) * scale
+    point.y = height / 2 + (point.y - sourceCenterY) * scale
+  }
+  return centers
+}
+
+const calculateTerritoryCenters = ({ territories, edges, memberships, width, height }) => {
+  const wikiTerritories = territories.filter((cluster) => isWikiTerritory(cluster))
+  const centers = new Map()
+  const radius = Math.min(width, height) * 0.29
+  wikiTerritories.forEach((territory, index) => {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(1, wikiTerritories.length)
+    centers.set(territory.id, {
+      x: width / 2 + Math.cos(angle) * radius,
+      y: height / 2 + Math.sin(angle) * radius
+    })
+  })
+  const territoryIds = new Set(wikiTerritories.map((territory) => territory.id))
+  const bridgeWeights = buildTerritoryBridgeWeights({ edges, memberships, territoryIds })
+  const pairs = [...bridgeWeights.entries()].map(([key, weight]) => {
+    const [left, right] = key.split('::')
+    return { left, right, weight }
+  })
+
+  for (let iteration = 0; iteration < 90; iteration += 1) {
+    const movements = new Map([...centers.keys()].map((id) => [id, { x: 0, y: 0 }]))
+    const ids = [...centers.keys()]
+    for (let leftIndex = 0; leftIndex < ids.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < ids.length; rightIndex += 1) {
+        const leftId = ids[leftIndex]
+        const rightId = ids[rightIndex]
+        const left = centers.get(leftId)
+        const right = centers.get(rightId)
+        const dx = left.x - right.x
+        const dy = left.y - right.y
+        const distanceSquared = Math.max(64, dx * dx + dy * dy)
+        const distance = Math.sqrt(distanceSquared)
+        const force = 2600 / distanceSquared
+        const x = (dx / distance) * force
+        const y = (dy / distance) * force
+        movements.get(leftId).x += x
+        movements.get(leftId).y += y
+        movements.get(rightId).x -= x
+        movements.get(rightId).y -= y
+      }
+    }
+    for (const pair of pairs) {
+      const left = centers.get(pair.left)
+      const right = centers.get(pair.right)
+      if (!left || !right) continue
+      const dx = right.x - left.x
+      const dy = right.y - left.y
+      const distance = Math.max(1, Math.hypot(dx, dy))
+      const desired = Math.max(105, 190 - Math.min(70, pair.weight * 8))
+      const force = (distance - desired) * 0.0028 * Math.min(8, pair.weight)
+      const x = (dx / distance) * force
+      const y = (dy / distance) * force
+      movements.get(pair.left).x += x
+      movements.get(pair.left).y += y
+      movements.get(pair.right).x -= x
+      movements.get(pair.right).y -= y
+    }
+    for (const [id, point] of centers.entries()) {
+      const movement = movements.get(id)
+      movement.x += (width / 2 - point.x) * 0.0015
+      movement.y += (height / 2 - point.y) * 0.0015
+      point.x += Math.max(-7, Math.min(7, movement.x))
+      point.y += Math.max(-7, Math.min(7, movement.y))
+    }
+  }
+  normalizeCentersToViewport({ centers, width, height })
+
+  const unassigned = territories.find((cluster) => isUnassignedTerritory(cluster))
+  if (unassigned) {
+    centers.set(unassigned.id, { x: width / 2, y: height - 62 })
+  }
+  return { centers, bridgeWeights }
+}
+
+const convexHull = (points = []) => {
+  if (points.length <= 2) return points
+  const sorted = [...points].sort((left, right) => left.x - right.x || left.y - right.y)
+  const cross = (origin, left, right) => (left.x - origin.x) * (right.y - origin.y) - (left.y - origin.y) * (right.x - origin.x)
+  const lower = []
+  for (const point of sorted) {
+    while (lower.length >= 2 && cross(lower.at(-2), lower.at(-1), point) <= 0) lower.pop()
+    lower.push(point)
+  }
+  const upper = []
+  for (const point of [...sorted].reverse()) {
+    while (upper.length >= 2 && cross(upper.at(-2), upper.at(-1), point) <= 0) upper.pop()
+    upper.push(point)
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)]
+}
+
+const territoryEnvelope = ({ territory, positions, center }) => {
+  const memberPoints = (territory.paths || [])
+    .map((id) => positions.get(id))
+    .filter(Boolean)
+  const points = memberPoints.length ? memberPoints : [center]
+  const centroid = points.reduce((output, point) => ({ x: output.x + point.x, y: output.y + point.y }), { x: 0, y: 0 })
+  centroid.x /= points.length
+  centroid.y /= points.length
+  const padding = territory.id === 'unassigned' ? 18 : 34
+  const expanded = points.map((point) => {
+    const dx = point.x - centroid.x
+    const dy = point.y - centroid.y
+    const distance = Math.max(1, Math.hypot(dx, dy))
+    return {
+      x: point.x + (dx / distance) * padding,
+      y: point.y + (dy / distance) * padding
+    }
+  })
+  let hull = convexHull(expanded)
+  if (hull.length < 3) {
+    const radius = territory.id === 'unassigned' ? 38 : Math.max(56, 34 + points.length * 3)
+    hull = Array.from({ length: 16 }, (_, index) => {
+      const angle = (Math.PI * 2 * index) / 16
+      return { x: centroid.x + Math.cos(angle) * radius, y: centroid.y + Math.sin(angle) * radius }
+    })
+  }
+  const path = `${hull.map((point, index) => `${index ? 'L' : 'M'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ')} Z`
+  const minX = Math.min(...hull.map((point) => point.x))
+  const maxX = Math.max(...hull.map((point) => point.x))
+  const minY = Math.min(...hull.map((point) => point.y))
+  const maxY = Math.max(...hull.map((point) => point.y))
+  return { path, bounds: { minX, maxX, minY, maxY }, centroid }
+}
+
+export const layoutWikiTerritories = ({
+  nodes = [],
+  edges = [],
+  clusters = [],
+  width = GRAPH_WIDTH,
+  height = GRAPH_HEIGHT
+} = {}) => {
+  const startedAt = globalThis.performance?.now?.() || Date.now()
+  const territories = clusters.filter((cluster) => isWikiTerritory(cluster) || isUnassignedTerritory(cluster))
+  if (!territories.some(isWikiTerritory)) {
+    return {
+      nodes: [],
+      territories: [],
+      territoryById: new Map(),
+      memberships: new Map(),
+      bridgeWeights: new Map(),
+      stats: { territoryCount: 0, overlapNotes: 0, unassignedNotes: 0, bridgeCount: 0, durationMs: 0 }
+    }
+  }
+
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const memberships = buildTerritoryMemberships(territories)
+  const { centers, bridgeWeights } = calculateTerritoryCenters({ territories, edges, memberships, width, height })
+  const positions = new Map()
+  const indexes = new Map()
+
+  for (const territory of territories) {
+    const center = centers.get(territory.id) || { x: width / 2, y: height / 2 }
+    if (byId.has(territory.id)) positions.set(territory.id, { ...center, territoryIds: [territory.id] })
+    indexes.set(territory.id, 0)
+  }
+
+  const overlapNotes = [...memberships.values()].filter((ids) => ids.filter((id) => id !== 'unassigned').length > 1).length
+  for (const node of nodes) {
+    if (node.kind === 'wiki') continue
+    const territoryIds = (memberships.get(node.id) || []).filter((id) => centers.has(id))
+    if (!territoryIds.length) continue
+    const territoryCenters = territoryIds.map((id) => centers.get(id))
+    const base = territoryCenters.reduce((output, point) => ({ x: output.x + point.x, y: output.y + point.y }), { x: 0, y: 0 })
+    base.x /= territoryCenters.length
+    base.y /= territoryCenters.length
+    const seed = stableHash(node.id)
+    if (territoryIds.length === 1) {
+      const territoryId = territoryIds[0]
+      const index = indexes.get(territoryId) || 0
+      indexes.set(territoryId, index + 1)
+      const count = Math.max(1, (clusters.find((cluster) => cluster.id === territoryId)?.paths?.length || 2) - 1)
+      const ring = Math.floor(index / 12)
+      const angle = ((seed % 360) / 180) * Math.PI + (Math.PI * 2 * (index % 12)) / Math.min(12, count)
+      const radius = territoryId === 'unassigned' ? 34 + ring * 22 : 48 + ring * 28
+      positions.set(node.id, {
+        x: base.x + Math.cos(angle) * radius,
+        y: base.y + Math.sin(angle) * radius,
+        territoryIds
+      })
+    } else {
+      const angle = ((seed % 360) / 180) * Math.PI
+      const radius = 8 + (seed % 14)
+      positions.set(node.id, {
+        x: base.x + Math.cos(angle) * radius,
+        y: base.y + Math.sin(angle) * radius,
+        territoryIds
+      })
+    }
+  }
+
+  const unpositioned = nodes.filter((node) => !positions.has(node.id))
+  unpositioned.forEach((node, index) => {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(1, unpositioned.length)
+    const radius = Math.min(width, height) * 0.47
+    positions.set(node.id, {
+      x: width / 2 + Math.cos(angle) * radius,
+      y: height / 2 + Math.sin(angle) * radius,
+      territoryIds: []
+    })
+  })
+
+  const positionedNodes = nodes.map((node) => ({ ...node, ...positions.get(node.id) }))
+  const projectedTerritories = territories.map((territory, index) => {
+    const center = centers.get(territory.id) || { x: width / 2, y: height / 2 }
+    const envelope = territoryEnvelope({ territory, positions, center })
+    return {
+      ...territory,
+      ...envelope,
+      centerX: center.x,
+      centerY: center.y,
+      status: territoryStatus(territory),
+      kind: isUnassignedTerritory(territory) ? 'unassigned' : 'wiki',
+      colorIndex: index,
+      memberCount: Math.max(0, (territory.paths || []).length - (territory.paths?.includes(territory.id) ? 1 : 0))
+    }
+  })
+  const durationMs = Math.max(0, Math.round((globalThis.performance?.now?.() || Date.now()) - startedAt))
+  return {
+    nodes: positionedNodes,
+    territories: projectedTerritories,
+    territoryById: new Map(projectedTerritories.map((territory) => [territory.id, territory])),
+    memberships,
+    bridgeWeights,
+    stats: {
+      territoryCount: projectedTerritories.filter((territory) => territory.kind === 'wiki').length,
+      overlapNotes,
+      unassignedNotes: projectedTerritories.find((territory) => territory.kind === 'unassigned')?.memberCount || 0,
+      bridgeCount: bridgeWeights.size,
+      durationMs
+    }
+  }
 }
 
 export const fitCameraToNodes = ({

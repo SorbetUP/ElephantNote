@@ -14,6 +14,7 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
 
     let mut store = KnowledgeStore::open(&canonical_root)?;
     store.initialize_relations()?;
+    store.initialize_wikis()?;
     let mut report = RebuildReport::default();
     let mut present_paths = HashSet::new();
 
@@ -44,9 +45,11 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
                 }
             }
             Ok(IndexDecision::Changed(snapshot)) => {
+                let changed_path = snapshot.relative_path.clone();
                 let index_result = store
                     .upsert_document(&snapshot)
-                    .and_then(|_| store.sync_markdown_relations(&snapshot).map(|_| ()));
+                    .and_then(|_| store.sync_markdown_relations(&snapshot).map(|_| ()))
+                    .and_then(|_| store.mark_wikis_outdated_for_source(&changed_path).map(|_| ()));
                 if let Err(error) = index_result {
                     report.failed.push(RebuildFailure {
                         relative_path,

@@ -5,7 +5,7 @@ import ThemeIcon from '@/assets/icons/pref_theme.svg'
 import ImageIcon from '@/assets/icons/pref_image.svg'
 import SpellIcon from '@/assets/icons/pref_spellcheck.svg'
 import KeyBindingIcon from '@/assets/icons/pref_key_binding.svg'
-import { Box, Connection } from '@element-plus/icons-vue'
+import { Connection } from '@element-plus/icons-vue'
 
 import preferences from '../../../../common/preferences/schema.json'
 import { t } from '../../i18n'
@@ -16,13 +16,6 @@ export const getCategory = () => [
     label: 'general',
     icon: GeneralIcon,
     path: '/preference/general'
-  },
-  {
-    name: 'Addons',
-    label: 'addons',
-    icon: Box,
-    path: '/preference/addons',
-    featured: true
   },
   {
     name: 'Sync',
@@ -69,9 +62,7 @@ export const getCategory = () => [
   }
 ]
 
-// Creates a reactive translated mapping function
 export const getTranslatedSearchContent = () => {
-  // Generate keys by iterating through each language
   const result = []
   Object.keys(preferences).forEach((k) => {
     const { description, enum: emums } = preferences[k]
@@ -79,8 +70,6 @@ export const getTranslatedSearchContent = () => {
     if (description.endsWith('--internal')) return
 
     let [category] = description.split('--')
-
-    // Map category names
     let mappedCategory = category.toLowerCase()
     if (category === 'General') mappedCategory = 'general'
     else if (category === 'Editor') mappedCategory = 'editor'
@@ -92,16 +81,11 @@ export const getTranslatedSearchContent = () => {
     else if (category === 'Watcher') mappedCategory = 'watcher'
     else if (category === 'Spelling') mappedCategory = 'spelling'
     else if (category === 'Custom CSS') mappedCategory = 'custom css'
-    else {
-      // Handle special category names
-      mappedCategory = category.toLowerCase().replace(/\s+/g, '-')
-    }
+    else mappedCategory = category.toLowerCase().replace(/\s+/g, '-')
 
-    // Compute the category for route navigation (only allow existing routes, otherwise fall back to general)
     let routeCategory = mappedCategory
     const validRoutes = [
       'general',
-      'addons',
       'rclone',
       'editor',
       'markdown',
@@ -112,38 +96,31 @@ export const getTranslatedSearchContent = () => {
     ]
     if (!validRoutes.includes(routeCategory)) routeCategory = 'general'
 
-    // Try to translate the category and item
     const categoryKey = `preferences.search.categories.${mappedCategory}`
     const itemKey = `preferences.search.items.${k}`
 
-    // Translate the category name
     let translatedCategory = category
     const englishCategory = category
     try {
       translatedCategory = t(categoryKey)
     } catch (e) {
       console.warn(`   ⚠️ 搜索分类翻译失败: ${e.message}`)
-      // Try fallback to preferences.categories
       try {
-        const fallbackKey = `preferences.categories.${mappedCategory}`
-        translatedCategory = t(fallbackKey)
+        translatedCategory = t(`preferences.categories.${mappedCategory}`)
       } catch (e2) {
         console.warn(`   ❌ 搜索分类fallback也失败: ${e2.message}`)
         translatedCategory = category
       }
     }
 
-    // Translate preference description
     let translatedPreference = description.split('--')[1] || description
     const englishPreference = description.split('--')[1] || description
     try {
       translatedPreference = t(itemKey)
     } catch (e) {
       console.warn(`   ⚠️ 搜索项目翻译失败: ${e.message}`)
-      // Try fallback to preferences.items
       try {
-        const fallbackKey = `preferences.items.${k}`
-        translatedPreference = t(fallbackKey)
+        translatedPreference = t(`preferences.items.${k}`)
       } catch (e2) {
         console.warn(`   ❌ 搜索项目fallback也失败: ${e2.message}`)
         translatedPreference = description.split('--')[1] || description
@@ -164,11 +141,8 @@ export const getTranslatedSearchContent = () => {
   return result
 }
 
-// Add language change listener
 export const setupLanguageChangeListener = () => {
-  // Listen for language change events
   const handleLanguageChange = () => {
-    // Trigger search content refresh
     if (window.__VUE_I18N__) {
       try {
         const g =
@@ -176,8 +150,6 @@ export const setupLanguageChangeListener = () => {
             ? window.__VUE_I18N__.global()
             : window.__VUE_I18N__.global
         const currentLanguage = g && g.locale ? g.locale.value || g.locale : 'en'
-
-        // Here we can dispatch a custom event to notify the search component to refresh
         window.dispatchEvent(
           new CustomEvent('languageChanged', {
             detail: { language: currentLanguage }
@@ -189,21 +161,18 @@ export const setupLanguageChangeListener = () => {
     }
   }
 
-  // Listen for locale changes in the i18n instance
   if (window.__VUE_I18N__) {
     try {
       const i18n = window.__VUE_I18N__
-      // Listen for locale changes
       const g = typeof i18n.global === 'function' ? i18n.global() : i18n.global
       if (g && g.locale && g.locale.value !== undefined) {
-        // Use Vue's reactive system to listen for language changes
+        // Locale changes are detected by the polling fallback below.
       }
     } catch (e) {
       console.warn('⚠️ 设置语言变化监听器失败:', e)
     }
   }
 
-  // Add a polling fallback mechanism as a backup
   setInterval(() => {
     try {
       if (window.__VUE_I18N__) {
@@ -217,12 +186,11 @@ export const setupLanguageChangeListener = () => {
           handleLanguageChange()
         }
       }
-    } catch (e) {
-      // Ignore errors and continue checking
+    } catch {
+      // Ignore errors and continue checking.
     }
-  }, 1000) // Check once per second
+  }, 1000)
 
-  // Record the initial language
   try {
     if (window.__VUE_I18N__) {
       const g =
@@ -231,22 +199,18 @@ export const setupLanguageChangeListener = () => {
           : window.__VUE_I18N__.global
       getTranslatedSearchContent.lastLanguage = g && g.locale ? g.locale.value || g.locale : 'en'
     }
-  } catch (e) {
+  } catch {
     getTranslatedSearchContent.lastLanguage = 'en'
   }
 }
 
-// Initialize the language change listener
 setupLanguageChangeListener()
 
-// Add manual refresh function
 export const refreshSearchContent = () => {
-  // Clear the language cache to force re-fetch
   if (getTranslatedSearchContent.lastLanguage) {
     delete getTranslatedSearchContent.lastLanguage
   }
 
-  // Trigger the language change event
   window.dispatchEvent(
     new CustomEvent('languageChanged', {
       detail: { language: 'force-refresh' }
@@ -256,15 +220,12 @@ export const refreshSearchContent = () => {
   return getTranslatedSearchContent()
 }
 
-// Creates the debug popup (ensures the close button is visible)
 function createDebugPopup() {
-  // Remove any existing popup
   const existingPopup = document.getElementById('debugPopup')
   if (existingPopup) {
     document.body.removeChild(existingPopup)
   }
 
-  // Create new popup
   const popup = document.createElement('div')
   popup.id = 'debugPopup'
   popup.style.cssText = `

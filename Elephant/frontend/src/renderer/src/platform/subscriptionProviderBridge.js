@@ -18,6 +18,54 @@ const providerNameFromConfig = (config = {}) => String(
 const unsupportedCodexInterrupt = () => {
   throw new Error('Codex turn interruption is not exposed yet because the current app-server reader is serialized. The turn remains real, but it must complete before another Codex request can run.')
 }
+const runtimeThreads = new Map()
+
+const text = (value = '') => String(value ?? '').trim()
+const chatMessage = (payload = {}) => {
+  const messages = Array.isArray(payload.messages) ? payload.messages : []
+  const lastUser = [...messages].reverse().find((message) => message?.role === 'user' && text(message?.content))
+  return text(lastUser?.content || payload.message || payload.prompt || payload.query || payload.text)
+}
+const conversationKey = (payload = {}) => text(
+  payload.conversationId ||
+  payload.conversationID ||
+  payload.chatId ||
+  payload.chatID ||
+  payload.sessionId ||
+  payload.sessionID ||
+  'default'
+)
+const chatRoute = (config = {}, payload = {}) => object(
+  payload.route ||
+  payload.chatRoute ||
+  config.routes?.chat ||
+  {}
+)
+const chatProvider = (config = {}, payload = {}) => text(
+  payload.provider ||
+  chatRoute(config, payload).source ||
+  chatRoute(config, payload).provider ||
+  config.provider ||
+  config.transport
+).toLowerCase()
+const chatModel = (config = {}, payload = {}) => text(
+  payload.model ||
+  chatRoute(config, payload).model ||
+  chatRoute(config, payload).modelId ||
+  config.model
+)
+const runtimeProviderConfig = (config = {}, provider) => {
+  const providers = Array.isArray(config.providers?.list) ? config.providers.list : []
+  return object(providers.find((entry) => text(entry?.type).toLowerCase() === provider) || config.providers?.[provider])
+}
+const threadIdFrom = (result = {}) => text(
+  result.threadId ||
+  result.threadID ||
+  result.id ||
+  result.thread?.id ||
+  result.thread?.threadId ||
+  result.thread?.threadID
+)
 
 export const SUBSCRIPTION_PROVIDER_ACTIONS = Object.freeze([
   'ai.providers.status',
@@ -44,6 +92,67 @@ const createProvider = (target, provider) => ({
     ? unsupportedCodexInterrupt
     : (payload = {}) => invoke(target, 'tauri_ai_turn_interrupt', providerPayload(provider, payload))
 })
+
+const createSubscriptionChat = (root, previousRagChat) => async(payload = {}) => {
+  const normalized = object(payload)
+  const config = object(normalized.aiConfig || normalized.config || await root.ai.getConfig?.())
+  const provider = chatProvider(config, normalized)
+  if (provider !== 'codex' && provider !== 'opencode') {
+    if (!previousRagChat) throw new Error(`No chat runtime is available for provider "${provider || 'unknown'}".`)
+    return previousRagChat(payload)
+  }
+
+  const message = chatMessage(normalized)
+  if (!message) throw new Error('A non-empty user message is required.')
+  const model = chatModel(config, normalized)
+  if (!model) throw new Error(`No ${provider} chat model is selected.`)
+  const runtime = root.ai[provider]
+  if (!runtime?.startThread || !runtime?.startTurn) throw new Error(`The ${provider} runtime bridge is unavailable.`)
+
+  const providerConfig = runtimeProviderConfig(config, provider)
+  const connection = provider === 'opencode'
+    ? { endpoint: providerConfig.endpoint || chatRoute(config, normalized).endpoint, password: providerConfig.apiKey || providerConfig.password }
+    : {}
+  const key = `${provider}:${conversationKey(normalized)}:${model}`
+  let threadId = runtimeThreads.get(key) || ''
+  let created = false
+  if (!threadId) {
+    const thread = await runtime.startThread({
+      ...connection,
+      model,
+      cwd: normalized.cwd || config.cwd,
+      title: normalized.title || 'ElephantNote chat'
+    })
+    threadId = threadIdFrom(thread)
+    if (!threadId) throw new Error(`${provider} created a thread without returning its id.`)
+    runtimeThreads.set(key, threadId)
+    created = true
+  }
+
+  const route = chatRoute(config, normalized)
+  const systemPrompt = text(route.systemPrompt || config.systemPrompt)
+  const turnMessage = created && systemPrompt ? `${systemPrompt}\n\nUser message:\n${message}` : message
+  let result
+  try {
+    result = await runtime.startTurn({ ...connection, threadId, message: turnMessage, model, cwd: normalized.cwd || config.cwd })
+  } catch (error) {
+    runtimeThreads.delete(key)
+    throw error
+  }
+
+  const answer = text(result?.text || result?.answer || result?.response?.text)
+  if (!answer) throw new Error(`${provider} completed the turn without returning assistant text.`)
+  return {
+    answer,
+    sources: Array.isArray(result?.sources) ? result.sources : [],
+    runtime: result?.runtime || `${provider}-runtime`,
+    provider,
+    model,
+    threadId,
+    turnId: result?.turnId || result?.turnID || '',
+    raw: result
+  }
+}
 
 export const installSubscriptionProviderBridge = (target = globalThis) => {
   const root = target?.elephantnote
@@ -83,13 +192,18 @@ export const installSubscriptionProviderBridge = (target = globalThis) => {
     }
     if (provider === 'opencode') {
       const endpoint = normalized.endpoint || normalized.opencode?.endpoint
-      const runtime = await opencode.status({ endpoint })
-      const auth = await opencode.authStatus({ endpoint })
+      const password = normalized.apiKey || normalized.password
+      const runtime = await opencode.status({ endpoint, password })
+      const auth = await opencode.authStatus({ endpoint, password })
       return { ok: true, provider: 'opencode', runtime, auth }
     }
     if (!previousTestConfig) throw new Error(`No runtime test is available for provider "${provider || 'unknown'}".`)
     return previousTestConfig(config)
   }
+
+  root.rag = root.rag || {}
+  const previousRagChat = root.rag.chat?.bind(root.rag)
+  root.rag.chat = createSubscriptionChat(root, previousRagChat)
 
   const previousApi = root.api || {}
   const previousDescribe = previousApi.describe?.bind(previousApi)

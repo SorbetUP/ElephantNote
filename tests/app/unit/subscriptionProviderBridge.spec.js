@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { installTauriElephantNoteBridge } from '../../../Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js'
 import {
   installSubscriptionProviderBridge,
   SUBSCRIPTION_PROVIDER_ACTIONS
@@ -30,6 +31,14 @@ const createTarget = () => {
     },
     invoke,
     fallbackChat
+  }
+}
+
+const memoryStorage = () => {
+  const values = new Map()
+  return {
+    getItem: (key) => values.has(key) ? values.get(key) : null,
+    setItem: (key, value) => values.set(key, String(value))
   }
 }
 
@@ -84,6 +93,31 @@ describe('subscription provider bridge', () => {
       model: 'codex-model-1'
     }))
     expect(fallbackChat).not.toHaveBeenCalled()
+  })
+
+  it('routes API rag.chat through the installed Tauri bridge to Codex', async() => {
+    const invoke = vi.fn(async(command, payload) => {
+      if (command === 'tauri_ai_config_get') return { routes: { chat: { source: 'codex', model: 'codex-model-api' } } }
+      if (command === 'tauri_ai_thread_start') return { thread: { id: 'codex-api-thread' } }
+      if (command === 'tauri_ai_turn_start') return { text: 'answer through api', runtime: 'codex-app-server' }
+      return { ok: true, command, payload }
+    })
+    const target = { __TAURI__: { core: { invoke } }, localStorage: memoryStorage() }
+    expect(installTauriElephantNoteBridge(target)).toBe(true)
+    expect(installSubscriptionProviderBridge(target)).toBe(true)
+
+    const response = await target.elephantnote.api.call('rag.chat', {
+      message: 'Use Codex',
+      messages: [{ role: 'user', content: 'Use Codex' }]
+    })
+
+    expect(response).toMatchObject({
+      ok: true,
+      data: { answer: 'answer through api', provider: 'codex', model: 'codex-model-api' }
+    })
+    expect(invoke).toHaveBeenCalledWith('tauri_ai_thread_start', expect.objectContaining({ provider: 'codex', model: 'codex-model-api' }))
+    expect(invoke).toHaveBeenCalledWith('tauri_ai_turn_start', expect.objectContaining({ provider: 'codex', threadId: 'codex-api-thread' }))
+    expect(invoke).not.toHaveBeenCalledWith('tauri_rag_chat', expect.anything())
   })
 
   it('routes OpenCode chat with its configured loopback endpoint and credential', async() => {

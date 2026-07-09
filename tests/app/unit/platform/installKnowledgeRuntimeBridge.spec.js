@@ -39,11 +39,15 @@ afterEach(() => {
 describe('knowledge search bridge initialization', () => {
   it('contains no implicit rebuild path in native init or chat helpers', () => {
     const nativeBridge = repositoryFile('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
+    const runtimeBridge = repositoryFile('Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js')
     const domainClients = repositoryFile('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
     const chatHelpers = domainClients.split('export const createDomainClients')[0]
 
     expect(nativeBridge).not.toContain("initVault: () => invoke(target, 'tauri_knowledge_rebuild')")
     expect(nativeBridge).toContain("initVault: async(payload = '')")
+    expect(runtimeBridge).not.toContain('MAX_GRAPH_NODES')
+    expect(runtimeBridge).not.toContain('graph:renderer-window')
+    expect(runtimeBridge).toContain("graphMode: 'full'")
     expect(chatHelpers).not.toContain('SEARCH_REBUILD')
     expect(chatHelpers).not.toContain('shouldRebuildChatSearch')
     expect(chatHelpers).not.toContain('ensureSearchVaultForChat')
@@ -141,8 +145,8 @@ describe('knowledge search bridge initialization', () => {
     expect(statusCalls).toBe(1)
   })
 
-  it('limits large graph inspections on the real API path before rendering', async() => {
-    const nodes = Array.from({ length: 500 }, (_, index) => ({
+  it('returns every graph node instead of applying a hidden renderer cap', async() => {
+    const nodes = Array.from({ length: 1389 }, (_, index) => ({
       id: `Note-${index}.md`,
       path: `Note-${index}.md`,
       title: `Note ${index}`,
@@ -150,20 +154,40 @@ describe('knowledge search bridge initialization', () => {
     }))
     const invoke = vi.fn(async(command) => {
       if (command === 'tauri_debug_log') return true
-      if (command === 'tauri_knowledge_status') return { documents: 500, chunks: 500 }
+      if (command === 'tauri_knowledge_status') return { documents: 1389, chunks: 2200 }
       if (command === 'tauri_knowledge_graph') return { nodes, edges: [], clusters: [] }
       return null
     })
     const bridge = await loadRealTauriBridge(invoke)
 
     await bridge.api.call('search.initVault', { vaultPath: '/vault/A' })
-    const envelope = await bridge.api.call('search.inspect', {})
-    const inspection = envelope.data
+    const inspection = (await bridge.api.call('search.inspect', {})).data
 
-    expect(inspection.graph.rendererLimited).toBe(true)
-    expect(inspection.graph.nodes).toHaveLength(240)
-    expect(inspection.graph.hiddenNodeCount).toBe(260)
-    expect(inspection.documents).toHaveLength(240)
+    expect(inspection.graph.rendererLimited).toBe(false)
+    expect(inspection.graph.nodes).toHaveLength(1389)
+    expect(inspection.graph.hiddenNodeCount).toBe(0)
+    expect(inspection.documents).toHaveLength(1389)
+  })
+
+  it('deduplicates chunk-level search hits by note path', async() => {
+    const invoke = vi.fn(async(command) => {
+      if (command === 'tauri_debug_log') return true
+      if (command === 'tauri_knowledge_search') {
+        return [
+          { relative_path: 'A.md', chunk_id: 'a-1', score: 0.5, excerpt: 'first' },
+          { relative_path: 'A.md', chunk_id: 'a-2', score: 0.9, excerpt: 'best' },
+          { relative_path: 'B.md', chunk_id: 'b-1', score: 0.7 }
+        ]
+      }
+      return null
+    })
+    const bridge = await loadRealTauriBridge(invoke)
+
+    const results = (await bridge.api.call('search.query', { query: 'test', limit: 20 })).data
+
+    expect(results).toHaveLength(2)
+    expect(results[0]).toMatchObject({ relativePath: 'A.md', chunkId: 'a-2', matchCount: 2 })
+    expect(results[1]).toMatchObject({ relativePath: 'B.md', matchCount: 1 })
   })
 
   it('runs a rebuild only through the explicit search.rebuild action and then settles', async() => {

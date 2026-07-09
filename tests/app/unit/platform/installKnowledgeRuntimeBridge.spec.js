@@ -1,11 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const repositoryFile = (relativePath) => readFileSync(
-  fileURLToPath(new URL(`../../../../${relativePath}`, import.meta.url)),
-  'utf8'
-)
+const repositoryFile = (relativePath) => readFileSync(join(process.cwd(), relativePath), 'utf8')
 
 const installTarget = (invoke) => {
   globalThis.__TAURI__ = { core: { invoke } }

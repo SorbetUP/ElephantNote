@@ -1,3 +1,6 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import vm from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('element-plus', () => ({
@@ -8,6 +11,8 @@ import { ElephantAddonManager } from '../../../../Elephant/frontend/src/renderer
 import { builtinAddons } from '../../../../Elephant/frontend/src/renderer/src/addons/builtin/index.js'
 import { ExternalAddonController } from '../../../../Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js'
 import { normalizeAddonManifest } from '../../../../Elephant/frontend/src/renderer/src/addons/manifest.js'
+
+const root = process.cwd()
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -104,6 +109,68 @@ describe('built-in starter addons', () => {
     expect(writeCall[1].relativePath).toBe(result.path)
     expect(writeCall[1].content).toContain('# ')
     expect(writeCall[1].content).toContain('## Tasks')
+  })
+})
+
+describe('external platform proof addon', () => {
+  it('uses app info, persistent storage and note write/read-back through the public API', async () => {
+    const source = fs.readFileSync(
+      path.join(root, 'examples/addons/platform-proof/main.js'),
+      'utf8'
+    )
+    const sandbox = { self: {} }
+    vm.runInNewContext(source, sandbox, { filename: 'platform-proof/main.js' })
+
+    const notes = new Map()
+    const storage = new Map()
+    let command = null
+    const api = {
+      app: {
+        info: vi.fn(async () => ({ name: 'ElephantNote', version: '0.18.9', addonApiVersion: 1 }))
+      },
+      notes: {
+        write: vi.fn(async (notePath, content) => {
+          notes.set(notePath, content)
+          return { ok: true, path: notePath }
+        }),
+        read: vi.fn(async (notePath) => ({ path: notePath, content: notes.get(notePath) }))
+      },
+      storage: {
+        get: vi.fn(async (key) => storage.get(key) ?? null),
+        set: vi.fn(async (key, value) => {
+          storage.set(key, value)
+          return { ok: true }
+        }),
+        remove: vi.fn(async (key) => storage.delete(key)),
+        entries: vi.fn(async () => Object.fromEntries(storage))
+      },
+      commands: {
+        register: vi.fn((definition) => {
+          command = definition
+          return () => { command = null }
+        })
+      }
+    }
+
+    const dispose = sandbox.self.elephantAddon.activate(api)
+    expect(command?.id).toBe('com.elephantnote.examples.platform-proof.run')
+
+    const first = await command.run()
+    const second = await command.run()
+
+    expect(first.verified).toBe(true)
+    expect(first.runCount).toBe(1)
+    expect(second.verified).toBe(true)
+    expect(second.runCount).toBe(2)
+    expect(second.path).toBe('Addon Proof/External Addon Platform Proof.md')
+    expect(notes.get(second.path)).toContain('ELEPHANT_ADDON_PROOF:2:')
+    expect(storage.get('runCount')).toBe(2)
+    expect(api.notes.write).toHaveBeenCalledTimes(2)
+    expect(api.notes.read).toHaveBeenCalledTimes(2)
+    expect(api.storage.entries).toHaveBeenCalledTimes(2)
+
+    dispose()
+    expect(command).toBeNull()
   })
 })
 

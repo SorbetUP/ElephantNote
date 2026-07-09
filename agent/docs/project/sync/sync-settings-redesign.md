@@ -93,6 +93,20 @@ macOS builds include `NSCameraUsageDescription` in `Elephant/backend/tauri/Info.
 
 A real camera cannot be synthesized by unit CI. The scanner integration is therefore covered by build/lint contracts, while the QR payload itself is tested by an independent encode/decode round trip.
 
+## Development dependency guard
+
+`pnpm` installs this repository's dependencies under `Elephant/node_modules` because `.npmrc` sets `modules-dir=Elephant/node_modules`. Switching to a branch that adds a package can therefore leave an older local installation in place even though `package.json` and `pnpm-lock.yaml` are correct.
+
+Before Tauri or Vite starts, `build/scripts/ensure-dev-dependencies.mjs` now:
+
+1. hashes `package.json`, `pnpm-lock.yaml`, and `.npmrc`;
+2. verifies Vite, `qrcode`, and `@zxing/browser` are actually resolvable from the frontend tree;
+3. runs `pnpm install --frozen-lockfile --prefer-offline` when the package metadata changed or modules are missing;
+4. verifies the installed modules after pnpm returns;
+5. records the successful fingerprint under `Elephant/node_modules` and skips installation on the next unchanged run.
+
+A failed or inconsistent install stops `pnpm tauri:dev` before Vite can return misleading HTTP 500 module-resolution errors.
+
 ## Link decision
 
 No invitation URL is displayed in this redesign because ElephantNote does not currently register a tested application URL scheme. A URL that merely contains the credential but cannot open ElephantNote would be misleading.
@@ -133,8 +147,10 @@ The focused suite verifies that:
 - QR, file, and pasted code resolve to the exact same temporary credential;
 - expired, malformed, and incomplete QR/file payloads are rejected;
 - live camera scanning, rear-camera constraints, system-camera capture, and still-image decoding remain wired;
+- dependency metadata changes are detected after switching branches;
+- the real development dependency guard performs a frozen pnpm install and then skips the unchanged second run;
 - file export, native sharing, fallback download, import, drag and drop, protocol checks, and expiration checks are present;
 - conflict retention, restore, delete, and toolbar synchronization remain wired to real implementations;
 - generic Settings cards and controls are not reimplemented locally in the Sync component.
 
-The dedicated `Sync Invitation Validation` workflow executes 17 focused tests across the invitation round-trip and Sync integration suites. Its output is uploaded for every run so a green status is backed by inspectable evidence rather than a hidden or smoke-only assertion.
+The dedicated `Sync Invitation Validation` workflow executes 21 focused tests across three suites. Its output includes the real pnpm dependency-repair run and is uploaded on every execution so a green status is backed by inspectable evidence rather than a hidden or smoke-only assertion.

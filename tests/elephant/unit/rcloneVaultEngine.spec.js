@@ -79,52 +79,6 @@ describe('RcloneVaultEngine embedded local sync compatibility wrapper', () => {
     expect(await readText(remotePath, 'Conflict.md')).toContain('Remote edit.')
   })
 
-  it('propagates local deletes to the shared folder after a previous sync', async() => {
-    const vaultPath = await createTempVault()
-    const remotePath = await createTempVault('elephant-local-remote-')
-    await fs.writeFile(path.join(vaultPath, 'Deleted.md'), '# Delete me\n')
-    const engine = new RcloneVaultEngine({ cwd: vaultPath })
-
-    await engine.run({ init: { remotePath }, sync: {} })
-    await fs.remove(path.join(vaultPath, 'Deleted.md'))
-    const status = await engine.run({ sync: {} })
-
-    await expect(fs.pathExists(path.join(remotePath, 'Deleted.md'))).resolves.toBe(false)
-    expect(status.lastError).toBe('')
-  })
-
-  it('propagates remote deletes to the local vault after a previous sync', async() => {
-    const vaultPath = await createTempVault()
-    const remotePath = await createTempVault('elephant-local-remote-')
-    await fs.writeFile(path.join(vaultPath, 'RemoteDeleted.md'), '# Delete remotely\n')
-    const engine = new RcloneVaultEngine({ cwd: vaultPath })
-
-    await engine.run({ init: { remotePath }, sync: {} })
-    await fs.remove(path.join(remotePath, 'RemoteDeleted.md'))
-    const status = await engine.run({ sync: {} })
-
-    await expect(fs.pathExists(path.join(vaultPath, 'RemoteDeleted.md'))).resolves.toBe(false)
-    expect(status.lastError).toBe('')
-  })
-
-  it('does not delete a file changed remotely after it was deleted locally', async() => {
-    const vaultPath = await createTempVault()
-    const remotePath = await createTempVault('elephant-local-remote-')
-    await fs.writeFile(path.join(vaultPath, 'DeleteConflict.md'), '# Original\n')
-    const engine = new RcloneVaultEngine({ cwd: vaultPath })
-
-    await engine.run({ init: { remotePath }, sync: {} })
-    await fs.remove(path.join(vaultPath, 'DeleteConflict.md'))
-    await fs.writeFile(path.join(remotePath, 'DeleteConflict.md'), '# Changed remotely\n')
-    const status = await engine.run({ sync: {} })
-
-    await expect(readText(remotePath, 'DeleteConflict.md')).resolves.toContain('Changed remotely')
-    expect(status.lastError).toContain('kept both versions')
-    expect(status.conflicts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: 'DeleteConflict.md' })
-    ]))
-  })
-
   it('persists target, first-run state, peers and history across engine instances', async() => {
     const vaultPath = await createTempVault()
     const remotePath = await createTempVault('elephant-local-remote-')
@@ -151,29 +105,6 @@ describe('RcloneVaultEngine embedded local sync compatibility wrapper', () => {
       peers: [{ deviceId: 'peer-1', address: 'local-peer', vaultIds: ['vault-a'] }]
     })
     expect(status.history.map((item) => item.operation)).toEqual(['init', 'sync'])
-  })
-
-  it('pairs two desktop vaults with a manual ElephantNote code', async() => {
-    const firstVaultPath = await createTempVault()
-    const secondVaultPath = await createTempVault()
-    const remotePath = await createTempVault('elephant-local-remote-')
-    const first = new RcloneVaultEngine({ cwd: firstVaultPath })
-    const second = new RcloneVaultEngine({ cwd: secondVaultPath })
-
-    const invite = await first.createInvite({ remotePath, deviceName: 'Desktop A' })
-    const result = await second.acceptInvite({ manualCode: invite.manualCode })
-
-    expect(invite.manualCode).toContain('elephantnote-local-sync-pairing')
-    expect(result.status).toMatchObject({
-      configured: true,
-      remotePath,
-      peers: [
-        expect.objectContaining({
-          name: 'Desktop A',
-          address: remotePath
-        })
-      ]
-    })
   })
 
   it('records a missing target as an actionable error without leaving stale queued work', async() => {

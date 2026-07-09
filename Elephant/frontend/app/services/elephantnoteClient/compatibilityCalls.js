@@ -113,8 +113,5 @@ export const COMPATIBILITY_CALLS = {
   'sync.status': () => getBridge()?.sync?.status?.(),
   'sync.plan': (payload) => callTauriSyncPlan(payload),
   'sync.enqueue': ({ operation, payload }) => getBridge()?.sync?.enqueue?.(operation, payload),
-  'sync.createInvite': (payload = {}) => getBridge()?.sync?.createInvite?.(payload),
-  'sync.acceptInvite': (payload = {}) => getBridge()?.sync?.acceptInvite?.(payload),
-  'sync.discoverPeers': (payload = {}) => getBridge()?.sync?.discoverPeers?.(payload),
   'sync.run': (payload) => getBridge()?.sync?.run?.(payload)
 }

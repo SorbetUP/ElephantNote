@@ -1,85 +1,339 @@
 <template>
-  <div class="en-settings-backdrop" :class="[`en-theme-${themeMode}`, `en-theme-${themeClassId}`]" :style="settingsStyle" @click.self="$emit('close')">
-    <section class="en-settings-panel" :style="settingsStyle" aria-label="ElephantNote settings">
+  <div
+    class="en-settings-backdrop"
+    :class="[`en-theme-${themeMode}`, `en-theme-${themeClassId}`]"
+    :style="settingsStyle"
+    @click.self="emit('close')"
+  >
+    <section
+      class="en-settings-panel"
+      :class="{ 'is-macos': isMacOS }"
+      :style="settingsStyle"
+      role="dialog"
+      aria-modal="true"
+      aria-label="ElephantNote settings"
+    >
       <header class="en-settings-header">
-        <button class="en-settings-close" type="button" @click="$emit('close')"><X class="en-icon" /></button>
-        <div><p>ElephantNote</p><h2>Settings</h2></div>
+        <button class="en-icon-button en-settings-close" type="button" aria-label="Close settings" @click="emit('close')">
+          <X aria-hidden="true" />
+        </button>
+        <h2>Settings</h2>
+        <label class="en-settings-search">
+          <Search aria-hidden="true" />
+          <input ref="searchInput" v-model="settingsQuery" type="search" placeholder="Search all settings" aria-label="Search all settings">
+          <kbd v-if="!settingsQuery">{{ isMacOS ? '⌘' : 'Ctrl' }} F</kbd>
+        </label>
       </header>
 
       <div class="en-settings-grid">
-        <aside class="en-settings-nav">
-          <button v-for="item in sections" :key="item.id" type="button" :class="{ active: activeSection === item.id }" @click="activeSection = item.id">{{ item.label }}</button>
+        <aside class="en-settings-nav" aria-label="Settings sections">
+          <button
+            v-for="item in sections"
+            :key="item.id"
+            type="button"
+            :class="{ active: !settingsQuery && activeSection === item.id }"
+            @click="selectSection(item.id)"
+          >
+            <component :is="item.icon" aria-hidden="true" />
+            <span>{{ item.label }}</span>
+            <ChevronRight class="en-settings-nav-chevron" aria-hidden="true" />
+          </button>
+          <footer class="en-settings-nav-footer">
+            <span>Local-first</span>
+            <span>v0.18.9</span>
+          </footer>
         </aside>
 
-        <div class="en-settings-content">
-          <template v-if="activeSection === 'appearance'">
-            <section class="en-settings-section">
-              <div><h3>Theme</h3><p>{{ activeThemeLabel }}</p></div>
-              <button class="en-theme-switch" type="button" :class="{ dark: themeMode === 'dark' }" @click="emit('update-theme', oppositeTheme)"><SunMedium class="en-theme-icon light" /><Moon class="en-theme-icon dark" />{{ themeMode === 'dark' ? 'Dark' : 'Light' }}</button>
+        <main ref="settingsContent" class="en-settings-content">
+          <template v-if="settingsQuery.trim()">
+            <div class="en-settings-page-title">
+              <h1>Search</h1>
+              <span>{{ searchResults.length }} result{{ searchResults.length === 1 ? '' : 's' }}</span>
+            </div>
+            <section v-if="searchResults.length" class="en-settings-search-results">
+              <button v-for="result in searchResults" :key="result.id" type="button" @click="openSearchResult(result)">
+                <span class="en-settings-result-icon"><component :is="result.icon" aria-hidden="true" /></span>
+                <span class="en-settings-result-copy">
+                  <strong>{{ result.label }}</strong>
+                  <small>{{ result.description }}</small>
+                </span>
+                <span class="en-settings-result-section">{{ result.sectionLabel }}</span>
+                <ChevronRight aria-hidden="true" />
+              </button>
             </section>
-            <section class="en-settings-section stacked">
-              <div><h3>Graphic themes</h3><p>Choose a visual family. Each family keeps matching light and dark variants.</p></div>
-              <div class="en-theme-grid">
-                <button v-for="family in themeFamilies" :key="family.id" type="button" class="en-theme-card" :class="{ active: activeThemeFamily.id === family.id }" @click="emit('update-theme', getThemeVariant(family.id, themeMode))">
-                  <span class="en-theme-card-preview"><i v-for="swatch in family.swatches" :key="swatch" :style="{ backgroundColor: swatch }" /></span>
-                  <span class="en-theme-card-copy"><strong>{{ family.name }}</strong><small>{{ family.description }}</small></span>
-                </button>
-              </div>
-            </section>
-            <section class="en-settings-section">
-              <div><h3>Sidebar width</h3><p>The navigation rail can also be resized by dragging its right edge.</p></div>
-              <label class="en-settings-range"><input type="range" min="184" max="320" :value="sidebarWidth" @input="$emit('update-sidebar-width', Number($event.target.value))"><output>{{ sidebarWidth }}px</output></label>
-            </section>
+            <div v-else class="en-settings-empty-state en-settings-search-empty">
+              <Search aria-hidden="true" />
+              <strong>No setting found</strong>
+              <span>Try another word, feature name or control.</span>
+            </div>
           </template>
 
-          <template v-else-if="activeSection === 'vaults'">
-            <section class="en-settings-section"><div><h3>Active vault</h3><p>The current vault path is shown here.</p></div><span class="en-settings-pill">{{ activeVaultName }}</span></section>
-            <section class="en-settings-section stacked"><div><h3>Open vaults</h3><p>Remove a vault from ElephantNote without deleting the folder from disk.</p></div><div class="en-vault-list"><article v-for="vault in vaults" :key="vault.id" class="en-vault-row"><div><strong>{{ vault.name }}</strong><p class="en-settings-path">{{ vault.path }}</p></div><button type="button" class="danger" :disabled="removingVaultId === vault.id" @click="removeVaultFromApp(vault)">{{ removingVaultId === vault.id ? 'Removing...' : 'Remove from app' }}</button></article></div><span class="en-settings-message">{{ vaultMessage }}</span></section>
-          </template>
+          <template v-else>
+            <div class="en-settings-page-title"><h1>{{ activeSectionMeta.label }}</h1></div>
 
-          <template v-else-if="activeSection === 'editor'">
-            <section class="en-settings-section"><div><h3>Editor footer</h3><p>Show the bottom bar with word count, typography controls, and theme shortcut.</p></div><button class="en-settings-toggle-pill" type="button" :class="{ active: preferences.showEditorFooter }" @click="setShowEditorFooter(!preferences.showEditorFooter)">{{ preferences.showEditorFooter ? 'Visible' : 'Hidden' }}</button></section>
-            <section class="en-settings-section"><div><h3>Tag prefix</h3><p>Show or hide the # prefix before tag names in the note editor.</p></div><button class="en-settings-toggle-pill" type="button" :class="{ active: preferences.showTagHashInEditor }" @click="setShowTagHashInEditor(!preferences.showTagHashInEditor)">{{ preferences.showTagHashInEditor ? 'Show #' : 'Hide #' }}</button></section>
-            <section class="en-settings-section stacked"><div><h3>Note margins</h3><p>Set the horizontal margin used by the note title and text.</p></div><label class="en-settings-range"><input type="range" min="8" max="160" step="4" :value="preferences.noteEditorMargin" @input="setNoteEditorMargin(Number($event.target.value))"><output>{{ preferences.noteEditorMargin }} px</output></label></section>
-            <section class="en-settings-section stacked"><div><h3>Autosave</h3><p>Changes are written automatically after a short delay.</p></div><label class="en-settings-range"><input type="range" min="250" max="5000" step="250" :value="preferences.autoSaveDelay" @input="setAutoSaveDelay(Number($event.target.value))"><output>{{ preferences.autoSaveDelay }} ms</output></label></section>
-          </template>
+            <template v-if="activeSection === 'appearance'">
+              <section class="en-settings-group">
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Color mode</strong><span>Use the light or dark variant of the selected theme.</span></div>
+                  <div class="en-segmented" aria-label="Color mode">
+                    <button type="button" :class="{ active: themeMode === 'light' }" @click="emit('update-theme', getThemeVariant(activeThemeFamily.id, 'light'))"><SunMedium aria-hidden="true" /> Light</button>
+                    <button type="button" :class="{ active: themeMode === 'dark' }" @click="emit('update-theme', getThemeVariant(activeThemeFamily.id, 'dark'))"><Moon aria-hidden="true" /> Dark</button>
+                  </div>
+                </div>
 
-          <template v-else-if="activeSection === 'import'">
-            <section class="en-settings-section"><div><h3>Import notes</h3><p>Bring notes from a Google Keep export into the active vault.</p></div><button type="button" :disabled="isImporting" @click="importGoogleKeep"><Download class="en-icon" />{{ isImporting ? 'Importing...' : 'Import Google Keep' }}</button></section>
-            <section class="en-settings-section stacked"><div><h3>Sources</h3><p>Ingest a web page or RSS feed into local markdown notes.</p></div><div class="en-form-grid"><label><span>URL</span><input v-model.trim="sourceUrl" type="text" placeholder="https://example.com/article"></label><label><span>Destination folder</span><input v-model.trim="sourceDestination" type="text" placeholder="Sources"></label></div><div class="en-settings-actions-row"><button type="button" :disabled="isImportingSource || !sourceUrl" @click="ingestSourceUrl">Import URL</button><button type="button" :disabled="isImportingSource || !sourceUrl" @click="importRssSource">Import RSS</button><span class="en-settings-message">{{ sourceImportMessage || importMessage }}</span></div></section>
-          </template>
+                <div class="en-settings-row en-settings-row-stacked">
+                  <div class="en-settings-row-copy"><strong>Theme</strong><span>Choose the visual family used throughout ElephantNote.</span></div>
+                  <div class="en-theme-grid">
+                    <button
+                      v-for="family in themeFamilies"
+                      :key="family.id"
+                      type="button"
+                      class="en-theme-card"
+                      :class="{ active: activeThemeFamily.id === family.id }"
+                      @click="emit('update-theme', getThemeVariant(family.id, themeMode))"
+                    >
+                      <span class="en-theme-card-preview" :style="{ background: family.swatches[0] }">
+                        <i class="sidebar" :style="{ background: family.swatches[1] }" />
+                        <i class="canvas" :style="{ background: family.swatches[2] }">
+                          <b :style="{ background: family.swatches[3] || family.swatches[2] }" />
+                          <b :style="{ background: family.swatches[3] || family.swatches[2] }" />
+                        </i>
+                      </span>
+                      <span class="en-theme-card-copy"><strong>{{ family.name }}</strong><small>{{ family.description }}</small></span>
+                      <span v-if="activeThemeFamily.id === family.id" class="en-theme-card-check"><Check aria-hidden="true" /></span>
+                    </button>
+                  </div>
+                </div>
 
-          <template v-else-if="activeSection === 'sites'">
-            <section class="en-settings-section stacked"><div><h3>Generated sites</h3><p>Manage the current folder website preview.</p></div><div class="en-settings-actions-row"><button type="button" :class="{ active: featureFlags.sitePreview }" @click="toggleFeature('sitePreview')">{{ featureFlags.sitePreview ? 'Enabled' : 'Disabled' }}</button><span class="en-settings-pill">{{ siteStatusLabel }}</span><button type="button" :disabled="!sitePreviewStore.previewUrl" @click="sitePreviewStore.openPreviewExternal">Open</button><button type="button" :disabled="!sitePreviewStore.info" @click="stopSitePreview">Stop</button></div></section>
-          </template>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Sidebar width</strong><span>Resize the main navigation rail.</span></div>
+                  <label class="en-range-control">
+                    <input type="range" min="184" max="320" :value="sidebarWidth" @input="emit('update-sidebar-width', Number($event.target.value))">
+                    <output>{{ sidebarWidth }} px</output>
+                  </label>
+                </div>
+              </section>
+            </template>
 
-          <template v-else-if="activeSection === 'sync'">
-            <sync-settings-panel :vaults="vaults" :active-vault-path="activeVaultPath" />
-          </template>
+            <template v-else-if="activeSection === 'editor'">
+              <section class="en-settings-group">
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Editor footer</strong><span>Show word count, typography controls and the theme shortcut.</span></div>
+                  <button class="en-switch" type="button" role="switch" aria-label="Show editor footer" :aria-checked="preferences.showEditorFooter" :class="{ active: preferences.showEditorFooter }" @click="setPreference('showEditorFooter', !preferences.showEditorFooter)"><span /></button>
+                </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Tag prefix</strong><span>Display # before tag names in the editor.</span></div>
+                  <button class="en-switch" type="button" role="switch" aria-label="Show tag prefix" :aria-checked="preferences.showTagHashInEditor" :class="{ active: preferences.showTagHashInEditor }" @click="setPreference('showTagHashInEditor', !preferences.showTagHashInEditor)"><span /></button>
+                </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Quick insert menu</strong><span>Show the block command menu when its trigger is typed.</span></div>
+                  <button class="en-switch" type="button" role="switch" aria-label="Show quick insert menu" :aria-checked="!preferences.hideQuickInsertHint" :class="{ active: !preferences.hideQuickInsertHint }" @click="setPreference('hideQuickInsertHint', !preferences.hideQuickInsertHint)"><span /></button>
+                </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Quick insert trigger</strong><span>The character that opens the insert menu. The default is /.</span></div>
+                  <input class="en-compact-input en-trigger-input" :value="preferences.quickInsertTrigger" maxlength="1" aria-label="Quick insert trigger" @change="setQuickInsertTrigger($event.target.value)">
+                </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Pair brackets</strong><span>Automatically insert the matching closing bracket.</span></div>
+                  <button class="en-switch" type="button" role="switch" aria-label="Automatically pair brackets" :aria-checked="preferences.autoPairBracket" :class="{ active: preferences.autoPairBracket }" @click="setPreference('autoPairBracket', !preferences.autoPairBracket)"><span /></button>
+                </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Pair Markdown syntax</strong><span>Automatically close Markdown emphasis and formatting markers.</span></div>
+                  <button class="en-switch" type="button" role="switch" aria-label="Automatically pair Markdown syntax" :aria-checked="preferences.autoPairMarkdownSyntax" :class="{ active: preferences.autoPairMarkdownSyntax }" @click="setPreference('autoPairMarkdownSyntax', !preferences.autoPairMarkdownSyntax)"><span /></button>
+                </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Pair quotes</strong><span>Automatically insert the matching closing quote.</span></div>
+                  <button class="en-switch" type="button" role="switch" aria-label="Automatically pair quotes" :aria-checked="preferences.autoPairQuote" :class="{ active: preferences.autoPairQuote }" @click="setPreference('autoPairQuote', !preferences.autoPairQuote)"><span /></button>
+                </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Spellchecker</strong><span>Check spelling while writing.</span></div>
+                  <button class="en-switch" type="button" role="switch" aria-label="Enable spellchecker" :aria-checked="preferences.spellcheckerEnabled" :class="{ active: preferences.spellcheckerEnabled }" @click="setPreference('spellcheckerEnabled', !preferences.spellcheckerEnabled)"><span /></button>
+                </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Code block line numbers</strong><span>Display line numbers in fenced code blocks.</span></div>
+                  <button class="en-switch" type="button" role="switch" aria-label="Show code block line numbers" :aria-checked="preferences.codeBlockLineNumbers" :class="{ active: preferences.codeBlockLineNumbers }" @click="setPreference('codeBlockLineNumbers', !preferences.codeBlockLineNumbers)"><span /></button>
+                </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Note margins</strong><span>Horizontal space around the title and text.</span></div>
+                  <label class="en-range-control">
+                    <input type="range" min="8" max="160" step="4" :value="preferences.noteEditorMargin" @input="setNoteEditorMargin(Number($event.target.value))">
+                    <output>{{ preferences.noteEditorMargin }} px</output>
+                  </label>
+                </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Autosave</strong><span>Write changes to disk automatically.</span></div>
+                  <button class="en-switch" type="button" role="switch" aria-label="Enable autosave" :aria-checked="preferences.autoSave" :class="{ active: preferences.autoSave }" @click="setPreference('autoSave', !preferences.autoSave)"><span /></button>
+                </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Autosave delay</strong><span>How long ElephantNote waits after the last edit.</span></div>
+                  <select class="en-compact-select" :disabled="!preferences.autoSave" :value="preferences.autoSaveDelay" @change="setPreference('autoSaveDelay', Number($event.target.value))">
+                    <option :value="250">Instant · 250 ms</option>
+                    <option :value="500">Fast · 500 ms</option>
+                    <option :value="1000">Balanced · 1 s</option>
+                    <option :value="2000">Relaxed · 2 s</option>
+                    <option :value="5000">Battery saver · 5 s</option>
+                  </select>
+                </div>
+              </section>
+            </template>
 
-          <template v-else-if="activeSection === 'ai'"><ai-provider-settings-panel /></template>
-        </div>
+            <template v-else-if="activeSection === 'vaults'">
+              <section class="en-settings-group">
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Active vault</strong><span>{{ activeVaultPath || 'No vault is currently open.' }}</span></div>
+                  <span class="en-status-badge active"><HardDrive aria-hidden="true" />{{ activeVaultName }}</span>
+                </div>
+                <div v-if="vaults.length" class="en-vault-list">
+                  <article v-for="vault in vaults" :key="vault.id" class="en-vault-row">
+                    <span class="en-vault-icon"><FolderOpen aria-hidden="true" /></span>
+                    <div><strong>{{ vault.name }}</strong><p>{{ vault.path }}</p></div>
+                    <button type="button" class="en-danger-button" :disabled="removingVaultId === vault.id" @click="removeVaultFromApp(vault)">{{ removingVaultId === vault.id ? 'Removing…' : 'Remove' }}</button>
+                  </article>
+                </div>
+                <div v-else class="en-settings-empty-state"><FolderOpen aria-hidden="true" /><strong>No vault registered</strong><span>Open a folder from the main workspace to add it.</span></div>
+                <p v-if="vaultMessage" class="en-settings-feedback">{{ vaultMessage }}</p>
+              </section>
+            </template>
+
+            <template v-else-if="activeSection === 'sync'">
+              <sync-settings-panel :vaults="vaults" :active-vault-path="activeVaultPath" :initial-page="syncInitialPage" />
+            </template>
+
+            <template v-else-if="activeSection === 'ai'">
+              <ai-provider-settings-panel :initial-page="aiInitialPage" />
+            </template>
+
+            <template v-else-if="activeSection === 'sites'">
+              <section class="en-settings-group">
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Site preview</strong><span>{{ siteStatusLabel }}</span></div>
+                  <button class="en-switch" type="button" role="switch" aria-label="Enable site preview" :aria-checked="featureFlags.sitePreview" :class="{ active: featureFlags.sitePreview }" @click="toggleFeature('sitePreview')"><span /></button>
+                </div>
+                <div class="en-settings-inline-actions">
+                  <button type="button" :disabled="!sitePreviewStore.previewUrl" @click="sitePreviewStore.openPreviewExternal"><Globe2 aria-hidden="true" />Open preview</button>
+                  <button type="button" :disabled="!sitePreviewStore.info" @click="stopSitePreview">Stop preview</button>
+                </div>
+              </section>
+            </template>
+
+            <template v-else-if="activeSection === 'import'">
+              <section class="en-settings-group">
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Google Keep archive</strong><span>Convert an exported archive into local Markdown notes.</span></div>
+                  <button class="en-primary-button" type="button" :disabled="isImporting" @click="importGoogleKeep"><Download aria-hidden="true" />{{ isImporting ? 'Importing…' : 'Import Google Keep' }}</button>
+                </div>
+                <div class="en-form-grid">
+                  <label><span>Source URL</span><input v-model.trim="sourceUrl" type="url" placeholder="https://example.com/article"></label>
+                  <label><span>Destination folder</span><input v-model.trim="sourceDestination" type="text" placeholder="Sources"></label>
+                </div>
+                <div class="en-settings-inline-actions">
+                  <button type="button" :disabled="isImportingSource || !sourceUrl" @click="ingestSourceUrl">Import page</button>
+                  <button type="button" :disabled="isImportingSource || !sourceUrl" @click="importRssSource">Import RSS</button>
+                  <span>{{ sourceImportMessage || importMessage }}</span>
+                </div>
+              </section>
+            </template>
+          </template>
+        </main>
       </div>
     </section>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import log from '@/platform/runtimeLogShim'
-import { Download, Moon, SunMedium, X } from '@lucide/vue'
+import {
+  Check,
+  ChevronRight,
+  Cloud,
+  Download,
+  FolderOpen,
+  Globe2,
+  HardDrive,
+  Moon,
+  Palette,
+  PenLine,
+  Search,
+  Sparkles,
+  SunMedium,
+  X
+} from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
-import { ELEPHANTNOTE_THEME_FAMILIES, getOppositeThemeVariant, getThemeFamily, getThemeLabel, getThemeMode, getThemeTokens, getThemeVariant } from 'common/elephantnote/appearance'
+import { ELEPHANTNOTE_THEME_FAMILIES, getThemeFamily, getThemeLabel, getThemeMode, getThemeTokens, getThemeVariant } from 'common/elephantnote/appearance'
 import AiProviderSettingsPanel from './AiProviderSettingsPanel.vue'
 import SyncSettingsPanel from './SyncSettingsPanel.vue'
 import { useSitePreviewStore } from '../../sitePreview/sitePreviewStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
 import { useVaultStore } from '../../stores/vaultStore'
 
-const props = defineProps({ theme: { type: String, required: true }, sidebarWidth: { type: Number, required: true }, vaults: { type: Array, default: () => [] }, activeVaultName: { type: String, default: 'No vault' }, activeVaultPath: { type: String, default: '' } })
+const props = defineProps({
+  theme: { type: String, required: true },
+  sidebarWidth: { type: Number, required: true },
+  vaults: { type: Array, default: () => [] },
+  activeVaultName: { type: String, default: 'No vault' },
+  activeVaultPath: { type: String, default: '' }
+})
 const emit = defineEmits(['close', 'update-theme', 'update-sidebar-width'])
-const sections = [{ id: 'appearance', label: 'Appearance' }, { id: 'vaults', label: 'Vaults' }, { id: 'editor', label: 'Editor' }, { id: 'import', label: 'Import' }, { id: 'sites', label: 'Sites' }, { id: 'sync', label: 'Sync' }, { id: 'ai', label: 'AI' }]
+
+const sections = [
+  { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'editor', label: 'Editor', icon: PenLine },
+  { id: 'vaults', label: 'Vaults', icon: FolderOpen },
+  { id: 'sync', label: 'Sync', icon: Cloud },
+  { id: 'ai', label: 'AI', icon: Sparkles },
+  { id: 'sites', label: 'Sites', icon: Globe2 },
+  { id: 'import', label: 'Import', icon: Download }
+]
+const sectionById = Object.fromEntries(sections.map((section) => [section.id, section]))
+const settingsIndex = [
+  { id: 'appearance-mode', section: 'appearance', label: 'Color mode', description: 'Light and dark appearance.' },
+  { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Apple, Graphite, Nord, Solar and Forest themes.' },
+  { id: 'appearance-sidebar', section: 'appearance', label: 'Sidebar width', description: 'Resize the main navigation rail.' },
+  { id: 'editor-footer', section: 'editor', label: 'Editor footer', description: 'Word count and typography controls.' },
+  { id: 'editor-tags', section: 'editor', label: 'Tag prefix', description: 'Show or hide the # before tags.' },
+  { id: 'editor-quick-insert', section: 'editor', label: 'Quick insert menu', description: 'Show block commands when typing the trigger.' },
+  { id: 'editor-quick-trigger', section: 'editor', label: 'Quick insert trigger', description: 'Change the / command trigger.' },
+  { id: 'editor-brackets', section: 'editor', label: 'Pair brackets', description: 'Automatically close brackets.' },
+  { id: 'editor-markdown', section: 'editor', label: 'Pair Markdown syntax', description: 'Automatically close Markdown markers.' },
+  { id: 'editor-quotes', section: 'editor', label: 'Pair quotes', description: 'Automatically close quotation marks.' },
+  { id: 'editor-spellchecker', section: 'editor', label: 'Spellchecker', description: 'Check spelling while writing.' },
+  { id: 'editor-code-lines', section: 'editor', label: 'Code block line numbers', description: 'Show line numbers in fenced code blocks.' },
+  { id: 'editor-margin', section: 'editor', label: 'Note margins', description: 'Horizontal writing space.' },
+  { id: 'editor-autosave', section: 'editor', label: 'Autosave', description: 'Automatically persist changes to disk.' },
+  { id: 'editor-autosave-delay', section: 'editor', label: 'Autosave delay', description: 'Delay before writing the latest edit.' },
+  { id: 'vault-active', section: 'vaults', label: 'Active vault', description: 'Current local workspace folder.' },
+  { id: 'vault-open', section: 'vaults', label: 'Open vaults', description: 'Review or remove registered vaults.' },
+  { id: 'sync-overview', section: 'sync', subpage: 'overview', label: 'Synchronization status', description: 'Active vault, device identity and last transfer.' },
+  { id: 'sync-devices', section: 'sync', subpage: 'devices', label: 'Pair devices', description: 'Create or accept an encrypted Iroh invitation.' },
+  { id: 'sync-conflicts', section: 'sync', subpage: 'conflicts', label: 'Conflict retention', description: 'Keep, restore or delete temporary conflict copies.' },
+  { id: 'ai-providers', section: 'ai', subpage: 'provider', label: 'AI providers', description: 'Local runtime, external APIs and Codex.' },
+  { id: 'ai-chat', section: 'ai', subpage: 'chat', label: 'Chat model and RAG', description: 'Model, tools, streaming, prompt and generation settings.' },
+  { id: 'ai-search', section: 'ai', subpage: 'embedding', label: 'Semantic search and embeddings', description: 'Indexing, chunking and retrieval settings.' },
+  { id: 'ai-ocr', section: 'ai', subpage: 'ocr', label: 'OCR', description: 'Recognition model, languages and image processing.' },
+  { id: 'sites-preview', section: 'sites', label: 'Site preview', description: 'Enable, open or stop the generated static site.' },
+  { id: 'import-keep', section: 'import', label: 'Google Keep import', description: 'Convert a Keep archive into Markdown.' },
+  { id: 'import-web', section: 'import', label: 'Web page import', description: 'Save a URL into the active vault.' },
+  { id: 'import-rss', section: 'import', label: 'RSS import', description: 'Import feed items into local notes.' }
+].map((entry) => ({ ...entry, sectionLabel: sectionById[entry.section].label, icon: sectionById[entry.section].icon }))
+
 const activeSection = ref('appearance')
+const settingsQuery = ref('')
+const syncInitialPage = ref('overview')
+const aiInitialPage = ref('provider')
+const searchInput = ref(null)
+const settingsContent = ref(null)
+const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
+const activeSectionMeta = computed(() => sectionById[activeSection.value] || sections[0])
+const searchResults = computed(() => {
+  const terms = settingsQuery.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean)
+  if (!terms.length) return []
+  return settingsIndex.filter((entry) => {
+    const haystack = `${entry.label} ${entry.description} ${entry.sectionLabel}`.toLocaleLowerCase()
+    return terms.every((term) => haystack.includes(term))
+  })
+})
+
 const vaults = computed(() => props.vaults)
 const theme = computed(() => props.theme)
 const themeFamilies = ELEPHANTNOTE_THEME_FAMILIES
@@ -87,8 +341,18 @@ const themeMode = computed(() => getThemeMode(theme.value))
 const themeClassId = computed(() => theme.value.replace(/[^a-z0-9-]/gi, '-'))
 const activeThemeFamily = computed(() => getThemeFamily(theme.value))
 const activeThemeLabel = computed(() => getThemeLabel(theme.value))
-const oppositeTheme = computed(() => getOppositeThemeVariant(theme.value))
-const settingsStyle = computed(() => { const tokens = getThemeTokens(theme.value); return { ...tokens, '--en-card': tokens['--en-soft'], '--en-accent': tokens['--en-primary'], '--en-active-bg': tokens['--selectionColor'], '--en-active-border': tokens['--en-primary'], '--en-active-text': tokens['--en-primary'] } })
+const settingsStyle = computed(() => {
+  const tokens = getThemeTokens(theme.value)
+  return {
+    ...tokens,
+    '--en-card': tokens['--en-soft'],
+    '--en-accent': tokens['--en-primary'],
+    '--en-active-bg': tokens['--selectionColor'],
+    '--en-active-border': tokens['--en-primary'],
+    '--en-active-text': tokens['--en-primary']
+  }
+})
+
 const preferences = usePreferencesStore()
 const sitePreviewStore = useSitePreviewStore()
 const vaultStore = useVaultStore()
@@ -102,56 +366,128 @@ const removingVaultId = ref('')
 const isImporting = ref(false)
 const isImportingSource = ref(false)
 const siteStatusLabel = computed(() => sitePreviewStore.previewUrl ? 'Preview running' : sitePreviewStore.lastBuild?.outputDir ? 'Static build ready' : 'No generated site active')
-const setAutoSaveDelay = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'autoSaveDelay', value })
-const setShowEditorFooter = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'showEditorFooter', value })
-const setShowTagHashInEditor = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'showTagHashInEditor', value })
-const setNoteEditorMargin = (value) => preferences.SET_SINGLE_PREFERENCE({ type: 'noteEditorMargin', value: Math.max(8, Math.min(160, Number(value) || 24)) })
-const removeVaultFromApp = async (vault) => { if (!vault?.id) return; if (!window.confirm(`Remove "${vault.name}" from ElephantNote? The folder stays on disk.`)) return; removingVaultId.value = vault.id; vaultMessage.value = ''; log.info('[settings] vault-remove:start', { id: vault.id, path: vault.path }); try { await vaultStore.removeVault(vault.id); vaultMessage.value = `Removed ${vault.name} from ElephantNote. The folder still exists.`; log.info('[settings] vault-remove:done', { id: vault.id }) } catch (error) { log.error('[settings] vault-remove:failed', error); vaultMessage.value = error instanceof Error ? error.message : 'Unable to remove vault.' } finally { removingVaultId.value = '' } }
-const importGoogleKeep = async () => { log.info('[settings] importGoogleKeep:start'); isImporting.value = true; importMessage.value = ''; try { const result = await elephantnoteClient.imports.googleKeep(); importMessage.value = result?.canceled ? 'Import canceled.' : `Imported ${result.imported || 0} note${result.imported === 1 ? '' : 's'}.`; log.info('[settings] importGoogleKeep:done', result) } catch (error) { log.error('[settings] importGoogleKeep:failed', error); importMessage.value = error instanceof Error ? error.message : 'Import failed.' } finally { isImporting.value = false } }
-const ingestSourceUrl = async () => { log.info('[settings] ingestSourceUrl:start', { url: sourceUrl.value, destination: sourceDestination.value }); isImportingSource.value = true; try { const result = await elephantnoteClient.sources.ingestUrl(sourceUrl.value, sourceDestination.value || 'Sources'); sourceImportMessage.value = `Imported ${result.source?.title || 'source'}.`; log.info('[settings] ingestSourceUrl:done', result) } catch (error) { log.error('[settings] ingestSourceUrl:failed', error); sourceImportMessage.value = error instanceof Error ? error.message : 'Source import failed.' } finally { isImportingSource.value = false } }
-const importRssSource = async () => { log.info('[settings] importRssSource:start', { url: sourceUrl.value, destination: sourceDestination.value }); isImportingSource.value = true; try { const result = await elephantnoteClient.sources.importRss(sourceUrl.value, sourceDestination.value || 'Sources'); sourceImportMessage.value = `Imported ${result.imported || 0} feed item${result.imported === 1 ? '' : 's'}.`; log.info('[settings] importRssSource:done', result) } catch (error) { log.error('[settings] importRssSource:failed', error); sourceImportMessage.value = error instanceof Error ? error.message : 'RSS import failed.' } finally { isImportingSource.value = false } }
-const stopSitePreview = async () => { log.info('[settings] stopSitePreview:start'); await sitePreviewStore.stopPreview(); sitePreviewStore.clear(); log.info('[settings] stopSitePreview:done') }
-const toggleFeature = async (key) => { log.info('[settings] toggleFeature:start', { key, enabled: !featureFlags.value[key] }); try { featureFlags.value = await elephantnoteClient.features.set(key, !featureFlags.value[key]); log.info('[settings] toggleFeature:done', featureFlags.value) } catch (error) { log.warn('[settings] toggleFeature:failed', error) } }
-onMounted(async () => { log.info('[settings] mounted:start'); try { featureFlags.value = await elephantnoteClient.features.get(); log.info('[settings] featureFlags:loaded', featureFlags.value) } catch (error) { log.warn('[settings] featureFlags:failed', error) } sitePreviewStore.refresh?.(); log.info('[settings] mounted:done') })
+
+const scrollContentToTop = () => nextTick(() => settingsContent.value?.scrollTo({ top: 0, behavior: 'instant' }))
+const selectSection = (section) => {
+  activeSection.value = section
+  settingsQuery.value = ''
+  scrollContentToTop()
+}
+const openSearchResult = (result) => {
+  activeSection.value = result.section
+  if (result.section === 'sync') syncInitialPage.value = result.subpage || 'overview'
+  if (result.section === 'ai') aiInitialPage.value = result.subpage || 'provider'
+  settingsQuery.value = ''
+  scrollContentToTop()
+}
+const setPreference = (type, value) => preferences.SET_SINGLE_PREFERENCE({ type, value })
+const setQuickInsertTrigger = (value) => setPreference('quickInsertTrigger', String(value || '/').slice(0, 1))
+const setNoteEditorMargin = (value) => setPreference('noteEditorMargin', Math.max(8, Math.min(160, Number(value) || 24)))
+
+const removeVaultFromApp = async (vault) => {
+  if (!vault?.id) return
+  if (!window.confirm(`Remove "${vault.name}" from ElephantNote? The folder stays on disk.`)) return
+  removingVaultId.value = vault.id
+  vaultMessage.value = ''
+  log.info('[settings] vault-remove:start', { id: vault.id, path: vault.path })
+  try {
+    await vaultStore.removeVault(vault.id)
+    vaultMessage.value = `Removed ${vault.name} from ElephantNote. The folder still exists.`
+    log.info('[settings] vault-remove:done', { id: vault.id })
+  } catch (error) {
+    log.error('[settings] vault-remove:failed', error)
+    vaultMessage.value = error instanceof Error ? error.message : 'Unable to remove vault.'
+  } finally {
+    removingVaultId.value = ''
+  }
+}
+
+const importGoogleKeep = async () => {
+  log.info('[settings] importGoogleKeep:start')
+  isImporting.value = true
+  importMessage.value = ''
+  try {
+    const result = await elephantnoteClient.imports.googleKeep()
+    importMessage.value = result?.canceled ? 'Import canceled.' : `Imported ${result.imported || 0} note${result.imported === 1 ? '' : 's'}.`
+    log.info('[settings] importGoogleKeep:done', result)
+  } catch (error) {
+    log.error('[settings] importGoogleKeep:failed', error)
+    importMessage.value = error instanceof Error ? error.message : 'Import failed.'
+  } finally {
+    isImporting.value = false
+  }
+}
+
+const ingestSourceUrl = async () => {
+  log.info('[settings] ingestSourceUrl:start', { url: sourceUrl.value, destination: sourceDestination.value })
+  isImportingSource.value = true
+  try {
+    const result = await elephantnoteClient.sources.ingestUrl(sourceUrl.value, sourceDestination.value || 'Sources')
+    sourceImportMessage.value = `Imported ${result.source?.title || 'source'}.`
+    log.info('[settings] ingestSourceUrl:done', result)
+  } catch (error) {
+    log.error('[settings] ingestSourceUrl:failed', error)
+    sourceImportMessage.value = error instanceof Error ? error.message : 'Source import failed.'
+  } finally {
+    isImportingSource.value = false
+  }
+}
+
+const importRssSource = async () => {
+  log.info('[settings] importRssSource:start', { url: sourceUrl.value, destination: sourceDestination.value })
+  isImportingSource.value = true
+  try {
+    const result = await elephantnoteClient.sources.importRss(sourceUrl.value, sourceDestination.value || 'Sources')
+    sourceImportMessage.value = `Imported ${result.imported || 0} feed item${result.imported === 1 ? '' : 's'}.`
+    log.info('[settings] importRssSource:done', result)
+  } catch (error) {
+    log.error('[settings] importRssSource:failed', error)
+    sourceImportMessage.value = error instanceof Error ? error.message : 'RSS import failed.'
+  } finally {
+    isImportingSource.value = false
+  }
+}
+
+const stopSitePreview = async () => {
+  log.info('[settings] stopSitePreview:start')
+  await sitePreviewStore.stopPreview()
+  sitePreviewStore.clear()
+  log.info('[settings] stopSitePreview:done')
+}
+
+const toggleFeature = async (key) => {
+  log.info('[settings] toggleFeature:start', { key, enabled: !featureFlags.value[key] })
+  try {
+    featureFlags.value = await elephantnoteClient.features.set(key, !featureFlags.value[key])
+    log.info('[settings] toggleFeature:done', featureFlags.value)
+  } catch (error) {
+    log.warn('[settings] toggleFeature:failed', error)
+  }
+}
+
+const handleKeyboard = (event) => {
+  if (event.key === 'Escape') emit('close')
+  if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'f') {
+    event.preventDefault()
+    searchInput.value?.focus()
+    searchInput.value?.select()
+  }
+}
+
+onMounted(async () => {
+  window.addEventListener('keydown', handleKeyboard)
+  log.info('[settings] mounted:start')
+  try {
+    featureFlags.value = await elephantnoteClient.features.get()
+    log.info('[settings] featureFlags:loaded', featureFlags.value)
+  } catch (error) {
+    log.warn('[settings] featureFlags:failed', error)
+  }
+  sitePreviewStore.refresh?.()
+  log.info('[settings] mounted:done', { theme: activeThemeLabel.value })
+})
+
+onBeforeUnmount(() => window.removeEventListener('keydown', handleKeyboard))
 </script>
 
-<style scoped>
-.en-settings-backdrop { position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; padding: 24px; background: rgba(15, 23, 42, 0.38); color: var(--en-text, #101828); }
-.en-settings-backdrop.en-theme-dark { background: rgba(3, 7, 18, 0.62); }
-.en-settings-panel { width: min(1120px, 92vw); height: min(820px, 88vh); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border: 1px solid var(--en-border, #c5cfdd); border-radius: 22px; background: var(--en-surface, #ffffff); color: var(--en-text, #101828); box-shadow: var(--en-card-shadow, 0 30px 90px rgba(15, 23, 42, 0.16)); }
-.en-settings-header { display: flex; align-items: center; justify-content: flex-start; gap: 14px; padding: 20px 24px; border-bottom: 1px solid var(--en-border, #c5cfdd); background: var(--en-surface, #ffffff); }
-.en-settings-header p { margin: 0; color: var(--en-muted, #475467); text-transform: uppercase; letter-spacing: 0.16em; font-size: 12px; }
-.en-settings-header h2 { margin: 2px 0 0; font-size: 24px; color: var(--en-text, #101828); }
-.en-settings-close, .en-settings-panel button, .en-settings-panel select, .en-settings-panel input { border: 1px solid var(--en-border, #c5cfdd); border-radius: 12px; background: var(--en-soft, #e9eff7); color: var(--en-text, #101828); }
-.en-settings-panel button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 34px; padding: 0 14px; cursor: pointer; transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease; }
-.en-settings-panel button:hover:not(:disabled) { background: var(--en-soft-strong, #dfe7f1); border-color: var(--en-border-strong, #aebacd); }
-.en-settings-panel button:focus-visible, .en-settings-panel input:focus-visible, .en-settings-panel select:focus-visible { outline: 2px solid var(--en-primary, #2563eb); outline-offset: 2px; }
-.en-settings-panel button:disabled { opacity: 0.5; cursor: not-allowed; }
-.en-settings-panel button.active, .en-settings-toggle-pill.active, .en-theme-card.active { border-color: var(--en-active-border, var(--en-primary, #2563eb)); color: var(--en-active-text, var(--en-primary, #2563eb)); background: var(--en-active-bg, var(--selectionColor, rgba(37, 99, 235, 0.14))); }
-.en-settings-panel button.danger { border-color: var(--en-danger, #dc2626); color: var(--en-danger, #dc2626); background: transparent; }
-.en-icon { width: 16px; height: 16px; }
-.en-settings-grid { min-height: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr); border-top: 1px solid transparent; }
-.en-settings-nav { display: flex; flex-direction: column; gap: 10px; padding: 18px 14px; border-right: 1px solid var(--en-border, #c5cfdd); background: var(--en-surface, #ffffff); }
-.en-settings-nav button { justify-content: flex-start; min-height: 42px; font-size: 14px; }
-.en-settings-content { min-width: 0; overflow: auto; padding: 24px 28px; background: var(--en-card, #e9eff7); }
-.en-settings-section { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px; margin-bottom: 18px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 18px; background: var(--en-surface, #fff); }
-.en-settings-section.stacked { align-items: stretch; flex-direction: column; }
-.en-settings-section h3 { margin: 0 0 6px; font-size: 18px; }
-.en-settings-section p { margin: 0; color: var(--en-muted, #475467); font-size: 14px; line-height: 1.5; }
-.en-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.en-form-grid label { display: flex; flex-direction: column; gap: 8px; color: var(--en-muted, #475467); }
-.en-form-grid input, .en-form-grid select { height: 42px; padding: 0 12px; background: var(--en-surface, #fff); }
-.en-settings-actions-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.en-settings-message { color: var(--en-muted, #475467); font-size: 13px; }
-.en-settings-pill { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 999px; background: var(--en-soft, #e9eff7); color: var(--en-muted, #475467); }
-.en-settings-path { word-break: break-all; }
-.en-vault-list { display: flex; flex-direction: column; gap: 12px; }
-.en-vault-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 14px; }
-.en-settings-range { display: flex; align-items: center; gap: 12px; }
-.en-settings-range input { min-width: 180px; }
-.en-theme-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.en-theme-card { min-height: 82px; justify-content: flex-start !important; }
-.en-theme-card-preview { display: inline-flex; gap: 4px; }
-.en-theme-card-preview i { width: 16px; height: 42px; border-radius: 999px; }
-.en-theme-card-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-</style>
+<style scoped src="./settings-redesign.css"></style>

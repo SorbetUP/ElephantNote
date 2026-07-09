@@ -1864,18 +1864,6 @@ const createElephantNoteMainApi = () => {
         log.info('[sync] api:enqueue', { operation })
         return syncEngine.enqueue({ operation, payload })
       },
-      [ELEPHANTNOTE_API_ACTIONS.SYNC_CREATE_INVITE]: async (payload = {}) => {
-        log.info('[sync] api:create-invite')
-        return syncEngine.createInvite(payload)
-      },
-      [ELEPHANTNOTE_API_ACTIONS.SYNC_ACCEPT_INVITE]: async (payload = {}) => {
-        log.info('[sync] api:accept-invite')
-        return syncEngine.acceptInvite(payload)
-      },
-      [ELEPHANTNOTE_API_ACTIONS.SYNC_DISCOVER_PEERS]: async (payload = {}) => {
-        log.info('[sync] api:discover-peers')
-        return syncEngine.discoverPeers(payload)
-      },
       [ELEPHANTNOTE_API_ACTIONS.SYNC_RUN]: async (payload = {}) => {
         log.info('[sync] api:run', {
           hasInit: Boolean(payload.init),

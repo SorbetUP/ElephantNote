@@ -52,7 +52,9 @@ export const installAddonSystem = (app, options = {}) => {
     manager.logger.error('default addon activation failed', error)
   })
 
-  installExternalAddonRuntime(manager, { logger: manager.logger })
+  if (globalThis?.__TAURI__?.core?.invoke) {
+    installExternalAddonRuntime(manager, { logger: manager.logger })
+  }
   return manager
 }
 

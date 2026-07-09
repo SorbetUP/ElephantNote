@@ -8,11 +8,16 @@ on:
       - 'Elephant/backend/tauri/src/chat_runtime.rs'
       - 'Elephant/backend/tauri/src/knowledge*.rs'
       - 'Elephant/backend/tauri/src/lib_min.rs'
+      - 'Elephant/frontend/app/stores/searchStore.js'
+      - 'Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js'
       - 'Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
       - 'Elephant/frontend/src/renderer/src/platform/runtimeLogShim.js'
+      - 'Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js'
+      - 'Elephant/frontend/src/renderer/src/platform/tauriSearchRuntimeGuards.js'
       - 'Elephant/frontend/app/components/views/GraphView.vue'
       - 'Elephant/frontend/app/components/views/graphNavigationHelpers.js'
       - 'Elephant/frontend/app/components/views/semanticGraphViewHelpers.js'
+      - 'tests/app/unit/platform/installKnowledgeRuntimeBridge.spec.js'
       - 'tests/app/unit/platform/knowledgeRuntimeClient.spec.js'
       - 'tests/app/unit/platform/runtimeLogShim.spec.js'
       - 'tests/app/unit/views/graphNavigationHelpers.spec.js'
@@ -28,11 +33,16 @@ on:
       - 'Elephant/backend/tauri/src/chat_runtime.rs'
       - 'Elephant/backend/tauri/src/knowledge*.rs'
       - 'Elephant/backend/tauri/src/lib_min.rs'
+      - 'Elephant/frontend/app/stores/searchStore.js'
+      - 'Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js'
       - 'Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
       - 'Elephant/frontend/src/renderer/src/platform/runtimeLogShim.js'
+      - 'Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js'
+      - 'Elephant/frontend/src/renderer/src/platform/tauriSearchRuntimeGuards.js'
       - 'Elephant/frontend/app/components/views/GraphView.vue'
       - 'Elephant/frontend/app/components/views/graphNavigationHelpers.js'
       - 'Elephant/frontend/app/components/views/semanticGraphViewHelpers.js'
+      - 'tests/app/unit/platform/installKnowledgeRuntimeBridge.spec.js'
       - 'tests/app/unit/platform/knowledgeRuntimeClient.spec.js'
       - 'tests/app/unit/platform/runtimeLogShim.spec.js'
       - 'tests/app/unit/views/graphNavigationHelpers.spec.js'
@@ -216,10 +226,14 @@ jobs:
           NODE_PATH: Elephant/node_modules
         run: |
           Elephant/node_modules/.bin/eslint \
+            Elephant/frontend/app/stores/searchStore.js \
+            Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \
             Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \
             Elephant/frontend/src/renderer/src/platform/runtimeLogShim.js \
+            Elephant/frontend/src/renderer/src/platform/tauriSearchRuntimeGuards.js \
             Elephant/frontend/app/components/views/GraphView.vue \
             Elephant/frontend/app/components/views/graphNavigationHelpers.js \
+            tests/app/unit/platform/installKnowledgeRuntimeBridge.spec.js \
             tests/app/unit/platform/knowledgeRuntimeClient.spec.js \
             tests/app/unit/platform/runtimeLogShim.spec.js \
             tests/app/unit/views/graphNavigationHelpers.spec.js
@@ -229,10 +243,13 @@ jobs:
         run: |
           set -o pipefail
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/platform/installKnowledgeRuntimeBridge.spec.js \
             tests/app/unit/platform/knowledgeRuntimeClient.spec.js \
             tests/app/unit/platform/runtimeLogShim.spec.js \
             tests/app/unit/views/graphNavigationHelpers.spec.js \
             --reporter=verbose 2>&1 | tee knowledge-renderer-test.log
+          grep -F 'knowledge search bridge initialization' knowledge-renderer-test.log
+          grep -F 'intercepts the real api.call closure used by elephantnoteClient' knowledge-renderer-test.log
           grep -F 'Graph terminal logging' knowledge-renderer-test.log
           grep -F 'graph semantic navigation' knowledge-renderer-test.log
           grep -F 'Wiki territory layout' knowledge-renderer-test.log

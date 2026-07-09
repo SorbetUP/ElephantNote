@@ -60,13 +60,15 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
       - name: Format and lint changed frontend knowledge files
+        env:
+          NODE_PATH: Elephant/node_modules
         run: |
-          pnpm exec eslint --fix \
+          Elephant/node_modules/.bin/eslint --fix \
             Elephant/frontend/app/components/views/WikiView.vue \
             Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \
             Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \
             Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js || true
-          pnpm exec eslint \
+          Elephant/node_modules/.bin/eslint \
             Elephant/frontend/app/components/views/WikiView.vue \
             Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \
             Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \

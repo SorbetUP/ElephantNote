@@ -195,6 +195,10 @@
               </section>
             </template>
 
+            <template v-else-if="activeSection === 'addons'">
+              <addons-settings-panel />
+            </template>
+
             <template v-else-if="activeSection === 'sync'">
               <sync-settings-panel :vaults="vaults" :active-vault-path="activeVaultPath" :initial-page="syncInitialPage" />
             </template>
@@ -252,6 +256,7 @@ import {
   Globe2,
   HardDrive,
   Moon,
+  Package,
   Palette,
   PenLine,
   Search,
@@ -261,6 +266,7 @@ import {
 } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import { ELEPHANTNOTE_THEME_FAMILIES, getThemeFamily, getThemeLabel, getThemeMode, getThemeTokens, getThemeVariant } from 'common/elephantnote/appearance'
+import AddonsSettingsPanel from './AddonsSettingsPanel.vue'
 import AiProviderSettingsPanel from './AiProviderSettingsPanel.vue'
 import SyncSettingsPanel from './SyncSettingsPanel.vue'
 import { useSitePreviewStore } from '../../sitePreview/sitePreviewStore'
@@ -280,6 +286,7 @@ const sections = [
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'editor', label: 'Editor', icon: PenLine },
   { id: 'vaults', label: 'Vaults', icon: FolderOpen },
+  { id: 'addons', label: 'Addons', icon: Package },
   { id: 'sync', label: 'Sync', icon: Cloud },
   { id: 'ai', label: 'AI', icon: Sparkles },
   { id: 'sites', label: 'Sites', icon: Globe2 },
@@ -304,6 +311,9 @@ const settingsIndex = [
   { id: 'editor-autosave-delay', section: 'editor', label: 'Autosave delay', description: 'Delay before writing the latest edit.' },
   { id: 'vault-active', section: 'vaults', label: 'Active vault', description: 'Current local workspace folder.' },
   { id: 'vault-open', section: 'vaults', label: 'Open vaults', description: 'Review or remove registered vaults.' },
+  { id: 'addons-installed', section: 'addons', label: 'Installed addons', description: 'Built-in and community addon packages.' },
+  { id: 'addons-community', section: 'addons', label: 'Community addons', description: 'Risk acknowledgement and third-party addon activation.' },
+  { id: 'addons-commands', section: 'addons', label: 'Addon commands', description: 'Run commands contributed by enabled addons.' },
   { id: 'sync-overview', section: 'sync', subpage: 'overview', label: 'Synchronization status', description: 'Active vault, device identity and last transfer.' },
   { id: 'sync-devices', section: 'sync', subpage: 'devices', label: 'Pair devices', description: 'Create or accept an encrypted Iroh invitation.' },
   { id: 'sync-conflicts', section: 'sync', subpage: 'conflicts', label: 'Conflict retention', description: 'Keep, restore or delete temporary conflict copies.' },
@@ -371,6 +381,7 @@ const scrollContentToTop = () => nextTick(() => settingsContent.value?.scrollTo(
 const selectSection = (section) => {
   activeSection.value = section
   settingsQuery.value = ''
+  log.info('[settings] section:selected', { section })
   scrollContentToTop()
 }
 const openSearchResult = (result) => {
@@ -378,6 +389,7 @@ const openSearchResult = (result) => {
   if (result.section === 'sync') syncInitialPage.value = result.subpage || 'overview'
   if (result.section === 'ai') aiInitialPage.value = result.subpage || 'provider'
   settingsQuery.value = ''
+  log.info('[settings] search-result:opened', { id: result.id, section: result.section })
   scrollContentToTop()
 }
 const setPreference = (type, value) => preferences.SET_SINGLE_PREFERENCE({ type, value })
@@ -476,7 +488,7 @@ const handleKeyboard = (event) => {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyboard)
-  log.info('[settings] mounted:start')
+  log.info('[settings] mounted:start', { sections: sections.map((section) => section.id) })
   try {
     featureFlags.value = await elephantnoteClient.features.get()
     log.info('[settings] featureFlags:loaded', featureFlags.value)
@@ -484,7 +496,7 @@ onMounted(async () => {
     log.warn('[settings] featureFlags:failed', error)
   }
   sitePreviewStore.refresh?.()
-  log.info('[settings] mounted:done', { theme: activeThemeLabel.value })
+  log.info('[settings] mounted:done', { theme: activeThemeLabel.value, addonsRegistered: Boolean(window.__ELEPHANT_ADDONS__) })
 })
 
 onBeforeUnmount(() => window.removeEventListener('keydown', handleKeyboard))

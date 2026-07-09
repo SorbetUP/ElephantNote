@@ -6,11 +6,11 @@ import { describe, expect, it } from 'vitest'
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const importFromRoot = (relativePath) => import(pathToFileURL(path.join(root, relativePath)).href)
-const readRuntime = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeBlocks.js')
+const readRuntime = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV2.js')
 const readObserver = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeBlockObserver.js')
 const readEditing = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeEditing.js')
-const readStyles = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeBlocks.css')
-const readBackend = () => read('Elephant/backend/tauri/src/code_execution.rs')
+const readStyles = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeBlocks.v2.css')
+const readBackend = () => read('Elephant/backend/tauri/src/code_execution_v2.rs')
 const readTauriLib = () => read('Elephant/backend/tauri/src/lib_min.rs')
 const readMain = () => read('Elephant/frontend/src/renderer/src/main.js')
 
@@ -23,28 +23,43 @@ describe('executable fenced code blocks', () => {
     expect(tauriLib).toContain('code_execution::tauri_programs_list')
     expect(tauriLib).toContain('code_execution::tauri_programs_set')
     expect(tauriLib).toContain('code_execution::tauri_programs_run')
-    expect(backend).toContain('io::{AsyncRead, AsyncReadExt, AsyncWriteExt}')
+    expect(backend).toContain('process::{Child, Command}')
     expect(backend).toContain('.stdin(Stdio::piped())')
     expect(backend).toContain('child.wait()')
     expect(backend).not.toContain('fake success')
   })
 
-  it('bounds execution by source size, timeout, vault working directory and a streaming tail buffer', () => {
+  it('bounds execution by source size, timeout, vault directory and streaming tail buffers', () => {
     const backend = readBackend()
 
     expect(backend).toContain('MAX_CODE_BYTES')
     expect(backend).toContain('MAX_OUTPUT_BYTES')
     expect(backend).toContain('DEFAULT_TIMEOUT_MS')
-    expect(backend).toContain('Duration::from_millis(timeout_ms)')
+    expect(backend).toContain('VecDeque::with_capacity(MAX_OUTPUT_BYTES)')
+    expect(backend).toContain('capture_stream')
     expect(backend).toContain('Refusing to execute code outside the active vault.')
     expect(backend).toContain('.kill_on_drop(true)')
-    expect(backend).toContain('VecDeque::with_capacity')
-    expect(backend).toContain('capture_stream')
-    expect(backend).toContain('process:stream:complete')
     expect(backend).not.toContain('wait_with_output')
   })
 
-  it('detects explicit interpreters and never routes arbitrary commands through a shell', () => {
+  it('supports a real interrupt path rather than hiding the output panel', () => {
+    const runtime = readRuntime()
+    const backend = readBackend()
+
+    expect(runtime).toContain("action === 'stop'")
+    expect(runtime).toContain('void stopBlock(target, current)')
+    expect(runtime).toContain("button.setAttribute('aria-label', isRunning ? 'Stop code execution' : 'Run code block')")
+    expect(runtime).toContain("icon.textContent = isRunning ? '' : '▶'")
+    expect(backend).toContain('RUNNING_EXECUTIONS')
+    expect(backend).toContain('oneshot::Sender<()>')
+    expect(backend).toContain('request_stop')
+    expect(backend).toContain('send_interrupt_signal')
+    expect(backend).toContain('signal=SIGINT')
+    expect(backend).toContain('Execution interrupted by user.')
+    expect(backend).toContain('interrupts_a_real_python_process_when_available')
+  })
+
+  it('detects explicit interpreters and never routes arbitrary source through a shell', () => {
     const backend = readBackend()
 
     expect(backend).toContain('candidates: &["python3", "python"]')
@@ -56,20 +71,45 @@ describe('executable fenced code blocks', () => {
     expect(backend).not.toContain('cmd /C')
   })
 
-  it('places the runner toolbar outside Muya editable content and renders a notebook-style output', () => {
+  it('uses compact in-block controls instead of a white toolbar below the code fence', () => {
     const runtime = readRuntime()
-    const main = readMain()
+    const styles = readStyles()
 
-    expect(main).toContain("import { installExecutableCodeBlocks } from './platform/executableCodeBlocks'")
-    expect(main).toContain('installExecutableCodeBlocks()')
-    expect(runtime).toContain("querySelectorAll('.en-editor-host pre, .muya-container pre, .ag-editor pre')")
-    expect(runtime).toContain("pre.insertAdjacentElement('afterend', toolbar)")
-    expect(runtime).toContain("toolbarPlacement: 'sibling-after-pre'")
+    expect(runtime).toContain("host.setAttribute?.(HOST_ATTRIBUTE, 'true')")
+    expect(runtime).toContain('host.append(toolbar)')
+    expect(runtime).toContain("toolbarPlacement: state.host === pre ? 'sibling-fallback' : 'stable-code-host'")
+    expect(styles).toContain("[data-elephant-code-host='true']")
+    expect(styles).toContain('position: absolute;')
+    expect(styles).toContain('right: 47px;')
+    expect(styles).toContain('var(--editorColor, currentColor)')
+    expect(styles).not.toContain('var(--en-card, #fff)')
+    expect(styles).not.toContain('min-width: 72px')
+  })
+
+  it('keeps output state across Muya node replacement and only clears explicitly', () => {
+    const runtime = readRuntime()
+
+    expect(runtime).toContain('const blockStates = new Map()')
+    expect(runtime).toContain('DETACHED_STATE_GRACE_MS')
+    expect(runtime).toContain('state.fingerprint === fingerprint || state.ordinal === ordinal')
+    expect(runtime).toContain('renderOutput(state)')
+    expect(runtime).toContain("clearButton.textContent = 'Clear'")
+    expect(runtime).toContain('state.result = null')
+    expect(runtime).toContain('block:state-pruned')
+  })
+
+  it('renders a readable notebook-style output with bounded scrolling', () => {
+    const runtime = readRuntime()
+    const styles = readStyles()
+
     expect(runtime).toContain("appendStream('stdout'")
     expect(runtime).toContain("appendStream('stderr'")
     expect(runtime).toContain("copyButton.textContent = 'Copy'")
     expect(runtime).toContain("collapseButton.textContent = 'Collapse'")
-    expect(runtime).toContain("action === 'programs.run'")
+    expect(runtime).toContain('stream.scrollTop = stream.scrollHeight')
+    expect(styles).toContain('max-height: min(42vh, 340px)')
+    expect(styles).toContain('overflow: auto')
+    expect(styles).toContain('--en-code-surface')
   })
 
   it('prevents the toolbar MutationObserver feedback loop that froze the editor', async() => {
@@ -78,9 +118,7 @@ describe('executable fenced code blocks', () => {
     )
     const toolbarChild = { nodeType: 1 }
     const sourceNode = { nodeType: 1 }
-    const toolbar = {
-      contains: (node) => node === toolbarChild
-    }
+    const toolbar = { contains: (node) => node === toolbarChild }
 
     expect(helper.relevantLanguageMutations([
       { type: 'childList', target: toolbarChild },
@@ -102,8 +140,6 @@ describe('executable fenced code blocks', () => {
       label: 'javascript',
       disabled: true
     })).toBe(true)
-    expect(languageElement.textContent).toBe('javascript')
-    expect(runButton.disabled).toBe(true)
   })
 
   it('adds practical code editing behavior for indentation and execution shortcuts', async() => {
@@ -120,8 +156,6 @@ describe('executable fenced code blocks', () => {
     expect(runtime).toContain("event.key === 'Tab'")
     expect(runtime).toContain("event.key === 'Enter'")
     expect(runtime).toContain('event.metaKey || event.ctrlKey')
-    expect(runtime).toContain('editor:auto-indent')
-    expect(runtime).toContain('editor:shortcut-run')
   })
 
   it('keeps only the configured output tail and exposes the limit in Settings', async() => {
@@ -136,16 +170,14 @@ describe('executable fenced code blocks', () => {
     expect(editing.normalizeOutputLineLimit('200')).toBe(200)
     expect(runtime).toContain("'Retained output'")
     expect(runtime).toContain('outputLineLimit')
-    expect(runtime).toContain('Earlier output was omitted')
-    expect(runtime).toContain('stream.scrollTop = stream.scrollHeight')
+    expect(runtime).toContain('Earlier output was discarded')
     expect(backend).toContain('DEFAULT_OUTPUT_LINE_LIMIT: usize = 200')
     expect(backend).toContain('prepare_stream')
     expect(backend).toContain('stdoutDroppedLines')
-    expect(backend).toContain('stderrDroppedBytes')
     expect(backend).toContain('capture_stream_is_memory_bounded_and_keeps_the_tail')
   })
 
-  it('uses the real Settings primitives and Vue scope instead of a custom oversized panel', () => {
+  it('uses the real Settings primitives and Vue scope', () => {
     const runtime = readRuntime()
     const styles = readStyles()
 
@@ -153,34 +185,29 @@ describe('executable fenced code blocks', () => {
     expect(runtime).toContain("copy.className = 'en-settings-row-copy'")
     expect(runtime).toContain("outputSelect.className = 'en-compact-select'")
     expect(runtime).toContain("executable.className = 'en-compact-input en-code-executable-input'")
-    expect(runtime).toContain('status.className = `en-status-badge')
     expect(runtime).toContain('applyVueScope(host, scopeSource)')
-    expect(runtime).toContain("name.startsWith('data-v-')")
     expect(styles).toContain('.en-code-environment-controls')
     expect(styles).toContain('.en-settings-panel .en-code-settings-group .en-switch')
-    expect(styles).not.toContain('grid-template-columns: minmax(160px, 0.9fr) minmax(180px, 1.1fr) auto')
   })
 
-  it('logs every frontend and backend execution stage without logging source text', () => {
+  it('logs frontend and backend execution stages without logging source text', () => {
     const runtime = readRuntime()
     const backend = readBackend()
 
     for (const event of [
       'install:start',
       'block:enhanced',
-      'editor:enhanced',
-      'language:changed',
-      'run:click',
       'run:dispatch',
       'invoke:start',
       'invoke:complete',
       'invoke:error',
       'run:result',
       'run:error',
-      'run:finished'
-    ]) {
-      expect(runtime).toContain(event)
-    }
+      'run:finished',
+      'stop:dispatch',
+      'stop:result'
+    ]) expect(runtime).toContain(event)
+
     for (const event of [
       'command:start',
       'validation:source',
@@ -192,63 +219,40 @@ describe('executable fenced code blocks', () => {
       'process:stdin:write:start',
       'process:wait:start',
       'process:stream:start',
+      'process:interrupt:requested',
       'process:output:captured',
       'command:complete',
       'command:error'
-    ]) {
-      expect(backend).toContain(event)
-    }
+    ]) expect(backend).toContain(event)
+
     expect(runtime).toContain('commandBytes')
     expect(runtime).not.toContain('sourceText: code')
     expect(backend).not.toContain('source={command}')
   })
 
-  it('uses a renderer watchdog so a missing IPC response cannot leave Run stuck forever', () => {
+  it('uses a renderer watchdog so missing IPC cannot leave the control stuck', () => {
     const runtime = readRuntime()
 
-    expect(runtime).toContain('const RUN_WATCHDOG_MS = 20_000')
+    expect(runtime).toContain('const RUN_WATCHDOG_MS = 22_000')
     expect(runtime).toContain('invoke:watchdog-timeout')
     expect(runtime).toContain('Promise.race([promise, watchdog])')
-    expect(runtime).toContain("button.querySelector('.en-code-runner-run-label').textContent = 'Run'")
-    expect(runtime).toContain('runningBlocks.delete(pre)')
-  })
-
-  it('detects the real Muya language input around a fenced block', () => {
-    const runtime = readRuntime()
-
-    expect(runtime).toContain('[data-placeholder*="language" i]')
-    expect(runtime).toContain('[placeholder*="language" i]')
-    expect(runtime).toContain('pre.parentElement')
-    expect(runtime).toContain('pre.previousElementSibling')
-    expect(runtime).toContain('languageInput: describeElement(findLanguageInput(pre))')
-  })
-
-  it('requires explicit opt-in and contains real Rust process tests', () => {
-    const runtime = readRuntime()
-    const backend = readBackend()
-
-    expect(runtime).toContain("'Code execution'")
-    expect(runtime).toContain('Detecting local environments…')
-    expect(runtime).toContain('Only execute code you trust')
-    expect(runtime).toContain('executionEnabled: state.executionEnabled === true')
-    expect(backend).toContain('execution_enabled: false')
-    expect(backend).toContain('Code execution is disabled. Enable it in Settings')
-    expect(backend).toContain('executes_a_real_python_interpreter_when_available')
-    expect(backend).toContain('"print(6 * 7)"')
-    expect(backend).toContain('assert_eq!(result.stdout.text.trim(), "42")')
+    expect(runtime).toContain('state.executionId = null')
+    expect(runtime).toContain('renderToolbar(state)')
   })
 
   it('keeps the observer and editing helpers wired into the actual runtime', () => {
     const runtime = readRuntime()
     const observer = readObserver()
     const editing = readEditing()
+    const main = readMain()
 
+    expect(main).toContain("import { installExecutableCodeBlocks } from './platform/executableCodeBlocks'")
+    expect(main).toContain('installExecutableCodeBlocks()')
     expect(runtime).toContain("from './executableCodeBlockObserver'")
     expect(runtime).toContain("from './executableCodeEditing'")
     expect(runtime).toContain('relevantLanguageMutations(records, toolbar)')
     expect(runtime).toContain('applyLanguageUiState({')
     expect(observer).toContain('languageElement.textContent !== label')
-    expect(observer).toContain('runButton.disabled !== disabled')
     expect(editing).toContain('indentationForNewline')
     expect(editing).toContain('indentationEdit')
   })

@@ -1,4 +1,6 @@
 pub mod actions;
+pub mod chat_action_storage;
+pub mod chat_actions;
 pub mod chunking;
 pub mod extraction;
 pub mod graph;
@@ -12,6 +14,10 @@ pub mod taxonomy;
 pub mod taxonomy_storage;
 
 pub use actions::{ActionValidation, ChatKnowledgeAction};
+pub use chat_actions::{
+    execute_approved_chat_action, prepare_chat_action, ChatActionExecution, ChatActionPreview,
+    ChatActionProposal, ChatActionStatus,
+};
 pub use chunking::analyze_markdown;
 pub use extraction::{
     build_tagging_request, parse_tagging_response, ExtractionValidation, StructuredModelRequest,

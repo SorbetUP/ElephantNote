@@ -59,8 +59,13 @@ jobs:
         run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
-      - name: Lint changed frontend knowledge files
+      - name: Format and lint changed frontend knowledge files
         run: |
+          pnpm exec eslint --fix \
+            Elephant/frontend/app/components/views/WikiView.vue \
+            Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \
+            Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \
+            Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js
           pnpm exec eslint \
             Elephant/frontend/app/components/views/WikiView.vue \
             Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \

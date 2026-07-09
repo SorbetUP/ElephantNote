@@ -9,10 +9,12 @@ on:
       - 'Elephant/backend/tauri/src/knowledge*.rs'
       - 'Elephant/backend/tauri/src/lib_min.rs'
       - 'Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
+      - 'Elephant/frontend/src/renderer/src/platform/runtimeLogShim.js'
       - 'Elephant/frontend/app/components/views/GraphView.vue'
       - 'Elephant/frontend/app/components/views/graphNavigationHelpers.js'
       - 'Elephant/frontend/app/components/views/semanticGraphViewHelpers.js'
       - 'tests/app/unit/platform/knowledgeRuntimeClient.spec.js'
+      - 'tests/app/unit/platform/runtimeLogShim.spec.js'
       - 'tests/app/unit/views/graphNavigationHelpers.spec.js'
       - '.github/workflows/knowledge-core.yml'
   push:
@@ -27,10 +29,12 @@ on:
       - 'Elephant/backend/tauri/src/knowledge*.rs'
       - 'Elephant/backend/tauri/src/lib_min.rs'
       - 'Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
+      - 'Elephant/frontend/src/renderer/src/platform/runtimeLogShim.js'
       - 'Elephant/frontend/app/components/views/GraphView.vue'
       - 'Elephant/frontend/app/components/views/graphNavigationHelpers.js'
       - 'Elephant/frontend/app/components/views/semanticGraphViewHelpers.js'
       - 'tests/app/unit/platform/knowledgeRuntimeClient.spec.js'
+      - 'tests/app/unit/platform/runtimeLogShim.spec.js'
       - 'tests/app/unit/views/graphNavigationHelpers.spec.js'
       - '.github/workflows/knowledge-core.yml'
   workflow_dispatch:
@@ -213,9 +217,11 @@ jobs:
         run: |
           Elephant/node_modules/.bin/eslint \
             Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \
+            Elephant/frontend/src/renderer/src/platform/runtimeLogShim.js \
             Elephant/frontend/app/components/views/GraphView.vue \
             Elephant/frontend/app/components/views/graphNavigationHelpers.js \
             tests/app/unit/platform/knowledgeRuntimeClient.spec.js \
+            tests/app/unit/platform/runtimeLogShim.spec.js \
             tests/app/unit/views/graphNavigationHelpers.spec.js
 
       - name: Run runtime and graph interaction tests
@@ -224,8 +230,10 @@ jobs:
           set -o pipefail
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
             tests/app/unit/platform/knowledgeRuntimeClient.spec.js \
+            tests/app/unit/platform/runtimeLogShim.spec.js \
             tests/app/unit/views/graphNavigationHelpers.spec.js \
             --reporter=verbose 2>&1 | tee knowledge-renderer-test.log
+          grep -F 'Graph terminal logging' knowledge-renderer-test.log
           grep -F 'graph semantic navigation' knowledge-renderer-test.log
           grep -F 'Wiki territory layout' knowledge-renderer-test.log
           grep -F 'graph camera calculations' knowledge-renderer-test.log

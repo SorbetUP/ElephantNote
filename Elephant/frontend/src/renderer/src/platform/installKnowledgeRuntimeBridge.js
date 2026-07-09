@@ -1,7 +1,6 @@
 import { knowledgeRuntimeClient, isKnowledgeRuntimeAvailable } from './knowledgeRuntimeClient'
 
-const MAX_GRAPH_NODES = 240
-const KNOWLEDGE_API_BRIDGE_VERSION = 2
+const KNOWLEDGE_API_BRIDGE_VERSION = 3
 
 const searchRuntimeState = {
   vaultPath: '',
@@ -48,9 +47,28 @@ const normalizeSearchHit = (result = {}) => ({
   endOffset: Number(result.endOffset ?? result.end_offset ?? 0) || 0
 })
 
-const normalizeSearchResults = (results) => Array.isArray(results)
-  ? results.map(normalizeSearchHit).filter((result) => result.relativePath)
-  : []
+const normalizeSearchResults = (results) => {
+  if (!Array.isArray(results)) return []
+  const byDocument = new Map()
+  for (const rawResult of results) {
+    const result = normalizeSearchHit(rawResult)
+    if (!result.relativePath) continue
+    const existing = byDocument.get(result.relativePath)
+    if (!existing) {
+      byDocument.set(result.relativePath, { ...result, matchCount: 1 })
+      continue
+    }
+    const matchCount = Number(existing.matchCount || 1) + 1
+    const existingScore = Number(existing.score ?? existing.rank ?? 0)
+    const nextScore = Number(result.score ?? result.rank ?? 0)
+    if (nextScore > existingScore) {
+      byDocument.set(result.relativePath, { ...result, matchCount })
+    } else {
+      existing.matchCount = matchCount
+    }
+  }
+  return [...byDocument.values()]
+}
 
 const graphDocuments = (graph) => (Array.isArray(graph?.nodes) ? graph.nodes : [])
   .filter((node) => (node.kind || node.type) === 'note')
@@ -63,59 +81,23 @@ const graphDocuments = (graph) => (Array.isArray(graph?.nodes) ? graph.nodes : [
     chunkCount: Number(node.chunkCount || node.chunk_count || 0)
   }))
 
-const limitGraphForRenderer = (graph = {}, maxNodes = MAX_GRAPH_NODES) => {
+const normalizeGraphForRenderer = (graph = {}) => {
   const nodes = Array.isArray(graph.nodes) ? graph.nodes : []
   const edges = Array.isArray(graph.edges) ? graph.edges : []
   const clusters = Array.isArray(graph.clusters) ? graph.clusters : []
-  if (nodes.length <= maxNodes) {
-    return {
-      ...graph,
-      nodes,
-      edges,
-      clusters,
-      totalNodeCount: nodes.length,
-      hiddenNodeCount: 0,
-      rendererLimited: false
-    }
-  }
-
-  const degree = new Map()
-  for (const edge of edges) {
-    degree.set(edge.source, (degree.get(edge.source) || 0) + 1)
-    degree.set(edge.target, (degree.get(edge.target) || 0) + 1)
-  }
-  const ranked = [...nodes].sort((left, right) => {
-    const wikiDelta = Number((right.kind || right.type) === 'wiki') - Number((left.kind || left.type) === 'wiki')
-    if (wikiDelta) return wikiDelta
-    const relationDelta = (degree.get(right.id) || 0) - (degree.get(left.id) || 0)
-    if (relationDelta) return relationDelta
-    return String(left.title || left.id || '').localeCompare(String(right.title || right.id || ''))
-  })
-  const visibleNodes = ranked.slice(0, maxNodes)
-  const visibleIds = new Set(visibleNodes.map((node) => node.id))
-  const visibleEdges = edges.filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
-  const visibleClusters = clusters
-    .map((cluster) => ({
-      ...cluster,
-      paths: Array.isArray(cluster.paths) ? cluster.paths.filter((path) => visibleIds.has(path)) : []
-    }))
-    .filter((cluster) => cluster.paths.length)
-
-  console.info('[KnowledgeRuntime] graph:renderer-window', {
+  console.info('[KnowledgeRuntime] graph:renderer-full', {
     totalNodes: nodes.length,
-    visibleNodes: visibleNodes.length,
-    hiddenNodes: nodes.length - visibleNodes.length,
     totalEdges: edges.length,
-    visibleEdges: visibleEdges.length
+    clusters: clusters.length
   })
   return {
     ...graph,
-    nodes: visibleNodes,
-    edges: visibleEdges,
-    clusters: visibleClusters,
+    nodes,
+    edges,
+    clusters,
     totalNodeCount: nodes.length,
-    hiddenNodeCount: nodes.length - visibleNodes.length,
-    rendererLimited: true
+    hiddenNodeCount: 0,
+    rendererLimited: false
   }
 }
 
@@ -203,7 +185,7 @@ const inspect = (payload = searchRuntimeState.vaultPath) => {
     currentSearchStatus(path)
   ])
     .then(([fullGraph, status]) => {
-      const graph = limitGraphForRenderer(fullGraph)
+      const graph = normalizeGraphForRenderer(fullGraph)
       return {
         indexPath: status.databasePath || '',
         documents: graphDocuments(graph),
@@ -243,7 +225,7 @@ const installApiDispatcher = (bridge) => {
     'wiki.sourceInfo': ({ id, draftId } = {}) => knowledgeRuntimeClient.getWikiDraft(draftId || id),
     'wiki.context': async() => ({
       records: await knowledgeRuntimeClient.listWikiDrafts({ limit: 500 }),
-      graph: limitGraphForRenderer(await knowledgeRuntimeClient.graph({ includeSuggestions: false }))
+      graph: normalizeGraphForRenderer(await knowledgeRuntimeClient.graph({ includeSuggestions: false }))
     }),
     'notes.autotag': ({ relativePath = '', path = '', maxTags = 8 } = {}) => knowledgeRuntimeClient.generateTagging({
       relativePath: relativePath || path,
@@ -318,7 +300,7 @@ export const installKnowledgeRuntimeBridge = (target = globalThis) => {
     sourceInfo: ({ id, draftId } = {}) => knowledgeRuntimeClient.getWikiDraft(draftId || id),
     context: async() => ({
       records: await knowledgeRuntimeClient.listWikiDrafts({ limit: 500 }),
-      graph: limitGraphForRenderer(await knowledgeRuntimeClient.graph({ includeSuggestions: false }))
+      graph: normalizeGraphForRenderer(await knowledgeRuntimeClient.graph({ includeSuggestions: false }))
     })
   }
   bridge.rag = { chat: knowledgeRuntimeClient.chat }
@@ -328,7 +310,8 @@ export const installKnowledgeRuntimeBridge = (target = globalThis) => {
     version: KNOWLEDGE_API_BRIDGE_VERSION,
     dispatcherInstalled,
     initMode: 'status-only',
-    rendererGraphLimit: MAX_GRAPH_NODES
+    rendererGraphLimit: null,
+    graphMode: 'full'
   })
   return true
 }

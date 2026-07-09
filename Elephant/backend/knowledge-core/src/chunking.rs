@@ -369,7 +369,10 @@ fn extract_wikilinks(markdown: &str) -> Vec<ExplicitLink> {
     while let Some(relative_start) = markdown[cursor..].find("[[") {
         let start = cursor + relative_start;
         let content_start = start + 2;
-        let Some(relative_end) = markdown[content_start..].find("]]" ) else { break };
+        let relative_end = match markdown[content_start..].find("]]" ) {
+            Some(value) => value,
+            None => break,
+        };
         let content_end = content_start + relative_end;
         let raw = markdown[content_start..content_end].trim();
         let (target, label) = raw.split_once('|').unwrap_or((raw, raw));

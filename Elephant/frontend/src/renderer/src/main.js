@@ -11,7 +11,7 @@ import { installTauriFileUtilsPathGuards } from './platform/tauriFileUtilsPathGu
 import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
 import { installTauriSearchRuntimeGuards } from './platform/tauriSearchRuntimeGuards'
 import { installTauriSearchConceptFallback } from './platform/tauriSearchConceptFallback'
-import { installPiProviderBridge } from './platform/piProviderInterface'
+import { installSubscriptionProviderBridge } from './platform/subscriptionProviderBridge'
 import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'
 import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
 import { installSlashMenuDiagnostics } from './platform/slashMenuDiagnostics'
@@ -112,7 +112,7 @@ installTauriFileUtilsPathGuards()
 installTauriElephantNoteBridge()
 installTauriSearchRuntimeGuards()
 installTauriSearchConceptFallback()
-installPiProviderBridge()
+installSubscriptionProviderBridge()
 installTauriMarkTextSaveBridge()
 installTauriLocalIpcBridge()
 installSlashMenuDiagnostics()

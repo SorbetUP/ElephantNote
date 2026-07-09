@@ -4,6 +4,7 @@ pub mod extraction;
 pub mod graph;
 pub mod model;
 pub mod pipeline;
+pub mod relation_extraction;
 pub mod relation_storage;
 pub mod relations;
 pub mod storage;
@@ -22,6 +23,10 @@ pub use model::{
     KnowledgeStatus, RebuildFailure, RebuildReport,
 };
 pub use pipeline::rebuild_vault;
+pub use relation_extraction::{
+    build_relation_extraction_request, parse_relation_extraction_response, ExtractedRelation,
+    RelationExtraction, RelationExtractionValidation,
+};
 pub use relations::{
     stable_relation_id, KnowledgeNodeKind, KnowledgeNodeRef, KnowledgeRelation, RelationOrigin,
     RelationStatus, RelationType, RelationValidation,

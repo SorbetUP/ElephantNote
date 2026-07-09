@@ -40,29 +40,91 @@ jobs:
         run: |
           cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
           cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-      - name: Check and test knowledge core
-        run: |
-          cargo check --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets
-          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets
-      - name: Check Tauri integration
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Lint and build frontend
-        run: |
-          pnpm lint
-          pnpm build
-      - name: Verify no legacy knowledge symbols remain
+      - name: Check knowledge core
+        id: core_check
+        continue-on-error: true
         shell: bash
         run: |
-          ! rg -n 'tauri_embeddings_|EmbeddingStore|tauri_wiki_proposals|tauri_rag_build_prompt|tauri_search_(inspect|rebuild|query|status)|legacyInspect|legacyRebuild|portable-markdown-index|tauri_rag_chat' Elephant
-          test ! -e Elephant/backend/tauri/src/embeddings.rs
-          test ! -e Elephant/backend/tauri/src/wiki.rs
-          test ! -e Elephant/backend/tauri/src/rag_prompt.rs
-          test ! -e Elephant/backend/tauri/src/search_logic.rs
-          test ! -e Elephant/backend/tauri/src/fts.rs
-          rg -n 'tauri_muya_render_html|knowledge-muya-preview' Elephant/frontend/app/components/views/WikiView.vue Elephant/backend/tauri/src/markdown/commands.rs
+          set -o pipefail
+          cargo check --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets --message-format short 2>&1 | tee legacy-removal-core-check.log
+      - name: Test knowledge core
+        id: core_test
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets --message-format short 2>&1 | tee legacy-removal-core-test.log
+      - name: Check Tauri integration
+        id: tauri_check
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features --message-format short 2>&1 | tee legacy-removal-tauri-check.log
+      - name: Install frontend dependencies
+        id: frontend_install
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee legacy-removal-pnpm-install.log
+      - name: Lint frontend
+        id: frontend_lint
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm lint 2>&1 | tee legacy-removal-lint.log
+      - name: Build frontend
+        id: frontend_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee legacy-removal-build.log
+      - name: Verify no legacy knowledge symbols remain
+        id: no_legacy
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            ! rg -n 'tauri_embeddings_|EmbeddingStore|tauri_wiki_proposals|tauri_rag_build_prompt|tauri_search_(inspect|rebuild|query|status)|legacyInspect|legacyRebuild|portable-markdown-index|tauri_rag_chat' Elephant
+            test ! -e Elephant/backend/tauri/src/embeddings.rs
+            test ! -e Elephant/backend/tauri/src/wiki.rs
+            test ! -e Elephant/backend/tauri/src/rag_prompt.rs
+            test ! -e Elephant/backend/tauri/src/search_logic.rs
+            test ! -e Elephant/backend/tauri/src/fts.rs
+            rg -n 'tauri_muya_render_html|knowledge-muya-preview' Elephant/frontend/app/components/views/WikiView.vue Elephant/backend/tauri/src/markdown/commands.rs
+          } 2>&1 | tee legacy-removal-verification.log
+      - name: Upload migration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-removal-diagnostics
+          path: |
+            legacy-removal-*.log
+            Elephant/backend/knowledge-core/src/
+            Elephant/backend/tauri/src/chat_runtime.rs
+            Elephant/backend/tauri/src/lib_min.rs
+            Elephant/frontend/app/components/views/WikiView.vue
+            Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js
+            Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js
+          if-no-files-found: warn
+          retention-days: 3
+      - name: Enforce migration checks
+        if: always()
+        shell: bash
+        run: |
+          test '${{ steps.core_check.outcome }}' = 'success'
+          test '${{ steps.core_test.outcome }}' = 'success'
+          test '${{ steps.tauri_check.outcome }}' = 'success'
+          test '${{ steps.frontend_install.outcome }}' = 'success'
+          test '${{ steps.frontend_lint.outcome }}' = 'success'
+          test '${{ steps.frontend_build.outcome }}' = 'success'
+          test '${{ steps.no_legacy.outcome }}' = 'success'
       - name: Remove migration files and commit
+        if: success()
         shell: bash
         run: |
           rm -f build/scripts/remove_legacy_knowledge.py

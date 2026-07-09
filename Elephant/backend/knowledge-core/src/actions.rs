@@ -77,7 +77,11 @@ impl ChatKnowledgeAction {
                     errors.push("Search limit must be between 1 and 100.".into());
                 }
             }
-            Self::CreateWiki { title, topic, source_paths } => {
+            Self::CreateWiki {
+                title,
+                topic,
+                source_paths,
+            } => {
                 if title.trim().is_empty() {
                     errors.push("Wiki title cannot be empty.".into());
                 }
@@ -88,13 +92,21 @@ impl ChatKnowledgeAction {
                     validate_note_path(path, &mut errors);
                 }
             }
-            Self::CreateNote { relative_path, title, .. } => {
+            Self::CreateNote {
+                relative_path,
+                title,
+                ..
+            } => {
                 validate_note_path(relative_path, &mut errors);
                 if title.trim().is_empty() {
                     errors.push("Note title cannot be empty.".into());
                 }
             }
-            Self::AppendToNote { relative_path, content, expected_hash } => {
+            Self::AppendToNote {
+                relative_path,
+                content,
+                expected_hash,
+            } => {
                 validate_note_path(relative_path, &mut errors);
                 validate_write_guard(content, expected_hash, &mut errors);
             }
@@ -111,7 +123,11 @@ impl ChatKnowledgeAction {
                     errors.push("Replacement range must have start_offset < end_offset.".into());
                 }
             }
-            Self::ReplaceNote { relative_path, content, expected_hash } => {
+            Self::ReplaceNote {
+                relative_path,
+                content,
+                expected_hash,
+            } => {
                 validate_note_path(relative_path, &mut errors);
                 validate_write_guard(content, expected_hash, &mut errors);
             }
@@ -141,20 +157,36 @@ fn validate_note_path(value: &str, errors: &mut Vec<String>) {
         errors.push("A relative note path is required.".into());
         return;
     }
-    let path = Path::new(trimmed);
-    if path.is_absolute() {
+
+    let normalized = trimmed.replace('\\', "/");
+    let path = Path::new(&normalized);
+    if path.is_absolute() || has_windows_drive_prefix(&normalized) {
         errors.push(format!("Absolute paths are forbidden: {trimmed}"));
     }
-    if path.components().any(|part| matches!(part, Component::ParentDir | Component::RootDir | Component::Prefix(_))) {
+    if path
+        .components()
+        .any(|part| matches!(part, Component::ParentDir | Component::RootDir))
+    {
         errors.push(format!("Path traversal is forbidden: {trimmed}"));
     }
-    let normalized = trimmed.replace('\\', "/");
     if normalized.split('/').any(|part| part.starts_with('.')) {
-        errors.push(format!("Hidden paths cannot be modified by chat actions: {trimmed}"));
+        errors.push(format!(
+            "Hidden paths cannot be modified by chat actions: {trimmed}"
+        ));
     }
     if !normalized.to_ascii_lowercase().ends_with(".md") {
-        errors.push(format!("Knowledge actions only support Markdown notes: {trimmed}"));
+        errors.push(format!(
+            "Knowledge actions only support Markdown notes: {trimmed}"
+        ));
     }
+}
+
+fn has_windows_drive_prefix(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && bytes[2] == b'/'
 }
 
 #[cfg(test)]
@@ -163,7 +195,10 @@ mod tests {
 
     #[test]
     fn search_is_read_only_and_needs_no_approval() {
-        let action = ChatKnowledgeAction::SearchNotes { query: "iroh".into(), limit: 10 };
+        let action = ChatKnowledgeAction::SearchNotes {
+            query: "iroh".into(),
+            limit: 10,
+        };
         let validation = action.validate();
         assert!(validation.valid);
         assert!(!validation.mutates_user_content);
@@ -180,12 +215,20 @@ mod tests {
         let validation = action.validate();
         assert!(!validation.valid);
         assert!(validation.requires_approval);
-        assert!(validation.errors.iter().any(|error| error.contains("content hash")));
+        assert!(validation
+            .errors
+            .iter()
+            .any(|error| error.contains("content hash")));
     }
 
     #[test]
     fn hidden_and_traversal_paths_are_rejected() {
-        for path in ["../outside.md", ".elephantnote/wiki/x.md", "/tmp/x.md"] {
+        for path in [
+            "../outside.md",
+            ".elephantnote/wiki/x.md",
+            "/tmp/x.md",
+            "C:/tmp/x.md",
+        ] {
             let action = ChatKnowledgeAction::CreateNote {
                 relative_path: path.into(),
                 title: "X".into(),

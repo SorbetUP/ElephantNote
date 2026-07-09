@@ -6,6 +6,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Instant, UNIX_EPOCH};
 
+const DETAILED_FILE_LOG_LIMIT: usize = 12;
+const PROGRESS_INTERVAL: usize = 100;
+
 pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
     let started_at = Instant::now();
     eprintln!(
@@ -49,6 +52,7 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
     store.initialize_wikis()?;
     let mut report = RebuildReport::default();
     let mut present_paths = HashSet::new();
+    let total_files = files.len();
 
     for absolute_path in files {
         let file_started_at = Instant::now();
@@ -59,7 +63,6 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
             .to_string_lossy()
             .replace('\\', "/");
         present_paths.insert(relative_path.clone());
-        eprintln!("[Knowledge][Rebuild] file:start path={relative_path}");
 
         match index_path(&store, &absolute_path, &relative_path) {
             Ok(IndexDecision::Unchanged) => {
@@ -72,11 +75,13 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
                 match relation_result {
                     Ok(relation_count) => {
                         report.unchanged += 1;
-                        eprintln!(
-                            "[Knowledge][Rebuild] file:unchanged path={} relations={} duration_ms={}",
-                            relative_path,
-                            relation_count.unwrap_or(0),
-                            file_started_at.elapsed().as_millis()
+                        log_file_outcome(
+                            "unchanged",
+                            &relative_path,
+                            report.scanned,
+                            total_files,
+                            file_started_at.elapsed().as_millis(),
+                            format!("relations={}", relation_count.unwrap_or(0)),
                         );
                     }
                     Err(error) => {
@@ -108,15 +113,16 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
                 match index_result {
                     Ok((relations, outdated_wikis)) => {
                         report.indexed += 1;
-                        eprintln!(
-                            "[Knowledge][Rebuild] file:indexed path={} sections={} chunks={} explicit_links={} relations={} outdated_wikis={} duration_ms={}",
-                            relative_path,
-                            sections,
-                            chunks,
-                            explicit_links,
-                            relations,
-                            outdated_wikis,
-                            file_started_at.elapsed().as_millis()
+                        log_file_outcome(
+                            "indexed",
+                            &relative_path,
+                            report.scanned,
+                            total_files,
+                            file_started_at.elapsed().as_millis(),
+                            format!(
+                                "sections={} chunks={} explicit_links={} relations={} outdated_wikis={}",
+                                sections, chunks, explicit_links, relations, outdated_wikis
+                            ),
                         );
                     }
                     Err(error) => {
@@ -146,6 +152,18 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
                 });
             }
         }
+
+        if report.scanned % PROGRESS_INTERVAL == 0 || report.scanned == total_files {
+            eprintln!(
+                "[Knowledge][Rebuild] progress scanned={} total={} indexed={} unchanged={} failed={} duration_ms={}",
+                report.scanned,
+                total_files,
+                report.indexed,
+                report.unchanged,
+                report.failed.len(),
+                started_at.elapsed().as_millis()
+            );
+        }
     }
 
     report.removed = store.prune_documents(&present_paths).map_err(|error| {
@@ -167,6 +185,22 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
         started_at.elapsed().as_millis()
     );
     Ok(report)
+}
+
+fn log_file_outcome(
+    outcome: &str,
+    relative_path: &str,
+    scanned: usize,
+    total: usize,
+    duration_ms: u128,
+    details: String,
+) {
+    if scanned <= DETAILED_FILE_LOG_LIMIT || scanned % PROGRESS_INTERVAL == 0 || scanned == total {
+        eprintln!(
+            "[Knowledge][Rebuild] file:{} path={} scanned={} total={} {} duration_ms={}",
+            outcome, relative_path, scanned, total, details, duration_ms
+        );
+    }
 }
 
 enum IndexDecision {

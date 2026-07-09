@@ -71,8 +71,11 @@ A focused CI workflow performs real round trips rather than checking only that U
 - require the decoded string to equal the source JSON byte-for-byte;
 - decode the PNG data URL produced by the browser helper in the same way;
 - create a real `.elephantnote-invite` `File`, read it back, and require identical content and MIME type;
+- require QR, file, and pasted code to resolve to the exact same credential;
 - pass every decoded/imported payload through the shared protocol, required-field, and expiration validator;
 - reject malformed, incomplete, and expired payloads.
+
+The dedicated focused workflow runs 17 Sync/invitation tests and persists its output as an artifact on every execution.
 
 Physical camera hardware cannot be created in hosted unit CI. Camera acquisition remains covered by build/lint and integration contracts, while the actual codec used after each camera frame or captured photo is covered by the independent decode round trip.
 

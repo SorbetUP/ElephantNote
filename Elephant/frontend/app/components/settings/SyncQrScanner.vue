@@ -89,7 +89,6 @@ const stopCameraScanner = () => {
   if (video.value) video.value.srcObject = null
   scanning.value = false
   busy.value = false
-  resultHandled = false
 }
 
 const acceptDecodedPayload = (payload) => {
@@ -156,6 +155,7 @@ const scanImageFile = async (event) => {
   if (input) input.value = ''
   if (!file) return
   scannerError.value = ''
+  resultHandled = false
   busy.value = true
   const objectUrl = URL.createObjectURL(file)
   try {

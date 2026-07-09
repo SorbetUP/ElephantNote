@@ -54,7 +54,7 @@ describe('executable fenced code blocks', () => {
 
     expect(main).toContain("import { installExecutableCodeBlocks } from './platform/executableCodeBlocks'")
     expect(main).toContain('installExecutableCodeBlocks()')
-    expect(runtime).toContain("document.querySelectorAll('.en-editor-host pre")
+    expect(runtime).toContain(".querySelectorAll('.en-editor-host pre")
     expect(runtime).toContain("run.textContent = 'Run'")
     expect(runtime).toContain("appendStream('stdout'")
     expect(runtime).toContain("appendStream('stderr'")

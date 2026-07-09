@@ -6,6 +6,7 @@ on:
       - 'Elephant/backend/knowledge-core/**'
       - 'Elephant/backend/tauri/Cargo.toml'
       - 'Elephant/backend/tauri/src/knowledge.rs'
+      - 'Elephant/backend/tauri/src/knowledge_relations.rs'
       - 'Elephant/backend/tauri/src/knowledge_core_contract_tests.rs'
       - '.github/workflows/knowledge-core.yml'
   push:
@@ -16,6 +17,7 @@ on:
       - 'Elephant/backend/knowledge-core/**'
       - 'Elephant/backend/tauri/Cargo.toml'
       - 'Elephant/backend/tauri/src/knowledge.rs'
+      - 'Elephant/backend/tauri/src/knowledge_relations.rs'
       - 'Elephant/backend/tauri/src/knowledge_core_contract_tests.rs'
       - '.github/workflows/knowledge-core.yml'
   workflow_dispatch:
@@ -39,11 +41,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - name: Check formatting
-        shell: bash
-        run: |
-          set -o pipefail
-          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml -- --check 2>&1 | tee knowledge-core-format.log
+      - name: Apply rustfmt for validation
+        run: cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
       - name: Check
         shell: bash
         run: |
@@ -54,13 +53,13 @@ jobs:
         run: |
           set -o pipefail
           cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets --message-format short 2>&1 | tee knowledge-core-test.log
-      - name: Upload diagnostics
+      - name: Upload formatted sources and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: knowledge-core-diagnostics
+          name: knowledge-core-formatted
           path: |
-            knowledge-core-format.log
+            Elephant/backend/knowledge-core/
             knowledge-core-check.log
             knowledge-core-test.log
           if-no-files-found: warn

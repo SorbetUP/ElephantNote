@@ -24,6 +24,48 @@
       :title="lastError"
     />
 
+    <section
+      v-if="communityConsentLoaded"
+      class="pref-community-safety"
+      :class="{ enabled: communityAddonsEnabled }"
+    >
+      <template v-if="!communityAddonsEnabled">
+        <div class="pref-community-safety-copy">
+          <strong>Community addons are disabled</strong>
+          <p>
+            Addons are third-party code. Even with isolation and permission checks, ElephantNote cannot guarantee that every addon is safe, private or free of bugs. Only enable addons you trust and review the capabilities they request.
+          </p>
+        </div>
+        <el-checkbox v-model="communityRiskAccepted">
+          I understand that community addons can be unsafe and that I am responsible for the addons I enable.
+        </el-checkbox>
+        <el-button
+          type="danger"
+          plain
+          :disabled="!communityRiskAccepted || operationInProgress"
+          :loading="operationInProgress"
+          @click="enableCommunityAddons"
+        >
+          Enable community addons
+        </el-button>
+      </template>
+
+      <template v-else>
+        <div class="pref-community-safety-copy">
+          <strong>Community addons are enabled</strong>
+          <p>
+            Third-party addons may execute code, modify permitted notes or send permitted data over the network. Review each addon and its requested capabilities before enabling it.
+          </p>
+        </div>
+        <el-button
+          :disabled="operationInProgress"
+          @click="disableCommunityAddons"
+        >
+          Disable community addons
+        </el-button>
+      </template>
+    </section>
+
     <section class="pref-addons-summary">
       <div>
         <strong>{{ items.length }}</strong>
@@ -83,7 +125,7 @@
           <div class="pref-addon-controls">
             <el-switch
               :model-value="addon.enabled"
-              :disabled="operationInProgress || addon.status === 'activating'"
+              :disabled="operationInProgress || addon.status === 'activating' || (addon.manifest.source === 'external' && !communityAddonsEnabled)"
               @change="(value) => setAddonEnabled(addon.manifest.id, value)"
             />
             <el-button
@@ -104,6 +146,7 @@
           <span v-if="addon.manifest.author">by {{ addon.manifest.author }}</span>
           <span v-if="addon.manifest.runtime?.type">{{ addon.manifest.runtime.type }}</span>
           <span v-if="addon.manifest.defaultEnabled">default enabled</span>
+          <span v-if="addon.manifest.source === 'external' && !communityAddonsEnabled">blocked by community mode</span>
         </div>
 
         <div
@@ -189,7 +232,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ElMessageBox } from 'element-plus'
 import { open } from '@tauri-apps/plugin-dialog'
@@ -197,6 +240,7 @@ import { getAddonActions, getAddonSettingsSections } from '@/addons'
 import { useAddonsStore } from '@/store/addons'
 
 const addonsStore = useAddonsStore()
+const communityRiskAccepted = ref(false)
 const {
   installed,
   items,
@@ -205,7 +249,9 @@ const {
   contributionCount,
   contributions,
   lastError,
-  operationInProgress
+  operationInProgress,
+  communityAddonsEnabled,
+  communityConsentLoaded
 } = storeToRefs(addonsStore)
 
 const actions = computed(() => getAddonActions(contributions.value))
@@ -221,6 +267,22 @@ const permissionLabels = (permissions) => {
   if (permissions.storage) labels.push('Private addon storage')
   if (permissions.commands) labels.push('Register commands')
   return labels
+}
+
+const enableCommunityAddons = async () => {
+  if (!communityRiskAccepted.value) return
+  await addonsStore.setCommunityAddonsEnabled(true)
+  communityRiskAccepted.value = false
+}
+
+const disableCommunityAddons = async () => {
+  await ElMessageBox.confirm(
+    'Disable community addons? All currently running community addons will be stopped. Installed packages and their private data will be kept.',
+    'Disable community addons',
+    { type: 'warning', confirmButtonText: 'Disable' }
+  )
+  await addonsStore.setCommunityAddonsEnabled(false)
+  communityRiskAccepted.value = false
 }
 
 const setAddonEnabled = async (id, enabled) => {
@@ -280,6 +342,33 @@ const runAddonAction = async (id) => {
 
 .pref-addons-alert {
   margin-bottom: 16px;
+}
+
+.pref-community-safety {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid var(--el-color-danger, #f56c6c);
+  border-radius: 12px;
+  background: var(--el-color-danger-light-9, rgba(245, 108, 108, 0.08));
+}
+
+.pref-community-safety.enabled {
+  border-color: var(--el-color-warning, #e6a23c);
+  background: var(--el-color-warning-light-9, rgba(230, 162, 60, 0.08));
+}
+
+.pref-community-safety-copy strong {
+  font-size: 15px;
+}
+
+.pref-community-safety-copy p {
+  max-width: 760px;
+  margin: 7px 0 0;
+  line-height: 1.5;
 }
 
 .pref-addons-summary {

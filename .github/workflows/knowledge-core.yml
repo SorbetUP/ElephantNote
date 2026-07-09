@@ -1,0 +1,47 @@
+name: Knowledge Core
+
+on:
+  pull_request:
+    paths:
+      - 'Elephant/backend/knowledge-core/**'
+      - 'Elephant/backend/tauri/Cargo.toml'
+      - 'Elephant/backend/tauri/src/knowledge.rs'
+      - 'Elephant/backend/tauri/src/knowledge_core_contract_tests.rs'
+      - '.github/workflows/knowledge-core.yml'
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'Elephant/backend/knowledge-core/**'
+      - 'Elephant/backend/tauri/Cargo.toml'
+      - 'Elephant/backend/tauri/src/knowledge.rs'
+      - 'Elephant/backend/tauri/src/knowledge_core_contract_tests.rs'
+      - '.github/workflows/knowledge-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: knowledge-core-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust knowledge-core
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Format
+        run: cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml -- --check
+      - name: Check
+        run: cargo check --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets --message-format short
+      - name: Test
+        run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets --message-format short

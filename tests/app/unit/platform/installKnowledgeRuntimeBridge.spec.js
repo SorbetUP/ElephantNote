@@ -70,7 +70,7 @@ describe('knowledge search bridge initialization', () => {
     expect(invoke.mock.calls.some(([command]) => command === 'tauri_knowledge_rebuild')).toBe(false)
   })
 
-  it('intercepts the real api.call closure used by elephantnoteClient', async() => {
+  it('accepts the searchStore object payload through elephantnoteClient and the real api.call dispatcher', async() => {
     const invoke = vi.fn(async(command) => {
       if (command === 'tauri_debug_log') return true
       if (command === 'tauri_knowledge_status') {
@@ -85,21 +85,37 @@ describe('knowledge search bridge initialization', () => {
       }
       return null
     })
-    const bridge = await loadRealTauriBridge(invoke)
+    await loadRealTauriBridge(invoke)
+    const { elephantnoteClient } = await import('../../../../Elephant/frontend/app/services/elephantnoteClient.js')
 
-    const envelope = await bridge.api.call('search.initVault', { vaultPath: '/vault/A' })
+    const status = await elephantnoteClient.search.initVault({ vaultPath: '/vault/A' })
 
-    expect(envelope).toMatchObject({
-      ok: true,
-      data: {
-        vaultPath: '/vault/A',
-        status: 'ready',
-        indexedDocuments: 1389,
-        databasePath: '/vault/A/.elephantnote/knowledge/knowledge.sqlite'
-      }
+    expect(status).toMatchObject({
+      vaultPath: '/vault/A',
+      status: 'ready',
+      indexedDocuments: 1389,
+      databasePath: '/vault/A/.elephantnote/knowledge/knowledge.sqlite'
     })
     expect(invoke.mock.calls.some(([command]) => command === 'tauri_knowledge_rebuild')).toBe(false)
     expect(invoke.mock.calls.filter(([command]) => command === 'tauri_knowledge_status')).toHaveLength(1)
+  })
+
+  it('also accepts the legacy string initVault argument', async() => {
+    const invoke = vi.fn(async(command) => {
+      if (command === 'tauri_debug_log') return true
+      if (command === 'tauri_knowledge_status') return { documents: 12, chunks: 24 }
+      return null
+    })
+    await loadRealTauriBridge(invoke)
+    const { elephantnoteClient } = await import('../../../../Elephant/frontend/app/services/elephantnoteClient.js')
+
+    const status = await elephantnoteClient.search.initVault('/vault/B')
+
+    expect(status).toMatchObject({
+      vaultPath: '/vault/B',
+      status: 'ready',
+      indexedDocuments: 12
+    })
   })
 
   it('deduplicates concurrent api.call initVault calls for the same vault', async() => {

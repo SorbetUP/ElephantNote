@@ -203,6 +203,17 @@ impl KnowledgeStore {
             .map_err(|error| error.to_string())
     }
 
+    pub fn reset_derived_explicit_link_relations(&self) -> Result<usize, String> {
+        let conn = open_relation_connection(self.database_path())?;
+        conn.execute_batch(RELATION_SCHEMA)
+            .map_err(|error| error.to_string())?;
+        conn.execute(
+            "DELETE FROM knowledge_relations WHERE relation_type='explicit_link'",
+            [],
+        )
+        .map_err(|error| error.to_string())
+    }
+
     pub fn sync_markdown_relations(&self, document: &DocumentSnapshot) -> Result<usize, String> {
         let conn = open_relation_connection(self.database_path())?;
         conn.execute_batch(RELATION_SCHEMA)
@@ -405,6 +416,19 @@ mod tests {
             .unwrap();
         assert_eq!(relations.len(), 1);
         assert_eq!(relations[0].target.id, "B");
+        fs::remove_dir_all(root).ok();
+    }
+    #[test]
+    fn explicit_link_reset_removes_only_rebuildable_links() {
+        let root = temp_vault("reset-explicit-links");
+        fs::create_dir_all(&root).unwrap();
+        let mut store = KnowledgeStore::open(&root).unwrap();
+        let source = analyze_markdown("A.md", "# A\nSee [[B]].", 1);
+        store.upsert_document(&source).unwrap();
+        store.sync_markdown_relations(&source).unwrap();
+        assert_eq!(store.list_relations(None, 10).unwrap().len(), 1);
+        assert_eq!(store.reset_derived_explicit_link_relations().unwrap(), 1);
+        assert!(store.list_relations(None, 10).unwrap().is_empty());
         fs::remove_dir_all(root).ok();
     }
 }

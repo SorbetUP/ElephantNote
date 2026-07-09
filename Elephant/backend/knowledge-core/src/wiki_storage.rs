@@ -38,6 +38,13 @@ impl KnowledgeStore {
         let conn = open_wiki_connection(self.database_path())?;
         conn.execute_batch(WIKI_SCHEMA)
             .map_err(|error| error.to_string())?;
+        if matches!(draft.status, WikiDraftStatus::Proposed) {
+            conn.execute(
+                "DELETE FROM wiki_drafts WHERE slug=?1 AND status='proposed' AND id!=?2",
+                params![draft.slug, draft.id],
+            )
+            .map_err(|error| error.to_string())?;
+        }
         let citations_json =
             serde_json::to_string(&draft.citations).map_err(|error| error.to_string())?;
         let source_paths_json =

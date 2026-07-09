@@ -50,6 +50,13 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
     })?;
     store.initialize_relations()?;
     store.initialize_wikis()?;
+    let reset_explicit_links = store.reset_derived_explicit_link_relations()?;
+    if reset_explicit_links > 0 {
+        eprintln!(
+            "[Knowledge][Rebuild] derived:reset explicit_links={}",
+            reset_explicit_links
+        );
+    }
     let mut report = RebuildReport::default();
     let mut present_paths = HashSet::new();
     let total_files = files.len();

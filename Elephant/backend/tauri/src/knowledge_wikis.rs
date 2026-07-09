@@ -7,11 +7,44 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use tauri::AppHandle;
 
 const DEFAULT_MAX_DOCUMENTS: usize = 12;
 const DEFAULT_MAX_CHUNKS: usize = 64;
 const DEFAULT_MAX_SECTIONS: usize = 10;
+
+static ACTIVE_WIKI_GENERATIONS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+struct WikiGenerationGuard {
+    key: String,
+}
+
+impl Drop for WikiGenerationGuard {
+    fn drop(&mut self) {
+        if let Ok(mut active) = ACTIVE_WIKI_GENERATIONS
+            .get_or_init(|| Mutex::new(HashSet::new()))
+            .lock()
+        {
+            active.remove(&self.key);
+        }
+    }
+}
+
+fn acquire_wiki_generation(topic: &str) -> Result<WikiGenerationGuard, String> {
+    let key = topic.trim().to_lowercase();
+    let mut active = ACTIVE_WIKI_GENERATIONS
+        .get_or_init(|| Mutex::new(HashSet::new()))
+        .lock()
+        .map_err(|_| "Wiki generation lock is poisoned.".to_string())?;
+    if !active.insert(key.clone()) {
+        return Err(format!(
+            "A wiki generation is already running for topic `{}`.",
+            topic.trim()
+        ));
+    }
+    Ok(WikiGenerationGuard { key })
+}
 
 fn active_vault_root(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(PathBuf::from(
@@ -54,6 +87,7 @@ pub async fn tauri_knowledge_wiki_generate(
     if topic.trim().is_empty() {
         return Err("Wiki topic cannot be empty.".into());
     }
+    let _generation_guard = acquire_wiki_generation(&topic)?;
     let root = active_vault_root(&app)?;
     let store = active_store(&root)?;
     let documents = select_documents(
@@ -277,11 +311,17 @@ fn selected_wiki_route(payload: &Value) -> Result<WikiModelRoute, String> {
     Err("No model is selected for wiki generation or chat.".into())
 }
 
+fn is_codex_provider(provider: &str) -> bool {
+    matches!(
+        provider,
+        "codex" | "chatgpt" | "codex-app-server" | "openai-codex"
+    )
+}
+
 fn is_bundled_local_provider(provider: &str) -> bool {
     matches!(
         provider,
-        ""
-            | "app-local"
+        "" | "app-local"
             | "local"
             | "tauri-rust"
             | "tauri-rust-local-bundled"
@@ -304,6 +344,25 @@ async fn generate_structured_response(
             request.system_prompt, request.user_prompt, request.json_schema_name
         );
         return crate::ollama::OllamaRuntime::generate(&route.model, &prompt).await;
+    }
+
+    if is_codex_provider(&provider) {
+        #[cfg(mobile)]
+        {
+            let _ = (app, request, payload);
+            return Err("Codex wiki generation is unavailable on mobile in this build.".into());
+        }
+
+        #[cfg(not(mobile))]
+        {
+            let prompt = format!(
+                "{}\n\n{}\n\nReturn exactly one JSON object. Schema name: {}",
+                request.system_prompt, request.user_prompt, request.json_schema_name
+            );
+            return crate::chat_runtime::codex_app_server::chat(app, &route.model, &prompt)
+                .await
+                .map(|result| result.answer);
+        }
     }
 
     if is_bundled_local_provider(&provider) {
@@ -441,5 +500,27 @@ mod tests {
         let route = selected_wiki_route(&payload).unwrap();
         assert_eq!(route.provider, "ollama");
         assert_eq!(route.model, "qwen3");
+    }
+    #[test]
+    fn wiki_route_accepts_codex_subscription_provider() {
+        let payload = json!({
+            "aiConfig": {
+                "routes": {
+                    "chat": { "provider": "codex", "model": "gpt-5.4-mini" }
+                }
+            }
+        });
+        let route = selected_wiki_route(&payload).unwrap();
+        assert_eq!(route.provider, "codex");
+        assert_eq!(route.model, "gpt-5.4-mini");
+        assert!(is_codex_provider(&route.provider));
+    }
+
+    #[test]
+    fn duplicate_topic_generation_is_rejected_until_guard_drops() {
+        let first = acquire_wiki_generation("Minecraft").unwrap();
+        assert!(acquire_wiki_generation(" minecraft ").is_err());
+        drop(first);
+        assert!(acquire_wiki_generation("Minecraft").is_ok());
     }
 }

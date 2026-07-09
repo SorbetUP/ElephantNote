@@ -1,3 +1,6 @@
+#[cfg(not(mobile))]
+pub(crate) mod codex_app_server;
+
 use elephantnote_knowledge_core::{KnowledgeSearchHit, KnowledgeStore};
 use serde_json::{json, Value};
 use tauri::AppHandle;

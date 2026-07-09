@@ -78,7 +78,11 @@ impl ManagedAiRuntimeState {
     loop {
       match opencode_health(OPENCODE_MANAGED_ENDPOINT) {
         Ok(health) => {
-          let pid = self.opencode.lock().ok().and_then(|guard| guard.as_ref().map(|process| process.child.id()));
+          let pid = self
+            .opencode
+            .lock()
+            .ok()
+            .and_then(|guard| guard.as_ref().map(|process| process.child.id()));
           eprintln!(
             "[AI][opencode] process:ready pid={} endpoint={} duration_ms={}",
             pid.map(|value| value.to_string()).unwrap_or_else(|| "unknown".to_string()),
@@ -182,22 +186,28 @@ impl ManagedAiRuntimeState {
   fn status(&self, provider: ManagedProvider) -> Value {
     let status = self.installer.status(provider);
     if provider == ManagedProvider::OpenCode {
-      let process = self.opencode.lock().ok().and_then(|mut guard| {
-        let process = guard.as_mut()?;
-        match process.child.try_wait() {
-          Ok(None) => Some(json!({
-            "running": true,
-            "pid": process.child.id(),
-            "executable": process.executable.to_string_lossy(),
-            "version": process.version,
-            "endpoint": OPENCODE_MANAGED_ENDPOINT
-          })),
-          _ => {
-            *guard = None;
-            None
-          }
+      let process = if let Ok(mut guard) = self.opencode.lock() {
+        let alive = match guard.as_mut() {
+          Some(process) => matches!(process.child.try_wait(), Ok(None)),
+          None => false,
+        };
+        if alive {
+          guard.as_ref().map(|process| {
+            json!({
+              "running": true,
+              "pid": process.child.id(),
+              "executable": process.executable.to_string_lossy(),
+              "version": process.version,
+              "endpoint": OPENCODE_MANAGED_ENDPOINT
+            })
+          })
+        } else {
+          *guard = None;
+          None
         }
-      });
+      } else {
+        None
+      };
       return json!({
         "ok": true,
         "provider": "opencode",
@@ -247,7 +257,9 @@ fn activate_managed_paths(installer: &ManagedRuntimeInstaller) -> R<()> {
   .into_iter()
   .flatten()
   .collect::<Vec<_>>();
-  entries.extend(env::var_os("PATH").as_deref().map(env::split_paths).into_iter().flatten());
+  if let Some(path) = env::var_os("PATH") {
+    entries.extend(env::split_paths(&path));
+  }
   let mut unique = Vec::new();
   for entry in entries {
     if !unique.contains(&entry) {
@@ -261,7 +273,12 @@ fn activate_managed_paths(installer: &ManagedRuntimeInstaller) -> R<()> {
 
 fn redact_line(line: &str) -> String {
   let lower = line.to_ascii_lowercase();
-  if lower.contains("token") || lower.contains("authorization") || lower.contains("api_key") || lower.contains("apikey") || lower.contains("password") {
+  if lower.contains("token")
+    || lower.contains("authorization")
+    || lower.contains("api_key")
+    || lower.contains("apikey")
+    || lower.contains("password")
+  {
     "[redacted-sensitive-log]".to_string()
   } else {
     line.to_string()

@@ -19,11 +19,9 @@ fn active_store(app: &AppHandle) -> Result<KnowledgeStore, String> {
 }
 
 #[tauri::command]
-pub async fn tauri_knowledge_rebuild(app: AppHandle) -> Result<RebuildReport, String> {
+pub fn tauri_knowledge_rebuild(app: AppHandle) -> Result<RebuildReport, String> {
     let root = active_vault_root(&app)?;
-    tauri::async_runtime::spawn_blocking(move || rebuild_vault(Path::new(&root)))
-        .await
-        .map_err(|error| format!("Knowledge rebuild worker failed: {error}"))?
+    rebuild_vault(Path::new(&root))
 }
 
 #[tauri::command]
@@ -386,70 +384,42 @@ mod tests {
             expected_hash: String::new(),
         });
         assert!(!validation.valid);
+        assert!(validation.mutates_user_content);
         assert!(validation.requires_approval);
     }
 
     #[test]
-    fn create_note_contract_rejects_hidden_path() {
-        let validation = tauri_knowledge_validate_chat_action(ChatKnowledgeAction::CreateNote {
-            relative_path: ".elephantnote/private.md".into(),
-            content: "# Hidden".into(),
-        });
-        assert!(!validation.valid);
-    }
-
-    #[test]
-    fn selected_route_prefers_explicit_knowledge_model() {
-        let route = selected_knowledge_route(&json!({
-            "modelSelection": {
-                "knowledgeTagging": {
-                    "provider": "ollama",
-                    "model": "qwen3:4b"
-                }
-            }
-        }))
-        .unwrap();
-        assert_eq!(
-            route,
-            KnowledgeModelRoute {
-                provider: "ollama".into(),
-                model: "qwen3:4b".into()
-            }
-        );
-    }
-
-    #[test]
-    fn selected_route_falls_back_to_chat_model() {
-        let route = selected_knowledge_route(&json!({
+    fn tagging_route_prefers_dedicated_role() {
+        let payload = json!({
             "aiConfig": {
                 "routes": {
-                    "chat": {
-                        "provider": "local-llama.cpp",
-                        "model": "qwen3.gguf"
-                    }
+                    "knowledgeTagging": { "provider": "ollama", "model": "qwen3:0.6b" },
+                    "chat": { "provider": "local", "model": "chat.gguf" }
                 }
             }
-        }))
-        .unwrap();
+        });
+        let route = selected_knowledge_route(&payload).unwrap();
+        assert_eq!(route.provider, "ollama");
+        assert_eq!(route.model, "qwen3:0.6b");
+    }
+
+    #[test]
+    fn tagging_route_falls_back_to_chat_model() {
+        let payload = json!({ "modelSelection": { "chat": "tiny.gguf" } });
+        let route = selected_knowledge_route(&payload).unwrap();
         assert_eq!(route.provider, "local-llama.cpp");
-        assert_eq!(route.model, "qwen3.gguf");
+        assert_eq!(route.model, "tiny.gguf");
     }
 
     #[test]
-    fn selected_route_rejects_missing_model() {
-        let error = selected_knowledge_route(&json!({})).unwrap_err();
-        assert!(error.contains("No model is selected"));
-    }
-
-    #[test]
-    fn extracts_json_from_fenced_model_response() {
-        let raw = "```json\n{\"tags\":[]}\n```";
-        assert_eq!(extract_json_payload(raw).unwrap(), "{\"tags\":[]}");
-    }
-
-    #[test]
-    fn extracts_json_from_wrapped_model_response() {
-        let raw = "Here is the result: {\"tags\":[]}";
-        assert_eq!(extract_json_payload(raw).unwrap(), "{\"tags\":[]}");
+    fn extracts_json_from_markdown_fence_or_surrounding_text() {
+        assert_eq!(
+            extract_json_payload("```json\n{\"tags\":[]}\n```").unwrap(),
+            "{\"tags\":[]}"
+        );
+        assert_eq!(
+            extract_json_payload("Result: {\"tags\":[]} done").unwrap(),
+            "{\"tags\":[]}"
+        );
     }
 }

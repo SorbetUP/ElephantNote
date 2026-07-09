@@ -119,13 +119,17 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('sitePreviewStore.openPreviewExternal')
   })
 
-  it('keeps Sync navigation at the top and makes retention directly editable', () => {
+  it('uses one Sync page with a focused pairing dialog and directly editable retention', () => {
     const source = readSync()
 
-    expect(source).toContain('class="en-sync-toolbar"')
-    expect(source).toContain("activeSyncPage === 'overview'")
-    expect(source).toContain("activeSyncPage === 'devices'")
-    expect(source).toContain("activeSyncPage === 'conflicts'")
+    expect(source).toContain('class="en-sync-card en-sync-hero"')
+    expect(source).toContain('<h4>Devices</h4>')
+    expect(source).toContain('<h4>Conflict protection</h4>')
+    expect(source).toContain('class="en-pair-modal"')
+    expect(source).toContain("pairingMode === 'create'")
+    expect(source).toContain("pairingMode === 'join'")
+    expect(source).not.toContain('class="en-sync-toolbar"')
+    expect(source).not.toContain('activeSyncPage')
     expect(source).toContain('v-model.number="retentionDays"')
     expect(source).toContain('@click="saveRetention"')
     expect(source).toContain('initialPage: { type: String')

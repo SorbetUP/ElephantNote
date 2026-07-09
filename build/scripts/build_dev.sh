@@ -22,6 +22,7 @@ kill_port_1420
 rm -rf "$ROOT_DIR/Elephant/backend/tauri/target/debug/bundle/macos/Elephant.app" 2>/dev/null || true
 
 cd "$ROOT_DIR"
+node build/scripts/ensure-dev-dependencies.mjs
 node build/scripts/ensure-tauri-llama-server.mjs
 
 cd "$ROOT_DIR/Elephant/backend/tauri"

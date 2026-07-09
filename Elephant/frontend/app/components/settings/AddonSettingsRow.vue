@@ -51,19 +51,28 @@
         </button>
       </div>
 
-      <button
-        v-if="addon.manifest.source === 'external'"
-        class="en-danger-link"
-        type="button"
-        :disabled="busy"
-        @click="emit('uninstall')"
-      ><Trash2 aria-hidden="true" /> Uninstall</button>
+      <div v-if="addon.manifest.source === 'external'" class="en-addon-uninstall">
+        <button
+          v-if="!confirmingUninstall"
+          class="en-danger-link"
+          type="button"
+          :disabled="busy"
+          @click="confirmingUninstall = true"
+        ><Trash2 aria-hidden="true" /> Uninstall</button>
+        <template v-else>
+          <span>The package will be removed. Private addon data will be kept.</span>
+          <button class="en-danger-link" type="button" :disabled="busy" @click="confirmUninstall">
+            <Trash2 aria-hidden="true" /> Confirm uninstall
+          </button>
+          <button class="en-secondary-button" type="button" :disabled="busy" @click="confirmingUninstall = false">Cancel</button>
+        </template>
+      </div>
     </div>
   </article>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ChevronDown, Package, Play, Trash2 } from '@lucide/vue'
 
 const props = defineProps({
@@ -74,6 +83,16 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['toggle-details', 'toggle-addon', 'run-action', 'uninstall'])
+const confirmingUninstall = ref(false)
+
+watch(() => props.expanded, (expanded) => {
+  if (!expanded) confirmingUninstall.value = false
+})
+
+const confirmUninstall = () => {
+  confirmingUninstall.value = false
+  emit('uninstall')
+}
 
 const permissionLabels = computed(() => {
   const permissions = props.addon?.manifest?.permissions
@@ -105,12 +124,12 @@ const permissionLabels = computed(() => {
 .en-addon-chevron.rotated { transform: rotate(180deg); }
 .en-addon-controls { display: flex; align-items: center; padding: 0 14px 0 8px; }
 .en-addon-details { grid-column: 1 / -1; display: grid; gap: 10px; padding: 0 14px 14px 59px; }
-.en-addon-details-meta, .en-addon-permissions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.en-addon-details-meta code, .en-addon-details-meta span, .en-addon-permissions span { color: var(--en-muted, #667085); font-size: 9.5px; }
+.en-addon-details-meta, .en-addon-permissions, .en-addon-uninstall { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.en-addon-details-meta code, .en-addon-details-meta span, .en-addon-permissions span, .en-addon-uninstall > span { color: var(--en-muted, #667085); font-size: 9.5px; }
 .en-addon-permissions span { padding: 2px 6px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 999px; }
 .en-addon-error { margin: 0; color: #b91c1c; font-size: 10.5px; }
 .en-addon-commands { display: flex; flex-wrap: wrap; gap: 7px; }
-.en-addon-commands button, .en-danger-link { font-size: 10.5px; }
+.en-addon-commands button, .en-danger-link, .en-addon-uninstall .en-secondary-button { font-size: 10.5px; }
 .en-addon-commands svg, .en-danger-link svg { width: 13px; height: 13px; }
 .en-danger-link { justify-self: start; }
 @media (max-width: 720px) { .en-addon-details { padding-left: 14px; } }

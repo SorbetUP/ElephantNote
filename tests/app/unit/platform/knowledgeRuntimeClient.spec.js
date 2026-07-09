@@ -137,5 +137,6 @@ describe('knowledge runtime startup regressions', () => {
     })
     expect(inspection.graph.nodes).toHaveLength(320)
     expect(inspection.documents).toHaveLength(320)
+    expect(invoke.mock.calls.some(([command]) => command === 'tauri_knowledge_rebuild')).toBe(false)
   })
 })

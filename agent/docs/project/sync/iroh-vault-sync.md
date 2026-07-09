@@ -75,9 +75,17 @@ A focused CI workflow performs real round trips rather than checking only that U
 - pass every decoded/imported payload through the shared protocol, required-field, and expiration validator;
 - reject malformed, incomplete, and expired payloads.
 
-The dedicated focused workflow runs 17 Sync/invitation tests and persists its output as an artifact on every execution.
+The dedicated focused workflow runs 21 Sync/invitation/dependency-guard tests and persists its output as an artifact on every execution.
 
 Physical camera hardware cannot be created in hosted unit CI. Camera acquisition remains covered by build/lint and integration contracts, while the actual codec used after each camera frame or captured photo is covered by the independent decode round trip.
+
+## Development dependency repair
+
+This repository configures pnpm with `modules-dir=Elephant/node_modules`. After switching branches, the source and lockfile may therefore reference a newly added package while an older local `Elephant/node_modules` directory remains installed.
+
+`pnpm tauri:dev` now executes `build/scripts/ensure-dev-dependencies.mjs` before Vite and Tauri. The guard hashes `package.json`, `pnpm-lock.yaml`, and `.npmrc`, verifies the QR generator, ZXing scanner, and Vite are resolvable, and runs `pnpm install --frozen-lockfile --prefer-offline` when the installation is stale or incomplete. It verifies the result before recording the successful fingerprint.
+
+The focused CI workflow exercises the actual guard twice: the first invocation performs and verifies the frozen pnpm install, while the second proves the unchanged installation is detected and skipped.
 
 ## Sync settings information architecture
 

@@ -21,8 +21,9 @@ jobs:
           fetch-depth: 0
 
       - name: Apply broker hardening
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path('Elephant/backend/tauri/src/addons.rs')
@@ -138,6 +139,7 @@ jobs:
           )
 
           path.write_text(source)
+          PY
 
       - name: Commit generated hardening
         shell: bash

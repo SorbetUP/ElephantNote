@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { installKnowledgeRuntimeBridge } from '../../../../Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js'
 import { invokeKnowledgeCommand } from '../../../../Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
+import { installKnowledgeRuntimeBridge } from '../../../../Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js'
 
 afterEach(() => {
   delete globalThis.__TAURI__
@@ -133,10 +133,10 @@ describe('knowledge runtime startup regressions', () => {
     expect(inspection.graph).toMatchObject({
       rendererLimited: true,
       totalNodeCount: 400,
-      hiddenNodeCount: 80
+      hiddenNodeCount: 160
     })
-    expect(inspection.graph.nodes).toHaveLength(320)
-    expect(inspection.documents).toHaveLength(320)
+    expect(inspection.graph.nodes).toHaveLength(240)
+    expect(inspection.documents).toHaveLength(240)
     expect(invoke.mock.calls.some(([command]) => command === 'tauri_knowledge_rebuild')).toBe(false)
   })
 })

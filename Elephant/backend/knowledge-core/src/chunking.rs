@@ -365,33 +365,88 @@ fn split_large_block(markdown: &str, start: usize, end: usize) -> Vec<(usize, us
 
 fn extract_wikilinks(markdown: &str) -> Vec<ExplicitLink> {
     let mut links = Vec::new();
-    let mut cursor = 0usize;
-    while let Some(relative_start) = markdown[cursor..].find("[[") {
-        let start = cursor + relative_start;
-        let content_start = start + 2;
-        let relative_end = match markdown[content_start..].find("]]") {
-            Some(value) => value,
-            None => break,
-        };
-        let content_end = content_start + relative_end;
-        if start > 0 && markdown.as_bytes().get(start - 1) == Some(&b'!') {
-            cursor = content_end + 2;
+    let mut absolute_offset = 0usize;
+    let mut fence: Option<char> = None;
+
+    for line in markdown.split_inclusive('\n') {
+        let trimmed = line.trim_start();
+        if let Some(marker) = fence_marker(trimmed) {
+            match fence {
+                Some(active) if active == marker => fence = None,
+                None => fence = Some(marker),
+                _ => {}
+            }
+            absolute_offset += line.len();
             continue;
         }
-        let raw = markdown[content_start..content_end].trim();
+        if fence.is_none() {
+            extract_line_wikilinks(line, absolute_offset, &mut links);
+        }
+        absolute_offset += line.len();
+    }
+    links
+}
+
+fn extract_line_wikilinks(line: &str, absolute_offset: usize, links: &mut Vec<ExplicitLink>) {
+    let bytes = line.as_bytes();
+    let mut cursor = 0usize;
+    let mut inline_code_delimiter = 0usize;
+
+    while cursor < bytes.len() {
+        if bytes[cursor] == b'`' {
+            let mut run_end = cursor + 1;
+            while run_end < bytes.len() && bytes[run_end] == b'`' {
+                run_end += 1;
+            }
+            let run_length = run_end - cursor;
+            if inline_code_delimiter == 0 {
+                inline_code_delimiter = run_length;
+            } else if inline_code_delimiter == run_length {
+                inline_code_delimiter = 0;
+            }
+            cursor = run_end;
+            continue;
+        }
+        if inline_code_delimiter != 0
+            || cursor + 1 >= bytes.len()
+            || bytes[cursor] != b'['
+            || bytes[cursor + 1] != b'['
+        {
+            cursor += 1;
+            continue;
+        }
+        if cursor > 0 && bytes[cursor - 1] == b'!' {
+            cursor += 2;
+            continue;
+        }
+
+        let content_start = cursor + 2;
+        let Some(relative_end) = line[content_start..].find("]]" ) else {
+            break;
+        };
+        let content_end = content_start + relative_end;
+        let raw = line[content_start..content_end].trim();
         let (target, label) = raw.split_once('|').unwrap_or((raw, raw));
         let target = target.split('#').next().unwrap_or("").trim();
-        if !target.is_empty() {
+        if valid_wikilink_target(target) {
             links.push(ExplicitLink {
                 target: target.to_string(),
                 label: label.trim().to_string(),
-                start_offset: start,
-                end_offset: content_end + 2,
+                start_offset: absolute_offset + cursor,
+                end_offset: absolute_offset + content_end + 2,
             });
         }
         cursor = content_end + 2;
     }
-    links
+}
+
+fn valid_wikilink_target(target: &str) -> bool {
+    !target.is_empty()
+        && target.chars().count() <= 240
+        && !target.contains('[')
+        && !target.contains(']')
+        && !target.contains('\n')
+        && !target.contains('\r')
 }
 
 fn stable_id(namespace: &str, parts: &[&str]) -> String {
@@ -455,6 +510,21 @@ mod tests {
         assert_eq!(document.explicit_links.len(), 1);
         assert_eq!(document.explicit_links[0].target, "B");
         assert_eq!(document.explicit_links[0].label, "Bee");
+    }
+
+    #[test]
+    fn wikilinks_ignore_fenced_and_inline_code_arrays() {
+        let markdown = "# Arrays\n```python\nvalues = [[0, 0], [0, 1]]\n```\n`mask = [[True, False]]`\nSee [[Real Note#part|Real]].";
+        let links = extract_wikilinks(markdown);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].target, "Real Note");
+        assert_eq!(links[0].label, "Real");
+    }
+
+    #[test]
+    fn wikilinks_reject_nested_matrix_targets() {
+        let markdown = "Matrix [[0, 0], [0, 1], [1, 0], [1, 1]] and ![[image.png]].";
+        assert!(extract_wikilinks(markdown).is_empty());
     }
 
     #[test]

@@ -104,19 +104,14 @@ const permissionLabels = computed(() => {
 .en-addon-chevron { width: 15px; height: 15px; color: var(--en-muted, #667085); transition: transform 140ms ease; }
 .en-addon-chevron.rotated { transform: rotate(180deg); }
 .en-addon-controls { display: flex; align-items: center; padding: 0 14px 0 8px; }
-.en-switch { position: relative; display: block; box-sizing: border-box; width: 42px; min-width: 42px; height: 24px; min-height: 24px; padding: 2px; overflow: hidden; border: 0; border-radius: 999px; background: var(--en-border-strong, #aebacd); cursor: pointer; transition: background 140ms ease; }
-.en-switch > span { position: absolute; top: 2px; left: 2px; display: block; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(2, 6, 23, 0.24); transform: translateX(0); transition: transform 170ms ease; }
-.en-switch.active { background: var(--en-primary, #2563eb); }
-.en-switch.active > span { transform: translateX(18px); }
 .en-addon-details { grid-column: 1 / -1; display: grid; gap: 10px; padding: 0 14px 14px 59px; }
 .en-addon-details-meta, .en-addon-permissions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .en-addon-details-meta code, .en-addon-details-meta span, .en-addon-permissions span { color: var(--en-muted, #667085); font-size: 9.5px; }
 .en-addon-permissions span { padding: 2px 6px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 999px; }
 .en-addon-error { margin: 0; color: #b91c1c; font-size: 10.5px; }
 .en-addon-commands { display: flex; flex-wrap: wrap; gap: 7px; }
-.en-addon-commands button, .en-danger-link { min-height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 8px; background: var(--en-surface, #fff); color: var(--en-text, #101828); font-size: 10.5px; cursor: pointer; }
+.en-addon-commands button, .en-danger-link { font-size: 10.5px; }
 .en-addon-commands svg, .en-danger-link svg { width: 13px; height: 13px; }
-.en-danger-link { justify-self: start; color: #b91c1c; }
-button:disabled { opacity: 0.48; cursor: not-allowed; }
+.en-danger-link { justify-self: start; }
 @media (max-width: 720px) { .en-addon-details { padding-left: 14px; } }
 </style>

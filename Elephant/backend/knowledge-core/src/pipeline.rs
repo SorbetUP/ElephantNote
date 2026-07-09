@@ -37,7 +37,7 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
         files.len()
     );
 
-    let store = KnowledgeStore::open(&canonical_root).map_err(|error| {
+    let mut store = KnowledgeStore::open(&canonical_root).map_err(|error| {
         eprintln!(
             "[Knowledge][Rebuild] error stage=open_store vault={} error={}",
             canonical_root.display(),

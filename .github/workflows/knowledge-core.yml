@@ -8,6 +8,7 @@ on:
       - 'Elephant/backend/tauri/src/chat_runtime.rs'
       - 'Elephant/backend/tauri/src/knowledge*.rs'
       - 'Elephant/backend/tauri/src/lib_min.rs'
+      - 'Elephant/frontend/app/services/elephantnoteClient/domainClients.js'
       - 'Elephant/frontend/app/stores/searchStore.js'
       - 'Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js'
       - 'Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
@@ -33,6 +34,7 @@ on:
       - 'Elephant/backend/tauri/src/chat_runtime.rs'
       - 'Elephant/backend/tauri/src/knowledge*.rs'
       - 'Elephant/backend/tauri/src/lib_min.rs'
+      - 'Elephant/frontend/app/services/elephantnoteClient/domainClients.js'
       - 'Elephant/frontend/app/stores/searchStore.js'
       - 'Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js'
       - 'Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
@@ -226,6 +228,7 @@ jobs:
           NODE_PATH: Elephant/node_modules
         run: |
           Elephant/node_modules/.bin/eslint \
+            Elephant/frontend/app/services/elephantnoteClient/domainClients.js \
             Elephant/frontend/app/stores/searchStore.js \
             Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \
             Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \
@@ -249,7 +252,7 @@ jobs:
             tests/app/unit/views/graphNavigationHelpers.spec.js \
             --reporter=verbose 2>&1 | tee knowledge-renderer-test.log
           grep -F 'knowledge search bridge initialization' knowledge-renderer-test.log
-          grep -F 'intercepts the real api.call closure used by elephantnoteClient' knowledge-renderer-test.log
+          grep -F 'accepts the searchStore object payload through elephantnoteClient and the real api.call dispatcher' knowledge-renderer-test.log
           grep -F 'Graph terminal logging' knowledge-renderer-test.log
           grep -F 'graph semantic navigation' knowledge-renderer-test.log
           grep -F 'Wiki territory layout' knowledge-renderer-test.log

@@ -371,16 +371,62 @@ const createBridge = (target) => {
     },
 
     search: {
-      initVault: () => invoke(target, 'tauri_knowledge_rebuild'),
+      initVault: async(payload = '') => {
+        const vaultPath = typeof payload === 'string' ? payload : payload?.vaultPath || payload?.path || ''
+        const status = await invoke(target, 'tauri_knowledge_status')
+        const indexedDocuments = Number(status.documents || status.indexedDocuments || 0)
+        return {
+          enabled: true,
+          runtime: 'rust-knowledge-core',
+          ...status,
+          status: indexedDocuments > 0 ? 'ready' : 'empty',
+          vaultPath,
+          indexedDocuments,
+          totalDocuments: indexedDocuments,
+          databasePath: status.databasePath || status.database_path || ''
+        }
+      },
       query: (params = {}) => invoke(target, 'tauri_knowledge_search', { query: params.query || params.q || '', limit: params.limit || params.maxResults || 20 }),
-      status: async() => ({ enabled: true, runtime: 'rust-knowledge-core', ...(await invoke(target, 'tauri_knowledge_status')) }),
+      status: async() => {
+        const status = await invoke(target, 'tauri_knowledge_status')
+        const indexedDocuments = Number(status.documents || status.indexedDocuments || 0)
+        return {
+          enabled: true,
+          runtime: 'rust-knowledge-core',
+          ...status,
+          status: indexedDocuments > 0 ? 'ready' : 'empty',
+          indexedDocuments,
+          totalDocuments: indexedDocuments,
+          databasePath: status.databasePath || status.database_path || ''
+        }
+      },
       rebuild: () => invoke(target, 'tauri_knowledge_rebuild'),
       inspect: async() => {
-        const [graph, status] = await Promise.all([
+        const [fullGraph, status] = await Promise.all([
           invoke(target, 'tauri_knowledge_graph', { includeSuggestions: false }),
           invoke(target, 'tauri_knowledge_status')
         ])
-        return { indexPath: status.databasePath || '', documents: graph.nodes || [], folders: [], semanticLinks: graph.edges || [], graph, generatedAt: new Date().toISOString() }
+        const allNodes = Array.isArray(fullGraph.nodes) ? fullGraph.nodes : []
+        const nodes = allNodes.slice(0, 240)
+        const visibleIds = new Set(nodes.map((node) => node.id))
+        const edges = (Array.isArray(fullGraph.edges) ? fullGraph.edges : [])
+          .filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+        const graph = {
+          ...fullGraph,
+          nodes,
+          edges,
+          totalNodeCount: allNodes.length,
+          hiddenNodeCount: Math.max(0, allNodes.length - nodes.length),
+          rendererLimited: allNodes.length > nodes.length
+        }
+        return {
+          indexPath: status.databasePath || status.database_path || '',
+          documents: nodes.filter((node) => (node.kind || node.type) === 'note'),
+          folders: [],
+          semanticLinks: edges,
+          graph,
+          generatedAt: new Date().toISOString()
+        }
       }
     },
 

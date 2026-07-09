@@ -1,10 +1,6 @@
 import { toPlainObject } from 'elephant-shared/plainObject'
 import { ELEPHANTNOTE_API_ACTIONS as API } from 'common/elephantnote/apiActions'
 
-const CHAT_REBUILD_COOLDOWN_MS = 60_000
-const searchVaultInitializedForChat = new Map()
-const chatSearchRebuiltAt = new Map()
-
 const getBridge = () => globalThis.window?.elephantnote
 
 const callModelBridge = (method, payload) => {
@@ -50,19 +46,8 @@ const normalizeRagChatPayload = (payload, limit = 6) => {
   }
 }
 
-const callRagChat = async (call, payload, limit = 6) => {
-  const vaultPath = await ensureSearchVaultForChat(call)
-  const request = normalizeRagChatPayload(payload, limit)
-  const result = await call(API.RAG_CHAT, request)
-
-  if (hasAnswer(result) || hasCitations(result) || !shouldRebuildChatSearch(vaultPath)) {
-    return result
-  }
-
-  await call(API.SEARCH_REBUILD, {}).catch(() => null)
-  const retry = await call(API.RAG_CHAT, request).catch(() => null)
-  return hasAnswer(retry) || hasCitations(retry) ? retry : result
-}
+const callRagChat = (call, payload, limit = 6) =>
+  call(API.RAG_CHAT, normalizeRagChatPayload(payload, limit))
 
 const directoryListPayload = (payload = '') =>
   typeof payload === 'string' ? { relativePath: payload } : toPlainObject(payload)

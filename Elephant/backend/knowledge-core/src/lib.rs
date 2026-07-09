@@ -1,6 +1,7 @@
 pub mod actions;
 pub mod chunking;
 pub mod extraction;
+pub mod graph;
 pub mod model;
 pub mod pipeline;
 pub mod relation_storage;
@@ -14,6 +15,9 @@ pub use chunking::analyze_markdown;
 pub use extraction::{
     build_tagging_request, parse_tagging_response, ExtractionValidation, StructuredModelRequest,
     StructuredTask, TagSuggestion, TaggingExtraction,
+};
+pub use graph::{
+    KnowledgeGraph, KnowledgeGraphCluster, KnowledgeGraphEdge, KnowledgeGraphNode,
 };
 pub use model::{
     DocumentSnapshot, ExplicitLink, KnowledgeChunk, KnowledgeSearchHit, KnowledgeSection,

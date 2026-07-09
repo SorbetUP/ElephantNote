@@ -152,16 +152,19 @@ jobs:
           BYTES="$(stat -c '%s' "$APK")"
           test "$BYTES" -le $((24 * 1024 * 1024))
           printf 'APK=%s\nBYTES=%s\nMIB=%.2f\n' "$APK" "$BYTES" "$(awk -v b="$BYTES" 'BEGIN { print b / 1024 / 1024 }')"
-          APKSIGNER="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner -print | sort | tail -n 1)"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner -print | sort | tail -n 1)"
           test -x "$APKSIGNER"
           "$APKSIGNER" verify --verbose "$APK"
 
       - name: Upload Android release APK and build log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: elephantnote-android-arm64-release-apk
           path: |
             Elephant/backend/tauri/gen/android/app/build/outputs/apk/**/*release-debug-signed.apk
             android-release-build.log
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14

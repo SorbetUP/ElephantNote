@@ -42,6 +42,10 @@ const notifyCreated = (label, result) => {
     : `${label} already exists: ${result.path}`)
 }
 
+const logAction = (ctx, phase, payload) => {
+  ctx.logger?.info?.(`[addons] builtin:${phase}`, payload)
+}
+
 export const dailyNotesAddon = {
   manifest: {
     id: 'elephant.daily-notes',
@@ -65,6 +69,7 @@ export const dailyNotesAddon = {
       async run() {
         const now = localDateParts()
         const path = `Daily/${now.date}.md`
+        logAction(ctx, 'daily-note:start', { path })
         const content = [
           '---',
           `title: ${yamlString(now.date)}`,
@@ -85,6 +90,7 @@ export const dailyNotesAddon = {
         ].join('\n')
         const result = await createNoteIfMissing(path, content)
         notifyCreated('Daily note', result)
+        logAction(ctx, 'daily-note:done', { path, created: result.created })
         return result
       }
     })
@@ -122,6 +128,7 @@ export const quickCaptureAddon = {
         const now = localDateParts()
         const filename = `Quick capture ${now.date} ${now.time}-${now.milliseconds}.md`
         const path = `Inbox/${filename}`
+        logAction(ctx, 'quick-capture:start', { path })
         const content = [
           '---',
           'title: "Quick capture"',
@@ -138,6 +145,7 @@ export const quickCaptureAddon = {
         ].join('\n')
         const written = await writeNote(path, content)
         ElMessage.success(`Quick capture created: ${path}`)
+        logAction(ctx, 'quick-capture:done', { path, changed: written?.changed === true })
         return { path, created: true, written }
       }
     })
@@ -232,16 +240,19 @@ export const vaultOverviewAddon = {
       description: 'Inspect the current vault and update Reports/Vault Overview.md.',
       async run() {
         const generatedAt = new Date().toISOString()
-        const inspection = await invokeTauri('tauri_search_inspect')
         const path = 'Reports/Vault Overview.md'
+        logAction(ctx, 'vault-overview:start', { path })
+        const inspection = await invokeTauri('tauri_search_inspect')
         const written = await writeNote(path, reportMarkdown(inspection, generatedAt))
-        ElMessage.success(`Vault overview updated: ${path}`)
-        return {
+        const result = {
           path,
           notes: Array.isArray(inspection?.documents) ? inspection.documents.length : 0,
           links: Array.isArray(inspection?.graph?.edges) ? inspection.graph.edges.length : 0,
           written
         }
+        ElMessage.success(`Vault overview updated: ${path}`)
+        logAction(ctx, 'vault-overview:done', result)
+        return result
       }
     })
 
@@ -274,8 +285,13 @@ export const addonInspectorAddon = {
     ctx.addAction({
       id: 'elephant.addon-inspector.open',
       title: 'Open Addon Inspector',
-      description: 'Open the Addons settings page.',
-      run: () => ctx.router?.push?.('/preference/addons')
+      description: 'Open the Addons section in the active settings panel.',
+      run: () => {
+        globalThis.dispatchEvent?.(new CustomEvent('elephantnote:open-settings', {
+          detail: { section: 'addons' }
+        }))
+        return { section: 'addons' }
+      }
     })
 
     ctx.addSidebarItem({

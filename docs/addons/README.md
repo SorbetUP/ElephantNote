@@ -2,6 +2,32 @@
 
 ElephantNote external addons are user-installable `.enaddon` packages. Version 1 deliberately exposes a small capability-based API instead of internal Vue, Pinia, Muya or Tauri objects.
 
+## Addons included with ElephantNote
+
+ElephantNote includes four built-in addons that use the same manager and contribution contracts as the addon platform:
+
+- **Daily Notes**, enabled by default, creates `Daily/YYYY-MM-DD.md` without overwriting an existing note;
+- **Quick Capture**, enabled by default, creates unique timestamped notes under `Inbox/`;
+- **Vault Overview**, enabled by default, builds `Reports/Vault Overview.md` from the real Markdown index and resolved wiki links;
+- **Addon Inspector**, disabled by default, demonstrates developer-oriented action, settings and sidebar contributions.
+
+Built-in addons are compiled with ElephantNote and do not require Community Addons mode. Their commands can be run from **Settings → Addons**. See `BUILTIN_ADDONS.md` for the detailed catalogue.
+
+## Per-vault addon storage
+
+Every initialized vault contains a hidden addon directory:
+
+```text
+.elephantnote/addons/
+├── registry.json
+├── packages/
+│   └── <addon-id>/
+└── data/
+    └── <addon-id>/storage.json
+```
+
+External addon installation, enable/disable state, extracted package files and private JSON storage are therefore scoped to the active vault. The `.elephantnote` directory remains hidden from ElephantNote's normal vault explorer.
+
 ## Package format
 
 An `.enaddon` package is a ZIP archive with `manifest.json` at its root.
@@ -30,7 +56,7 @@ Community Addons mode is disabled by default. Before any external addon can exec
 
 The acknowledgement states that third-party addons can be unsafe, contain bugs, modify permitted notes or transmit permitted data, and that ElephantNote cannot guarantee the safety of every package. This consent is persisted on the device.
 
-Turning Community Addons mode off immediately stops every running external addon. Installed packages and their private storage remain available, but they cannot execute. At application startup, an addon previously marked as enabled is not restarted unless Community Addons mode is still enabled.
+Turning Community Addons mode off immediately stops every running external addon. Installed packages and their private storage remain available in the active vault, but they cannot execute. At application startup, an addon previously marked as enabled is not restarted unless Community Addons mode is still enabled.
 
 The acknowledgement is a safety boundary, not a claim that an addon is safe. Users should still review the package author, source and requested capabilities.
 
@@ -164,7 +190,7 @@ The current preview broker still follows a limited number of redirects. Conseque
 
 ### Private storage
 
-Requires `permissions.storage: true`. Storage is namespaced by addon and is not stored in the vault.
+Requires `permissions.storage: true`. Storage is namespaced by addon and stored in the active vault under `.elephantnote/addons/data/<addon-id>/storage.json`.
 
 ```js
 await api.storage.set('settings', { symbol: 'AAPL' })
@@ -191,7 +217,8 @@ All privileged operations are checked again in Rust. Worker isolation protects t
 
 ## Lifecycle and failures
 
-- installation validates and extracts into a staging directory;
+- vault initialization creates `.elephantnote/addons`;
+- installation validates and extracts into a staging directory inside the active vault;
 - a package update replaces the previous package with rollback on registry failure;
 - Community Addons consent is required before activation and before startup restoration;
 - disabling Community Addons stops all running external addons;
@@ -199,7 +226,7 @@ All privileged operations are checked again in Rust. Worker isolation protects t
 - addon commands have a 30-second timeout;
 - a timed-out Worker is terminated;
 - activation errors are displayed in Settings → Addons;
-- per-addon enable/disable state and global Community Addons consent are persisted.
+- per-addon enable/disable state is persisted in the vault and global Community Addons consent is persisted on the device.
 
 ## Build an addon
 

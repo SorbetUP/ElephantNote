@@ -2,7 +2,6 @@ use crate::managed_ai_runtime::{ManagedProvider, ManagedRuntimeInstaller, R};
 use reqwest::blocking::Client;
 use serde_json::{json, Value};
 use std::{
-  env,
   io::{BufRead, BufReader},
   path::{Path, PathBuf},
   process::{Child, Command, Stdio},
@@ -29,10 +28,8 @@ struct ManagedOpenCodeProcess {
 
 impl ManagedAiRuntimeState {
   pub fn new(app: &AppHandle) -> R<Self> {
-    let installer = ManagedRuntimeInstaller::new(app)?;
-    activate_managed_paths(&installer)?;
     Ok(Self {
-      installer,
+      installer: ManagedRuntimeInstaller::new(app)?,
       opencode: Arc::new(Mutex::new(None)),
     })
   }
@@ -70,7 +67,6 @@ impl ManagedAiRuntimeState {
     }
 
     let install = self.installer.ensure_installed(ManagedProvider::OpenCode)?;
-    activate_managed_paths(&self.installer)?;
     let executable = PathBuf::from(&install.executable);
     let version = install.version.clone();
     self.start_opencode(&executable, &version)?;
@@ -249,28 +245,6 @@ fn opencode_health(endpoint: &str) -> R<Value> {
     .map_err(|error| format!("OpenCode returned invalid health JSON: {error}"))
 }
 
-fn activate_managed_paths(installer: &ManagedRuntimeInstaller) -> R<()> {
-  let mut entries = vec![
-    installer.managed_executable(ManagedProvider::Codex).parent().map(Path::to_path_buf),
-    installer.managed_executable(ManagedProvider::OpenCode).parent().map(Path::to_path_buf),
-  ]
-  .into_iter()
-  .flatten()
-  .collect::<Vec<_>>();
-  if let Some(path) = env::var_os("PATH") {
-    entries.extend(env::split_paths(&path));
-  }
-  let mut unique = Vec::new();
-  for entry in entries {
-    if !unique.contains(&entry) {
-      unique.push(entry);
-    }
-  }
-  let joined = env::join_paths(unique).map_err(|error| format!("Unable to activate managed runtime PATH: {error}"))?;
-  env::set_var("PATH", joined);
-  Ok(())
-}
-
 fn redact_line(line: &str) -> String {
   let lower = line.to_ascii_lowercase();
   if lower.contains("token")
@@ -321,7 +295,6 @@ pub async fn tauri_ai_managed_runtime_install(
   let runtime = state.inner().clone();
   blocking(move || {
     let outcome = runtime.installer.ensure_installed(provider)?;
-    activate_managed_paths(&runtime.installer)?;
     Ok(json!({ "ok": true, "provider": provider.id(), "install": outcome }))
   })
   .await
@@ -338,7 +311,6 @@ pub async fn tauri_ai_managed_runtime_ensure(
   blocking(move || match provider {
     ManagedProvider::Codex => {
       let outcome = runtime.installer.ensure_installed(provider)?;
-      activate_managed_paths(&runtime.installer)?;
       Ok(json!({ "ok": true, "provider": "codex", "install": outcome }))
     }
     ManagedProvider::OpenCode => runtime.ensure_opencode_running(endpoint),

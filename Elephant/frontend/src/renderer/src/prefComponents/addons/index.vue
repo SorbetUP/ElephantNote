@@ -1,9 +1,20 @@
 <template>
   <div class="pref-addons">
-    <h4>Addons</h4>
-    <p class="pref-addons-description">
-      Manage ElephantNote addons. This page currently exposes the internal addon runtime and builtin addons; external package loading will be added after the sandbox and permission layer are implemented.
-    </p>
+    <div class="pref-addons-heading">
+      <div>
+        <h4>Addons</h4>
+        <p class="pref-addons-description">
+          Install community addons as isolated JavaScript workers. External addons start disabled and can only use the note paths, HTTPS hosts, storage and commands declared in their manifest.
+        </p>
+      </div>
+      <el-button
+        type="primary"
+        :loading="operationInProgress"
+        @click="installAddonPackage"
+      >
+        Install from file
+      </el-button>
+    </div>
 
     <el-alert
       v-if="lastError"
@@ -23,6 +34,10 @@
         <span>enabled</span>
       </div>
       <div>
+        <strong>{{ externalAddons.length }}</strong>
+        <span>community addons</span>
+      </div>
+      <div>
         <strong>{{ contributionCount }}</strong>
         <span>active contributions</span>
       </div>
@@ -39,7 +54,7 @@
       v-else-if="!items.length"
       class="pref-addons-empty"
     >
-      No addons are registered yet.
+      No addons are installed. Community packages use the <code>.enaddon</code> format.
     </section>
 
     <section
@@ -53,31 +68,51 @@
       >
         <div class="pref-addon-card-main">
           <div>
-            <h5>{{ addon.manifest.name }}</h5>
+            <div class="pref-addon-title-row">
+              <h5>{{ addon.manifest.name }}</h5>
+              <span
+                class="pref-addon-source"
+                :class="{ external: addon.manifest.source === 'external' }"
+              >
+                {{ addon.manifest.source === 'external' ? 'community worker' : 'built in' }}
+              </span>
+            </div>
             <code>{{ addon.manifest.id }}</code>
             <p>{{ addon.manifest.description || 'No description.' }}</p>
           </div>
-          <el-switch
-            :model-value="addon.enabled"
-            :disabled="addon.status === 'activating'"
-            @change="(value) => setAddonEnabled(addon.manifest.id, value)"
-          />
+          <div class="pref-addon-controls">
+            <el-switch
+              :model-value="addon.enabled"
+              :disabled="operationInProgress || addon.status === 'activating'"
+              @change="(value) => setAddonEnabled(addon.manifest.id, value)"
+            />
+            <el-button
+              v-if="addon.manifest.source === 'external'"
+              text
+              type="danger"
+              :disabled="operationInProgress"
+              @click="uninstallAddon(addon)"
+            >
+              Uninstall
+            </el-button>
+          </div>
         </div>
 
         <div class="pref-addon-meta">
           <span>v{{ addon.manifest.version }}</span>
           <span>{{ addon.status }}</span>
           <span v-if="addon.manifest.author">by {{ addon.manifest.author }}</span>
+          <span v-if="addon.manifest.runtime?.type">{{ addon.manifest.runtime.type }}</span>
           <span v-if="addon.manifest.defaultEnabled">default enabled</span>
         </div>
 
         <div
-          v-if="addon.manifest.permissions.length"
+          v-if="permissionLabels(addon.manifest.permissions).length"
           class="pref-addon-permissions"
         >
-          <strong>Permissions:</strong>
+          <strong>Granted capabilities:</strong>
           <span
-            v-for="permission in addon.manifest.permissions"
+            v-for="permission in permissionLabels(addon.manifest.permissions)"
             :key="permission"
           >
             {{ permission }}
@@ -156,6 +191,8 @@
 <script setup>
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
+import { ElMessageBox } from 'element-plus'
+import { open } from '@tauri-apps/plugin-dialog'
 import { getAddonActions, getAddonSettingsSections } from '@/addons'
 import { useAddonsStore } from '@/store/addons'
 
@@ -164,16 +201,52 @@ const {
   installed,
   items,
   enabledAddons,
+  externalAddons,
   contributionCount,
   contributions,
-  lastError
+  lastError,
+  operationInProgress
 } = storeToRefs(addonsStore)
 
 const actions = computed(() => getAddonActions(contributions.value))
 const settingsSections = computed(() => getAddonSettingsSections(contributions.value))
 
+const permissionLabels = (permissions) => {
+  if (Array.isArray(permissions)) return permissions
+  if (!permissions || typeof permissions !== 'object') return []
+  const labels = []
+  for (const scope of permissions.notes?.read || []) labels.push(`Read notes: ${scope}`)
+  for (const scope of permissions.notes?.write || []) labels.push(`Write notes: ${scope}`)
+  for (const host of permissions.network?.hosts || []) labels.push(`HTTPS: ${host}`)
+  if (permissions.storage) labels.push('Private addon storage')
+  if (permissions.commands) labels.push('Register commands')
+  return labels
+}
+
 const setAddonEnabled = async (id, enabled) => {
   await addonsStore.setAddonEnabled(id, enabled)
+}
+
+const installAddonPackage = async () => {
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    filters: [
+      { name: 'ElephantNote addon', extensions: ['enaddon', 'zip'] }
+    ]
+  })
+  if (typeof selected === 'string' && selected) {
+    await addonsStore.installExternalAddon(selected)
+  }
+}
+
+const uninstallAddon = async (addon) => {
+  await ElMessageBox.confirm(
+    `Uninstall ${addon.manifest.name}? Its private storage is kept so a later reinstall can recover its settings.`,
+    'Uninstall addon',
+    { type: 'warning', confirmButtonText: 'Uninstall' }
+  )
+  await addonsStore.uninstallExternalAddon(addon.manifest.id)
 }
 
 const runAddonAction = async (id) => {
@@ -183,11 +256,23 @@ const runAddonAction = async (id) => {
 
 <style scoped>
 .pref-addons {
-  max-width: 860px;
+  max-width: 900px;
   color: var(--editorColor);
 }
 
+.pref-addons-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.pref-addons-heading h4 {
+  margin-top: 0;
+}
+
 .pref-addons-description {
+  max-width: 680px;
   margin: 14px 0 20px;
   color: var(--editorColor60, var(--editorColor));
   line-height: 1.45;
@@ -199,7 +284,7 @@ const runAddonAction = async (id) => {
 
 .pref-addons-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin: 0 0 18px;
 }
@@ -248,10 +333,40 @@ const runAddonAction = async (id) => {
 }
 
 .pref-addon-card-main,
-.pref-addon-action {
+.pref-addon-action,
+.pref-addon-title-row,
+.pref-addon-controls {
   display: flex;
+}
+
+.pref-addon-card-main,
+.pref-addon-action {
   justify-content: space-between;
   gap: 16px;
+}
+
+.pref-addon-title-row,
+.pref-addon-controls {
+  align-items: center;
+  gap: 10px;
+}
+
+.pref-addon-controls {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.pref-addon-source {
+  border: 1px solid var(--floatBorderColor, var(--editorColor10));
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--editorColor60, var(--editorColor));
+  font-size: 11px;
+}
+
+.pref-addon-source.external {
+  border-color: var(--primaryColor, var(--el-color-primary));
+  color: var(--primaryColor, var(--el-color-primary));
 }
 
 .pref-addon-action {
@@ -263,6 +378,10 @@ const runAddonAction = async (id) => {
 .pref-addon-contributions h5 {
   margin: 0 0 6px;
   font-size: 16px;
+}
+
+.pref-addon-title-row h5 {
+  margin: 0;
 }
 
 .pref-addon-card code {
@@ -306,5 +425,25 @@ const runAddonAction = async (id) => {
   justify-content: space-between;
   padding: 8px 0;
   border-bottom: 1px solid var(--floatBorderColor, var(--editorColor10));
+}
+
+@media (max-width: 720px) {
+  .pref-addons-heading {
+    flex-direction: column;
+  }
+
+  .pref-addons-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pref-addon-card-main {
+    flex-direction: column;
+  }
+
+  .pref-addon-controls {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
 }
 </style>

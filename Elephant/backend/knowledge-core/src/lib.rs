@@ -23,6 +23,4 @@ pub use taxonomy::{
     canonical_tag_key, clean_display_name, normalize_alias, stable_tag_id, CanonicalTag,
     NewTagCandidate, TagAlias, TagStatus,
 };
-pub use taxonomy_storage::{
-    DocumentTagAssignment, TagAssignmentOrigin, TagAssignmentStatus,
-};
+pub use taxonomy_storage::{DocumentTagAssignment, TagAssignmentOrigin, TagAssignmentStatus};

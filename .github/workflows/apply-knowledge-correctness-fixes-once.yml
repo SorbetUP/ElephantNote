@@ -1,0 +1,392 @@
+name: Apply Knowledge Correctness Fixes Once
+
+on:
+  push:
+    branches:
+      - feature/rust-knowledge-core
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-knowledge-correctness-fixes-once
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-knowledge-core
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Apply source fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          bridge_path = Path('Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js')
+          bridge = bridge_path.read_text()
+          bridge = bridge.replace("const MAX_GRAPH_NODES = 240\n", "")
+          bridge = bridge.replace(
+          """const normalizeSearchResults = (results) => Array.isArray(results)
+            ? results.map(normalizeSearchHit).filter((result) => result.relativePath)
+            : []""",
+          """const normalizeSearchResults = (results) => {
+            if (!Array.isArray(results)) return []
+            const byDocument = new Map()
+            for (const rawResult of results) {
+              const result = normalizeSearchHit(rawResult)
+              if (!result.relativePath) continue
+              const existing = byDocument.get(result.relativePath)
+              if (!existing) {
+                byDocument.set(result.relativePath, { ...result, matchCount: 1 })
+                continue
+              }
+              existing.matchCount += 1
+              const existingScore = Number(existing.score ?? existing.rank ?? 0)
+              const nextScore = Number(result.score ?? result.rank ?? 0)
+              if (nextScore > existingScore) {
+                byDocument.set(result.relativePath, { ...result, matchCount: existing.matchCount })
+              }
+            }
+            return [...byDocument.values()]
+          }""")
+          graph_pattern = re.compile(r"const limitGraphForRenderer = \(graph = \{\}, maxNodes = MAX_GRAPH_NODES\) => \{.*?\n\}\n\nconst currentSearchStatus", re.S)
+          graph_replacement = """const normalizeGraphForRenderer = (graph = {}) => {
+            const nodes = Array.isArray(graph.nodes) ? graph.nodes : []
+            const edges = Array.isArray(graph.edges) ? graph.edges : []
+            const clusters = Array.isArray(graph.clusters) ? graph.clusters : []
+            console.info('[KnowledgeRuntime] graph:renderer-full', {
+              totalNodes: nodes.length,
+              totalEdges: edges.length,
+              clusters: clusters.length
+            })
+            return {
+              ...graph,
+              nodes,
+              edges,
+              clusters,
+              totalNodeCount: nodes.length,
+              hiddenNodeCount: 0,
+              rendererLimited: false
+            }
+          }
+
+          const currentSearchStatus"""
+          bridge, count = graph_pattern.subn(graph_replacement, bridge, count=1)
+          if count != 1:
+              raise SystemExit(f'graph limiter replacement count={count}')
+          bridge = bridge.replace('limitGraphForRenderer(fullGraph)', 'normalizeGraphForRenderer(fullGraph)')
+          bridge = bridge.replace('limitGraphForRenderer(await knowledgeRuntimeClient.graph({ includeSuggestions: false }))', 'normalizeGraphForRenderer(await knowledgeRuntimeClient.graph({ includeSuggestions: false }))')
+          bridge = bridge.replace("    rendererGraphLimit: MAX_GRAPH_NODES\n", "    rendererGraphLimit: null,\n    graphMode: 'full'\n")
+          bridge_path.write_text(bridge)
+
+          native_path = Path('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
+          native = native_path.read_text()
+          old_native = """        const allNodes = Array.isArray(fullGraph.nodes) ? fullGraph.nodes : []
+                  const nodes = allNodes.slice(0, 240)
+                  const visibleIds = new Set(nodes.map((node) => node.id))
+                  const edges = (Array.isArray(fullGraph.edges) ? fullGraph.edges : [])
+                    .filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+                  const graph = {
+                    ...fullGraph,
+                    nodes,
+                    edges,
+                    totalNodeCount: allNodes.length,
+                    hiddenNodeCount: Math.max(0, allNodes.length - nodes.length),
+                    rendererLimited: allNodes.length > nodes.length
+                  }"""
+          new_native = """        const nodes = Array.isArray(fullGraph.nodes) ? fullGraph.nodes : []
+                  const edges = Array.isArray(fullGraph.edges) ? fullGraph.edges : []
+                  const graph = {
+                    ...fullGraph,
+                    nodes,
+                    edges,
+                    totalNodeCount: nodes.length,
+                    hiddenNodeCount: 0,
+                    rendererLimited: false
+                  }"""
+          if old_native not in native:
+              raise SystemExit('native graph limiter block not found')
+          native_path.write_text(native.replace(old_native, new_native))
+
+          wiki_path = Path('Elephant/backend/tauri/src/knowledge_wikis.rs')
+          wiki = wiki_path.read_text()
+          wiki = wiki.replace('["provider", "runtime", "type"]', '["source", "provider", "runtime", "type"]')
+          wiki = wiki.replace(
+              '"" | "local" | "tauri-rust" | "llama.cpp" | "local-llama.cpp" | "node-llama-cpp"',
+              '"" | "app-local" | "local" | "tauri-rust" | "tauri-rust-local-bundled" | "llama.cpp" | "local-llama.cpp" | "node-llama-cpp"'
+          )
+          test_marker = """    #[test]
+              fn wiki_route_prefers_dedicated_model() {"""
+          source_test = """    #[test]
+              fn wiki_route_accepts_app_local_source() {
+                  let payload = json!({
+                      "aiConfig": {
+                          "routes": {
+                              "chat": { "source": "app-local", "model": "tiny.gguf" }
+                          }
+                      }
+                  });
+                  let route = selected_wiki_route(&payload).unwrap();
+                  assert_eq!(route.provider, "app-local");
+                  assert_eq!(route.model, "tiny.gguf");
+              }
+
+          """
+          if test_marker not in wiki:
+              raise SystemExit('wiki test insertion marker not found')
+          wiki_path.write_text(wiki.replace(test_marker, source_test + test_marker))
+
+          chunk_path = Path('Elephant/backend/knowledge-core/src/chunking.rs')
+          chunk = chunk_path.read_text()
+          parser_replacement = r'''fn extract_wikilinks(markdown: &str) -> Vec<ExplicitLink> {
+              let mut links = Vec::new();
+              let mut absolute_offset = 0usize;
+              let mut fence: Option<char> = None;
+
+              for line in markdown.split_inclusive('\n') {
+                  let trimmed = line.trim_start();
+                  if let Some(marker) = fence_marker(trimmed) {
+                      match fence {
+                          Some(active) if active == marker => fence = None,
+                          None => fence = Some(marker),
+                          _ => {}
+                      }
+                      absolute_offset += line.len();
+                      continue;
+                  }
+                  if fence.is_none() {
+                      extract_line_wikilinks(line, absolute_offset, &mut links);
+                  }
+                  absolute_offset += line.len();
+              }
+              links
+          }
+
+          fn extract_line_wikilinks(line: &str, absolute_offset: usize, links: &mut Vec<ExplicitLink>) {
+              let bytes = line.as_bytes();
+              let mut cursor = 0usize;
+              let mut inline_code = false;
+
+              while cursor < bytes.len() {
+                  if bytes[cursor] == b'`' {
+                      let mut run_end = cursor + 1;
+                      while run_end < bytes.len() && bytes[run_end] == b'`' {
+                          run_end += 1;
+                      }
+                      inline_code = !inline_code;
+                      cursor = run_end;
+                      continue;
+                  }
+                  if inline_code
+                      || cursor + 1 >= bytes.len()
+                      || bytes[cursor] != b'['
+                      || bytes[cursor + 1] != b'['
+                  {
+                      cursor += 1;
+                      continue;
+                  }
+                  if cursor > 0 && bytes[cursor - 1] == b'!' {
+                      cursor += 2;
+                      continue;
+                  }
+
+                  let content_start = cursor + 2;
+                  let Some(relative_end) = line[content_start..].find("]]" ) else {
+                      break;
+                  };
+                  let content_end = content_start + relative_end;
+                  let raw = line[content_start..content_end].trim();
+                  let (target, label) = raw.split_once('|').unwrap_or((raw, raw));
+                  let target = target.split('#').next().unwrap_or("").trim();
+                  if valid_wikilink_target(target) {
+                      links.push(ExplicitLink {
+                          target: target.to_string(),
+                          label: label.trim().to_string(),
+                          start_offset: absolute_offset + cursor,
+                          end_offset: absolute_offset + content_end + 2,
+                      });
+                  }
+                  cursor = content_end + 2;
+              }
+          }
+
+          fn valid_wikilink_target(target: &str) -> bool {
+              !target.is_empty()
+                  && target.chars().count() <= 240
+                  && !target.contains('[')
+                  && !target.contains(']')
+                  && !target.contains('\n')
+                  && !target.contains('\r')
+          }
+
+          fn stable_id'''
+          parser_pattern = re.compile(r"fn extract_wikilinks\(markdown: &str\) -> Vec<ExplicitLink> \{.*?\n\}\n\nfn stable_id", re.S)
+          chunk, parser_count = parser_pattern.subn(parser_replacement, chunk, count=1)
+          if parser_count != 1:
+              raise SystemExit(f'wikilink parser replacement count={parser_count}')
+          chunk_test_marker = """    #[test]
+              fn title_prefers_frontmatter_then_heading() {"""
+          chunk_tests = r'''    #[test]
+              fn wikilinks_ignore_fenced_and_inline_code_arrays() {
+                  let markdown = "# Arrays\n```python\nvalues = [[0, 0], [0, 1]]\n```\n`mask = [[True, False]]`\nSee [[Real Note#part|Real]].";
+                  let links = extract_wikilinks(markdown);
+                  assert_eq!(links.len(), 1);
+                  assert_eq!(links[0].target, "Real Note");
+                  assert_eq!(links[0].label, "Real");
+              }
+
+              #[test]
+              fn wikilinks_reject_nested_matrix_targets() {
+                  let markdown = "Matrix [[0, 0], [0, 1], [1, 0], [1, 1]] and ![[image.png]].";
+                  assert!(extract_wikilinks(markdown).is_empty());
+              }
+
+          '''
+          if chunk_test_marker not in chunk:
+              raise SystemExit('chunk test insertion marker not found')
+          chunk_path.write_text(chunk.replace(chunk_test_marker, chunk_tests + chunk_test_marker))
+
+          pipeline_path = Path('Elephant/backend/knowledge-core/src/pipeline.rs')
+          pipeline = pipeline_path.read_text()
+          old_unchanged = """            Ok(IndexDecision::Unchanged) => {
+                          let relation_result = store.inspect_document(&relative_path).and_then(|document| {
+                              document
+                                  .as_ref()
+                                  .map(|snapshot| store.sync_markdown_relations(snapshot))
+                                  .transpose()
+                          });
+                          match relation_result {
+                              Ok(relation_count) => {
+                                  report.unchanged += 1;
+                                  log_file_outcome(
+                                      "unchanged",
+                                      &relative_path,
+                                      report.scanned,
+                                      total_files,
+                                      file_started_at.elapsed().as_millis(),
+                                      format!("relations={}", relation_count.unwrap_or(0)),
+                                  );
+                              }"""
+          new_unchanged = """            Ok(IndexDecision::Unchanged(snapshot)) => {
+                          let relation_result = store.sync_markdown_relations(&snapshot);
+                          match relation_result {
+                              Ok(relation_count) => {
+                                  report.unchanged += 1;
+                                  log_file_outcome(
+                                      "unchanged",
+                                      &relative_path,
+                                      report.scanned,
+                                      total_files,
+                                      file_started_at.elapsed().as_millis(),
+                                      format!("relations={relation_count}"),
+                                  );
+                              }"""
+          if old_unchanged not in pipeline:
+              raise SystemExit('pipeline unchanged block not found')
+          pipeline = pipeline.replace(old_unchanged, new_unchanged)
+          pipeline = pipeline.replace("enum IndexDecision {\n    Unchanged,", "enum IndexDecision {\n    Unchanged(crate::model::DocumentSnapshot),")
+          old_index = """    let content_hash = blake3::hash(markdown.as_bytes()).to_hex().to_string();
+              if store.existing_hash(relative_path)?.as_deref() == Some(content_hash.as_str()) {
+                  return Ok(IndexDecision::Unchanged);
+              }
+              let modified_at = fs::metadata(absolute_path)
+                  .and_then(|metadata| metadata.modified())
+                  .ok()
+                  .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                  .map(|duration| duration.as_secs() as i64)
+                  .unwrap_or(0);
+              Ok(IndexDecision::Changed(analyze_markdown(
+                  relative_path,
+                  &markdown,
+                  modified_at,
+              )))"""
+          new_index = """    let content_hash = blake3::hash(markdown.as_bytes()).to_hex().to_string();
+              let modified_at = fs::metadata(absolute_path)
+                  .and_then(|metadata| metadata.modified())
+                  .ok()
+                  .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                  .map(|duration| duration.as_secs() as i64)
+                  .unwrap_or(0);
+              let snapshot = analyze_markdown(relative_path, &markdown, modified_at);
+              if store.existing_hash(relative_path)?.as_deref() == Some(content_hash.as_str()) {
+                  return Ok(IndexDecision::Unchanged(snapshot));
+              }
+              Ok(IndexDecision::Changed(snapshot))"""
+          if old_index not in pipeline:
+              raise SystemExit('pipeline index_path block not found')
+          pipeline_test_marker = """    #[test]
+              fn rebuild_prunes_deleted_notes() {"""
+          pipeline_test = r'''    #[test]
+              fn unchanged_rebuild_purges_false_code_wikilinks() {
+                  let root = temp_vault("relation-parser-upgrade");
+                  fs::create_dir_all(&root).unwrap();
+                  fs::write(
+                      root.join("A.md"),
+                      "# A\n```python\nvalues = [[0, 0], [0, 1]]\n```\nSee [[B]].",
+                  )
+                  .unwrap();
+                  rebuild_vault(&root).unwrap();
+
+                  let store = KnowledgeStore::open(&root).unwrap();
+                  let relations = store
+                      .relations_for_node(
+                          &KnowledgeNodeRef {
+                              kind: KnowledgeNodeKind::Document,
+                              id: "A.md".into(),
+                          },
+                          false,
+                      )
+                      .unwrap();
+                  assert_eq!(relations.len(), 1);
+                  assert_eq!(relations[0].target.id, "B");
+
+                  let second = rebuild_vault(&root).unwrap();
+                  assert_eq!(second.unchanged, 1);
+                  let relations = store
+                      .relations_for_node(
+                          &KnowledgeNodeRef {
+                              kind: KnowledgeNodeKind::Document,
+                              id: "A.md".into(),
+                          },
+                          false,
+                      )
+                      .unwrap();
+                  assert_eq!(relations.len(), 1);
+                  assert_eq!(relations[0].target.id, "B");
+                  fs::remove_dir_all(root).ok();
+              }
+
+          '''
+          if pipeline_test_marker not in pipeline:
+              raise SystemExit('pipeline test insertion marker not found')
+          pipeline_path.write_text(pipeline.replace(pipeline_test_marker, pipeline_test + pipeline_test_marker))
+
+          Path('.github/workflows/apply-knowledge-correctness-fixes-once.yml').unlink()
+      - name: Format changed Rust sources
+        run: |
+          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+      - name: Verify source invariants
+        shell: bash
+        run: |
+          ! grep -R "MAX_GRAPH_NODES\|slice(0, 240)\|rendererLimited: true" Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js
+          grep -F '"app-local"' Elephant/backend/tauri/src/knowledge_wikis.rs
+          grep -F 'wikilinks_ignore_fenced_and_inline_code_arrays' Elephant/backend/knowledge-core/src/chunking.rs
+          grep -F 'IndexDecision::Unchanged(snapshot)' Elephant/backend/knowledge-core/src/pipeline.rs
+      - name: Commit fixes
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js Elephant/backend/tauri/src/knowledge_wikis.rs Elephant/backend/knowledge-core/src/chunking.rs Elephant/backend/knowledge-core/src/pipeline.rs .github/workflows/apply-knowledge-correctness-fixes-once.yml
+          git commit -m 'fix(knowledge): restore full graph and functional local wikis'
+          git push origin HEAD:feature/rust-knowledge-core

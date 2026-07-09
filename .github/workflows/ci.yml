@@ -56,10 +56,7 @@ jobs:
           test "$lines" -ge 10000
 
       - name: Critical ElephantNote flow guard
-        shell: bash
-        run: |
-          set -o pipefail
-          node build/scripts/verify-critical-flows.mjs 2>&1 | tee critical-flows-output.txt
+        run: node build/scripts/verify-critical-flows.mjs
 
       - name: Security guardrails
         run: pnpm security:guard
@@ -108,7 +105,6 @@ jobs:
             docs/parity/generated/
             docs/parity/index.md
             security-guardrails-report.json
-            critical-flows-output.txt
             eslint-output.txt
             build-output.txt
           if-no-files-found: ignore

@@ -113,6 +113,7 @@ pub fn run() {
       knowledge::tauri_knowledge_tag_reject_name,
       knowledge::tauri_knowledge_tagging_request,
       knowledge::tauri_knowledge_tagging_validate,
+      knowledge::tauri_knowledge_tagging_generate,
       sync_commands::iroh_sync_create_invite,
       sync_commands::iroh_sync_accept_invite,
       sync_commands::iroh_sync_status,

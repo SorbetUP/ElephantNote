@@ -278,7 +278,8 @@ impl ManagedRuntimeInstaller {
       ));
     }
 
-    let binary = extract_runtime_binary(provider, &asset.name, &bytes)?;
+    let asset_name = asset.name.clone();
+    let binary = extract_runtime_binary(provider, &asset_name, &bytes)?;
     let executable = self.managed_executable(provider);
     let bin_dir = executable.parent().ok_or_else(|| "Managed runtime binary path has no parent.".to_string())?;
     fs::create_dir_all(bin_dir).map_err(|error| format!("Unable to create {}: {error}", bin_dir.display()))?;
@@ -299,11 +300,12 @@ impl ManagedRuntimeInstaller {
     fs::rename(&temp, &executable).map_err(|error| format!("Unable to activate {}: {error}", executable.display()))?;
     register_runtime_executable(provider, executable.clone());
 
+    let release_tag = release.tag_name.clone();
     let manifest = InstallManifest {
       provider: provider.id().to_string(),
       repository: provider.repository().to_string(),
-      release: release.tag_name.clone(),
-      asset: asset.name.clone(),
+      release: release_tag.clone(),
+      asset: asset_name.clone(),
       sha256: actual_digest.clone(),
       installed_at_unix_ms: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis(),
     };
@@ -318,7 +320,7 @@ impl ManagedRuntimeInstaller {
     .map_err(|error| format!("Unable to write {}: {error}", manifest_path.display()))?;
     eprintln!(
       "[AI][runtime] install:complete provider={} release={} executable={} version={}",
-      provider.id(), release.tag_name, executable.display(), version
+      provider.id(), release_tag, executable.display(), version
     );
     Ok(InstallOutcome {
       provider: provider.id().to_string(),
@@ -326,8 +328,8 @@ impl ManagedRuntimeInstaller {
       reused: false,
       executable: executable.to_string_lossy().to_string(),
       version,
-      release: release.tag_name,
-      asset: asset.name.clone(),
+      release: release_tag,
+      asset: asset_name,
       sha256: actual_digest,
     })
   }
@@ -453,7 +455,7 @@ fn extract_zip_binary(provider: ManagedProvider, bytes: &[u8]) -> R<Vec<u8>> {
     if entry.is_dir() || entry.size() > MAX_RELEASE_BYTES {
       continue;
     }
-    let Some(path) = entry.enclosed_name().map(Path::to_path_buf) else { continue; };
+    let Some(path) = entry.enclosed_name() else { continue; };
     let score = binary_candidate_score(provider, &path);
     if score == 0 || best.as_ref().is_some_and(|(current, _)| *current >= score) {
       continue;

@@ -26,62 +26,6 @@
 
     <template v-if="activePage === 'provider'">
       <section class="en-ai-card">
-        <header class="en-ai-card-header">
-          <div>
-            <h4>Codex subscription</h4>
-            <p>Uses the official <code>codex app-server</code> protocol and your authenticated ChatGPT account.</p>
-          </div>
-          <span class="en-ai-badge" :class="{ active: codexStatus.connected, warning: !codexStatus.installed }">
-            {{ codexStatusLabel }}
-          </span>
-        </header>
-        <div class="en-ai-setting-row en-codex-row">
-          <span class="en-ai-row-icon"><TerminalSquare aria-hidden="true" /></span>
-          <div class="en-ai-setting-copy">
-            <strong>{{ codexAccountLabel }}</strong>
-            <span v-if="codexStatus.version">{{ codexStatus.version }}</span>
-            <span v-if="codexStatus.account?.email">{{ codexStatus.account.email }}</span>
-            <small v-if="providerMessage">{{ providerMessage }}</small>
-          </div>
-          <div class="en-ai-actions en-ai-actions-wrap">
-            <button class="secondary" type="button" :disabled="codexBusy" @click="refreshCodex">
-              <RotateCw aria-hidden="true" /> Check
-            </button>
-            <button
-              v-if="codexStatus.connected"
-              class="danger"
-              type="button"
-              :disabled="codexBusy"
-              @click="disconnectCodex"
-            >
-              <Unlink aria-hidden="true" /> Disconnect
-            </button>
-            <button
-              v-else
-              class="primary"
-              type="button"
-              :disabled="codexBusy || !codexStatus.installed"
-              @click="connectCodex"
-            >
-              <Link2 aria-hidden="true" /> Connect with ChatGPT
-            </button>
-          </div>
-        </div>
-        <div v-if="loginChallenge.userCode" class="en-login-challenge">
-          <strong>Device code: {{ loginChallenge.userCode }}</strong>
-          <button class="secondary compact" type="button" @click="openExternal(loginChallenge.verificationUrl)">
-            Open authentication page
-          </button>
-        </div>
-        <div v-if="codexRateLimit" class="en-rate-limit">
-          <span>Usage</span>
-          <progress max="100" :value="codexRateLimit.usedPercent || 0" />
-          <strong>{{ Math.round(codexRateLimit.usedPercent || 0) }}%</strong>
-          <small v-if="codexRateLimit.resetsAt">reset {{ formatReset(codexRateLimit.resetsAt) }}</small>
-        </div>
-      </section>
-
-      <section class="en-ai-card">
         <div class="en-ai-setting-row">
           <span class="en-ai-row-icon"><Cpu aria-hidden="true" /></span>
           <div class="en-ai-setting-copy">
@@ -154,6 +98,62 @@
         </div>
         <div v-else class="en-ai-empty"><Server aria-hidden="true" /><span>No external API provider configured.</span></div>
       </section>
+      <section class="en-ai-card">
+        <header class="en-ai-card-header">
+          <div>
+            <h4>Codex subscription</h4>
+            <p>Uses the official <code>codex app-server</code> protocol and your authenticated ChatGPT account.</p>
+          </div>
+          <span class="en-ai-badge" :class="{ active: codexStatus.connected, warning: !codexStatus.installed }">
+            {{ codexStatusLabel }}
+          </span>
+        </header>
+        <div class="en-ai-setting-row en-codex-row">
+          <span class="en-ai-row-icon"><TerminalSquare aria-hidden="true" /></span>
+          <div class="en-ai-setting-copy">
+            <strong>{{ codexAccountLabel }}</strong>
+            <span v-if="codexStatus.version">{{ codexStatus.version }}</span>
+            <span v-if="codexStatus.account?.email">{{ codexStatus.account.email }}</span>
+            <small v-if="providerMessage">{{ providerMessage }}</small>
+          </div>
+          <div class="en-ai-actions en-ai-actions-wrap">
+            <button class="secondary" type="button" :disabled="codexBusy" @click="refreshCodex">
+              <RotateCw aria-hidden="true" /> Check
+            </button>
+            <button
+              v-if="codexStatus.connected"
+              class="danger"
+              type="button"
+              :disabled="codexBusy"
+              @click="disconnectCodex"
+            >
+              <Unlink aria-hidden="true" /> Disconnect
+            </button>
+            <button
+              v-else
+              class="primary"
+              type="button"
+              :disabled="codexBusy || !codexStatus.installed"
+              @click="connectCodex"
+            >
+              <Link2 aria-hidden="true" /> Connect with ChatGPT
+            </button>
+          </div>
+        </div>
+        <div v-if="loginChallenge.userCode" class="en-login-challenge">
+          <strong>Device code: {{ loginChallenge.userCode }}</strong>
+          <button class="secondary compact" type="button" @click="openExternal(loginChallenge.verificationUrl)">
+            Open authentication page
+          </button>
+        </div>
+        <div v-if="codexRateLimit" class="en-rate-limit">
+          <span>Usage</span>
+          <progress max="100" :value="codexRateLimit.usedPercent || 0" />
+          <strong>{{ Math.round(codexRateLimit.usedPercent || 0) }}%</strong>
+          <small v-if="codexRateLimit.resetsAt">reset {{ formatReset(codexRateLimit.resetsAt) }}</small>
+        </div>
+      </section>
+
     </template>
 
     <template v-else-if="activePage === 'chat'">
@@ -698,11 +698,11 @@ button svg { width: 14px; height: 14px; }
 .en-ai-switch.small { width: 36px; min-height: 22px; }
 .en-ai-switch.small span { width: 16px; height: 16px; }
 .en-ai-switch.small.active span { transform: translateX(14px); }
-.en-codex-row { flex-wrap: wrap; }
+.en-codex-row { flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
 .en-ai-actions-wrap { flex-wrap: wrap; justify-content: flex-end; }
-.en-login-challenge, .en-rate-limit { margin: 0 16px 16px; padding: 10px 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); }
+.en-login-challenge, .en-rate-limit { margin: 0 16px 14px; padding: 8px 10px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); }
 .en-login-challenge { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.en-rate-limit progress { flex: 1; min-width: 120px; }
+.en-rate-limit progress { flex: 1; min-width: 120px; height: 8px; }
 .en-provider-list { display: grid; }
 .en-provider-row { padding: 14px 16px; border-top: 1px solid var(--en-border); }
 .en-provider-row:first-child { border-top: 0; }

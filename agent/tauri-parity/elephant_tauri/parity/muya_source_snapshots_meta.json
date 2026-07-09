@@ -1,8 +1,0 @@
-{
-  "generatedAt": null,
-  "mode": "contract-adapter",
-  "strictReal": false,
-  "adapter": null,
-  "snapshotCount": 6,
-  "note": "This metadata file is updated by scripts/generate-muya-source-snapshots.mjs. The source snapshot JSON remains an array so existing Rust tests can read it directly."
-}

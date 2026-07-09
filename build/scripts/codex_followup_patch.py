@@ -1,4 +1,15 @@
 from pathlib import Path
+import os
+import subprocess
+
+if os.environ.get('GITHUB_ACTIONS') == 'true':
+    subprocess.run(['sudo', 'apt-get', 'update'], check=True)
+    subprocess.run([
+        'sudo', 'apt-get', 'install', '-y', '--no-install-recommends',
+        'build-essential', 'curl', 'file', 'libayatana-appindicator3-dev',
+        'libgtk-3-dev', 'librsvg2-dev', 'libssl-dev',
+        'libwebkit2gtk-4.1-dev', 'patchelf', 'wget'
+    ], check=True)
 
 backend_path = Path('Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs')
 backend = backend_path.read_text()

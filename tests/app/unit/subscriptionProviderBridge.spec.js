@@ -5,7 +5,11 @@ import {
 } from '../../../Elephant/frontend/src/renderer/src/platform/subscriptionProviderBridge.js'
 
 const createTarget = () => {
-  const invoke = vi.fn(async(command, payload) => ({ command, payload }))
+  const invoke = vi.fn(async(command, payload) => {
+    if (command === 'tauri_ai_runtime_status') return { ok: true, installed: true, command, payload }
+    if (command === 'tauri_ai_auth_status') return { ok: true, account: { type: 'chatgpt' }, command, payload }
+    return { command, payload }
+  })
   return {
     target: {
       __TAURI__: { core: { invoke } },
@@ -14,7 +18,9 @@ const createTarget = () => {
           describe: async() => ({ runtime: 'tauri', actions: ['existing.action'] }),
           call: async(action, payload) => ({ ok: true, data: { action, payload } })
         },
-        ai: {}
+        ai: {
+          testConfig: async(config) => ({ ok: true, provider: 'legacy', config })
+        }
       }
     },
     invoke
@@ -33,6 +39,26 @@ describe('subscription provider bridge', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, 'tauri_ai_models_list', {
       provider: 'opencode',
       endpoint: 'http://127.0.0.1:4096'
+    })
+  })
+
+  it('tests Codex through the real runtime status and account commands', async() => {
+    const { target, invoke } = createTarget()
+    installSubscriptionProviderBridge(target)
+
+    const result = await target.elephantnote.ai.testConfig({ provider: 'codex' })
+
+    expect(result).toMatchObject({ ok: true, provider: 'codex' })
+    expect(invoke).toHaveBeenNthCalledWith(1, 'tauri_ai_runtime_status', { provider: 'codex' })
+    expect(invoke).toHaveBeenNthCalledWith(2, 'tauri_ai_auth_status', { provider: 'codex' })
+  })
+
+  it('keeps non-subscription config tests delegated to the existing provider implementation', async() => {
+    const { target } = createTarget()
+    installSubscriptionProviderBridge(target)
+    await expect(target.elephantnote.ai.testConfig({ provider: 'openai-compatible' })).resolves.toMatchObject({
+      ok: true,
+      provider: 'legacy'
     })
   })
 
@@ -61,6 +87,13 @@ describe('subscription provider bridge', () => {
       ok: true,
       data: { action: 'existing.action', payload: { value: 1 } }
     })
+  })
+
+  it('rejects Codex interruption until a concurrent event dispatcher exists', () => {
+    const { target, invoke } = createTarget()
+    installSubscriptionProviderBridge(target)
+    expect(() => target.elephantnote.ai.codex.interruptTurn({ threadId: 'thread-1' })).toThrow('not exposed yet')
+    expect(invoke).not.toHaveBeenCalled()
   })
 
   it('throws when the Tauri command API is missing', () => {

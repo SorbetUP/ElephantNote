@@ -256,7 +256,6 @@ onMounted(async () => {
 
 <style scoped>
 .en-addons-panel { display: grid; gap: 16px; }
-.en-addons-card { overflow: hidden; border: 1px solid var(--en-border, #c5cfdd); border-radius: var(--en-ui-card-radius, 14px); background: var(--en-surface, #fff); }
 .en-addons-loading, .en-addons-empty { padding: 24px; color: var(--en-muted, #667085); font-size: 11.5px; text-align: center; }
 .en-addons-gate { display: grid; gap: 18px; max-width: 680px; padding: 22px; }
 .en-addons-gate-heading { display: flex; gap: 13px; align-items: flex-start; }
@@ -270,10 +269,6 @@ onMounted(async () => {
 .en-addons-gate .en-primary-button { justify-self: start; }
 .en-addons-mode-row { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 13px 18px; }
 .en-addons-mode-row strong { font-size: 13px; }
-.en-addons-mode-row .en-switch { position: relative; display: block; box-sizing: border-box; width: 42px; min-width: 42px; height: 24px; min-height: 24px; padding: 2px; overflow: hidden; border: 0; border-radius: 999px; background: var(--en-border-strong, #aebacd); cursor: pointer; }
-.en-addons-mode-row .en-switch > span { position: absolute; top: 2px; left: 2px; display: block; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(2, 6, 23, 0.24); transform: translateX(0); transition: transform 170ms ease; }
-.en-addons-mode-row .en-switch.active { background: var(--en-primary, #2563eb); }
-.en-addons-mode-row .en-switch.active > span { transform: translateX(18px); }
 .en-addons-feedback { margin: 0; padding: 9px 11px; border-radius: 9px; background: color-mix(in srgb, #16a34a 9%, var(--en-surface, #fff)); color: #15803d; font-size: 11px; }
 .en-addons-feedback.error { background: color-mix(in srgb, #dc2626 9%, var(--en-surface, #fff)); color: #b91c1c; }
 .en-addons-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -283,7 +278,6 @@ onMounted(async () => {
 .en-addons-list-section { display: grid; gap: 8px; }
 .en-addons-list-section > header { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
 .en-addons-list-section > header span { color: var(--en-muted, #667085); font-size: 10px; }
-button:disabled { opacity: 0.48; cursor: not-allowed; }
 @media (max-width: 720px) {
   .en-addons-toolbar { align-items: stretch; flex-direction: column; }
   .en-addons-search { width: 100%; }

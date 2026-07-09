@@ -8,6 +8,7 @@ ANDROID_TARGET="${ANDROID_TARGET:-aarch64}"
 ANDROID_BUILD_PROFILE="${ANDROID_BUILD_PROFILE:-release}"
 ANDROID_APK_MAX_MIB="${ANDROID_APK_MAX_MIB:-24}"
 APK_ROOT="$TAURI_DIR/gen/android/app/build/outputs/apk"
+ANDROID_GRADLE_FILE="$TAURI_DIR/gen/android/app/build.gradle.kts"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -17,7 +18,50 @@ require_cmd() {
 }
 
 file_size_bytes() {
-  stat -f '%z' "$1" 2>/dev/null || stat -c '%s' "$1"
+  if stat -c '%s' "$1" >/dev/null 2>&1; then
+    stat -c '%s' "$1"
+  else
+    stat -f '%z' "$1"
+  fi
+}
+
+ensure_compressed_native_libraries() {
+  local gradle_file="$1"
+  if [ ! -f "$gradle_file" ]; then
+    echo "Missing generated Android Gradle file: $gradle_file" >&2
+    exit 1
+  fi
+
+  node - "$gradle_file" <<'NODE'
+const fs = require('node:fs')
+const gradlePath = process.argv[2]
+let source = fs.readFileSync(gradlePath, 'utf8')
+
+if (source.includes('useLegacyPackaging = true')) {
+  process.exit(0)
+}
+
+const androidBlock = /android\s*\{/
+if (!androidBlock.test(source)) {
+  throw new Error(`Unable to locate android { block in ${gradlePath}`)
+}
+
+source = source.replace(
+  androidBlock,
+  `android {
+    // Store native libraries compressed in the APK. Android extracts them on install.
+    // Without this, the 28 MiB Rust .so is stored verbatim and the APK exceeds 30 MiB.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }`
+)
+fs.writeFileSync(gradlePath, source)
+NODE
+
+  grep -q 'useLegacyPackaging = true' "$gradle_file"
+  echo "[android-apk] native libraries will be compressed in the APK"
 }
 
 require_cmd cargo
@@ -51,6 +95,8 @@ if [ ! -d "$TAURI_DIR/gen/android" ]; then
   cd "$TAURI_DIR"
   cargo tauri android init --config "$ANDROID_CONFIG"
 fi
+
+ensure_compressed_native_libraries "$ANDROID_GRADLE_FILE"
 
 # Never report stale APKs from an older profile or ABI as the current result.
 rm -rf "$APK_ROOT"

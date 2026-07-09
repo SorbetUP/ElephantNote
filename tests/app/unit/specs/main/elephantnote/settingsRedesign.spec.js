@@ -11,6 +11,8 @@ const readSettingsPrimitives = () => read('Elephant/frontend/app/components/sett
 const readSync = () => read('Elephant/frontend/app/components/settings/SyncSettingsPanel.vue')
 const readAi = () => read('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
 const readAddons = () => read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
+const readAddonLogic = () => read('Elephant/frontend/app/components/settings/useAddonsSettings.js')
+const readAddonStyles = () => read('Elephant/frontend/app/components/settings/addons-settings.css')
 const readAddonRow = () => read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
 const readAddonStore = () => read('Elephant/frontend/src/renderer/src/store/addons.js')
 const readAppShell = () => read('Elephant/frontend/app/components/shell/AppShell.vue')
@@ -72,11 +74,12 @@ describe('ElephantNote settings redesign', () => {
 
   it('uses one consent gate before rendering addon management', () => {
     const addons = readAddons()
+    const logic = readAddonLogic()
 
     expect(addons).toContain('v-else-if="!communityAddonsEnabled"')
     expect(addons).toContain('Turn on community addons')
     expect(addons).toContain('v-model="riskAccepted"')
-    expect(addons).toContain('setCommunityAddonsEnabled(true)')
+    expect(logic).toContain('setCommunityAddonsEnabled(true)')
     expect(addons).toContain('<template v-else>')
     expect(addons).not.toContain('en-addons-summary')
   })
@@ -84,21 +87,36 @@ describe('ElephantNote settings redesign', () => {
   it('integrates compact real addon controls into the active settings panel', () => {
     const settings = readSettings()
     const addons = readAddons()
+    const logic = readAddonLogic()
     const row = readAddonRow()
 
     expect(settings).toContain("activeSection === 'addons'")
     expect(settings).toContain('<addons-settings-panel />')
     expect(settings).toContain("import AddonsSettingsPanel from './AddonsSettingsPanel.vue'")
-    expect(addons).toContain('useAddonsStore()')
-    expect(addons).toContain('getAddonActions(contributions.value)')
-    expect(addons).toContain('installExternalAddon(selected)')
-    expect(addons).toContain('setAddonEnabled(addon.manifest.id')
-    expect(addons).toContain('runAction(action.id)')
+    expect(addons).toContain("import { useAddonsSettings } from './useAddonsSettings'")
+    expect(logic).toContain('useAddonsStore()')
+    expect(logic).toContain('getAddonActions(contributions.value)')
+    expect(logic).toContain('installExternalAddon(selected)')
+    expect(logic).toContain('setAddonEnabled(addon.manifest.id')
+    expect(logic).toContain('runAction(action.id)')
     expect(addons).toContain('<addon-settings-row')
     expect(row).toContain('role="switch"')
     expect(row).toContain("emit('run-action', action)")
     expect(row).toContain("addon.manifest.source === 'external'")
-    expect(addons).toContain("log.info('[settings:addons] mounted'")
+    expect(logic).toContain("log.info('[settings:addons] mounted'")
+  })
+
+  it('uses inline destructive confirmation and no unsupported native confirm command', () => {
+    const addons = readAddons()
+    const logic = readAddonLogic()
+    const row = readAddonRow()
+
+    expect(addons).not.toContain('window.confirm')
+    expect(logic).not.toContain('window.confirm')
+    expect(row).not.toContain('window.confirm')
+    expect(row).toContain('Confirm uninstall')
+    expect(row).toContain('confirmingUninstall')
+    expect(logic).toContain('setCommunityAddonsEnabled(false)')
   })
 
   it('refreshes the real vault and opens notes produced by addon commands', () => {
@@ -141,6 +159,7 @@ describe('ElephantNote settings redesign', () => {
     const styles = readSettingsStyles()
     const primitives = readSettingsPrimitives()
     const addons = readAddons()
+    const addonStyles = readAddonStyles()
     const row = readAddonRow()
 
     expect(styles).toContain("@import './settings-primitives.css';")
@@ -152,7 +171,8 @@ describe('ElephantNote settings redesign', () => {
     expect(primitives).toContain('.en-addons-panel .en-primary-button')
     expect(primitives).toContain('.en-addons-panel .en-switch')
     expect(primitives).toContain(':where(.en-ai-badge, .en-provider-state, .en-sync-status')
-    expect(addons).not.toContain('.en-addons-mode-row .en-switch {')
+    expect(addons).toContain('<style scoped src="./addons-settings.css"></style>')
+    expect(addonStyles).not.toContain('.en-addons-mode-row .en-switch {')
     expect(row).not.toContain('.en-switch {')
   })
 

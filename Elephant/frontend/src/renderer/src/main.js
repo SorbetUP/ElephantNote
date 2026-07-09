@@ -9,6 +9,7 @@ import { installTauriRuntimeBridge } from './platform/tauriRuntimeBridge'
 import { ensureRendererPathFacade } from './platform/rendererPathFacade'
 import { installTauriFileUtilsPathGuards } from './platform/tauriFileUtilsPathGuards'
 import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
+import { installKnowledgeRuntimeBridge } from './platform/installKnowledgeRuntimeBridge'
 import { installTauriSearchRuntimeGuards } from './platform/tauriSearchRuntimeGuards'
 import { installTauriSearchConceptFallback } from './platform/tauriSearchConceptFallback'
 import { installPiProviderBridge } from './platform/piProviderInterface'
@@ -110,6 +111,7 @@ installTauriRuntimeBridge()
 ensureRendererPathFacade()
 installTauriFileUtilsPathGuards()
 installTauriElephantNoteBridge()
+installKnowledgeRuntimeBridge()
 installTauriSearchRuntimeGuards()
 installTauriSearchConceptFallback()
 installPiProviderBridge()

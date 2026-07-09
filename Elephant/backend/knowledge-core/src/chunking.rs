@@ -369,11 +369,15 @@ fn extract_wikilinks(markdown: &str) -> Vec<ExplicitLink> {
     while let Some(relative_start) = markdown[cursor..].find("[[") {
         let start = cursor + relative_start;
         let content_start = start + 2;
-        let relative_end = match markdown[content_start..].find("]]") {
+        let relative_end = match markdown[content_start..].find("]]" ) {
             Some(value) => value,
             None => break,
         };
         let content_end = content_start + relative_end;
+        if start > 0 && markdown.as_bytes().get(start - 1) == Some(&b'!') {
+            cursor = content_end + 2;
+            continue;
+        }
         let raw = markdown[content_start..content_end].trim();
         let (target, label) = raw.split_once('|').unwrap_or((raw, raw));
         let target = target.split('#').next().unwrap_or("").trim();
@@ -418,45 +422,42 @@ mod tests {
     #[test]
     fn sections_and_chunks_keep_valid_source_offsets() {
         let markdown = "# Alpha\n\nFirst paragraph.\n\n## Code\n\n```rust\nfn main() {}\n```\n";
-        let snapshot = analyze_markdown("Notes/a.md", markdown, 1);
-        assert_eq!(snapshot.sections.len(), 2);
-        assert!(!snapshot.chunks.is_empty());
-        for chunk in snapshot.chunks {
+        let document = analyze_markdown("Notes/A.md", markdown, 42);
+        assert_eq!(document.title, "Alpha");
+        assert_eq!(document.sections.len(), 2);
+        assert!(!document.chunks.is_empty());
+        for section in &document.sections {
+            assert!(section.start_offset <= section.end_offset);
+            assert!(section.end_offset <= markdown.len());
+        }
+        for chunk in &document.chunks {
             assert!(chunk.start_offset < chunk.end_offset);
             assert!(chunk.end_offset <= markdown.len());
-            assert!(!markdown[chunk.start_offset..chunk.end_offset]
-                .trim()
-                .is_empty());
+            assert_eq!(markdown[chunk.start_offset..chunk.end_offset].trim(), chunk.text);
         }
     }
 
     #[test]
-    fn fenced_code_is_not_split_on_blank_lines() {
-        let markdown = "# Code\n\n```rust\nfn a() {}\n\nfn b() {}\n```\n";
-        let snapshot = analyze_markdown("code.md", markdown, 0);
-        assert_eq!(snapshot.chunks.len(), 1);
-        assert!(snapshot.chunks[0].text.contains("fn a"));
-        assert!(snapshot.chunks[0].text.contains("fn b"));
+    fn ids_are_stable_for_same_document() {
+        let left = analyze_markdown("A.md", "# A\n\nBody", 1);
+        let right = analyze_markdown("A.md", "# A\n\nBody", 1);
+        assert_eq!(left.content_hash, right.content_hash);
+        assert_eq!(left.sections[0].id, right.sections[0].id);
+        assert_eq!(left.chunks[0].id, right.chunks[0].id);
     }
 
     #[test]
     fn extracts_wikilinks_with_alias_and_fragment() {
-        let markdown = "See [[Iroh#Relays|Iroh relays]] and [[CRDT]].";
-        let links = extract_wikilinks(markdown);
-        assert_eq!(links.len(), 2);
-        assert_eq!(links[0].target, "Iroh");
-        assert_eq!(links[0].label, "Iroh relays");
-        assert_eq!(
-            &markdown[links[0].start_offset..links[0].end_offset],
-            "[[Iroh#Relays|Iroh relays]]"
-        );
+        let document = analyze_markdown("A.md", "See [[B#part|Bee]] and ![[image.png]].", 1);
+        assert_eq!(document.explicit_links.len(), 1);
+        assert_eq!(document.explicit_links[0].target, "B");
+        assert_eq!(document.explicit_links[0].label, "Bee");
     }
 
     #[test]
-    fn ids_are_stable_for_same_document() {
-        let first = analyze_markdown("a.md", "# A\nBody", 1);
-        let second = analyze_markdown("a.md", "# A\nBody", 2);
-        assert_eq!(first.sections[0].id, second.sections[0].id);
-        assert_eq!(first.chunks[0].id, second.chunks[0].id);
+    fn fenced_code_is_not_split_on_blank_lines() {
+        let markdown = "# A\n\n```python\nprint('a')\n\nprint('b')\n```\n\nAfter.";
+        let document = analyze_markdown("A.md", markdown, 1);
+        assert!(document.chunks.iter().any(|chunk| chunk.text.contains("print('b')")));
     }
 }

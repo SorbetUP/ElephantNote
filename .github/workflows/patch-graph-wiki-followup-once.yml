@@ -1,0 +1,164 @@
+name: Patch Graph Wiki Followup Once
+
+on:
+  push:
+    branches:
+      - feature/rust-knowledge-core
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-graph-wiki-followup-once
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-knowledge-core
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Patch graph window, unresolved logs, and app-local routes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          bridge = Path('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
+          content = bridge.read_text()
+          old = """        const allNodes = Array.isArray(fullGraph.nodes) ? fullGraph.nodes : []
+                const nodes = allNodes.slice(0, 240)
+                const visibleIds = new Set(nodes.map((node) => node.id))
+                const edges = (Array.isArray(fullGraph.edges) ? fullGraph.edges : [])
+                  .filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+                const graph = {
+                  ...fullGraph,
+                  nodes,
+                  edges,
+                  totalNodeCount: allNodes.length,
+                  hiddenNodeCount: Math.max(0, allNodes.length - nodes.length),
+                  rendererLimited: allNodes.length > nodes.length
+                }
+                return {
+                  indexPath: status.databasePath || status.database_path || '',
+                  documents: nodes.filter((node) => (node.kind || node.type) === 'note'),
+                  folders: [],
+                  semanticLinks: edges,
+                  graph,
+                  generatedAt: new Date().toISOString()
+                }"""
+          new = """        const nodes = Array.isArray(fullGraph.nodes) ? fullGraph.nodes : []
+                const edges = Array.isArray(fullGraph.edges) ? fullGraph.edges : []
+                const graph = {
+                  ...fullGraph,
+                  nodes,
+                  edges,
+                  totalNodeCount: nodes.length,
+                  hiddenNodeCount: 0,
+                  rendererLimited: false
+                }
+                console.info('[KnowledgeRuntime] graph:renderer-full', {
+                  totalNodes: nodes.length,
+                  totalEdges: edges.length,
+                  clusters: Array.isArray(fullGraph.clusters) ? fullGraph.clusters.length : 0
+                })
+                return {
+                  indexPath: status.databasePath || status.database_path || '',
+                  documents: nodes.filter((node) => (node.kind || node.type) === 'note'),
+                  folders: [],
+                  semanticLinks: edges,
+                  graph,
+                  generatedAt: new Date().toISOString()
+                }"""
+          if old in content:
+              content = content.replace(old, new)
+              bridge.write_text(content)
+          elif 'const nodes = allNodes.slice(0, 240)' in content:
+              raise SystemExit('Native bridge still contains graph slice but exact block did not match')
+
+          knowledge = Path('Elephant/backend/tauri/src/knowledge.rs')
+          content = knowledge.read_text()
+          old = '"" | "local" | "tauri-rust" | "llama.cpp" | "local-llama.cpp" | "node-llama-cpp"'
+          new = '"" | "app-local" | "local" | "tauri-rust" | "tauri-rust-local-bundled" | "llama.cpp" | "local-llama.cpp" | "node-llama-cpp"'
+          if old in content:
+              content = content.replace(old, new)
+          knowledge.write_text(content)
+
+          graph = Path('Elephant/backend/knowledge-core/src/graph.rs')
+          content = graph.read_text()
+          content = content.replace(
+              '''            let Some(source) = resolver.resolve(&relation.source.id) else {
+                unresolved_count += 1;
+                eprintln!(
+                    "[Knowledge][Graph] relation:unresolved side=source relation_id={} reference={}",
+                    relation.id, relation.source.id
+                );
+                continue;
+            };
+            let Some(target) = resolver.resolve(&relation.target.id) else {
+                unresolved_count += 1;
+                eprintln!(
+                    "[Knowledge][Graph] relation:unresolved side=target relation_id={} reference={}",
+                    relation.id, relation.target.id
+                );
+                continue;
+            };''',
+              '''            let Some(source) = resolver.resolve(&relation.source.id) else {
+                unresolved_count += 1;
+                log_unresolved_relation(unresolved_count, "source", &relation.id, &relation.source.id);
+                continue;
+            };
+            let Some(target) = resolver.resolve(&relation.target.id) else {
+                unresolved_count += 1;
+                log_unresolved_relation(unresolved_count, "target", &relation.id, &relation.target.id);
+                continue;
+            };'''
+          )
+          marker = '''fn relation_origin_label(origin: &RelationOrigin) -> &'static str {'''
+          helper = '''fn log_unresolved_relation(count: usize, side: &str, relation_id: &str, reference: &str) {
+    if count <= 8 {
+        eprintln!(
+            "[Knowledge][Graph] relation:unresolved side={} relation_id={} reference={}",
+            side, relation_id, reference
+        );
+    } else if count == 9 {
+        eprintln!(
+            "[Knowledge][Graph] relation:unresolved:suppressed additional_unresolved_relations=true"
+        );
+    }
+}
+
+'''
+          if helper.strip() not in content:
+              if marker not in content:
+                  raise SystemExit('graph helper insertion marker not found')
+              content = content.replace(marker, helper + marker)
+          graph.write_text(content)
+
+          workflow = Path('.github/workflows/patch-graph-wiki-followup-once.yml')
+          workflow.unlink()
+      - name: Format Rust
+        run: cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml && cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+      - name: Verify graph limits removed and app-local accepted
+        shell: bash
+        run: |
+          ! grep -F 'slice(0, 240)' Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js
+          ! grep -F 'slice(0, 240)' Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js
+          grep -F 'graph:renderer-full' Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js
+          grep -F '"app-local"' Elephant/backend/tauri/src/knowledge.rs
+          grep -F 'relation:unresolved:suppressed' Elephant/backend/knowledge-core/src/graph.rs
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js Elephant/backend/tauri/src/knowledge.rs Elephant/backend/knowledge-core/src/graph.rs .github/workflows/patch-graph-wiki-followup-once.yml
+          git commit -m 'fix(knowledge): render full graph and accept app-local wiki routes'
+          git push origin HEAD:feature/rust-knowledge-core

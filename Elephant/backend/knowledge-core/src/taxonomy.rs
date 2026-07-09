@@ -152,14 +152,21 @@ mod tests {
             canonical_tag_key("  Programming Languages > Rust  ").unwrap(),
             "programming languages/rust"
         );
-        assert_eq!(normalize_alias("Artificial   Intelligence").unwrap(), "artificial intelligence");
+        assert_eq!(
+            normalize_alias("Artificial   Intelligence").unwrap(),
+            "artificial intelligence"
+        );
     }
 
     #[test]
     fn keeps_distinct_languages_until_an_alias_is_explicitly_added() {
-        assert_ne!(normalize_alias("AI").unwrap(), normalize_alias("Intelligence artificielle").unwrap());
+        assert_ne!(
+            normalize_alias("AI").unwrap(),
+            normalize_alias("Intelligence artificielle").unwrap()
+        );
         let tag = CanonicalTag::new("Intelligence artificielle", None, "").unwrap();
-        let alias = TagAlias::new("Artificial Intelligence", tag.id.clone(), Some("en".into())).unwrap();
+        let alias =
+            TagAlias::new("Artificial Intelligence", tag.id.clone(), Some("en".into())).unwrap();
         assert_eq!(alias.tag_id, tag.id);
         assert_eq!(alias.normalized_alias, "artificial intelligence");
     }

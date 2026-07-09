@@ -3,6 +3,7 @@ import { markRaw } from 'vue'
 
 const ADDON_STORE_EVENTS = [
   'registered',
+  'unregistered',
   'changed',
   'enabled',
   'disabled',
@@ -22,12 +23,14 @@ export const useAddonsStore = defineStore('addons', {
     items: [],
     contributions: {},
     lastError: null,
+    operationInProgress: false,
     manager: null,
     disposeListeners: []
   }),
 
   getters: {
     enabledAddons: (state) => state.items.filter((item) => item.enabled),
+    externalAddons: (state) => state.items.filter((item) => item.manifest.source === 'external'),
     failedAddons: (state) => state.items.filter((item) => item.status === 'error'),
     contributionCount: (state) => Object.values(state.contributions).reduce(
       (total, entries) => total + (Array.isArray(entries) ? entries.length : 0),
@@ -39,7 +42,7 @@ export const useAddonsStore = defineStore('addons', {
   actions: {
     install(manager) {
       if (!manager) throw new TypeError('Addon manager is required')
-      this.uninstall()
+      this.uninstallStore()
       this.manager = markRaw(manager)
       this.installed = true
       this.refresh()
@@ -48,7 +51,7 @@ export const useAddonsStore = defineStore('addons', {
       this.disposeListeners = ADDON_STORE_EVENTS.map((eventName) => manager.on(eventName, refresh))
     },
 
-    uninstall() {
+    uninstallStore() {
       for (const dispose of this.disposeListeners) {
         try {
           dispose()
@@ -62,6 +65,7 @@ export const useAddonsStore = defineStore('addons', {
       this.items = []
       this.contributions = {}
       this.lastError = null
+      this.operationInProgress = false
     },
 
     refresh() {
@@ -101,6 +105,37 @@ export const useAddonsStore = defineStore('addons', {
         await this.enableAddon(id)
       } else {
         await this.disableAddon(id)
+      }
+    },
+
+    async installExternalAddon(packagePath) {
+      if (!this.manager?.external) throw new Error('External addon runtime is not available')
+      this.operationInProgress = true
+      try {
+        const result = await this.manager.external.installFromPath(packagePath)
+        this.lastError = null
+        return result
+      } catch (error) {
+        this.lastError = error?.message || String(error)
+        throw error
+      } finally {
+        this.operationInProgress = false
+        this.refresh()
+      }
+    },
+
+    async uninstallExternalAddon(id) {
+      if (!this.manager?.external) throw new Error('External addon runtime is not available')
+      this.operationInProgress = true
+      try {
+        await this.manager.external.uninstall(id)
+        this.lastError = null
+      } catch (error) {
+        this.lastError = error?.message || String(error)
+        throw error
+      } finally {
+        this.operationInProgress = false
+        this.refresh()
       }
     },
 

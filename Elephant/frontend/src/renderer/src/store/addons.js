@@ -17,6 +17,12 @@ const cloneContributionMap = (map = {}) => {
   )
 }
 
+const setExternalRegistryEnabled = async (id, enabled) => {
+  const invoke = globalThis?.__TAURI__?.core?.invoke
+  if (typeof invoke !== 'function') throw new Error('Tauri command API is unavailable for external addons')
+  return invoke('tauri_addons_set_enabled', { addonId: id, enabled })
+}
+
 export const useAddonsStore = defineStore('addons', {
   state: () => ({
     installed: false,
@@ -42,7 +48,7 @@ export const useAddonsStore = defineStore('addons', {
   actions: {
     install(manager) {
       if (!manager) throw new TypeError('Addon manager is required')
-      this.uninstallStore()
+      this.uninstall()
       this.manager = markRaw(manager)
       this.installed = true
       this.refresh()
@@ -51,7 +57,7 @@ export const useAddonsStore = defineStore('addons', {
       this.disposeListeners = ADDON_STORE_EVENTS.map((eventName) => manager.on(eventName, refresh))
     },
 
-    uninstallStore() {
+    uninstall() {
       for (const dispose of this.disposeListeners) {
         try {
           dispose()
@@ -76,10 +82,14 @@ export const useAddonsStore = defineStore('addons', {
 
     async enableAddon(id) {
       if (!this.manager) throw new Error('Addon manager is not installed')
+      const addon = this.manager.get(id)
+      const external = addon?.manifest?.source === 'external'
       try {
+        if (external) await setExternalRegistryEnabled(id, true)
         await this.manager.enable(id)
         this.lastError = null
       } catch (error) {
+        if (external) await setExternalRegistryEnabled(id, false).catch(() => {})
         this.lastError = error?.message || String(error)
         throw error
       } finally {

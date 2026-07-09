@@ -20,6 +20,8 @@ ElephantNote starts `codex app-server --listen stdio://` and performs the requir
 
 The Codex process owns ChatGPT authentication and token refresh. ElephantNote only receives account status, plan metadata, model metadata, and conversation events.
 
+Codex turns currently use a serialized app-server reader. The response and protocol events are real, but the renderer receives the completed turn rather than live deltas. Concurrent Codex interruption is therefore rejected explicitly until the backend has a dedicated event dispatcher. Approval requests are denied by default rather than being silently accepted.
+
 ## OpenCode
 
 Requirements:
@@ -52,6 +54,8 @@ The Tauri bridge exposes:
 - `ai.threads.start`
 - `ai.turns.start`
 - `ai.turns.interrupt`
+
+`ai.turns.interrupt` is functional for OpenCode. For Codex it currently returns an explicit unsupported-operation error instead of pretending that a serialized request can interrupt the active turn.
 
 Direct provider helpers are also available under `elephantnote.ai.codex` and `elephantnote.ai.opencode`.
 

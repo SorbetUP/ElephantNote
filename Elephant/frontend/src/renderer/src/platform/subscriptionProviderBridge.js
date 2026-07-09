@@ -26,15 +26,29 @@ const chatMessage = (payload = {}) => {
   const lastUser = [...messages].reverse().find((message) => message?.role === 'user' && text(message?.content))
   return text(lastUser?.content || payload.message || payload.prompt || payload.query || payload.text)
 }
-const conversationKey = (payload = {}) => text(
-  payload.conversationId ||
-  payload.conversationID ||
-  payload.chatId ||
-  payload.chatID ||
-  payload.sessionId ||
-  payload.sessionID ||
-  'default'
-)
+const stableHash = (value = '') => {
+  let hash = 2166136261
+  for (const character of String(value)) {
+    hash ^= character.codePointAt(0)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+const conversationKey = (payload = {}) => {
+  const explicit = text(
+    payload.conversationId ||
+    payload.conversationID ||
+    payload.chatId ||
+    payload.chatID ||
+    payload.sessionId ||
+    payload.sessionID
+  )
+  if (explicit) return explicit
+  const messages = Array.isArray(payload.messages) ? payload.messages : []
+  const firstMeaningful = messages.find((message) => text(message?.content))
+  const seed = text(firstMeaningful?.content || payload.message || payload.prompt || payload.query || payload.text || 'default')
+  return `message-${stableHash(seed)}`
+}
 const chatRoute = (config = {}, payload = {}) => object(
   payload.route ||
   payload.chatRoute ||

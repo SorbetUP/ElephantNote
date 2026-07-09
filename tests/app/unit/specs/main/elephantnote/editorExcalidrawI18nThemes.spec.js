@@ -148,7 +148,8 @@ describe('expanded ElephantNote experience', () => {
     expect(content).toContain("import GraphViewHost from '../views/GraphViewHost.vue'")
     expect(host).toContain("root?.querySelector?.('.en-graph-settings-panel')")
     expect(host).toContain("root.querySelector?.('.en-graph-floating-icon.active')?.click()")
-    expect(host).toContain('without bypassing or duplicating the component\'s state machine')
+    expect(host).toContain('isInitializing.value = false')
+    expect(host).toContain('.en-graph-host.is-initializing :deep(.en-graph-settings-panel)')
   })
 
   it('keeps note behavior intact while centralizing visual and translated chrome', () => {

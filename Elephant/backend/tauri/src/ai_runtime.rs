@@ -26,39 +26,31 @@ impl AiRuntimeState {
     Self::default()
   }
 
-  fn codex_request(&self, method: &str, params: Value) -> R<RpcOutcome> {
-    let mut guard = self.codex.lock().map_err(|_| "Codex runtime lock is poisoned.".to_string())?;
-    let must_restart = match guard.as_mut() {
+  fn connection<'a>(&self, guard: &'a mut Option<CodexConnection>) -> R<&'a mut CodexConnection> {
+    let restart = match guard.as_mut() {
       Some(connection) => connection.child.try_wait().map_err(|error| error.to_string())?.is_some(),
       None => true,
     };
-    if must_restart {
+    if restart {
       *guard = Some(CodexConnection::spawn()?);
     }
-    guard
-      .as_mut()
-      .ok_or_else(|| "Codex app-server did not start.".to_string())?
-      .request(method, params)
+    guard.as_mut().ok_or_else(|| "Codex app-server did not start.".to_string())
+  }
+
+  fn codex_request(&self, method: &str, params: Value) -> R<RpcOutcome> {
+    let mut guard = self.codex.lock().map_err(|_| "Codex runtime lock is poisoned.".to_string())?;
+    self.connection(&mut guard)?.request(method, params)
   }
 
   fn codex_turn(&self, params: Value) -> R<Value> {
     let mut guard = self.codex.lock().map_err(|_| "Codex runtime lock is poisoned.".to_string())?;
-    let must_restart = match guard.as_mut() {
-      Some(connection) => connection.child.try_wait().map_err(|error| error.to_string())?.is_some(),
-      None => true,
-    };
-    if must_restart {
-      *guard = Some(CodexConnection::spawn()?);
-    }
-    guard
-      .as_mut()
-      .ok_or_else(|| "Codex app-server did not start.".to_string())?
-      .start_turn(params)
+    self.connection(&mut guard)?.start_turn(params)
   }
 
   fn stop_codex(&self) {
     if let Ok(mut guard) = self.codex.lock() {
       if let Some(mut connection) = guard.take() {
+        eprintln!("[AI][codex] process:stop pid={}", connection.child.id());
         let _ = connection.child.kill();
         let _ = connection.child.wait();
       }
@@ -68,7 +60,9 @@ impl AiRuntimeState {
 
 impl Drop for AiRuntimeState {
   fn drop(&mut self) {
-    self.stop_codex();
+    if Arc::strong_count(&self.codex) == 1 {
+      self.stop_codex();
+    }
   }
 }
 
@@ -100,7 +94,7 @@ impl CodexConnection {
       .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
       .unwrap_or_default();
 
-    eprintln!("[AI][codex] process:start executable={}", executable_text);
+    eprintln!("[AI][codex] process:start executable={executable_text}");
     let mut child = Command::new(&executable)
       .arg("app-server")
       .arg("--listen")
@@ -115,8 +109,7 @@ impl CodexConnection {
     let stdout = child.stdout.take().ok_or_else(|| "Codex app-server stdout is unavailable.".to_string())?;
     if let Some(stderr) = child.stderr.take() {
       thread::spawn(move || {
-        let reader = BufReader::new(stderr);
-        for line in reader.lines().map_while(Result::ok) {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
           let clean = redact_text(&line);
           if !clean.trim().is_empty() {
             eprintln!("[AI][codex][stderr] {clean}");
@@ -145,7 +138,8 @@ impl CodexConnection {
     )?;
     connection.send_notification("initialized", json!({}))?;
     eprintln!(
-      "[AI][codex] protocol:initialized executable={} version={} platform={}",
+      "[AI][codex] protocol:initialized pid={} executable={} version={} platform={}",
+      connection.child.id(),
       connection.executable,
       connection.version,
       initialized.result.get("platformFamily").and_then(Value::as_str).unwrap_or("unknown")
@@ -167,9 +161,9 @@ impl CodexConnection {
   fn request(&mut self, method: &str, params: Value) -> R<RpcOutcome> {
     let id = self.next_id;
     self.next_id += 1;
+    let started = Instant::now();
     eprintln!("[AI][codex] request:start id={id} method={method}");
     self.send_json(&json!({ "id": id, "method": method, "params": params }))?;
-    let started = Instant::now();
     let outcome = read_until_response(&mut self.stdout, &mut self.stdin, id)?;
     eprintln!(
       "[AI][codex] request:complete id={} method={} duration_ms={} notifications={}",
@@ -207,8 +201,17 @@ impl CodexConnection {
       let completed = message.get("method").and_then(Value::as_str) == Some("turn/completed");
       events.push(message.clone());
       if completed {
-        let completed_turn = message.get("params").and_then(|params| params.get("turn")).cloned().unwrap_or(Value::Null);
-        eprintln!("[AI][codex] turn:complete turn_id={} chars={} events={}", turn_id, text.chars().count(), events.len());
+        let completed_turn = message
+          .get("params")
+          .and_then(|params| params.get("turn"))
+          .cloned()
+          .unwrap_or(Value::Null);
+        eprintln!(
+          "[AI][codex] turn:complete turn_id={} chars={} events={}",
+          turn_id,
+          text.chars().count(),
+          events.len()
+        );
         return Ok(json!({
           "ok": true,
           "provider": "codex",
@@ -307,7 +310,14 @@ fn redact_text(input: &str) -> String {
     return serde_json::to_string(&value).unwrap_or_else(|_| "[redacted-json]".to_string());
   }
   let lower = input.to_ascii_lowercase();
-  if lower.contains("access_token") || lower.contains("refreshtoken") || lower.contains("api_key") || lower.contains("authorization") {
+  if lower.contains("access_token")
+    || lower.contains("accesstoken")
+    || lower.contains("refresh_token")
+    || lower.contains("refreshtoken")
+    || lower.contains("api_key")
+    || lower.contains("apikey")
+    || lower.contains("authorization")
+  {
     "[redacted-sensitive-log]".to_string()
   } else {
     input.to_string()
@@ -318,7 +328,7 @@ fn redact_value(value: &mut Value) {
   match value {
     Value::Object(object) => {
       for (key, child) in object.iter_mut() {
-        let normalized = key.to_ascii_lowercase().replace(['_', '-'], "");
+        let normalized = key.to_ascii_lowercase().replace('_', "").replace('-', "");
         if normalized.contains("token") || normalized.contains("apikey") || normalized == "authorization" || normalized == "password" {
           *child = Value::String("[redacted]".to_string());
         } else {
@@ -338,7 +348,10 @@ fn provider_name(provider: Option<String>) -> String {
 fn normalize_opencode_endpoint(endpoint: Option<String>) -> R<String> {
   let value = endpoint.unwrap_or_else(|| OPENCODE_DEFAULT_ENDPOINT.to_string());
   let value = value.trim().trim_end_matches('/').to_string();
-  let allowed = value.starts_with("http://127.0.0.1:") || value.starts_with("http://localhost:") || value == "http://127.0.0.1" || value == "http://localhost";
+  let allowed = value.starts_with("http://127.0.0.1:")
+    || value.starts_with("http://localhost:")
+    || value == "http://127.0.0.1"
+    || value == "http://localhost";
   if !allowed {
     return Err("OpenCode endpoint must be an HTTP loopback address (127.0.0.1 or localhost).".to_string());
   }
@@ -378,7 +391,7 @@ fn opencode_request(
   let status = response.status();
   let text = response.text().map_err(|error| error.to_string())?;
   if !status.is_success() {
-    return Err(format!("OpenCode returned HTTP {} for {}: {}", status.as_u16(), path, text));
+    return Err(format!("OpenCode returned HTTP {} for {}: {}", status.as_u16(), path, redact_text(&text)));
   }
   if text.trim().is_empty() {
     return Ok(Value::Null);
@@ -388,9 +401,6 @@ fn opencode_request(
 
 fn parse_model_reference(model: Option<String>) -> Option<Value> {
   let model = model?.trim().to_string();
-  if model.is_empty() {
-    return None;
-  }
   let (provider_id, model_id) = model.split_once('/')?;
   if provider_id.is_empty() || model_id.is_empty() {
     return None;
@@ -402,11 +412,11 @@ fn flatten_opencode_models(payload: &Value) -> Vec<Value> {
   let providers = payload.get("providers").and_then(Value::as_array).cloned().unwrap_or_default();
   let mut models = Vec::new();
   for provider in providers {
-    let provider_id = provider.get("id").or_else(|| provider.get("name")).and_then(Value::as_str).unwrap_or("");
-    let provider_name = provider.get("name").and_then(Value::as_str).unwrap_or(provider_id);
+    let provider_id = provider.get("id").or_else(|| provider.get("name")).and_then(Value::as_str).unwrap_or("").to_string();
+    let provider_name = provider.get("name").and_then(Value::as_str).unwrap_or(&provider_id).to_string();
     let provider_models = provider.get("models").and_then(Value::as_object).cloned().unwrap_or_else(Map::new);
     for (model_id, model) in provider_models {
-      let name = model.get("name").and_then(Value::as_str).unwrap_or(&model_id);
+      let name = model.get("name").and_then(Value::as_str).unwrap_or(&model_id).to_string();
       models.push(json!({
         "id": format!("{provider_id}/{model_id}"),
         "model": model_id,
@@ -433,7 +443,7 @@ where
 
 #[tauri::command]
 pub async fn tauri_ai_runtime_status(
-  state: State<'_, AiRuntimeState>,
+  _state: State<'_, AiRuntimeState>,
   provider: Option<String>,
   endpoint: Option<String>,
   username: Option<String>,
@@ -443,7 +453,12 @@ pub async fn tauri_ai_runtime_status(
   if provider == "codex" {
     let executable = which::which("codex").ok();
     let version = executable.as_ref().and_then(|path| {
-      Command::new(path).arg("--version").output().ok().filter(|output| output.status.success()).map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+      Command::new(path)
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
     });
     return Ok(json!({
       "ok": executable.is_some(),
@@ -460,7 +475,6 @@ pub async fn tauri_ai_runtime_status(
       Ok(json!({ "ok": true, "provider": "opencode", "runtime": "opencode-server", "health": health }))
     }).await;
   }
-  let _ = state;
   Err(format!("Unsupported subscription provider: {provider}"))
 }
 
@@ -545,7 +559,10 @@ pub async fn tauri_ai_models_list(
   if provider == "codex" {
     let runtime = state.inner().clone();
     return blocking(move || {
-      let outcome = runtime.codex_request("model/list", json!({ "limit": 200, "includeHidden": include_hidden.unwrap_or(false) }))?;
+      let outcome = runtime.codex_request(
+        "model/list",
+        json!({ "limit": 200, "includeHidden": include_hidden.unwrap_or(false) }),
+      )?;
       let models = outcome.result.get("data").cloned().unwrap_or_else(|| json!([]));
       Ok(json!({ "ok": true, "provider": "codex", "runtime": "codex-app-server", "models": models, "raw": outcome.result }))
     }).await;
@@ -580,15 +597,23 @@ pub async fn tauri_ai_thread_start(
         "sandbox": "readOnly",
         "serviceName": "elephantnote"
       });
-      if let Some(model) = model.filter(|value| !value.trim().is_empty()) { params["model"] = json!(model); }
-      if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) { params["cwd"] = json!(cwd); }
+      if let Some(model) = model.filter(|value| !value.trim().is_empty()) {
+        params["model"] = json!(model);
+      }
+      if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) {
+        params["cwd"] = json!(cwd);
+      }
       let outcome = runtime.codex_request("thread/start", params)?;
-      Ok(json!({ "ok": true, "provider": "codex", "runtime": "codex-app-server", "thread": outcome.result.get("thread").cloned().unwrap_or(outcome.result) }))
+      let thread = outcome.result.get("thread").cloned().unwrap_or_else(|| outcome.result.clone());
+      Ok(json!({ "ok": true, "provider": "codex", "runtime": "codex-app-server", "thread": thread }))
     }).await;
   }
   if provider == "opencode" {
     return blocking(move || {
-      let body = title.filter(|value| !value.trim().is_empty()).map(|title| json!({ "title": title })).unwrap_or_else(|| json!({}));
+      let body = title
+        .filter(|value| !value.trim().is_empty())
+        .map(|title| json!({ "title": title }))
+        .unwrap_or_else(|| json!({}));
       let session = opencode_request(reqwest::Method::POST, endpoint, "/session", Some(body), username, password)?;
       Ok(json!({ "ok": true, "provider": "opencode", "runtime": "opencode-server", "thread": session }))
     }).await;
@@ -621,8 +646,12 @@ pub async fn tauri_ai_turn_start(
         "approvalPolicy": "never",
         "sandboxPolicy": { "type": "readOnly" }
       });
-      if let Some(model) = model.filter(|value| !value.trim().is_empty()) { params["model"] = json!(model); }
-      if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) { params["cwd"] = json!(cwd); }
+      if let Some(model) = model.filter(|value| !value.trim().is_empty()) {
+        params["model"] = json!(model);
+      }
+      if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) {
+        params["cwd"] = json!(cwd);
+      }
       runtime.codex_turn(params)
     }).await;
   }
@@ -632,7 +661,7 @@ pub async fn tauri_ai_turn_start(
       if let Some(model) = parse_model_reference(model) {
         body["model"] = model;
       }
-      let path = format!("/session/{}/message", thread_id);
+      let path = format!("/session/{thread_id}/message");
       let response = opencode_request(reqwest::Method::POST, endpoint, &path, Some(body), username, password)?;
       let text = response
         .get("parts")
@@ -660,14 +689,16 @@ pub async fn tauri_ai_turn_interrupt(
     let runtime = state.inner().clone();
     return blocking(move || {
       let mut params = json!({ "threadId": thread_id });
-      if let Some(turn_id) = turn_id.filter(|value| !value.trim().is_empty()) { params["turnId"] = json!(turn_id); }
+      if let Some(turn_id) = turn_id.filter(|value| !value.trim().is_empty()) {
+        params["turnId"] = json!(turn_id);
+      }
       let outcome = runtime.codex_request("turn/interrupt", params)?;
       Ok(json!({ "ok": true, "provider": "codex", "result": outcome.result }))
     }).await;
   }
   if provider == "opencode" {
     return blocking(move || {
-      let path = format!("/session/{}/abort", thread_id);
+      let path = format!("/session/{thread_id}/abort");
       let result = opencode_request(reqwest::Method::POST, endpoint, &path, Some(json!({})), username, password)?;
       Ok(json!({ "ok": true, "provider": "opencode", "result": result }))
     }).await;
@@ -719,7 +750,7 @@ mod tests {
 
   #[test]
   fn sensitive_logs_are_redacted() {
-    let redacted = redact_text(r#"{\"access_token\":\"secret\",\"safe\":\"value\"}"#);
+    let redacted = redact_text(r#"{"access_token":"secret","safe":"value"}"#);
     assert!(!redacted.contains("secret"));
     assert!(redacted.contains("[redacted]"));
   }
@@ -730,8 +761,11 @@ mod tests {
       return;
     }
     let mut connection = CodexConnection::spawn().expect("installed Codex must complete app-server initialization");
-    let account = connection.request("account/read", json!({ "refreshToken": false })).expect("account/read must answer");
+    let account = connection
+      .request("account/read", json!({ "refreshToken": false }))
+      .expect("account/read must answer");
     assert!(account.result.get("requiresOpenaiAuth").is_some());
     let _ = connection.child.kill();
+    let _ = connection.child.wait();
   }
 }

@@ -222,6 +222,13 @@ pub async fn tauri_rag_chat(app: AppHandle, payload: Value) -> R<Value> {
     }));
   }
 
+  let local_sources = ["", "app-local", "local", "tauri-rust", "node-llama-cpp", "local-llama.cpp"];
+  if !local_sources.contains(&source.as_str()) {
+    return Err(format!(
+      "Chat provider '{source}' is configured but is not implemented in the Tauri chat router. Select Codex or App Local instead."
+    ));
+  }
+
   if model.is_empty() {
     let warning = "No local GGUF chat model is selected.";
     eprintln!("[tauri-rag][warn] {warning}");

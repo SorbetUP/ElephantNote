@@ -11,7 +11,7 @@ on:
 
 permissions:
   actions: read
-  contents: write
+  pull-requests: write
 
 jobs:
   diagnose:
@@ -21,17 +21,17 @@ jobs:
         with:
           ref: feature/wiki-knowledge-continuation
           fetch-depth: 0
-      - name: Capture the failed Tauri check
+      - name: Report the failed Tauri check
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p .github/diagnostics
-          gh run view 29057587121 --repo "$GITHUB_REPOSITORY" --log-failed > .github/diagnostics/wiki-continuation-cargo-check.log
-          test -s .github/diagnostics/wiki-continuation-cargo-check.log
-      - name: Commit diagnostic
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/diagnostics/wiki-continuation-cargo-check.log
-          git commit -m 'chore(ci): expose wiki integration compile failure' || exit 0
-          git push origin HEAD:feature/wiki-knowledge-continuation
+          gh run view 29057587121 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/wiki-check.log
+          test -s /tmp/wiki-check.log
+          {
+            echo '### Wiki continuation compile diagnostic'
+            echo
+            echo '```text'
+            tail -n 120 /tmp/wiki-check.log
+            echo '```'
+          } > /tmp/wiki-check-comment.md
+          gh pr comment 37 --repo "$GITHUB_REPOSITORY" --body-file /tmp/wiki-check-comment.md

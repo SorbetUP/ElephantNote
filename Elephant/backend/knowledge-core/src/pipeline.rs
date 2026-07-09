@@ -13,6 +13,7 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
     files.sort();
 
     let mut store = KnowledgeStore::open(&canonical_root)?;
+    store.initialize_relations()?;
     let mut report = RebuildReport::default();
     let mut present_paths = HashSet::new();
 
@@ -27,9 +28,28 @@ pub fn rebuild_vault(vault_root: &Path) -> Result<RebuildReport, String> {
 
         let result = index_path(&store, &absolute_path, &relative_path);
         match result {
-            Ok(IndexDecision::Unchanged) => report.unchanged += 1,
+            Ok(IndexDecision::Unchanged) => {
+                let relation_result = store
+                    .inspect_document(&relative_path)
+                    .and_then(|document| {
+                        document
+                            .as_ref()
+                            .map(|snapshot| store.sync_markdown_relations(snapshot))
+                            .transpose()
+                    });
+                match relation_result {
+                    Ok(_) => report.unchanged += 1,
+                    Err(error) => report.failed.push(RebuildFailure {
+                        relative_path,
+                        error,
+                    }),
+                }
+            }
             Ok(IndexDecision::Changed(snapshot)) => {
-                if let Err(error) = store.upsert_document(&snapshot) {
+                let index_result = store
+                    .upsert_document(&snapshot)
+                    .and_then(|_| store.sync_markdown_relations(&snapshot).map(|_| ()));
+                if let Err(error) = index_result {
                     report.failed.push(RebuildFailure {
                         relative_path,
                         error,
@@ -108,6 +128,7 @@ fn ignored_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::relations::{KnowledgeNodeKind, KnowledgeNodeRef};
     use crate::storage::KnowledgeStore;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -141,6 +162,41 @@ mod tests {
 
         let store = KnowledgeStore::open(&root).unwrap();
         assert_eq!(store.status().unwrap().documents, 1);
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn rebuild_projects_explicit_wikilinks_as_typed_relations() {
+        let root = temp_vault("relations");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("A.md"), "# A\nSee [[B]].").unwrap();
+        rebuild_vault(&root).unwrap();
+
+        let store = KnowledgeStore::open(&root).unwrap();
+        let relations = store
+            .relations_for_node(
+                &KnowledgeNodeRef {
+                    kind: KnowledgeNodeKind::Document,
+                    id: "A.md".into(),
+                },
+                false,
+            )
+            .unwrap();
+        assert_eq!(relations.len(), 1);
+        assert_eq!(relations[0].target.id, "B");
+
+        let second = rebuild_vault(&root).unwrap();
+        assert_eq!(second.unchanged, 1);
+        let relations = store
+            .relations_for_node(
+                &KnowledgeNodeRef {
+                    kind: KnowledgeNodeKind::Document,
+                    id: "A.md".into(),
+                },
+                false,
+            )
+            .unwrap();
+        assert_eq!(relations.len(), 1);
         fs::remove_dir_all(root).ok();
     }
 

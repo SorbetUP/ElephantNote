@@ -38,7 +38,7 @@ describe('executable fenced code blocks', () => {
     expect(backend).toContain('Duration::from_millis(timeout_ms)')
     expect(backend).toContain('Refusing to execute code outside the active vault.')
     expect(backend).toContain('.kill_on_drop(true)')
-    expect(backend).toContain('VecDeque<u8>')
+    expect(backend).toContain('VecDeque::with_capacity')
     expect(backend).toContain('capture_stream')
     expect(backend).toContain('process:stream:complete')
     expect(backend).not.toContain('wait_with_output')

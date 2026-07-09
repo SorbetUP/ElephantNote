@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import fs from 'fs-extra'
+import path from 'path'
 import {
   createInitialExcalidrawData,
   ensureExcalidrawName,
@@ -47,5 +49,16 @@ describe('ElephantNote Excalidraw helpers', () => {
     expect(resolveExcalidrawModule(nativeModule)).toBe(nativeModule)
     expect(resolveExcalidrawModule(defaultModule)).toBe(defaultModule.default)
     expect(() => resolveExcalidrawModule({ default: {} })).toThrow('Excalidraw could not be loaded')
+  })
+
+  it('uses React 18 root mounting and avoids invalid image element fields', async() => {
+    const dialog = await fs.readFile(path.resolve('Elephant/frontend/app/components/editor/ExcalidrawDialog.vue'), 'utf8')
+    const service = await fs.readFile(path.resolve('Elephant/frontend/app/services/excalidraw.js'), 'utf8')
+
+    expect(dialog).toContain("import { createRoot } from 'react-dom/client'")
+    expect(dialog).toContain('markRaw(createRoot(mountEl.value))')
+    expect(dialog).not.toContain('ReactDOM.render')
+    expect(dialog).not.toContain('unmountComponentAtNode')
+    expect(service).not.toContain('index: null')
   })
 })

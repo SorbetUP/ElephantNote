@@ -29,10 +29,32 @@
       http://ipc.localhost;
       "
     />
+    <link rel="stylesheet" href="/src/mobile-android.css" />
   </head>
 
   <body>
     <div id="app"></div>
+    <script>
+      window.global = window.global || window
+      window.process = window.process || {
+        env: {},
+        platform: 'browser',
+        versions: {},
+        cwd: function () {
+          return '/'
+        }
+      }
+      window.Buffer = window.Buffer || {
+        from: function (value) {
+          if (value instanceof ArrayBuffer) return new Uint8Array(value)
+          return new TextEncoder().encode(String(value || ''))
+        },
+        byteLength: function (value) {
+          return new TextEncoder().encode(String(value || '')).byteLength
+        }
+      }
+    </script>
+    <script type="module" src="/src/platform/mobileVaultBridge.js"></script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

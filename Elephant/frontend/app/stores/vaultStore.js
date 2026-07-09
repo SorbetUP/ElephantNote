@@ -280,6 +280,16 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.loadPinnedNotes()
     },
 
+    applyChosenVaultPayload(payload) {
+      this.applyPayload(payload)
+      this.currentPath = ''
+      useNavigationStore().push({
+        type: 'workspace',
+        id: this.activeVaultId,
+        title: this.activeVault?.name
+      })
+    },
+
     async load() {
       this.loading = true
       this.error = ''
@@ -306,13 +316,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         log.info('[vault] chooseVault:start')
         const payload = await elephantnoteClient.vaults.select()
         if (payload?.canceled) return false
-        this.applyPayload(payload)
-        this.currentPath = ''
-        useNavigationStore().push({
-          type: 'workspace',
-          id: this.activeVaultId,
-          title: this.activeVault?.name
-        })
+        this.applyChosenVaultPayload(payload)
         log.info('[vault] chooseVault:done', {
           activeVaultId: this.activeVaultId || null
         })
@@ -320,6 +324,26 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       } catch (err) {
         log.error('[vault] chooseVault failed', err)
         this.error = err.message || 'Unable to choose vault.'
+        return false
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async createLocalVault() {
+      this.loading = true
+      this.error = ''
+      try {
+        log.info('[vault] createLocalVault:start')
+        const payload = await elephantnoteClient.vaults.createLocal()
+        this.applyChosenVaultPayload(payload)
+        log.info('[vault] createLocalVault:done', {
+          activeVaultId: this.activeVaultId || null
+        })
+        return true
+      } catch (err) {
+        log.error('[vault] createLocalVault failed', err)
+        this.error = err.message || 'Unable to create a phone vault.'
         return false
       } finally {
         this.loading = false

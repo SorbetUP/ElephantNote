@@ -3,9 +3,11 @@ use crate::relations::{
     RelationType,
 };
 use crate::storage::KnowledgeStore;
+use crate::wiki_graph_projection::project_wiki_territories;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct KnowledgeGraph {
@@ -58,12 +60,31 @@ pub struct KnowledgeGraphCluster {
 
 impl KnowledgeStore {
     pub fn graph_projection(&self, include_suggestions: bool) -> Result<KnowledgeGraph, String> {
+        let started_at = Instant::now();
+        eprintln!(
+            "[Knowledge][Graph] projection:start include_suggestions={} database={}",
+            include_suggestions,
+            self.database_path().display()
+        );
+
         self.initialize_relations()?;
         self.initialize_taxonomy()?;
-        let conn = Connection::open(self.database_path()).map_err(|error| error.to_string())?;
+        self.initialize_wikis()?;
+        let conn = Connection::open(self.database_path()).map_err(|error| {
+            eprintln!("[Knowledge][Graph] projection:error stage=open_database error={error}");
+            error.to_string()
+        })?;
         let documents = load_documents(&conn)?;
         let tags = load_document_tags(&conn)?;
         let relations = self.list_relations(None, 50_000)?;
+        let tag_assignments = tags.values().map(Vec::len).sum::<usize>();
+        eprintln!(
+            "[Knowledge][Graph] data:loaded documents={} tagged_documents={} tag_assignments={} relations={}",
+            documents.len(),
+            tags.len(),
+            tag_assignments,
+            relations.len()
+        );
 
         let resolver = DocumentResolver::new(&documents);
         let mut nodes = documents
@@ -85,34 +106,54 @@ impl KnowledgeStore {
             })
             .collect::<Vec<_>>();
         nodes.sort_by(|left, right| left.id.cmp(&right.id));
+        let note_node_count = nodes.len();
 
         let node_ids = nodes
             .iter()
-            .map(|node| node.id.as_str())
+            .map(|node| node.id.clone())
             .collect::<HashSet<_>>();
         let mut edges = Vec::new();
         let mut seen_edges = HashSet::new();
+        let mut rejected_count = 0usize;
+        let mut suggested_hidden_count = 0usize;
+        let mut non_document_count = 0usize;
+        let mut unresolved_count = 0usize;
+        let mut duplicate_count = 0usize;
 
         for relation in relations {
             if matches!(relation.status, RelationStatus::Rejected) {
+                rejected_count += 1;
                 continue;
             }
             if !include_suggestions && matches!(relation.status, RelationStatus::Suggested) {
+                suggested_hidden_count += 1;
                 continue;
             }
             if !matches!(relation.source.kind, KnowledgeNodeKind::Document)
                 || !matches!(relation.target.kind, KnowledgeNodeKind::Document)
             {
+                non_document_count += 1;
                 continue;
             }
 
             let Some(source) = resolver.resolve(&relation.source.id) else {
+                unresolved_count += 1;
+                eprintln!(
+                    "[Knowledge][Graph] relation:unresolved side=source relation_id={} reference={}",
+                    relation.id, relation.source.id
+                );
                 continue;
             };
             let Some(target) = resolver.resolve(&relation.target.id) else {
+                unresolved_count += 1;
+                eprintln!(
+                    "[Knowledge][Graph] relation:unresolved side=target relation_id={} reference={}",
+                    relation.id, relation.target.id
+                );
                 continue;
             };
             if source == target || !node_ids.contains(source) || !node_ids.contains(target) {
+                unresolved_count += 1;
                 continue;
             }
             let edge_key = format!(
@@ -123,13 +164,66 @@ impl KnowledgeStore {
                 relation_origin_label(&relation.origin)
             );
             if !seen_edges.insert(edge_key) {
+                duplicate_count += 1;
                 continue;
             }
             edges.push(to_graph_edge(&relation, source, target));
         }
         edges.sort_by(|left, right| left.id.cmp(&right.id));
+        eprintln!(
+            "[Knowledge][Graph] relations:projected edges={} rejected={} suggestions_hidden={} non_document={} unresolved={} duplicates={}",
+            edges.len(),
+            rejected_count,
+            suggested_hidden_count,
+            non_document_count,
+            unresolved_count,
+            duplicate_count
+        );
 
-        let clusters = build_folder_clusters(&nodes);
+        let wiki_projection = project_wiki_territories(self, &node_ids, include_suggestions)?;
+        let wiki_node_count = wiki_projection.nodes.len();
+        let wiki_edge_count = wiki_projection.edges.len();
+        let assigned_document_count = wiki_projection.assigned_document_ids.len();
+        nodes.extend(wiki_projection.nodes);
+        edges.extend(wiki_projection.edges);
+        nodes.sort_by(|left, right| left.id.cmp(&right.id));
+        edges.sort_by(|left, right| left.id.cmp(&right.id));
+
+        let mut clusters = if wiki_projection.clusters.is_empty() {
+            eprintln!("[Knowledge][Graph] territories:fallback mode=folders");
+            build_folder_clusters(&nodes)
+        } else {
+            let mut territories = wiki_projection.clusters;
+            if let Some(unassigned) = build_unassigned_cluster(
+                &nodes,
+                &wiki_projection.assigned_document_ids,
+            ) {
+                eprintln!(
+                    "[Knowledge][Graph] territories:unassigned notes={}",
+                    unassigned.node_count
+                );
+                territories.push(unassigned);
+            }
+            territories
+        };
+        clusters.sort_by(|left, right| left.id.cmp(&right.id));
+
+        let mut edge_types = BTreeMap::<String, usize>::new();
+        for edge in &edges {
+            *edge_types.entry(edge.edge_type.clone()).or_default() += 1;
+        }
+        eprintln!(
+            "[Knowledge][Graph] projection:complete note_nodes={} wiki_nodes={} edges={} wiki_edges={} territories={} assigned_notes={} edge_types={:?} duration_ms={}",
+            note_node_count,
+            wiki_node_count,
+            edges.len(),
+            wiki_edge_count,
+            clusters.len(),
+            assigned_document_count,
+            edge_types,
+            started_at.elapsed().as_millis()
+        );
+
         Ok(KnowledgeGraph {
             nodes,
             edges,
@@ -238,6 +332,9 @@ fn relation_status_label(status: &RelationStatus) -> &'static str {
 fn build_folder_clusters(nodes: &[KnowledgeGraphNode]) -> Vec<KnowledgeGraphCluster> {
     let mut clusters = BTreeMap::<String, Vec<String>>::new();
     for node in nodes {
+        if node.kind != "note" {
+            continue;
+        }
         let folder = node
             .relative_path
             .rsplit_once('/')
@@ -260,9 +357,30 @@ fn build_folder_clusters(nodes: &[KnowledgeGraphNode]) -> Vec<KnowledgeGraphClus
             node_count: paths.len(),
             id,
             paths,
-            tags: Vec::new(),
+            tags: vec!["folder-cluster".into()],
         })
         .collect()
+}
+
+fn build_unassigned_cluster(
+    nodes: &[KnowledgeGraphNode],
+    assigned_document_ids: &HashSet<String>,
+) -> Option<KnowledgeGraphCluster> {
+    let paths = nodes
+        .iter()
+        .filter(|node| node.kind == "note" && !assigned_document_ids.contains(&node.id))
+        .map(|node| node.id.clone())
+        .collect::<Vec<_>>();
+    if paths.is_empty() {
+        return None;
+    }
+    Some(KnowledgeGraphCluster {
+        id: "unassigned".into(),
+        label: "Unassigned notes".into(),
+        node_count: paths.len(),
+        paths,
+        tags: vec!["unassigned-territory".into()],
+    })
 }
 
 struct DocumentResolver {
@@ -330,6 +448,7 @@ mod tests {
     use super::*;
     use crate::chunking::analyze_markdown;
     use crate::relations::{KnowledgeRelation, RelationOrigin, RelationStatus, RelationType};
+    use crate::wiki_core::{WikiCitation, WikiDraft, WikiDraftStatus};
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -352,6 +471,31 @@ mod tests {
         }
     }
 
+    fn accepted_wiki(source_path: &str) -> WikiDraft {
+        WikiDraft {
+            id: "wiki-a".into(),
+            topic: "Topic A".into(),
+            title: "Topic A".into(),
+            slug: "topic-a".into(),
+            markdown: "# Topic A\n".into(),
+            citations: vec![WikiCitation {
+                key: "source-1".into(),
+                document_path: source_path.into(),
+                document_title: "A".into(),
+                chunk_id: "chunk-a".into(),
+                heading: "A".into(),
+                start_offset: 0,
+                end_offset: 10,
+            }],
+            source_paths: vec![source_path.into()],
+            source_hash: "hash".into(),
+            model_id: "test-model".into(),
+            status: WikiDraftStatus::Accepted,
+            created_at: 1,
+            updated_at: 1,
+        }
+    }
+
     #[test]
     fn projects_only_resolved_document_relations() {
         let root = temp_vault("projection");
@@ -369,6 +513,52 @@ mod tests {
         assert_eq!(graph.edges[0].source, "Notes/A.md");
         assert_eq!(graph.edges[0].target, "Notes/B.md");
         assert_eq!(graph.edges[0].edge_type, "explicit-link");
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn graph_projection_includes_wiki_node_source_edge_and_territory() {
+        let root = temp_vault("wiki-territory");
+        fs::create_dir_all(&root).unwrap();
+        let mut store = KnowledgeStore::open(&root).unwrap();
+        store
+            .upsert_document(&analyze_markdown("Notes/A.md", "# A\nBody", 1))
+            .unwrap();
+        store.save_wiki_draft(&accepted_wiki("Notes/A.md")).unwrap();
+
+        let graph = store.graph_projection(false).unwrap();
+        assert!(graph.nodes.iter().any(|node| node.kind == "wiki"));
+        assert!(graph
+            .edges
+            .iter()
+            .any(|edge| edge.edge_type == "wiki-source"));
+        assert!(graph
+            .clusters
+            .iter()
+            .any(|cluster| cluster.tags.iter().any(|tag| tag == "wiki-territory")));
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn notes_outside_wikis_are_kept_in_an_unassigned_territory() {
+        let root = temp_vault("unassigned");
+        fs::create_dir_all(&root).unwrap();
+        let mut store = KnowledgeStore::open(&root).unwrap();
+        store
+            .upsert_document(&analyze_markdown("A.md", "# A\nBody", 1))
+            .unwrap();
+        store
+            .upsert_document(&analyze_markdown("B.md", "# B\nBody", 1))
+            .unwrap();
+        store.save_wiki_draft(&accepted_wiki("A.md")).unwrap();
+
+        let graph = store.graph_projection(false).unwrap();
+        let unassigned = graph
+            .clusters
+            .iter()
+            .find(|cluster| cluster.id == "unassigned")
+            .unwrap();
+        assert_eq!(unassigned.paths, vec!["B.md"]);
         fs::remove_dir_all(root).ok();
     }
 

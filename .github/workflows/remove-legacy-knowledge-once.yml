@@ -19,84 +19,56 @@ concurrency:
 jobs:
   migrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feature/rust-knowledge-core
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-      - name: Install Tauri system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf
-      - name: Apply no-legacy migration
+      - name: Apply no-legacy frontend migration
         run: |
           python build/scripts/remove_legacy_knowledge.py
           python build/scripts/fix_knowledge_graph.py
-      - name: Format Rust
-        run: |
-          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-      - name: Check and test knowledge core
-        run: |
-          cargo check --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets
-          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets
-      - name: Check Tauri integration
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
-      - name: Format and lint changed frontend knowledge files
+      - name: Format changed frontend files
         run: |
           pnpm exec eslint --fix \
             Elephant/frontend/app/components/views/WikiView.vue \
             Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \
             Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \
-            Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js
+            Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js || true
+      - name: Diagnose targeted lint
+        id: lint
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
           pnpm exec eslint \
             Elephant/frontend/app/components/views/WikiView.vue \
             Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \
             Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \
+            Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js \
+            --format stylish 2>&1 | tee legacy-removal-frontend-lint.log
+      - name: Upload frontend diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-removal-frontend-diagnostics
+          path: |
+            legacy-removal-frontend-lint.log
+            Elephant/frontend/app/components/views/WikiView.vue
+            Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js
+            Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js
             Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js
-      - name: Build frontend
-        run: pnpm build
-      - name: Verify no legacy knowledge implementation remains
-        shell: bash
-        run: |
-          if grep -R -n -E 'tauri_embeddings_|EmbeddingStore|tauri_wiki_proposals|tauri_rag_build_prompt|tauri_search_(inspect|rebuild|query|status)|legacyInspect|legacyRebuild|portable-markdown-index|tauri_rag_chat|crate::search_logic|pub mod search_logic|pub mod embeddings|pub mod rag_prompt|pub mod fts' Elephant --include='*.rs' --include='*.js' --include='*.ts' --include='*.vue'; then
-            echo 'Legacy knowledge implementation remains.' >&2
-            exit 1
-          fi
-          test ! -e Elephant/backend/tauri/src/embeddings.rs
-          test ! -e Elephant/backend/tauri/src/wiki.rs
-          test ! -e Elephant/backend/tauri/src/rag_prompt.rs
-          test ! -e Elephant/backend/tauri/src/search_logic.rs
-          test ! -e Elephant/backend/tauri/src/fts.rs
-          grep -n 'knowledge-muya-preview' Elephant/frontend/app/components/views/WikiView.vue
-          grep -n 'muya.renderHtml' Elephant/frontend/app/components/views/WikiView.vue
-          grep -n 'tauri_muya_render_html' Elephant/backend/tauri/src/markdown/commands.rs
-          grep -n 'tauri_knowledge_chat' Elephant/backend/tauri/src/chat_runtime.rs Elephant/backend/tauri/src/lib_min.rs
-      - name: Remove migration files and commit
-        shell: bash
-        run: |
-          rm -f build/scripts/remove_legacy_knowledge.py
-          rm -f build/scripts/fix_knowledge_graph.py
-          rm -f .github/workflows/remove-legacy-knowledge-once.yml
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'refactor(knowledge): remove legacy backend and use Muya rendering'
-          git push origin HEAD:feature/rust-knowledge-core
+          if-no-files-found: error
+          retention-days: 3
+      - name: Enforce lint
+        if: always()
+        run: test '${{ steps.lint.outcome }}' = 'success'

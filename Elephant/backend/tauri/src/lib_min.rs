@@ -48,6 +48,9 @@ mod sync_contract_tests;
 #[cfg(test)]
 mod platform_contract_tests;
 
+#[cfg(test)]
+mod knowledge_core_contract_tests;
+
 #[tauri::command]
 fn healthcheck() -> &'static str {
   "ok"

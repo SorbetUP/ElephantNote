@@ -261,7 +261,7 @@ fn selected_wiki_route(payload: &Value) -> Result<WikiModelRoute, String> {
             if model.is_empty() {
                 continue;
             }
-            let provider = ["provider", "runtime", "type"]
+            let provider = ["source", "provider", "runtime", "type"]
                 .iter()
                 .find_map(|key| object.get(*key).and_then(Value::as_str))
                 .map(str::trim)
@@ -275,6 +275,20 @@ fn selected_wiki_route(payload: &Value) -> Result<WikiModelRoute, String> {
     }
 
     Err("No model is selected for wiki generation or chat.".into())
+}
+
+fn is_bundled_local_provider(provider: &str) -> bool {
+    matches!(
+        provider,
+        ""
+            | "app-local"
+            | "local"
+            | "tauri-rust"
+            | "tauri-rust-local-bundled"
+            | "llama.cpp"
+            | "local-llama.cpp"
+            | "node-llama-cpp"
+    )
 }
 
 async fn generate_structured_response(
@@ -292,10 +306,7 @@ async fn generate_structured_response(
         return crate::ollama::OllamaRuntime::generate(&route.model, &prompt).await;
     }
 
-    if matches!(
-        provider.as_str(),
-        "" | "local" | "tauri-rust" | "llama.cpp" | "local-llama.cpp" | "node-llama-cpp"
-    ) {
+    if is_bundled_local_provider(&provider) {
         #[cfg(mobile)]
         {
             let _ = (app, request, payload);
@@ -400,6 +411,21 @@ mod tests {
             .map(|source| source.document_path.as_str())
             .collect::<HashSet<_>>();
         assert_eq!(paths.len(), 2);
+    }
+
+    #[test]
+    fn wiki_route_accepts_app_local_source() {
+        let payload = json!({
+            "aiConfig": {
+                "routes": {
+                    "chat": { "source": "app-local", "model": "tiny.gguf" }
+                }
+            }
+        });
+        let route = selected_wiki_route(&payload).unwrap();
+        assert_eq!(route.provider, "app-local");
+        assert_eq!(route.model, "tiny.gguf");
+        assert!(is_bundled_local_provider(&route.provider));
     }
 
     #[test]

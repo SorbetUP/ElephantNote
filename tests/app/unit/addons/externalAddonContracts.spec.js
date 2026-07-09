@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ElephantAddonManager } from '../../../../Elephant/frontend/src/renderer/src/addons/AddonManager.js'
+import { builtinAddons } from '../../../../Elephant/frontend/src/renderer/src/addons/builtin/index.js'
 import { ExternalAddonController } from '../../../../Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js'
 import { normalizeAddonManifest } from '../../../../Elephant/frontend/src/renderer/src/addons/manifest.js'
 
@@ -40,6 +41,37 @@ describe('external addon manifest contract', () => {
     })
 
     expect(manifest.permissions).toEqual(['notes.read'])
+  })
+})
+
+describe('built-in starter addons', () => {
+  it('ships three useful addons and one developer inspector', () => {
+    expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
+      'elephant.daily-notes',
+      'elephant.quick-capture',
+      'elephant.vault-overview',
+      'elephant.addon-inspector'
+    ])
+    expect(builtinAddons.filter((addon) => addon.manifest.defaultEnabled)).toHaveLength(3)
+  })
+
+  it('registers starter actions through the same addon manager contract', async () => {
+    const manager = new ElephantAddonManager({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    })
+    for (const addon of builtinAddons) manager.register(addon)
+
+    await manager.enableDefaultAddons()
+
+    expect(manager.get('elephant.daily-notes')?.enabled).toBe(true)
+    expect(manager.get('elephant.quick-capture')?.enabled).toBe(true)
+    expect(manager.get('elephant.vault-overview')?.enabled).toBe(true)
+    expect(manager.get('elephant.addon-inspector')?.enabled).toBe(false)
+    expect(manager.getActions().map((entry) => entry.contribution.id).sort()).toEqual([
+      'elephant.daily-notes.open-today',
+      'elephant.quick-capture.create',
+      'elephant.vault-overview.generate'
+    ])
   })
 })
 

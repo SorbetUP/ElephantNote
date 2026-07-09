@@ -77,7 +77,8 @@ if [ "$ANDROID_BUILD_PROFILE" = "release" ]; then
   fi
 
   require_cmd keytool
-  APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner -print 2>/dev/null | sort -V | tail -n 1)"
+  # Plain lexical ordering is supported by both macOS BSD sort and GNU sort.
+  APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner -print 2>/dev/null | sort | tail -n 1)"
   if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
     echo "Unable to find Android SDK apksigner under $SDK_ROOT/build-tools." >&2
     exit 1

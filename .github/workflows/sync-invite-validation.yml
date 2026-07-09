@@ -1,0 +1,54 @@
+name: Sync Invitation Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'Elephant/frontend/app/components/settings/SyncQrScanner.vue'
+      - 'Elephant/frontend/app/components/settings/SyncSettingsPanel.vue'
+      - 'Elephant/frontend/app/services/syncInvite.js'
+      - 'Elephant/backend/tauri/Info.plist'
+      - 'tests/app/unit/specs/main/elephantnote/syncInviteRoundTrip.spec.js'
+      - 'tests/app/unit/specs/main/elephantnote/syncSettingsPanel.spec.js'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/sync-invite-validation.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'Elephant/frontend/app/components/settings/SyncQrScanner.vue'
+      - 'Elephant/frontend/app/components/settings/SyncSettingsPanel.vue'
+      - 'Elephant/frontend/app/services/syncInvite.js'
+      - 'Elephant/backend/tauri/Info.plist'
+      - 'tests/app/unit/specs/main/elephantnote/syncInviteRoundTrip.spec.js'
+      - 'tests/app/unit/specs/main/elephantnote/syncSettingsPanel.spec.js'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/sync-invite-validation.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qr-and-file-round-trip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Decode generated QR and re-import invitation file
+        run: >-
+          NODE_PATH=Elephant/node_modules
+          Elephant/node_modules/.bin/vitest run
+          tests/app/unit/specs/main/elephantnote/syncInviteRoundTrip.spec.js
+          tests/app/unit/specs/main/elephantnote/syncSettingsPanel.spec.js
+      - name: Upload focused validation output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-invite-validation-output
+          path: |
+            vitest-output.txt
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7

@@ -8,6 +8,13 @@ const invoke = (target, command, payload = {}) => {
 
 const object = (value = {}) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {})
 const providerPayload = (provider, payload = {}) => ({ provider, ...object(payload) })
+const providerNameFromConfig = (config = {}) => String(
+  config.provider ||
+  config.transport ||
+  config.preset ||
+  config.providers?.active ||
+  ''
+).trim().toLowerCase()
 
 export const SUBSCRIPTION_PROVIDER_ACTIONS = Object.freeze([
   'ai.providers.status',
@@ -41,6 +48,7 @@ export const installSubscriptionProviderBridge = (target = globalThis) => {
   const opencode = createProvider(target, 'opencode')
 
   root.ai = root.ai || {}
+  const previousTestConfig = root.ai.testConfig?.bind(root.ai)
   root.ai.providers = {
     ...(root.ai.providers || {}),
     status: (payload = {}) => invoke(target, 'tauri_ai_runtime_status', object(payload)),
@@ -55,6 +63,24 @@ export const installSubscriptionProviderBridge = (target = globalThis) => {
   }
   root.ai.codex = { ...(root.ai.codex || {}), ...codex }
   root.ai.opencode = { ...(root.ai.opencode || {}), ...opencode }
+  root.ai.testConfig = async(config = {}) => {
+    const normalized = object(config)
+    const provider = providerNameFromConfig(normalized)
+    if (provider === 'codex') {
+      const runtime = await codex.status()
+      if (!runtime?.ok) throw new Error('Codex CLI is not installed or unavailable.')
+      const auth = await codex.authStatus()
+      return { ok: true, provider: 'codex', runtime, auth }
+    }
+    if (provider === 'opencode') {
+      const endpoint = normalized.endpoint || normalized.opencode?.endpoint
+      const runtime = await opencode.status({ endpoint })
+      const auth = await opencode.authStatus({ endpoint })
+      return { ok: true, provider: 'opencode', runtime, auth }
+    }
+    if (!previousTestConfig) throw new Error(`No runtime test is available for provider "${provider || 'unknown'}".`)
+    return previousTestConfig(config)
+  }
 
   const previousApi = root.api || {}
   const previousDescribe = previousApi.describe?.bind(previousApi)

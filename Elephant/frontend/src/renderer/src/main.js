@@ -12,6 +12,7 @@ import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBrid
 import { installTauriSearchRuntimeGuards } from './platform/tauriSearchRuntimeGuards'
 import { installTauriSearchConceptFallback } from './platform/tauriSearchConceptFallback'
 import { installSubscriptionProviderBridge } from './platform/subscriptionProviderBridge'
+import { installManagedRuntimeAutoinstall } from './platform/managedRuntimeAutoinstall'
 import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBridge'
 import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
 import { installSlashMenuDiagnostics } from './platform/slashMenuDiagnostics'
@@ -113,6 +114,7 @@ installTauriElephantNoteBridge()
 installTauriSearchRuntimeGuards()
 installTauriSearchConceptFallback()
 installSubscriptionProviderBridge()
+installManagedRuntimeAutoinstall()
 installTauriMarkTextSaveBridge()
 installTauriLocalIpcBridge()
 installSlashMenuDiagnostics()

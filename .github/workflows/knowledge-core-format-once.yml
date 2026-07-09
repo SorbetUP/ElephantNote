@@ -24,7 +24,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - name: Format knowledge core
+      - name: Format knowledge core relation modules
         run: cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
       - name: Commit formatting when needed
         shell: bash

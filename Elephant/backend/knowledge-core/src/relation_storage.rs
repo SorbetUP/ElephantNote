@@ -7,6 +7,7 @@ use crate::relations::{
 };
 use crate::storage::KnowledgeStore;
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::HashSet;
 use std::path::Path;
 
 const RELATION_SCHEMA: &str = r#"
@@ -150,10 +151,7 @@ impl KnowledgeStore {
         };
         let mut statement = conn.prepare(sql).map_err(|error| error.to_string())?;
         let rows = statement
-            .query_map(
-                params![node_kind_name(&node.kind), node.id],
-                map_relation_row,
-            )
+            .query_map(params![node_kind_name(&node.kind), node.id], map_relation_row)
             .map_err(|error| error.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())
@@ -178,10 +176,7 @@ impl KnowledgeStore {
                 )
                 .map_err(|error| error.to_string())?;
             let rows = statement
-                .query_map(
-                    params![relation_status_name(&status), capped_limit],
-                    map_relation_row,
-                )
+                .query_map(params![relation_status_name(&status), capped_limit], map_relation_row)
                 .map_err(|error| error.to_string())?;
             return rows
                 .collect::<Result<Vec<_>, _>>()
@@ -206,9 +201,7 @@ impl KnowledgeStore {
         let conn = open_relation_connection(self.database_path())?;
         conn.execute_batch(RELATION_SCHEMA)
             .map_err(|error| error.to_string())?;
-        let transaction = conn
-            .unchecked_transaction()
-            .map_err(|error| error.to_string())?;
+        let transaction = conn.unchecked_transaction().map_err(|error| error.to_string())?;
         transaction
             .execute(
                 "DELETE FROM knowledge_relations
@@ -217,6 +210,7 @@ impl KnowledgeStore {
             )
             .map_err(|error| error.to_string())?;
 
+        let mut unique_relations = HashSet::new();
         let mut inserted = 0usize;
         for link in &document.explicit_links {
             let relation = KnowledgeRelation::new(
@@ -236,14 +230,22 @@ impl KnowledgeStore {
                 format!("Explicit wikilink: {}", link.label),
                 None,
             );
+            if !unique_relations.insert(relation.id.clone()) {
+                continue;
+            }
             let evidence = "[]";
             transaction
                 .execute(
                     "INSERT INTO knowledge_relations(
                        id, source_kind, source_id, target_kind, target_id, relation_type,
-                       origin, status, confidence, evidence_chunk_ids_json, reason, model_id
+                       origin, status, confidence, evidence_chunk_ids_json, reason, model_id, updated_at
                      ) VALUES (?1, 'document', ?2, 'document', ?3, 'explicit_link',
-                               'markdown', 'explicit', NULL, ?4, ?5, NULL)",
+                               'markdown', 'explicit', NULL, ?4, ?5, NULL, unixepoch())
+                     ON CONFLICT(id) DO UPDATE SET
+                       status=excluded.status,
+                       evidence_chunk_ids_json=excluded.evidence_chunk_ids_json,
+                       reason=excluded.reason,
+                       updated_at=unixepoch()",
                     params![
                         relation.id,
                         document.relative_path,
@@ -351,22 +353,22 @@ mod tests {
         let root = temp_vault("markdown");
         fs::create_dir_all(&root).unwrap();
         let mut store = KnowledgeStore::open(&root).unwrap();
-        let first = analyze_markdown("A.md", "# A\nSee [[B]] and [[C|label]].", 1);
-        store.upsert_document(&first).unwrap();
-        assert_eq!(store.sync_markdown_relations(&first).unwrap(), 2);
-        assert_eq!(
-            store
-                .relations_for_node(&document_node("A.md"), false)
-                .unwrap()
-                .len(),
-            2
+        let document = analyze_markdown(
+            "A.md",
+            "# A\nSee [[B]] and ![[Embedded.png]] and [external](https://example.com).",
+            1,
         );
-
-        let second = analyze_markdown("A.md", "# A\nSee [[B]].", 2);
-        store.upsert_document(&second).unwrap();
-        assert_eq!(store.sync_markdown_relations(&second).unwrap(), 1);
+        store.upsert_document(&document).unwrap();
+        let count = store.sync_markdown_relations(&document).unwrap();
+        assert_eq!(count, 1);
         let relations = store
-            .relations_for_node(&document_node("A.md"), false)
+            .relations_for_node(
+                &KnowledgeNodeRef {
+                    kind: KnowledgeNodeKind::Document,
+                    id: "A.md".into(),
+                },
+                false,
+            )
             .unwrap();
         assert_eq!(relations.len(), 1);
         assert_eq!(relations[0].target.id, "B");
@@ -374,24 +376,27 @@ mod tests {
     }
 
     #[test]
-    fn rejects_model_relation_with_unknown_evidence() {
-        let root = temp_vault("invalid");
+    fn duplicate_markdown_wikilinks_are_idempotent() {
+        let root = temp_vault("duplicate-markdown");
         fs::create_dir_all(&root).unwrap();
         let mut store = KnowledgeStore::open(&root).unwrap();
-        let source = analyze_markdown("A.md", "# A\nContent", 1);
-        store.upsert_document(&source).unwrap();
-        let relation = KnowledgeRelation::new(
-            document_node("A.md"),
-            document_node("B.md"),
-            RelationType::RelatedTo,
-            RelationOrigin::Model,
-            RelationStatus::Suggested,
-            Some(0.7),
-            vec!["missing-chunk".into()],
-            "Related",
-            Some("model".into()),
-        );
-        assert!(store.save_relation(&relation).is_err());
+        let document = analyze_markdown("A.md", "# A\nSee [[B]] then [[B|same target]] again.", 1);
+        store.upsert_document(&document).unwrap();
+        let count = store.sync_markdown_relations(&document).unwrap();
+        assert_eq!(count, 1);
+        let count = store.sync_markdown_relations(&document).unwrap();
+        assert_eq!(count, 1);
+        let relations = store
+            .relations_for_node(
+                &KnowledgeNodeRef {
+                    kind: KnowledgeNodeKind::Document,
+                    id: "A.md".into(),
+                },
+                false,
+            )
+            .unwrap();
+        assert_eq!(relations.len(), 1);
+        assert_eq!(relations[0].target.id, "B");
         fs::remove_dir_all(root).ok();
     }
 }

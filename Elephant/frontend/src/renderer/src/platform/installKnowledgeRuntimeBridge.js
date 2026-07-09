@@ -8,6 +8,11 @@ const searchRuntimeState = {
   rebuilds: new Map()
 }
 
+const resolveVaultPathPayload = (payload = '') => {
+  if (typeof payload === 'string') return payload.trim()
+  return String(payload?.vaultPath || payload?.path || '').trim()
+}
+
 const documentCount = (status = {}) => Number(
   status.indexedDocuments ?? status.notesIndexed ?? status.documents ?? 0
 ) || 0
@@ -45,7 +50,7 @@ const normalizeSearchResults = (results) => Array.isArray(results)
   : []
 
 const graphDocuments = (graph) => (Array.isArray(graph?.nodes) ? graph.nodes : [])
-  .filter((node) => (node.kind || node.type) !== 'wiki')
+  .filter((node) => (node.kind || node.type) === 'note')
   .map((node) => ({
     relativePath: node.relativePath || node.path || node.id || '',
     path: node.path || node.relativePath || node.id || '',
@@ -117,8 +122,8 @@ const currentSearchStatus = async() => {
   return normalizeKnowledgeSearchStatus(raw, searchRuntimeState.vaultPath, rebuilding ? 'indexing' : '')
 }
 
-const rebuildSearchIndex = (vaultPath = searchRuntimeState.vaultPath) => {
-  const path = String(vaultPath || '').trim()
+const rebuildSearchIndex = (payload = searchRuntimeState.vaultPath) => {
+  const path = resolveVaultPathPayload(payload) || searchRuntimeState.vaultPath
   const existing = searchRuntimeState.rebuilds.get(path)
   if (existing) return existing
 
@@ -145,8 +150,8 @@ const rebuildSearchIndex = (vaultPath = searchRuntimeState.vaultPath) => {
   return rebuild
 }
 
-const initializeSearchVault = (vaultPath = '') => {
-  const path = String(vaultPath || '').trim()
+const initializeSearchVault = (payload = '') => {
+  const path = resolveVaultPathPayload(payload)
   searchRuntimeState.vaultPath = path
   const existing = searchRuntimeState.initializations.get(path)
   if (existing) return existing

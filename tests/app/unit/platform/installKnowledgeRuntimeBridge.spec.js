@@ -1,4 +1,11 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const repositoryFile = (relativePath) => readFileSync(
+  fileURLToPath(new URL(`../../../../${relativePath}`, import.meta.url)),
+  'utf8'
+)
 
 const installTarget = (invoke) => {
   globalThis.__TAURI__ = { core: { invoke } }
@@ -33,6 +40,17 @@ afterEach(() => {
 })
 
 describe('knowledge search bridge initialization', () => {
+  it('contains no implicit rebuild path in the native bridge or chat client', () => {
+    const nativeBridge = repositoryFile('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
+    const domainClients = repositoryFile('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
+
+    expect(nativeBridge).not.toContain("initVault: () => invoke(target, 'tauri_knowledge_rebuild')")
+    expect(nativeBridge).toContain("initVault: async(payload = '')")
+    expect(domainClients).not.toContain('SEARCH_REBUILD')
+    expect(domainClients).not.toContain('shouldRebuildChatSearch')
+    expect(domainClients).not.toContain('ensureSearchVaultForChat')
+  })
+
   it('normalizes initVault object payloads and does not rebuild automatically', async() => {
     const invoke = vi.fn(async(command) => {
       if (command === 'tauri_debug_log') return true

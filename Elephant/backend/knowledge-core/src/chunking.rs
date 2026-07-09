@@ -369,7 +369,7 @@ fn extract_wikilinks(markdown: &str) -> Vec<ExplicitLink> {
     while let Some(relative_start) = markdown[cursor..].find("[[") {
         let start = cursor + relative_start;
         let content_start = start + 2;
-        let relative_end = match markdown[content_start..].find("]]" ) {
+        let relative_end = match markdown[content_start..].find("]]") {
             Some(value) => value,
             None => break,
         };
@@ -433,7 +433,10 @@ mod tests {
         for chunk in &document.chunks {
             assert!(chunk.start_offset < chunk.end_offset);
             assert!(chunk.end_offset <= markdown.len());
-            assert_eq!(markdown[chunk.start_offset..chunk.end_offset].trim(), chunk.text);
+            assert_eq!(
+                markdown[chunk.start_offset..chunk.end_offset].trim(),
+                chunk.text
+            );
         }
     }
 
@@ -458,6 +461,9 @@ mod tests {
     fn fenced_code_is_not_split_on_blank_lines() {
         let markdown = "# A\n\n```python\nprint('a')\n\nprint('b')\n```\n\nAfter.";
         let document = analyze_markdown("A.md", markdown, 1);
-        assert!(document.chunks.iter().any(|chunk| chunk.text.contains("print('b')")));
+        assert!(document
+            .chunks
+            .iter()
+            .any(|chunk| chunk.text.contains("print('b')")));
     }
 }

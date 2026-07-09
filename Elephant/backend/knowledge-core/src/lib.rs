@@ -12,6 +12,8 @@ pub mod relations;
 pub mod storage;
 pub mod taxonomy;
 pub mod taxonomy_storage;
+pub mod wiki_core;
+pub mod wiki_storage;
 
 pub use actions::{ActionValidation, ChatKnowledgeAction};
 pub use chat_actions::{
@@ -43,3 +45,8 @@ pub use taxonomy::{
     NewTagCandidate, TagAlias, TagStatus,
 };
 pub use taxonomy_storage::{DocumentTagAssignment, TagAssignmentOrigin, TagAssignmentStatus};
+pub use wiki_core::{
+    build_wiki_synthesis_request, collect_wiki_sources, parse_and_render_wiki, render_wiki,
+    slugify, source_hash, wiki_draft_from_rendered, RenderedWiki, WikiCitation, WikiClaim, WikiDraft,
+    WikiDraftStatus, WikiSection, WikiSourceChunk, WikiSynthesis, WikiValidation,
+};

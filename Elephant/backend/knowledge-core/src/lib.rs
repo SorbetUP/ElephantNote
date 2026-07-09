@@ -13,6 +13,7 @@ pub mod storage;
 pub mod taxonomy;
 pub mod taxonomy_storage;
 pub mod wiki_core;
+pub mod wiki_graph_projection;
 pub mod wiki_storage;
 
 pub use actions::{ActionValidation, ChatKnowledgeAction};

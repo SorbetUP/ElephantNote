@@ -101,6 +101,29 @@ describe('executable code language bridge', () => {
     expect(nativeChange).not.toHaveBeenCalled()
   })
 
+  it('survives repeated language changes without recursion or duplicate dispatch', () => {
+    const bridge = installExecutableCodeLanguageBridge(globalThis)
+    const { runtime, state, native, languageSelect } = makeRuntime()
+    bridge.bind(runtime)
+
+    const nativeInput = vi.fn()
+    const nativeChange = vi.fn()
+    native.addEventListener('input', nativeInput)
+    native.addEventListener('change', nativeChange)
+
+    for (let index = 0; index < 200; index += 1) {
+      languageSelect.value = index % 2 === 0 ? 'javascript' : 'python'
+      languageSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+
+    expect(nativeInput).toHaveBeenCalledTimes(200)
+    expect(nativeChange).toHaveBeenCalledTimes(200)
+    expect(state.language).toBe('python')
+    expect(native.textContent).toBe('python')
+    expect(state.pre.classList.contains('language-python')).toBe(true)
+    expect(state.pre.querySelector('code').classList.contains('language-python')).toBe(true)
+  })
+
   it('mirrors a native Muya language change without dispatching back', () => {
     const bridge = installExecutableCodeLanguageBridge(globalThis)
     const { runtime, state, native, languageSelect } = makeRuntime()

@@ -3,6 +3,7 @@ import {
   addedSourceLines,
   countTestContracts,
   findForbiddenTestAdditions,
+  maskQuotedTextAndComments,
   validateChangedTestSource
 } from '../../../../../../build/scripts/test-integrity-core.mjs'
 
@@ -18,6 +19,27 @@ describe('test integrity diff parsing', () => {
     ])
   })
 
+  it('masks quoted examples while preserving executable calls', () => {
+    expect(maskQuotedTextAndComments('const example = \'it.skip("x")\'; it.only("real", run)')).toBe(
+      "const example = ''; it.only('', run)"
+    )
+  })
+
+  it('masks template literals and escaped quote content', () => {
+    expect(maskQuotedTextAndComments('const value = `test.todo("x") ${ignored}`')).toBe(
+      'const value = ``'
+    )
+    expect(maskQuotedTextAndComments('const value = "test.skip(\\\"x\\\")"')).toBe(
+      'const value = ""'
+    )
+  })
+
+  it('removes line comments from executable analysis', () => {
+    expect(maskQuotedTextAndComments('expect(value).toBe(1) // test.skip("documented")')).toBe(
+      'expect(value).toBe(1) '
+    )
+  })
+
   it.each([
     ['+it.only("x", () => {})', 'focused test'],
     ['+test.only("x", () => {})', 'focused test'],
@@ -31,16 +53,16 @@ describe('test integrity diff parsing', () => {
     ['+expect(false).toBe(false)', 'trivial false assertion'],
     ['+it("x", () => {})', 'empty test body']
   ])('rejects %s as %s', (line, rule) => {
-    expect(findForbiddenTestAdditions(line)).toEqual([
-      expect.objectContaining({ rule })
-    ])
+    expect(findForbiddenTestAdditions(line)).toEqual([expect.objectContaining({ rule })])
   })
 
   it.each([
     '+it("works", () => expect(result).toBe(expected))',
     '+expect(value).toBe(true)',
     '+const skipped = false',
-    '+// test.skip is documentation, not an invocation'
+    '+// test.skip("x") is documentation, not an invocation',
+    '+const example = \'it.only("x", () => {})\'',
+    '+const example = `test.todo("x")`'
   ])('accepts a legitimate added line: %s', (line) => {
     expect(findForbiddenTestAdditions(line)).toEqual([])
   })

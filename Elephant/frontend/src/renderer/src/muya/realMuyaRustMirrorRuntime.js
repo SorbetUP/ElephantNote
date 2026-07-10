@@ -97,8 +97,13 @@ export const createRealMuyaRustMirror = ({
       flush: async() => status,
       undo: async() => null,
       redo: async() => null,
+      setSelection: async() => null,
       toggleInline: async() => null,
       transformBlock: async() => null,
+      applyOperation: async() => null,
+      tableCommand: async() => null,
+      upsertFootnote: async() => null,
+      insertTemplate: async() => null,
       destroy: () => {}
     }
   }
@@ -282,6 +287,10 @@ export const createRealMuyaRustMirror = ({
     flush,
     undo: () => applyCommand('rust-undo', (engine) => engine.undo()),
     redo: () => applyCommand('rust-redo', (engine) => engine.redo()),
+    setSelection: (anchor, focus = anchor) => applyCommand(
+      'rust-selection',
+      (engine) => engine.setSelection(anchor, focus)
+    ),
     toggleInline: (marker) => applyCommand(
       `rust-inline-${String(marker)}`,
       (engine) => engine.toggleInline(String(marker))
@@ -289,6 +298,22 @@ export const createRealMuyaRustMirror = ({
     transformBlock: (kind) => applyCommand(
       `rust-block-${String(kind)}`,
       (engine) => engine.transformBlock(String(kind))
+    ),
+    applyOperation: (operation) => applyCommand(
+      `rust-operation-${String(operation?.type || 'unknown')}`,
+      (engine) => engine.applyOperation(operation)
+    ),
+    tableCommand: (action, index = 0) => applyCommand(
+      `rust-table-${String(action)}`,
+      (engine) => engine.tableCommand(String(action), index)
+    ),
+    upsertFootnote: (label, text = '') => applyCommand(
+      'rust-footnote-upsert',
+      (engine) => engine.upsertFootnote(String(label), String(text))
+    ),
+    insertTemplate: (id) => applyCommand(
+      `rust-template-${String(id)}`,
+      (engine) => engine.insertTemplate(String(id))
     ),
     get state() {
       return client.state

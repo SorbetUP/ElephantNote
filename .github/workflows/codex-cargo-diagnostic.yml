@@ -1,0 +1,178 @@
+name: Apply isolated Codex chat runtime fix
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    if: github.head_ref == 'feature/real-codex-subscription'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/real-codex-subscription
+          fetch-depth: 0
+
+      - name: Patch Codex chat isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  'let (events, _) = broadcast::channel(256);',
+                  'let (events, _) = broadcast::channel(2048);',
+                  'broadcast channel capacity',
+              ),
+              (
+                  '''                json!({
+                  "clientInfo": {
+                    "name": "elephantnote",
+                    "title": "ElephantNote",
+                    "version": env!("CARGO_PKG_VERSION")
+                  }
+                }),''',
+                  '''                json!({
+                  "clientInfo": {
+                    "name": "elephantnote",
+                    "title": "ElephantNote",
+                    "version": env!("CARGO_PKG_VERSION")
+                  },
+                  "capabilities": {
+                    "experimentalApi": true,
+                    "optOutNotificationMethods": ["mcpServer/startupStatus/updated"]
+                  }
+                }),''',
+                  'initialize capabilities',
+              ),
+              (
+                  '''    let thread = client
+        .request(
+            "thread/start",''',
+                  '''    // Subscribe before thread/start so no notification can race past this chat.
+    let mut events = client.subscribe();
+    let thread = client
+        .request(
+            "thread/start",''',
+                  'early event subscription',
+              ),
+              (
+                  '''              "approvalPolicy": "never",
+              "sandbox": READ_ONLY_SANDBOX,
+              "serviceName": "elephantnote"''',
+                  '''              "approvalPolicy": "never",
+              "sandbox": READ_ONLY_SANDBOX,
+              "serviceName": "elephantnote",
+              "ephemeral": true,
+              "environments": [],
+              "selectedCapabilityRoots": [],
+              "config": {
+                "mcp_servers": {},
+                "features.apps": false
+              }''',
+                  'isolated thread payload',
+              ),
+              (
+                  '''\n    let mut events = client.subscribe();
+    let turn = client''',
+                  '''\n    let turn = client''',
+                  'late duplicate subscription',
+              ),
+              (
+                  '''        let event = timeout(TURN_TIMEOUT, events.recv())
+            .await
+            .map_err(|_| "Codex generation timed out.".to_string())?
+            .map_err(|error| format!("Codex event stream closed: {error}"))?;''',
+                  '''        let event = match timeout(TURN_TIMEOUT, events.recv()).await {
+            Err(_) => {
+                let _ = client
+                    .request("turn/interrupt", json!({ "threadId": thread_id, "turnId": turn_id }))
+                    .await;
+                return Err("Codex generation timed out before turn/completed.".to_string());
+            }
+            Ok(Ok(event)) => event,
+            Ok(Err(broadcast::error::RecvError::Lagged(skipped))) => {
+                log("event", format!("lagged skipped={skipped}; continuing"));
+                continue;
+            }
+            Ok(Err(broadcast::error::RecvError::Closed)) => {
+                return Err("Codex event stream closed before turn/completed.".to_string());
+            }
+        };''',
+                  'event receiver handling',
+              ),
+          ]
+
+          for old, new, label in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 occurrence, found {count}')
+              text = text.replace(old, new, 1)
+
+          marker = '''    #[test]
+    fn reads_delta_text() {'''
+          insertion = '''    #[test]
+    fn isolated_chat_configuration_disables_external_capabilities() {
+        let params = json!({
+          "ephemeral": true,
+          "environments": [],
+          "selectedCapabilityRoots": [],
+          "config": {
+            "mcp_servers": {},
+            "features.apps": false
+          }
+        });
+        assert_eq!(params.pointer("/config/mcp_servers"), Some(&json!({})));
+        assert_eq!(params.pointer("/config/features.apps"), Some(&json!(false)));
+        assert_eq!(params.get("environments"), Some(&json!([])));
+        assert_eq!(params.get("selectedCapabilityRoots"), Some(&json!([])));
+        assert_eq!(params.get("ephemeral").and_then(Value::as_bool), Some(true));
+    }
+
+    #[test]
+    fn reads_delta_text() {'''
+          if text.count(marker) != 1:
+              raise SystemExit(f'test marker: expected 1 occurrence, found {text.count(marker)}')
+          text = text.replace(marker, insertion, 1)
+          path.write_text(text)
+          PY
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential curl file libayatana-appindicator3-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev patchelf wget
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91
+          components: rustfmt
+
+      - name: Validate Rust implementation
+        shell: bash
+        run: |
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features chat_runtime::codex_app_server::tests
+
+      - name: Remove temporary files and commit
+        shell: bash
+        run: |
+          rm -f .github/workflows/codex-cargo-diagnostic.yml
+          rm -f .github/workflows/fix-codex-chat-hang.yml
+          rm -f .github/codex-chat-hang-trigger
+          rm -f .github/codex-isolation-trigger
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Isolate Codex chat from MCP and app startup hangs"
+          git push origin HEAD:feature/real-codex-subscription

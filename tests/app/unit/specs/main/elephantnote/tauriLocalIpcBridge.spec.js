@@ -1,21 +1,29 @@
 import { describe, expect, it, vi } from 'vitest'
-import { installTauriLocalIpcBridge } from '@/platform/tauriLocalIpcBridge'
+import { getRelativeVaultPath, installTauriLocalIpcBridge } from '@/platform/tauriLocalIpcBridge'
 
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-const createTarget = ({ vaultRoot = '/Users/sorbet/Documents/New project 2', notePayload = { markdown: 'Hello from disk' } } = {}) => {
+const createTarget = ({
+  vaultRoot = '/Users/sorbet/Documents/New project 2',
+  bridgeVaultRoot = vaultRoot,
+  nativeVaultRoot = vaultRoot,
+  notePayload = { markdown: 'Hello from disk' }
+} = {}) => {
   const target = new EventTarget()
   const nativeSend = vi.fn()
   const read = vi.fn(async() => notePayload)
+  const invoke = vi.fn(async(command) => command === 'tauri_vaults_get'
+    ? { activeVault: nativeVaultRoot ? { path: nativeVaultRoot } : null }
+    : undefined)
 
-  target.__TAURI__ = { core: { invoke: vi.fn() } }
+  target.__TAURI__ = { core: { invoke } }
   target.tauri = { ipcRenderer: { send: nativeSend } }
   target.elephantnote = {
-    getVaults: vi.fn(async() => ({ activeVault: { path: vaultRoot } })),
+    getVaults: vi.fn(async() => ({ activeVault: bridgeVaultRoot ? { path: bridgeVaultRoot } : null })),
     notes: { read }
   }
 
-  return { target, nativeSend, read }
+  return { target, nativeSend, read, invoke }
 }
 
 describe('Tauri local IPC bridge', () => {
@@ -37,6 +45,35 @@ describe('Tauri local IPC bridge', () => {
       markdown: 'Hello from disk',
       isMixedLineEndings: false
     })
+  })
+
+  it('uses unfiltered Rust vault state when the mobile bridge hides the private vault', async() => {
+    const privateVault = '/data/user/0/com.elephantnote.app/vaults/Personal'
+    const { target, nativeSend, read, invoke } = createTarget({
+      bridgeVaultRoot: '',
+      nativeVaultRoot: privateVault
+    })
+    const opened = []
+    target.addEventListener('mt::open-new-tab', (event) => opened.push(event.detail))
+
+    installTauriLocalIpcBridge(target)
+    target.tauri.ipcRenderer.send(
+      'mt::open-file',
+      `${privateVault}/Daily/2026-07-09.md`,
+      {}
+    )
+    await flushPromises()
+
+    expect(invoke).toHaveBeenCalledWith('tauri_vaults_get')
+    expect(read).toHaveBeenCalledWith({ relativePath: 'Daily/2026-07-09.md' })
+    expect(nativeSend).not.toHaveBeenCalled()
+    expect(opened).toHaveLength(1)
+  })
+
+  it('accepts an already relative Markdown path without introducing traversal', () => {
+    const target = {}
+    expect(getRelativeVaultPath(target, '/vault', 'Daily/2026-07-10.md')).toBe('Daily/2026-07-10.md')
+    expect(getRelativeVaultPath(target, '/vault', '../outside.md')).toBe('')
   })
 
   it('falls back to native IPC for files outside the active vault', async() => {

@@ -3,18 +3,19 @@ use tauri::{
   Manager, Runtime,
 };
 
+#[cfg(not(target_os = "android"))]
 mod desktop;
 mod error;
 mod models;
-#[cfg(mobile)]
+#[cfg(target_os = "android")]
 mod mobile;
 
 pub use error::{Error, Result};
 pub use models::*;
 
-#[cfg(not(mobile))]
+#[cfg(not(target_os = "android"))]
 pub use desktop::ElephantAndroidVault;
-#[cfg(mobile)]
+#[cfg(target_os = "android")]
 pub use mobile::ElephantAndroidVault;
 
 pub trait ElephantAndroidVaultExt<R: Runtime> {
@@ -30,9 +31,9 @@ impl<R: Runtime, T: Manager<R>> ElephantAndroidVaultExt<R> for T {
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
   Builder::new("elephant-android-vault")
     .setup(|app, api| {
-      #[cfg(mobile)]
+      #[cfg(target_os = "android")]
       let vault = mobile::init(app, api)?;
-      #[cfg(not(mobile))]
+      #[cfg(not(target_os = "android"))]
       let vault = desktop::init(app, api)?;
       app.manage(vault);
       Ok(())

@@ -204,6 +204,7 @@ pub fn run() {
       markdown::commands::tauri_muya_cancel_composition,
       markdown::commands::tauri_muya_editor_snapshot,
       markdown::commands::tauri_muya_engine_create,
+      markdown::commands::tauri_muya_engine_sync_document,
       markdown::commands::tauri_muya_engine_apply,
       markdown::commands::tauri_muya_engine_apply_grouped,
       markdown::commands::tauri_muya_engine_apply_batch,

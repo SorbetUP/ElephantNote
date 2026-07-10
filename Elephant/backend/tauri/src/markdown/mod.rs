@@ -4,6 +4,7 @@ pub mod muya_clipboard;
 pub mod muya_clipboard_commands;
 pub mod muya_clipboard_html;
 pub mod muya_compat;
+pub mod muya_complete;
 pub mod muya_deterministic;
 pub mod muya_edges;
 pub mod muya_engine;

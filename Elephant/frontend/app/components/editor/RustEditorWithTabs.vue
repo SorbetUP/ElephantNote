@@ -21,7 +21,7 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, onBeforeUnmount } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, watchEffect } from 'vue'
 
 import { useEditorStore } from '@/store/editor'
 import { MuyaRuntimeEditor, isRustMuyaEngineAvailable } from '@/muya'
@@ -64,6 +64,12 @@ const editorMarkdown = computed({
       editorStore.tabs[index].isSaved = false
     }
   }
+})
+
+watchEffect(() => {
+  const pathname = editorStore.currentFile?.pathname || ''
+  if (!pathname || typeof window.path?.dirname !== 'function') return
+  window.DIRNAME = window.path.dirname(pathname)
 })
 
 const handleRustEditorReady = (runtime) => {

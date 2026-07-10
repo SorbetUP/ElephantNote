@@ -3,7 +3,7 @@ self.elephantAddon = {
     return api.commands.register({
       id: 'com.elephantnote.examples.platform-proof.run',
       title: 'Run addon platform proof',
-      description: 'Exercise the isolated Worker, app broker, private storage and scoped note read/write APIs.',
+      description: 'Exercise the isolated Worker, app broker, private storage and scoped note list/read/write APIs.',
       async run() {
         const app = await api.app.info()
         const previousCount = Number(await api.storage.get('runCount')) || 0
@@ -29,6 +29,7 @@ self.elephantAddon = {
           '- [x] Private addon storage read/write',
           '- [x] Scoped Markdown note write',
           '- [x] Scoped Markdown note read-back',
+          '- [x] Scoped Markdown note listing',
           '',
           '## Runtime result',
           '',
@@ -44,15 +45,22 @@ self.elephantAddon = {
         ].join('\n')
 
         await api.notes.write(path, markdown)
-        const readBack = await api.notes.read(path)
-        const storage = await api.storage.entries()
-        const verified = readBack.content === markdown && storage.runCount === runCount
+        const [readBack, listedNotes, storage] = await Promise.all([
+          api.notes.read(path),
+          api.notes.list('Addon Proof'),
+          api.storage.entries()
+        ])
+        const listed = listedNotes.some((entry) => entry.path === path)
+        const verified = readBack.content === markdown && storage.runCount === runCount && listed
 
-        if (!verified) throw new Error('Addon platform proof failed during note read-back or storage verification')
+        if (!verified) {
+          throw new Error('Addon platform proof failed during note listing, read-back or storage verification')
+        }
 
         return {
           verified,
           path,
+          listedNotes: listedNotes.length,
           runCount,
           executedAt,
           appVersion: app.version,

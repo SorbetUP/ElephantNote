@@ -58,6 +58,12 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     return engine.markdown
   }
 
+  const adoptCanonicalStateWithoutRender = async() => {
+    const jsonState = await engine.jsonState()
+    view.adoptJsonState?.(jsonState)
+    return jsonState
+  }
+
   const apply = (operation, group = 'rust', { synchronizeSelection = true } = {}) => enqueue(async() => {
     if (compositionSelection) {
       throw new Error('Muya cannot apply a command while an IME composition is active.')
@@ -119,10 +125,11 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
 
   const syncDomToRust = (group = 'input') => enqueue(async() => {
     if (compositionSelection) return engine.markdown
+
     const selection = readDomSelection()
-    view.renderLiveNow?.(group)
     const next = view.domToMarkdown()
     let documentChanged = false
+
     if (next !== engine.markdown) {
       const continueGroup = historyGroup === group
       await engine.setSelection(0, utf16Length(engine.markdown))
@@ -133,12 +140,17 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
       documentChanged = Boolean(transaction?.documentChanged)
       if (documentChanged) historyGroup = group
     }
+
     if (selection) await engine.setSelection(selection.anchor, selection.focus)
+
     if (documentChanged) {
-      await renderCanonicalState(group)
-    } else {
-      restoreCanonicalSelection()
+      if (engine.markdown === next) {
+        await adoptCanonicalStateWithoutRender()
+      } else {
+        await renderCanonicalState(group)
+      }
     }
+
     return engine.markdown
   })
 

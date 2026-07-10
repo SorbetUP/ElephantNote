@@ -61,6 +61,16 @@ export default class CompleteMuyaWithRustCore extends RustOwnedMuya {
     )
     hooks.switchTableData = () => this.__switchTableData()
     hooks.deleteSelectedTableCells = (isCut = false) => this.__clearSelectedTableCells(isCut)
+    hooks.replaceWordInline = (_line, _wordCursor, replacement) => (
+      this.replaceWordInline(replacement)
+    )
+    hooks._replaceCurrentWordInlineUnsafe = (_word, replacement) => {
+      void this.replaceWordInline(replacement)
+      return true
+    }
+    hooks.selectAll = () => this.selectAll()
+    hooks.selectAllContent = () => this.selectAll()
+    hooks.createTable = (tableChecker) => this.createTable(tableChecker)
   }
 
   __beforeInput (event) {

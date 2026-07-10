@@ -4,10 +4,7 @@ export const MUYA_RUNTIME_FLAGS = Object.freeze({
   active: 'active'
 })
 
-export const defaultMuyaRuntimeMode = (source = globalThis) => {
-  if (source.__MARKTEXT_RUNTIME__) return 'shadow'
-  return 'disabled'
-}
+export const defaultMuyaRuntimeMode = () => MUYA_RUNTIME_FLAGS.disabled
 
 export const readMuyaRuntimeMode = (source = globalThis) => {
   const raw = source.__ELEPHANT_MUYA_RUNTIME_MODE__ || defaultMuyaRuntimeMode(source)

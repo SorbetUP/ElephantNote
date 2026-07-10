@@ -36,6 +36,8 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     return transaction
   })
 
+  const query = (operation) => enqueue(operation)
+
   const setMarkdown = (next, group = 'external') => enqueue(async() => {
     const value = String(next || '')
     await engine.reset(value)
@@ -81,11 +83,14 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     domToMarkdown: () => view.domToMarkdown(),
     snapshotSelection: () => view.snapshotSelection(),
     restoreSelection: (snapshot) => view.restoreSelection(snapshot),
-    copy: () => view.copy(),
-    imageToolbar: (cursor) => view.imageToolbar(cursor),
-    footnotePopup: (cursor) => view.footnotePopup(cursor),
+    copy: () => query(() => engine.clipboard()),
+    imageToolbar: (cursor = null) => query(() => engine.imageToolbar(cursor)),
+    footnotePopup: (cursor = null) => query(() => engine.footnotePopup(cursor)),
+    slashCommands: (queryText = '') => query(() => engine.slashCommands(queryText)),
+    previewDescriptor: (blockType, language = null, text = '') => query(
+      () => engine.previewDescriptor(blockType, language, text)
+    ),
     floatingToolbar: view.floatingToolbar,
-    previewBlock: view.previewBlock,
     renderPreviewBlock: view.renderPreviewBlock,
     applyOperation: (operation) => apply(() => engine.applyOperation(operation), 'operation'),
     insertText: (text) => apply(() => engine.insertText(text), 'insert'),

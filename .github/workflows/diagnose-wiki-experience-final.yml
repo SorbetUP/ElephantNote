@@ -1,0 +1,63 @@
+name: Diagnose Wiki experience final
+
+on:
+  pull_request:
+    branches:
+      - feature/wiki-knowledge-continuation
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: github.head_ref == 'assistant/wiki-experience-final'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Apply and persist diagnostics
+        shell: bash
+        run: |
+          set +e
+          git fetch origin feature/wiki-knowledge-continuation
+          git reset --hard origin/feature/wiki-knowledge-continuation
+          git show origin/feature/wiki-knowledge-continuation:.github/scripts/implement_wiki_experience_phase1.py > /tmp/impl.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/impl.py')
+          text = p.read_text()
+          start = text.index("wiki_graph = 'Elephant/backend/knowledge-core/src/wiki_graph_projection.rs'\nreplace_once(\n")
+          marker = "# The exact legacy parser is easier to extend"
+          end = text.index(marker, start)
+          text = text[:start] + "wiki_graph = 'Elephant/backend/knowledge-core/src/wiki_graph_projection.rs'\n" + text[end:]
+          old = '''replace_once(
+              wiki_view,
+              '    await loadLibrary()\\n  } catch (error) {\\n    setEntryError(entry.id, normalizeError(error))',
+              '    await loadLibrary()\\n    await refreshKnowledgeViews(\\'wiki-generated\\')\\n  } catch (error) {\\n    setEntryError(entry.id, normalizeError(error))'
+          )'''
+          new = '''replace_once(
+              wiki_view,
+              "    selectedSuggestionId.value = ''\\n    await loadLibrary()\\n  } catch (error) {\\n    setEntryError(entry.id, normalizeError(error))",
+              "    selectedSuggestionId.value = ''\\n    await loadLibrary()\\n    await refreshKnowledgeViews('wiki-generated')\\n  } catch (error) {\\n    setEntryError(entry.id, normalizeError(error))"
+          )'''
+          if old not in text:
+              raise SystemExit('Could not patch the generate-specific WikiView replacement')
+          p.write_text(text.replace(old, new, 1))
+          PY
+          python3 /tmp/impl.py > /tmp/wiki-final-apply.log 2>&1
+          status=$?
+          {
+            echo "status=$status"
+            cat /tmp/wiki-final-apply.log
+            echo '=== git status ==='
+            git status --short
+          } > .github/wiki-experience-final-apply-error.txt
+          git config user.name "ElephantNote Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/wiki-experience-final-apply-error.txt
+          git commit -m "Record final Wiki experience apply diagnostics"
+          git push --force-with-lease origin HEAD:${{ github.head_ref }}
+          exit "$status"

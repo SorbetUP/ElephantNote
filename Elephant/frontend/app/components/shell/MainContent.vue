@@ -3,8 +3,13 @@
     class="en-main"
     :class="{ 'has-editor-open': hasOpenNote }"
   >
+    <addon-workspace-host
+      v-if="!hasOpenNote && activeAddonViewId"
+      :view-id="activeAddonViewId"
+      @close="emit('close-addon-view')"
+    />
     <section
-      v-if="!hasOpenNote && store.activeWorkspaceView === 'notes'"
+      v-else-if="!hasOpenNote && store.activeWorkspaceView === 'notes'"
       class="en-library"
     >
       <library-toolbar />
@@ -17,7 +22,7 @@
     <models-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'models'" />
     <sigma-canvas v-else-if="!hasOpenNote && store.activeWorkspaceView === 'canvas'" />
     <calendar-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'calendar'" />
-    <site-preview-panel v-if="!hasOpenNote && store.activeWorkspaceView === 'notes'" />
+    <site-preview-panel v-if="!hasOpenNote && !activeAddonViewId && store.activeWorkspaceView === 'notes'" />
     <note-editor-host
       v-if="hasOpenNote"
       class="en-main-editor"
@@ -39,9 +44,18 @@ import ModelsView from '../views/ModelsView.vue'
 import SigmaCanvas from '../views/SigmaCanvas.vue'
 import AtomicGraphView from '../views/AtomicGraphView.vue'
 import CalendarView from '../views/CalendarView.vue'
+import AddonWorkspaceHost from '../views/AddonWorkspaceHost.vue'
 
+const props = defineProps({
+  activeAddonViewId: {
+    type: String,
+    default: ''
+  }
+})
+const emit = defineEmits(['close-addon-view'])
 const store = useVaultStore()
 const hasOpenNote = computed(() => !!store.openedNotePath)
+const activeAddonViewId = computed(() => props.activeAddonViewId)
 </script>
 
 <style scoped>

@@ -5,10 +5,7 @@ export default mergeConfig(
   baseConfig,
   defineConfig({
     test: {
-      include: [
-        'tests/app/unit/specs/main/elephantnote/coreUtilities.contract.spec.js',
-        'tests/app/unit/specs/main/elephantnote/testIntegrity.contract.spec.js'
-      ],
+      include: ['tests/app/unit/specs/main/elephantnote/*contract.spec.js'],
       coverage: {
         provider: 'v8',
         reportsDirectory: 'build/coverage-critical',

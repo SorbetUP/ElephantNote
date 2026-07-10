@@ -6,6 +6,7 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const readRuntime = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeNativeRuntime.js')
 const readLifecycle = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeNativeLifecycle.js')
+const readSettings = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeSettings.js')
 const readRenderer = () => read('Elephant/frontend/src/muya/lib/parser/render/renderBlock/renderContainerBlock.js')
 const readRendererHelper = () => read('Elephant/frontend/src/muya/lib/parser/render/renderBlock/renderExecutableCodeRuntime.js')
 const readStyles = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeNativeRuntime.css')
@@ -13,7 +14,7 @@ const readBackend = () => read('Elephant/backend/tauri/src/code_execution_v2.rs'
 const readTauriLib = () => read('Elephant/backend/tauri/src/lib_min.rs')
 const readMain = () => read('Elephant/frontend/src/renderer/src/main.js')
 
- describe('native executable fenced code blocks', () => {
+describe('native executable fenced code blocks', () => {
   it('registers real Rust commands instead of a renderer-only result', () => {
     const backend = readBackend()
     const tauriLib = readTauriLib()
@@ -59,12 +60,12 @@ const readMain = () => read('Elephant/frontend/src/renderer/src/main.js')
     expect(renderer).toContain("functionType === 'fencecode'")
     expect(renderer).toContain('renderExecutableRunButton(block)')
     expect(renderer).toContain('renderExecutableOutput(block)')
-    expect(helper).toContain("button.en-code-native-run")
-    expect(helper).toContain("elephant-code-output.en-code-native-output")
+    expect(helper).toContain('button.en-code-native-run')
+    expect(helper).toContain('elephant-code-output.en-code-native-output')
     expect(helper).toContain("contenteditable: 'false'")
   })
 
-  it('has no DOM scanner, MutationObserver, portal or floating coordinates', () => {
+  it('has no editor scanner, portal or floating coordinate layout', () => {
     const runtime = readRuntime()
     const styles = readStyles()
 
@@ -105,7 +106,18 @@ const readMain = () => read('Elephant/frontend/src/renderer/src/main.js')
     expect(backend).toContain('signal=SIGINT')
   })
 
-  it('keeps the public bootstrap wired only to the active native runtime', () => {
+  it('keeps Settings isolated from the Muya editor runtime', () => {
+    const settings = readSettings()
+
+    expect(settings).toContain("const SETTINGS_HOST = '.en-settings-content'")
+    expect(settings).toContain('target.elephantnote.programs.list()')
+    expect(settings).toContain('target.elephantnote.programs.set')
+    expect(settings).toContain('MutationObserver')
+    expect(settings).not.toContain('ag-fence-code')
+    expect(settings).not.toContain('querySelectorAll(\'pre\')')
+  })
+
+  it('keeps the public bootstrap wired only to active, separated modules', () => {
     const entry = read('Elephant/frontend/src/renderer/src/platform/executableCodeBlocks.js')
     const main = readMain()
 
@@ -113,6 +125,7 @@ const readMain = () => read('Elephant/frontend/src/renderer/src/main.js')
     expect(main).toContain('installExecutableCodeBlocks()')
     expect(entry).toContain("from './executableCodeNativeRuntime'")
     expect(entry).toContain("from './executableCodeNativeLifecycle'")
+    expect(entry).toContain("from './executableCodeSettings'")
     expect(entry).not.toContain('executableCodeBlocksV6')
   })
 })

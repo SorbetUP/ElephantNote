@@ -2,6 +2,7 @@ const getInvoke = (target = globalThis) => target?.__TAURI__?.core?.invoke
 
 const MOBILE_VAULT_CHOICE_KEY = 'elephantnote:mobile-vault-choice-v4'
 const MOBILE_ADVANCED_VAULT_KEY = 'elephantnote:mobile-advanced-vault-v1'
+const MOBILE_ADVANCED_DIRTY_KEY = 'elephantnote:mobile-advanced-vault-dirty-v1'
 let syncTimer = null
 let lifecycleInstalled = false
 
@@ -36,10 +37,12 @@ const writeFlag = (target, key, enabled) => {
 
 const hasExplicitVaultChoice = (target) => readFlag(target, MOBILE_VAULT_CHOICE_KEY)
 const usesAdvancedVault = (target) => readFlag(target, MOBILE_ADVANCED_VAULT_KEY)
+const hasPendingAdvancedWrites = (target) => readFlag(target, MOBILE_ADVANCED_DIRTY_KEY)
 
 const rememberExplicitVaultChoice = (target, advanced = false) => {
   writeFlag(target, MOBILE_VAULT_CHOICE_KEY, true)
   writeFlag(target, MOBILE_ADVANCED_VAULT_KEY, advanced)
+  writeFlag(target, MOBILE_ADVANCED_DIRTY_KEY, false)
 }
 
 const isAndroid = async (target) => {
@@ -71,16 +74,25 @@ const hideLegacyAutomaticVaultUntilChoice = async (payload, target) => {
   }
 }
 
+const syncAdvancedVault = async (target) => {
+  if (!usesAdvancedVault(target) || !(await isAndroid(target))) return null
+  const result = await invoke(target, 'tauri_android_vault_sync')
+  writeFlag(target, MOBILE_ADVANCED_DIRTY_KEY, false)
+  return result
+}
+
 const restoreAdvancedVault = async (target) => {
   if (!usesAdvancedVault(target) || !(await isAndroid(target))) return null
+  if (hasPendingAdvancedWrites(target)) await syncAdvancedVault(target)
   return invoke(target, 'tauri_android_vault_restore')
 }
 
 const scheduleAdvancedSync = (target, immediate = false) => {
   if (!usesAdvancedVault(target)) return
+  writeFlag(target, MOBILE_ADVANCED_DIRTY_KEY, true)
   target.clearTimeout?.(syncTimer)
   syncTimer = target.setTimeout?.(() => {
-    invoke(target, 'tauri_android_vault_sync').catch((error) => {
+    syncAdvancedVault(target).catch((error) => {
       console.warn('[mobile-vault] unable to synchronize Android document tree', error)
     })
   }, immediate ? 0 : 350)
@@ -89,10 +101,11 @@ const scheduleAdvancedSync = (target, immediate = false) => {
 const installLifecycleSync = (target) => {
   if (lifecycleInstalled || !target?.document) return
   lifecycleInstalled = true
+  target.addEventListener?.('elephantnote:vault-mutated', () => scheduleAdvancedSync(target))
   target.addEventListener?.('pagehide', () => scheduleAdvancedSync(target, true))
   target.document.addEventListener('visibilitychange', async () => {
     if (target.document.visibilityState === 'hidden') {
-      scheduleAdvancedSync(target, true)
+      if (hasPendingAdvancedWrites(target)) scheduleAdvancedSync(target, true)
       return
     }
     if (!usesAdvancedVault(target)) return
@@ -160,7 +173,6 @@ export const patchMobileVaultBridge = (bridge, target = globalThis) => {
         }
       }
       rememberExplicitVaultChoice(target, true)
-      scheduleAdvancedSync(target)
       return result
     } catch (error) {
       if (/cancel/i.test(String(error?.message || error))) return { canceled: true }

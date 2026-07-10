@@ -4,6 +4,8 @@
       ref="rootRef"
       class="muya-runtime-editor"
       data-testid="muya-runtime-editor"
+      @compositionstart="handleCompositionStart"
+      @compositionend="handleCompositionEnd"
       @input="handleInput"
       @keydown="handleKeydown"
       @paste="handlePaste"
@@ -34,6 +36,7 @@ const mode = toRef(props, 'mode')
 const runtime = useMuyaRuntimeEditor({ markdown, mode })
 const { rootRef, runtimeRef, ready } = runtime
 let inputSyncTimer = null
+let composing = false
 
 const syncAndEmit = async() => {
   const next = await runtime.syncFromRuntime()
@@ -42,6 +45,7 @@ const syncAndEmit = async() => {
 }
 
 const handleInput = () => {
+  if (composing) return
   if (inputSyncTimer) clearTimeout(inputSyncTimer)
   inputSyncTimer = setTimeout(() => {
     inputSyncTimer = null
@@ -49,13 +53,37 @@ const handleInput = () => {
   }, 0)
 }
 
+const handleCompositionStart = async() => {
+  composing = true
+  if (inputSyncTimer) {
+    clearTimeout(inputSyncTimer)
+    inputSyncTimer = null
+  }
+  await runtimeRef.value?.startComposition?.()
+}
+
+const handleCompositionEnd = async(event) => {
+  try {
+    if (runtimeRef.value?.commitComposition) {
+      await runtimeRef.value.commitComposition(event.data || '')
+    }
+  } catch (error) {
+    await runtimeRef.value?.cancelComposition?.()
+    throw error
+  } finally {
+    composing = false
+  }
+  await syncAndEmit()
+}
+
 const handleKeydown = async(event) => {
+  if (composing || event.isComposing) return
   const handled = await handleMuyaKeydown(runtimeRef.value, event)
   if (handled) await syncAndEmit()
 }
 
 const handlePaste = async(event) => {
-  if (!runtimeRef.value) return
+  if (!runtimeRef.value || composing) return
   const html = event.clipboardData?.getData('text/html') || ''
   const text = event.clipboardData?.getData('text/plain') || ''
   if (!html && !text) return

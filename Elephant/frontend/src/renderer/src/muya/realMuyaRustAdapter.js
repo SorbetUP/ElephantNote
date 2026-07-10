@@ -28,6 +28,7 @@ const RUST_BLOCK_KINDS = Object.freeze({
 
 const STRUCTURED_LINE = /^\s*(?:>|[-+*]\s|[-+*]\s+\[[ xX]\]\s|\d+[.)]\s)/
 const HEADING_LINE = /^\s{0,3}#{1,6}\s/
+const INLINE_BLOCK_TYPES = /paragraphContent|cellContent|atxLine/
 
 const historyIdentity = (history) => {
   if (!history || typeof history !== 'object') return ''
@@ -136,6 +137,15 @@ export default class RealMuyaWithRustMirror extends Muya {
     }
   }
 
+  __rustCanFormat (type) {
+    const { start, end } = this.contentState.cursor || {}
+    if (!start || !end || start.key !== end.key) return false
+    const block = this.contentState.getBlock(start.key)
+    if (block?.type !== 'span' || !INLINE_BLOCK_TYPES.test(block.functionType || '')) return false
+    const { neighbors = [] } = this.contentState.selectionFormats({ start, end })
+    return !neighbors.some((token) => token.type === type || token.tag === type)
+  }
+
   undo () {
     return this.__applyElephantRustCommand(
       'undo',
@@ -154,7 +164,7 @@ export default class RealMuyaWithRustMirror extends Muya {
 
   format (type) {
     const marker = RUST_INLINE_MARKERS[type]
-    if (!marker) return super.format(type)
+    if (!marker || !this.__rustCanFormat(type)) return super.format(type)
     return this.__applyElephantRustCommand(
       `format-${type}`,
       (engine) => engine.toggleInline(marker),

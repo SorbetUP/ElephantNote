@@ -248,7 +248,14 @@ class IsolatedAddonSession {
     const declaredViews = Array.isArray(this.record.manifest.contributes?.views) ? this.record.manifest.contributes.views : []
     const id = safeString(view.id)
     const declared = declaredViews.some((entry) => entry?.id === id && entry?.kind === view.kind)
-    if (!declared || !id.startsWith(`${this.addonId}.`)) return
+    if (!declared || !id.startsWith(`${this.addonId}.`)) {
+      this.logger?.warn?.('external addon attempted to register an undeclared view', {
+        addonId: this.addonId,
+        viewId: id,
+        kind: view.kind
+      })
+      return
+    }
     this.context.addView({
       id,
       title: safeString(view.title, id),
@@ -363,9 +370,13 @@ export class ExternalAddonController {
     const safeMode = await getTrustedSafeMode()
     for (const record of records) this.register(record)
     for (const record of records) {
-      if (!record.enabled || !communityEnabled) continue
-      if (safeMode && isTrustedExternalManifest({ ...record.manifest, source: 'external' })) {
-        this.logger?.warn?.('trusted addon skipped by safe mode', { id: record.manifest.id })
+      if (!record.enabled) continue
+      const trusted = isTrustedExternalManifest({ ...record.manifest, source: 'external' })
+      if (!communityEnabled || (safeMode && trusted)) {
+        await externalAddonApi.setEnabled(record.manifest.id, false).catch(() => {})
+        if (safeMode && trusted) {
+          this.logger?.warn?.('trusted addon disabled by safe mode', { id: record.manifest.id })
+        }
         continue
       }
       try { await this.manager.enable(record.manifest.id) }

@@ -73,12 +73,12 @@ const normalizeRuntime = (value, manifest = {}, contributes = {}) => {
   const type = normalizeString(runtime.type)
   const entry = normalizeString(runtime.entry)
   if (!type && !entry) return Object.freeze({})
-  return Object.freeze({
-    type,
-    entry,
-    mode: normalizeAccessLevel(manifest, runtime, contributes),
-    desktopOnly: runtime.desktopOnly === true
-  })
+
+  const normalized = { type, entry }
+  const accessLevel = normalizeAccessLevel(manifest, runtime, contributes)
+  if (accessLevel !== ADDON_ACCESS_LEVEL.isolated) normalized.mode = accessLevel
+  if (runtime.desktopOnly === true) normalized.desktopOnly = true
+  return Object.freeze(normalized)
 }
 
 export const getAddonAccessLevel = (manifest = {}) => {

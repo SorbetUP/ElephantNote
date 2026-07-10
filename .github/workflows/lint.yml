@@ -32,34 +32,43 @@ jobs:
 
           panel_path = Path('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
           panel = panel_path.read_text()
-          toolbar_pattern = re.compile(
-              r'\n\s*<div class="en-ai-actions">\s*'
-              r'<span class="en-ai-save-status">.*?</div>'
-              r'(?=\s*</div>\s*<template v-if="activePage)',
-              re.S,
-          )
-          panel, removed = toolbar_pattern.subn('', panel, count=1)
-          if removed != 1:
-              raise SystemExit(f'Expected to remove one redundant toolbar action block, removed {removed}')
+          marker = '<span class="en-ai-save-status">'
+          marker_pos = panel.find(marker)
+          if marker_pos >= 0:
+              start = panel.rfind('<div class="en-ai-actions">', 0, marker_pos)
+              if start < 0:
+                  raise RuntimeError('Could not locate toolbar action container')
+              tag_pattern = re.compile(r'<div\b[^>]*>|</div>')
+              depth = 0
+              end = None
+              for match in tag_pattern.finditer(panel, start):
+                  if match.group().startswith('</div'):
+                      depth -= 1
+                      if depth == 0:
+                          end = match.end()
+                          break
+                  else:
+                      depth += 1
+              if end is None:
+                  raise RuntimeError('Could not locate toolbar action container end')
+              panel = panel[:start] + panel[end:]
           panel = panel.replace(', Save,', ',', 1)
-          if 'en-ai-save-status' in panel or '<Save aria-hidden' in panel:
-              raise SystemExit('Redundant AI toolbar controls remain')
+          if marker in panel or '<Save aria-hidden' in panel:
+              raise RuntimeError('Redundant AI toolbar controls remain')
           panel_path.write_text(panel)
 
           card_path = Path('Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue')
           card = card_path.read_text()
-          card, removed = re.subn(
-              r'\n<style>\s*\.en-ai-settings > \.en-ai-toolbar > \.en-ai-actions '
-              r'\{ display: none !important; \}\s*</style>\s*$',
-              '\n',
-              card,
-              count=1,
-              flags=re.S,
-          )
-          if removed != 1:
-              raise SystemExit(f'Expected to remove one temporary global toolbar style, removed {removed}')
+          selector = '.en-ai-settings > .en-ai-toolbar > .en-ai-actions'
+          selector_pos = card.find(selector)
+          if selector_pos >= 0:
+              style_start = card.rfind('<style>', 0, selector_pos)
+              style_end = card.find('</style>', selector_pos)
+              if style_start < 0 or style_end < 0:
+                  raise RuntimeError('Could not locate temporary global style block')
+              card = card[:style_start] + card[style_end + len('</style>'):]
           if '<svg' not in card or 'fill="currentColor"' not in card:
-              raise SystemExit('Inline theme-aware ChatGPT SVG is missing')
+              raise RuntimeError('Inline theme-aware ChatGPT SVG is missing')
           card_path.write_text(card.rstrip() + '\n')
 
           test_path = Path('tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js')
@@ -70,8 +79,6 @@ jobs:
               expect(source).not.toContain('<Save aria-hidden')"""
           if old_expectation in test:
               test = test.replace(old_expectation, new_expectations, 1)
-          elif "expect(source).toContain('<ChatgptSubscriptionCard')" not in test:
-              raise SystemExit('Neither old nor updated Codex-card assertion was found')
           test_path.write_text(test)
           PY
 

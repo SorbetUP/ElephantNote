@@ -126,13 +126,13 @@ describe('ElephantNote mobile Android release', () => {
     expect(nodeShim).toContain('export const createHash')
   })
 
-  it('requests recursive scoped folder access instead of broad storage permission', () => {
+  it('uses the Android system folder picker instead of broad storage permission', () => {
     const bridge = read('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
     const buildScript = read('build/scripts/build_dev_apk.sh')
 
+    expect(bridge).toContain('openVaultDirectory')
     expect(bridge).toContain('directory: true')
-    expect(bridge).toContain('recursive: true')
-    expect(bridge).toContain("pickerMode: 'document'")
+    expect(bridge).toContain('tauri_vaults_select_path')
     expect(buildScript).not.toContain('READ_EXTERNAL_STORAGE')
     expect(buildScript).not.toContain('WRITE_EXTERNAL_STORAGE')
     expect(buildScript).not.toContain('MANAGE_EXTERNAL_STORAGE')

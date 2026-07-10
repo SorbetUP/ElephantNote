@@ -6,18 +6,39 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 describe('ElephantNote mobile Android release', () => {
-  it('keeps the complete touch-first mobile shell from the validated mobile branch', () => {
+  it('keeps the complete touch-first mobile shell and a real animated drawer', () => {
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
     const shellStyles = read('Elephant/frontend/app/styles/app-shell.css')
     const emptyVault = read('Elephant/frontend/app/components/shell/EmptyVaultPicker.vue')
     const mobileVaultBridge = read('Elephant/frontend/src/renderer/src/platform/mobileVaultBridge.js')
 
-    expect(shell).toContain('mobile')
+    expect(shell).toContain("'en-mobile-shell': isMobileShell")
+    expect(shell).toContain('v-if="sidebarVisible || isMobileShell"')
+    expect(shell).toContain(':class="{ visible: sidebarVisible }"')
+    expect(shell).toContain('translate3d(-104%, 0, 0)')
+    expect(shell).toContain('cubic-bezier(0.22, 1, 0.36, 1)')
+    expect(shell).toContain("'elephantnote:vault-files-changed'")
     expect(shellStyles).toContain('@media')
     expect(shellStyles).toContain('safe-area-inset')
-    expect(emptyVault).toContain('create')
-    expect(mobileVaultBridge).toContain('createLocalVault')
-    expect(mobileVaultBridge).toContain('/vaults/Personal')
+    expect(emptyVault).toContain('Choose vault folder')
+    expect(emptyVault).toContain('Use private app folder instead')
+    expect(mobileVaultBridge).toContain('MOBILE_VAULT_CHOICE_KEY')
+    expect(mobileVaultBridge).toContain('return { canceled: true }')
+    expect(mobileVaultBridge).not.toContain('using phone vault')
+  })
+
+  it('normalizes direct Tauri create responses for notes and folders', () => {
+    const clients = read('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
+    const sidebar = read('Elephant/frontend/app/components/navigation/SidebarNav.vue')
+
+    expect(clients).toContain('normalizeCreatedNote')
+    expect(clients).toContain('normalizeCreatedFolder')
+    expect(clients).toContain("call(API.DIRECTORY_LIST")
+    expect(clients).toContain("[parentPath, 'New Folder']")
+    expect(sidebar).toContain('New note')
+    expect(sidebar).toContain('New folder')
+    expect(sidebar).toContain('store.createNote()')
+    expect(sidebar).toContain('store.createFolder()')
   })
 
   it('loads explicit phone interaction styles and makes Sync pairing full-screen', () => {
@@ -33,6 +54,16 @@ describe('ElephantNote mobile Android release', () => {
     expect(mobileStyles).toContain('env(safe-area-inset-bottom)')
     expect(mobileStyles).toContain('min-height: 44px')
     expect(mobileStyles).toContain('.en-qr-preview')
+  })
+
+  it('treats only a clean Iroh code-zero shutdown as successful completion', () => {
+    const syncClient = read('Elephant/frontend/app/services/irohSyncClient.js')
+
+    expect(syncClient).toContain('cleanPeerCloseMessage')
+    expect(syncClient).toContain("message.includes('closed by peer: 0')")
+    expect(syncClient).toContain('transportClosedCleanly: true')
+    expect(syncClient).toContain('IROH_SYNC_FILES_CHANGED_EVENT')
+    expect(syncClient).toContain('publishVaultFilesChanged(status)')
   })
 
   it('builds an optimized signed ARM64 release APK by default and rejects oversized output', () => {
@@ -59,7 +90,7 @@ describe('ElephantNote mobile Android release', () => {
     expect(cargo).not.toContain('panic = "abort"')
   })
 
-  it('installs the tracked minimal activity and rejects unresolved Node browser externals', () => {
+  it('installs camera permission, immersive system bars and tracked Android activity', () => {
     const script = read('build/scripts/build_dev_apk.sh')
     const activity = read('build/android/MainActivity.kt')
     const vite = read('vite.tauri.config.js')
@@ -67,9 +98,13 @@ describe('ElephantNote mobile Android release', () => {
       'Elephant/frontend/src/renderer/src/platform/mobileNodeBuiltinsShim.js'
     )
 
-    expect(activity.trim()).toBe(
-      'package com.elephantnote.app\n\nclass MainActivity : TauriActivity()'
-    )
+    expect(activity).toContain('requestCameraPermissionIfNeeded()')
+    expect(activity).toContain('Manifest.permission.CAMERA')
+    expect(activity).toContain('WindowInsets.Type.systemBars()')
+    expect(activity).toContain('BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE')
+    expect(activity).toContain('onWindowFocusChanged')
+    expect(script).toContain('android.permission.CAMERA')
+    expect(script).toContain('android.hardware.camera.any')
     expect(script).toContain('cp "$MAIN_ACTIVITY_TEMPLATE" "$MAIN_ACTIVITY"')
     expect(script).toContain("'__vite-browser-external'")
     expect(vite).toContain("process.env.ELEPHANTNOTE_ANDROID_BUILD === '1'")

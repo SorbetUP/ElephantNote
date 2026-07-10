@@ -334,11 +334,17 @@ export const useAddonsStore = defineStore('addons', {
     async runAction(id, payload = undefined) {
       if (!this.manager) throw new Error('Addon manager is not installed')
       this.operationInProgress = true
+      this.manager.logger?.info?.('[addons] action:start', { id })
       try {
         const result = await this.manager.runAction(id, payload)
         await refreshVaultAfterAddonAction(result, this.manager.logger)
         this.lastError = null
+        this.manager.logger?.info?.('[addons] action:done', { id, result })
         return result
+      } catch (error) {
+        this.lastError = error?.message || String(error)
+        this.manager.logger?.error?.('[addons] action:failed', { id, error: this.lastError })
+        throw error
       } finally {
         this.operationInProgress = false
         this.refresh()

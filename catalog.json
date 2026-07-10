@@ -1,8 +1,74 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-10T05:00:00Z",
+  "updatedAt": "2026-07-10T09:30:00Z",
   "addons": [
+    {
+      "id": "com.elephantnote.template-studio",
+      "slug": "template-studio",
+      "name": "Template Studio",
+      "version": "1.0.0",
+      "description": "Creates notes from reusable Markdown templates with deterministic date and variable expansion.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/template-studio/manifest.json",
+      "entryPath": "addons/template-studio/main.js",
+      "readmePath": "addons/template-studio/README.md"
+    },
+    {
+      "id": "com.elephantnote.weekly-review",
+      "slug": "weekly-review",
+      "name": "Weekly Review",
+      "version": "1.0.0",
+      "description": "Summarizes the last seven daily notes into a weekly review with tasks, highlights and source links.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/weekly-review/manifest.json",
+      "entryPath": "addons/weekly-review/main.js",
+      "readmePath": "addons/weekly-review/README.md"
+    },
+    {
+      "id": "com.elephantnote.writing-statistics",
+      "slug": "writing-statistics",
+      "name": "Writing Statistics",
+      "version": "1.0.0",
+      "description": "Measures words, characters, reading time and recent writing activity across the visible vault.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/writing-statistics/manifest.json",
+      "entryPath": "addons/writing-statistics/main.js",
+      "readmePath": "addons/writing-statistics/README.md"
+    },
+    {
+      "id": "com.elephantnote.vault-changelog",
+      "slug": "vault-changelog",
+      "name": "Vault Changelog",
+      "version": "1.0.0",
+      "description": "Tracks created, modified and deleted Markdown notes between manual snapshots.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/vault-changelog/manifest.json",
+      "entryPath": "addons/vault-changelog/main.js",
+      "readmePath": "addons/vault-changelog/README.md"
+    },
+    {
+      "id": "com.elephantnote.tag-index",
+      "slug": "tag-index",
+      "name": "Tag Index",
+      "version": "1.0.0",
+      "description": "Indexes frontmatter and inline tags, detects case collisions and writes a navigable tag report.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/tag-index/manifest.json",
+      "entryPath": "addons/tag-index/main.js",
+      "readmePath": "addons/tag-index/README.md"
+    },
+    {
+      "id": "com.elephantnote.markdown-linter",
+      "slug": "markdown-linter",
+      "name": "Markdown Linter",
+      "version": "1.0.0",
+      "description": "Audits Markdown style issues and can explicitly apply a conservative set of safe formatting fixes.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/markdown-linter/manifest.json",
+      "entryPath": "addons/markdown-linter/main.js",
+      "readmePath": "addons/markdown-linter/README.md"
+    },
     {
       "id": "com.elephantnote.task-dashboard",
       "slug": "task-dashboard",

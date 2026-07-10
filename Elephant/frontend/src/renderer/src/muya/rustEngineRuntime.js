@@ -1,9 +1,15 @@
 const requireInvoke = (target = globalThis) => {
-  const invoke = target?.tauri?.ipcRenderer?.invoke || target?.__TAURI__?.core?.invoke
-  if (typeof invoke !== 'function') {
-    throw new Error('Muya Rust engine requires the Tauri invoke bridge.')
+  const ipcRenderer = target?.tauri?.ipcRenderer
+  if (typeof ipcRenderer?.invoke === 'function') {
+    return ipcRenderer.invoke.bind(ipcRenderer)
   }
-  return invoke
+
+  const core = target?.__TAURI__?.core
+  if (typeof core?.invoke === 'function') {
+    return core.invoke.bind(core)
+  }
+
+  throw new Error('Muya Rust engine requires the Tauri invoke bridge.')
 }
 
 const ensureState = (state) => {
@@ -11,6 +17,13 @@ const ensureState = (state) => {
     throw new Error('Muya Rust engine returned an invalid editor state.')
   }
   return state
+}
+
+const ensureCommand = (command) => {
+  if (!command || typeof command !== 'object' || typeof command.type !== 'string') {
+    throw new Error('Muya Rust engine requires a typed editor command.')
+  }
+  return command
 }
 
 export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {}) => {
@@ -26,14 +39,20 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
 
   const apply = async(command) => {
     if (!state) throw new Error('Muya Rust engine must be initialized before applying commands.')
-    const transaction = await call('tauri_muya_engine_apply', { state, command })
+    const transaction = await call('tauri_muya_engine_apply', {
+      state,
+      command: ensureCommand(command)
+    })
     state = ensureState(transaction?.state)
     return transaction
   }
 
   const applyBatch = async(commands = []) => {
     if (!state) throw new Error('Muya Rust engine must be initialized before applying commands.')
-    const transaction = await call('tauri_muya_engine_apply_batch', { state, commands })
+    const transaction = await call('tauri_muya_engine_apply_batch', {
+      state,
+      commands: commands.map(ensureCommand)
+    })
     state = ensureState(transaction?.state)
     return transaction
   }

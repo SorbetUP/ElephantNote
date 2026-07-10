@@ -70,7 +70,8 @@ const requiredDirectHooks = [
   'selectAll',
   'selectAllContent',
   'createTable',
-  'replaceImage'
+  'replaceImage',
+  'setEmoji'
 ]
 
 describe('complete Rust ownership of Muya document mutations', () => {

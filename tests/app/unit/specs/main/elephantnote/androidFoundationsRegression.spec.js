@@ -26,6 +26,16 @@ describe('Android storage, camera and drawer foundations', () => {
     expect(bridge).not.toContain("startsWith('content://')")
   })
 
+  test('all vault mutations participate in crash-resilient SAF synchronization', () => {
+    const client = source('Elephant/frontend/app/services/elephantnoteClient.js')
+    const bridge = source('Elephant/frontend/src/renderer/src/platform/mobileVaultBridge.js')
+    const fileUtils = source('Elephant/frontend/src/renderer/src/platform/tauriFileUtilsPathGuards.js')
+    expect(client).toContain("new CustomEvent('elephantnote:vault-mutated'")
+    expect(bridge).toContain('MOBILE_ADVANCED_DIRTY_KEY')
+    expect(bridge).toContain('hasPendingAdvancedWrites')
+    expect(fileUtils).toContain('ANDROID_ADVANCED_DIRTY_KEY')
+  })
+
   test('QR image selection never requests the Samsung WebView camera picker', () => {
     const scanner = source('Elephant/frontend/app/components/settings/SyncQrScanner.vue')
     expect(scanner).not.toContain('capture="environment"')

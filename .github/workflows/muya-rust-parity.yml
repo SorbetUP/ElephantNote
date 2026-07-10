@@ -9,6 +9,8 @@ on:
       - 'Elephant/backend/tauri/src/markdown/**'
       - 'Elephant/backend/tauri/src/lib_min.rs'
       - 'Elephant/frontend/src/renderer/src/muya/**'
+      - 'Elephant/frontend/app/components/editor/RustNoteEditorHost.vue'
+      - 'Elephant/frontend/app/components/shell/MainContent.vue'
       - 'Elephant/shared/muyaParityCases.json'
       - 'Elephant/shared/muyaJsonStateCases.json'
       - 'tests/app/unit/muya*.spec.js'
@@ -19,6 +21,8 @@ on:
       - 'Elephant/backend/tauri/src/markdown/**'
       - 'Elephant/backend/tauri/src/lib_min.rs'
       - 'Elephant/frontend/src/renderer/src/muya/**'
+      - 'Elephant/frontend/app/components/editor/RustNoteEditorHost.vue'
+      - 'Elephant/frontend/app/components/shell/MainContent.vue'
       - 'Elephant/shared/muyaParityCases.json'
       - 'Elephant/shared/muyaJsonStateCases.json'
       - 'tests/app/unit/muya*.spec.js'
@@ -95,6 +99,9 @@ jobs:
             tests/app/unit/muyaRustEngineRuntime.spec.js \
             tests/app/unit/muyaRustGroupedHistoryClient.spec.js \
             tests/app/unit/muyaRustBackedRuntime.spec.js \
+            tests/app/unit/muyaRustEditorActivation.spec.js \
+            tests/app/unit/muyaRuntimeFlags.spec.js \
+            tests/app/unit/muyaRuntimeVueIntegration.spec.js \
             tests/app/unit/muyaSharedParityMatrix.spec.js \
             tests/app/unit/muyaJsonStateSharedParity.spec.js \
             tests/app/unit/muyaMarkdownSelectionRuntime.spec.js \

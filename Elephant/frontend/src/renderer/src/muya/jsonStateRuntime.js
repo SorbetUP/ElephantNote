@@ -1,4 +1,4 @@
-import { muyaStateToHtml, parseInlineFallback, renderMuyaStateIntoDom } from './muyaDomRendererRuntime.js'
+import { muyaStateToHtml, renderMuyaStateIntoDom } from './muyaDomRendererRuntime.js'
 
 export const markdownToJsonState = (markdown = '') => {
   const blocks = []
@@ -42,7 +42,7 @@ export const markdownToJsonState = (markdown = '') => {
     i += 1
   }
   if (!blocks.length) blocks.push(block('paragraph', { text: '' }))
-  return { version: 2, type: 'muya-json-state', blocks }
+  return { version: 1, type: 'muya-json-state', blocks }
 }
 
 export const jsonStateToMarkdown = (state) => (state?.blocks || []).map((item) => {
@@ -64,11 +64,8 @@ export const renderJsonStateIntoDom = (root, state, doc = globalThis.document) =
   return renderMuyaStateIntoDom(root, state)
 }
 
-const block = (type, values = {}) => ({
-  type,
-  ...values,
-  children: parseInlineFallback(values.text || '')
-})
+const block = (type, values = {}) => ({ type, ...values, children: inlineState(values.text || '') })
+const inlineState = (text) => [{ type: 'text', text }]
 
 const parseListLine = (line) => {
   const depth = Math.floor((line.match(/^\s*/)?.[0].length || 0) / 2)

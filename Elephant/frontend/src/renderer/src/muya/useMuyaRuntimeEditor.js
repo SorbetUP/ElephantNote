@@ -1,6 +1,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
 import { createMuyaFullEditorRuntime } from './fullEditorRuntime.js'
+import { createRustBackedMuyaFullEditorRuntime } from './rustBackedFullEditorRuntime.js'
+import { isRustMuyaEngineAvailable } from './rustEngineRuntime.js'
 import { isMuyaRuntimeActive, isMuyaRuntimeEnabled, readMuyaRuntimeMode } from './runtimeFlags.js'
 
 export const useMuyaRuntimeEditor = ({ markdown = ref(''), mode = ref(readMuyaRuntimeMode()), documentRef = null } = {}) => {
@@ -13,30 +15,39 @@ export const useMuyaRuntimeEditor = ({ markdown = ref(''), mode = ref(readMuyaRu
   const html = computed(() => runtimeRef.value?.html || '')
   const state = computed(() => runtimeRef.value?.state || null)
 
-  const mount = () => {
+  const mount = async() => {
     if (!rootRef.value || !enabled.value) return null
-    runtimeRef.value = createMuyaFullEditorRuntime(rootRef.value, markdown.value || '', { document: documentRef?.value || globalThis.document })
-    ready.value = true
+    const options = { document: documentRef?.value || globalThis.document }
+    runtimeRef.value = isRustMuyaEngineAvailable(globalThis)
+      ? createRustBackedMuyaFullEditorRuntime(rootRef.value, markdown.value || '', options)
+      : createMuyaFullEditorRuntime(rootRef.value, markdown.value || '', options)
     mounted.value = true
+    if (runtimeRef.value?.readyPromise) await runtimeRef.value.readyPromise
+    ready.value = true
     return runtimeRef.value
   }
 
   const destroy = () => {
+    runtimeRef.value?.destroy?.()
     runtimeRef.value?.live?.cancel?.()
     runtimeRef.value = null
     ready.value = false
     mounted.value = false
   }
 
-  const setMarkdown = (next, group = 'external') => {
+  const setMarkdown = async(next, group = 'external') => {
     markdown.value = next
-    if (runtimeRef.value) runtimeRef.value.setMarkdown(next, group)
+    if (runtimeRef.value) await runtimeRef.value.setMarkdown(next, group)
   }
 
-  const syncFromRuntime = () => {
+  const syncFromRuntime = async() => {
     if (!runtimeRef.value) return markdown.value
-    runtimeRef.value.renderLiveNow?.('input')
-    markdown.value = runtimeRef.value.markdown
+    if (runtimeRef.value.syncDomToRust) {
+      markdown.value = await runtimeRef.value.syncDomToRust('input')
+    } else {
+      runtimeRef.value.renderLiveNow?.('input')
+      markdown.value = runtimeRef.value.markdown
+    }
     return markdown.value
   }
 
@@ -44,16 +55,16 @@ export const useMuyaRuntimeEditor = ({ markdown = ref(''), mode = ref(readMuyaRu
     runtimeRef.value?.scheduleLiveRender?.()
   }
 
-  onMounted(mount)
+  onMounted(() => { void mount() })
   onBeforeUnmount(destroy)
 
   watch(markdown, (next) => {
     if (!runtimeRef.value || runtimeRef.value.markdown === next) return
-    runtimeRef.value.setMarkdown(next || '', 'external')
+    void runtimeRef.value.setMarkdown(next || '', 'external')
   })
 
   watch(mode, () => {
-    if (enabled.value && rootRef.value && !runtimeRef.value) mount()
+    if (enabled.value && rootRef.value && !runtimeRef.value) void mount()
     if (!enabled.value && runtimeRef.value) destroy()
   })
 

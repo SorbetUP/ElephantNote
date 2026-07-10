@@ -51,11 +51,12 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
 
   const capabilities = async() => call('tauri_muya_engine_capabilities')
 
-  const applyTransaction = async(commandName, command) => {
+  const applyTransaction = async(commandName, command, extraPayload = {}) => {
     if (!state) throw new Error('Muya Rust engine must be initialized before applying commands.')
     const transaction = await call(commandName, {
       state,
-      command: ensureCommand(command)
+      command: ensureCommand(command),
+      ...extraPayload
     })
     state = ensureState(transaction?.state)
     return transaction
@@ -72,6 +73,11 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
   }
 
   const apply = async(command) => applyTransaction('tauri_muya_engine_apply', command)
+  const applyGrouped = async(command, continueGroup = false) => applyTransaction(
+    'tauri_muya_engine_apply_grouped',
+    command,
+    { continueGroup: Boolean(continueGroup) }
+  )
   const applyParity = async(command) => applyTransaction('tauri_muya_engine_apply_parity', command)
 
   const applyBatch = async(commands = []) => {
@@ -104,6 +110,7 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
     reset,
     capabilities,
     apply,
+    applyGrouped,
     applyParity,
     applyBatch,
     commitComposition,

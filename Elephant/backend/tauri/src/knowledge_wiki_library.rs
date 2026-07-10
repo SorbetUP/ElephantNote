@@ -79,7 +79,11 @@ fn rejected_topics(store: &KnowledgeStore) -> Result<HashSet<String>, String> {
         .map_err(|error| error.to_string())
 }
 
-fn set_candidate_decision(store: &KnowledgeStore, topic: &str, decision: &str) -> Result<(), String> {
+fn set_candidate_decision(
+    store: &KnowledgeStore,
+    topic: &str,
+    decision: &str,
+) -> Result<(), String> {
     let normalized = normalize_topic(topic);
     if normalized.is_empty() {
         return Err("Wiki suggestion topic cannot be empty.".into());
@@ -151,7 +155,10 @@ fn candidate_item(candidate: WikiCandidate) -> WikiLibraryItem {
 }
 
 fn disk_markdown(root: &Path, draft: &WikiDraft) -> (Option<String>, String) {
-    if !matches!(draft.status, WikiDraftStatus::Accepted | WikiDraftStatus::Outdated) {
+    if !matches!(
+        draft.status,
+        WikiDraftStatus::Accepted | WikiDraftStatus::Outdated
+    ) {
         return (None, draft.markdown.clone());
     }
     let relative = format!(".elephantnote/wiki/{}.md", draft.slug);
@@ -307,6 +314,7 @@ pub fn tauri_knowledge_wiki_library_delete(
     connection
         .execute("DELETE FROM wiki_drafts WHERE id=?1", params![draft_id])
         .map_err(|error| error.to_string())?;
+    drop(connection);
     if suppress_future.unwrap_or(true) {
         set_candidate_decision(&store, &draft.topic, "rejected")?;
     }
@@ -322,10 +330,42 @@ pub fn tauri_knowledge_wiki_library_delete(
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temporary_vault(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "elephantnote-wiki-library-{name}-{}-{nonce}",
+            std::process::id()
+        ))
+    }
 
     #[test]
     fn candidate_ids_are_stable_and_normalized() {
         assert_eq!(candidate_id("  Minecraft "), "wiki-suggestion:minecraft");
+    }
+
+    #[test]
+    fn candidate_rejection_is_persisted_and_can_be_cleared() {
+        let root = temporary_vault("decisions");
+        fs::create_dir_all(&root).expect("create temporary vault");
+        let store = KnowledgeStore::open(&root).expect("open knowledge store");
+
+        set_candidate_decision(&store, " Minecraft ", "rejected").expect("reject candidate");
+        assert!(rejected_topics(&store)
+            .expect("read rejected topics")
+            .contains("minecraft"));
+
+        clear_candidate_decision(&store, "MINECRAFT").expect("clear decision");
+        assert!(!rejected_topics(&store)
+            .expect("read cleared topics")
+            .contains("minecraft"));
+
+        drop(store);
+        fs::remove_dir_all(root).expect("remove temporary vault");
     }
 
     #[test]
@@ -340,7 +380,9 @@ mod tests {
         assert!(cleaned.get("modelSelection").is_none());
         assert!(cleaned.pointer("/aiConfig/localModelSelection").is_none());
         assert_eq!(
-            cleaned.pointer("/aiConfig/routes/chat/source").and_then(Value::as_str),
+            cleaned
+                .pointer("/aiConfig/routes/chat/source")
+                .and_then(Value::as_str),
             Some("codex")
         );
     }

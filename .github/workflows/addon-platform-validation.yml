@@ -17,6 +17,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check out official addon catalogue
+        uses: actions/checkout@v4
+        with:
+          ref: addon-catalog
+          path: addon-catalog-source
+
       - name: Install Linux Tauri dependencies
         shell: bash
         run: |
@@ -29,6 +35,13 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      - name: Validate official addon catalogue
+        shell: bash
+        run: |
+          set -o pipefail
+          node build/scripts/validate-addon-catalog.mjs addon-catalog-source \
+            2>&1 | tee addon-catalog-tests.txt
+
       - name: Run focused addon and settings tests
         shell: bash
         run: |
@@ -37,30 +50,45 @@ jobs:
             Elephant/node_modules/.bin/vitest run \
             tests/app/unit/addons/externalAddonContracts.spec.js \
             tests/app/unit/addons/addonCatalogContracts.spec.js \
+            tests/app/unit/addons/builtinAddonsQuality.spec.js \
+            tests/app/unit/addons/runtimeSecurityContracts.spec.js \
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
             2>&1 | tee addon-tests.txt
 
-      - name: Compile and test Rust addon catalogue
+      - name: Compile and test Rust addon security modules
         shell: bash
         run: |
           set -o pipefail
-          cargo test \
-            --manifest-path Elephant/backend/tauri/Cargo.toml \
-            --no-default-features \
+          : > addon-rust-tests.txt
+          for test_filter in \
             addon_catalog::tests \
-            --lib \
-            2>&1 | tee addon-rust-tests.txt
+            addon_runtime_access::tests \
+            addon_note_access::tests \
+            addon_http_access::tests
+          do
+            cargo test \
+              --manifest-path Elephant/backend/tauri/Cargo.toml \
+              --no-default-features \
+              "$test_filter" \
+              --lib \
+              2>&1 | tee -a addon-rust-tests.txt
+          done
 
-      - name: Package installable external proof addon
+      - name: Package every official catalogue addon
         shell: bash
         run: |
           set -o pipefail
-          node build/scripts/package-addon.mjs \
-            examples/addons/platform-proof \
-            build/addons/platform-proof.enaddon \
-            2>&1 | tee addon-package.txt
-          unzip -t build/addons/platform-proof.enaddon
-          unzip -l build/addons/platform-proof.enaddon
+          mkdir -p build/addons
+          : > addon-package.txt
+          for source in addon-catalog-source/addons/*
+          do
+            slug="$(basename "$source")"
+            node build/scripts/package-addon.mjs \
+              "$source" \
+              "build/addons/$slug.enaddon" \
+              2>&1 | tee -a addon-package.txt
+            unzip -t "build/addons/$slug.enaddon"
+          done
 
       - name: Build Tauri web bundle
         shell: bash
@@ -68,15 +96,16 @@ jobs:
           set -o pipefail
           pnpm tauri:web:build 2>&1 | tee addon-build.txt
 
-      - name: Upload addon validation and installable proof
+      - name: Upload addon validation and installable packages
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: addon-platform-validation
           path: |
+            addon-catalog-tests.txt
             addon-tests.txt
             addon-rust-tests.txt
             addon-package.txt
             addon-build.txt
-            build/addons/platform-proof.enaddon
+            build/addons/*.enaddon
           if-no-files-found: ignore

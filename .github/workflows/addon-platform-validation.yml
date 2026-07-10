@@ -46,8 +46,11 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          : > addon-functional-tests.txt
           node build/scripts/test-official-addons.mjs addon-catalog-source \
-            2>&1 | tee addon-functional-tests.txt
+            2>&1 | tee -a addon-functional-tests.txt
+          node build/scripts/test-notion-importer.mjs addon-catalog-source \
+            2>&1 | tee -a addon-functional-tests.txt
 
       - name: Run focused addon and settings tests
         shell: bash

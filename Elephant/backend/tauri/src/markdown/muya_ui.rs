@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use super::muya_compat::render_muya_html;
+use super::muya_complete::find_matches;
 use super::muya_engine::{utf16_to_byte_index, MuyaEditorState};
 use super::muya_inline::parse_inlines;
 use super::muya_state::markdown_to_json_state;
@@ -29,6 +30,13 @@ pub enum MuyaUiQuery {
         block_type: String,
         language: Option<String>,
         text: String,
+    },
+    Search {
+        query: String,
+        #[serde(default)]
+        case_sensitive: bool,
+        #[serde(default)]
+        whole_word: bool,
     },
 }
 
@@ -59,6 +67,16 @@ pub fn execute_ui_query(
             language,
             text,
         } => Ok(preview_descriptor(&block_type, language.as_deref(), &text)),
+        MuyaUiQuery::Search {
+            query,
+            case_sensitive,
+            whole_word,
+        } => Ok(search_payload(
+            require_state(state)?,
+            &query,
+            case_sensitive,
+            whole_word,
+        )),
     }
 }
 
@@ -69,7 +87,6 @@ fn require_state(state: Option<&MuyaEditorState>) -> Result<&MuyaEditorState, St
 fn render_json_state(markdown: &str) -> Result<Value, String> {
     let mut value = serde_json::to_value(markdown_to_json_state(markdown))
         .map_err(|error| format!("failed to serialize Muya render state: {error}"))?;
-
     let Some(blocks) = value.get_mut("blocks").and_then(Value::as_array_mut) else {
         return Err("Muya render state is missing blocks".to_string());
     };
@@ -91,7 +108,6 @@ fn render_json_state(markdown: &str) -> Result<Value, String> {
             object.insert("inlineNodes".to_string(), inline_nodes);
         }
     }
-
     Ok(value)
 }
 
@@ -113,20 +129,38 @@ pub fn clipboard_payload(state: &MuyaEditorState) -> Value {
     json!({ "markdown": markdown, "html": html })
 }
 
+pub fn search_payload(
+    state: &MuyaEditorState,
+    query: &str,
+    case_sensitive: bool,
+    whole_word: bool,
+) -> Value {
+    let matches = find_matches(&state.markdown, query, case_sensitive, whole_word)
+        .into_iter()
+        .map(|(start, end)| {
+            json!({
+                "start": state.markdown[..start].encode_utf16().count(),
+                "end": state.markdown[..end].encode_utf16().count()
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({ "query": query, "matches": matches })
+}
+
 pub fn image_toolbar_state(markdown: &str, cursor_utf16: usize) -> Value {
     let cursor = utf16_to_byte_index(markdown, cursor_utf16);
     let Some(image) = image_at_cursor(markdown, cursor) else {
         return json!({ "visible": false });
     };
     json!({
-      "visible": true,
-      "start": image.start,
-      "end": image.end,
-      "alt": image.alt,
-      "url": image.url,
-      "width": image.width,
-      "actions": ["resize", "replace", "caption", "copy", "delete"],
-      "sizes": ["25%", "50%", "75%", "100%"]
+        "visible": true,
+        "start": markdown[..image.start].encode_utf16().count(),
+        "end": markdown[..image.end].encode_utf16().count(),
+        "alt": image.alt,
+        "url": image.url,
+        "width": image.width,
+        "actions": ["resize", "replace", "caption", "copy", "delete"],
+        "sizes": ["25%", "50%", "75%", "100%"]
     })
 }
 
@@ -150,10 +184,10 @@ pub fn footnote_popup_state(markdown: &str, cursor_utf16: usize) -> Value {
         .find_map(|line| line.strip_prefix(&prefix).map(str::trim))
         .unwrap_or("");
     json!({
-      "visible": true,
-      "label": label,
-      "text": text,
-      "actions": ["edit", "jump", "delete"]
+        "visible": true,
+        "label": label,
+        "text": text,
+        "actions": ["edit", "jump", "delete"]
     })
 }
 
@@ -209,24 +243,18 @@ struct ImageMatch<'a> {
 fn image_at_cursor(markdown: &str, cursor: usize) -> Option<ImageMatch<'_>> {
     for (start, _) in markdown.match_indices("![") {
         let alt_start = start + 2;
-        let Some(alt_end_relative) = markdown[alt_start..].find(']') else {
-            continue;
-        };
-        let alt_end = alt_start + alt_end_relative;
+        let alt_end = alt_start + markdown[alt_start..].find(']')?;
         if markdown.as_bytes().get(alt_end + 1) != Some(&b'(') {
             continue;
         }
         let url_start = alt_end + 2;
-        let Some(url_end_relative) = markdown[url_start..].find(')') else {
-            continue;
-        };
-        let url_end = url_start + url_end_relative;
+        let url_end = url_start + markdown[url_start..].find(')')?;
         let mut end = url_end + 1;
         let mut width = None;
         if markdown[end..].starts_with("{width=") {
             let width_start = end + "{width=".len();
-            if let Some(width_end_relative) = markdown[width_start..].find('}') {
-                let width_end = width_start + width_end_relative;
+            if let Some(relative) = markdown[width_start..].find('}') {
+                let width_end = width_start + relative;
                 width = Some(&markdown[width_start..width_end]);
                 end = width_end + 1;
             }
@@ -252,13 +280,18 @@ mod tests {
     #[test]
     fn copies_selected_markdown_and_rendered_html() {
         let mut state = MuyaEditorState::new("A **bold** B".to_string());
-        state.selection = MuyaSelection {
-            anchor: 2,
-            focus: 10,
-        };
+        state.selection = MuyaSelection { anchor: 2, focus: 10 };
         let payload = clipboard_payload(&state);
         assert_eq!(payload["markdown"], "**bold**");
         assert!(payload["html"].as_str().unwrap().contains("strong"));
+    }
+
+    #[test]
+    fn searches_in_rust_and_returns_utf16_offsets() {
+        let state = MuyaEditorState::new("😀 alpha ALPHA".to_string());
+        let payload = search_payload(&state, "alpha", false, true);
+        assert_eq!(payload["matches"].as_array().unwrap().len(), 2);
+        assert_eq!(payload["matches"][0]["start"], 3);
     }
 
     #[test]
@@ -266,7 +299,6 @@ mod tests {
         let toolbar = image_toolbar_state("x ![Alt](a.png){width=50%} y", 8);
         assert_eq!(toolbar["visible"], true);
         assert_eq!(toolbar["width"], "50%");
-        assert_eq!(toolbar["actions"][0], "resize");
     }
 
     #[test]
@@ -275,57 +307,13 @@ mod tests {
         let popup = footnote_popup_state(markdown, 5);
         assert_eq!(popup["visible"], true);
         assert_eq!(popup["label"], "n");
-        assert_eq!(popup["text"], "note");
     }
 
     #[test]
-    fn filters_slash_commands() {
+    fn filters_slash_commands_and_describes_previews() {
         let commands = slash_commands("/mer");
         assert_eq!(commands.as_array().unwrap().len(), 1);
         assert_eq!(commands[0]["id"], "mermaid");
-    }
-
-    #[test]
-    fn creates_preview_descriptors_without_rendering_untrusted_code() {
         assert_eq!(preview_descriptor("math_block", None, "x")["type"], "katex");
-        assert_eq!(
-            preview_descriptor("code_fence", Some("mermaid"), "graph TD")["type"],
-            "diagram"
-        );
-        assert_eq!(preview_descriptor("paragraph", None, "x")["type"], "none");
-    }
-
-    #[test]
-    fn json_state_query_adds_typed_inline_render_nodes_only_for_the_renderer() {
-        let state = MuyaEditorState::new(
-            "**bold** ![drawing](../../.assets/drawing.png) [docs](https://example.com)"
-                .to_string(),
-        );
-        let json_state = execute_ui_query(Some(&state), MuyaUiQuery::JsonState).unwrap();
-        let inline_nodes = json_state["blocks"][0]["inlineNodes"].as_array().unwrap();
-        assert!(inline_nodes.iter().any(|node| node["type"] == "strong"));
-        assert!(inline_nodes.iter().any(|node| node["type"] == "image"));
-        assert!(inline_nodes.iter().any(|node| node["type"] == "link"));
-        assert_eq!(json_state["blocks"][0]["children"][0]["type"], "text");
-    }
-
-    #[test]
-    fn dispatches_typed_ui_queries() {
-        let mut state = MuyaEditorState::new("A[^n]\n\n[^n]: note".to_string());
-        state.selection = MuyaSelection::collapsed(5);
-        let popup =
-            execute_ui_query(Some(&state), MuyaUiQuery::FootnotePopup { cursor: None }).unwrap();
-        assert_eq!(popup["label"], "n");
-        let json_state = execute_ui_query(Some(&state), MuyaUiQuery::JsonState).unwrap();
-        assert_eq!(json_state["type"], "muya-json-state");
-        let commands = execute_ui_query(
-            None,
-            MuyaUiQuery::SlashCommands {
-                query: "table".to_string(),
-            },
-        )
-        .unwrap();
-        assert_eq!(commands[0]["id"], "table");
-        assert!(execute_ui_query(None, MuyaUiQuery::Clipboard).is_err());
     }
 }

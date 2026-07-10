@@ -14,13 +14,19 @@ export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) =
   let state = markdownToJsonState(markdown)
   renderJsonStateIntoDom(root, state, options.document || globalThis.document)
 
-  const setMarkdown = (next, group = 'setMarkdown') => {
+  const setJsonState = (nextState, group = 'setJsonState') => {
+    if (!nextState || nextState.type !== 'muya-json-state' || !Array.isArray(nextState.blocks)) {
+      throw new Error('Muya DOM adapter requires a valid JSON document state.')
+    }
     const before = jsonStateToMarkdown(state)
-    state = markdownToJsonState(next)
-    pushGroupedHistory(history, before, next, group)
+    const after = jsonStateToMarkdown(nextState)
+    state = nextState
+    pushGroupedHistory(history, before, after, group)
     renderJsonStateIntoDom(root, state, options.document || globalThis.document)
     return state
   }
+
+  const setMarkdown = (next, group = 'setMarkdown') => setJsonState(markdownToJsonState(next), group)
 
   const live = createLiveRenderScheduler({
     root,
@@ -52,6 +58,7 @@ export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) =
     get markdown() { return jsonStateToMarkdown(state) },
     get html() { return jsonStateToHtml(state) },
     setMarkdown,
+    setJsonState,
     scheduleLiveRender: () => live.schedule(),
     renderLiveNow: syncDomToState,
     renderCurrentBlockNow: () => renderCurrentBlockNow({ root, setState: (nextState) => { state = nextState }, getDocument: () => options.document || globalThis.document }),

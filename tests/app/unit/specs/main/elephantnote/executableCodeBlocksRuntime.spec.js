@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installExecutableCodeBlocks } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocks'
-import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV4'
+import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV5'
 
 const flush = async() => {
   await new Promise((resolve) => setTimeout(resolve, 0))
@@ -36,7 +36,7 @@ const installEditor = (source = 'print("hello")') => {
   return pre
 }
 
-describe('executable code blocks consolidated runtime', () => {
+describe('executable code blocks V5 runtime', () => {
   let invoke
   let writeText
 
@@ -48,6 +48,10 @@ describe('executable code blocks consolidated runtime', () => {
       configurable: true,
       value: { writeText }
     })
+    window.getComputedStyle = vi.fn(() => ({
+      backgroundColor: 'rgb(42, 42, 45)',
+      color: 'rgb(220, 220, 222)'
+    }))
     invoke = vi.fn(async(command, payload) => {
       if (command === 'tauri_programs_list') {
         return { executionEnabled: true, outputLineLimit: 200, environments: [] }
@@ -87,10 +91,10 @@ describe('executable code blocks consolidated runtime', () => {
     await flush()
 
     expect(pre.textContent).toBe(before)
-    expect(document.querySelector('.en-editor-host .en-code-v4-toolbar')).toBeNull()
-    expect(document.querySelector('.en-editor-host .en-code-v4-output')).toBeNull()
+    expect(document.querySelector('.en-editor-host .en-code-v5-toolbar')).toBeNull()
+    expect(document.querySelector('.en-editor-host .en-code-v5-output')).toBeNull()
     expect(runtime.layer.parentElement).toBe(document.body)
-    expect(runtime.layer.querySelector('.en-code-v4-toolbar')).not.toBeNull()
+    expect(runtime.layer.querySelector('.en-code-v5-toolbar')).not.toBeNull()
   })
 
   it('integrates language, copy and fence chrome using real Muya elements', async() => {
@@ -99,10 +103,10 @@ describe('executable code blocks consolidated runtime', () => {
     runtime.scan('test')
     await flush()
 
-    expect(document.querySelector('.ag-language-input').classList.contains('en-code-v4-language')).toBe(true)
-    expect(document.querySelector('.ag-copy-code').classList.contains('en-code-v4-native-copy')).toBe(true)
-    expect(document.querySelector('.ag-fence-label').classList.contains('en-code-v4-fence-hint')).toBe(true)
-    runtime.layer.querySelector('.en-code-v4-copy').click()
+    expect(document.querySelector('.ag-language-input').classList.contains('en-code-v5-native-language')).toBe(true)
+    expect(document.querySelector('.ag-copy-code').classList.contains('en-code-v5-native-copy')).toBe(true)
+    expect(document.querySelector('.ag-fence-label').classList.contains('en-code-v5-fence-hint')).toBe(true)
+    runtime.layer.querySelector('.en-code-v5-copy').click()
     await flush()
     expect(writeText).toHaveBeenCalledWith('print("hello")')
   })
@@ -113,7 +117,7 @@ describe('executable code blocks consolidated runtime', () => {
     runtime.scan('test')
     await flush()
 
-    runtime.layer.querySelector('.en-code-v4-run').click()
+    runtime.layer.querySelector('.en-code-v5-run').click()
     await flush()
 
     expect(invoke).toHaveBeenCalledWith('tauri_programs_run', expect.objectContaining({
@@ -121,7 +125,7 @@ describe('executable code blocks consolidated runtime', () => {
       command: 'print("hello")',
       stop: false
     }))
-    expect(runtime.layer.querySelector('.en-code-v4-output')).not.toBeNull()
+    expect(runtime.layer.querySelector('.en-code-v5-output')).not.toBeNull()
     expect(runtime.layer.textContent).toContain('hello')
   })
 
@@ -130,7 +134,7 @@ describe('executable code blocks consolidated runtime', () => {
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('initial')
     await flush()
-    runtime.layer.querySelector('.en-code-v4-run').click()
+    runtime.layer.querySelector('.en-code-v5-run').click()
     await flush()
 
     const originalState = [...runtime.states.values()][0]
@@ -159,7 +163,7 @@ describe('executable code blocks consolidated runtime', () => {
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('test')
     await flush()
-    const button = runtime.layer.querySelector('.en-code-v4-run')
+    const button = runtime.layer.querySelector('.en-code-v5-run')
     button.click()
     await flush()
 

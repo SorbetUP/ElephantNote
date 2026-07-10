@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use tauri::Manager;
 
 pub mod chat_runtime;
+pub mod code_execution;
 pub mod drawing_domain;
 pub mod folder_domain;
 #[cfg(not(mobile))]
@@ -242,6 +243,9 @@ pub fn run() {
             markdown::commands::tauri_muya_commit_composition,
             markdown::commands::tauri_muya_cancel_composition,
             markdown::commands::tauri_muya_editor_snapshot,
+            code_execution::tauri_programs_list,
+            code_execution::tauri_programs_set,
+            code_execution::tauri_programs_run,
             tauri_extra_commands::shell_exec,
             tauri_extra_commands::tauri_notes_read,
             tauri_extra_commands::tauri_notes_write,

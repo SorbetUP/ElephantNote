@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Temporary deterministic transformer used only by the Android foundations validation workflow.
 import json
 from pathlib import Path
 

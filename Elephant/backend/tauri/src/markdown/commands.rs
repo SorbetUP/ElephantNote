@@ -1,15 +1,26 @@
 use serde_json::{json, Value};
 
 use super::{parse_markdown_document, render_html, render_plain_text};
-use super::muya_clipboard::{backspace, clipboard_contract, paste_text, redo, remove_next, selected_html, selected_markdown, undo, EditState, Selection};
+use super::muya_clipboard::{
+  backspace, clipboard_contract, paste_text, redo, remove_next, selected_html,
+  selected_markdown, undo, EditState, Selection,
+};
 use super::muya_compat::{parse_muya_document, render_muya_html, tokenize_muya};
-use super::muya_engine::{apply_command, apply_commands, MuyaEditorCommand, MuyaEditorState, MuyaSelection};
+use super::muya_engine::{
+  apply_command, apply_commands, MuyaEditorCommand, MuyaEditorSnapshot, MuyaEditorState,
+  MuyaEditorTransaction, MuyaSelection,
+};
 use super::muya_extras::collect_muya_extras;
-use super::muya_interactions::{commit_composition, editor_snapshot, image_selection, start_composition, table_contract, table_insert_column, table_insert_row, update_composition, cancel_composition, CompositionState};
+use super::muya_interactions::{
+  cancel_composition, commit_composition, editor_snapshot, image_selection, start_composition,
+  table_contract, table_insert_column, table_insert_row, update_composition, CompositionState,
+};
 use super::muya_navigation::{detect_input_rule, move_cursor};
 use super::muya_parity::{apply_parity_command, MuyaParityCommand};
 use super::muya_ui::{execute_ui_query, MuyaUiQuery};
 use super::parser_v4::{extract_images, extract_links, parse_blocks, split_frontmatter};
+
+const MUYA_HISTORY_LIMIT: usize = 100;
 
 #[tauri::command]
 pub fn tauri_markdown_parse(markdown: String) -> Value {
@@ -99,7 +110,13 @@ pub fn tauri_muya_redo(state: EditState) -> Value {
 }
 
 #[tauri::command]
-pub fn tauri_muya_move_cursor(markdown: String, cursor: usize, direction: String, extend: bool, anchor: Option<usize>) -> Value {
+pub fn tauri_muya_move_cursor(
+  markdown: String,
+  cursor: usize,
+  direction: String,
+  extend: bool,
+  anchor: Option<usize>,
+) -> Value {
   move_cursor(&markdown, cursor, &direction, extend, anchor)
 }
 
@@ -159,6 +176,63 @@ pub fn tauri_muya_engine_create(markdown: String) -> Value {
 }
 
 #[tauri::command]
+pub fn tauri_muya_engine_sync_document(
+  mut state: MuyaEditorState,
+  markdown: String,
+  selection: MuyaSelection,
+  continue_group: bool,
+) -> Result<Value, String> {
+  let before_markdown = state.markdown.clone();
+  let before_selection = state.selection;
+
+  if before_markdown == markdown {
+    return apply_command(
+      state,
+      MuyaEditorCommand::SetSelection {
+        anchor: selection.anchor,
+        focus: selection.focus,
+      },
+    )
+    .map(|transaction| json!(transaction));
+  }
+
+  let current_snapshot = MuyaEditorSnapshot {
+    markdown: before_markdown,
+    selection: before_selection,
+  };
+  let grouped_snapshot = if continue_group {
+    state.undo_stack.pop()
+  } else {
+    None
+  };
+
+  state.markdown = markdown;
+  state.selection = selection;
+  state = apply_command(
+    state,
+    MuyaEditorCommand::SetSelection {
+      anchor: selection.anchor,
+      focus: selection.focus,
+    },
+  )?
+  .state;
+
+  while state.undo_stack.len() >= MUYA_HISTORY_LIMIT {
+    state.undo_stack.remove(0);
+  }
+  state.undo_stack.push(grouped_snapshot.unwrap_or(current_snapshot));
+  state.redo_stack.clear();
+  state.revision = state.revision.saturating_add(1);
+
+  let selection_changed = state.selection != before_selection;
+  Ok(json!(MuyaEditorTransaction {
+    state,
+    document_changed: true,
+    selection_changed,
+  }))
+}
+
+#[tauri::command]
 pub fn tauri_muya_engine_apply(
   state: MuyaEditorState,
   command: MuyaEditorCommand,
@@ -210,7 +284,8 @@ pub fn tauri_muya_engine_commit_composition(
       },
       MuyaEditorCommand::ReplaceSelection { text },
     ],
-  ).map(|transaction| json!(transaction))
+  )
+  .map(|transaction| json!(transaction))
 }
 
 #[tauri::command]
@@ -233,7 +308,7 @@ pub fn tauri_muya_engine_query(
 pub fn tauri_muya_engine_capabilities() -> Value {
   json!({
     "engine": "rust",
-    "version": 5,
+    "version": 6,
     "offsetEncoding": "utf16",
     "history": {
       "undo": true,
@@ -242,6 +317,7 @@ pub fn tauri_muya_engine_capabilities() -> Value {
       "maximumEntries": 100
     },
     "commands": [
+      "syncDocument",
       "insertText",
       "replaceSelection",
       "deleteBackward",
@@ -293,6 +369,15 @@ pub fn tauri_muya_engine_capabilities() -> Value {
       "align_center",
       "align_right"
     ],
-    "templates": ["heading", "task-list", "table", "image", "math", "mermaid", "footnote", "code"]
+    "templates": [
+      "heading",
+      "task-list",
+      "table",
+      "image",
+      "math",
+      "mermaid",
+      "footnote",
+      "code"
+    ]
   })
 }

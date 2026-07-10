@@ -1,0 +1,32 @@
+{
+  "id": "com.elephantnote.markdown-linter",
+  "name": "Markdown Linter",
+  "version": "1.0.0",
+  "description": "Audits Markdown style issues and can explicitly apply a conservative set of safe formatting fixes.",
+  "author": "ElephantNote",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": { "type": "javascript-worker", "entry": "main.js" },
+  "permissions": {
+    "commands": true,
+    "storage": false,
+    "notes": {
+      "read": ["*"],
+      "write": ["*"]
+    },
+    "network": { "hosts": [] }
+  },
+  "activationEvents": ["onStartup"],
+  "contributes": {
+    "commands": [
+      {
+        "id": "com.elephantnote.markdown-linter.audit",
+        "title": "Audit Markdown formatting"
+      },
+      {
+        "id": "com.elephantnote.markdown-linter.apply-safe-fixes",
+        "title": "Apply safe Markdown fixes"
+      }
+    ]
+  }
+}

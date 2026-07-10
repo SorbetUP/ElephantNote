@@ -21,7 +21,7 @@
         <GripVertical class="en-rail-layout-grip" aria-hidden="true" />
         <div class="en-rail-layout-copy">
           <strong>{{ item.label }}</strong>
-          <span>{{ item.source === 'addon' ? 'Addon workspace' : item.description }}</span>
+          <span>{{ item.description }}</span>
         </div>
         <div class="en-rail-layout-actions">
           <button type="button" :disabled="index === 0" :aria-label="`Move ${item.label} up`" @click="move(item.id, index - 1)">
@@ -47,6 +47,7 @@ import { computed, ref } from 'vue'
 import { ChevronDown, ChevronUp, Eye, EyeOff, GripVertical, RotateCcw } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import { useAddonsStore } from '@/store/addons'
+import { getAddonSidebarItems } from '@/addons'
 import {
   CORE_ICON_RAIL_ITEMS,
   DEFAULT_ICON_RAIL_ORDER,
@@ -69,9 +70,17 @@ const addonItems = computed(() => addonsStore.getContributions('views')
     source: 'addon'
   })))
 
+const legacyAddonItems = computed(() => getAddonSidebarItems(addonsStore.contributions).map((item) => ({
+  id: `addon-item:${item.addonId}:${item.id}`,
+  label: item.title || item.tooltip || item.id,
+  description: item.tooltip || 'Addon navigation item.',
+  source: 'addon'
+})))
+
 const availableItems = computed(() => [
   ...CORE_ICON_RAIL_ITEMS.map((item) => ({ ...item, source: 'core' })),
-  ...addonItems.value
+  ...addonItems.value,
+  ...legacyAddonItems.value
 ])
 const availableIds = computed(() => availableItems.value.map((item) => item.id))
 const orderedIds = computed(() => normalizeIconRailOrder(preferences.iconRailOrder, availableIds.value))
@@ -92,7 +101,6 @@ const persistHidden = (hidden) => preferences.SET_SINGLE_PREFERENCE({
 })
 
 const isHidden = (id) => hiddenIds.value.includes(id)
-
 const move = (id, index) => persistOrder(moveIconRailItem(orderedIds.value, id, index))
 
 const toggleVisibility = (id) => {

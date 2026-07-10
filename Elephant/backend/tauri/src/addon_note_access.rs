@@ -7,12 +7,7 @@ use std::{
 };
 use tauri::AppHandle;
 
-use crate::addon_runtime_access::{
-  canonical_vault_root,
-  normalize_relative_path,
-  read_enabled_addon,
-  scope_matches,
-};
+use crate::addon_runtime_access::{canonical_vault_root, normalize_relative_path, read_enabled_addon, scope_matches};
 
 type R<T> = Result<T, String>;
 
@@ -27,6 +22,13 @@ pub struct AddonNoteEntry {
   modified_at: Option<u64>,
 }
 
+fn normalize_listing_prefix(value: &str) -> R<String> {
+  if value.trim() == "." {
+    return Ok(String::new());
+  }
+  normalize_relative_path(value, "A note directory or '.' for the vault root is required")
+}
+
 fn is_hidden_component(path: &Path) -> bool {
   path.components().any(|component| match component {
     Component::Normal(part) => part.to_string_lossy().starts_with('.'),
@@ -35,7 +37,7 @@ fn is_hidden_component(path: &Path) -> bool {
 }
 
 fn collect_markdown_notes(root: &Path, prefix: &str, scopes: &[String]) -> R<Vec<AddonNoteEntry>> {
-  let start = root.join(prefix);
+  let start = if prefix.is_empty() { root.to_path_buf() } else { root.join(prefix) };
   if !start.exists() {
     return Ok(Vec::new());
   }
@@ -107,11 +109,17 @@ fn collect_markdown_notes(root: &Path, prefix: &str, scopes: &[String]) -> R<Vec
 
 #[tauri::command]
 pub fn tauri_addons_notes_list(app: AppHandle, addon_id: String, prefix: String) -> R<Vec<AddonNoteEntry>> {
-  let prefix = normalize_relative_path(&prefix, "A non-empty note directory is required")?;
+  let prefix = normalize_listing_prefix(&prefix)?;
   let record = read_enabled_addon(&app, &addon_id)?;
   let scopes = &record.manifest.permissions.notes.read;
-  if scopes.is_empty() || !scopes.iter().any(|scope| scope_matches(scope, &prefix)) {
-    return Err(format!("Addon is not permitted to list notes under {prefix}"));
+  let permitted = if prefix.is_empty() {
+    scopes.iter().any(|scope| scope.trim() == "*")
+  } else {
+    scopes.iter().any(|scope| scope_matches(scope, &prefix))
+  };
+  if scopes.is_empty() || !permitted {
+    let display = if prefix.is_empty() { "the vault root" } else { &prefix };
+    return Err(format!("Addon is not permitted to list notes under {display}"));
   }
   collect_markdown_notes(&canonical_vault_root(&app)?, &prefix, scopes)
 }
@@ -119,6 +127,13 @@ pub fn tauri_addons_notes_list(app: AppHandle, addon_id: String, prefix: String)
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn accepts_root_sentinel_and_rejects_traversal() {
+    assert_eq!(normalize_listing_prefix(".").unwrap(), "");
+    assert!(normalize_listing_prefix("../Inbox").is_err());
+    assert_eq!(normalize_listing_prefix("Inbox/2026").unwrap(), "Inbox/2026");
+  }
 
   #[test]
   fn hidden_paths_are_never_listed() {

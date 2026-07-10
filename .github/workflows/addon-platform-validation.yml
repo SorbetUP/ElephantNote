@@ -59,8 +59,19 @@ jobs:
             tests/app/unit/addons/runtimeSecurityContracts.spec.js \
             tests/app/unit/addons/declarativeViewsContracts.spec.js \
             tests/app/unit/addons/calendarAndIconRail.spec.js \
+            tests/app/unit/addons/trustedAddonRuntime.spec.js \
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
             2>&1 | tee addon-tests.txt
+
+      - name: Package full app access reference addon
+        shell: bash
+        run: |
+          set -o pipefail
+          node build/scripts/package-addon.mjs \
+            examples/addons/trusted-workspace-lab \
+            build/addons/trusted-workspace-lab.enaddon \
+            2>&1 | tee trusted-addon-package.txt
+          unzip -t build/addons/trusted-workspace-lab.enaddon
 
       - name: Package every official catalogue addon
         shell: bash
@@ -93,6 +104,7 @@ jobs:
             addon-catalog-tests.txt
             addon-functional-tests.txt
             addon-tests.txt
+            trusted-addon-package.txt
             addon-package.txt
             addon-build.txt
             build/addons/*.enaddon

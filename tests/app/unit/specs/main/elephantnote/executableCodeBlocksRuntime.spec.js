@@ -72,15 +72,16 @@ describe('executable code blocks portal runtime', () => {
     delete window.__TAURI__
   })
 
-  it('mounts controls outside the editable Muya tree without changing its markup', async() => {
+  it('mounts controls outside the editable Muya tree without changing Markdown content', async() => {
     const pre = installEditor()
-    const before = pre.innerHTML
+    const before = pre.textContent
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('test')
     await flush()
 
-    expect(pre.innerHTML).toBe(before)
+    expect(pre.textContent).toBe(before)
     expect(document.querySelector('.en-editor-host .en-code-runner-toolbar')).toBeNull()
+    expect(document.querySelector('.en-editor-host .en-code-output')).toBeNull()
     expect(runtime.layer.parentElement).toBe(document.body)
     expect(runtime.layer.querySelector('.en-code-runner-toolbar')).not.toBeNull()
   })

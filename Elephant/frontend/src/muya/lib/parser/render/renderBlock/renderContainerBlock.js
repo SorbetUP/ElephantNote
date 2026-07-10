@@ -4,6 +4,10 @@ import { footnoteJumpIcon } from './renderFootnoteJump'
 import { renderEditIcon } from './renderContainerEditIcon'
 // import renderLineNumberRows from './renderLineNumber'
 import renderCopyButton from './renderCopyButton'
+import {
+  renderExecutableOutput,
+  renderExecutableRunButton
+} from './renderExecutableCodeRuntime'
 import { renderLeftBar, renderBottomBar } from './renderTableDargBar'
 import { h } from '../snabbdom'
 
@@ -62,6 +66,10 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
     }
     if (type === 'pre') {
       children.unshift(renderCopyButton(t))
+      if (functionType === 'fencecode') {
+        children.unshift(renderExecutableRunButton(block))
+        children.push(renderExecutableOutput(block))
+      }
     }
     // FIXME: Disabled due to #1648 - be consistent.
     // if (this.muya.options.codeBlockLineNumbers) {
@@ -109,7 +117,6 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
     } else {
       // Judge whether to render the table drag bar.
       const { renderingTable, renderingRowContainer } = this
-
       const findTable = renderingTable ? activeBlocks.find(b => b.key === renderingTable.key) : null
       if (findTable && renderingRowContainer) {
         const { row: tableRow, column: tableColumn } = findTable
@@ -123,7 +130,6 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
         if (block.parent === activeBlocks[1].parent && !block.preSibling && tableRow > 0) {
           children.unshift(renderLeftBar())
         }
-
         if (column === activeBlocks[1].column && isLastRow() && tableColumn > 0) {
           children.push(renderBottomBar())
         }
@@ -141,9 +147,11 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
     Object.assign(data.dataset, {
       role: type
     })
+    selector += PRE_BLOCK_HASH[block.functionType]
   } else if (type === 'figure') {
     if (functionType) {
       Object.assign(data.dataset, { role: functionType.toUpperCase() })
+      selector += PRE_BLOCK_HASH[block.functionType]
       if (functionType === 'table' && activeBlocks[0] && activeBlocks[0].functionType === 'cellContent') {
         children.unshift(renderTableTools(activeBlocks, t))
       } else if (functionType !== 'footnote') {

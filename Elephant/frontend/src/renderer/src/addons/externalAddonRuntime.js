@@ -14,6 +14,7 @@ const externalApi = Object.freeze({
   uninstall: (addonId) => invoke('tauri_addons_uninstall', { addonId }),
   setEnabled: (addonId, enabled) => invoke('tauri_addons_set_enabled', { addonId, enabled }),
   readEntry: (addonId) => invoke('tauri_addons_read_entry', { addonId }),
+  listNotes: (addonId, prefix) => invoke('tauri_addons_notes_list', { addonId, prefix }),
   call: (addonId, method, params = {}) => invoke('tauri_addons_call', { addonId, method, params }),
   getCommunityEnabled: async () => {
     const value = await invoke('tauri_prefs_get', { key: COMMUNITY_ADDONS_PREF_KEY })
@@ -99,6 +100,7 @@ ${entrySource}
   const api = Object.freeze({
     app: Object.freeze({ info: () => rpc('app.info') }),
     notes: Object.freeze({
+      list: (prefix) => rpc('notes.list', { prefix }),
       read: (path) => rpc('notes.read', { path }),
       write: (path, content) => rpc('notes.write', { path, content })
     }),
@@ -197,9 +199,16 @@ class ExternalAddonSession {
     await this.request('activate', {}, 10_000)
   }
 
+  callBroker(method, params = {}) {
+    if (method === 'notes.list') {
+      return externalApi.listNotes(this.addonId, safeString(params?.prefix))
+    }
+    return externalApi.call(this.addonId, method, params)
+  }
+
   handleMessage(message) {
     if (message.type === 'rpc') {
-      void externalApi.call(this.addonId, message.method, message.params || {})
+      void this.callBroker(message.method, message.params || {})
         .then((result) => this.post({ type: 'rpc-result', id: message.id, ok: true, result }))
         .catch((error) => this.post({
           type: 'rpc-result',
@@ -240,7 +249,7 @@ class ExternalAddonSession {
       title: safeString(action.title, id),
       description: safeString(action.description),
       order: Number.isFinite(action.order) ? action.order : 0,
-      run: (payload) => this.request('run-command', { commandId: id, payload }, 30_000)
+      run: (payload) => this.request('run-command', { commandId: id, payload }, 60_000)
     })
   }
 

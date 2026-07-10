@@ -73,12 +73,17 @@ jobs:
           toolchain: 1.91
           components: rustfmt
 
-      - name: Validate Rust runtime resolution
-        run: |
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
-          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features bundled_codex_candidates_prefer_packaged_resources
-          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features chat_runtime::codex_app_server::tests
+      - name: Format Rust changes
+        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+
+      - name: Compile all Rust targets
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+
+      - name: Test bundled Codex path resolution
+        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features bundled_codex_candidates_prefer_packaged_resources
+
+      - name: Test Codex app-server runtime
+        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features chat_runtime::codex_app_server::tests
 
       - name: Push validated implementation
         run: |

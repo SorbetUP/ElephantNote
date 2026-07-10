@@ -10,6 +10,7 @@ ANDROID_APK_MAX_MIB="${ANDROID_APK_MAX_MIB:-24}"
 APK_ROOT="$TAURI_DIR/gen/android/app/build/outputs/apk"
 ANDROID_GRADLE_FILE="$TAURI_DIR/gen/android/app/build.gradle.kts"
 ANDROID_MANIFEST="$TAURI_DIR/gen/android/app/src/main/AndroidManifest.xml"
+ANDROID_JNI_LIBS="$TAURI_DIR/gen/android/app/src/main/jniLibs"
 MAIN_ACTIVITY="$TAURI_DIR/gen/android/app/src/main/java/com/elephantnote/app/MainActivity.kt"
 MAIN_ACTIVITY_TEMPLATE="$ROOT_DIR/build/android/MainActivity.kt"
 RENDERER_OUT="$ROOT_DIR/build/out/renderer"
@@ -27,6 +28,19 @@ file_size_bytes() {
   else
     stat -f '%z' "$1"
   fi
+}
+
+expected_android_abi() {
+  case "$ANDROID_TARGET" in
+    aarch64) printf '%s' 'arm64-v8a' ;;
+    armv7) printf '%s' 'armeabi-v7a' ;;
+    i686) printf '%s' 'x86' ;;
+    x86_64) printf '%s' 'x86_64' ;;
+    *)
+      echo "Unsupported Android target for ABI verification: $ANDROID_TARGET" >&2
+      exit 1
+      ;;
+  esac
 }
 
 ensure_compressed_native_libraries() {
@@ -104,6 +118,12 @@ install_main_activity() {
   echo "[android-apk] installed tracked MainActivity template"
 }
 
+clean_generated_native_libraries() {
+  rm -rf "$ANDROID_JNI_LIBS"
+  mkdir -p "$ANDROID_JNI_LIBS"
+  echo "[android-apk] removed stale generated ABI libraries"
+}
+
 verify_android_renderer() {
   if [ ! -f "$RENDERER_OUT/index.html" ]; then
     echo "Android renderer output is missing: $RENDERER_OUT/index.html" >&2
@@ -115,6 +135,26 @@ verify_android_renderer() {
     exit 1
   fi
   echo "[android-apk] renderer has no unresolved Vite Node builtin stubs"
+}
+
+verify_single_target_abi() {
+  local apk="$1"
+  local expected_abi
+  expected_abi="$(expected_android_abi)"
+  require_cmd unzip
+
+  local packaged_abis
+  packaged_abis="$(unzip -Z1 "$apk" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u)"
+  if [ -z "$packaged_abis" ]; then
+    echo "APK contains no packaged native ABI library." >&2
+    exit 1
+  fi
+  if [ "$packaged_abis" != "$expected_abi" ]; then
+    echo "APK contains unexpected ABI libraries. Expected only $expected_abi, got:" >&2
+    printf '%s\n' "$packaged_abis" >&2
+    exit 1
+  fi
+  printf '[android-apk] verified single ABI=%s\n' "$expected_abi"
 }
 
 require_cmd cargo
@@ -152,6 +192,7 @@ fi
 install_android_manifest_permissions
 install_main_activity
 ensure_compressed_native_libraries "$ANDROID_GRADLE_FILE"
+clean_generated_native_libraries
 
 rm -rf "$APK_ROOT"
 mkdir -p "$APK_ROOT"
@@ -174,7 +215,7 @@ FINAL_APK=""
 if [ "$ANDROID_BUILD_PROFILE" = "release" ]; then
   UNSIGNED_APK="$(find "$APK_ROOT" -type f -name '*-release-unsigned.apk' -print | head -n 1)"
   if [ -z "$UNSIGNED_APK" ]; then
-    echo "Release build completed but no unsigned ARM64 release APK was found under $APK_ROOT." >&2
+    echo "Release build completed but no unsigned target-specific release APK was found under $APK_ROOT." >&2
     exit 1
   fi
 
@@ -218,6 +259,8 @@ if [ -z "$FINAL_APK" ] || [ ! -s "$FINAL_APK" ]; then
   echo "No non-empty APK was generated." >&2
   exit 1
 fi
+
+verify_single_target_abi "$FINAL_APK"
 
 APK_BYTES="$(file_size_bytes "$FINAL_APK")"
 MAX_BYTES=$((ANDROID_APK_MAX_MIB * 1024 * 1024))

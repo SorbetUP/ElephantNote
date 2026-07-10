@@ -71,6 +71,7 @@ export default class CompleteMuyaWithRustCore extends RustOwnedMuya {
     hooks.selectAll = () => this.selectAll()
     hooks.selectAllContent = () => this.selectAll()
     hooks.createTable = (tableChecker) => this.createTable(tableChecker)
+    hooks.replaceImage = (imageInfo, image) => this.__replaceImage(imageInfo, image)
   }
 
   __beforeInput (event) {
@@ -201,6 +202,19 @@ export default class CompleteMuyaWithRustCore extends RustOwnedMuya {
       cells,
       cut: Boolean(isCut)
     }))
+  }
+
+  __replaceImage (imageInfo, { alt = '', src = '', title = '' } = {}) {
+    const range = this.__imageRange(imageInfo)
+    return this.__applyRust('replace-image', async(engine) => {
+      await engine.setSelection(range.start, range.end)
+      return engine.complete({
+        type: 'insertImage',
+        alt: String(alt),
+        src: String(src),
+        title: String(title)
+      })
+    })
   }
 
   __drop (event) {

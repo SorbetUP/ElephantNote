@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PACKAGE_ID="${ANDROID_PACKAGE_ID:-com.elephantnote.app}"
+ACTIVITY="${ANDROID_ACTIVITY:-com.elephantnote.app/.MainActivity}"
+APK_ROOT="${ANDROID_APK_ROOT:-Elephant/backend/tauri/gen/android/app/build/outputs/apk}"
+STARTUP_WAIT_SECONDS="${ANDROID_STARTUP_WAIT_SECONDS:-10}"
+LOG_FILE="${ANDROID_STARTUP_LOG:-android-startup-logcat.txt}"
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "Missing required command: $1" >&2
+    exit 1
+  }
+}
+
+require_cmd adb
+
+APK="${ANDROID_APK_PATH:-}"
+if [ -z "$APK" ]; then
+  APK="$(find "$APK_ROOT" -type f -name '*-debug.apk' -print | head -n 1)"
+fi
+if [ -z "$APK" ] || [ ! -s "$APK" ]; then
+  echo "No non-empty Android debug APK found under $APK_ROOT" >&2
+  exit 1
+fi
+
+printf '[android-startup] apk=%s\n' "$APK"
+adb wait-for-device
+adb install -r "$APK"
+adb shell pm clear "$PACKAGE_ID" >/dev/null
+adb logcat -c
+adb shell am force-stop "$PACKAGE_ID"
+
+START_OUTPUT="$(adb shell am start -W -n "$ACTIVITY" 2>&1)"
+printf '%s\n' "$START_OUTPUT"
+if printf '%s\n' "$START_OUTPUT" | grep -Eqi 'Error|Exception|does not exist'; then
+  echo "Android Activity Manager failed to launch ElephantNote." >&2
+  exit 1
+fi
+
+sleep "$STARTUP_WAIT_SECONDS"
+adb logcat -d -v threadtime > "$LOG_FILE"
+
+PID="$(adb shell pidof "$PACKAGE_ID" | tr -d '\r' || true)"
+if [ -z "$PID" ]; then
+  echo "ElephantNote process is not alive after startup." >&2
+  grep -E 'FATAL EXCEPTION|AndroidRuntime|Process: com\.elephantnote\.app|Fatal signal|SIGABRT|SIGSEGV' "$LOG_FILE" >&2 || true
+  exit 1
+fi
+printf '[android-startup] pid=%s\n' "$PID"
+
+RESUMED="$(adb shell dumpsys activity activities | grep -m 1 'mResumedActivity' || true)"
+printf '[android-startup] resumed=%s\n' "$RESUMED"
+if ! printf '%s' "$RESUMED" | grep -q "$PACKAGE_ID"; then
+  echo "ElephantNote did not remain the resumed activity. A permission dialog or another Activity interrupted startup." >&2
+  exit 1
+fi
+
+CAMERA_LINE="$(adb shell dumpsys package "$PACKAGE_ID" | grep -m 1 'android.permission.CAMERA:' || true)"
+printf '[android-startup] camera=%s\n' "$CAMERA_LINE"
+if printf '%s' "$CAMERA_LINE" | grep -q 'granted=true'; then
+  echo "Camera permission was granted during startup; it must only be requested by the QR scanner action." >&2
+  exit 1
+fi
+
+if grep -Eq 'FATAL EXCEPTION|Process: com\.elephantnote\.app|Fatal signal.*com\.elephantnote\.app|SIGABRT|SIGSEGV' "$LOG_FILE"; then
+  echo "A fatal Android crash was detected during startup." >&2
+  grep -E 'FATAL EXCEPTION|AndroidRuntime|Process: com\.elephantnote\.app|Fatal signal|SIGABRT|SIGSEGV' "$LOG_FILE" >&2 || true
+  exit 1
+fi
+
+printf '[android-startup] success package=%s pid=%s camera_not_requested=true\n' "$PACKAGE_ID" "$PID"

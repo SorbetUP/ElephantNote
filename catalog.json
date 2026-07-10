@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-10T04:30:00Z",
+  "updatedAt": "2026-07-10T05:00:00Z",
   "addons": [
     {
       "id": "com.elephantnote.task-dashboard",
@@ -35,6 +35,17 @@
       "manifestPath": "addons/github-release-watcher/manifest.json",
       "entryPath": "addons/github-release-watcher/main.js",
       "readmePath": "addons/github-release-watcher/README.md"
+    },
+    {
+      "id": "com.elephantnote.notion-markdown-importer",
+      "slug": "notion-markdown-importer",
+      "name": "Notion Markdown Importer",
+      "version": "1.0.0",
+      "description": "Imports a Notion Markdown export from Imports/Notion, cleans UUID names and rewrites internal links.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/notion-markdown-importer/manifest.json",
+      "entryPath": "addons/notion-markdown-importer/main.js",
+      "readmePath": "addons/notion-markdown-importer/README.md"
     },
     {
       "id": "com.elephantnote.inbox-digest",

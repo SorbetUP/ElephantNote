@@ -54,6 +54,18 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git commit -m "Fix Codex reasoning, chat routing and Wiki synthesis"
           git push origin HEAD:${{ github.head_ref }}
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            pkg-config \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev
       - name: Check Tauri
         shell: bash
         run: |
@@ -71,7 +83,6 @@ jobs:
             git push origin HEAD:${{ github.head_ref }}
             exit "$status"
           fi
-          rm -f .github/tauri-ai-wiki-check-error.txt
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
       - name: Test knowledge core

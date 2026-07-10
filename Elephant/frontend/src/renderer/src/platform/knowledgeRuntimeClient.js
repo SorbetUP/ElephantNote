@@ -39,6 +39,39 @@ const emitRuntimeLog = (core, level, phase, command, details = {}) => {
   }).catch(() => null)
 }
 
+const cloneObject = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  if (typeof structuredClone === 'function') return structuredClone(value)
+  return JSON.parse(JSON.stringify(value))
+}
+
+const withActiveWikiRoute = (payload = {}) => {
+  const normalized = cloneObject(payload)
+  delete normalized.modelSelection
+
+  const configure = (config) => {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) return
+    delete config.localModelSelection
+    const routes = config.routes && typeof config.routes === 'object' && !Array.isArray(config.routes)
+      ? config.routes
+      : {}
+    const chatRoute = routes.chat && typeof routes.chat === 'object' && !Array.isArray(routes.chat)
+      ? cloneObject(routes.chat)
+      : null
+    if (chatRoute?.model && (chatRoute.source || chatRoute.provider)) {
+      config.routes = {
+        ...routes,
+        wiki: cloneObject(chatRoute),
+        wikiWriting: cloneObject(chatRoute)
+      }
+    }
+  }
+
+  configure(normalized.aiConfig)
+  configure(normalized.config)
+  return normalized
+}
+
 export const invokeKnowledgeCommand = async(command, payload = {}, target = globalThis) => {
   const core = getCore(target)
   if (!core?.invoke) throw new Error(`Tauri knowledge command API is unavailable for ${command}`)
@@ -78,18 +111,35 @@ export const knowledgeRuntimeClient = Object.freeze({
   rejectChatAction: (proposalId) => invokeKnowledgeCommand('tauri_knowledge_chat_action_reject', { proposalId }),
   executeChatAction: (proposalId) => invokeKnowledgeCommand('tauri_knowledge_chat_action_execute', { proposalId }),
   generateWiki: ({ topic, title = null, sourcePaths = [], payload = {}, maxDocuments = 12, maxChunks = 64, maxSections = 10 }) =>
-    invokeKnowledgeCommand('tauri_knowledge_wiki_generate', { topic, title, sourcePaths, payload, maxDocuments, maxChunks, maxSections }),
+    invokeKnowledgeCommand('tauri_knowledge_wiki_generate', {
+      topic,
+      title,
+      sourcePaths,
+      payload: withActiveWikiRoute(payload),
+      maxDocuments,
+      maxChunks,
+      maxSections
+    }),
   discoverWikiCandidates: ({ limit = 12 } = {}) =>
     invokeKnowledgeCommand('tauri_knowledge_wiki_candidates', { limit }),
   autoProposeWikis: ({ payload = {}, maxProposals = 2, force = false } = {}) =>
-    invokeKnowledgeCommand('tauri_knowledge_wikis_auto_propose', { payload, maxProposals, force }),
+    invokeKnowledgeCommand('tauri_knowledge_wikis_auto_propose', {
+      payload: withActiveWikiRoute(payload),
+      maxProposals,
+      force
+    }),
   getWikiDraft: (draftId) => invokeKnowledgeCommand('tauri_knowledge_wiki_get', { draftId }),
   listWikiDrafts: ({ status = null, limit = 100 } = {}) => invokeKnowledgeCommand('tauri_knowledge_wikis_list', { status, limit }),
   acceptWikiDraft: (draftId) => invokeKnowledgeCommand('tauri_knowledge_wiki_accept', { draftId }),
   rejectWikiDraft: (draftId) => invokeKnowledgeCommand('tauri_knowledge_wiki_reject', { draftId }),
   listWikiLibrary: ({ limit = 500 } = {}) => invokeKnowledgeCommand('tauri_knowledge_wiki_library_list', { limit }),
   generateWikiLibraryItem: ({ topic, title = null, sourcePaths = [], payload = {} }) =>
-    invokeKnowledgeCommand('tauri_knowledge_wiki_library_generate', { topic, title, sourcePaths, payload }),
+    invokeKnowledgeCommand('tauri_knowledge_wiki_library_generate', {
+      topic,
+      title,
+      sourcePaths,
+      payload: withActiveWikiRoute(payload)
+    }),
   rejectWikiSuggestion: (topic) => invokeKnowledgeCommand('tauri_knowledge_wiki_library_reject', { topic }),
   deleteWikiLibraryItem: (draftId, suppressFuture = true) =>
     invokeKnowledgeCommand('tauri_knowledge_wiki_library_delete', { draftId, suppressFuture }),

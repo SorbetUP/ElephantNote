@@ -25,20 +25,12 @@ jobs:
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - name: Apply focused repair
+        shell: bash
         run: |
-          if [ -f .github/patch-ai-wiki-error.txt ]; then
-            cat .github/patch-ai-wiki-error.txt
-            exit 1
-          fi
+          git fetch origin feature/wiki-knowledge-continuation
+          git show origin/feature/wiki-knowledge-continuation:.github/scripts/repair_ai_wiki.py > /tmp/repair_ai_wiki.py
           set +e
-          python3 <<'PY' > /tmp/patch-ai-wiki.log 2>&1
-          from pathlib import Path
-          workflow = Path('.github/workflows/patch-ai-wiki-codex-once.yml').read_text()
-          marker = "          python3 <<'PY'\n"
-          source = workflow.split(marker, 1)[1].split("\n          PY", 1)[0]
-          source = "\n".join(line[10:] if line.startswith("          ") else line for line in source.splitlines())
-          exec(compile(source, 'patch-ai-wiki-codex-once', 'exec'))
-          PY
+          python3 /tmp/repair_ai_wiki.py > /tmp/patch-ai-wiki.log 2>&1
           status=$?
           set -e
           cat /tmp/patch-ai-wiki.log
@@ -51,6 +43,7 @@ jobs:
             git push origin HEAD:${{ github.head_ref }}
             exit "$status"
           fi
+          rm -f .github/patch-ai-wiki-error.txt
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
       - name: Format Rust
@@ -62,6 +55,7 @@ jobs:
       - name: Run focused frontend lint
         run: pnpm exec eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue
       - name: Commit repair
+        shell: bash
         run: |
           git config user.name "ElephantNote Bot"
           git config user.email "actions@users.noreply.github.com"

@@ -14,7 +14,7 @@ describe('ElephantNote mobile interaction regressions', () => {
     expect(runtime).toContain('.en-recent-heading')
     expect(runtime).toContain('preserveDrawerForLocalToggle')
     expect(runtime).toContain('target.queueMicrotask')
-    expect(runtime).toContain('if (!isDrawerOpen(target)) openDrawer(target)')
+    expect(runtime).toContain('clickElement(target, OPEN_DRAWER_SELECTOR)')
     expect(shell).toContain('@click.capture="handleMobileSidebarClick"')
   })
 

@@ -1,383 +1,385 @@
 use serde_json::{json, Value};
 
-use super::{parse_markdown_document, render_html, render_plain_text};
 use super::muya_clipboard::{
-  backspace, clipboard_contract, paste_text, redo, remove_next, selected_html,
-  selected_markdown, undo, EditState, Selection,
+    backspace, clipboard_contract, paste_text, redo, remove_next, selected_html, selected_markdown,
+    undo, EditState, Selection,
 };
 use super::muya_compat::{parse_muya_document, render_muya_html, tokenize_muya};
 use super::muya_engine::{
-  apply_command, apply_commands, MuyaEditorCommand, MuyaEditorSnapshot, MuyaEditorState,
-  MuyaEditorTransaction, MuyaSelection,
+    apply_command, apply_commands, MuyaEditorCommand, MuyaEditorSnapshot, MuyaEditorState,
+    MuyaEditorTransaction, MuyaSelection,
 };
 use super::muya_extras::collect_muya_extras;
 use super::muya_interactions::{
-  cancel_composition, commit_composition, editor_snapshot, image_selection, start_composition,
-  table_contract, table_insert_column, table_insert_row, update_composition, CompositionState,
+    cancel_composition, commit_composition, editor_snapshot, image_selection, start_composition,
+    table_contract, table_insert_column, table_insert_row, update_composition, CompositionState,
 };
 use super::muya_navigation::{detect_input_rule, move_cursor};
 use super::muya_parity::{apply_parity_command, MuyaParityCommand};
 use super::muya_ui::{execute_ui_query, MuyaUiQuery};
 use super::parser_v4::{extract_images, extract_links, parse_blocks, split_frontmatter};
+use super::{parse_markdown_document, render_html, render_plain_text};
 
 const MUYA_HISTORY_LIMIT: usize = 100;
 
 #[tauri::command]
 pub fn tauri_markdown_parse(markdown: String) -> Value {
-  json!(parse_markdown_document(&markdown))
+    json!(parse_markdown_document(&markdown))
 }
 
 #[tauri::command]
 pub fn tauri_markdown_render_html(markdown: String) -> Value {
-  json!({ "html": render_html(&markdown) })
+    json!({ "html": render_html(&markdown) })
 }
 
 #[tauri::command]
 pub fn tauri_markdown_to_text(markdown: String) -> Value {
-  let blocks = parse_blocks(&markdown);
-  json!({ "text": render_plain_text(&blocks) })
+    let blocks = parse_blocks(&markdown);
+    json!({ "text": render_plain_text(&blocks) })
 }
 
 #[tauri::command]
 pub fn tauri_markdown_extract_frontmatter(markdown: String) -> Value {
-  let (frontmatter, body) = split_frontmatter(&markdown);
-  json!({ "frontmatter": frontmatter, "body": body })
+    let (frontmatter, body) = split_frontmatter(&markdown);
+    json!({ "frontmatter": frontmatter, "body": body })
 }
 
 #[tauri::command]
 pub fn tauri_markdown_extract_links(markdown: String) -> Value {
-  json!({ "links": extract_links(&markdown), "images": extract_images(&markdown) })
+    json!({ "links": extract_links(&markdown), "images": extract_images(&markdown) })
 }
 
 #[tauri::command]
 pub fn tauri_muya_parse(markdown: String) -> Value {
-  parse_muya_document(&markdown)
+    parse_muya_document(&markdown)
 }
 
 #[tauri::command]
 pub fn tauri_muya_render_html(markdown: String) -> Value {
-  json!({ "html": render_muya_html(&markdown) })
+    json!({ "html": render_muya_html(&markdown) })
 }
 
 #[tauri::command]
 pub fn tauri_muya_tokens(markdown: String) -> Value {
-  json!({ "tokens": tokenize_muya(&markdown) })
+    json!({ "tokens": tokenize_muya(&markdown) })
 }
 
 #[tauri::command]
 pub fn tauri_muya_extras(markdown: String) -> Value {
-  json!({ "extras": collect_muya_extras(&markdown) })
+    json!({ "extras": collect_muya_extras(&markdown) })
 }
 
 #[tauri::command]
 pub fn tauri_muya_clipboard(markdown: String, selection: Option<Selection>) -> Value {
-  clipboard_contract(&markdown, selection)
+    clipboard_contract(&markdown, selection)
 }
 
 #[tauri::command]
 pub fn tauri_muya_copy_markdown(markdown: String, selection: Option<Selection>) -> Value {
-  json!({ "markdown": selected_markdown(&markdown, selection) })
+    json!({ "markdown": selected_markdown(&markdown, selection) })
 }
 
 #[tauri::command]
 pub fn tauri_muya_copy_html(markdown: String, selection: Option<Selection>) -> Value {
-  json!({ "html": selected_html(&markdown, selection) })
+    json!({ "html": selected_html(&markdown, selection) })
 }
 
 #[tauri::command]
 pub fn tauri_muya_paste(state: EditState, text: String) -> Value {
-  json!(paste_text(state, &text))
+    json!(paste_text(state, &text))
 }
 
 #[tauri::command]
 pub fn tauri_muya_backspace(state: EditState) -> Value {
-  json!(backspace(state))
+    json!(backspace(state))
 }
 
 #[tauri::command]
 pub fn tauri_muya_remove_next(state: EditState) -> Value {
-  json!(remove_next(state))
+    json!(remove_next(state))
 }
 
 #[tauri::command]
 pub fn tauri_muya_undo(state: EditState) -> Value {
-  json!(undo(state))
+    json!(undo(state))
 }
 
 #[tauri::command]
 pub fn tauri_muya_redo(state: EditState) -> Value {
-  json!(redo(state))
+    json!(redo(state))
 }
 
 #[tauri::command]
 pub fn tauri_muya_move_cursor(
-  markdown: String,
-  cursor: usize,
-  direction: String,
-  extend: bool,
-  anchor: Option<usize>,
+    markdown: String,
+    cursor: usize,
+    direction: String,
+    extend: bool,
+    anchor: Option<usize>,
 ) -> Value {
-  move_cursor(&markdown, cursor, &direction, extend, anchor)
+    move_cursor(&markdown, cursor, &direction, extend, anchor)
 }
 
 #[tauri::command]
 pub fn tauri_muya_input_rule(line_before_cursor: String) -> Value {
-  json!({ "rule": detect_input_rule(&line_before_cursor) })
+    json!({ "rule": detect_input_rule(&line_before_cursor) })
 }
 
 #[tauri::command]
 pub fn tauri_muya_table_insert_row(markdown: String, row_index: usize) -> Value {
-  json!({ "markdown": table_insert_row(&markdown, row_index) })
+    json!({ "markdown": table_insert_row(&markdown, row_index) })
 }
 
 #[tauri::command]
 pub fn tauri_muya_table_insert_column(markdown: String, column_index: usize) -> Value {
-  json!({ "markdown": table_insert_column(&markdown, column_index) })
+    json!({ "markdown": table_insert_column(&markdown, column_index) })
 }
 
 #[tauri::command]
 pub fn tauri_muya_table_contract(markdown: String) -> Value {
-  table_contract(&markdown)
+    table_contract(&markdown)
 }
 
 #[tauri::command]
 pub fn tauri_muya_image_selection(markdown: String, cursor: usize) -> Value {
-  json!({ "image": image_selection(&markdown, cursor) })
+    json!({ "image": image_selection(&markdown, cursor) })
 }
 
 #[tauri::command]
 pub fn tauri_muya_start_composition(state: CompositionState) -> Value {
-  json!(start_composition(state))
+    json!(start_composition(state))
 }
 
 #[tauri::command]
 pub fn tauri_muya_update_composition(state: CompositionState, text: String) -> Value {
-  json!(update_composition(state, &text))
+    json!(update_composition(state, &text))
 }
 
 #[tauri::command]
 pub fn tauri_muya_commit_composition(state: CompositionState) -> Value {
-  json!(commit_composition(state))
+    json!(commit_composition(state))
 }
 
 #[tauri::command]
 pub fn tauri_muya_cancel_composition(state: CompositionState) -> Value {
-  json!(cancel_composition(state))
+    json!(cancel_composition(state))
 }
 
 #[tauri::command]
 pub fn tauri_muya_editor_snapshot(state: EditState) -> Value {
-  editor_snapshot(&state)
+    editor_snapshot(&state)
 }
 
 #[tauri::command]
 pub fn tauri_muya_engine_create(markdown: String) -> Value {
-  json!(MuyaEditorState::new(markdown))
+    json!(MuyaEditorState::new(markdown))
 }
 
 #[tauri::command]
 pub fn tauri_muya_engine_sync_document(
-  mut state: MuyaEditorState,
-  markdown: String,
-  selection: MuyaSelection,
-  continue_group: bool,
+    mut state: MuyaEditorState,
+    markdown: String,
+    selection: MuyaSelection,
+    continue_group: bool,
 ) -> Result<Value, String> {
-  let before_markdown = state.markdown.clone();
-  let before_selection = state.selection;
+    let before_markdown = state.markdown.clone();
+    let before_selection = state.selection;
 
-  if before_markdown == markdown {
-    return apply_command(
-      state,
-      MuyaEditorCommand::SetSelection {
-        anchor: selection.anchor,
-        focus: selection.focus,
-      },
-    )
-    .map(|transaction| json!(transaction));
-  }
+    if before_markdown == markdown {
+        return apply_command(
+            state,
+            MuyaEditorCommand::SetSelection {
+                anchor: selection.anchor,
+                focus: selection.focus,
+            },
+        )
+        .map(|transaction| json!(transaction));
+    }
 
-  let current_snapshot = MuyaEditorSnapshot {
-    markdown: before_markdown,
-    selection: before_selection,
-  };
-  let grouped_snapshot = if continue_group {
-    state.undo_stack.pop()
-  } else {
-    None
-  };
+    let current_snapshot = MuyaEditorSnapshot {
+        markdown: before_markdown,
+        selection: before_selection,
+    };
+    let grouped_snapshot = if continue_group {
+        state.undo_stack.pop()
+    } else {
+        None
+    };
 
-  state.markdown = markdown;
-  state.selection = selection;
-  state = apply_command(
-    state,
-    MuyaEditorCommand::SetSelection {
-      anchor: selection.anchor,
-      focus: selection.focus,
-    },
-  )?
-  .state;
+    state.markdown = markdown;
+    state.selection = selection;
+    state = apply_command(
+        state,
+        MuyaEditorCommand::SetSelection {
+            anchor: selection.anchor,
+            focus: selection.focus,
+        },
+    )?
+    .state;
 
-  while state.undo_stack.len() >= MUYA_HISTORY_LIMIT {
-    state.undo_stack.remove(0);
-  }
-  state.undo_stack.push(grouped_snapshot.unwrap_or(current_snapshot));
-  state.redo_stack.clear();
-  state.revision = state.revision.saturating_add(1);
+    while state.undo_stack.len() >= MUYA_HISTORY_LIMIT {
+        state.undo_stack.remove(0);
+    }
+    state
+        .undo_stack
+        .push(grouped_snapshot.unwrap_or(current_snapshot));
+    state.redo_stack.clear();
+    state.revision = state.revision.saturating_add(1);
 
-  let selection_changed = state.selection != before_selection;
-  Ok(json!(MuyaEditorTransaction {
-    state,
-    document_changed: true,
-    selection_changed,
-  }))
+    let selection_changed = state.selection != before_selection;
+    Ok(json!(MuyaEditorTransaction {
+        state,
+        document_changed: true,
+        selection_changed,
+    }))
 }
 
 #[tauri::command]
 pub fn tauri_muya_engine_apply(
-  state: MuyaEditorState,
-  command: MuyaEditorCommand,
+    state: MuyaEditorState,
+    command: MuyaEditorCommand,
 ) -> Result<Value, String> {
-  apply_command(state, command).map(|transaction| json!(transaction))
+    apply_command(state, command).map(|transaction| json!(transaction))
 }
 
 #[tauri::command]
 pub fn tauri_muya_engine_apply_grouped(
-  mut state: MuyaEditorState,
-  command: MuyaEditorCommand,
-  continue_group: bool,
+    mut state: MuyaEditorState,
+    command: MuyaEditorCommand,
+    continue_group: bool,
 ) -> Result<Value, String> {
-  let preserved_snapshot = if continue_group {
-    state.undo_stack.pop()
-  } else {
-    None
-  };
-  let mut transaction = apply_command(state, command)?;
-  if let Some(snapshot) = preserved_snapshot {
-    if transaction.document_changed {
-      transaction.state.undo_stack.pop();
+    let preserved_snapshot = if continue_group {
+        state.undo_stack.pop()
+    } else {
+        None
+    };
+    let mut transaction = apply_command(state, command)?;
+    if let Some(snapshot) = preserved_snapshot {
+        if transaction.document_changed {
+            transaction.state.undo_stack.pop();
+        }
+        transaction.state.undo_stack.push(snapshot);
     }
-    transaction.state.undo_stack.push(snapshot);
-  }
-  Ok(json!(transaction))
+    Ok(json!(transaction))
 }
 
 #[tauri::command]
 pub fn tauri_muya_engine_apply_batch(
-  state: MuyaEditorState,
-  commands: Vec<MuyaEditorCommand>,
+    state: MuyaEditorState,
+    commands: Vec<MuyaEditorCommand>,
 ) -> Result<Value, String> {
-  apply_commands(state, commands).map(|transaction| json!(transaction))
+    apply_commands(state, commands).map(|transaction| json!(transaction))
 }
 
 #[tauri::command]
 pub fn tauri_muya_engine_commit_composition(
-  state: MuyaEditorState,
-  selection: MuyaSelection,
-  text: String,
+    state: MuyaEditorState,
+    selection: MuyaSelection,
+    text: String,
 ) -> Result<Value, String> {
-  apply_commands(
-    state,
-    vec![
-      MuyaEditorCommand::SetSelection {
-        anchor: selection.anchor,
-        focus: selection.focus,
-      },
-      MuyaEditorCommand::ReplaceSelection { text },
-    ],
-  )
-  .map(|transaction| json!(transaction))
+    apply_commands(
+        state,
+        vec![
+            MuyaEditorCommand::SetSelection {
+                anchor: selection.anchor,
+                focus: selection.focus,
+            },
+            MuyaEditorCommand::ReplaceSelection { text },
+        ],
+    )
+    .map(|transaction| json!(transaction))
 }
 
 #[tauri::command]
 pub fn tauri_muya_engine_apply_parity(
-  state: MuyaEditorState,
-  command: MuyaParityCommand,
+    state: MuyaEditorState,
+    command: MuyaParityCommand,
 ) -> Result<Value, String> {
-  apply_parity_command(state, command).map(|transaction| json!(transaction))
+    apply_parity_command(state, command).map(|transaction| json!(transaction))
 }
 
 #[tauri::command]
 pub fn tauri_muya_engine_query(
-  state: Option<MuyaEditorState>,
-  query: MuyaUiQuery,
+    state: Option<MuyaEditorState>,
+    query: MuyaUiQuery,
 ) -> Result<Value, String> {
-  execute_ui_query(state.as_ref(), query)
+    execute_ui_query(state.as_ref(), query)
 }
 
 #[tauri::command]
 pub fn tauri_muya_engine_capabilities() -> Value {
-  json!({
-    "engine": "rust",
-    "version": 6,
-    "offsetEncoding": "utf16",
-    "history": {
-      "undo": true,
-      "redo": true,
-      "grouped": true,
-      "maximumEntries": 100
-    },
-    "commands": [
-      "syncDocument",
-      "insertText",
-      "replaceSelection",
-      "deleteBackward",
-      "deleteForward",
-      "setSelection",
-      "toggleInline",
-      "transformBlock",
-      "insertLineBreak",
-      "commitComposition",
-      "undo",
-      "redo"
-    ],
-    "parityCommands": [
-      "applyOperation",
-      "keyboardRule",
-      "tableCommand",
-      "resizeImage",
-      "upsertFootnote",
-      "insertTemplate"
-    ],
-    "uiQueries": [
-      "jsonState",
-      "clipboard",
-      "imageToolbar",
-      "footnotePopup",
-      "slashCommands",
-      "previewDescriptor"
-    ],
-    "inlineMarkers": ["**", "*", "~~", "`", "=="],
-    "blockKinds": [
-      "paragraph",
-      "heading1",
-      "heading2",
-      "heading3",
-      "heading4",
-      "heading5",
-      "heading6",
-      "bullet",
-      "ordered",
-      "task",
-      "quote"
-    ],
-    "tableActions": [
-      "insert_row",
-      "delete_row",
-      "insert_column",
-      "delete_column",
-      "align_left",
-      "align_center",
-      "align_right"
-    ],
-    "templates": [
-      "heading",
-      "task-list",
-      "table",
-      "image",
-      "math",
-      "mermaid",
-      "footnote",
-      "code"
-    ]
-  })
+    json!({
+      "engine": "rust",
+      "version": 6,
+      "offsetEncoding": "utf16",
+      "history": {
+        "undo": true,
+        "redo": true,
+        "grouped": true,
+        "maximumEntries": 100
+      },
+      "commands": [
+        "syncDocument",
+        "insertText",
+        "replaceSelection",
+        "deleteBackward",
+        "deleteForward",
+        "setSelection",
+        "toggleInline",
+        "transformBlock",
+        "insertLineBreak",
+        "commitComposition",
+        "undo",
+        "redo"
+      ],
+      "parityCommands": [
+        "applyOperation",
+        "keyboardRule",
+        "tableCommand",
+        "resizeImage",
+        "upsertFootnote",
+        "insertTemplate"
+      ],
+      "uiQueries": [
+        "jsonState",
+        "clipboard",
+        "imageToolbar",
+        "footnotePopup",
+        "slashCommands",
+        "previewDescriptor"
+      ],
+      "inlineMarkers": ["**", "*", "~~", "`", "=="],
+      "blockKinds": [
+        "paragraph",
+        "heading1",
+        "heading2",
+        "heading3",
+        "heading4",
+        "heading5",
+        "heading6",
+        "bullet",
+        "ordered",
+        "task",
+        "quote"
+      ],
+      "tableActions": [
+        "insert_row",
+        "delete_row",
+        "insert_column",
+        "delete_column",
+        "align_left",
+        "align_center",
+        "align_right"
+      ],
+      "templates": [
+        "heading",
+        "task-list",
+        "table",
+        "image",
+        "math",
+        "mermaid",
+        "footnote",
+        "code"
+      ]
+    })
 }

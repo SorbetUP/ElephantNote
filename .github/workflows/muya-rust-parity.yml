@@ -135,7 +135,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          pnpm exec vitest run \
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
             tests/app/unit/muyaRustCompleteOwnership.spec.js \
             tests/app/unit/muyaRustCompleteSession.spec.js \
             tests/app/unit/muyaRustEngineRuntime.spec.js \

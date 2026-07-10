@@ -35,11 +35,12 @@ describe('real Muya editor activation', () => {
     expect(editor).not.toContain('MuyaRuntimeEditor')
   })
 
-  it('injects Rust behind only the exact Muya class import', () => {
+  it('injects a Rust-owned session behind only the exact Muya class import', () => {
     const viteConfig = read('vite.tauri.config.js')
     const adapter = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js')
     const mirror = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js')
     const client = read('Elephant/frontend/src/renderer/src/muya/rustEngineRuntime.js')
+    const backend = read('Elephant/backend/tauri/src/markdown/muya_session.rs')
 
     expect(viteConfig).toContain('const realMuyaRustMirrorPlugin = () => ({')
     expect(viteConfig).toContain("if (source !== 'muya/lib') return null")
@@ -52,22 +53,30 @@ describe('real Muya editor activation', () => {
     expect(adapter).not.toContain('innerHTML')
     expect(adapter).not.toContain('createElement')
     expect(mirror).toContain("target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-core'")
+    expect(mirror).toContain('sessionId: createSessionId()')
     expect(mirror).toContain('client.syncDocument(')
     expect(mirror).toContain('client.jsonState()')
-    expect(client).toContain("'tauri_muya_engine_sync_document'")
+    expect(client).toContain("'tauri_muya_session_sync_document'")
+    expect(client).toContain("'tauri_muya_session_apply'")
+    expect(client).toContain("'tauri_muya_session_close'")
+    expect(backend).toContain('pub struct MuyaEngineSessions')
+    expect(backend).toContain('pub undo_depth: usize')
+    expect(backend).not.toContain('pub undo_stack:')
   })
 
   it('routes undo and redo through Rust and restores the result with real Muya', () => {
     const adapter = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js')
     const mirror = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js')
 
-    expect(adapter).toContain("return this.__applyElephantRustHistory('undo')")
-    expect(adapter).toContain("return this.__applyElephantRustHistory('redo')")
+    expect(adapter).toContain("'undo',")
+    expect(adapter).toContain('(engine) => engine.undo()')
+    expect(adapter).toContain("'redo',")
+    expect(adapter).toContain('(engine) => engine.redo()')
     expect(adapter).toContain('selectionToMuyaIndexCursor(state.markdown, state.selection)')
     expect(adapter).toContain('super.setMarkdown(state.markdown, undefined, true, muyaIndexCursor)')
     expect(adapter).toContain("this.__elephantRustMirror?.reset(markdown, 'set-markdown'")
-    expect(mirror).toContain("undo: () => applyHistory('undo')")
-    expect(mirror).toContain("redo: () => applyHistory('redo')")
+    expect(mirror).toContain("undo: () => applyCommand('rust-undo'")
+    expect(mirror).toContain("redo: () => applyCommand('rust-redo'")
   })
 
   it('keeps every Muya UI plugin on the untouched original submodule path', () => {

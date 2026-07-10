@@ -1,42 +1,83 @@
-# Built-in starter addons
+# Built-in Addons
 
-ElephantNote ships four built-in addons so users and developers can see the addon lifecycle and contribution APIs without installing third-party code.
+Built-in addons are compiled with ElephantNote, use the same manager and contribution contracts as the addon platform, and do not require Community Addons mode.
 
 ## Daily Notes
 
-Enabled by default.
+**ID:** `elephant.daily-notes`  
+**Version:** `1.1.0`  
+**Enabled by default:** yes
 
-- Command: **Create today's daily note**
-- Writes `Daily/YYYY-MM-DD.md`
-- Creates the note only when it does not already exist
-- Adds frontmatter, a notes section and a task section
+Creates or opens:
+
+```text
+Daily/YYYY-MM-DD.md
+```
+
+A new daily note contains:
+
+- frontmatter with date and timestamps;
+- links to the previous and next day;
+- Focus;
+- Tasks;
+- Notes;
+- End-of-day review.
+
+Existing daily notes are never overwritten. All adjacent-day links are derived from one timestamp to avoid midnight boundary inconsistencies.
 
 ## Quick Capture
 
-Enabled by default.
+**ID:** `elephant.quick-capture`  
+**Version:** `1.1.0`  
+**Enabled by default:** yes
 
-- Command: **Create a quick capture note**
-- Writes a unique timestamped note under `Inbox/`
-- Intended for ideas that will be classified or moved later
+Creates a collision-resistant note under:
+
+```text
+Inbox/Quick capture YYYY-MM-DD HH-MM-SS-mmm.md
+```
+
+Each note is marked with:
+
+```yaml
+status: unprocessed
+```
+
+and includes a review task. Programmatic invocations may pass an optional `{ title, content }` payload.
 
 ## Vault Overview
 
-Enabled by default.
+**ID:** `elephant.vault-overview`  
+**Version:** `1.1.0`  
+**Enabled by default:** yes
 
-- Command: **Generate vault overview**
-- Inspects the real Markdown index and resolved wiki links
-- Writes or updates `Reports/Vault Overview.md`
-- Reports note count, resolved links and notes without resolved links
+Generates:
+
+```text
+Reports/Vault Overview.md
+```
+
+The report is derived from the real Markdown index and resolved wiki graph. It includes:
+
+- indexed note count;
+- resolved-link count;
+- connected-note count;
+- graph link coverage;
+- most connected notes with incoming/outgoing counts;
+- orphan notes;
+- a deterministic path-sorted note index.
 
 ## Addon Inspector
 
-Disabled by default.
+**ID:** `elephant.addon-inspector`  
+**Version:** `0.3.0`  
+**Enabled by default:** no
 
-- Developer-oriented example
-- Demonstrates action, settings and sidebar contributions
-- Opens the Addons settings page
+A developer reference showing action, settings and sidebar contributions. It is intentionally not part of the default user workflow.
 
-Built-in addons are compiled with ElephantNote and do not require Community Addons mode. User-installed packages are stored per vault under:
+## Per-vault external addon data
+
+User-installed packages remain scoped to the active vault:
 
 ```text
 .elephantnote/addons/

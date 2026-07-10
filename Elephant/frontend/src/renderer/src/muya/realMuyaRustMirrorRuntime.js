@@ -101,6 +101,7 @@ export const createRealMuyaRustMirror = ({
       toggleInline: async() => null,
       transformBlock: async() => null,
       applyOperation: async() => null,
+      keyboardRule: async() => null,
       tableCommand: async() => null,
       upsertFootnote: async() => null,
       insertTemplate: async() => null,
@@ -304,6 +305,10 @@ export const createRealMuyaRustMirror = ({
     applyOperation: (operation) => applyCommand(
       `rust-operation-${String(operation?.type || 'unknown')}`,
       (engine) => engine.applyOperation(operation)
+    ),
+    keyboardRule: (key, options = {}) => applyCommand(
+      `rust-keyboard-${String(key).toLowerCase()}`,
+      (engine) => engine.keyboardRule(String(key), options)
     ),
     tableCommand: (action, index = 0) => applyCommand(
       `rust-table-${String(action)}`,

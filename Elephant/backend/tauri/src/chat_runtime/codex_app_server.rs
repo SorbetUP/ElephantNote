@@ -97,7 +97,11 @@ fn source_auth_candidates() -> Vec<PathBuf> {
         candidates.push(codex_home.join("auth.json"));
     }
     if let Some(home) = home_dir() {
-        candidates.push(home.join(".elephantnote").join("codex-home").join("auth.json"));
+        candidates.push(
+            home.join(".elephantnote")
+                .join("codex-home")
+                .join("auth.json"),
+        );
         candidates.push(home.join(".codex").join("auth.json"));
     }
     candidates.dedup();
@@ -112,13 +116,19 @@ async fn isolated_codex_home(app: &AppHandle) -> R<PathBuf> {
         .join("runtimes")
         .join("codex")
         .join(CODEX_HOME_DIR);
-    tokio::fs::create_dir_all(&root)
-        .await
-        .map_err(|error| format!("Unable to create isolated Codex home {}: {error}", root.display()))?;
+    tokio::fs::create_dir_all(&root).await.map_err(|error| {
+        format!(
+            "Unable to create isolated Codex home {}: {error}",
+            root.display()
+        )
+    })?;
 
     let target_auth = root.join("auth.json");
     if !target_auth.exists() {
-        if let Some(source_auth) = source_auth_candidates().into_iter().find(|path| path.is_file()) {
+        if let Some(source_auth) = source_auth_candidates()
+            .into_iter()
+            .find(|path| path.is_file())
+        {
             tokio::fs::copy(&source_auth, &target_auth)
                 .await
                 .map_err(|error| {
@@ -626,10 +636,7 @@ fn should_log_event(method: &str) -> bool {
 fn should_emit_frontend_event(method: &str) -> bool {
     matches!(
         method,
-        "account/login/completed"
-            | "account/updated"
-            | "account/rateLimits/updated"
-            | "warning"
+        "account/login/completed" | "account/updated" | "account/rateLimits/updated" | "warning"
     )
 }
 
@@ -761,7 +768,11 @@ impl CodexState {
         if let Some(client) = self.client.lock().await.take() {
             let mut child = client.child.lock().await;
             log("process", format!("stop:start pid={:?}", child.id()));
-            if child.try_wait().map_err(|error| error.to_string())?.is_none() {
+            if child
+                .try_wait()
+                .map_err(|error| error.to_string())?
+                .is_none()
+            {
                 child.kill().await.map_err(|error| error.to_string())?;
                 let _ = child.wait().await;
             }
@@ -962,7 +973,9 @@ impl CodexClient {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => {
                 self.pending.lock().await.remove(&id);
-                return Err(format!("Codex app-server response channel closed: {method}"));
+                return Err(format!(
+                    "Codex app-server response channel closed: {method}"
+                ));
             }
             Err(_) => {
                 self.pending.lock().await.remove(&id);
@@ -1272,14 +1285,19 @@ mod tests {
         assert_eq!(params.get("ephemeral").and_then(Value::as_bool), Some(true));
         assert_eq!(params.get("environments"), Some(&json!([])));
         assert_eq!(params.get("selectedCapabilityRoots"), Some(&json!([])));
-        assert_eq!(params.get("sandbox").and_then(Value::as_str), Some("read-only"));
+        assert_eq!(
+            params.get("sandbox").and_then(Value::as_str),
+            Some("read-only")
+        );
     }
 
     #[test]
     fn turn_payload_disables_network_access() {
         let params = turn_start_params("thread", "gpt-test", "/tmp/chat", "hello");
         assert_eq!(
-            params.pointer("/sandboxPolicy/type").and_then(Value::as_str),
+            params
+                .pointer("/sandboxPolicy/type")
+                .and_then(Value::as_str),
             Some("readOnly")
         );
         assert_eq!(

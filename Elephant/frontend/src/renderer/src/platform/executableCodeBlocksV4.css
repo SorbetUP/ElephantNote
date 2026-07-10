@@ -1,0 +1,333 @@
+.en-code-v4-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482500;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.en-code-v4-layer > * {
+  pointer-events: auto;
+}
+
+.en-code-v4-host {
+  position: relative !important;
+}
+
+.en-code-v4-pre {
+  overflow-x: auto !important;
+  scrollbar-width: thin;
+}
+
+.en-code-v4-pre > code {
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+
+.en-code-v4-pre.en-code-v4-has-output {
+  margin-bottom: calc(var(--en-code-v4-output-height, 0px) + 14px) !important;
+}
+
+/* Keep Muya's language selector, but make it editor chrome rather than a title. */
+.en-code-v4-language {
+  min-height: 20px !important;
+  max-width: 160px !important;
+  margin: 0 !important;
+  padding: 1px 6px !important;
+  border: 0 !important;
+  border-radius: 5px !important;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--editorColor, currentColor) 52%, transparent) !important;
+  font-family: var(--font-family, system-ui, sans-serif) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 18px !important;
+  text-transform: capitalize !important;
+  box-shadow: none !important;
+  transition: background 120ms ease, color 120ms ease !important;
+}
+
+.en-code-v4-language:hover,
+.en-code-v4-language:focus,
+.en-code-v4-language:focus-within {
+  background: color-mix(in srgb, var(--editorColor, currentColor) 7%, transparent) !important;
+  color: var(--editorColor, currentColor) !important;
+  outline: none !important;
+}
+
+.en-code-v4-native-copy,
+.en-code-v4-fence-hint {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* No floating capsule: just two quiet actions inside the code block corner. */
+.en-code-v4-toolbar {
+  position: fixed;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.58;
+  transition: opacity 120ms ease;
+}
+
+.en-code-v4-toolbar:hover,
+.en-code-v4-toolbar:focus-within {
+  opacity: 1;
+}
+
+.en-code-v4-copy,
+.en-code-v4-run {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--editorColor, currentColor) 62%, transparent);
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, transform 90ms ease;
+}
+
+.en-code-v4-copy:hover:not(:disabled),
+.en-code-v4-run:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--editorColor, currentColor) 9%, transparent);
+  color: var(--editorColor, currentColor);
+}
+
+.en-code-v4-run:hover:not(:disabled) {
+  color: var(--en-primary, #1687ff);
+}
+
+.en-code-v4-copy:active:not(:disabled),
+.en-code-v4-run:active:not(:disabled) {
+  transform: scale(0.9);
+}
+
+.en-code-v4-copy:focus-visible,
+.en-code-v4-run:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--en-primary, #1687ff) 42%, transparent);
+  outline-offset: 1px;
+}
+
+.en-code-v4-copy:disabled,
+.en-code-v4-run:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.en-code-v4-copy-icon {
+  position: relative;
+  width: 13px;
+  height: 13px;
+}
+
+.en-code-v4-copy-icon::before,
+.en-code-v4-copy-icon::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 9px;
+  border: 1.4px solid currentColor;
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+
+.en-code-v4-copy-icon::before {
+  top: 0;
+  left: 0;
+  opacity: 0.58;
+}
+
+.en-code-v4-copy-icon::after {
+  right: 0;
+  bottom: 0;
+  background: var(--editorBgColor, transparent);
+}
+
+.en-code-v4-copy.is-copied {
+  color: #22a657;
+}
+
+.en-code-v4-run-icon {
+  width: 0;
+  height: 0;
+  margin-left: 2px;
+  border-top: 4.5px solid transparent;
+  border-bottom: 4.5px solid transparent;
+  border-left: 7px solid currentColor;
+}
+
+.en-code-v4-run.is-running,
+.en-code-v4-run.is-stopping {
+  color: #e05252;
+}
+
+.en-code-v4-run.is-running .en-code-v4-run-icon,
+.en-code-v4-run.is-stopping .en-code-v4-run-icon {
+  width: 8px;
+  height: 8px;
+  margin-left: 0;
+  border: 0;
+  border-radius: 1.5px;
+  background: currentColor;
+}
+
+.en-code-v4-run.is-stopping .en-code-v4-run-icon {
+  opacity: 0.55;
+}
+
+.en-code-v4-output {
+  position: fixed;
+  z-index: 1;
+  max-width: calc(100vw - 16px);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--editorColor, currentColor) 11%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--editorBgColor, #fff) 96%, var(--editorColor, #000) 4%);
+  box-shadow: none;
+  color: var(--editorColor, inherit);
+}
+
+.en-code-v4-output.is-error {
+  border-color: color-mix(in srgb, #d94c4c 36%, transparent);
+}
+
+.en-code-v4-output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding: 5px 8px 5px 11px;
+  border-bottom: 1px solid color-mix(in srgb, var(--editorColor, currentColor) 8%, transparent);
+}
+
+.en-code-v4-output-status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+
+.en-code-v4-output-status strong {
+  font-weight: 650;
+}
+
+.en-code-v4-status-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #22a657;
+}
+
+.en-code-v4-output.is-running .en-code-v4-status-dot {
+  background: var(--en-primary, #1687ff);
+}
+
+.en-code-v4-output.is-error .en-code-v4-status-dot {
+  background: #d94c4c;
+}
+
+.en-code-v4-output-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--editorColor, currentColor) 48%, transparent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.en-code-v4-output-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.en-code-v4-output-actions button {
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: color-mix(in srgb, var(--editorColor, currentColor) 58%, transparent);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.en-code-v4-output-actions button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--editorColor, currentColor) 8%, transparent);
+  color: var(--editorColor, currentColor);
+}
+
+.en-code-v4-output-actions button:disabled {
+  opacity: 0.35;
+}
+
+.en-code-v4-output-body {
+  max-height: 280px;
+  overflow: auto;
+  padding: 9px 11px 11px;
+}
+
+.en-code-v4-stream + .en-code-v4-stream {
+  margin-top: 10px;
+}
+
+.en-code-v4-stream-label {
+  margin-bottom: 4px;
+  color: color-mix(in srgb, var(--editorColor, currentColor) 44%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.en-code-v4-stream.is-error .en-code-v4-stream-label {
+  color: #d94c4c;
+}
+
+.en-code-v4-stream pre {
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  color: inherit;
+  font-family: var(--codeFontFamily, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.en-code-v4-empty {
+  margin: 0;
+  color: color-mix(in srgb, var(--editorColor, currentColor) 52%, transparent);
+  font-size: 12px;
+}
+
+.en-code-v4-progress {
+  width: 42px;
+  height: 3px;
+  border-radius: 99px;
+  background: var(--en-primary, #1687ff);
+  animation: en-code-v4-pulse 900ms ease-in-out infinite alternate;
+}
+
+@keyframes en-code-v4-pulse {
+  from { opacity: 0.25; transform: scaleX(0.55); transform-origin: left; }
+  to { opacity: 1; transform: scaleX(1); transform-origin: left; }
+}

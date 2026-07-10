@@ -61,7 +61,16 @@ const tablePointOffset = (table, node, offset, markdown) => {
   return previousLines + 2 + previousCells + inCell
 }
 
+const rootPointOffset = (root, offset) => {
+  const blocks = childBlocks(root)
+  const count = Math.max(0, Math.min(Number(offset) || 0, blocks.length))
+  return blocks.slice(0, count).reduce((sum, item, index) => (
+    sum + blockMarkdown(item).length + (index < count - 1 ? 2 : 0)
+  ), 0)
+}
+
 const pointToMarkdownOffset = (root, node, offset) => {
+  if (node === root) return rootPointOffset(root, offset)
   const blocks = childBlocks(root)
   const block = topLevelBlock(root, node)
   if (!block) return 0
@@ -79,7 +88,9 @@ const pointToMarkdownOffset = (root, node, offset) => {
 
 export const readMarkdownSelection = (root, selection = globalThis.getSelection?.()) => {
   if (!root || !selection || selection.rangeCount === 0) return null
-  if (!root.contains(selection.anchorNode) || !root.contains(selection.focusNode)) return null
+  if (!selection.anchorNode || !selection.focusNode) return null
+  if (selection.anchorNode !== root && !root.contains(selection.anchorNode)) return null
+  if (selection.focusNode !== root && !root.contains(selection.focusNode)) return null
   return {
     anchor: pointToMarkdownOffset(root, selection.anchorNode, selection.anchorOffset),
     focus: pointToMarkdownOffset(root, selection.focusNode, selection.focusOffset)
@@ -156,14 +167,21 @@ export const restoreMarkdownSelection = (root, selection, doc = root?.ownerDocum
   if (!root || !selection || !doc?.createRange) return false
   const browserSelection = doc.defaultView?.getSelection?.() || globalThis.getSelection?.()
   if (!browserSelection) return false
-  const anchor = markdownOffsetToPoint(root, selection.anchor)
-  const focus = markdownOffsetToPoint(root, selection.focus)
+  const backward = selection.anchor > selection.focus
+  const startOffset = backward ? selection.focus : selection.anchor
+  const endOffset = backward ? selection.anchor : selection.focus
+  const start = markdownOffsetToPoint(root, startOffset)
+  const end = markdownOffsetToPoint(root, endOffset)
   const range = doc.createRange()
   try {
-    range.setStart(anchor.node, anchor.offset)
-    range.setEnd(focus.node, focus.offset)
+    range.setStart(start.node, start.offset)
+    range.setEnd(end.node, end.offset)
     browserSelection.removeAllRanges()
     browserSelection.addRange(range)
+    if (backward && typeof browserSelection.extend === 'function') {
+      browserSelection.collapse(end.node, end.offset)
+      browserSelection.extend(start.node, start.offset)
+    }
     return true
   } catch {
     return false

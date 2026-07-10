@@ -8,19 +8,31 @@ const normalizeRepository = (value) => {
 }
 
 const readConfig = async (api) => {
+  let note
   try {
-    const note = await api.notes.read(CONFIG_PATH)
-    const parsed = JSON.parse(note.content)
-    const repositories = Array.isArray(parsed?.repositories)
-      ? parsed.repositories.map(normalizeRepository).filter(Boolean)
-      : []
-    if (!repositories.length) throw new Error('No valid repositories configured')
-    return { repositories: [...new Set(repositories)].slice(0, 25), created: false }
+    note = await api.notes.read(CONFIG_PATH)
   } catch {
     const template = { version: 1, repositories: DEFAULT_REPOSITORIES }
     await api.notes.write(CONFIG_PATH, `${JSON.stringify(template, null, 2)}\n`)
     return { repositories: DEFAULT_REPOSITORIES, created: true }
   }
+
+  let parsed
+  try {
+    parsed = JSON.parse(note.content)
+  } catch (error) {
+    throw new Error(`Invalid JSON in ${CONFIG_PATH}: ${error.message}`)
+  }
+  if (parsed?.version !== 1) {
+    throw new Error(`Unsupported GitHub Release Watcher config version: ${parsed?.version}`)
+  }
+  const repositories = Array.isArray(parsed.repositories)
+    ? parsed.repositories.map(normalizeRepository).filter(Boolean)
+    : []
+  if (!repositories.length) {
+    throw new Error(`${CONFIG_PATH} must contain at least one valid owner/repository entry`)
+  }
+  return { repositories: [...new Set(repositories)].slice(0, 25), created: false }
 }
 
 const fetchLatestRelease = async (api, repository) => {

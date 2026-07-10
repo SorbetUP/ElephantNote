@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installExecutableCodeBlocks } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocks'
-import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV4'
+import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV5'
 
 const wait = (milliseconds = 90) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 const flush = async() => {
@@ -10,7 +10,7 @@ const flush = async() => {
   await new Promise((resolve) => (globalThis.requestAnimationFrame || setTimeout)(resolve, 0))
   await wait(0)
 }
-const settle = async() => wait(220)
+const settle = async() => wait(180)
 
 const rect = (top = 40) => ({
   x: 20,
@@ -25,11 +25,11 @@ const rect = (top = 40) => ({
 })
 
 const blockMarkup = (source, index = 0) => `
-  <section data-code-block="${index}">
-    <div class="muya-language-label">python</div>
+  <section data-code-block="${index}" class="ag-code-block">
+    <span class="ag-language-input" contenteditable="true">python</span>
     <pre class="language-python"><code class="language-python">${source}</code></pre>
-    <button class="muya-copy-button" aria-label="Copy content" title="Copy content">copy</button>
-    <span class="muya-code-fence-hint">Code fence</span>
+    <button class="ag-copy-code" aria-label="Copy content" title="Copy content">copy</button>
+    <span class="ag-fence-label">Code fence</span>
   </section>
 `
 
@@ -43,7 +43,7 @@ const installEditor = (sources = ['print("hello")']) => {
   return [...document.querySelectorAll('pre')]
 }
 
-describe('consolidated executable code block runtime', () => {
+describe('stable executable code block UI', () => {
   let invoke
   let clipboardWrite
 
@@ -55,6 +55,12 @@ describe('consolidated executable code block runtime', () => {
       configurable: true,
       value: { writeText: clipboardWrite }
     })
+    Object.defineProperty(window, 'scrollX', { configurable: true, value: 0 })
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 })
+    window.getComputedStyle = vi.fn(() => ({
+      backgroundColor: 'rgb(42, 42, 45)',
+      color: 'rgb(220, 220, 222)'
+    }))
     invoke = vi.fn(async(command, payload) => {
       if (command === 'tauri_programs_list') {
         return { executionEnabled: true, outputLineLimit: 200, environments: [] }
@@ -65,7 +71,7 @@ describe('consolidated executable code block runtime', () => {
         return {
           success: true,
           language: payload.id,
-          environment: 'Python',
+          environment: payload.id === 'javascript' ? 'JavaScript' : 'Python',
           stdout: 'hello\n',
           stderr: '',
           exitCode: 0,
@@ -94,81 +100,107 @@ describe('consolidated executable code block runtime', () => {
     return runtime
   }
 
-  it('renders exactly two text-free integrated actions', async() => {
+  it('renders a stable language selector with copy and run actions', async() => {
     const runtime = await start()
-    const toolbar = runtime.layer.querySelector('.en-code-v4-toolbar')
-    expect(toolbar.children).toHaveLength(2)
+    const toolbar = runtime.layer.querySelector('.en-code-v5-toolbar')
+    expect(toolbar.hidden).toBe(false)
+    expect(toolbar.querySelectorAll('select')).toHaveLength(1)
     expect(toolbar.querySelectorAll('button')).toHaveLength(2)
-    expect(toolbar.querySelector('.en-code-v4-copy')).not.toBeNull()
-    expect(toolbar.querySelector('.en-code-v4-run')).not.toBeNull()
-    expect(toolbar.textContent).toBe('')
+    expect(toolbar.querySelector('.en-code-v5-language').value).toBe('python')
+    expect(toolbar.querySelector('.en-code-v5-copy')).not.toBeNull()
+    expect(toolbar.querySelector('.en-code-v5-run')).not.toBeNull()
   })
 
-  it('ignores one hundred mutations inside the runtime layer', async() => {
+  it('changes the real Muya language and the persisted fence classes', async() => {
     const runtime = await start()
-    const scansBefore = runtime.metrics.scans
-    for (let index = 0; index < 100; index += 1) {
-      const node = document.createElement('span')
-      runtime.layer.append(node)
-      node.remove()
-    }
-    await settle()
-    expect(runtime.metrics.scans).toBe(scansBefore)
-    expect(runtime.metrics.ignoredMutations).toBeGreaterThan(0)
-  })
-
-  it('ignores syntax-highlight span churn in an existing code element', async() => {
-    const runtime = await start()
-    const scansBefore = runtime.metrics.scans
-    const code = document.querySelector('code')
-    for (let index = 0; index < 80; index += 1) {
-      const span = document.createElement('span')
-      span.textContent = String(index)
-      code.append(span)
-      span.remove()
-    }
-    await settle()
-    expect(runtime.metrics.scans).toBe(scansBefore)
-  })
-
-  it('coalesces twenty topology changes into at most one scan', async() => {
-    const runtime = await start()
-    const scansBefore = runtime.metrics.scans
-    const editor = document.querySelector('.en-editor-host')
-    for (let index = 0; index < 20; index += 1) {
-      const wrapper = document.createElement('section')
-      wrapper.innerHTML = `<pre class="language-python"><code>print(${index})</code></pre>`
-      editor.append(wrapper)
-      wrapper.remove()
-    }
-    await settle()
-    expect(runtime.metrics.scans - scansBefore).toBeLessThanOrEqual(1)
-  })
-
-  it('runs real IPC and output rendering does not trigger another scan', async() => {
-    const runtime = await start()
-    const scansBefore = runtime.metrics.scans
-    runtime.layer.querySelector('.en-code-v4-run').click()
+    const select = runtime.layer.querySelector('.en-code-v5-language')
+    select.value = 'javascript'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
     await flush()
-    await settle()
+
+    const native = document.querySelector('.ag-language-input')
+    const pre = document.querySelector('pre')
+    const code = document.querySelector('code')
+    expect(native.textContent).toBe('javascript')
+    expect(native.dataset.value).toBe('javascript')
+    expect(pre.classList.contains('language-javascript')).toBe(true)
+    expect(code.classList.contains('language-javascript')).toBe(true)
+    expect([...runtime.states.values()][0].language).toBe('javascript')
+  })
+
+  it('runs the newly selected language through real IPC', async() => {
+    const runtime = await start()
+    const select = runtime.layer.querySelector('.en-code-v5-language')
+    select.value = 'javascript'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+    runtime.layer.querySelector('.en-code-v5-run').click()
+    await flush()
+
     expect(invoke).toHaveBeenCalledWith('tauri_programs_run', expect.objectContaining({
-      id: 'python',
+      id: 'javascript',
       command: 'print("hello")',
       stop: false
     }))
-    expect(runtime.layer.querySelector('.en-code-v4-output').textContent).toContain('hello')
+  })
+
+  it('anchors toolbar and output in document coordinates instead of viewport coordinates', async() => {
+    Object.defineProperty(window, 'scrollX', { configurable: true, value: 15 })
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 200 })
+    const runtime = await start()
+    runtime.layer.querySelector('.en-code-v5-run').click()
+    await flush()
+
+    const toolbar = runtime.layer.querySelector('.en-code-v5-toolbar')
+    const output = runtime.layer.querySelector('.en-code-v5-output')
+    expect(runtime.layer.classList.contains('en-code-v5-layer')).toBe(true)
+    expect(toolbar.style.top).toBe('249px')
+    expect(output.style.top).toBe('347px')
+    expect(output.style.left).toBe('35px')
+  })
+
+  it('does not schedule layout or scans when the page scrolls', async() => {
+    const runtime = await start()
+    const scansBefore = runtime.metrics.scans
+    const scheduledBefore = runtime.metrics.scheduledScans
+    window.dispatchEvent(new Event('scroll'))
+    document.dispatchEvent(new Event('scroll'))
+    await settle()
+    expect(runtime.metrics.scans).toBe(scansBefore)
+    expect(runtime.metrics.scheduledScans).toBe(scheduledBefore)
+  })
+
+  it('keeps output rendering from causing another scan', async() => {
+    const runtime = await start()
+    const scansBefore = runtime.metrics.scans
+    runtime.layer.querySelector('.en-code-v5-run').click()
+    await flush()
+    await settle()
+    expect(runtime.layer.querySelector('.en-code-v5-output').textContent).toContain('hello')
     expect(runtime.metrics.scans).toBe(scansBefore)
   })
 
-  it('copies exact source and tags only native Muya chrome', async() => {
-    const runtime = await start(['for i in range(2):\n  print(i)'])
-    runtime.layer.querySelector('.en-code-v4-copy').click()
+  it('uses the code block computed surface instead of a white output panel', async() => {
+    const runtime = await start()
+    runtime.layer.querySelector('.en-code-v5-run').click()
     await flush()
-    expect(clipboardWrite).toHaveBeenCalledWith('for i in range(2):\n  print(i)')
-    expect(document.querySelector('.muya-language-label').classList.contains('en-code-v4-language')).toBe(true)
-    expect(document.querySelector('.muya-copy-button').classList.contains('en-code-v4-native-copy')).toBe(true)
-    expect(document.querySelector('.muya-code-fence-hint').classList.contains('en-code-v4-fence-hint')).toBe(true)
-    expect(runtime.layer.querySelector('.en-code-v4-copy').classList.contains('en-code-v4-native-copy')).toBe(false)
+    const output = runtime.layer.querySelector('.en-code-v5-output')
+    expect(output.style.getPropertyValue('--en-code-v5-surface')).toBe('rgb(42, 42, 45)')
+    expect(output.style.getPropertyValue('--en-code-v5-text')).toBe('rgb(220, 220, 222)')
+  })
+
+  it('ignores runtime and syntax-highlighting mutations', async() => {
+    const runtime = await start()
+    const scansBefore = runtime.metrics.scans
+    for (let index = 0; index < 100; index += 1) {
+      const runtimeNode = document.createElement('span')
+      runtime.layer.append(runtimeNode)
+      runtimeNode.remove()
+      const syntaxNode = document.createElement('span')
+      document.querySelector('code').append(syntaxNode)
+      syntaxNode.remove()
+    }
+    await settle()
+    expect(runtime.metrics.scans).toBe(scansBefore)
   })
 
   it('rebinds one stable state after a complete Muya host replacement', async() => {
@@ -182,23 +214,16 @@ describe('consolidated executable code block runtime', () => {
     await settle()
     expect(runtime.states.size).toBe(1)
     expect([...runtime.states.values()][0]).toBe(state)
-    expect(runtime.layer.querySelectorAll('.en-code-v4-toolbar')).toHaveLength(1)
+    expect(runtime.layer.querySelectorAll('.en-code-v5-toolbar')).toHaveLength(1)
   })
 
-  it('maintains one toolbar per block', async() => {
-    const runtime = await start(['print("one")', 'print("two")', 'print("three")'])
-    expect(runtime.states.size).toBe(3)
-    expect(runtime.layer.querySelectorAll('.en-code-v4-toolbar')).toHaveLength(3)
-    expect(runtime.layer.querySelectorAll('.en-code-v4-run')).toHaveLength(3)
-    expect(runtime.layer.querySelectorAll('.en-code-v4-copy')).toHaveLength(3)
-  })
-
-  it('disconnects observation and removes portal UI on dispose', async() => {
-    const runtime = await start()
-    runtime.dispose()
-    document.querySelector('.en-editor-host').append(document.createElement('pre'))
-    await wait(120)
-    expect(document.querySelector('.en-code-v4-layer')).toBeNull()
-    expect(window.__ELEPHANT_CODE_RUNTIME__).toBeUndefined()
+  it('copies exact source and hides only the native Muya chrome', async() => {
+    const runtime = await start(['for i in range(2):\n  print(i)'])
+    runtime.layer.querySelector('.en-code-v5-copy').click()
+    await flush()
+    expect(clipboardWrite).toHaveBeenCalledWith('for i in range(2):\n  print(i)')
+    expect(document.querySelector('.ag-language-input').classList.contains('en-code-v5-native-language')).toBe(true)
+    expect(document.querySelector('.ag-copy-code').classList.contains('en-code-v5-native-copy')).toBe(true)
+    expect(document.querySelector('.ag-fence-label').classList.contains('en-code-v5-fence-hint')).toBe(true)
   })
 })

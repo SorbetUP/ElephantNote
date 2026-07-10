@@ -40,12 +40,31 @@ const ensureSelection = (selection) => {
   return { anchor: selection.anchor, focus: selection.focus }
 }
 
-export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {}) => {
+const ensureSessionId = (sessionId) => {
+  if (sessionId == null) return ''
+  const value = String(sessionId)
+  if (!/^[A-Za-z0-9:_-]{1,128}$/.test(value)) {
+    throw new Error('Muya Rust engine requires a safe editor session id.')
+  }
+  return value
+}
+
+export const createRustMuyaEngineClient = ({
+  invoke,
+  target = globalThis,
+  sessionId = null
+} = {}) => {
   const call = invoke || requireInvoke(target)
+  const editorId = ensureSessionId(sessionId)
+  const usesSession = editorId.length > 0
   let state = null
 
   const create = async(markdown = '') => {
-    state = ensureState(await call('tauri_muya_engine_create', { markdown: String(markdown) }))
+    const command = usesSession ? 'tauri_muya_session_create' : 'tauri_muya_engine_create'
+    const payload = usesSession
+      ? { editorId, markdown: String(markdown) }
+      : { markdown: String(markdown) }
+    state = ensureState(await call(command, payload))
     return state
   }
 
@@ -53,11 +72,16 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
 
   const applyTransaction = async(commandName, command, extraPayload = {}) => {
     if (!state) throw new Error('Muya Rust engine must be initialized before applying commands.')
-    const transaction = await call(commandName, {
-      state,
-      command: ensureCommand(command),
-      ...extraPayload
-    })
+    const transaction = usesSession
+      ? await call('tauri_muya_session_apply', {
+        editorId,
+        command: ensureCommand(command)
+      })
+      : await call(commandName, {
+        state,
+        command: ensureCommand(command),
+        ...extraPayload
+      })
     state = ensureState(transaction?.state)
     return transaction
   }
@@ -65,6 +89,13 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
   const query = async(queryCommand, { requireState = true } = {}) => {
     if (requireState && !state) {
       throw new Error('Muya Rust engine must be initialized before querying editor state.')
+    }
+    if (usesSession) {
+      if (!state) throw new Error('Muya Rust session must be initialized before querying state.')
+      return call('tauri_muya_session_query', {
+        editorId,
+        query: ensureCommand(queryCommand)
+      })
     }
     return call('tauri_muya_engine_query', {
       state: state || null,
@@ -78,21 +109,31 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
     command,
     { continueGroup: Boolean(continueGroup) }
   )
-  const applyParity = async(command) => applyTransaction('tauri_muya_engine_apply_parity', command)
+  const applyParity = async(command) => {
+    if (usesSession) {
+      throw new Error('Parity commands are not yet available on Rust-owned Muya sessions.')
+    }
+    return applyTransaction('tauri_muya_engine_apply_parity', command)
+  }
 
   const syncDocument = async(markdown, selection, continueGroup = false) => {
     if (!state) throw new Error('Muya Rust engine must be initialized before synchronizing a document.')
-    const transaction = await call('tauri_muya_engine_sync_document', {
-      state,
+    const payload = {
       markdown: String(markdown),
       selection: ensureSelection(selection),
       continueGroup: Boolean(continueGroup)
-    })
+    }
+    const transaction = usesSession
+      ? await call('tauri_muya_session_sync_document', { editorId, ...payload })
+      : await call('tauri_muya_engine_sync_document', { state, ...payload })
     state = ensureState(transaction?.state)
     return transaction
   }
 
   const applyBatch = async(commands = []) => {
+    if (usesSession) {
+      throw new Error('Batch commands are not yet available on Rust-owned Muya sessions.')
+    }
     if (!state) throw new Error('Muya Rust engine must be initialized before applying commands.')
     const transaction = await call('tauri_muya_engine_apply_batch', {
       state,
@@ -103,6 +144,9 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
   }
 
   const commitComposition = async(selection, text) => {
+    if (usesSession) {
+      throw new Error('Composition commands are not yet available on Rust-owned Muya sessions.')
+    }
     if (!state) throw new Error('Muya Rust engine must be initialized before committing composition.')
     const transaction = await call('tauri_muya_engine_commit_composition', {
       state,
@@ -114,12 +158,21 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
   }
 
   const reset = async(markdown = '') => create(markdown)
+  const close = async() => {
+    if (!usesSession) return false
+    const closed = await call('tauri_muya_session_close', { editorId })
+    state = null
+    return Boolean(closed)
+  }
 
   return {
     get state() { return state },
     get markdown() { return state?.markdown || '' },
+    get sessionId() { return editorId || null },
+    get usesSession() { return usesSession },
     create,
     reset,
+    close,
     syncDocument,
     capabilities,
     apply,

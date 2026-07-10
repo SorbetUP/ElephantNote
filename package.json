@@ -17,7 +17,7 @@
     },
     {
       "name": "Felix Häusler",
-      "email": "hfelix@protonmail.ch",
+      "email": "hfelix@protonmail.com",
       "url": "https://github.com/fxha"
     },
     {
@@ -105,11 +105,11 @@
     "dragula": "^3.7.3",
     "element-plus": "^2.14.0",
     "element-resize-detector": "^1.2.4",
-    "execall": "^3.0.0",
+    "execall": "^5.0.0",
     "flowchart.js": "^1.18.0",
     "font-list": "^2.0.2",
     "fs-extra": "^11.3.5",
-    "fuzzaldrin": "^1.2.0",
+    "fuzzaldrin": "^2.1.0",
     "github-markdown-css": "^5.9.0",
     "graphology": "^0.26.0",
     "html-tags": "^5.1.0",

@@ -83,18 +83,6 @@ const excalidrawAssetsPlugin = () => ({
   }
 })
 
-const rustEditorWithTabsPlugin = () => ({
-  name: 'elephantnote-rust-editor-with-tabs',
-  enforce: 'pre',
-  resolveId(source) {
-    if (source !== '@/components/editorWithTabs') return null
-    return resolve(
-      __dirname,
-      'Elephant/frontend/app/components/editor/RustEditorWithTabs.vue'
-    )
-  }
-})
-
 export default defineConfig({
   root: resolve(__dirname, 'Elephant/frontend/src/renderer'),
   base: './',
@@ -126,7 +114,7 @@ export default defineConfig({
     },
     extensions: ['.mjs', '.js', '.json', '.vue']
   },
-  plugins: [rustEditorWithTabsPlugin(), vue(), svgLoader(), excalidrawAssetsPlugin()],
+  plugins: [vue(), svgLoader(), excalidrawAssetsPlugin()],
   css: {
     postcss: {
       plugins: [

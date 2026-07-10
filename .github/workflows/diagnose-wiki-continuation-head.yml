@@ -24,14 +24,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run view 29060905070 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/automatic-wiki-patch.log
+          gh run view 29061251292 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/automatic-wiki-patch.log
           python - <<'PY'
           from pathlib import Path
           lines = Path('/tmp/automatic-wiki-patch.log').read_text(errors='replace').splitlines()
           selected = []
           for index, line in enumerate(lines):
               lowered = line.lower()
-              if any(token in lowered for token in ('traceback', 'systemexit', 'changed unexpectedly', 'marker missing', 'error:', 'failed')):
+              if any(token in lowered for token in ('traceback', 'systemexit', 'changed unexpectedly', 'marker missing', 'error:', 'failed', 'psych::')):
                   selected.extend(lines[max(0, index - 4):min(len(lines), index + 8)])
           compact = []
           seen = set()
@@ -41,4 +41,4 @@ jobs:
                   compact.append(line)
           Path('/tmp/compact.log').write_text('\n'.join(compact[-80:]) or '\n'.join(lines[-80:]))
           PY
-          gh pr comment 37 --repo "$GITHUB_REPOSITORY" --body "$(printf '### Automatic Wiki patch failure (compact)\n\n```text\n%s\n```' "$(cat /tmp/compact.log)")"
+          gh pr comment 37 --repo "$GITHUB_REPOSITORY" --body "$(printf '### Automatic Wiki patch failure 2 (compact)\n\n```text\n%s\n```' "$(cat /tmp/compact.log)")"

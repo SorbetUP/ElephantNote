@@ -8,16 +8,26 @@ import { createLiveRenderScheduler, domToMarkdown } from './liveRenderingRuntime
 import { renderCurrentBlockNow } from './blockLiveRuntime.js'
 import { renderPreviewBlock } from './previewRenderersRuntime.js'
 
+const validateJsonState = (nextState) => {
+  if (!nextState || nextState.type !== 'muya-json-state' || !Array.isArray(nextState.blocks)) {
+    throw new Error('Muya DOM adapter requires a valid JSON document state.')
+  }
+  return nextState
+}
+
 export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) => {
   const editor = createDomEditor(root, options.document || globalThis.document)
   const history = createGroupedHistory()
   let state = markdownToJsonState(markdown)
   renderJsonStateIntoDom(root, state, options.document || globalThis.document)
 
+  const adoptJsonState = (nextState) => {
+    state = validateJsonState(nextState)
+    return state
+  }
+
   const setJsonState = (nextState, group = 'setJsonState') => {
-    if (!nextState || nextState.type !== 'muya-json-state' || !Array.isArray(nextState.blocks)) {
-      throw new Error('Muya DOM adapter requires a valid JSON document state.')
-    }
+    validateJsonState(nextState)
     const before = jsonStateToMarkdown(state)
     const after = jsonStateToMarkdown(nextState)
     state = nextState
@@ -59,6 +69,7 @@ export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) =
     get html() { return jsonStateToHtml(state) },
     setMarkdown,
     setJsonState,
+    adoptJsonState,
     scheduleLiveRender: () => live.schedule(),
     renderLiveNow: syncDomToState,
     renderCurrentBlockNow: () => renderCurrentBlockNow({ root, setState: (nextState) => { state = nextState }, getDocument: () => options.document || globalThis.document }),

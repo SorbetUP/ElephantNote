@@ -9,11 +9,12 @@ on:
       - 'Elephant/backend/tauri/src/markdown/**'
       - 'Elephant/backend/tauri/src/lib_min.rs'
       - 'Elephant/frontend/src/renderer/src/muya/**'
-      - 'Elephant/frontend/app/components/editor/RustNoteEditorHost.vue'
+      - 'Elephant/frontend/src/renderer/src/components/editorWithTabs/**'
       - 'Elephant/frontend/app/components/shell/MainContent.vue'
       - 'Elephant/shared/muyaParityCases.json'
       - 'Elephant/shared/muyaJsonStateCases.json'
       - 'tests/app/unit/muya*.spec.js'
+      - 'vite.tauri.config.js'
       - '.github/workflows/muya-rust-parity.yml'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -21,11 +22,12 @@ on:
       - 'Elephant/backend/tauri/src/markdown/**'
       - 'Elephant/backend/tauri/src/lib_min.rs'
       - 'Elephant/frontend/src/renderer/src/muya/**'
-      - 'Elephant/frontend/app/components/editor/RustNoteEditorHost.vue'
+      - 'Elephant/frontend/src/renderer/src/components/editorWithTabs/**'
       - 'Elephant/frontend/app/components/shell/MainContent.vue'
       - 'Elephant/shared/muyaParityCases.json'
       - 'Elephant/shared/muyaJsonStateCases.json'
       - 'tests/app/unit/muya*.spec.js'
+      - 'vite.tauri.config.js'
       - '.github/workflows/muya-rust-parity.yml'
   workflow_dispatch:
 
@@ -101,6 +103,7 @@ jobs:
             tests/app/unit/muyaRustBackedRuntime.spec.js \
             tests/app/unit/muyaRustEditorActivation.spec.js \
             tests/app/unit/muyaRustMuyaDomParity.spec.js \
+            tests/app/unit/muyaRealSurfaceRustMirror.spec.js \
             tests/app/unit/muyaRuntimeFlags.spec.js \
             tests/app/unit/muyaRuntimeVueIntegration.spec.js \
             tests/app/unit/muyaSharedParityMatrix.spec.js \

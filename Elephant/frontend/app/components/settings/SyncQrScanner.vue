@@ -5,7 +5,6 @@
       class="visually-hidden"
       type="file"
       :accept="INVITE_IMAGE_ACCEPT"
-      capture="environment"
       @change="scanImageFile"
     >
 
@@ -15,7 +14,7 @@
         {{ busy ? 'Opening camera…' : 'Scan with camera' }}
       </button>
       <button class="secondary" type="button" :disabled="busy" @click="imageInput?.click()">
-        <ImageUp aria-hidden="true" /> Use camera app or QR image
+        <ImageUp aria-hidden="true" /> Choose QR image
       </button>
     </div>
 
@@ -23,13 +22,13 @@
       <video ref="video" autoplay muted playsinline aria-label="Live camera preview for QR scanning"></video>
       <span class="en-qr-frame" aria-hidden="true"></span>
       <div class="en-qr-preview-actions">
-        <span><ScanLine aria-hidden="true" /> Point the camera at the ElephantNote QR code</span>
+        <span><ScanLine aria-hidden="true" /> Point the camera at the Elephant QR code</span>
         <button class="secondary compact" type="button" @click="stopCameraScanner">Stop camera</button>
       </div>
     </div>
 
     <p class="en-qr-help">
-      Live scanning stays on this device. On mobile, “Use camera app or QR image” can open the system camera and decode the captured photo after it returns to ElephantNote.
+      Live scanning stays on this device. The image picker only chooses an existing image and never opens the camera implicitly.
     </p>
     <p v-if="scannerError" class="en-qr-error"><AlertTriangle aria-hidden="true" />{{ scannerError }}</p>
   </section>
@@ -58,10 +57,10 @@ let resultHandled = false
 const friendlyScannerError = (error, fallback) => {
   const name = String(error?.name || '')
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-    return 'Camera access was denied. Allow camera access or use a QR image instead.'
+    return 'Camera access was denied. Allow camera access or choose a QR image instead.'
   }
   if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-    return 'No camera was found on this device. Use a QR image instead.'
+    return 'No camera was found on this device. Choose a QR image instead.'
   }
   if (name === 'NotReadableError' || name === 'TrackStartError') {
     return 'The camera is already in use or could not be opened.'
@@ -100,14 +99,45 @@ const acceptDecodedPayload = (payload) => {
   emit('decoded', normalized)
 }
 
+const isNativeAndroid = async () => {
+  const invoke = globalThis.__TAURI__?.core?.invoke
+  if (typeof invoke !== 'function') return false
+  try {
+    return (await invoke('tauri_platform_info'))?.android === true
+  } catch {
+    return false
+  }
+}
+
+const startNativeScanner = async () => {
+  const { checkPermissions, Format, requestPermissions, scan } = await import('@tauri-apps/plugin-barcode-scanner')
+  let permission = await checkPermissions()
+  if (permission !== 'granted') permission = await requestPermissions()
+  if (permission !== 'granted') {
+    const error = new Error('Camera access was denied. Allow camera access or choose a QR image instead.')
+    error.name = 'NotAllowedError'
+    throw error
+  }
+  const result = await scan({
+    cameraDirection: 'back',
+    formats: [Format.QRCode],
+    windowed: false
+  })
+  acceptDecodedPayload(result.content)
+}
+
 const startCameraScanner = async () => {
   if (busy.value || scanning.value) return
   scannerError.value = ''
   resultHandled = false
   busy.value = true
   try {
+    if (await isNativeAndroid()) {
+      await startNativeScanner()
+      return
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('Live camera scanning is unavailable in this webview. Use the system camera or a QR image instead.')
+      throw new Error('Live camera scanning is unavailable in this webview. Choose a QR image instead.')
     }
     const { BrowserQRCodeReader } = await import('@zxing/browser')
     scannerReader = new BrowserQRCodeReader(undefined, {
@@ -131,7 +161,7 @@ const startCameraScanner = async () => {
           try {
             acceptDecodedPayload(result.getText())
           } catch (validationError) {
-            reportError(friendlyScannerError(validationError, 'The scanned QR code is not a valid ElephantNote invitation.'))
+            reportError(friendlyScannerError(validationError, 'The scanned QR code is not a valid Elephant invitation.'))
           }
           return
         }
@@ -164,7 +194,7 @@ const scanImageFile = async (event) => {
     const result = await reader.decodeFromImageUrl(objectUrl)
     acceptDecodedPayload(result.getText())
   } catch (error) {
-    reportError(friendlyScannerError(error, 'No readable ElephantNote QR code was found in this image.'))
+    reportError(friendlyScannerError(error, 'No readable Elephant QR code was found in this image.'))
   } finally {
     URL.revokeObjectURL(objectUrl)
     busy.value = false

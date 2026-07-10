@@ -1,7 +1,5 @@
 package com.elephantnote.app
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import android.view.WindowInsets
@@ -10,7 +8,8 @@ import android.view.WindowInsetsController
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    requestCameraPermissionIfNeeded()
+    // Camera access is requested by the WebView only after the user taps
+    // "Scan with camera" in Sync. Never interrupt application startup with it.
     enterImmersiveMode()
   }
 
@@ -22,15 +21,6 @@ class MainActivity : TauriActivity() {
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
     if (hasFocus) enterImmersiveMode()
-  }
-
-  private fun requestCameraPermissionIfNeeded() {
-    if (
-      android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M &&
-      checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
-    ) {
-      requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST)
-    }
   }
 
   private fun enterImmersiveMode() {
@@ -51,9 +41,5 @@ class MainActivity : TauriActivity() {
           View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
           View.SYSTEM_UI_FLAG_LAYOUT_STABLE
     }
-  }
-
-  companion object {
-    private const val CAMERA_PERMISSION_REQUEST = 4102
   }
 }

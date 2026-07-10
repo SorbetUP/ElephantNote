@@ -6,6 +6,7 @@ const ANDROID_PRIVATE_PATH_RE = /^\/data\/(?:data|user\/\d+)\/([^/]+)(\/.*)?$/
 
 let cachedActiveVaultRoot = ''
 let activeVaultLookup = null
+let androidSyncTimer = null
 
 const normalizeSlashes = (value = '') => String(value || '').replace(/\\/g, '/')
 
@@ -61,40 +62,77 @@ export const canonicalizeAndroidPrivateVaultPath = (pathname = '', vaultRoot = c
   const candidate = parseAndroidPrivatePath(normalized)
   const activeRoot = parseAndroidPrivatePath(vaultRoot)
   if (!candidate || !activeRoot || candidate.packageName !== activeRoot.packageName) return normalized
-
-  // /data/data/<package> and /data/user/0/<package> are aliases for the same
-  // private Android application directory. Rust keeps one canonical spelling;
-  // renderer APIs and WebView file pickers may return the other.
   return normalizeFilePath(`${activeRoot.packageRoot}${candidate.suffix}`)
+}
+
+const invoke = (target, command, payload = {}) => {
+  const caller = target?.__TAURI__?.core?.invoke
+  if (typeof caller !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
+  return caller(command, payload)
 }
 
 const refreshActiveVaultRoot = async (target = globalThis) => {
   if (activeVaultLookup) return activeVaultLookup
-  const invoke = target?.__TAURI__?.core?.invoke
-  if (typeof invoke !== 'function') return cachedActiveVaultRoot
-
-  activeVaultLookup = invoke('tauri_vaults_get')
+  const caller = target?.__TAURI__?.core?.invoke
+  if (typeof caller !== 'function') return cachedActiveVaultRoot
+  activeVaultLookup = caller('tauri_vaults_get')
     .then((payload) => {
       const root = normalizeFilePath(payload?.activeVault?.path || '')
       if (root) cachedActiveVaultRoot = root
       return cachedActiveVaultRoot
     })
-    .catch((error) => {
-      console.warn('[tauri:file-utils] unable to refresh active vault root', {
-        error: error?.message || String(error)
-      })
-      return cachedActiveVaultRoot
-    })
-    .finally(() => {
-      activeVaultLookup = null
-    })
-
+    .catch(() => cachedActiveVaultRoot)
+    .finally(() => { activeVaultLookup = null })
   return activeVaultLookup
 }
 
-export const resolveTauriVaultPath = async (target = globalThis, pathname = '') => {
-  const root = await refreshActiveVaultRoot(target)
-  return canonicalizeAndroidPrivateVaultPath(pathname, root)
+const pathInsideRoot = (pathname, root) => {
+  const normalizedPath = canonicalizeAndroidPrivateVaultPath(pathname, root)
+  const normalizedRoot = canonicalizeAndroidPrivateVaultPath(root, root)
+  return Boolean(normalizedRoot && (
+    normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}/`)
+  ))
+}
+
+const scheduleAndroidTreeSync = (target) => {
+  target.clearTimeout?.(androidSyncTimer)
+  androidSyncTimer = target.setTimeout?.(() => {
+    invoke(target, 'tauri_android_vault_sync').catch((error) => {
+      if (!/unavailable|not configured/i.test(String(error?.message || error))) {
+        console.warn('[tauri:file-utils] Android tree synchronization failed', error)
+      }
+    })
+  }, 180)
+}
+
+const bytesToBase64 = async (value) => {
+  let bytes
+  if (typeof value === 'string') bytes = new TextEncoder().encode(value)
+  else if (value instanceof Blob) bytes = new Uint8Array(await value.arrayBuffer())
+  else if (value instanceof ArrayBuffer) bytes = new Uint8Array(value)
+  else if (ArrayBuffer.isView(value)) bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+  else if (value?.type === 'Buffer' && Array.isArray(value.data)) bytes = Uint8Array.from(value.data)
+  else bytes = new TextEncoder().encode(String(value ?? ''))
+  let binary = ''
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
+  }
+  return btoa(binary)
+}
+
+const base64ToBytes = (encoded) => {
+  const binary = atob(String(encoded || ''))
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  return bytes
+}
+
+const readEncoding = (option) => typeof option === 'string' ? option : (option?.encoding || '')
+const formatReadResult = (bytes, option) => {
+  const encoding = readEncoding(option)
+  if (encoding) return new TextDecoder(encoding === 'utf8' ? 'utf-8' : encoding).decode(bytes)
+  if (globalThis.Buffer?.from) return globalThis.Buffer.from(bytes)
+  return bytes
 }
 
 const rememberPath = (pathname, isDirectory = false) => {
@@ -110,42 +148,118 @@ const rememberPath = (pathname, isDirectory = false) => {
 
 const shouldTrustHiddenAssetPath = (pathname = '') => {
   const normalized = canonicalizeAndroidPrivateVaultPath(pathname)
-  return HIDDEN_VAULT_ASSET_RE.test(normalized) && (IMAGE_ASSET_RE.test(normalized) || EXCALIDRAW_SCENE_RE.test(normalized))
+  return HIDDEN_VAULT_ASSET_RE.test(normalized) &&
+    (IMAGE_ASSET_RE.test(normalized) || EXCALIDRAW_SCENE_RE.test(normalized))
 }
 
-const wrapPathMethod = (target, fileUtils, name, pathIndexes = [0], afterSuccess = null) => {
-  const original = fileUtils?.[name]
-  if (typeof original !== 'function' || original.__ELEPHANT_PATH_GUARD__) return
-  const wrapped = async(...args) => {
-    const nextArgs = [...args]
+const wrapVaultAwareRead = (target, fileUtils) => {
+  const original = fileUtils.readFile
+  if (typeof original !== 'function') return
+  fileUtils.readFile = async(pathname, options, ...rest) => {
     const root = await refreshActiveVaultRoot(target)
-    for (const index of pathIndexes) {
-      if (typeof nextArgs[index] === 'string') {
-        nextArgs[index] = canonicalizeAndroidPrivateVaultPath(nextArgs[index], root)
-      }
-    }
-    const result = await original.apply(fileUtils, nextArgs)
-    afterSuccess?.(nextArgs, result)
+    const resolved = canonicalizeAndroidPrivateVaultPath(pathname, root)
+    if (!pathInsideRoot(resolved, root)) return original.call(fileUtils, resolved, options, ...rest)
+    const result = await invoke(target, 'tauri_vault_read_binary', { pathname: resolved })
+    return formatReadResult(base64ToBytes(result.dataBase64), options)
+  }
+}
+
+const wrapVaultAwareWrite = (target, fileUtils, name) => {
+  const original = fileUtils[name]
+  if (typeof original !== 'function') return
+  fileUtils[name] = async(pathname, content, ...rest) => {
+    const root = await refreshActiveVaultRoot(target)
+    const resolved = canonicalizeAndroidPrivateVaultPath(pathname, root)
+    if (!pathInsideRoot(resolved, root)) return original.call(fileUtils, resolved, content, ...rest)
+    const result = await invoke(target, 'tauri_vault_write_binary', {
+      pathname: resolved,
+      dataBase64: await bytesToBase64(content)
+    })
+    rememberPath(resolved, false)
+    scheduleAndroidTreeSync(target)
     return result
   }
-  wrapped.__ELEPHANT_PATH_GUARD__ = true
-  fileUtils[name] = wrapped
+}
+
+const wrapVaultAwareEnsureDir = (target, fileUtils) => {
+  const original = fileUtils.ensureDir
+  if (typeof original !== 'function') return
+  fileUtils.ensureDir = async(pathname, ...rest) => {
+    const root = await refreshActiveVaultRoot(target)
+    const resolved = canonicalizeAndroidPrivateVaultPath(pathname, root)
+    if (!pathInsideRoot(resolved, root)) return original.call(fileUtils, resolved, ...rest)
+    const result = await invoke(target, 'tauri_vault_ensure_dir', { pathname: resolved })
+    rememberPath(resolved, true)
+    scheduleAndroidTreeSync(target)
+    return result
+  }
+}
+
+const wrapVaultAwareRemove = (target, fileUtils, name) => {
+  const original = fileUtils[name]
+  if (typeof original !== 'function') return
+  fileUtils[name] = async(pathname, ...rest) => {
+    const root = await refreshActiveVaultRoot(target)
+    const resolved = canonicalizeAndroidPrivateVaultPath(pathname, root)
+    if (!pathInsideRoot(resolved, root)) return original.call(fileUtils, resolved, ...rest)
+    const result = await invoke(target, 'tauri_vault_remove_path', { pathname: resolved })
+    scheduleAndroidTreeSync(target)
+    return result
+  }
+}
+
+const wrapVaultAwareCopy = (target, fileUtils, name) => {
+  const original = fileUtils[name]
+  if (typeof original !== 'function') return
+  fileUtils[name] = async(source, destination, ...rest) => {
+    const root = await refreshActiveVaultRoot(target)
+    const resolvedSource = canonicalizeAndroidPrivateVaultPath(source, root)
+    const resolvedDestination = canonicalizeAndroidPrivateVaultPath(destination, root)
+    if (!pathInsideRoot(resolvedDestination, root)) {
+      return original.call(fileUtils, resolvedSource, resolvedDestination, ...rest)
+    }
+    const bytes = await fileUtils.readFile(resolvedSource)
+    await fileUtils.writeFile(resolvedDestination, bytes)
+    rememberPath(resolvedDestination, false)
+    return resolvedDestination
+  }
+}
+
+const wrapVaultAwareMove = (target, fileUtils) => {
+  const original = fileUtils.move
+  if (typeof original !== 'function') return
+  fileUtils.move = async(source, destination, ...rest) => {
+    const root = await refreshActiveVaultRoot(target)
+    const resolvedSource = canonicalizeAndroidPrivateVaultPath(source, root)
+    const resolvedDestination = canonicalizeAndroidPrivateVaultPath(destination, root)
+    if (pathInsideRoot(resolvedSource, root) && pathInsideRoot(resolvedDestination, root)) {
+      const result = await invoke(target, 'tauri_vault_rename_path', {
+        source: resolvedSource,
+        destination: resolvedDestination
+      })
+      rememberPath(resolvedDestination, false)
+      scheduleAndroidTreeSync(target)
+      return result
+    }
+    return original.call(fileUtils, resolvedSource, resolvedDestination, ...rest)
+  }
 }
 
 const wrapSyncPathMethod = (fileUtils, name, pathIndexes = [0], mapper = null) => {
   const original = fileUtils?.[name]
-  if (typeof original !== 'function' || original.__ELEPHANT_PATH_GUARD__) return
-  const wrapped = (...args) => {
+  if (typeof original !== 'function') return
+  fileUtils[name] = (...args) => {
     const nextArgs = [...args]
     for (const index of pathIndexes) {
-      if (typeof nextArgs[index] === 'string') {
-        nextArgs[index] = canonicalizeAndroidPrivateVaultPath(nextArgs[index])
-      }
+      if (typeof nextArgs[index] === 'string') nextArgs[index] = canonicalizeAndroidPrivateVaultPath(nextArgs[index])
     }
     return mapper ? mapper(original, nextArgs) : original.apply(fileUtils, nextArgs)
   }
-  wrapped.__ELEPHANT_PATH_GUARD__ = true
-  fileUtils[name] = wrapped
+}
+
+export const resolveTauriVaultPath = async (target = globalThis, pathname = '') => {
+  const root = await refreshActiveVaultRoot(target)
+  return canonicalizeAndroidPrivateVaultPath(pathname, root)
 }
 
 export const installTauriFileUtilsPathGuards = (target = globalThis) => {
@@ -153,30 +267,30 @@ export const installTauriFileUtilsPathGuards = (target = globalThis) => {
   if (!target?.__TAURI__ || !fileUtils || target.__ELEPHANT_FILE_UTILS_PATH_GUARDS__) return false
   target.__ELEPHANT_FILE_UTILS_PATH_GUARDS__ = true
 
-  // Warm the cache immediately, but every asynchronous file operation also
-  // refreshes it so switching vaults cannot leave a stale Android alias.
   void refreshActiveVaultRoot(target)
-
-  wrapPathMethod(target, fileUtils, 'readFile', [0])
-  wrapPathMethod(target, fileUtils, 'stat', [0], ([pathname], result) => {
-    if (result?.isFile || result?.isDirectory) rememberPath(pathname, !!result?.isDirectory)
-  })
-  wrapPathMethod(target, fileUtils, 'ensureDir', [0], ([pathname]) => rememberPath(pathname, true))
-  wrapPathMethod(target, fileUtils, 'outputFile', [0], ([pathname]) => rememberPath(pathname, false))
-  wrapPathMethod(target, fileUtils, 'writeFile', [0], ([pathname]) => rememberPath(pathname, false))
-  wrapPathMethod(target, fileUtils, 'copy', [0, 1], ([source, destination]) => rememberPath(destination, false))
-  wrapPathMethod(target, fileUtils, 'copyFile', [0, 1], ([source, destination]) => rememberPath(destination, false))
-  wrapPathMethod(target, fileUtils, 'move', [0, 1], ([source, destination]) => rememberPath(destination, false))
+  wrapVaultAwareRead(target, fileUtils)
+  wrapVaultAwareWrite(target, fileUtils, 'outputFile')
+  wrapVaultAwareWrite(target, fileUtils, 'writeFile')
+  wrapVaultAwareEnsureDir(target, fileUtils)
+  wrapVaultAwareRemove(target, fileUtils, 'remove')
+  wrapVaultAwareRemove(target, fileUtils, 'removeFile')
+  wrapVaultAwareCopy(target, fileUtils, 'copy')
+  wrapVaultAwareCopy(target, fileUtils, 'copyFile')
+  wrapVaultAwareMove(target, fileUtils)
 
   wrapSyncPathMethod(fileUtils, 'pathExistsSync', [0], (original, args) => {
     const pathname = args[0]
-    return original.apply(fileUtils, args) || KNOWN_EXISTING_PATHS.has(canonicalizeAndroidPrivateVaultPath(pathname)) || shouldTrustHiddenAssetPath(pathname)
+    return original.apply(fileUtils, args) ||
+      KNOWN_EXISTING_PATHS.has(canonicalizeAndroidPrivateVaultPath(pathname)) ||
+      shouldTrustHiddenAssetPath(pathname)
   })
   wrapSyncPathMethod(fileUtils, 'isSamePathSync', [0, 1])
   wrapSyncPathMethod(fileUtils, 'isChildOfDirectory', [0, 1])
-  wrapSyncPathMethod(fileUtils, 'isFile', [0], (original, args) => original.apply(fileUtils, args) || KNOWN_EXISTING_PATHS.has(canonicalizeAndroidPrivateVaultPath(args[0])))
+  wrapSyncPathMethod(fileUtils, 'isFile', [0], (original, args) =>
+    original.apply(fileUtils, args) ||
+    KNOWN_EXISTING_PATHS.has(canonicalizeAndroidPrivateVaultPath(args[0])))
   wrapSyncPathMethod(fileUtils, 'isDirectory', [0])
 
-  console.info('[tauri:file-utils] Android vault path guards installed')
+  console.info('[tauri:file-utils] Rust-owned vault filesystem bridge installed')
   return true
 }

@@ -1,7 +1,5 @@
 <template>
-  <aside
-    class="en-sidebar"
-  >
+  <aside class="en-sidebar">
     <div class="en-sidebar-scroll">
       <button
         class="en-all-notes"
@@ -19,6 +17,19 @@
         <Inbox class="en-all-notes-icon" />
         <span>All notes</span>
       </button>
+
+      <div class="en-sidebar-create-actions">
+        <button type="button" :disabled="creating" @click="createNote">
+          <FilePlus2 />
+          <span>New note</span>
+        </button>
+        <button type="button" :disabled="creating" @click="createFolder">
+          <FolderPlus />
+          <span>New folder</span>
+        </button>
+      </div>
+
+      <p v-if="actionError" class="en-sidebar-action-error">{{ actionError }}</p>
 
       <div class="en-tags-header">
         <span class="en-tags-label">Tags</span>
@@ -104,6 +115,8 @@ import { storeToRefs } from 'pinia'
 import {
   CalendarClock,
   ChevronDown,
+  FilePlus2,
+  FolderPlus,
   Inbox,
   Search
 } from '@lucide/vue'
@@ -124,6 +137,8 @@ const isRootDropTarget = ref(false)
 const isRootDropDisabled = ref(false)
 const isRecentCollapsed = ref(false)
 const showAllRecent = ref(false)
+const creating = ref(false)
+const actionError = ref('')
 const recentLimit = 5
 
 const sidebarEntries = computed(() => store.rootSidebarEntries)
@@ -152,6 +167,22 @@ const loadDirectory = async (relativePath = '') => {
   if (!store.activeVault?.path) return []
   return elephantnoteClient.directory.list(relativePath)
 }
+
+const runCreateAction = async (action) => {
+  if (creating.value) return
+  creating.value = true
+  actionError.value = ''
+  try {
+    await action()
+  } catch (error) {
+    actionError.value = error?.message || 'Unable to create this item.'
+  } finally {
+    creating.value = false
+  }
+}
+
+const createNote = () => runCreateAction(() => store.createNote())
+const createFolder = () => runCreateAction(() => store.createFolder())
 
 const handleRootDragOver = (event) => {
   const entry = parseDraggedEntry(event)
@@ -235,6 +266,53 @@ const handleRootDrop = async (event) => {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
+}
+
+.en-sidebar-create-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0 8px 10px;
+}
+
+.en-sidebar-create-actions button {
+  min-width: 0;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 8px;
+  border: 1px solid var(--en-border);
+  border-radius: 9px;
+  color: var(--en-text);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.en-sidebar-create-actions button:hover {
+  background: var(--en-soft);
+}
+
+.en-sidebar-create-actions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.en-sidebar-create-actions svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.en-sidebar-action-error {
+  margin: -2px 10px 8px;
+  color: var(--en-danger, #ef4444);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .en-tags-header {
@@ -377,5 +455,17 @@ const handleRootDrop = async (event) => {
   padding: 6px 8px;
   color: var(--en-muted);
   font-size: 12px;
+}
+
+@media (max-width: 760px), (pointer: coarse) {
+  .en-sidebar-create-actions button {
+    min-height: 46px;
+    border-radius: 12px;
+    font-size: 13px;
+  }
+
+  .en-all-notes {
+    min-height: 46px;
+  }
 }
 </style>

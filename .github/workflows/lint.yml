@@ -46,7 +46,9 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Apply reviewed refactor
-        run: python3 .github/scripts/apply_codex_bundle_and_limits.py
+        run: |
+          python3 .github/scripts/apply_codex_bundle_and_limits.py
+          python3 .github/scripts/fix_codex_bundle_patch.py
 
       - name: Auto-fix generated frontend files
         run: Elephant/node_modules/.bin/eslint --fix Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue Elephant/frontend/app/components/settings/codexRateLimits.js tests/app/unit/codexRateLimits.spec.js
@@ -76,31 +78,8 @@ jobs:
       - name: Format Rust changes
         run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
 
-      - name: Capture Rust compilation diagnostics
-        shell: bash
-        run: |
-          set +e
-          set -o pipefail
-          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features 2>&1 | tee codex-cargo-check.log
-          echo "${PIPESTATUS[0]}" > codex-cargo-check.exit
-          exit 0
-
-      - name: Upload Rust compilation diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: codex-cargo-check
-          path: |
-            codex-cargo-check.log
-            codex-cargo-check.exit
-
-      - name: Report Rust compilation errors
-        shell: bash
-        run: |
-          exit_code="$(cat codex-cargo-check.exit)"
-          if [ "$exit_code" -ne 0 ]; then
-            grep -E "^(error(\[[^]]+\])?:| *-->| *[0-9]+ *\|)" codex-cargo-check.log | tail -n 120 || true
-            exit "$exit_code"
-          fi
+      - name: Compile all Rust targets
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
 
       - name: Test bundled Codex path resolution
         run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features bundled_codex_candidates_prefer_packaged_resources
@@ -114,6 +93,7 @@ jobs:
           git checkout origin/develop -- .github/workflows/lint.yml
           rm -f .github/workflows/apply-codex-bundle-and-limits.yml
           rm -f .github/scripts/apply_codex_bundle_and_limits.py
+          rm -f .github/scripts/fix_codex_bundle_patch.py
           rm -f .github/codex-bundle-refactor-trigger
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

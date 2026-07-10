@@ -29,51 +29,11 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           core = Path('Elephant/backend/knowledge-core/src/wiki_core.rs')
           text = core.read_text()
-          old_related = '''    if !synthesis.related_wikis.is_empty() {
-              markdown.push_str("\n## Related wikis\n\n");
-              for related in &synthesis.related_wikis {
-                  markdown.push_str(&format!("- [[{}]]\n", related.trim()));
-              }
-          }
-
-          let mut citations = Vec::new();
-          if !citation_numbers.is_empty() {
-              markdown.push_str("\n## Sources\n\n");
-              for (chunk_id, number) in &citation_numbers {
-                  let source = source_by_id
-                      .get(chunk_id.as_str())
-                      .ok_or_else(|| format!("Missing source chunk while rendering: {chunk_id}"))?;
-                  let key = format!("source-{number}");
-                  let anchor = if source.heading.trim().is_empty() {
-                      String::new()
-                  } else {
-                      format!("#{}", source.heading.trim())
-                  };
-                  markdown.push_str(&format!(
-                      "[^{}]: [[{}{}|{} — {}]] (bytes {}–{})\n",
-                      key,
-                      source.document_path,
-                      anchor,
-                      source.document_title,
-                      source.heading,
-                      source.start_offset,
-                      source.end_offset
-                  ));
-                  citations.push(WikiCitation {
-                      key,
-                      document_path: source.document_path.clone(),
-                      document_title: source.document_title.clone(),
-                      chunk_id: source.chunk_id.clone(),
-                      heading: source.heading.clone(),
-                      start_offset: source.start_offset,
-                      end_offset: source.end_offset,
-                  });
-              }
-          }'''
-          new_related = '''    if !synthesis.related_wikis.is_empty() {
+          rendered_tail = r'''    if !synthesis.related_wikis.is_empty() {
               markdown.push_str("\n## Related wikis\n\n");
               for related in &synthesis.related_wikis {
                   markdown.push_str(&format!(
@@ -111,37 +71,20 @@ jobs:
                       end_offset: source.end_offset,
                   });
               }
-          }'''
-          if old_related not in text:
-              raise SystemExit('Old Wiki source renderer not found')
-          text = text.replace(old_related, new_related, 1)
+          }
 
-          old_claims = '''fn render_claims(
-              markdown: &mut String,
-              claims: &[WikiClaim],
-              citation_numbers: &mut BTreeMap<String, usize>,
-              source_by_id: &HashMap<&str, &WikiSourceChunk>,
-          ) -> Result<(), String> {
-              for claim in claims {
-                  let mut references = Vec::new();
-                  for chunk_id in &claim.citation_chunk_ids {
-                      if !source_by_id.contains_key(chunk_id.as_str()) {
-                          return Err(format!("Unknown source chunk while rendering: {chunk_id}"));
-                      }
-                      let next = citation_numbers.len() + 1;
-                      let number = *citation_numbers.entry(chunk_id.clone()).or_insert(next);
-                      references.push(format!("[^source-{number}]"));
-                  }
-                  references.sort();
-                  references.dedup();
-                  markdown.push_str(claim.text.trim());
-                  markdown.push(' ');
-                  markdown.push_str(&references.join(""));
-                  markdown.push_str("\n\n");
-              }
-              Ok(())
-          }'''
-          new_claims = '''fn markdown_link_component(value: &str) -> String {
+'''
+          text, count = re.subn(
+              r'    if !synthesis\.related_wikis\.is_empty\(\) \{.*?\n    let slug = slugify',
+              rendered_tail + '    let slug = slugify',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit(f'Could not replace Wiki rendered tail: {count}')
+
+          helpers = r'''fn markdown_link_component(value: &str) -> String {
               let mut output = String::new();
               for character in value.chars() {
                   match character {
@@ -209,42 +152,89 @@ jobs:
                   markdown.push_str("\n\n");
               }
               Ok(())
-          }'''
-          if old_claims not in text:
-              raise SystemExit('Old Wiki claim renderer not found')
-          core.write_text(text.replace(old_claims, new_claims, 1))
+          }
+
+'''
+          text, count = re.subn(
+              r'fn render_claims\(.*?\n\}\n\npub fn wiki_draft_from_rendered',
+              helpers + 'pub fn wiki_draft_from_rendered',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit(f'Could not replace Wiki claim renderer: {count}')
+          core.write_text(text)
 
           graph = Path('Elephant/backend/knowledge-core/src/wiki_graph_projection.rs')
           text = graph.read_text()
-          old_tail = '''            remainder = &after_start[end + 2..];
-              }
-          }
-          references.sort();'''
-          new_tail = '''            remainder = &after_start[end + 2..];
-              }
-              let mut markdown_remainder = trimmed;
-              while let Some(open) = markdown_remainder.find("](") {
-                  let after_open = &markdown_remainder[open + 2..];
-                  let Some(close) = after_open.find(')') else {
-                      break;
-                  };
-                  let target = after_open[..close]
-                      .split('#')
-                      .next()
-                      .unwrap_or("")
-                      .trim()
-                      .trim_start_matches("./")
-                      .trim_end_matches(".md");
-                  if !target.is_empty() {
-                      references.push(target.to_string());
+          parser = r'''fn parse_related_wiki_references(markdown: &str) -> Vec<String> {
+              let mut in_related_section = false;
+              let mut references = Vec::new();
+              for line in markdown.lines() {
+                  let trimmed = line.trim();
+                  if let Some(heading) = trimmed.strip_prefix("## ") {
+                      in_related_section = heading.trim().eq_ignore_ascii_case("related wikis");
+                      continue;
                   }
-                  markdown_remainder = &after_open[close + 1..];
+                  if !in_related_section {
+                      continue;
+                  }
+                  let mut legacy = trimmed;
+                  while let Some(start) = legacy.find("[[") {
+                      let after_start = &legacy[start + 2..];
+                      let Some(end) = after_start.find("]]" ) else {
+                          break;
+                      };
+                      let raw = &after_start[..end];
+                      let target = raw
+                          .split('|')
+                          .next()
+                          .unwrap_or(raw)
+                          .split('#')
+                          .next()
+                          .unwrap_or(raw)
+                          .trim();
+                      if !target.is_empty() {
+                          references.push(target.to_string());
+                      }
+                      legacy = &after_start[end + 2..];
+                  }
+                  let mut standard = trimmed;
+                  while let Some(open) = standard.find("](") {
+                      let after_open = &standard[open + 2..];
+                      let Some(close) = after_open.find(')') else {
+                          break;
+                      };
+                      let target = after_open[..close]
+                          .split('#')
+                          .next()
+                          .unwrap_or("")
+                          .trim()
+                          .trim_start_matches("./")
+                          .trim_end_matches(".md");
+                      if !target.is_empty() {
+                          references.push(target.to_string());
+                      }
+                      standard = &after_open[close + 1..];
+                  }
               }
+              references.sort();
+              references.dedup();
+              references
           }
-          references.sort();'''
-          if old_tail not in text:
-              raise SystemExit('Wiki graph parser tail not found')
-          graph.write_text(text.replace(old_tail, new_tail, 1))
+
+'''
+          text, count = re.subn(
+              r'fn parse_related_wiki_references\(.*?\n\}\n\nfn normalize_wiki_reference',
+              parser + 'fn normalize_wiki_reference',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit(f'Could not replace related Wiki parser: {count}')
+          graph.write_text(text)
           PY
           cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
           git config user.name "ElephantNote Bot"

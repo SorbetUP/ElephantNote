@@ -7,6 +7,7 @@ use super::muya_engine::{apply_command, apply_commands, MuyaEditorCommand, MuyaE
 use super::muya_extras::collect_muya_extras;
 use super::muya_interactions::{commit_composition, editor_snapshot, image_selection, start_composition, table_contract, table_insert_column, table_insert_row, update_composition, cancel_composition, CompositionState};
 use super::muya_navigation::{detect_input_rule, move_cursor};
+use super::muya_parity::{apply_parity_command, MuyaParityCommand};
 use super::parser_v4::{extract_images, extract_links, parse_blocks, split_frontmatter};
 
 #[tauri::command]
@@ -173,10 +174,18 @@ pub fn tauri_muya_engine_apply_batch(
 }
 
 #[tauri::command]
+pub fn tauri_muya_engine_apply_parity(
+  state: MuyaEditorState,
+  command: MuyaParityCommand,
+) -> Result<Value, String> {
+  apply_parity_command(state, command).map(|transaction| json!(transaction))
+}
+
+#[tauri::command]
 pub fn tauri_muya_engine_capabilities() -> Value {
   json!({
     "engine": "rust",
-    "version": 1,
+    "version": 2,
     "offsetEncoding": "utf16",
     "history": { "undo": true, "redo": true, "maximumEntries": 100 },
     "commands": [
@@ -191,6 +200,14 @@ pub fn tauri_muya_engine_capabilities() -> Value {
       "undo",
       "redo"
     ],
+    "parityCommands": [
+      "applyOperation",
+      "keyboardRule",
+      "tableCommand",
+      "resizeImage",
+      "upsertFootnote",
+      "insertTemplate"
+    ],
     "inlineMarkers": ["**", "*", "~~", "`", "=="],
     "blockKinds": [
       "paragraph",
@@ -204,6 +221,16 @@ pub fn tauri_muya_engine_capabilities() -> Value {
       "ordered",
       "task",
       "quote"
-    ]
+    ],
+    "tableActions": [
+      "insert_row",
+      "delete_row",
+      "insert_column",
+      "delete_column",
+      "align_left",
+      "align_center",
+      "align_right"
+    ],
+    "templates": ["heading", "task-list", "table", "image", "math", "mermaid", "footnote", "code"]
   })
 }

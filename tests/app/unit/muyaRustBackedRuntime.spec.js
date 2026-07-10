@@ -12,6 +12,32 @@ const stateFor = (markdown = '') => ({
   redoStack: []
 })
 
+const replaceSelection = (state, command, continueGroup = false) => {
+  const start = Math.min(state.selection.anchor, state.selection.focus)
+  const end = Math.max(state.selection.anchor, state.selection.focus)
+  const text = String(command.text || '')
+  const markdown = `${state.markdown.slice(0, start)}${text}${state.markdown.slice(end)}`
+  const cursor = start + text.length
+  const snapshot = continueGroup && state.undoStack.length
+    ? state.undoStack.at(-1)
+    : { markdown: state.markdown, selection: state.selection }
+  const undoStack = continueGroup && state.undoStack.length
+    ? [...state.undoStack.slice(0, -1), snapshot]
+    : [...state.undoStack, snapshot]
+  return {
+    state: {
+      ...state,
+      markdown,
+      selection: { anchor: cursor, focus: cursor },
+      revision: state.revision + 1,
+      undoStack,
+      redoStack: []
+    },
+    documentChanged: markdown !== state.markdown,
+    selectionChanged: true
+  }
+}
+
 const mockRustInvoke = async(command, payload = {}) => {
   if (command === 'tauri_muya_engine_create') return stateFor(payload.markdown)
 
@@ -51,6 +77,13 @@ const mockRustInvoke = async(command, payload = {}) => {
       }
     }
     throw new Error(`unexpected editor command: ${editorCommand.type}`)
+  }
+
+  if (command === 'tauri_muya_engine_apply_grouped') {
+    if (payload.command.type !== 'replaceSelection') {
+      throw new Error(`unexpected grouped command: ${payload.command.type}`)
+    }
+    return replaceSelection(payload.state, payload.command, payload.continueGroup)
   }
 
   if (command === 'tauri_muya_engine_commit_composition') {
@@ -127,5 +160,50 @@ describe('Rust-backed Muya runtime', () => {
     expect(runtime.markdown).toBe('base')
     expect(root.textContent).toBe('base')
     expect(runtime.state.undoStack).toHaveLength(0)
+  })
+
+  it('groups consecutive native typing into one Rust undo snapshot', async() => {
+    const dom = new JSDOM('<div id="editor"></div>')
+    const root = dom.window.document.getElementById('editor')
+    const runtime = createRustBackedMuyaFullEditorRuntime(root, '', {
+      document: dom.window.document,
+      invoke: mockRustInvoke
+    })
+    await runtime.readyPromise
+
+    root.querySelector('p').textContent = 'a'
+    await runtime.syncDomToRust('input')
+    expect(runtime.markdown).toBe('a')
+    expect(runtime.currentHistoryGroup).toBe('input')
+
+    root.querySelector('p').textContent = 'ab'
+    await runtime.syncDomToRust('input')
+    expect(runtime.markdown).toBe('ab')
+    expect(runtime.state.undoStack).toHaveLength(1)
+    expect(runtime.state.undoStack[0].markdown).toBe('')
+
+    await runtime.undo()
+    expect(runtime.markdown).toBe('')
+    expect(root.textContent).toBe('')
+  })
+
+  it('creates a new undo boundary after the group is closed', async() => {
+    const dom = new JSDOM('<div id="editor"></div>')
+    const root = dom.window.document.getElementById('editor')
+    const runtime = createRustBackedMuyaFullEditorRuntime(root, '', {
+      document: dom.window.document,
+      invoke: mockRustInvoke
+    })
+    await runtime.readyPromise
+
+    root.querySelector('p').textContent = 'a'
+    await runtime.syncDomToRust('input')
+    runtime.closeHistoryGroup()
+    root.querySelector('p').textContent = 'ab'
+    await runtime.syncDomToRust('input')
+
+    expect(runtime.state.undoStack).toHaveLength(2)
+    await runtime.undo()
+    expect(runtime.markdown).toBe('a')
   })
 })

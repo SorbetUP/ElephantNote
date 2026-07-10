@@ -1,7 +1,6 @@
 import { createReadStream, existsSync, mkdirSync, statSync, cpSync } from 'fs'
 import { resolve, dirname, join, normalize, extname } from 'path'
 import { fileURLToPath } from 'url'
-import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import svgLoader from 'vite-svg-loader'
 import postcssPresetEnv from 'postcss-preset-env'
@@ -83,7 +82,7 @@ const excalidrawAssetsPlugin = () => ({
   }
 })
 
-export default defineConfig({
+export default {
   root: resolve(__dirname, 'Elephant/frontend/src/renderer'),
   base: './',
   build: {
@@ -125,4 +124,4 @@ export default defineConfig({
       ]
     }
   }
-})
+}

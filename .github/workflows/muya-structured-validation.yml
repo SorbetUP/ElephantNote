@@ -61,43 +61,109 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p .github/validation
-          node build/scripts/verify-critical-flows.mjs 2>&1 | tee .github/validation/critical-flow.log
+          node build/scripts/verify-critical-flows.mjs 2>&1 | tee /tmp/critical-flow.txt
+          status=${PIPESTATUS[0]}
+          tail -n 300 /tmp/critical-flow.txt > .github/validation/critical-flow.txt
+          exit "$status"
 
       - id: security
         name: Security guardrails
-        run: pnpm security:guard
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm security:guard 2>&1 | tee /tmp/security.txt
+          status=${PIPESTATUS[0]}
+          tail -n 300 /tmp/security.txt > .github/validation/security.txt
+          exit "$status"
 
       - id: platform
         name: Tauri platform compatibility
-        run: pnpm tauri:platform:check
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm tauri:platform:check 2>&1 | tee /tmp/platform.txt
+          status=${PIPESTATUS[0]}
+          tail -n 300 /tmp/platform.txt > .github/validation/platform.txt
+          exit "$status"
 
       - id: lint
         name: Lint
-        run: pnpm lint
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm lint 2>&1 | tee /tmp/lint.txt
+          status=${PIPESTATUS[0]}
+          tail -n 300 /tmp/lint.txt > .github/validation/lint.txt
+          exit "$status"
 
       - id: rustfmt
         name: Rust formatting
-        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check 2>&1 | tee /tmp/rustfmt.txt
+          status=${PIPESTATUS[0]}
+          tail -n 300 /tmp/rustfmt.txt > .github/validation/rustfmt.txt
+          exit "$status"
 
       - id: rust_check
         name: Rust check
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features 2>&1 | tee /tmp/rust-check.txt
+          status=${PIPESTATUS[0]}
+          tail -n 300 /tmp/rust-check.txt > .github/validation/rust-check.txt
+          exit "$status"
 
       - id: rust_tests
         name: Rust tests
-        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features 2>&1 | tee /tmp/rust-tests.txt
+          status=${PIPESTATUS[0]}
+          tail -n 300 /tmp/rust-tests.txt > .github/validation/rust-tests.txt
+          exit "$status"
 
       - id: structured_tests
         name: Structured Muya unit contracts
-        run: pnpm exec vitest run tests/app/unit/muyaRustSessionRuntime.spec.js tests/app/unit/muyaRustStructuredSession.spec.js tests/app/unit/muyaRealSurfaceRustMirror.spec.js tests/app/unit/muyaRustEditorActivation.spec.js
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec vitest run tests/app/unit/muyaRustSessionRuntime.spec.js tests/app/unit/muyaRustStructuredSession.spec.js tests/app/unit/muyaRealSurfaceRustMirror.spec.js tests/app/unit/muyaRustEditorActivation.spec.js 2>&1 | tee /tmp/structured-tests.txt
+          status=${PIPESTATUS[0]}
+          tail -n 300 /tmp/structured-tests.txt > .github/validation/structured-tests.txt
+          exit "$status"
 
       - id: renderer
         name: Build renderer
-        run: pnpm tauri:web:build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm tauri:web:build 2>&1 | tee /tmp/renderer.txt
+          status=${PIPESTATUS[0]}
+          tail -n 300 /tmp/renderer.txt > .github/validation/renderer.txt
+          exit "$status"
 
       - id: unit_tests
         name: Full unit suite
-        run: pnpm test:unit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm test:unit 2>&1 | tee /tmp/unit-tests.txt
+          status=${PIPESTATUS[0]}
+          tail -n 300 /tmp/unit-tests.txt > .github/validation/unit-tests.txt
+          exit "$status"
 
       - name: Persist validation result
         if: always()

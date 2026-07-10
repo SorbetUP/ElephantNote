@@ -27,14 +27,14 @@ const mobileNodeShim = resolve(
 const mobileNodeAliases = isAndroidBuild
   ? Object.fromEntries(
       [
+        'fs/promises',
+        'node:fs/promises',
         'child_process',
         'node:child_process',
         'crypto',
         'node:crypto',
         'fs',
         'node:fs',
-        'fs/promises',
-        'node:fs/promises',
         'os',
         'node:os',
         'zlib',

@@ -9,6 +9,7 @@ pub mod muya_extras;
 pub mod muya_frontmatter;
 pub mod muya_interactions;
 pub mod muya_navigation;
+pub mod muya_parity;
 pub mod parser_v4;
 pub mod renderer_v2;
 pub mod types;

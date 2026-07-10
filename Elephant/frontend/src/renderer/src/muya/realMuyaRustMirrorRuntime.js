@@ -1,6 +1,12 @@
 import { createRustMuyaEngineClient, isRustMuyaEngineAvailable } from './rustEngineRuntime.js'
 
+let sessionSequence = 0
+
 const asMarkdown = (value) => String(value ?? '')
+const createSessionId = () => {
+  sessionSequence += 1
+  return `muya:${Date.now()}:${sessionSequence}`
+}
 
 const createStatus = () => ({
   active: false,
@@ -97,7 +103,11 @@ export const createRealMuyaRustMirror = ({
     }
   }
 
-  const client = createRustMuyaEngineClient({ invoke, target })
+  const client = createRustMuyaEngineClient({
+    invoke,
+    target,
+    sessionId: createSessionId()
+  })
   let destroyed = false
   let initialized = false
   let pending = null
@@ -134,8 +144,12 @@ export const createRealMuyaRustMirror = ({
     status.markdownLength = state.markdown.length
     status.blocks = jsonState.blocks.length
     status.selection = { ...state.selection }
-    status.undoDepth = Array.isArray(state.undoStack) ? state.undoStack.length : 0
-    status.redoDepth = Array.isArray(state.redoStack) ? state.redoStack.length : 0
+    status.undoDepth = Number.isInteger(state.undoDepth)
+      ? state.undoDepth
+      : (Array.isArray(state.undoStack) ? state.undoStack.length : 0)
+    status.redoDepth = Number.isInteger(state.redoDepth)
+      ? state.redoDepth
+      : (Array.isArray(state.redoStack) ? state.redoStack.length : 0)
     status.error = ''
     publishStatus(target, status)
     return status
@@ -162,6 +176,7 @@ export const createRealMuyaRustMirror = ({
     logger.debug?.('[elephantnote:muya-rust] synchronized', {
       kind,
       reason,
+      sessionId: client.sessionId,
       markdownLength: status.markdownLength,
       blocks: status.blocks,
       revision: status.revision,
@@ -252,9 +267,10 @@ export const createRealMuyaRustMirror = ({
 
   const ready = reset(initialMarkdown, 'initial')
   target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-core'
-  logger.info?.('[elephantnote:editor] real Muya UI with persistent Rust core active', {
+  logger.info?.('[elephantnote:editor] real Muya UI with Rust-owned core active', {
     engine: 'rust',
-    surface: 'muya'
+    surface: 'muya',
+    sessionId: client.sessionId
   })
 
   return {
@@ -277,9 +293,17 @@ export const createRealMuyaRustMirror = ({
     get state() {
       return client.state
     },
+    get sessionId() {
+      return client.sessionId
+    },
     destroy: () => {
       destroyed = true
       pending = null
+      client.close().catch((error) => {
+        logger.error?.('[elephantnote:muya-rust] failed to close Rust session', {
+          error: error instanceof Error ? error.message : String(error)
+        })
+      })
       if (target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ === 'muya-ui-rust-core') {
         delete target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__
       }

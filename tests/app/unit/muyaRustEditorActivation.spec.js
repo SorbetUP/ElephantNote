@@ -39,6 +39,7 @@ describe('real Muya editor activation', () => {
     const viteConfig = read('vite.tauri.config.js')
     const adapter = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js')
     const mirror = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js')
+    const client = read('Elephant/frontend/src/renderer/src/muya/rustEngineRuntime.js')
 
     expect(viteConfig).toContain('const realMuyaRustMirrorPlugin = () => ({')
     expect(viteConfig).toContain("if (source !== 'muya/lib') return null")
@@ -50,8 +51,10 @@ describe('real Muya editor activation', () => {
     expect(adapter).toContain("this.on('change', this.__elephantRustChangeListener)")
     expect(adapter).not.toContain('innerHTML')
     expect(adapter).not.toContain('createElement')
-    expect(mirror).toContain("target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-mirror'")
+    expect(mirror).toContain("target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-core'")
+    expect(mirror).toContain('client.syncDocument(')
     expect(mirror).toContain('client.jsonState()')
+    expect(client).toContain("'tauri_muya_engine_sync_document'")
   })
 
   it('keeps every Muya UI plugin on the untouched original submodule path', () => {

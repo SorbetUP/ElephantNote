@@ -1,2 +1,3 @@
 Trigger editor-state diagnostics for the Wiki continuation implementation.
 Run after the PR-triggered workflow was installed on the base branch.
+Persist the matching implementation paths for review.

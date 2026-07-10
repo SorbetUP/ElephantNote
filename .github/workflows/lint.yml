@@ -31,48 +31,27 @@ jobs:
 
           panel_path = Path('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
           panel = panel_path.read_text()
-          toolbar_actions = '''      <div class="en-ai-actions">
-                <span class="en-ai-save-status">{{ autosaveMessage || 'Saved' }}</span>
-                <button
-                  class="secondary compact"
-                  type="button"
-                  :disabled="loading"
-                  @click="loadConfig"
-                >
-                  <RotateCw aria-hidden="true" /> Refresh
-                </button>
-                <button
-                  class="primary compact"
-                  type="button"
-                  :disabled="saving"
-                  @click="saveConfig"
-                >
-                  <Save aria-hidden="true" />{{ saving ? 'Saving…' : 'Save' }}
-                </button>
-              </div>
-          '''
-          if panel.count(toolbar_actions) != 1:
-              raise SystemExit(f'Expected one redundant toolbar action block, found {panel.count(toolbar_actions)}')
-          panel = panel.replace(toolbar_actions, '', 1)
-          old_import = "import { Activity, Cpu, Link2, Plus, RotateCw, Save, Server, Trash2 } from '@lucide/vue'"
-          new_import = "import { Activity, Cpu, Link2, Plus, RotateCw, Server, Trash2 } from '@lucide/vue'"
-          if panel.count(old_import) != 1:
-              raise SystemExit('Expected Save icon import')
-          panel = panel.replace(old_import, new_import, 1)
+          nav_end = panel.index('      </nav>') + len('      </nav>\n')
+          actions_start = panel.index('      <div class="en-ai-actions">', nav_end)
+          toolbar_end = panel.index('    </div>\n\n    <template', actions_start)
+          panel = panel[:actions_start] + panel[toolbar_end:]
+          panel = panel.replace(
+              "import { Activity, Cpu, Link2, Plus, RotateCw, Save, Server, Trash2 } from '@lucide/vue'",
+              "import { Activity, Cpu, Link2, Plus, RotateCw, Server, Trash2 } from '@lucide/vue'",
+              1,
+          )
           if 'en-ai-save-status' in panel or '<Save aria-hidden' in panel:
               raise SystemExit('Redundant AI toolbar controls remain')
           panel_path.write_text(panel)
 
           card_path = Path('Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue')
           card = card_path.read_text()
-          global_style = '''
-          <style>
+          global_style = '''<style>
           .en-ai-settings > .en-ai-toolbar > .en-ai-actions { display: none !important; }
-          </style>
-          '''
+          </style>'''
           if card.count(global_style) != 1:
               raise SystemExit(f'Expected one temporary global toolbar style, found {card.count(global_style)}')
-          card = card.replace(global_style, '\n', 1)
+          card = card.replace(global_style, '', 1).rstrip() + '\n'
           if '<svg' not in card or 'fill="currentColor"' not in card:
               raise SystemExit('Inline theme-aware ChatGPT SVG is missing')
           card_path.write_text(card)
@@ -83,9 +62,10 @@ jobs:
           new_expectations = """    expect(source).toContain('<ChatgptSubscriptionCard')
               expect(source).not.toContain('en-ai-save-status')
               expect(source).not.toContain('<Save aria-hidden')"""
-          if test.count(old_expectation) != 1:
-              raise SystemExit('Expected stale Codex-row assertion')
-          test = test.replace(old_expectation, new_expectations, 1)
+          if old_expectation in test:
+              test = test.replace(old_expectation, new_expectations, 1)
+          elif "expect(source).toContain('<ChatgptSubscriptionCard')" not in test:
+              raise SystemExit('Neither old nor updated Codex-card assertion was found')
           test_path.write_text(test)
           PY
 

@@ -74,26 +74,31 @@ jobs:
           test_path = Path('tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js')
           test = test_path.read_text()
           old_expectation = "    expect(source).toContain('class=\"en-ai-setting-row en-codex-row\"')"
-          new_expectations = """    expect(source).toContain('<ChatgptSubscriptionCard')
-              expect(source).not.toContain('en-ai-save-status')
-              expect(source).not.toContain('<Save aria-hidden')"""
+          new_expectations = (
+              "    expect(source).toContain('<ChatgptSubscriptionCard')\n"
+              "    expect(source).not.toContain('en-ai-save-status')\n"
+              "    expect(source).not.toContain('<Save aria-hidden')"
+          )
           if old_expectation in test:
               test = test.replace(old_expectation, new_expectations, 1)
           test_path.write_text(test)
           PY
 
-      - name: Validate focused frontend changes
-        shell: bash
+      - name: ESLint focused files
         run: |
-          set -euxo pipefail
           Elephant/node_modules/.bin/eslint \
             Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
             Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue \
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js
+
+      - name: Run focused unit tests
+        run: |
           pnpm exec vitest run \
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
             tests/app/unit/codexRateLimits.spec.js
-          pnpm tauri:web:build
+
+      - name: Build Tauri frontend
+        run: pnpm tauri:web:build
 
       - name: Restore workflow and commit validated cleanup
         shell: bash

@@ -23,18 +23,32 @@ import {
   upsertFootnote
 } from '../../../Elephant/frontend/src/renderer/src/muya/fullEditorRuntime.js'
 
+const textNodeContaining = (element, text) => {
+  const walker = element.ownerDocument.createTreeWalker(
+    element,
+    element.ownerDocument.defaultView.NodeFilter.SHOW_TEXT
+  )
+  let node = walker.nextNode()
+  while (node) {
+    if (node.nodeValue?.includes(text)) return node
+    node = walker.nextNode()
+  }
+  return null
+}
+
 describe('Muya full editor runtime contracts', () => {
   it('creates a real contenteditable DOM editor and restores browser selection snapshots', () => {
     const dom = new JSDOM('<div id="editor"></div>')
-    globalThis.document = dom.window.document
-    globalThis.getSelection = dom.window.getSelection.bind(dom.window)
     const root = dom.window.document.getElementById('editor')
-    const runtime = createMuyaFullEditorRuntime(root, '# Title\n\nText')
+    const runtime = createMuyaFullEditorRuntime(root, '# Title\n\nText', {
+      document: dom.window.document
+    })
     expect(root.getAttribute('contenteditable')).toBe('true')
     expect(root.getAttribute('data-muya-editor')).toBe('true')
     expect(root.querySelector('h1')?.textContent).toBe('Title')
 
-    const textNode = root.querySelector('p').firstChild
+    const textNode = textNodeContaining(root.querySelector('p'), 'Text')
+    expect(textNode).toBeTruthy()
     const range = dom.window.document.createRange()
     range.setStart(textNode, 0)
     range.setEnd(textNode, 4)
@@ -99,10 +113,10 @@ describe('Muya full editor runtime contracts', () => {
 
   it('runs the assembled editor runtime end to end', () => {
     const dom = new JSDOM('<div id="editor"></div>')
-    globalThis.document = dom.window.document
-    globalThis.getSelection = dom.window.getSelection.bind(dom.window)
     const root = dom.window.document.getElementById('editor')
-    const runtime = createMuyaFullEditorRuntime(root, '# A')
+    const runtime = createMuyaFullEditorRuntime(root, '# A', {
+      document: dom.window.document
+    })
     runtime.applyOperation({ type: 'insert', pos: runtime.markdown.length, text: '\n\n![Alt](pic.png)' })
     expect(runtime.imageToolbar(runtime.markdown.length - 2).visible).toBe(true)
     runtime.pasteClipboard({ html: '<h2>Paste</h2><p>Body</p>' })

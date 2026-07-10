@@ -55,11 +55,12 @@ describe('external addon manifest contract', () => {
 })
 
 describe('built-in starter addons', () => {
-  it('ships three useful addons and one developer inspector', () => {
+  it('ships four useful addons and one developer inspector', () => {
     expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
       'elephant.daily-notes',
       'elephant.quick-capture',
       'elephant.vault-overview',
+      'elephant.addon-profiles',
       'elephant.addon-inspector'
     ])
     expect(builtinAddons.filter((addon) => addon.manifest.defaultEnabled)).toHaveLength(3)
@@ -76,6 +77,7 @@ describe('built-in starter addons', () => {
     expect(manager.get('elephant.daily-notes')?.enabled).toBe(true)
     expect(manager.get('elephant.quick-capture')?.enabled).toBe(true)
     expect(manager.get('elephant.vault-overview')?.enabled).toBe(true)
+    expect(manager.get('elephant.addon-profiles')?.enabled).toBe(false)
     expect(manager.get('elephant.addon-inspector')?.enabled).toBe(false)
     expect(manager.getActions().map((entry) => entry.contribution.id).sort()).toEqual([
       'elephant.daily-notes.open-today',

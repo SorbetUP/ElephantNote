@@ -2,7 +2,7 @@
 
 ## Goal
 
-ElephantNote keeps ordinary Markdown fenced code blocks as the portable source of truth and adds an optional local execution layer around them.
+ElephantNote keeps ordinary Markdown fenced code blocks as the portable source of truth and adds optional local execution without turning notes into a proprietary notebook format.
 
 A shared note therefore remains readable in any Markdown application. In ElephantNote, a reader can select the fenced language, edit the source, run the block, stop it, and inspect stdout or stderr directly below it.
 
@@ -18,6 +18,26 @@ print(6 * 7)
 
 The execution layer recognizes Python, JavaScript/Node.js, Bash, POSIX shell, Ruby, PHP and PowerShell aliases. A language is never presented as available unless a real executable is detected or explicitly configured.
 
+## Inline component architecture
+
+Each executable block uses Muya's existing code-block host as one visual component. The direct children are ordered as:
+
+1. the runtime toolbar;
+2. the original editable `<pre>` code block;
+3. the session-local output section.
+
+The toolbar and output are `contenteditable="false"` siblings of the `<pre>`. They are never inserted inside the source node. The host owns the single border, background and border radius, so code and output cannot become two independent floating windows.
+
+There is no visual layer attached to `document.body`, no viewport-coordinate positioning, no `left` or `top` updates, and no scroll listener. The whole component participates in the note's normal document flow. Scrolling the note therefore moves code and output together exactly like any other block.
+
+The original Muya language/copy/fence chrome is hidden after it is identified. A stable runtime toolbar replaces it with:
+
+- a real language `<select>`;
+- Copy;
+- Run, which becomes Stop while the process is active.
+
+Changing the runtime selector updates Muya's native language control, the `language-*` classes and the related `input`/`change` events so the Markdown fence remains the persisted source of truth.
+
 ## Editing behavior
 
 The code remains Muya content rather than being replaced by a proprietary notebook editor. ElephantNote adds:
@@ -29,27 +49,29 @@ The code remains Muya content rather than being replaced by a proprietary notebo
 - the same shortcut stops the block while it is running;
 - disabled spellcheck, autocorrect and automatic capitalization inside code.
 
-The execution controls and output are rendered in a dedicated portal attached to `document.body`, outside Muya's editable and serialized DOM. The portal is positioned beside and below the corresponding fenced block. This prevents the controls from changing the Markdown or being removed when Muya replaces a transient `<pre>` node.
-
-The compact control shows the language and a triangular Run icon. During execution the icon becomes a square Stop control. Pointer and click diagnostics are logged before dispatching the Tauri command.
-
 ## Output behavior
 
 Output is session-local and is not written into Markdown.
 
-The output panel:
+The output section:
 
-- uses editor-theme-derived surfaces rather than Settings colors;
+- expands inside the same code-block shell;
+- uses the code block's computed surface and text colors;
 - remains readable in light and dark themes;
 - separates stdout and stderr;
 - scrolls internally for long output;
-- opens at the final output;
 - supports Copy, Collapse/Expand and Clear;
 - shows duration, exit status, timeout, interruption and truncation.
 
-The output state is stored separately from Muya's transient DOM. If Muya replaces the `<pre>` after blur, editing or deletion elsewhere in the note, ElephantNote matches the replacement by editor root, source fingerprint and document ordinal, then repositions the existing controls and result. Clicking outside does not clear an output; only Clear does.
+Output state is stored independently from Muya's transient `<pre>`. If Muya replaces the host or source node, ElephantNote matches the replacement by editor root, source fingerprint and document ordinal, then remounts the same state inside the new host. Clicking outside does not clear output; only Clear does.
 
 Settings → Editor → Code execution controls how many final lines are retained. The default is 200 and the accepted range is 10 to 5,000 lines.
+
+## Mutation and lifecycle behavior
+
+Runtime-owned mutations are ignored by the editor topology observer. Rendering, collapsing, expanding, clearing or scrolling output does not trigger a code-block rescan. Syntax-highlighting span churn is also ignored.
+
+Real code-host additions and replacements are debounced. Removing a complete host schedules one lifecycle scan and delayed state cleanup, preventing detached state or orphan controls without creating a mutation feedback loop.
 
 ## Real process interruption
 
@@ -90,13 +112,20 @@ These controls do not prevent code from accessing user-readable files, using the
 
 ## Validation
 
-The branch includes tests for:
+The active V6 suites verify:
 
-- controls and output remaining outside the editable Muya tree;
-- Markdown text remaining unchanged when controls are mounted;
-- an actual button click dispatching `tauri_programs_run`;
-- stable state and output across replacement of the fenced `<pre>`;
-- the Run triangle changing to a Stop square and sending a real stop request;
+- toolbar, source and output are direct children of one Muya host;
+- no visual runtime layer exists under `document.body`;
+- no floating positioning styles are written;
+- Markdown source text remains unchanged when runtime UI mounts;
+- language selection updates the native Muya control and fence classes;
+- a real button click dispatches `tauri_programs_run`;
+- code and output state survive complete Muya host replacement;
+- Run changes to Stop and sends a real stop request;
+- output rendering, collapse, expansion, clearing and scroll cause zero scans;
+- runtime and syntax-highlighting mutation churn cause zero scans;
+- deleting a block removes its state and leaves no orphan UI;
+- multiple blocks each own exactly one toolbar and one output section;
 - indentation and execution shortcuts;
 - output line-limit normalization;
 - fixed-size stream capture;

@@ -105,6 +105,7 @@ export const createRealMuyaRustMirror = ({
       upsertFootnote: async() => null,
       insertTemplate: async() => null,
       pasteClipboard: async() => null,
+      commitComposition: async() => null,
       destroy: () => {}
     }
   }
@@ -319,6 +320,10 @@ export const createRealMuyaRustMirror = ({
     pasteClipboard: (html = '', text = '') => applyCommand(
       'rust-rich-paste',
       (engine) => engine.pasteClipboard(String(html), String(text))
+    ),
+    commitComposition: (selection, text) => applyCommand(
+      'rust-ime-commit',
+      (engine) => engine.commitComposition(selection, String(text))
     ),
     get state() {
       return client.state

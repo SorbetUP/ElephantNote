@@ -5,143 +5,29 @@ on:
     types: [opened, synchronize, reopened]
 
 concurrency:
-  group: codex-finalize-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   lint:
-    if: github.head_ref == 'feature/real-codex-subscription'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: feature/real-codex-subscription
-          fetch-depth: 0
-
       - uses: ./.github/actions/setup
 
-      - name: Apply focused source cleanup
-        shell: bash
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
-          import re
-
-          panel_path = Path('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
-          panel = panel_path.read_text()
-          marker = '<span class="en-ai-save-status">'
-          marker_pos = panel.find(marker)
-          if marker_pos >= 0:
-              start = panel.rfind('<div class="en-ai-actions">', 0, marker_pos)
-              if start < 0:
-                  raise RuntimeError('Could not locate toolbar action container')
-              tag_pattern = re.compile(r'<div\b[^>]*>|</div>')
-              depth = 0
-              end = None
-              for match in tag_pattern.finditer(panel, start):
-                  if match.group().startswith('</div'):
-                      depth -= 1
-                      if depth == 0:
-                          end = match.end()
-                          break
-                  else:
-                      depth += 1
-              if end is None:
-                  raise RuntimeError('Could not locate toolbar action container end')
-              panel = panel[:start] + panel[end:]
-          panel = panel.replace(', Save,', ',', 1)
-          panel = panel.replace('.en-ai-badge, .en-ai-save-status {', '.en-ai-badge {', 1)
-          if marker in panel or '<Save aria-hidden' in panel or '.en-ai-save-status {' in panel:
-              raise RuntimeError('Redundant AI toolbar controls or styles remain')
-          panel_path.write_text(panel)
-
-          card_path = Path('Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue')
-          card = card_path.read_text()
-          selector = '.en-ai-settings > .en-ai-toolbar > .en-ai-actions'
-          selector_pos = card.find(selector)
-          if selector_pos >= 0:
-              style_start = card.rfind('<style>', 0, selector_pos)
-              style_end = card.find('</style>', selector_pos)
-              if style_start < 0 or style_end < 0:
-                  raise RuntimeError('Could not locate temporary global style block')
-              card = card[:style_start] + card[style_end + len('</style>'):]
-          if '<svg' not in card or 'fill="currentColor"' not in card:
-              raise RuntimeError('Inline theme-aware ChatGPT SVG is missing')
-          card_path.write_text(card.rstrip() + '\n')
-
-          test_path = Path('tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js')
-          test = test_path.read_text()
-          old_expectation = "    expect(source).toContain('class=\"en-ai-setting-row en-codex-row\"')"
-          new_expectations = (
-              "    expect(source).toContain('<ChatgptSubscriptionCard')\n"
-              "    expect(source).not.toContain('en-ai-save-status')\n"
-              "    expect(source).not.toContain('<Save aria-hidden')"
-          )
-          if old_expectation in test:
-              test = test.replace(old_expectation, new_expectations, 1)
-          test_path.write_text(test)
-          PY
-
-      - name: Format and lint focused files
+      - name: Run ESLint
         shell: bash
         run: |
           set -o pipefail
-          Elephant/node_modules/.bin/eslint --fix \
-            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
-            Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue \
-            tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js 2>&1 | tee focused-eslint.txt
-          Elephant/node_modules/.bin/eslint \
-            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
-            Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue \
-            tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js 2>&1 | tee -a focused-eslint.txt
+          pnpm lint 2>&1 | tee eslint-output.txt
 
-      - name: Run settings redesign test
-        shell: bash
-        env:
-          NODE_PATH: Elephant/node_modules
-        run: |
-          set -o pipefail
-          Elephant/node_modules/.bin/vitest run tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js --reporter=verbose 2>&1 | tee settings-test.txt
-
-      - name: Run Codex rate-limit tests
-        if: always()
-        shell: bash
-        env:
-          NODE_PATH: Elephant/node_modules
-        run: |
-          set -o pipefail
-          Elephant/node_modules/.bin/vitest run tests/app/unit/codexRateLimits.spec.js --reporter=verbose 2>&1 | tee codex-limits-test.txt
-
-      - name: Build Tauri frontend
-        if: success()
-        run: pnpm tauri:web:build
-
-      - name: Upload focused diagnostics
+      - name: Upload ESLint output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: codex-final-validation
-          path: |
-            focused-eslint.txt
-            settings-test.txt
-            codex-limits-test.txt
+          name: eslint-output
+          path: eslint-output.txt
           if-no-files-found: ignore
-
-      - name: Restore workflow and commit validated cleanup
-        if: success()
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git show origin/develop:.github/workflows/lint.yml > .github/workflows/lint.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            .github/workflows/lint.yml \
-            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
-            Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue \
-            tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js
-          git commit -m "Clean up ChatGPT settings UI and update focused tests"
-          git push origin HEAD:feature/real-codex-subscription

@@ -267,7 +267,3 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   .en-chatgpt-reset-bar button { width: 100%; }
 }
 </style>
-
-<style>
-.en-ai-settings > .en-ai-toolbar > .en-ai-actions { display: none !important; }
-</style>

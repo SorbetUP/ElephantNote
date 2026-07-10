@@ -19,25 +19,6 @@
           <span>{{ page.label }}</span>
         </button>
       </nav>
-      <div class="en-ai-actions">
-        <span class="en-ai-save-status">{{ autosaveMessage || 'Saved' }}</span>
-        <button
-          class="secondary compact"
-          type="button"
-          :disabled="loading"
-          @click="loadConfig"
-        >
-          <RotateCw aria-hidden="true" /> Refresh
-        </button>
-        <button
-          class="primary compact"
-          type="button"
-          :disabled="saving"
-          @click="saveConfig"
-        >
-          <Save aria-hidden="true" />{{ saving ? 'Saving…' : 'Save' }}
-        </button>
-      </div>
     </div>
 
     <template v-if="activePage === 'provider'">
@@ -421,7 +402,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Activity, Cpu, Link2, Plus, RotateCw, Save, Server, Trash2 } from '@lucide/vue'
+import { Activity, Cpu, Link2, Plus, RotateCw, Server, Trash2 } from '@lucide/vue'
 import log from '@/platform/runtimeLogShim'
 import { normalizeAiConfig, normalizeLocalAiConfig } from 'common/elephantnote/aiProviders'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
@@ -854,7 +835,7 @@ button svg { width: 14px; height: 14px; }
 .en-ai-setting-copy { min-width: 0; flex: 1; display: grid; gap: 3px; }
 .en-ai-row-icon { display: grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; background: var(--en-soft); }
 .en-ai-row-icon svg { width: 16px; height: 16px; }
-.en-ai-badge, .en-ai-save-status { padding: 4px 9px; border: 1px solid var(--en-border); border-radius: 99px; color: var(--en-muted); font-size: 11px; }
+.en-ai-badge { padding: 4px 9px; border: 1px solid var(--en-border); border-radius: 99px; color: var(--en-muted); font-size: 11px; }
 .en-ai-badge.active { border-color: #86efac; color: #15803d; }
 .en-ai-badge.warning { border-color: #fbbf24; color: #a16207; }
 .en-ai-switch { width: 42px; min-height: 24px; padding: 2px; border-radius: 99px; justify-content: flex-start; }

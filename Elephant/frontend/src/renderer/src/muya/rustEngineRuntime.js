@@ -26,6 +26,13 @@ const ensureCommand = (command) => {
   return command
 }
 
+const ensureJsonState = (jsonState) => {
+  if (!jsonState || jsonState.type !== 'muya-json-state' || !Array.isArray(jsonState.blocks)) {
+    throw new Error('Muya Rust engine returned an invalid JSON document state.')
+  }
+  return jsonState
+}
+
 export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {}) => {
   const call = invoke || requireInvoke(target)
   let state = null
@@ -114,6 +121,7 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
       text: String(text)
     }),
     insertTemplate: (id) => applyParity({ type: 'insertTemplate', id: String(id) }),
+    jsonState: async() => ensureJsonState(await query({ type: 'jsonState' })),
     clipboard: () => query({ type: 'clipboard' }),
     imageToolbar: (cursor = null) => query({ type: 'imageToolbar', cursor }),
     footnotePopup: (cursor = null) => query({ type: 'footnotePopup', cursor }),

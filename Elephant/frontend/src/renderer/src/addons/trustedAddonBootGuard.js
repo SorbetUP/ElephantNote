@@ -51,3 +51,7 @@ export const recoverTrustedActivationCrash = async (target = globalThis) => {
   await setPreference(TRUSTED_SAFE_MODE_PREF_KEY, true, target).catch(() => {})
   return marker
 }
+
+// Run before the external-addon controller starts. A leftover marker means the
+// previous renderer stopped during trusted addon activation.
+export const trustedActivationRecovery = recoverTrustedActivationCrash()

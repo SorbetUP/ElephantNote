@@ -1,0 +1,33 @@
+{
+  "id": "com.elephantnote.inbox-digest",
+  "name": "Inbox Digest",
+  "version": "1.0.0",
+  "description": "Builds a review report from Markdown notes under Inbox/ without modifying the source notes.",
+  "author": "ElephantNote",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": {
+    "type": "javascript-worker",
+    "entry": "main.js"
+  },
+  "permissions": {
+    "commands": true,
+    "storage": true,
+    "notes": {
+      "read": ["Inbox/**"],
+      "write": ["Reports/**"]
+    },
+    "network": {
+      "hosts": []
+    }
+  },
+  "activationEvents": ["onStartup"],
+  "contributes": {
+    "commands": [
+      {
+        "id": "com.elephantnote.inbox-digest.generate",
+        "title": "Generate inbox digest"
+      }
+    ]
+  }
+}

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::State;
 
+use super::muya_advanced::{apply_advanced_command, MuyaAdvancedCommand};
 use super::muya_clipboard_commands::paste_clipboard;
 use super::muya_complete::{apply_complete_command, MuyaCompleteCommand};
 use super::muya_engine::{
@@ -22,6 +23,7 @@ const HISTORY_LIMIT: usize = 100;
 pub enum MuyaSessionMutation {
     Complete(MuyaCompleteCommand),
     Surface(MuyaSurfaceCommand),
+    Advanced(MuyaAdvancedCommand),
 }
 
 #[derive(Default)]
@@ -215,6 +217,7 @@ pub fn tauri_muya_session_apply_complete(
     session_transaction(&sessions, &editor_id, |state| match command {
         MuyaSessionMutation::Complete(command) => apply_complete_command(state, command),
         MuyaSessionMutation::Surface(command) => apply_surface_command(state, command),
+        MuyaSessionMutation::Advanced(command) => apply_advanced_command(state, command),
     })
 }
 
@@ -304,6 +307,18 @@ mod tests {
         let json = serde_json::to_value(MuyaSessionState::from(&state)).unwrap();
         assert_eq!(json["undoDepth"], 1);
         assert!(json.get("undoStack").is_none());
+    }
+
+    #[test]
+    fn advanced_mutations_share_the_same_native_session_history() {
+        let state = MuyaEditorState::new("- item".to_string());
+        let transaction = apply_advanced_command(
+            state,
+            MuyaAdvancedCommand::SmartEnter { shift_key: false },
+        )
+        .unwrap();
+        assert_eq!(transaction.state.markdown, "- item\n- ");
+        assert_eq!(transaction.state.undo_stack.len(), 1);
     }
 
     #[test]

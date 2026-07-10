@@ -64,7 +64,18 @@ jobs:
           test "$lines" -ge 10000
 
       - name: Critical ElephantNote flow guard
-        run: node build/scripts/verify-critical-flows.mjs
+        shell: bash
+        run: |
+          set -o pipefail
+          node build/scripts/verify-critical-flows.mjs 2>&1 | tee critical-flow-guard.log
+
+      - name: Upload critical flow diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: critical-flow-guard-${{ github.run_id }}
+          path: critical-flow-guard.log
+          if-no-files-found: error
 
       - name: Security guardrails
         run: pnpm security:guard

@@ -100,6 +100,7 @@ jobs:
             tests/app/unit/muyaRustGroupedHistoryClient.spec.js \
             tests/app/unit/muyaRustBackedRuntime.spec.js \
             tests/app/unit/muyaRustEditorActivation.spec.js \
+            tests/app/unit/muyaRustMuyaDomParity.spec.js \
             tests/app/unit/muyaRuntimeFlags.spec.js \
             tests/app/unit/muyaRuntimeVueIntegration.spec.js \
             tests/app/unit/muyaSharedParityMatrix.spec.js \

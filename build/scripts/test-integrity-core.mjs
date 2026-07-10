@@ -31,11 +31,47 @@ export const addedSourceLines = (diff = '') =>
     .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
     .map((line) => line.slice(1))
 
+export const maskQuotedTextAndComments = (sourceLine = '') => {
+  const source = String(sourceLine || '')
+  let result = ''
+  let quote = ''
+  let escaped = false
+
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index]
+    const next = source[index + 1]
+
+    if (!quote && character === '/' && next === '/') break
+    if (!quote && (character === "'" || character === '"' || character === '`')) {
+      quote = character
+      result += character
+      continue
+    }
+    if (quote) {
+      if (escaped) {
+        escaped = false
+      } else if (character === '\\') {
+        escaped = true
+      } else if (character === quote) {
+        quote = ''
+        result += character
+      }
+      continue
+    }
+    result += character
+  }
+
+  return result
+}
+
 export const findForbiddenTestAdditions = (diff = '') => {
   const failures = []
   for (const [index, line] of addedSourceLines(diff).entries()) {
+    const executableSource = maskQuotedTextAndComments(line)
     for (const rule of FORBIDDEN_ADDITIONS) {
-      if (rule.pattern.test(line)) failures.push({ line: index + 1, rule: rule.name, source: line.trim() })
+      if (rule.pattern.test(executableSource)) {
+        failures.push({ line: index + 1, rule: rule.name, source: line.trim() })
+      }
     }
   }
   return failures

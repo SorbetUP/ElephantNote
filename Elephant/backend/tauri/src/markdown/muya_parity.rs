@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use super::muya_engine::{
-    apply_command, utf16_len, utf16_to_byte_index, MuyaEditorCommand, MuyaEditorState,
-    MuyaEditorTransaction,
+    apply_command, utf16_len, utf16_to_byte_index, MuyaEditorCommand, MuyaEditorSnapshot,
+    MuyaEditorState, MuyaEditorTransaction, MuyaSelection,
 };
+
+const MUYA_PARITY_HISTORY_LIMIT: usize = 100;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,8 +58,8 @@ pub fn apply_parity_command(
     match command {
         MuyaParityCommand::ApplyOperation { operation } => apply_text_operation(state, operation),
         MuyaParityCommand::KeyboardRule { key, shift_key } => {
-            let next = apply_keyboard_rule(&state.markdown, &key, shift_key);
-            replace_document_if_changed(state, next)
+            let selection = state.selection;
+            apply_keyboard_rule_at_selection(state, &key, shift_key, selection.focus)
         }
         MuyaParityCommand::TableCommand { action, index } => {
             let next = apply_table_command(&state.markdown, &action, index)?;
@@ -144,33 +146,105 @@ fn replace_document_if_changed(
 }
 
 pub fn apply_keyboard_rule(markdown: &str, key: &str, shift_key: bool) -> String {
-    let mut lines = markdown.split('\n').map(str::to_string).collect::<Vec<_>>();
-    let Some(current) = lines.last_mut() else {
-        return markdown.to_string();
+    let cursor = utf16_len(markdown);
+    apply_keyboard_rule_to_markdown(markdown, key, shift_key, cursor).0
+}
+
+fn apply_keyboard_rule_at_selection(
+    mut state: MuyaEditorState,
+    key: &str,
+    shift_key: bool,
+    cursor: usize,
+) -> Result<MuyaEditorTransaction, String> {
+    let before_selection = state.selection;
+    let (next, next_cursor) =
+        apply_keyboard_rule_to_markdown(&state.markdown, key, shift_key, cursor);
+    if next == state.markdown {
+        return apply_command(
+            state,
+            MuyaEditorCommand::SetSelection {
+                anchor: before_selection.anchor,
+                focus: before_selection.focus,
+            },
+        );
+    }
+
+    let snapshot = MuyaEditorSnapshot {
+        markdown: state.markdown.clone(),
+        selection: before_selection,
     };
+    while state.undo_stack.len() >= MUYA_PARITY_HISTORY_LIMIT {
+        state.undo_stack.remove(0);
+    }
+    state.undo_stack.push(snapshot);
+    state.redo_stack.clear();
+    state.markdown = next;
+    state.selection = MuyaSelection::collapsed(next_cursor.min(utf16_len(&state.markdown)));
+    state.revision = state.revision.saturating_add(1);
+
+    Ok(MuyaEditorTransaction {
+        state,
+        document_changed: true,
+        selection_changed: before_selection.anchor != next_cursor
+            || before_selection.focus != next_cursor,
+    })
+}
+
+fn apply_keyboard_rule_to_markdown(
+    markdown: &str,
+    key: &str,
+    shift_key: bool,
+    cursor_utf16: usize,
+) -> (String, usize) {
+    let cursor = utf16_to_byte_index(markdown, cursor_utf16.min(utf16_len(markdown)));
+    let line_start = markdown[..cursor]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
+    let line_end = markdown[cursor..]
+        .find('\n')
+        .map_or(markdown.len(), |offset| cursor + offset);
+    let current = &markdown[line_start..line_end];
 
     if key == "Tab" {
-        if shift_key {
-            if current.starts_with("  ") {
-                current.drain(..2);
-            }
+        let replacement = if shift_key {
+            current.strip_prefix("  ").unwrap_or(current).to_string()
         } else {
-            current.insert_str(0, "  ");
+            format!("  {current}")
+        };
+        if replacement == current {
+            return (markdown.to_string(), cursor_utf16);
         }
-        return lines.join("\n");
+        let mut next = String::with_capacity(
+            markdown.len() + replacement.len().saturating_sub(current.len()),
+        );
+        next.push_str(&markdown[..line_start]);
+        next.push_str(&replacement);
+        next.push_str(&markdown[line_end..]);
+        let relative_cursor = cursor.saturating_sub(line_start);
+        let next_relative = if shift_key {
+            relative_cursor.saturating_sub(current.len().saturating_sub(replacement.len()))
+        } else {
+            relative_cursor + replacement.len().saturating_sub(current.len())
+        };
+        let next_cursor_byte = line_start + next_relative.min(replacement.len());
+        return (next.clone(), utf16_len(&next[..next_cursor_byte]));
     }
 
-    if key != "Enter" {
-        return markdown.to_string();
+    if key != "Enter" || cursor != line_end {
+        return (markdown.to_string(), cursor_utf16);
     }
 
-    let continuation = list_continuation(current);
-    if let Some(next) = continuation {
-        lines.push(next);
-        lines.join("\n")
-    } else {
-        markdown.to_string()
-    }
+    let Some(continuation) = list_continuation(current) else {
+        return (markdown.to_string(), cursor_utf16);
+    };
+    let insertion = format!("\n{continuation}");
+    let mut next = String::with_capacity(markdown.len() + insertion.len());
+    next.push_str(&markdown[..cursor]);
+    next.push_str(&insertion);
+    next.push_str(&markdown[cursor..]);
+    let next_cursor_byte = cursor + insertion.len();
+    let next_cursor = utf16_len(&next[..next_cursor_byte]);
+    (next, next_cursor)
 }
 
 fn list_continuation(line: &str) -> Option<String> {
@@ -416,7 +490,6 @@ pub fn slash_template(id: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::muya_engine::MuyaSelection;
     use super::*;
 
     #[test]
@@ -457,6 +530,60 @@ mod tests {
     fn indents_and_outdents_the_last_line() {
         assert_eq!(apply_keyboard_rule("a\nb", "Tab", false), "a\n  b");
         assert_eq!(apply_keyboard_rule("a\n  b", "Tab", true), "a\nb");
+    }
+
+    #[test]
+    fn keyboard_rule_uses_the_active_middle_line_and_restores_selection() {
+        let mut state = MuyaEditorState::new("- first\n- second\nafter".to_string());
+        state.selection = MuyaSelection::collapsed(16);
+        let transaction = apply_parity_command(
+            state,
+            MuyaParityCommand::KeyboardRule {
+                key: "Enter".to_string(),
+                shift_key: false,
+            },
+        )
+        .expect("list continuation should apply");
+
+        assert_eq!(transaction.state.markdown, "- first\n- second\n- \nafter");
+        assert_eq!(transaction.state.selection, MuyaSelection::collapsed(19));
+        assert_eq!(transaction.state.undo_stack.len(), 1);
+        let snapshot = &transaction.state.undo_stack[0];
+        assert_eq!(snapshot.selection, MuyaSelection::collapsed(16));
+    }
+
+    #[test]
+    fn tab_rule_indents_only_the_active_line() {
+        let mut state = MuyaEditorState::new("- first\n- second\nafter".to_string());
+        state.selection = MuyaSelection::collapsed(12);
+        let transaction = apply_parity_command(
+            state,
+            MuyaParityCommand::KeyboardRule {
+                key: "Tab".to_string(),
+                shift_key: false,
+            },
+        )
+        .expect("indentation should apply");
+
+        assert_eq!(transaction.state.markdown, "- first\n  - second\nafter");
+        assert_eq!(transaction.state.selection, MuyaSelection::collapsed(14));
+    }
+
+    #[test]
+    fn enter_inside_a_list_item_is_not_intercepted() {
+        let mut state = MuyaEditorState::new("- second".to_string());
+        state.selection = MuyaSelection::collapsed(3);
+        let transaction = apply_parity_command(
+            state,
+            MuyaParityCommand::KeyboardRule {
+                key: "Enter".to_string(),
+                shift_key: false,
+            },
+        )
+        .expect("no-op should remain valid");
+
+        assert_eq!(transaction.state.markdown, "- second");
+        assert!(transaction.state.undo_stack.is_empty());
     }
 
     #[test]

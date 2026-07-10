@@ -53,6 +53,8 @@ jobs:
             2>&1 | tee -a addon-functional-tests.txt
           node build/scripts/test-popular-note-addons.mjs addon-catalog-source \
             2>&1 | tee -a addon-functional-tests.txt
+          node build/scripts/test-elephant-tasks.mjs addon-catalog-source \
+            2>&1 | tee -a addon-functional-tests.txt
 
       - name: Run focused addon and settings tests
         shell: bash
@@ -65,6 +67,7 @@ jobs:
             tests/app/unit/addons/builtinAddonsQuality.spec.js \
             tests/app/unit/addons/addonProfiles.spec.js \
             tests/app/unit/addons/runtimeSecurityContracts.spec.js \
+            tests/app/unit/addons/declarativeViewsContracts.spec.js \
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
             2>&1 | tee addon-tests.txt
 

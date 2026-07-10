@@ -8,6 +8,7 @@ pub mod folder_domain;
 pub mod knowledge;
 pub mod knowledge_chat_actions;
 pub mod knowledge_relations;
+pub mod knowledge_wiki_library;
 pub mod knowledge_wikis;
 #[cfg(not(mobile))]
 pub mod local_llama_runtime;
@@ -131,6 +132,10 @@ pub fn run() {
             knowledge_wikis::tauri_knowledge_wikis_list,
             knowledge_wikis::tauri_knowledge_wiki_accept,
             knowledge_wikis::tauri_knowledge_wiki_reject,
+            knowledge_wiki_library::tauri_knowledge_wiki_library_list,
+            knowledge_wiki_library::tauri_knowledge_wiki_library_generate,
+            knowledge_wiki_library::tauri_knowledge_wiki_library_reject,
+            knowledge_wiki_library::tauri_knowledge_wiki_library_delete,
             sync_commands::iroh_sync_create_invite,
             sync_commands::iroh_sync_accept_invite,
             sync_commands::iroh_sync_status,

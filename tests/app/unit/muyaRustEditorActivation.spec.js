@@ -26,7 +26,15 @@ describe('canonical Rust note editor activation', () => {
 
   it('forbids silent JavaScript fallback while active mode is requested', () => {
     const runtimeHook = read('Elephant/frontend/src/renderer/src/muya/useMuyaRuntimeEditor.js')
-    expect(runtimeHook).toContain('Active Muya mode requires the Rust Tauri engine')
+    expect(runtimeHook).toContain('allowJavaScriptFallback = false')
+    expect(runtimeHook).toContain("rootRef.value.dataset.muyaEngine = 'unavailable'")
+    expect(runtimeHook).toContain('active mode unavailable: Rust Tauri engine is required')
     expect(runtimeHook).toContain('rootRef.value.dataset.muyaEngine = engineKind')
+  })
+
+  it('keeps JavaScript fallback explicit and test-only', () => {
+    const component = read('Elephant/frontend/src/renderer/src/muya/MuyaRuntimeEditor.vue')
+    expect(component).toContain('allowJavascriptFallback: { type: Boolean, default: false }')
+    expect(component).toContain('allowJavaScriptFallback: props.allowJavascriptFallback')
   })
 })

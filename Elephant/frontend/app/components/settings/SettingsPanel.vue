@@ -14,9 +14,7 @@
       aria-label="ElephantNote settings"
     >
       <header class="en-settings-header">
-        <button class="en-icon-button en-settings-close" type="button" aria-label="Close settings" @click="emit('close')">
-          <X aria-hidden="true" />
-        </button>
+        <button class="en-icon-button en-settings-close" type="button" aria-label="Close settings" @click="emit('close')"><X aria-hidden="true" /></button>
         <h2>Settings</h2>
         <label class="en-settings-search">
           <Search aria-hidden="true" />
@@ -27,45 +25,26 @@
 
       <div class="en-settings-grid">
         <aside class="en-settings-nav" aria-label="Settings sections">
-          <button
-            v-for="item in sections"
-            :key="item.id"
-            type="button"
-            :class="{ active: !settingsQuery && activeSection === item.id }"
-            @click="selectSection(item.id)"
-          >
+          <button v-for="item in sections" :key="item.id" type="button" :class="{ active: !settingsQuery && activeSection === item.id }" @click="selectSection(item.id)">
             <component :is="item.icon" aria-hidden="true" />
             <span>{{ item.label }}</span>
             <ChevronRight class="en-settings-nav-chevron" aria-hidden="true" />
           </button>
-          <footer class="en-settings-nav-footer">
-            <span>Local-first</span>
-            <span>v0.18.9</span>
-          </footer>
+          <footer class="en-settings-nav-footer"><span>Local-first</span><span>v0.18.9</span></footer>
         </aside>
 
         <main ref="settingsContent" class="en-settings-content">
           <template v-if="settingsQuery.trim()">
-            <div class="en-settings-page-title">
-              <h1>Search</h1>
-              <span>{{ searchResults.length }} result{{ searchResults.length === 1 ? '' : 's' }}</span>
-            </div>
+            <div class="en-settings-page-title"><h1>Search</h1><span>{{ searchResults.length }} result{{ searchResults.length === 1 ? '' : 's' }}</span></div>
             <section v-if="searchResults.length" class="en-settings-search-results">
               <button v-for="result in searchResults" :key="result.id" type="button" @click="openSearchResult(result)">
                 <span class="en-settings-result-icon"><component :is="result.icon" aria-hidden="true" /></span>
-                <span class="en-settings-result-copy">
-                  <strong>{{ result.label }}</strong>
-                  <small>{{ result.description }}</small>
-                </span>
+                <span class="en-settings-result-copy"><strong>{{ result.label }}</strong><small>{{ result.description }}</small></span>
                 <span class="en-settings-result-section">{{ result.sectionLabel }}</span>
                 <ChevronRight aria-hidden="true" />
               </button>
             </section>
-            <div v-else class="en-settings-empty-state en-settings-search-empty">
-              <Search aria-hidden="true" />
-              <strong>No setting found</strong>
-              <span>Try another word, feature name or control.</span>
-            </div>
+            <div v-else class="en-settings-empty-state en-settings-search-empty"><Search aria-hidden="true" /><strong>No setting found</strong><span>Try another word, feature name or control.</span></div>
           </template>
 
           <template v-else>
@@ -84,21 +63,8 @@
                 <div class="en-settings-row en-settings-row-stacked">
                   <div class="en-settings-row-copy"><strong>Theme</strong><span>Choose the visual family used throughout ElephantNote.</span></div>
                   <div class="en-theme-grid">
-                    <button
-                      v-for="family in themeFamilies"
-                      :key="family.id"
-                      type="button"
-                      class="en-theme-card"
-                      :class="{ active: activeThemeFamily.id === family.id }"
-                      @click="emit('update-theme', getThemeVariant(family.id, themeMode))"
-                    >
-                      <span class="en-theme-card-preview" :style="{ background: family.swatches[0] }">
-                        <i class="sidebar" :style="{ background: family.swatches[1] }" />
-                        <i class="canvas" :style="{ background: family.swatches[2] }">
-                          <b :style="{ background: family.swatches[3] || family.swatches[2] }" />
-                          <b :style="{ background: family.swatches[3] || family.swatches[2] }" />
-                        </i>
-                      </span>
+                    <button v-for="family in themeFamilies" :key="family.id" type="button" class="en-theme-card" :class="{ active: activeThemeFamily.id === family.id }" @click="emit('update-theme', getThemeVariant(family.id, themeMode))">
+                      <span class="en-theme-card-preview" :style="{ background: family.swatches[0] }"><i class="sidebar" :style="{ background: family.swatches[1] }" /><i class="canvas" :style="{ background: family.swatches[2] }"><b :style="{ background: family.swatches[3] || family.swatches[2] }" /><b :style="{ background: family.swatches[3] || family.swatches[2] }" /></i></span>
                       <span class="en-theme-card-copy"><strong>{{ family.name }}</strong><small>{{ family.description }}</small></span>
                       <span v-if="activeThemeFamily.id === family.id" class="en-theme-card-check"><Check aria-hidden="true" /></span>
                     </button>
@@ -107,134 +73,58 @@
 
                 <div class="en-settings-row">
                   <div class="en-settings-row-copy"><strong>Sidebar width</strong><span>Resize the main navigation rail.</span></div>
-                  <label class="en-range-control">
-                    <input type="range" min="184" max="320" :value="sidebarWidth" @input="emit('update-sidebar-width', Number($event.target.value))">
-                    <output>{{ sidebarWidth }} px</output>
-                  </label>
+                  <label class="en-range-control"><input type="range" min="184" max="320" :value="sidebarWidth" @input="emit('update-sidebar-width', Number($event.target.value))"><output>{{ sidebarWidth }} px</output></label>
+                </div>
+
+                <div class="en-settings-row en-settings-row-stacked">
+                  <div class="en-settings-row-copy"><strong>Vertical icon bar</strong><span>Reorder or hide native features and enabled addon workspaces.</span></div>
+                  <icon-rail-layout-settings />
                 </div>
               </section>
             </template>
 
             <template v-else-if="activeSection === 'editor'">
               <section class="en-settings-group">
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Editor footer</strong><span>Show word count, typography controls and the theme shortcut.</span></div>
-                  <button class="en-switch" type="button" role="switch" aria-label="Show editor footer" :aria-checked="preferences.showEditorFooter" :class="{ active: preferences.showEditorFooter }" @click="setPreference('showEditorFooter', !preferences.showEditorFooter)"><span /></button>
-                </div>
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Tag prefix</strong><span>Display # before tag names in the editor.</span></div>
-                  <button class="en-switch" type="button" role="switch" aria-label="Show tag prefix" :aria-checked="preferences.showTagHashInEditor" :class="{ active: preferences.showTagHashInEditor }" @click="setPreference('showTagHashInEditor', !preferences.showTagHashInEditor)"><span /></button>
-                </div>
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Quick insert menu</strong><span>Show the block command menu when its trigger is typed.</span></div>
-                  <button class="en-switch" type="button" role="switch" aria-label="Show quick insert menu" :aria-checked="!preferences.hideQuickInsertHint" :class="{ active: !preferences.hideQuickInsertHint }" @click="setPreference('hideQuickInsertHint', !preferences.hideQuickInsertHint)"><span /></button>
-                </div>
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Quick insert trigger</strong><span>The character that opens the insert menu. The default is /.</span></div>
-                  <input class="en-compact-input en-trigger-input" :value="preferences.quickInsertTrigger" maxlength="1" aria-label="Quick insert trigger" @change="setQuickInsertTrigger($event.target.value)">
-                </div>
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Pair brackets</strong><span>Automatically insert the matching closing bracket.</span></div>
-                  <button class="en-switch" type="button" role="switch" aria-label="Automatically pair brackets" :aria-checked="preferences.autoPairBracket" :class="{ active: preferences.autoPairBracket }" @click="setPreference('autoPairBracket', !preferences.autoPairBracket)"><span /></button>
-                </div>
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Pair Markdown syntax</strong><span>Automatically close Markdown emphasis and formatting markers.</span></div>
-                  <button class="en-switch" type="button" role="switch" aria-label="Automatically pair Markdown syntax" :aria-checked="preferences.autoPairMarkdownSyntax" :class="{ active: preferences.autoPairMarkdownSyntax }" @click="setPreference('autoPairMarkdownSyntax', !preferences.autoPairMarkdownSyntax)"><span /></button>
-                </div>
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Pair quotes</strong><span>Automatically insert the matching closing quote.</span></div>
-                  <button class="en-switch" type="button" role="switch" aria-label="Automatically pair quotes" :aria-checked="preferences.autoPairQuote" :class="{ active: preferences.autoPairQuote }" @click="setPreference('autoPairQuote', !preferences.autoPairQuote)"><span /></button>
-                </div>
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Spellchecker</strong><span>Check spelling while writing.</span></div>
-                  <button class="en-switch" type="button" role="switch" aria-label="Enable spellchecker" :aria-checked="preferences.spellcheckerEnabled" :class="{ active: preferences.spellcheckerEnabled }" @click="setPreference('spellcheckerEnabled', !preferences.spellcheckerEnabled)"><span /></button>
-                </div>
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Code block line numbers</strong><span>Display line numbers in fenced code blocks.</span></div>
-                  <button class="en-switch" type="button" role="switch" aria-label="Show code block line numbers" :aria-checked="preferences.codeBlockLineNumbers" :class="{ active: preferences.codeBlockLineNumbers }" @click="setPreference('codeBlockLineNumbers', !preferences.codeBlockLineNumbers)"><span /></button>
-                </div>
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Note margins</strong><span>Horizontal space around the title and text.</span></div>
-                  <label class="en-range-control">
-                    <input type="range" min="8" max="160" step="4" :value="preferences.noteEditorMargin" @input="setNoteEditorMargin(Number($event.target.value))">
-                    <output>{{ preferences.noteEditorMargin }} px</output>
-                  </label>
-                </div>
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Autosave</strong><span>Write changes to disk automatically.</span></div>
-                  <button class="en-switch" type="button" role="switch" aria-label="Enable autosave" :aria-checked="preferences.autoSave" :class="{ active: preferences.autoSave }" @click="setPreference('autoSave', !preferences.autoSave)"><span /></button>
-                </div>
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Autosave delay</strong><span>How long ElephantNote waits after the last edit.</span></div>
-                  <select class="en-compact-select" :disabled="!preferences.autoSave" :value="preferences.autoSaveDelay" @change="setPreference('autoSaveDelay', Number($event.target.value))">
-                    <option :value="250">Instant · 250 ms</option>
-                    <option :value="500">Fast · 500 ms</option>
-                    <option :value="1000">Balanced · 1 s</option>
-                    <option :value="2000">Relaxed · 2 s</option>
-                    <option :value="5000">Battery saver · 5 s</option>
-                  </select>
-                </div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Editor footer</strong><span>Show word count, typography controls and the theme shortcut.</span></div><button class="en-switch" type="button" role="switch" aria-label="Show editor footer" :aria-checked="preferences.showEditorFooter" :class="{ active: preferences.showEditorFooter }" @click="setPreference('showEditorFooter', !preferences.showEditorFooter)"><span /></button></div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Tag prefix</strong><span>Display # before tag names in the editor.</span></div><button class="en-switch" type="button" role="switch" aria-label="Show tag prefix" :aria-checked="preferences.showTagHashInEditor" :class="{ active: preferences.showTagHashInEditor }" @click="setPreference('showTagHashInEditor', !preferences.showTagHashInEditor)"><span /></button></div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Quick insert menu</strong><span>Show the block command menu when its trigger is typed.</span></div><button class="en-switch" type="button" role="switch" aria-label="Show quick insert menu" :aria-checked="!preferences.hideQuickInsertHint" :class="{ active: !preferences.hideQuickInsertHint }" @click="setPreference('hideQuickInsertHint', !preferences.hideQuickInsertHint)"><span /></button></div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Quick insert trigger</strong><span>The character that opens the insert menu. The default is /.</span></div><input class="en-compact-input en-trigger-input" :value="preferences.quickInsertTrigger" maxlength="1" aria-label="Quick insert trigger" @change="setQuickInsertTrigger($event.target.value)"></div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Pair brackets</strong><span>Automatically insert the matching closing bracket.</span></div><button class="en-switch" type="button" role="switch" aria-label="Automatically pair brackets" :aria-checked="preferences.autoPairBracket" :class="{ active: preferences.autoPairBracket }" @click="setPreference('autoPairBracket', !preferences.autoPairBracket)"><span /></button></div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Pair Markdown syntax</strong><span>Automatically close Markdown emphasis and formatting markers.</span></div><button class="en-switch" type="button" role="switch" aria-label="Automatically pair Markdown syntax" :aria-checked="preferences.autoPairMarkdownSyntax" :class="{ active: preferences.autoPairMarkdownSyntax }" @click="setPreference('autoPairMarkdownSyntax', !preferences.autoPairMarkdownSyntax)"><span /></button></div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Pair quotes</strong><span>Automatically insert the matching closing quote.</span></div><button class="en-switch" type="button" role="switch" aria-label="Automatically pair quotes" :aria-checked="preferences.autoPairQuote" :class="{ active: preferences.autoPairQuote }" @click="setPreference('autoPairQuote', !preferences.autoPairQuote)"><span /></button></div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Spellchecker</strong><span>Check spelling while writing.</span></div><button class="en-switch" type="button" role="switch" aria-label="Enable spellchecker" :aria-checked="preferences.spellcheckerEnabled" :class="{ active: preferences.spellcheckerEnabled }" @click="setPreference('spellcheckerEnabled', !preferences.spellcheckerEnabled)"><span /></button></div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Code block line numbers</strong><span>Display line numbers in fenced code blocks.</span></div><button class="en-switch" type="button" role="switch" aria-label="Show code block line numbers" :aria-checked="preferences.codeBlockLineNumbers" :class="{ active: preferences.codeBlockLineNumbers }" @click="setPreference('codeBlockLineNumbers', !preferences.codeBlockLineNumbers)"><span /></button></div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Note margins</strong><span>Horizontal space around the title and text.</span></div><label class="en-range-control"><input type="range" min="8" max="160" step="4" :value="preferences.noteEditorMargin" @input="setNoteEditorMargin(Number($event.target.value))"><output>{{ preferences.noteEditorMargin }} px</output></label></div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Autosave</strong><span>Write changes to disk automatically.</span></div><button class="en-switch" type="button" role="switch" aria-label="Enable autosave" :aria-checked="preferences.autoSave" :class="{ active: preferences.autoSave }" @click="setPreference('autoSave', !preferences.autoSave)"><span /></button></div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Autosave delay</strong><span>How long ElephantNote waits after the last edit.</span></div><select class="en-compact-select" :disabled="!preferences.autoSave" :value="preferences.autoSaveDelay" @change="setPreference('autoSaveDelay', Number($event.target.value))"><option :value="250">Instant · 250 ms</option><option :value="500">Fast · 500 ms</option><option :value="1000">Balanced · 1 s</option><option :value="2000">Relaxed · 2 s</option><option :value="5000">Battery saver · 5 s</option></select></div>
               </section>
             </template>
 
             <template v-else-if="activeSection === 'vaults'">
               <section class="en-settings-group">
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Active vault</strong><span>{{ activeVaultPath || 'No vault is currently open.' }}</span></div>
-                  <span class="en-status-badge active"><HardDrive aria-hidden="true" />{{ activeVaultName }}</span>
-                </div>
-                <div v-if="vaults.length" class="en-vault-list">
-                  <article v-for="vault in vaults" :key="vault.id" class="en-vault-row">
-                    <span class="en-vault-icon"><FolderOpen aria-hidden="true" /></span>
-                    <div><strong>{{ vault.name }}</strong><p>{{ vault.path }}</p></div>
-                    <button type="button" class="en-danger-button" :disabled="removingVaultId === vault.id" @click="removeVaultFromApp(vault)">{{ removingVaultId === vault.id ? 'Removing…' : 'Remove' }}</button>
-                  </article>
-                </div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Active vault</strong><span>{{ activeVaultPath || 'No vault is currently open.' }}</span></div><span class="en-status-badge active"><HardDrive aria-hidden="true" />{{ activeVaultName }}</span></div>
+                <div v-if="vaults.length" class="en-vault-list"><article v-for="vault in vaults" :key="vault.id" class="en-vault-row"><span class="en-vault-icon"><FolderOpen aria-hidden="true" /></span><div><strong>{{ vault.name }}</strong><p>{{ vault.path }}</p></div><button type="button" class="en-danger-button" :disabled="removingVaultId === vault.id" @click="removeVaultFromApp(vault)">{{ removingVaultId === vault.id ? 'Removing…' : 'Remove' }}</button></article></div>
                 <div v-else class="en-settings-empty-state"><FolderOpen aria-hidden="true" /><strong>No vault registered</strong><span>Open a folder from the main workspace to add it.</span></div>
                 <p v-if="vaultMessage" class="en-settings-feedback">{{ vaultMessage }}</p>
               </section>
             </template>
 
-            <template v-else-if="activeSection === 'addons'">
-              <addons-settings-panel />
-            </template>
-
-            <template v-else-if="activeSection === 'sync'">
-              <sync-settings-panel :vaults="vaults" :active-vault-path="activeVaultPath" :initial-page="syncInitialPage" />
-            </template>
-
-            <template v-else-if="activeSection === 'ai'">
-              <ai-provider-settings-panel :initial-page="aiInitialPage" />
-            </template>
+            <template v-else-if="activeSection === 'addons'"><addons-settings-panel /></template>
+            <template v-else-if="activeSection === 'sync'"><sync-settings-panel :vaults="vaults" :active-vault-path="activeVaultPath" :initial-page="syncInitialPage" /></template>
+            <template v-else-if="activeSection === 'ai'"><ai-provider-settings-panel :initial-page="aiInitialPage" /></template>
 
             <template v-else-if="activeSection === 'sites'">
               <section class="en-settings-group">
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Site preview</strong><span>{{ siteStatusLabel }}</span></div>
-                  <button class="en-switch" type="button" role="switch" aria-label="Enable site preview" :aria-checked="featureFlags.sitePreview" :class="{ active: featureFlags.sitePreview }" @click="toggleFeature('sitePreview')"><span /></button>
-                </div>
-                <div class="en-settings-inline-actions">
-                  <button type="button" :disabled="!sitePreviewStore.previewUrl" @click="sitePreviewStore.openPreviewExternal"><Globe2 aria-hidden="true" />Open preview</button>
-                  <button type="button" :disabled="!sitePreviewStore.info" @click="stopSitePreview">Stop preview</button>
-                </div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Site preview</strong><span>{{ siteStatusLabel }}</span></div><button class="en-switch" type="button" role="switch" aria-label="Enable site preview" :aria-checked="featureFlags.sitePreview" :class="{ active: featureFlags.sitePreview }" @click="toggleFeature('sitePreview')"><span /></button></div>
+                <div class="en-settings-inline-actions"><button type="button" :disabled="!sitePreviewStore.previewUrl" @click="sitePreviewStore.openPreviewExternal"><Globe2 aria-hidden="true" />Open preview</button><button type="button" :disabled="!sitePreviewStore.info" @click="stopSitePreview">Stop preview</button></div>
               </section>
             </template>
 
             <template v-else-if="activeSection === 'import'">
               <section class="en-settings-group">
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Google Keep archive</strong><span>Convert an exported archive into local Markdown notes.</span></div>
-                  <button class="en-primary-button" type="button" :disabled="isImporting" @click="importGoogleKeep"><Download aria-hidden="true" />{{ isImporting ? 'Importing…' : 'Import Google Keep' }}</button>
-                </div>
-                <div class="en-form-grid">
-                  <label><span>Source URL</span><input v-model.trim="sourceUrl" type="url" placeholder="https://example.com/article"></label>
-                  <label><span>Destination folder</span><input v-model.trim="sourceDestination" type="text" placeholder="Sources"></label>
-                </div>
-                <div class="en-settings-inline-actions">
-                  <button type="button" :disabled="isImportingSource || !sourceUrl" @click="ingestSourceUrl">Import page</button>
-                  <button type="button" :disabled="isImportingSource || !sourceUrl" @click="importRssSource">Import RSS</button>
-                  <span>{{ sourceImportMessage || importMessage }}</span>
-                </div>
+                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Google Keep archive</strong><span>Convert an exported archive into local Markdown notes.</span></div><button class="en-primary-button" type="button" :disabled="isImporting" @click="importGoogleKeep"><Download aria-hidden="true" />{{ isImporting ? 'Importing…' : 'Import Google Keep' }}</button></div>
+                <div class="en-form-grid"><label><span>Source URL</span><input v-model.trim="sourceUrl" type="url" placeholder="https://example.com/article"></label><label><span>Destination folder</span><input v-model.trim="sourceDestination" type="text" placeholder="Sources"></label></div>
+                <div class="en-settings-inline-actions"><button type="button" :disabled="isImportingSource || !sourceUrl" @click="ingestSourceUrl">Import page</button><button type="button" :disabled="isImportingSource || !sourceUrl" @click="importRssSource">Import RSS</button><span>{{ sourceImportMessage || importMessage }}</span></div>
               </section>
             </template>
           </template>
@@ -247,27 +137,12 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import log from '@/platform/runtimeLogShim'
-import {
-  Check,
-  ChevronRight,
-  Cloud,
-  Download,
-  FolderOpen,
-  Globe2,
-  HardDrive,
-  Moon,
-  Package,
-  Palette,
-  PenLine,
-  Search,
-  Sparkles,
-  SunMedium,
-  X
-} from '@lucide/vue'
+import { Check, ChevronRight, Cloud, Download, FolderOpen, Globe2, HardDrive, Moon, Package, Palette, PenLine, Search, Sparkles, SunMedium, X } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import { ELEPHANTNOTE_THEME_FAMILIES, getThemeFamily, getThemeLabel, getThemeMode, getThemeTokens, getThemeVariant } from 'common/elephantnote/appearance'
 import AddonsSettingsPanel from './AddonsSettingsPanel.vue'
 import AiProviderSettingsPanel from './AiProviderSettingsPanel.vue'
+import IconRailLayoutSettings from './IconRailLayoutSettings.vue'
 import SyncSettingsPanel from './SyncSettingsPanel.vue'
 import { useSitePreviewStore } from '../../sitePreview/sitePreviewStore'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
@@ -299,6 +174,7 @@ const settingsIndex = [
   { id: 'appearance-mode', section: 'appearance', label: 'Color mode', description: 'Light and dark appearance.' },
   { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Apple, Graphite, Nord, Solar and Forest themes.' },
   { id: 'appearance-sidebar', section: 'appearance', label: 'Sidebar width', description: 'Resize the main navigation rail.' },
+  { id: 'appearance-icon-rail', section: 'appearance', label: 'Vertical icon bar', description: 'Reorder or hide navigation icons and addon workspaces.' },
   { id: 'editor-footer', section: 'editor', label: 'Editor footer', description: 'Word count and typography controls.' },
   { id: 'editor-tags', section: 'editor', label: 'Tag prefix', description: 'Show or hide the # before tags.' },
   { id: 'editor-quick-insert', section: 'editor', label: 'Quick insert menu', description: 'Show block commands when typing the trigger.' },
@@ -365,14 +241,7 @@ const activeThemeFamily = computed(() => getThemeFamily(theme.value))
 const activeThemeLabel = computed(() => getThemeLabel(theme.value))
 const settingsStyle = computed(() => {
   const tokens = getThemeTokens(theme.value)
-  return {
-    ...tokens,
-    '--en-card': tokens['--en-soft'],
-    '--en-accent': tokens['--en-primary'],
-    '--en-active-bg': tokens['--selectionColor'],
-    '--en-active-border': tokens['--en-primary'],
-    '--en-active-text': tokens['--en-primary']
-  }
+  return { ...tokens, '--en-card': tokens['--en-soft'], '--en-accent': tokens['--en-primary'], '--en-active-bg': tokens['--selectionColor'], '--en-active-border': tokens['--en-primary'], '--en-active-text': tokens['--en-primary'] }
 })
 
 const preferences = usePreferencesStore()
@@ -390,12 +259,7 @@ const isImportingSource = ref(false)
 const siteStatusLabel = computed(() => sitePreviewStore.previewUrl ? 'Preview running' : sitePreviewStore.lastBuild?.outputDir ? 'Static build ready' : 'No generated site active')
 
 const scrollContentToTop = () => nextTick(() => settingsContent.value?.scrollTo({ top: 0, behavior: 'instant' }))
-const selectSection = (section) => {
-  activeSection.value = section
-  settingsQuery.value = ''
-  log.info('[settings] section:selected', { section })
-  scrollContentToTop()
-}
+const selectSection = (section) => { activeSection.value = section; settingsQuery.value = ''; log.info('[settings] section:selected', { section }); scrollContentToTop() }
 const openSearchResult = (result) => {
   activeSection.value = result.section
   if (result.section === 'sync') syncInitialPage.value = result.subpage || 'overview'
@@ -409,111 +273,59 @@ const setQuickInsertTrigger = (value) => setPreference('quickInsertTrigger', Str
 const setNoteEditorMargin = (value) => setPreference('noteEditorMargin', Math.max(8, Math.min(160, Number(value) || 24)))
 
 const removeVaultFromApp = async (vault) => {
-  if (!vault?.id) return
-  if (!window.confirm(`Remove "${vault.name}" from ElephantNote? The folder stays on disk.`)) return
+  if (!vault?.id || !window.confirm(`Remove "${vault.name}" from ElephantNote? The folder stays on disk.`)) return
   removingVaultId.value = vault.id
   vaultMessage.value = ''
-  log.info('[settings] vault-remove:start', { id: vault.id, path: vault.path })
   try {
     await vaultStore.removeVault(vault.id)
     vaultMessage.value = `Removed ${vault.name} from ElephantNote. The folder still exists.`
-    log.info('[settings] vault-remove:done', { id: vault.id })
   } catch (error) {
     log.error('[settings] vault-remove:failed', error)
     vaultMessage.value = error instanceof Error ? error.message : 'Unable to remove vault.'
-  } finally {
-    removingVaultId.value = ''
-  }
+  } finally { removingVaultId.value = '' }
 }
 
 const importGoogleKeep = async () => {
-  log.info('[settings] importGoogleKeep:start')
   isImporting.value = true
   importMessage.value = ''
   try {
     const result = await elephantnoteClient.imports.googleKeep()
     importMessage.value = result?.canceled ? 'Import canceled.' : `Imported ${result.imported || 0} note${result.imported === 1 ? '' : 's'}.`
-    log.info('[settings] importGoogleKeep:done', result)
-  } catch (error) {
-    log.error('[settings] importGoogleKeep:failed', error)
-    importMessage.value = error instanceof Error ? error.message : 'Import failed.'
-  } finally {
-    isImporting.value = false
-  }
+  } catch (error) { importMessage.value = error instanceof Error ? error.message : 'Import failed.' } finally { isImporting.value = false }
 }
 
 const ingestSourceUrl = async () => {
-  log.info('[settings] ingestSourceUrl:start', { url: sourceUrl.value, destination: sourceDestination.value })
   isImportingSource.value = true
   try {
     const result = await elephantnoteClient.sources.ingestUrl(sourceUrl.value, sourceDestination.value || 'Sources')
     sourceImportMessage.value = `Imported ${result.source?.title || 'source'}.`
-    log.info('[settings] ingestSourceUrl:done', result)
-  } catch (error) {
-    log.error('[settings] ingestSourceUrl:failed', error)
-    sourceImportMessage.value = error instanceof Error ? error.message : 'Source import failed.'
-  } finally {
-    isImportingSource.value = false
-  }
+  } catch (error) { sourceImportMessage.value = error instanceof Error ? error.message : 'Source import failed.' } finally { isImportingSource.value = false }
 }
 
 const importRssSource = async () => {
-  log.info('[settings] importRssSource:start', { url: sourceUrl.value, destination: sourceDestination.value })
   isImportingSource.value = true
   try {
     const result = await elephantnoteClient.sources.importRss(sourceUrl.value, sourceDestination.value || 'Sources')
     sourceImportMessage.value = `Imported ${result.imported || 0} feed item${result.imported === 1 ? '' : 's'}.`
-    log.info('[settings] importRssSource:done', result)
-  } catch (error) {
-    log.error('[settings] importRssSource:failed', error)
-    sourceImportMessage.value = error instanceof Error ? error.message : 'RSS import failed.'
-  } finally {
-    isImportingSource.value = false
-  }
+  } catch (error) { sourceImportMessage.value = error instanceof Error ? error.message : 'RSS import failed.' } finally { isImportingSource.value = false }
 }
 
-const stopSitePreview = async () => {
-  log.info('[settings] stopSitePreview:start')
-  await sitePreviewStore.stopPreview()
-  sitePreviewStore.clear()
-  log.info('[settings] stopSitePreview:done')
-}
-
+const stopSitePreview = async () => { await sitePreviewStore.stopPreview(); sitePreviewStore.clear() }
 const toggleFeature = async (key) => {
-  log.info('[settings] toggleFeature:start', { key, enabled: !featureFlags.value[key] })
-  try {
-    featureFlags.value = await elephantnoteClient.features.set(key, !featureFlags.value[key])
-    log.info('[settings] toggleFeature:done', featureFlags.value)
-  } catch (error) {
-    log.warn('[settings] toggleFeature:failed', error)
-  }
+  try { featureFlags.value = await elephantnoteClient.features.set(key, !featureFlags.value[key]) } catch (error) { log.warn('[settings] toggleFeature:failed', error) }
 }
-
 const handleKeyboard = (event) => {
   if (event.key === 'Escape') emit('close')
-  if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'f') {
-    event.preventDefault()
-    searchInput.value?.focus()
-    searchInput.value?.select()
-  }
+  if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'f') { event.preventDefault(); searchInput.value?.focus(); searchInput.value?.select() }
 }
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyboard)
-  log.info('[settings] mounted:start', {
-    sections: sections.map((section) => section.id),
-    initialSection: activeSection.value
-  })
-  try {
-    featureFlags.value = await elephantnoteClient.features.get()
-    log.info('[settings] featureFlags:loaded', featureFlags.value)
-  } catch (error) {
-    log.warn('[settings] featureFlags:failed', error)
-  }
+  log.info('[settings] mounted:start', { sections: sections.map((section) => section.id), initialSection: activeSection.value })
+  try { featureFlags.value = await elephantnoteClient.features.get() } catch (error) { log.warn('[settings] featureFlags:failed', error) }
   sitePreviewStore.refresh?.()
   log.info('[settings] mounted:done', { theme: activeThemeLabel.value, addonsRegistered: Boolean(window.__ELEPHANT_ADDONS__) })
 })
-
 onBeforeUnmount(() => window.removeEventListener('keydown', handleKeyboard))
 </script>
 

@@ -6,6 +6,7 @@ use serde_json::{from_value, Value};
 use tauri::State;
 
 use super::commands::tauri_muya_engine_sync_document;
+use super::muya_clipboard_commands::paste_clipboard;
 use super::muya_engine::{
     apply_command, MuyaEditorCommand, MuyaEditorState, MuyaEditorTransaction, MuyaSelection,
 };
@@ -144,6 +145,18 @@ pub fn tauri_muya_session_apply_parity(
 }
 
 #[tauri::command]
+pub fn tauri_muya_session_paste_clipboard(
+    sessions: State<'_, MuyaEngineSessions>,
+    editor_id: String,
+    html: String,
+    text: String,
+) -> Result<MuyaSessionTransaction, String> {
+    session_transaction(&sessions, &editor_id, |state| {
+        paste_clipboard(state, html, text)
+    })
+}
+
+#[tauri::command]
 pub fn tauri_muya_session_query(
     sessions: State<'_, MuyaEngineSessions>,
     editor_id: String,
@@ -209,5 +222,24 @@ mod tests {
 
         assert_eq!(transaction.state.markdown, "Body# ");
         assert_eq!(transaction.state.undo_stack.len(), 1);
+    }
+
+    #[test]
+    fn rich_clipboard_transaction_remains_in_native_history() {
+        let mut state = MuyaEditorState::new("A😀B".to_string());
+        state.selection = MuyaSelection {
+            anchor: 1,
+            focus: 3,
+        };
+        let transaction = paste_clipboard(
+            state,
+            "<strong>bold</strong>".to_string(),
+            "bold".to_string(),
+        )
+        .expect("rich paste should apply");
+
+        assert_eq!(transaction.state.markdown, "A**bold**B");
+        assert_eq!(transaction.state.undo_stack.len(), 1);
+        assert_eq!(transaction.state.redo_stack.len(), 0);
     }
 }

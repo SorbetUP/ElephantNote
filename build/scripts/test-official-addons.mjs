@@ -46,6 +46,23 @@ const createStorage = () => {
   }
 }
 
+const noteApi = (sourceNotes = new Map(), written = new Map()) => ({
+  list: async () => [...sourceNotes.entries()].map(([notePath, content], index) => ({
+    path: notePath,
+    size: content.length,
+    modifiedAt: 1_700_000_000_000 + index
+  })),
+  read: async (notePath) => {
+    if (sourceNotes.has(notePath)) return { path: notePath, content: sourceNotes.get(notePath) }
+    if (written.has(notePath)) return { path: notePath, content: written.get(notePath) }
+    throw new Error(`missing note: ${notePath}`)
+  },
+  write: async (notePath, content) => {
+    written.set(notePath, content)
+    return { ok: true, path: notePath }
+  }
+})
+
 const testPlatformProof = async () => {
   const definition = await loadAddon('platform-proof')
   const storage = createStorage()
@@ -136,15 +153,7 @@ const testInboxDigest = async () => {
   const written = new Map()
   const command = await activateCommand(definition, {
     app: { info: async () => ({}) },
-    notes: {
-      list: async () => [...sourceNotes.entries()].map(([notePath, content], index) => ({
-        path: notePath,
-        size: content.length,
-        modifiedAt: 1_700_000_000_000 + index
-      })),
-      read: async (notePath) => ({ path: notePath, content: sourceNotes.get(notePath) }),
-      write: async (notePath, content) => { written.set(notePath, content); return { ok: true, path: notePath } }
-    },
+    notes: noteApi(sourceNotes, written),
     http: { request: async () => { throw new Error('network not expected') } },
     storage: storage.api
   })
@@ -160,7 +169,102 @@ const testInboxDigest = async () => {
   console.log('[official-addons] inbox-digest ok notes=2 tasks=3')
 }
 
+const testTaskDashboard = async () => {
+  const definition = await loadAddon('task-dashboard')
+  const sourceNotes = new Map([
+    ['Projects/Alpha.md', '# Alpha\n\n- [ ] Design API\n- [x] Create branch\n'],
+    ['Daily/2026-07-10.md', '# Today\n\n- [ ] Review pull request\n']
+  ])
+  const written = new Map()
+  const command = await activateCommand(definition, {
+    app: { info: async () => ({}) },
+    notes: noteApi(sourceNotes, written),
+    http: { request: async () => { throw new Error('network not expected') } },
+    storage: createStorage().api
+  })
+  const result = await command.run()
+  assert.equal(result.open, 2)
+  assert.equal(result.completed, 1)
+  assert.equal(result.sources, 2)
+  assert.match(written.get(result.path), /Design API/)
+  assert.match(written.get(result.path), /Review pull request/)
+  console.log('[official-addons] task-dashboard ok open=2 completed=1')
+}
+
+const testBrokenLinks = async () => {
+  const definition = await loadAddon('broken-links-auditor')
+  const sourceNotes = new Map([
+    ['Home.md', '# Home\n\n[[Existing]]\n[[Missing]]\n[[Shared]]\n'],
+    ['Existing.md', '# Existing\n'],
+    ['One/Shared.md', '# Shared one\n'],
+    ['Two/Shared.md', '# Shared two\n']
+  ])
+  const written = new Map()
+  const command = await activateCommand(definition, {
+    app: { info: async () => ({}) },
+    notes: noteApi(sourceNotes, written),
+    http: { request: async () => { throw new Error('network not expected') } },
+    storage: createStorage().api
+  })
+  const result = await command.run()
+  assert.equal(result.broken, 1)
+  assert.equal(result.ambiguous, 1)
+  assert.equal(result.checked, 3)
+  const report = written.get(result.path)
+  assert.match(report, /\[\[Missing\]\]/)
+  assert.match(report, /\[\[Shared\]\]/)
+  console.log('[official-addons] broken-links-auditor ok broken=1 ambiguous=1')
+}
+
+const githubReleasePayload = (repository, tag) => JSON.stringify({
+  tag_name: tag,
+  name: `${repository} ${tag}`,
+  html_url: `https://github.com/${repository}/releases/tag/${tag}`,
+  published_at: '2026-07-10T00:00:00Z',
+  prerelease: false,
+  draft: false,
+  body: 'Release notes.'
+})
+
+const testGithubReleaseWatcher = async () => {
+  const definition = await loadAddon('github-release-watcher')
+  const storage = createStorage()
+  const sourceNotes = new Map()
+  const written = new Map()
+  let tag = 'v1.0.0'
+  const notes = noteApi(sourceNotes, written)
+  notes.read = async (notePath) => {
+    if (written.has(notePath)) return { path: notePath, content: written.get(notePath) }
+    throw new Error('configuration missing')
+  }
+  const command = await activateCommand(definition, {
+    app: { info: async () => ({}) },
+    notes,
+    http: {
+      request: async ({ url }) => {
+        const match = url.match(/repos\/([^/]+\/[^/]+)\/releases\/latest/)
+        const repository = match?.[1] || 'unknown/repository'
+        return { ok: true, status: 200, body: githubReleasePayload(repository, tag) }
+      }
+    },
+    storage: storage.api
+  })
+
+  const first = await command.run()
+  assert.equal(first.configurationCreated, true)
+  assert.equal(first.live, 3)
+  assert.equal(first.newReleases, 0)
+  tag = 'v1.1.0'
+  const second = await command.run()
+  assert.equal(second.newReleases, 3)
+  assert.match(written.get(second.path), /New release/)
+  console.log('[official-addons] github-release-watcher ok new=3')
+}
+
 await testPlatformProof()
 await testFinanceNotes()
 await testInboxDigest()
+await testTaskDashboard()
+await testBrokenLinks()
+await testGithubReleaseWatcher()
 console.log('[official-addons] all functional pipelines passed')

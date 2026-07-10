@@ -136,6 +136,57 @@ describe('Muya Rust engine runtime client', () => {
     await expect(client.clipboard()).rejects.toThrow('initialized')
   })
 
+  it('commits IME text with one dedicated Rust transaction', async() => {
+    const calls = []
+    const invoke = async(command, payload = {}) => {
+      calls.push({ command, payload })
+      if (command === 'tauri_muya_engine_create') return stateFor(payload.markdown)
+      if (command === 'tauri_muya_engine_commit_composition') {
+        return {
+          state: {
+            ...payload.state,
+            markdown: 'A漢B',
+            selection: { anchor: 2, focus: 2 },
+            revision: 1,
+            undoStack: [{ markdown: 'A😀B', selection: payload.selection }]
+          },
+          documentChanged: true,
+          selectionChanged: true
+        }
+      }
+      throw new Error(`unexpected command: ${command}`)
+    }
+
+    const client = createRustMuyaEngineClient({ invoke })
+    await client.create('A😀B')
+    const transaction = await client.commitComposition({ anchor: 1, focus: 3 }, '漢')
+
+    expect(calls[1]).toEqual({
+      command: 'tauri_muya_engine_commit_composition',
+      payload: {
+        state: stateFor('A😀B'),
+        selection: { anchor: 1, focus: 3 },
+        text: '漢'
+      }
+    })
+    expect(transaction.state.undoStack).toHaveLength(1)
+    expect(client.markdown).toBe('A漢B')
+  })
+
+  it('rejects malformed IME selections before invoking Rust', async() => {
+    let calls = 0
+    const invoke = async(command, payload = {}) => {
+      calls += 1
+      if (command === 'tauri_muya_engine_create') return stateFor(payload.markdown)
+      throw new Error('must not be called')
+    }
+    const client = createRustMuyaEngineClient({ invoke })
+    await client.create('text')
+    await expect(client.commitComposition({ anchor: 1.5, focus: 2 }, 'x'))
+      .rejects.toThrow('valid UTF-16 selection')
+    expect(calls).toBe(1)
+  })
+
   it('sends batches as one backend request', async() => {
     const invoke = async(command, payload = {}) => {
       if (command === 'tauri_muya_engine_create') return stateFor(payload.markdown)

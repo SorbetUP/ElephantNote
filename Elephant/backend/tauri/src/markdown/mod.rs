@@ -42,6 +42,9 @@ mod muya_grouped_history_tests;
 mod muya_json_state_parity_tests;
 
 #[cfg(test)]
+mod muya_real_surface_sync_tests;
+
+#[cfg(test)]
 mod muya_shared_parity_tests;
 
 #[cfg(test)]

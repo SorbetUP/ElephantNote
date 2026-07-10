@@ -235,9 +235,9 @@ fn parse_related_wiki_references(markdown: &str) -> Vec<String> {
         if !in_related_section {
             continue;
         }
-        let mut remainder = trimmed;
-        while let Some(start) = remainder.find("[[") {
-            let after_start = &remainder[start + 2..];
+        let mut legacy = trimmed;
+        while let Some(start) = legacy.find("[[") {
+            let after_start = &legacy[start + 2..];
             let Some(end) = after_start.find("]]") else {
                 break;
             };
@@ -253,7 +253,25 @@ fn parse_related_wiki_references(markdown: &str) -> Vec<String> {
             if !target.is_empty() {
                 references.push(target.to_string());
             }
-            remainder = &after_start[end + 2..];
+            legacy = &after_start[end + 2..];
+        }
+        let mut standard = trimmed;
+        while let Some(open) = standard.find("](") {
+            let after_open = &standard[open + 2..];
+            let Some(close) = after_open.find(')') else {
+                break;
+            };
+            let target = after_open[..close]
+                .split('#')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .trim_start_matches("./")
+                .trim_end_matches(".md");
+            if !target.is_empty() {
+                references.push(target.to_string());
+            }
+            standard = &after_open[close + 1..];
         }
     }
     references.sort();

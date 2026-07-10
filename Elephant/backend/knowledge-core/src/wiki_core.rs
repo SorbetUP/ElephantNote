@@ -420,34 +420,44 @@ pub fn render_wiki(
     }
 
     if !synthesis.related_wikis.is_empty() {
-        markdown.push_str("\n## Related wikis\n\n");
+        markdown.push_str(
+            "
+## Related wikis
+
+",
+        );
         for related in &synthesis.related_wikis {
-            markdown.push_str(&format!("- [[{}]]\n", related.trim()));
+            markdown.push_str(&format!(
+                "- [{}](./{}.md)
+",
+                related.trim(),
+                slugify(related)
+            ));
         }
     }
 
     let mut citations = Vec::new();
     if !citation_numbers.is_empty() {
-        markdown.push_str("\n## Sources\n\n");
-        for (chunk_id, number) in &citation_numbers {
+        markdown.push_str(
+            "
+## Sources
+
+",
+        );
+        let mut numbered = citation_numbers.iter().collect::<Vec<_>>();
+        numbered.sort_by_key(|(_, number)| **number);
+        for (chunk_id, number) in numbered {
             let source = source_by_id
                 .get(chunk_id.as_str())
                 .ok_or_else(|| format!("Missing source chunk while rendering: {chunk_id}"))?;
             let key = format!("source-{number}");
-            let anchor = if source.heading.trim().is_empty() {
-                String::new()
-            } else {
-                format!("#{}", source.heading.trim())
-            };
             markdown.push_str(&format!(
-                "[^{}]: [[{}{}|{} — {}]] (bytes {}–{})\n",
-                key,
-                source.document_path,
-                anchor,
+                "{}. [{} — {}]({})
+",
+                number,
                 source.document_title,
                 source.heading,
-                source.start_offset,
-                source.end_offset
+                markdown_note_target(source)
             ));
             citations.push(WikiCitation {
                 key,
@@ -479,6 +489,48 @@ pub fn render_wiki(
     })
 }
 
+fn markdown_link_component(value: &str) -> String {
+    let mut output = String::new();
+    for character in value.chars() {
+        match character {
+            ' ' => output.push_str("%20"),
+            '(' => output.push_str("%28"),
+            ')' => output.push_str("%29"),
+            '#' => output.push_str("%23"),
+            '%' => output.push_str("%25"),
+            _ => output.push(character),
+        }
+    }
+    output
+}
+
+fn markdown_heading_anchor(value: &str) -> String {
+    let mut output = String::new();
+    let mut pending_dash = false;
+    for character in value.trim().to_lowercase().chars() {
+        if character.is_alphanumeric() {
+            if pending_dash && !output.is_empty() {
+                output.push('-');
+            }
+            output.push(character);
+            pending_dash = false;
+        } else if !output.is_empty() {
+            pending_dash = true;
+        }
+    }
+    output
+}
+
+fn markdown_note_target(source: &WikiSourceChunk) -> String {
+    let path = markdown_link_component(&source.document_path);
+    let anchor = markdown_heading_anchor(&source.heading);
+    if anchor.is_empty() {
+        format!("../../{path}")
+    } else {
+        format!("../../{path}#{anchor}")
+    }
+}
+
 fn render_claims(
     markdown: &mut String,
     claims: &[WikiClaim],
@@ -488,19 +540,25 @@ fn render_claims(
     for claim in claims {
         let mut references = Vec::new();
         for chunk_id in &claim.citation_chunk_ids {
-            if !source_by_id.contains_key(chunk_id.as_str()) {
-                return Err(format!("Unknown source chunk while rendering: {chunk_id}"));
-            }
+            let source = source_by_id
+                .get(chunk_id.as_str())
+                .ok_or_else(|| format!("Unknown source chunk while rendering: {chunk_id}"))?;
             let next = citation_numbers.len() + 1;
             let number = *citation_numbers.entry(chunk_id.clone()).or_insert(next);
-            references.push(format!("[^source-{number}]"));
+            references.push(format!("[{number}]({})", markdown_note_target(source)));
         }
         references.sort();
         references.dedup();
         markdown.push_str(claim.text.trim());
-        markdown.push(' ');
-        markdown.push_str(&references.join(""));
-        markdown.push_str("\n\n");
+        if !references.is_empty() {
+            markdown.push(' ');
+            markdown.push_str(&references.join(" "));
+        }
+        markdown.push_str(
+            "
+
+",
+        );
     }
     Ok(())
 }

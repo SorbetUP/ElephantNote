@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const root = path.resolve(__dirname, '../..')
-const outDir = path.join(root, 'docs', 'parity', 'generated')
+const outDir = path.join(root, 'agent', 'docs', 'project', 'parity', 'generated')
 const tasksPerFeature = 410
 
 const features = [
@@ -796,7 +796,7 @@ indexLines.push('```')
 indexLines.push('')
 
 fs.writeFileSync(
-  path.join(root, 'docs', 'parity', 'index.md'),
+  path.join(root, 'agent', 'docs', 'project', 'parity', 'index.md'),
   `${indexLines.join('\n')}\n`,
   'utf8'
 )

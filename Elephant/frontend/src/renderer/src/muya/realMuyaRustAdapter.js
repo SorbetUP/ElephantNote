@@ -34,7 +34,7 @@ const INLINE_BLOCK_TYPES = /paragraphContent|cellContent|atxLine/
 const RUST_PASTE_BLOCK_TYPES = /paragraphContent|atxLine/
 const TABLE_SEPARATOR = /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/
 const URL_ONLY = /^\S+:\/\/\S+$/
-const SIMPLE_LIST_LINE = /^\s*(?:[-+*]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)\S/
+const SIMPLE_LIST_LINE = /^\s*(?:[-+*]\s+(?:\[[ xX]\]\s+)?|\d+\.\s+)\S/
 
 const historyIdentity = (history) => {
   if (!history || typeof history !== 'object') return ''

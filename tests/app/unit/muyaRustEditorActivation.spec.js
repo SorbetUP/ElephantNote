@@ -8,20 +8,28 @@ const repositoryRoot = path.resolve(currentDirectory, '../../..')
 const read = (relativePath) => fs.readFileSync(path.join(repositoryRoot, relativePath), 'utf8')
 
 describe('canonical Rust note editor activation', () => {
-  it('routes open notes through the dedicated Rust host', () => {
+  it('keeps the real note host and replaces only its EditorWithTabs injection in Tauri', () => {
     const mainContent = read('Elephant/frontend/app/components/shell/MainContent.vue')
-    expect(mainContent).toContain("import RustNoteEditorHost from '../editor/RustNoteEditorHost.vue'")
-    expect(mainContent).toContain('<rust-note-editor-host')
-    expect(mainContent).not.toContain("import NoteEditorHost from '../editor/NoteEditorHost.vue'")
+    const viteConfig = read('vite.tauri.config.js')
+
+    expect(mainContent).toContain("import NoteEditorHost from '../editor/NoteEditorHost.vue'")
+    expect(mainContent).toContain('<note-editor-host')
+    expect(mainContent).not.toContain('RustNoteEditorHost')
+    expect(viteConfig).toContain("if (source !== '@/components/editorWithTabs') return null")
+    expect(viteConfig).toContain('RustEditorWithTabs.vue')
+    expect(viteConfig).toContain('rustEditorWithTabsPlugin()')
   })
 
-  it('mounts active Rust mode inside the real editor host and hides legacy input', () => {
-    const host = read('Elephant/frontend/app/components/editor/RustNoteEditorHost.vue')
+  it('mounts exactly one Rust surface and uses legacy Muya only as an explicit fallback', () => {
+    const host = read('Elephant/frontend/app/components/editor/RustEditorWithTabs.vue')
+
+    expect(host).toContain('v-if="rustActive"')
+    expect(host).toContain('v-else')
     expect(host).toContain('mode="active"')
-    expect(host).toContain(':data-editor-engine="rustEditorActive ? \'rust\' : \'legacy-muya\'"')
     expect(host).toContain("window.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'rust'")
-    expect(host).toContain('.en-editor-host > :not(.en-rust-note-editor)')
-    expect(host).toContain("throw new Error('Rust note editor mounted without the canonical Rust engine.')")
+    expect(host).toContain("throw new Error('Rust Muya editor mounted without the canonical Rust engine.')")
+    expect(host).not.toContain('Teleport')
+    expect(host).not.toContain('display: none !important')
   })
 
   it('forbids silent JavaScript fallback while active mode is requested', () => {

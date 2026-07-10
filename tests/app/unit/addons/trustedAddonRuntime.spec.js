@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import TrustedWorkspaceLab from '../../../../examples/addons/trusted-workspace-lab/main.js'
+import { createAddonHostRuntime } from '../../../../Elephant/frontend/src/renderer/src/addons/addonHostRuntime.js'
 import {
   approveTrustedAddon,
   createTrustedAddonApi,
@@ -137,7 +138,7 @@ describe('hash-bound trusted approval', () => {
 })
 
 describe('trusted addon host API', () => {
-  it('exposes deep application context and registers automatic cleanup', () => {
+  it('exposes deep application context, patches resources and restores everything', () => {
     const removed = vi.fn()
     const appended = []
     const fakeDocument = {
@@ -148,14 +149,18 @@ describe('trusted addon host API', () => {
         remove: removed
       })
     }
+    const target = { document: fakeDocument }
+    const service = { value: 2, calculate(number) { return this.value + number } }
+    const addonHost = createAddonHostRuntime({ services: { service } }, target)
     const contributions = []
     const contextDisposables = []
     const context = {
       router: { currentRoute: {} },
       pinia: { state: {} },
-      services: { example: true },
+      services: { service },
       runtime: 'tauri',
       addons: { list: vi.fn() },
+      addonHost,
       vueApp: { component: vi.fn() },
       registerContribution: vi.fn((area, contribution) => {
         contributions.push({ area, contribution })
@@ -169,7 +174,6 @@ describe('trusted addon host API', () => {
       addStatusBarItem: vi.fn(),
       addDisposable: (dispose) => contextDisposables.push(dispose)
     }
-    const target = { document: fakeDocument }
     const record = {
       manifest: { id: 'com.example.trusted', permissions: {} },
       packageHash: 'abc123'
@@ -181,10 +185,16 @@ describe('trusted addon host API', () => {
     api.editor.registerBlockType({ id: 'com.example.trusted.block' })
     api.markdown.registerEmbedRenderer({ id: 'com.example.trusted.embed' })
     api.layout.registerItem({ id: 'com.example.trusted.layout' })
+    api.resources.provide('customService', { ready: true })
+    api.patch.method(service, 'calculate', (original, number) => original(number) * 10)
+    api.patch.property(service, 'value', 5)
 
     expect(api.access.level).toBe('trusted')
     expect(api.app.router).toBe(context.router)
+    expect(api.app.host).toBe(addonHost)
     expect(api.experimental.services).toBe(context.services)
+    expect(api.resources.get('customService')).toEqual({ ready: true })
+    expect(service.calculate(1)).toBe(60)
     expect(appended).toHaveLength(1)
     expect(contributions.map((entry) => entry.area)).toEqual([
       'editor.block-types',
@@ -194,17 +204,28 @@ describe('trusted addon host API', () => {
     expect(contextDisposables.length).toBeGreaterThan(0)
 
     for (const dispose of [...contextDisposables].reverse()) dispose()
+    expect(service.value).toBe(2)
+    expect(service.calculate(1)).toBe(3)
+    expect(api.resources.get('customService')).toBeUndefined()
     expect(removed).toHaveBeenCalledTimes(1)
   })
 
   it('executes the reference addon lifecycle and deep contributions', async () => {
     const classes = new Set()
     const commandDefinitions = []
+    const resources = new Map()
     const api = {
       manifest: { id: 'com.elephantnote.examples.trusted-workspace-lab' },
       ui: {
         registerStyle: vi.fn(() => vi.fn()),
         on: vi.fn(() => vi.fn())
+      },
+      resources: {
+        list: vi.fn(() => ['router', 'services']),
+        provide: vi.fn((name, value) => {
+          resources.set(name, value)
+          return () => resources.delete(name)
+        })
       },
       commands: {
         register: vi.fn((definition) => {
@@ -239,9 +260,15 @@ describe('trusted addon host API', () => {
     expect(api.settings.registerSection).toHaveBeenCalledOnce()
     expect(api.editor.registerExtension).toHaveBeenCalledOnce()
     expect(api.layout.registerItem).toHaveBeenCalledOnce()
+    expect(api.resources.provide).toHaveBeenCalledWith('trustedWorkspaceLab', plugin)
     expect(api.app.emit).toHaveBeenCalledWith('elephantnote:trusted-addon-loaded', expect.objectContaining({
-      addonId: 'com.elephantnote.examples.trusted-workspace-lab'
+      addonId: 'com.elephantnote.examples.trusted-workspace-lab',
+      resources: ['router', 'services']
     }))
+
+    const settingsDefinition = api.settings.registerSection.mock.calls[0][0]
+    expect(settingsDefinition.section).toBe('addons')
+    expect(typeof settingsDefinition.render).toBe('function')
 
     expect(commandDefinitions).toHaveLength(1)
     expect(commandDefinitions[0].run()).toEqual({ enabled: true })

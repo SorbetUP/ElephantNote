@@ -1,0 +1,176 @@
+name: Apply Rust Muya Keyboard Adapter Migration
+
+on:
+  push:
+    branches:
+      - feature/rust-muya-editor-core
+    paths:
+      - '.github/workflows/muya-keyboard-adapter-migration.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-muya-editor-core
+          fetch-depth: 0
+
+      - name: Patch mirror and real Muya adapter
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          mirror_path = Path('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js')
+          mirror = mirror_path.read_text()
+          disabled_marker = '''      applyOperation: async() => null,
+              tableCommand: async() => null,'''
+          if disabled_marker not in mirror:
+              raise SystemExit('disabled mirror marker not found')
+          mirror = mirror.replace(
+              disabled_marker,
+              '''      applyOperation: async() => null,
+              keyboardRule: async() => null,
+              tableCommand: async() => null,''',
+              1
+          )
+          active_marker = '''    applyOperation: (operation) => applyCommand(
+              `rust-operation-${String(operation?.type || 'unknown')}`,
+              (engine) => engine.applyOperation(operation)
+            ),
+            tableCommand: (action, index = 0) => applyCommand('''
+          if active_marker not in mirror:
+              raise SystemExit('active mirror marker not found')
+          mirror = mirror.replace(
+              active_marker,
+              '''    applyOperation: (operation) => applyCommand(
+              `rust-operation-${String(operation?.type || 'unknown')}`,
+              (engine) => engine.applyOperation(operation)
+            ),
+            keyboardRule: (key, options = {}) => applyCommand(
+              `rust-keyboard-${String(key).toLowerCase()}`,
+              (engine) => engine.keyboardRule(String(key), options)
+            ),
+            tableCommand: (action, index = 0) => applyCommand(''',
+              1
+          )
+          mirror_path.write_text(mirror)
+
+          adapter_path = Path('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js')
+          adapter = adapter_path.read_text()
+          regex_marker = '''const URL_ONLY = /^\\S+:\\/\\/\\S+$/
+          '''
+          if regex_marker not in adapter:
+              raise SystemExit('keyboard regex insertion marker not found')
+          adapter = adapter.replace(
+              regex_marker,
+              '''const URL_ONLY = /^\\S+:\\/\\/\\S+$/
+              const SIMPLE_LIST_LINE = /^\\s*(?:[-+*]\\s+(?:\\[[ xX]\\]\\s+)?|\\d+[.)]\\s+)\\S/
+              ''',
+              1
+          )
+
+          originals_marker = '''      createFootnote: this.contentState.createFootnote.bind(this.contentState),
+              pasteHandler: this.contentState.pasteHandler.bind(this.contentState)
+            }'''
+          if originals_marker not in adapter:
+              raise SystemExit('contentState originals marker not found')
+          adapter = adapter.replace(
+              originals_marker,
+              '''      createFootnote: this.contentState.createFootnote.bind(this.contentState),
+              pasteHandler: this.contentState.pasteHandler.bind(this.contentState),
+              enterHandler: this.contentState.enterHandler.bind(this.contentState),
+              tabHandler: this.contentState.tabHandler.bind(this.contentState)
+            }''',
+              1
+          )
+
+          hooks_marker = '''    this.contentState.pasteHandler = (event, type = 'normal', rawText, rawHtml) => (
+              this.__pasteThroughRust(event, type, rawText, rawHtml)
+            )
+          }'''
+          if hooks_marker not in adapter:
+              raise SystemExit('contentState hooks marker not found')
+          adapter = adapter.replace(
+              hooks_marker,
+              '''    this.contentState.pasteHandler = (event, type = 'normal', rawText, rawHtml) => (
+              this.__pasteThroughRust(event, type, rawText, rawHtml)
+            )
+            this.contentState.enterHandler = (event) => this.__enterThroughRust(event)
+            this.contentState.tabHandler = (event) => this.__tabThroughRust(event)
+          }''',
+              1
+          )
+
+          method_marker = '''  undo () {
+          '''
+          if method_marker not in adapter:
+              raise SystemExit('keyboard method insertion marker not found')
+          methods = '''  __keyboardRuleContext (key) {
+              if (
+                !this.__elephantRustMirror?.active ||
+                this.contentState.selectedImage ||
+                this.contentState.selectedTableCells ||
+                this.__elephantRustComposition
+              ) return null
+
+              const cursor = this.contentState.getMuyaIndexCursor()
+              const anchor = cursor?.anchor
+              const focus = cursor?.focus
+              if (
+                !anchor ||
+                !focus ||
+                anchor.line !== focus.line ||
+                anchor.ch !== focus.ch
+              ) return null
+
+              const markdown = this.getMarkdown()
+              const currentLine = lineAt(markdown, anchor.line)
+              if (!SIMPLE_LIST_LINE.test(currentLine)) return null
+              if (key === 'Enter' && anchor.ch !== currentLine.length) return null
+              return { markdown, cursor }
+            }
+
+            __enterThroughRust (event) {
+              const fallback = () => this.__elephantRustOriginalContentState.enterHandler(event)
+              if (!this.__keyboardRuleContext('Enter')) return fallback()
+              event?.preventDefault?.()
+              event?.stopPropagation?.()
+              return this.__applyElephantRustCommand(
+                'keyboard-enter',
+                (engine) => engine.keyboardRule('Enter'),
+                fallback
+              )
+            }
+
+            __tabThroughRust (event) {
+              const fallback = () => this.__elephantRustOriginalContentState.tabHandler(event)
+              if (!this.__keyboardRuleContext('Tab')) return fallback()
+              event?.preventDefault?.()
+              event?.stopPropagation?.()
+              return this.__applyElephantRustCommand(
+                event?.shiftKey ? 'keyboard-shift-tab' : 'keyboard-tab',
+                (engine) => engine.keyboardRule('Tab', {
+                  shiftKey: Boolean(event?.shiftKey)
+                }),
+                fallback
+              )
+            }
+
+          '''
+          adapter = adapter.replace(method_marker, methods + method_marker, 1)
+          adapter_path.write_text(adapter)
+          PY
+
+          rm .github/workflows/muya-keyboard-adapter-migration.yml
+          git config user.name 'ElephantNote CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(muya): route safe list keyboard rules through Rust'
+          git push origin HEAD:feature/rust-muya-editor-core

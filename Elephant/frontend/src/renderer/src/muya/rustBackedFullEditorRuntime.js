@@ -11,6 +11,12 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
   let destroyed = false
   let queue = Promise.resolve()
 
+  const initialized = engine.create(markdown).then(async() => {
+    view.setJsonState(await engine.jsonState(), 'rust:init')
+    ready = true
+    return engine.state
+  })
+
   const enqueue = (operation) => {
     const run = queue.then(async() => {
       if (destroyed) throw new Error('Muya Rust runtime has been destroyed.')
@@ -20,11 +26,6 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     queue = run.catch(() => {})
     return run
   }
-
-  const initialized = engine.create(markdown).then(() => {
-    ready = true
-    return engine.state
-  })
 
   const readDomSelection = () => readMarkdownSelection(
     root,
@@ -45,8 +46,8 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     return restoreMarkdownSelection(root, engine.state.selection, options.document || root?.ownerDocument)
   }
 
-  const renderCanonicalState = (group = 'rust') => {
-    if (view.markdown !== engine.markdown) view.setMarkdown(engine.markdown, group)
+  const renderCanonicalState = async(group = 'rust') => {
+    view.setJsonState(await engine.jsonState(), group)
     restoreCanonicalSelection()
     return engine.markdown
   }
@@ -54,7 +55,11 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
   const apply = (operation, group = 'rust', { synchronizeSelection = true } = {}) => enqueue(async() => {
     if (synchronizeSelection) await synchronizeSelectionToRust()
     const transaction = await operation()
-    renderCanonicalState(group)
+    if (transaction?.documentChanged) {
+      await renderCanonicalState(group)
+    } else {
+      restoreCanonicalSelection()
+    }
     return transaction
   })
 
@@ -64,10 +69,8 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
   })
 
   const setMarkdown = (next, group = 'external') => enqueue(async() => {
-    const value = String(next || '')
-    await engine.reset(value)
-    view.setMarkdown(value, group)
-    restoreCanonicalSelection()
+    await engine.reset(String(next || ''))
+    await renderCanonicalState(group)
     return engine.state
   })
 
@@ -75,16 +78,22 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     const selection = readDomSelection()
     view.renderLiveNow?.(group)
     const next = view.domToMarkdown()
+    let documentChanged = false
     if (next !== engine.markdown) {
-      await engine.applyOperation({
+      const transaction = await engine.applyOperation({
         type: 'replace',
         pos: 0,
         count: utf16Length(engine.markdown),
         text: next
       })
+      documentChanged = Boolean(transaction?.documentChanged)
     }
     if (selection) await engine.setSelection(selection.anchor, selection.focus)
-    restoreCanonicalSelection()
+    if (documentChanged) {
+      await renderCanonicalState(group)
+    } else {
+      restoreCanonicalSelection()
+    }
     return engine.markdown
   })
 
@@ -102,6 +111,7 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     get ready() { return ready },
     get readyPromise() { return initialized },
     get state() { return engine.state },
+    get documentState() { return view.state },
     get markdown() { return ready ? engine.markdown : view.markdown },
     get html() { return view.html },
     setMarkdown,
@@ -145,7 +155,7 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     toggleInline: (marker) => apply(() => engine.toggleInline(marker), 'format'),
     transformBlock: (kind) => apply(() => engine.transformBlock(kind), 'block'),
     insertLineBreak: () => apply(() => engine.insertLineBreak(), 'insert'),
-    keyboardRule: (key, options) => apply(() => engine.keyboardRule(key, options), `key:${key}`),
+    keyboardRule: (key, keyOptions) => apply(() => engine.keyboardRule(key, keyOptions), `key:${key}`),
     undo: () => apply(() => engine.undo(), 'undo', { synchronizeSelection: false }),
     redo: () => apply(() => engine.redo(), 'redo', { synchronizeSelection: false }),
     table: (action, index = 0) => apply(() => engine.tableCommand(action, index), `table:${action}`),

@@ -4,10 +4,17 @@ on:
   push:
     branches:
       - fix/android-foundations-rework
+  pull_request:
+    branches:
+      - integration/mobile-develop-refresh
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: android-foundations-rework
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -93,6 +100,7 @@ jobs:
           if-no-files-found: error
 
       - name: Commit validated implementation
+        if: github.event_name == 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

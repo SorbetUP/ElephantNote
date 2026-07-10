@@ -147,13 +147,14 @@ assert(
 assert(
   androidActivity.includes('enterImmersiveMode') &&
     androidActivity.includes('WindowInsets.Type.systemBars()') &&
-    androidActivity.includes('requestCameraPermissionIfNeeded'),
-  'Android MainActivity must hide system bars and request camera permission'
+    !androidActivity.includes('requestPermissions(') &&
+    !androidActivity.includes('requestCameraPermissionIfNeeded'),
+  'Android MainActivity must hide system bars without requesting camera during startup'
 )
 assert(
   buildAndroid.includes('android.permission.CAMERA') &&
     buildAndroid.includes('android.hardware.camera.any'),
-  'Android build must install camera manifest declarations'
+  'Android build must install camera manifest declarations for on-demand QR scanning'
 )
 assert(
   buildAndroid.includes('cargo tauri android init --config "$ANDROID_CONFIG"'),
@@ -190,8 +191,11 @@ assert(
   'Vault config must normalize existing config without inventing a first-run vault'
 )
 assert(
-  tauriBridge.includes('openVaultDirectory') && tauriBridge.includes('tauri_vaults_select_path'),
-  'Tauri bridge must expose native vault directory selection'
+  tauriBridge.includes('openVaultDirectory') &&
+    tauriBridge.includes('tauri_vaults_select_path') &&
+    tauriBridge.includes('recursive: true') &&
+    tauriBridge.includes("pickerMode: 'document'"),
+  'Tauri bridge must request recursive scoped access through the native folder picker'
 )
 assert(
   mobileVaultBridge.includes('/vaults/Personal') &&

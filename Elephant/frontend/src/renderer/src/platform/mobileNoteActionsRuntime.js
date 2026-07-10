@@ -59,15 +59,70 @@ const duplicateCurrentNote = async (target) => {
   store.openNote(entry)
 }
 
-const openTagEditor = (target) => {
-  const addButton = target.document.querySelector('.en-main.has-editor-open .en-note-chip-add')
-  if (addButton) {
-    addButton.click()
-    return true
+const visibleTagButtons = (target) => [...target.document.querySelectorAll(
+  '.en-main.has-editor-open .en-note-chip-rail .en-note-chip:not(.en-note-chip-add):not(.en-note-chip-muted)'
+)]
+
+const closeTagManager = (target) => {
+  target.document.querySelector('.en-mobile-tag-manager-backdrop')?.remove()
+}
+
+const renderTagManager = (target) => {
+  closeTagManager(target)
+  const buttons = visibleTagButtons(target)
+  const backdrop = target.document.createElement('div')
+  backdrop.className = 'en-mobile-tag-manager-backdrop'
+  backdrop.innerHTML = `
+    <section class="en-mobile-tag-manager" role="dialog" aria-modal="true" aria-label="Tags">
+      <header>
+        <strong>Tags</strong>
+        <button type="button" data-tag-action="close" aria-label="Close">×</button>
+      </header>
+      <div class="en-mobile-tag-list"></div>
+      <button type="button" class="en-mobile-tag-add" data-tag-action="add">+ Add tag</button>
+    </section>
+  `
+  const list = backdrop.querySelector('.en-mobile-tag-list')
+  if (!buttons.length) {
+    list.innerHTML = '<p>No tags on this note.</p>'
+  } else {
+    buttons.forEach((sourceButton, index) => {
+      const row = target.document.createElement('div')
+      row.className = 'en-mobile-tag-row'
+      const label = target.document.createElement('span')
+      label.textContent = sourceButton.textContent?.trim() || `Tag ${index + 1}`
+      const remove = target.document.createElement('button')
+      remove.type = 'button'
+      remove.dataset.tagRemove = String(index)
+      remove.setAttribute('aria-label', `Remove ${label.textContent}`)
+      remove.textContent = 'Remove'
+      row.append(label, remove)
+      list.appendChild(row)
+    })
   }
-  const firstTag = target.document.querySelector('.en-main.has-editor-open .en-note-chip:not(.en-note-chip-muted)')
-  firstTag?.click?.()
-  return !!firstTag
+
+  backdrop.addEventListener('click', (event) => {
+    if (event.target === backdrop || event.target.closest('[data-tag-action="close"]')) {
+      closeTagManager(target)
+      return
+    }
+    if (event.target.closest('[data-tag-action="add"]')) {
+      closeTagManager(target)
+      target.document.querySelector('.en-main.has-editor-open .en-note-chip-add')?.click?.()
+      return
+    }
+    const remove = event.target.closest('[data-tag-remove]')
+    if (!remove) return
+    const index = Number(remove.dataset.tagRemove)
+    const sourceButton = visibleTagButtons(target)[index]
+    sourceButton?.dispatchEvent?.(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      view: target
+    }))
+    target.requestAnimationFrame(() => renderTagManager(target))
+  })
+  target.document.body.appendChild(backdrop)
 }
 
 export const installMobileNoteActionsRuntime = (target = globalThis) => {
@@ -80,9 +135,7 @@ export const installMobileNoteActionsRuntime = (target = globalThis) => {
       target.alert?.(error?.message || String(error))
     })
   }
-  const onTags = () => {
-    if (!openTagEditor(target)) target.alert?.('No note is currently open.')
-  }
+  const onTags = () => renderTagManager(target)
 
   bus.on('elephantnote:duplicate-note', onDuplicate)
   bus.on('elephantnote:open-tags', onTags)
@@ -90,6 +143,7 @@ export const installMobileNoteActionsRuntime = (target = globalThis) => {
   target.__ELEPHANT_MOBILE_NOTE_ACTIONS_DISPOSE__ = () => {
     bus.off('elephantnote:duplicate-note', onDuplicate)
     bus.off('elephantnote:open-tags', onTags)
+    closeTagManager(target)
     target[FLAG] = false
   }
   return true

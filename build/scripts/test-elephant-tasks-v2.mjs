@@ -115,6 +115,8 @@ state = await view.getState({ list: `area:${areaId}` })
 assert.equal(state.sections.flatMap(section => section.tasks).some(task => task.id === capture.id), true, 'Area must include tasks inherited through its Project')
 state = await view.dispatch('toggleToday', { id: capture.id })
 assert.equal(state.state.activeList.id, `area:${areaId}`, 'view actions must preserve the current list context')
+state = await view.getState({ list: 'today' })
+assert.equal(state.sections.flatMap(section => section.tasks).some(task => task.id === capture.id), true, 'manual Today must override a future start date')
 
 const recurring = await command.run({ title: 'Weekly review !today #review' })
 await view.dispatch('updateTask', {

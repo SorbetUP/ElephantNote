@@ -32,55 +32,34 @@
       class="knowledge-wiki-layout"
     >
       <aside class="knowledge-wiki-sidebar">
-        <form
-          class="knowledge-wiki-generator"
-          @submit.prevent="generateWiki"
-        >
+        <section class="knowledge-wiki-generator">
           <div class="knowledge-section-heading">
-            <h2>Créer un wiki</h2>
-            <span>Proposition citée</span>
+            <h2>Propositions automatiques</h2>
+            <span>{{ candidates.length }} sujet{{ candidates.length === 1 ? '' : 's' }} détecté{{ candidates.length === 1 ? '' : 's' }}</span>
           </div>
-
-          <label class="knowledge-field">
-            <span>Sujet</span>
-            <input
-              v-model.trim="form.topic"
-              type="text"
-              autocomplete="off"
-              placeholder="Ex. Synchronisation avec Iroh"
-              :disabled="busy"
-            >
-          </label>
-
-          <label class="knowledge-field">
-            <span>Titre souhaité <small>facultatif</small></span>
-            <input
-              v-model.trim="form.title"
-              type="text"
-              autocomplete="off"
-              placeholder="Le modèle peut le proposer"
-              :disabled="busy"
-            >
-          </label>
-
-          <label class="knowledge-field">
-            <span>Notes sources <small>facultatif</small></span>
-            <textarea
-              v-model="form.sourcePaths"
-              rows="5"
-              placeholder="Une note par ligne. Sans source explicite, la recherche FTS sélectionne les notes."
-              :disabled="busy"
-            />
-          </label>
-
+          <p class="knowledge-auto-copy">
+            ElephantNote détecte des groupes de notes cohérents et prépare des brouillons cités. Les notes originales ne sont jamais modifiées.
+          </p>
           <button
             class="knowledge-button knowledge-button-primary"
-            type="submit"
-            :disabled="busy || !form.topic"
+            type="button"
+            :disabled="busy || autoProposing"
+            @click="runAutoProposals(true)"
           >
-            {{ generating ? 'Génération…' : 'Générer une proposition' }}
+            {{ autoProposing ? 'Analyse et génération…' : 'Analyser maintenant' }}
           </button>
-        </form>
+          <div v-if="candidates.length" class="knowledge-candidate-list">
+            <article
+              v-for="candidate in candidates.slice(0, 6)"
+              :key="candidate.topic"
+              class="knowledge-candidate"
+            >
+              <strong>{{ candidate.title }}</strong>
+              <span>{{ candidate.reason }}</span>
+              <small>{{ candidate.sourcePaths.length }} notes sources</small>
+            </article>
+          </div>
+        </section>
 
         <nav
           class="knowledge-wiki-tabs"
@@ -245,17 +224,14 @@ const tabs = Object.freeze([
   { status: 'rejected', label: 'Rejetés' }
 ])
 
-const form = reactive({
-  topic: '',
-  title: '',
-  sourcePaths: ''
-})
 const drafts = ref([])
 const renderedWikiHtml = reactive({})
 const activeStatus = ref('proposed')
 const selectedDraft = ref(null)
 const loading = ref(false)
-const generating = ref(false)
+const candidates = ref([])
+const discovering = ref(false)
+const autoProposing = ref(false)
 const busy = ref(false)
 const error = ref('')
 const message = ref('')
@@ -270,10 +246,6 @@ const filteredDrafts = computed(() => drafts.value.filter((draft) => draft.statu
 const activeTabLabel = computed(() => tabs.find((tab) => tab.status === activeStatus.value)?.label || '')
 
 const normalizeError = (value) => value?.message || String(value || 'Erreur inconnue')
-const sourcePathList = () => form.sourcePaths
-  .split(/\r?\n|,/)
-  .map((value) => value.trim())
-  .filter(Boolean)
 
 const renderDraftWithMuya = async (draft) => {
   const result = await globalThis.elephantnote?.muya?.renderHtml?.({ markdown: draft.markdown || '' })
@@ -297,36 +269,55 @@ const refresh = async () => {
   }
 }
 
-const generateWiki = async () => {
-  if (!form.topic || runtimeUnavailable.value) return
-  generating.value = true
+const loadCandidates = async () => {
+  if (runtimeUnavailable.value) return
+  discovering.value = true
+  try {
+    candidates.value = await runtime.value.wikis.candidates({ limit: 12 })
+  } catch (reason) {
+    error.value = normalizeError(reason)
+  } finally {
+    discovering.value = false
+  }
+}
+
+const runAutoProposals = async (force = false) => {
+  if (runtimeUnavailable.value || autoProposing.value) return
+  autoProposing.value = true
   busy.value = true
   error.value = ''
   message.value = ''
   try {
     const aiConfig = await globalThis.elephantnote?.ai?.getConfig?.() || {}
-    const result = await runtime.value.wikis.generate({
-      topic: form.topic,
-      title: form.title || null,
-      sourcePaths: sourcePathList(),
-      payload: {
-        aiConfig,
-        modelSelection: aiConfig.localModelSelection || {}
-      }
+    const result = await runtime.value.wikis.autoPropose({
+      payload: { aiConfig, modelSelection: aiConfig.localModelSelection || {} },
+      maxProposals: 2,
+      force
     })
-    message.value = `Proposition « ${result.draft.title} » générée avec ${result.draft.citations.length} citations.`
-    form.topic = ''
-    form.title = ''
-    form.sourcePaths = ''
-    activeStatus.value = 'proposed'
+    const count = result.generated?.length || 0
+    if (count) {
+      message.value = `${count} proposition${count === 1 ? '' : 's'} de wiki prête${count === 1 ? '' : 's'} à être relue${count === 1 ? '' : 's'}.`
+      activeStatus.value = 'proposed'
+    } else if (result.errors?.length) {
+      error.value = result.errors[0]
+    } else if (!result.alreadyRan) {
+      message.value = 'Aucun nouveau groupe de notes suffisamment cohérent pour proposer un wiki.'
+    }
     await refresh()
-    selectedDraft.value = drafts.value.find((draft) => draft.id === result.draft.id) || result.draft
+    await loadCandidates()
   } catch (reason) {
     error.value = normalizeError(reason)
   } finally {
-    generating.value = false
+    autoProposing.value = false
     busy.value = false
   }
+}
+
+const initializeWiki = async () => {
+  await refresh()
+  await loadCandidates()
+  const hasPending = drafts.value.some((draft) => draft.status === 'proposed')
+  if (!hasPending && candidates.value.length) await runAutoProposals(false)
 }
 
 const acceptDraft = async (draft) => {
@@ -407,7 +398,7 @@ const openCitation = async (citation) => {
   }
 }
 
-onMounted(refresh)
+onMounted(initializeWiki)
 </script>
 
 <style scoped>
@@ -486,6 +477,35 @@ onMounted(refresh)
   flex-direction: column;
   gap: 16px;
   padding: 18px;
+}
+
+.knowledge-auto-copy {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: .72;
+}
+
+.knowledge-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.knowledge-candidate {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--editorBgColor, #fff) 97%, currentColor 3%);
+}
+
+.knowledge-candidate span,
+.knowledge-candidate small {
+  font-size: 12px;
+  opacity: .64;
 }
 
 .knowledge-section-heading span,

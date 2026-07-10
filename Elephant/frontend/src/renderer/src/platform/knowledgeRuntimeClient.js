@@ -79,6 +79,10 @@ export const knowledgeRuntimeClient = Object.freeze({
   executeChatAction: (proposalId) => invokeKnowledgeCommand('tauri_knowledge_chat_action_execute', { proposalId }),
   generateWiki: ({ topic, title = null, sourcePaths = [], payload = {}, maxDocuments = 12, maxChunks = 64, maxSections = 10 }) =>
     invokeKnowledgeCommand('tauri_knowledge_wiki_generate', { topic, title, sourcePaths, payload, maxDocuments, maxChunks, maxSections }),
+  discoverWikiCandidates: ({ limit = 12 } = {}) =>
+    invokeKnowledgeCommand('tauri_knowledge_wiki_candidates', { limit }),
+  autoProposeWikis: ({ payload = {}, maxProposals = 2, force = false } = {}) =>
+    invokeKnowledgeCommand('tauri_knowledge_wikis_auto_propose', { payload, maxProposals, force }),
   getWikiDraft: (draftId) => invokeKnowledgeCommand('tauri_knowledge_wiki_get', { draftId }),
   listWikiDrafts: ({ status = null, limit = 100 } = {}) => invokeKnowledgeCommand('tauri_knowledge_wikis_list', { status, limit }),
   acceptWikiDraft: (draftId) => invokeKnowledgeCommand('tauri_knowledge_wiki_accept', { draftId }),

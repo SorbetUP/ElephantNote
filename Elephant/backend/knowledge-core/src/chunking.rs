@@ -421,7 +421,7 @@ fn extract_line_wikilinks(line: &str, absolute_offset: usize, links: &mut Vec<Ex
         }
 
         let content_start = cursor + 2;
-        let Some(relative_end) = line[content_start..].find("]]" ) else {
+        let Some(relative_end) = line[content_start..].find("]]") else {
             break;
         };
         let content_end = content_start + relative_end;
@@ -441,12 +441,42 @@ fn extract_line_wikilinks(line: &str, absolute_offset: usize, links: &mut Vec<Ex
 }
 
 fn valid_wikilink_target(target: &str) -> bool {
-    !target.is_empty()
-        && target.chars().count() <= 240
-        && !target.contains('[')
-        && !target.contains(']')
-        && !target.contains('\n')
-        && !target.contains('\r')
+    let target = target.trim();
+    if target.is_empty()
+        || target.chars().count() > 240
+        || target.contains('[')
+        || target.contains(']')
+        || target.contains('\n')
+        || target.contains('\n')
+    {
+        return false;
+    }
+
+    let tokens = target.split_whitespace().collect::<Vec<_>>();
+    let data_tokens = tokens
+        .iter()
+        .filter(|token| {
+            let normalized = token
+                .trim_matches(|character: char| ",;(){}".contains(character))
+                .to_ascii_lowercase();
+            matches!(
+                normalized.as_str(),
+                "true" | "false" | "nan" | "inf" | "-inf"
+            ) || normalized.parse::<f64>().is_ok()
+        })
+        .count();
+    if tokens.len() >= 3 && data_tokens * 2 >= tokens.len() {
+        return false;
+    }
+
+    let alphabetic = target
+        .chars()
+        .filter(|character| character.is_alphabetic())
+        .count();
+    if alphabetic == 0 || (target.matches(',').count() >= 2 && alphabetic < 4) {
+        return false;
+    }
+    true
 }
 
 fn stable_id(namespace: &str, parts: &[&str]) -> String {

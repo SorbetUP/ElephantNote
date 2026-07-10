@@ -58,16 +58,47 @@ fn last_user_message(payload: &Value) -> String {
         .unwrap_or_default()
 }
 
-fn selected_chat_model(payload: &Value) -> String {
-    let config = payload
+fn ai_config(payload: &Value) -> &Value {
+    payload
         .get("aiConfig")
         .or_else(|| payload.get("config"))
-        .unwrap_or(&Value::Null);
+        .unwrap_or(&Value::Null)
+}
+
+fn selected_chat_source(payload: &Value) -> String {
+    let config = ai_config(payload);
+    let route = config.pointer("/routes/chat").unwrap_or(&Value::Null);
+    [
+        text(route, &["source", "provider"]),
+        text(config, &["provider", "transport"]),
+    ]
+    .into_iter()
+    .find(|value| !value.is_empty())
+    .unwrap_or_else(|| "app-local".to_string())
+}
+
+fn selected_chat_model(payload: &Value) -> String {
+    let config = ai_config(payload);
+    let route = config.pointer("/routes/chat").unwrap_or(&Value::Null);
+    let source = selected_chat_source(payload);
+    if source == "codex" {
+        return [
+            text(route, &["model", "modelId", "id"]),
+            text(
+                config.pointer("/providers/codex").unwrap_or(&Value::Null),
+                &["model"],
+            ),
+            text(payload, &["model", "modelId", "chatModel"]),
+        ]
+        .into_iter()
+        .find(|value| !value.is_empty())
+        .unwrap_or_default();
+    }
+
     let selection = payload.get("modelSelection").unwrap_or(&Value::Null);
     let config_selection = config
         .pointer("/localModelSelection")
         .unwrap_or(&Value::Null);
-    let route = config.pointer("/routes/chat").unwrap_or(&Value::Null);
     [
         text(selection, &["chat"]),
         text(config_selection, &["chat"]),
@@ -75,7 +106,7 @@ fn selected_chat_model(payload: &Value) -> String {
         text(payload, &["model", "modelId", "chatModel"]),
     ]
     .into_iter()
-    .find(|value| !value.trim().is_empty())
+    .find(|value| !value.is_empty())
     .unwrap_or_default()
 }
 
@@ -177,8 +208,14 @@ fn validate_configured_llama_binary(payload: &Value) -> R<()> {
 
 #[tauri::command]
 pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
+    #[cfg(not(mobile))]
+    if payload.get("codexOperation").is_some() {
+        return codex_app_server::command(&app, &payload).await;
+    }
+
     let message = last_user_message(&payload);
     let model = selected_chat_model(&payload);
+    let source = selected_chat_source(&payload);
     if message.trim().is_empty() {
         return Ok(
             json!({ "answer": "Écris un message pour démarrer le chat.", "sources": [], "runtime": "rust-knowledge-core", "model": model }),
@@ -192,12 +229,54 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
 
     #[cfg(mobile)]
     {
-        let _ = app;
-        return Err("Bundled local GGUF chat is unavailable on mobile in this build.".into());
+        let _ = (app, source);
+        return Err("Desktop AI runtimes are unavailable on mobile in this build.".into());
+    }
+
+    #[cfg(not(mobile))]
+    if source == "codex" {
+        let (messages, hits) = grounded_messages(&app, &payload, &message);
+        let transcript = messages
+            .iter()
+            .map(|entry| {
+                format!(
+                    "{}:\n{}",
+                    text(entry, &["role"]).to_uppercase(),
+                    text(entry, &["content"])
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let prompt = format!(
+            "You are answering inside ElephantNote. Do not inspect the filesystem or run commands. Use only the conversation and retrieved note context below. Return only the answer.\n\n{}",
+            transcript
+        );
+        let result = codex_app_server::chat(&app, &model, &prompt).await?;
+        return Ok(json!({
+            "answer": result.answer,
+            "sources": hits,
+            "runtime": "codex-app-server",
+            "provider": "codex",
+            "model": result.model,
+            "threadId": result.thread_id
+        }));
     }
 
     #[cfg(not(mobile))]
     {
+        let local_sources = [
+            "",
+            "app-local",
+            "local",
+            "tauri-rust",
+            "tauri-rust-local-bundled",
+            "node-llama-cpp",
+            "local-llama.cpp",
+            "llama.cpp",
+        ];
+        if !local_sources.contains(&source.as_str()) {
+            return Err(format!("Unsupported chat provider: {source}"));
+        }
         validate_configured_llama_binary(&payload)?;
         let (messages, hits) = grounded_messages(&app, &payload, &message);
         let local =

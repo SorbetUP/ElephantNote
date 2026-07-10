@@ -3,9 +3,10 @@ use elephantnote_knowledge_core::{
     wiki_draft_from_rendered, DocumentSnapshot, KnowledgeStore, StructuredModelRequest, WikiDraft,
     WikiDraftStatus, WikiSourceChunk,
 };
+use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::AppHandle;
@@ -175,6 +176,313 @@ pub fn tauri_knowledge_wiki_accept(app: AppHandle, draft_id: String) -> Result<W
 pub fn tauri_knowledge_wiki_reject(app: AppHandle, draft_id: String) -> Result<WikiDraft, String> {
     let root = active_vault_root(&app)?;
     active_store(&root)?.set_wiki_draft_status(&draft_id, WikiDraftStatus::Rejected)
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WikiCandidate {
+    pub topic: String,
+    pub title: String,
+    pub source_paths: Vec<String>,
+    pub reason: String,
+    pub score: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WikiAutoProposalResult {
+    pub candidates_considered: usize,
+    pub generated: Vec<WikiDraft>,
+    pub skipped: Vec<String>,
+    pub errors: Vec<String>,
+    pub already_ran: bool,
+}
+
+#[derive(Default)]
+struct CandidateAccumulator {
+    paths: HashSet<String>,
+    hashtag_hits: usize,
+    folder_hits: usize,
+    title_hits: usize,
+}
+
+static AUTO_PROPOSED_VAULTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+fn normalized_candidate_word(raw: &str) -> Option<String> {
+    let value = raw
+        .trim_start_matches('#')
+        .trim_matches(|character: char| {
+            !character.is_alphanumeric() && character != '-' && character != '_'
+        })
+        .to_lowercase();
+    let length = value.chars().count();
+    if !(4..=48).contains(&length) || value.chars().all(|character| character.is_numeric()) {
+        return None;
+    }
+    const STOP_WORDS: &[&str] = &[
+        "avec",
+        "dans",
+        "pour",
+        "sans",
+        "sous",
+        "entre",
+        "cette",
+        "comme",
+        "plus",
+        "note",
+        "notes",
+        "untitled",
+        "daily",
+        "inbox",
+        "test_keep",
+        "pourtoi",
+        "viral",
+        "shorts",
+        "video",
+        "fyp",
+        "fypsh",
+        "reels",
+        "edit",
+        "funny",
+        "humour",
+        "drole",
+        "million",
+        "today",
+        "from",
+        "that",
+        "this",
+        "with",
+        "your",
+        "have",
+        "about",
+        "into",
+        "when",
+        "what",
+        "just",
+        "new",
+        "folder",
+        "getting",
+        "started",
+    ];
+    (!STOP_WORDS.contains(&value.as_str())).then_some(value)
+}
+
+fn title_for_topic(topic: &str) -> String {
+    let mut characters = topic.chars();
+    match characters.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + characters.as_str(),
+        None => String::new(),
+    }
+}
+
+fn add_candidate_signal(
+    groups: &mut HashMap<String, CandidateAccumulator>,
+    topic: String,
+    path: &str,
+    signal: &str,
+) {
+    let entry = groups.entry(topic).or_default();
+    entry.paths.insert(path.to_string());
+    match signal {
+        "hashtag" => entry.hashtag_hits += 1,
+        "folder" => entry.folder_hits += 1,
+        _ => entry.title_hits += 1,
+    }
+}
+
+fn discover_wiki_candidates(
+    store: &KnowledgeStore,
+    max_candidates: usize,
+) -> Result<Vec<WikiCandidate>, String> {
+    let connection = Connection::open(store.database_path()).map_err(|error| error.to_string())?;
+    let mut statement = connection
+        .prepare(
+            "SELECT d.relative_path, d.title,
+                    COALESCE((SELECT c.text FROM chunks c WHERE c.document_path=d.relative_path ORDER BY c.ordinal LIMIT 1), '')
+             FROM documents d ORDER BY d.relative_path",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?;
+
+    let existing_topics = store
+        .list_wiki_drafts(None, 1_000)?
+        .into_iter()
+        .map(|draft| draft.topic.trim().to_lowercase())
+        .collect::<HashSet<_>>();
+    let mut groups = HashMap::<String, CandidateAccumulator>::new();
+
+    for row in rows {
+        let (path, title, first_chunk) = row.map_err(|error| error.to_string())?;
+        let mut seen_in_document = HashSet::new();
+        for token in title.split_whitespace() {
+            let signal = if token.starts_with('#') {
+                "hashtag"
+            } else {
+                "title"
+            };
+            if let Some(topic) = normalized_candidate_word(token) {
+                if seen_in_document.insert(topic.clone()) {
+                    add_candidate_signal(&mut groups, topic, &path, signal);
+                }
+            }
+        }
+        for token in first_chunk
+            .split_whitespace()
+            .filter(|token| token.starts_with('#'))
+        {
+            if let Some(topic) = normalized_candidate_word(token) {
+                if seen_in_document.insert(topic.clone()) {
+                    add_candidate_signal(&mut groups, topic, &path, "hashtag");
+                }
+            }
+        }
+        if let Some((parent, _)) = path.rsplit_once('/') {
+            let folder = parent.rsplit('/').next().unwrap_or(parent);
+            if let Some(topic) = normalized_candidate_word(folder) {
+                add_candidate_signal(&mut groups, topic, &path, "folder");
+            }
+        }
+    }
+
+    let mut candidates = groups
+        .into_iter()
+        .filter_map(|(topic, group)| {
+            if existing_topics.contains(&topic) || group.paths.len() < 3 {
+                return None;
+            }
+            let score = group.hashtag_hits * 4 + group.folder_hits * 2 + group.title_hits;
+            if score < 6 {
+                return None;
+            }
+            let mut source_paths = group.paths.into_iter().collect::<Vec<_>>();
+            source_paths.sort();
+            source_paths.truncate(DEFAULT_MAX_DOCUMENTS);
+            let reason = if group.hashtag_hits >= group.folder_hits
+                && group.hashtag_hits >= group.title_hits
+            {
+                format!("{} notes partagent le thème #{}", source_paths.len(), topic)
+            } else if group.folder_hits >= group.title_hits {
+                format!(
+                    "{} notes forment un groupe de dossier cohérent",
+                    source_paths.len()
+                )
+            } else {
+                format!(
+                    "{} notes répètent ce concept dans leur titre",
+                    source_paths.len()
+                )
+            };
+            Some(WikiCandidate {
+                title: title_for_topic(&topic),
+                topic,
+                source_paths,
+                reason,
+                score,
+            })
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        right
+            .score
+            .cmp(&left.score)
+            .then(right.source_paths.len().cmp(&left.source_paths.len()))
+            .then(left.topic.cmp(&right.topic))
+    });
+    candidates.truncate(max_candidates.clamp(1, 50));
+    Ok(candidates)
+}
+
+#[tauri::command]
+pub fn tauri_knowledge_wiki_candidates(
+    app: AppHandle,
+    limit: Option<usize>,
+) -> Result<Vec<WikiCandidate>, String> {
+    let root = active_vault_root(&app)?;
+    discover_wiki_candidates(&active_store(&root)?, limit.unwrap_or(12))
+}
+
+#[tauri::command]
+pub async fn tauri_knowledge_wikis_auto_propose(
+    app: AppHandle,
+    payload: Value,
+    max_proposals: Option<usize>,
+    force: Option<bool>,
+) -> Result<WikiAutoProposalResult, String> {
+    selected_wiki_route(&payload)?;
+    let root = active_vault_root(&app)?;
+    let vault_key = root.to_string_lossy().to_string();
+    if !force.unwrap_or(false) {
+        let mut completed = AUTO_PROPOSED_VAULTS
+            .get_or_init(|| Mutex::new(HashSet::new()))
+            .lock()
+            .map_err(|_| "Automatic wiki proposal lock is poisoned.".to_string())?;
+        if !completed.insert(vault_key) {
+            return Ok(WikiAutoProposalResult {
+                candidates_considered: 0,
+                generated: Vec::new(),
+                skipped: Vec::new(),
+                errors: Vec::new(),
+                already_ran: true,
+            });
+        }
+    }
+
+    let candidates = discover_wiki_candidates(&active_store(&root)?, 24)?;
+    let limit = max_proposals.unwrap_or(2).clamp(1, 4);
+    let considered = candidates.len();
+    let mut generated = Vec::new();
+    let mut errors = Vec::new();
+
+    for candidate in candidates.into_iter().take(limit) {
+        eprintln!(
+            "[knowledge] wiki:auto-propose topic={} sources={} score={}",
+            candidate.topic,
+            candidate.source_paths.len(),
+            candidate.score
+        );
+        match tauri_knowledge_wiki_generate(
+            app.clone(),
+            candidate.topic.clone(),
+            Some(candidate.title),
+            Some(candidate.source_paths),
+            payload.clone(),
+            Some(DEFAULT_MAX_DOCUMENTS),
+            Some(DEFAULT_MAX_CHUNKS),
+            Some(DEFAULT_MAX_SECTIONS),
+        )
+        .await
+        {
+            Ok(result) => generated.push(result.draft),
+            Err(error) => {
+                errors.push(format!("{}: {}", candidate.topic, error));
+                break;
+            }
+        }
+    }
+
+    let skipped = if considered > limit {
+        vec![format!(
+            "{} candidats différés par la limite de session",
+            considered - limit
+        )]
+    } else {
+        Vec::new()
+    };
+    Ok(WikiAutoProposalResult {
+        candidates_considered: considered,
+        generated,
+        skipped,
+        errors,
+        already_ran: false,
+    })
 }
 
 fn select_documents(

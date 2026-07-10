@@ -125,6 +125,8 @@ pub fn run() {
             knowledge_chat_actions::tauri_knowledge_chat_action_reject,
             knowledge_chat_actions::tauri_knowledge_chat_action_execute,
             knowledge_wikis::tauri_knowledge_wiki_generate,
+            knowledge_wikis::tauri_knowledge_wiki_candidates,
+            knowledge_wikis::tauri_knowledge_wikis_auto_propose,
             knowledge_wikis::tauri_knowledge_wiki_get,
             knowledge_wikis::tauri_knowledge_wikis_list,
             knowledge_wikis::tauri_knowledge_wiki_accept,

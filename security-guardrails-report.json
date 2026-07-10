@@ -1,0 +1,75 @@
+{
+  "summary": {
+    "blockerCount": 1,
+    "warningCount": 0,
+    "acceptedCount": 8,
+    "hasBlockingFindings": true
+  },
+  "acceptedFindings": [
+    {
+      "severity": "warning",
+      "id": "TAURI_CSP_BROAD_LOCALHOST_CONNECT",
+      "file": "Elephant/backend/tauri/tauri.conf.json",
+      "value": "connect-src http://127.0.0.1:*",
+      "message": "Prefer exact local runtime ports instead of wildcard localhost connect-src entries in production."
+    },
+    {
+      "severity": "warning",
+      "id": "TAURI_CSP_BROAD_LOCALHOST_CONNECT",
+      "file": "Elephant/backend/tauri/tauri.conf.json",
+      "value": "connect-src http://localhost:*",
+      "message": "Prefer exact local runtime ports instead of wildcard localhost connect-src entries in production."
+    },
+    {
+      "severity": "blocker",
+      "id": "TAURI_FS_DEFAULT_PERMISSION",
+      "file": "Elephant/backend/tauri/capabilities/default.json",
+      "value": "fs:default",
+      "message": "Avoid fs:default; list only the exact filesystem operations the app needs."
+    },
+    {
+      "severity": "blocker",
+      "id": "TAURI_FS_SCOPE_BROAD",
+      "file": "Elephant/backend/tauri/capabilities/default.json",
+      "value": "$DESKTOP/**/*",
+      "message": "Filesystem scopes should be vault-specific or app-data-specific, not broad user directories."
+    },
+    {
+      "severity": "blocker",
+      "id": "TAURI_FS_SCOPE_BROAD",
+      "file": "Elephant/backend/tauri/capabilities/default.json",
+      "value": "$DOCUMENT/**/*",
+      "message": "Filesystem scopes should be vault-specific or app-data-specific, not broad user directories."
+    },
+    {
+      "severity": "blocker",
+      "id": "TAURI_FS_SCOPE_BROAD",
+      "file": "Elephant/backend/tauri/capabilities/default.json",
+      "value": "$DOWNLOAD/**/*",
+      "message": "Filesystem scopes should be vault-specific or app-data-specific, not broad user directories."
+    },
+    {
+      "severity": "blocker",
+      "id": "TAURI_FS_SCOPE_BROAD",
+      "file": "Elephant/backend/tauri/capabilities/default.json",
+      "value": "$HOME/**/*",
+      "message": "Filesystem scopes should be vault-specific or app-data-specific, not broad user directories."
+    },
+    {
+      "severity": "blocker",
+      "id": "TAURI_GLOBAL_API_ENABLED",
+      "file": "Elephant/backend/tauri/tauri.conf.json",
+      "value": "withGlobalTauri: true",
+      "message": "Production Tauri builds must not expose the global window.__TAURI__ bridge; use explicit imports from @tauri-apps/api instead."
+    }
+  ],
+  "newFindings": [
+    {
+      "severity": "blocker",
+      "id": "GITHUB_ACTIONS_WRITE_PERMISSION",
+      "file": ".github/workflows/muya-structured-validation.yml",
+      "value": "contents: write",
+      "message": "Write permissions in CI must be justified by a dedicated release or reporting workflow."
+    }
+  ]
+}

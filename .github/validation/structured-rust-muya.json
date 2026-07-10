@@ -2,7 +2,7 @@
   "linuxDependencies": "success",
   "setup": "success",
   "critical": "failure",
-  "security": "skipped",
+  "security": "failure",
   "platform": "skipped",
   "lint": "skipped",
   "rustfmt": "skipped",
@@ -11,5 +11,5 @@
   "structuredTests": "skipped",
   "renderer": "skipped",
   "unitTests": "skipped",
-  "validatedCommit": "45fd35f6520dc7c03589911fab9e6283beeaf462"
+  "validatedCommit": "7ba9682f2cfc2272253fc45c4bde26bb1a56a572"
 }

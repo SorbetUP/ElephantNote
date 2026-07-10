@@ -21,11 +21,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount } from 'vue'
 
 import { useEditorStore } from '@/store/editor'
-import LegacyEditorWithTabs from '@/components/editorWithTabs/index.vue'
 import { MuyaRuntimeEditor, isRustMuyaEngineAvailable } from '@/muya'
+
+const LegacyEditorWithTabs = defineAsyncComponent(
+  () => import('@/components/editorWithTabs/index.vue')
+)
 
 const props = defineProps({
   markdown: { type: String, required: true },

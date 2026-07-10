@@ -5,6 +5,14 @@ import {
   isRustMuyaEngineAvailable
 } from '../../../Elephant/frontend/src/renderer/src/muya/rustEngineRuntime.js'
 
+const stateFor = (markdown = '') => ({
+  markdown,
+  selection: { anchor: markdown.length, focus: markdown.length },
+  revision: 0,
+  undoStack: [],
+  redoStack: []
+})
+
 describe('Muya Rust engine runtime client', () => {
   it('fails loudly when the Tauri invoke bridge is unavailable', () => {
     expect(() => createRustMuyaEngineClient({ target: {} }))
@@ -15,15 +23,7 @@ describe('Muya Rust engine runtime client', () => {
     const calls = []
     const invoke = async(command, payload = {}) => {
       calls.push({ command, payload })
-      if (command === 'tauri_muya_engine_create') {
-        return {
-          markdown: payload.markdown,
-          selection: { anchor: payload.markdown.length, focus: payload.markdown.length },
-          revision: 0,
-          undoStack: [],
-          redoStack: []
-        }
-      }
+      if (command === 'tauri_muya_engine_create') return stateFor(payload.markdown)
       if (command === 'tauri_muya_engine_apply') {
         return {
           state: {
@@ -54,17 +54,47 @@ describe('Muya Rust engine runtime client', () => {
     expect(client.state.revision).toBe(1)
   })
 
-  it('sends batches as one backend request', async() => {
+  it('routes tables images footnotes templates keyboard and OT operations to Rust', async() => {
+    const calls = []
     const invoke = async(command, payload = {}) => {
-      if (command === 'tauri_muya_engine_create') {
+      calls.push({ command, payload })
+      if (command === 'tauri_muya_engine_create') return stateFor(payload.markdown)
+      if (command === 'tauri_muya_engine_apply_parity') {
         return {
-          markdown: payload.markdown,
-          selection: { anchor: 0, focus: 0 },
-          revision: 0,
-          undoStack: [],
-          redoStack: []
+          state: { ...payload.state, markdown: `${payload.state.markdown}.`, revision: payload.state.revision + 1 },
+          documentChanged: true,
+          selectionChanged: false
         }
       }
+      throw new Error(`unexpected command: ${command}`)
+    }
+
+    const client = createRustMuyaEngineClient({ invoke })
+    await client.create('x')
+    await client.applyOperation({ type: 'replace', pos: 0, count: 1, text: 'y' })
+    await client.keyboardRule('Tab', { shiftKey: true })
+    await client.tableCommand('align_center', 1)
+    await client.resizeImage(3, '50%')
+    await client.upsertFootnote('note', 'text')
+    await client.insertTemplate('mermaid')
+
+    expect(calls.slice(1).map((entry) => entry.command))
+      .toEqual(Array(6).fill('tauri_muya_engine_apply_parity'))
+    expect(calls[1].payload.command).toEqual({
+      type: 'applyOperation',
+      operation: { type: 'replace', pos: 0, count: 1, text: 'y' }
+    })
+    expect(calls[2].payload.command).toEqual({ type: 'keyboardRule', key: 'Tab', shiftKey: true })
+    expect(calls[3].payload.command).toEqual({ type: 'tableCommand', action: 'align_center', index: 1 })
+    expect(calls[4].payload.command).toEqual({ type: 'resizeImage', cursor: 3, width: '50%' })
+    expect(calls[5].payload.command).toEqual({ type: 'upsertFootnote', label: 'note', text: 'text' })
+    expect(calls[6].payload.command).toEqual({ type: 'insertTemplate', id: 'mermaid' })
+    expect(client.state.revision).toBe(6)
+  })
+
+  it('sends batches as one backend request', async() => {
+    const invoke = async(command, payload = {}) => {
+      if (command === 'tauri_muya_engine_create') return stateFor(payload.markdown)
       if (command === 'tauri_muya_engine_apply_batch') {
         return {
           state: {
@@ -89,6 +119,20 @@ describe('Muya Rust engine runtime client', () => {
 
     expect(client.markdown).toBe('# Title')
     expect(client.state.revision).toBe(2)
+  })
+
+  it('binds ipcRenderer invoke so bridge methods keep their receiver', async() => {
+    const bridge = {
+      marker: 'bridge',
+      async invoke(command, payload) {
+        expect(this.marker).toBe('bridge')
+        expect(command).toBe('tauri_muya_engine_create')
+        return stateFor(payload.markdown)
+      }
+    }
+    const client = createRustMuyaEngineClient({ target: { tauri: { ipcRenderer: bridge } } })
+    await client.create('bound')
+    expect(client.markdown).toBe('bound')
   })
 
   it('detects both supported Tauri invoke surfaces', () => {

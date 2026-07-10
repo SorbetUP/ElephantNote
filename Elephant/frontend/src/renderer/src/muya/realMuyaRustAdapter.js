@@ -78,7 +78,18 @@ export default class RealMuyaWithRustMirror extends Muya {
       })
     }
 
+    this.__elephantRustSelectionListener = () => {
+      if (!this.__elephantRustMirror?.active || this.__elephantRustExpectedMarkdown !== null) return
+      const markdown = this.getMarkdown()
+      const muyaIndexCursor = this.contentState.getMuyaIndexCursor()
+      this.__elephantRustMirror.sync(markdown, 'selection-change', {
+        muyaIndexCursor,
+        continueGroup: false
+      })
+    }
+
     this.on('change', this.__elephantRustChangeListener)
+    this.on('selectionChange', this.__elephantRustSelectionListener)
   }
 
   setMarkdown (markdown, ...args) {
@@ -174,9 +185,13 @@ export default class RealMuyaWithRustMirror extends Muya {
     if (this.__elephantRustChangeListener) {
       this.off('change', this.__elephantRustChangeListener)
     }
+    if (this.__elephantRustSelectionListener) {
+      this.off('selectionChange', this.__elephantRustSelectionListener)
+    }
     this.__elephantRustMirror?.destroy()
     this.__elephantRustMirror = null
     this.__elephantRustChangeListener = null
+    this.__elephantRustSelectionListener = null
     this.__elephantRustHistoryIdentity = ''
     this.__elephantRustExpectedMarkdown = null
     return super.destroy()

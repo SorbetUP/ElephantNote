@@ -14,9 +14,17 @@ export const nodeFromPath = (root, path = []) => path.reduce((node, index) => no
 
 export const nodeLength = (node) => node?.nodeType === 3 ? node.nodeValue.length : node?.childNodes?.length || 0
 
-export const createSelectionSnapshot = (root, selection = globalThis.getSelection?.()) => {
-  if (!root || !selection || selection.rangeCount === 0) return null
-  const range = selection.getRangeAt(0)
+const editorSelection = (root, selection = null) => (
+  selection ||
+  root?.ownerDocument?.defaultView?.getSelection?.() ||
+  globalThis.getSelection?.() ||
+  null
+)
+
+export const createSelectionSnapshot = (root, selection = null) => {
+  const resolvedSelection = editorSelection(root, selection)
+  if (!root || !resolvedSelection || resolvedSelection.rangeCount === 0) return null
+  const range = resolvedSelection.getRangeAt(0)
   if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null
   return {
     anchor: nodePath(root, range.startContainer),
@@ -27,21 +35,26 @@ export const createSelectionSnapshot = (root, selection = globalThis.getSelectio
   }
 }
 
-export const restoreSelectionSnapshot = (root, snapshot, doc = globalThis.document) => {
-  if (!root || !snapshot || !doc?.createRange || !globalThis.getSelection) return false
+export const restoreSelectionSnapshot = (root, snapshot, doc = root?.ownerDocument || globalThis.document) => {
+  if (!root || !snapshot || !doc?.createRange) return false
   const anchor = nodeFromPath(root, snapshot.anchor)
   const focus = nodeFromPath(root, snapshot.focus)
   if (!anchor || !focus) return false
+  const selection = editorSelection(root)
+  if (!selection) return false
   const range = doc.createRange()
-  range.setStart(anchor, Math.min(snapshot.anchorOffset, nodeLength(anchor)))
-  range.setEnd(focus, Math.min(snapshot.focusOffset, nodeLength(focus)))
-  const selection = globalThis.getSelection()
-  selection.removeAllRanges()
-  selection.addRange(range)
-  return true
+  try {
+    range.setStart(anchor, Math.min(snapshot.anchorOffset, nodeLength(anchor)))
+    range.setEnd(focus, Math.min(snapshot.focusOffset, nodeLength(focus)))
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return true
+  } catch {
+    return false
+  }
 }
 
-export const createDomEditor = (root, doc = globalThis.document) => {
+export const createDomEditor = (root, doc = root?.ownerDocument || globalThis.document) => {
   if (!root || !doc) return null
   root.setAttribute('contenteditable', 'true')
   root.setAttribute('data-muya-editor', 'true')

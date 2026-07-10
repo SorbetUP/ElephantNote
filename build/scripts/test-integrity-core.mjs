@@ -1,11 +1,11 @@
 const FORBIDDEN_ADDITIONS = [
   {
     name: 'focused test',
-    pattern: /\b(?:describe|it|test)\.only\s*\(/
+    pattern: /\b(?:(?:describe|it|test)\.only|fit|fdescribe)\s*\(/
   },
   {
     name: 'disabled test',
-    pattern: /\b(?:describe|it|test)\.skip\s*\(/
+    pattern: /\b(?:(?:describe|it|test)\.skip|xit|xdescribe)\s*\(/
   },
   {
     name: 'todo test',
@@ -79,9 +79,10 @@ export const findForbiddenTestAdditions = (diff = '') => {
 
 export const countTestContracts = (source = '') => {
   const value = String(source || '')
-  const tests = [...value.matchAll(/\b(?:it|test)(?:\.each\s*\([^)]*\))?\s*\(/g)].length
+  const directTests = [...value.matchAll(/\b(?:it|test)\s*\(/g)].length
+  const tableTests = [...value.matchAll(/\b(?:it|test)\.each\s*\(/g)].length
   const assertions = [...value.matchAll(/\bexpect\s*\(/g)].length
-  return { tests, assertions }
+  return { tests: directTests + tableTests, assertions }
 }
 
 export const validateChangedTestSource = (filename, source = '') => {

@@ -1,0 +1,104 @@
+name: Android foundations rework
+
+on:
+  push:
+    branches:
+      - fix/android-foundations-rework
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  apply-validate-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/android-foundations-rework
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Apply source transformations
+        run: |
+          python build/scripts/finalize-android-backend-rework.py
+          python build/scripts/finalize-android-frontend-rework.py
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Format Rust
+        run: |
+          cargo fmt --manifest-path Elephant/backend/tauri-plugin-elephant-android-vault/Cargo.toml
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+
+      - name: Lint changed frontend
+        run: >-
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint
+          Elephant/frontend/app/components/settings/SyncQrScanner.vue
+          Elephant/frontend/app/components/shell/AppShell.vue
+          Elephant/frontend/src/renderer/src/platform/mobileInteractionRuntime.js
+          Elephant/frontend/src/renderer/src/platform/mobileVaultBridge.js
+          Elephant/frontend/src/renderer/src/platform/tauriFileUtilsPathGuards.js
+          tests/app/unit/specs/main/elephantnote/androidFoundationsRegression.spec.js
+
+      - name: Run Android focused regressions
+        run: >-
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run
+          tests/app/unit/specs/main/elephantnote/androidFoundationsRegression.spec.js
+          tests/app/unit/specs/main/elephantnote/androidPrivateVaultPath.spec.js
+          tests/app/unit/specs/main/elephantnote/mobileAndroidRelease.spec.js
+          tests/app/unit/specs/main/elephantnote/mobileInteractionRegression.spec.js
+
+      - name: Compile Rust backend
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets
+
+      - name: Build renderer
+        run: pnpm tauri:web:build
+
+      - name: Build signed ARM64 Android APK
+        run: pnpm tauri:android:build
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Elephant-android-foundations-arm64
+          path: |
+            Elephant/backend/tauri/gen/android/app/build/outputs/apk/**/*.apk
+            build/**/*.apk
+          if-no-files-found: error
+
+      - name: Commit validated implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/android-foundations-rework.yml
+          git rm build/scripts/finalize-android-backend-rework.py
+          git rm build/scripts/finalize-android-frontend-rework.py
+          git add -A
+          git commit -m "fix(android): rebuild storage camera and drawer foundations"
+          git push origin HEAD:fix/android-foundations-rework

@@ -34,7 +34,18 @@ jobs:
             librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev patchelf wget
 
       - name: Apply focused implementation
-        run: python3 build/scripts/apply-chatgpt-subscription-card.py
+        shell: bash
+        run: |
+          python3 build/scripts/apply-chatgpt-subscription-card.py
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
+          text = path.read_text()
+          obsolete = "const formatReset = (timestamp) => new Date(Number(timestamp) * 1000).toLocaleString()\n"
+          if text.count(obsolete) != 1:
+              raise SystemExit(f'obsolete reset formatter count={text.count(obsolete)}')
+          path.write_text(text.replace(obsolete, '', 1))
+          PY
 
       - name: Format and validate frontend
         shell: bash

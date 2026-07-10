@@ -1,6 +1,7 @@
 use crate::extraction::{StructuredModelRequest, StructuredTask};
 use crate::model::{DocumentSnapshot, KnowledgeChunk};
-use serde::{Deserialize, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -26,25 +27,129 @@ pub struct WikiSourceChunk {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WikiSynthesis {
     pub title: String,
+    #[serde(default, deserialize_with = "deserialize_claims")]
     pub summary: Vec<WikiClaim>,
     #[serde(default)]
     pub sections: Vec<WikiSection>,
-    #[serde(default)]
+    #[serde(
+        default,
+        alias = "relatedWikis",
+        deserialize_with = "deserialize_strings"
+    )]
     pub related_wikis: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WikiSection {
     pub heading: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_claims")]
     pub claims: Vec<WikiClaim>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WikiClaim {
     pub text: String,
-    #[serde(default)]
+    #[serde(default, alias = "citationChunkIds", alias = "citations")]
     pub citation_chunk_ids: Vec<String>,
+}
+
+fn strings_from_value(value: &Value) -> Vec<String> {
+    match value {
+        Value::String(value) => vec![value.trim().to_string()],
+        Value::Array(values) => values
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn extract_inline_citations(text: &str) -> (String, Vec<String>) {
+    let mut citations = Vec::new();
+    let mut cursor = text;
+    while let Some(start) = cursor.find("[chunk-") {
+        let after = &cursor[start + 1..];
+        let Some(end) = after.find(']') else {
+            break;
+        };
+        let candidate = &after[..end];
+        if candidate
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+        {
+            citations.push(candidate.to_string());
+        }
+        cursor = &after[end + 1..];
+    }
+    citations.sort();
+    citations.dedup();
+    let mut cleaned = text.to_string();
+    for citation in &citations {
+        cleaned = cleaned.replace(&format!("[{citation}]"), "");
+    }
+    (
+        cleaned.split_whitespace().collect::<Vec<_>>().join(" "),
+        citations,
+    )
+}
+
+fn claims_from_value(value: &Value) -> Result<Vec<WikiClaim>, String> {
+    match value {
+        Value::Null => Ok(Vec::new()),
+        Value::String(text) => {
+            let (text, citation_chunk_ids) = extract_inline_citations(text);
+            Ok(vec![WikiClaim {
+                text,
+                citation_chunk_ids,
+            }])
+        }
+        Value::Array(values) => {
+            let mut claims = Vec::new();
+            for value in values {
+                claims.extend(claims_from_value(value)?);
+            }
+            Ok(claims)
+        }
+        Value::Object(object) => {
+            let raw_text = ["text", "claim", "content", "summary"]
+                .iter()
+                .find_map(|key| object.get(*key).and_then(Value::as_str))
+                .unwrap_or("");
+            let mut citation_chunk_ids = ["citation_chunk_ids", "citationChunkIds", "citations"]
+                .iter()
+                .find_map(|key| object.get(*key))
+                .map(strings_from_value)
+                .unwrap_or_default();
+            let (text, inline) = extract_inline_citations(raw_text);
+            if citation_chunk_ids.is_empty() {
+                citation_chunk_ids = inline;
+            }
+            Ok(vec![WikiClaim {
+                text,
+                citation_chunk_ids,
+            }])
+        }
+        _ => Err("Wiki claims must be a string, object, or array.".into()),
+    }
+}
+
+fn deserialize_claims<'de, D>(deserializer: D) -> Result<Vec<WikiClaim>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    claims_from_value(&value).map_err(D::Error::custom)
+}
+
+fn deserialize_strings<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    Ok(strings_from_value(&value))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -141,10 +246,27 @@ pub fn build_wiki_synthesis_request(
         })
         .collect::<Vec<_>>()
         .join("\n\n");
+    let schema = r#"{
+  "title": "Short wiki title",
+  "summary": [
+    { "text": "One factual summary claim.", "citation_chunk_ids": ["chunk-id-from-sources"] }
+  ],
+  "sections": [
+    {
+      "heading": "Section heading",
+      "claims": [
+        { "text": "One factual section claim.", "citation_chunk_ids": ["chunk-id-from-sources"] }
+      ]
+    }
+  ],
+  "related_wikis": ["Related concept"]
+}"#;
     StructuredModelRequest {
         task: StructuredTask::WriteWikiSection,
         system_prompt: format!(
-            "You synthesize a cited local wiki from supplied note chunks. Return only data matching the requested JSON schema. Every factual claim must cite one or more supplied chunk IDs. Never cite a chunk that was not supplied. Do not repeat the same idea across sections. Return no more than {max_sections} sections. related_wikis contains only short concept names suitable for wikilinks, never file paths."
+            "You synthesize a cited local wiki from supplied note chunks. Return exactly one JSON object and no prose or Markdown fences. The object must use this exact shape:
+{schema}
+Every summary and section claim must be an object with text and citation_chunk_ids; summary is always an array, never a string. Every factual claim must cite one or more supplied chunk IDs. Never cite a chunk that was not supplied. Do not place citation markers inside text. Do not repeat the same idea across sections. Return no more than {max_sections} sections. related_wikis contains only short concept names suitable for wikilinks, never file paths."
         ),
         user_prompt: format!(
             "Topic: {}\nRequested title: {}\n\nSources:\n{}",
@@ -523,6 +645,21 @@ mod tests {
         assert!(rendered.markdown.contains("[[Notes/Iroh.md#Iroh"));
         assert!(rendered.markdown.contains("[[Peer-to-peer networking]]"));
         assert_eq!(rendered.citations.len(), 2);
+    }
+
+    #[test]
+    fn accepts_string_summary_with_inline_chunk_citations() {
+        let sources = sources();
+        let response = serde_json::json!({
+            "title": "Iroh",
+            "summary": format!("Iroh provides connectivity. [{}]", sources[0].chunk_id),
+            "sections": [],
+            "related_wikis": []
+        })
+        .to_string();
+        let rendered = parse_and_render_wiki(&response, "Iroh", &sources, 8).unwrap();
+        assert!(rendered.markdown.contains("Iroh provides connectivity."));
+        assert_eq!(rendered.citations.len(), 1);
     }
 
     #[test]

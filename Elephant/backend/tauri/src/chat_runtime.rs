@@ -110,6 +110,30 @@ fn selected_chat_model(payload: &Value) -> String {
     .unwrap_or_default()
 }
 
+fn selected_chat_reasoning_effort(payload: &Value) -> Option<String> {
+    let route = ai_config(payload)
+        .pointer("/routes/chat")
+        .unwrap_or(&Value::Null);
+    let effort = text(route, &["reasoningEffort", "reasoning_effort", "effort"]);
+    (!effort.is_empty()).then_some(effort)
+}
+
+fn with_saved_ai_config(app: &AppHandle, payload: Value) -> Value {
+    let mut payload = if payload.is_object() {
+        payload
+    } else {
+        json!({ "message": payload })
+    };
+    if ai_config(&payload).pointer("/routes/chat").is_none() {
+        if let Ok(config) = crate::tauri_extra_commands::load_ai_config(app) {
+            if let Some(object) = payload.as_object_mut() {
+                object.insert("aiConfig".into(), config);
+            }
+        }
+    }
+    payload
+}
+
 fn knowledge_hits(app: &AppHandle, query: &str, limit: usize) -> Vec<KnowledgeSearchHit> {
     let Ok(vault) = crate::vault::config::get_active_vault(app) else {
         return Vec::new();
@@ -213,9 +237,11 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
         return codex_app_server::command(&app, &payload).await;
     }
 
+    let payload = with_saved_ai_config(&app, payload);
     let message = last_user_message(&payload);
     let model = selected_chat_model(&payload);
     let source = selected_chat_source(&payload);
+    let reasoning_effort = selected_chat_reasoning_effort(&payload);
     if message.trim().is_empty() {
         return Ok(
             json!({ "answer": "Écris un message pour démarrer le chat.", "sources": [], "runtime": "rust-knowledge-core", "model": model }),
@@ -251,13 +277,16 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
             "You are answering inside ElephantNote. Do not inspect the filesystem or run commands. Use only the conversation and retrieved note context below. Return only the answer.\n\n{}",
             transcript
         );
-        let result = codex_app_server::chat(&app, &model, &prompt).await?;
+        let result =
+            codex_app_server::chat_with_effort(&app, &model, &prompt, reasoning_effort.as_deref())
+                .await?;
         return Ok(json!({
             "answer": result.answer,
             "sources": hits,
             "runtime": "codex-app-server",
             "provider": "codex",
             "model": result.model,
+            "reasoningEffort": reasoning_effort,
             "threadId": result.thread_id
         }));
     }
@@ -302,6 +331,16 @@ mod tests {
         let payload = json!({ "aiConfig": { "routes": { "chat": { "model": "tiny.gguf" } } } });
         assert_eq!(selected_chat_model(&payload), "tiny.gguf");
     }
+    #[test]
+    fn reads_reasoning_effort_from_chat_route() {
+        let payload =
+            json!({ "aiConfig": { "routes": { "chat": { "reasoningEffort": "high" } } } });
+        assert_eq!(
+            selected_chat_reasoning_effort(&payload).as_deref(),
+            Some("high")
+        );
+    }
+
     #[test]
     fn extracts_last_user_message() {
         let payload = json!({ "messages": [{ "role": "user", "content": "first" }, { "role": "user", "content": "second" }] });

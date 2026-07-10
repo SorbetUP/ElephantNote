@@ -733,8 +733,20 @@ fn thread_start_params(model: &str, cwd: &str) -> Value {
     })
 }
 
-fn turn_start_params(thread_id: &str, model: &str, cwd: &str, prompt: &str) -> Value {
-    json!({
+fn normalize_reasoning_effort(value: Option<&str>) -> Option<&str> {
+    value
+        .map(str::trim)
+        .filter(|value| matches!(*value, "minimal" | "low" | "medium" | "high" | "xhigh"))
+}
+
+fn turn_start_params(
+    thread_id: &str,
+    model: &str,
+    cwd: &str,
+    prompt: &str,
+    reasoning_effort: Option<&str>,
+) -> Value {
+    let mut params = json!({
       "threadId": thread_id,
       "input": [{ "type": "text", "text": prompt }],
       "model": model,
@@ -744,7 +756,11 @@ fn turn_start_params(thread_id: &str, model: &str, cwd: &str, prompt: &str) -> V
         "type": TURN_READ_ONLY_SANDBOX,
         "networkAccess": false
       }
-    })
+    });
+    if let Some(effort) = normalize_reasoning_effort(reasoning_effort) {
+        params["effort"] = json!(effort);
+    }
+    params
 }
 
 impl CodexState {
@@ -1142,11 +1158,21 @@ pub async fn command(app: &AppHandle, payload: &Value) -> R<Value> {
 }
 
 pub async fn chat(app: &AppHandle, model: &str, prompt: &str) -> R<CodexChatResult> {
+    chat_with_effort(app, model, prompt, None).await
+}
+
+pub async fn chat_with_effort(
+    app: &AppHandle,
+    model: &str,
+    prompt: &str,
+    reasoning_effort: Option<&str>,
+) -> R<CodexChatResult> {
     let started = Instant::now();
     log(
         "chat",
         format!(
-            "start model={model} prompt_chars={}",
+            "start model={model} effort={} prompt_chars={}",
+            normalize_reasoning_effort(reasoning_effort).unwrap_or("default"),
             prompt.chars().count()
         ),
     );
@@ -1191,7 +1217,7 @@ pub async fn chat(app: &AppHandle, model: &str, prompt: &str) -> R<CodexChatResu
     let turn = match client
         .request(
             "turn/start",
-            turn_start_params(&thread_id, model, &cwd_text, prompt),
+            turn_start_params(&thread_id, model, &cwd_text, prompt, reasoning_effort),
         )
         .await
     {
@@ -1322,7 +1348,7 @@ mod tests {
 
     #[test]
     fn turn_payload_disables_network_access() {
-        let params = turn_start_params("thread", "gpt-test", "/tmp/chat", "hello");
+        let params = turn_start_params("thread", "gpt-test", "/tmp/chat", "hello", None);
         assert_eq!(
             params
                 .pointer("/sandboxPolicy/type")
@@ -1335,6 +1361,20 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(false)
         );
+    }
+
+    #[test]
+    fn turn_payload_carries_supported_reasoning_effort() {
+        let params = turn_start_params("thread", "gpt-test", "/tmp/chat", "hello", Some("high"));
+        assert_eq!(params.get("effort").and_then(Value::as_str), Some("high"));
+        let invalid = turn_start_params(
+            "thread",
+            "gpt-test",
+            "/tmp/chat",
+            "hello",
+            Some("impossible"),
+        );
+        assert!(invalid.get("effort").is_none());
     }
 
     #[test]

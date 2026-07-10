@@ -498,9 +498,8 @@ pub fn tauri_models_set_selection(app: AppHandle, selection: Value) -> R<Value> 
     Ok(normalized)
 }
 
-#[tauri::command]
-pub fn tauri_ai_config_get(app: AppHandle) -> R<Value> {
-    let path = provider_config_path(&app)?;
+pub(crate) fn load_ai_config(app: &AppHandle) -> R<Value> {
+    let path = provider_config_path(app)?;
     Ok(read_json(
         path,
         json!({
@@ -511,6 +510,11 @@ pub fn tauri_ai_config_get(app: AppHandle) -> R<Value> {
           "localModelSelection": {}
         }),
     ))
+}
+
+#[tauri::command]
+pub fn tauri_ai_config_get(app: AppHandle) -> R<Value> {
+    load_ai_config(&app)
 }
 
 #[tauri::command]

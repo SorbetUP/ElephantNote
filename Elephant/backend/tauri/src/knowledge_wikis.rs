@@ -72,6 +72,7 @@ pub struct WikiGenerationResult {
 struct WikiModelRoute {
     provider: String,
     model: String,
+    reasoning_effort: Option<String>,
 }
 
 #[tauri::command]
@@ -106,6 +107,7 @@ pub async fn tauri_knowledge_wiki_generate(
     }
     let max_sections = max_sections.unwrap_or(DEFAULT_MAX_SECTIONS).clamp(1, 30);
     let request = build_wiki_synthesis_request(&topic, title.as_deref(), &sources, max_sections);
+    let payload = with_saved_ai_config(&app, payload);
     let route = selected_wiki_route(&payload)?;
 
     eprintln!(
@@ -565,18 +567,36 @@ fn select_source_chunks(
     selected
 }
 
+fn with_saved_ai_config(app: &AppHandle, payload: Value) -> Value {
+    let mut payload = if payload.is_object() {
+        payload
+    } else {
+        json!({})
+    };
+    let has_route = payload.pointer("/aiConfig/routes/chat").is_some()
+        || payload.pointer("/config/routes/chat").is_some();
+    if !has_route {
+        if let Ok(config) = crate::tauri_extra_commands::load_ai_config(app) {
+            if let Some(object) = payload.as_object_mut() {
+                object.insert("aiConfig".into(), config);
+            }
+        }
+    }
+    payload
+}
+
 fn selected_wiki_route(payload: &Value) -> Result<WikiModelRoute, String> {
     const ROUTE_POINTERS: &[&str] = &[
-        "/modelSelection/wiki",
-        "/modelSelection/wikiWriting",
-        "/aiConfig/localModelSelection/wiki",
-        "/aiConfig/localModelSelection/wikiWriting",
         "/aiConfig/routes/wiki",
         "/aiConfig/routes/wikiWriting",
         "/config/routes/wiki",
         "/config/routes/wikiWriting",
         "/aiConfig/routes/chat",
         "/config/routes/chat",
+        "/modelSelection/wiki",
+        "/modelSelection/wikiWriting",
+        "/aiConfig/localModelSelection/wiki",
+        "/aiConfig/localModelSelection/wikiWriting",
         "/modelSelection/chat",
     ];
 
@@ -592,6 +612,7 @@ fn selected_wiki_route(payload: &Value) -> Result<WikiModelRoute, String> {
             return Ok(WikiModelRoute {
                 provider: "local-llama.cpp".into(),
                 model: model.to_string(),
+                reasoning_effort: None,
             });
         }
         if let Some(object) = value.as_object() {
@@ -609,9 +630,16 @@ fn selected_wiki_route(payload: &Value) -> Result<WikiModelRoute, String> {
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .unwrap_or("local-llama.cpp");
+            let reasoning_effort = ["reasoningEffort", "reasoning_effort", "effort"]
+                .iter()
+                .find_map(|key| object.get(*key).and_then(Value::as_str))
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string);
             return Ok(WikiModelRoute {
                 provider: provider.to_string(),
                 model: model.to_string(),
+                reasoning_effort,
             });
         }
     }
@@ -667,9 +695,14 @@ async fn generate_structured_response(
                 "{}\n\n{}\n\nReturn exactly one JSON object. Schema name: {}",
                 request.system_prompt, request.user_prompt, request.json_schema_name
             );
-            return crate::chat_runtime::codex_app_server::chat(app, &route.model, &prompt)
-                .await
-                .map(|result| result.answer);
+            return crate::chat_runtime::codex_app_server::chat_with_effort(
+                app,
+                &route.model,
+                &prompt,
+                route.reasoning_effort.as_deref(),
+            )
+            .await
+            .map(|result| result.answer);
         }
     }
 
@@ -821,6 +854,7 @@ mod tests {
         let route = selected_wiki_route(&payload).unwrap();
         assert_eq!(route.provider, "codex");
         assert_eq!(route.model, "gpt-5.4-mini");
+        assert_eq!(route.reasoning_effort, None);
         assert!(is_codex_provider(&route.provider));
     }
 

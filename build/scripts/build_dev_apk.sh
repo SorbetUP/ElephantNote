@@ -9,6 +9,7 @@ ANDROID_BUILD_PROFILE="${ANDROID_BUILD_PROFILE:-release}"
 ANDROID_APK_MAX_MIB="${ANDROID_APK_MAX_MIB:-24}"
 APK_ROOT="$TAURI_DIR/gen/android/app/build/outputs/apk"
 ANDROID_GRADLE_FILE="$TAURI_DIR/gen/android/app/build.gradle.kts"
+ANDROID_MANIFEST="$TAURI_DIR/gen/android/app/src/main/AndroidManifest.xml"
 MAIN_ACTIVITY="$TAURI_DIR/gen/android/app/src/main/java/com/elephantnote/app/MainActivity.kt"
 MAIN_ACTIVITY_TEMPLATE="$ROOT_DIR/build/android/MainActivity.kt"
 RENDERER_OUT="$ROOT_DIR/build/out/renderer"
@@ -62,6 +63,34 @@ NODE
 
   grep -q 'useLegacyPackaging = true' "$gradle_file"
   echo "[android-apk] native libraries will be compressed in the APK"
+}
+
+install_android_manifest_permissions() {
+  if [ ! -f "$ANDROID_MANIFEST" ]; then
+    echo "Missing generated Android manifest: $ANDROID_MANIFEST" >&2
+    exit 1
+  fi
+
+  node - "$ANDROID_MANIFEST" <<'NODE'
+const fs = require('node:fs')
+const manifestPath = process.argv[2]
+let source = fs.readFileSync(manifestPath, 'utf8')
+const declarations = [
+  '    <uses-permission android:name="android.permission.CAMERA" />',
+  '    <uses-feature android:name="android.hardware.camera.any" android:required="false" />'
+]
+
+if (!source.includes('android.permission.CAMERA')) {
+  const application = source.indexOf('<application')
+  if (application < 0) throw new Error(`Unable to locate <application in ${manifestPath}`)
+  source = `${source.slice(0, application)}${declarations.join('\n')}\n\n    ${source.slice(application)}`
+  fs.writeFileSync(manifestPath, source)
+}
+NODE
+
+  grep -q 'android.permission.CAMERA' "$ANDROID_MANIFEST"
+  grep -q 'android.hardware.camera.any' "$ANDROID_MANIFEST"
+  echo "[android-apk] installed Android camera permission and optional camera feature"
 }
 
 install_main_activity() {
@@ -120,6 +149,7 @@ if [ ! -d "$TAURI_DIR/gen/android" ]; then
   cargo tauri android init --config "$ANDROID_CONFIG"
 fi
 
+install_android_manifest_permissions
 install_main_activity
 ensure_compressed_native_libraries "$ANDROID_GRADLE_FILE"
 
@@ -202,4 +232,4 @@ if [ "$ANDROID_BUILD_PROFILE" = "release" ] && [ "$APK_BYTES" -gt "$MAX_BYTES" ]
 fi
 
 printf '[android-apk] install with: adb install -r %q\n' "$FINAL_APK"
-printf '[android-apk] capture startup crash: adb logcat -c && adb shell am force-stop com.elephantnote.app && adb shell monkey -p com.elephantnote.app 1 && adb logcat -d -v threadtime AndroidRuntime:E libc:F elephantnote:I Tauri:I chromium:E \"*:S\"\n'
+printf '[android-apk] capture startup crash: adb logcat -c && adb shell am force-stop com.elephantnote.app && adb shell monkey -p com.elephantnote.app 1 && adb logcat -d -v threadtime AndroidRuntime:E libc:F elephantnote:I Tauri:I chromium:E "*:S"\n'

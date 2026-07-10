@@ -24,7 +24,8 @@ import { useMuyaRuntimeEditor } from './useMuyaRuntimeEditor.js'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
-  mode: { type: String, default: 'active' }
+  mode: { type: String, default: 'active' },
+  allowJavascriptFallback: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:modelValue', 'ready', 'change'])
@@ -35,7 +36,11 @@ const markdown = computed({
 })
 
 const mode = toRef(props, 'mode')
-const runtime = useMuyaRuntimeEditor({ markdown, mode })
+const runtime = useMuyaRuntimeEditor({
+  markdown,
+  mode,
+  allowJavaScriptFallback: props.allowJavascriptFallback
+})
 const { rootRef, runtimeRef, ready } = runtime
 let inputSyncTimer = null
 let composing = false

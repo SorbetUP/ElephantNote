@@ -86,12 +86,6 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Unit tests
-        run: pnpm test:unit
-
-      - name: Build renderer
-        run: pnpm tauri:web:build
-
       - name: Rust formatting
         run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
 
@@ -100,6 +94,12 @@ jobs:
 
       - name: Rust tests
         run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features
+
+      - name: Build renderer
+        run: pnpm tauri:web:build
+
+      - name: Unit tests
+        run: pnpm test:unit
 
   e2e:
     name: E2E

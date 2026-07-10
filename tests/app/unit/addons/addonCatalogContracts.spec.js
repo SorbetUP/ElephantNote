@@ -18,7 +18,7 @@ describe('official addon branch catalogue', () => {
     const logic = read('Elephant/frontend/app/components/settings/useAddonsSettings.js')
     const store = read('Elephant/frontend/src/renderer/src/store/addons.js')
 
-    expect(panel).toContain('<h3>Available addons</h3>')
+    expect(panel).toContain('<h3>Browse official addons</h3>')
     expect(panel).toContain('v-for="addon in availableCatalogAddons"')
     expect(panel).toContain("addon.updateAvailable ? 'Update' : addon.installed ? 'Installed' : 'Install'")
     expect(logic).toContain('await addonsStore.loadAddonCatalog()')

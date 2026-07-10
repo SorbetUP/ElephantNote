@@ -66,7 +66,7 @@ pre.en-code-native-shell > .en-code-native-run {
   border: 0 !important;
   border-radius: 0 !important;
   background: color-mix(in srgb, var(--editorBgColor, #29292c) 97%, currentColor 3%) !important;
-  color: color-mix(in srgb, currentColor 54%, transparent) !important;
+  color: color-mix(in srgb, currentColor 62%, transparent) !important;
   cursor: pointer;
 }
 
@@ -88,9 +88,49 @@ pre.en-code-native-shell > .en-code-native-run:hover {
   color: var(--primary-color, #1687ff) !important;
 }
 
-pre.en-code-native-shell > .en-code-native-run:focus-visible {
+pre.en-code-native-shell > .en-code-native-run:focus-visible,
+pre.en-code-native-shell > .ag-code-copy:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--primary-color, #1687ff) 55%, transparent);
   outline-offset: -3px;
+}
+
+/* Muya's bundled PNG copy icon can disappear against dark themes. Draw the
+   familiar two-sheet glyph with currentColor so it is always visible. */
+pre.en-code-native-shell > .ag-code-copy > .icon {
+  position: relative !important;
+  display: block !important;
+  width: 14px !important;
+  height: 14px !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  color: inherit !important;
+  pointer-events: none;
+}
+
+pre.en-code-native-shell > .ag-code-copy > .icon > .icon-inner {
+  display: none !important;
+}
+
+pre.en-code-native-shell > .ag-code-copy > .icon::before,
+pre.en-code-native-shell > .ag-code-copy > .icon::after {
+  position: absolute;
+  box-sizing: border-box;
+  width: 9px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  content: '';
+}
+
+pre.en-code-native-shell > .ag-code-copy > .icon::before {
+  top: 1px;
+  left: 4px;
+  opacity: .72;
+}
+
+pre.en-code-native-shell > .ag-code-copy > .icon::after {
+  top: 4px;
+  left: 1px;
 }
 
 .en-code-native-run-icon {
@@ -136,6 +176,13 @@ pre.en-code-native-shell > code {
   word-break: normal !important;
   scrollbar-width: thin;
   scrollbar-gutter: stable;
+}
+
+/* Remove Muya's active-block "fence" / "Code fence" decoration. */
+pre.en-code-native-shell.ag-active.ag-fence-code > code::before,
+pre.en-code-native-shell.ag-active.ag-fence-code > code::after {
+  content: none !important;
+  display: none !important;
 }
 
 pre.en-code-native-shell > elephant-code-output {

@@ -141,7 +141,12 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          pnpm exec vitest run tests/app/unit/muyaRustSessionRuntime.spec.js tests/app/unit/muyaRustStructuredSession.spec.js tests/app/unit/muyaRealSurfaceRustMirror.spec.js tests/app/unit/muyaRustEditorActivation.spec.js 2>&1 | tee /tmp/structured-tests.txt
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/muyaRustSessionRuntime.spec.js \
+            tests/app/unit/muyaRustStructuredSession.spec.js \
+            tests/app/unit/muyaRealSurfaceRustMirror.spec.js \
+            tests/app/unit/muyaRustEditorActivation.spec.js \
+            2>&1 | tee /tmp/structured-tests.txt
           status=${PIPESTATUS[0]}
           tail -n 300 /tmp/structured-tests.txt > .github/validation/structured-tests.txt
           exit "$status"
@@ -216,6 +221,7 @@ jobs:
           done
 
           if [ "$all_success" = true ]; then
+            rm -rf .github/validation
             rm .github/workflows/muya-structured-validation.yml
           fi
 

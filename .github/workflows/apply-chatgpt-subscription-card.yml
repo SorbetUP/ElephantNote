@@ -39,20 +39,31 @@ jobs:
       - name: Format and validate frontend
         shell: bash
         run: |
-          set -euxo pipefail
-          Elephant/node_modules/.bin/eslint \
-            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
-            Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue \
-            Elephant/frontend/app/components/settings/codexRateLimits.js \
-            tests/app/unit/codexRateLimits.spec.js \
-            --fix
-          Elephant/node_modules/.bin/eslint \
-            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
-            Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue \
-            Elephant/frontend/app/components/settings/codexRateLimits.js \
-            tests/app/unit/codexRateLimits.spec.js
-          Elephant/node_modules/.bin/vitest run tests/app/unit/codexRateLimits.spec.js
-          pnpm tauri:web:build
+          set -o pipefail
+          {
+            set -x
+            Elephant/node_modules/.bin/eslint \
+              Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
+              Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue \
+              Elephant/frontend/app/components/settings/codexRateLimits.js \
+              tests/app/unit/codexRateLimits.spec.js \
+              --fix
+            Elephant/node_modules/.bin/eslint \
+              Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
+              Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue \
+              Elephant/frontend/app/components/settings/codexRateLimits.js \
+              tests/app/unit/codexRateLimits.spec.js
+            Elephant/node_modules/.bin/vitest run tests/app/unit/codexRateLimits.spec.js
+            pnpm tauri:web:build
+          } 2>&1 | tee chatgpt-card-frontend.log
+
+      - name: Upload frontend diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-card-frontend
+          path: chatgpt-card-frontend.log
+          if-no-files-found: ignore
 
       - name: Format and validate Rust
         shell: bash

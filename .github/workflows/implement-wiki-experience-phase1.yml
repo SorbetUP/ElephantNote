@@ -55,6 +55,8 @@ jobs:
           p.write_text(text.replace(old, new, 1))
           PY
             python3 /tmp/impl.py
+            git show origin/feature/wiki-knowledge-continuation:.github/scripts/fix_phase1_tests.py > /tmp/fix_phase1_tests.py
+            python3 /tmp/fix_phase1_tests.py
             cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
             cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
           } > /tmp/phase1-apply.log 2>&1

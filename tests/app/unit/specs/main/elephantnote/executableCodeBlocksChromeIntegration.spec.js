@@ -2,12 +2,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installExecutableCodeBlocks } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocks'
-import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV3'
+import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV4'
 
+const wait = (milliseconds = 90) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 const flush = async() => {
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await wait(0)
   await new Promise((resolve) => (globalThis.requestAnimationFrame || setTimeout)(resolve, 0))
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await wait(0)
 }
 
 const rect = (top = 40) => ({
@@ -41,10 +42,9 @@ const installEditor = (sources = ['print("hello")']) => {
   return [...document.querySelectorAll('pre')]
 }
 
-describe('executable code blocks public runtime with Muya chrome', () => {
+describe('consolidated executable code block runtime', () => {
   let invoke
   let clipboardWrite
-  let consoleError
 
   beforeEach(() => {
     resetExecutableCodeBlocksForTests(window)
@@ -54,7 +54,6 @@ describe('executable code blocks public runtime with Muya chrome', () => {
       configurable: true,
       value: { writeText: clipboardWrite }
     })
-    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     invoke = vi.fn(async(command, payload) => {
       if (command === 'tauri_programs_list') {
         return { executionEnabled: true, outputLineLimit: 200, environments: [] }
@@ -85,133 +84,167 @@ describe('executable code blocks public runtime with Muya chrome', () => {
 
   afterEach(() => {
     resetExecutableCodeBlocksForTests(window)
-    consoleError.mockRestore()
     delete window.__TAURI__
   })
 
-  it('keeps Run first in DOM after adding Copy and survives repeated scans', async() => {
+  it('renders only two minimal controls with no floating capsule content', async() => {
     installEditor()
     const runtime = installExecutableCodeBlocks(window)
-    runtime.scan('initial')
+    runtime.scan('test')
     await flush()
 
-    const toolbar = runtime.layer.querySelector('.en-code-runtime-toolbar')
-    expect([...toolbar.querySelectorAll('button')].map((button) => button.className)).toEqual([
-      'en-code-runner-run',
-      'en-code-runner-copy'
-    ])
-    expect(toolbar.querySelector('button .en-code-runner-run-icon')).not.toBeNull()
-    expect(() => runtime.scan('second-pass')).not.toThrow()
-    await flush()
-    expect(consoleError).not.toHaveBeenCalledWith('[Code:UI] scan:error', expect.anything())
+    const toolbar = runtime.layer.querySelector('.en-code-v4-toolbar')
+    expect(toolbar).not.toBeNull()
+    expect(toolbar.children).toHaveLength(2)
+    expect(toolbar.querySelectorAll('button')).toHaveLength(2)
+    expect(toolbar.querySelector('.en-code-v4-copy')).not.toBeNull()
+    expect(toolbar.querySelector('.en-code-v4-run')).not.toBeNull()
+    expect(toolbar.textContent).toBe('')
   })
 
-  it('dispatches a real run after the copy control has been installed', async() => {
+  it('does not rescan when toolbar and output DOM mutate', async() => {
     installEditor()
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('initial')
-    await flush()
+    await wait(120)
+    const scansBefore = runtime.metrics.scans
 
-    expect(runtime.layer.querySelector('.en-code-runner-copy')).not.toBeNull()
-    runtime.layer.querySelector('.en-code-runner-run').click()
+    for (let index = 0; index < 100; index += 1) {
+      const node = document.createElement('span')
+      runtime.layer.append(node)
+      node.remove()
+    }
+    await wait(160)
+
+    expect(runtime.metrics.scans).toBe(scansBefore)
+    expect(runtime.metrics.ignoredMutations).toBeGreaterThan(0)
+  })
+
+  it('does not rescan for syntax-highlight span churn inside an existing code node', async() => {
+    installEditor()
+    const runtime = installExecutableCodeBlocks(window)
+    runtime.scan('initial')
+    await wait(120)
+    const scansBefore = runtime.metrics.scans
+    const code = document.querySelector('code')
+
+    for (let index = 0; index < 80; index += 1) {
+      const span = document.createElement('span')
+      span.textContent = String(index)
+      code.append(span)
+      span.remove()
+    }
+    await wait(160)
+
+    expect(runtime.metrics.scans).toBe(scansBefore)
+  })
+
+  it('coalesces a burst of real code-block topology mutations into one scan', async() => {
+    installEditor()
+    const runtime = installExecutableCodeBlocks(window)
+    runtime.scan('initial')
+    await wait(120)
+    const scansBefore = runtime.metrics.scans
+    const editor = document.querySelector('.en-editor-host')
+
+    for (let index = 0; index < 20; index += 1) {
+      const wrapper = document.createElement('section')
+      wrapper.innerHTML = `<pre class="language-python"><code>print(${index})</code></pre>`
+      editor.append(wrapper)
+      wrapper.remove()
+    }
+    await wait(180)
+
+    expect(runtime.metrics.scans - scansBefore).toBe(1)
+    expect(runtime.metrics.coalescedScans).toBeGreaterThan(0)
+  })
+
+  it('dispatches a real run and rendering the result does not start a scan loop', async() => {
+    installEditor()
+    const runtime = installExecutableCodeBlocks(window)
+    runtime.scan('initial')
+    await wait(120)
+    const scansBefore = runtime.metrics.scans
+
+    runtime.layer.querySelector('.en-code-v4-run').click()
     await flush()
+    await wait(160)
 
     expect(invoke).toHaveBeenCalledWith('tauri_programs_run', expect.objectContaining({
       id: 'python',
       command: 'print("hello")',
       stop: false
     }))
-    expect(runtime.layer.textContent).toContain('hello')
+    expect(runtime.layer.querySelector('.en-code-v4-output').textContent).toContain('hello')
+    expect(runtime.metrics.scans).toBe(scansBefore)
   })
 
-  it('repairs a removed run icon before a later editor scan', async() => {
-    installEditor()
-    const runtime = installExecutableCodeBlocks(window)
-    runtime.scan('initial')
-    await flush()
-
-    const runButton = runtime.layer.querySelector('.en-code-runner-run')
-    runButton.querySelector('.en-code-runner-run-icon').remove()
-    await flush()
-
-    expect(runButton.querySelector('.en-code-runner-run-icon')).not.toBeNull()
-    expect(() => runtime.scan('after-icon-repair')).not.toThrow()
-    await flush()
-  })
-
-  it('does not classify runtime controls as native Muya copy controls', async() => {
-    installEditor()
-    const runtime = installExecutableCodeBlocks(window)
-    runtime.scan('initial')
-    await flush()
-
-    expect(document.querySelector('.muya-copy-button').classList.contains('en-code-runtime-native-copy')).toBe(true)
-    expect(runtime.layer.querySelector('.en-code-runner-copy').classList.contains('en-code-runtime-native-copy')).toBe(false)
-    expect(runtime.layer.querySelector('.en-code-runner-run').classList.contains('en-code-runtime-native-copy')).toBe(false)
-    expect(document.querySelector('.muya-code-fence-hint').classList.contains('en-code-runtime-fence-hint')).toBe(true)
-  })
-
-  it('copies the exact code text through the runtime copy action', async() => {
+  it('copies exact source text through the integrated copy action', async() => {
     installEditor(['for i in range(2):\n  print(i)'])
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('initial')
     await flush()
 
-    runtime.layer.querySelector('.en-code-runner-copy').click()
+    runtime.layer.querySelector('.en-code-v4-copy').click()
     await flush()
 
     expect(clipboardWrite).toHaveBeenCalledWith('for i in range(2):\n  print(i)')
   })
 
-  it('keeps one stable toolbar per block across a Muya host replacement', async() => {
-    const [firstPre] = installEditor()
-    const runtime = installExecutableCodeBlocks(window)
-    runtime.scan('initial')
-    await flush()
-
-    const oldHost = firstPre.closest('[data-code-block]')
-    const replacement = oldHost.cloneNode(true)
-    const replacementPre = replacement.querySelector('pre')
-    replacementPre.getBoundingClientRect = firstPre.getBoundingClientRect
-    oldHost.replaceWith(replacement)
-    runtime.scan('muya-host-replacement')
-    await flush()
-
-    expect(runtime.states.size).toBe(1)
-    expect(runtime.layer.querySelectorAll('.en-code-runtime-toolbar')).toHaveLength(1)
-    expect(runtime.layer.querySelectorAll('.en-code-runner-run')).toHaveLength(1)
-    expect(runtime.layer.querySelectorAll('.en-code-runner-copy')).toHaveLength(1)
-    expect(() => runtime.scan('post-replacement')).not.toThrow()
-  })
-
-  it('maintains the toolbar invariant independently for multiple blocks', async() => {
-    installEditor(['print("one")', 'print("two")', 'print("three")'])
-    const runtime = installExecutableCodeBlocks(window)
-    runtime.scan('initial')
-    await flush()
-
-    expect(runtime.states.size).toBe(3)
-    const toolbars = [...runtime.layer.querySelectorAll('.en-code-runtime-toolbar')]
-    expect(toolbars).toHaveLength(3)
-    for (const toolbar of toolbars) {
-      expect(toolbar.querySelector('button')).toBe(toolbar.querySelector('.en-code-runner-run'))
-      expect(toolbar.querySelectorAll('.en-code-runner-copy')).toHaveLength(1)
-      expect(toolbar.querySelector('.en-code-runner-run-icon')).not.toBeNull()
-    }
-    expect(() => runtime.scan('multi-block-rescan')).not.toThrow()
-  })
-
-  it('can refresh chrome repeatedly without duplicating controls', async() => {
+  it('styles only the real native language, copy, and fence controls', async() => {
     installEditor()
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('initial')
     await flush()
 
-    for (let index = 0; index < 10; index += 1) runtime.refreshCodeBlockChrome()
+    expect(document.querySelector('.muya-language-label')).toHaveClass('en-code-v4-language')
+    expect(document.querySelector('.muya-copy-button')).toHaveClass('en-code-v4-native-copy')
+    expect(document.querySelector('.muya-code-fence-hint')).toHaveClass('en-code-v4-fence-hint')
+    expect(runtime.layer.querySelector('.en-code-v4-copy')).not.toHaveClass('en-code-v4-native-copy')
+  })
 
-    const toolbar = runtime.layer.querySelector('.en-code-runtime-toolbar')
-    expect(toolbar.querySelectorAll('.en-code-runner-run')).toHaveLength(1)
-    expect(toolbar.querySelectorAll('.en-code-runner-run-icon')).toHaveLength(1)
-    expect(toolbar.querySelectorAll('.en-code-runner-copy')).toHaveLength(1)
+  it('rebinds one stable state when Muya replaces the complete block host', async() => {
+    const [firstPre] = installEditor()
+    const runtime = installExecutableCodeBlocks(window)
+    runtime.scan('initial')
+    await flush()
+    const state = [...runtime.states.values()][0]
+    const oldHost = firstPre.closest('[data-code-block]')
+    const replacement = oldHost.cloneNode(true)
+    replacement.querySelector('pre').getBoundingClientRect = firstPre.getBoundingClientRect
+
+    oldHost.replaceWith(replacement)
+    await wait(180)
+
+    expect(runtime.states.size).toBe(1)
+    expect([...runtime.states.values()][0]).toBe(state)
+    expect(runtime.layer.querySelectorAll('.en-code-v4-toolbar')).toHaveLength(1)
+  })
+
+  it('maintains one toolbar per block without duplicate scans', async() => {
+    installEditor(['print("one")', 'print("two")', 'print("three")'])
+    const runtime = installExecutableCodeBlocks(window)
+    runtime.scan('initial')
+    await wait(140)
+
+    expect(runtime.states.size).toBe(3)
+    expect(runtime.layer.querySelectorAll('.en-code-v4-toolbar')).toHaveLength(3)
+    expect(runtime.layer.querySelectorAll('.en-code-v4-run')).toHaveLength(3)
+    expect(runtime.layer.querySelectorAll('.en-code-v4-copy')).toHaveLength(3)
+    expect(runtime.metrics.scans).toBeLessThanOrEqual(2)
+  })
+
+  it('stops observing and removes all portal UI on dispose', async() => {
+    installEditor()
+    const runtime = installExecutableCodeBlocks(window)
+    runtime.scan('initial')
+    await flush()
+
+    runtime.dispose()
+    document.querySelector('.en-editor-host').append(document.createElement('pre'))
+    await wait(120)
+
+    expect(document.querySelector('.en-code-v4-layer')).toBeNull()
+    expect(window.__ELEPHANT_CODE_RUNTIME__).toBeUndefined()
   })
 })

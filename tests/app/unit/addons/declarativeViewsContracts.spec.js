@@ -13,7 +13,7 @@ describe('declarative addon workspace views', () => {
     expect(runtime).toContain("type: 'register-view'")
     expect(runtime).toContain("message.type === 'view-state'")
     expect(runtime).toContain("message.type === 'view-action'")
-    expect(runtime).toContain("this.context.addView({")
+    expect(runtime).toContain('this.context.addView({')
     expect(runtime).toContain("getState: (params) => this.request('view-state'")
     expect(runtime).toContain("dispatch: (action, params) => this.request('view-action'")
     expect(runtime).not.toContain('innerHTML')
@@ -46,12 +46,14 @@ describe('declarative addon workspace views', () => {
   })
 
   it('keeps the Things-like workflow in the installable catalogue addon', () => {
-    const workflow = read('build/scripts/test-elephant-tasks.mjs')
+    const workflow = read('build/scripts/test-elephant-tasks-v2.mjs')
     const catalogWorkflow = read('.github/workflows/addon-platform-validation.yml')
 
     expect(workflow).toContain('future start dates must stay out of Anytime')
     expect(workflow).toContain('after-completion recurrence must create a separate future occurrence')
     expect(workflow).toContain('manual Today must override a future start date')
-    expect(catalogWorkflow).toContain('test-elephant-tasks.mjs addon-catalog-source')
+    expect(workflow).toContain('Area must include tasks inherited through its Project')
+    expect(workflow).toContain('view actions must preserve the current list context')
+    expect(catalogWorkflow).toContain('test-elephant-tasks-v2.mjs addon-catalog-source')
   })
 })

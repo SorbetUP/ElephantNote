@@ -10,30 +10,35 @@ class MainActivity : TauriActivity() {
     super.onCreate(savedInstanceState)
     // Camera access is requested by the WebView only after the user taps
     // "Scan with camera" in Sync. Never interrupt application startup with it.
-    enterImmersiveMode()
+    scheduleImmersiveMode()
   }
 
   override fun onResume() {
     super.onResume()
-    enterImmersiveMode()
+    scheduleImmersiveMode()
   }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
-    if (hasFocus) enterImmersiveMode()
+    if (hasFocus) scheduleImmersiveMode()
   }
 
-  private fun enterImmersiveMode() {
+  private fun scheduleImmersiveMode() {
+    val decorView = window.decorView
+    decorView.post { enterImmersiveMode(decorView) }
+  }
+
+  private fun enterImmersiveMode(decorView: View) {
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
       window.setDecorFitsSystemWindows(false)
-      window.insetsController?.let { controller ->
+      decorView.windowInsetsController?.let { controller ->
         controller.hide(WindowInsets.Type.systemBars())
         controller.systemBarsBehavior =
           WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
       }
     } else {
       @Suppress("DEPRECATION")
-      window.decorView.systemUiVisibility =
+      decorView.systemUiVisibility =
         View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
           View.SYSTEM_UI_FLAG_FULLSCREEN or
           View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or

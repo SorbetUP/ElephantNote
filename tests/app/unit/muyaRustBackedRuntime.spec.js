@@ -12,6 +12,19 @@ const stateFor = (markdown = '') => ({
   redoStack: []
 })
 
+const textNodeContaining = (element, text = '') => {
+  const walker = element.ownerDocument.createTreeWalker(
+    element,
+    element.ownerDocument.defaultView.NodeFilter.SHOW_TEXT
+  )
+  let node = walker.nextNode()
+  while (node) {
+    if (!text || node.nodeValue?.includes(text)) return node
+    node = walker.nextNode()
+  }
+  return null
+}
+
 const replaceSelection = (state, command, continueGroup = false) => {
   const start = Math.min(state.selection.anchor, state.selection.focus)
   const end = Math.max(state.selection.anchor, state.selection.focus)
@@ -119,7 +132,8 @@ describe('Rust-backed Muya runtime', () => {
     })
     await runtime.readyPromise
 
-    const textNode = root.querySelector('p').firstChild
+    const textNode = textNodeContaining(root.querySelector('p'), 'A😀B')
+    expect(textNode).toBeTruthy()
     const range = dom.window.document.createRange()
     range.setStart(textNode, 1)
     range.setEnd(textNode, 3)
@@ -207,7 +221,7 @@ describe('Rust-backed Muya runtime', () => {
     expect(runtime.markdown).toBe('a')
   })
 
-  it('keeps the same DOM node and caret offset after native input reaches Rust', async() => {
+  it('keeps the same DOM text node and caret offset after native input reaches Rust', async() => {
     const dom = new JSDOM('<div id="editor"></div>')
     const root = dom.window.document.getElementById('editor')
     const runtime = createRustBackedMuyaFullEditorRuntime(root, 'abc', {
@@ -217,7 +231,8 @@ describe('Rust-backed Muya runtime', () => {
     await runtime.readyPromise
 
     const paragraph = root.querySelector('p')
-    const textNode = paragraph.firstChild
+    const textNode = textNodeContaining(paragraph, 'abc')
+    expect(textNode).toBeTruthy()
     textNode.nodeValue = 'axbc'
 
     const range = dom.window.document.createRange()
@@ -231,7 +246,7 @@ describe('Rust-backed Muya runtime', () => {
 
     expect(runtime.markdown).toBe('axbc')
     expect(root.querySelector('p')).toBe(paragraph)
-    expect(root.querySelector('p').firstChild).toBe(textNode)
+    expect(textNodeContaining(root.querySelector('p'), 'axbc')).toBe(textNode)
     expect(selection.anchorNode).toBe(textNode)
     expect(selection.anchorOffset).toBe(2)
   })

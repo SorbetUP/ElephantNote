@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 
 use super::muya_compat::render_muya_html;
 use super::muya_engine::{utf16_to_byte_index, MuyaEditorState};
+use super::muya_inline::parse_inlines;
 use super::muya_state::markdown_to_json_state;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -19,7 +20,7 @@ pub enum MuyaUiQuery {
 pub fn execute_ui_query(state: Option<&MuyaEditorState>, query: MuyaUiQuery) -> Result<Value, String> {
   match query {
     MuyaUiQuery::Clipboard => Ok(clipboard_payload(require_state(state)?)),
-    MuyaUiQuery::JsonState => Ok(json!(markdown_to_json_state(&require_state(state)?.markdown))),
+    MuyaUiQuery::JsonState => render_json_state(&require_state(state)?.markdown),
     MuyaUiQuery::ImageToolbar { cursor } => {
       let state = require_state(state)?;
       Ok(image_toolbar_state(&state.markdown, cursor.unwrap_or(state.selection.focus)))
@@ -37,6 +38,33 @@ pub fn execute_ui_query(state: Option<&MuyaEditorState>, query: MuyaUiQuery) -> 
 
 fn require_state(state: Option<&MuyaEditorState>) -> Result<&MuyaEditorState, String> {
   state.ok_or_else(|| "Muya UI query requires editor state".to_string())
+}
+
+fn render_json_state(markdown: &str) -> Result<Value, String> {
+  let mut value = serde_json::to_value(markdown_to_json_state(markdown))
+    .map_err(|error| format!("failed to serialize Muya render state: {error}"))?;
+
+  let Some(blocks) = value.get_mut("blocks").and_then(Value::as_array_mut) else {
+    return Err("Muya render state is missing blocks".to_string());
+  };
+
+  for block in blocks {
+    let block_type = block.get("type").and_then(Value::as_str).unwrap_or("");
+    if !matches!(
+      block_type,
+      "paragraph" | "heading" | "blockquote" | "list_item" | "task_list_item"
+    ) {
+      continue;
+    }
+    let Some(text) = block.get("text").and_then(Value::as_str) else { continue; };
+    let inline_nodes = serde_json::to_value(parse_inlines(text))
+      .map_err(|error| format!("failed to serialize Muya inline render state: {error}"))?;
+    if let Some(object) = block.as_object_mut() {
+      object.insert("inlineNodes".to_string(), inline_nodes);
+    }
+  }
+
+  Ok(value)
 }
 
 pub fn clipboard_payload(state: &MuyaEditorState) -> Value {
@@ -207,6 +235,19 @@ mod tests {
     assert_eq!(preview_descriptor("math_block", None, "x")["type"], "katex");
     assert_eq!(preview_descriptor("code_fence", Some("mermaid"), "graph TD")["type"], "diagram");
     assert_eq!(preview_descriptor("paragraph", None, "x")["type"], "none");
+  }
+
+  #[test]
+  fn json_state_query_adds_typed_inline_render_nodes_only_for_the_renderer() {
+    let state = MuyaEditorState::new(
+      "**bold** ![drawing](../../.assets/drawing.png) [docs](https://example.com)".to_string(),
+    );
+    let json_state = execute_ui_query(Some(&state), MuyaUiQuery::JsonState).unwrap();
+    let inline_nodes = json_state["blocks"][0]["inlineNodes"].as_array().unwrap();
+    assert!(inline_nodes.iter().any(|node| node["type"] == "strong"));
+    assert!(inline_nodes.iter().any(|node| node["type"] == "image"));
+    assert!(inline_nodes.iter().any(|node| node["type"] == "link"));
+    assert_eq!(json_state["blocks"][0]["children"][0]["type"], "text");
   }
 
   #[test]

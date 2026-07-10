@@ -78,15 +78,31 @@ describe('native executable fenced code blocks', () => {
     expect(styles).not.toContain('position: absolute;\n  top:')
   })
 
-  it('shows a theme-safe Copy glyph and suppresses Muya code-fence decoration', () => {
+  it('keeps Copy permanently visible and uses one continuous header background', () => {
     const styles = readStyles()
 
+    expect(styles).toContain('--en-code-header-bg:')
+    expect(styles).toContain('background: var(--en-code-header-bg) !important;')
+    expect(styles).toContain('pre.en-code-native-shell > .ag-language-input')
+    expect(styles).toContain('background: transparent !important;')
+    expect(styles).toContain('visibility: visible !important;')
+    expect(styles).toContain('opacity: 1 !important;')
+    expect(styles).toContain('pointer-events: auto !important;')
     expect(styles).toContain('pre.en-code-native-shell > .ag-code-copy > .icon::before')
     expect(styles).toContain('pre.en-code-native-shell > .ag-code-copy > .icon::after')
-    expect(styles).toContain('pre.en-code-native-shell > .ag-code-copy > .icon > .icon-inner')
-    expect(styles).toContain('display: none !important;')
+  })
+
+  it('suppresses Muya code-fence decoration and preserves real code indentation', () => {
+    const styles = readStyles()
+
     expect(styles).toContain('pre.en-code-native-shell.ag-active.ag-fence-code > code::before')
     expect(styles).toContain('content: none !important;')
+    expect(styles).toContain('pre.en-code-native-shell > code *')
+    expect(styles).toContain('white-space: pre !important;')
+    expect(styles).toContain('overflow-wrap: normal !important;')
+    expect(styles).toContain('word-break: normal !important;')
+    expect(styles).toContain('overflow-x: auto !important;')
+    expect(styles).toContain('tab-size: 4;')
   })
 
   it('keeps output state through custom-element reconnect and prunes deletion separately', () => {

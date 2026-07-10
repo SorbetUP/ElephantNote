@@ -17,19 +17,32 @@ describe('CI workflow guards', () => {
     expect(workflow.slice(checkIndex, testIndex)).toContain('cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features')
   })
 
-  it('keeps Rust formatting diagnostic while compile and tests remain blocking', () => {
-    for (const workflowPath of ['.github/workflows/ci.yml', '.github/workflows/tauri-ci.yml']) {
-      const workflow = read(workflowPath)
-      const fmtIndex = workflow.indexOf('- name: Rust formatting diagnostic')
-      const checkIndex = workflow.indexOf('cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features')
-      const testIndex = workflow.indexOf('cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features')
+  it('keeps main CI Rust formatting, compile and tests blocking in order', () => {
+    const workflow = read('.github/workflows/ci.yml')
+    const fmtIndex = workflow.indexOf('- name: Rust formatting')
+    const checkIndex = workflow.indexOf('- name: Rust check')
+    const testIndex = workflow.indexOf('- name: Rust tests')
 
-      expect(fmtIndex).toBeGreaterThan(-1)
-      expect(checkIndex).toBeGreaterThan(fmtIndex)
-      expect(testIndex).toBeGreaterThan(checkIndex)
-      expect(workflow.slice(fmtIndex, checkIndex)).toContain('continue-on-error: true')
-      expect(workflow.slice(checkIndex, testIndex)).not.toContain('continue-on-error: true')
-    }
+    expect(fmtIndex).toBeGreaterThan(-1)
+    expect(checkIndex).toBeGreaterThan(fmtIndex)
+    expect(testIndex).toBeGreaterThan(checkIndex)
+    expect(workflow.slice(fmtIndex, testIndex)).not.toContain('continue-on-error: true')
+    expect(workflow.slice(fmtIndex, checkIndex)).toContain('cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check')
+    expect(workflow.slice(checkIndex, testIndex)).toContain('cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features')
+  })
+
+  it('keeps dedicated Tauri formatting diagnostic while compile and tests remain blocking', () => {
+    const workflow = read('.github/workflows/tauri-ci.yml')
+    const fmtIndex = workflow.indexOf('- name: Rust formatting diagnostic')
+    const checkIndex = workflow.indexOf('- name: Cargo check all targets')
+    const testIndex = workflow.indexOf('- name: Cargo tests')
+
+    expect(fmtIndex).toBeGreaterThan(-1)
+    expect(checkIndex).toBeGreaterThan(fmtIndex)
+    expect(testIndex).toBeGreaterThan(checkIndex)
+    expect(workflow.slice(fmtIndex, checkIndex)).toContain('continue-on-error: true')
+    expect(workflow.slice(checkIndex, testIndex)).not.toContain('continue-on-error: true')
+    expect(workflow.slice(checkIndex, testIndex)).toContain('cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features')
   })
 
   it('keeps dependency setup resilient to stale pnpm lockfiles', () => {

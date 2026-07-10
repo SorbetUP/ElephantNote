@@ -39,6 +39,7 @@ if (!Array.isArray(catalog.addons) || catalog.addons.length === 0) fail('catalog
 const ids = new Set()
 const slugs = new Set()
 let commandCount = 0
+let viewCount = 0
 
 for (const entry of catalog.addons) {
   for (const field of ['id', 'slug', 'name', 'version', 'manifestPath', 'entryPath']) {
@@ -68,14 +69,15 @@ for (const entry of catalog.addons) {
   }
 
   const source = await fs.readFile(path.join(catalogueRoot, entryPath), 'utf8')
-  const sandbox = { self: {} }
+  const sandbox = { self: {}, Intl, Date, Math }
   vm.runInNewContext(source, sandbox, { filename: entryPath, timeout: 1_000 })
   const definition = sandbox.self.elephantAddon
   if (!definition || typeof definition.activate !== 'function') {
     fail(`${entry.id} must assign self.elephantAddon.activate`)
   }
 
-  const registered = []
+  const registeredCommands = []
+  const registeredViews = []
   const unavailable = (name) => async () => fail(`${entry.id} called ${name} during activation`)
   const api = Object.freeze({
     app: Object.freeze({ info: unavailable('app.info') }),
@@ -86,7 +88,7 @@ for (const entry of catalog.addons) {
     }),
     http: Object.freeze({ request: unavailable('http.request') }),
     storage: Object.freeze({
-      get: unavailable('storage.get'),
+      get: async () => null,
       set: unavailable('storage.set'),
       remove: unavailable('storage.remove'),
       entries: unavailable('storage.entries')
@@ -95,7 +97,17 @@ for (const entry of catalog.addons) {
       register(command) {
         if (!command?.id?.startsWith(`${entry.id}.`)) fail(`${entry.id} registered invalid command id ${command?.id}`)
         if (typeof command.run !== 'function') fail(`${command.id} has no run handler`)
-        registered.push(command)
+        registeredCommands.push(command)
+        return () => {}
+      }
+    }),
+    views: Object.freeze({
+      register(view) {
+        if (!view?.id?.startsWith(`${entry.id}.`)) fail(`${entry.id} registered invalid view id ${view?.id}`)
+        if (typeof view.kind !== 'string' || !view.kind) fail(`${view.id} has no declarative kind`)
+        if (typeof view.getState !== 'function') fail(`${view.id} has no getState handler`)
+        if (typeof view.dispatch !== 'function') fail(`${view.id} has no dispatch handler`)
+        registeredViews.push(view)
         return () => {}
       }
     })
@@ -103,13 +115,22 @@ for (const entry of catalog.addons) {
   await definition.activate(api)
 
   const declaredCommands = Array.isArray(manifest.contributes?.commands) ? manifest.contributes.commands : []
-  const registeredIds = registered.map((command) => command.id).sort()
-  const declaredIds = declaredCommands.map((command) => command.id).sort()
-  if (JSON.stringify(registeredIds) !== JSON.stringify(declaredIds)) {
+  const registeredCommandIds = registeredCommands.map((command) => command.id).sort()
+  const declaredCommandIds = declaredCommands.map((command) => command.id).sort()
+  if (JSON.stringify(registeredCommandIds) !== JSON.stringify(declaredCommandIds)) {
     fail(`${entry.id} registered commands do not match manifest contributions`)
   }
-  commandCount += registered.length
-  console.log(`[addon-catalog] ok id=${entry.id} version=${entry.version} commands=${registered.length}`)
+
+  const declaredViews = Array.isArray(manifest.contributes?.views) ? manifest.contributes.views : []
+  const registeredViewSignatures = registeredViews.map((view) => `${view.id}:${view.kind}`).sort()
+  const declaredViewSignatures = declaredViews.map((view) => `${view.id}:${view.kind}`).sort()
+  if (JSON.stringify(registeredViewSignatures) !== JSON.stringify(declaredViewSignatures)) {
+    fail(`${entry.id} registered views do not match manifest contributions`)
+  }
+
+  commandCount += registeredCommands.length
+  viewCount += registeredViews.length
+  console.log(`[addon-catalog] ok id=${entry.id} version=${entry.version} commands=${registeredCommands.length} views=${registeredViews.length}`)
 }
 
-console.log(`[addon-catalog] valid addons=${catalog.addons.length} commands=${commandCount}`)
+console.log(`[addon-catalog] valid addons=${catalog.addons.length} commands=${commandCount} views=${viewCount}`)

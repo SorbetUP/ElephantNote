@@ -8,7 +8,8 @@ use tauri::State;
 use super::commands::tauri_muya_engine_sync_document;
 use super::muya_clipboard_commands::paste_clipboard;
 use super::muya_engine::{
-    apply_command, MuyaEditorCommand, MuyaEditorState, MuyaEditorTransaction, MuyaSelection,
+    apply_command, apply_commands, MuyaEditorCommand, MuyaEditorState, MuyaEditorTransaction,
+    MuyaSelection,
 };
 use super::muya_parity::{apply_parity_command, MuyaParityCommand};
 use super::muya_ui::{execute_ui_query, MuyaUiQuery};
@@ -157,6 +158,27 @@ pub fn tauri_muya_session_paste_clipboard(
 }
 
 #[tauri::command]
+pub fn tauri_muya_session_commit_composition(
+    sessions: State<'_, MuyaEngineSessions>,
+    editor_id: String,
+    selection: MuyaSelection,
+    text: String,
+) -> Result<MuyaSessionTransaction, String> {
+    session_transaction(&sessions, &editor_id, |state| {
+        apply_commands(
+            state,
+            vec![
+                MuyaEditorCommand::SetSelection {
+                    anchor: selection.anchor,
+                    focus: selection.focus,
+                },
+                MuyaEditorCommand::ReplaceSelection { text },
+            ],
+        )
+    })
+}
+
+#[tauri::command]
 pub fn tauri_muya_session_query(
     sessions: State<'_, MuyaEngineSessions>,
     editor_id: String,
@@ -241,5 +263,28 @@ mod tests {
         assert_eq!(transaction.state.markdown, "A**bold**B");
         assert_eq!(transaction.state.undo_stack.len(), 1);
         assert_eq!(transaction.state.redo_stack.len(), 0);
+    }
+
+    #[test]
+    fn ime_commit_is_one_native_history_entry() {
+        let state = MuyaEditorState::new("A B".to_string());
+        let transaction = apply_commands(
+            state,
+            vec![
+                MuyaEditorCommand::SetSelection {
+                    anchor: 1,
+                    focus: 2,
+                },
+                MuyaEditorCommand::ReplaceSelection {
+                    text: "日本語".to_string(),
+                },
+            ],
+        )
+        .expect("composition should commit");
+
+        assert_eq!(transaction.state.markdown, "A日本語B");
+        assert_eq!(transaction.state.undo_stack.len(), 1);
+        assert_eq!(transaction.state.selection.anchor, 4);
+        assert_eq!(transaction.state.selection.focus, 4);
     }
 }

@@ -8,7 +8,7 @@ on:
       - '.github/workflows/muya-structured-validation.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: structured-rust-muya-validation
@@ -24,6 +24,9 @@ jobs:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-muya-editor-core
+          fetch-depth: 0
 
       - name: Install Linux dependencies
         shell: bash
@@ -78,3 +81,13 @@ jobs:
 
       - name: Full unit suite
         run: pnpm test:unit
+
+      - name: Record successful validation and remove temporary workflow
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name 'ElephantNote CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git rm .github/workflows/muya-structured-validation.yml
+          git commit -m 'ci: complete structured Rust Muya validation'
+          git push origin HEAD:feature/rust-muya-editor-core

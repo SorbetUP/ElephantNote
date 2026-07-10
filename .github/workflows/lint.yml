@@ -101,14 +101,14 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          pnpm exec vitest run tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js --reporter=verbose 2>&1 | tee settings-test.txt
+          Elephant/node_modules/.bin/vitest run tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js --reporter=verbose 2>&1 | tee settings-test.txt
 
       - name: Run Codex rate-limit tests
         if: always()
         shell: bash
         run: |
           set -o pipefail
-          pnpm exec vitest run tests/app/unit/codexRateLimits.spec.js --reporter=verbose 2>&1 | tee codex-limits-test.txt
+          Elephant/node_modules/.bin/vitest run tests/app/unit/codexRateLimits.spec.js --reporter=verbose 2>&1 | tee codex-limits-test.txt
 
       - name: Build Tauri frontend
         if: success()

@@ -165,15 +165,14 @@ export const createRustMuyaEngineClient = ({
   }
 
   const commitComposition = async(selection, text) => {
-    if (usesSession) {
-      throw new Error('Composition commands are not yet available on Rust-owned Muya sessions.')
-    }
     if (!state) throw new Error('Muya Rust engine must be initialized before committing composition.')
-    const transaction = await call('tauri_muya_engine_commit_composition', {
-      state,
+    const payload = {
       selection: ensureSelection(selection),
       text: String(text)
-    })
+    }
+    const transaction = usesSession
+      ? await call('tauri_muya_session_commit_composition', { editorId, ...payload })
+      : await call('tauri_muya_engine_commit_composition', { state, ...payload })
     state = ensureState(transaction?.state)
     return transaction
   }

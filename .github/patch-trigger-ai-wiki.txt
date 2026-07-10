@@ -1,2 +1,0 @@
-Trigger the one-shot AI Wiki repair workflow.
-Run focused lint diagnostics for the persisted source repair.

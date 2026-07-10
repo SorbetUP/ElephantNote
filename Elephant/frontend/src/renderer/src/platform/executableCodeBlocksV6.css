@@ -1,0 +1,347 @@
+.en-code-v6-shell {
+  position: relative !important;
+  display: block !important;
+  overflow: hidden !important;
+  border: 1px solid color-mix(in srgb, var(--en-code-v6-text, currentColor) 14%, transparent) !important;
+  border-radius: 10px !important;
+  background: var(--en-code-v6-surface, #29292c) !important;
+  color: var(--en-code-v6-text, inherit) !important;
+}
+
+.en-code-v6-shell > .en-code-v6-toolbar {
+  box-sizing: border-box;
+}
+
+.en-code-v6-toolbar {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 7px 5px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--en-code-v6-text, currentColor) 8%, transparent);
+  background: color-mix(in srgb, var(--en-code-v6-surface, #29292c) 96%, var(--en-code-v6-text, #fff) 4%);
+  color: var(--en-code-v6-text, inherit);
+  user-select: none;
+}
+
+.en-code-v6-toolbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.en-code-v6-language {
+  width: auto;
+  min-width: 96px;
+  max-width: 180px;
+  height: 28px;
+  padding: 0 28px 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--en-code-v6-text, currentColor) 72%, transparent);
+  font: 600 12px/1 var(--font-family, system-ui, sans-serif);
+  cursor: pointer;
+  outline: none;
+}
+
+.en-code-v6-language:hover,
+.en-code-v6-language:focus-visible {
+  background: color-mix(in srgb, var(--en-code-v6-text, currentColor) 8%, transparent);
+  color: var(--en-code-v6-text, currentColor);
+}
+
+.en-code-v6-copy,
+.en-code-v6-run {
+  position: relative;
+  display: inline-grid;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--en-code-v6-text, currentColor) 62%, transparent);
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, transform 90ms ease;
+}
+
+.en-code-v6-copy:hover:not(:disabled),
+.en-code-v6-run:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--en-code-v6-text, currentColor) 9%, transparent);
+  color: var(--en-code-v6-text, currentColor);
+}
+
+.en-code-v6-run:hover:not(:disabled) {
+  color: var(--en-primary, #1687ff);
+}
+
+.en-code-v6-copy:active:not(:disabled),
+.en-code-v6-run:active:not(:disabled) {
+  transform: scale(0.9);
+}
+
+.en-code-v6-copy:focus-visible,
+.en-code-v6-run:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--en-primary, #1687ff) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.en-code-v6-copy:disabled,
+.en-code-v6-run:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+.en-code-v6-copy-icon {
+  position: relative;
+  width: 13px;
+  height: 13px;
+}
+
+.en-code-v6-copy-icon::before,
+.en-code-v6-copy-icon::after {
+  content: '';
+  position: absolute;
+  box-sizing: border-box;
+  width: 8px;
+  height: 9px;
+  border: 1.4px solid currentColor;
+  border-radius: 2px;
+}
+
+.en-code-v6-copy-icon::before {
+  top: 0;
+  left: 0;
+  opacity: 0.58;
+}
+
+.en-code-v6-copy-icon::after {
+  right: 0;
+  bottom: 0;
+  background: var(--en-code-v6-surface, #29292c);
+}
+
+.en-code-v6-copy.is-copied {
+  color: #22a657;
+}
+
+.en-code-v6-run-icon {
+  width: 0;
+  height: 0;
+  margin-left: 2px;
+  border-top: 4.5px solid transparent;
+  border-bottom: 4.5px solid transparent;
+  border-left: 7px solid currentColor;
+}
+
+.en-code-v6-run.is-running,
+.en-code-v6-run.is-stopping {
+  color: #e05252;
+}
+
+.en-code-v6-run.is-running .en-code-v6-run-icon,
+.en-code-v6-run.is-stopping .en-code-v6-run-icon {
+  width: 8px;
+  height: 8px;
+  margin-left: 0;
+  border: 0;
+  border-radius: 1.5px;
+  background: currentColor;
+}
+
+.en-code-v6-run.is-stopping .en-code-v6-run-icon {
+  opacity: 0.55;
+}
+
+.en-code-v6-pre {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  margin: 0 !important;
+  overflow-x: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  scrollbar-width: thin;
+}
+
+.en-code-v6-pre > code {
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+
+.en-code-v6-output {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--en-code-v6-text, currentColor) 10%, transparent);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--en-code-v6-surface, #29292c) 96%, var(--en-code-v6-text, #fff) 4%);
+  color: var(--en-code-v6-text, inherit);
+}
+
+.en-code-v6-output[hidden] {
+  display: none !important;
+}
+
+.en-code-v6-output.is-error {
+  border-top-color: color-mix(in srgb, #e05252 55%, transparent);
+}
+
+.en-code-v6-output-header {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 8px 5px 11px;
+  border-bottom: 1px solid color-mix(in srgb, var(--en-code-v6-text, currentColor) 7%, transparent);
+}
+
+.en-code-v6-output-status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+
+.en-code-v6-output-status strong {
+  font-weight: 650;
+}
+
+.en-code-v6-status-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #22a657;
+}
+
+.en-code-v6-output.is-running .en-code-v6-status-dot {
+  background: var(--en-primary, #1687ff);
+}
+
+.en-code-v6-output.is-error .en-code-v6-status-dot {
+  background: #e05252;
+}
+
+.en-code-v6-output-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--en-code-v6-text, currentColor) 48%, transparent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.en-code-v6-output-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.en-code-v6-output-actions button {
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: color-mix(in srgb, var(--en-code-v6-text, currentColor) 58%, transparent);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.en-code-v6-output-actions button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--en-code-v6-text, currentColor) 8%, transparent);
+  color: var(--en-code-v6-text, currentColor);
+}
+
+.en-code-v6-output-actions button:disabled {
+  opacity: 0.35;
+}
+
+.en-code-v6-output-body {
+  max-height: 300px;
+  overflow: auto;
+  padding: 10px 11px 12px;
+}
+
+.en-code-v6-stream + .en-code-v6-stream {
+  margin-top: 10px;
+}
+
+.en-code-v6-stream-label {
+  margin-bottom: 4px;
+  color: color-mix(in srgb, var(--en-code-v6-text, currentColor) 44%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.en-code-v6-stream.is-error .en-code-v6-stream-label {
+  color: #e05252;
+}
+
+.en-code-v6-stream pre {
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: var(--codeFontFamily, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.en-code-v6-empty {
+  margin: 0;
+  color: color-mix(in srgb, var(--en-code-v6-text, currentColor) 52%, transparent);
+  font-size: 12px;
+}
+
+.en-code-v6-progress {
+  width: 100%;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--en-primary, #1687ff) 16%, transparent);
+}
+
+.en-code-v6-progress::after {
+  content: '';
+  display: block;
+  width: 36%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--en-primary, #1687ff);
+  animation: en-code-v6-progress 1s ease-in-out infinite alternate;
+}
+
+@keyframes en-code-v6-progress {
+  from { transform: translateX(-20%); }
+  to { transform: translateX(220%); }
+}
+
+.en-code-v6-native-language,
+.en-code-v6-native-copy,
+.en-code-v6-fence-hint,
+.en-code-v6-shell [class*='language-input' i]:not(.en-code-v6-language),
+.en-code-v6-shell [class*='copy' i]:not(.en-code-v6-copy):not(.en-code-v6-output-actions),
+.en-code-v6-shell [class*='fence' i]:not(.en-code-v6-pre),
+.en-code-v6-shell [data-function-type*='language' i]:not(.en-code-v6-language),
+.en-code-v6-shell [functiontype*='language' i]:not(.en-code-v6-language) {
+  display: none !important;
+}

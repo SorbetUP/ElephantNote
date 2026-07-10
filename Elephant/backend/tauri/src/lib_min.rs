@@ -84,6 +84,7 @@ pub fn run() {
       app.manage(state::AppState::new(&handle));
       app.manage(watcher::WatcherState::new());
       app.manage(sync::IrohSyncState::new());
+      app.manage(markdown::muya_session::MuyaEngineSessions::default());
       let sync_handle = handle.clone();
       tauri::async_runtime::spawn(async move {
         let state = sync_handle.state::<sync::IrohSyncState>();
@@ -212,6 +213,11 @@ pub fn run() {
       markdown::commands::tauri_muya_engine_apply_parity,
       markdown::commands::tauri_muya_engine_query,
       markdown::commands::tauri_muya_engine_capabilities,
+      markdown::muya_session::tauri_muya_session_create,
+      markdown::muya_session::tauri_muya_session_sync_document,
+      markdown::muya_session::tauri_muya_session_apply,
+      markdown::muya_session::tauri_muya_session_query,
+      markdown::muya_session::tauri_muya_session_close,
       tauri_extra_commands::shell_exec,
       tauri_extra_commands::tauri_notes_read,
       tauri_extra_commands::tauri_notes_write,

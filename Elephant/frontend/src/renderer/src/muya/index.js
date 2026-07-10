@@ -1,5 +1,6 @@
 export * from './runtimeFlags.js'
 export * from './selectionRuntime.js'
+export * from './markdownSelectionRuntime.js'
 export * from './jsonStateRuntime.js'
 export * from './operationsRuntime.js'
 export * from './clipboardRuntime.js'

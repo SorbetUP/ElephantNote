@@ -55,15 +55,17 @@ describe('external addon manifest contract', () => {
 })
 
 describe('built-in starter addons', () => {
-  it('ships four useful addons and one developer inspector', () => {
+  it('ships useful workflow addons, optional Calendar and one developer inspector', () => {
     expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
       'elephant.daily-notes',
       'elephant.quick-capture',
       'elephant.vault-overview',
       'elephant.addon-profiles',
+      'elephant.calendar',
       'elephant.addon-inspector'
     ])
     expect(builtinAddons.filter((addon) => addon.manifest.defaultEnabled)).toHaveLength(3)
+    expect(builtinAddons.find((addon) => addon.manifest.id === 'elephant.calendar')?.manifest.defaultEnabled).toBe(false)
   })
 
   it('registers starter actions through the same addon manager contract', async () => {
@@ -78,6 +80,7 @@ describe('built-in starter addons', () => {
     expect(manager.get('elephant.quick-capture')?.enabled).toBe(true)
     expect(manager.get('elephant.vault-overview')?.enabled).toBe(true)
     expect(manager.get('elephant.addon-profiles')?.enabled).toBe(false)
+    expect(manager.get('elephant.calendar')?.enabled).toBe(false)
     expect(manager.get('elephant.addon-inspector')?.enabled).toBe(false)
     expect(manager.getActions().map((entry) => entry.contribution.id).sort()).toEqual([
       'elephant.daily-notes.open-today',

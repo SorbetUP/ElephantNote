@@ -225,4 +225,54 @@ if count != 1:
     raise SystemExit('Unable to replace drawer CSS runtime block')
 css_path.write_text(css)
 
-print('Frontend drawer finalization complete')
+file_utils_path = root / 'Elephant/frontend/src/renderer/src/platform/tauriFileUtilsPathGuards.js'
+file_utils = file_utils_path.read_text()
+file_utils = replace_once(
+    file_utils,
+    "let androidSyncTimer = null\n",
+    "let androidSyncTimer = null\nconst ANDROID_ADVANCED_DIRTY_KEY = 'elephantnote:mobile-advanced-vault-dirty-v1'\n",
+    'SAF dirty marker constant',
+)
+file_utils = replace_once(
+    file_utils,
+    '''const scheduleAndroidTreeSync = (target) => {
+  target.clearTimeout?.(androidSyncTimer)
+  androidSyncTimer = target.setTimeout?.(() => {
+    invoke(target, 'tauri_android_vault_sync').catch((error) => {
+      if (!/unavailable|not configured/i.test(String(error?.message || error))) {
+        console.warn('[tauri:file-utils] Android tree synchronization failed', error)
+      }
+    })
+  }, 180)
+}
+''',
+    '''const scheduleAndroidTreeSync = (target) => {
+  try {
+    target.localStorage?.setItem(ANDROID_ADVANCED_DIRTY_KEY, '1')
+  } catch {
+    // The native shadow remains intact even if WebView storage is constrained.
+  }
+  target.dispatchEvent?.(new CustomEvent('elephantnote:vault-mutated'))
+  target.clearTimeout?.(androidSyncTimer)
+  androidSyncTimer = target.setTimeout?.(() => {
+    invoke(target, 'tauri_android_vault_sync')
+      .then(() => {
+        try {
+          target.localStorage?.removeItem(ANDROID_ADVANCED_DIRTY_KEY)
+        } catch {
+          // Ignore constrained WebView storage.
+        }
+      })
+      .catch((error) => {
+        if (!/unavailable|not configured/i.test(String(error?.message || error))) {
+          console.warn('[tauri:file-utils] Android tree synchronization failed', error)
+        }
+      })
+  }, 180)
+}
+''',
+    'SAF dirty synchronization',
+)
+file_utils_path.write_text(file_utils)
+
+print('Frontend Android finalization complete')

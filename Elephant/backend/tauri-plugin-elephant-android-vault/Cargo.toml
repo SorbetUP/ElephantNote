@@ -9,5 +9,5 @@ tauri-plugin = { version = "2", features = ["build"] }
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-tauri = "2"
+tauri = { version = "2", default-features = false }
 thiserror = "2"

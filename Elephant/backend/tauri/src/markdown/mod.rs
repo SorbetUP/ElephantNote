@@ -30,6 +30,9 @@ mod editor_parity_tests;
 mod muya_edge_parity_tests;
 
 #[cfg(test)]
+mod muya_shared_parity_tests;
+
+#[cfg(test)]
 mod muya_snapshot_basic_tests;
 
 #[cfg(test)]

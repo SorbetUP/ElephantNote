@@ -72,6 +72,15 @@ const createStructuredInvoke = () => {
       }
       return { state: view(state), documentChanged: true, selectionChanged: false }
     }
+    if (command === 'tauri_muya_session_paste_clipboard') {
+      state = {
+        ...state,
+        markdown: `${state.markdown}\n**${payload.text}**`,
+        revision: state.revision + 1,
+        undoDepth: state.undoDepth + 1
+      }
+      return { state: view(state), documentChanged: true, selectionChanged: true }
+    }
     if (command === 'tauri_muya_session_query') {
       return { type: 'muya-json-state', blocks: [{ type: 'table' }] }
     }
@@ -81,7 +90,7 @@ const createStructuredInvoke = () => {
 }
 
 describe('structured operations on the Rust-owned Muya session', () => {
-  it('routes table, image/text and footnote mutations through session parity IPC', async() => {
+  it('routes tables, images, footnotes and rich paste through native session IPC', async() => {
     const invoke = createStructuredInvoke()
     const mirror = createRealMuyaRustMirror({
       initialMarkdown: '| A | B |\n| - | - |\n| 1 | 2 |',
@@ -94,6 +103,7 @@ describe('structured operations on the Rust-owned Muya session', () => {
     await mirror.tableCommand('insert_row', 1)
     await mirror.applyOperation({ type: 'insert', pos: 0, count: 0, text: 'Intro\n' })
     await mirror.upsertFootnote('note', '')
+    await mirror.pasteClipboard('<strong>rich</strong>', 'rich')
 
     const parityCalls = invoke.mock.calls.filter(([command]) => (
       command === 'tauri_muya_session_apply_parity'
@@ -108,7 +118,12 @@ describe('structured operations on the Rust-owned Muya session', () => {
       expect(payload.state).toBeUndefined()
       expect(payload.undoStack).toBeUndefined()
     }
-    expect(mirror.status.undoDepth).toBe(3)
+    expect(invoke).toHaveBeenCalledWith('tauri_muya_session_paste_clipboard', {
+      editorId: mirror.sessionId,
+      html: '<strong>rich</strong>',
+      text: 'rich'
+    })
+    expect(mirror.status.undoDepth).toBe(4)
   })
 
   it('hooks the original Muya content state instead of replacing its DOM renderer', () => {
@@ -119,9 +134,11 @@ describe('structured operations on the Rust-owned Muya session', () => {
     expect(adapter).toContain('this.contentState.updateImage =')
     expect(adapter).toContain('this.contentState.deleteImage =')
     expect(adapter).toContain('this.contentState.createFootnote =')
+    expect(adapter).toContain('this.contentState.pasteHandler =')
     expect(adapter).toContain("engine.tableCommand(context.action, context.index)")
     expect(adapter).toContain('engine.applyOperation(mutation.operation)')
     expect(adapter).toContain("engine.upsertFootnote(label, '')")
+    expect(adapter).toContain('engine.pasteClipboard(html, text)')
     expect(adapter).not.toContain('innerHTML')
     expect(adapter).not.toContain('createElement')
   })

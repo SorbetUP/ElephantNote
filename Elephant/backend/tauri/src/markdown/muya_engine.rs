@@ -172,7 +172,7 @@ fn apply_redo(state: &mut MuyaEditorState) {
 }
 
 fn push_history(stack: &mut Vec<MuyaEditorSnapshot>, snapshot: MuyaEditorSnapshot) {
-  if stack.len() == MAX_HISTORY_ENTRIES {
+  while stack.len() >= MAX_HISTORY_ENTRIES {
     stack.remove(0);
   }
   stack.push(snapshot);
@@ -230,33 +230,36 @@ fn toggle_inline(state: &mut MuyaEditorState, marker: &str) -> Result<(), String
   let start_utf16 = selection.start();
   let start_byte = utf16_to_byte_index(&state.markdown, start_utf16);
   let end_byte = utf16_to_byte_index(&state.markdown, selection.end());
+  let marker_utf16 = utf16_len(marker);
 
   if selection.is_collapsed() {
     let pair = format!("{marker}{marker}");
     state.markdown.insert_str(start_byte, &pair);
-    state.selection = MuyaSelection::collapsed(start_utf16 + utf16_len(marker));
+    state.selection = MuyaSelection::collapsed(start_utf16 + marker_utf16);
+    return Ok(());
+  }
+
+  if start_byte >= marker.len()
+    && end_byte + marker.len() <= state.markdown.len()
+    && &state.markdown[start_byte - marker.len()..start_byte] == marker
+    && &state.markdown[end_byte..end_byte + marker.len()] == marker
+  {
+    state.markdown.replace_range(end_byte..end_byte + marker.len(), "");
+    state.markdown.replace_range(start_byte - marker.len()..start_byte, "");
+    state.selection = MuyaSelection {
+      anchor: start_utf16.saturating_sub(marker_utf16),
+      focus: selection.end().saturating_sub(marker_utf16),
+    };
     return Ok(());
   }
 
   let selected = state.markdown[start_byte..end_byte].to_string();
-  if selected.starts_with(marker)
-    && selected.ends_with(marker)
-    && selected.len() >= marker.len() * 2
-  {
-    let unwrapped = &selected[marker.len()..selected.len() - marker.len()];
-    state.markdown.replace_range(start_byte..end_byte, unwrapped);
-    state.selection = MuyaSelection {
-      anchor: start_utf16,
-      focus: start_utf16 + utf16_len(unwrapped),
-    };
-  } else {
-    let wrapped = format!("{marker}{selected}{marker}");
-    state.markdown.replace_range(start_byte..end_byte, &wrapped);
-    state.selection = MuyaSelection {
-      anchor: start_utf16 + utf16_len(marker),
-      focus: start_utf16 + utf16_len(marker) + utf16_len(&selected),
-    };
-  }
+  let wrapped = format!("{marker}{selected}{marker}");
+  state.markdown.replace_range(start_byte..end_byte, &wrapped);
+  state.selection = MuyaSelection {
+    anchor: start_utf16 + marker_utf16,
+    focus: start_utf16 + marker_utf16 + utf16_len(&selected),
+  };
   Ok(())
 }
 
@@ -271,10 +274,16 @@ fn transform_current_block(state: &mut MuyaEditorState, kind: &str) -> Result<()
   let clean = strip_block_prefix(content);
   let prefix = block_prefix(kind)?;
   let replacement = format!("{indentation}{prefix}{clean}");
+
   let original_cursor_in_line = cursor_byte.saturating_sub(line_start);
+  let old_clean_start = indentation.len() + content.len().saturating_sub(clean.len());
+  let cursor_in_clean = original_cursor_in_line
+    .saturating_sub(old_clean_start)
+    .min(clean.len());
+  let requested_cursor = line_start + indentation.len() + prefix.len() + cursor_in_clean;
 
   state.markdown.replace_range(line_start..line_end, &replacement);
-  let new_cursor_byte = line_start + original_cursor_in_line.min(replacement.len());
+  let new_cursor_byte = previous_char_boundary(&state.markdown, requested_cursor);
   let cursor_utf16 = byte_to_utf16_index(&state.markdown, new_cursor_byte);
   state.selection = MuyaSelection::collapsed(cursor_utf16);
   Ok(())
@@ -298,7 +307,7 @@ fn strip_block_prefix(line: &str) -> &str {
   let heading_markers = trimmed.chars().take_while(|character| *character == '#').count();
   if (1..=6).contains(&heading_markers) {
     if let Some(rest) = trimmed.get(heading_markers..) {
-      if rest.starts_with(char::is_whitespace) {
+      if rest.chars().next().is_some_and(char::is_whitespace) {
         return rest.trim_start();
       }
     }
@@ -360,13 +369,16 @@ pub fn utf16_to_byte_index(value: &str, utf16_index: usize) -> usize {
 }
 
 pub fn byte_to_utf16_index(value: &str, byte_index: usize) -> usize {
-  let safe_byte_index = value
-    .char_indices()
-    .map(|(index, _)| index)
-    .take_while(|index| *index <= byte_index.min(value.len()))
-    .last()
-    .unwrap_or(0);
+  let safe_byte_index = previous_char_boundary(value, byte_index);
   value[..safe_byte_index].encode_utf16().count()
+}
+
+fn previous_char_boundary(value: &str, byte_index: usize) -> usize {
+  let mut safe = byte_index.min(value.len());
+  while safe > 0 && !value.is_char_boundary(safe) {
+    safe -= 1;
+  }
+  safe
 }
 
 fn clamp_selection(markdown: &str, selection: MuyaSelection) -> MuyaSelection {
@@ -386,6 +398,18 @@ mod tests {
   }
 
   #[test]
+  fn converts_offsets_at_start_middle_and_end() {
+    let text = "A😀B";
+    assert_eq!(utf16_to_byte_index(text, 0), 0);
+    assert_eq!(utf16_to_byte_index(text, 1), 1);
+    assert_eq!(utf16_to_byte_index(text, 3), 5);
+    assert_eq!(utf16_to_byte_index(text, 4), 6);
+    assert_eq!(byte_to_utf16_index(text, 0), 0);
+    assert_eq!(byte_to_utf16_index(text, 5), 3);
+    assert_eq!(byte_to_utf16_index(text, text.len()), 4);
+  }
+
+  #[test]
   fn inserts_at_javascript_utf16_offsets() {
     let mut state = MuyaEditorState::new("A😀B".to_string());
     state.selection = MuyaSelection::collapsed(3);
@@ -399,6 +423,15 @@ mod tests {
     let mut state = MuyaEditorState::new("A😀B".to_string());
     state.selection = MuyaSelection::collapsed(3);
     let state = apply(state, MuyaEditorCommand::DeleteBackward);
+    assert_eq!(state.markdown, "AB");
+    assert_eq!(state.selection, MuyaSelection::collapsed(1));
+  }
+
+  #[test]
+  fn forward_delete_removes_a_complete_unicode_scalar() {
+    let mut state = MuyaEditorState::new("A😀B".to_string());
+    state.selection = MuyaSelection::collapsed(1);
+    let state = apply(state, MuyaEditorCommand::DeleteForward);
     assert_eq!(state.markdown, "AB");
     assert_eq!(state.selection, MuyaSelection::collapsed(1));
   }
@@ -433,6 +466,9 @@ mod tests {
     let state = apply(state, MuyaEditorCommand::ToggleInline { marker: "**".to_string() });
     assert_eq!(state.markdown, "**hello**");
     assert_eq!(state.selection, MuyaSelection { anchor: 2, focus: 7 });
+    let state = apply(state, MuyaEditorCommand::ToggleInline { marker: "**".to_string() });
+    assert_eq!(state.markdown, "hello");
+    assert_eq!(state.selection, MuyaSelection { anchor: 0, focus: 5 });
   }
 
   #[test]
@@ -458,6 +494,16 @@ mod tests {
     state.selection = MuyaSelection::collapsed(4);
     let state = apply(state, MuyaEditorCommand::TransformBlock { kind: "quote".to_string() });
     assert_eq!(state.markdown, "> task");
+  }
+
+  #[test]
+  fn keeps_end_cursor_at_end_after_block_transform() {
+    let state = apply(
+      MuyaEditorState::new("Title".to_string()),
+      MuyaEditorCommand::TransformBlock { kind: "heading1".to_string() },
+    );
+    assert_eq!(state.markdown, "# Title");
+    assert_eq!(state.selection, MuyaSelection::collapsed(7));
   }
 
   #[test]

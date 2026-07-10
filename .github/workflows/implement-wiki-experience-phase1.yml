@@ -27,9 +27,11 @@ jobs:
       - name: Apply implementation
         shell: bash
         run: |
-          git fetch origin feature/wiki-knowledge-continuation
-          git show origin/feature/wiki-knowledge-continuation:.github/scripts/implement_wiki_experience_phase1.py > /tmp/impl.py
-          python3 - <<'PY'
+          set +e
+          {
+            git fetch origin feature/wiki-knowledge-continuation
+            git show origin/feature/wiki-knowledge-continuation:.github/scripts/implement_wiki_experience_phase1.py > /tmp/impl.py
+            python3 - <<'PY'
           from pathlib import Path
           p = Path('/tmp/impl.py')
           text = p.read_text()
@@ -51,9 +53,22 @@ jobs:
               raise SystemExit('Could not patch the generate-specific WikiView replacement')
           p.write_text(text.replace(old, new, 1))
           PY
-          python3 /tmp/impl.py
-          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+            python3 /tmp/impl.py
+            cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+            cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+          } > /tmp/phase1-apply.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/phase1-apply.log
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/phase1-apply.log .github/wiki-experience-phase1-error.txt
+            git config user.name "ElephantNote Bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add .github/wiki-experience-phase1-error.txt
+            git commit -m "Record Wiki experience patch failure"
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Install Tauri system dependencies
@@ -73,6 +88,7 @@ jobs:
         run: |
           git config user.name "ElephantNote Bot"
           git config user.email "actions@users.noreply.github.com"
+          rm -f .github/wiki-experience-phase1-error.txt
           git add Elephant/backend/knowledge-core/src/wiki_core.rs \
             Elephant/backend/knowledge-core/src/wiki_graph_projection.rs \
             Elephant/backend/tauri/src/chat_runtime.rs \
@@ -80,6 +96,7 @@ jobs:
             Elephant/backend/tauri/src/knowledge_wikis.rs \
             Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
             Elephant/frontend/app/components/views/ChatView.vue \
-            Elephant/frontend/app/components/views/WikiView.vue
+            Elephant/frontend/app/components/views/WikiView.vue \
+            .github/wiki-experience-phase1-error.txt
           git commit -m "Implement functional Wiki previews, links and refresh"
           git push origin HEAD:${{ github.head_ref }}

@@ -91,6 +91,8 @@ export const createRealMuyaRustMirror = ({
       flush: async() => status,
       undo: async() => null,
       redo: async() => null,
+      toggleInline: async() => null,
+      transformBlock: async() => null,
       destroy: () => {}
     }
   }
@@ -100,7 +102,7 @@ export const createRealMuyaRustMirror = ({
   let initialized = false
   let pending = null
   let draining = null
-  let historyQueue = Promise.resolve()
+  let commandQueue = Promise.resolve()
   let lastValidatedMarkdown = null
   let lastValidatedSelection = null
 
@@ -224,21 +226,22 @@ export const createRealMuyaRustMirror = ({
     return status
   }
 
-  const applyHistory = (action) => {
-    historyQueue = historyQueue.then(async() => {
+  const applyCommand = (reason, operation) => {
+    commandQueue = commandQueue.then(async() => {
       await flush()
       if (destroyed || !initialized) return null
-      const transaction = action === 'undo' ? await client.undo() : await client.redo()
-      await refreshStatus(`rust-${action}`)
-      logger.info?.(`[elephantnote:muya-rust] ${action}`, {
+      const transaction = await operation(client)
+      await refreshStatus(reason)
+      logger.info?.(`[elephantnote:muya-rust] ${reason}`, {
         documentChanged: Boolean(transaction.documentChanged),
+        selectionChanged: Boolean(transaction.selectionChanged),
         revision: status.revision,
         undoDepth: status.undoDepth,
         redoDepth: status.redoDepth
       })
       return transaction
     })
-    return historyQueue
+    return commandQueue
   }
 
   const ready = reset(initialMarkdown, 'initial')
@@ -255,8 +258,16 @@ export const createRealMuyaRustMirror = ({
     sync,
     reset,
     flush,
-    undo: () => applyHistory('undo'),
-    redo: () => applyHistory('redo'),
+    undo: () => applyCommand('rust-undo', (engine) => engine.undo()),
+    redo: () => applyCommand('rust-redo', (engine) => engine.redo()),
+    toggleInline: (marker) => applyCommand(
+      `rust-inline-${String(marker)}`,
+      (engine) => engine.toggleInline(String(marker))
+    ),
+    transformBlock: (kind) => applyCommand(
+      `rust-block-${String(kind)}`,
+      (engine) => engine.transformBlock(String(kind))
+    ),
     get state() {
       return client.state
     },

@@ -1,0 +1,28 @@
+{
+  "id": "com.elephantnote.writing-statistics",
+  "name": "Writing Statistics",
+  "version": "1.0.0",
+  "description": "Measures words, characters, reading time and recent writing activity across the visible vault.",
+  "author": "ElephantNote",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": { "type": "javascript-worker", "entry": "main.js" },
+  "permissions": {
+    "commands": true,
+    "storage": true,
+    "notes": {
+      "read": ["*"],
+      "write": ["Reports/Writing Statistics.md"]
+    },
+    "network": { "hosts": [] }
+  },
+  "activationEvents": ["onStartup"],
+  "contributes": {
+    "commands": [
+      {
+        "id": "com.elephantnote.writing-statistics.generate",
+        "title": "Generate writing statistics"
+      }
+    ]
+  }
+}

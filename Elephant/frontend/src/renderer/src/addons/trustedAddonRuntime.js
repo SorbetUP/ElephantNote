@@ -1,4 +1,5 @@
 import { ADDON_ACCESS_LEVEL, getAddonAccessLevel } from './manifest'
+import { beginTrustedActivation, clearTrustedActivationMarker } from './trustedAddonBootGuard'
 
 const COMMUNITY_ADDONS_PREF_KEY = 'addons.communityEnabled'
 const TRUSTED_SAFE_MODE_PREF_KEY = 'addons.trustedSafeMode'
@@ -318,11 +319,14 @@ export const createTrustedAddonDefinition = (record, logger) => {
         throw error
       }
 
+      beginTrustedActivation(record)
       session = new TrustedAddonSession(record, logger)
       try {
         await session.start(context)
+        clearTrustedActivationMarker()
         await invoke('tauri_addons_set_enabled', { addonId: record.manifest.id, enabled: true })
       } catch (error) {
+        clearTrustedActivationMarker()
         await session.stop().catch(() => {})
         session = null
         await invoke('tauri_addons_set_enabled', { addonId: record.manifest.id, enabled: false }).catch(() => {})

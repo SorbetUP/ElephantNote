@@ -11,7 +11,10 @@ pub fn paste_clipboard(
     text: String,
 ) -> Result<MuyaEditorTransaction, String> {
     let markdown = clipboard_payload_to_markdown(&html, &text);
-    apply_command(state, MuyaEditorCommand::ReplaceSelection { text: markdown })
+    apply_command(
+        state,
+        MuyaEditorCommand::ReplaceSelection { text: markdown },
+    )
 }
 
 #[tauri::command]
@@ -65,12 +68,9 @@ mod tests {
     #[test]
     fn plain_text_paste_preserves_line_breaks() {
         let state = MuyaEditorState::new(String::new());
-        let value = tauri_muya_engine_paste_clipboard(
-            state,
-            String::new(),
-            "line 1\nline 2".to_string(),
-        )
-        .unwrap();
+        let value =
+            tauri_muya_engine_paste_clipboard(state, String::new(), "line 1\nline 2".to_string())
+                .unwrap();
         assert_eq!(value["state"]["markdown"], "line 1\nline 2");
     }
 

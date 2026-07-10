@@ -28,40 +28,30 @@ jobs:
           path = Path('Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs')
           text = path.read_text()
 
-          old_channel = 'let (events, _) = broadcast::channel(256);'
-          new_channel = 'let (events, _) = broadcast::channel(2048);'
-
-          old_subscription = '''    let thread = client
+          replacements = [
+              ('let (events, _) = broadcast::channel(256);', 'let (events, _) = broadcast::channel(2048);', 'broadcast channel'),
+              ('''    let thread = client
         .request(
-            "thread/start",'''
-          new_subscription = '''    // Subscribe before thread/start so no auto-subscription event can race past us.
+            "thread/start",''', '''    // Subscribe before thread/start so no auto-subscription event can race past us.
     let mut events = client.subscribe();
     let thread = client
         .request(
-            "thread/start",'''
-
-          old_thread_payload = '''              "approvalPolicy": "never",
+            "thread/start",''', 'early subscription'),
+              ('''              "approvalPolicy": "never",
               "sandbox": READ_ONLY_SANDBOX,
-              "serviceName": "elephantnote"'''
-          new_thread_payload = '''              "approvalPolicy": "never",
+              "serviceName": "elephantnote"''', '''              "approvalPolicy": "never",
               "sandbox": READ_ONLY_SANDBOX,
               "serviceName": "elephantnote",
               "ephemeral": true,
               "config": {
                 "mcp_servers": {}
-              }'''
-
-          old_second_subscription = '''
-    let mut events = client.subscribe();
-    let turn = client'''
-          new_second_subscription = '''
-    let turn = client'''
-
-          old_event_receive = '''        let event = timeout(TURN_TIMEOUT, events.recv())
+              }''', 'isolated thread payload'),
+              ('''\n    let mut events = client.subscribe();
+    let turn = client''', '''\n    let turn = client''', 'duplicate subscription removal'),
+              ('''        let event = timeout(TURN_TIMEOUT, events.recv())
             .await
             .map_err(|_| "Codex generation timed out.".to_string())?
-            .map_err(|error| format!("Codex event stream closed: {error}"))?;'''
-          new_event_receive = '''        let event = match timeout(TURN_TIMEOUT, events.recv()).await {
+            .map_err(|error| format!("Codex event stream closed: {error}"))?;''', '''        let event = match timeout(TURN_TIMEOUT, events.recv()).await {
             Err(_) => {
                 let _ = client
                     .request("turn/interrupt", json!({ "threadId": thread_id, "turnId": turn_id }))
@@ -76,14 +66,7 @@ jobs:
             Ok(Err(broadcast::error::RecvError::Closed)) => {
                 return Err("Codex event stream closed before turn/completed.".to_string());
             }
-        };'''
-
-          replacements = [
-              (old_channel, new_channel, 'broadcast channel'),
-              (old_subscription, new_subscription, 'early subscription'),
-              (old_thread_payload, new_thread_payload, 'isolated thread payload'),
-              (old_second_subscription, new_second_subscription, 'duplicate subscription removal'),
-              (old_event_receive, new_event_receive, 'event receive handling'),
+        };''', 'event receive handling'),
           ]
           for old, new, label in replacements:
               count = text.count(old)
@@ -91,18 +74,6 @@ jobs:
                   raise SystemExit(f'{label}: expected 1 occurrence, found {count}')
               text = text.replace(old, new, 1)
 
-          path.write_text(text)
-          PY
-
-      - name: Add focused contract tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-
-          path = Path('Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs')
-          text = path.read_text()
           marker = '''    #[test]
     fn reads_delta_text() {'''
           insertion = '''    #[test]
@@ -140,12 +111,13 @@ jobs:
           cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
           cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features chat_runtime::codex_app_server::tests
 
-      - name: Remove temporary workflow and commit
+      - name: Remove temporary files and commit
         shell: bash
         run: |
+          rm -f .github/codex-chat-hang-trigger
           rm .github/workflows/fix-codex-chat-hang.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs .github/workflows/fix-codex-chat-hang.yml
+          git add -A
           git commit -m "Isolate Codex chat from inherited MCP servers"
           git push origin HEAD:feature/real-codex-subscription

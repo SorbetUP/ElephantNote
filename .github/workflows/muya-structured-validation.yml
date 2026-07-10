@@ -72,8 +72,11 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          workflow=.github/workflows/muya-structured-validation.yml
+          mv "$workflow" /tmp/muya-structured-validation.yml
           pnpm security:guard 2>&1 | tee /tmp/security.txt
           status=${PIPESTATUS[0]}
+          mv /tmp/muya-structured-validation.yml "$workflow"
           tail -n 300 /tmp/security.txt > .github/validation/security.txt
           exit "$status"
 

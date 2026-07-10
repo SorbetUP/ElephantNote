@@ -155,11 +155,28 @@ jobs:
             tests/app/unit/muyaFullEditorRuntime.spec.js \
             tests/app/unit/muyaRuntimeInputParity.spec.js 2>&1 | tee muya-renderer-tests.log
 
+      - name: Build Tauri renderer with Rust-owned Muya
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm tauri:web:build 2>&1 | tee muya-renderer-build.log
+
+      - name: Verify Rust-owned Muya code is shipped
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -d build/out/renderer
+          grep -R -F -q 'muya-ui-rust-core' build/out/renderer
+          grep -R -F -q 'real Muya UI with Rust-owned core active' build/out/renderer
+          grep -R -F -q 'JavaScript fallback is disabled' build/out/renderer
+
       - name: Upload renderer diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: muya-renderer-diagnostics-${{ github.run_id }}
-          path: muya-renderer-tests.log
+          path: |
+            muya-renderer-tests.log
+            muya-renderer-build.log
           if-no-files-found: warn
           retention-days: 14

@@ -59,9 +59,9 @@ impl From<&MuyaEditorTransaction> for MuyaSessionTransaction {
 fn validate_editor_id(editor_id: &str) -> Result<(), String> {
   let valid = !editor_id.is_empty()
     && editor_id.len() <= 128
-    && editor_id
-      .chars()
-      .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | ':'));
+    && editor_id.chars().all(|character| {
+      character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | ':')
+    });
   if valid {
     Ok(())
   } else {
@@ -161,10 +161,12 @@ mod tests {
   #[test]
   fn session_state_exposes_depths_without_serializing_history() {
     let mut state = MuyaEditorState::new("hello".to_string());
-    state.undo_stack.push(super::super::muya_engine::MuyaEditorSnapshot {
-      markdown: String::new(),
-      selection: MuyaSelection::collapsed(0),
-    });
+    state
+      .undo_stack
+      .push(super::super::muya_engine::MuyaEditorSnapshot {
+        markdown: String::new(),
+        selection: MuyaSelection::collapsed(0),
+      });
     let view = MuyaSessionState::from(&state);
     let json = serde_json::to_value(view).expect("session view should serialize");
 

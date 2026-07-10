@@ -72,7 +72,7 @@ const findLanguageControl = (host, pre, language) => {
 const findNativeCopyControl = (host, pre) => nearbyElements(host, pre).find((element) => {
   if (isRuntimeElement(element)) return false
   const className = String(element.className || '').toLowerCase()
-  if (className.includes('en-code-runner-') || className.includes('en-code-runtime-')) return false
+  if (className.includes('en-code-runner-')) return false
   const label = `${element.getAttribute?.('aria-label') || ''} ${element.getAttribute?.('title') || ''}`.toLowerCase()
   if (!element.matches?.('button, [role="button"], [tabindex]') && !className.includes('copy')) return false
   return className.includes('copy') || label.includes('copy')

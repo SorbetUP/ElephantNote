@@ -33,11 +33,11 @@ jobs:
           set +e
           python3 <<'PY' > /tmp/patch-ai-wiki.log 2>&1
           from pathlib import Path
-          import textwrap
           workflow = Path('.github/workflows/patch-ai-wiki-codex-once.yml').read_text()
           marker = "          python3 <<'PY'\n"
           source = workflow.split(marker, 1)[1].split("\n          PY", 1)[0]
-          exec(compile(textwrap.dedent(source), 'patch-ai-wiki-codex-once', 'exec'))
+          source = "\n".join(line[10:] if line.startswith("          ") else line for line in source.splitlines())
+          exec(compile(source, 'patch-ai-wiki-codex-once', 'exec'))
           PY
           status=$?
           set -e

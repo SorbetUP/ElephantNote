@@ -60,9 +60,10 @@ export const dailyNotesAddon = {
       title: "Open today's daily note",
       description: 'Create Daily/YYYY-MM-DD.md when missing, otherwise open the existing note.',
       async run() {
-        const now = localDateParts()
-        const yesterday = offsetLocalDate(-1)
-        const tomorrow = offsetLocalDate(1)
+        const anchor = new Date()
+        const now = localDateParts(anchor)
+        const yesterday = offsetLocalDate(-1, anchor)
+        const tomorrow = offsetLocalDate(1, anchor)
         const path = `Daily/${now.date}.md`
         logAction(ctx, 'daily-note:start', { path })
         const result = await createNoteIfMissing(path, dailyNoteMarkdown(now, yesterday, tomorrow))

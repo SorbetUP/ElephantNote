@@ -1,5 +1,5 @@
-export const ADDON_API_VERSION = 2
-export const SUPPORTED_ADDON_API_VERSIONS = Object.freeze([1, 2])
+export const ADDON_API_VERSION = 1
+export const SUPPORTED_ADDON_API_VERSIONS = Object.freeze([1])
 
 export const ADDON_ACCESS_LEVEL = Object.freeze({
   isolated: 'isolated',
@@ -105,7 +105,7 @@ export const normalizeAddonManifest = (manifest = {}) => {
 
   const apiVersion = Number.isInteger(manifest.apiVersion)
     ? manifest.apiVersion
-    : 1
+    : ADDON_API_VERSION
 
   if (!SUPPORTED_ADDON_API_VERSIONS.includes(apiVersion)) {
     throw new Error(`Unsupported addon apiVersion ${apiVersion}`)

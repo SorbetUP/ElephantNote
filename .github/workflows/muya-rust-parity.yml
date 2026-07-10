@@ -1,6 +1,17 @@
 name: Muya Rust Parity
 
 on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'assistant/**'
+    paths:
+      - 'Elephant/backend/tauri/src/markdown/**'
+      - 'Elephant/backend/tauri/src/lib_min.rs'
+      - 'Elephant/frontend/src/renderer/src/muya/**'
+      - 'Elephant/shared/muyaParityCases.json'
+      - 'tests/app/unit/muya*.spec.js'
+      - '.github/workflows/muya-rust-parity.yml'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:

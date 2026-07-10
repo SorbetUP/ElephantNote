@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::State;
 
@@ -16,6 +16,13 @@ use super::muya_surface::{apply_surface_command, MuyaSurfaceCommand};
 use super::muya_ui::{execute_ui_query, MuyaUiQuery};
 
 const HISTORY_LIMIT: usize = 100;
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(untagged)]
+pub enum MuyaSessionMutation {
+    Complete(MuyaCompleteCommand),
+    Surface(MuyaSurfaceCommand),
+}
 
 #[derive(Default)]
 pub struct MuyaEngineSessions {
@@ -203,21 +210,11 @@ pub fn tauri_muya_session_apply_parity(
 pub fn tauri_muya_session_apply_complete(
     sessions: State<'_, MuyaEngineSessions>,
     editor_id: String,
-    command: MuyaCompleteCommand,
+    command: MuyaSessionMutation,
 ) -> Result<MuyaSessionTransaction, String> {
-    session_transaction(&sessions, &editor_id, |state| {
-        apply_complete_command(state, command)
-    })
-}
-
-#[tauri::command]
-pub fn tauri_muya_session_apply_surface(
-    sessions: State<'_, MuyaEngineSessions>,
-    editor_id: String,
-    command: MuyaSurfaceCommand,
-) -> Result<MuyaSessionTransaction, String> {
-    session_transaction(&sessions, &editor_id, |state| {
-        apply_surface_command(state, command)
+    session_transaction(&sessions, &editor_id, |state| match command {
+        MuyaSessionMutation::Complete(command) => apply_complete_command(state, command),
+        MuyaSessionMutation::Surface(command) => apply_surface_command(state, command),
     })
 }
 

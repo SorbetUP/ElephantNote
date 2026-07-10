@@ -18,6 +18,7 @@ pub mod local_llama_runtime;
 pub mod chat_runtime;
 pub mod search_logic;
 
+mod android_vault_commands;
 mod tauri_extra_commands;
 mod debug_commands;
 mod sync_commands;
@@ -70,10 +71,14 @@ fn tauri_platform_info() -> serde_json::Value {
 pub fn run() {
   let builder = tauri::Builder::default()
     .plugin(tauri_plugin_fs::init())
+    .plugin(tauri_plugin_elephant_android_vault::init())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_notification::init());
+
+  #[cfg(mobile)]
+  let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
 
   #[cfg(not(mobile))]
   let builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
@@ -96,6 +101,10 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       healthcheck,
       tauri_platform_info,
+      android_vault_commands::tauri_android_vault_pick,
+      android_vault_commands::tauri_android_vault_restore,
+      android_vault_commands::tauri_android_vault_sync,
+      android_vault_commands::tauri_android_vault_clear,
       sync_commands::iroh_sync_create_invite,
       sync_commands::iroh_sync_accept_invite,
       sync_commands::iroh_sync_status,
@@ -204,6 +213,11 @@ pub fn run() {
       markdown::commands::tauri_muya_cancel_composition,
       markdown::commands::tauri_muya_editor_snapshot,
       tauri_extra_commands::shell_exec,
+      tauri_extra_commands::tauri_vault_read_binary,
+      tauri_extra_commands::tauri_vault_write_binary,
+      tauri_extra_commands::tauri_vault_ensure_dir,
+      tauri_extra_commands::tauri_vault_remove_path,
+      tauri_extra_commands::tauri_vault_rename_path,
       tauri_extra_commands::tauri_notes_read,
       tauri_extra_commands::tauri_notes_write,
       tauri_extra_commands::tauri_marktext_write_file,

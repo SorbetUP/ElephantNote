@@ -76,6 +76,8 @@ for (const file of [
   'Elephant/shared/apiContractsRuntime.js',
   'Elephant/shared/sync.js',
   'Elephant/frontend/app/components/editor/NoteEditorHost.vue',
+  'Elephant/frontend/app/components/editor/RustNoteEditorHost.vue',
+  'Elephant/frontend/app/components/shell/MainContent.vue',
   'Elephant/frontend/app/components/editor/ExcalidrawDialog.vue',
   'Elephant/frontend/app/services/elephantnoteClient/apiRuntime.js',
   'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
@@ -102,9 +104,10 @@ ordered(
     'run: node build/scripts/verify-critical-flows.mjs',
     '- name: Security guardrails',
     'run: pnpm security:guard',
-    'pnpm exec vitest run tests/app/unit/specs/main/elephantnote'
+    '- name: Unit tests',
+    'run: pnpm test:unit'
   ],
-  'main CI must run the guard, security gate and ElephantNote contract tests'
+  'main CI must run the critical-flow guard, security gate and complete unit suite'
 )
 has(
   '.github/workflows/ci.yml',
@@ -326,7 +329,7 @@ ordered(
   'Elephant/shared/apiContractsRuntime.js',
   [
     "import * as baseContracts from './apiContracts.js'",
-    "const runtimeField = ['local', 'Runtime'].join('')",
+    'const validatedByBaseContract = baseContracts.validateApiPayload(actionName, payload)',
     "actionName === 'ai.config.set'",
     'baseContracts.validateApiPayload(actionName, validatedByBaseContract)',
     'return payload'
@@ -399,6 +402,26 @@ ordered(
   'Excalidraw byte persistence'
 )
 ordered(
+  'Elephant/frontend/app/components/editor/RustNoteEditorHost.vue',
+  [
+    "import { MuyaRuntimeEditor, isRustMuyaEngineAvailable } from '@/muya'",
+    '<note-editor-host />',
+    'mode="active"',
+    "window.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'rust'",
+    '.en-editor-host > :not(.en-rust-note-editor)'
+  ],
+  'canonical Rust editor mounted inside the real note editor shell'
+)
+ordered(
+  'Elephant/frontend/app/components/shell/MainContent.vue',
+  [
+    "import RustNoteEditorHost from '../editor/RustNoteEditorHost.vue'",
+    '<rust-note-editor-host',
+    'v-if="hasOpenNote"'
+  ],
+  'open notes route through the canonical Rust editor host'
+)
+ordered(
   'Elephant/frontend/app/components/editor/ExcalidrawDialog.vue',
   [
     'const blobToBytes = async(blob) => new Uint8Array(await blob.arrayBuffer())',
@@ -428,17 +451,6 @@ ordered(
     'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PUSH)'
   ],
   'shared sync plan'
-)
-ordered(
-  'Elephant/backend/tauri/src/vault/sync.rs',
-  [
-    'const BACKEND_LOCAL: &str = "elephant-local";',
-    'fn planned_operations(payload_by_operation: &Value) -> Vec<String> {',
-    'if payload_has(payload_by_operation, SYNC_OPERATION_SYNC)',
-    'fn copy_tree_safely(source_root: &Path, target_root: &Path, conflict_tag: &str) -> R<Vec<Value>> {',
-    'fn run_sync(&mut self, payload: &Value) -> R<Vec<Value>>'
-  ],
-  'Tauri embedded local sync engine'
 )
 for (const needle of [
   'desktopRclone": false',

@@ -20,7 +20,10 @@ const codeBlockCtrl = (ContentState) => {
     const { text } = startBlock
     if (startBlock.type === 'span') {
       if (startBlock.functionType === 'languageInput') {
-        lang = text.trim()
+        // The visible language control is edited transactionally. During the
+        // edit its DOM text is newer than ContentState, which is committed only
+        // on selection, Enter or blur.
+        lang = String(paragraph?.textContent ?? text).trim()
       } else if (startBlock.functionType === 'paragraphContent') {
         const token = text.match(/(^`{3,})([^`]+)/)
         if (token) {
@@ -49,15 +52,13 @@ const codeBlockCtrl = (ContentState) => {
    * @param lang Language identifier
    */
   ContentState.prototype.updateCodeLanguage = function(block, lang) {
-    if (!lang || typeof lang !== 'string') {
+    if (typeof lang !== 'string') {
       console.error('Invalid code block language string:', lang)
-
-      // Use fallback language
       lang = ''
     }
 
     // Prevent possible XSS on language input when using lang attribute later on. The input is also sanitized before rendering.
-    lang = escapeHTML(lang)
+    lang = escapeHTML(lang.trim())
     if (lang !== '') {
       loadLanguage(lang)
     }

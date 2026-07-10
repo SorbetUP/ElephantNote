@@ -211,6 +211,12 @@ export const useAddonsSettings = () => {
     if (communityAddonsEnabled.value) {
       await Promise.allSettled([refreshCatalog(), addonsStore.loadTrustedState()])
     }
+    log.info('[settings:addons] mounted', {
+      registered: items.value.map((addon) => addon.manifest.id),
+      enabled: items.value.filter((addon) => addon.enabled).map((addon) => addon.manifest.id),
+      communityEnabled: communityAddonsEnabled.value,
+      trustedSafeMode: trustedSafeMode.value
+    })
   })
 
   return {

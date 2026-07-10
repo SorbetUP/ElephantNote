@@ -158,8 +158,10 @@ await view.dispatch('updateTask', {
   recurrence: { mode: 'fixed', frequency: 'daily', interval: 2 }
 })
 state = await view.getState({ list: 'upcoming' })
-assert.equal(state.sections.flatMap(section => section.tasks).some(task => task.title === 'Water plants' && task.startDate === offsetDate(2)), true)
-assert.ok(state.sections.flatMap(section => section.tasks).filter(task => task.title === 'Water plants').length <= 12)
+const plantOccurrences = state.sections.flatMap(section => section.tasks).filter(task => task.title === 'Water plants')
+assert.equal(plantOccurrences.some(task => task.startDate === offsetDate(2)), true)
+assert.ok(plantOccurrences.length <= 45, 'fixed repeats must stay inside the 90-day materialization horizon')
+assert.ok(plantOccurrences.every(task => task.startDate <= offsetDate(90)))
 
 await view.getState({ list: 'today', selectedTaskId: capture.id })
 await view.dispatch('cancelTask', { id: capture.id })

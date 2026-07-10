@@ -5,6 +5,7 @@ const historyIdentity = (history) => {
   if (!history || typeof history !== 'object') return ''
   const index = Number.isInteger(history.index) ? history.index : -1
   const lastEditIndex = Number.isInteger(history.lastEditIndex) ? history.lastEditIndex : -1
+  if (index < 0 || lastEditIndex < 0) return ''
   return `${index}:${lastEditIndex}`
 }
 

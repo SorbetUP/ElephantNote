@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Muya from '../../../../../../Elephant/frontend/src/muya/lib'
+import { search as searchLanguages } from '../../../../../../Elephant/frontend/src/muya/lib/prism'
 import { installExecutableCodeBlocks } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocks'
 import {
   resetExecutableCodeNativeRuntimeForTests
@@ -91,6 +92,38 @@ describe('native executable code integration with real Muya', () => {
     expect(muya.getMarkdown()).toContain('```python')
     expect(muya.getMarkdown()).toContain('print("hello")')
     expect(change).not.toHaveBeenCalled()
+  })
+
+  it('does not save partial language identifiers while the user is typing', async() => {
+    await createMuya()
+    const baseline = muya.getMarkdown()
+    const change = vi.fn()
+    muya.on('change', change)
+
+    const native = document.querySelector('.ag-language-input')
+    native.textContent = 'py'
+    native.dispatchEvent(new Event('input', { bubbles: true }))
+    await settle()
+
+    expect(muya.getMarkdown()).toBe(baseline)
+    expect(change).not.toHaveBeenCalled()
+
+    native.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    await settle()
+
+    expect(change).toHaveBeenCalledTimes(1)
+    expect(muya.getMarkdown()).toContain('```py')
+    expect(muya.getMarkdown()).toContain('print("hello")')
+  })
+
+  it('returns relevant and bounded language suggestions', () => {
+    const matches = searchLanguages('py').map((item) => item.name)
+    expect(matches).toContain('python')
+    expect(matches).not.toContain('c')
+    expect(matches).not.toContain('d')
+    expect(matches).not.toContain('j')
+    expect(matches).not.toContain('q')
+    expect(matches.length).toBeLessThanOrEqual(8)
   })
 
   it('uses Muya native language state and runs the selected language', async() => {

@@ -53,8 +53,9 @@ jobs:
                   raise RuntimeError('Could not locate toolbar action container end')
               panel = panel[:start] + panel[end:]
           panel = panel.replace(', Save,', ',', 1)
-          if marker in panel or '<Save aria-hidden' in panel:
-              raise RuntimeError('Redundant AI toolbar controls remain')
+          panel = panel.replace('.en-ai-badge, .en-ai-save-status {', '.en-ai-badge {', 1)
+          if marker in panel or '<Save aria-hidden' in panel or '.en-ai-save-status {' in panel:
+              raise RuntimeError('Redundant AI toolbar controls or styles remain')
           panel_path.write_text(panel)
 
           card_path = Path('Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue')

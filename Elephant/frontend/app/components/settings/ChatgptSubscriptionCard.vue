@@ -2,13 +2,11 @@
   <section class="en-chatgpt-card">
     <header class="en-chatgpt-header">
       <div class="en-chatgpt-identity">
-        <svg
+        <span
           class="en-chatgpt-logo"
-          viewBox="0 0 24 24"
+          :style="{ '--chatgpt-logo-url': `url(${chatgptLogoUrl})` }"
           aria-hidden="true"
-        >
-          <use :href="chatgptLogoHref" />
-        </svg>
+        />
         <div class="en-chatgpt-title-line">
           <h4>ChatGPT subscription</h4>
           <span
@@ -170,7 +168,6 @@ const usageOpen = ref(false)
 const resetPickerOpen = ref(false)
 const activeResetId = ref('')
 
-const chatgptLogoHref = `${chatgptLogoUrl}#chatgpt-mark`
 const accountName = computed(() => props.status?.account?.displayName || props.status?.account?.email || '')
 const formatTimestamp = (timestamp, options) => {
   const numeric = Number(timestamp)
@@ -219,11 +216,12 @@ watch(() => props.resetBusy, (busy, previous) => {
 </script>
 
 <style scoped>
+:global(.en-ai-toolbar > .en-ai-actions) { display: none; }
 .en-chatgpt-card { overflow: hidden; border: 1px solid var(--en-border); border-radius: 14px; background: var(--en-surface); }
 .en-chatgpt-header { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; }
 .en-chatgpt-identity, .en-chatgpt-header-actions, .en-chatgpt-title-line, .en-chatgpt-reset-bar { display: flex; align-items: center; }
 .en-chatgpt-identity { min-width: 0; gap: 12px; }
-.en-chatgpt-logo { flex: 0 0 auto; width: 30px; height: 30px; color: var(--en-text); }
+.en-chatgpt-logo { display: block; flex: 0 0 auto; width: 30px; height: 30px; background: var(--en-text); -webkit-mask: var(--chatgpt-logo-url) center / contain no-repeat; mask: var(--chatgpt-logo-url) center / contain no-repeat; }
 .en-chatgpt-title-line { min-width: 0; flex-wrap: wrap; gap: 7px 12px; }
 .en-chatgpt-title-line h4 { margin: 0; font-size: 14px; }
 .en-chatgpt-account { overflow: hidden; max-width: 320px; color: var(--en-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }

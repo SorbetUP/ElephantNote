@@ -19,6 +19,9 @@ const CATALOG_ROOT: &str = "https://raw.githubusercontent.com/SorbetUP/ElephantN
 const MAX_CATALOG_BYTES: u64 = 1024 * 1024;
 const MAX_MANIFEST_BYTES: u64 = 256 * 1024;
 const MAX_ENTRY_BYTES: u64 = 5 * 1024 * 1024;
+const BUNDLED_TRUSTED_LAB_ID: &str = "com.elephantnote.examples.trusted-workspace-lab";
+const BUNDLED_TRUSTED_LAB_MANIFEST: &str = include_str!("../../../../examples/addons/trusted-workspace-lab/manifest.json");
+const BUNDLED_TRUSTED_LAB_ENTRY: &str = include_str!("../../../../examples/addons/trusted-workspace-lab/main.js");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +48,20 @@ struct AddonCatalog {
   #[serde(default)]
   updated_at: String,
   addons: Vec<CatalogAddon>,
+}
+
+fn bundled_trusted_lab_item() -> CatalogAddon {
+  CatalogAddon {
+    id: BUNDLED_TRUSTED_LAB_ID.to_string(),
+    slug: "trusted-workspace-lab".to_string(),
+    name: "Trusted Workspace Lab".to_string(),
+    version: "1.0.0".to_string(),
+    description: "Full app access reference addon that visibly modifies Settings, workspace UI and application behavior.".to_string(),
+    author: "ElephantNote".to_string(),
+    manifest_path: "bundled/trusted-workspace-lab/manifest.json".to_string(),
+    entry_path: "bundled/trusted-workspace-lab/main.js".to_string(),
+    readme_path: String::new(),
+  }
 }
 
 fn safe_catalog_path(value: &str) -> R<String> {
@@ -74,6 +91,9 @@ fn validate_catalog_item(item: &CatalogAddon) -> R<()> {
   }
   if !item.slug.chars().all(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-') {
     return Err(format!("Invalid addon catalogue slug: {}", item.slug));
+  }
+  if item.id == BUNDLED_TRUSTED_LAB_ID {
+    return Ok(());
   }
   let expected_prefix = format!("addons/{}/", item.slug);
   let manifest_path = safe_catalog_path(&item.manifest_path)?;
@@ -148,15 +168,16 @@ fn fetch_catalog() -> R<AddonCatalog> {
   Ok(catalog)
 }
 
-fn create_temporary_package(item: &CatalogAddon) -> R<std::path::PathBuf> {
-  let manifest_bytes = fetch_bytes(&item.manifest_path, MAX_MANIFEST_BYTES)?;
-  let manifest: AddonManifest = serde_json::from_slice(&manifest_bytes)
+fn write_temporary_package(item: &CatalogAddon, manifest_bytes: &[u8], entry_bytes: &[u8]) -> R<std::path::PathBuf> {
+  let manifest: AddonManifest = serde_json::from_slice(manifest_bytes)
     .map_err(|error| format!("Invalid manifest for {}: {error}", item.id))?;
   if manifest.id != item.id || manifest.version != item.version || manifest.name != item.name {
     return Err(format!("Catalogue metadata does not match manifest for {}", item.id));
   }
+  if entry_bytes.len() as u64 > MAX_ENTRY_BYTES {
+    return Err(format!("Addon entry exceeds the allowed size for {}", item.id));
+  }
 
-  let entry_bytes = fetch_bytes(&item.entry_path, MAX_ENTRY_BYTES)?;
   let temp_path = std::env::temp_dir().join(format!(
     "elephantnote-catalog-{}-{}.enaddon",
     item.slug,
@@ -166,18 +187,35 @@ fn create_temporary_package(item: &CatalogAddon) -> R<std::path::PathBuf> {
   let mut archive = ZipWriter::new(file);
   let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
   archive.start_file("manifest.json", options).map_err(|error| error.to_string())?;
-  archive.write_all(&manifest_bytes).map_err(|error| error.to_string())?;
+  archive.write_all(manifest_bytes).map_err(|error| error.to_string())?;
   archive
     .start_file(manifest.runtime.entry.clone(), options)
     .map_err(|error| error.to_string())?;
-  archive.write_all(&entry_bytes).map_err(|error| error.to_string())?;
+  archive.write_all(entry_bytes).map_err(|error| error.to_string())?;
   archive.finish().map_err(|error| error.to_string())?;
   Ok(temp_path)
 }
 
+fn create_temporary_package(item: &CatalogAddon) -> R<std::path::PathBuf> {
+  if item.id == BUNDLED_TRUSTED_LAB_ID {
+    return write_temporary_package(
+      item,
+      BUNDLED_TRUSTED_LAB_MANIFEST.as_bytes(),
+      BUNDLED_TRUSTED_LAB_ENTRY.as_bytes(),
+    );
+  }
+  let manifest_bytes = fetch_bytes(&item.manifest_path, MAX_MANIFEST_BYTES)?;
+  let entry_bytes = fetch_bytes(&item.entry_path, MAX_ENTRY_BYTES)?;
+  write_temporary_package(item, &manifest_bytes, &entry_bytes)
+}
+
 #[tauri::command]
 pub fn tauri_addons_catalog_list() -> R<Vec<CatalogAddon>> {
-  Ok(fetch_catalog()?.addons)
+  let mut addons = fetch_catalog()?.addons;
+  if !addons.iter().any(|item| item.id == BUNDLED_TRUSTED_LAB_ID) {
+    addons.push(bundled_trusted_lab_item());
+  }
+  Ok(addons)
 }
 
 #[tauri::command]
@@ -186,12 +224,15 @@ pub fn tauri_addons_catalog_install(
   state: State<'_, AddonState>,
   addon_id: String,
 ) -> R<InstalledAddon> {
-  let catalog = fetch_catalog()?;
-  let item = catalog
-    .addons
-    .into_iter()
-    .find(|item| item.id == addon_id)
-    .ok_or_else(|| format!("Addon is not listed in the official catalogue: {addon_id}"))?;
+  let item = if addon_id == BUNDLED_TRUSTED_LAB_ID {
+    bundled_trusted_lab_item()
+  } else {
+    fetch_catalog()?
+      .addons
+      .into_iter()
+      .find(|item| item.id == addon_id)
+      .ok_or_else(|| format!("Addon is not listed in the official catalogue: {addon_id}"))?
+  };
   let package_path = create_temporary_package(&item)?;
   let package_string = package_path.to_string_lossy().to_string();
   let result = addons::tauri_addons_install(app, state, package_string);
@@ -223,5 +264,16 @@ mod tests {
       readme_path: "addons/test/README.md".to_string(),
     };
     assert!(validate_catalog_item(&item).is_ok());
+  }
+
+  #[test]
+  fn bundles_the_full_access_lab_without_network_paths() {
+    let item = bundled_trusted_lab_item();
+    assert_eq!(item.id, BUNDLED_TRUSTED_LAB_ID);
+    assert!(validate_catalog_item(&item).is_ok());
+    let manifest: AddonManifest = serde_json::from_str(BUNDLED_TRUSTED_LAB_MANIFEST).unwrap();
+    assert_eq!(manifest.id, BUNDLED_TRUSTED_LAB_ID);
+    assert_eq!(manifest.runtime.entry, "main.js");
+    assert!(BUNDLED_TRUSTED_LAB_ENTRY.contains("export default class TrustedWorkspaceLab"));
   }
 }

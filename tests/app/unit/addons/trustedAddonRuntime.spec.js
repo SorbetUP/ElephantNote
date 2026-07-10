@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import TrustedWorkspaceLab from '../../../../examples/addons/trusted-workspace-lab/main.js'
 import {
   approveTrustedAddon,
   createTrustedAddonApi,
@@ -166,5 +167,62 @@ describe('trusted addon host API', () => {
 
     for (const dispose of [...contextDisposables].reverse()) dispose()
     expect(removed).toHaveBeenCalledTimes(1)
+  })
+
+  it('executes the reference addon lifecycle and deep contributions', async () => {
+    const classes = new Set()
+    const commandDefinitions = []
+    const api = {
+      manifest: { id: 'com.elephantnote.examples.trusted-workspace-lab' },
+      ui: {
+        registerStyle: vi.fn(() => vi.fn()),
+        on: vi.fn(() => vi.fn())
+      },
+      commands: {
+        register: vi.fn((definition) => {
+          commandDefinitions.push(definition)
+          return vi.fn()
+        })
+      },
+      workspace: { registerSidebarItem: vi.fn() },
+      settings: { registerSection: vi.fn() },
+      editor: { registerExtension: vi.fn() },
+      layout: { registerItem: vi.fn() },
+      app: { emit: vi.fn() },
+      experimental: {
+        window: {},
+        document: {
+          documentElement: {
+            classList: {
+              toggle: (name, enabled) => enabled ? classes.add(name) : classes.delete(name),
+              remove: (name) => classes.delete(name)
+            }
+          }
+        }
+      }
+    }
+    const plugin = new TrustedWorkspaceLab(api)
+
+    await plugin.onload(api)
+
+    expect(api.ui.registerStyle).toHaveBeenCalledOnce()
+    expect(api.commands.register).toHaveBeenCalledOnce()
+    expect(api.workspace.registerSidebarItem).toHaveBeenCalledOnce()
+    expect(api.settings.registerSection).toHaveBeenCalledOnce()
+    expect(api.editor.registerExtension).toHaveBeenCalledOnce()
+    expect(api.layout.registerItem).toHaveBeenCalledOnce()
+    expect(api.app.emit).toHaveBeenCalledWith('elephantnote:trusted-addon-loaded', expect.objectContaining({
+      addonId: 'com.elephantnote.examples.trusted-workspace-lab'
+    }))
+
+    expect(commandDefinitions).toHaveLength(1)
+    expect(commandDefinitions[0].run()).toEqual({ enabled: true })
+    expect(classes.has('elephant-trusted-focus')).toBe(true)
+    expect(commandDefinitions[0].run()).toEqual({ enabled: false })
+    expect(classes.has('elephant-trusted-focus')).toBe(false)
+
+    classes.add('elephant-trusted-focus')
+    await plugin.onunload()
+    expect(classes.has('elephant-trusted-focus')).toBe(false)
   })
 })

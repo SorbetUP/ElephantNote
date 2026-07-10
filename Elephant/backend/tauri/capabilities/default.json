@@ -26,6 +26,11 @@
     {
       "identifier": "fs:scope",
       "allow": [
+        { "path": "$APPDATA/**/*" },
+        { "path": "$APPLOCALDATA/**/*" },
+        { "path": "$APPCONFIG/**/*" },
+        { "path": "/data/user/0/com.elephantnote.app/**/*" },
+        { "path": "/data/data/com.elephantnote.app/**/*" },
         { "path": "$HOME/**/*" },
         { "path": "$HOME/**/.assets" },
         { "path": "$HOME/**/.assets/*" },

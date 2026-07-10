@@ -5,15 +5,11 @@ import { describe, expect, it } from 'vitest'
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
-describe('ElephantNote mobile interaction regressions', () => {
+describe('Elephant mobile interaction regressions', () => {
   it('keeps folder expansion distinct from folder navigation', () => {
-    const runtime = read('Elephant/frontend/src/renderer/src/platform/mobileInteractionRuntime.js')
     const treeEntry = read('Elephant/frontend/app/components/navigation/SidebarTreeEntry.vue')
     const css = read('Elephant/frontend/src/renderer/src/mobile-native-ux.css')
 
-    expect(runtime).toContain('.en-sidebar-tree-toggle')
-    expect(runtime).toContain('.en-recent-heading')
-    expect(runtime).toContain('preserveDrawerForLocalToggle')
     expect(treeEntry).toContain('class="en-sidebar-tree-toggle"')
     expect(treeEntry).toContain('role="button"')
     expect(treeEntry).toContain('@click.stop="toggleExpanded"')
@@ -23,21 +19,28 @@ describe('ElephantNote mobile interaction regressions', () => {
     expect(css).toContain('width: 46px !important')
   })
 
-  it('drives the drawer continuously from an edge-only pointer gesture', () => {
+  it('drives the drawer continuously from a dedicated edge handle', () => {
     const runtime = read('Elephant/frontend/src/renderer/src/platform/mobileInteractionRuntime.js')
-    const css = read('Elephant/frontend/src/renderer/src/mobile-native-ux.css')
+    const nativeCss = read('Elephant/frontend/src/renderer/src/mobile-native-ux.css')
+    const roundTwoCss = read('Elephant/frontend/src/renderer/src/mobile-editor-round2.css')
     const html = read('Elephant/frontend/src/renderer/index.html')
 
-    expect(runtime).toContain('const SWIPE_EDGE_PX = 24')
-    expect(runtime).toContain("addEventListener('pointerdown'")
+    expect(runtime).toContain('const SWIPE_EDGE_PX = 30')
+    expect(runtime).toContain('en-mobile-drawer-edge-handle')
+    expect(runtime).toContain('createEdgeHandle')
+    expect(runtime).toContain("edgeHandle.addEventListener('pointerdown'")
     expect(runtime).toContain("addEventListener('pointermove'")
     expect(runtime).toContain("addEventListener('pointerup'")
+    expect(runtime).toContain('requestAnimationFrame(flushMove)')
     expect(runtime).toContain('--en-mobile-drawer-offset')
     expect(runtime).toContain('--en-mobile-drawer-progress')
-    expect(runtime).toContain('en-mobile-drawer-dragging')
     expect(runtime).toContain('velocityX')
-    expect(css).toContain('translate3d(var(--en-mobile-drawer-offset')
-    expect(css).toContain('transition: none !important')
+    expect(runtime).not.toContain('preserveDrawerForLocalToggle')
+    expect(nativeCss).toContain('translate3d(var(--en-mobile-drawer-offset')
+    expect(nativeCss).toContain('transition: none !important')
+    expect(roundTwoCss).toContain('touch-action: none')
+    expect(roundTwoCss).toContain('.en-mobile-shell .en-sidebar')
+    expect(roundTwoCss).toContain('touch-action: pan-y !important')
     expect(html).toContain('/src/platform/mobileInteractionRuntime.js')
   })
 
@@ -51,22 +54,44 @@ describe('ElephantNote mobile interaction regressions', () => {
     expect(runtime).toContain("target.document.querySelector('.en-settings-close')")
   })
 
-  it('provides a mobile-native editor toolbar without Android capture inputs', () => {
+  it('provides real editor actions and keeps them above the Android keyboard', () => {
     const runtime = read('Elephant/frontend/src/renderer/src/platform/mobileEditorRuntime.js')
-    const css = read('Elephant/frontend/src/renderer/src/mobile-native-ux.css')
+    const noteActions = read('Elephant/frontend/src/renderer/src/platform/mobileNoteActionsRuntime.js')
+    const css = read('Elephant/frontend/src/renderer/src/mobile-editor-round2.css')
     const html = read('Elephant/frontend/src/renderer/index.html')
 
-    expect(runtime).toContain('navigator.mediaDevices.getUserMedia')
+    expect(runtime).toContain('requestCameraStream')
+    expect(runtime.indexOf('stream = await requestCameraStream')).toBeLessThan(runtime.indexOf("document.body.appendChild(backdrop)"))
     expect(runtime).toContain("input.accept = 'image/*'")
     expect(runtime).not.toContain('input.capture =')
     expect(runtime).toContain("bus.emit('insert-image', destination)")
-    expect(runtime).toContain("action: 'excalidraw'")
-    expect(runtime).toContain("action: 'tasks'")
-    expect(runtime).toContain("action: 'heading-1'")
-    expect(runtime).toContain('bus.emit(action)')
-    expect(css).toContain('.en-mobile-editor-toolbar')
-    expect(css).toContain('.en-mobile-camera-backdrop')
+    expect(runtime).toContain("iconName: 'h1'")
+    expect(runtime).toContain("iconName: 'bold'")
+    expect(runtime).toContain("action: 'share-note'")
+    expect(runtime).toContain("action: 'duplicate-note'")
+    expect(runtime).toContain("action: 'manage-tags'")
+    expect(runtime).toContain('target.visualViewport')
+    expect(runtime).toContain('--en-mobile-keyboard-offset')
+    expect(noteActions).toContain('duplicateCurrentNote')
+    expect(noteActions).toContain('en-mobile-tag-manager-backdrop')
+    expect(noteActions).toContain("new MouseEvent('contextmenu'")
+    expect(css).toContain('var(--en-mobile-keyboard-offset, 0px)')
+    expect(css).toContain('.en-mobile-tag-manager')
     expect(html).toContain('/src/platform/mobileEditorRuntime.js')
+    expect(html).toContain('/src/platform/mobileNoteActionsRuntime.js')
+  })
+
+  it('keeps tag submission inside the note and removes the redundant cancel button', () => {
+    const form = read('Elephant/frontend/app/components/editor/NoteTagForm.vue')
+    const topbar = read('Elephant/frontend/app/components/editor/NoteEditorTopBar.vue')
+
+    expect(form).toContain('@submit.stop.prevent="submit"')
+    expect(form).toContain('@keydown.enter.stop.prevent="submit"')
+    expect(form).toContain('enterkeyhint="done"')
+    expect(form).not.toContain('Cancel\n')
+    expect(topbar).toContain('window.addEventListener(\'pointerdown\', closeOnOutsideClick)')
+    expect(topbar).toContain('<ArrowLeft class="en-icon" />')
+    expect(topbar).toContain('@keydown.enter.stop.prevent="$event.target.blur()"')
   })
 
   it('separates pinned notes from other entries in grid and list modes', () => {
@@ -90,6 +115,17 @@ describe('ElephantNote mobile interaction regressions', () => {
     expect(runtime).toContain('viewButton.dataset.icon')
     expect(runtime).toContain('if (viewButton.dataset.icon !== desiredIcon)')
     expect(runtime).toContain('viewButton.innerHTML = svg(desiredIcon)')
+  })
+
+  it('uses minimal Excalidraw application chrome', () => {
+    const css = read('Elephant/frontend/src/renderer/src/mobile-editor-round2.css')
+    const dialog = read('Elephant/frontend/app/components/editor/ExcalidrawDialog.vue')
+
+    expect(css).toContain('.en-excalidraw-name-wrap')
+    expect(css).toContain('display: none !important')
+    expect(css).toContain('width: 28px !important')
+    expect(dialog).toContain('aria-label="Cancel"')
+    expect(dialog).toContain('aria-label="Save"')
   })
 
   it('removes desktop-only mobile chrome and preserves the Android launcher icon', () => {

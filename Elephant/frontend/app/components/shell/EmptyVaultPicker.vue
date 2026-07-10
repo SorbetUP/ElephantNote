@@ -5,16 +5,16 @@
         <img
           class="en-logo-image"
           :src="logoUrl"
-          alt="ElephantNote"
+          alt="Elephant"
           @error="$event.target.classList.add('is-missing')"
         >
-        <span class="en-logo-fallback">EN</span>
+        <span class="en-logo-fallback">E</span>
       </div>
       <div class="en-empty-heading">
         <h1>Choose where your vault lives</h1>
         <p>
           Your notes, folders, drawings and images stay together in one vault.
-          ElephantNote never needs access to all files on your phone.
+          Elephant only accesses the location you choose.
         </p>
       </div>
 
@@ -22,40 +22,59 @@
         <button
           class="en-storage-mode en-storage-mode-simple"
           type="button"
-          @click="$emit('create-local')"
+          :disabled="store.loading"
+          @click="emit('create-local')"
         >
           <span class="en-storage-mode-label">Simple mode</span>
-          <strong>Let ElephantNote manage it</strong>
+          <strong>Let Elephant manage it</strong>
           <small>
-            Uses a private app folder. No setup and no storage permission prompt.
+            Uses the private app folder. It works immediately and remains isolated from other apps.
           </small>
         </button>
 
         <button
           class="en-storage-mode en-storage-mode-advanced"
           type="button"
-          @click="$emit('choose')"
+          :disabled="store.loading"
+          @click="emit('choose')"
         >
           <span class="en-storage-mode-label">Advanced mode</span>
           <strong>Choose a vault folder</strong>
           <small>
-            Android opens its system picker and grants access only to the folder you select.
+            Opens Android's folder picker and grants Elephant access only to the selected folder.
           </small>
         </button>
       </div>
 
+      <p
+        v-if="store.loading"
+        class="en-storage-status"
+        role="status"
+      >
+        Opening Android storage…
+      </p>
+      <p
+        v-else-if="store.error"
+        class="en-storage-error"
+        role="alert"
+      >
+        {{ store.error }}
+      </p>
+
       <small class="en-storage-footnote">
-        Simple mode is safer and works immediately. Advanced mode is intended for a visible,
-        filesystem-backed folder that you also want to open from a file manager or another app.
+        Android does not require access to every file. Advanced mode uses the system folder grant,
+        while Simple mode keeps the vault inside Elephant's private storage.
       </small>
     </section>
   </main>
 </template>
 
 <script setup>
-import logoUrl from '../../assets/ElephantLogo.png'
+import { useVaultStore } from '../../stores/vaultStore'
+import logoUrl from '../../../../assets/static/icon.png'
 
-defineEmits(['choose', 'create-local'])
+const emit = defineEmits(['choose', 'create-local'])
+const store = useVaultStore()
 </script>
 
 <style scoped>
@@ -99,7 +118,7 @@ defineEmits(['choose', 'create-local'])
 
 .en-logo-fallback {
   display: none;
-  font-size: 28px;
+  font-size: 38px;
   font-weight: 800;
 }
 
@@ -151,6 +170,15 @@ defineEmits(['choose', 'create-local'])
   background: color-mix(in srgb, var(--en-surface, #182233) 78%, transparent);
   font: inherit;
   text-align: left;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.en-storage-mode:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.en-storage-mode:disabled {
+  opacity: 0.58;
 }
 
 .en-storage-mode-simple {
@@ -182,6 +210,24 @@ defineEmits(['choose', 'create-local'])
   color: var(--en-muted, #98a3b6);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.en-storage-status,
+.en-storage-error {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 13px !important;
+  text-align: left;
+}
+
+.en-storage-status {
+  background: color-mix(in srgb, var(--en-primary, #5ea1ff) 12%, var(--en-surface, #182233));
+}
+
+.en-storage-error {
+  color: #fecaca !important;
+  background: rgba(127, 29, 29, 0.58);
 }
 
 .en-storage-footnote {

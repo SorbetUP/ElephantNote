@@ -9,7 +9,9 @@
       type="text"
       :value="title"
       aria-label="Note title"
+      enterkeyhint="next"
       @change="$emit('update-title', $event.target.value)"
+      @keydown.enter.stop.prevent="$event.target.blur()"
     >
 
     <div class="en-note-chip-rail">
@@ -42,7 +44,7 @@
           v-else
           class="en-note-chip"
           type="button"
-          :title="`Click to edit, right-click to delete ${displayTag(tag)}`"
+          :title="`Edit ${displayTag(tag)}`"
           @click="startTagEdit(index, tag)"
           @contextmenu.prevent.stop="$emit('delete-tag', index)"
         >
@@ -102,6 +104,15 @@
 
     <div class="en-note-topbar-actions">
       <button
+        class="en-note-action-button en-note-back-button"
+        type="button"
+        title="Back"
+        aria-label="Back"
+        @click="$emit('close')"
+      >
+        <ArrowLeft class="en-icon" />
+      </button>
+      <button
         class="en-note-action-button"
         :class="{ active: isPinned }"
         type="button"
@@ -111,22 +122,13 @@
       >
         <Pin class="en-icon" />
       </button>
-      <button
-        class="en-note-action-button"
-        type="button"
-        title="Close note"
-        aria-label="Close note"
-        @click="$emit('close')"
-      >
-        <X class="en-icon" />
-      </button>
     </div>
   </header>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Pin, X } from '@lucide/vue'
+import { ArrowLeft, Pin } from '@lucide/vue'
 import NoteTagForm from './NoteTagForm.vue'
 
 const props = defineProps({
@@ -224,6 +226,8 @@ const updateTagDraft = (value) => {
 }
 
 const submitTag = (value = localTagDraft.value) => {
+  localTagDraft.value = value
+  emit('update-tag-draft', value)
   localAddingTag.value = false
   localEditingTag.value = false
   localEditingIndex.value = -1
@@ -241,14 +245,15 @@ const cancelTag = () => {
 const closeOnOutsideClick = (event) => {
   if (rootRef.value?.contains?.(event.target)) return
   isHiddenTagsOpen.value = false
+  if (localAddingTag.value) cancelTag()
 }
 
 onMounted(() => {
-  window.addEventListener('click', closeOnOutsideClick)
+  window.addEventListener('pointerdown', closeOnOutsideClick)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('click', closeOnOutsideClick)
+  window.removeEventListener('pointerdown', closeOnOutsideClick)
 })
 
 watch(
@@ -359,6 +364,12 @@ watch(
   justify-content: center;
 }
 
+.en-note-action-button .en-icon {
+  width: 17px;
+  height: 17px;
+  display: block;
+}
+
 .en-note-date-chip:hover,
 .en-note-chip:hover,
 .en-note-action-button:hover {
@@ -417,26 +428,5 @@ watch(
   background: transparent;
   font: inherit;
   font-size: 13px;
-}
-
-:deep(.en-inline-tag-form input) {
-  width: 96px;
-}
-
-.en-icon {
-  width: 18px;
-  height: 18px;
-}
-
-@media (max-width: 900px) {
-  .en-note-topbar {
-    flex-wrap: wrap;
-    align-content: center;
-    padding: 6px var(--en-note-editor-gutter-right, 24px) 6px var(--en-note-editor-gutter-left, 32px);
-  }
-
-  .en-note-title-input {
-    flex-basis: 100%;
-  }
 }
 </style>

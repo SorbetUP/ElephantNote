@@ -1,18 +1,9 @@
 import Muya from '../../../muya/lib'
-import { correctImageSrc } from '../../../muya/lib/utils/getImageInfo'
 import {
   createRealMuyaRustMirror,
   muyaIndexCursorToSelection,
   selectionToMuyaIndexCursor
 } from './realMuyaRustMirrorRuntime.js'
-
-const INLINE_MARKERS = Object.freeze({
-  strong: '**',
-  em: '*',
-  del: '~~',
-  inline_code: '`',
-  highlight: '=='
-})
 
 const BLOCK_KINDS = Object.freeze({
   paragraph: 'paragraph',
@@ -29,44 +20,57 @@ const BLOCK_KINDS = Object.freeze({
   'ul-task': 'task'
 })
 
+const TABLE_ROW = /^\s*\|.*\|\s*$/
 const TABLE_SEPARATOR = /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/
-const encodeImageSource = (source) => String(source || '')
-  .replace(/ /g, encodeURI(' '))
-  .replace(/#/g, encodeURIComponent('#'))
+const MUTATING_INPUT = /^(?:insert|delete|history|format)/
 
-const markdownTables = (markdown) => {
+const getInvoke = () => {
+  const ipc = globalThis?.tauri?.ipcRenderer
+  if (typeof ipc?.invoke === 'function') return ipc.invoke.bind(ipc)
+  const core = globalThis?.__TAURI__?.core
+  if (typeof core?.invoke === 'function') return core.invoke.bind(core)
+  return null
+}
+
+const offsetForLine = (lines, line) => {
+  let offset = 0
+  for (let index = 0; index < line; index += 1) offset += lines[index].length + 1
+  return offset
+}
+
+const tableRangeAtLine = (markdown, activeLine) => {
   const lines = String(markdown || '').split('\n')
-  const tables = []
-  for (let index = 0; index < lines.length - 1; index += 1) {
-    if (!/^\s*\|.*\|\s*$/.test(lines[index]) || !TABLE_SEPARATOR.test(lines[index + 1])) continue
-    let end = index + 1
-    while (end + 1 < lines.length && /^\s*\|.*\|\s*$/.test(lines[end + 1])) end += 1
-    tables.push({ start: index, end })
-    index = end
+  for (let start = 0; start < lines.length - 1; start += 1) {
+    if (!TABLE_ROW.test(lines[start]) || !TABLE_SEPARATOR.test(lines[start + 1])) continue
+    let end = start + 1
+    while (end + 1 < lines.length && TABLE_ROW.test(lines[end + 1])) end += 1
+    if (activeLine >= start && activeLine <= end) {
+      const startOffset = offsetForLine(lines, start)
+      const endOffset = offsetForLine(lines, end) + lines[end].length
+      return { start: startOffset, end: endOffset, startLine: start, endLine: end }
+    }
+    start = end
   }
-  return { lines, tables }
+  return null
 }
 
-const imageHtml = (token, attrName, attrValue) => {
-  const attrs = Object.assign({}, token?.attrs || {})
-  attrs[attrName] = attrValue
-  let result = '<img '
-  for (const attr of Object.keys(attrs)) {
-    let value = attrs[attr]
-    if (value && attr === 'src') value = correctImageSrc(value)
-    result += `${attr}="${value}" `
+const fileBytes = async(file) => Array.from(new Uint8Array(await file.arrayBuffer()))
+
+const tokenRangeAtSelection = (markdown, selection, token) => {
+  const range = token?.range
+  if (!range || !Number.isInteger(range.start) || !Number.isInteger(range.end)) {
+    throw new Error('Muya token does not expose a stable range.')
   }
-  return `${result.trim()}>`
+  const count = Math.max(0, range.end - range.start)
+  const end = Math.max(selection.anchor, selection.focus)
+  const start = Math.max(0, end - count)
+  if (start > markdown.length || end > markdown.length || end < start) {
+    throw new Error('Muya token range is outside the canonical document.')
+  }
+  return { start, end }
 }
 
-const clipboardHasImage = (event) => {
-  const items = event?.clipboardData?.items
-  return Boolean(items && Array.from(items).some((item) => String(item?.type || '').startsWith('image/')))
-}
-
-const lineAt = (markdown, line) => String(markdown || '').split('\n')[line] || ''
-
-export default class RealMuyaWithRustCore extends Muya {
+export default class RustOwnedMuya extends Muya {
   constructor (element, options = {}) {
     super(element, options)
     this.__rustExpectedMarkdown = null
@@ -77,9 +81,8 @@ export default class RealMuyaWithRustCore extends Muya {
       initialMarkdown: options.markdown || '',
       target: globalThis
     })
-
     this.__installRustHooks()
-    this.__installRustDomEvents()
+    this.__installRustEvents()
 
     this.__rustChangeListener = ({ markdown, muyaIndexCursor } = {}) => {
       if (typeof markdown !== 'string') return
@@ -93,17 +96,16 @@ export default class RealMuyaWithRustCore extends Muya {
         return
       }
       if (this.__rustApplying) return
-      const canonical = this.__rustMirror?.state?.markdown
-      if (this.__rustMirror?.active && typeof canonical === 'string' && canonical !== markdown) {
-        console.error('[elephantnote:muya-rust] rejected JavaScript-side document mutation')
-        this.__rustExpectedMarkdown = canonical
-        super.setMarkdown(
-          canonical,
-          undefined,
-          true,
-          selectionToMuyaIndexCursor(canonical, this.__rustMirror.state.selection)
-        )
-      }
+      const state = this.__rustMirror?.state
+      if (!state || state.markdown === markdown) return
+      console.error('[elephantnote:muya-rust] rejected non-canonical JavaScript mutation')
+      this.__rustExpectedMarkdown = state.markdown
+      super.setMarkdown(
+        state.markdown,
+        undefined,
+        true,
+        selectionToMuyaIndexCursor(state.markdown, state.selection)
+      )
     }
 
     this.__rustSelectionListener = () => {
@@ -113,7 +115,7 @@ export default class RealMuyaWithRustCore extends Muya {
       this.__rustMirror.sync(markdown, 'selection-change', {
         muyaIndexCursor,
         continueGroup: false
-      }).then(() => this.__refreshRustClipboard()).catch(this.__reportRustError)
+      }).then(() => this.__refreshClipboard()).catch(this.__reportRustError)
     }
 
     this.on('change', this.__rustChangeListener)
@@ -121,21 +123,19 @@ export default class RealMuyaWithRustCore extends Muya {
   }
 
   __reportRustError = (error) => {
+    const message = error instanceof Error ? error.message : String(error)
     console.error('[elephantnote:muya-rust] canonical command failed', error)
-    this.eventCenter.dispatch('crashed', {
-      engine: 'rust',
-      error: error instanceof Error ? error.message : String(error)
-    })
+    this.eventCenter.dispatch('crashed', { engine: 'rust', error: message })
   }
 
   __requireRust () {
     if (!this.__rustMirror?.active) {
-      throw new Error('The canonical Rust editor is required; JavaScript Muya fallback is disabled.')
+      throw new Error('The canonical Rust editor is required; JavaScript fallback is disabled.')
     }
     return this.__rustMirror
   }
 
-  __currentSelection () {
+  __selection () {
     const markdown = this.getMarkdown()
     const cursor = this.contentState.getMuyaIndexCursor()
     return {
@@ -149,13 +149,17 @@ export default class RealMuyaWithRustCore extends Muya {
     const engine = this.__requireRust()
     this.__rustApplying = true
     try {
-      const { markdown, cursor } = this.__currentSelection()
+      const { markdown, cursor } = this.__selection()
+      const canonical = engine.state?.markdown
+      if (typeof canonical === 'string' && canonical !== markdown) {
+        throw new Error(`Refusing ${name}: Muya DOM diverged from the Rust document.`)
+      }
       await engine.sync(markdown, `pre-${name}`, {
         muyaIndexCursor: cursor,
         continueGroup: false
       })
       const transaction = await operation(engine)
-      return this.__renderRustTransaction(transaction)
+      return this.__renderRust(transaction)
     } catch (error) {
       this.__reportRustError(error)
       throw error
@@ -164,40 +168,48 @@ export default class RealMuyaWithRustCore extends Muya {
     }
   }
 
-  __renderRustTransaction (transaction) {
+  __renderRust (transaction) {
     if (!transaction?.state) return transaction
-    const { state } = transaction
     if (!transaction.documentChanged && !transaction.selectionChanged) return transaction
+    const { state } = transaction
     this.__rustExpectedMarkdown = state.markdown
-    const cursor = selectionToMuyaIndexCursor(state.markdown, state.selection)
-    super.setMarkdown(state.markdown, undefined, true, cursor)
+    super.setMarkdown(
+      state.markdown,
+      undefined,
+      true,
+      selectionToMuyaIndexCursor(state.markdown, state.selection)
+    )
     super.clearHistory()
     return transaction
   }
 
   __installRustHooks () {
-    this.contentState.updateParagraph = (type) => this.updateParagraph(type)
-    this.contentState.editTable = (data, key) => this.__editTable(data, key)
-    this.contentState.updateImage = (imageInfo, attrName, attrValue) => (
-      this.__updateImage(imageInfo, attrName, attrValue)
-    )
-    this.contentState.deleteImage = (imageInfo) => this.__deleteImage(imageInfo)
-    this.contentState.createFootnote = (identifier) => this.__createFootnote(identifier)
-    this.contentState.pasteHandler = (event, type = 'normal', text, html) => (
+    const hooks = this.contentState
+    hooks.updateParagraph = (type) => this.updateParagraph(type)
+    hooks.format = (type) => this.format(type)
+    hooks.clearBlockFormat = (_block, _cursor, type = 'clear') => this.format(type || 'clear')
+    hooks.editTable = (data, key) => this.__editTable(data, key)
+    hooks.updateImage = (info, attr, value) => this.__updateImage(info, attr, value)
+    hooks.deleteImage = (info) => this.__deleteImage(info)
+    hooks.createFootnote = (label) => this.__createFootnote(label)
+    hooks.pasteHandler = (event, type = 'normal', text, html) => (
       this.__paste(event, type, text, html)
     )
-    this.contentState.enterHandler = (event) => this.__enter(event)
-    this.contentState.tabHandler = (event) => this.__tab(event)
-    this.contentState.backspaceHandler = (event) => this.__backspace(event)
-    this.contentState.docBackspaceHandler = (event) => this.__backspace(event)
-    this.contentState.deleteHandler = (event) => this.__deleteForward(event)
-    this.contentState.inputHandler = () => undefined
-    this.contentState.duplicate = () => this.duplicate()
-    this.contentState.deleteParagraph = () => this.deleteParagraph()
-    this.contentState.insertParagraph = (location, text = '') => this.insertParagraph(location, text)
+    hooks.enterHandler = (event) => this.__enter(event)
+    hooks.tabHandler = (event) => this.__tab(event)
+    hooks.backspaceHandler = (event) => this.__backspace(event)
+    hooks.docBackspaceHandler = (event) => this.__backspace(event)
+    hooks.deleteHandler = (event) => this.__deleteForward(event)
+    hooks.inputHandler = () => undefined
+    hooks.duplicate = () => this.duplicate()
+    hooks.deleteParagraph = () => this.deleteParagraph()
+    hooks.insertParagraph = (location, text = '') => this.insertParagraph(location, text)
+    hooks.updateCodeLanguage = (_block, language) => this.__setCodeLanguage(language)
+    hooks.unlink = () => this.__unlink()
+    hooks.listItemCheckBoxClick = () => this.__toggleTask()
   }
 
-  __installRustDomEvents () {
+  __installRustEvents () {
     this.__beforeInputListener = (event) => this.__beforeInput(event)
     this.__pasteListener = (event) => this.__paste(event)
     this.__dropListener = (event) => this.__drop(event)
@@ -217,227 +229,252 @@ export default class RealMuyaWithRustCore extends Muya {
   __beforeInput (event) {
     if (!this.__rustMirror?.active || this.__rustComposition) return
     const inputType = String(event.inputType || '')
+    if (inputType === 'insertFromPaste' || inputType === 'insertCompositionText') return
     const text = event.data == null ? '' : String(event.data)
+    const selection = this.__selection().selection
     const operations = {
-      insertText: (engine) => {
-        const { selection } = this.__currentSelection()
-        return engine.replaceRange(selection.anchor, selection.focus, text)
-      },
-      insertParagraph: (engine) => {
-        const { selection } = this.__currentSelection()
-        return engine.replaceRange(selection.anchor, selection.focus, '\n')
-      },
-      insertLineBreak: (engine) => {
-        const { selection } = this.__currentSelection()
-        return engine.replaceRange(selection.anchor, selection.focus, '\n')
-      },
+      insertText: (engine) => engine.replaceRange(selection.anchor, selection.focus, text),
+      insertParagraph: (engine) => engine.replaceRange(selection.anchor, selection.focus, '\n'),
+      insertLineBreak: (engine) => engine.replaceRange(selection.anchor, selection.focus, '\n'),
       deleteContentBackward: (engine) => engine.deleteBackward(),
       deleteContentForward: (engine) => engine.deleteForward(),
-      deleteByCut: (engine) => {
-        const { selection } = this.__currentSelection()
-        return engine.replaceRange(selection.anchor, selection.focus, '')
-      },
+      deleteByCut: (engine) => engine.replaceRange(selection.anchor, selection.focus, ''),
       historyUndo: (engine) => engine.undo(),
       historyRedo: (engine) => engine.redo(),
-      formatBold: (engine) => engine.toggleInline('**'),
-      formatItalic: (engine) => engine.toggleInline('*'),
-      formatStrikeThrough: (engine) => engine.toggleInline('~~')
+      formatBold: (engine) => engine.complete({ type: 'formatInline', format: 'strong' }),
+      formatItalic: (engine) => engine.complete({ type: 'formatInline', format: 'em' }),
+      formatStrikeThrough: (engine) => engine.complete({ type: 'formatInline', format: 'del' })
     }
     const operation = operations[inputType]
-    if (!operation || inputType === 'insertFromPaste' || inputType === 'insertCompositionText') return
+    if (!operation) {
+      if (MUTATING_INPUT.test(inputType)) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        this.__reportRustError(new Error(`Unsupported browser mutation: ${inputType}`))
+      }
+      return
+    }
     event.preventDefault()
-    event.stopPropagation()
-    this.__applyRust(`beforeinput-${inputType}`, operation).catch(this.__reportRustError)
+    event.stopImmediatePropagation()
+    this.__applyRust(`beforeinput-${inputType}`, operation).catch(() => {})
   }
 
   __backspace (event) {
     event?.preventDefault?.()
-    event?.stopPropagation?.()
+    event?.stopImmediatePropagation?.()
     return this.__applyRust('backspace', (engine) => engine.deleteBackward())
   }
 
   __deleteForward (event) {
     event?.preventDefault?.()
-    event?.stopPropagation?.()
+    event?.stopImmediatePropagation?.()
     return this.__applyRust('delete-forward', (engine) => engine.deleteForward())
   }
 
   __enter (event) {
     event?.preventDefault?.()
-    event?.stopPropagation?.()
+    event?.stopImmediatePropagation?.()
     return this.__applyRust('enter', async(engine) => {
       const transaction = await engine.keyboardRule('Enter')
       if (transaction.documentChanged) return transaction
-      const { selection } = this.__currentSelection()
+      const selection = this.__selection().selection
       return engine.replaceRange(selection.anchor, selection.focus, '\n')
     })
   }
 
   __tab (event) {
     event?.preventDefault?.()
-    event?.stopPropagation?.()
+    event?.stopImmediatePropagation?.()
     return this.__applyRust('tab', (engine) => engine.indentSelection({
       outdent: Boolean(event?.shiftKey),
       width: Number(this.contentState.tabSize) || 2
     }))
   }
 
+  async __persistImage (file) {
+    const invoke = getInvoke()
+    if (!invoke) throw new Error('Tauri asset writer is unavailable.')
+    const result = await invoke('tauri_muya_asset_write', {
+      fileName: file.name || null,
+      mimeType: file.type,
+      bytes: await fileBytes(file)
+    })
+    await this.__applyRust('asset-image', (engine) => engine.complete({
+      type: 'insertImage',
+      alt: file.name || 'image',
+      src: result.path,
+      title: ''
+    }))
+  }
+
   __paste (event, type = 'normal', rawText, rawHtml) {
-    if (clipboardHasImage(event)) {
-      this.__reportRustError(new Error('Binary image paste must be imported through the attachment service.'))
+    const files = Array.from(event?.clipboardData?.files || [])
+    const images = files.filter((file) => String(file.type || '').startsWith('image/'))
+    event?.preventDefault?.()
+    event?.stopImmediatePropagation?.()
+    if (images.length) {
+      Promise.all(images.map((file) => this.__persistImage(file))).catch(this.__reportRustError)
       return
     }
     const text = String(rawText ?? event?.clipboardData?.getData?.('text/plain') ?? '').replace(/\r/g, '')
-    const sourceHtml = String(rawHtml ?? event?.clipboardData?.getData?.('text/html') ?? '').replace(/\r/g, '')
-    const html = type === 'pasteAsPlainText' ? '' : sourceHtml
-    event?.preventDefault?.()
-    event?.stopPropagation?.()
+    const html = type === 'pasteAsPlainText'
+      ? ''
+      : String(rawHtml ?? event?.clipboardData?.getData?.('text/html') ?? '').replace(/\r/g, '')
     return this.__applyRust('paste', (engine) => engine.pasteClipboard(html, text))
   }
 
   __drop (event) {
+    const files = Array.from(event?.dataTransfer?.files || [])
+    const images = files.filter((file) => String(file.type || '').startsWith('image/'))
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    if (images.length) {
+      Promise.all(images.map((file) => this.__persistImage(file))).catch(this.__reportRustError)
+      return
+    }
     const text = String(event?.dataTransfer?.getData?.('text/plain') || '')
     if (!text) return
-    event.preventDefault()
-    event.stopPropagation()
-    return this.__applyRust('drop', (engine) => {
-      const { selection } = this.__currentSelection()
+    this.__applyRust('drop', (engine) => {
+      const selection = this.__selection().selection
       return engine.replaceRange(selection.anchor, selection.focus, text)
-    })
+    }).catch(() => {})
   }
 
-  async __refreshRustClipboard () {
-    if (typeof this.__rustMirror?.clipboard !== 'function') return
-    this.__rustClipboard = await this.__rustMirror.clipboard()
+  async __refreshClipboard () {
+    this.__rustClipboard = await this.__requireRust().clipboard()
+    return this.__rustClipboard
   }
 
   __copy (event) {
-    const payload = this.__rustClipboard || { markdown: '', html: '' }
-    if (!payload.markdown && !payload.html) return
+    const payload = this.__rustClipboard
+    if (!payload?.markdown && !payload?.html) return
     event.preventDefault()
+    event.stopImmediatePropagation()
     event.clipboardData?.setData?.('text/plain', payload.markdown || '')
     event.clipboardData?.setData?.('text/html', payload.html || '')
   }
 
   __cut (event) {
     this.__copy(event)
-    const { selection } = this.__currentSelection()
+    const selection = this.__selection().selection
     if (selection.anchor === selection.focus) return
     this.__applyRust('cut', (engine) => (
       engine.replaceRange(selection.anchor, selection.focus, '')
-    )).catch(this.__reportRustError)
+    )).catch(() => {})
   }
 
   __compositionStart () {
     if (!this.__rustMirror?.active || this.__rustComposition) return
-    const { markdown, cursor, selection } = this.__currentSelection()
-    this.__rustComposition = {
-      markdown,
-      cursor,
-      selection,
-      finalMarkdown: markdown,
-      finalCursor: cursor
-    }
+    const current = this.__selection()
+    this.__rustComposition = current
   }
 
   __compositionEnd (event) {
     const composition = this.__rustComposition
     if (!composition) return
     this.__rustComposition = null
-    const text = String(event?.data || '')
     this.__applyRust('composition', (engine) => (
-      engine.commitComposition(composition.selection, text)
-    )).catch(this.__reportRustError)
+      engine.commitComposition(composition.selection, String(event?.data || ''))
+    )).catch(() => {})
   }
 
-  __tableContext (data, cellContentKey) {
-    const { start, end } = this.contentState.cursor || {}
-    if (!cellContentKey && (!start || !end || start.key !== end.key)) {
-      throw new Error('Rust table command requires a single active cell.')
+  __tableContext (data, key) {
+    const blockKey = key || this.contentState.cursor?.start?.key
+    const block = blockKey ? this.contentState.getBlock(blockKey) : null
+    if (!block || block.functionType !== 'cellContent') {
+      throw new Error('A table cell must be active.')
     }
-    const block = this.contentState.getBlock(cellContentKey || start.key)
-    if (block?.functionType !== 'cellContent') throw new Error('Rust table command requires a table cell.')
     const cell = this.contentState.getParent(block)
     const row = this.contentState.getParent(cell)
-    const table = this.contentState.closest(block, 'table')
-    const body = table?.children?.[1]
     const column = row?.children?.indexOf(cell)
-    const visualRow = cell?.type === 'th' ? 0 : (body?.children?.indexOf(row) ?? -1) + 1
-    if (!table || !Number.isInteger(column) || column < 0 || visualRow < 0) {
-      throw new Error('Unable to resolve the active Rust table position.')
+    const cursor = this.contentState.getMuyaIndexCursor()
+    const range = tableRangeAtLine(this.getMarkdown(), cursor?.anchor?.line ?? -1)
+    if (!range || !Number.isInteger(column) || column < 0) {
+      throw new Error('Unable to resolve the active table in the Rust document.')
     }
-    const parsed = markdownTables(this.getMarkdown())
-    if (parsed.tables.length !== 1) {
-      throw new Error('Multiple-table editing is not yet addressable by the table toolbar.')
-    }
+    const visualRow = (cursor?.anchor?.line ?? range.startLine) - range.startLine
     if (data?.target === 'row') {
-      if (visualRow === 0) throw new Error('The Markdown table header cannot be deleted as a body row.')
-      const index = visualRow - 1
-      if (data.action === 'insert') {
-        return { action: 'insert_row', index: data.location === 'previous' ? index : index + 1 }
+      if (visualRow <= 1 && data.action === 'remove') {
+        throw new Error('The Markdown table header and separator cannot be removed.')
       }
-      if (data.action === 'remove') return { action: 'delete_row', index }
+      const bodyIndex = Math.max(0, visualRow - 2)
+      if (data.action === 'insert') {
+        const index = data.location === 'previous' ? bodyIndex : bodyIndex + 1
+        return { range, action: 'insert_row', index }
+      }
+      if (data.action === 'remove') return { range, action: 'delete_row', index: bodyIndex }
     }
     if (data?.target === 'column') {
       if (data.action === 'insert') {
-        return { action: 'insert_column', index: data.location === 'left' ? column : column + 1 }
+        return {
+          range,
+          action: 'insert_column',
+          index: data.location === 'left' ? column : column + 1
+        }
       }
-      if (data.action === 'remove') return { action: 'delete_column', index: column }
+      if (data.action === 'remove') return { range, action: 'delete_column', index: column }
     }
-    throw new Error('Unsupported Rust table command.')
+    throw new Error('Unsupported table operation.')
   }
 
-  __editTable (data, cellContentKey) {
-    const context = this.__tableContext(data, cellContentKey)
-    return this.__applyRust(`table-${context.action}`, (engine) => (
-      engine.tableCommand(context.action, context.index)
-    ))
+  __editTable (data, key) {
+    const context = this.__tableContext(data, key)
+    return this.__applyRust(`table-${context.action}`, (engine) => engine.complete({
+      type: 'transformTable',
+      start: context.range.start,
+      end: context.range.end,
+      action: context.action,
+      index: context.index
+    }))
   }
 
-  __imageRange (imageInfo) {
-    const token = imageInfo?.token
-    const range = token?.range
-    if (!range || !Number.isInteger(range.start) || !Number.isInteger(range.end)) {
-      throw new Error('Rust image command requires a token range.')
-    }
-    const { selection } = this.__currentSelection()
-    const count = Math.max(0, range.end - range.start)
-    const end = selection.focus
-    const start = Math.max(0, end - count)
-    return { start, end }
+  __imageRange (info) {
+    const current = this.__selection()
+    return tokenRangeAtSelection(current.markdown, current.selection, info?.token)
   }
 
-  __updateImage (imageInfo, attrName, attrValue) {
-    if (!['width', 'data-align', 'src', 'alt', 'title'].includes(attrName)) {
-      throw new Error(`Unsupported Rust image attribute: ${attrName}`)
-    }
-    const replacement = imageHtml(imageInfo?.token, attrName, attrValue)
-    const range = this.__imageRange(imageInfo)
-    return this.__applyRust(`image-${attrName}`, (engine) => (
-      engine.replaceRange(range.start, range.end, replacement)
-    ))
+  __updateImage (info, attribute, value) {
+    const range = this.__imageRange(info)
+    return this.__applyRust(`image-${attribute}`, (engine) => engine.complete({
+      type: 'updateImage',
+      start: range.start,
+      end: range.end,
+      attribute: String(attribute),
+      value: String(value)
+    }))
   }
 
-  __deleteImage (imageInfo) {
-    const range = this.__imageRange(imageInfo)
+  __deleteImage (info) {
+    const range = this.__imageRange(info)
     return this.__applyRust('image-delete', (engine) => (
       engine.replaceRange(range.start, range.end, '')
     ))
   }
 
-  __createFootnote (identifier) {
-    const label = String(identifier || '')
-    if (!label || /[\]\r\n]/.test(label)) throw new Error('Invalid Rust footnote label.')
-    return this.__applyRust('footnote-create', (engine) => engine.upsertFootnote(label, ''))
+  __createFootnote (label) {
+    const value = String(label || '')
+    if (!value || /[\]\r\n]/.test(value)) throw new Error('Invalid footnote label.')
+    return this.__applyRust('footnote-create', (engine) => engine.upsertFootnote(value, ''))
+  }
+
+  __setCodeLanguage (language) {
+    return this.__applyRust('code-language', (engine) => engine.setCodeLanguage(String(language || '')))
+  }
+
+  __unlink () {
+    return this.__applyRust('unlink', (engine) => engine.removeLink())
+  }
+
+  __toggleTask () {
+    return this.__applyRust('task-toggle', (engine) => engine.toggleTask())
   }
 
   setMarkdown (markdown, ...args) {
     const result = super.setMarkdown(markdown, ...args)
     this.__rustExpectedMarkdown = null
     this.__rustComposition = null
-    const cursor = args[2]
-    this.__rustMirror?.reset(markdown, 'set-markdown', { muyaIndexCursor: cursor })
-      .then(() => this.__refreshRustClipboard())
+    this.__rustMirror?.reset(markdown, 'set-markdown', { muyaIndexCursor: args[2] })
+      .then(() => this.__refreshClipboard())
       .catch(this.__reportRustError)
     return result
   }
@@ -451,29 +488,28 @@ export default class RealMuyaWithRustCore extends Muya {
   }
 
   format (type) {
-    const marker = INLINE_MARKERS[type]
-    if (!marker) throw new Error(`Unsupported Rust inline format: ${type}`)
-    return this.__applyRust(`format-${type}`, (engine) => engine.toggleInline(marker))
+    return this.__applyRust(`format-${type}`, (engine) => engine.complete({
+      type: 'formatInline',
+      format: String(type)
+    }))
   }
 
   updateParagraph (type) {
     const kind = BLOCK_KINDS[type]
-    if (!kind) throw new Error(`Unsupported Rust block transformation: ${type}`)
+    if (!kind) throw new Error(`Unsupported block transformation: ${type}`)
     return this.__applyRust(`paragraph-${type}`, (engine) => engine.transformBlock(kind))
   }
 
   duplicate () {
-    return this.__applyRust('duplicate-block', (engine) => engine.duplicateBlock())
+    return this.__applyRust('duplicate', (engine) => engine.duplicateBlock())
   }
 
   deleteParagraph () {
-    return this.__applyRust('delete-block', (engine) => engine.deleteBlock())
+    return this.__applyRust('delete-paragraph', (engine) => engine.deleteBlock())
   }
 
   insertParagraph (location, text = '') {
-    return this.__applyRust(`insert-paragraph-${location}`, (engine) => (
-      engine.insertParagraph(location, text)
-    ))
+    return this.__applyRust(`insert-${location}`, (engine) => engine.insertParagraph(location, text))
   }
 
   editTable (data) {
@@ -481,66 +517,96 @@ export default class RealMuyaWithRustCore extends Muya {
   }
 
   createTable ({ rows = 2, columns = 2 } = {}) {
-    const width = Math.max(1, Number(columns) || 1)
-    const height = Math.max(2, Number(rows) || 2)
-    const row = `| ${Array(width).fill('').join(' | ')} |`
-    const separator = `| ${Array(width).fill('-').join(' | ')} |`
-    const markdown = [row, separator, ...Array(height - 1).fill(row)].join('\n')
-    const { selection } = this.__currentSelection()
-    return this.__applyRust('create-table', (engine) => (
-      engine.replaceRange(selection.anchor, selection.focus, markdown)
-    ))
+    return this.__applyRust('create-table', (engine) => engine.complete({
+      type: 'createTable',
+      rows: Number(rows) || 2,
+      columns: Number(columns) || 2
+    }))
   }
 
   insertImage ({ alt = '', src = '', title = '' } = {}) {
-    const source = encodeImageSource(src)
-    const sourceAndTitle = title ? `${source} "${title}"` : source
-    const markdown = `![${alt}](${sourceAndTitle})`
-    const { selection } = this.__currentSelection()
-    return this.__applyRust('image-insert', (engine) => (
-      engine.replaceRange(selection.anchor, selection.focus, markdown)
-    ))
+    return this.__applyRust('insert-image', (engine) => engine.complete({
+      type: 'insertImage',
+      alt: String(alt),
+      src: String(src),
+      title: String(title)
+    }))
   }
 
   selectAll () {
     return this.__applyRust('select-all', (engine) => engine.selectAll())
   }
 
+  async search (value, options = {}) {
+    const query = String(value || '')
+    const result = await this.__requireRust().searchMatches(query, {
+      caseSensitive: Boolean(options.caseSensitive),
+      wholeWord: Boolean(options.wholeWord)
+    })
+    const markdown = this.getMarkdown()
+    const matches = (result?.matches || []).map(({ start, end }) => {
+      const indexCursor = selectionToMuyaIndexCursor(markdown, { anchor: start, focus: end })
+      const cursor = this.contentState.convertMuyaIndexCursortoCursor(indexCursor)
+      return { start: cursor.start, end: cursor.end, active: false }
+    })
+    this.contentState.searchMatches = { value: query, matches, index: matches.length ? 0 : -1 }
+    if (matches.length) matches[0].active = true
+    this.contentState.render(Boolean(options.selectHighlight))
+    return this.contentState.searchMatches
+  }
+
   replace (value, options = {}) {
     return this.__applyRust('replace', (engine) => engine.searchReplace({
-      query: value,
-      replacement: options.replaceValue || options.replacement || '',
+      query: String(value || ''),
+      replacement: String(options.replaceValue ?? options.replacement ?? ''),
       replaceAll: Boolean(options.all || options.replaceAll),
       caseSensitive: Boolean(options.caseSensitive),
       wholeWord: Boolean(options.wholeWord)
     }))
   }
 
-  search (value, options = {}) {
-    this.__rustSearch = {
-      value: String(value || ''),
-      options: { ...options },
-      index: -1
-    }
-    return []
+  find (action) {
+    const search = this.contentState.searchMatches
+    if (!search?.matches?.length) return search
+    const delta = action === 'pre' ? -1 : 1
+    search.index = (search.index + delta + search.matches.length) % search.matches.length
+    search.matches.forEach((match, index) => { match.active = index === search.index })
+    this.contentState.render(true)
+    return search
   }
 
-  find (action) {
-    if (!this.__rustSearch?.value) return []
-    this.__rustSearch.index += action === 'pre' ? -1 : 1
-    return []
+  async __writeClipboard () {
+    const payload = await this.__refreshClipboard()
+    if (globalThis.ClipboardItem && navigator.clipboard?.write) {
+      const item = new ClipboardItem({
+        'text/plain': new Blob([payload.markdown || ''], { type: 'text/plain' }),
+        'text/html': new Blob([payload.html || ''], { type: 'text/html' })
+      })
+      await navigator.clipboard.write([item])
+      return payload
+    }
+    await navigator.clipboard?.writeText?.(payload.markdown || '')
+    return payload
   }
 
   copyAsRich () {
-    return this.__refreshRustClipboard()
+    return this.__writeClipboard()
   }
 
   copyAsHtml () {
-    return this.__refreshRustClipboard()
+    return this.__writeClipboard()
   }
 
-  pasteAsPlainText () {
-    throw new Error('Paste as plain text must be initiated by a clipboard event.')
+  async pasteAsPlainText () {
+    const text = await navigator.clipboard?.readText?.()
+    return this.__applyRust('paste-plain-text', (engine) => engine.pasteClipboard('', text || ''))
+  }
+
+  replaceWordInline (text) {
+    const selection = this.__selection().selection
+    return this.__applyRust('replace-word', (engine) => (
+      engine.replaceRange(selection.anchor, selection.focus, String(text || ''))
+    ))
   }
 
   destroy () {

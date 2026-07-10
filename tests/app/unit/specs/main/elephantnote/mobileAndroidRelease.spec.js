@@ -90,21 +90,29 @@ describe('ElephantNote mobile Android release', () => {
     expect(cargo).not.toContain('panic = "abort"')
   })
 
-  it('installs camera permission, immersive system bars and tracked Android activity', () => {
+  it('declares camera capability but never requests camera during application startup', () => {
     const script = read('build/scripts/build_dev_apk.sh')
     const activity = read('build/android/MainActivity.kt')
+    const scanner = read('Elephant/frontend/app/components/settings/SyncQrScanner.vue')
+    const startupSmoke = read('build/scripts/android_startup_smoke.sh')
     const vite = read('vite.tauri.config.js')
     const nodeShim = read(
       'Elephant/frontend/src/renderer/src/platform/mobileNodeBuiltinsShim.js'
     )
 
-    expect(activity).toContain('requestCameraPermissionIfNeeded()')
-    expect(activity).toContain('Manifest.permission.CAMERA')
+    expect(activity).not.toContain('requestPermissions(')
+    expect(activity).not.toContain('requestCameraPermissionIfNeeded')
+    expect(activity).not.toContain('Manifest.permission.CAMERA')
     expect(activity).toContain('WindowInsets.Type.systemBars()')
     expect(activity).toContain('BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE')
     expect(activity).toContain('onWindowFocusChanged')
     expect(script).toContain('android.permission.CAMERA')
     expect(script).toContain('android.hardware.camera.any')
+    expect(scanner).toContain('@click="startCameraScanner"')
+    expect(scanner).toContain('navigator.mediaDevices?.getUserMedia')
+    expect(startupSmoke).toContain('camera_not_requested=true')
+    expect(startupSmoke).toContain('mResumedActivity')
+    expect(startupSmoke).toContain('FATAL EXCEPTION')
     expect(script).toContain('cp "$MAIN_ACTIVITY_TEMPLATE" "$MAIN_ACTIVITY"')
     expect(script).toContain("'__vite-browser-external'")
     expect(vite).toContain("process.env.ELEPHANTNOTE_ANDROID_BUILD === '1'")
@@ -116,6 +124,18 @@ describe('ElephantNote mobile Android release', () => {
     expect(nodeShim).toContain('export const spawn')
     expect(nodeShim).toContain('export const statSync')
     expect(nodeShim).toContain('export const createHash')
+  })
+
+  it('requests recursive scoped folder access instead of broad storage permission', () => {
+    const bridge = read('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
+    const buildScript = read('build/scripts/build_dev_apk.sh')
+
+    expect(bridge).toContain('directory: true')
+    expect(bridge).toContain('recursive: true')
+    expect(bridge).toContain("pickerMode: 'document'")
+    expect(buildScript).not.toContain('READ_EXTERNAL_STORAGE')
+    expect(buildScript).not.toContain('WRITE_EXTERNAL_STORAGE')
+    expect(buildScript).not.toContain('MANAGE_EXTERNAL_STORAGE')
   })
 
   it('keeps the Android runtime mobile-only and exposes the Tauri bridge', () => {

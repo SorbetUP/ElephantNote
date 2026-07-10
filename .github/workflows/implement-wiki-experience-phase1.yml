@@ -85,8 +85,7 @@ jobs:
             Elephant/backend/tauri/src/knowledge_wikis.rs \
             Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
             Elephant/frontend/app/components/views/ChatView.vue \
-            Elephant/frontend/app/components/views/WikiView.vue \
-            .github/wiki-experience-phase1-apply-error.txt
+            Elephant/frontend/app/components/views/WikiView.vue
           git commit -m "Implement functional Wiki previews, links and refresh"
           git push --force-with-lease origin HEAD:${{ github.head_ref }}
       - name: Install dependencies
@@ -103,7 +102,7 @@ jobs:
           core_status=$?
           cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features > /tmp/tauri.log 2>&1
           tauri_status=$?
-          pnpm exec eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue Elephant/frontend/app/components/views/WikiView.vue Elephant/frontend/app/components/views/ChatView.vue > /tmp/eslint.log 2>&1
+          Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue Elephant/frontend/app/components/views/WikiView.vue Elephant/frontend/app/components/views/ChatView.vue > /tmp/eslint.log 2>&1
           lint_status=$?
           pnpm tauri:web:build > /tmp/build.log 2>&1
           build_status=$?

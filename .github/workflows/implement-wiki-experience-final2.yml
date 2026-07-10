@@ -27,32 +27,25 @@ jobs:
       - name: Apply implementation
         shell: bash
         run: |
-          set -euo pipefail
-          git fetch origin feature/wiki-knowledge-continuation
-          git reset --hard origin/feature/wiki-knowledge-continuation
-          git show origin/feature/wiki-knowledge-continuation:.github/scripts/implement_wiki_experience_phase1.py > /tmp/impl.py
-          python3 - <<'PY'
+          set +e
+          {
+            git fetch origin feature/wiki-knowledge-continuation
+            git reset --hard origin/feature/wiki-knowledge-continuation
+            git show origin/feature/wiki-knowledge-continuation:.github/scripts/implement_wiki_experience_phase1.py > /tmp/impl.py
+            python3 - <<'PY'
           from pathlib import Path
           p = Path('/tmp/impl.py')
           text = p.read_text()
-          settings_old = '''replace_once(
-              settings,
-              '        <div class="en-ai-card-body en-ai-grid">\n          <label>\n            <span>Provider</span>\n',
-              '        <div class="en-ai-card-body en-ai-grid en-ai-chat-route-grid">\n          <label>\n            <span>Provider</span>\n'
-          )'''
-          settings_new = '''regex_once(
-              settings,
-              r'(<template v-else-if="activePage === \'chat\'">.*?<div class="en-ai-card-body )en-ai-grid(">)',
-              r'\\1en-ai-grid en-ai-chat-route-grid\\2',
-              flags=re.S
-          )'''
-          if settings_old not in text:
-              raise SystemExit('Could not patch the Chat settings grid replacement')
-          text = text.replace(settings_old, settings_new, 1)
-          start = text.index("wiki_graph = 'Elephant/backend/knowledge-core/src/wiki_graph_projection.rs'\nreplace_once(\n")
-          marker = "# The exact legacy parser is easier to extend"
-          end = text.index(marker, start)
-          text = text[:start] + "wiki_graph = 'Elephant/backend/knowledge-core/src/wiki_graph_projection.rs'\n" + text[end:]
+
+          settings_start = text.index("replace_once(\n    settings,\n    '        <div class=\"en-ai-card-body en-ai-grid\">")
+          settings_end = text.index("\nreplace_once(\n    settings,", settings_start + 1)
+          text = text[:settings_start] + text[settings_end + 1:]
+
+          graph_start = text.index("wiki_graph = 'Elephant/backend/knowledge-core/src/wiki_graph_projection.rs'\nreplace_once(\n")
+          graph_marker = "# The exact legacy parser is easier to extend"
+          graph_end = text.index(graph_marker, graph_start)
+          text = text[:graph_start] + "wiki_graph = 'Elephant/backend/knowledge-core/src/wiki_graph_projection.rs'\n" + text[graph_end:]
+
           old = '''replace_once(
               wiki_view,
               '    await loadLibrary()\\n  } catch (error) {\\n    setEntryError(entry.id, normalizeError(error))',
@@ -67,18 +60,43 @@ jobs:
               raise SystemExit('Could not patch the generate-specific WikiView replacement')
           p.write_text(text.replace(old, new, 1))
           PY
-          python3 /tmp/impl.py
-          git show origin/feature/wiki-knowledge-continuation:.github/scripts/fix_phase1_tests.py > /tmp/fix_phase1_tests.py
-          python3 /tmp/fix_phase1_tests.py
-          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-          git status --short
-          git diff --stat
+            python3 /tmp/impl.py
+            python3 - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
+          text = path.read_text()
+          pattern = r'(<template v-else-if="activePage === \'chat\'">.*?<div class="en-ai-card-body )en-ai-grid(">)'
+          updated, count = re.subn(pattern, r'\1en-ai-grid en-ai-chat-route-grid\2', text, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit(f'Expected one Chat settings grid, found {count}')
+          path.write_text(updated)
+          PY
+            git show origin/feature/wiki-knowledge-continuation:.github/scripts/fix_phase1_tests.py > /tmp/fix_phase1_tests.py
+            python3 /tmp/fix_phase1_tests.py
+            cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+            cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+            git status --short
+            git diff --stat
+          } > /tmp/wiki-final2-apply.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/wiki-final2-apply.log
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/wiki-final2-apply.log .github/wiki-experience-final2-apply-error.txt
+            git config user.name "ElephantNote Bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add .github/wiki-experience-final2-apply-error.txt
+            git commit -m "Record final Wiki experience apply failure"
+            git push --force-with-lease origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
       - name: Commit implementation
         shell: bash
         run: |
           git config user.name "ElephantNote Bot"
           git config user.email "actions@users.noreply.github.com"
+          rm -f .github/wiki-experience-final2-apply-error.txt
           git add Elephant/backend/knowledge-core/src/wiki_core.rs \
             Elephant/backend/knowledge-core/src/wiki_graph_projection.rs \
             Elephant/backend/tauri/src/chat_runtime.rs \

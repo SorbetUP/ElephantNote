@@ -81,6 +81,18 @@ const createStructuredInvoke = () => {
       }
       return { state: view(state), documentChanged: true, selectionChanged: true }
     }
+    if (command === 'tauri_muya_session_commit_composition') {
+      const start = Math.min(payload.selection.anchor, payload.selection.focus)
+      const end = Math.max(payload.selection.anchor, payload.selection.focus)
+      state = {
+        ...state,
+        markdown: state.markdown.slice(0, start) + payload.text + state.markdown.slice(end),
+        selection: { anchor: start + payload.text.length, focus: start + payload.text.length },
+        revision: state.revision + 1,
+        undoDepth: state.undoDepth + 1
+      }
+      return { state: view(state), documentChanged: true, selectionChanged: true }
+    }
     if (command === 'tauri_muya_session_query') {
       return { type: 'muya-json-state', blocks: [{ type: 'table' }] }
     }
@@ -90,7 +102,7 @@ const createStructuredInvoke = () => {
 }
 
 describe('structured operations on the Rust-owned Muya session', () => {
-  it('routes tables, images, footnotes and rich paste through native session IPC', async() => {
+  it('routes tables, images, footnotes, rich paste and IME through native session IPC', async() => {
     const invoke = createStructuredInvoke()
     const mirror = createRealMuyaRustMirror({
       initialMarkdown: '| A | B |\n| - | - |\n| 1 | 2 |',
@@ -104,6 +116,7 @@ describe('structured operations on the Rust-owned Muya session', () => {
     await mirror.applyOperation({ type: 'insert', pos: 0, count: 0, text: 'Intro\n' })
     await mirror.upsertFootnote('note', '')
     await mirror.pasteClipboard('<strong>rich</strong>', 'rich')
+    await mirror.commitComposition({ anchor: 0, focus: 0 }, '日')
 
     const parityCalls = invoke.mock.calls.filter(([command]) => (
       command === 'tauri_muya_session_apply_parity'
@@ -123,7 +136,12 @@ describe('structured operations on the Rust-owned Muya session', () => {
       html: '<strong>rich</strong>',
       text: 'rich'
     })
-    expect(mirror.status.undoDepth).toBe(4)
+    expect(invoke).toHaveBeenCalledWith('tauri_muya_session_commit_composition', {
+      editorId: mirror.sessionId,
+      selection: { anchor: 0, focus: 0 },
+      text: '日'
+    })
+    expect(mirror.status.undoDepth).toBe(5)
   })
 
   it('hooks the original Muya content state instead of replacing its DOM renderer', () => {
@@ -135,6 +153,9 @@ describe('structured operations on the Rust-owned Muya session', () => {
     expect(adapter).toContain('this.contentState.deleteImage =')
     expect(adapter).toContain('this.contentState.createFootnote =')
     expect(adapter).toContain('this.contentState.pasteHandler =')
+    expect(adapter).toContain("this.container.addEventListener('compositionstart'")
+    expect(adapter).toContain("this.container.addEventListener('compositionend'")
+    expect(adapter).toContain('engine.commitComposition(selection, String(text))')
     expect(adapter).toContain("engine.tableCommand(context.action, context.index)")
     expect(adapter).toContain('engine.applyOperation(mutation.operation)')
     expect(adapter).toContain("engine.upsertFootnote(label, '')")

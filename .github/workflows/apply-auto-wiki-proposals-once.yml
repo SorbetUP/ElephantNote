@@ -1,0 +1,696 @@
+name: Apply Automatic Wiki Proposals Once
+
+on:
+  push:
+    branches:
+      - feature/wiki-knowledge-continuation
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-auto-wiki-proposals-once
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/wiki-knowledge-continuation
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Install Tauri build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Apply implementation
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          import subprocess
+
+          subprocess.run(['git', 'fetch', 'origin', 'feature/real-codex-subscription'], check=True)
+
+          def read(path):
+              return Path(path).read_text()
+
+          def write(path, content):
+              target = Path(path)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(content)
+
+          def from_branch(path):
+              return subprocess.run(
+                  ['git', 'show', f'origin/feature/real-codex-subscription:{path}'],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              ).stdout
+
+          # Keep the Codex protocol implementation in sync with the branch that
+          # already fixed the app-server turn sandbox enum and account commands.
+          for path in [
+              'Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs',
+              'Elephant/backend/tauri/src/chat_runtime/codex_app_server/codex_runtime_installer.rs',
+              'Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue',
+          ]:
+              write(path, from_branch(path))
+
+          # The knowledge branch owns its own chat command. Add real Codex routing
+          # without replacing the knowledge-grounded local path.
+          chat_path = 'Elephant/backend/tauri/src/chat_runtime.rs'
+          chat = read(chat_path)
+          old_model = '''fn selected_chat_model(payload: &Value) -> String {
+    let config = payload
+        .get("aiConfig")
+        .or_else(|| payload.get("config"))
+        .unwrap_or(&Value::Null);
+    let selection = payload.get("modelSelection").unwrap_or(&Value::Null);
+    let config_selection = config
+        .pointer("/localModelSelection")
+        .unwrap_or(&Value::Null);
+    let route = config.pointer("/routes/chat").unwrap_or(&Value::Null);
+    [
+        text(selection, &["chat"]),
+        text(config_selection, &["chat"]),
+        text(route, &["model", "modelId", "id"]),
+        text(payload, &["model", "modelId", "chatModel"]),
+    ]
+    .into_iter()
+    .find(|value| !value.trim().is_empty())
+    .unwrap_or_default()
+}
+'''
+          new_model = '''fn ai_config(payload: &Value) -> &Value {
+    payload
+        .get("aiConfig")
+        .or_else(|| payload.get("config"))
+        .unwrap_or(&Value::Null)
+}
+
+fn chat_route(payload: &Value) -> &Value {
+    ai_config(payload)
+        .pointer("/routes/chat")
+        .unwrap_or(&Value::Null)
+}
+
+fn selected_chat_source(payload: &Value) -> String {
+    let route = chat_route(payload);
+    [
+        text(route, &["source", "provider"]),
+        text(ai_config(payload), &["provider", "transport"]),
+    ]
+    .into_iter()
+    .find(|value| !value.is_empty())
+    .unwrap_or_else(|| "app-local".to_string())
+}
+
+fn selected_chat_model(payload: &Value) -> String {
+    let config = ai_config(payload);
+    let route = chat_route(payload);
+    let source = selected_chat_source(payload);
+    if source == "codex" {
+        return [
+            text(route, &["model", "modelId", "id"]),
+            text(config.pointer("/providers/codex").unwrap_or(&Value::Null), &["model"]),
+            text(payload, &["model", "modelId", "chatModel"]),
+        ]
+        .into_iter()
+        .find(|value| !value.is_empty())
+        .unwrap_or_default();
+    }
+    let selection = payload.get("modelSelection").unwrap_or(&Value::Null);
+    let config_selection = config
+        .pointer("/localModelSelection")
+        .unwrap_or(&Value::Null);
+    [
+        text(selection, &["chat"]),
+        text(config_selection, &["chat"]),
+        text(route, &["model", "modelId", "id"]),
+        text(payload, &["model", "modelId", "chatModel"]),
+    ]
+    .into_iter()
+    .find(|value| !value.is_empty())
+    .unwrap_or_default()
+}
+'''
+          if old_model not in chat:
+              raise SystemExit('selected_chat_model block changed unexpectedly')
+          chat = chat.replace(old_model, new_model, 1)
+
+          command_start = '''pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
+    let message = last_user_message(&payload);
+    let model = selected_chat_model(&payload);
+'''
+          command_replacement = '''pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
+    #[cfg(not(mobile))]
+    if payload.get("codexOperation").is_some() {
+        return codex_app_server::command(&app, &payload).await;
+    }
+
+    let message = last_user_message(&payload);
+    let model = selected_chat_model(&payload);
+    let source = selected_chat_source(&payload);
+'''
+          if command_start not in chat:
+              raise SystemExit('tauri_knowledge_chat start changed unexpectedly')
+          chat = chat.replace(command_start, command_replacement, 1)
+
+          local_marker = '''    #[cfg(not(mobile))]
+    {
+        validate_configured_llama_binary(&payload)?;
+        let (messages, hits) = grounded_messages(&app, &payload, &message);
+'''
+          codex_branch = '''    #[cfg(not(mobile))]
+    if source == "codex" {
+        let (messages, hits) = grounded_messages(&app, &payload, &message);
+        let transcript = messages
+            .iter()
+            .map(|entry| {
+                format!(
+                    "{}:\\n{}",
+                    text(entry, &["role"]).to_uppercase(),
+                    text(entry, &["content"])
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\\n\\n");
+        let prompt = format!(
+            "You are answering inside ElephantNote. Do not inspect the filesystem or run commands. Use only the conversation and retrieved note context below. Return only the answer.\\n\\n{}",
+            transcript
+        );
+        let result = codex_app_server::chat(&app, &model, &prompt).await?;
+        return Ok(json!({
+            "answer": result.answer,
+            "sources": hits,
+            "runtime": "codex-app-server",
+            "provider": "codex",
+            "model": result.model,
+            "threadId": result.thread_id
+        }));
+    }
+
+    #[cfg(not(mobile))]
+    {
+        let local_sources = ["", "app-local", "local", "tauri-rust", "node-llama-cpp", "local-llama.cpp"];
+        if !local_sources.contains(&source.as_str()) {
+            return Err(format!("Unsupported chat provider: {source}"));
+        }
+        validate_configured_llama_binary(&payload)?;
+        let (messages, hits) = grounded_messages(&app, &payload, &message);
+'''
+          if local_marker not in chat:
+              raise SystemExit('local chat branch changed unexpectedly')
+          chat = chat.replace(local_marker, codex_branch, 1)
+          write(chat_path, chat)
+
+          wiki_path = 'Elephant/backend/tauri/src/knowledge_wikis.rs'
+          wiki = read(wiki_path)
+          wiki = wiki.replace('use rusqlite', 'use rusqlite')
+          wiki = wiki.replace(
+              'use std::collections::HashSet;',
+              'use rusqlite::Connection;\nuse std::collections::{HashMap, HashSet};',
+              1,
+          )
+
+          candidate_code = r'''
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WikiCandidate {
+    pub topic: String,
+    pub title: String,
+    pub source_paths: Vec<String>,
+    pub reason: String,
+    pub score: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WikiAutoProposalResult {
+    pub candidates_considered: usize,
+    pub generated: Vec<WikiDraft>,
+    pub skipped: Vec<String>,
+    pub errors: Vec<String>,
+    pub already_ran: bool,
+}
+
+#[derive(Default)]
+struct CandidateAccumulator {
+    paths: HashSet<String>,
+    hashtag_hits: usize,
+    folder_hits: usize,
+    title_hits: usize,
+}
+
+static AUTO_PROPOSED_VAULTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+fn normalized_candidate_word(raw: &str) -> Option<String> {
+    let value = raw
+        .trim_matches(|character: char| !character.is_alphanumeric() && character != '-' && character != '_')
+        .trim_start_matches('#')
+        .to_lowercase();
+    let length = value.chars().count();
+    if !(4..=48).contains(&length) || value.chars().all(|character| character.is_numeric()) {
+        return None;
+    }
+    const STOP_WORDS: &[&str] = &[
+        "avec", "dans", "pour", "sans", "sous", "entre", "cette", "comme", "plus", "note",
+        "notes", "untitled", "daily", "inbox", "test_keep", "pourtoi", "viral", "shorts", "video",
+        "fyp", "fypsh", "reels", "edit", "funny", "humour", "drole", "million", "today", "from",
+        "that", "this", "with", "your", "have", "about", "into", "when", "what", "just", "new",
+    ];
+    (!STOP_WORDS.contains(&value.as_str())).then_some(value)
+}
+
+fn title_for_topic(topic: &str) -> String {
+    let mut characters = topic.chars();
+    match characters.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + characters.as_str(),
+        None => String::new(),
+    }
+}
+
+fn add_candidate_signal(
+    groups: &mut HashMap<String, CandidateAccumulator>,
+    topic: String,
+    path: &str,
+    signal: &str,
+) {
+    let entry = groups.entry(topic).or_default();
+    entry.paths.insert(path.to_string());
+    match signal {
+        "hashtag" => entry.hashtag_hits += 1,
+        "folder" => entry.folder_hits += 1,
+        _ => entry.title_hits += 1,
+    }
+}
+
+fn discover_wiki_candidates(
+    store: &KnowledgeStore,
+    max_candidates: usize,
+) -> Result<Vec<WikiCandidate>, String> {
+    let conn = Connection::open(store.database_path()).map_err(|error| error.to_string())?;
+    let mut statement = conn
+        .prepare(
+            "SELECT d.relative_path, d.title,
+                    COALESCE((SELECT c.text FROM chunks c WHERE c.document_path=d.relative_path ORDER BY c.ordinal LIMIT 1), '')
+             FROM documents d ORDER BY d.relative_path",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?;
+
+    let existing_topics = store
+        .list_wiki_drafts(None, 1_000)?
+        .into_iter()
+        .map(|draft| draft.topic.trim().to_lowercase())
+        .collect::<HashSet<_>>();
+    let mut groups = HashMap::<String, CandidateAccumulator>::new();
+
+    for row in rows {
+        let (path, title, first_chunk) = row.map_err(|error| error.to_string())?;
+        let mut per_document = HashSet::new();
+        for token in title.split(|character: char| !character.is_alphanumeric() && character != '#' && character != '-' && character != '_') {
+            let is_hashtag = token.starts_with('#');
+            if let Some(topic) = normalized_candidate_word(token) {
+                if per_document.insert((topic.clone(), is_hashtag)) {
+                    add_candidate_signal(&mut groups, topic, &path, if is_hashtag { "hashtag" } else { "title" });
+                }
+            }
+        }
+        for token in first_chunk.split_whitespace().filter(|token| token.starts_with('#')) {
+            if let Some(topic) = normalized_candidate_word(token) {
+                if per_document.insert((topic.clone(), true)) {
+                    add_candidate_signal(&mut groups, topic, &path, "hashtag");
+                }
+            }
+        }
+        if let Some(folder) = path.rsplit_once('/').map(|(parent, _)| parent.rsplit('/').next().unwrap_or(parent)) {
+            if let Some(topic) = normalized_candidate_word(folder) {
+                add_candidate_signal(&mut groups, topic, &path, "folder");
+            }
+        }
+    }
+
+    let mut candidates = groups
+        .into_iter()
+        .filter_map(|(topic, group)| {
+            if existing_topics.contains(&topic) || group.paths.len() < 3 {
+                return None;
+            }
+            let score = group.hashtag_hits * 4 + group.folder_hits * 2 + group.title_hits;
+            if score < 6 {
+                return None;
+            }
+            let mut source_paths = group.paths.into_iter().collect::<Vec<_>>();
+            source_paths.sort();
+            source_paths.truncate(DEFAULT_MAX_DOCUMENTS);
+            let reason = if group.hashtag_hits >= group.folder_hits && group.hashtag_hits >= group.title_hits {
+                format!("{} notes partagent le thème #{}", source_paths.len(), topic)
+            } else if group.folder_hits >= group.title_hits {
+                format!("{} notes forment un groupe de dossier cohérent", source_paths.len())
+            } else {
+                format!("{} notes répètent ce concept dans leur titre", source_paths.len())
+            };
+            Some(WikiCandidate {
+                title: title_for_topic(&topic),
+                topic,
+                source_paths,
+                reason,
+                score,
+            })
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        right
+            .score
+            .cmp(&left.score)
+            .then(right.source_paths.len().cmp(&left.source_paths.len()))
+            .then(left.topic.cmp(&right.topic))
+    });
+    candidates.truncate(max_candidates.clamp(1, 50));
+    Ok(candidates)
+}
+
+#[tauri::command]
+pub fn tauri_knowledge_wiki_candidates(
+    app: AppHandle,
+    limit: Option<usize>,
+) -> Result<Vec<WikiCandidate>, String> {
+    let root = active_vault_root(&app)?;
+    let store = active_store(&root)?;
+    discover_wiki_candidates(&store, limit.unwrap_or(12))
+}
+
+#[tauri::command]
+pub async fn tauri_knowledge_wikis_auto_propose(
+    app: AppHandle,
+    payload: Value,
+    max_proposals: Option<usize>,
+    force: Option<bool>,
+) -> Result<WikiAutoProposalResult, String> {
+    selected_wiki_route(&payload)?;
+    let root = active_vault_root(&app)?;
+    let vault_key = root.to_string_lossy().to_string();
+    if !force.unwrap_or(false) {
+        let mut completed = AUTO_PROPOSED_VAULTS
+            .get_or_init(|| Mutex::new(HashSet::new()))
+            .lock()
+            .map_err(|_| "Automatic wiki proposal lock is poisoned.".to_string())?;
+        if !completed.insert(vault_key) {
+            return Ok(WikiAutoProposalResult {
+                candidates_considered: 0,
+                generated: Vec::new(),
+                skipped: Vec::new(),
+                errors: Vec::new(),
+                already_ran: true,
+            });
+        }
+    }
+
+    let store = active_store(&root)?;
+    let candidates = discover_wiki_candidates(&store, 24)?;
+    let limit = max_proposals.unwrap_or(3).clamp(1, 5);
+    let considered = candidates.len();
+    let mut generated = Vec::new();
+    let mut skipped = Vec::new();
+    let mut errors = Vec::new();
+
+    for candidate in candidates.into_iter().take(limit) {
+        eprintln!(
+            "[knowledge] wiki:auto-propose topic={} sources={} score={}",
+            candidate.topic,
+            candidate.source_paths.len(),
+            candidate.score
+        );
+        match tauri_knowledge_wiki_generate(
+            app.clone(),
+            candidate.topic.clone(),
+            Some(candidate.title),
+            Some(candidate.source_paths),
+            payload.clone(),
+            Some(DEFAULT_MAX_DOCUMENTS),
+            Some(DEFAULT_MAX_CHUNKS),
+            Some(DEFAULT_MAX_SECTIONS),
+        )
+        .await
+        {
+            Ok(result) => generated.push(result.draft),
+            Err(error) => {
+                errors.push(format!("{}: {}", candidate.topic, error));
+                break;
+            }
+        }
+    }
+    if considered > limit {
+        skipped.push(format!("{} candidats différés par la limite de session", considered - limit));
+    }
+    Ok(WikiAutoProposalResult {
+        candidates_considered: considered,
+        generated,
+        skipped,
+        errors,
+        already_ran: false,
+    })
+}
+'''
+          insertion_marker = '\nfn select_documents(\n'
+          if 'pub struct WikiCandidate' not in wiki:
+              if insertion_marker not in wiki:
+                  raise SystemExit('wiki candidate insertion marker missing')
+              wiki = wiki.replace(insertion_marker, candidate_code + insertion_marker, 1)
+          write(wiki_path, wiki)
+
+          lib_path = 'Elephant/backend/tauri/src/lib_min.rs'
+          lib = read(lib_path)
+          marker = '            knowledge_wikis::tauri_knowledge_wiki_generate,\n'
+          addition = (
+              '            knowledge_wikis::tauri_knowledge_wiki_candidates,\n'
+              '            knowledge_wikis::tauri_knowledge_wikis_auto_propose,\n'
+          )
+          if addition not in lib:
+              if marker not in lib:
+                  raise SystemExit('lib_min wiki registration marker missing')
+              lib = lib.replace(marker, marker + addition, 1)
+          write(lib_path, lib)
+
+          client_path = 'Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
+          client = read(client_path)
+          marker = '''  generateWiki: ({ topic, title = null, sourcePaths = [], payload = {}, maxDocuments = 12, maxChunks = 64, maxSections = 10 }) =>
+    invokeKnowledgeCommand('tauri_knowledge_wiki_generate', { topic, title, sourcePaths, payload, maxDocuments, maxChunks, maxSections }),
+'''
+          addition = marker + '''  discoverWikiCandidates: ({ limit = 12 } = {}) =>
+    invokeKnowledgeCommand('tauri_knowledge_wiki_candidates', { limit }),
+  autoProposeWikis: ({ payload = {}, maxProposals = 3, force = false } = {}) =>
+    invokeKnowledgeCommand('tauri_knowledge_wikis_auto_propose', { payload, maxProposals, force }),
+'''
+          if 'discoverWikiCandidates' not in client:
+              if marker not in client:
+                  raise SystemExit('knowledge client wiki marker missing')
+              client = client.replace(marker, addition, 1)
+          write(client_path, client)
+
+          bridge_path = 'Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js'
+          bridge = read(bridge_path)
+          bridge = bridge.replace('const KNOWLEDGE_API_BRIDGE_VERSION = 3', 'const KNOWLEDGE_API_BRIDGE_VERSION = 4')
+          wikis_marker = '''      generate: knowledgeRuntimeClient.generateWiki,
+      get: knowledgeRuntimeClient.getWikiDraft,
+'''
+          wikis_addition = '''      generate: knowledgeRuntimeClient.generateWiki,
+      candidates: knowledgeRuntimeClient.discoverWikiCandidates,
+      autoPropose: knowledgeRuntimeClient.autoProposeWikis,
+      get: knowledgeRuntimeClient.getWikiDraft,
+'''
+          if 'autoPropose: knowledgeRuntimeClient.autoProposeWikis' not in bridge:
+              if wikis_marker not in bridge:
+                  raise SystemExit('bridge wikis marker missing')
+              bridge = bridge.replace(wikis_marker, wikis_addition, 1)
+          write(bridge_path, bridge)
+
+          wiki_view_path = 'Elephant/frontend/app/components/views/WikiView.vue'
+          view = read(wiki_view_path)
+          old_form = re.search(r'        <form\n          class="knowledge-wiki-generator".*?        </form>\n', view, re.S)
+          if not old_form:
+              raise SystemExit('manual wiki form not found')
+          automatic_panel = '''        <section class="knowledge-wiki-generator">
+          <div class="knowledge-section-heading">
+            <h2>Propositions automatiques</h2>
+            <span>{{ candidates.length }} sujet{{ candidates.length === 1 ? '' : 's' }} détecté{{ candidates.length === 1 ? '' : 's' }}</span>
+          </div>
+          <p class="knowledge-auto-copy">
+            ElephantNote regroupe les notes qui partagent réellement un thème, puis génère des brouillons cités à revoir. Aucune note originale n’est modifiée.
+          </p>
+          <button
+            class="knowledge-button knowledge-button-primary"
+            type="button"
+            :disabled="busy || autoProposing"
+            @click="runAutoProposals(true)"
+          >
+            {{ autoProposing ? 'Analyse et génération…' : 'Rechercher de nouvelles propositions' }}
+          </button>
+          <div v-if="candidates.length" class="knowledge-candidate-list">
+            <article v-for="candidate in candidates.slice(0, 6)" :key="candidate.topic" class="knowledge-candidate">
+              <strong>{{ candidate.title }}</strong>
+              <span>{{ candidate.reason }}</span>
+              <small>{{ candidate.sourcePaths.length }} notes sources</small>
+            </article>
+          </div>
+        </section>
+'''
+          view = view[:old_form.start()] + automatic_panel + view[old_form.end():]
+          view = view.replace("import { computed, onMounted, reactive, ref } from 'vue'", "import { computed, onMounted, reactive, ref } from 'vue'")
+          form_block = '''const form = reactive({
+  topic: '',
+  title: '',
+  sourcePaths: ''
+})
+'''
+          view = view.replace(form_block, '')
+          view = view.replace('const generating = ref(false)\n', 'const candidates = ref([])\nconst discovering = ref(false)\nconst autoProposing = ref(false)\n')
+          source_list = re.search(r"const sourcePathList = \(\) => form\.sourcePaths.*?\.filter\(Boolean\)\n", view, re.S)
+          if source_list:
+              view = view[:source_list.start()] + view[source_list.end():]
+          generate_fn = re.search(r'const generateWiki = async \(\) => \{.*?\n\}\n\nconst acceptDraft', view, re.S)
+          if not generate_fn:
+              raise SystemExit('manual generateWiki function not found')
+          auto_functions = '''const loadCandidates = async () => {
+  if (runtimeUnavailable.value) return
+  discovering.value = true
+  try {
+    candidates.value = await runtime.value.wikis.candidates({ limit: 12 })
+  } catch (reason) {
+    error.value = normalizeError(reason)
+  } finally {
+    discovering.value = false
+  }
+}
+
+const runAutoProposals = async (force = false) => {
+  if (runtimeUnavailable.value || autoProposing.value) return
+  autoProposing.value = true
+  busy.value = true
+  error.value = ''
+  message.value = ''
+  try {
+    const aiConfig = await globalThis.elephantnote?.ai?.getConfig?.() || {}
+    const result = await runtime.value.wikis.autoPropose({
+      payload: { aiConfig, modelSelection: aiConfig.localModelSelection || {} },
+      maxProposals: 3,
+      force
+    })
+    if (result.generated?.length) {
+      message.value = `${result.generated.length} proposition${result.generated.length === 1 ? '' : 's'} de wiki prête${result.generated.length === 1 ? '' : 's'} à être relue${result.generated.length === 1 ? '' : 's'}.`
+      activeStatus.value = 'proposed'
+    } else if (result.errors?.length) {
+      error.value = result.errors[0]
+    } else if (!result.alreadyRan) {
+      message.value = 'Aucun nouveau groupe de notes suffisamment cohérent pour proposer un wiki.'
+    }
+    await refresh()
+    await loadCandidates()
+  } catch (reason) {
+    error.value = normalizeError(reason)
+  } finally {
+    autoProposing.value = false
+    busy.value = false
+  }
+}
+
+const initializeWiki = async () => {
+  await refresh()
+  await loadCandidates()
+  if (!drafts.value.some((draft) => draft.status === 'proposed') && candidates.value.length) {
+    await runAutoProposals(false)
+  }
+}
+
+const acceptDraft'''
+          view = view[:generate_fn.start()] + auto_functions + view[generate_fn.end():]
+          view = view.replace('onMounted(refresh)', 'onMounted(initializeWiki)')
+          view = view.replace('.knowledge-field small {', '.knowledge-field small {')
+          style_marker = '''.knowledge-section-heading span,
+.knowledge-field small {
+'''
+          candidate_css = '''.knowledge-auto-copy {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: .72;
+}
+
+.knowledge-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.knowledge-candidate {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--editorBgColor, #fff) 97%, currentColor 3%);
+}
+
+.knowledge-candidate span,
+.knowledge-candidate small {
+  font-size: 12px;
+  opacity: .64;
+}
+
+'''
+          if '.knowledge-candidate-list' not in view:
+              if style_marker not in view:
+                  raise SystemExit('WikiView CSS insertion marker missing')
+              view = view.replace(style_marker, candidate_css + style_marker, 1)
+          write(wiki_view_path, view)
+
+          # One-shot workflow must not remain in the product branch.
+          Path('.github/workflows/apply-auto-wiki-proposals-once.yml').unlink()
+
+      - name: Format Rust
+        run: |
+          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+
+      - name: Run knowledge-core tests
+        run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --nocapture
+
+      - name: Check Tauri integration
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features --message-format short
+
+      - name: Run focused Tauri tests
+        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features knowledge_wikis -- --nocapture
+
+      - name: Commit implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(wiki): propose cited wikis automatically'
+          git push origin HEAD:feature/wiki-knowledge-continuation

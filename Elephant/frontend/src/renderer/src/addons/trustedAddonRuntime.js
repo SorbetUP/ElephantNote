@@ -90,7 +90,9 @@ const addDisposable = (context, disposables, dispose) => {
 export const createTrustedAddonApi = (record, context, sessionDisposables = [], target = globalThis) => {
   const manifest = record.manifest
   const documentRef = target?.document
+  const host = context.addonHost
   const register = (area, contribution) => context.registerContribution(area, contribution)
+  const track = (dispose) => addDisposable(context, sessionDisposables, dispose)
 
   const api = {
     manifest,
@@ -105,12 +107,44 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
       services: context.services,
       runtime: context.runtime,
       addons: context.addons,
+      host,
       vueApp: context.vueApp,
       openSettings(section = 'addons') {
         target?.dispatchEvent?.(new CustomEvent('elephantnote:open-settings', { detail: { section } }))
       },
       emit(name, detail) {
         target?.dispatchEvent?.(new CustomEvent(name, { detail }))
+      }
+    }),
+    resources: Object.freeze({
+      get: (name) => host?.get(name),
+      has: (name) => host?.has(name) || false,
+      list: () => host?.list() || [],
+      provide(name, value) {
+        if (!host) throw new Error('Addon host registry is unavailable')
+        return track(host.provide(name, value))
+      },
+      watch(name, listener, options) {
+        if (!host) throw new Error('Addon host registry is unavailable')
+        return track(host.watch(name, listener, options))
+      }
+    }),
+    patch: Object.freeze({
+      method(object, methodName, wrapper) {
+        if (!host) throw new Error('Addon host registry is unavailable')
+        return track(host.patchMethod(object, methodName, wrapper))
+      },
+      property(object, propertyName, value) {
+        if (!host) throw new Error('Addon host registry is unavailable')
+        return track(host.patchProperty(object, propertyName, value))
+      },
+      hook(name, handler) {
+        if (!host) throw new Error('Addon host registry is unavailable')
+        return track(host.registerHook(name, handler))
+      },
+      async runHook(name, payload) {
+        if (!host) throw new Error('Addon host registry is unavailable')
+        return await host.runHook(name, payload)
       }
     }),
     workspace: Object.freeze({
@@ -125,6 +159,13 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
       }
     }),
     editor: Object.freeze({
+      get active() {
+        return host?.get('editor') || host?.get('muya') || target?.marktext?.muya || null
+      },
+      watch(listener, options) {
+        if (!host) throw new Error('Addon host registry is unavailable')
+        return track(host.watch('editor', listener, options))
+      },
       registerExtension: context.addEditorExtension,
       registerBlockType(definition) {
         return register('editor.block-types', definition)
@@ -170,6 +211,55 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
     commands: Object.freeze({
       register: context.addAction
     }),
+    router: Object.freeze({
+      addRoute(...args) {
+        if (!context.router?.addRoute) throw new Error('Vue Router is unavailable')
+        return track(context.router.addRoute(...args))
+      },
+      beforeEach(guard) {
+        if (!context.router?.beforeEach) throw new Error('Vue Router is unavailable')
+        return track(context.router.beforeEach(guard))
+      },
+      afterEach(guard) {
+        if (!context.router?.afterEach) throw new Error('Vue Router is unavailable')
+        return track(context.router.afterEach(guard))
+      }
+    }),
+    vue: Object.freeze({
+      component(name, component) {
+        const app = context.vueApp
+        if (!app?.component) throw new Error('Vue application is unavailable')
+        const previous = app.component(name)
+        app.component(name, component)
+        return track(() => {
+          if (previous) app.component(name, previous)
+          else delete app._context?.components?.[name]
+        })
+      },
+      directive(name, directive) {
+        const app = context.vueApp
+        if (!app?.directive) throw new Error('Vue application is unavailable')
+        const previous = app.directive(name)
+        app.directive(name, directive)
+        return track(() => {
+          if (previous) app.directive(name, previous)
+          else delete app._context?.directives?.[name]
+        })
+      },
+      provide(key, value) {
+        const app = context.vueApp
+        if (!app?.provide) throw new Error('Vue application is unavailable')
+        const provides = app._context?.provides
+        const hadPrevious = provides && Object.prototype.hasOwnProperty.call(provides, key)
+        const previous = provides?.[key]
+        app.provide(key, value)
+        return track(() => {
+          if (!provides) return
+          if (hadPrevious) provides[key] = previous
+          else delete provides[key]
+        })
+      }
+    }),
     ui: Object.freeze({
       registerStyle(cssText, id = '') {
         if (!documentRef?.head) throw new Error('Document is unavailable')
@@ -178,7 +268,11 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
         if (id) style.dataset.elephantAddonStyle = safeString(id)
         style.textContent = String(cssText || '')
         documentRef.head.appendChild(style)
-        return addDisposable(context, sessionDisposables, () => style.remove())
+        return track(() => style.remove())
+      },
+      mount(selectorOrElement, renderer) {
+        if (!host) throw new Error('Addon host registry is unavailable')
+        return track(host.mount(selectorOrElement, renderer))
       },
       on(eventTarget, eventName, listener, options) {
         if (!eventTarget?.addEventListener || !eventTarget?.removeEventListener) {
@@ -186,19 +280,19 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
         }
         requireFunction(listener, 'listener')
         eventTarget.addEventListener(eventName, listener, options)
-        return addDisposable(context, sessionDisposables, () => eventTarget.removeEventListener(eventName, listener, options))
+        return track(() => eventTarget.removeEventListener(eventName, listener, options))
       },
       observe(element, listener, options = { childList: true, subtree: true }) {
         if (!target?.MutationObserver) throw new Error('MutationObserver is unavailable')
         requireFunction(listener, 'listener')
         const observer = new target.MutationObserver(listener)
         observer.observe(element, options)
-        return addDisposable(context, sessionDisposables, () => observer.disconnect())
+        return track(() => observer.disconnect())
       }
     }),
     lifecycle: Object.freeze({
       addDisposable(dispose) {
-        return addDisposable(context, sessionDisposables, dispose)
+        return track(dispose)
       }
     }),
     experimental: Object.freeze({
@@ -209,6 +303,7 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
       pinia: context.pinia,
       services: context.services,
       vueApp: context.vueApp,
+      host,
       rawContext: context
     })
   }

@@ -218,8 +218,9 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
 const resolvePluginInstance = (module, api) => {
   const exported = module?.default ?? module?.plugin ?? module
   if (typeof exported === 'function') {
+    const PluginConstructor = exported
     try {
-      return new exported(api)
+      return new PluginConstructor(api)
     } catch (error) {
       if (/not a constructor/i.test(error?.message || '')) return exported(api)
       throw error

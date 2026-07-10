@@ -10,7 +10,7 @@ on:
 
 permissions:
   actions: read
-  contents: write
+  pull-requests: write
 
 jobs:
   diagnose:
@@ -20,17 +20,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feature/wiki-knowledge-continuation
-          fetch-depth: 0
-      - name: Capture failed patch output
+      - name: Post compact failed patch output
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p .github/diagnostics
-          gh run view 29060905070 --repo "$GITHUB_REPOSITORY" --log-failed > .github/diagnostics/automatic-wiki-patch.log
+          gh run view 29060905070 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/automatic-wiki-patch.log
           python - <<'PY'
           from pathlib import Path
-          path = Path('.github/diagnostics/automatic-wiki-patch.log')
-          lines = path.read_text(errors='replace').splitlines()
+          lines = Path('/tmp/automatic-wiki-patch.log').read_text(errors='replace').splitlines()
           selected = []
           for index, line in enumerate(lines):
               lowered = line.lower()
@@ -42,12 +39,14 @@ jobs:
               if line not in seen:
                   seen.add(line)
                   compact.append(line)
-          path.write_text('\n'.join(compact[-120:]) or '\n'.join(lines[-120:]))
+          output = '\n'.join(compact[-80:]) or '\n'.join(lines[-80:])
+          Path('/tmp/automatic-wiki-patch-compact.log').write_text(output)
           PY
-      - name: Commit diagnostic
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/diagnostics/automatic-wiki-patch.log
-          git commit -m 'chore(ci): capture automatic wiki patch failure'
-          git push origin HEAD:feature/wiki-knowledge-continuation
+          {
+            echo '### Automatic Wiki patch failure (compact)'
+            echo
+            echo '```text'
+            cat /tmp/automatic-wiki-patch-compact.log
+            echo '```'
+          } > /tmp/comment.md
+          gh pr comment 37 --repo "$GITHUB_REPOSITORY" --body-file /tmp/comment.md

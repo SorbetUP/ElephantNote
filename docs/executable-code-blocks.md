@@ -36,6 +36,10 @@ The runtime does not append a toolbar to `document.body`, wrap the editor, scan 
 
 ElephantNote does not create a second language selector. The existing Muya language input and language picker remain the only source of truth. Muya's `ContentState.updateCodeLanguage()` updates the fence and performs its normal partial render.
 
+Editing the language is transactional. Keystrokes update only the visible draft and the picker; the Markdown fence is committed once when the user chooses a suggestion, presses Enter or leaves the field. Deleting `python` therefore no longer produces six separate note saves for `pytho`, `pyth`, `pyt`, and so on.
+
+The picker prioritizes exact and prefix matches, removes irrelevant one-letter fuzzy aliases, limits the result list to eight entries and shows readable language titles with aliases when useful.
+
 This avoids synthetic `input` and `change` events. In particular, changing a language cannot recursively redispatch an event onto the same selector or run Muya's keyboard input handler with an unrelated selection.
 
 ## Runtime lifecycle
@@ -95,6 +99,9 @@ The active tests cover both isolated runtime behavior and a real Muya instance. 
 - Run and Output are native children of the fenced `<pre>`;
 - installing the runtime changes zero Markdown characters;
 - no V6 toolbar or duplicate language selector is created;
+- partial language typing does not save or alter Markdown;
+- a completed language edit emits one change only;
+- `py` returns relevant, bounded suggestions instead of unrelated one-letter aliases;
 - the native Muya language state is used for execution;
 - repeated language changes do not recurse or emit synthetic keyboard input;
 - real Run and Stop IPC requests are sent;

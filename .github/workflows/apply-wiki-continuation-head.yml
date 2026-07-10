@@ -42,33 +42,12 @@ jobs:
 
       - name: Extract and run the branch patch
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          source = Path('.github/workflows/apply-auto-wiki-proposals-once.yml')
-          lines = source.read_text().splitlines()
-          start = None
-          for index, line in enumerate(lines):
-              if line.strip() == '- name: Apply implementation':
-                  for candidate in range(index + 1, len(lines)):
-                      if lines[candidate].strip() == 'run: |':
-                          start = candidate + 1
-                          break
-                  break
-          if start is None:
-              raise SystemExit('Unable to locate the Python patch in the head workflow')
-
-          captured = []
-          for line in lines[start:]:
-              if line.startswith('          '):
-                  captured.append(line[10:])
-                  continue
-              if not line.strip():
-                  captured.append('')
-                  continue
-              break
-          Path('/tmp/apply_auto_wiki_patch.py').write_text('\n'.join(captured).rstrip() + '\n')
-          PY
+          ruby -ryaml -e '
+            workflow = YAML.load_file(".github/workflows/apply-auto-wiki-proposals-once.yml")
+            step = workflow.fetch("jobs").fetch("apply").fetch("steps").find { |item| item["name"] == "Apply implementation" }
+            abort("Apply implementation step not found") unless step && step["run"]
+            File.write("/tmp/apply_auto_wiki_patch.py", step.fetch("run"))
+          '
           python /tmp/apply_auto_wiki_patch.py
 
       - name: Format Rust

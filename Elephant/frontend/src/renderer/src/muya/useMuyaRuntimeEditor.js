@@ -5,7 +5,12 @@ import { createRustBackedMuyaFullEditorRuntime } from './rustBackedFullEditorRun
 import { isRustMuyaEngineAvailable } from './rustEngineRuntime.js'
 import { isMuyaRuntimeActive, isMuyaRuntimeEnabled, readMuyaRuntimeMode } from './runtimeFlags.js'
 
-export const useMuyaRuntimeEditor = ({ markdown = ref(''), mode = ref(readMuyaRuntimeMode()), documentRef = null } = {}) => {
+export const useMuyaRuntimeEditor = ({
+  markdown = ref(''),
+  mode = ref(readMuyaRuntimeMode()),
+  documentRef = null,
+  allowJavaScriptFallback = false
+} = {}) => {
   const rootRef = shallowRef(null)
   const runtimeRef = shallowRef(null)
   const ready = ref(false)
@@ -21,8 +26,13 @@ export const useMuyaRuntimeEditor = ({ markdown = ref(''), mode = ref(readMuyaRu
     const options = { document: documentRef?.value || globalThis.document }
     const rustAvailable = isRustMuyaEngineAvailable(globalThis)
 
-    if (active.value && !rustAvailable) {
-      throw new Error('Active Muya mode requires the Rust Tauri engine; JavaScript fallback is disabled.')
+    if (active.value && !rustAvailable && !allowJavaScriptFallback) {
+      rootRef.value.dataset.muyaEngine = 'unavailable'
+      rootRef.value.dataset.muyaRuntimeMode = mode.value
+      globalThis.console?.error?.(
+        '[muya-runtime] active mode unavailable: Rust Tauri engine is required'
+      )
+      return null
     }
 
     const engineKind = rustAvailable ? 'rust' : 'javascript'
@@ -34,7 +44,8 @@ export const useMuyaRuntimeEditor = ({ markdown = ref(''), mode = ref(readMuyaRu
     rootRef.value.dataset.muyaRuntimeMode = mode.value
     globalThis.console?.info?.('[muya-runtime] mounted', {
       engine: engineKind,
-      mode: mode.value
+      mode: mode.value,
+      explicitJavaScriptFallback: engineKind === 'javascript'
     })
 
     mounted.value = true

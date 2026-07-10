@@ -1,4 +1,11 @@
-export const ADDON_API_VERSION = 1
+export const ADDON_API_VERSION = 2
+export const SUPPORTED_ADDON_API_VERSIONS = Object.freeze([1, 2])
+
+export const ADDON_ACCESS_LEVEL = Object.freeze({
+  isolated: 'isolated',
+  trusted: 'trusted',
+  system: 'system'
+})
 
 export const ADDON_STATUS = Object.freeze({
   disabled: 'disabled',
@@ -44,16 +51,46 @@ const normalizePermissions = (value) => {
     }),
     storage: permissions.storage === true,
     commands: permissions.commands === true,
-    views: permissions.views === true
+    views: permissions.views === true,
+    native: permissions.native === true
   })
 }
 
-const normalizeRuntime = (value) => {
+const normalizeAccessLevel = (manifest, runtime, contributes) => {
+  if (normalizeString(manifest.source, 'builtin') === 'builtin') return ADDON_ACCESS_LEVEL.system
+  const declared = normalizeString(
+    runtime.mode || contributes.runtimeMode || contributes.security?.access,
+    ADDON_ACCESS_LEVEL.isolated
+  ).toLowerCase()
+  if (['trusted', 'full', 'full-app', 'full-app-access'].includes(declared)) {
+    return ADDON_ACCESS_LEVEL.trusted
+  }
+  return ADDON_ACCESS_LEVEL.isolated
+}
+
+const normalizeRuntime = (value, manifest = {}, contributes = {}) => {
   const runtime = normalizeObject(value)
   const type = normalizeString(runtime.type)
   const entry = normalizeString(runtime.entry)
   if (!type && !entry) return Object.freeze({})
-  return Object.freeze({ type, entry })
+  return Object.freeze({
+    type,
+    entry,
+    mode: normalizeAccessLevel(manifest, runtime, contributes),
+    desktopOnly: runtime.desktopOnly === true
+  })
+}
+
+export const getAddonAccessLevel = (manifest = {}) => {
+  if (manifest?.runtime?.mode) return manifest.runtime.mode
+  const source = normalizeString(manifest.source, 'builtin')
+  if (source === 'builtin') return ADDON_ACCESS_LEVEL.system
+  const contributes = normalizeObject(manifest.contributes)
+  return normalizeAccessLevel(manifest, normalizeObject(manifest.runtime), contributes)
+}
+
+export const isTrustedAddonManifest = (manifest = {}) => {
+  return getAddonAccessLevel(manifest) === ADDON_ACCESS_LEVEL.trusted
 }
 
 export const normalizeAddonManifest = (manifest = {}) => {
@@ -68,14 +105,15 @@ export const normalizeAddonManifest = (manifest = {}) => {
 
   const apiVersion = Number.isInteger(manifest.apiVersion)
     ? manifest.apiVersion
-    : ADDON_API_VERSION
+    : 1
 
-  if (apiVersion !== ADDON_API_VERSION) {
+  if (!SUPPORTED_ADDON_API_VERSIONS.includes(apiVersion)) {
     throw new Error(`Unsupported addon apiVersion ${apiVersion}`)
   }
 
   const name = normalizeString(manifest.name, id)
   const version = normalizeString(manifest.version, '0.0.0')
+  const contributes = Object.freeze(normalizeObject(manifest.contributes))
 
   return Object.freeze({
     id,
@@ -86,9 +124,10 @@ export const normalizeAddonManifest = (manifest = {}) => {
     apiVersion,
     minAppVersion: normalizeString(manifest.minAppVersion),
     permissions: normalizePermissions(manifest.permissions),
-    contributes: Object.freeze(normalizeObject(manifest.contributes)),
+    contributes,
     activationEvents: Object.freeze(normalizeStringArray(manifest.activationEvents)),
-    runtime: normalizeRuntime(manifest.runtime),
+    runtime: normalizeRuntime(manifest.runtime, manifest, contributes),
+    platforms: Object.freeze(normalizeStringArray(manifest.platforms)),
     source: normalizeString(manifest.source, 'builtin'),
     packageHash: normalizeString(manifest.packageHash),
     installedAt: normalizeString(manifest.installedAt),

@@ -206,6 +206,7 @@ pub fn run() {
       markdown::commands::tauri_muya_engine_create,
       markdown::commands::tauri_muya_engine_apply,
       markdown::commands::tauri_muya_engine_apply_batch,
+      markdown::commands::tauri_muya_engine_apply_parity,
       markdown::commands::tauri_muya_engine_capabilities,
       tauri_extra_commands::shell_exec,
       tauri_extra_commands::tauri_notes_read,

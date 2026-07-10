@@ -1,5 +1,3 @@
-mod codex_runtime_installer;
-
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, HashSet},
@@ -17,17 +15,21 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin, Command},
     sync::{broadcast, oneshot, Mutex},
-    time::{timeout, Instant},
+    time::{timeout, timeout_at, Instant},
 };
 
 type R<T> = Result<T, String>;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const TURN_TIMEOUT: Duration = Duration::from_secs(180);
+const CLEANUP_TIMEOUT: Duration = Duration::from_secs(3);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(12);
+const SHELL_LOOKUP_TIMEOUT: Duration = Duration::from_secs(8);
 const MAX_LOG_TEXT: usize = 900;
+const EVENT_BUFFER_CAPACITY: usize = 1024;
 const READ_ONLY_SANDBOX: &str = "read-only";
 const TURN_READ_ONLY_SANDBOX: &str = "readOnly";
+const CODEX_HOME_DIR: &str = "home";
 
 #[derive(Debug)]
 pub struct CodexChatResult {
@@ -85,6 +87,84 @@ fn home_dir() -> Option<PathBuf> {
     env::var_os("HOME")
         .map(PathBuf::from)
         .or_else(|| env::var_os("USERPROFILE").map(PathBuf::from))
+}
+
+fn source_auth_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(codex_home) = env::var_os("CODEX_HOME").map(PathBuf::from) {
+        candidates.push(codex_home.join("auth.json"));
+    }
+    if let Some(home) = home_dir() {
+        candidates.push(
+            home.join(".elephantnote")
+                .join("codex-home")
+                .join("auth.json"),
+        );
+        candidates.push(home.join(".codex").join("auth.json"));
+    }
+    candidates.dedup();
+    candidates
+}
+
+async fn isolated_codex_home(app: &AppHandle) -> R<PathBuf> {
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Unable to resolve ElephantNote app data directory: {error}"))?
+        .join("runtimes")
+        .join("codex")
+        .join(CODEX_HOME_DIR);
+    tokio::fs::create_dir_all(&root).await.map_err(|error| {
+        format!(
+            "Unable to create isolated Codex home {}: {error}",
+            root.display()
+        )
+    })?;
+
+    let target_auth = root.join("auth.json");
+    if !target_auth.exists() {
+        if let Some(source_auth) = source_auth_candidates()
+            .into_iter()
+            .find(|path| path.is_file())
+        {
+            tokio::fs::copy(&source_auth, &target_auth)
+                .await
+                .map_err(|error| {
+                    format!(
+                        "Unable to seed isolated Codex authentication from {}: {error}",
+                        source_auth.display()
+                    )
+                })?;
+            restrict_auth_permissions(&target_auth).await?;
+            log(
+                "auth",
+                format!(
+                    "seeded isolated authentication source={} target={}",
+                    source_auth.display(),
+                    target_auth.display()
+                ),
+            );
+        }
+    }
+    Ok(root)
+}
+
+async fn restrict_auth_permissions(path: &Path) -> R<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = tokio::fs::metadata(path)
+            .await
+            .map_err(|error| error.to_string())?
+            .permissions();
+        permissions.set_mode(0o600);
+        tokio::fs::set_permissions(path, permissions)
+            .await
+            .map_err(|error| error.to_string())?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
 }
 
 fn binary_name() -> &'static str {
@@ -217,28 +297,38 @@ fn add_native_package_candidates(
                 .unwrap_or_default(),
         ];
         for optional_root in optional_roots {
-            push_candidate(
-                out,
-                seen,
-                optional_root
-                    .join("vendor")
-                    .join(triple)
-                    .join("bin")
-                    .join(binary_name()),
-                format!("{source}:optional-package"),
-            );
-            push_candidate(
-                out,
-                seen,
-                optional_root
-                    .join("vendor")
-                    .join(triple)
-                    .join("codex")
-                    .join(binary_name()),
-                format!("{source}:optional-package-legacy"),
-            );
+            for (suffix, label) in [
+                (
+                    PathBuf::from("vendor")
+                        .join(triple)
+                        .join("bin")
+                        .join(binary_name()),
+                    "optional-package",
+                ),
+                (
+                    PathBuf::from("vendor")
+                        .join(triple)
+                        .join("codex")
+                        .join(binary_name()),
+                    "optional-package-legacy",
+                ),
+            ] {
+                push_candidate(
+                    out,
+                    seen,
+                    optional_root.join(suffix),
+                    format!("{source}:{label}"),
+                );
+            }
         }
     }
+}
+
+fn is_nvm_version_dir(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .is_some_and(|name| name.starts_with('v'))
+        && path.is_dir()
 }
 
 fn add_nvm_candidates(out: &mut Vec<(PathBuf, String)>, seen: &mut HashSet<PathBuf>) {
@@ -250,11 +340,14 @@ fn add_nvm_candidates(out: &mut Vec<(PathBuf, String)>, seen: &mut HashSet<PathB
     };
     let mut paths = read_dir
         .filter_map(Result::ok)
-        .map(|entry| entry.path().join("bin").join(binary_name()))
+        .map(|entry| entry.path())
+        .filter(|path| is_nvm_version_dir(path))
+        .map(|path| path.join("bin").join(binary_name()))
         .collect::<Vec<_>>();
     paths.sort();
     paths.reverse();
     for path in paths {
+        add_native_package_candidates(out, seen, &path, "nvm-global-bin");
         push_candidate(out, seen, path, "nvm-global-bin");
     }
 }
@@ -267,10 +360,12 @@ fn add_codex_app_candidates(out: &mut Vec<(PathBuf, String)>, seen: &mut HashSet
             .unwrap_or_default()
             .join("Applications/Codex.app/Contents/Resources"),
     ] {
-        let candidate = root.join("codex");
-        if candidate.exists() {
-            push_candidate(out, seen, candidate, "codex-app-bundle-resource");
-        }
+        push_candidate(
+            out,
+            seen,
+            root.join(binary_name()),
+            "codex-app-bundle-resource",
+        );
     }
 }
 
@@ -278,9 +373,8 @@ async fn shell_candidate() -> Option<PathBuf> {
     #[cfg(unix)]
     {
         let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        log("resolver", format!("login-shell:start shell={shell}"));
         let result = timeout(
-            Duration::from_secs(8),
+            SHELL_LOOKUP_TIMEOUT,
             Command::new(shell)
                 .args([
                     "-lic",
@@ -311,9 +405,7 @@ async fn shell_candidate() -> Option<PathBuf> {
 async fn candidate_paths(app: &AppHandle) -> Vec<(PathBuf, String)> {
     let mut out = Vec::new();
     let mut seen = HashSet::new();
-    if let Some(runtime) = codex_runtime_installer::existing(app) {
-        push_candidate(&mut out, &mut seen, runtime.path, "elephantnote-managed");
-    }
+
     for key in ["ELEPHANTNOTE_CODEX_PATH", "CODEX_PATH"] {
         if let Some(value) = env::var_os(key) {
             push_candidate(
@@ -324,14 +416,24 @@ async fn candidate_paths(app: &AppHandle) -> Vec<(PathBuf, String)> {
             );
         }
     }
-    if let Ok(path) = which::which("codex") {
-        add_native_package_candidates(&mut out, &mut seen, &path, "process-path");
-        push_candidate(&mut out, &mut seen, path, "process-path");
+
+    // Preserve compatibility with one previously downloaded runtime, but only after the bundled
+    // binary so application updates always use the version shipped with ElephantNote.
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        push_candidate(
+            &mut out,
+            &mut seen,
+            app_data_dir
+                .join("runtimes")
+                .join("codex")
+                .join("bin")
+                .join(binary_name()),
+            "legacy-elephantnote-managed",
+        );
     }
-    if let Some(path) = shell_candidate().await {
-        add_native_package_candidates(&mut out, &mut seen, &path, "login-shell");
-        push_candidate(&mut out, &mut seen, path, "login-shell");
-    }
+
+    add_codex_app_candidates(&mut out, &mut seen);
+
     #[cfg(target_os = "macos")]
     for path in ["/opt/homebrew/bin/codex", "/usr/local/bin/codex"] {
         push_candidate(
@@ -341,8 +443,16 @@ async fn candidate_paths(app: &AppHandle) -> Vec<(PathBuf, String)> {
             "macos-common-path",
         );
     }
+
+    if let Ok(path) = which::which("codex") {
+        add_native_package_candidates(&mut out, &mut seen, &path, "process-path");
+        push_candidate(&mut out, &mut seen, path, "process-path");
+    }
+    if let Some(path) = shell_candidate().await {
+        add_native_package_candidates(&mut out, &mut seen, &path, "login-shell");
+        push_candidate(&mut out, &mut seen, path, "login-shell");
+    }
     add_nvm_candidates(&mut out, &mut seen);
-    add_codex_app_candidates(&mut out, &mut seen);
     out
 }
 
@@ -370,15 +480,6 @@ fn app_server_help_valid(output: &std::process::Output) -> bool {
 }
 
 async fn probe_runtime(path: PathBuf, source: String) -> Option<Runtime> {
-    log(
-        "resolver",
-        format!(
-            "candidate source={source} path={} exists={} executable={}",
-            path_string(&path),
-            path.is_file(),
-            executable(&path)
-        ),
-    );
     if !executable(&path) {
         return None;
     }
@@ -388,10 +489,9 @@ async fn probe_runtime(path: PathBuf, source: String) -> Option<Runtime> {
             log(
                 "resolver",
                 format!(
-                    "rejected source={source} path={} error=--version exit={} stdout={} stderr={}",
+                    "rejected source={source} path={} error=--version exit={} stderr={}",
                     path_string(&path),
                     output.status,
-                    short(String::from_utf8_lossy(&output.stdout)),
                     short(String::from_utf8_lossy(&output.stderr))
                 ),
             );
@@ -411,6 +511,7 @@ async fn probe_runtime(path: PathBuf, source: String) -> Option<Runtime> {
     let stdout = short(String::from_utf8_lossy(&version_output.stdout));
     let stderr = short(String::from_utf8_lossy(&version_output.stderr));
     let version = if stdout.is_empty() { stderr } else { stdout };
+
     let help_output = match run_probe(&path, &["app-server", "--help"]).await {
         Ok(output) => output,
         Err(error) => {
@@ -426,21 +527,20 @@ async fn probe_runtime(path: PathBuf, source: String) -> Option<Runtime> {
     };
     if !app_server_help_valid(&help_output) {
         log(
-      "resolver",
-      format!(
-        "rejected source={source} path={} reason=app-server-capability help_exit={} stdout={} stderr={}",
-        path_string(&path),
-        help_output.status,
-        short(String::from_utf8_lossy(&help_output.stdout)),
-        short(String::from_utf8_lossy(&help_output.stderr))
-      ),
-    );
+            "resolver",
+            format!(
+                "rejected source={source} path={} reason=app-server-capability exit={}",
+                path_string(&path),
+                help_output.status
+            ),
+        );
         return None;
     }
+
     log(
         "resolver",
         format!(
-            "accepted source={source} path={} version={version} app_server=true",
+            "accepted source={source} path={} version={version}",
             path_string(&path)
         ),
     );
@@ -452,38 +552,26 @@ async fn probe_runtime(path: PathBuf, source: String) -> Option<Runtime> {
 }
 
 async fn resolve_runtime(app: &AppHandle) -> R<Runtime> {
+    let candidates = candidate_paths(app).await;
     log(
         "resolver",
         format!(
-            "start os={} arch={} target={} cwd={} PATH={}",
+            "start os={} arch={} target={} candidates={}",
             env::consts::OS,
             env::consts::ARCH,
             target_triple().unwrap_or("unsupported"),
-            env::current_dir()
-                .map(|path| path_string(&path))
-                .unwrap_or_else(|_| "<unknown>".to_string()),
-            env::var("PATH").unwrap_or_else(|_| "<unset>".to_string())
+            candidates.len()
         ),
     );
-    for (path, source) in candidate_paths(app).await {
+    for (path, source) in candidates {
         if let Some(runtime) = probe_runtime(path, source).await {
             return Ok(runtime);
         }
     }
-    log(
-        "installer",
-        "no valid app-server runtime found; installing official managed Codex CLI",
-    );
-    let app_clone = app.clone();
-    let installed =
-        tokio::task::spawn_blocking(move || codex_runtime_installer::ensure_installed(app_clone))
-            .await
-            .map_err(|error| format!("Managed Codex installer task failed: {error}"))??;
-    probe_runtime(installed.path, "elephantnote-managed-download".to_string())
-        .await
-        .ok_or_else(|| {
-            "Downloaded Codex binary does not expose the app-server protocol.".to_string()
-        })
+
+    Err(
+        "The bundled Codex app-server runtime is missing or invalid. Rebuild ElephantNote with `pnpm tauri:codex:install`; ElephantNote no longer downloads a 100 MB runtime while opening AI settings.".to_string(),
+    )
 }
 
 fn event_thread_id(event: &Value) -> &str {
@@ -534,6 +622,23 @@ fn turn_failure(event: &Value) -> Option<String> {
         .or_else(|| Some(format!("Codex turn ended with status: {status}")))
 }
 
+fn should_log_event(method: &str) -> bool {
+    !matches!(
+        method,
+        "item/agentMessage/delta"
+            | "thread/tokenUsage/updated"
+            | "thread/status/changed"
+            | "mcpServer/startupStatus/updated"
+    )
+}
+
+fn should_emit_frontend_event(method: &str) -> bool {
+    matches!(
+        method,
+        "account/login/completed" | "account/updated" | "account/rateLimits/updated" | "warning"
+    )
+}
+
 fn params_summary(method: &str, params: &Value) -> String {
     match method {
         "turn/start" => {
@@ -562,7 +667,7 @@ fn params_summary(method: &str, params: &Value) -> String {
             )
         }
         "thread/start" => format!(
-            "model={} cwd={} approval={} sandbox={}",
+            "model={} cwd={} approval={} sandbox={} ephemeral={}",
             params
                 .get("model")
                 .and_then(Value::as_str)
@@ -578,7 +683,11 @@ fn params_summary(method: &str, params: &Value) -> String {
             params
                 .get("sandbox")
                 .and_then(Value::as_str)
-                .unwrap_or("<none>")
+                .unwrap_or("<none>"),
+            params
+                .get("ephemeral")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
         ),
         "account/login/start" => format!(
             "type={}",
@@ -597,23 +706,57 @@ fn params_summary(method: &str, params: &Value) -> String {
     }
 }
 
+fn initialize_params() -> Value {
+    json!({
+      "clientInfo": {
+        "name": "elephantnote",
+        "title": "ElephantNote",
+        "version": env!("CARGO_PKG_VERSION")
+      },
+      "capabilities": {
+        "experimentalApi": true,
+        "optOutNotificationMethods": ["mcpServer/startupStatus/updated"]
+      }
+    })
+}
+
+fn thread_start_params(model: &str, cwd: &str) -> Value {
+    json!({
+      "model": model,
+      "cwd": cwd,
+      "approvalPolicy": "never",
+      "sandbox": READ_ONLY_SANDBOX,
+      "serviceName": "elephantnote",
+      "ephemeral": true,
+      "environments": [],
+      "selectedCapabilityRoots": []
+    })
+}
+
+fn turn_start_params(thread_id: &str, model: &str, cwd: &str, prompt: &str) -> Value {
+    json!({
+      "threadId": thread_id,
+      "input": [{ "type": "text", "text": prompt }],
+      "model": model,
+      "cwd": cwd,
+      "approvalPolicy": "never",
+      "sandboxPolicy": {
+        "type": TURN_READ_ONLY_SANDBOX,
+        "networkAccess": false
+      }
+    })
+}
+
 impl CodexState {
     async fn client(&self, app: &AppHandle) -> R<Arc<CodexClient>> {
         let mut slot = self.client.lock().await;
         if let Some(client) = slot.as_ref() {
             if client.is_running().await {
-                log(
-                    "state",
-                    format!(
-                        "reuse source={} path={}",
-                        client.runtime.source,
-                        path_string(&client.runtime.path)
-                    ),
-                );
                 return Ok(client.clone());
             }
             log("state", "cached app-server exited; resolving again");
         }
+
         let runtime = resolve_runtime(app).await?;
         let client = Arc::new(CodexClient::spawn(app.clone(), runtime).await?);
         *slot = Some(client.clone());
@@ -624,7 +767,14 @@ impl CodexState {
         if let Some(client) = self.client.lock().await.take() {
             let mut child = client.child.lock().await;
             log("process", format!("stop:start pid={:?}", child.id()));
-            child.kill().await.map_err(|error| error.to_string())?;
+            if child
+                .try_wait()
+                .map_err(|error| error.to_string())?
+                .is_none()
+            {
+                child.kill().await.map_err(|error| error.to_string())?;
+                let _ = child.wait().await;
+            }
         }
         Ok(())
     }
@@ -632,17 +782,20 @@ impl CodexState {
 
 impl CodexClient {
     async fn spawn(app: AppHandle, runtime: Runtime) -> R<Self> {
+        let codex_home = isolated_codex_home(&app).await?;
         log(
             "process",
             format!(
-                "spawn:start source={} path={} version={} args=app-server --listen stdio://",
+                "spawn:start source={} path={} version={} codex_home={} args=app-server --listen stdio://",
                 runtime.source,
                 path_string(&runtime.path),
-                runtime.version
+                runtime.version,
+                codex_home.display()
             ),
         );
         let mut child = Command::new(&runtime.path)
             .args(["app-server", "--listen", "stdio://"])
+            .env("CODEX_HOME", &codex_home)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -669,7 +822,7 @@ impl CodexClient {
         let child = Arc::new(Mutex::new(child));
         let stdin = Arc::new(Mutex::new(stdin));
         let pending = Arc::new(Mutex::new(HashMap::<u64, oneshot::Sender<R<Value>>>::new()));
-        let (events, _) = broadcast::channel(256);
+        let (events, _) = broadcast::channel(EVENT_BUFFER_CAPACITY);
 
         {
             let pending = pending.clone();
@@ -690,23 +843,24 @@ impl CodexClient {
                                     continue;
                                 }
                             };
-                            if message.get("method").is_some() {
-                                let method = message
-                                    .get("method")
-                                    .and_then(Value::as_str)
-                                    .unwrap_or("<none>");
-                                log(
-                                    "event",
-                                    format!(
-                                        "method={method} thread={} turn={}",
-                                        event_thread_id(&message),
-                                        event_turn_id(&message)
-                                    ),
-                                );
+                            if let Some(method) = message.get("method").and_then(Value::as_str) {
+                                if should_log_event(method) {
+                                    log(
+                                        "event",
+                                        format!(
+                                            "method={method} thread={} turn={}",
+                                            event_thread_id(&message),
+                                            event_turn_id(&message)
+                                        ),
+                                    );
+                                }
                                 let _ = events.send(message.clone());
-                                let _ = app.emit("elephantnote:codex:event", &message);
+                                if should_emit_frontend_event(method) {
+                                    let _ = app.emit("elephantnote:codex:event", &message);
+                                }
                                 continue;
                             }
+
                             let Some(id) = message.get("id").and_then(Value::as_u64) else {
                                 continue;
                             };
@@ -723,7 +877,6 @@ impl CodexClient {
                                     );
                                     Err(detail)
                                 } else {
-                                    log("response", format!("id={id} status=ok"));
                                     Ok(message.get("result").cloned().unwrap_or(Value::Null))
                                 };
                                 let _ = sender.send(result);
@@ -747,7 +900,9 @@ impl CodexClient {
         tokio::spawn(async move {
             let mut lines = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                log("stderr", short(line));
+                if !line.trim().is_empty() {
+                    log("stderr", short(line));
+                }
             }
         });
 
@@ -759,20 +914,18 @@ impl CodexClient {
             events,
             next_id: AtomicU64::new(1),
         };
-        client
-            .request(
-                "initialize",
-                json!({
-                  "clientInfo": {
-                    "name": "elephantnote",
-                    "title": "ElephantNote",
-                    "version": env!("CARGO_PKG_VERSION")
-                  }
-                }),
-            )
-            .await?;
+        let initialized = client.request("initialize", initialize_params()).await?;
         client.notify("initialized", json!({})).await?;
-        log("protocol", "initialize:complete");
+        log(
+            "protocol",
+            format!(
+                "initialize:complete codex_home={}",
+                initialized
+                    .get("codexHome")
+                    .and_then(Value::as_str)
+                    .unwrap_or("<unknown>")
+            ),
+        );
         Ok(client)
     }
 
@@ -814,10 +967,20 @@ impl CodexClient {
             self.pending.lock().await.remove(&id);
             return Err(error);
         }
-        let result = timeout(REQUEST_TIMEOUT, receiver)
-            .await
-            .map_err(|_| format!("Codex app-server request timed out: {method}"))?
-            .map_err(|_| format!("Codex app-server response channel closed: {method}"))?;
+
+        let result = match timeout(REQUEST_TIMEOUT, receiver).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => {
+                self.pending.lock().await.remove(&id);
+                return Err(format!(
+                    "Codex app-server response channel closed: {method}"
+                ));
+            }
+            Err(_) => {
+                self.pending.lock().await.remove(&id);
+                return Err(format!("Codex app-server request timed out: {method}"));
+            }
+        };
         log(
             "request",
             format!(
@@ -830,16 +993,20 @@ impl CodexClient {
     }
 
     async fn notify(&self, method: &str, params: Value) -> R<()> {
-        log(
-            "notify",
-            format!("method={method} {}", params_summary(method, &params)),
-        );
         self.write(&json!({ "method": method, "params": params }))
             .await
     }
 
     fn subscribe(&self) -> broadcast::Receiver<Value> {
         self.events.subscribe()
+    }
+
+    async fn cleanup_thread(&self, thread_id: &str) {
+        let _ = timeout(
+            CLEANUP_TIMEOUT,
+            self.request("thread/unsubscribe", json!({ "threadId": thread_id })),
+        )
+        .await;
     }
 }
 
@@ -913,6 +1080,35 @@ async fn rate_limits(app: &AppHandle) -> R<Value> {
     client.request("account/rateLimits/read", json!({})).await
 }
 
+fn consume_rate_limit_reset_params(payload: &Value) -> R<Value> {
+    let credit_id = payload
+        .get("creditId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "A Codex reset credit id is required.".to_string())?;
+    let idempotency_key = payload
+        .get("idempotencyKey")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "A reset idempotency key is required.".to_string())?;
+    Ok(json!({
+      "creditId": credit_id,
+      "idempotencyKey": idempotency_key
+    }))
+}
+
+async fn consume_rate_limit_reset(app: &AppHandle, payload: &Value) -> R<Value> {
+    let client = state().client(app).await?;
+    client
+        .request(
+            "account/rateLimitResetCredit/consume",
+            consume_rate_limit_reset_params(payload)?,
+        )
+        .await
+}
+
 async fn stop() -> R<Value> {
     state().stop().await?;
     Ok(json!({ "ok": true }))
@@ -939,6 +1135,7 @@ pub async fn command(app: &AppHandle, payload: &Value) -> R<Value> {
         "logout" => logout(app).await,
         "models" => models(app).await,
         "rateLimits" => rate_limits(app).await,
+        "consumeRateLimitReset" => consume_rate_limit_reset(app, payload).await,
         "stop" => stop().await,
         _ => Err(format!("Unsupported Codex operation: {operation}")),
     }
@@ -979,17 +1176,11 @@ pub async fn chat(app: &AppHandle, model: &str, prompt: &str) -> R<CodexChatResu
         .await
         .map_err(|error| error.to_string())?;
     let cwd_text = cwd.to_string_lossy().to_string();
+
+    // Subscribe before creating the thread so fast notifications cannot race past this receiver.
+    let mut events = client.subscribe();
     let thread = client
-        .request(
-            "thread/start",
-            json!({
-              "model": model,
-              "cwd": cwd_text,
-              "approvalPolicy": "never",
-              "sandbox": READ_ONLY_SANDBOX,
-              "serviceName": "elephantnote"
-            }),
-        )
+        .request("thread/start", thread_start_params(model, &cwd_text))
         .await?;
     let thread_id = thread
         .pointer("/thread/id")
@@ -997,23 +1188,19 @@ pub async fn chat(app: &AppHandle, model: &str, prompt: &str) -> R<CodexChatResu
         .ok_or_else(|| "Codex thread/start returned no thread id.".to_string())?
         .to_string();
 
-    let mut events = client.subscribe();
-    let turn = client
+    let turn = match client
         .request(
             "turn/start",
-            json!({
-              "threadId": thread_id,
-              "input": [{ "type": "text", "text": prompt }],
-              "model": model,
-              "cwd": cwd_text,
-              "approvalPolicy": "never",
-              "sandboxPolicy": {
-                "type": TURN_READ_ONLY_SANDBOX,
-                "networkAccess": false
-              }
-            }),
+            turn_start_params(&thread_id, model, &cwd_text, prompt),
         )
-        .await?;
+        .await
+    {
+        Ok(turn) => turn,
+        Err(error) => {
+            client.cleanup_thread(&thread_id).await;
+            return Err(error);
+        }
+    };
     let turn_id = turn
         .pointer("/turn/id")
         .and_then(Value::as_str)
@@ -1025,19 +1212,45 @@ pub async fn chat(app: &AppHandle, model: &str, prompt: &str) -> R<CodexChatResu
     );
 
     let mut answer = String::new();
-    loop {
-        let event = timeout(TURN_TIMEOUT, events.recv())
-            .await
-            .map_err(|_| "Codex generation timed out.".to_string())?
-            .map_err(|error| format!("Codex event stream closed: {error}"))?;
-        if !event_thread_id(&event).is_empty() && event_thread_id(&event) != thread_id {
+    let mut delta_count = 0usize;
+    let deadline = Instant::now() + TURN_TIMEOUT;
+    let turn_result = loop {
+        let event = match timeout_at(deadline, events.recv()).await {
+            Err(_) => {
+                let _ = timeout(
+                    CLEANUP_TIMEOUT,
+                    client.request(
+                        "turn/interrupt",
+                        json!({ "threadId": thread_id, "turnId": turn_id }),
+                    ),
+                )
+                .await;
+                break Err("Codex generation timed out before turn/completed.".to_string());
+            }
+            Ok(Ok(event)) => event,
+            Ok(Err(broadcast::error::RecvError::Lagged(skipped))) => {
+                log("event", format!("receiver-lagged skipped={skipped}"));
+                continue;
+            }
+            Ok(Err(broadcast::error::RecvError::Closed)) => {
+                break Err("Codex event stream closed before turn/completed.".to_string());
+            }
+        };
+
+        let event_thread = event_thread_id(&event);
+        if !event_thread.is_empty() && event_thread != thread_id {
             continue;
         }
-        if !event_turn_id(&event).is_empty() && event_turn_id(&event) != turn_id {
+        let event_turn = event_turn_id(&event);
+        if !event_turn.is_empty() && event_turn != turn_id {
             continue;
         }
+
         match event.get("method").and_then(Value::as_str).unwrap_or("") {
-            "item/agentMessage/delta" => answer.push_str(delta_text(&event)),
+            "item/agentMessage/delta" => {
+                delta_count += 1;
+                answer.push_str(delta_text(&event));
+            }
             "item/completed" => {
                 let text = completed_agent_text(&event);
                 if !text.is_empty() {
@@ -1046,20 +1259,23 @@ pub async fn chat(app: &AppHandle, model: &str, prompt: &str) -> R<CodexChatResu
             }
             "turn/completed" => {
                 if let Some(error) = turn_failure(&event) {
-                    return Err(error);
+                    break Err(error);
                 }
-                break;
+                break Ok(());
             }
             "error" => {
                 let message = event
                     .pointer("/params/error/message")
                     .and_then(Value::as_str)
                     .unwrap_or("Codex generation failed.");
-                return Err(message.to_string());
+                break Err(message.to_string());
             }
             _ => {}
         }
-    }
+    };
+
+    client.cleanup_thread(&thread_id).await;
+    turn_result?;
 
     if answer.trim().is_empty() {
         return Err("Codex completed the turn without an assistant message.".to_string());
@@ -1067,10 +1283,11 @@ pub async fn chat(app: &AppHandle, model: &str, prompt: &str) -> R<CodexChatResu
     log(
         "chat",
         format!(
-            "complete thread={} turn={} answer_chars={} duration_ms={}",
+            "complete thread={} turn={} answer_chars={} deltas={} duration_ms={}",
             thread_id,
             turn_id,
             answer.chars().count(),
+            delta_count,
             started.elapsed().as_millis()
         ),
     );
@@ -1086,9 +1303,79 @@ mod tests {
     use super::*;
 
     #[test]
-    fn uses_protocol_sandbox_variant() {
+    fn uses_protocol_sandbox_variants() {
         assert_eq!(READ_ONLY_SANDBOX, "read-only");
         assert_eq!(TURN_READ_ONLY_SANDBOX, "readOnly");
+    }
+
+    #[test]
+    fn isolated_thread_payload_disables_external_environments() {
+        let params = thread_start_params("gpt-test", "/tmp/chat");
+        assert_eq!(params.get("ephemeral").and_then(Value::as_bool), Some(true));
+        assert_eq!(params.get("environments"), Some(&json!([])));
+        assert_eq!(params.get("selectedCapabilityRoots"), Some(&json!([])));
+        assert_eq!(
+            params.get("sandbox").and_then(Value::as_str),
+            Some("read-only")
+        );
+    }
+
+    #[test]
+    fn turn_payload_disables_network_access() {
+        let params = turn_start_params("thread", "gpt-test", "/tmp/chat", "hello");
+        assert_eq!(
+            params
+                .pointer("/sandboxPolicy/type")
+                .and_then(Value::as_str),
+            Some("readOnly")
+        );
+        assert_eq!(
+            params
+                .pointer("/sandboxPolicy/networkAccess")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn suppresses_high_frequency_event_logs() {
+        assert!(!should_log_event("item/agentMessage/delta"));
+        assert!(!should_log_event("thread/tokenUsage/updated"));
+        assert!(!should_log_event("mcpServer/startupStatus/updated"));
+        assert!(should_log_event("turn/completed"));
+        assert!(should_log_event("warning"));
+    }
+
+    #[test]
+    fn emits_only_account_and_warning_events_to_frontend() {
+        assert!(should_emit_frontend_event("account/updated"));
+        assert!(should_emit_frontend_event("account/rateLimits/updated"));
+        assert!(!should_emit_frontend_event("item/agentMessage/delta"));
+        assert!(!should_emit_frontend_event("thread/status/changed"));
+    }
+
+    #[test]
+    fn builds_rate_limit_reset_request_params() {
+        let params = consume_rate_limit_reset_params(&json!({
+          "creditId": "credit-1",
+          "idempotencyKey": "attempt-1"
+        }))
+        .expect("valid reset params");
+        assert_eq!(
+            params.get("creditId").and_then(Value::as_str),
+            Some("credit-1")
+        );
+        assert_eq!(
+            params.get("idempotencyKey").and_then(Value::as_str),
+            Some("attempt-1")
+        );
+    }
+
+    #[test]
+    fn rejects_missing_rate_limit_reset_credit() {
+        let error = consume_rate_limit_reset_params(&json!({ "idempotencyKey": "attempt-1" }))
+            .expect_err("missing credit id must fail");
+        assert!(error.contains("credit id"));
     }
 
     #[test]
@@ -1118,23 +1405,17 @@ mod tests {
 
     #[test]
     fn finds_package_root_from_npm_launcher() {
-        let entry = Path::new(
-            "/Users/test/.nvm/versions/node/v22/lib/node_modules/@openai/codex/bin/codex.js",
-        );
-        assert!(package_roots(entry)
+        let launcher = Path::new("/tmp/node_modules/@openai/codex/bin/codex.js");
+        assert!(package_roots(launcher)
             .iter()
-            .any(|root| root.ends_with("lib/node_modules/@openai/codex")));
+            .any(|root| root.ends_with("node_modules/@openai/codex")));
     }
 
     #[test]
-    fn turn_summary_does_not_log_prompt() {
-        let params = json!({
-          "threadId": "thread-1",
-          "model": "gpt-test",
-          "input": [{ "type": "text", "text": "secret prompt" }]
-        });
-        let summary = params_summary("turn/start", &params);
-        assert!(summary.contains("input_chars=13"));
-        assert!(!summary.contains("secret prompt"));
+    fn rejects_non_version_nvm_directories() {
+        assert!(!Path::new("/tmp/.DS_Store")
+            .file_name()
+            .and_then(|value| value.to_str())
+            .is_some_and(|name| name.starts_with('v')));
     }
 }

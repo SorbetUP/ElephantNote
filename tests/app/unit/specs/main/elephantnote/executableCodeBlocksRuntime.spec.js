@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  installExecutableCodeBlocks,
-  resetExecutableCodeBlocksForTests
-} from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV3'
+import { installExecutableCodeBlocks } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocks'
+import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV3'
 
 const flush = async() => {
   await new Promise((resolve) => setTimeout(resolve, 0))
@@ -15,7 +13,12 @@ const flush = async() => {
 const installEditor = (source = 'print("hello")') => {
   document.body.innerHTML = `
     <main class="en-editor-host" contenteditable="true">
-      <pre class="language-python"><code class="language-python">${source}</code></pre>
+      <div class="ag-code-block">
+        <span class="ag-language-input" contenteditable="true">python</span>
+        <pre class="language-python"><code class="language-python">${source}</code></pre>
+        <button class="ag-copy-code" type="button" aria-label="Copy code"></button>
+        <span class="ag-fence-label">Code fence</span>
+      </div>
     </main>
   `
   const pre = document.querySelector('pre')
@@ -35,10 +38,16 @@ const installEditor = (source = 'print("hello")') => {
 
 describe('executable code blocks portal runtime', () => {
   let invoke
+  let writeText
 
   beforeEach(() => {
     resetExecutableCodeBlocksForTests(window)
     document.body.innerHTML = ''
+    writeText = vi.fn(async() => {})
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText }
+    })
     invoke = vi.fn(async(command, payload) => {
       if (command === 'tauri_programs_list') {
         return { executionEnabled: true, outputLineLimit: 200, environments: [] }
@@ -84,6 +93,22 @@ describe('executable code blocks portal runtime', () => {
     expect(document.querySelector('.en-editor-host .en-code-output')).toBeNull()
     expect(runtime.layer.parentElement).toBe(document.body)
     expect(runtime.layer.querySelector('.en-code-runner-toolbar')).not.toBeNull()
+  })
+
+  it('integrates language, copy and fence chrome using the real Muya elements', async() => {
+    installEditor()
+    const runtime = installExecutableCodeBlocks(window)
+    runtime.scan('test')
+    await flush()
+
+    expect(document.querySelector('.ag-language-input').classList).toContain('en-code-runtime-language-control')
+    expect(document.querySelector('.ag-copy-code').classList).toContain('en-code-runtime-native-copy')
+    expect(document.querySelector('.ag-fence-label').classList).toContain('en-code-runtime-fence-hint')
+    expect(runtime.layer.querySelector('.en-code-runner-copy')).not.toBeNull()
+
+    runtime.layer.querySelector('.en-code-runner-copy').click()
+    await flush()
+    expect(writeText).toHaveBeenCalledWith('print("hello")')
   })
 
   it('dispatches a real Tauri run request when the visible run control is clicked', async() => {

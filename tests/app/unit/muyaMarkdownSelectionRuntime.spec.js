@@ -17,6 +17,13 @@ const editorFor = (markdown) => {
   return { dom, root }
 }
 
+const editorForState = (state) => {
+  const dom = new JSDOM('<div id="root"></div>')
+  const root = dom.window.document.getElementById('root')
+  renderJsonStateIntoDom(root, state, dom.window.document)
+  return { dom, root }
+}
+
 const select = (dom, node, offset) => {
   const range = dom.window.document.createRange()
   range.setStart(node, offset)
@@ -53,6 +60,51 @@ describe('Muya Markdown selection runtime', () => {
     const secondCell = root.querySelectorAll('tbody td')[1].firstChild
     const selection = select(dom, secondCell, 1)
     expect(readMarkdownSelection(root, selection)).toEqual({ anchor: 27, focus: 27 })
+  })
+
+  it('counts hidden syntax but restores the caret into visible strong text', () => {
+    const { dom, root } = editorForState({
+      version: 1,
+      type: 'muya-json-state',
+      blocks: [{
+        type: 'paragraph',
+        text: '**bold**',
+        children: [{ type: 'text', text: '**bold**' }],
+        inlineNodes: [{
+          type: 'strong',
+          text: 'bold',
+          marker: '**',
+          children: [{ type: 'text', text: 'bold' }]
+        }]
+      }]
+    })
+    const visibleText = root.querySelector('strong').firstChild
+    expect(readMarkdownSelection(root, select(dom, visibleText, 2))).toEqual({ anchor: 4, focus: 4 })
+
+    expect(restoreMarkdownSelection(root, { anchor: 2, focus: 2 }, dom.window.document)).toBe(true)
+    const selection = dom.window.getSelection()
+    expect(selection.anchorNode).toBe(visibleText)
+    expect(selection.anchorOffset).toBe(0)
+  })
+
+  it('ignores the visual language label when mapping code selections', () => {
+    const { dom, root } = editorForState({
+      version: 1,
+      type: 'muya-json-state',
+      blocks: [{
+        type: 'code_fence',
+        marker: '```',
+        info: 'python',
+        language: 'python',
+        text: 'abc',
+        children: [{ type: 'text', text: 'abc' }]
+      }]
+    })
+    const codeText = root.querySelector('code').firstChild
+    expect(readMarkdownSelection(root, select(dom, codeText, 1))).toEqual({ anchor: 11, focus: 11 })
+    expect(restoreMarkdownSelection(root, { anchor: 11, focus: 11 }, dom.window.document)).toBe(true)
+    expect(dom.window.getSelection().anchorNode).toBe(codeText)
+    expect(dom.window.getSelection().anchorOffset).toBe(1)
   })
 
   it('round-trips cross-block selections', () => {

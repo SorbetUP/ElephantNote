@@ -1,0 +1,53 @@
+name: Diagnose Wiki Continuation Head
+
+on:
+  pull_request:
+    branches:
+      - feature/rust-knowledge-core
+    paths:
+      - '.github/wiki-diagnostic-trigger'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  diagnose:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feature/wiki-knowledge-continuation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/wiki-knowledge-continuation
+          fetch-depth: 0
+      - name: Capture failed patch output
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .github/diagnostics
+          gh run view 29060905070 --repo "$GITHUB_REPOSITORY" --log-failed > .github/diagnostics/automatic-wiki-patch.log
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/diagnostics/automatic-wiki-patch.log')
+          lines = path.read_text(errors='replace').splitlines()
+          selected = []
+          for index, line in enumerate(lines):
+              lowered = line.lower()
+              if any(token in lowered for token in ('traceback', 'systemexit', 'changed unexpectedly', 'marker missing', 'error:', 'failed')):
+                  selected.extend(lines[max(0, index - 4):min(len(lines), index + 8)])
+          compact = []
+          seen = set()
+          for line in selected:
+              if line not in seen:
+                  seen.add(line)
+                  compact.append(line)
+          path.write_text('\n'.join(compact[-120:]) or '\n'.join(lines[-120:]))
+          PY
+      - name: Commit diagnostic
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/diagnostics/automatic-wiki-patch.log
+          git commit -m 'chore(ci): capture automatic wiki patch failure'
+          git push origin HEAD:feature/wiki-knowledge-continuation

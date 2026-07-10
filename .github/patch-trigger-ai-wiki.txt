@@ -1,2 +1,2 @@
 Trigger the one-shot AI Wiki repair workflow.
-Retry compile diagnostics after staged-source guard fix.
+Run focused lint diagnostics for the persisted source repair.

@@ -15,9 +15,13 @@ const read = (relativePath) => {
 const has = (relativePath, needle, description = needle) => {
   if (!read(relativePath).includes(needle)) failures.push(`${relativePath}: missing ${description}`)
 }
+const hasAll = (relativePath, needles, description) => {
+  for (const needle of needles) has(relativePath, needle, `${description}: ${needle}`)
+}
 const lacks = (relativePath, needle, description = needle) => {
-  if (read(relativePath).includes(needle))
+  if (read(relativePath).includes(needle)) {
     failures.push(`${relativePath}: unexpected ${description}`)
+  }
 }
 const ordered = (relativePath, needles, description) => {
   const content = read(relativePath)
@@ -76,12 +80,14 @@ for (const file of [
   'Elephant/shared/apiContractsRuntime.js',
   'Elephant/shared/sync.js',
   'Elephant/frontend/app/components/editor/NoteEditorHost.vue',
-  'Elephant/frontend/app/components/editor/RustNoteEditorHost.vue',
+  'Elephant/frontend/app/components/editor/RustEditorWithTabs.vue',
   'Elephant/frontend/app/components/shell/MainContent.vue',
   'Elephant/frontend/app/components/editor/ExcalidrawDialog.vue',
   'Elephant/frontend/app/services/elephantnoteClient/apiRuntime.js',
   'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
   'Elephant/frontend/app/utils/noteCardView.js',
+  'Elephant/frontend/src/renderer/src/muya/MuyaRuntimeEditor.vue',
+  'Elephant/frontend/src/renderer/src/muya/muyaDomRendererRuntime.js',
   'tests/app/unit/elephantnote/domainClients.spec.js',
   'tests/app/unit/specs/main/elephantnote/apiContracts.spec.js',
   'tests/app/unit/specs/main/elephantnote/apiRuntime.spec.js',
@@ -93,9 +99,11 @@ for (const file of [
   'tests/elephant/unit/sync/GitSyncEngine.spec.js',
   'tests/app/unit/realComponentImportSmoke.spec.js',
   'tests/app/unit/specs/main/elephantnote/agentSkills.spec.js',
+  'tests/app/unit/muyaRustEditorActivation.spec.js',
+  'tests/app/unit/muyaRustMuyaDomParity.spec.js',
+  'vite.tauri.config.js',
   'vitest.config.js'
-])
-  read(file)
+]) read(file)
 
 ordered(
   '.github/workflows/ci.yml',
@@ -109,23 +117,19 @@ ordered(
   ],
   'main CI must run the critical-flow guard, security gate and complete unit suite'
 )
-has(
+hasAll(
   '.github/workflows/ci.yml',
-  'cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features',
+  ['cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features'],
   'blocking Tauri cargo check in main CI'
 )
-has(
+hasAll(
   '.github/workflows/tauri-ci.yml',
-  'cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features',
+  ['cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features'],
   'blocking Tauri all-target cargo check'
 )
 has('.github/workflows/codeql.yml', 'github/codeql-action/analyze@v3', 'CodeQL workflow')
 has('.github/dependabot.yml', 'package-ecosystem: cargo', 'Cargo dependency monitoring')
-has(
-  'package.json',
-  '"security:guard": "node build/scripts/verify-security-guardrails.mjs"',
-  'security guard script'
-)
+has('package.json', '"security:guard": "node build/scripts/verify-security-guardrails.mjs"', 'security guard script')
 
 ordered(
   'agent/skill/README.md',
@@ -163,28 +167,12 @@ ordered(
     '../tauri-ci-verifier/SKILL.md',
     '../artifact-release-gate/SKILL.md'
   ],
-  'ElephantNote CI skill routes to the new CI skill stack'
+  'ElephantNote CI skill routes to the CI skill stack'
 )
-has(
-  'agent/skill/anti-fake-tests/SKILL.md',
-  'A test is valid only if it checks an observable contract',
-  'anti-fake observable contract rule'
-)
-has(
-  'agent/skill/tauri-ci-verifier/SKILL.md',
-  'A successful web build alone is not proof that the packaged app opens',
-  'Tauri packaged-app proof rule'
-)
-has(
-  'agent/skill/cross-platform-paths/SKILL.md',
-  'Hidden app folders must not show as normal notes in the main tree',
-  'hidden-folder path invariant'
-)
-has(
-  'agent/skill/artifact-release-gate/SKILL.md',
-  'The expected artifact exists at the expected path',
-  'artifact existence rule'
-)
+has('agent/skill/anti-fake-tests/SKILL.md', 'A test is valid only if it checks an observable contract', 'anti-fake observable contract rule')
+has('agent/skill/tauri-ci-verifier/SKILL.md', 'A successful web build alone is not proof that the packaged app opens', 'Tauri packaged-app proof rule')
+has('agent/skill/cross-platform-paths/SKILL.md', 'Hidden app folders must not show as normal notes in the main tree', 'hidden-folder path invariant')
+has('agent/skill/artifact-release-gate/SKILL.md', 'The expected artifact exists at the expected path', 'artifact existence rule')
 
 ordered(
   'Elephant/frontend/src/renderer/src/main.js',
@@ -201,81 +189,36 @@ ordered(
   ],
   'renderer runtime bridge installation order'
 )
-has(
+hasAll(
   'Elephant/frontend/src/renderer/src/main.js',
-  "import { installTauriRuntimeBridge } from './platform/tauriRuntimeBridge'",
-  'strict Tauri runtime bridge import'
+  [
+    "import { installTauriRuntimeBridge } from './platform/tauriRuntimeBridge'",
+    "import { ensureRendererPathFacade } from './platform/rendererPathFacade'",
+    "import { installTauriSearchConceptFallback } from './platform/tauriSearchConceptFallback'",
+    "const runtime = 'tauri'",
+    'unsupported runtime'
+  ],
+  'strict Tauri renderer bootstrap'
 )
-has(
-  'Elephant/frontend/src/renderer/src/main.js',
-  "import { ensureRendererPathFacade } from './platform/rendererPathFacade'",
-  'renderer path facade import'
-)
-has(
-  'Elephant/frontend/src/renderer/src/main.js',
-  "import { installTauriSearchConceptFallback } from './platform/tauriSearchConceptFallback'",
-  'Tauri search concept fallback import'
-)
-has(
-  'Elephant/frontend/src/renderer/src/main.js',
-  "const runtime = 'tauri'",
-  'Tauri-only renderer runtime selection'
-)
-has(
-  'Elephant/frontend/src/renderer/src/main.js',
-  'unsupported runtime',
-  'explicit unsupported runtime failure'
-)
-lacks(
-  'Elephant/frontend/src/renderer/src/main.js',
-  'tauri-compatible',
-  'compatibility renderer runtime'
-)
-lacks(
-  'Elephant/frontend/src/renderer/src/main.js',
-  'const ensurePathResolve =',
-  'inline renderer path facade'
-)
-lacks(
-  'Elephant/frontend/src/renderer/src/main.js',
-  'const normalizeSearchPath =',
-  'inline search concept path normalization'
-)
-has(
+lacks('Elephant/frontend/src/renderer/src/main.js', 'tauri-compatible', 'compatibility renderer runtime')
+lacks('Elephant/frontend/src/renderer/src/main.js', 'const ensurePathResolve =', 'inline renderer path facade')
+lacks('Elephant/frontend/src/renderer/src/main.js', 'const normalizeSearchPath =', 'inline search concept normalization')
+hasAll(
   'Elephant/frontend/src/renderer/src/platform/rendererPathFacade.js',
-  'export const ensureRendererPathFacade',
-  'renderer path facade export'
+  ['export const ensureRendererPathFacade', 'scope.path.resolve'],
+  'renderer path facade'
 )
-has(
-  'Elephant/frontend/src/renderer/src/platform/rendererPathFacade.js',
-  'scope.path.resolve',
-  'renderer path resolve helper'
-)
-has(
+hasAll(
   'Elephant/frontend/src/renderer/src/platform/tauriRuntimeBridge.js',
-  'export const installTauriRuntimeBridge',
-  'strict Tauri runtime bridge export'
+  ['export const installTauriRuntimeBridge', 'requires the Tauri runtime bridge'],
+  'strict Tauri runtime bridge'
 )
-has(
-  'Elephant/frontend/src/renderer/src/platform/tauriRuntimeBridge.js',
-  'requires the Tauri runtime bridge',
-  'strict Tauri runtime bridge unavailable-runtime error'
-)
-has(
+hasAll(
   'Elephant/frontend/src/renderer/src/platform/tauriSearchConceptFallback.js',
-  'export const installTauriSearchConceptFallback',
-  'Tauri search concept fallback export'
+  ['export const installTauriSearchConceptFallback', 'rust-search-concepts-command-unavailable'],
+  'Tauri search concept fallback'
 )
-has(
-  'Elephant/frontend/src/renderer/src/platform/tauriSearchConceptFallback.js',
-  'rust-search-concepts-command-unavailable',
-  'Tauri search concept fallback reason'
-)
-has(
-  'tests/app/unit/specs/main/elephantnote/tauriOnlyRuntime.spec.js',
-  'keeps search concept fallback out of the renderer bootstrap entrypoint',
-  'Tauri search concept fallback regression test'
-)
+has('tests/app/unit/specs/main/elephantnote/tauriOnlyRuntime.spec.js', 'keeps search concept fallback out of the renderer bootstrap entrypoint', 'Tauri search fallback regression test')
 ordered(
   'Elephant/frontend/src/renderer/src/platform/tauriLocalIpcBridge.js',
   [
@@ -297,11 +240,7 @@ ordered(
   ],
   'Tauri save bridge result reporting'
 )
-has(
-  'Elephant/backend/tauri/src/lib_min.rs',
-  'tauri_extra_commands::tauri_marktext_write_file',
-  'registered MarkText backend writer'
-)
+has('Elephant/backend/tauri/src/lib_min.rs', 'tauri_extra_commands::tauri_marktext_write_file', 'registered MarkText backend writer')
 ordered(
   'Elephant/backend/tauri/src/tauri_extra_commands.rs',
   [
@@ -337,11 +276,7 @@ ordered(
   ],
   'runtime-aware API contract wrapper'
 )
-has(
-  'vitest.config.js',
-  "'common/elephantnote/apiContracts': apiContractsRuntime",
-  'Vitest alias for runtime-aware API contracts'
-)
+has('vitest.config.js', "'common/elephantnote/apiContracts': apiContractsRuntime", 'Vitest alias for runtime-aware API contracts')
 ordered(
   'tests/app/unit/specs/main/elephantnote/apiContracts.spec.js',
   [
@@ -375,11 +310,7 @@ ordered(
   ],
   'front client note methods and chat search throttling'
 )
-has(
-  'tests/app/unit/elephantnote/domainClients.spec.js',
-  'does not rebuild chat search when the model already produced an answer',
-  'chat search rebuild throttling test'
-)
+has('tests/app/unit/elephantnote/domainClients.spec.js', 'does not rebuild chat search when the model already produced an answer', 'chat search rebuild throttling test')
 
 ordered(
   'Elephant/frontend/app/components/editor/NoteEditorHost.vue',
@@ -402,30 +333,65 @@ ordered(
   ],
   'Excalidraw byte persistence'
 )
-has(
-  'Elephant/frontend/app/components/editor/RustNoteEditorHost.vue',
-  "import { MuyaRuntimeEditor, isRustMuyaEngineAvailable } from '@/muya'",
-  'canonical Rust editor import'
+hasAll(
+  'Elephant/frontend/app/components/shell/MainContent.vue',
+  ["import NoteEditorHost from '../editor/NoteEditorHost.vue'", '<note-editor-host'],
+  'open notes use the real note shell'
 )
-ordered(
-  'Elephant/frontend/app/components/editor/RustNoteEditorHost.vue',
+lacks('Elephant/frontend/app/components/shell/MainContent.vue', 'RustNoteEditorHost', 'obsolete Rust overlay host')
+hasAll(
+  'vite.tauri.config.js',
   [
-    '<note-editor-host />',
-    'mode="active"',
-    "window.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'rust'",
-    '.en-editor-host > :not(.en-rust-note-editor)'
+    'const rustEditorWithTabsPlugin = () => ({',
+    "if (source !== '@/components/editorWithTabs') return null",
+    'RustEditorWithTabs.vue',
+    'rustEditorWithTabsPlugin()'
   ],
-  'canonical Rust editor mounted inside the real note editor shell'
+  'Tauri EditorWithTabs injection'
 )
-has(
-  'Elephant/frontend/app/components/shell/MainContent.vue',
-  "import RustNoteEditorHost from '../editor/RustNoteEditorHost.vue'",
-  'canonical Rust editor host import'
+hasAll(
+  'Elephant/frontend/app/components/editor/RustEditorWithTabs.vue',
+  [
+    'v-if="rustActive"',
+    'v-else',
+    'mode="active"',
+    'defineAsyncComponent(',
+    "() => import('@/components/editorWithTabs/index.vue')",
+    "window.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'rust'",
+    "throw new Error('Rust Muya editor mounted without the canonical Rust engine.')"
+  ],
+  'single canonical Rust editor with lazy legacy fallback'
 )
-ordered(
-  'Elephant/frontend/app/components/shell/MainContent.vue',
-  ['<rust-note-editor-host', 'v-if="hasOpenNote"'],
-  'open notes route through the canonical Rust editor host'
+lacks('Elephant/frontend/app/components/editor/RustEditorWithTabs.vue', 'Teleport', 'overlay editor mounting')
+lacks('Elephant/frontend/app/components/editor/RustEditorWithTabs.vue', 'display: none !important', 'hidden duplicate editor')
+hasAll(
+  'Elephant/frontend/src/renderer/src/muya/MuyaRuntimeEditor.vue',
+  [
+    "import 'muya/lib/assets/styles/index.css'",
+    "import 'muya/themes/default.css'",
+    'class="muya-runtime-editor editor-component"'
+  ],
+  'Muya styles and editor surface'
+)
+hasAll(
+  'Elephant/frontend/src/renderer/src/muya/muyaDomRendererRuntime.js',
+  [
+    "root.id = 'ag-editor-id'",
+    "root.setAttribute('data-muya-renderer', 'rust-compatible')",
+    'ag-paragraph',
+    'ag-fence-code',
+    'ag-image-marked-text',
+    'inlineNodes'
+  ],
+  'Rust state to Muya DOM adapter'
+)
+hasAll(
+  'tests/app/unit/muyaRustMuyaDomParity.spec.js',
+  [
+    'renders Muya structure, hidden syntax, local images, headings and code blocks',
+    'round-trips the visible Muya DOM without losing Markdown syntax'
+  ],
+  'Muya DOM parity regression tests'
 )
 ordered(
   'Elephant/frontend/app/components/editor/ExcalidrawDialog.vue',
@@ -463,34 +429,20 @@ for (const needle of [
   'mobileRcloneBinary": false',
   'mobileSyncRequiresBackend": false',
   'requiresExternalBinary": false'
-])
-  has(
-    'Elephant/backend/tauri/src/vault/sync.rs',
-    needle,
-    `Tauri external-free sync invariant ${needle}`
-  )
+]) {
+  has('Elephant/backend/tauri/src/vault/sync.rs', needle, `Tauri external-free sync invariant ${needle}`)
+}
 for (const needle of [
   'sync_push_copies_visible_vault_files_to_local_target',
   'sync_pull_copies_target_files_back_to_vault',
   'sync_preserves_both_versions_on_conflict',
   'sync_run_reports_actionable_missing_target_error'
-])
+]) {
   has('Elephant/backend/tauri/src/vault/sync.rs', needle, `Tauri embedded sync unit test ${needle}`)
-has(
-  'Elephant/backend/tauri/src/sync_contract_tests.rs',
-  'tauri_sync_runtime_is_embedded_local_and_external_free',
-  'Tauri local sync runtime contract test'
-)
-has(
-  'tests/app/unit/specs/main/elephantnote/syncPlan.spec.js',
-  'can pull into a second device without creating a local snapshot first',
-  'sync plan pull regression test'
-)
-has(
-  'tests/elephant/unit/sync/GitSyncEngine.spec.js',
-  'persists remote path and first run state after a successful sync',
-  'compatibility sync engine persistence regression test'
-)
+}
+has('Elephant/backend/tauri/src/sync_contract_tests.rs', 'tauri_sync_runtime_is_embedded_local_and_external_free', 'Tauri local sync runtime contract test')
+has('tests/app/unit/specs/main/elephantnote/syncPlan.spec.js', 'can pull into a second device without creating a local snapshot first', 'sync plan pull regression test')
+has('tests/elephant/unit/sync/GitSyncEngine.spec.js', 'persists remote path and first run state after a successful sync', 'compatibility sync engine persistence regression test')
 ordered(
   'build/scripts/sync-two-docker-smoke.mjs',
   [
@@ -503,11 +455,7 @@ ordered(
   ],
   'Docker pair sync smoke invariants'
 )
-has(
-  '.github/workflows/sync-docker.yml',
-  'node build/scripts/sync-two-docker-smoke.mjs',
-  'Docker pair sync workflow'
-)
+has('.github/workflows/sync-docker.yml', 'node build/scripts/sync-two-docker-smoke.mjs', 'Docker pair sync workflow')
 
 if (failures.length) {
   console.error('Critical ElephantNote flow guard failed:')

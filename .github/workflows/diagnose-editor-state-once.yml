@@ -1,0 +1,22 @@
+name: Diagnose editor state once
+
+on:
+  push:
+    branches:
+      - feature/wiki-knowledge-continuation
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate editor load/save implementation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rg -n "observed active markdown|write:start|reason.?[:=].?['\"]vue-watch|before unmount|handleFileChange|schedule.*notePath|slash-menu.*mounted" Elephant/frontend || true
+          echo '--- likely editor files ---'
+          find Elephant/frontend -type f \( -name '*.vue' -o -name '*.js' -o -name '*.ts' \) | grep -Ei 'editor|marktext|muya|note' | sort | head -300

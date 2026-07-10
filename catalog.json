@@ -1,8 +1,41 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-10T02:30:00Z",
+  "updatedAt": "2026-07-10T04:30:00Z",
   "addons": [
+    {
+      "id": "com.elephantnote.task-dashboard",
+      "slug": "task-dashboard",
+      "name": "Task Dashboard",
+      "version": "1.0.0",
+      "description": "Aggregates open and completed Markdown tasks from the vault into a generated dashboard.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/task-dashboard/manifest.json",
+      "entryPath": "addons/task-dashboard/main.js",
+      "readmePath": "addons/task-dashboard/README.md"
+    },
+    {
+      "id": "com.elephantnote.broken-links-auditor",
+      "slug": "broken-links-auditor",
+      "name": "Broken Links Auditor",
+      "version": "1.0.0",
+      "description": "Finds unresolved and ambiguous wikilinks across the vault and writes a repair report.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/broken-links-auditor/manifest.json",
+      "entryPath": "addons/broken-links-auditor/main.js",
+      "readmePath": "addons/broken-links-auditor/README.md"
+    },
+    {
+      "id": "com.elephantnote.github-release-watcher",
+      "slug": "github-release-watcher",
+      "name": "GitHub Release Watcher",
+      "version": "1.0.0",
+      "description": "Tracks releases for configured GitHub repositories and writes a Markdown dashboard.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/github-release-watcher/manifest.json",
+      "entryPath": "addons/github-release-watcher/main.js",
+      "readmePath": "addons/github-release-watcher/README.md"
+    },
     {
       "id": "com.elephantnote.inbox-digest",
       "slug": "inbox-digest",

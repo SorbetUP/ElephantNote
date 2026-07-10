@@ -50,15 +50,41 @@ if [ -z "$PID" ]; then
 fi
 printf '[android-startup] pid=%s\n' "$PID"
 
-RESUMED="$(adb shell dumpsys activity activities | grep -m 1 'mResumedActivity' || true)"
+ACTIVITY_DUMP="$(adb shell dumpsys activity activities || true)"
+WINDOW_DUMP="$(adb shell dumpsys window windows || true)"
+RESUMED="$(printf '%s\n' "$ACTIVITY_DUMP" | grep -E -m 1 'topResumedActivity|mResumedActivity|ResumedActivity' || true)"
+FOCUSED="$(printf '%s\n' "$WINDOW_DUMP" | grep -E -m 1 'mCurrentFocus|mFocusedApp' || true)"
+VISIBLE="$(printf '%s\n' "$ACTIVITY_DUMP" | grep -E -m 1 "ActivityRecord.*${PACKAGE_ID}.*(RESUMED|visible=true)" || true)"
+PERMISSION_UI="$(printf '%s\n' "$ACTIVITY_DUMP" | grep -Ei -m 1 'permissioncontroller.*(GrantPermissionsActivity|permission\.ui)' || true)"
+
+{
+  printf '\n[android-startup-diagnostics]\n'
+  printf 'pid=%s\n' "$PID"
+  printf 'resumed=%s\n' "$RESUMED"
+  printf 'focused=%s\n' "$FOCUSED"
+  printf 'visible=%s\n' "$VISIBLE"
+  printf 'permission_ui=%s\n' "$PERMISSION_UI"
+} >> "$LOG_FILE"
+
 printf '[android-startup] resumed=%s\n' "$RESUMED"
-if ! printf '%s' "$RESUMED" | grep -q "$PACKAGE_ID"; then
-  echo "ElephantNote did not remain the resumed activity. A permission dialog or another Activity interrupted startup." >&2
+printf '[android-startup] focused=%s\n' "$FOCUSED"
+printf '[android-startup] visible=%s\n' "$VISIBLE"
+
+if ! {
+  printf '%s\n' "$RESUMED" "$FOCUSED" "$VISIBLE" | grep -q "$PACKAGE_ID"
+}; then
+  echo "ElephantNote is alive but no resumed, focused, or visible Activity record was found." >&2
+  exit 1
+fi
+
+if [ -n "$PERMISSION_UI" ]; then
+  echo "Android permission UI interrupted startup: $PERMISSION_UI" >&2
   exit 1
 fi
 
 CAMERA_LINE="$(adb shell dumpsys package "$PACKAGE_ID" | grep -m 1 'android.permission.CAMERA:' || true)"
 printf '[android-startup] camera=%s\n' "$CAMERA_LINE"
+printf 'camera=%s\n' "$CAMERA_LINE" >> "$LOG_FILE"
 if printf '%s' "$CAMERA_LINE" | grep -q 'granted=true'; then
   echo "Camera permission was granted during startup; it must only be requested by the QR scanner action." >&2
   exit 1

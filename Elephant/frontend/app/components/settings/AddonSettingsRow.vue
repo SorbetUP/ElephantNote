@@ -129,12 +129,12 @@ const accessLabel = computed(() => ({
   isolated: 'Limited access',
   trusted: 'Full app access',
   system: 'Built in by ElephantNote'
-}[accessLevel.value] || 'Unknown access')
+}[accessLevel.value] || 'Unknown access'))
 const accessDescription = computed(() => ({
   isolated: 'Runs in an isolated Worker and can only use the capabilities listed below.',
   trusted: 'Runs inside ElephantNote and can change the interface, editor and application behavior. Enable only if you trust its source.',
   system: 'Ships with ElephantNote and is tested as part of the application.'
-}[accessLevel.value] || '')
+}[accessLevel.value] || ''))
 
 const confirmUninstall = () => {
   confirmingUninstall.value = false

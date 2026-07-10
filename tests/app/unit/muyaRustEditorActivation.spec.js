@@ -35,6 +35,22 @@ describe('real Muya editor activation', () => {
     expect(editor).not.toContain('MuyaRuntimeEditor')
   })
 
+  it('injects Rust behind the real Muya class without replacing its DOM', () => {
+    const viteConfig = read('vite.tauri.config.js')
+    const adapter = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js')
+    const mirror = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js')
+
+    expect(viteConfig).toContain("'muya/lib': resolve(")
+    expect(viteConfig).toContain('realMuyaRustAdapter.js')
+    expect(adapter).toContain("import Muya from '../../../muya/lib'")
+    expect(adapter).toContain('export default class RealMuyaWithRustMirror extends Muya')
+    expect(adapter).toContain("this.on('change', this.__elephantRustChangeListener)")
+    expect(adapter).not.toContain('innerHTML')
+    expect(adapter).not.toContain('createElement')
+    expect(mirror).toContain("target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-mirror'")
+    expect(mirror).toContain('client.jsonState()')
+  })
+
   it('keeps the experimental Rust renderer opt-in instead of replacing production Muya', () => {
     const flags = read('Elephant/frontend/src/renderer/src/muya/runtimeFlags.js')
     const runtimeHook = read('Elephant/frontend/src/renderer/src/muya/useMuyaRuntimeEditor.js')

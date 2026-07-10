@@ -14,7 +14,7 @@ on:
       - 'Elephant/shared/muyaParityCases.json'
       - 'Elephant/shared/muyaJsonStateCases.json'
       - 'tests/app/unit/muya*.spec.js'
-      - 'vite.tauri.config.js'
+      - 'vite.tauri.config.mjs'
       - '.github/workflows/muya-rust-parity.yml'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -27,7 +27,7 @@ on:
       - 'Elephant/shared/muyaParityCases.json'
       - 'Elephant/shared/muyaJsonStateCases.json'
       - 'tests/app/unit/muya*.spec.js'
-      - 'vite.tauri.config.js'
+      - 'vite.tauri.config.mjs'
       - '.github/workflows/muya-rust-parity.yml'
   workflow_dispatch:
 
@@ -42,7 +42,7 @@ jobs:
   parity:
     name: Rust and renderer parity
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       CARGO_TERM_COLOR: always
       DEBIAN_FRONTEND: noninteractive
@@ -86,18 +86,42 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Check Rust formatting
-        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check 2>&1 | tee muya-rustfmt.log
 
       - name: Compile Tauri Rust backend
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features 2>&1 | tee muya-cargo-check.log
 
       - name: Run Rust Muya tests
-        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib markdown:: --no-default-features
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib markdown:: --no-default-features -- --nocapture 2>&1 | tee muya-rust-tests.log
+
+      - name: Upload Rust diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-rust-diagnostics-${{ github.run_id }}
+          path: |
+            muya-rustfmt.log
+            muya-cargo-check.log
+            muya-rust-tests.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Run renderer Muya parity tests
         shell: bash
         run: |
+          set -o pipefail
           pnpm exec vitest run \
+            tests/app/unit/muyaRustCompleteOwnership.spec.js \
+            tests/app/unit/muyaRustCompleteSession.spec.js \
             tests/app/unit/muyaRustEngineRuntime.spec.js \
             tests/app/unit/muyaRustSessionRuntime.spec.js \
             tests/app/unit/muyaRustGroupedHistoryClient.spec.js \
@@ -111,4 +135,13 @@ jobs:
             tests/app/unit/muyaJsonStateSharedParity.spec.js \
             tests/app/unit/muyaMarkdownSelectionRuntime.spec.js \
             tests/app/unit/muyaFullEditorRuntime.spec.js \
-            tests/app/unit/muyaRuntimeInputParity.spec.js
+            tests/app/unit/muyaRuntimeInputParity.spec.js 2>&1 | tee muya-renderer-tests.log
+
+      - name: Upload renderer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-renderer-diagnostics-${{ github.run_id }}
+          path: muya-renderer-tests.log
+          if-no-files-found: warn
+          retention-days: 14

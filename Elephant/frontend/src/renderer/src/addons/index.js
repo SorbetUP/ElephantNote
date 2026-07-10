@@ -28,14 +28,29 @@ const createDiagnosticsLogger = (logger) => ({
   error: logger?.error || ((...args) => console.error('[addons]', ...args))
 })
 
+const createAddonHostFacade = (managerRef) => Object.freeze({
+  list: (...args) => managerRef.current?.list(...args) || [],
+  get: (...args) => managerRef.current?.get(...args) || null,
+  getContributions: (...args) => managerRef.current?.getContributions(...args) || [],
+  getContributionMap: () => managerRef.current?.getContributionMap() || {},
+  enable: (...args) => managerRef.current?.enable(...args),
+  disable: (...args) => managerRef.current?.disable(...args),
+  runAction: (...args) => managerRef.current?.runAction(...args),
+  on: (...args) => managerRef.current?.on(...args) || (() => {})
+})
+
 export const createAddonManager = (options = {}) => {
   const logger = createDiagnosticsLogger(options.logger)
+  const addonDefinitions = options.addons || builtinAddons
+  const managerRef = { current: null }
+  const addonHost = createAddonHostFacade(managerRef)
   const manager = new ElephantAddonManager({
     ...options,
+    addons: addonHost,
     logger
   })
+  managerRef.current = manager
 
-  const addonDefinitions = options.addons || builtinAddons
   logger.info('[addons] register:start', {
     count: addonDefinitions.length,
     ids: addonDefinitions.map((addon) => addon?.manifest?.id || 'unknown')

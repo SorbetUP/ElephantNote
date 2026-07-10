@@ -64,7 +64,12 @@ const requiredDirectHooks = [
   'updateCodeLanguage',
   'codeBlockUpdate',
   'switchTableData',
-  'deleteSelectedTableCells'
+  'deleteSelectedTableCells',
+  'replaceWordInline',
+  '_replaceCurrentWordInlineUnsafe',
+  'selectAll',
+  'selectAllContent',
+  'createTable'
 ]
 
 describe('complete Rust ownership of Muya document mutations', () => {

@@ -1,6 +1,6 @@
 use crate::knowledge_wikis::{
-    tauri_knowledge_wiki_accept, tauri_knowledge_wiki_candidates,
-    tauri_knowledge_wiki_generate, WikiCandidate,
+    tauri_knowledge_wiki_accept, tauri_knowledge_wiki_candidates, tauri_knowledge_wiki_generate,
+    WikiCandidate,
 };
 use elephantnote_knowledge_core::{KnowledgeStore, WikiDraft, WikiDraftStatus};
 use rusqlite::{params, Connection};
@@ -279,10 +279,7 @@ pub async fn tauri_knowledge_wiki_library_generate(
 }
 
 #[tauri::command]
-pub fn tauri_knowledge_wiki_library_reject(
-    app: AppHandle,
-    topic: String,
-) -> Result<(), String> {
+pub fn tauri_knowledge_wiki_library_reject(app: AppHandle, topic: String) -> Result<(), String> {
     let root = active_vault_root(&app)?;
     let store = active_store(&root)?;
     set_candidate_decision(&store, &topic, "rejected")?;

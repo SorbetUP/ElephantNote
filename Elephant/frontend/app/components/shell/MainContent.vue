@@ -3,7 +3,7 @@
     class="en-main"
     :class="{ 'has-editor-open': hasOpenNote }"
   >
-    <addon-workspace-host
+    <addon-workspace-router
       v-if="!hasOpenNote && activeAddonViewId"
       :view-id="activeAddonViewId"
       @close="emit('close-addon-view')"
@@ -21,7 +21,6 @@
     <atomic-graph-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'graph'" />
     <models-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'models'" />
     <sigma-canvas v-else-if="!hasOpenNote && store.activeWorkspaceView === 'canvas'" />
-    <calendar-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'calendar'" />
     <site-preview-panel v-if="!hasOpenNote && !activeAddonViewId && store.activeWorkspaceView === 'notes'" />
     <note-editor-host
       v-if="hasOpenNote"
@@ -43,8 +42,7 @@ import ChatView from '../views/ChatView.vue'
 import ModelsView from '../views/ModelsView.vue'
 import SigmaCanvas from '../views/SigmaCanvas.vue'
 import AtomicGraphView from '../views/AtomicGraphView.vue'
-import CalendarView from '../views/CalendarView.vue'
-import AddonWorkspaceHost from '../views/AddonWorkspaceHost.vue'
+import AddonWorkspaceRouter from '../views/AddonWorkspaceRouter.vue'
 
 const props = defineProps({
   activeAddonViewId: {

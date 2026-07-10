@@ -32,6 +32,9 @@ mod editor_parity_tests;
 mod muya_edge_parity_tests;
 
 #[cfg(test)]
+mod muya_json_state_parity_tests;
+
+#[cfg(test)]
 mod muya_shared_parity_tests;
 
 #[cfg(test)]

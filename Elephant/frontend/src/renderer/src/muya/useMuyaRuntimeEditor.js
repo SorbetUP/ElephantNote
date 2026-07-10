@@ -17,10 +17,26 @@ export const useMuyaRuntimeEditor = ({ markdown = ref(''), mode = ref(readMuyaRu
 
   const mount = async() => {
     if (!rootRef.value || !enabled.value) return null
+
     const options = { document: documentRef?.value || globalThis.document }
-    runtimeRef.value = isRustMuyaEngineAvailable(globalThis)
+    const rustAvailable = isRustMuyaEngineAvailable(globalThis)
+
+    if (active.value && !rustAvailable) {
+      throw new Error('Active Muya mode requires the Rust Tauri engine; JavaScript fallback is disabled.')
+    }
+
+    const engineKind = rustAvailable ? 'rust' : 'javascript'
+    runtimeRef.value = rustAvailable
       ? createRustBackedMuyaFullEditorRuntime(rootRef.value, markdown.value || '', options)
       : createMuyaFullEditorRuntime(rootRef.value, markdown.value || '', options)
+
+    rootRef.value.dataset.muyaEngine = engineKind
+    rootRef.value.dataset.muyaRuntimeMode = mode.value
+    globalThis.console?.info?.('[muya-runtime] mounted', {
+      engine: engineKind,
+      mode: mode.value
+    })
+
     mounted.value = true
     if (runtimeRef.value?.readyPromise) await runtimeRef.value.readyPromise
     ready.value = true

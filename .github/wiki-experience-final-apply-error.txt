@@ -1,0 +1,9 @@
+status=1
+Traceback (most recent call last):
+  File "/tmp/impl.py", line 35, in <module>
+    replace_once(
+  File "/tmp/impl.py", line 19, in replace_once
+    raise RuntimeError(f'{path}: expected one occurrence, found {count}: {old[:120]!r}')
+RuntimeError: Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue: expected one occurrence, found 3: '        <div class="en-ai-card-body en-ai-grid">\n          <label>\n            <span>Provider</span>\n'
+=== git status ===
+?? .github/wiki-experience-final-apply-error.txt

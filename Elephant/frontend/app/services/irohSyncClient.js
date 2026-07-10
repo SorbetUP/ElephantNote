@@ -1,17 +1,46 @@
 import { invoke } from '@tauri-apps/api/core'
 
 export const IROH_SYNC_STATUS_EVENT = 'elephantnote:iroh-sync-status'
+export const IROH_SYNC_FILES_CHANGED_EVENT = 'elephantnote:vault-files-changed'
 
 let lastPublishedStatus = null
 
 const normalizeObject = (value) => (value && typeof value === 'object' ? value : {})
+const cleanPeerCloseMessage = (value) => {
+  const message = String(value || '').trim().toLowerCase()
+  return message === 'closed by peer: 0' ||
+    message.includes('closed by peer: 0') ||
+    (message.includes('application closed') && /\b0\b/.test(message))
+}
+
+const sanitizeStatus = (status) => {
+  if (!status || typeof status !== 'object') return status
+  if (!cleanPeerCloseMessage(status.lastError)) return status
+  return {
+    ...status,
+    lastError: '',
+    running: false,
+    transportClosedCleanly: true
+  }
+}
 
 const publishStatus = (status) => {
-  if (status && typeof status === 'object') lastPublishedStatus = status
-  if (typeof window !== 'undefined' && status && typeof status === 'object') {
-    window.dispatchEvent(new CustomEvent(IROH_SYNC_STATUS_EVENT, { detail: status }))
+  const normalized = sanitizeStatus(status)
+  if (normalized && typeof normalized === 'object') lastPublishedStatus = normalized
+  if (typeof window !== 'undefined' && normalized && typeof normalized === 'object') {
+    window.dispatchEvent(new CustomEvent(IROH_SYNC_STATUS_EVENT, { detail: normalized }))
   }
-  return status
+  return normalized
+}
+
+const publishVaultFilesChanged = (status) => {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(IROH_SYNC_FILES_CHANGED_EVENT, {
+    detail: {
+      transferredFiles: Number(status?.transferredFiles || 0),
+      transferredBytes: Number(status?.transferredBytes || 0)
+    }
+  }))
 }
 
 const readStatus = async () => publishStatus(await invoke('tauri_sync_status'))
@@ -29,10 +58,22 @@ const run = async () => {
     publishStatus({ ...lastPublishedStatus, running: true, lastError: '' })
   }
   try {
-    return publishStatus(await invoke('tauri_sync_run', {
+    const status = publishStatus(await invoke('tauri_sync_run', {
       payloadByOperation: { sync: {} }
     }))
+    if (!status?.lastError) publishVaultFilesChanged(status)
+    return status
   } catch (error) {
+    if (cleanPeerCloseMessage(error?.message || error)) {
+      const status = await readStatus().catch(() => ({
+        ...(lastPublishedStatus || {}),
+        running: false,
+        lastError: '',
+        transportClosedCleanly: true
+      }))
+      publishVaultFilesChanged(status)
+      return publishStatus(status)
+    }
     if (lastPublishedStatus) {
       publishStatus({
         ...lastPublishedStatus,

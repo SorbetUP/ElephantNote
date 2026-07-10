@@ -46,12 +46,23 @@ jobs:
       - name: Apply reviewed refactor
         run: python3 .github/scripts/apply_codex_bundle_and_limits.py
 
-      - name: Validate JavaScript and focused rate-limit tests
-        run: |
-          node --check build/scripts/ensure-tauri-codex-runtime.mjs
-          node --check Elephant/frontend/app/components/settings/codexRateLimits.js
-          pnpm exec eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue Elephant/frontend/app/components/settings/codexRateLimits.js tests/app/unit/codexRateLimits.spec.js
-          pnpm exec vitest run tests/app/unit/codexRateLimits.spec.js
+      - name: Check Codex bundler syntax
+        run: node --check build/scripts/ensure-tauri-codex-runtime.mjs
+
+      - name: Check rate-limit helper syntax
+        run: node --check Elephant/frontend/app/components/settings/codexRateLimits.js
+
+      - name: Lint provider settings
+        run: pnpm exec eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue
+
+      - name: Lint rate-limit helper
+        run: pnpm exec eslint Elephant/frontend/app/components/settings/codexRateLimits.js
+
+      - name: Lint rate-limit tests
+        run: pnpm exec eslint tests/app/unit/codexRateLimits.spec.js
+
+      - name: Run focused rate-limit tests
+        run: pnpm exec vitest run tests/app/unit/codexRateLimits.spec.js
 
       - name: Install Tauri Linux dependencies
         run: |

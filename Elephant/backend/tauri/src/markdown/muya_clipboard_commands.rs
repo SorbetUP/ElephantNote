@@ -10,7 +10,8 @@ pub fn paste_clipboard(
     html: String,
     text: String,
 ) -> Result<MuyaEditorTransaction, String> {
-    let markdown = clipboard_payload_to_markdown(&html, &text);
+    let markdown = clipboard_payload_to_markdown(&html, &text)
+        .replace("blocked-javascript:", "blocked-javascript:unsafe-");
     apply_command(
         state,
         MuyaEditorCommand::ReplaceSelection { text: markdown },
@@ -85,6 +86,9 @@ mod tests {
 
         assert!(!transaction.state.markdown.contains("<script"));
         assert!(!transaction.state.markdown.contains("javascript:alert"));
-        assert!(transaction.state.markdown.contains("blocked-javascript:"));
+        assert!(transaction
+            .state
+            .markdown
+            .contains("blocked-javascript:unsafe-"));
     }
 }

@@ -6,7 +6,7 @@ import {
   selectionToMuyaIndexCursor
 } from '../../../Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js'
 
-const stateFor = (
+const internalState = (
   markdown,
   revision = 0,
   selection = null,
@@ -20,37 +20,48 @@ const stateFor = (
   redoStack
 })
 
+const sessionView = (state) => ({
+  markdown: state.markdown,
+  selection: { ...state.selection },
+  revision: state.revision,
+  undoDepth: state.undoStack.length,
+  redoDepth: state.redoStack.length
+})
+
 const snapshot = (state) => ({
   markdown: state.markdown,
   selection: { ...state.selection }
 })
 
 const createInvoke = () => {
-  let state = null
+  const sessions = new Map()
   return vi.fn(async(command, payload = {}) => {
-    if (command === 'tauri_muya_engine_create') {
-      state = stateFor(String(payload.markdown || ''), 0)
-      return state
+    if (command === 'tauri_muya_session_create') {
+      const state = internalState(String(payload.markdown || ''), 0)
+      sessions.set(payload.editorId, state)
+      return sessionView(state)
     }
-    if (command === 'tauri_muya_engine_sync_document') {
-      const previous = state
+    if (command === 'tauri_muya_session_sync_document') {
+      const previous = sessions.get(payload.editorId)
       const undoStack = payload.continueGroup && previous.undoStack.length
         ? [...previous.undoStack]
         : [...previous.undoStack, snapshot(previous)]
-      state = stateFor(
+      const state = internalState(
         String(payload.markdown || ''),
         previous.revision + 1,
         payload.selection,
         undoStack,
         []
       )
+      sessions.set(payload.editorId, state)
       return {
-        state,
+        state: sessionView(state),
         documentChanged: previous.markdown !== state.markdown,
         selectionChanged: true
       }
     }
-    if (command === 'tauri_muya_engine_apply') {
+    if (command === 'tauri_muya_session_apply') {
+      let state = sessions.get(payload.editorId)
       if (payload.command?.type === 'setSelection') {
         state = {
           ...state,
@@ -59,46 +70,53 @@ const createInvoke = () => {
             focus: payload.command.focus
           }
         }
-        return { state, documentChanged: false, selectionChanged: true }
+        sessions.set(payload.editorId, state)
+        return { state: sessionView(state), documentChanged: false, selectionChanged: true }
       }
       if (payload.command?.type === 'undo') {
         const previous = state.undoStack.at(-1)
-        if (!previous) return { state, documentChanged: false, selectionChanged: false }
-        state = stateFor(
+        if (!previous) return { state: sessionView(state), documentChanged: false, selectionChanged: false }
+        state = internalState(
           previous.markdown,
           state.revision + 1,
           previous.selection,
           state.undoStack.slice(0, -1),
           [...state.redoStack, snapshot(state)]
         )
-        return { state, documentChanged: true, selectionChanged: true }
+        sessions.set(payload.editorId, state)
+        return { state: sessionView(state), documentChanged: true, selectionChanged: true }
       }
       if (payload.command?.type === 'redo') {
         const next = state.redoStack.at(-1)
-        if (!next) return { state, documentChanged: false, selectionChanged: false }
-        state = stateFor(
+        if (!next) return { state: sessionView(state), documentChanged: false, selectionChanged: false }
+        state = internalState(
           next.markdown,
           state.revision + 1,
           next.selection,
           [...state.undoStack, snapshot(state)],
           state.redoStack.slice(0, -1)
         )
-        return { state, documentChanged: true, selectionChanged: true }
+        sessions.set(payload.editorId, state)
+        return { state: sessionView(state), documentChanged: true, selectionChanged: true }
       }
       throw new Error(`Unexpected apply command: ${payload.command?.type}`)
     }
-    if (command === 'tauri_muya_engine_query') {
+    if (command === 'tauri_muya_session_query') {
+      const state = sessions.get(payload.editorId)
       return {
         type: 'muya-json-state',
-        blocks: payload.state?.markdown ? [{ type: 'paragraph' }] : []
+        blocks: state?.markdown ? [{ type: 'paragraph' }] : []
       }
+    }
+    if (command === 'tauri_muya_session_close') {
+      return sessions.delete(payload.editorId)
     }
     throw new Error(`Unexpected command: ${command}`)
   })
 }
 
 describe('real Muya Rust core', () => {
-  it('keeps the real Muya surface while validating its Markdown in persistent Rust state', async() => {
+  it('keeps the real Muya surface while storing canonical state inside Rust', async() => {
     const target = {}
     const invoke = createInvoke()
     const logger = { info: vi.fn(), debug: vi.fn(), error: vi.fn() }
@@ -116,15 +134,20 @@ describe('real Muya Rust core', () => {
     expect(mirror.status.markdownLength).toBe(7)
     expect(mirror.status.blocks).toBe(1)
     expect(mirror.status.undoDepth).toBe(0)
+    expect(mirror.sessionId).toMatch(/^muya:/)
     expect(target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__).toBe('muya-ui-rust-core')
     expect(target.__ELEPHANT_MUYA_RUST_MIRROR__.phase).toBe('ready')
-    expect(invoke).toHaveBeenCalledWith('tauri_muya_engine_create', { markdown: '# Hello' })
-    expect(invoke).toHaveBeenCalledWith('tauri_muya_engine_query', expect.objectContaining({
+    expect(invoke).toHaveBeenCalledWith('tauri_muya_session_create', {
+      editorId: mirror.sessionId,
+      markdown: '# Hello'
+    })
+    expect(invoke).toHaveBeenCalledWith('tauri_muya_session_query', {
+      editorId: mirror.sessionId,
       query: { type: 'jsonState' }
-    }))
+    })
   })
 
-  it('coalesces rapid Muya changes and persists only the latest document', async() => {
+  it('coalesces rapid Muya changes and sends no history arrays across IPC', async() => {
     const invoke = createInvoke()
     const mirror = createRealMuyaRustMirror({
       initialMarkdown: 'a',
@@ -142,11 +165,15 @@ describe('real Muya Rust core', () => {
     expect(mirror.status.phase).toBe('ready')
     expect(mirror.status.markdownLength).toBe(4)
     expect(mirror.state.markdown).toBe('abcd')
-    const syncCalls = invoke.mock.calls.filter(([command]) => command === 'tauri_muya_engine_sync_document')
+    expect(mirror.state.undoStack).toBeUndefined()
+    expect(mirror.state.redoStack).toBeUndefined()
+    const syncCalls = invoke.mock.calls.filter(([command]) => command === 'tauri_muya_session_sync_document')
     expect(syncCalls.at(-1)[1]).toEqual(expect.objectContaining({
+      editorId: mirror.sessionId,
       markdown: 'abcd',
       selection: { anchor: 4, focus: 4 }
     }))
+    expect(syncCalls.at(-1)[1].state).toBeUndefined()
     expect(syncCalls.length).toBeLessThanOrEqual(2)
   })
 
@@ -183,7 +210,8 @@ describe('real Muya Rust core', () => {
     await mirror.flush()
 
     expect(mirror.state.selection).toEqual({ anchor: 8, focus: 8 })
-    expect(invoke).toHaveBeenCalledWith('tauri_muya_engine_sync_document', expect.objectContaining({
+    expect(invoke).toHaveBeenCalledWith('tauri_muya_session_sync_document', expect.objectContaining({
+      editorId: mirror.sessionId,
       markdown: 'one\ntwo!',
       selection: { anchor: 8, focus: 8 },
       continueGroup: true
@@ -235,6 +263,23 @@ describe('real Muya Rust core', () => {
     expect(mirror.status.redoDepth).toBe(0)
   })
 
+  it('closes the Rust-owned session when real Muya is destroyed', async() => {
+    const invoke = createInvoke()
+    const mirror = createRealMuyaRustMirror({
+      initialMarkdown: 'text',
+      invoke,
+      target: {},
+      logger: { info: vi.fn(), debug: vi.fn(), error: vi.fn() }
+    })
+    await mirror.ready
+    const editorId = mirror.sessionId
+
+    mirror.destroy()
+    await vi.waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('tauri_muya_session_close', { editorId })
+    })
+  })
+
   it('stays disabled outside Tauri instead of replacing Muya with a fallback renderer', async() => {
     const target = {}
     const mirror = createRealMuyaRustMirror({ initialMarkdown: 'text', target })
@@ -250,8 +295,16 @@ describe('real Muya Rust core', () => {
     const target = {}
     const logger = { info: vi.fn(), debug: vi.fn(), error: vi.fn() }
     const invoke = vi.fn(async(command, payload = {}) => {
-      if (command === 'tauri_muya_engine_create') return stateFor(`${payload.markdown}!`, 1)
-      if (command === 'tauri_muya_engine_query') return { type: 'muya-json-state', blocks: [] }
+      if (command === 'tauri_muya_session_create') {
+        return {
+          markdown: `${payload.markdown}!`,
+          selection: { anchor: 0, focus: 0 },
+          revision: 1,
+          undoDepth: 0,
+          redoDepth: 0
+        }
+      }
+      if (command === 'tauri_muya_session_query') return { type: 'muya-json-state', blocks: [] }
       throw new Error(`Unexpected command: ${command}`)
     })
     const mirror = createRealMuyaRustMirror({ initialMarkdown: 'safe', invoke, target, logger })

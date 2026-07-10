@@ -1,1 +1,1 @@
-export { installExecutableCodeBlocks } from './executableCodeBlocksV2'
+export { installExecutableCodeBlocks } from './executableCodeBlocksV3'

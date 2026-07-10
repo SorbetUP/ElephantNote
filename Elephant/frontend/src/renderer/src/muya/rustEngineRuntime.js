@@ -138,6 +138,19 @@ export const createRustMuyaEngineClient = ({
     return transaction
   }
 
+  const pasteClipboard = async(html = '', text = '') => {
+    if (!state) throw new Error('Muya Rust engine must be initialized before pasting clipboard data.')
+    const payload = {
+      html: String(html),
+      text: String(text)
+    }
+    const transaction = usesSession
+      ? await call('tauri_muya_session_paste_clipboard', { editorId, ...payload })
+      : await call('tauri_muya_engine_paste_clipboard', { state, ...payload })
+    state = ensureState(transaction?.state)
+    return transaction
+  }
+
   const applyBatch = async(commands = []) => {
     if (usesSession) {
       throw new Error('Batch commands are not yet available on Rust-owned Muya sessions.')
@@ -186,6 +199,7 @@ export const createRustMuyaEngineClient = ({
     apply,
     applyGrouped,
     applyParity,
+    pasteClipboard,
     applyBatch,
     commitComposition,
     query,

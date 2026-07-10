@@ -2,18 +2,14 @@ import { useNavigationStore } from 'elephant-front/stores/navigationStore'
 import { useSearchStore } from 'elephant-front/stores/searchStore'
 import { useVaultStore } from 'elephant-front/stores/vaultStore'
 
-const MOBILE_BACK_STATE = '__elephantnoteMobileBackState'
-const DRAWER_KEEP_OPEN_SELECTOR = [
-  '.en-sidebar-tree-toggle',
-  '.en-recent-heading',
-  '.en-recent-more'
-].join(', ')
+const MOBILE_BACK_STATE = '__elephantMobileBackState'
 const OPEN_DRAWER_SELECTOR = '.en-mobile-icon-button[aria-label="Open navigation"]'
 const CLOSE_DRAWER_SELECTOR = '.en-mobile-scrim.visible'
-const SWIPE_EDGE_PX = 24
-const DIRECTION_LOCK_PX = 8
-const OPEN_PROGRESS_THRESHOLD = 0.42
-const FLING_VELOCITY_PX_MS = 0.38
+const EDGE_HANDLE_CLASS = 'en-mobile-drawer-edge-handle'
+const SWIPE_EDGE_PX = 30
+const DIRECTION_LOCK_PX = 7
+const OPEN_PROGRESS_THRESHOLD = 0.48
+const FLING_VELOCITY_PX_MS = 0.42
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
@@ -42,26 +38,9 @@ const closeDrawer = (target = globalThis) => {
   return clickElement(target, CLOSE_DRAWER_SELECTOR)
 }
 
-const preserveDrawerForLocalToggle = (target, event) => {
-  if (!isDrawerOpen(target)) return
-  if (!event.target?.closest?.(DRAWER_KEEP_OPEN_SELECTOR)) return
-
-  const shell = getShell(target)
-  shell?.classList.add('en-mobile-preserve-drawer')
-
-  // AppShell still has a generic compatibility close handler. Re-open before
-  // the next paint so local tree/recent toggles never collapse the drawer.
-  target.queueMicrotask(() => {
-    target.requestAnimationFrame(() => {
-      if (!isDrawerOpen(target)) openDrawer(target)
-      target.requestAnimationFrame(() => shell?.classList.remove('en-mobile-preserve-drawer'))
-    })
-  })
-}
-
 const setInteractiveDrawerPosition = (shell, width, progress) => {
   const normalized = clamp(progress, 0, 1)
-  const offset = Math.round((normalized - 1) * width)
+  const offset = (normalized - 1) * width
   shell.style.setProperty('--en-mobile-drawer-offset', `${offset}px`)
   shell.style.setProperty('--en-mobile-drawer-progress', String(normalized))
 }
@@ -72,24 +51,54 @@ const clearInteractiveDrawerPosition = (shell) => {
   shell.classList.remove('en-mobile-drawer-dragging', 'en-mobile-drawer-settling')
 }
 
-const installDrawerGestures = (target = globalThis) => {
-  let gesture = null
+const createEdgeHandle = (target) => {
+  const existing = target.document.querySelector(`.${EDGE_HANDLE_CLASS}`)
+  if (existing) return existing
+  const handle = target.document.createElement('div')
+  handle.className = EDGE_HANDLE_CLASS
+  handle.setAttribute('aria-hidden', 'true')
+  target.document.body.appendChild(handle)
+  return handle
+}
 
-  const reset = () => {
-    if (gesture?.shell) clearInteractiveDrawerPosition(gesture.shell)
-    gesture = null
+const installDrawerGestures = (target = globalThis) => {
+  const edgeHandle = createEdgeHandle(target)
+  let gesture = null
+  let moveFrame = 0
+  let pendingProgress = null
+
+  const syncEdgeHandle = () => {
+    const available = isMobileViewport(target) && !!getShell(target) && !isDrawerOpen(target)
+    edgeHandle.style.pointerEvents = available ? 'auto' : 'none'
+    edgeHandle.style.display = available ? 'block' : 'none'
   }
 
-  const onPointerDown = (event) => {
+  const flushMove = () => {
+    moveFrame = 0
+    if (!gesture || pendingProgress == null) return
+    gesture.progress = pendingProgress
+    setInteractiveDrawerPosition(gesture.shell, gesture.width, gesture.progress)
+    pendingProgress = null
+  }
+
+  const cancelMoveFrame = () => {
+    if (moveFrame) target.cancelAnimationFrame(moveFrame)
+    moveFrame = 0
+    pendingProgress = null
+  }
+
+  const reset = () => {
+    cancelMoveFrame()
+    if (gesture?.shell) clearInteractiveDrawerPosition(gesture.shell)
+    gesture = null
+    syncEdgeHandle()
+  }
+
+  const beginGesture = (event, drawerOpen) => {
     if (!isMobileViewport(target) || event.isPrimary === false || event.button > 0) return
     const shell = getShell(target)
     const sidebar = getSidebar(target)
     if (!shell || !sidebar) return
-
-    const drawerOpen = isDrawerOpen(target)
-    const startedInsideDrawer = !!event.target?.closest?.('.en-sidebar, .en-mobile-scrim')
-    if (!drawerOpen && event.clientX > SWIPE_EDGE_PX) return
-    if (drawerOpen && !startedInsideDrawer) return
 
     const width = Math.max(1, sidebar.getBoundingClientRect().width)
     gesture = {
@@ -103,10 +112,32 @@ const installDrawerGestures = (target = globalThis) => {
       lastAt: performance.now(),
       velocityX: 0,
       progress: drawerOpen ? 1 : 0,
-      locked: false,
-      cancelled: false
+      locked: false
     }
+    shell.classList.add('en-mobile-drawer-dragging')
     setInteractiveDrawerPosition(shell, width, gesture.progress)
+    try {
+      event.currentTarget?.setPointerCapture?.(event.pointerId)
+      event.target?.setPointerCapture?.(event.pointerId)
+    } catch {
+      // Document listeners still maintain the gesture when a WebView refuses capture.
+    }
+  }
+
+  const onEdgePointerDown = (event) => {
+    if (isDrawerOpen(target)) return
+    beginGesture(event, false)
+  }
+
+  const onDocumentPointerDown = (event) => {
+    if (!isDrawerOpen(target) || gesture) return
+    const sidebar = getSidebar(target)
+    if (!sidebar) return
+    const sidebarRect = sidebar.getBoundingClientRect()
+    const insideDrawer = event.clientX >= sidebarRect.left && event.clientX <= sidebarRect.right
+    const onScrim = !!event.target?.closest?.('.en-mobile-scrim.visible')
+    if (!insideDrawer && !onScrim) return
+    beginGesture(event, true)
   }
 
   const onPointerMove = (event) => {
@@ -116,42 +147,37 @@ const installDrawerGestures = (target = globalThis) => {
 
     if (!gesture.locked) {
       if (Math.abs(dx) < DIRECTION_LOCK_PX && Math.abs(dy) < DIRECTION_LOCK_PX) return
-      if (Math.abs(dy) > Math.abs(dx)) {
-        gesture.cancelled = true
+      if (Math.abs(dy) > Math.abs(dx) * 1.15) {
         reset()
         return
       }
       gesture.locked = true
-      gesture.shell.classList.add('en-mobile-drawer-dragging')
-      try {
-        event.target?.setPointerCapture?.(event.pointerId)
-      } catch {
-        // Some Android WebViews reject capture after DOM changes; document-level
-        // listeners below still keep the drag continuous.
-      }
     }
 
     event.preventDefault()
     const now = performance.now()
     const elapsed = Math.max(1, now - gesture.lastAt)
-    gesture.velocityX = (event.clientX - gesture.lastX) / elapsed
+    const instantaneousVelocity = (event.clientX - gesture.lastX) / elapsed
+    gesture.velocityX = gesture.velocityX * 0.65 + instantaneousVelocity * 0.35
     gesture.lastX = event.clientX
     gesture.lastAt = now
 
     const progress = gesture.drawerOpen
       ? 1 + Math.min(0, dx) / gesture.width
       : Math.max(0, dx) / gesture.width
-    gesture.progress = clamp(progress, 0, 1)
-    setInteractiveDrawerPosition(gesture.shell, gesture.width, gesture.progress)
+    pendingProgress = clamp(progress, 0, 1)
+    if (!moveFrame) moveFrame = target.requestAnimationFrame(flushMove)
   }
 
   const settle = (event) => {
     if (!gesture || (event?.pointerId != null && event.pointerId !== gesture.pointerId)) return
+    if (moveFrame) flushMove()
     const current = gesture
     gesture = null
 
-    if (!current.locked || current.cancelled) {
+    if (!current.locked) {
       clearInteractiveDrawerPosition(current.shell)
+      syncEdgeHandle()
       return
     }
 
@@ -164,19 +190,37 @@ const installDrawerGestures = (target = globalThis) => {
     if (shouldOpen) openDrawer(target)
     else closeDrawer(target)
 
-    target.setTimeout(() => clearInteractiveDrawerPosition(current.shell), 300)
+    target.setTimeout(() => {
+      clearInteractiveDrawerPosition(current.shell)
+      syncEdgeHandle()
+    }, 260)
   }
 
-  target.document.addEventListener('pointerdown', onPointerDown, { passive: true })
+  edgeHandle.addEventListener('pointerdown', onEdgePointerDown, { passive: true })
+  target.document.addEventListener('pointerdown', onDocumentPointerDown, { passive: true })
   target.document.addEventListener('pointermove', onPointerMove, { passive: false })
   target.document.addEventListener('pointerup', settle, { passive: true })
   target.document.addEventListener('pointercancel', settle, { passive: true })
+  target.addEventListener('resize', syncEdgeHandle)
+
+  const shellObserver = new target.MutationObserver(syncEdgeHandle)
+  shellObserver.observe(target.document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['class']
+  })
+  syncEdgeHandle()
 
   return () => {
-    target.document.removeEventListener('pointerdown', onPointerDown)
+    edgeHandle.removeEventListener('pointerdown', onEdgePointerDown)
+    target.document.removeEventListener('pointerdown', onDocumentPointerDown)
     target.document.removeEventListener('pointermove', onPointerMove)
     target.document.removeEventListener('pointerup', settle)
     target.document.removeEventListener('pointercancel', settle)
+    target.removeEventListener('resize', syncEdgeHandle)
+    shellObserver.disconnect()
+    edgeHandle.remove()
     reset()
   }
 }
@@ -236,24 +280,21 @@ const installAndroidBackNavigation = (target = globalThis) => {
 }
 
 export const installMobileInteractionRuntime = (target = globalThis) => {
-  if (!target?.document || target.__ELEPHANTNOTE_MOBILE_INTERACTIONS_INSTALLED__) return false
+  if (!target?.document || target.__ELEPHANT_MOBILE_INTERACTIONS_INSTALLED__) return false
 
   const installWhenMounted = () => {
     if (!getShell(target)) return false
 
-    target.__ELEPHANTNOTE_MOBILE_INTERACTIONS_INSTALLED__ = true
-    const onSidebarClick = (event) => preserveDrawerForLocalToggle(target, event)
-    target.document.addEventListener('click', onSidebarClick, true)
+    target.__ELEPHANT_MOBILE_INTERACTIONS_INSTALLED__ = true
     const removeGestures = installDrawerGestures(target)
     const removeBackNavigation = installAndroidBackNavigation(target)
 
-    target.__ELEPHANTNOTE_MOBILE_INTERACTIONS_DISPOSE__ = () => {
-      target.document.removeEventListener('click', onSidebarClick, true)
+    target.__ELEPHANT_MOBILE_INTERACTIONS_DISPOSE__ = () => {
       removeGestures()
       removeBackNavigation()
-      target.__ELEPHANTNOTE_MOBILE_INTERACTIONS_INSTALLED__ = false
+      target.__ELEPHANT_MOBILE_INTERACTIONS_INSTALLED__ = false
     }
-    console.info('[mobile-navigation] interactive edge drawer and Android back navigation installed')
+    console.info('[mobile-navigation] native edge drawer and Android back navigation installed')
     return true
   }
 

@@ -10,6 +10,7 @@ on:
       - 'Elephant/backend/tauri/src/lib_min.rs'
       - 'Elephant/frontend/src/renderer/src/muya/**'
       - 'Elephant/shared/muyaParityCases.json'
+      - 'Elephant/shared/muyaJsonStateCases.json'
       - 'tests/app/unit/muya*.spec.js'
       - '.github/workflows/muya-rust-parity.yml'
   pull_request:
@@ -19,6 +20,7 @@ on:
       - 'Elephant/backend/tauri/src/lib_min.rs'
       - 'Elephant/frontend/src/renderer/src/muya/**'
       - 'Elephant/shared/muyaParityCases.json'
+      - 'Elephant/shared/muyaJsonStateCases.json'
       - 'tests/app/unit/muya*.spec.js'
       - '.github/workflows/muya-rust-parity.yml'
   workflow_dispatch:
@@ -92,6 +94,7 @@ jobs:
           pnpm exec vitest run \
             tests/app/unit/muyaRustEngineRuntime.spec.js \
             tests/app/unit/muyaSharedParityMatrix.spec.js \
+            tests/app/unit/muyaJsonStateSharedParity.spec.js \
             tests/app/unit/muyaMarkdownSelectionRuntime.spec.js \
             tests/app/unit/muyaFullEditorRuntime.spec.js \
             tests/app/unit/muyaRuntimeInputParity.spec.js

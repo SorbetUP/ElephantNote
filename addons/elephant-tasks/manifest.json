@@ -1,0 +1,40 @@
+{
+  "id": "com.elephantnote.elephant-tasks",
+  "name": "Elephant Tasks",
+  "version": "1.0.0",
+  "description": "A focused task manager with Inbox, Today, Upcoming, Anytime, Someday, Areas, Projects, deadlines, repeats and Logbook.",
+  "author": "ElephantNote",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": {
+    "type": "javascript-worker",
+    "entry": "main.js"
+  },
+  "permissions": {
+    "commands": true,
+    "storage": true,
+    "notes": {
+      "read": [],
+      "write": []
+    },
+    "network": {
+      "hosts": []
+    }
+  },
+  "activationEvents": ["onStartup"],
+  "contributes": {
+    "commands": [
+      {
+        "id": "com.elephantnote.elephant-tasks.capture",
+        "title": "Capture task"
+      }
+    ],
+    "views": [
+      {
+        "id": "com.elephantnote.elephant-tasks.workspace",
+        "title": "Tasks",
+        "kind": "task-manager-v1"
+      }
+    ]
+  }
+}

@@ -51,8 +51,8 @@ describe('ElephantNote mobile interaction regressions', () => {
 
     expect(buildScript).toContain('ANDROID_ICON_SOURCE="$ROOT_DIR/Elephant/assets/static/icon.png"')
     expect(buildScript).toContain('drawable-nodpi/elephantnote_launcher.png')
-    expect(buildScript).toContain('android:icon', '@drawable/elephantnote_launcher')
-    expect(buildScript).toContain('android:roundIcon', '@drawable/elephantnote_launcher')
+    expect(buildScript).toContain('android:icon="@drawable/elephantnote_launcher"')
+    expect(buildScript).toContain('android:roundIcon="@drawable/elephantnote_launcher"')
     expect(buildScript).toContain('install_android_launcher_icon')
   })
 })

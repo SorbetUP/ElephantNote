@@ -58,12 +58,12 @@ describe('ElephantNote mobile interaction regressions', () => {
 
     expect(runtime).toContain('navigator.mediaDevices.getUserMedia')
     expect(runtime).toContain("input.accept = 'image/*'")
-    expect(runtime).not.toContain("input.capture =")
+    expect(runtime).not.toContain('input.capture =')
     expect(runtime).toContain("bus.emit('insert-image', destination)")
     expect(runtime).toContain("action: 'excalidraw'")
     expect(runtime).toContain("action: 'tasks'")
     expect(runtime).toContain("action: 'heading-1'")
-    expect(runtime).toContain("bus.emit(action)")
+    expect(runtime).toContain('bus.emit(action)')
     expect(css).toContain('.en-mobile-editor-toolbar')
     expect(css).toContain('.en-mobile-camera-backdrop')
     expect(html).toContain('/src/platform/mobileEditorRuntime.js')
@@ -81,6 +81,15 @@ describe('ElephantNote mobile interaction regressions', () => {
     expect(library).toContain('.en-library-grid.list .en-library-section-grid')
     expect(mobileCss).toContain('.en-library-grid.list .en-note-card')
     expect(mobileCss).toContain('min-height: 76px !important')
+  })
+
+  it('updates library header icons only when the layout mode changes', () => {
+    const runtime = read('Elephant/frontend/src/renderer/src/platform/mobileLibraryChromeRuntime.js')
+
+    expect(runtime).toContain('const desiredIcon =')
+    expect(runtime).toContain('viewButton.dataset.icon')
+    expect(runtime).toContain('if (viewButton.dataset.icon !== desiredIcon)')
+    expect(runtime).toContain('viewButton.innerHTML = svg(desiredIcon)')
   })
 
   it('removes desktop-only mobile chrome and preserves the Android launcher icon', () => {

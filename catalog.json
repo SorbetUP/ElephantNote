@@ -1,8 +1,19 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-10T09:30:00Z",
+  "updatedAt": "2026-07-10T13:00:00Z",
   "addons": [
+    {
+      "id": "com.elephantnote.elephant-tasks",
+      "slug": "elephant-tasks",
+      "name": "Elephant Tasks",
+      "version": "1.0.0",
+      "description": "A focused task manager with Inbox, Today, Upcoming, Anytime, Someday, Areas, Projects, deadlines, repeats and Logbook.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/elephant-tasks/manifest.json",
+      "entryPath": "addons/elephant-tasks/main.js",
+      "readmePath": "addons/elephant-tasks/README.md"
+    },
     {
       "id": "com.elephantnote.template-studio",
       "slug": "template-studio",

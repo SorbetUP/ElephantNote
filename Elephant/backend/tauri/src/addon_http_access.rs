@@ -37,14 +37,27 @@ fn is_public_ipv4(address: Ipv4Addr) -> bool {
 }
 
 fn is_public_ipv6(address: Ipv6Addr) -> bool {
+  if let Some(mapped) = address.to_ipv4_mapped() {
+    return is_public_ipv4(mapped);
+  }
+
   let segments = address.segments();
   let unique_local = segments[0] & 0xfe00 == 0xfc00;
   let link_local = segments[0] & 0xffc0 == 0xfe80;
+  let site_local = segments[0] & 0xffc0 == 0xfec0;
+  let documentation = segments[0] == 0x2001 && segments[1] == 0x0db8;
+  let benchmarking = segments[0] == 0x2001 && segments[1] == 0x0002 && segments[2] == 0;
+  let discard_only = segments[0] == 0x0100 && segments[1..4].iter().all(|segment| *segment == 0);
+
   !address.is_loopback()
     && !address.is_unspecified()
     && !address.is_multicast()
     && !unique_local
     && !link_local
+    && !site_local
+    && !documentation
+    && !benchmarking
+    && !discard_only
 }
 
 fn is_public_ip(address: IpAddr) -> bool {
@@ -202,6 +215,11 @@ mod tests {
     assert!(!is_public_ip("169.254.1.1".parse().unwrap()));
     assert!(!is_public_ip("::1".parse().unwrap()));
     assert!(!is_public_ip("fc00::1".parse().unwrap()));
+    assert!(!is_public_ip("::ffff:127.0.0.1".parse().unwrap()));
+    assert!(!is_public_ip("::ffff:10.0.0.1".parse().unwrap()));
+    assert!(!is_public_ip("2001:db8::1".parse().unwrap()));
+    assert!(!is_public_ip("2001:2::1".parse().unwrap()));
+    assert!(!is_public_ip("100::1".parse().unwrap()));
     assert!(is_public_ip("1.1.1.1".parse().unwrap()));
     assert!(is_public_ip("2606:4700:4700::1111".parse().unwrap()));
   }

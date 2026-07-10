@@ -141,6 +141,18 @@ const renderSettings = (target, host, state) => {
   }
 }
 
+const activeSettingsSection = (content) => {
+  const explicit = content?.dataset?.activeSection?.trim().toLowerCase()
+  if (explicit) return explicit
+  const title = content?.querySelector?.('.en-settings-page-title h1')?.textContent?.trim().toLowerCase()
+  if (title) return title
+  return document.querySelector('.en-settings-nav button.active span')?.textContent?.trim().toLowerCase() || ''
+}
+
+const removeMountedSettings = (content = document.querySelector(SETTINGS_HOST)) => {
+  content?.querySelector?.(`[${SETTINGS_MARKER}]`)?.remove()
+}
+
 export const installExecutableCodeSettings = (target = globalThis) => {
   if (target.__ELEPHANT_CODE_SETTINGS__) return target.__ELEPHANT_CODE_SETTINGS__
 
@@ -150,7 +162,14 @@ export const installExecutableCodeSettings = (target = globalThis) => {
   const mount = async() => {
     if (disposed || loading) return
     const content = document.querySelector(SETTINGS_HOST)
-    if (!content || content.querySelector(`[${SETTINGS_MARKER}]`)) return
+    if (!content) return
+
+    if (activeSettingsSection(content) !== 'editor') {
+      removeMountedSettings(content)
+      return
+    }
+
+    if (content.querySelector(`[${SETTINGS_MARKER}]`)) return
     const marker = content.querySelector('.en-settings-group')
     if (!marker || !target.elephantnote?.programs) return
 
@@ -170,11 +189,8 @@ export const installExecutableCodeSettings = (target = globalThis) => {
     }
   }
 
-  const observer = new MutationObserver((records) => {
-    const settingsMounted = records.some((record) => [...record.addedNodes].some((node) =>
-      node?.nodeType === 1 &&
-      (node.matches?.(SETTINGS_HOST) || node.querySelector?.(SETTINGS_HOST))))
-    if (settingsMounted) void mount()
+  const observer = new MutationObserver(() => {
+    void mount()
   })
   observer.observe(document.body, { childList: true, subtree: true })
   void mount()
@@ -184,6 +200,7 @@ export const installExecutableCodeSettings = (target = globalThis) => {
     dispose() {
       disposed = true
       observer.disconnect()
+      removeMountedSettings()
       if (target.__ELEPHANT_CODE_SETTINGS__ === settings) {
         delete target.__ELEPHANT_CODE_SETTINGS__
       }

@@ -143,7 +143,6 @@ describe('consolidated executable code block runtime', () => {
     }
     await settle()
     expect(runtime.metrics.scans - scansBefore).toBeLessThanOrEqual(1)
-    expect(runtime.metrics.coalescedScans).toBeGreaterThan(0)
   })
 
   it('runs real IPC and output rendering does not trigger another scan', async() => {

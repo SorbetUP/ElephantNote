@@ -19,6 +19,7 @@ pub mod chat_runtime;
 pub mod search_logic;
 pub mod addons;
 pub mod addon_catalog;
+pub mod addon_note_access;
 
 mod tauri_extra_commands;
 mod debug_commands;
@@ -103,6 +104,7 @@ pub fn run() {
       addons::tauri_addons_install,
       addon_catalog::tauri_addons_catalog_list,
       addon_catalog::tauri_addons_catalog_install,
+      addon_note_access::tauri_addons_notes_list,
       addons::tauri_addons_uninstall,
       addons::tauri_addons_set_enabled,
       addons::tauri_addons_read_entry,

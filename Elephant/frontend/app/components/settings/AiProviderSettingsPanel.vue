@@ -188,6 +188,7 @@
             <select
               v-if="form.routes.chat.source === 'codex'"
               v-model="form.routes.chat.model"
+              @change="onCodexModelChanged"
             >
               <option value="">Select a Codex model</option>
               <option
@@ -217,6 +218,18 @@
               type="text"
               placeholder="Provider model id"
             >
+          </label>
+          <label v-if="form.routes.chat.source === 'codex'">
+            <span>Reasoning</span>
+            <select v-model="form.routes.chat.reasoningEffort">
+              <option
+                v-for="effort in codexReasoningOptions"
+                :key="effort.value"
+                :value="effort.value"
+              >
+                {{ effort.label }}
+              </option>
+            </select>
           </label>
           <label class="wide"><span>System prompt</span><textarea
             v-model="form.routes.chat.systemPrompt"
@@ -464,6 +477,7 @@ const defaultForm = () => ({
     chat: {
       ...defaultRoute(),
       systemPrompt: '',
+      reasoningEffort: 'medium',
       temperature: 0.2,
       maxTokens: 2048,
       contextWindow: 8192,
@@ -523,6 +537,35 @@ const codexRateLimitRows = computed(() => buildCodexRateLimitRows(codexRateLimit
 const codexResetCredits = computed(() => buildCodexResetCredits(codexRateLimits.value || {}))
 const codexAvailableResetCount = computed(() => getCodexResetAvailableCount(codexRateLimits.value || {}))
 const routeProviderLabel = (source = '') => ({ 'app-local': 'App Local', codex: 'Codex', disabled: 'Disabled' }[source] || source || 'Disabled')
+const selectedCodexModel = computed(() => codexModels.value.find((model) => (model.model || model.id) === form.value.routes.chat.model) || null)
+const normalizeReasoningEntry = (entry) => {
+  const value = typeof entry === 'string'
+    ? entry
+    : entry?.reasoningEffort || entry?.reasoning_effort || entry?.effort || entry?.value || entry?.id || ''
+  const normalized = String(value).trim()
+  if (!normalized) return null
+  const label = typeof entry === 'object' && entry?.label
+    ? String(entry.label)
+    : normalized === 'xhigh'
+      ? 'Extra high'
+      : normalized.charAt(0).toUpperCase() + normalized.slice(1)
+  return { value: normalized, label }
+}
+const codexReasoningOptions = computed(() => {
+  const model = selectedCodexModel.value || {}
+  const advertised = model.supportedReasoningEfforts || model.supported_reasoning_efforts || model.reasoningEfforts || []
+  const options = advertised.map(normalizeReasoningEntry).filter(Boolean)
+  return options.length ? options : ['low', 'medium', 'high'].map(normalizeReasoningEntry)
+})
+const applyCodexReasoningDefault = () => {
+  const options = codexReasoningOptions.value
+  if (options.some((entry) => entry.value === form.value.routes.chat.reasoningEffort)) return
+  const model = selectedCodexModel.value || {}
+  const preferred = model.defaultReasoningEffort || model.default_reasoning_effort || 'medium'
+  form.value.routes.chat.reasoningEffort = options.some((entry) => entry.value === preferred)
+    ? preferred
+    : options[0]?.value || 'medium'
+}
 
 const normalizeProviderRows = (config = {}) => {
   const rows = Array.isArray(config.providers?.list) ? config.providers.list : []
@@ -609,11 +652,9 @@ const refreshCodex = async() => {
   try {
     codexStatus.value = await invokeCodex('status')
     form.value.codex.connected = Boolean(codexStatus.value.connected)
-    codexMessage.value = codexStatus.value.error || (codexStatus.value.connected
+    codexMessage.value = codexStatus.value.error || (codexStatus.value.installed
       ? ''
-      : codexStatus.value.installed
-        ? 'Codex is installed but no ChatGPT account is connected.'
-        : 'The bundled Codex runtime is missing from this build.')
+      : 'The bundled Codex runtime is missing from this build.')
     if (codexStatus.value.connected) {
       const models = await invokeCodex('models')
       codexModels.value = Array.isArray(models?.data) ? models.data : []
@@ -621,6 +662,7 @@ const refreshCodex = async() => {
       if (form.value.routes.chat.source === 'codex' && !form.value.routes.chat.model) {
         form.value.routes.chat.model = codexModels.value.find((model) => model.isDefault)?.model || codexModels.value[0]?.model || codexModels.value[0]?.id || ''
       }
+      if (form.value.routes.chat.source === 'codex') applyCodexReasoningDefault()
     } else {
       codexModels.value = []
       codexRateLimits.value = null
@@ -688,9 +730,14 @@ const consumeCodexReset = async(creditId) => {
     codexResetBusy.value = false
   }
 }
+const onCodexModelChanged = () => {
+  applyCodexReasoningDefault()
+  scheduleAutosave('codex-model')
+}
 const onChatSourceChanged = () => {
   if (form.value.routes.chat.source === 'codex') {
     form.value.routes.chat.model = codexModels.value.find((model) => model.isDefault)?.model || codexModels.value[0]?.model || codexModels.value[0]?.id || ''
+    applyCodexReasoningDefault()
   } else if (form.value.routes.chat.source === 'app-local') {
     form.value.routes.chat.model = resolveModelId(localModels.value[0]) || ''
   } else {

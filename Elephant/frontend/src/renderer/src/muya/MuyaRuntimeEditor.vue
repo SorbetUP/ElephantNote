@@ -2,7 +2,7 @@
   <div class="muya-runtime-shell" :data-muya-runtime-mode="mode">
     <div
       ref="rootRef"
-      class="muya-runtime-editor"
+      class="muya-runtime-editor editor-component"
       data-testid="muya-runtime-editor"
       @blur="handleHistoryBoundary"
       @compositionstart="handleCompositionStart"
@@ -17,6 +17,10 @@
 
 <script setup>
 import { computed, toRef, watch } from 'vue'
+
+import 'muya/lib/assets/styles/index.css'
+import 'muya/themes/default.css'
+import '@/assets/themes/codemirror/one-dark.css'
 
 import { clipboardPayloadToMarkdown } from './clipboardRuntime.js'
 import { handleMuyaKeydown } from './inputRulesRuntime.js'
@@ -129,11 +133,11 @@ watch(ready, (value) => {
 .muya-runtime-shell {
   width: 100%;
   height: 100%;
+  overflow: auto;
 }
 
 .muya-runtime-editor {
   min-height: 100%;
   outline: none;
-  white-space: pre-wrap;
 }
 </style>

@@ -21,7 +21,7 @@ describe('test integrity diff parsing', () => {
 
   it('masks quoted examples while preserving executable calls', () => {
     expect(maskQuotedTextAndComments('const example = \'it.skip("x")\'; it.only("real", run)')).toBe(
-      "const example = ''; it.only('', run)"
+      'const example = \'\'; it.only("", run)'
     )
   })
 

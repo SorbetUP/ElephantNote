@@ -40,18 +40,18 @@ jobs:
       - name: Persist repair source
         shell: bash
         run: |
-          if git diff --quiet; then
-            echo 'No source changes to commit.'
-            exit 0
-          fi
-          git config user.name "ElephantNote Bot"
-          git config user.email "actions@users.noreply.github.com"
           git add Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
             Elephant/backend/tauri/src/tauri_extra_commands.rs \
             Elephant/backend/tauri/src/chat_runtime.rs \
             Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs \
             Elephant/backend/tauri/src/knowledge_wikis.rs \
             Elephant/backend/knowledge-core/src/wiki_core.rs
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git config user.name "ElephantNote Bot"
+          git config user.email "actions@users.noreply.github.com"
           git commit -m "Fix Codex reasoning, chat routing and Wiki synthesis"
           git push origin HEAD:${{ github.head_ref }}
       - name: Check Tauri

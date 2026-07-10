@@ -19,7 +19,7 @@ describe('Muya Vue runtime integration', () => {
     expect(isMuyaRuntimeActive('shadow')).toBe(false)
   })
 
-  it('mounts the Vue wrapper and emits ready', async() => {
+  it('mounts the Vue wrapper and emits ready with an explicit test fallback', async() => {
     const dom = new JSDOM('<div id="app"></div>')
     globalThis.window = dom.window
     globalThis.document = dom.window.document
@@ -30,6 +30,7 @@ describe('Muya Vue runtime integration', () => {
       setup: () => () => h(MuyaRuntimeEditor, {
         modelValue: markdown.value,
         mode: 'active',
+        allowJavascriptFallback: true,
         'onUpdate:modelValue': (value) => { markdown.value = value },
         onReady: () => { ready.value = true }
       })
@@ -38,12 +39,13 @@ describe('Muya Vue runtime integration', () => {
     await nextTick()
     await nextTick()
     expect(dom.window.document.querySelector('[data-testid="muya-runtime-editor"]')).toBeTruthy()
+    expect(dom.window.document.querySelector('[data-muya-engine="javascript"]')).toBeTruthy()
     expect(dom.window.document.querySelector('h1')?.textContent).toBe('Hello')
     expect(ready.value).toBe(true)
     app.unmount()
   })
 
-  it('keeps paste flow synchronized with v-model', async() => {
+  it('keeps paste flow synchronized with v-model in the explicit legacy test adapter', async() => {
     const dom = new JSDOM('<div id="app"></div>')
     globalThis.window = dom.window
     globalThis.document = dom.window.document
@@ -53,6 +55,7 @@ describe('Muya Vue runtime integration', () => {
       setup: () => () => h(MuyaRuntimeEditor, {
         modelValue: markdown.value,
         mode: 'active',
+        allowJavascriptFallback: true,
         'onUpdate:modelValue': (value) => { markdown.value = value }
       })
     })

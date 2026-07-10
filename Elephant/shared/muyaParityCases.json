@@ -1,0 +1,100 @@
+[
+  {
+    "name": "insert ASCII at cursor",
+    "markdown": "hello",
+    "selection": { "anchor": 5, "focus": 5 },
+    "command": { "type": "applyOperation", "operation": { "type": "insert", "pos": 5, "count": 0, "text": "!" } },
+    "expected": "hello!"
+  },
+  {
+    "name": "replace emoji using JavaScript UTF-16 offsets",
+    "markdown": "A😀B",
+    "selection": { "anchor": 4, "focus": 4 },
+    "command": { "type": "applyOperation", "operation": { "type": "replace", "pos": 1, "count": 2, "text": "é" } },
+    "expected": "AéB"
+  },
+  {
+    "name": "delete range",
+    "markdown": "abcdef",
+    "selection": { "anchor": 6, "focus": 6 },
+    "command": { "type": "applyOperation", "operation": { "type": "delete", "pos": 2, "count": 3, "text": "" } },
+    "expected": "abf"
+  },
+  {
+    "name": "indent final line",
+    "markdown": "first\nsecond",
+    "selection": { "anchor": 12, "focus": 12 },
+    "command": { "type": "keyboardRule", "key": "Tab", "shiftKey": false },
+    "expected": "first\n  second"
+  },
+  {
+    "name": "outdent final line",
+    "markdown": "first\n  second",
+    "selection": { "anchor": 14, "focus": 14 },
+    "command": { "type": "keyboardRule", "key": "Tab", "shiftKey": true },
+    "expected": "first\nsecond"
+  },
+  {
+    "name": "continue checked task",
+    "markdown": "- [x] done",
+    "selection": { "anchor": 10, "focus": 10 },
+    "command": { "type": "keyboardRule", "key": "Enter", "shiftKey": false },
+    "expected": "- [x] done\n- [ ] "
+  },
+  {
+    "name": "continue ordered list",
+    "markdown": "9. item",
+    "selection": { "anchor": 7, "focus": 7 },
+    "command": { "type": "keyboardRule", "key": "Enter", "shiftKey": false },
+    "expected": "9. item\n10. "
+  },
+  {
+    "name": "insert table row",
+    "markdown": "| A | B |\n| - | - |\n| 1 | 2 |",
+    "selection": { "anchor": 29, "focus": 29 },
+    "command": { "type": "tableCommand", "action": "insert_row", "index": 1 },
+    "expected": "| A | B |\n| - | - |\n| 1 | 2 |\n|  |  |"
+  },
+  {
+    "name": "insert table column",
+    "markdown": "| A | B |\n| - | - |\n| 1 | 2 |",
+    "selection": { "anchor": 29, "focus": 29 },
+    "command": { "type": "tableCommand", "action": "insert_column", "index": 1 },
+    "expected": "| A |  | B |\n| - | - | - |\n| 1 |  | 2 |"
+  },
+  {
+    "name": "center table column",
+    "markdown": "| A | B |\n| - | - |\n| 1 | 2 |",
+    "selection": { "anchor": 29, "focus": 29 },
+    "command": { "type": "tableCommand", "action": "align_center", "index": 1 },
+    "expected": "| A | B |\n| - | :-: |\n| 1 | 2 |"
+  },
+  {
+    "name": "resize image replacing previous width",
+    "markdown": "before ![Alt](pic.png){width=25%} after",
+    "selection": { "anchor": 12, "focus": 12 },
+    "command": { "type": "resizeImage", "cursor": 12, "width": "75%" },
+    "expected": "before ![Alt](pic.png){width=75%} after"
+  },
+  {
+    "name": "insert footnote definition",
+    "markdown": "Body",
+    "selection": { "anchor": 4, "focus": 4 },
+    "command": { "type": "upsertFootnote", "label": "note", "text": "First" },
+    "expected": "Body\n\n[^note]: First\n"
+  },
+  {
+    "name": "update footnote definition",
+    "markdown": "Body\n\n[^note]: First\n",
+    "selection": { "anchor": 21, "focus": 21 },
+    "command": { "type": "upsertFootnote", "label": "note", "text": "Second" },
+    "expected": "Body\n\n[^note]: Second\n"
+  },
+  {
+    "name": "insert Mermaid template at cursor",
+    "markdown": "",
+    "selection": { "anchor": 0, "focus": 0 },
+    "command": { "type": "insertTemplate", "id": "mermaid" },
+    "expected": "```mermaid\ngraph TD;\n```"
+  }
+]

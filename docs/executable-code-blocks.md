@@ -29,9 +29,9 @@ The code remains Muya content rather than being replaced by a proprietary notebo
 - the same shortcut stops the block while it is running;
 - disabled spellcheck, autocorrect and automatic capitalization inside code.
 
-The execution controls are attached to the stable code-block host and rendered beside Muya's copy control. They are not inserted into the editable `<pre>`.
+The execution controls and output are rendered in a dedicated portal attached to `document.body`, outside Muya's editable and serialized DOM. The portal is positioned beside and below the corresponding fenced block. This prevents the controls from changing the Markdown or being removed when Muya replaces a transient `<pre>` node.
 
-The compact control shows the language and a triangular Run icon. During execution the icon becomes a square Stop control.
+The compact control shows the language and a triangular Run icon. During execution the icon becomes a square Stop control. Pointer and click diagnostics are logged before dispatching the Tauri command.
 
 ## Output behavior
 
@@ -47,7 +47,7 @@ The output panel:
 - supports Copy, Collapse/Expand and Clear;
 - shows duration, exit status, timeout, interruption and truncation.
 
-The output state is stored separately from Muya's transient DOM. If Muya replaces the `<pre>` after blur, editing or deletion elsewhere in the note, ElephantNote reattaches the controls and result to the corresponding fenced block. Clicking outside does not clear an output; only Clear does.
+The output state is stored separately from Muya's transient DOM. If Muya replaces the `<pre>` after blur, editing or deletion elsewhere in the note, ElephantNote matches the replacement by editor root, source fingerprint and document ordinal, then repositions the existing controls and result. Clicking outside does not clear an output; only Clear does.
 
 Settings → Editor → Code execution controls how many final lines are retained. The default is 200 and the accepted range is 10 to 5,000 lines.
 
@@ -92,11 +92,13 @@ These controls do not prevent code from accessing user-readable files, using the
 
 The branch includes tests for:
 
-- the MutationObserver freeze regression;
+- controls and output remaining outside the editable Muya tree;
+- Markdown text remaining unchanged when controls are mounted;
+- an actual button click dispatching `tauri_programs_run`;
+- stable state and output across replacement of the fenced `<pre>`;
+- the Run triangle changing to a Stop square and sending a real stop request;
 - indentation and execution shortcuts;
 - output line-limit normalization;
-- stable state across Muya DOM replacement;
-- adaptive output styling and compact controls;
 - fixed-size stream capture;
 - stop-request delivery;
 - real Python execution;

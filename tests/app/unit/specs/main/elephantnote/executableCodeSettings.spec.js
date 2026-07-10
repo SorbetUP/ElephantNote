@@ -33,6 +33,20 @@ const settingsState = () => ({
   ]
 })
 
+const hydratedSettingsState = (configuration) => {
+  const current = settingsState()
+  return {
+    ...current,
+    executionEnabled: configuration.executionEnabled,
+    outputLineLimit: configuration.outputLineLimit,
+    environments: current.environments.map((environment) => ({
+      ...environment,
+      enabled: configuration.environments[environment.id]?.enabled ?? environment.enabled,
+      configuredExecutable: configuration.environments[environment.id]?.executable ?? ''
+    }))
+  }
+}
+
 describe('isolated executable code settings', () => {
   let list
   let set
@@ -41,10 +55,7 @@ describe('isolated executable code settings', () => {
     globalThis.__ELEPHANT_CODE_SETTINGS__?.dispose?.()
     document.body.innerHTML = ''
     list = vi.fn(async() => settingsState())
-    set = vi.fn(async({ environments }) => ({
-      ...settingsState(),
-      ...environments
-    }))
+    set = vi.fn(async({ environments }) => hydratedSettingsState(environments))
     globalThis.elephantnote = { programs: { list, set } }
   })
 
@@ -106,6 +117,7 @@ describe('isolated executable code settings', () => {
         })
       })
     })
+    expect(document.querySelector('.en-code-settings-group').textContent).toContain('Python')
   })
 
   it('disconnects its observer without touching the editor runtime', async() => {

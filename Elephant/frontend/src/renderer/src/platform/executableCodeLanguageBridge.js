@@ -1,3 +1,8 @@
+import {
+  CODE_LANGUAGE_EVENT,
+  registerExecutableCodeLanguageMuyaPlugin
+} from './executableCodeLanguageMuyaPlugin'
+
 const RUNTIME_SELECT = '.en-code-v6-language'
 const RUNTIME_UI = '.en-code-v6-toolbar, .en-code-v6-output'
 const NATIVE_LANGUAGE = [
@@ -58,27 +63,7 @@ const nativeControlForState = (state) => {
     !candidate.closest?.(RUNTIME_UI)) || null
 }
 
-const makeInputEvent = (target, language) => {
-  const EventCtor = target.InputEvent || target.Event
-  if (target.InputEvent) {
-    return new EventCtor('input', {
-      bubbles: true,
-      inputType: 'insertText',
-      data: language
-    })
-  }
-  return new EventCtor('input', { bubbles: true })
-}
-
-const markBridgeEvent = (event) => {
-  Object.defineProperty(event, '__elephantCodeLanguageBridge', {
-    configurable: true,
-    value: true
-  })
-  return event
-}
-
-const updateStateWithoutDispatch = (state, language) => {
+const updateRuntimeState = (state, language) => {
   if (!state || !language) return
   state.language = language
   replaceLanguageClass(state.pre, language)
@@ -90,26 +75,42 @@ const updateStateWithoutDispatch = (state, language) => {
   state.fingerprint = `${language}\u0000${source.replace(/\u00a0/g, ' ')}`
 }
 
-const writeNativeOnce = (target, state, language) => {
-  const native = nativeControlForState(state)
-  updateStateWithoutDispatch(state, language)
-  if (!native) return false
+const requestMuyaLanguageChange = (target, state, native, language) => {
+  if (!native?.dispatchEvent || !native.id) return false
+  const detail = {
+    blockKey: native.id,
+    language,
+    handled: false
+  }
+  native.dispatchEvent(new target.CustomEvent(CODE_LANGUAGE_EVENT, {
+    bubbles: true,
+    detail
+  }))
+  return detail.handled === true
+}
 
-  const previous = languageValue(native)
+const updateNativeFallback = (native, language) => {
+  if (!native) return false
   if ('value' in native) native.value = language
   native.dataset.value = language
   if (!native.matches?.('input, select, textarea')) native.textContent = language
+  return true
+}
 
-  if (previous === language) return true
+const writeLanguageOnce = (target, state, language) => {
+  const native = nativeControlForState(state)
+  updateRuntimeState(state, language)
 
   state.__codeLanguageBridgeSyncing = true
   try {
-    native.dispatchEvent(markBridgeEvent(makeInputEvent(target, language)))
-    native.dispatchEvent(markBridgeEvent(new target.Event('change', { bubbles: true })))
+    // The Muya plugin updates ContentState directly through updateCodeLanguage().
+    // This is intentionally not an `input` event: synthetic keyboard events use
+    // the current selection and previously caused recursive edits and corruption.
+    if (requestMuyaLanguageChange(target, state, native, language)) return true
+    return updateNativeFallback(native, language)
   } finally {
     state.__codeLanguageBridgeSyncing = false
   }
-  return true
 }
 
 export const installExecutableCodeLanguageBridge = (target = globalThis) => {
@@ -117,6 +118,7 @@ export const installExecutableCodeLanguageBridge = (target = globalThis) => {
     return target.__ELEPHANT_CODE_LANGUAGE_BRIDGE__
   }
 
+  registerExecutableCodeLanguageMuyaPlugin()
   let runtime = null
 
   const onRuntimeSelectChange = (event) => {
@@ -126,16 +128,15 @@ export const installExecutableCodeLanguageBridge = (target = globalThis) => {
     const state = runtime && stateForElement(runtime, select)
     if (!state) return
 
-    // This capture listener owns runtime-select changes. Stopping the old V6
-    // target listener prevents writeNativeLanguage() from dispatching a change
-    // back onto the same select and recursing until stack exhaustion.
+    // The legacy V6 target listener redispatches `change` onto the same select.
+    // This capture listener owns the transition and prevents that recursion.
     event.stopImmediatePropagation()
     event.stopPropagation()
 
-    if (state.__codeLanguageBridgeSyncing || event.__elephantCodeLanguageBridge) return
+    if (state.__codeLanguageBridgeSyncing) return
     const language = normalizeCodeLanguage(select.value)
-    if (!language) return
-    writeNativeOnce(target, state, language)
+    if (!language || language === state.language) return
+    writeLanguageOnce(target, state, language)
   }
 
   const onNativeLanguageChange = (event) => {
@@ -146,8 +147,8 @@ export const installExecutableCodeLanguageBridge = (target = globalThis) => {
     const state = stateForElement(runtime, element)
     if (!state || state.__codeLanguageBridgeSyncing) return
     const language = languageValue(element)
-    if (!language) return
-    updateStateWithoutDispatch(state, language)
+    if (!language || language === state.language) return
+    updateRuntimeState(state, language)
   }
 
   document.addEventListener('change', onRuntimeSelectChange, true)
@@ -160,7 +161,9 @@ export const installExecutableCodeLanguageBridge = (target = globalThis) => {
       return nextRuntime
     },
     sync(state, language) {
-      return writeNativeOnce(target, state, normalizeCodeLanguage(language))
+      const normalized = normalizeCodeLanguage(language)
+      if (!normalized || normalized === state?.language) return false
+      return writeLanguageOnce(target, state, normalized)
     },
     dispose() {
       document.removeEventListener('change', onRuntimeSelectChange, true)

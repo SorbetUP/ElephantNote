@@ -93,6 +93,7 @@ jobs:
         run: |
           pnpm exec vitest run \
             tests/app/unit/muyaRustEngineRuntime.spec.js \
+            tests/app/unit/muyaRustBackedRuntime.spec.js \
             tests/app/unit/muyaSharedParityMatrix.spec.js \
             tests/app/unit/muyaJsonStateSharedParity.spec.js \
             tests/app/unit/muyaMarkdownSelectionRuntime.spec.js \

@@ -1,0 +1,25 @@
+.en-code-v5-host .ag-language-input,
+.en-code-v5-host .language-input,
+.en-code-v5-host .ag-code-language,
+.en-code-v5-host .code-block-language,
+.en-code-v5-host [data-function-type="languageInput"],
+.en-code-v5-host [functiontype="languageInput"],
+.en-code-v5-host [data-role="language-input"],
+.en-code-v5-host [data-language-input],
+.en-code-v5-host [aria-label*="language" i],
+.en-code-v5-host button[class*="copy" i],
+.en-code-v5-host [role="button"][class*="copy" i],
+.en-code-v5-host [aria-label*="copy" i],
+.en-code-v5-host [title*="copy" i],
+.en-code-v5-host [class*="fence-label" i],
+.en-code-v5-host [class*="code-fence-hint" i] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.en-code-v5-host::before,
+.en-code-v5-host::after,
+.en-code-v5-pre::before,
+.en-code-v5-pre::after {
+  content: none !important;
+}

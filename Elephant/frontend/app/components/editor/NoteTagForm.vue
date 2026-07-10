@@ -2,25 +2,28 @@
   <form
     class="en-inline-tag-form"
     @click.stop
-    @submit.prevent="submit"
+    @pointerdown.stop
+    @submit.stop.prevent="submit"
   >
     <input
       :value="localValue"
       autofocus
+      name="tag"
       type="text"
+      enterkeyhint="done"
+      autocomplete="off"
+      autocapitalize="none"
       :placeholder="isEditing ? 'Edit tag' : 'Tag'"
       @input="updateValue($event.target.value)"
-      @keydown.esc="$emit('cancel')"
-      @keydown.enter.prevent="submit"
+      @keydown.esc.stop.prevent="$emit('cancel')"
+      @keydown.enter.stop.prevent="submit"
     >
-    <button type="submit">
-      Save
-    </button>
     <button
-      type="button"
-      @click="$emit('cancel')"
+      type="submit"
+      @pointerdown.stop
+      @click.stop
     >
-      Cancel
+      Save
     </button>
   </form>
 </template>
@@ -75,5 +78,10 @@ const submit = () => {
   color: var(--en-text);
   background: transparent;
   font: inherit;
+}
+
+.en-inline-tag-form button {
+  padding: 0 10px;
+  font-weight: 700;
 }
 </style>

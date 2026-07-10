@@ -99,6 +99,7 @@ jobs:
         run: |
           pnpm exec vitest run \
             tests/app/unit/muyaRustEngineRuntime.spec.js \
+            tests/app/unit/muyaRustSessionRuntime.spec.js \
             tests/app/unit/muyaRustGroupedHistoryClient.spec.js \
             tests/app/unit/muyaRustBackedRuntime.spec.js \
             tests/app/unit/muyaRustEditorActivation.spec.js \

@@ -84,8 +84,12 @@ jobs:
           test_path.write_text(test)
           PY
 
-      - name: ESLint focused files
+      - name: Format and lint focused files
         run: |
+          Elephant/node_modules/.bin/eslint --fix \
+            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
+            Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue \
+            tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js
           Elephant/node_modules/.bin/eslint \
             Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
             Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue \

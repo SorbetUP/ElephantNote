@@ -1,0 +1,156 @@
+[
+  {
+    "name": "writable empty document",
+    "markdown": "",
+    "roundTrip": "",
+    "expected": {
+      "version": 1,
+      "type": "muya-json-state",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "",
+          "children": [{ "type": "text", "text": "" }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "heading and paragraph",
+    "markdown": "## Title\n\nBody",
+    "roundTrip": "## Title\n\nBody",
+    "expected": {
+      "version": 1,
+      "type": "muya-json-state",
+      "blocks": [
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "Title",
+          "children": [{ "type": "text", "text": "Title" }]
+        },
+        {
+          "type": "paragraph",
+          "text": "Body",
+          "children": [{ "type": "text", "text": "Body" }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "task and ordered list depth",
+    "markdown": "  - [X] Done\n\n    3. Item",
+    "roundTrip": "  - [x] Done\n\n    3. Item",
+    "expected": {
+      "version": 1,
+      "type": "muya-json-state",
+      "blocks": [
+        {
+          "type": "task_list_item",
+          "text": "Done",
+          "depth": 1,
+          "checked": true,
+          "children": [{ "type": "text", "text": "Done" }]
+        },
+        {
+          "type": "list_item",
+          "text": "Item",
+          "depth": 2,
+          "ordered": true,
+          "index": 3,
+          "children": [{ "type": "text", "text": "Item" }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "code fence metadata",
+    "markdown": "```rust linenos\nfn main() {}\n```",
+    "roundTrip": "```rust linenos\nfn main() {}\n```",
+    "expected": {
+      "version": 1,
+      "type": "muya-json-state",
+      "blocks": [
+        {
+          "type": "code_fence",
+          "text": "fn main() {}",
+          "marker": "```",
+          "info": "rust linenos",
+          "language": "rust",
+          "children": [{ "type": "text", "text": "fn main() {}" }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "math block",
+    "markdown": "$$\nx + y\n$$",
+    "roundTrip": "$$\nx + y\n$$",
+    "expected": {
+      "version": 1,
+      "type": "muya-json-state",
+      "blocks": [
+        {
+          "type": "math_block",
+          "text": "x + y",
+          "children": [{ "type": "text", "text": "x + y" }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "table cells and alignments",
+    "markdown": "| A | B |\n| :- | -: |\n| 1 | 2 |",
+    "roundTrip": "| A | B |\n| :- | -: |\n| 1 | 2 |",
+    "expected": {
+      "version": 1,
+      "type": "muya-json-state",
+      "blocks": [
+        {
+          "type": "table",
+          "headers": ["A", "B"],
+          "alignments": ["left", "right"],
+          "rows": [["1", "2"]]
+        }
+      ]
+    }
+  },
+  {
+    "name": "blockquote",
+    "markdown": "> Quote",
+    "roundTrip": "> Quote",
+    "expected": {
+      "version": 1,
+      "type": "muya-json-state",
+      "blocks": [
+        {
+          "type": "blockquote",
+          "text": "Quote",
+          "children": [{ "type": "text", "text": "Quote" }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "windows line endings normalize",
+    "markdown": "# A\r\n\r\nB",
+    "roundTrip": "# A\n\nB",
+    "expected": {
+      "version": 1,
+      "type": "muya-json-state",
+      "blocks": [
+        {
+          "type": "heading",
+          "level": 1,
+          "text": "A",
+          "children": [{ "type": "text", "text": "A" }]
+        },
+        {
+          "type": "paragraph",
+          "text": "B",
+          "children": [{ "type": "text", "text": "B" }]
+        }
+      ]
+    }
+  }
+]

@@ -35,6 +35,8 @@ jobs:
   codex-bundle-refactor:
     if: github.head_ref == 'feature/real-codex-subscription'
     runs-on: ubuntu-latest
+    env:
+      NODE_PATH: Elephant/node_modules
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,38 +48,8 @@ jobs:
       - name: Apply reviewed refactor
         run: python3 .github/scripts/apply_codex_bundle_and_limits.py
 
-      - name: Capture provider lint diagnostics
-        shell: bash
-        run: |
-          set +e
-          pnpm exec eslint --fix --format json Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue > codex-provider-eslint.json
-          echo "$?" > codex-provider-eslint.exit
-          exit 0
-
-      - name: Upload provider lint diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: codex-provider-eslint
-          path: |
-            codex-provider-eslint.json
-            codex-provider-eslint.exit
-
-      - name: Report provider lint errors
-        run: |
-          node - <<'NODE'
-          const fs = require('node:fs')
-          const exitCode = Number(fs.readFileSync('codex-provider-eslint.exit', 'utf8').trim())
-          const reports = JSON.parse(fs.readFileSync('codex-provider-eslint.json', 'utf8'))
-          for (const report of reports) {
-            for (const message of report.messages || []) {
-              console.error(`${report.filePath}:${message.line}:${message.column} ${message.ruleId || 'parse'} ${message.message}`)
-            }
-          }
-          if (exitCode !== 0) process.exit(exitCode)
-          NODE
-
-      - name: Auto-fix rate-limit helper and tests
-        run: pnpm exec eslint --fix Elephant/frontend/app/components/settings/codexRateLimits.js tests/app/unit/codexRateLimits.spec.js
+      - name: Auto-fix generated frontend files
+        run: Elephant/node_modules/.bin/eslint --fix Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue Elephant/frontend/app/components/settings/codexRateLimits.js tests/app/unit/codexRateLimits.spec.js
 
       - name: Check Codex bundler syntax
         run: node --check build/scripts/ensure-tauri-codex-runtime.mjs
@@ -86,10 +58,10 @@ jobs:
         run: node --check Elephant/frontend/app/components/settings/codexRateLimits.js
 
       - name: Lint generated frontend files
-        run: pnpm exec eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue Elephant/frontend/app/components/settings/codexRateLimits.js tests/app/unit/codexRateLimits.spec.js
+        run: Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue Elephant/frontend/app/components/settings/codexRateLimits.js tests/app/unit/codexRateLimits.spec.js
 
       - name: Run focused rate-limit tests
-        run: pnpm exec vitest run tests/app/unit/codexRateLimits.spec.js
+        run: Elephant/node_modules/.bin/vitest run tests/app/unit/codexRateLimits.spec.js
 
       - name: Install Tauri Linux dependencies
         run: |

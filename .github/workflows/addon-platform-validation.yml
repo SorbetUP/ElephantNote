@@ -42,6 +42,13 @@ jobs:
           node build/scripts/validate-addon-catalog.mjs addon-catalog-source \
             2>&1 | tee addon-catalog-tests.txt
 
+      - name: Execute official addon pipelines
+        shell: bash
+        run: |
+          set -o pipefail
+          node build/scripts/test-official-addons.mjs addon-catalog-source \
+            2>&1 | tee addon-functional-tests.txt
+
       - name: Run focused addon and settings tests
         shell: bash
         run: |
@@ -103,6 +110,7 @@ jobs:
           name: addon-platform-validation
           path: |
             addon-catalog-tests.txt
+            addon-functional-tests.txt
             addon-tests.txt
             addon-rust-tests.txt
             addon-package.txt

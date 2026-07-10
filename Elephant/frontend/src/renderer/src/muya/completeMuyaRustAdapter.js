@@ -3,6 +3,17 @@ import RustOwnedMuya from './realMuyaRustAdapter.js'
 const TABLE_ROW = /^\s*\|.*\|\s*$/
 const TABLE_SEPARATOR = /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/
 const IMAGE_URL = /\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i
+const ADVANCED_BLOCKS = Object.freeze({
+  pre: { kind: 'code', language: '' },
+  mathblock: { kind: 'math', language: '' },
+  html: { kind: 'html', language: '' },
+  flowchart: { kind: 'code', language: 'flowchart' },
+  sequence: { kind: 'code', language: 'sequence' },
+  plantuml: { kind: 'code', language: 'plantuml' },
+  mermaid: { kind: 'code', language: 'mermaid' },
+  'vega-lite': { kind: 'code', language: 'vega-lite' },
+  hr: { kind: 'thematic-break', language: '' }
+})
 
 const markdownTableRanges = (markdown) => {
   const lines = String(markdown || '').split('\n')
@@ -26,6 +37,25 @@ const markdownTableRanges = (markdown) => {
     startLine = endLine
   }
   return ranges
+}
+
+const selectedLineRange = (markdown, selection) => {
+  const value = String(markdown || '')
+  const selectionStart = Math.min(selection.anchor, selection.focus, value.length)
+  const selectionEnd = Math.min(Math.max(selection.anchor, selection.focus), value.length)
+  const start = value.lastIndexOf('\n', Math.max(0, selectionStart - 1)) + 1
+  const nextBreak = value.indexOf('\n', selectionEnd)
+  const end = nextBreak < 0 ? value.length : nextBreak
+  return { start, end, content: value.slice(start, end) }
+}
+
+const headingKind = (markdown, selection, direction) => {
+  const { content } = selectedLineRange(markdown, selection)
+  const current = /^(?: {0,3})(#{1,6})\s/.exec(content)?.[1]?.length || 0
+  const next = direction === 'upgrade'
+    ? (current === 0 ? 6 : Math.max(1, current - 1))
+    : (current === 0 ? 0 : current === 6 ? 0 : current + 1)
+  return next === 0 ? 'paragraph' : `heading${next}`
 }
 
 const tableRangeById = (markdown, tableId) => {
@@ -161,6 +191,44 @@ export default class CompleteMuyaWithRustCore extends RustOwnedMuya {
       language: String(language),
       content: String(content)
     }))
+  }
+
+  __transformAdvancedParagraph (type) {
+    if (type === 'table') {
+      return this.contentState.showTablePicker()
+    }
+    if (type === 'front-matter') {
+      const markdown = this.getMarkdown()
+      if (/^(?:---|\+\+\+|;;;|\{)\s*\n/.test(markdown)) return undefined
+      return this.__applyRust('paragraph-front-matter', async(engine) => {
+        await engine.setSelection(0, 0)
+        return engine.complete({ type: 'insertBlock', kind: 'frontmatter', language: '', content: '' })
+      })
+    }
+    if (type === 'upgrade heading' || type === 'degrade heading') {
+      const current = this.__selection()
+      const kind = headingKind(current.markdown, current.selection, type.startsWith('upgrade') ? 'upgrade' : 'degrade')
+      return this.__applyRust(`paragraph-${type}`, (engine) => engine.transformBlock(kind))
+    }
+    const spec = ADVANCED_BLOCKS[type]
+    if (!spec) return null
+    const current = this.__selection()
+    const range = selectedLineRange(current.markdown, current.selection)
+    return this.__applyRust(`paragraph-${type}`, async(engine) => {
+      await engine.setSelection(range.start, range.end)
+      return engine.complete({
+        type: 'insertBlock',
+        kind: spec.kind,
+        language: spec.language,
+        content: range.content
+      })
+    })
+  }
+
+  updateParagraph (type) {
+    const advanced = this.__transformAdvancedParagraph(String(type))
+    if (advanced !== null) return advanced
+    return super.updateParagraph(type)
   }
 
   __setCodeLanguage (language) {

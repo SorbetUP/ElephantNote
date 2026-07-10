@@ -114,7 +114,7 @@ assert(
 )
 assert(
   packageJson.scripts['tauri:mac:smoke'] === 'node build/scripts/tauri-macos-window-smoke.mjs',
-  'macOS smoke script must run the packaged window verifier'
+  'macOS Tauri window smoke verifier must run the packaged window verifier'
 )
 assert(
   existsSync(resolve(root, 'build/scripts/tauri-macos-window-smoke.mjs')),
@@ -192,10 +192,15 @@ assert(
 )
 assert(
   tauriBridge.includes('openVaultDirectory') &&
-    tauriBridge.includes('tauri_vaults_select_path') &&
-    tauriBridge.includes('recursive: true') &&
-    tauriBridge.includes("pickerMode: 'document'"),
-  'Tauri bridge must request recursive scoped access through the native folder picker'
+    tauriBridge.includes('directory: true') &&
+    tauriBridge.includes('tauri_vaults_select_path'),
+  'Tauri bridge must expose native system folder selection for scoped vault access'
+)
+assert(
+  !buildAndroid.includes('READ_EXTERNAL_STORAGE') &&
+    !buildAndroid.includes('WRITE_EXTERNAL_STORAGE') &&
+    !buildAndroid.includes('MANAGE_EXTERNAL_STORAGE'),
+  'Android build must not request deprecated broad storage permissions'
 )
 assert(
   mobileVaultBridge.includes('/vaults/Personal') &&

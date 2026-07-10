@@ -69,6 +69,14 @@ fn tauri_platform_info() -> serde_json::Value {
     })
 }
 
+#[tauri::command]
+async fn tauri_rag_chat(
+    app: tauri::AppHandle,
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    chat_runtime::tauri_knowledge_chat(app, payload).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -263,7 +271,7 @@ pub fn run() {
             model_library::tauri_models_active,
             model_library::tauri_models_refresh_index,
             chat_runtime::tauri_knowledge_chat,
-            chat_runtime::tauri_knowledge_chat,
+            tauri_rag_chat,
             tauri_extra_commands::tauri_sync_plan
         ])
         .run(tauri::generate_context!())

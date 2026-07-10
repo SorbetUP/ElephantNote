@@ -121,7 +121,7 @@ const rustOwnedMuyaPlugin = () => ({
     if (source !== 'muya/lib') return null
     return resolve(
       __dirname,
-      'Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js'
+      'Elephant/frontend/src/renderer/src/muya/completeMuyaRustAdapter.js'
     )
   }
 })

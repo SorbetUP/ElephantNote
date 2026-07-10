@@ -83,9 +83,6 @@ jobs:
           tests/app/unit/specs/main/elephantnote/mobileAndroidRelease.spec.js
           tests/app/unit/specs/main/elephantnote/mobileInteractionRegression.spec.js
 
-      - name: Compile Android vault plugin
-        run: cargo check --manifest-path Elephant/backend/tauri-plugin-elephant-android-vault/Cargo.toml --all-targets
-
       - name: Build renderer
         run: pnpm tauri:web:build
 

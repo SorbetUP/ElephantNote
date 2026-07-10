@@ -7,6 +7,7 @@ pub mod muya_edges;
 pub mod muya_engine;
 pub mod muya_extras;
 pub mod muya_frontmatter;
+pub mod muya_inline;
 pub mod muya_interactions;
 pub mod muya_navigation;
 pub mod muya_parity;

@@ -167,6 +167,27 @@ pub fn tauri_muya_engine_apply(
 }
 
 #[tauri::command]
+pub fn tauri_muya_engine_apply_grouped(
+  mut state: MuyaEditorState,
+  command: MuyaEditorCommand,
+  continue_group: bool,
+) -> Result<Value, String> {
+  let preserved_snapshot = if continue_group {
+    state.undo_stack.pop()
+  } else {
+    None
+  };
+  let mut transaction = apply_command(state, command)?;
+  if let Some(snapshot) = preserved_snapshot {
+    if transaction.document_changed {
+      transaction.state.undo_stack.pop();
+    }
+    transaction.state.undo_stack.push(snapshot);
+  }
+  Ok(json!(transaction))
+}
+
+#[tauri::command]
 pub fn tauri_muya_engine_apply_batch(
   state: MuyaEditorState,
   commands: Vec<MuyaEditorCommand>,
@@ -212,9 +233,14 @@ pub fn tauri_muya_engine_query(
 pub fn tauri_muya_engine_capabilities() -> Value {
   json!({
     "engine": "rust",
-    "version": 4,
+    "version": 5,
     "offsetEncoding": "utf16",
-    "history": { "undo": true, "redo": true, "maximumEntries": 100 },
+    "history": {
+      "undo": true,
+      "redo": true,
+      "grouped": true,
+      "maximumEntries": 100
+    },
     "commands": [
       "insertText",
       "replaceSelection",

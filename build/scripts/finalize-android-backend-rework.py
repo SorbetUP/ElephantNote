@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Temporary deterministic transformer used only by the Android foundations validation workflow.
 # Kept separate from production code and removed after the complete Android build succeeds.
+# This isolated push intentionally avoids unrelated pull-request workflows.
 import json
 from pathlib import Path
 

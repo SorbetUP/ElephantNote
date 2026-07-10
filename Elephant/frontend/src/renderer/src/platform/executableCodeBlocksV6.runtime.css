@@ -1,5 +1,0 @@
-/* Native Muya chrome is hidden with broad compatibility selectors. Keep the
-   runtime-owned icon explicitly visible even when a Muya copy class is broad. */
-.en-code-v6-shell .en-code-v6-copy-icon {
-  display: block !important;
-}

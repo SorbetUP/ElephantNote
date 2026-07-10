@@ -152,6 +152,14 @@ export default [
     }
   },
 
+  // 3e. Keep the portal runtime readable without forcing one-property-per-line objects
+  {
+    files: ['Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV3.js'],
+    rules: {
+      '@stylistic/object-property-newline': 'off'
+    }
+  },
+
   // 4. JSON files basic validation
   ...pluginJsonc.configs['flat/recommended-with-json'],
 

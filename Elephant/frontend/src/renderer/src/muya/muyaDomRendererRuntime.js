@@ -74,7 +74,7 @@ export const parseInlineFallback = (source = '') => {
       continue
     }
 
-    const next = rest.slice(1).search(/[!\[*_~`]/)
+    const next = rest.slice(1).search(/[![_*~`]/)
     const length = next < 0 ? rest.length : next + 1
     pushText(rest.slice(0, length))
     offset += length

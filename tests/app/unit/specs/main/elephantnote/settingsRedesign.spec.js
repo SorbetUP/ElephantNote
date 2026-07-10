@@ -4,11 +4,19 @@ import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const exists = (relativePath) => fs.existsSync(path.join(root, relativePath))
 const readSettings = () => read('Elephant/frontend/app/components/settings/SettingsPanel.vue')
 const readSettingsStyles = () => read('Elephant/frontend/app/components/settings/settings-redesign.css')
 const readSettingsPrimitives = () => read('Elephant/frontend/app/components/settings/settings-primitives.css')
 const readSync = () => read('Elephant/frontend/app/components/settings/SyncSettingsPanel.vue')
 const readAi = () => read('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
+const readAddons = () => read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
+const readAddonLogic = () => read('Elephant/frontend/app/components/settings/useAddonsSettings.js')
+const readAddonStyles = () => read('Elephant/frontend/app/components/settings/addons-settings.css')
+const readAddonRow = () => read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
+const readAddonStore = () => read('Elephant/frontend/src/renderer/src/store/addons.js')
+const readAppShell = () => read('Elephant/frontend/app/components/shell/AppShell.vue')
+const readRouter = () => read('Elephant/frontend/src/renderer/src/router/index.js')
 const readPreferences = () => read('Elephant/frontend/src/renderer/src/store/preferences.js')
 
 describe('ElephantNote settings redesign', () => {
@@ -32,6 +40,7 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('placeholder="Search all settings"')
     expect(source).toContain('const settingsIndex = [')
     expect(source).toContain("label: 'Quick insert trigger'")
+    expect(source).toContain("label: 'Installed addons'")
     expect(source).toContain("label: 'Conflict retention'")
     expect(source).toContain("label: 'Semantic search and embeddings'")
     expect(source).toContain('const openSearchResult = (result) =>')
@@ -39,15 +48,95 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('aiInitialPage.value = result.subpage')
   })
 
-  it('uses a minimal flat navigation and keeps Sites separate from Import', () => {
+  it('opens a requested section through the active modal instead of a legacy route', () => {
+    const settings = readSettings()
+    const shell = readAppShell()
+
+    expect(shell).toContain(':initial-section="settingsInitialSection"')
+    expect(shell).toContain("window.addEventListener('elephantnote:open-settings', handleOpenSettingsEvent)")
+    expect(settings).toContain("initialSection: { type: String, default: 'appearance' }")
+    expect(settings).toContain('const normalizeSection = (section) =>')
+    expect(settings).toContain('const activeSection = ref(normalizeSection(props.initialSection))')
+    expect(settings).toContain("watch(() => props.initialSection")
+  })
+
+  it('uses a minimal flat navigation and keeps Addons, Sites and Import separate', () => {
     const source = readSettings()
 
+    expect(source).toContain("{ id: 'addons', label: 'Addons', icon: Package }")
     expect(source).toContain("{ id: 'sites', label: 'Sites', icon: Globe2 }")
     expect(source).toContain("{ id: 'import', label: 'Import', icon: Download }")
     expect(source).not.toContain("label: 'Workspace'")
     expect(source).not.toContain("label: 'Services'")
     expect(source).not.toContain("label: 'Data'")
     expect(source).not.toContain('Import & sites')
+  })
+
+  it('uses one consent gate before rendering addon management', () => {
+    const addons = readAddons()
+    const logic = readAddonLogic()
+
+    expect(addons).toContain('v-else-if="!communityAddonsEnabled"')
+    expect(addons).toContain('Turn on community addons')
+    expect(addons).toContain('v-model="riskAccepted"')
+    expect(logic).toContain('setCommunityAddonsEnabled(true)')
+    expect(addons).toContain('<template v-else>')
+    expect(addons).not.toContain('en-addons-summary')
+  })
+
+  it('integrates compact real addon controls into the active settings panel', () => {
+    const settings = readSettings()
+    const addons = readAddons()
+    const logic = readAddonLogic()
+    const row = readAddonRow()
+
+    expect(settings).toContain("activeSection === 'addons'")
+    expect(settings).toContain('<addons-settings-panel />')
+    expect(settings).toContain("import AddonsSettingsPanel from './AddonsSettingsPanel.vue'")
+    expect(addons).toContain("import { useAddonsSettings } from './useAddonsSettings'")
+    expect(logic).toContain('useAddonsStore()')
+    expect(logic).toContain('getAddonActions(contributions.value)')
+    expect(logic).toContain('installExternalAddon(selected)')
+    expect(logic).toContain('setAddonEnabled(addon.manifest.id')
+    expect(logic).toContain('runAction(action.id)')
+    expect(addons).toContain('<addon-settings-row')
+    expect(row).toContain('role="switch"')
+    expect(row).toContain("emit('run-action', action)")
+    expect(row).toContain("addon.manifest.source === 'external'")
+    expect(logic).toContain("log.info('[settings:addons] mounted'")
+  })
+
+  it('uses inline destructive confirmation and no unsupported native confirm command', () => {
+    const addons = readAddons()
+    const logic = readAddonLogic()
+    const row = readAddonRow()
+
+    expect(addons).not.toContain('window.confirm')
+    expect(logic).not.toContain('window.confirm')
+    expect(row).not.toContain('window.confirm')
+    expect(row).toContain('Confirm uninstall')
+    expect(row).toContain('confirmingUninstall')
+    expect(logic).toContain('setCommunityAddonsEnabled(false)')
+  })
+
+  it('refreshes the real vault and opens notes produced by addon commands', () => {
+    const store = readAddonStore()
+
+    expect(store).toContain('refreshVaultAfterAddonAction')
+    expect(store).toContain("import('elephant-front/stores/vaultStore')")
+    expect(store).toContain("import('elephant-front/services/elephantnoteClient')")
+    expect(store).toContain("elephantnoteClient.directory.list('')")
+    expect(store).toContain('vaultStore.openNote(createdEntry)')
+    expect(store).toContain("'[addons] action:start'")
+    expect(store).toContain("'[addons] action:done'")
+  })
+
+  it('removes the dead legacy Addons settings route and component', () => {
+    const router = readRouter()
+
+    expect(router).not.toContain("import AddonsSettings from '@/prefComponents/addons'")
+    expect(router).not.toContain("path: 'addons'")
+    expect(exists('Elephant/frontend/src/renderer/src/prefComponents/addons/index.vue')).toBe(false)
   })
 
   it('uses semantic controls and exposes real quick-insert preferences', () => {
@@ -66,19 +155,25 @@ describe('ElephantNote settings redesign', () => {
     expect(preferences).toContain('autoPairBracket: true')
   })
 
-  it('imports one shared visual primitive layer', () => {
+  it('imports one shared visual primitive layer for AI, Sync and Addons', () => {
     const styles = readSettingsStyles()
     const primitives = readSettingsPrimitives()
+    const addons = readAddons()
+    const addonStyles = readAddonStyles()
+    const row = readAddonRow()
 
     expect(styles).toContain("@import './settings-primitives.css';")
     expect(styles).toContain('Reusable control chrome lives in settings-primitives.css')
     expect(primitives).toContain('--en-ui-control-height: 34px')
     expect(primitives).toContain('--en-ui-card-radius: 14px')
-    expect(primitives).toContain(':where(.en-ai-card, .en-sync-card)')
+    expect(primitives).toContain(':where(.en-ai-card, .en-sync-card, .en-addons-card)')
     expect(primitives).toContain(':where(.en-ai-toolbar, .en-sync-toolbar)')
-    expect(primitives).toContain(':where(.en-ai-settings button, .en-sync-panel button)')
+    expect(primitives).toContain('.en-addons-panel .en-primary-button')
+    expect(primitives).toContain('.en-addons-panel .en-switch')
     expect(primitives).toContain(':where(.en-ai-badge, .en-provider-state, .en-sync-status')
-    expect(primitives).toContain(':where(.en-ai-settings input, .en-ai-settings select, .en-ai-settings textarea')
+    expect(addons).toContain('<style scoped src="./addons-settings.css"></style>')
+    expect(addonStyles).not.toContain('.en-addons-mode-row .en-switch {')
+    expect(row).not.toContain('.en-switch {')
   })
 
   it('uses one switch geometry for root and nested settings panels', () => {
@@ -87,7 +182,7 @@ describe('ElephantNote settings redesign', () => {
 
     expect(styles).not.toContain('.en-settings-panel .en-switch,')
     expect(primitives).toContain('.en-settings-panel .en-switch,')
-    expect(primitives).toContain('.en-settings-panel :deep(.en-ai-switch)')
+    expect(primitives).toContain('.en-ai-switch, .en-addons-panel .en-switch')
     expect(primitives).toContain('display: block !important')
     expect(primitives).toContain('transform: translateX(0) !important')
     expect(primitives).toContain('transform: translateX(18px) !important')

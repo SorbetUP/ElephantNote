@@ -65,6 +65,20 @@ export class ElephantAddonManager {
     return createSnapshot(record)
   }
 
+  unregister(id) {
+    const record = this.requireRecord(id)
+    if (record.enabled || record.status === ADDON_STATUS.activating) {
+      throw new Error(`Cannot unregister an active addon: ${id}`)
+    }
+    this.disposeRecord(record)
+    this.clearContributionsFromAddon(id)
+    this.records.delete(id)
+    const snapshot = createSnapshot(record)
+    this.emit('unregistered', snapshot)
+    this.emit('changed', snapshot)
+    return snapshot
+  }
+
   get(id) {
     const record = this.records.get(id)
     return record ? createSnapshot(record) : null

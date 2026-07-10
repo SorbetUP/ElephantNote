@@ -11,6 +11,7 @@ pub const INDEX_DIR: &str = "index";
 pub const CACHE_DIR: &str = "cache";
 pub const STATE_DIR: &str = "state";
 pub const TRASH_DIR: &str = "trash";
+pub const ADDONS_DIR: &str = "addons";
 pub const ASSETS_DIR: &str = HIDDEN_ASSETS_ROOT;
 
 pub const WORKSPACE_FILE: &str = "workspace.json";
@@ -58,12 +59,27 @@ pub fn index_file(vault_root: impl AsRef<Path>, file: &str) -> PathBuf {
   hidden_dir(vault_root, INDEX_DIR).join(file)
 }
 
+pub fn addons_dir(vault_root: impl AsRef<Path>) -> PathBuf {
+  hidden_dir(vault_root, ADDONS_DIR)
+}
+
 pub fn assets_dir(vault_root: impl AsRef<Path>) -> PathBuf {
   vault_root.as_ref().join(HIDDEN_ASSETS_ROOT)
 }
 
-pub fn required_hidden_dirs() -> [&'static str; 9] {
-  [HIDDEN_CONFIG_ROOT, HIDDEN_ASSETS_ROOT, CONFIG_DIR, MODELS_DIR, SYNC_DIR, INDEX_DIR, CACHE_DIR, STATE_DIR, TRASH_DIR]
+pub fn required_hidden_dirs() -> [&'static str; 10] {
+  [
+    HIDDEN_CONFIG_ROOT,
+    HIDDEN_ASSETS_ROOT,
+    CONFIG_DIR,
+    MODELS_DIR,
+    SYNC_DIR,
+    INDEX_DIR,
+    CACHE_DIR,
+    STATE_DIR,
+    TRASH_DIR,
+    ADDONS_DIR,
+  ]
 }
 
 pub fn is_hidden_vault_path(relative_path: &str) -> bool {
@@ -95,6 +111,7 @@ mod tests {
     assert!(models_file("vault", MODELS_FILE).ends_with("vault/.elephantnote/models/models.json"));
     assert!(sync_file("vault", SYNC_FILE).ends_with("vault/.elephantnote/sync/sync.json"));
     assert!(index_file("vault", INDEX_FILE).ends_with("vault/.elephantnote/index/index.json"));
+    assert!(addons_dir("vault").ends_with("vault/.elephantnote/addons"));
     assert!(assets_dir("vault").ends_with("vault/.assets"));
   }
 
@@ -107,11 +124,13 @@ mod tests {
     assert!(!dirs.contains(&WIKI_DIR));
     assert!(dirs.contains(&MODELS_DIR));
     assert!(dirs.contains(&SYNC_DIR));
+    assert!(dirs.contains(&ADDONS_DIR));
   }
 
   #[test]
   fn distinguishes_hidden_and_visible_paths() {
     assert!(is_hidden_vault_path(".elephantnote/config/workspace.json"));
+    assert!(is_hidden_vault_path(".elephantnote/addons/registry.json"));
     assert!(is_hidden_vault_path(".config/provider/provider.json"));
     assert!(is_hidden_vault_path(".assets/excalidraw.png"));
     assert!(is_hidden_vault_path(".git/config"));

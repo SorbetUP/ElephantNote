@@ -1,12 +1,10 @@
 <template>
-  <aside
-    class="en-sidebar"
-  >
+  <aside class="en-sidebar">
     <div class="en-sidebar-scroll">
       <button
         class="en-all-notes"
         :class="{
-          active: store.activeWorkspaceView === 'notes' && store.currentPath === '' && !store.openedNotePath,
+          active: !activeAddonViewId && store.activeWorkspaceView === 'notes' && store.currentPath === '' && !store.openedNotePath,
           'is-drop-target': isRootDropTarget,
           'is-drop-disabled': isRootDropDisabled
         }"
@@ -14,11 +12,27 @@
         @dragover.prevent="handleRootDragOver"
         @dragleave="handleRootDragLeave"
         @drop.prevent="handleRootDrop"
-        @click="store.openDirectory('')"
+        @click="openAllNotes"
       >
         <Inbox class="en-all-notes-icon" />
         <span>All notes</span>
       </button>
+
+      <section v-if="addonViews.length" class="en-addon-views">
+        <p class="en-addon-views-label">Addons</p>
+        <button
+          v-for="entry in addonViews"
+          :key="entry.contribution.id"
+          class="en-addon-view-button"
+          :class="{ active: activeAddonViewId === entry.contribution.id }"
+          type="button"
+          :title="entry.contribution.description || entry.contribution.title"
+          @click="emit('open-addon-view', entry.contribution.id)"
+        >
+          <ListTodo />
+          <span>{{ entry.contribution.title }}</span>
+        </button>
+      </section>
 
       <div class="en-tags-header">
         <span class="en-tags-label">Tags</span>
@@ -41,8 +55,8 @@
           :active-path="store.currentPath"
           :active-note-path="store.openedNotePath"
           :load-directory="loadDirectory"
-          :open-directory="store.openDirectory"
-          :open-note="store.openNote"
+          :open-directory="openDirectory"
+          :open-note="openNote"
           :detach-entry="store.detachEntryFromSidebar"
         />
       </div>
@@ -70,7 +84,7 @@
             class="en-recent-note"
             :class="{ active: note.path === store.openedNotePath }"
             type="button"
-            @click="store.openNote(note)"
+            @click="openNote(note)"
           >
             {{ note.title }}
           </button>
@@ -105,10 +119,12 @@ import {
   CalendarClock,
   ChevronDown,
   Inbox,
+  ListTodo,
   Search
 } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useEditorStore } from '@/store/editor'
+import { useAddonsStore } from '@/store/addons'
 import SidebarTreeEntry from './SidebarTreeEntry.vue'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
 import {
@@ -116,9 +132,16 @@ import {
   parseDraggedEntry
 } from '../../utils/entryDragDrop'
 
-const emit = defineEmits(['search'])
+const props = defineProps({
+  activeAddonViewId: {
+    type: String,
+    default: ''
+  }
+})
+const emit = defineEmits(['search', 'open-addon-view', 'close-addon-view'])
 const store = useVaultStore()
 const editorStore = useEditorStore()
+const addonsStore = useAddonsStore()
 const { currentFile } = storeToRefs(editorStore)
 const isRootDropTarget = ref(false)
 const isRootDropDisabled = ref(false)
@@ -126,6 +149,13 @@ const isRecentCollapsed = ref(false)
 const showAllRecent = ref(false)
 const recentLimit = 5
 
+const activeAddonViewId = computed(() => props.activeAddonViewId)
+const addonViews = computed(() => addonsStore.getContributions('views')
+  .filter((entry) => entry?.contribution?.id && entry?.contribution?.title)
+  .sort((left, right) => {
+    const order = Number(left.contribution.order || 0) - Number(right.contribution.order || 0)
+    return order || left.contribution.title.localeCompare(right.contribution.title)
+  }))
 const sidebarEntries = computed(() => store.rootSidebarEntries)
 const recentNotes = computed(() => {
   const notes = [...store.recentNoteEntries]
@@ -151,6 +181,21 @@ const visibleRecentNotes = computed(() => {
 const loadDirectory = async (relativePath = '') => {
   if (!store.activeVault?.path) return []
   return elephantnoteClient.directory.list(relativePath)
+}
+
+const openAllNotes = async () => {
+  emit('close-addon-view')
+  await store.openDirectory('')
+}
+
+const openDirectory = async (...args) => {
+  emit('close-addon-view')
+  return store.openDirectory(...args)
+}
+
+const openNote = (...args) => {
+  emit('close-addon-view')
+  return store.openNote(...args)
 }
 
 const handleRootDragOver = (event) => {
@@ -235,6 +280,50 @@ const handleRootDrop = async (event) => {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
+}
+
+.en-addon-views {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 6px 9px;
+}
+
+.en-addon-views-label {
+  margin: 0;
+  padding: 5px 8px;
+  color: var(--en-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.en-addon-view-button {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--en-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.en-addon-view-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.en-addon-view-button:hover,
+.en-addon-view-button.active {
+  color: var(--en-text);
+  background: color-mix(in srgb, var(--en-primary, #7c3aed) 16%, var(--en-soft));
 }
 
 .en-tags-header {

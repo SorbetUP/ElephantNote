@@ -158,6 +158,7 @@ ordered(
     '## CI skill stack',
     '../ci-architect/SKILL.md',
     '../github-actions-linter/SKILL.md',
+    '../github-actions-security/SKILL.md',
     '../anti-fake-tests/SKILL.md',
     '../tauri-ci-verifier/SKILL.md',
     '../artifact-release-gate/SKILL.md'
@@ -401,10 +402,14 @@ ordered(
   ],
   'Excalidraw byte persistence'
 )
+has(
+  'Elephant/frontend/app/components/editor/RustNoteEditorHost.vue',
+  "import { MuyaRuntimeEditor, isRustMuyaEngineAvailable } from '@/muya'",
+  'canonical Rust editor import'
+)
 ordered(
   'Elephant/frontend/app/components/editor/RustNoteEditorHost.vue',
   [
-    "import { MuyaRuntimeEditor, isRustMuyaEngineAvailable } from '@/muya'",
     '<note-editor-host />',
     'mode="active"',
     "window.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'rust'",
@@ -412,13 +417,14 @@ ordered(
   ],
   'canonical Rust editor mounted inside the real note editor shell'
 )
+has(
+  'Elephant/frontend/app/components/shell/MainContent.vue',
+  "import RustNoteEditorHost from '../editor/RustNoteEditorHost.vue'",
+  'canonical Rust editor host import'
+)
 ordered(
   'Elephant/frontend/app/components/shell/MainContent.vue',
-  [
-    "import RustNoteEditorHost from '../editor/RustNoteEditorHost.vue'",
-    '<rust-note-editor-host',
-    'v-if="hasOpenNote"'
-  ],
+  ['<rust-note-editor-host', 'v-if="hasOpenNote"'],
   'open notes route through the canonical Rust editor host'
 )
 ordered(

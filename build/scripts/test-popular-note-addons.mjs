@@ -129,7 +129,7 @@ const testWritingStatistics = async () => {
   assert.ok(first.words >= 8)
   assert.match(notes.written.get(first.path), /Largest notes/)
   const second = await command.run()
-  assert.match(notes.written.get(second.path), /Change since previous run: \+0 words, \+0 notes/)
+  assert.match(notes.written.get(second.path), /Change since previous run: 0 words, 0 notes/)
   assert.equal(storage.values.get('lastSummary').notes, 2)
   console.log(`[popular-addons] writing-statistics ok words=${first.words}`)
 }

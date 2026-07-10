@@ -8,6 +8,13 @@ const flush = async() => {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
+const editorSettingsMarkup = () => `
+  <section class="en-settings-content" data-active-section="editor">
+    <div class="en-settings-page-title"><h1>Editor</h1></div>
+    <div class="en-settings-group"></div>
+  </section>
+`
+
 const settingsState = () => ({
   executionEnabled: true,
   outputLineLimit: 200,
@@ -65,10 +72,10 @@ describe('isolated executable code settings', () => {
     document.body.innerHTML = ''
   })
 
-  it('mounts only in Settings and lists detected environments', async() => {
+  it('mounts only in Editor settings and lists detected environments', async() => {
     document.body.innerHTML = `
       <main class="en-editor-host"><pre class="ag-fence-code"><code>print(1)</code></pre></main>
-      <section class="en-settings-content"><div class="en-settings-group"></div></section>
+      ${editorSettingsMarkup()}
     `
 
     installExecutableCodeSettings(globalThis)
@@ -84,20 +91,35 @@ describe('isolated executable code settings', () => {
     expect(document.querySelector('pre').children).toHaveLength(1)
   })
 
-  it('reacts when the Settings page is mounted later', async() => {
+  it('does not mount in non-editor settings categories', async() => {
+    document.body.innerHTML = `
+      <section class="en-settings-content" data-active-section="addons">
+        <div class="en-settings-page-title"><h1>Addons</h1></div>
+        <div class="en-settings-group"></div>
+      </section>
+    `
+
     installExecutableCodeSettings(globalThis)
-    const content = document.createElement('section')
-    content.className = 'en-settings-content'
-    content.innerHTML = '<div class="en-settings-group"></div>'
-    document.body.append(content)
     await flush()
 
+    expect(document.querySelector('[data-elephant-code-settings]')).toBeNull()
+    expect(list).not.toHaveBeenCalled()
+  })
+
+  it('reacts when the Editor settings page is mounted later', async() => {
+    installExecutableCodeSettings(globalThis)
+    const wrapper = document.createElement('div')
+    wrapper.innerHTML = editorSettingsMarkup()
+    document.body.append(wrapper.firstElementChild)
+    await flush()
+
+    const content = document.querySelector('.en-settings-content')
     expect(content.querySelector('[data-elephant-code-settings]')).not.toBeNull()
     expect(list).toHaveBeenCalledTimes(1)
   })
 
   it('persists one normalized settings payload', async() => {
-    document.body.innerHTML = '<section class="en-settings-content"><div class="en-settings-group"></div></section>'
+    document.body.innerHTML = editorSettingsMarkup()
     installExecutableCodeSettings(globalThis)
     await flush()
 
@@ -120,16 +142,30 @@ describe('isolated executable code settings', () => {
     expect(document.querySelector('.en-code-settings-group').textContent).toContain('Python')
   })
 
+  it('removes code controls when the active category changes', async() => {
+    document.body.innerHTML = editorSettingsMarkup()
+    const settings = installExecutableCodeSettings(globalThis)
+    await flush()
+    expect(document.querySelector('[data-elephant-code-settings]')).not.toBeNull()
+
+    const content = document.querySelector('.en-settings-content')
+    content.dataset.activeSection = 'appearance'
+    content.querySelector('h1').textContent = 'Appearance'
+    await settings.mount()
+
+    expect(document.querySelector('[data-elephant-code-settings]')).toBeNull()
+  })
+
   it('disconnects its observer without touching the editor runtime', async() => {
     const settings = installExecutableCodeSettings(globalThis)
     settings.dispose()
 
-    const content = document.createElement('section')
-    content.className = 'en-settings-content'
-    content.innerHTML = '<div class="en-settings-group"></div>'
-    document.body.append(content)
+    const wrapper = document.createElement('div')
+    wrapper.innerHTML = editorSettingsMarkup()
+    document.body.append(wrapper.firstElementChild)
     await flush()
 
+    const content = document.querySelector('.en-settings-content')
     expect(content.querySelector('[data-elephant-code-settings]')).toBeNull()
     expect(list).not.toHaveBeenCalled()
   })

@@ -54,11 +54,27 @@ jobs:
             Elephant/backend/knowledge-core/src/wiki_core.rs
           git commit -m "Fix Codex reasoning, chat routing and Wiki synthesis"
           git push origin HEAD:${{ github.head_ref }}
+      - name: Check Tauri
+        shell: bash
+        run: |
+          set +e
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features > /tmp/tauri-check.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/tauri-check.log
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/tauri-check.log .github/tauri-ai-wiki-check-error.txt
+            git config user.name "ElephantNote Bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add .github/tauri-ai-wiki-check-error.txt
+            git commit -m "Record Tauri AI Wiki compile failure"
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
+          rm -f .github/tauri-ai-wiki-check-error.txt
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
       - name: Test knowledge core
         run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --nocapture
-      - name: Check Tauri
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features
       - name: Run focused frontend lint
         run: pnpm exec eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue

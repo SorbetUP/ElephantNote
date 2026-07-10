@@ -3,6 +3,7 @@ import { createAddonHostRuntime } from './addonHostRuntime'
 import { ElephantAddonManager } from './AddonManagerWithState'
 import { builtinAddons } from './builtin'
 import { installExternalAddonRuntime } from './externalAddonRuntime'
+import { installSettingsContributionRuntime } from './settingsContributionRuntime'
 import { useAddonsStore } from '@/store/addons'
 export { ADDON_EXTENSION_POINTS } from './extensionPoints'
 export { createAddonHostRuntime } from './addonHostRuntime'
@@ -96,6 +97,8 @@ export const installAddonSystem = (app, options = {}) => {
   } else {
     manager.logger.warn('[addons] store:not-installed')
   }
+
+  manager.settingsContributions = installSettingsContributionRuntime(manager)
 
   if (typeof window !== 'undefined') {
     window.__ELEPHANT_ADDONS__ = manager

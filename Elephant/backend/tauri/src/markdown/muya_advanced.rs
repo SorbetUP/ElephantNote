@@ -14,7 +14,11 @@ pub struct TableCellPosition {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum MuyaAdvancedCommand {
     SmartInput {
         #[serde(default)]
@@ -117,10 +121,7 @@ fn set_selection(
     anchor: usize,
     focus: usize,
 ) -> Result<MuyaEditorTransaction, String> {
-    apply_command(
-        state,
-        MuyaEditorCommand::SetSelection { anchor, focus },
-    )
+    apply_command(state, MuyaEditorCommand::SetSelection { anchor, focus })
 }
 
 fn next_char(markdown: &str, offset_utf16: usize) -> Option<char> {
@@ -159,7 +160,10 @@ fn pair_for(character: char, bracket: bool, markdown: bool) -> Option<char> {
 }
 
 fn is_closing_pair(character: char) -> bool {
-    matches!(character, ')' | ']' | '}' | '"' | '\'' | '`' | '*' | '_' | '~' | '=' | '$')
+    matches!(
+        character,
+        ')' | ']' | '}' | '"' | '\'' | '`' | '*' | '_' | '~' | '=' | '$'
+    )
 }
 
 fn smart_input(
@@ -180,7 +184,11 @@ fn smart_input(
     if start == end && text.chars().count() == 1 {
         let character = text.chars().next().unwrap_or_default();
         if is_closing_pair(character) && next_char(&state.markdown, start) == Some(character) {
-            return set_selection(state, start + character.len_utf16(), start + character.len_utf16());
+            return set_selection(
+                state,
+                start + character.len_utf16(),
+                start + character.len_utf16(),
+            );
         }
         if let Some(close) = pair_for(character, auto_pair_bracket, auto_pair_markdown_syntax) {
             let selected = String::new();
@@ -266,13 +274,15 @@ fn leading_whitespace(line: &str) -> &str {
     &line[..end]
 }
 
-fn smart_enter(
-    state: MuyaEditorState,
-    shift_key: bool,
-) -> Result<MuyaEditorTransaction, String> {
+fn smart_enter(state: MuyaEditorState, shift_key: bool) -> Result<MuyaEditorTransaction, String> {
     if state.selection.anchor != state.selection.focus {
         let replacement = if shift_key { "  \n" } else { "\n" };
-        return replace_range(state.clone(), state.selection.start(), state.selection.end(), replacement);
+        return replace_range(
+            state.clone(),
+            state.selection.start(),
+            state.selection.end(),
+            replacement,
+        );
     }
 
     let cursor = state.selection.focus;
@@ -290,12 +300,7 @@ fn smart_enter(
                     leading_whitespace(&line),
                 );
             }
-            return replace_range(
-                state,
-                cursor,
-                cursor,
-                &format!("\n{continuation}"),
-            );
+            return replace_range(state, cursor, cursor, &format!("\n{continuation}"));
         }
     }
 
@@ -363,7 +368,12 @@ fn markdown_prefix_range(markdown: &str, cursor_utf16: usize) -> Option<(usize, 
 
 fn smart_delete_backward(state: MuyaEditorState) -> Result<MuyaEditorTransaction, String> {
     if state.selection.anchor != state.selection.focus {
-        return replace_range(state.clone(), state.selection.start(), state.selection.end(), "");
+        return replace_range(
+            state.clone(),
+            state.selection.start(),
+            state.selection.end(),
+            "",
+        );
     }
     let cursor = state.selection.focus;
     if cursor == 0 {
@@ -396,7 +406,12 @@ fn smart_delete_backward(state: MuyaEditorState) -> Result<MuyaEditorTransaction
 
 fn smart_delete_forward(state: MuyaEditorState) -> Result<MuyaEditorTransaction, String> {
     if state.selection.anchor != state.selection.focus {
-        return replace_range(state.clone(), state.selection.start(), state.selection.end(), "");
+        return replace_range(
+            state.clone(),
+            state.selection.start(),
+            state.selection.end(),
+            "",
+        );
     }
     let cursor = state.selection.focus;
     if let (Some(open), Some(close)) = (
@@ -419,7 +434,12 @@ fn replace_current_word(
     text: &str,
 ) -> Result<MuyaEditorTransaction, String> {
     if state.selection.anchor != state.selection.focus {
-        return replace_range(state.clone(), state.selection.start(), state.selection.end(), text);
+        return replace_range(
+            state.clone(),
+            state.selection.start(),
+            state.selection.end(),
+            text,
+        );
     }
     let cursor_byte = utf16_to_byte_index(&state.markdown, state.selection.focus);
     let start = state.markdown[..cursor_byte]
@@ -543,7 +563,11 @@ fn reorder_table(
         }
         other => return Err(format!("unsupported table reorder axis: {other}")),
     }
-    let markdown = rows.iter().map(render_table_row).collect::<Vec<_>>().join("\n");
+    let markdown = rows
+        .iter()
+        .map(render_table_row)
+        .collect::<Vec<_>>()
+        .join("\n");
     replace_range(state, start, end, &markdown)
 }
 
@@ -588,7 +612,11 @@ fn clear_table_cells(
             .ok_or_else(|| "selected table column is out of bounds".to_string())?;
         value.clear();
     }
-    let markdown = rows.iter().map(render_table_row).collect::<Vec<_>>().join("\n");
+    let markdown = rows
+        .iter()
+        .map(render_table_row)
+        .collect::<Vec<_>>()
+        .join("\n");
     replace_range(state, start, end, &markdown)
 }
 
@@ -619,7 +647,12 @@ fn insert_block(
         "thematic-break" => "---".to_string(),
         other => return Err(format!("unsupported Muya block kind: {other}")),
     };
-    replace_range(state.clone(), state.selection.start(), state.selection.end(), &markdown)
+    replace_range(
+        state.clone(),
+        state.selection.start(),
+        state.selection.end(),
+        &markdown,
+    )
 }
 
 #[cfg(test)]
@@ -676,17 +709,12 @@ mod tests {
 
     #[test]
     fn backspace_removes_pairs_and_empty_markers_atomically() {
-        let pair = apply_advanced_command(
-            state("()", 1),
-            MuyaAdvancedCommand::SmartDeleteBackward,
-        )
-        .unwrap();
+        let pair = apply_advanced_command(state("()", 1), MuyaAdvancedCommand::SmartDeleteBackward)
+            .unwrap();
         assert_eq!(pair.state.markdown, "");
-        let marker = apply_advanced_command(
-            state("- ", 2),
-            MuyaAdvancedCommand::SmartDeleteBackward,
-        )
-        .unwrap();
+        let marker =
+            apply_advanced_command(state("- ", 2), MuyaAdvancedCommand::SmartDeleteBackward)
+                .unwrap();
         assert_eq!(marker.state.markdown, "");
     }
 

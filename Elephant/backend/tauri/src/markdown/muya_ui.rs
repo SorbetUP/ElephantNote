@@ -280,7 +280,10 @@ mod tests {
     #[test]
     fn copies_selected_markdown_and_rendered_html() {
         let mut state = MuyaEditorState::new("A **bold** B".to_string());
-        state.selection = MuyaSelection { anchor: 2, focus: 10 };
+        state.selection = MuyaSelection {
+            anchor: 2,
+            focus: 10,
+        };
         let payload = clipboard_payload(&state);
         assert_eq!(payload["markdown"], "**bold**");
         assert!(payload["html"].as_str().unwrap().contains("strong"));

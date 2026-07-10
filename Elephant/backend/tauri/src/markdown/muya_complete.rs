@@ -8,7 +8,11 @@ use super::muya_engine::{
 const HISTORY_LIMIT: usize = 100;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum MuyaCompleteCommand {
     ReplaceRange {
         start: usize,
@@ -93,9 +97,7 @@ pub fn apply_complete_command(
             indent_selected_lines(state, outdent, width.clamp(1, 8))
         }
         MuyaCompleteCommand::ToggleTask => toggle_task(state),
-        MuyaCompleteCommand::SetCodeLanguage { language } => {
-            set_code_language(state, &language)
-        }
+        MuyaCompleteCommand::SetCodeLanguage { language } => set_code_language(state, &language),
         MuyaCompleteCommand::InsertLink { url, title } => insert_link(state, &url, &title),
         MuyaCompleteCommand::RemoveLink => remove_link(state),
         MuyaCompleteCommand::SearchReplace {
@@ -192,9 +194,7 @@ fn selected_line_range(markdown: &str, selection: MuyaSelection) -> (usize, usiz
     let maximum = utf16_len(markdown);
     let start = utf16_to_byte_index(markdown, selection.start().min(maximum));
     let end = utf16_to_byte_index(markdown, selection.end().min(maximum));
-    let line_start = markdown[..start]
-        .rfind('\n')
-        .map_or(0, |index| index + 1);
+    let line_start = markdown[..start].rfind('\n').map_or(0, |index| index + 1);
     let line_end = markdown[end..]
         .find('\n')
         .map_or(markdown.len(), |offset| end + offset);
@@ -543,9 +543,7 @@ pub fn find_matches(
         } else {
             candidate.to_lowercase() == query.to_lowercase()
         };
-        if equal
-            && (!whole_word
-                || (is_start_boundary(text, start) && is_end_boundary(text, end)))
+        if equal && (!whole_word || (is_start_boundary(text, start) && is_end_boundary(text, end)))
         {
             matches.push((start, end));
         }
@@ -586,11 +584,8 @@ mod tests {
         .unwrap();
         assert_eq!(duplicated.state.markdown, "alpha\nalpha\nbeta");
         assert_eq!(duplicated.state.undo_stack.len(), 1);
-        let deleted = apply_complete_command(
-            duplicated.state,
-            MuyaCompleteCommand::DeleteBlock,
-        )
-        .unwrap();
+        let deleted =
+            apply_complete_command(duplicated.state, MuyaCompleteCommand::DeleteBlock).unwrap();
         assert_eq!(deleted.state.markdown, "alpha\nbeta");
     }
 
@@ -618,11 +613,8 @@ mod tests {
 
     #[test]
     fn toggles_tasks_and_replaces_unicode_case_insensitively() {
-        let task = apply_complete_command(
-            state("item", 0, 0),
-            MuyaCompleteCommand::ToggleTask,
-        )
-        .unwrap();
+        let task =
+            apply_complete_command(state("item", 0, 0), MuyaCompleteCommand::ToggleTask).unwrap();
         assert_eq!(task.state.markdown, "- [ ] item");
         let replaced = apply_complete_command(
             state("Été été", 0, 0),
@@ -651,7 +643,8 @@ mod tests {
         assert_eq!(linked.state.markdown, "[hello](https://example.com)");
         let mut linked_state = linked.state;
         linked_state.selection = MuyaSelection::collapsed(3);
-        let unlinked = apply_complete_command(linked_state, MuyaCompleteCommand::RemoveLink).unwrap();
+        let unlinked =
+            apply_complete_command(linked_state, MuyaCompleteCommand::RemoveLink).unwrap();
         assert_eq!(unlinked.state.markdown, "hello");
     }
 

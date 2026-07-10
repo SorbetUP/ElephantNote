@@ -8,10 +8,19 @@ use super::muya_engine::{
 use super::muya_parity::apply_table_command;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum MuyaSurfaceCommand {
-    FormatInline { format: String },
-    CreateTable { rows: usize, columns: usize },
+    FormatInline {
+        format: String,
+    },
+    CreateTable {
+        rows: usize,
+        columns: usize,
+    },
     TransformTable {
         start: usize,
         end: usize,
@@ -41,7 +50,9 @@ pub enum MuyaSurfaceCommand {
         #[serde(default)]
         label: String,
     },
-    RemoveFootnote { label: String },
+    RemoveFootnote {
+        label: String,
+    },
 }
 
 pub fn apply_surface_command(
@@ -116,10 +127,7 @@ fn selection_text(state: &MuyaEditorState) -> (usize, usize, String) {
     (start, end, state.markdown[start_byte..end_byte].to_string())
 }
 
-fn format_inline(
-    state: MuyaEditorState,
-    format: &str,
-) -> Result<MuyaEditorTransaction, String> {
+fn format_inline(state: MuyaEditorState, format: &str) -> Result<MuyaEditorTransaction, String> {
     let (start, end, selected) = selection_text(&state);
     if format == "clear" {
         let stripped = clear_inline_markup(&selected);
@@ -168,14 +176,7 @@ fn format_inline(
     let replacement = format!("{open}{selected}{close}");
     let content_start = start + utf16_len(open);
     let content_end = content_start + utf16_len(&selected);
-    replace_range_with_selection(
-        state,
-        start,
-        end,
-        replacement,
-        content_start,
-        content_end,
-    )
+    replace_range_with_selection(state, start, end, replacement, content_start, content_end)
 }
 
 fn clear_inline_markup(text: &str) -> String {
@@ -216,7 +217,12 @@ fn create_table(
     let mut lines = vec![header, separator];
     lines.extend(std::iter::repeat_n(body, rows));
     let table = lines.join("\n");
-    replace_range(state.clone(), state.selection.start(), state.selection.end(), table)
+    replace_range(
+        state.clone(),
+        state.selection.start(),
+        state.selection.end(),
+        table,
+    )
 }
 
 fn transform_table(
@@ -416,11 +422,7 @@ fn update_link(
     if href.trim().is_empty() {
         return Err("Muya link URL must not be empty".to_string());
     }
-    let label = if label.is_empty() {
-        href
-    } else {
-        label
-    };
+    let label = if label.is_empty() { href } else { label };
     let title = if title.is_empty() {
         String::new()
     } else {
@@ -434,10 +436,7 @@ fn update_link(
     )
 }
 
-fn remove_footnote(
-    state: MuyaEditorState,
-    label: &str,
-) -> Result<MuyaEditorTransaction, String> {
+fn remove_footnote(state: MuyaEditorState, label: &str) -> Result<MuyaEditorTransaction, String> {
     if label.is_empty() || label.contains([']', '\r', '\n']) {
         return Err("invalid Muya footnote label".to_string());
     }
@@ -498,7 +497,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(transformed.state.markdown.matches("|  | ").count(), 1);
-        assert!(transformed.state.markdown.starts_with("| A |\n| - |\n| 1 |"));
+        assert!(transformed
+            .state
+            .markdown
+            .starts_with("| A |\n| - |\n| 1 |"));
     }
 
     #[test]

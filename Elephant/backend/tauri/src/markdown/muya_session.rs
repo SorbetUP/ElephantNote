@@ -312,11 +312,9 @@ mod tests {
     #[test]
     fn advanced_mutations_share_the_same_native_session_history() {
         let state = MuyaEditorState::new("- item".to_string());
-        let transaction = apply_advanced_command(
-            state,
-            MuyaAdvancedCommand::SmartEnter { shift_key: false },
-        )
-        .unwrap();
+        let transaction =
+            apply_advanced_command(state, MuyaAdvancedCommand::SmartEnter { shift_key: false })
+                .unwrap();
         assert_eq!(transaction.state.markdown, "- item\n- ");
         assert_eq!(transaction.state.undo_stack.len(), 1);
     }

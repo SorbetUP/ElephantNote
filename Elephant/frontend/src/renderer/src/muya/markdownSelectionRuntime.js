@@ -15,8 +15,13 @@ const textOffsetWithin = (container, node, offset) => {
   try {
     const range = doc.createRange()
     range.setStart(container, 0)
-    range.setEnd(node, Math.min(offset, node.nodeType === 3 ? node.nodeValue.length : node.childNodes.length))
-    return range.toString().length
+    range.setEnd(
+      node,
+      Math.min(offset, node.nodeType === 3 ? node.nodeValue.length : node.childNodes.length)
+    )
+    const fragment = range.cloneContents()
+    fragment.querySelectorAll?.('[data-muya-ui="true"]').forEach((item) => item.remove())
+    return fragment.textContent?.length || 0
   } catch {
     return 0
   }
@@ -97,6 +102,10 @@ export const readMarkdownSelection = (root, selection = globalThis.getSelection?
   }
 }
 
+const isUiTextNode = (node) => Boolean(node?.parentElement?.closest?.('[data-muya-ui="true"]'))
+const isMarkerTextNode = (node) => Boolean(node?.parentElement?.closest?.('[data-muya-marker="true"]'))
+const nodeEnd = (node) => ({ node, offset: node?.nodeValue?.length || 0 })
+
 const textPointAt = (container, offset) => {
   const doc = container?.ownerDocument
   const nodeFilter = doc?.defaultView?.NodeFilter
@@ -104,17 +113,37 @@ const textPointAt = (container, offset) => {
   const walker = doc.createTreeWalker(container, nodeFilter.SHOW_TEXT)
   let remaining = Math.max(0, offset)
   let node = walker.nextNode()
-  let last = null
+  let lastEditable = null
+
   while (node) {
-    last = node
+    if (isUiTextNode(node)) {
+      node = walker.nextNode()
+      continue
+    }
+
     const length = node.nodeValue?.length || 0
+    if (isMarkerTextNode(node)) {
+      if (remaining === 0 && lastEditable) return nodeEnd(lastEditable)
+      if (remaining <= length) {
+        let next = walker.nextNode()
+        while (next && (isUiTextNode(next) || isMarkerTextNode(next))) {
+          next = walker.nextNode()
+        }
+        if (next) return { node: next, offset: 0 }
+        return lastEditable ? nodeEnd(lastEditable) : { node: container, offset: 0 }
+      }
+      remaining -= length
+      node = walker.nextNode()
+      continue
+    }
+
+    lastEditable = node
     if (remaining <= length) return { node, offset: remaining }
     remaining -= length
     node = walker.nextNode()
   }
-  return last
-    ? { node: last, offset: last.nodeValue?.length || 0 }
-    : { node: container, offset: 0 }
+
+  return lastEditable ? nodeEnd(lastEditable) : { node: container, offset: 0 }
 }
 
 const tablePointAt = (table, localOffset, markdown) => {

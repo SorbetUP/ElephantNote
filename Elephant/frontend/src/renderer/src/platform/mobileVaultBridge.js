@@ -1,5 +1,7 @@
 const getInvoke = (target = globalThis) => target?.__TAURI__?.core?.invoke
 
+const MOBILE_VAULT_CHOICE_KEY = 'elephantnote:mobile-vault-choice-v2'
+
 const invoke = (target, command, payload = {}) => {
   const invokeCommand = getInvoke(target)
   if (typeof invokeCommand !== 'function') {
@@ -8,33 +10,95 @@ const invoke = (target, command, payload = {}) => {
   return invokeCommand(command, payload)
 }
 
+const normalizePath = (value = '') => String(value || '')
+  .replace(/\\/g, '/')
+  .replace(/\/+$/g, '')
+
+const hasExplicitVaultChoice = (target) => {
+  try {
+    return target?.localStorage?.getItem(MOBILE_VAULT_CHOICE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+const rememberExplicitVaultChoice = (target) => {
+  try {
+    target?.localStorage?.setItem(MOBILE_VAULT_CHOICE_KEY, '1')
+  } catch {
+    // A constrained WebView may disable localStorage. The selected vault still remains in Rust config.
+  }
+}
+
 export const defaultMobileVaultPath = async () => {
   const { appDataDir } = await import('@tauri-apps/api/path')
   const base = await appDataDir()
   return `${String(base || '').replace(/[\\/]+$/g, '')}/vaults/Personal`
 }
 
+const hideLegacyAutomaticVaultUntilChoice = async (payload, target) => {
+  if (!payload || hasExplicitVaultChoice(target)) return payload
+  const privatePath = normalizePath(await defaultMobileVaultPath())
+  const activePath = normalizePath(payload?.activeVault?.path)
+  if (!activePath || activePath !== privatePath) return payload
+  return {
+    ...payload,
+    activeVaultId: null,
+    activeVault: null,
+    workspace: null,
+    entries: [],
+    requiresVaultChoice: true
+  }
+}
+
 export const patchMobileVaultBridge = (bridge, target = globalThis) => {
   if (!bridge || typeof bridge !== 'object' || bridge.__elephantnoteMobileVaultBridge) return bridge
 
+  const originalGetVaults = typeof bridge.getVaults === 'function'
+    ? bridge.getVaults.bind(bridge)
+    : null
   const originalSelectVault = typeof bridge.selectVault === 'function'
     ? bridge.selectVault.bind(bridge)
     : null
 
-  bridge.createLocalVault = async () => invoke(target, 'tauri_vaults_select_path', {
-    vaultPath: await defaultMobileVaultPath()
-  })
+  if (originalGetVaults) {
+    bridge.getVaults = async () => hideLegacyAutomaticVaultUntilChoice(
+      await originalGetVaults(),
+      target
+    )
+  }
+
+  bridge.createLocalVault = async () => {
+    const result = await invoke(target, 'tauri_vaults_select_path', {
+      vaultPath: await defaultMobileVaultPath()
+    })
+    rememberExplicitVaultChoice(target)
+    return result
+  }
 
   bridge.selectVault = async () => {
-    if (originalSelectVault) {
-      try {
-        const result = await originalSelectVault()
-        if (result && !result.canceled) return result
-      } catch (error) {
-        console.warn('[vault] native directory picker unavailable, using phone vault', error)
-      }
+    if (!originalSelectVault) {
+      throw new Error('The Android folder picker is unavailable in this build.')
     }
-    return bridge.createLocalVault()
+
+    const previousPrivatePath = normalizePath(await defaultMobileVaultPath())
+    const result = await originalSelectVault()
+    const selectedPath = normalizePath(result?.activeVault?.path)
+
+    // The base bridge historically returned the current vault when the Android
+    // picker was cancelled. Convert that ambiguous response into a real cancel.
+    if (!selectedPath || (!hasExplicitVaultChoice(target) && selectedPath === previousPrivatePath)) {
+      return { canceled: true }
+    }
+
+    if (selectedPath.startsWith('content://')) {
+      throw new Error(
+        'Android returned a document URI instead of a filesystem folder. This build cannot safely use that folder as a vault yet.'
+      )
+    }
+
+    rememberExplicitVaultChoice(target)
+    return result
   }
 
   Object.defineProperty(bridge, '__elephantnoteMobileVaultBridge', {

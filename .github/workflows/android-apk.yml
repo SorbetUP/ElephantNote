@@ -12,6 +12,8 @@ on:
       - 'Elephant/frontend/**'
       - 'build/android/**'
       - 'build/scripts/build_dev_apk.sh'
+      - 'tests/app/unit/specs/main/elephantnote/mobileAndroidRelease.spec.js'
+      - 'tests/app/unit/specs/main/elephantnote/mobileCreationContracts.spec.js'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'vite.tauri.config.js'
@@ -23,6 +25,8 @@ on:
       - 'Elephant/frontend/**'
       - 'build/android/**'
       - 'build/scripts/build_dev_apk.sh'
+      - 'tests/app/unit/specs/main/elephantnote/mobileAndroidRelease.spec.js'
+      - 'tests/app/unit/specs/main/elephantnote/mobileCreationContracts.spec.js'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'vite.tauri.config.js'
@@ -51,12 +55,13 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - name: Verify restored mobile shell and Android release contract
+      - name: Verify mobile shell, creation and Android release contracts
         shell: bash
         run: |
           set -euxo pipefail
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/specs/main/elephantnote/mobileAndroidRelease.spec.js
+            tests/app/unit/specs/main/elephantnote/mobileAndroidRelease.spec.js \
+            tests/app/unit/specs/main/elephantnote/mobileCreationContracts.spec.js
 
       - name: Capture responsive Settings contract
         id: settings_contract

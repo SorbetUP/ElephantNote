@@ -61,10 +61,13 @@
           @toggle-sidebar="toggleSidebar"
         />
         <button
-          v-if="isMobileShell && sidebarVisible"
+          v-if="isMobileShell"
           class="en-mobile-scrim"
+          :class="{ visible: sidebarVisible }"
           type="button"
           aria-label="Close navigation"
+          :aria-hidden="!sidebarVisible"
+          :tabindex="sidebarVisible ? 0 : -1"
           @click="closeMobileSidebar"
         />
         <div
@@ -72,7 +75,7 @@
           :class="{ 'en-sidebar-hidden': !sidebarVisible }"
         >
           <sidebar-nav
-            v-if="sidebarVisible"
+            v-if="sidebarVisible || isMobileShell"
             @search="openSearch"
             @click.capture="handleMobileSidebarClick"
           />
@@ -193,17 +196,18 @@ const closeMobileSidebar = () => {
 const handleMobileSidebarClick = (event) => {
   if (!isMobileShell.value) return
   if (event.target?.closest?.('button')) {
-    window.setTimeout(closeMobileSidebar, 80)
+    window.requestAnimationFrame(closeMobileSidebar)
   }
 }
 
 const updateMobileShell = () => {
   const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches
   const narrowViewport = window.matchMedia?.('(max-width: 760px)').matches
+  const wasMobile = isMobileShell.value
   isMobileShell.value = !!(coarsePointer || narrowViewport)
-  if (isMobileShell.value) {
+  if (isMobileShell.value && !wasMobile) {
     sidebarVisible.value = false
-  } else if (!sidebarVisible.value) {
+  } else if (!isMobileShell.value && !sidebarVisible.value) {
     sidebarVisible.value = true
   }
 }
@@ -305,6 +309,20 @@ const handleTabSaved = (_event, tabId) => {
   }
 }
 
+const refreshVisibleVaultFiles = async () => {
+  if (!store.activeVault?.path) return
+  try {
+    const currentPath = store.currentPath || ''
+    const entries = await elephantnoteClient.directory.list(currentPath)
+    store.entries = Array.isArray(entries) ? entries : []
+    store.rootEntries = currentPath
+      ? await elephantnoteClient.directory.list('')
+      : store.entries
+  } catch (error) {
+    console.warn('Unable to refresh the vault after synchronization:', error)
+  }
+}
+
 const applyAiConfigVisibility = (config = {}) => {
   localAi.value = { ...localAi.value, ...(config.localAi || {}) }
   if (!showLocalModelLibrary.value && store.activeWorkspaceView === 'models') {
@@ -331,6 +349,7 @@ onMounted(() => {
   window.screen?.orientation?.addEventListener?.('change', updateMobileShell)
   window.addEventListener('keydown', handleShortcut)
   window.addEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
+  window.addEventListener('elephantnote:vault-files-changed', refreshVisibleVaultFiles)
   window.tauri.ipcRenderer.on('mt::tab-saved', handleTabSaved)
   setTheme(theme.value)
   const storedWidth = Number(window.localStorage.getItem('elephantnote:sidebarWidth'))
@@ -351,6 +370,7 @@ onBeforeUnmount(() => {
   window.screen?.orientation?.removeEventListener?.('change', updateMobileShell)
   window.removeEventListener('keydown', handleShortcut)
   window.removeEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
+  window.removeEventListener('elephantnote:vault-files-changed', refreshVisibleVaultFiles)
   if (sidebarResizeFrame) {
     window.cancelAnimationFrame(sidebarResizeFrame)
     sidebarResizeFrame = null
@@ -538,14 +558,15 @@ onBeforeUnmount(() => {
     max-width: calc(100vw - 28px);
     z-index: 50;
     border-right: 1px solid var(--en-border);
-    transform: translateX(-104%);
-    transition: transform 0.2s ease;
+    transform: translate3d(-104%, 0, 0);
+    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
     padding-top: env(safe-area-inset-top, 0px);
     box-shadow: 18px 0 44px rgba(0, 0, 0, 0.38);
   }
 
   .en-mobile-shell.en-mobile-drawer-open :deep(.en-sidebar) {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
 
   .en-mobile-scrim {
@@ -554,7 +575,15 @@ onBeforeUnmount(() => {
     display: block;
     z-index: 45;
     border: 0;
+    opacity: 0;
+    pointer-events: none;
     background: rgba(0, 0, 0, 0.46);
+    transition: opacity 220ms ease;
+  }
+
+  .en-mobile-scrim.visible {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .en-mobile-fab {

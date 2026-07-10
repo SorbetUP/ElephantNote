@@ -10,22 +10,28 @@
         >
         <span class="en-logo-fallback">EN</span>
       </div>
-      <h1>Choose your first vault</h1>
-      <p>Create a private vault on this phone, or choose a folder when the Android picker is available.</p>
+      <h1>Select your vault folder</h1>
+      <p>
+        Choose the folder on this phone that ElephantNote should read, edit and synchronize.
+        That folder is your vault; its notes, folders and assets stay together.
+      </p>
       <button
         class="en-primary-button"
         type="button"
-        @click="$emit('create-local')"
+        @click="$emit('choose')"
       >
-        Create phone vault
+        Choose vault folder
       </button>
       <button
         class="en-secondary-button"
         type="button"
-        @click="$emit('choose')"
+        @click="$emit('create-local')"
       >
-        Choose folder
+        Use private app folder instead
       </button>
+      <small>
+        The Android system picker grants access only to the folder you select. The private app folder is isolated from file-manager apps and should be used only when you do not need a visible phone folder.
+      </small>
     </section>
   </main>
 </template>
@@ -85,7 +91,8 @@ defineEmits(['choose', 'create-local'])
 }
 
 .en-empty-card h1,
-.en-empty-card p {
+.en-empty-card p,
+.en-empty-card small {
   margin: 0;
 }
 
@@ -97,6 +104,13 @@ defineEmits(['choose', 'create-local'])
 .en-empty-card p {
   color: var(--en-muted, #98a3b6);
   font-size: 16px;
+  line-height: 1.45;
+}
+
+.en-empty-card small {
+  max-width: 360px;
+  color: var(--en-muted, #98a3b6);
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -124,7 +138,7 @@ defineEmits(['choose', 'create-local'])
 
 .en-primary-button,
 .en-secondary-button {
-  width: min(260px, 100%);
+  width: min(300px, 100%);
 }
 
 @media (max-width: 760px), (pointer: coarse) {

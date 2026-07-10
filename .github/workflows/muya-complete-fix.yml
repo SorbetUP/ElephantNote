@@ -1,0 +1,100 @@
+name: Fix complete Muya Rust core
+
+on:
+  push:
+    branches:
+      - feature/rust-muya-editor-core
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-muya-editor-core
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Fix Rust ownership core and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('Elephant/backend/tauri/src/markdown/muya_complete.rs')
+          text = path.read_text()
+          text = text.replace(
+              "line.trim_start_matches([' ', '\\t']).len()",
+              "line.trim_start_matches(|character| matches!(character, ' ' | '\\t')).len()",
+          )
+          text = text.replace(
+              "if url.trim().is_empty() || url.contains(['\\r', '\\n']) {",
+              "if url.trim().is_empty() || url.contains('\\r') || url.contains('\\n') {",
+          )
+          old = '''    apply_replace_range(
+              state,
+              byte_to_utf16(&state.markdown, start),
+              byte_to_utf16(&state.markdown, end),
+              replacement,
+          )'''
+          new = '''    let start_utf16 = byte_to_utf16(&state.markdown, start);
+          let end_utf16 = byte_to_utf16(&state.markdown, end);
+          apply_replace_range(state, start_utf16, end_utf16, replacement)'''
+          if old not in text:
+              raise SystemExit('insert_link replace-range anchor not found')
+          text = text.replace(old, new, 1)
+          old = '''    apply_replace_range(
+              state,
+              byte_to_utf16(&state.markdown, open),
+              byte_to_utf16(&state.markdown, close + 1),
+              label,
+          )'''
+          new = '''    let start_utf16 = byte_to_utf16(&state.markdown, open);
+          let end_utf16 = byte_to_utf16(&state.markdown, close + 1);
+          apply_replace_range(state, start_utf16, end_utf16, label)'''
+          if old not in text:
+              raise SystemExit('remove_link replace-range anchor not found')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              '''        let valid = !whole_word
+                      || (is_word_boundary(&state.markdown, start) && is_word_boundary(&state.markdown, end));''',
+              '''        let valid = !whole_word
+                      || (is_start_boundary(&state.markdown, start)
+                          && is_end_boundary(&state.markdown, end));''',
+          )
+          old = '''fn is_word_boundary(text: &str, byte_index: usize) -> bool {
+              let before = text[..byte_index.min(text.len())].chars().next_back();
+              let after = text[byte_index.min(text.len())..].chars().next();
+              before.map_or(true, |character| !character.is_alphanumeric() && character != '_')
+                  || after.map_or(true, |character| !character.is_alphanumeric() && character != '_')
+          }'''
+          new = '''fn is_start_boundary(text: &str, byte_index: usize) -> bool {
+              text[..byte_index.min(text.len())]
+                  .chars()
+                  .next_back()
+                  .map_or(true, |character| !character.is_alphanumeric() && character != '_')
+          }
+
+          fn is_end_boundary(text: &str, byte_index: usize) -> bool {
+              text[byte_index.min(text.len())..]
+                  .chars()
+                  .next()
+                  .map_or(true, |character| !character.is_alphanumeric() && character != '_')
+          }'''
+          if old not in text:
+              raise SystemExit('word-boundary helper anchor not found')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+          Path('.github/workflows/muya-complete-fix.yml').unlink()
+          PY
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+          git config user.name 'ElephantNote CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add Elephant/backend/tauri/src/markdown/muya_complete.rs .github/workflows/muya-complete-fix.yml
+          git commit -m 'fix(muya): make complete Rust core compile and preserve word boundaries'
+          git push origin HEAD:feature/rust-muya-editor-core

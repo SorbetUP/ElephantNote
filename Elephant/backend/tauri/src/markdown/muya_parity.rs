@@ -17,7 +17,7 @@ pub struct MuyaTextOperation {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum MuyaParityCommand {
   ApplyOperation { operation: MuyaTextOperation },
   KeyboardRule { key: String, #[serde(default)] shift_key: bool },
@@ -63,13 +63,14 @@ fn apply_text_operation(
   let maximum = utf16_len(&state.markdown);
   let start = operation.pos.min(maximum);
   let end = start.saturating_add(operation.count).min(maximum);
-  let replacement = match operation.r#type.as_str() {
+  let operation_type = operation.r#type.clone();
+  let replacement = match operation_type.as_str() {
     "insert" => operation.text,
     "delete" => String::new(),
     "replace" => operation.text,
     other => return Err(format!("unsupported Muya text operation: {other}")),
   };
-  let selection_end = if operation.r#type == "insert" { start } else { end };
+  let selection_end = if operation_type == "insert" { start } else { end };
   state = apply_command(
     state,
     MuyaEditorCommand::SetSelection { anchor: start, focus: selection_end },
@@ -125,8 +126,11 @@ pub fn apply_keyboard_rule(markdown: &str, key: &str, shift_key: bool) -> String
 }
 
 fn list_continuation(line: &str) -> Option<String> {
-  let indentation_len = line.chars().take_while(|ch| matches!(ch, ' ' | '\t')).count();
-  let (indentation, content) = line.split_at(indentation_len);
+  let indentation_end = line
+    .char_indices()
+    .find(|(_, character)| !matches!(character, ' ' | '\t'))
+    .map_or(line.len(), |(index, _)| index);
+  let (indentation, content) = line.split_at(indentation_end);
 
   for prefix in ["- [ ] ", "- [x] ", "- [X] "] {
     if content.starts_with(prefix) {
@@ -234,7 +238,7 @@ fn format_table_row(cells: &[String]) -> String {
 }
 
 pub fn resize_image(markdown: &str, cursor_utf16: usize, width: &str) -> Result<String, String> {
-  if width.is_empty() || width.contains(['\n', '\r', '}']) {
+  if width.is_empty() || width.chars().any(|character| matches!(character, '\n' | '\r' | '}')) {
     return Err("invalid Muya image width".to_string());
   }
   let cursor = utf16_to_byte_index(markdown, cursor_utf16);
@@ -253,10 +257,12 @@ struct ImageMatch<'a> {
 fn image_at_cursor(markdown: &str, cursor: usize) -> Option<ImageMatch<'_>> {
   for (start, _) in markdown.match_indices("![") {
     let alt_start = start + 2;
-    let alt_end = alt_start + markdown[alt_start..].find(']')?;
+    let Some(alt_end_relative) = markdown[alt_start..].find(']') else { continue; };
+    let alt_end = alt_start + alt_end_relative;
     if markdown.as_bytes().get(alt_end + 1) != Some(&b'(') { continue; }
     let url_start = alt_end + 2;
-    let url_end = url_start + markdown[url_start..].find(')')?;
+    let Some(url_end_relative) = markdown[url_start..].find(')') else { continue; };
+    let url_end = url_start + url_end_relative;
     let mut end = url_end + 1;
     if markdown[end..].starts_with("{width=") {
       if let Some(relative) = markdown[end..].find('}') {
@@ -276,7 +282,7 @@ fn image_at_cursor(markdown: &str, cursor: usize) -> Option<ImageMatch<'_>> {
 }
 
 pub fn upsert_footnote(markdown: &str, label: &str, text: &str) -> Result<String, String> {
-  if label.is_empty() || label.contains([']', '\n', '\r']) {
+  if label.is_empty() || label.chars().any(|character| matches!(character, ']' | '\n' | '\r')) {
     return Err("invalid Muya footnote label".to_string());
   }
   let prefix = format!("[^{label}]:");
@@ -347,8 +353,8 @@ mod tests {
   #[test]
   fn supports_complete_table_command_matrix() {
     let table = "| A | B |\n| - | - |\n| 1 | 2 |";
-    assert!(apply_table_command(table, "insert_row", 1).unwrap().lines().count() == 4);
-    assert!(apply_table_command(table, "delete_row", 0).unwrap().lines().count() == 2);
+    assert_eq!(apply_table_command(table, "insert_row", 1).unwrap().lines().count(), 4);
+    assert_eq!(apply_table_command(table, "delete_row", 0).unwrap().lines().count(), 2);
     assert!(apply_table_command(table, "insert_column", 1).unwrap().contains("A |  | B"));
     assert!(apply_table_command(table, "delete_column", 0).unwrap().contains("| B |"));
     assert!(apply_table_command(table, "align_center", 1).unwrap().contains(":---:"));
@@ -359,6 +365,13 @@ mod tests {
     let markdown = "before ![Alt](pic.png){width=25%} after";
     let result = resize_image(markdown, 12, "75%").unwrap();
     assert_eq!(result, "before ![Alt](pic.png){width=75%} after");
+  }
+
+  #[test]
+  fn skips_malformed_images_and_finds_the_valid_one() {
+    let markdown = "![broken then ![Alt](pic.png)";
+    let result = resize_image(markdown, 24, "50%").unwrap();
+    assert!(result.ends_with("![Alt](pic.png){width=50%}"));
   }
 
   #[test]
@@ -381,5 +394,6 @@ mod tests {
   fn rejects_unknown_mutations_instead_of_silently_ignoring_them() {
     assert!(apply_table_command("| A |\n| - |", "explode", 0).is_err());
     assert!(upsert_footnote("Body", "bad]label", "x").is_err());
+    assert!(resize_image("![](a)", 1, "bad}").is_err());
   }
 }

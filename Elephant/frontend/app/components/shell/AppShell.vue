@@ -20,9 +20,12 @@
       <top-vault-bar :sidebar-visible="sidebarVisible" />
       <div class="en-layout">
         <icon-rail
+          :active-addon-view-id="activeAddonViewId"
           @open-settings="openSettings"
           @search="openSearch"
           @toggle-sidebar="toggleSidebar"
+          @open-addon-view="openAddonView"
+          @close-addon-view="closeAddonView"
         />
         <div
           class="en-body"
@@ -168,6 +171,11 @@ watch(theme, (mode) => {
 watch(
   () => [store.activeWorkspaceView, store.openedNotePath, store.activeVaultId],
   ([workspaceView, openedNotePath]) => {
+    if (workspaceView === 'calendar') {
+      store.setWorkspaceView('notes', { record: false })
+      activeAddonViewId.value = ''
+      return
+    }
     if (openedNotePath || workspaceView !== 'notes') activeAddonViewId.value = ''
   }
 )

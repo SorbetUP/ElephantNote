@@ -3,11 +3,14 @@ import { storeToRefs } from 'pinia'
 import { open } from '@tauri-apps/plugin-dialog'
 import log from '@/platform/runtimeLogShim'
 import { getAddonActions } from '@/addons'
+import { isTrustedAddonManifest } from '@/addons/manifest'
 import { useAddonsStore } from '@/store/addons'
 
 export const useAddonsSettings = () => {
   const addonsStore = useAddonsStore()
   const riskAccepted = ref(false)
+  const trustAccepted = ref(false)
+  const pendingTrustedAddon = ref(null)
   const query = ref('')
   const expandedAddonId = ref('')
   const message = ref('')
@@ -21,6 +24,9 @@ export const useAddonsSettings = () => {
     catalogError,
     communityAddonsEnabled,
     communityConsentLoaded,
+    trustedApprovals,
+    trustedSafeMode,
+    trustedStateLoaded,
     operationInProgress,
     lastError
   } = storeToRefs(addonsStore)
@@ -73,23 +79,32 @@ export const useAddonsSettings = () => {
     try {
       await addonsStore.setCommunityAddonsEnabled(true)
       riskAccepted.value = false
-      showMessage('Community addons are available. Installed packages remain individually disabled until you enable them.')
-      log.info('[settings:addons] community:enabled')
+      showMessage('Community addons are available. Every addon remains individually disabled until you enable it.')
       await refreshCatalog()
+      await addonsStore.loadTrustedState()
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
-      log.error('[settings:addons] community:enable-failed', error)
     }
   }
 
   const disableCommunityAddons = async () => {
     try {
       await addonsStore.setCommunityAddonsEnabled(false)
+      pendingTrustedAddon.value = null
       expandedAddonId.value = ''
-      log.info('[settings:addons] community:disabled')
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
-      log.error('[settings:addons] community:disable-failed', error)
+    }
+  }
+
+  const toggleTrustedSafeMode = async () => {
+    try {
+      const enabled = await addonsStore.setTrustedSafeMode(!trustedSafeMode.value)
+      showMessage(enabled
+        ? 'Safe mode enabled. Full app access addons are stopped and will not start automatically.'
+        : 'Safe mode disabled. Trusted addons remain disabled until you enable them.')
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : String(error), true)
     }
   }
 
@@ -101,43 +116,72 @@ export const useAddonsSettings = () => {
         filters: [{ name: 'ElephantNote addon', extensions: ['enaddon', 'zip'] }]
       })
       if (typeof selected !== 'string' || !selected) return
-      log.info('[settings:addons] install:start', { packagePath: selected })
       const result = await addonsStore.installExternalAddon(selected)
       expandedAddonId.value = result.manifest.id
-      showMessage(`Installed ${result.manifest.name}. Review its permissions, then enable it.`)
-      log.info('[settings:addons] install:done', { id: result.manifest.id, packagePath: selected })
+      showMessage(`Installed ${result.manifest.name}. Review its access level before enabling it.`)
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
-      log.error('[settings:addons] install:failed', error)
     }
   }
 
   const installCatalogAddon = async (addon) => {
     try {
-      log.info('[settings:addons] catalog-install:start', { id: addon.id, version: addon.version })
       const result = await addonsStore.installCatalogAddon(addon.id)
       expandedAddonId.value = result.manifest.id
-      showMessage(`${addon.updateAvailable ? 'Updated' : 'Installed'} ${result.manifest.name}. Review its permissions, then enable it.`)
-      log.info('[settings:addons] catalog-install:done', {
-        id: result.manifest.id,
-        version: result.manifest.version
-      })
+      showMessage(`${addon.updateAvailable ? 'Updated' : 'Installed'} ${result.manifest.name}. Review its access level before enabling it.`)
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
-      log.error('[settings:addons] catalog-install:failed', { id: addon.id, error })
+    }
+  }
+
+  const requestTrustedApproval = (addon) => {
+    pendingTrustedAddon.value = addon
+    trustAccepted.value = false
+    expandedAddonId.value = addon.manifest.id
+  }
+
+  const cancelTrustedApproval = () => {
+    pendingTrustedAddon.value = null
+    trustAccepted.value = false
+  }
+
+  const approveAndEnableTrusted = async () => {
+    const addon = pendingTrustedAddon.value
+    if (!addon || !trustAccepted.value) return
+    try {
+      await addonsStore.approveTrustedAddon(addon.manifest.id)
+      await addonsStore.enableAddon(addon.manifest.id)
+      showMessage(`${addon.manifest.name} now has full app access and is enabled.`)
+      cancelTrustedApproval()
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : String(error), true)
+    }
+  }
+
+  const revokeTrustedApproval = async (addon) => {
+    try {
+      await addonsStore.revokeTrustedAddon(addon.manifest.id)
+      showMessage(`Full app access was revoked for ${addon.manifest.name}.`)
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : String(error), true)
     }
   }
 
   const toggleAddon = async (addon) => {
     const nextEnabled = !addon.enabled
-    log.info('[settings:addons] toggle:start', { id: addon.manifest.id, enabled: nextEnabled })
+    if (nextEnabled && addon.manifest.source === 'external' && isTrustedAddonManifest(addon.manifest)) {
+      if (!trustedStateLoaded.value) await addonsStore.loadTrustedState()
+      if (!trustedApprovals.value[addon.manifest.id]?.approved) {
+        requestTrustedApproval(addon)
+        return
+      }
+    }
     try {
       await addonsStore.setAddonEnabled(addon.manifest.id, nextEnabled)
       showMessage(`${addon.manifest.name} ${nextEnabled ? 'enabled' : 'disabled'}.`)
-      log.info('[settings:addons] toggle:done', { id: addon.manifest.id, enabled: nextEnabled })
     } catch (error) {
-      showMessage(error instanceof Error ? error.message : String(error), true)
-      log.error('[settings:addons] toggle:failed', { id: addon.manifest.id, error })
+      if (error?.code === 'TRUST_REQUIRED') requestTrustedApproval(addon)
+      else showMessage(error instanceof Error ? error.message : String(error), true)
     }
   }
 
@@ -145,20 +189,17 @@ export const useAddonsSettings = () => {
     try {
       await addonsStore.uninstallExternalAddon(addon.manifest.id)
       if (expandedAddonId.value === addon.manifest.id) expandedAddonId.value = ''
+      if (pendingTrustedAddon.value?.manifest?.id === addon.manifest.id) cancelTrustedApproval()
       showMessage(`Uninstalled ${addon.manifest.name}. Its private data was kept.`)
-      log.info('[settings:addons] uninstall:done', { id: addon.manifest.id })
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
-      log.error('[settings:addons] uninstall:failed', { id: addon.manifest.id, error })
     }
   }
 
   const runAction = async (action) => {
-    log.info('[settings:addons] action:start', { id: action.id, addonId: action.addonId })
     try {
       const result = await addonsStore.runAction(action.id)
       showMessage(`${action.title} completed${result?.path ? `: ${result.path}` : '.'}`)
-      log.info('[settings:addons] action:done', { id: action.id, result })
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
       log.error('[settings:addons] action:failed', { id: action.id, error })
@@ -167,17 +208,15 @@ export const useAddonsSettings = () => {
 
   onMounted(async () => {
     if (!communityConsentLoaded.value) await addonsStore.loadCommunityAddonsConsent()
-    if (communityAddonsEnabled.value) await refreshCatalog()
-    log.info('[settings:addons] mounted', {
-      registered: items.value.map((addon) => addon.manifest.id),
-      enabled: items.value.filter((addon) => addon.enabled).map((addon) => addon.manifest.id),
-      communityEnabled: communityAddonsEnabled.value,
-      catalog: catalog.value.map((addon) => addon.id)
-    })
+    if (communityAddonsEnabled.value) {
+      await Promise.allSettled([refreshCatalog(), addonsStore.loadTrustedState()])
+    }
   })
 
   return {
     riskAccepted,
+    trustAccepted,
+    pendingTrustedAddon,
     query,
     expandedAddonId,
     message,
@@ -186,6 +225,8 @@ export const useAddonsSettings = () => {
     catalogError,
     communityAddonsEnabled,
     communityConsentLoaded,
+    trustedApprovals,
+    trustedSafeMode,
     operationInProgress,
     lastError,
     filteredBuiltInAddons,
@@ -196,8 +237,13 @@ export const useAddonsSettings = () => {
     refreshCatalog,
     enableCommunityAddons,
     disableCommunityAddons,
+    toggleTrustedSafeMode,
     installAddonPackage,
     installCatalogAddon,
+    requestTrustedApproval,
+    cancelTrustedApproval,
+    approveAndEnableTrusted,
+    revokeTrustedApproval,
     toggleAddon,
     uninstallAddon,
     runAction

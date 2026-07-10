@@ -1,18 +1,22 @@
 name: Diagnose editor state once
 
 on:
-  push:
+  pull_request:
     branches:
       - feature/wiki-knowledge-continuation
+    types: [opened, synchronize]
 
 permissions:
   contents: read
 
 jobs:
   diagnose:
+    if: github.head_ref == 'assistant/diagnose-editor-state'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
       - name: Locate editor load/save implementation
         shell: bash
         run: |

@@ -37,6 +37,12 @@ const fallbackRelativePath = (vaultRoot = '', filePath = '') => {
   return file.slice(prefix.length)
 }
 
+const normalizeSafeRelativePath = (value = '') => {
+  const normalized = normalizePath(value).replace(/^\.\//, '').replace(/^\/+/, '')
+  if (!normalized || normalized === '..' || normalized.startsWith('../') || normalized.includes('/../')) return ''
+  return normalized
+}
+
 const dispatchLocalIpcEvent = (target, channel, args) => {
   target.dispatchEvent(new CustomEvent(channel, { detail: args }))
 }
@@ -45,12 +51,14 @@ const getBasename = (target, pathname = '') => (
   target.path?.basename?.(pathname) || normalizePath(pathname).split('/').filter(Boolean).pop() || 'Untitled.md'
 )
 
-const getRelativeVaultPath = (target, vaultRoot = '', filePath = '') => {
-  if (!vaultRoot || !filePath) return ''
+export const getRelativeVaultPath = (target, vaultRoot = '', filePath = '') => {
+  if (!filePath) return ''
+  if (!isAbsolutePath(filePath)) return normalizeSafeRelativePath(filePath)
+  if (!vaultRoot) return ''
 
   const relative = target.path?.relative?.(vaultRoot, filePath) || fallbackRelativePath(vaultRoot, filePath)
   if (!relative || relative.startsWith('..') || isAbsolutePath(relative)) return ''
-  return normalizePath(relative)
+  return normalizeSafeRelativePath(relative)
 }
 
 const readVaultNote = async(target, relativePath) => {
@@ -59,6 +67,24 @@ const readVaultNote = async(target, relativePath) => {
   }
   if (typeof target.elephantnote?.readNote === 'function') {
     return target.elephantnote.readNote({ relativePath })
+  }
+  return null
+}
+
+const getUnfilteredVaultPayload = async(target) => {
+  const nativeInvoke = target.__TAURI__?.core?.invoke
+  if (typeof nativeInvoke === 'function') {
+    try {
+      const payload = await nativeInvoke('tauri_vaults_get')
+      if (payload?.activeVault?.path) return payload
+    } catch (error) {
+      console.warn('[tauri:local-ipc] direct vault lookup failed', {
+        error: error?.message || String(error)
+      })
+    }
+  }
+  if (typeof target.elephantnote?.getVaults === 'function') {
+    return target.elephantnote.getVaults()
   }
   return null
 }
@@ -82,14 +108,14 @@ const openAssetExternally = async(target, filePath, channel) => {
 
 const openVaultNoteWithBackend = async(target, channel, args) => {
   const filePath = args[0]
-  if (!filePath || typeof target.elephantnote?.getVaults !== 'function') return false
+  if (!filePath) return false
 
   if (isAssetPath(filePath) || !isMarkdownPath(filePath)) {
     return openAssetExternally(target, filePath, channel)
   }
 
   try {
-    const payload = await target.elephantnote.getVaults()
+    const payload = await getUnfilteredVaultPayload(target)
     const vaultRoot = payload?.activeVault?.path || ''
     const relativePath = getRelativeVaultPath(target, vaultRoot, filePath)
     if (!relativePath) return false

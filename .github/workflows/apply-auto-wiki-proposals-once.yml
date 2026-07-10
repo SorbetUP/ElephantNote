@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/wiki-knowledge-continuation
+  pull_request:
+    branches:
+      - feature/rust-knowledge-core
   workflow_dispatch:
 
 permissions:
@@ -62,8 +65,6 @@ jobs:
                   text=True,
               ).stdout
 
-          # Keep the Codex protocol implementation in sync with the branch that
-          # already fixed the app-server turn sandbox enum and account commands.
           for path in [
               'Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs',
               'Elephant/backend/tauri/src/chat_runtime/codex_app_server/codex_runtime_installer.rs',
@@ -71,8 +72,6 @@ jobs:
           ]:
               write(path, from_branch(path))
 
-          # The knowledge branch owns its own chat command. Add real Codex routing
-          # without replacing the knowledge-grounded local path.
           chat_path = 'Elephant/backend/tauri/src/chat_runtime.rs'
           chat = read(chat_path)
           old_model = '''fn selected_chat_model(payload: &Value) -> String {
@@ -221,7 +220,6 @@ fn selected_chat_model(payload: &Value) -> String {
 
           wiki_path = 'Elephant/backend/tauri/src/knowledge_wikis.rs'
           wiki = read(wiki_path)
-          wiki = wiki.replace('use rusqlite', 'use rusqlite')
           wiki = wiki.replace(
               'use std::collections::HashSet;',
               'use rusqlite::Connection;\nuse std::collections::{HashMap, HashSet};',
@@ -561,7 +559,6 @@ pub async fn tauri_knowledge_wikis_auto_propose(
         </section>
 '''
           view = view[:old_form.start()] + automatic_panel + view[old_form.end():]
-          view = view.replace("import { computed, onMounted, reactive, ref } from 'vue'", "import { computed, onMounted, reactive, ref } from 'vue'")
           form_block = '''const form = reactive({
   topic: '',
   title: '',
@@ -630,7 +627,6 @@ const initializeWiki = async () => {
 const acceptDraft'''
           view = view[:generate_fn.start()] + auto_functions + view[generate_fn.end():]
           view = view.replace('onMounted(refresh)', 'onMounted(initializeWiki)')
-          view = view.replace('.knowledge-field small {', '.knowledge-field small {')
           style_marker = '''.knowledge-section-heading span,
 .knowledge-field small {
 '''
@@ -670,7 +666,6 @@ const acceptDraft'''
               view = view.replace(style_marker, candidate_css + style_marker, 1)
           write(wiki_view_path, view)
 
-          # One-shot workflow must not remain in the product branch.
           Path('.github/workflows/apply-auto-wiki-proposals-once.yml').unlink()
 
       - name: Format Rust

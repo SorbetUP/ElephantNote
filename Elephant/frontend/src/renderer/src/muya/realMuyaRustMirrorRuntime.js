@@ -174,16 +174,17 @@ export const createRealMuyaRustMirror = ({
   }
 
   const drain = async() => {
-    while (!destroyed && pending) {
-      const next = pending
-      pending = null
-      const sameMarkdown = next.markdown === lastValidatedMarkdown
-      const sameSelection = lastValidatedSelection &&
-        next.selection.anchor === lastValidatedSelection.anchor &&
-        next.selection.focus === lastValidatedSelection.focus
-      if (next.kind !== 'reset' && sameMarkdown && sameSelection) continue
+    if (destroyed || !pending) return
+    const next = pending
+    pending = null
+    const sameMarkdown = next.markdown === lastValidatedMarkdown
+    const sameSelection = lastValidatedSelection &&
+      next.selection.anchor === lastValidatedSelection.anchor &&
+      next.selection.focus === lastValidatedSelection.focus
+    if (next.kind === 'reset' || !sameMarkdown || !sameSelection) {
       await validate(next)
     }
+    if (!destroyed && pending) await drain()
   }
 
   const ensureDrain = () => {
@@ -220,27 +221,32 @@ export const createRealMuyaRustMirror = ({
   )
 
   const flush = async() => {
-    while (draining || pending) {
-      await (draining || ensureDrain())
-    }
+    if (draining) await draining
+    else if (pending) await ensureDrain()
+    if (draining || pending) return flush()
     return status
   }
 
   const applyCommand = (reason, operation) => {
-    commandQueue = commandQueue.then(async() => {
-      await flush()
-      if (destroyed || !initialized) return null
-      const transaction = await operation(client)
-      await refreshStatus(reason)
-      logger.info?.(`[elephantnote:muya-rust] ${reason}`, {
-        documentChanged: Boolean(transaction.documentChanged),
-        selectionChanged: Boolean(transaction.selectionChanged),
-        revision: status.revision,
-        undoDepth: status.undoDepth,
-        redoDepth: status.redoDepth
+    commandQueue = commandQueue
+      .catch(() => null)
+      .then(async() => {
+        await flush()
+        if (status.phase === 'error') {
+          throw new Error(status.error || 'Rust Muya core is in an error state.')
+        }
+        if (destroyed || !initialized) return null
+        const transaction = await operation(client)
+        await refreshStatus(reason)
+        logger.info?.(`[elephantnote:muya-rust] ${reason}`, {
+          documentChanged: Boolean(transaction.documentChanged),
+          selectionChanged: Boolean(transaction.selectionChanged),
+          revision: status.revision,
+          undoDepth: status.undoDepth,
+          redoDepth: status.redoDepth
+        })
+        return transaction
       })
-      return transaction
-    })
     return commandQueue
   }
 

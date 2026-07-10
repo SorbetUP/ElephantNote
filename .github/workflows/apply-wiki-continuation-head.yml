@@ -57,12 +57,18 @@ jobs:
           if old not in script:
               raise SystemExit('Unable to upgrade wikilink validator patch')
           script = script.replace(old, new, 1)
-          script = script.replace(r"target.contains('\n')", r"target.contains('\\n')")
-          script = script.replace(r"target.contains('\r')", r"target.contains('\\r')")
           Path('/tmp/apply_auto_wiki_patch.py').write_text(script)
           PY
           python -m py_compile /tmp/apply_auto_wiki_patch.py
           python /tmp/apply_auto_wiki_patch.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('Elephant/backend/knowledge-core/src/chunking.rs')
+          text = path.read_text()
+          text = text.replace("target.contains('" + "\n" + "')", r"target.contains('\n')")
+          text = text.replace("target.contains('" + "\r" + "')", r"target.contains('\r')")
+          path.write_text(text)
+          PY
 
       - name: Format Rust
         run: |

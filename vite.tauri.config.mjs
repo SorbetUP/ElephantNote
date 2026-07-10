@@ -15,9 +15,7 @@ const __dirname = dirname(__filename)
 
 const exportedPackageEntry = (value) => {
   if (typeof value === 'string') return value
-  if (Array.isArray(value)) {
-    return value.map(exportedPackageEntry).find(Boolean) || ''
-  }
+  if (Array.isArray(value)) return value.map(exportedPackageEntry).find(Boolean) || ''
   if (!value || typeof value !== 'object') return ''
   for (const condition of ['import', 'module', 'node', 'default', 'require']) {
     const entry = exportedPackageEntry(value[condition])
@@ -26,7 +24,7 @@ const exportedPackageEntry = (value) => {
   return Object.values(value).map(exportedPackageEntry).find(Boolean) || ''
 }
 
-const importElephantPackage = async (name) => {
+const importElephantPackage = async(name) => {
   const packageDir = resolve(__dirname, 'Elephant/node_modules', name)
   const manifestPath = join(packageDir, 'package.json')
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
@@ -116,6 +114,18 @@ const excalidrawAssetsPlugin = () => ({
   }
 })
 
+const rustOwnedMuyaPlugin = () => ({
+  name: 'elephantnote-rust-owned-muya',
+  enforce: 'pre',
+  resolveId(source) {
+    if (source !== 'muya/lib') return null
+    return resolve(
+      __dirname,
+      'Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js'
+    )
+  }
+})
+
 export default {
   root: resolve(__dirname, 'Elephant/frontend/src/renderer'),
   base: './',
@@ -147,7 +157,7 @@ export default {
     },
     extensions: ['.mjs', '.js', '.json', '.vue']
   },
-  plugins: [vue(), svgLoader(), excalidrawAssetsPlugin()],
+  plugins: [rustOwnedMuyaPlugin(), vue(), svgLoader(), excalidrawAssetsPlugin()],
   css: {
     postcss: {
       plugins: [

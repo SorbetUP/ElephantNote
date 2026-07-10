@@ -63,7 +63,7 @@
       "$ref": "#/$defs/permissions"
     },
     "contributes": {
-      "type": "object"
+      "$ref": "#/$defs/contributions"
     },
     "activationEvents": {
       "type": "array",
@@ -82,6 +82,59 @@
         "minLength": 1
       },
       "uniqueItems": true
+    },
+    "commandContribution": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "title"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "viewContribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "kind"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": ["task-manager-v1"]
+        }
+      }
+    },
+    "contributions": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/commandContribution"
+          },
+          "uniqueItems": true
+        },
+        "views": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/viewContribution"
+          },
+          "uniqueItems": true
+        }
+      }
     },
     "permissions": {
       "type": "object",

@@ -31,7 +31,9 @@ const RUST_BLOCK_KINDS = Object.freeze({
 const STRUCTURED_LINE = /^\s*(?:>|[-+*]\s|[-+*]\s+\[[ xX]\]\s|\d+[.)]\s)/
 const HEADING_LINE = /^\s{0,3}#{1,6}\s/
 const INLINE_BLOCK_TYPES = /paragraphContent|cellContent|atxLine/
+const RUST_PASTE_BLOCK_TYPES = /paragraphContent|atxLine/
 const TABLE_SEPARATOR = /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/
+const URL_ONLY = /^\S+:\/\/\S+$/
 
 const historyIdentity = (history) => {
   if (!history || typeof history !== 'object') return ''
@@ -117,6 +119,12 @@ const imageHtml = (token, attrName, attrValue) => {
   return `${result.trim()}>`
 }
 
+const clipboardHasImage = (event) => {
+  const items = event?.clipboardData?.items
+  if (!items) return false
+  return Array.from(items).some((item) => String(item?.type || '').startsWith('image/'))
+}
+
 export default class RealMuyaWithRustMirror extends Muya {
   constructor (element, options = {}) {
     super(element, options)
@@ -132,7 +140,8 @@ export default class RealMuyaWithRustMirror extends Muya {
       editTable: this.contentState.editTable.bind(this.contentState),
       updateImage: this.contentState.updateImage.bind(this.contentState),
       deleteImage: this.contentState.deleteImage.bind(this.contentState),
-      createFootnote: this.contentState.createFootnote.bind(this.contentState)
+      createFootnote: this.contentState.createFootnote.bind(this.contentState),
+      pasteHandler: this.contentState.pasteHandler.bind(this.contentState)
     }
     this.__installElephantRustContentStateHooks()
 
@@ -182,6 +191,9 @@ export default class RealMuyaWithRustMirror extends Muya {
     )
     this.contentState.createFootnote = (identifier) => (
       this.__createFootnoteThroughRust(identifier)
+    )
+    this.contentState.pasteHandler = (event, type = 'normal', rawText, rawHtml) => (
+      this.__pasteThroughRust(event, type, rawText, rawHtml)
     )
   }
 
@@ -315,12 +327,8 @@ export default class RealMuyaWithRustMirror extends Muya {
         const table = parsed.tables[0]
         const bodyRows = Math.max(0, table.end - table.start - 1)
         const columnCount = Math.max(1, lineAt(transaction.state.markdown, table.start).split('|').length - 2)
-        const row = context.action === 'delete_row'
-          ? Math.min(context.row, bodyRows)
-          : Math.min(context.row, bodyRows)
-        const column = context.action === 'delete_column'
-          ? Math.min(context.column, columnCount - 1)
-          : Math.min(context.column, columnCount - 1)
+        const row = Math.min(context.row, bodyRows)
+        const column = Math.min(context.column, columnCount - 1)
         const offset = tableCellOffset(transaction.state.markdown, table, row, column)
         if (!Number.isInteger(offset)) return transaction
         const selectionTransaction = await engine.setSelection(offset, offset)
@@ -346,7 +354,7 @@ export default class RealMuyaWithRustMirror extends Muya {
     const end = selection.focus
     const pos = Math.max(0, end - count)
     const current = markdown.slice(pos, end)
-    if (!current || current.length !== count) return null
+    if (!current || current.length !== count || !/^(?:!\[|<img\s)/.test(current)) return null
 
     return {
       operation: {
@@ -430,6 +438,42 @@ export default class RealMuyaWithRustMirror extends Muya {
           selectionChanged: true
         }
       },
+      fallback
+    )
+  }
+
+  __pasteThroughRust (event, type = 'normal', rawText, rawHtml) {
+    const text = String(rawText ?? event?.clipboardData?.getData?.('text/plain') ?? '').replace(/\r/g, '')
+    const sourceHtml = String(rawHtml ?? event?.clipboardData?.getData?.('text/html') ?? '').replace(/\r/g, '')
+    const html = type === 'pasteAsPlainText' ? '' : sourceHtml
+    const fallback = () => this.__elephantRustOriginalContentState.pasteHandler(
+      event,
+      type,
+      text,
+      sourceHtml
+    )
+
+    const { start, end } = this.contentState.cursor || {}
+    if (!this.__elephantRustMirror?.active || !start || !end || start.key !== end.key) {
+      return fallback()
+    }
+    const block = this.contentState.getBlock(start.key)
+    if (
+      block?.type !== 'span' ||
+      !RUST_PASTE_BLOCK_TYPES.test(block.functionType || '') ||
+      this.contentState.selectedImage ||
+      this.contentState.selectedTableCells ||
+      clipboardHasImage(event) ||
+      (!html && URL_ONLY.test(text.trim()))
+    ) {
+      return fallback()
+    }
+
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    return this.__applyElephantRustCommand(
+      type === 'pasteAsPlainText' ? 'paste-plain-text' : 'paste-rich',
+      (engine) => engine.pasteClipboard(html, text),
       fallback
     )
   }

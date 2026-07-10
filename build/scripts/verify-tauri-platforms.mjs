@@ -20,6 +20,7 @@ const androidActivity = readText('build/android/MainActivity.kt')
 const chatRuntime = readText('Elephant/backend/tauri/src/chat_runtime.rs')
 const vaultConfig = readText('Elephant/backend/tauri/src/vault/config.rs')
 const tauriBridge = readText('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
+const mobileVaultBridge = readText('Elephant/frontend/src/renderer/src/platform/mobileVaultBridge.js')
 const tauriExtra = readText('Elephant/backend/tauri/src/tauri_extra_commands.rs')
 const libMin = readText('Elephant/backend/tauri/src/lib_min.rs')
 
@@ -144,16 +145,27 @@ assert(
   'Android build must copy the tracked immersive MainActivity template'
 )
 assert(
-  androidActivity.includes('enterImmersiveMode') && androidActivity.includes('WindowInsetsController'),
-  'Android MainActivity template must hide status and navigation bars'
+  androidActivity.includes('enterImmersiveMode') &&
+    androidActivity.includes('WindowInsets.Type.systemBars()') &&
+    androidActivity.includes('requestCameraPermissionIfNeeded'),
+  'Android MainActivity must hide system bars and request camera permission'
+)
+assert(
+  buildAndroid.includes('android.permission.CAMERA') &&
+    buildAndroid.includes('android.hardware.camera.any'),
+  'Android build must install camera manifest declarations'
 )
 assert(
   buildAndroid.includes('cargo tauri android init --config "$ANDROID_CONFIG"'),
   'Android build script must initialize the generated Android project with the Android config'
 )
 assert(
-  buildAndroid.includes('cargo tauri android build --debug --apk --config "$ANDROID_CONFIG"'),
-  'Android build script must build with the Android config'
+  buildAndroid.includes('BUILD_ARGS=(android build --apk --target "$ANDROID_TARGET" --config "$ANDROID_CONFIG")'),
+  'Android build script must build a target-specific APK with the Android config'
+)
+assert(
+  buildAndroid.includes('ANDROID_BUILD_PROFILE') && buildAndroid.includes('BUILD_ARGS+=(--debug)'),
+  'Android build script must support explicit debug and release profiles'
 )
 
 assert(chatRuntime.includes('#[cfg(mobile)]'), 'Chat runtime must have a mobile guard')
@@ -178,8 +190,14 @@ assert(
   'Vault config must normalize existing config without inventing a first-run vault'
 )
 assert(
-  tauriBridge.includes('/vaults/Personal') && tauriBridge.includes('createLocalVault'),
-  'Android bridge must create the explicit local phone vault under app data vaults/Personal'
+  tauriBridge.includes('openVaultDirectory') && tauriBridge.includes('tauri_vaults_select_path'),
+  'Tauri bridge must expose native vault directory selection'
+)
+assert(
+  mobileVaultBridge.includes('/vaults/Personal') &&
+    mobileVaultBridge.includes('MOBILE_VAULT_CHOICE_KEY') &&
+    mobileVaultBridge.includes('return { canceled: true }'),
+  'Android bridge must require an explicit folder or private-vault choice'
 )
 assert(
   tauriExtra.includes('vault_config::get_active_vault'),

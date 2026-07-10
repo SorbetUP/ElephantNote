@@ -35,6 +35,20 @@ jobs:
           from pathlib import Path
           p = Path('/tmp/impl.py')
           text = p.read_text()
+          settings_old = '''replace_once(
+              settings,
+              '        <div class="en-ai-card-body en-ai-grid">\n          <label>\n            <span>Provider</span>\n',
+              '        <div class="en-ai-card-body en-ai-grid en-ai-chat-route-grid">\n          <label>\n            <span>Provider</span>\n'
+          )'''
+          settings_new = '''regex_once(
+              settings,
+              r'(<template v-else-if="activePage === \'chat\'">.*?<div class="en-ai-card-body )en-ai-grid(">)',
+              r'\\1en-ai-grid en-ai-chat-route-grid\\2',
+              flags=re.S
+          )'''
+          if settings_old not in text:
+              raise SystemExit('Could not patch the Chat settings grid replacement')
+          text = text.replace(settings_old, settings_new, 1)
           start = text.index("wiki_graph = 'Elephant/backend/knowledge-core/src/wiki_graph_projection.rs'\nreplace_once(\n")
           marker = "# The exact legacy parser is easier to extend"
           end = text.index(marker, start)

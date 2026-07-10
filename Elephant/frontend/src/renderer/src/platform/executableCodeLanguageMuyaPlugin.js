@@ -38,8 +38,10 @@ let registered = false
 
 export const registerExecutableCodeLanguageMuyaPlugin = () => {
   if (registered) return
+  const alreadyRegistered = Muya.plugins.some(({ plugin }) =>
+    plugin?.pluginName === ExecutableCodeLanguagePlugin.pluginName)
   registered = true
-  Muya.use(ExecutableCodeLanguagePlugin)
+  if (!alreadyRegistered) Muya.use(ExecutableCodeLanguagePlugin)
 }
 
 export { ExecutableCodeLanguagePlugin }

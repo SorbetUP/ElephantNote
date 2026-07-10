@@ -88,6 +88,13 @@ const runWritingCommand = (command) => {
   removeActiveQuickInsertQuery()
   console.info(`${COMMAND_LOG_PREFIX} run`, { command: normalized })
   switch (normalized) {
+    case 'paragraph':
+    case 'body':
+      bus.emit('paragraph', 'paragraph')
+      return true
+    case 'heading-1':
+      bus.emit('paragraph', 'heading 1')
+      return true
     case 'heading-2':
       bus.emit('paragraph', 'heading 2')
       return true

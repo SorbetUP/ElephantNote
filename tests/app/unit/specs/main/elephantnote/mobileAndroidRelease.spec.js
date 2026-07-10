@@ -6,7 +6,7 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 describe('ElephantNote mobile Android release', () => {
-  it('keeps the complete touch-first mobile shell and a real animated drawer', () => {
+  it('keeps the complete touch-first mobile shell and explicit vault onboarding', () => {
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
     const shellStyles = read('Elephant/frontend/app/styles/app-shell.css')
     const emptyVault = read('Elephant/frontend/app/components/shell/EmptyVaultPicker.vue')
@@ -20,9 +20,12 @@ describe('ElephantNote mobile Android release', () => {
     expect(shell).toContain("'elephantnote:vault-files-changed'")
     expect(shellStyles).toContain('@media')
     expect(shellStyles).toContain('safe-area-inset')
-    expect(emptyVault).toContain('Choose vault folder')
-    expect(emptyVault).toContain('Use private app folder instead')
-    expect(mobileVaultBridge).toContain('MOBILE_VAULT_CHOICE_KEY')
+    expect(emptyVault).toContain('Simple mode')
+    expect(emptyVault).toContain('Advanced mode')
+    expect(emptyVault).toContain('Choose a vault folder')
+    expect(emptyVault).toContain("@click=\"$emit('create-local')\"")
+    expect(emptyVault).toContain("@click=\"$emit('choose')\"")
+    expect(mobileVaultBridge).toContain("mobile-vault-choice-v3")
     expect(mobileVaultBridge).toContain('return { canceled: true }')
     expect(mobileVaultBridge).not.toContain('using phone vault')
   })
@@ -41,12 +44,18 @@ describe('ElephantNote mobile Android release', () => {
     expect(sidebar).toContain('store.createFolder()')
   })
 
-  it('loads explicit phone interaction styles and makes Sync pairing full-screen', () => {
+  it('loads explicit phone interaction styles and native mobile runtimes', () => {
     const html = read('Elephant/frontend/src/renderer/index.html')
     const mobileStyles = read('Elephant/frontend/src/renderer/src/mobile-android.css')
+    const nativeStyles = read('Elephant/frontend/src/renderer/src/mobile-native-ux.css')
 
     expect(html).toContain('/src/mobile-android.css')
+    expect(html).toContain('/src/mobile-native-ux.css')
+    expect(html).toContain('/src/mobile-library-chrome.css')
     expect(html).toContain('/src/platform/mobileVaultBridge.js')
+    expect(html).toContain('/src/platform/mobileInteractionRuntime.js')
+    expect(html).toContain('/src/platform/mobileEditorRuntime.js')
+    expect(html).toContain('/src/platform/mobileLibraryChromeRuntime.js')
     expect(mobileStyles).toContain('height: 100dvh')
     expect(mobileStyles).toContain('.en-pair-modal')
     expect(mobileStyles).toContain('width: 100vw')
@@ -54,6 +63,8 @@ describe('ElephantNote mobile Android release', () => {
     expect(mobileStyles).toContain('env(safe-area-inset-bottom)')
     expect(mobileStyles).toContain('min-height: 44px')
     expect(mobileStyles).toContain('.en-qr-preview')
+    expect(nativeStyles).toContain('--en-mobile-drawer-offset')
+    expect(nativeStyles).toContain('.en-mobile-editor-toolbar')
   })
 
   it('treats only a clean Iroh code-zero shutdown as successful completion', () => {
@@ -90,10 +101,11 @@ describe('ElephantNote mobile Android release', () => {
     expect(cargo).not.toContain('panic = "abort"')
   })
 
-  it('declares camera capability but never requests camera during application startup', () => {
+  it('declares camera capability but requests it only from a user action', () => {
     const script = read('build/scripts/build_dev_apk.sh')
     const activity = read('build/android/MainActivity.kt')
     const scanner = read('Elephant/frontend/app/components/settings/SyncQrScanner.vue')
+    const editorRuntime = read('Elephant/frontend/src/renderer/src/platform/mobileEditorRuntime.js')
     const startupSmoke = read('build/scripts/android_startup_smoke.sh')
     const vite = read('vite.tauri.config.js')
     const nodeShim = read(
@@ -110,6 +122,8 @@ describe('ElephantNote mobile Android release', () => {
     expect(script).toContain('android.hardware.camera.any')
     expect(scanner).toContain('@click="startCameraScanner"')
     expect(scanner).toContain('navigator.mediaDevices?.getUserMedia')
+    expect(editorRuntime).toContain('navigator.mediaDevices.getUserMedia')
+    expect(editorRuntime).not.toContain('input.capture =')
     expect(startupSmoke).toContain('camera_not_requested=true')
     expect(startupSmoke).toContain('mResumedActivity')
     expect(startupSmoke).toContain('FATAL EXCEPTION')

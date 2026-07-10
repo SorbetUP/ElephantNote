@@ -1,6 +1,6 @@
 const getInvoke = (target = globalThis) => target?.__TAURI__?.core?.invoke
 
-const MOBILE_VAULT_CHOICE_KEY = 'elephantnote:mobile-vault-choice-v2'
+const MOBILE_VAULT_CHOICE_KEY = 'elephantnote:mobile-vault-choice-v3'
 
 const invoke = (target, command, payload = {}) => {
   const invokeCommand = getInvoke(target)
@@ -93,7 +93,7 @@ export const patchMobileVaultBridge = (bridge, target = globalThis) => {
 
     if (selectedPath.startsWith('content://')) {
       throw new Error(
-        'Android returned a document URI instead of a filesystem folder. This build cannot safely use that folder as a vault yet.'
+        'This Android provider exposed only a document URI. Select a filesystem-backed folder, or use Simple mode while full SAF document-tree support is being added.'
       )
     }
 

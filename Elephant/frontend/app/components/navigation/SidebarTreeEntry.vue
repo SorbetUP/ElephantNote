@@ -19,18 +19,22 @@
       @dragleave.stop="handleDragLeave"
       @drop.prevent.stop="handleFolderDrop"
     >
-      <button
+      <span
         class="en-sidebar-tree-toggle"
-        type="button"
+        role="button"
+        tabindex="0"
+        :aria-expanded="expanded"
         :aria-label="expanded ? `Collapse ${entry.title}` : `Expand ${entry.title}`"
         @click.stop="toggleExpanded"
+        @keydown.enter.stop.prevent="toggleExpanded"
+        @keydown.space.stop.prevent="toggleExpanded"
       >
         <component
           :is="expanded ? ChevronDown : ChevronRight"
           class="en-sidebar-tree-chevron"
           :size="15"
         />
-      </button>
+      </span>
       <button
         class="en-sidebar-tree-label"
         type="button"
@@ -311,8 +315,15 @@ watch(isFolderActive, async (active) => {
   align-items: center;
   justify-content: center;
   border: 0;
+  border-radius: 6px;
   color: inherit;
   background: transparent;
+  cursor: pointer;
+}
+
+.en-sidebar-tree-toggle:focus-visible {
+  outline: 2px solid var(--en-primary);
+  outline-offset: 1px;
 }
 
 .en-sidebar-tree-label,

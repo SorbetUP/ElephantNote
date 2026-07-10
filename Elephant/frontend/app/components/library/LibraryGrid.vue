@@ -11,15 +11,49 @@
     @dragleave="handleRootDragLeave"
     @drop.prevent="handleRootDrop"
   >
-    <NoteCard
-      v-for="(entry, index) in visibleEntries"
-      :key="entry.path"
-      :entry="entry"
-      :featured="index === 0 && visibleEntries.length > 3"
-      @open="openEntry"
-      @rename="renameEntry"
-      @delete="deleteEntry"
-    />
+    <section
+      v-if="pinnedEntries.length"
+      class="en-library-section en-library-pinned-section"
+      aria-labelledby="en-pinned-notes-heading"
+    >
+      <h2 id="en-pinned-notes-heading">Notes épinglées</h2>
+      <div class="en-library-section-grid">
+        <NoteCard
+          v-for="entry in pinnedEntries"
+          :key="entry.path"
+          :entry="entry"
+          :featured="false"
+          @open="openEntry"
+          @rename="renameEntry"
+          @delete="deleteEntry"
+        />
+      </div>
+    </section>
+
+    <section
+      v-if="otherEntries.length"
+      class="en-library-section"
+      aria-labelledby="en-other-notes-heading"
+    >
+      <h2
+        v-if="pinnedEntries.length"
+        id="en-other-notes-heading"
+      >
+        Autres
+      </h2>
+      <div class="en-library-section-grid">
+        <NoteCard
+          v-for="entry in otherEntries"
+          :key="entry.path"
+          :entry="entry"
+          :featured="false"
+          @open="openEntry"
+          @rename="renameEntry"
+          @delete="deleteEntry"
+        />
+      </div>
+    </section>
+
     <form
       v-if="renamingEntry"
       class="en-library-rename-form"
@@ -85,6 +119,9 @@ const isCompatibilityRootWikiEntry = (entry) => {
 
 const filteredEntries = computed(() => store.activeEntries.filter((entry) => !isCompatibilityRootWikiEntry(entry)))
 const visibleEntries = computed(() => filteredEntries.value.slice(0, visibleEntryLimit.value))
+const isPinnedNote = (entry) => getEntryKind(entry) === 'note' && !!entry?.path && store.isEntryPinned(entry.path)
+const pinnedEntries = computed(() => visibleEntries.value.filter(isPinnedNote))
+const otherEntries = computed(() => visibleEntries.value.filter((entry) => !isPinnedNote(entry)))
 
 const resetVisibleWindow = () => {
   visibleEntryLimit.value = RENDER_CHUNK_SIZE
@@ -264,24 +301,56 @@ const handleRootDrop = async(event) => {
 .en-library-grid {
   min-height: 0;
   overflow: auto;
+  padding: 20px;
+}
+
+.en-library-section + .en-library-section {
+  margin-top: 28px;
+}
+
+.en-library-section > h2 {
+  margin: 0 0 14px;
+  color: var(--en-text);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.en-library-section-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   gap: 18px;
-  padding: 20px;
   align-content: start;
+}
+
+.en-library-grid.list .en-library-section-grid {
+  grid-template-columns: 1fr;
 }
 
 @media (max-width: 760px), (pointer: coarse) {
   .en-library-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
     padding: 14px 12px calc(108px + env(safe-area-inset-bottom, 0px));
     scroll-padding-bottom: 120px;
     -webkit-overflow-scrolling: touch;
   }
 
-  .en-library-grid.list {
+  .en-library-section + .en-library-section {
+    margin-top: 24px;
+  }
+
+  .en-library-section > h2 {
+    margin: 0 4px 12px;
+    font-size: 16px;
+  }
+
+  .en-library-section-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .en-library-grid.list .en-library-section-grid {
     grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .en-library-rename-form {
@@ -303,22 +372,22 @@ const handleRootDrop = async(event) => {
 }
 
 @media (max-width: 390px) {
-  .en-library-grid {
+  .en-library-section-grid {
     grid-template-columns: 1fr;
   }
 }
-.en-library-grid.list {
-  grid-template-columns: 1fr;
-}
+
 .en-library-grid.is-empty {
   display: block;
   padding: 0;
   background: transparent;
 }
+
 .en-library-grid.is-drop-target {
   outline: 2px dashed var(--en-accent);
   outline-offset: -8px;
 }
+
 .en-library-rename-form {
   border: 1px solid var(--en-border);
   border-radius: 16px;
@@ -328,6 +397,7 @@ const handleRootDrop = async(event) => {
   background: var(--en-surface);
   color: var(--en-text);
 }
+
 .en-library-rename-form input {
   border: 1px solid var(--en-border);
   border-radius: 10px;
@@ -335,6 +405,7 @@ const handleRootDrop = async(event) => {
   background: var(--en-input-bg);
   color: var(--en-text);
 }
+
 .en-library-rename-form button {
   border: 1px solid var(--en-border);
   border-radius: 10px;

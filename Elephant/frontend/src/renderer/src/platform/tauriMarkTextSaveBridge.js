@@ -1,3 +1,5 @@
+import { resolveTauriVaultPath } from './tauriFileUtilsPathGuards'
+
 const normalizePath = (value = '') => String(value || '').replace(/\\/g, '/')
 const MARKDOWN_EXTENSION_RE = /\.md$/i
 
@@ -24,7 +26,8 @@ const writeViaRustBackend = async(target, pathname, markdown) => {
   if (typeof invoke !== 'function') {
     throw new Error('Tauri save bridge cannot write: core.invoke is unavailable.')
   }
-  return invoke('tauri_marktext_write_file', { pathname, content: markdown })
+  const canonicalPathname = await resolveTauriVaultPath(target, pathname)
+  return invoke('tauri_marktext_write_file', { pathname: canonicalPathname, content: markdown })
 }
 
 const writeRecord = async(target, ipc, record = {}, reason = 'save') => {
@@ -52,19 +55,20 @@ const writeRecord = async(target, ipc, record = {}, reason = 'save') => {
   }
 
   try {
+    const canonicalPathname = await resolveTauriVaultPath(target, pathname)
     console.info('[tauri:marktext-save] write:start', {
       reason,
       id,
-      pathname: normalizePath(pathname),
+      pathname: normalizePath(canonicalPathname),
       length: markdown.length
     })
 
-    await writeViaRustBackend(target, pathname, markdown)
+    await writeViaRustBackend(target, canonicalPathname, markdown)
 
     console.info('[tauri:marktext-save] write:done', {
       reason,
       id,
-      pathname: normalizePath(pathname),
+      pathname: normalizePath(canonicalPathname),
       length: markdown.length
     })
     ipc.send('mt::tab-saved', id)

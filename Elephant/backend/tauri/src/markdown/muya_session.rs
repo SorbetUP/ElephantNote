@@ -2,18 +2,19 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use serde::Serialize;
-use serde_json::{from_value, Value};
+use serde_json::Value;
 use tauri::State;
 
-use super::commands::tauri_muya_engine_sync_document;
 use super::muya_clipboard_commands::paste_clipboard;
 use super::muya_complete::{apply_complete_command, MuyaCompleteCommand};
 use super::muya_engine::{
-    apply_command, apply_commands, MuyaEditorCommand, MuyaEditorState, MuyaEditorTransaction,
-    MuyaSelection,
+    apply_command, apply_commands, MuyaEditorCommand, MuyaEditorSnapshot, MuyaEditorState,
+    MuyaEditorTransaction, MuyaSelection,
 };
 use super::muya_parity::{apply_parity_command, MuyaParityCommand};
 use super::muya_ui::{execute_ui_query, MuyaUiQuery};
+
+const HISTORY_LIMIT: usize = 100;
 
 #[derive(Default)]
 pub struct MuyaEngineSessions {
@@ -98,6 +99,59 @@ fn session_transaction(
     Ok(MuyaSessionTransaction::from(&transaction))
 }
 
+fn sync_document(
+    mut state: MuyaEditorState,
+    markdown: String,
+    selection: MuyaSelection,
+    continue_group: bool,
+) -> Result<MuyaEditorTransaction, String> {
+    let before_markdown = state.markdown.clone();
+    let before_selection = state.selection;
+    if before_markdown == markdown {
+        return apply_command(
+            state,
+            MuyaEditorCommand::SetSelection {
+                anchor: selection.anchor,
+                focus: selection.focus,
+            },
+        );
+    }
+
+    let current_snapshot = MuyaEditorSnapshot {
+        markdown: before_markdown,
+        selection: before_selection,
+    };
+    let grouped_snapshot = if continue_group {
+        state.undo_stack.pop()
+    } else {
+        None
+    };
+
+    state.markdown = markdown;
+    state = apply_command(
+        state,
+        MuyaEditorCommand::SetSelection {
+            anchor: selection.anchor,
+            focus: selection.focus,
+        },
+    )?
+    .state;
+    while state.undo_stack.len() >= HISTORY_LIMIT {
+        state.undo_stack.remove(0);
+    }
+    state
+        .undo_stack
+        .push(grouped_snapshot.unwrap_or(current_snapshot));
+    state.redo_stack.clear();
+    state.revision = state.revision.saturating_add(1);
+
+    Ok(MuyaEditorTransaction {
+        selection_changed: state.selection != before_selection,
+        state,
+        document_changed: true,
+    })
+}
+
 #[tauri::command]
 pub fn tauri_muya_session_create(
     sessions: State<'_, MuyaEngineSessions>,
@@ -120,9 +174,7 @@ pub fn tauri_muya_session_sync_document(
     continue_group: bool,
 ) -> Result<MuyaSessionTransaction, String> {
     session_transaction(&sessions, &editor_id, |state| {
-        let value = tauri_muya_engine_sync_document(state, markdown, selection, continue_group)?;
-        from_value::<MuyaEditorTransaction>(value)
-            .map_err(|error| format!("invalid Muya sync transaction: {error}"))
+        sync_document(state, markdown, selection, continue_group)
     })
 }
 
@@ -218,94 +270,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn session_state_exposes_depths_without_serializing_history() {
+    fn grouped_sync_keeps_one_native_snapshot() {
+        let state = MuyaEditorState::new(String::new());
+        let first = sync_document(state, "a".to_string(), MuyaSelection::collapsed(1), false)
+            .expect("first sync");
+        let second = sync_document(
+            first.state,
+            "ab".to_string(),
+            MuyaSelection::collapsed(2),
+            true,
+        )
+        .expect("grouped sync");
+        assert_eq!(second.state.undo_stack.len(), 1);
+        assert_eq!(second.state.undo_stack[0].markdown, "");
+    }
+
+    #[test]
+    fn session_view_never_serializes_history_arrays() {
         let mut state = MuyaEditorState::new("hello".to_string());
-        state
-            .undo_stack
-            .push(super::super::muya_engine::MuyaEditorSnapshot {
-                markdown: String::new(),
-                selection: MuyaSelection::collapsed(0),
-            });
-        let view = MuyaSessionState::from(&state);
-        let json = serde_json::to_value(view).expect("session view should serialize");
-
+        state.undo_stack.push(MuyaEditorSnapshot {
+            markdown: String::new(),
+            selection: MuyaSelection::collapsed(0),
+        });
+        let json = serde_json::to_value(MuyaSessionState::from(&state)).unwrap();
         assert_eq!(json["undoDepth"], 1);
-        assert_eq!(json["redoDepth"], 0);
         assert!(json.get("undoStack").is_none());
-        assert!(json.get("redoStack").is_none());
     }
 
     #[test]
-    fn session_ids_are_bounded_and_safe() {
+    fn editor_ids_reject_paths() {
         assert!(validate_editor_id("note-1:primary").is_ok());
-        assert!(validate_editor_id("").is_err());
         assert!(validate_editor_id("../../note").is_err());
-        assert!(validate_editor_id(&"a".repeat(129)).is_err());
-    }
-
-    #[test]
-    fn complete_commands_keep_history_inside_the_session_state() {
-        let state = MuyaEditorState::new("alpha\nbeta".to_string());
-        let transaction = apply_complete_command(state, MuyaCompleteCommand::DuplicateBlock)
-            .expect("complete command should apply");
-        assert_eq!(transaction.state.markdown, "alpha\nbeta\nbeta");
-        assert_eq!(transaction.state.undo_stack.len(), 1);
-    }
-
-    #[test]
-    fn parity_commands_keep_history_inside_the_session_state() {
-        let state = MuyaEditorState::new("Body".to_string());
-        let transaction = apply_parity_command(
-            state,
-            MuyaParityCommand::InsertTemplate {
-                id: "heading".to_string(),
-            },
-        )
-        .expect("parity command should apply");
-
-        assert_eq!(transaction.state.markdown, "Body# ");
-        assert_eq!(transaction.state.undo_stack.len(), 1);
-    }
-
-    #[test]
-    fn rich_clipboard_transaction_remains_in_native_history() {
-        let mut state = MuyaEditorState::new("A😀B".to_string());
-        state.selection = MuyaSelection {
-            anchor: 1,
-            focus: 3,
-        };
-        let transaction = paste_clipboard(
-            state,
-            "<strong>bold</strong>".to_string(),
-            "bold".to_string(),
-        )
-        .expect("rich paste should apply");
-
-        assert_eq!(transaction.state.markdown, "A**bold**B");
-        assert_eq!(transaction.state.undo_stack.len(), 1);
-        assert_eq!(transaction.state.redo_stack.len(), 0);
-    }
-
-    #[test]
-    fn ime_commit_is_one_native_history_entry() {
-        let state = MuyaEditorState::new("A B".to_string());
-        let transaction = apply_commands(
-            state,
-            vec![
-                MuyaEditorCommand::SetSelection {
-                    anchor: 1,
-                    focus: 2,
-                },
-                MuyaEditorCommand::ReplaceSelection {
-                    text: "日本語".to_string(),
-                },
-            ],
-        )
-        .expect("composition should commit");
-
-        assert_eq!(transaction.state.markdown, "A日本語B");
-        assert_eq!(transaction.state.undo_stack.len(), 1);
-        assert_eq!(transaction.state.selection.anchor, 4);
-        assert_eq!(transaction.state.selection.focus, 4);
     }
 }

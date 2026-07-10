@@ -1,0 +1,33 @@
+{
+  "id": "com.elephantnote.notion-markdown-importer",
+  "name": "Notion Markdown Importer",
+  "version": "1.0.0",
+  "description": "Imports a Notion Markdown export from Imports/Notion, cleans UUID names and rewrites internal links.",
+  "author": "ElephantNote",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": {
+    "type": "javascript-worker",
+    "entry": "main.js"
+  },
+  "permissions": {
+    "commands": true,
+    "storage": false,
+    "notes": {
+      "read": ["Imports/Notion/**"],
+      "write": ["Imported/Notion/**", "Reports/Notion Import.md"]
+    },
+    "network": {
+      "hosts": []
+    }
+  },
+  "activationEvents": ["onStartup"],
+  "contributes": {
+    "commands": [
+      {
+        "id": "com.elephantnote.notion-markdown-importer.import",
+        "title": "Import Notion Markdown export"
+      }
+    ]
+  }
+}

@@ -37,15 +37,18 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
 
   const capabilities = async() => call('tauri_muya_engine_capabilities')
 
-  const apply = async(command) => {
+  const applyTransaction = async(commandName, command) => {
     if (!state) throw new Error('Muya Rust engine must be initialized before applying commands.')
-    const transaction = await call('tauri_muya_engine_apply', {
+    const transaction = await call(commandName, {
       state,
       command: ensureCommand(command)
     })
     state = ensureState(transaction?.state)
     return transaction
   }
+
+  const apply = async(command) => applyTransaction('tauri_muya_engine_apply', command)
+  const applyParity = async(command) => applyTransaction('tauri_muya_engine_apply_parity', command)
 
   const applyBatch = async(commands = []) => {
     if (!state) throw new Error('Muya Rust engine must be initialized before applying commands.')
@@ -66,6 +69,7 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
     reset,
     capabilities,
     apply,
+    applyParity,
     applyBatch,
     insertText: (text) => apply({ type: 'insertText', text: String(text) }),
     replaceSelection: (text) => apply({ type: 'replaceSelection', text: String(text) }),
@@ -76,7 +80,29 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
     transformBlock: (kind) => apply({ type: 'transformBlock', kind }),
     insertLineBreak: () => apply({ type: 'insertLineBreak' }),
     undo: () => apply({ type: 'undo' }),
-    redo: () => apply({ type: 'redo' })
+    redo: () => apply({ type: 'redo' }),
+    applyOperation: (operation) => applyParity({ type: 'applyOperation', operation }),
+    keyboardRule: (key, { shiftKey = false } = {}) => applyParity({
+      type: 'keyboardRule',
+      key: String(key),
+      shiftKey: Boolean(shiftKey)
+    }),
+    tableCommand: (action, index = 0) => applyParity({
+      type: 'tableCommand',
+      action: String(action),
+      index
+    }),
+    resizeImage: (cursor, width) => applyParity({
+      type: 'resizeImage',
+      cursor,
+      width: String(width)
+    }),
+    upsertFootnote: (label, text) => applyParity({
+      type: 'upsertFootnote',
+      label: String(label),
+      text: String(text)
+    }),
+    insertTemplate: (id) => applyParity({ type: 'insertTemplate', id: String(id) })
   }
 }
 

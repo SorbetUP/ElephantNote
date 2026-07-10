@@ -4,11 +4,11 @@
 
 ElephantNote keeps ordinary Markdown fenced code blocks as the portable source of truth and adds optional local execution without turning notes into a proprietary notebook format.
 
-A shared note therefore remains readable in any Markdown application. In ElephantNote, a reader can select the fenced language, edit the source, run the block, stop it, and inspect stdout or stderr directly below it.
+A shared note remains readable in any Markdown application. Inside ElephantNote, the existing Muya code block owns language selection, source editing, Copy, Run/Stop and the session-local output.
 
-## Current syntax
+## Markdown syntax
 
-Muya persists the selected language in the Markdown fence:
+Muya persists the language in the normal fence:
 
 ````markdown
 ```python
@@ -16,119 +16,91 @@ print(6 * 7)
 ```
 ````
 
-The execution layer recognizes Python, JavaScript/Node.js, Bash, POSIX shell, Ruby, PHP and PowerShell aliases. A language is never presented as available unless a real executable is detected or explicitly configured.
+The backend recognizes Python, JavaScript/Node.js, Bash, POSIX shell, Ruby, PHP and PowerShell aliases. It only executes a language when a real interpreter is detected or configured.
 
-## Inline component architecture
+## Native Muya integration
 
-Each executable block uses Muya's existing code-block host as one visual component. The direct children are ordered as:
+Executable controls are rendered by Muya's own fenced-code VDOM. A fence contains:
 
-1. the runtime toolbar;
-2. the original editable `<pre>` code block;
-3. the session-local output section.
+1. Muya's native language input;
+2. Muya's native Copy action;
+3. ElephantNote's Run/Stop action;
+4. the original editable `<code>` source;
+5. one `elephant-code-output` element.
 
-The toolbar and output are `contenteditable="false"` siblings of the `<pre>`. They are never inserted inside the source node. The host owns the single border, background and border radius, so code and output cannot become two independent floating windows.
+All five nodes are children of the same `<pre class="ag-fence-code">`. The `<pre>` owns one border, background and radius, so source and output form one component in the note.
 
-There is no visual layer attached to `document.body`, no viewport-coordinate positioning, no `left` or `top` updates, and no scroll listener. The whole component participates in the note's normal document flow. Scrolling the note therefore moves code and output together exactly like any other block.
+The runtime does not append a toolbar to `document.body`, wrap the editor, scan for code blocks or reposition controls. It has no `MutationObserver`, page-scroll listener or viewport-coordinate layout.
 
-The original Muya language/copy/fence chrome is hidden after it is identified. A stable runtime toolbar replaces it with:
+### Language selection
 
-- a real language `<select>`;
-- Copy;
-- Run, which becomes Stop while the process is active.
+ElephantNote does not create a second language selector. The existing Muya language input and language picker remain the only source of truth. Muya's `ContentState.updateCodeLanguage()` updates the fence and performs its normal partial render.
 
-Changing the runtime selector updates Muya's native language control, the `language-*` classes and the related `input`/`change` events so the Markdown fence remains the persisted source of truth.
+This avoids synthetic `input` and `change` events. In particular, changing a language cannot recursively redispatch an event onto the same selector or run Muya's keyboard input handler with an unrelated selection.
 
-## Editing behavior
+## Runtime lifecycle
 
-The code remains Muya content rather than being replaced by a proprietary notebook editor. ElephantNote adds:
+`elephant-code-output` is a custom element rendered by Muya. Its connection lifecycle registers the corresponding fence with the execution runtime.
 
-- `Tab` indentation;
-- `Shift+Tab` outdent;
-- automatic indentation on `Enter`;
-- `Cmd+Enter` on macOS or `Ctrl+Enter` elsewhere to run the current block;
-- the same shortcut stops the block while it is running;
-- disabled spellcheck, autocorrect and automatic capitalization inside code.
+State is keyed by editor root and Muya block key. When Muya partially rerenders a fence:
 
-## Output behavior
+- the old output element disconnects;
+- the replacement connects with the same block key;
+- the existing result and running state are reused;
+- deletion is pruned after a short grace period.
 
-Output is session-local and is not written into Markdown.
+No DOM topology scan is required.
+
+## Running and stopping
+
+Clicking Run reads language and source directly from the same native `<pre>`, then invokes `tauri_programs_run` through Tauri. `Cmd+Enter` on macOS and `Ctrl+Enter` elsewhere use the same path.
+
+Each execution has a unique identifier. While running, the triangle becomes a square Stop control. Stop targets that exact process.
+
+On Unix, the backend sends `SIGINT` first, waits briefly for a graceful exit, then force-terminates and reaps a process that ignores the interrupt. Other platforms use the supported termination fallback.
+
+## Output
+
+Output is session-local and is never written into Markdown. The custom element uses a shadow root so Muya's VDOM can rerender the fence without serializing or patching the output contents.
 
 The output section:
 
-- expands inside the same code-block shell;
-- uses the code block's computed surface and text colors;
-- remains readable in light and dark themes;
+- expands below the source inside the same `<pre>`;
+- inherits the note theme;
 - separates stdout and stderr;
-- scrolls internally for long output;
+- scrolls internally when long;
 - supports Copy, Collapse/Expand and Clear;
 - shows duration, exit status, timeout, interruption and truncation.
 
-Output state is stored independently from Muya's transient `<pre>`. If Muya replaces the host or source node, ElephantNote matches the replacement by editor root, source fingerprint and document ordinal, then remounts the same state inside the new host. Clicking outside does not clear output; only Clear does.
+## Bounded execution
 
-Settings → Editor → Code execution controls how many final lines are retained. The default is 200 and the accepted range is 10 to 5,000 lines.
+The Rust backend never collects unbounded process output. stdout and stderr are drained concurrently into fixed-size tail buffers.
 
-## Mutation and lifecycle behavior
-
-Runtime-owned mutations are ignored by the editor topology observer. Rendering, collapsing, expanding, clearing or scrolling output does not trigger a code-block rescan. Syntax-highlighting span churn is also ignored.
-
-Real code-host additions and replacements are debounced. Removing a complete host schedules one lifecycle scan and delayed state cleanup, preventing detached state or orphan controls without creating a mutation feedback loop.
-
-## Real process interruption
-
-Each execution has a unique identifier registered in the Rust backend. Clicking the square Stop control sends a cancellation request to the corresponding process.
-
-On Unix platforms, ElephantNote first sends `SIGINT`, matching the normal semantics of `Ctrl+C`. It waits briefly for a graceful exit and then force-terminates the process if it ignores the interrupt. Platforms without a Unix signal API use the force-termination fallback.
-
-The final result is marked as interrupted and retains the bounded output produced before termination.
-
-## Bounded output
-
-The backend never collects unbounded process output. stdout and stderr are drained concurrently into fixed-size tail buffers while execution is running.
-
+- source is limited to 256 KiB;
 - each stream retains at most 1 MiB;
-- earlier bytes are discarded continuously;
 - only the configured final lines are returned;
-- infinite printing loops remain memory-bounded;
-- timeout and manual interruption both kill and reap the child process;
-- responses report retained lines and discarded bytes/lines.
+- execution has a timeout;
+- interruption and timeout both kill and reap the child process;
+- interpreters are spawned directly, not through a generic shell;
+- the working directory is constrained to the active vault.
 
 ## Security model
 
-This implementation is **not a sandbox or container**. A program runs with the same operating-system user permissions as ElephantNote.
-
-The implementation reduces accidental exposure by:
-
-- requiring explicit global opt-in;
-- requiring an explicit supported runtime mapping;
-- spawning interpreters directly rather than using a generic shell;
-- constraining the working directory to the active vault;
-- rejecting source larger than 256 KiB;
-- stopping execution after 15 seconds;
-- providing manual interruption;
-- retaining bounded output tails;
-- logging execution stages without logging source code.
-
-These controls do not prevent code from accessing user-readable files, using the network, launching subprocesses or modifying the machine.
+This implementation is **not a sandbox or container**. A program runs with the same operating-system user permissions as ElephantNote. Code may access user-readable files, use the network, launch subprocesses or modify the machine.
 
 ## Validation
 
-The active V6 suites verify:
+The active tests cover both isolated runtime behavior and a real Muya instance. They verify that:
 
-- toolbar, source and output are direct children of one Muya host;
-- no visual runtime layer exists under `document.body`;
-- no floating positioning styles are written;
-- Markdown source text remains unchanged when runtime UI mounts;
-- language selection updates the native Muya control and fence classes;
-- a real button click dispatches `tauri_programs_run`;
-- code and output state survive complete Muya host replacement;
-- Run changes to Stop and sends a real stop request;
-- output rendering, collapse, expansion, clearing and scroll cause zero scans;
-- runtime and syntax-highlighting mutation churn cause zero scans;
-- deleting a block removes its state and leaves no orphan UI;
-- multiple blocks each own exactly one toolbar and one output section;
-- indentation and execution shortcuts;
-- output line-limit normalization;
-- fixed-size stream capture;
-- stop-request delivery;
-- real Python execution;
-- real interruption of a running Python loop when Python is installed.
+- Run and Output are native children of the fenced `<pre>`;
+- installing the runtime changes zero Markdown characters;
+- no V6 toolbar or duplicate language selector is created;
+- the native Muya language state is used for execution;
+- repeated language changes do not recurse or emit synthetic keyboard input;
+- real Run and Stop IPC requests are sent;
+- output survives a Muya rerender with the same block key;
+- deletion prunes state without a mutation scan;
+- multiple blocks keep independent states;
+- page and output scrolling trigger no runtime work;
+- stream capture remains bounded;
+- a real Python process can execute and be interrupted when Python is available.

@@ -34,6 +34,7 @@ const INLINE_BLOCK_TYPES = /paragraphContent|cellContent|atxLine/
 const RUST_PASTE_BLOCK_TYPES = /paragraphContent|atxLine/
 const TABLE_SEPARATOR = /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/
 const URL_ONLY = /^\S+:\/\/\S+$/
+const SIMPLE_LIST_LINE = /^\s*(?:[-+*]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)\S/
 
 const historyIdentity = (history) => {
   if (!history || typeof history !== 'object') return ''
@@ -142,7 +143,9 @@ export default class RealMuyaWithRustMirror extends Muya {
       updateImage: this.contentState.updateImage.bind(this.contentState),
       deleteImage: this.contentState.deleteImage.bind(this.contentState),
       createFootnote: this.contentState.createFootnote.bind(this.contentState),
-      pasteHandler: this.contentState.pasteHandler.bind(this.contentState)
+      pasteHandler: this.contentState.pasteHandler.bind(this.contentState),
+      enterHandler: this.contentState.enterHandler.bind(this.contentState),
+      tabHandler: this.contentState.tabHandler.bind(this.contentState)
     }
     this.__installElephantRustContentStateHooks()
 
@@ -228,6 +231,8 @@ export default class RealMuyaWithRustMirror extends Muya {
     this.contentState.pasteHandler = (event, type = 'normal', rawText, rawHtml) => (
       this.__pasteThroughRust(event, type, rawText, rawHtml)
     )
+    this.contentState.enterHandler = (event) => this.__enterThroughRust(event)
+    this.contentState.tabHandler = (event) => this.__tabThroughRust(event)
   }
 
   setMarkdown (markdown, ...args) {
@@ -555,6 +560,57 @@ export default class RealMuyaWithRustMirror extends Muya {
     return this.__applyElephantRustCommand(
       type === 'pasteAsPlainText' ? 'paste-plain-text' : 'paste-rich',
       (engine) => engine.pasteClipboard(html, text),
+      fallback
+    )
+  }
+
+  __keyboardRuleContext (key) {
+    if (
+      !this.__elephantRustMirror?.active ||
+      this.contentState.selectedImage ||
+      this.contentState.selectedTableCells ||
+      this.__elephantRustComposition
+    ) return null
+
+    const cursor = this.contentState.getMuyaIndexCursor()
+    const anchor = cursor?.anchor
+    const focus = cursor?.focus
+    if (
+      !anchor ||
+      !focus ||
+      anchor.line !== focus.line ||
+      anchor.ch !== focus.ch
+    ) return null
+
+    const markdown = this.getMarkdown()
+    const currentLine = lineAt(markdown, anchor.line)
+    if (!SIMPLE_LIST_LINE.test(currentLine)) return null
+    if (key === 'Enter' && anchor.ch !== currentLine.length) return null
+    return { markdown, cursor }
+  }
+
+  __enterThroughRust (event) {
+    const fallback = () => this.__elephantRustOriginalContentState.enterHandler(event)
+    if (!this.__keyboardRuleContext('Enter')) return fallback()
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    return this.__applyElephantRustCommand(
+      'keyboard-enter',
+      (engine) => engine.keyboardRule('Enter'),
+      fallback
+    )
+  }
+
+  __tabThroughRust (event) {
+    const fallback = () => this.__elephantRustOriginalContentState.tabHandler(event)
+    if (!this.__keyboardRuleContext('Tab')) return fallback()
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    return this.__applyElephantRustCommand(
+      event?.shiftKey ? 'keyboard-shift-tab' : 'keyboard-tab',
+      (engine) => engine.keyboardRule('Tab', {
+        shiftKey: Boolean(event?.shiftKey)
+      }),
       fallback
     )
   }

@@ -1,1 +1,2 @@
 Run the focused Wiki rendering repair and validation.
+Retry with structural source replacements.

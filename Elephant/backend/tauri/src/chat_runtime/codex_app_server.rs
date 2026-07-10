@@ -1080,6 +1080,35 @@ async fn rate_limits(app: &AppHandle) -> R<Value> {
     client.request("account/rateLimits/read", json!({})).await
 }
 
+fn consume_rate_limit_reset_params(payload: &Value) -> R<Value> {
+    let credit_id = payload
+        .get("creditId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "A Codex reset credit id is required.".to_string())?;
+    let idempotency_key = payload
+        .get("idempotencyKey")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "A reset idempotency key is required.".to_string())?;
+    Ok(json!({
+      "creditId": credit_id,
+      "idempotencyKey": idempotency_key
+    }))
+}
+
+async fn consume_rate_limit_reset(app: &AppHandle, payload: &Value) -> R<Value> {
+    let client = state().client(app).await?;
+    client
+        .request(
+            "account/rateLimitResetCredit/consume",
+            consume_rate_limit_reset_params(payload)?,
+        )
+        .await
+}
+
 async fn stop() -> R<Value> {
     state().stop().await?;
     Ok(json!({ "ok": true }))
@@ -1106,6 +1135,7 @@ pub async fn command(app: &AppHandle, payload: &Value) -> R<Value> {
         "logout" => logout(app).await,
         "models" => models(app).await,
         "rateLimits" => rate_limits(app).await,
+        "consumeRateLimitReset" => consume_rate_limit_reset(app, payload).await,
         "stop" => stop().await,
         _ => Err(format!("Unsupported Codex operation: {operation}")),
     }
@@ -1322,6 +1352,30 @@ mod tests {
         assert!(should_emit_frontend_event("account/rateLimits/updated"));
         assert!(!should_emit_frontend_event("item/agentMessage/delta"));
         assert!(!should_emit_frontend_event("thread/status/changed"));
+    }
+
+    #[test]
+    fn builds_rate_limit_reset_request_params() {
+        let params = consume_rate_limit_reset_params(&json!({
+          "creditId": "credit-1",
+          "idempotencyKey": "attempt-1"
+        }))
+        .expect("valid reset params");
+        assert_eq!(
+            params.get("creditId").and_then(Value::as_str),
+            Some("credit-1")
+        );
+        assert_eq!(
+            params.get("idempotencyKey").and_then(Value::as_str),
+            Some("attempt-1")
+        );
+    }
+
+    #[test]
+    fn rejects_missing_rate_limit_reset_credit() {
+        let error = consume_rate_limit_reset_params(&json!({ "idempotencyKey": "attempt-1" }))
+            .expect_err("missing credit id must fail");
+        assert!(error.contains("credit id"));
     }
 
     #[test]

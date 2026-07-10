@@ -162,92 +162,20 @@
           <Server aria-hidden="true" /><span>No external API provider configured.</span>
         </div>
       </section>
-      <section class="en-ai-card">
-        <header class="en-ai-card-header">
-          <div>
-            <h4>Codex subscription</h4>
-            <p>Uses the official <code>codex app-server</code> protocol and your authenticated ChatGPT account.</p>
-          </div>
-          <span
-            class="en-ai-badge"
-            :class="{ active: codexStatus.connected, warning: !codexStatus.installed }"
-          >
-            {{ codexStatusLabel }}
-          </span>
-        </header>
-        <div class="en-ai-setting-row en-codex-row">
-          <span class="en-ai-row-icon"><TerminalSquare aria-hidden="true" /></span>
-          <div class="en-ai-setting-copy">
-            <strong>{{ codexAccountLabel }}</strong>
-            <span v-if="codexStatus.version">{{ codexStatus.version }}</span>
-            <span v-if="codexStatus.account?.email">{{ codexStatus.account.email }}</span>
-            <small v-if="providerMessage">{{ providerMessage }}</small>
-          </div>
-          <div class="en-ai-actions en-ai-actions-wrap">
-            <button
-              class="secondary"
-              type="button"
-              :disabled="codexBusy"
-              @click="refreshCodex"
-            >
-              <RotateCw aria-hidden="true" /> Check
-            </button>
-            <button
-              v-if="codexStatus.connected"
-              class="danger"
-              type="button"
-              :disabled="codexBusy"
-              @click="disconnectCodex"
-            >
-              <Unlink aria-hidden="true" /> Disconnect
-            </button>
-            <button
-              v-else
-              class="primary"
-              type="button"
-              :disabled="codexBusy || !codexStatus.installed"
-              @click="connectCodex"
-            >
-              <Link2 aria-hidden="true" /> Connect with ChatGPT
-            </button>
-          </div>
-        </div>
-        <div
-          v-if="loginChallenge.userCode"
-          class="en-login-challenge"
-        >
-          <strong>Device code: {{ loginChallenge.userCode }}</strong>
-          <button
-            class="secondary compact"
-            type="button"
-            @click="openExternal(loginChallenge.verificationUrl)"
-          >
-            Open authentication page
-          </button>
-        </div>
-        <div
-          v-if="codexRateLimitRows.length"
-          class="en-rate-limits"
-        >
-          <div
-            v-for="limit in codexRateLimitRows"
-            :key="limit.id"
-            class="en-rate-limit"
-          >
-            <div class="en-rate-limit-copy">
-              <strong>{{ limit.label }}</strong>
-              <small v-if="limit.bucketLabel">{{ limit.bucketLabel }}</small>
-            </div>
-            <progress
-              max="100"
-              :value="limit.remainingPercent"
-            />
-            <strong>{{ limit.remainingPercent }}% left</strong>
-            <small>{{ limit.usedPercent }}% used</small>
-            <small v-if="limit.resetsAt">resets {{ formatReset(limit.resetsAt) }}</small>
-          </div>
-        </div>
-      </section>
+      <ChatgptSubscriptionCard
+        :status="codexStatus"
+        :rate-limit-rows="codexRateLimitRows"
+        :reset-credits="codexResetCredits"
+        :available-reset-count="codexAvailableResetCount"
+        :busy="codexBusy"
+        :reset-busy="codexResetBusy"
+        :message="codexMessage"
+        :login-challenge="loginChallenge"
+        @connect="connectCodex"
+        @disconnect="disconnectCodex"
+        @open-auth="openExternal"
+        @consume-reset="consumeCodexReset"
+      />
     </template>
 
     <template v-else-if="activePage === 'chat'">
@@ -493,12 +421,13 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Activity, Cpu, Link2, Plus, RotateCw, Save, Server, TerminalSquare, Trash2, Unlink } from '@lucide/vue'
+import { Activity, Cpu, Link2, Plus, RotateCw, Save, Server, Trash2 } from '@lucide/vue'
 import log from '@/platform/runtimeLogShim'
 import { normalizeAiConfig, normalizeLocalAiConfig } from 'common/elephantnote/aiProviders'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
 import { clonePlainObject } from './settingsModelHelpers'
-import { buildCodexRateLimitRows } from './codexRateLimits'
+import { buildCodexRateLimitRows, buildCodexResetCredits, getCodexResetAvailableCount } from './codexRateLimits'
+import ChatgptSubscriptionCard from './ChatgptSubscriptionCard.vue'
 import { resolveModelId, resolveModelName } from '../views/modelsViewHelpers'
 
 const props = defineProps({ initialPage: { type: String, default: 'provider' } })
@@ -514,6 +443,8 @@ const loading = ref(false)
 const saving = ref(false)
 const indexing = ref(false)
 const codexBusy = ref(false)
+const codexResetBusy = ref(false)
+const codexMessage = ref('')
 const providerMessage = ref('')
 const autosaveMessage = ref('')
 const currentConfig = ref(normalizeAiConfig())
@@ -607,11 +538,10 @@ const parseJsonObject = (text = '') => {
 const stringifyObject = (value) => value && typeof value === 'object' && Object.keys(value).length ? JSON.stringify(value) : ''
 const providerSource = (provider) => provider.type === 'openai-compatible' ? 'api' : provider.type
 const enabledProviderRows = computed(() => form.value.providerRows.filter((provider) => provider.enabled))
-const codexStatusLabel = computed(() => !codexStatus.value.installed ? 'Not installed' : codexStatus.value.connected ? 'Connected' : 'Disconnected')
-const codexAccountLabel = computed(() => codexStatus.value.connected ? `ChatGPT ${codexStatus.value.account?.planType || 'account'}` : codexStatus.value.installed ? 'Bundled Codex runtime ready' : 'Bundled Codex runtime missing')
 const codexRateLimitRows = computed(() => buildCodexRateLimitRows(codexRateLimits.value || {}))
+const codexResetCredits = computed(() => buildCodexResetCredits(codexRateLimits.value || {}))
+const codexAvailableResetCount = computed(() => getCodexResetAvailableCount(codexRateLimits.value || {}))
 const routeProviderLabel = (source = '') => ({ 'app-local': 'App Local', codex: 'Codex', disabled: 'Disabled' }[source] || source || 'Disabled')
-const formatReset = (timestamp) => new Date(Number(timestamp) * 1000).toLocaleString()
 
 const normalizeProviderRows = (config = {}) => {
   const rows = Array.isArray(config.providers?.list) ? config.providers.list : []
@@ -698,7 +628,7 @@ const refreshCodex = async() => {
   try {
     codexStatus.value = await invokeCodex('status')
     form.value.codex.connected = Boolean(codexStatus.value.connected)
-    providerMessage.value = codexStatus.value.error || (codexStatus.value.connected
+    codexMessage.value = codexStatus.value.error || (codexStatus.value.connected
       ? 'Authenticated through Codex app-server.'
       : codexStatus.value.installed
         ? 'Codex is installed but no ChatGPT account is connected.'
@@ -721,7 +651,7 @@ const refreshCodex = async() => {
       connected: false,
       error: error instanceof Error ? error.message : String(error)
     }
-    providerMessage.value = codexStatus.value.error
+    codexMessage.value = codexStatus.value.error
   } finally {
     codexBusy.value = false
   }
@@ -733,11 +663,11 @@ const connectCodex = async() => {
     loginChallenge.value = challenge || {}
     const url = challenge?.authUrl || challenge?.verificationUrl
     if (url) await openExternal(url)
-    providerMessage.value = challenge?.userCode
+    codexMessage.value = challenge?.userCode
       ? `Enter device code ${challenge.userCode}.`
       : 'Authentication opened in your browser.'
   } catch (error) {
-    providerMessage.value = error instanceof Error ? error.message : String(error)
+    codexMessage.value = error instanceof Error ? error.message : String(error)
   } finally {
     codexBusy.value = false
   }
@@ -754,6 +684,27 @@ const disconnectCodex = async() => {
     scheduleAutosave('codex-logout')
   } finally {
     codexBusy.value = false
+  }
+}
+const consumeCodexReset = async(creditId) => {
+  if (!creditId || codexResetBusy.value) return
+  codexResetBusy.value = true
+  codexMessage.value = ''
+  try {
+    const idempotencyKey = globalThis.crypto?.randomUUID?.() || `elephantnote-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const result = await invokeCodex('consumeRateLimitReset', { creditId, idempotencyKey })
+    const outcome = String(result?.outcome || '')
+    codexMessage.value = ({
+      reset: 'Usage limits were reset.',
+      nothingToReset: 'No current usage window is eligible for a reset.',
+      noCredit: 'No reset credit is available.',
+      alreadyRedeemed: 'This reset was already applied.'
+    })[outcome] || 'Reset request completed.'
+    codexRateLimits.value = await invokeCodex('rateLimits')
+  } catch (error) {
+    codexMessage.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    codexResetBusy.value = false
   }
 }
 const onChatSourceChanged = () => {
@@ -913,13 +864,6 @@ button svg { width: 14px; height: 14px; }
 .en-ai-switch.small { width: 36px; min-height: 22px; }
 .en-ai-switch.small span { width: 16px; height: 16px; }
 .en-ai-switch.small.active span { transform: translateX(14px); }
-.en-codex-row { flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
-.en-ai-actions-wrap { flex-wrap: wrap; justify-content: flex-end; }
-.en-login-challenge { margin: 0 16px 14px; padding: 8px 10px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.en-rate-limits { display: grid; gap: 8px; margin: 0 16px 14px; }
-.en-rate-limit { margin: 0; padding: 10px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); }
-.en-rate-limit-copy { min-width: 120px; display: grid; gap: 2px; }
-.en-rate-limit progress { flex: 1; min-width: 120px; height: 8px; }
 .en-provider-list { display: grid; }
 .en-provider-row { padding: 14px 16px; border-top: 1px solid var(--en-border); }
 .en-provider-row:first-child { border-top: 0; }

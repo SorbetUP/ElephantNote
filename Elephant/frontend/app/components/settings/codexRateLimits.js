@@ -51,3 +51,30 @@ export const buildCodexRateLimitRows = (payload = {}) => {
     })
   })
 }
+
+
+const resetCreditsSummary = (payload = {}) => payload?.rateLimitResetCredits && typeof payload.rateLimitResetCredits === 'object'
+  ? payload.rateLimitResetCredits
+  : {}
+
+export const buildCodexResetCredits = (payload = {}) => {
+  const credits = resetCreditsSummary(payload).credits
+  if (!Array.isArray(credits)) return []
+  return credits
+    .filter((credit) => credit && credit.status === 'available' && (!credit.resetType || credit.resetType === 'codexRateLimits'))
+    .map((credit) => ({
+      id: String(credit.id || ''),
+      title: String(credit.title || ''),
+      description: String(credit.description || ''),
+      grantedAt: Number.isFinite(Number(credit.grantedAt)) ? Number(credit.grantedAt) : null,
+      expiresAt: Number.isFinite(Number(credit.expiresAt)) ? Number(credit.expiresAt) : null
+    }))
+    .filter((credit) => credit.id)
+    .sort((left, right) => (left.expiresAt ?? Number.MAX_SAFE_INTEGER) - (right.expiresAt ?? Number.MAX_SAFE_INTEGER))
+}
+
+export const getCodexResetAvailableCount = (payload = {}) => {
+  const summary = resetCreditsSummary(payload)
+  const count = Number(summary.availableCount)
+  return Number.isFinite(count) && count >= 0 ? Math.floor(count) : buildCodexResetCredits(payload).length
+}

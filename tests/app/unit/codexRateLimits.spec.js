@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCodexRateLimitRows, formatCodexWindowLabel } from '../../../Elephant/frontend/app/components/settings/codexRateLimits'
+import { buildCodexRateLimitRows, buildCodexResetCredits, formatCodexWindowLabel, getCodexResetAvailableCount } from '../../../Elephant/frontend/app/components/settings/codexRateLimits'
 
 describe('Codex rate-limit display', () => {
   it('shows both the short and weekly subscription windows', () => {
@@ -23,5 +23,20 @@ describe('Codex rate-limit display', () => {
 
   it('does not invent weekly labels when the server omits the duration', () => {
     expect(formatCodexWindowLabel({}, true)).toBe('Secondary usage limit')
+  })
+
+  it('normalizes selectable reset credits and preserves the server count', () => {
+    const payload = {
+      rateLimitResetCredits: {
+        availableCount: 4,
+        credits: [
+          { id: 'late', status: 'available', resetType: 'codexRateLimits', expiresAt: 2000, title: 'Full reset' },
+          { id: 'used', status: 'redeemed', resetType: 'codexRateLimits', expiresAt: 500 },
+          { id: 'early', status: 'available', resetType: 'codexRateLimits', expiresAt: 1000 }
+        ]
+      }
+    }
+    expect(getCodexResetAvailableCount(payload)).toBe(4)
+    expect(buildCodexResetCredits(payload).map((credit) => credit.id)).toEqual(['early', 'late'])
   })
 })

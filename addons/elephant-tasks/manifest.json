@@ -1,14 +1,14 @@
 {
   "id": "com.elephantnote.elephant-tasks",
   "name": "Elephant Tasks",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A focused task manager with Inbox, Today, Upcoming, Anytime, Someday, Areas, Projects, deadlines, repeats and Logbook.",
   "author": "ElephantNote",
   "apiVersion": 1,
   "minAppVersion": "0.18.9",
   "runtime": {
     "type": "javascript-worker",
-    "entry": "main.js"
+    "entry": "main-v2.js"
   },
   "permissions": {
     "commands": true,

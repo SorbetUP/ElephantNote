@@ -49,9 +49,9 @@
     "tauri:check": "cargo check --manifest-path Elephant/backend/tauri/Cargo.toml",
     "tauri:platform:check": "node build/scripts/verify-tauri-platforms.mjs",
     "tauri:dev": "./build/scripts/build_dev.sh",
-    "tauri:build": "pnpm tauri:llama:install && cd Elephant/backend/tauri && cargo tauri build",
+    "tauri:build": "pnpm tauri:llama:install && pnpm tauri:codex:install && cd Elephant/backend/tauri && cargo tauri build",
     "tauri:mac:smoke": "node build/scripts/tauri-macos-window-smoke.mjs",
-    "tauri:linux:build": "pnpm tauri:llama:install && cd Elephant/backend/tauri && cargo tauri build --config tauri.linux.conf.json",
+    "tauri:linux:build": "pnpm tauri:llama:install && pnpm tauri:codex:install && cd Elephant/backend/tauri && cargo tauri build --config tauri.linux.conf.json",
     "tauri:android:init": "cd Elephant/backend/tauri && cargo tauri android init --config tauri.android.conf.json",
     "tauri:android:dev": "cd Elephant/backend/tauri && cargo tauri android dev --config tauri.android.conf.json",
     "tauri:android:build": "./build/scripts/build_dev_apk.sh",
@@ -68,7 +68,8 @@
     "test:e2e": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/playwright test --config tests/app/e2e/playwright.config.js",
     "prod:check": "pnpm lint && pnpm security:guard && pnpm test:unit && pnpm test:e2e && pnpm validate-licenses && pnpm run build:unpack",
     "gen-third-party": "node build/scripts/generateThirdPartyLicense.js",
-    "validate-licenses": "node build/scripts/validateLicenses.js"
+    "validate-licenses": "node build/scripts/validateLicenses.js",
+    "tauri:codex:install": "node build/scripts/ensure-tauri-codex-runtime.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

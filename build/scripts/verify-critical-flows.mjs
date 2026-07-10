@@ -62,11 +62,13 @@ for (const file of [
   'Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js',
   'Elephant/frontend/src/renderer/src/platform/tauriLocalIpcBridge.js',
   'Elephant/frontend/src/renderer/src/platform/tauriMarkTextSaveBridge.js',
-  'Elephant/frontend/src/renderer/src/platform/tauriSearchConceptFallback.js',
   'Elephant/backend/tauri/src/lib_min.rs',
   'Elephant/backend/tauri/src/tauri_extra_commands.rs',
   'Elephant/backend/tauri/src/vault/sync.rs',
+  'Elephant/backend/tauri/src/vault/sync_iroh/base.rs',
+  'Elephant/backend/tauri/src/vault/sync_iroh/e2e_tests.rs',
   'Elephant/backend/tauri/src/sync_contract_tests.rs',
+  'Elephant/backend/tauri/src/markdown/muya_session.rs',
   'Elephant/shared/apiContracts.js',
   'Elephant/shared/apiContractsRuntime.js',
   'Elephant/shared/sync.js',
@@ -75,6 +77,9 @@ for (const file of [
   'Elephant/frontend/app/components/editor/ExcalidrawDialog.vue',
   'Elephant/frontend/src/renderer/src/components/editorWithTabs/index.vue',
   'Elephant/frontend/src/renderer/src/components/editorWithTabs/editor.vue',
+  'Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js',
+  'Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js',
+  'Elephant/frontend/src/renderer/src/muya/rustEngineRuntime.js',
   'Elephant/frontend/app/services/elephantnoteClient/apiRuntime.js',
   'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
   'Elephant/frontend/app/utils/noteCardView.js',
@@ -89,6 +94,7 @@ for (const file of [
   'tests/elephant/unit/sync/GitSyncEngine.spec.js',
   'tests/app/unit/realComponentImportSmoke.spec.js',
   'tests/app/unit/muyaRustEditorActivation.spec.js',
+  'tests/app/unit/muyaRustSessionRuntime.spec.js',
   'vite.tauri.config.js',
   'vitest.config.js'
 ]) read(file)
@@ -97,22 +103,23 @@ ordered(
   '.github/workflows/ci.yml',
   [
     '- name: Critical ElephantNote flow guard',
-    'run: node build/scripts/verify-critical-flows.mjs',
+    'node build/scripts/verify-critical-flows.mjs',
+    '- name: Upload critical flow diagnostics',
     '- name: Security guardrails',
     'run: pnpm security:guard',
     '- name: Unit tests',
     'run: pnpm test:unit'
   ],
-  'main CI must run the critical-flow guard, security gate and complete unit suite'
+  'main CI must run and preserve the critical-flow guard before security and tests'
 )
-hasAll(
+has(
   '.github/workflows/ci.yml',
-  ['cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features'],
+  'cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features',
   'blocking Tauri cargo check in main CI'
 )
-hasAll(
+has(
   '.github/workflows/tauri-ci.yml',
-  ['cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features'],
+  'cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features',
   'blocking Tauri all-target cargo check'
 )
 has('.github/workflows/codeql.yml', 'github/codeql-action/analyze@v3', 'CodeQL workflow')
@@ -180,7 +187,7 @@ ordered(
 )
 ordered(
   'Elephant/shared/apiContractsRuntime.js',
-  ["import * as baseContracts from './apiContracts.js'", 'const validatedByBaseContract = baseContracts.validateApiPayload(actionName, payload)', "actionName === 'ai.config.set'", 'baseContracts.validateApiPayload(actionName, validatedByBaseContract)', 'return payload'],
+  ["import * as baseContracts from './apiContracts.js'", "const runtimeField = ['local', 'Runtime'].join('')", 'const validatedByBaseContract = { ...payload }', 'delete validatedByBaseContract[runtimeField]', 'baseContracts.validateApiPayload(actionName, validatedByBaseContract)', 'return baseContracts.validateApiPayload(actionName, payload)'],
   'runtime-aware API contract wrapper'
 )
 has('vitest.config.js', "'common/elephantnote/apiContracts': apiContractsRuntime", 'Vitest alias for runtime-aware API contracts')
@@ -200,22 +207,27 @@ missing('Elephant/frontend/app/components/editor/RustNoteEditorHost.vue', 'obsol
 hasAll('Elephant/frontend/src/renderer/src/components/editorWithTabs/index.vue', ["import Editor from './editor.vue'", '<editor'], 'real EditorWithTabs uses the real Muya editor component')
 hasAll('Elephant/frontend/src/renderer/src/components/editorWithTabs/editor.vue', ["import Muya from 'muya/lib'", "import 'muya/themes/default.css'", 'class="editor-component"', 'editor.value = new Muya(ele, options)'], 'real Muya editing surface')
 lacks('Elephant/frontend/src/renderer/src/components/editorWithTabs/editor.vue', 'MuyaRuntimeEditor', 'raw Markdown runtime replacing Muya')
-hasAll('tests/app/unit/muyaRustEditorActivation.spec.js', ['keeps open notes routed through the real Muya EditorWithTabs component', 'preserves the official Muya DOM surface instead of a raw Markdown renderer'], 'real Muya surface regression tests')
+hasAll('vite.tauri.config.js', ['const realMuyaRustMirrorPlugin = () => ({', "if (source !== 'muya/lib') return null", 'realMuyaRustAdapter.js', 'realMuyaRustMirrorPlugin()'], 'exact Muya class interception')
+hasAll('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js', ['extends Muya', "this.on('change', this.__elephantRustChangeListener)", "this.on('selectionChange', this.__elephantRustSelectionListener)", '(engine) => engine.undo()', '(engine) => engine.redo()', 'super.setMarkdown(state.markdown, undefined, true, muyaIndexCursor)'], 'real Muya surface backed by Rust commands')
+lacks('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js', 'innerHTML', 'replacement DOM renderer')
+hasAll('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js', ['sessionId: createSessionId()', "target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-core'", 'client.syncDocument(', 'client.close()'], 'Rust-owned Muya session lifecycle')
+hasAll('Elephant/frontend/src/renderer/src/muya/rustEngineRuntime.js', ["'tauri_muya_session_create'", "'tauri_muya_session_sync_document'", "'tauri_muya_session_apply'", "'tauri_muya_session_query'", "'tauri_muya_session_close'"], 'compact Muya session IPC')
+hasAll('Elephant/backend/tauri/src/markdown/muya_session.rs', ['pub struct MuyaEngineSessions', 'pub undo_depth: usize', 'pub redo_depth: usize', 'tauri_muya_session_sync_document', 'tauri_muya_session_close'], 'Rust-owned Muya state and history')
+lacks('Elephant/backend/tauri/src/markdown/muya_session.rs', 'pub undo_stack:', 'history exposed through session IPC')
+hasAll('tests/app/unit/muyaRustEditorActivation.spec.js', ['keeps open notes routed through the real Muya EditorWithTabs component', 'preserves the official Muya DOM surface instead of a raw Markdown renderer', 'Rust-owned session'], 'real Muya surface regression tests')
+hasAll('tests/app/unit/muyaRustSessionRuntime.spec.js', ['never history arrays', 'routes mutations and queries to the same Rust session', 'rejects unsafe session identifiers'], 'Rust session IPC regression tests')
+
 ordered('Elephant/frontend/app/components/editor/ExcalidrawDialog.vue', ['const blobToBytes = async(blob) => new Uint8Array(await blob.arrayBuffer())', 'imageBlob: await blobToBytes(blob)', 'sceneBlob: await sceneBlob.text()'], 'Excalidraw writable payload')
 ordered('Elephant/frontend/app/utils/noteCardView.js', ['const stripInlineFrontmatterPrefix', 'const metadataPairPattern = new RegExp', 'export const getNoteCardExcerpt = (entry) => cleanPreview'], 'note-card preview frontmatter cleanup')
 
-ordered('Elephant/shared/sync.js', ["export const SYNC_METADATA_DIR = '.elephantnote/sync'", "export const SYNC_COMPATIBILITY_METADATA_DIR = '.elephantnote'", 'export const createDefaultSyncPlan = (payloadByOperation = {}) => {', 'const explicitOperations = normalizeExplicitOperations', 'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PULL)', 'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PUSH)'], 'shared sync plan')
-for (const needle of ['desktopRclone": false', 'mobileRcloneBinary": false', 'mobileSyncRequiresBackend": false', 'requiresExternalBinary": false']) {
-  has('Elephant/backend/tauri/src/vault/sync.rs', needle, `Tauri external-free sync invariant ${needle}`)
-}
-for (const needle of ['sync_push_copies_visible_vault_files_to_local_target', 'sync_pull_copies_target_files_back_to_vault', 'sync_preserves_both_versions_on_conflict', 'sync_run_reports_actionable_missing_target_error']) {
-  has('Elephant/backend/tauri/src/vault/sync.rs', needle, `Tauri embedded sync unit test ${needle}`)
-}
-has('Elephant/backend/tauri/src/sync_contract_tests.rs', 'tauri_sync_runtime_is_embedded_local_and_external_free', 'Tauri local sync runtime contract test')
+hasAll('Elephant/backend/tauri/src/vault/sync.rs', ['include!("sync_iroh/base.rs")', 'include!("sync_iroh/network.rs")', 'include!("sync_iroh/e2e_tests.rs")'], 'Iroh sync composition')
+hasAll('Elephant/backend/tauri/src/vault/sync_iroh/base.rs', ['use iroh::endpoint::Connection;', 'const BACKEND_IROH: &str = "iroh";', 'PROTOCOL_NAME', 'fn default_config(', 'backend: BACKEND_IROH.to_string()'], 'embedded Iroh backend configuration')
+has('Elephant/backend/tauri/src/vault/sync_iroh/e2e_tests.rs', 'two_real_iroh_endpoints_exchange_modify_and_delete_vault_content', 'real two-endpoint Iroh test')
+hasAll('Elephant/backend/tauri/src/sync_contract_tests.rs', ['status_initializes_real_iroh_sync_metadata_without_git', 'whole_vault_manifest_includes_content_but_excludes_device_configuration', 'three_way_plan_propagates_deletion_and_preserves_concurrent_edits', 'public_sync_plan_declares_iroh_without_external_binary'], 'Iroh sync contract tests')
+hasAll('.github/workflows/sync-docker.yml', ['name: Iroh Sync Validation', 'Two real Iroh endpoints', 'two_real_iroh_endpoints_exchange_modify_and_delete_vault_content', 'Verify structured terminal synchronization logs', 'navigationIrohSync.spec.js', 'syncSettingsPanel.spec.js'], 'Iroh sync workflow and toolbar contracts')
+hasAll('Elephant/shared/sync.js', ["export const SYNC_METADATA_DIR = '.elephantnote/sync'", "export const SYNC_COMPATIBILITY_METADATA_DIR = '.elephantnote'", 'export const createDefaultSyncPlan = (payloadByOperation = {}) => {', 'const explicitOperations = normalizeExplicitOperations', 'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PULL)', 'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PUSH)'], 'shared sync plan')
 has('tests/app/unit/specs/main/elephantnote/syncPlan.spec.js', 'can pull into a second device without creating a local snapshot first', 'sync plan pull regression test')
 has('tests/elephant/unit/sync/GitSyncEngine.spec.js', 'persists remote path and first run state after a successful sync', 'compatibility sync engine persistence regression test')
-ordered('build/scripts/sync-two-docker-smoke.mjs', ['assertPeerIdentity', 'stopDevice(deviceB)', 'device B reconnect auto-pull', "await assertNoTrackedSyncMetadata(deviceB, 'device B reconnect auto-pull')", 'assertResourceBudget', 'local sync metadata files stay untracked in each container git repository'], 'Docker pair sync smoke invariants')
-has('.github/workflows/sync-docker.yml', 'node build/scripts/sync-two-docker-smoke.mjs', 'Docker pair sync workflow')
 
 if (failures.length) {
   console.error('Critical ElephantNote flow guard failed:')

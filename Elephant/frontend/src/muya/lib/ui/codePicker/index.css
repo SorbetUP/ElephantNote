@@ -1,10 +1,11 @@
 .ag-list-picker {
-  width: 140px;
-  max-height: 156px;
-  padding: 8px 0;
+  width: 184px;
+  max-height: 196px;
+  padding: 4px;
   overflow-y: auto;
   box-sizing: border-box;
-  font-size: 14px;
+  font-size: 12px;
+  scrollbar-width: thin;
 }
 
 .ag-list-picker ul,
@@ -14,51 +15,75 @@
 }
 
 .ag-list-picker .item {
-  height: 28px;
+  height: 30px;
   display: flex;
+  align-items: center;
   list-style: none;
+  border-radius: 5px;
+  cursor: pointer;
 }
 
 .ag-list-picker:hover .active {
   background: transparent;
 }
 
-.ag-list-picker .item .language {
-  color: var(--editorColor);
-}
-
 .ag-list-picker .item:hover,
 .ag-list-picker .item.active {
- background-color: var(--floatHoverColor);
+  background-color: var(--floatHoverColor);
 }
 
 .ag-list-picker .item .icon-wrapper {
   width: 28px;
-  height: 28px;
+  height: 30px;
+  flex: 0 0 28px;
   display: flex;
-  justify-content: space-around;
+  justify-content: center;
   align-items: center;
-  padding-top: 2px;
+  opacity: 0.78;
 }
 
 .ag-list-picker .item .icon-wrapper span:before {
-  font-size: 14px;
+  font-size: 13px;
+}
+
+.ag-list-picker .icon-wrapper > svg,
+.ag-list-picker .item .icon-wrapper img {
+  width: 13px;
+  height: 13px;
 }
 
 .ag-list-picker .icon-wrapper > svg {
-  width: 14px;
-  height: 14px;
   fill: var(--iconColor);
 }
 
-.ag-list-picker .item .icon-wrapper img {
-  width: 14px;
-  height: 14px;
+.ag-list-picker .item .language {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--editorColor);
+  line-height: 30px;
 }
 
-.ag-list-picker .item .language {
-  color: var(--editorColor);
-  font-size: 14px;
-  line-height: 28px;
-  margin-left: 5px;
+.ag-list-picker .language-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ag-list-picker .language-alias {
+  flex: 0 0 auto;
+  color: var(--editorColor50);
+  font-family: monospace;
+  font-size: 10px;
+}
+
+.ag-list-picker .no-result {
+  padding: 8px 10px;
+  color: var(--editorColor50);
+  font-size: 11px;
 }

@@ -43,6 +43,22 @@ class Keyboard {
     }
   }
 
+  languageInputFor(target) {
+    return target?.closest?.('.ag-language-input') || null
+  }
+
+  commitLanguageInput(element) {
+    if (!element?.id) return false
+    const { contentState } = this.muya
+    const block = contentState.getBlock(element.id)
+    if (!block || block.functionType !== 'languageInput') return false
+    const language = String(element.textContent || '').trim()
+    if (block.text === language) return false
+    contentState.updateCodeLanguage(block, language)
+    this.muya.dispatchChange()
+    return true
+  }
+
   recordIsComposed() {
     const { container, eventCenter, contentState } = this.muya
     const handler = (event) => {
@@ -50,6 +66,9 @@ class Keyboard {
         this.isComposed = true
       } else if (event.type === 'compositionend') {
         this.isComposed = false
+        // Language identifiers are committed as one transaction on selection,
+        // Enter or blur instead of writing every IME composition step.
+        if (this.languageInputFor(event.target)) return
         // Because the compose event will not cause `input` event, So need call `inputHandler` by ourself
         contentState.inputHandler(event)
         eventCenter.dispatch('stateChange')
@@ -129,7 +148,7 @@ class Keyboard {
         case EVENT_KEYS.ArrowUp: // fallthrough
         case EVENT_KEYS.ArrowDown: // fallthrough
         case EVENT_KEYS.ArrowLeft: // fallthrough
-        case EVENT_KEYS.ArrowRight: // fallthrough
+        case EVENT_KEYS.ArrowRight:
           return contentState.docArrowHandler(event)
       }
     }
@@ -139,6 +158,7 @@ class Keyboard {
         container.classList.add('ag-meta-or-ctrl')
       }
 
+      const languageInput = this.languageInputFor(event.target)
       if (
         Object.keys(this.shownFloat).length > 0 &&
         (event.key === EVENT_KEYS.Enter ||
@@ -165,10 +185,27 @@ class Keyboard {
         }
         if (needPreventDefault) {
           event.preventDefault()
+          if (languageInput) event.stopPropagation()
         }
-        // event.stopPropagation()
         return
       }
+
+      if (languageInput) {
+        // Let the browser edit the visible identifier, but keep Muya's model
+        // unchanged until the user has finished choosing it.
+        event.stopPropagation()
+        if (event.key === EVENT_KEYS.Enter) {
+          event.preventDefault()
+          this.commitLanguageInput(languageInput)
+        } else if (event.key === EVENT_KEYS.Escape) {
+          event.preventDefault()
+          const block = contentState.getBlock(languageInput.id)
+          if (block) languageInput.textContent = block.text
+          eventCenter.dispatch('muya-code-picker', { reference: null })
+        }
+        return
+      }
+
       switch (event.key) {
         case EVENT_KEYS.Backspace:
           contentState.backspaceHandler(event)
@@ -185,7 +222,7 @@ class Keyboard {
         case EVENT_KEYS.ArrowUp: // fallthrough
         case EVENT_KEYS.ArrowDown: // fallthrough
         case EVENT_KEYS.ArrowLeft: // fallthrough
-        case EVENT_KEYS.ArrowRight: // fallthrough
+        case EVENT_KEYS.ArrowRight:
           if (!this.isComposed) {
             contentState.arrowHandler(event)
           }
@@ -204,28 +241,51 @@ class Keyboard {
 
   inputBinding() {
     const { container, eventCenter, contentState } = this.muya
+    const showCodePicker = (paragraph, lang) => {
+      if (lang && paragraph) {
+        eventCenter.dispatch('muya-code-picker', {
+          reference: getParagraphReference(paragraph, paragraph.id),
+          lang,
+          cb: (item) => {
+            contentState.selectLanguage(paragraph, item.name)
+            this.muya.dispatchChange()
+          }
+        })
+      } else {
+        eventCenter.dispatch('muya-code-picker', { reference: null })
+      }
+    }
+
     const inputHandler = (event) => {
+      const languageInput = this.languageInputFor(event.target)
+      if (languageInput) {
+        // Do not mutate ContentState or save the note for every character typed
+        // in the language identifier. The visible DOM is only a draft here.
+        showCodePicker(languageInput, String(languageInput.textContent || '').trim())
+        return
+      }
+
       if (!this.isComposed) {
         contentState.inputHandler(event)
         this.muya.dispatchChange()
       }
 
       const { lang, paragraph } = contentState.checkEditLanguage()
-      if (lang) {
-        eventCenter.dispatch('muya-code-picker', {
-          reference: getParagraphReference(paragraph, paragraph.id),
-          lang,
-          cb: (item) => {
-            contentState.selectLanguage(paragraph, item.name)
-          }
-        })
-      } else {
-        // hide code picker float box
-        eventCenter.dispatch('muya-code-picker', { reference: null })
-      }
+      showCodePicker(paragraph, lang)
+    }
+
+    const focusOutHandler = (event) => {
+      const languageInput = this.languageInputFor(event.target)
+      if (!languageInput) return
+      // A picker click runs after focusout. Delay the fallback commit so a
+      // selected item can rerender and disconnect the draft element first.
+      setTimeout(() => {
+        if (languageInput.isConnected) this.commitLanguageInput(languageInput)
+      })
     }
 
     eventCenter.attachDOMEvent(container, 'input', inputHandler)
+    eventCenter.attachDOMEvent(container, 'focusout', focusOutHandler)
   }
 
   keyupBinding() {

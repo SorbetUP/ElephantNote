@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createDomainClients } from '../../../../../Elephant/frontend/app/services/elephantnoteClient/domainClients'
-import { ELEPHANTNOTE_API_ACTIONS as API } from '../../../../../Elephant/shared/apiActions'
+import { createDomainClients } from '../../../../../../Elephant/frontend/app/services/elephantnoteClient/domainClients'
+import { ELEPHANTNOTE_API_ACTIONS as API } from '../../../../../../Elephant/shared/apiActions'
 
 const createClients = (responses = {}) => {
   const call = vi.fn(async (action, payload) => {

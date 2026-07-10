@@ -6,43 +6,42 @@ import { describe, expect, it } from 'vitest'
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(currentDirectory, '../../..')
 const read = (relativePath) => fs.readFileSync(path.join(repositoryRoot, relativePath), 'utf8')
+const exists = (relativePath) => fs.existsSync(path.join(repositoryRoot, relativePath))
 
-describe('canonical Rust note editor activation', () => {
-  it('keeps the real note host and replaces only its EditorWithTabs injection in Tauri', () => {
+describe('real Muya editor activation', () => {
+  it('keeps open notes routed through the real Muya EditorWithTabs component', () => {
     const mainContent = read('Elephant/frontend/app/components/shell/MainContent.vue')
     const viteConfig = read('vite.tauri.config.js')
 
     expect(mainContent).toContain("import NoteEditorHost from '../editor/NoteEditorHost.vue'")
     expect(mainContent).toContain('<note-editor-host')
     expect(mainContent).not.toContain('RustNoteEditorHost')
-    expect(viteConfig).toContain("if (source !== '@/components/editorWithTabs') return null")
-    expect(viteConfig).toContain('RustEditorWithTabs.vue')
-    expect(viteConfig).toContain('rustEditorWithTabsPlugin()')
+    expect(viteConfig).not.toContain('rustEditorWithTabsPlugin')
+    expect(viteConfig).not.toContain('RustEditorWithTabs.vue')
+    expect(exists('Elephant/frontend/app/components/editor/RustEditorWithTabs.vue')).toBe(false)
+    expect(exists('Elephant/frontend/app/components/editor/RustNoteEditorHost.vue')).toBe(false)
   })
 
-  it('mounts exactly one Rust surface and uses legacy Muya only as an explicit fallback', () => {
-    const host = read('Elephant/frontend/app/components/editor/RustEditorWithTabs.vue')
+  it('preserves the official Muya DOM surface instead of a raw Markdown renderer', () => {
+    const editorWithTabs = read('Elephant/frontend/src/renderer/src/components/editorWithTabs/index.vue')
+    const editor = read('Elephant/frontend/src/renderer/src/components/editorWithTabs/editor.vue')
 
-    expect(host).toContain('v-if="rustActive"')
-    expect(host).toContain('v-else')
-    expect(host).toContain('mode="active"')
-    expect(host).toContain("window.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'rust'")
-    expect(host).toContain("throw new Error('Rust Muya editor mounted without the canonical Rust engine.')")
-    expect(host).not.toContain('Teleport')
-    expect(host).not.toContain('display: none !important')
+    expect(editorWithTabs).toContain("import Editor from './editor.vue'")
+    expect(editorWithTabs).toContain('<editor')
+    expect(editor).toContain("import Muya from 'muya/lib'")
+    expect(editor).toContain("import 'muya/themes/default.css'")
+    expect(editor).toContain('editor.value = new Muya(ele, options)')
+    expect(editor).toContain('class="editor-component"')
+    expect(editor).not.toContain('MuyaRuntimeEditor')
   })
 
-  it('forbids silent JavaScript fallback while active mode is requested', () => {
+  it('keeps the experimental Rust renderer opt-in instead of replacing production Muya', () => {
+    const flags = read('Elephant/frontend/src/renderer/src/muya/runtimeFlags.js')
     const runtimeHook = read('Elephant/frontend/src/renderer/src/muya/useMuyaRuntimeEditor.js')
+
+    expect(flags).toContain('export const defaultMuyaRuntimeMode = () => MUYA_RUNTIME_FLAGS.disabled')
     expect(runtimeHook).toContain('allowJavaScriptFallback = false')
     expect(runtimeHook).toContain("rootRef.value.dataset.muyaEngine = 'unavailable'")
     expect(runtimeHook).toContain('active mode unavailable: Rust Tauri engine is required')
-    expect(runtimeHook).toContain('rootRef.value.dataset.muyaEngine = engineKind')
-  })
-
-  it('keeps JavaScript fallback explicit and test-only', () => {
-    const component = read('Elephant/frontend/src/renderer/src/muya/MuyaRuntimeEditor.vue')
-    expect(component).toContain('allowJavascriptFallback: { type: Boolean, default: false }')
-    expect(component).toContain('allowJavaScriptFallback: props.allowJavascriptFallback')
   })
 })

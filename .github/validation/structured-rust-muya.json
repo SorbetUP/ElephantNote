@@ -1,0 +1,15 @@
+{
+  "linuxDependencies": "success",
+  "setup": "success",
+  "critical": "failure",
+  "security": "skipped",
+  "platform": "skipped",
+  "lint": "skipped",
+  "rustfmt": "skipped",
+  "rustCheck": "skipped",
+  "rustTests": "skipped",
+  "structuredTests": "skipped",
+  "renderer": "skipped",
+  "unitTests": "skipped",
+  "validatedCommit": "45fd35f6520dc7c03589911fab9e6283beeaf462"
+}

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
+
 describe('declarative addon workspace views', () => {
   it('keeps external view code in the Worker and exposes state/action RPC only', () => {
     const runtime = read('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js')
@@ -30,17 +31,23 @@ describe('declarative addon workspace views', () => {
     expect(validator).toContain('registered views do not match manifest contributions')
   })
 
-  it('renders the task workspace in ElephantNote instead of accepting addon HTML', () => {
-    const host = read('Elephant/frontend/app/components/views/AddonWorkspaceHost.vue')
+  it('routes trusted task and calendar schemas without accepting addon HTML', () => {
+    const taskHost = read('Elephant/frontend/app/components/views/AddonWorkspaceHost.vue')
+    const router = read('Elephant/frontend/app/components/views/AddonWorkspaceRouter.vue')
+    const calendarHost = read('Elephant/frontend/app/components/views/CalendarAddonWorkspace.vue')
     const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
     const sidebar = read('Elephant/frontend/app/components/navigation/SidebarNav.vue')
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
 
-    expect(host).toContain("view.contribution.kind !== 'task-manager-v1'")
-    expect(host).toContain('contribution.getState')
-    expect(host).toContain('contribution.dispatch')
-    expect(host).not.toContain('v-html')
-    expect(main).toContain('<addon-workspace-host')
+    expect(taskHost).toContain('contribution.getState')
+    expect(taskHost).toContain('contribution.dispatch')
+    expect(taskHost).not.toContain('v-html')
+    expect(router).toContain("view.contribution.kind === 'task-manager-v1'")
+    expect(router).toContain("view.contribution.kind === 'calendar-v1'")
+    expect(calendarHost).toContain('props.view?.contribution?.getState')
+    expect(calendarHost).toContain('props.view?.contribution?.dispatch')
+    expect(calendarHost).not.toContain('v-html')
+    expect(main).toContain('<addon-workspace-router')
     expect(sidebar).toContain("addonsStore.getContributions('views')")
     expect(shell).toContain('@open-addon-view="openAddonView"')
   })

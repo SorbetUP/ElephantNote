@@ -88,6 +88,7 @@ export default class RealMuyaWithRustMirror extends Muya {
     this.__elephantRustExpectedMarkdown = state.markdown
     const muyaIndexCursor = selectionToMuyaIndexCursor(state.markdown, state.selection)
     super.setMarkdown(state.markdown, undefined, true, muyaIndexCursor)
+    super.clearHistory()
     return transaction
   }
 

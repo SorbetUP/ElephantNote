@@ -4,18 +4,29 @@ ElephantNote external addons are user-installable `.enaddon` packages. API v1 ex
 
 ## Built-in addons
 
-ElephantNote ships four compiled addons:
+ElephantNote ships five compiled addons:
 
 - **Daily Notes** creates a linked daily workspace with focus, tasks, notes and end-of-day review sections;
 - **Quick Capture** creates timestamped `Inbox/` notes with an explicit `unprocessed` state;
 - **Vault Overview** generates graph coverage, connected-note and orphan-note reports;
+- **Addon Profiles** installs, updates, enables and disables official catalogue addons from `Addon Profiles/default.json`;
 - **Addon Inspector** is a disabled-by-default developer reference for actions, settings and sidebar contributions.
 
-Built-in addons do not require Community Addons mode.
+Built-in addons do not require Community Addons mode. Addon Profiles cannot install arbitrary URLs or packages and enabling external addons through a profile still requires Community Addons consent.
 
 ## Official catalogue
 
 The application loads its official catalogue from the dedicated `addon-catalog` branch. The branch contains only catalogue metadata and addon sources.
+
+Current catalogue examples include:
+
+- Task Dashboard;
+- Broken Links Auditor;
+- GitHub Release Watcher;
+- Notion Markdown Importer;
+- Inbox Digest;
+- Finance Notes;
+- Addon Platform Proof.
 
 The Rust backend:
 
@@ -68,7 +79,7 @@ External addons are installed disabled.
 
 ## Community Addons mode
 
-Community Addons mode is disabled by default and requires explicit risk acknowledgement. Turning it off stops every external addon without uninstalling packages or deleting their private data.
+Community Addons mode is disabled by default and requires explicit risk acknowledgement. Turning it off stops every external addon without uninstalling packages or deleting private data.
 
 Worker isolation and permission checks reduce risk but do not prove that third-party code is safe. Users should review the publisher, source and requested capabilities.
 
@@ -161,21 +172,23 @@ The Addons settings page runs commands without a payload. Other internal invocat
 All paths are relative to the active vault and checked in Rust against the manifest scopes.
 
 ```js
-const entries = await api.notes.list('Inbox')
-const note = await api.notes.read(entries[0].path)
+const inboxEntries = await api.notes.list('Inbox')
+const allVisibleNotes = await api.notes.list('.')
+const note = await api.notes.read(inboxEntries[0].path)
 await api.notes.write('Generated/Report.md', '# Report\n')
 ```
 
 `notes.list(prefix)`:
 
 - requires a matching read scope;
+- accepts `.` as the vault-root sentinel only when the manifest declares `read: ["*"]`;
 - returns only Markdown files;
 - does not follow symbolic links;
 - excludes hidden files and directories, including `.elephantnote`;
 - is limited to 1,000 notes and 64 directory levels;
 - returns `path`, `size` and `modifiedAt` metadata.
 
-Scopes can target a file, a directory tree, or the whole vault:
+Scopes can target a file, a directory tree, or the whole visible vault:
 
 ```json
 {
@@ -184,7 +197,7 @@ Scopes can target a file, a directory tree, or the whole vault:
 }
 ```
 
-`*` grants access to every visible relative path and should be avoided.
+`*` grants access to every visible relative Markdown path and should be avoided unless an addon genuinely requires vault-wide analysis.
 
 ### HTTPS
 
@@ -215,6 +228,7 @@ The broker:
 - rejects URL credentials;
 - resolves the hostname and pins the request to a checked public address;
 - blocks loopback, private, link-local, multicast, documentation and other special-use addresses;
+- blocks private IPv4 represented as IPv6;
 - disables automatic redirects and revalidates every GET redirect;
 - permits at most five redirects;
 - limits request bodies to 1 MiB and responses to 5 MiB;
@@ -245,7 +259,7 @@ External addons do not receive:
 - the Tauri bridge;
 - direct browser networking APIs.
 
-All privileged operations are checked again in Rust.
+All privileged operations are checked again by an application broker or in Rust.
 
 ## Lifecycle and failures
 
@@ -278,6 +292,8 @@ node build/scripts/validate-addon-catalog.mjs path/to/addon-catalog
 - custom panels and iframe views;
 - Muya editor extensions;
 - secrets or keychain access;
+- native Apple Calendar or Apple Notes bridges;
+- OAuth-based service connectors;
 - publisher signatures.
 
-These capabilities must be added through explicit, permissioned API versions rather than by exposing application internals.
+These capabilities must be added through explicit, permissioned API versions rather than by exposing application internals. See `CONNECTOR_ROADMAP.md` for the concrete requirements for Apple Calendar, Apple Notes, direct Notion synchronization, email ingestion and Muya 3D blocks.

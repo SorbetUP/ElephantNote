@@ -9,6 +9,7 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
   const engine = createRustMuyaEngineClient(options)
   let ready = false
   let destroyed = false
+  let compositionSelection = null
   let queue = Promise.resolve()
 
   const initialized = engine.create(markdown).then(async() => {
@@ -53,6 +54,9 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
   }
 
   const apply = (operation, group = 'rust', { synchronizeSelection = true } = {}) => enqueue(async() => {
+    if (compositionSelection) {
+      throw new Error('Muya cannot apply a command while an IME composition is active.')
+    }
     if (synchronizeSelection) await synchronizeSelectionToRust()
     const transaction = await operation()
     if (transaction?.documentChanged) {
@@ -64,17 +68,47 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
   })
 
   const query = (operation, { synchronizeSelection = true } = {}) => enqueue(async() => {
-    if (synchronizeSelection) await synchronizeSelectionToRust()
+    if (synchronizeSelection && !compositionSelection) await synchronizeSelectionToRust()
     return operation()
   })
 
   const setMarkdown = (next, group = 'external') => enqueue(async() => {
+    compositionSelection = null
     await engine.reset(String(next || ''))
     await renderCanonicalState(group)
     return engine.state
   })
 
+  const startComposition = () => enqueue(async() => {
+    if (compositionSelection) return compositionSelection
+    const selection = await synchronizeSelectionToRust()
+    compositionSelection = selection
+      ? { anchor: selection.anchor, focus: selection.focus }
+      : { anchor: engine.state.selection.anchor, focus: engine.state.selection.focus }
+    return compositionSelection
+  })
+
+  const commitComposition = (text = '') => enqueue(async() => {
+    const selection = compositionSelection || engine.state?.selection
+    if (!selection) throw new Error('Muya IME composition has no valid selection.')
+    const transaction = await engine.commitComposition(selection, text)
+    compositionSelection = null
+    if (transaction?.documentChanged) {
+      await renderCanonicalState('composition')
+    } else {
+      restoreCanonicalSelection()
+    }
+    return transaction
+  })
+
+  const cancelComposition = () => enqueue(async() => {
+    compositionSelection = null
+    await renderCanonicalState('composition:cancel')
+    return engine.markdown
+  })
+
   const syncDomToRust = (group = 'input') => enqueue(async() => {
+    if (compositionSelection) return engine.markdown
     const selection = readDomSelection()
     view.renderLiveNow?.(group)
     const next = view.domToMarkdown()
@@ -99,6 +133,7 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
 
   const destroy = () => {
     destroyed = true
+    compositionSelection = null
     view.live?.cancel?.()
   }
 
@@ -114,8 +149,12 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     get documentState() { return view.state },
     get markdown() { return ready ? engine.markdown : view.markdown },
     get html() { return view.html },
+    get composing() { return Boolean(compositionSelection) },
     setMarkdown,
     syncDomToRust,
+    startComposition,
+    commitComposition,
+    cancelComposition,
     synchronizeSelectionToRust: () => enqueue(synchronizeSelectionToRust),
     restoreCanonicalSelection,
     destroy,

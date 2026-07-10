@@ -1,0 +1,86 @@
+name: Muya Rust Parity
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'Elephant/backend/tauri/src/markdown/**'
+      - 'Elephant/backend/tauri/src/lib_min.rs'
+      - 'Elephant/frontend/src/renderer/src/muya/**'
+      - 'Elephant/shared/muyaParityCases.json'
+      - 'tests/app/unit/muya*.spec.js'
+      - '.github/workflows/muya-rust-parity.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    name: Rust and renderer parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri Linux dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf \
+            wget
+
+      - uses: ./.github/actions/setup
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Elephant/backend/tauri/target
+          key: ${{ runner.os }}-muya-rust-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-muya-rust-
+            ${{ runner.os }}-cargo-
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
+
+      - name: Compile Tauri Rust backend
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+
+      - name: Run Rust Muya tests
+        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib markdown:: --no-default-features
+
+      - name: Run renderer Muya parity tests
+        shell: bash
+        run: |
+          pnpm exec vitest run \
+            tests/app/unit/muyaRustEngineRuntime.spec.js \
+            tests/app/unit/muyaSharedParityMatrix.spec.js \
+            tests/app/unit/muyaMarkdownSelectionRuntime.spec.js \
+            tests/app/unit/muyaFullEditorRuntime.spec.js \
+            tests/app/unit/muyaRuntimeInputParity.spec.js

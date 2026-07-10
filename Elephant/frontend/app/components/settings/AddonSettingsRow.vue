@@ -95,16 +95,23 @@ const confirmUninstall = () => {
 }
 
 const permissionLabels = computed(() => {
-  const permissions = props.addon?.manifest?.permissions
-  if (Array.isArray(permissions)) return permissions
-  if (!permissions || typeof permissions !== 'object') return []
+  const manifest = props.addon?.manifest || {}
+  const permissions = manifest.permissions
   const labels = []
-  for (const scope of permissions.notes?.read || []) labels.push(`Read ${scope}`)
-  for (const scope of permissions.notes?.write || []) labels.push(`Write ${scope}`)
-  for (const host of permissions.network?.hosts || []) labels.push(`HTTPS ${host}`)
-  if (permissions.storage) labels.push('Private storage')
-  if (permissions.commands) labels.push('Commands')
-  return labels
+  if (Array.isArray(permissions)) labels.push(...permissions)
+  else if (permissions && typeof permissions === 'object') {
+    for (const scope of permissions.notes?.read || []) labels.push(`Read ${scope}`)
+    for (const scope of permissions.notes?.write || []) labels.push(`Write ${scope}`)
+    for (const host of permissions.network?.hosts || []) labels.push(`HTTPS ${host}`)
+    if (permissions.storage) labels.push('Private storage')
+    if (permissions.commands) labels.push('Commands')
+  }
+  const views = Array.isArray(manifest.contributes?.views) ? manifest.contributes.views : []
+  for (const view of views) {
+    const title = typeof view?.title === 'string' && view.title.trim() ? view.title.trim() : 'Addon'
+    labels.push(`Interactive workspace: ${title}`)
+  }
+  return [...new Set(labels)]
 })
 </script>
 

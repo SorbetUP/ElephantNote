@@ -11,6 +11,9 @@ APK_ROOT="$TAURI_DIR/gen/android/app/build/outputs/apk"
 ANDROID_GRADLE_FILE="$TAURI_DIR/gen/android/app/build.gradle.kts"
 ANDROID_MANIFEST="$TAURI_DIR/gen/android/app/src/main/AndroidManifest.xml"
 ANDROID_JNI_LIBS="$TAURI_DIR/gen/android/app/src/main/jniLibs"
+ANDROID_RESOURCES="$TAURI_DIR/gen/android/app/src/main/res"
+ANDROID_ICON_SOURCE="$ROOT_DIR/Elephant/assets/static/icon.png"
+ANDROID_ICON_DEST="$ANDROID_RESOURCES/drawable-nodpi/elephantnote_launcher.png"
 MAIN_ACTIVITY="$TAURI_DIR/gen/android/app/src/main/java/com/elephantnote/app/MainActivity.kt"
 MAIN_ACTIVITY_TEMPLATE="$ROOT_DIR/build/android/MainActivity.kt"
 RENDERER_OUT="$ROOT_DIR/build/out/renderer"
@@ -107,6 +110,45 @@ NODE
   echo "[android-apk] installed Android camera permission and optional camera feature"
 }
 
+install_android_launcher_icon() {
+  if [ ! -s "$ANDROID_ICON_SOURCE" ]; then
+    echo "Missing ElephantNote launcher icon: $ANDROID_ICON_SOURCE" >&2
+    exit 1
+  fi
+  if [ ! -f "$ANDROID_MANIFEST" ]; then
+    echo "Missing generated Android manifest: $ANDROID_MANIFEST" >&2
+    exit 1
+  fi
+
+  mkdir -p "$(dirname "$ANDROID_ICON_DEST")"
+  cp "$ANDROID_ICON_SOURCE" "$ANDROID_ICON_DEST"
+  cmp -s "$ANDROID_ICON_SOURCE" "$ANDROID_ICON_DEST"
+
+  node - "$ANDROID_MANIFEST" <<'NODE'
+const fs = require('node:fs')
+const manifestPath = process.argv[2]
+let source = fs.readFileSync(manifestPath, 'utf8')
+const applicationPattern = /<application\b[^>]*>/
+const application = source.match(applicationPattern)?.[0]
+if (!application) throw new Error(`Unable to locate <application> in ${manifestPath}`)
+
+const setAttribute = (tag, name, value) => {
+  const attributePattern = new RegExp(`\\s${name}="[^"]*"`)
+  if (attributePattern.test(tag)) return tag.replace(attributePattern, ` ${name}="${value}"`)
+  return tag.replace(/>$/, ` ${name}="${value}">`)
+}
+
+let updated = setAttribute(application, 'android:icon', '@drawable/elephantnote_launcher')
+updated = setAttribute(updated, 'android:roundIcon', '@drawable/elephantnote_launcher')
+source = source.replace(application, updated)
+fs.writeFileSync(manifestPath, source)
+NODE
+
+  grep -q 'android:icon="@drawable/elephantnote_launcher"' "$ANDROID_MANIFEST"
+  grep -q 'android:roundIcon="@drawable/elephantnote_launcher"' "$ANDROID_MANIFEST"
+  echo "[android-apk] installed ElephantNote launcher icon"
+}
+
 install_main_activity() {
   if [ ! -f "$MAIN_ACTIVITY_TEMPLATE" ]; then
     echo "Missing tracked Android activity template: $MAIN_ACTIVITY_TEMPLATE" >&2
@@ -190,6 +232,7 @@ if [ ! -d "$TAURI_DIR/gen/android" ]; then
 fi
 
 install_android_manifest_permissions
+install_android_launcher_icon
 install_main_activity
 ensure_compressed_native_libraries "$ANDROID_GRADLE_FILE"
 clean_generated_native_libraries

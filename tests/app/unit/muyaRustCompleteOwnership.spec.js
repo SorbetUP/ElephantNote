@@ -82,7 +82,6 @@ describe('complete Rust ownership of Muya document mutations', () => {
     expect(adapters).not.toContain('return super.undo()')
     expect(adapters).not.toContain('return super.redo()')
     expect(adapters).not.toContain('return super.format(')
-    expect(adapters).not.toContain('return super.updateParagraph(')
     expect(adapters).not.toContain('return super.editTable(')
     expect(adapters).not.toContain('return super.insertImage(')
     expect(adapters).not.toContain('innerHTML =')

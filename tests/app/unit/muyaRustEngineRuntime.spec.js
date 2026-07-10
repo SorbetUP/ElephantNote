@@ -92,6 +92,50 @@ describe('Muya Rust engine runtime client', () => {
     expect(client.state.revision).toBe(6)
   })
 
+  it('routes clipboard image footnote slash and preview descriptors to Rust', async() => {
+    const calls = []
+    const invoke = async(command, payload = {}) => {
+      calls.push({ command, payload })
+      if (command === 'tauri_muya_engine_create') return stateFor(payload.markdown)
+      if (command === 'tauri_muya_engine_query') return { queryType: payload.query.type }
+      throw new Error(`unexpected command: ${command}`)
+    }
+
+    const client = createRustMuyaEngineClient({ invoke })
+    await client.create('A[^n]')
+    await client.clipboard()
+    await client.imageToolbar(2)
+    await client.footnotePopup()
+    await client.slashCommands('/mer')
+    await client.previewDescriptor('code_fence', 'mermaid', 'graph TD')
+
+    expect(calls.slice(1).map((entry) => entry.command))
+      .toEqual(Array(5).fill('tauri_muya_engine_query'))
+    expect(calls[1].payload.query).toEqual({ type: 'clipboard' })
+    expect(calls[2].payload.query).toEqual({ type: 'imageToolbar', cursor: 2 })
+    expect(calls[3].payload.query).toEqual({ type: 'footnotePopup', cursor: null })
+    expect(calls[4].payload.query).toEqual({ type: 'slashCommands', query: '/mer' })
+    expect(calls[5].payload.query).toEqual({
+      type: 'previewDescriptor',
+      blockType: 'code_fence',
+      language: 'mermaid',
+      text: 'graph TD'
+    })
+    expect(calls[4].payload.state.markdown).toBe('A[^n]')
+  })
+
+  it('allows stateless slash and preview queries but rejects stateful queries before create', async() => {
+    const invoke = async(command, payload = {}) => {
+      expect(command).toBe('tauri_muya_engine_query')
+      expect(payload.state).toBeNull()
+      return []
+    }
+    const client = createRustMuyaEngineClient({ invoke })
+    await client.slashCommands('table')
+    await client.previewDescriptor('paragraph', null, 'x')
+    await expect(client.clipboard()).rejects.toThrow('initialized')
+  })
+
   it('sends batches as one backend request', async() => {
     const invoke = async(command, payload = {}) => {
       if (command === 'tauri_muya_engine_create') return stateFor(payload.markdown)

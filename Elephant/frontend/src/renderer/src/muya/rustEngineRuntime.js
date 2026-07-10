@@ -1,13 +1,9 @@
 const requireInvoke = (target = globalThis) => {
   const ipcRenderer = target?.tauri?.ipcRenderer
-  if (typeof ipcRenderer?.invoke === 'function') {
-    return ipcRenderer.invoke.bind(ipcRenderer)
-  }
+  if (typeof ipcRenderer?.invoke === 'function') return ipcRenderer.invoke.bind(ipcRenderer)
 
   const core = target?.__TAURI__?.core
-  if (typeof core?.invoke === 'function') {
-    return core.invoke.bind(core)
-  }
+  if (typeof core?.invoke === 'function') return core.invoke.bind(core)
 
   throw new Error('Muya Rust engine requires the Tauri invoke bridge.')
 }
@@ -86,6 +82,17 @@ export const createRustMuyaEngineClient = ({
     return transaction
   }
 
+  const applySpecialized = async(sessionCommand, command) => {
+    if (!usesSession) throw new Error('Complete Muya commands require a Rust-owned session.')
+    if (!state) throw new Error('Muya Rust session must be initialized before applying commands.')
+    const transaction = await call(sessionCommand, {
+      editorId,
+      command: ensureCommand(command)
+    })
+    state = ensureState(transaction?.state)
+    return transaction
+  }
+
   const query = async(queryCommand, { requireState = true } = {}) => {
     if (requireState && !state) {
       throw new Error('Muya Rust engine must be initialized before querying editor state.')
@@ -123,6 +130,10 @@ export const createRustMuyaEngineClient = ({
     state = ensureState(transaction?.state)
     return transaction
   }
+  const applyComplete = async(command) => applySpecialized(
+    'tauri_muya_session_apply_complete',
+    command
+  )
 
   const syncDocument = async(markdown, selection, continueGroup = false) => {
     if (!state) throw new Error('Muya Rust engine must be initialized before synchronizing a document.')
@@ -140,10 +151,7 @@ export const createRustMuyaEngineClient = ({
 
   const pasteClipboard = async(html = '', text = '') => {
     if (!state) throw new Error('Muya Rust engine must be initialized before pasting clipboard data.')
-    const payload = {
-      html: String(html),
-      text: String(text)
-    }
+    const payload = { html: String(html), text: String(text) }
     const transaction = usesSession
       ? await call('tauri_muya_session_paste_clipboard', { editorId, ...payload })
       : await call('tauri_muya_engine_paste_clipboard', { state, ...payload })
@@ -152,9 +160,7 @@ export const createRustMuyaEngineClient = ({
   }
 
   const applyBatch = async(commands = []) => {
-    if (usesSession) {
-      throw new Error('Batch commands are not yet available on Rust-owned Muya sessions.')
-    }
+    if (usesSession) throw new Error('Batch commands are not available on Rust-owned Muya sessions.')
     if (!state) throw new Error('Muya Rust engine must be initialized before applying commands.')
     const transaction = await call('tauri_muya_engine_apply_batch', {
       state,
@@ -166,10 +172,7 @@ export const createRustMuyaEngineClient = ({
 
   const commitComposition = async(selection, text) => {
     if (!state) throw new Error('Muya Rust engine must be initialized before committing composition.')
-    const payload = {
-      selection: ensureSelection(selection),
-      text: String(text)
-    }
+    const payload = { selection: ensureSelection(selection), text: String(text) }
     const transaction = usesSession
       ? await call('tauri_muya_session_commit_composition', { editorId, ...payload })
       : await call('tauri_muya_engine_commit_composition', { state, ...payload })
@@ -198,6 +201,7 @@ export const createRustMuyaEngineClient = ({
     apply,
     applyGrouped,
     applyParity,
+    applyComplete,
     pasteClipboard,
     applyBatch,
     commitComposition,
@@ -234,6 +238,58 @@ export const createRustMuyaEngineClient = ({
       text: String(text)
     }),
     insertTemplate: (id) => applyParity({ type: 'insertTemplate', id: String(id) }),
+    replaceRange: (start, end, text = '') => applyComplete({
+      type: 'replaceRange',
+      start,
+      end,
+      text: String(text)
+    }),
+    completeDeleteBackward: () => applyComplete({ type: 'deleteBackward' }),
+    completeDeleteForward: () => applyComplete({ type: 'deleteForward' }),
+    insertParagraph: (location, text = '') => applyComplete({
+      type: 'insertParagraph',
+      location: String(location),
+      text: String(text)
+    }),
+    duplicateBlock: () => applyComplete({ type: 'duplicateBlock' }),
+    deleteBlock: () => applyComplete({ type: 'deleteBlock' }),
+    moveBlock: (fromStart, fromEnd, target) => applyComplete({
+      type: 'moveBlock',
+      fromStart,
+      fromEnd,
+      target
+    }),
+    indentSelection: ({ outdent = false, width = 2 } = {}) => applyComplete({
+      type: 'indentSelection',
+      outdent: Boolean(outdent),
+      width
+    }),
+    toggleTask: () => applyComplete({ type: 'toggleTask' }),
+    setCodeLanguage: (language = '') => applyComplete({
+      type: 'setCodeLanguage',
+      language: String(language)
+    }),
+    insertLink: (url, title = '') => applyComplete({
+      type: 'insertLink',
+      url: String(url),
+      title: String(title)
+    }),
+    removeLink: () => applyComplete({ type: 'removeLink' }),
+    searchReplace: ({
+      query: searchQuery,
+      replacement = '',
+      replaceAll = false,
+      caseSensitive = false,
+      wholeWord = false
+    }) => applyComplete({
+      type: 'searchReplace',
+      query: String(searchQuery),
+      replacement: String(replacement),
+      replaceAll: Boolean(replaceAll),
+      caseSensitive: Boolean(caseSensitive),
+      wholeWord: Boolean(wholeWord)
+    }),
+    selectAll: () => applyComplete({ type: 'selectAll' }),
     jsonState: async() => ensureJsonState(await query({ type: 'jsonState' })),
     clipboard: () => query({ type: 'clipboard' }),
     imageToolbar: (cursor = null) => query({ type: 'imageToolbar', cursor }),

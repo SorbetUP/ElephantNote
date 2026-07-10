@@ -35,6 +35,9 @@ mod muya_composition_transaction_tests;
 mod muya_edge_parity_tests;
 
 #[cfg(test)]
+mod muya_grouped_history_tests;
+
+#[cfg(test)]
 mod muya_json_state_parity_tests;
 
 #[cfg(test)]

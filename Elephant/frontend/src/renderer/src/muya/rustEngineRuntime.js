@@ -80,6 +80,18 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
   )
   const applyParity = async(command) => applyTransaction('tauri_muya_engine_apply_parity', command)
 
+  const syncDocument = async(markdown, selection, continueGroup = false) => {
+    if (!state) throw new Error('Muya Rust engine must be initialized before synchronizing a document.')
+    const transaction = await call('tauri_muya_engine_sync_document', {
+      state,
+      markdown: String(markdown),
+      selection: ensureSelection(selection),
+      continueGroup: Boolean(continueGroup)
+    })
+    state = ensureState(transaction?.state)
+    return transaction
+  }
+
   const applyBatch = async(commands = []) => {
     if (!state) throw new Error('Muya Rust engine must be initialized before applying commands.')
     const transaction = await call('tauri_muya_engine_apply_batch', {
@@ -108,6 +120,7 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
     get markdown() { return state?.markdown || '' },
     create,
     reset,
+    syncDocument,
     capabilities,
     apply,
     applyGrouped,

@@ -29,6 +29,9 @@ mod deterministic_parity_render_tests;
 mod editor_parity_tests;
 
 #[cfg(test)]
+mod muya_composition_transaction_tests;
+
+#[cfg(test)]
 mod muya_edge_parity_tests;
 
 #[cfg(test)]

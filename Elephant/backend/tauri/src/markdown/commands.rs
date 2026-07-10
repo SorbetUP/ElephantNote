@@ -8,6 +8,7 @@ use super::muya_extras::collect_muya_extras;
 use super::muya_interactions::{commit_composition, editor_snapshot, image_selection, start_composition, table_contract, table_insert_column, table_insert_row, update_composition, cancel_composition, CompositionState};
 use super::muya_navigation::{detect_input_rule, move_cursor};
 use super::muya_parity::{apply_parity_command, MuyaParityCommand};
+use super::muya_ui::{execute_ui_query, MuyaUiQuery};
 use super::parser_v4::{extract_images, extract_links, parse_blocks, split_frontmatter};
 
 #[tauri::command]
@@ -182,10 +183,18 @@ pub fn tauri_muya_engine_apply_parity(
 }
 
 #[tauri::command]
+pub fn tauri_muya_engine_query(
+  state: Option<MuyaEditorState>,
+  query: MuyaUiQuery,
+) -> Result<Value, String> {
+  execute_ui_query(state.as_ref(), query)
+}
+
+#[tauri::command]
 pub fn tauri_muya_engine_capabilities() -> Value {
   json!({
     "engine": "rust",
-    "version": 2,
+    "version": 3,
     "offsetEncoding": "utf16",
     "history": { "undo": true, "redo": true, "maximumEntries": 100 },
     "commands": [
@@ -207,6 +216,13 @@ pub fn tauri_muya_engine_capabilities() -> Value {
       "resizeImage",
       "upsertFootnote",
       "insertTemplate"
+    ],
+    "uiQueries": [
+      "clipboard",
+      "imageToolbar",
+      "footnotePopup",
+      "slashCommands",
+      "previewDescriptor"
     ],
     "inlineMarkers": ["**", "*", "~~", "`", "=="],
     "blockKinds": [

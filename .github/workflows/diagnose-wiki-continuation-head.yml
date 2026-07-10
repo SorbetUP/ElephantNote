@@ -24,7 +24,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run view 29061976875 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/automatic-wiki-patch.log
+          gh run view 29062113569 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/automatic-wiki-patch.log
           python - <<'PY'
           from pathlib import Path
           lines = Path('/tmp/automatic-wiki-patch.log').read_text(errors='replace').splitlines()
@@ -41,4 +41,4 @@ jobs:
                   compact.append(line)
           Path('/tmp/compact.log').write_text('\n'.join(compact[-120:]) or '\n'.join(lines[-120:]))
           PY
-          gh pr comment 37 --repo "$GITHUB_REPOSITORY" --body "$(printf '### Automatic Wiki format failure (compact)\n\n```text\n%s\n```' "$(cat /tmp/compact.log)")"
+          gh pr comment 37 --repo "$GITHUB_REPOSITORY" --body "$(printf '### Automatic Wiki format failure 2 (compact)\n\n```text\n%s\n```' "$(cat /tmp/compact.log)")"

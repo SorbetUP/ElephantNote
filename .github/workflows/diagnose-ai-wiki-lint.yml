@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          pnpm exec eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue > /tmp/ai-wiki-lint.log 2>&1
+          Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue > /tmp/ai-wiki-lint.log 2>&1
           status=$?
           set -e
           cat /tmp/ai-wiki-lint.log

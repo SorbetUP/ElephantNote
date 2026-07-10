@@ -383,26 +383,32 @@ export class ExternalAddonController {
   }
 
   getRecord(addonId) { return this.records.get(addonId) || null }
+
   isTrusted(addonId) {
     const record = this.getRecord(addonId)
     return Boolean(record && isTrustedExternalManifest({ ...record.manifest, source: 'external' }))
   }
+
   getTrustState(addonId) {
     const record = this.getRecord(addonId)
     if (!record) throw new Error(`Unknown external addon: ${addonId}`)
     return getTrustedApproval(record)
   }
+
   approveTrusted(addonId) {
     const record = this.getRecord(addonId)
     if (!record || !this.isTrusted(addonId)) throw new Error(`Addon does not request full app access: ${addonId}`)
     return approveTrustedAddon(record)
   }
+
   revokeTrusted(addonId) {
     const record = this.getRecord(addonId)
     if (!record) throw new Error(`Unknown external addon: ${addonId}`)
     return revokeTrustedAddon(record)
   }
+
   getSafeMode() { return getTrustedSafeMode() }
+
   setSafeMode(enabled) { return setTrustedSafeMode(enabled) }
 
   async installFromPath(packagePath) {

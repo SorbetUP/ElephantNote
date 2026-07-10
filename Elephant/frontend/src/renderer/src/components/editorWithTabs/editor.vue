@@ -226,6 +226,15 @@ let printer = null
 let spellchecker = null
 let switchLanguageCommand = null
 let imageViewer = null
+let boundDocumentId = ''
+let suppressEditorChangesUntil = 0
+const PROGRAMMATIC_CHANGE_GUARD_MS = 350
+
+const beginProgrammaticEditorUpdate = (documentId, callback) => {
+  boundDocumentId = documentId || currentFile.value?.id || boundDocumentId
+  suppressEditorChangesUntil = Date.now() + PROGRAMMATIC_CHANGE_GUARD_MS
+  callback()
+}
 
 class SimpleImageViewer {
   constructor (container, { url }) {
@@ -1024,20 +1033,23 @@ const handleDialogTableConfirm = () => {
 }
 
 // listen for `open-single-file` event, it will call this method only when open a new file.
-const setMarkdownToEditor = ({ markdown: newMarkdown, cursor: newCursor }) => {
+const setMarkdownToEditor = ({ id, markdown: newMarkdown, cursor: newCursor }) => {
   if (editor.value) {
     const editorMarkdown = props.toEditorMarkdown(newMarkdown)
-    editor.value.clearHistory()
-    if (newCursor) {
-      editor.value.setMarkdown(editorMarkdown, newCursor, true)
-    } else {
-      editor.value.setMarkdown(editorMarkdown)
-    }
+    beginProgrammaticEditorUpdate(id, () => {
+      editor.value.clearHistory()
+      if (newCursor) {
+        editor.value.setMarkdown(editorMarkdown, newCursor, true)
+      } else {
+        editor.value.setMarkdown(editorMarkdown)
+      }
+    })
   }
 }
 
 // listen for markdown change form source mode or change tabs etc
 const handleFileChange = ({
+  id,
   markdown: newMarkdown,
   cursor: newCursor,
   renderCursor,
@@ -1061,7 +1073,9 @@ const handleFileChange = ({
         muyaIndexCursor,
         blocks
       })
-      editor.value.setMarkdown(editorMarkdown, newCursor, renderCursor, muyaIndexCursor, blocks)
+      beginProgrammaticEditorUpdate(id, () => {
+        editor.value.setMarkdown(editorMarkdown, newCursor, renderCursor, muyaIndexCursor, blocks)
+      })
     } else if (newCursor) {
       editor.value.setCursor(newCursor)
     }
@@ -1136,25 +1150,29 @@ onMounted(() => {
   printer = new Printer()
   const ele = editorRef.value
 
-  // use muya UI plugins
-  Muya.use(TablePicker)
-  Muya.use(QuickInsert)
-  Muya.use(CodePicker)
-  Muya.use(EmojiPicker)
-  Muya.use(ImagePathPicker)
-  Muya.use(ImageSelector, {
-    unsplashAccessKey: process.env.UNSPLASH_ACCESS_KEY,
-    photoCreatorClick
-  })
-  Muya.use(Transformer)
-  Muya.use(ImageToolbar)
-  Muya.use(FormatPicker)
-  Muya.use(FrontMenu)
-  Muya.use(LinkTools, {
-    jumpClick
-  })
-  Muya.use(FootnoteTool)
-  Muya.use(TableBarTools)
+  // Muya plugins are global. Registering them on every editor mount duplicates
+  // floating menus and event handlers across tab switches.
+  if (!globalThis.__ELEPHANT_MUYA_PLUGINS_INSTALLED__) {
+    Muya.use(TablePicker)
+    Muya.use(QuickInsert)
+    Muya.use(CodePicker)
+    Muya.use(EmojiPicker)
+    Muya.use(ImagePathPicker)
+    Muya.use(ImageSelector, {
+      unsplashAccessKey: process.env.UNSPLASH_ACCESS_KEY,
+      photoCreatorClick
+    })
+    Muya.use(Transformer)
+    Muya.use(ImageToolbar)
+    Muya.use(FormatPicker)
+    Muya.use(FrontMenu)
+    Muya.use(LinkTools, {
+      jumpClick
+    })
+    Muya.use(FootnoteTool)
+    Muya.use(TableBarTools)
+    globalThis.__ELEPHANT_MUYA_PLUGINS_INSTALLED__ = true
+  }
 
   const options = {
     focusMode: focus.value,
@@ -1209,6 +1227,8 @@ onMounted(() => {
     })
   }
 
+  boundDocumentId = currentFile.value?.id || ''
+  suppressEditorChangesUntil = Date.now() + PROGRAMMATIC_CHANGE_GUARD_MS
   editor.value = new Muya(ele, options)
 
   const { container } = editor.value
@@ -1260,16 +1280,27 @@ onMounted(() => {
   bus.on('replace-misspelling', replaceMisspelling)
 
   editor.value.on('change', (changes) => {
-    // There is a chance that this event is fired AFTER the tab is switched. If we purely rely on this.currentFile later on
-    // it can cause invalid updates. Hence, we need the id to identify changes as part of each tab
-    const { id } = currentFile.value
-    if (id) {
-      const nextChanges = {
-        ...changes,
-        markdown: props.fromEditorMarkdown(changes.markdown)
-      }
-      editorStore.LISTEN_FOR_CONTENT_CHANGE(Object.assign(nextChanges, { id }))
+    // setMarkdown() may emit a normal change event. Treat it as hydration, never
+    // as a user edit, otherwise opening a tab can rewrite the file on disk.
+    if (Date.now() < suppressEditorChangesUntil) return
+    const id = boundDocumentId || currentFile.value?.id
+    const target = editorStore.tabs.find((tab) => tab.id === id)
+    if (!id || !target) return
+    const documentMarkdown = props.fromEditorMarkdown(changes.markdown)
+    const nextChanges = {
+      ...changes,
+      markdown: documentMarkdown
     }
+    editorStore.LISTEN_FOR_CONTENT_CHANGE(Object.assign(nextChanges, { id }))
+    window.dispatchEvent(
+      new CustomEvent('elephantnote:editor-user-change', {
+        detail: {
+          id,
+          pathname: target.pathname || '',
+          markdown: documentMarkdown
+        }
+      })
+    )
   })
 
   editor.value.on('scroll', (scrollEvent) => {

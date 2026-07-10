@@ -109,7 +109,6 @@ const { platform } = storeToRefs(mainStore)
 const { sourceCode, textDirection } = storeToRefs(preferencesStore)
 const { currentFile } = storeToRefs(editorStore)
 
-const AUTOSAVE_POLL_MS = 500
 const AUTOSAVE_DELAY_MS = 160
 const LARGE_EDIT_AUTOSAVE_DELAY_MS = 60
 const HUGE_EDIT_AUTOSAVE_DELAY_MS = 20
@@ -171,7 +170,6 @@ const setShellTheme = inject('setElephantnoteTheme', (value) => {
   window.localStorage.setItem('elephantnote:theme', value)
 })
 let noteSaveTimer = null
-let noteSaveInterval = null
 let noteSaveInFlight = false
 let pendingSaveAfterFlight = null
 let lastSavedNotePath = ''
@@ -199,6 +197,20 @@ const getActiveNoteFile = () => {
     return currentFile.value
   }
   return null
+}
+const notePathForFile = (file) => {
+  const vaultPath = store.activeVault?.path
+  const pathname = file?.pathname
+  if (!vaultPath || !pathname) return ''
+  const relativePath = window.path.relative(vaultPath, pathname)
+  if (!relativePath || relativePath.startsWith('..') || window.path.isAbsolute(relativePath)) return ''
+  return relativePath
+}
+const liveFileForSnapshot = (file, notePath, nextMarkdown) => {
+  if (!file?.id) return null
+  const live = editorStore.tabs.find((tab) => tab.id === file.id)
+  if (!live || notePathForFile(live) !== notePath || live.markdown !== nextMarkdown) return null
+  return live
 }
 const activeNoteFile = computed(
   () => getActiveNoteFile() || (openedNoteAbsolutePath.value ? null : currentFile.value)
@@ -586,7 +598,16 @@ const scheduleNoteSave = (
   })
   noteSaveTimer = window.setTimeout(() => {
     noteSaveTimer = null
-    void persistNoteMarkdown(notePath, nextMarkdown, file, reason)
+    const liveFile = liveFileForSnapshot(file, notePath, nextMarkdown)
+    if (!liveFile) {
+      pushEditorLog('info', '[elephantnote:save] stale scheduled write skipped', {
+        notePath,
+        fileId: file?.id,
+        reason
+      })
+      return
+    }
+    void persistNoteMarkdown(notePath, nextMarkdown, liveFile, reason)
   }, effectiveDelay)
 }
 
@@ -599,27 +620,24 @@ const rememberObservedMarkdown = (notePath, nextMarkdown, file, reason = 'observ
     reason,
     isSaved: file?.isSaved
   })
-  if (file?.isSaved === false) {
-    scheduleNoteSave(notePath, nextMarkdown, file, 0, `${reason}:first-unsaved`)
-    return
+  if (file?.isSaved !== false) {
+    lastSavedNotePath = notePath
+    lastSavedMarkdown = nextMarkdown
   }
-  lastSavedNotePath = notePath
-  lastSavedMarkdown = nextMarkdown
 }
 
-const pollActiveMarkdownSave = (reason = 'poll') => {
-  const file = getActiveNoteFile() || currentFile.value
-  const notePath = currentNoteRelativePath.value || store.openedNotePath
-  const nextMarkdown = file?.markdown
-  if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return
-  if (lastSeenNotePath !== notePath) {
-    rememberObservedMarkdown(notePath, nextMarkdown, file, reason)
-    return
-  }
-  if (lastSeenMarkdown === nextMarkdown) return
-  const editDelta = estimateEditDelta(lastSeenMarkdown, nextMarkdown)
+const handleEditorUserChange = (event) => {
+  const detail = event?.detail || {}
+  const file = editorStore.tabs.find((tab) => tab.id === detail.id)
+  const notePath = notePathForFile(file)
+  const nextMarkdown = detail.markdown
+  if (!file || !notePath || typeof nextMarkdown !== 'string') return
+  if (file.markdown !== nextMarkdown) return
+  const previousMarkdown = lastSeenNotePath === notePath ? lastSeenMarkdown : lastSavedMarkdown
+  const editDelta = estimateEditDelta(previousMarkdown, nextMarkdown)
+  lastSeenNotePath = notePath
   lastSeenMarkdown = nextMarkdown
-  scheduleNoteSave(notePath, nextMarkdown, file, AUTOSAVE_DELAY_MS, reason, editDelta)
+  scheduleNoteSave(notePath, nextMarkdown, file, AUTOSAVE_DELAY_MS, 'muya-user-change', editDelta)
 }
 
 const flushActiveNoteSave = async (reason = 'flush') => {
@@ -631,6 +649,7 @@ const flushActiveNoteSave = async (reason = 'flush') => {
   const notePath = currentNoteRelativePath.value || store.openedNotePath
   const nextMarkdown = file?.markdown
   if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return false
+  if (file.isSaved !== false) return true
   if (lastSavedNotePath === notePath && lastSavedMarkdown === nextMarkdown) return true
   pushEditorLog('info', '[elephantnote:save] flush active note', {
     notePath,
@@ -669,15 +688,19 @@ watch(
   }),
   ({ notePath, markdown: nextMarkdown, file }, previous) => {
     if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return
-    if (previous?.notePath !== notePath) {
-      rememberObservedMarkdown(notePath, nextMarkdown, file, 'vue-watch')
+    const identityChanged = previous?.notePath !== notePath || previous?.file?.id !== file.id
+    if (identityChanged) {
+      if (noteSaveTimer) {
+        window.clearTimeout(noteSaveTimer)
+        noteSaveTimer = null
+      }
+      rememberObservedMarkdown(notePath, nextMarkdown, file, 'document-switch')
       return
     }
-    if (previous?.markdown === nextMarkdown) return
-    const editDelta = estimateEditDelta(previous?.markdown, nextMarkdown)
+    // Generic reactive changes include disk hydration and tab restoration. They
+    // update the baseline only; only the explicit Muya user-change event saves.
     lastSeenNotePath = notePath
     lastSeenMarkdown = nextMarkdown
-    scheduleNoteSave(notePath, nextMarkdown, file, AUTOSAVE_DELAY_MS, 'vue-watch', editDelta)
   }
 )
 
@@ -898,8 +921,12 @@ onMounted(() => {
   })
   bus.on('ELEPHANT::open-excalidraw', openExcalidraw)
   bus.on('open-excalidraw-from-image', openExcalidrawFromImage)
-  pollActiveMarkdownSave('mount')
-  noteSaveInterval = window.setInterval(() => pollActiveMarkdownSave('interval'), AUTOSAVE_POLL_MS)
+  window.addEventListener('elephantnote:editor-user-change', handleEditorUserChange)
+  const file = getActiveNoteFile() || currentFile.value
+  const notePath = notePathForFile(file) || currentNoteRelativePath.value || store.openedNotePath
+  if (notePath && file?.id && typeof file.markdown === 'string') {
+    rememberObservedMarkdown(notePath, file.markdown, file, 'mount-baseline')
+  }
 })
 onBeforeUnmount(() => {
   pushEditorLog('info', '[elephantnote:editor] before unmount', {
@@ -907,10 +934,7 @@ onBeforeUnmount(() => {
   })
   bus.off('ELEPHANT::open-excalidraw', openExcalidraw)
   bus.off('open-excalidraw-from-image', openExcalidrawFromImage)
-  if (noteSaveInterval) {
-    window.clearInterval(noteSaveInterval)
-    noteSaveInterval = null
-  }
+  window.removeEventListener('elephantnote:editor-user-change', handleEditorUserChange)
   void flushActiveNoteSave('unmount')
 })
 </script>

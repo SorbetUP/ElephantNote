@@ -1,6 +1,6 @@
 import { knowledgeRuntimeClient, isKnowledgeRuntimeAvailable } from './knowledgeRuntimeClient'
 
-const KNOWLEDGE_API_BRIDGE_VERSION = 4
+const KNOWLEDGE_API_BRIDGE_VERSION = 5
 
 const searchRuntimeState = {
   vaultPath: '',
@@ -281,7 +281,11 @@ export const installKnowledgeRuntimeBridge = (target = globalThis) => {
       get: knowledgeRuntimeClient.getWikiDraft,
       list: knowledgeRuntimeClient.listWikiDrafts,
       accept: knowledgeRuntimeClient.acceptWikiDraft,
-      reject: knowledgeRuntimeClient.rejectWikiDraft
+      reject: knowledgeRuntimeClient.rejectWikiDraft,
+      libraryList: knowledgeRuntimeClient.listWikiLibrary,
+      libraryGenerate: knowledgeRuntimeClient.generateWikiLibraryItem,
+      libraryReject: knowledgeRuntimeClient.rejectWikiSuggestion,
+      libraryDelete: knowledgeRuntimeClient.deleteWikiLibraryItem
     },
     listRelations: knowledgeRuntimeClient.listRelations,
     relationsForNode: knowledgeRuntimeClient.relationsForNode,

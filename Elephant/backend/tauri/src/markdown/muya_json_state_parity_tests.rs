@@ -13,7 +13,7 @@ struct JsonStateCase {
 }
 
 #[test]
-fn shared_json_state_matrix_matches_legacy_mِuya_shape() {
+fn shared_json_state_matrix_matches_legacy_muya_shape() {
   let cases: Vec<JsonStateCase> = serde_json::from_str(include_str!(
     "../../../../shared/muyaJsonStateCases.json"
   )).expect("shared Muya JSON state cases must be valid");

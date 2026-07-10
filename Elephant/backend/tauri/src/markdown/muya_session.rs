@@ -9,6 +9,7 @@ use super::commands::tauri_muya_engine_sync_document;
 use super::muya_engine::{
     apply_command, MuyaEditorCommand, MuyaEditorState, MuyaEditorTransaction, MuyaSelection,
 };
+use super::muya_parity::{apply_parity_command, MuyaParityCommand};
 use super::muya_ui::{execute_ui_query, MuyaUiQuery};
 
 #[derive(Default)]
@@ -132,6 +133,17 @@ pub fn tauri_muya_session_apply(
 }
 
 #[tauri::command]
+pub fn tauri_muya_session_apply_parity(
+    sessions: State<'_, MuyaEngineSessions>,
+    editor_id: String,
+    command: MuyaParityCommand,
+) -> Result<MuyaSessionTransaction, String> {
+    session_transaction(&sessions, &editor_id, |state| {
+        apply_parity_command(state, command)
+    })
+}
+
+#[tauri::command]
 pub fn tauri_muya_session_query(
     sessions: State<'_, MuyaEngineSessions>,
     editor_id: String,
@@ -182,5 +194,20 @@ mod tests {
         assert!(validate_editor_id("").is_err());
         assert!(validate_editor_id("../../note").is_err());
         assert!(validate_editor_id(&"a".repeat(129)).is_err());
+    }
+
+    #[test]
+    fn parity_commands_keep_history_inside_the_session_state() {
+        let state = MuyaEditorState::new("Body".to_string());
+        let transaction = apply_parity_command(
+            state,
+            MuyaParityCommand::InsertTemplate {
+                id: "heading".to_string(),
+            },
+        )
+        .expect("parity command should apply");
+
+        assert_eq!(transaction.state.markdown, "Body# ");
+        assert_eq!(transaction.state.undo_stack.len(), 1);
     }
 }

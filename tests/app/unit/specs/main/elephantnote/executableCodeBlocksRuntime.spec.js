@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installExecutableCodeBlocks } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocks'
-import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV5'
+import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV6'
 
 const flush = async() => {
   await new Promise((resolve) => setTimeout(resolve, 0))
@@ -13,7 +13,7 @@ const flush = async() => {
 const installEditor = (source = 'print("hello")') => {
   document.body.innerHTML = `
     <main class="en-editor-host" contenteditable="true">
-      <div class="ag-code-block">
+      <div class="ag-code-block" data-code-block="0">
         <span class="ag-language-input" contenteditable="true">python</span>
         <pre class="language-python"><code class="language-python">${source}</code></pre>
         <button class="ag-copy-code" type="button" aria-label="Copy code"></button>
@@ -21,22 +21,10 @@ const installEditor = (source = 'print("hello")') => {
       </div>
     </main>
   `
-  const pre = document.querySelector('pre')
-  pre.getBoundingClientRect = () => ({
-    x: 20,
-    y: 40,
-    left: 20,
-    top: 40,
-    right: 620,
-    bottom: 140,
-    width: 600,
-    height: 100,
-    toJSON: () => ({})
-  })
-  return pre
+  return document.querySelector('pre')
 }
 
-describe('executable code blocks V5 runtime', () => {
+describe('executable code blocks V6 runtime', () => {
   let invoke
   let writeText
 
@@ -83,50 +71,39 @@ describe('executable code blocks V5 runtime', () => {
     delete window.__TAURI__
   })
 
-  it('mounts controls outside Muya without changing code text', async() => {
+  it('installs one inline shell without changing source text', async() => {
     const pre = installEditor()
     const before = pre.textContent
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('test')
     await flush()
 
+    const host = document.querySelector('.ag-code-block')
+    expect(runtime.version).toBe('v6')
+    expect(runtime.layer).toBeNull()
     expect(pre.textContent).toBe(before)
-    expect(document.querySelector('.en-editor-host .en-code-v5-toolbar')).toBeNull()
-    expect(document.querySelector('.en-editor-host .en-code-v5-output')).toBeNull()
-    expect(runtime.layer.parentElement).toBe(document.body)
-    expect(runtime.layer.querySelector('.en-code-v5-toolbar')).not.toBeNull()
+    expect(host.classList.contains('en-code-v6-shell')).toBe(true)
+    expect(host.querySelector(':scope > .en-code-v6-toolbar')).not.toBeNull()
+    expect(host.querySelector(':scope > .en-code-v6-output')).not.toBeNull()
   })
 
-  it('integrates language, copy and fence chrome using real Muya elements', async() => {
+  it('copies code and dispatches a real run request', async() => {
     installEditor()
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('test')
     await flush()
 
-    expect(document.querySelector('.ag-language-input').classList.contains('en-code-v5-native-language')).toBe(true)
-    expect(document.querySelector('.ag-copy-code').classList.contains('en-code-v5-native-copy')).toBe(true)
-    expect(document.querySelector('.ag-fence-label').classList.contains('en-code-v5-fence-hint')).toBe(true)
-    runtime.layer.querySelector('.en-code-v5-copy').click()
+    document.querySelector('.en-code-v6-copy').click()
+    document.querySelector('.en-code-v6-run').click()
     await flush()
+
     expect(writeText).toHaveBeenCalledWith('print("hello")')
-  })
-
-  it('dispatches a real Tauri run request from the visible control', async() => {
-    installEditor()
-    const runtime = installExecutableCodeBlocks(window)
-    runtime.scan('test')
-    await flush()
-
-    runtime.layer.querySelector('.en-code-v5-run').click()
-    await flush()
-
     expect(invoke).toHaveBeenCalledWith('tauri_programs_run', expect.objectContaining({
       id: 'python',
       command: 'print("hello")',
       stop: false
     }))
-    expect(runtime.layer.querySelector('.en-code-v5-output')).not.toBeNull()
-    expect(runtime.layer.textContent).toContain('hello')
+    expect(document.querySelector('.en-code-v6-output').textContent).toContain('hello')
   })
 
   it('keeps state and output when Muya replaces the pre node', async() => {
@@ -134,12 +111,11 @@ describe('executable code blocks V5 runtime', () => {
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('initial')
     await flush()
-    runtime.layer.querySelector('.en-code-v5-run').click()
+    document.querySelector('.en-code-v6-run').click()
     await flush()
 
     const originalState = [...runtime.states.values()][0]
     const replacement = firstPre.cloneNode(true)
-    replacement.getBoundingClientRect = firstPre.getBoundingClientRect
     firstPre.replaceWith(replacement)
     runtime.scan('muya-rerender')
     await flush()
@@ -147,7 +123,7 @@ describe('executable code blocks V5 runtime', () => {
     expect(runtime.states.size).toBe(1)
     expect([...runtime.states.values()][0]).toBe(originalState)
     expect(originalState.pre).toBe(replacement)
-    expect(runtime.layer.textContent).toContain('hello')
+    expect(document.querySelector('.en-code-v6-output').textContent).toContain('hello')
   })
 
   it('turns Run into Stop and sends a stop request', async() => {
@@ -163,7 +139,7 @@ describe('executable code blocks V5 runtime', () => {
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('test')
     await flush()
-    const button = runtime.layer.querySelector('.en-code-v5-run')
+    const button = document.querySelector('.en-code-v6-run')
     button.click()
     await flush()
 
@@ -183,5 +159,18 @@ describe('executable code blocks V5 runtime', () => {
       outputLineLimit: 200
     })
     await flush()
+  })
+
+  it('cleans all inline UI and shell classes on dispose', async() => {
+    installEditor()
+    const runtime = installExecutableCodeBlocks(window)
+    runtime.scan('test')
+    await flush()
+    runtime.dispose()
+
+    expect(document.querySelector('.en-code-v6-toolbar')).toBeNull()
+    expect(document.querySelector('.en-code-v6-output')).toBeNull()
+    expect(document.querySelector('.en-code-v6-shell')).toBeNull()
+    expect(window.__ELEPHANT_CODE_RUNTIME__).toBeUndefined()
   })
 })

@@ -1,29 +1,40 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-10T00:00:00Z",
+  "updatedAt": "2026-07-10T02:30:00Z",
   "addons": [
     {
-      "id": "com.elephantnote.examples.platform-proof",
-      "slug": "platform-proof",
-      "name": "Addon Platform Proof",
+      "id": "com.elephantnote.inbox-digest",
+      "slug": "inbox-digest",
+      "name": "Inbox Digest",
       "version": "1.0.0",
-      "description": "Verifies the external Worker, app broker, private storage and scoped note read/write APIs.",
+      "description": "Builds a review report from Markdown notes under Inbox/ without modifying the source notes.",
       "author": "ElephantNote",
-      "manifestPath": "addons/platform-proof/manifest.json",
-      "entryPath": "addons/platform-proof/main.js",
-      "readmePath": "addons/platform-proof/README.md"
+      "manifestPath": "addons/inbox-digest/manifest.json",
+      "entryPath": "addons/inbox-digest/main.js",
+      "readmePath": "addons/inbox-digest/README.md"
     },
     {
       "id": "com.elephantnote.examples.finance-notes",
       "slug": "finance-notes",
       "name": "Finance Notes",
-      "version": "0.1.0",
-      "description": "Fetches a current market quote and writes a sourced Markdown note.",
+      "version": "0.2.0",
+      "description": "Builds a sourced multi-asset market dashboard with per-symbol notes and cached fallback data.",
       "author": "ElephantNote",
       "manifestPath": "addons/finance-notes/manifest.json",
       "entryPath": "addons/finance-notes/main.js",
       "readmePath": "addons/finance-notes/README.md"
+    },
+    {
+      "id": "com.elephantnote.examples.platform-proof",
+      "slug": "platform-proof",
+      "name": "Addon Platform Proof",
+      "version": "1.1.0",
+      "description": "Verifies the isolated Worker, app broker, private storage and scoped note list/read/write APIs.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/platform-proof/manifest.json",
+      "entryPath": "addons/platform-proof/main.js",
+      "readmePath": "addons/platform-proof/README.md"
     }
   ]
 }

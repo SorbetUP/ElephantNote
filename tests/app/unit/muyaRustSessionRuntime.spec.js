@@ -72,17 +72,21 @@ describe('Rust-owned Muya session client', () => {
       }
       if (command === 'tauri_muya_session_apply_parity') {
         expect(payload.editorId).toBe('muya:test:2')
-        state = compactState('**text**\n\n[^note]: ', 2)
+        if (payload.command.type === 'keyboardRule') {
+          state = compactState('**text**\n\n[^note]: \n- ', 3)
+        } else {
+          state = compactState('**text**\n\n[^note]: ', 2)
+        }
         return { state, documentChanged: true, selectionChanged: true }
       }
       if (command === 'tauri_muya_session_paste_clipboard') {
         expect(payload.editorId).toBe('muya:test:2')
-        state = compactState('**text**\n\n[^note]: **rich**', 3)
+        state = compactState('**text**\n\n[^note]: **rich**', 4)
         return { state, documentChanged: true, selectionChanged: true }
       }
       if (command === 'tauri_muya_session_commit_composition') {
         expect(payload.editorId).toBe('muya:test:2')
-        state = compactState('日**text**\n\n[^note]: **rich**', 4, { anchor: 1, focus: 1 })
+        state = compactState('日**text**\n\n[^note]: **rich**', 5, { anchor: 1, focus: 1 })
         return { state, documentChanged: true, selectionChanged: true }
       }
       if (command === 'tauri_muya_session_query') {
@@ -96,12 +100,14 @@ describe('Rust-owned Muya session client', () => {
     await client.create('text')
     const transaction = await client.toggleInline('**')
     const footnote = await client.upsertFootnote('note', '')
+    const keyboard = await client.keyboardRule('Enter')
     const pasted = await client.pasteClipboard('<strong>rich</strong>', 'rich')
     const composed = await client.commitComposition({ anchor: 0, focus: 0 }, '日')
     const jsonState = await client.jsonState()
 
     expect(transaction.state.markdown).toBe('**text**')
     expect(footnote.state.markdown).toContain('[^note]: ')
+    expect(keyboard.state.markdown).toContain('\n- ')
     expect(pasted.state.markdown).toContain('**rich**')
     expect(composed.state.markdown.startsWith('日')).toBe(true)
     expect(jsonState.blocks).toHaveLength(1)
@@ -112,6 +118,10 @@ describe('Rust-owned Muya session client', () => {
     expect(invoke).toHaveBeenCalledWith('tauri_muya_session_apply_parity', {
       editorId: 'muya:test:2',
       command: { type: 'upsertFootnote', label: 'note', text: '' }
+    })
+    expect(invoke).toHaveBeenCalledWith('tauri_muya_session_apply_parity', {
+      editorId: 'muya:test:2',
+      command: { type: 'keyboardRule', key: 'Enter', shiftKey: false }
     })
     expect(invoke).toHaveBeenCalledWith('tauri_muya_session_paste_clipboard', {
       editorId: 'muya:test:2',

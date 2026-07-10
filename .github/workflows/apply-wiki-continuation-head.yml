@@ -48,8 +48,15 @@ jobs:
           import zlib
 
           payload = Path('.github/scripts/apply_auto_wiki_patch.py.zb64').read_text().strip()
-          script = zlib.decompress(base64.b64decode(payload))
-          Path('/tmp/apply_auto_wiki_patch.py').write_bytes(script)
+          script = zlib.decompress(base64.b64decode(payload)).decode()
+          old = "chunking = replace_once(chunking, old_validator, new_validator, 'wikilink target validation')"
+          new = """validator_pattern = re.compile(r\"fn valid_wikilink_target\\(target: &str\\) -> bool \\{.*?\\n\\}\\n\", re.S)
+          if not validator_pattern.search(chunking):
+              raise SystemExit('wikilink target validation: function not found')
+          chunking = validator_pattern.sub(new_validator, chunking, count=1)"""
+          if old not in script:
+              raise SystemExit('Unable to upgrade wikilink validator patch')
+          Path('/tmp/apply_auto_wiki_patch.py').write_text(script.replace(old, new, 1))
           PY
           python -m py_compile /tmp/apply_auto_wiki_patch.py
           python /tmp/apply_auto_wiki_patch.py

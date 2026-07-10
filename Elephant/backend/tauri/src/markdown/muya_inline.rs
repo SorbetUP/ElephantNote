@@ -1,6 +1,34 @@
-use super::muya_state::MuyaInlineNode;
+use serde::{Deserialize, Serialize};
 
-pub fn parse_inlines(source: &str) -> Vec<MuyaInlineNode> {
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MuyaRenderInlineNode {
+  #[serde(rename = "type")]
+  pub node_type: String,
+  pub text: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub marker: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub href: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub title: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub alt: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub children: Option<Vec<MuyaRenderInlineNode>>,
+}
+
+impl MuyaRenderInlineNode {
+  fn text(text: String) -> Self {
+    Self {
+      node_type: "text".to_string(),
+      text,
+      ..Self::default()
+    }
+  }
+}
+
+pub fn parse_inlines(source: &str) -> Vec<MuyaRenderInlineNode> {
   let mut nodes = Vec::new();
   let mut offset = 0usize;
 
@@ -32,11 +60,11 @@ pub fn parse_inlines(source: &str) -> Vec<MuyaInlineNode> {
     }
 
     if rest.starts_with("\\\n") {
-      nodes.push(MuyaInlineNode {
+      nodes.push(MuyaRenderInlineNode {
         node_type: "hard_break".to_string(),
         text: String::new(),
         marker: Some("\\".to_string()),
-        ..MuyaInlineNode::default()
+        ..MuyaRenderInlineNode::default()
       });
       offset += 2;
       continue;
@@ -48,51 +76,65 @@ pub fn parse_inlines(source: &str) -> Vec<MuyaInlineNode> {
   }
 
   if nodes.is_empty() {
-    nodes.push(MuyaInlineNode::text(String::new()));
+    nodes.push(MuyaRenderInlineNode::text(String::new()));
   }
 
   nodes
 }
 
-fn parse_image(source: &str) -> Option<(MuyaInlineNode, usize)> {
-  if !source.starts_with("![") { return None; }
+fn parse_image(source: &str) -> Option<(MuyaRenderInlineNode, usize)> {
+  if !source.starts_with("![") {
+    return None;
+  }
   let label_end = source.get(2..)?.find("](")? + 2;
   let destination_start = label_end + 2;
   let destination_end = source.get(destination_start..)?.find(')')? + destination_start;
   let alt = source.get(2..label_end)?.to_string();
   let destination = source.get(destination_start..destination_end)?;
   let (href, title) = parse_destination(destination);
-  if href.is_empty() { return None; }
+  if href.is_empty() {
+    return None;
+  }
 
-  Some((MuyaInlineNode {
-    node_type: "image".to_string(),
-    text: source.get(..=destination_end)?.to_string(),
-    href: Some(href),
-    title,
-    alt: Some(alt),
-    ..MuyaInlineNode::default()
-  }, destination_end + 1))
+  Some((
+    MuyaRenderInlineNode {
+      node_type: "image".to_string(),
+      text: source.get(..=destination_end)?.to_string(),
+      href: Some(href),
+      title,
+      alt: Some(alt),
+      ..MuyaRenderInlineNode::default()
+    },
+    destination_end + 1,
+  ))
 }
 
-fn parse_link(source: &str) -> Option<(MuyaInlineNode, usize)> {
-  if !source.starts_with('[') || source.starts_with("![") { return None; }
+fn parse_link(source: &str) -> Option<(MuyaRenderInlineNode, usize)> {
+  if !source.starts_with('[') || source.starts_with("![") {
+    return None;
+  }
   let label_end = source.get(1..)?.find("](")? + 1;
   let destination_start = label_end + 2;
   let destination_end = source.get(destination_start..)?.find(')')? + destination_start;
   let label = source.get(1..label_end)?.to_string();
   let destination = source.get(destination_start..destination_end)?;
   let (href, title) = parse_destination(destination);
-  if href.is_empty() { return None; }
+  if href.is_empty() {
+    return None;
+  }
 
-  Some((MuyaInlineNode {
-    node_type: "link".to_string(),
-    text: label.clone(),
-    marker: Some("[]()".to_string()),
-    href: Some(href),
-    title,
-    children: Some(parse_inlines(&label)),
-    ..MuyaInlineNode::default()
-  }, destination_end + 1))
+  Some((
+    MuyaRenderInlineNode {
+      node_type: "link".to_string(),
+      text: label.clone(),
+      marker: Some("[]()".to_string()),
+      href: Some(href),
+      title,
+      children: Some(parse_inlines(&label)),
+      ..MuyaRenderInlineNode::default()
+    },
+    destination_end + 1,
+  ))
 }
 
 fn parse_paired(
@@ -100,30 +142,44 @@ fn parse_paired(
   marker: &str,
   node_type: &str,
   recursive: bool,
-) -> Option<(MuyaInlineNode, usize)> {
-  if !source.starts_with(marker) { return None; }
+) -> Option<(MuyaRenderInlineNode, usize)> {
+  if !source.starts_with(marker) {
+    return None;
+  }
   let body_start = marker.len();
   let body_end = source.get(body_start..)?.find(marker)? + body_start;
-  if body_end == body_start { return None; }
+  if body_end == body_start {
+    return None;
+  }
   let body = source.get(body_start..body_end)?.to_string();
   let consumed = body_end + marker.len();
 
-  Some((MuyaInlineNode {
-    node_type: node_type.to_string(),
-    text: body.clone(),
-    marker: Some(marker.to_string()),
-    children: recursive.then(|| parse_inlines(&body)),
-    ..MuyaInlineNode::default()
-  }, consumed))
+  Some((
+    MuyaRenderInlineNode {
+      node_type: node_type.to_string(),
+      text: body.clone(),
+      marker: Some(marker.to_string()),
+      children: recursive.then(|| parse_inlines(&body)),
+      ..MuyaRenderInlineNode::default()
+    },
+    consumed,
+  ))
 }
 
 fn parse_destination(value: &str) -> (String, Option<String>) {
   let trimmed = value.trim();
   for quote in ['"', '\''] {
-    if !trimmed.ends_with(quote) { continue; }
+    if !trimmed.ends_with(quote) {
+      continue;
+    }
     let prefix = &trimmed[..trimmed.len().saturating_sub(1)];
     if let Some(index) = prefix.rfind(quote) {
-      if index > 0 && prefix.as_bytes().get(index.saturating_sub(1)).is_some_and(u8::is_ascii_whitespace) {
+      let has_separator = index > 0
+        && prefix
+          .as_bytes()
+          .get(index.saturating_sub(1))
+          .is_some_and(|byte| byte.is_ascii_whitespace());
+      if has_separator {
         let href = prefix[..index].trim().to_string();
         let title = prefix[index + quote.len_utf8()..].to_string();
         return (href, (!title.is_empty()).then_some(title));
@@ -139,15 +195,17 @@ fn next_special_offset(value: &str) -> Option<usize> {
   })
 }
 
-fn push_text(nodes: &mut Vec<MuyaInlineNode>, value: &str) {
-  if value.is_empty() { return; }
+fn push_text(nodes: &mut Vec<MuyaRenderInlineNode>, value: &str) {
+  if value.is_empty() {
+    return;
+  }
   if let Some(previous) = nodes.last_mut() {
     if previous.node_type == "text" {
       previous.text.push_str(value);
       return;
     }
   }
-  nodes.push(MuyaInlineNode::text(value.to_string()));
+  nodes.push(MuyaRenderInlineNode::text(value.to_string()));
 }
 
 #[cfg(test)]
@@ -158,7 +216,12 @@ mod tests {
   fn parses_nested_inline_marks_and_links() {
     let nodes = parse_inlines("**bold and *italic*** [docs](https://example.com \"Docs\")");
     assert_eq!(nodes[0].node_type, "strong");
-    assert!(nodes[0].children.as_ref().is_some_and(|children| children.iter().any(|node| node.node_type == "emphasis")));
+    assert!(
+      nodes[0]
+        .children
+        .as_ref()
+        .is_some_and(|children| children.iter().any(|node| node.node_type == "emphasis"))
+    );
     assert_eq!(nodes[2].node_type, "link");
     assert_eq!(nodes[2].href.as_deref(), Some("https://example.com"));
     assert_eq!(nodes[2].title.as_deref(), Some("Docs"));
@@ -167,7 +230,10 @@ mod tests {
   #[test]
   fn parses_local_markdown_image_as_typed_node() {
     let nodes = parse_inlines("before ![drawing](../../.assets/drawing.png) after");
-    let image = nodes.iter().find(|node| node.node_type == "image").expect("image node");
+    let image = nodes
+      .iter()
+      .find(|node| node.node_type == "image")
+      .expect("image node");
     assert_eq!(image.alt.as_deref(), Some("drawing"));
     assert_eq!(image.href.as_deref(), Some("../../.assets/drawing.png"));
   }

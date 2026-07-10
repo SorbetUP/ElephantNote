@@ -1,0 +1,32 @@
+.en-code-runtime-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482500;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.en-code-runtime-layer > * {
+  pointer-events: auto;
+}
+
+.en-code-runtime-toolbar {
+  position: fixed !important;
+  top: 0;
+  right: auto !important;
+  margin: 0 !important;
+  z-index: 2;
+}
+
+.en-code-runtime-output {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  max-width: calc(100vw - 16px);
+  margin: 0 !important;
+}
+
+pre.en-code-runtime-has-output {
+  margin-bottom: calc(var(--en-code-runtime-output-height, 0px) + 20px) !important;
+}

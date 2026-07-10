@@ -49,6 +49,8 @@ jobs:
 
       - name: Format and validate frontend
         shell: bash
+        env:
+          NODE_PATH: Elephant/node_modules
         run: |
           set -o pipefail
           {

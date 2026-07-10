@@ -1,0 +1,77 @@
+@media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  .en-mobile-shell.en-mobile-drawer-dragging .en-sidebar,
+  .en-mobile-shell.en-mobile-drawer-settling .en-sidebar {
+    transform: translate3d(var(--en-mobile-drawer-offset, -104%), 0, 0) !important;
+    will-change: transform !important;
+  }
+
+  .en-mobile-shell.en-mobile-drawer-dragging .en-sidebar,
+  .en-mobile-shell.en-mobile-drawer-dragging .en-mobile-scrim {
+    transition: none !important;
+  }
+
+  .en-mobile-shell.en-mobile-drawer-settling .en-sidebar {
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+  }
+
+  .en-mobile-shell.en-mobile-drawer-dragging .en-mobile-scrim,
+  .en-mobile-shell.en-mobile-drawer-settling .en-mobile-scrim {
+    display: block !important;
+    opacity: calc(var(--en-mobile-drawer-progress, 0) * 0.46) !important;
+    pointer-events: auto !important;
+  }
+
+  .en-mobile-shell.en-mobile-drawer-settling .en-mobile-scrim {
+    transition: opacity 240ms ease !important;
+  }
+
+  /* Opening is deliberately edge-only; this invisible strip is also useful
+     to browser accessibility tooling and documents the gesture affordance. */
+  .en-mobile-shell:not(.en-mobile-drawer-open)::before {
+    content: '';
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 44;
+    width: 24px;
+    pointer-events: none;
+  }
+
+  /* The previous 22 px chevron was too easy to miss with a thumb. Keep the
+     label as navigation, but make the first 46 px of every folder row a real
+     expansion target. */
+  .en-sidebar-tree-row {
+    position: relative !important;
+    min-height: 46px !important;
+    padding-left: calc(4px + var(--tree-depth, 0) * 14px) !important;
+  }
+
+  .en-sidebar-tree-toggle {
+    width: 46px !important;
+    height: 46px !important;
+    flex: 0 0 46px !important;
+    margin: 0 !important;
+    border-radius: 12px !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .en-sidebar-tree-label {
+    min-height: 46px !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  /* The global shell search/settings header belongs to the library. A note
+     has its own back/title/actions and must use the full screen. */
+  .en-mobile-shell:has(.en-main.has-editor-open) .en-mobile-topbar {
+    display: none !important;
+  }
+
+  .en-mobile-shell:has(.en-main.has-editor-open) .en-layout {
+    min-height: 100dvh !important;
+  }
+
+  .en-mobile-shell:has(.en-main.has-editor-open) .en-mobile-fab {
+    display: none !important;
+  }
+}

@@ -99,6 +99,8 @@ jobs:
 
       - name: Run settings redesign test
         shell: bash
+        env:
+          NODE_PATH: Elephant/node_modules
         run: |
           set -o pipefail
           Elephant/node_modules/.bin/vitest run tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js --reporter=verbose 2>&1 | tee settings-test.txt
@@ -106,6 +108,8 @@ jobs:
       - name: Run Codex rate-limit tests
         if: always()
         shell: bash
+        env:
+          NODE_PATH: Elephant/node_modules
         run: |
           set -o pipefail
           Elephant/node_modules/.bin/vitest run tests/app/unit/codexRateLimits.spec.js --reporter=verbose 2>&1 | tee codex-limits-test.txt

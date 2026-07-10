@@ -9,12 +9,41 @@ const createStatus = () => ({
   revision: 0,
   markdownLength: 0,
   blocks: 0,
+  selection: { anchor: 0, focus: 0 },
   error: ''
 })
 
 const publishStatus = (target, status) => {
   if (!target || typeof target !== 'object') return
-  target.__ELEPHANT_MUYA_RUST_MIRROR__ = { ...status }
+  target.__ELEPHANT_MUYA_RUST_MIRROR__ = {
+    ...status,
+    selection: { ...status.selection }
+  }
+}
+
+const clamp = (value, minimum, maximum) => Math.min(Math.max(value, minimum), maximum)
+
+export const muyaIndexCursorToSelection = (markdown, cursor) => {
+  const source = asMarkdown(markdown)
+  const lines = source.split('\n')
+
+  const pointToOffset = (point) => {
+    if (!point || !Number.isInteger(point.line) || !Number.isInteger(point.ch)) {
+      return source.length
+    }
+    const line = clamp(point.line, 0, Math.max(0, lines.length - 1))
+    const ch = clamp(point.ch, 0, lines[line]?.length || 0)
+    let offset = ch
+    for (let index = 0; index < line; index += 1) {
+      offset += lines[index].length + 1
+    }
+    return offset
+  }
+
+  return {
+    anchor: pointToOffset(cursor?.anchor),
+    focus: pointToOffset(cursor?.focus)
+  }
 }
 
 export const createRealMuyaRustMirror = ({
@@ -41,9 +70,11 @@ export const createRealMuyaRustMirror = ({
 
   const client = createRustMuyaEngineClient({ invoke, target })
   let destroyed = false
+  let initialized = false
   let pending = null
   let draining = null
   let lastValidatedMarkdown = null
+  let lastValidatedSelection = null
 
   status.active = true
   status.phase = 'initializing'
@@ -58,10 +89,21 @@ export const createRealMuyaRustMirror = ({
     })
   }
 
-  const validate = async(markdown, reason) => {
-    const state = await client.reset(markdown)
-    if (state.markdown !== markdown) {
+  const validate = async({ markdown, selection, reason, continueGroup }) => {
+    const state = initialized
+      ? (await client.syncDocument(markdown, selection, continueGroup)).state
+      : await client.create(markdown)
+    initialized = true
+
+    if (!initialized || state.markdown !== markdown) {
       throw new Error('Rust Muya mirror changed the Markdown during synchronization.')
+    }
+
+    if (state.selection.anchor !== selection.anchor || state.selection.focus !== selection.focus) {
+      const selectionTransaction = await client.setSelection(selection.anchor, selection.focus)
+      if (selectionTransaction.state.markdown !== markdown) {
+        throw new Error('Rust Muya mirror changed Markdown while synchronizing selection.')
+      }
     }
 
     const jsonState = await client.jsonState()
@@ -70,18 +112,22 @@ export const createRealMuyaRustMirror = ({
     }
 
     lastValidatedMarkdown = markdown
+    lastValidatedSelection = { ...selection }
     status.phase = 'ready'
     status.reason = reason
-    status.revision = Number(state.revision) || 0
+    status.revision = Number(client.state?.revision) || 0
     status.markdownLength = markdown.length
     status.blocks = jsonState.blocks.length
+    status.selection = { ...selection }
     status.error = ''
     publishStatus(target, status)
     logger.debug?.('[elephantnote:muya-rust] synchronized', {
       reason,
       markdownLength: status.markdownLength,
       blocks: status.blocks,
-      revision: status.revision
+      revision: status.revision,
+      selection: status.selection,
+      continueGroup
     })
     return status
   }
@@ -90,8 +136,12 @@ export const createRealMuyaRustMirror = ({
     while (!destroyed && pending) {
       const next = pending
       pending = null
-      if (next.markdown === lastValidatedMarkdown) continue
-      await validate(next.markdown, next.reason)
+      const sameMarkdown = next.markdown === lastValidatedMarkdown
+      const sameSelection = lastValidatedSelection &&
+        next.selection.anchor === lastValidatedSelection.anchor &&
+        next.selection.focus === lastValidatedSelection.focus
+      if (sameMarkdown && sameSelection) continue
+      await validate(next)
     }
   }
 
@@ -107,15 +157,22 @@ export const createRealMuyaRustMirror = ({
     return draining
   }
 
-  const sync = (markdown, reason = 'change') => {
+  const sync = (markdown, reason = 'change', options = {}) => {
     if (destroyed) return Promise.resolve(status)
-    pending = { markdown: asMarkdown(markdown), reason: String(reason || 'change') }
+    const source = asMarkdown(markdown)
+    const selection = options.selection || muyaIndexCursorToSelection(source, options.muyaIndexCursor)
+    pending = {
+      markdown: source,
+      selection,
+      reason: String(reason || 'change'),
+      continueGroup: Boolean(options.continueGroup)
+    }
     return ensureDrain()
   }
 
   const ready = sync(initialMarkdown, 'initial')
-  target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-mirror'
-  logger.info?.('[elephantnote:editor] real Muya UI with Rust document mirror active', {
+  target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-core'
+  logger.info?.('[elephantnote:editor] real Muya UI with persistent Rust core active', {
     engine: 'rust',
     surface: 'muya'
   })
@@ -131,10 +188,13 @@ export const createRealMuyaRustMirror = ({
       }
       return status
     },
+    get state() {
+      return client.state
+    },
     destroy: () => {
       destroyed = true
       pending = null
-      if (target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ === 'muya-ui-rust-mirror') {
+      if (target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ === 'muya-ui-rust-core') {
         delete target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__
       }
       if (target.__ELEPHANT_MUYA_RUST_MIRROR__) {

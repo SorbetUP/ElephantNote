@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 use super::{parse_markdown_document, render_html, render_plain_text};
 use super::muya_clipboard::{backspace, clipboard_contract, paste_text, redo, remove_next, selected_html, selected_markdown, undo, EditState, Selection};
 use super::muya_compat::{parse_muya_document, render_muya_html, tokenize_muya};
+use super::muya_engine::{apply_command, apply_commands, MuyaEditorCommand, MuyaEditorState};
 use super::muya_extras::collect_muya_extras;
 use super::muya_interactions::{commit_composition, editor_snapshot, image_selection, start_composition, table_contract, table_insert_column, table_insert_row, update_composition, cancel_composition, CompositionState};
 use super::muya_navigation::{detect_input_rule, move_cursor};
@@ -148,4 +149,61 @@ pub fn tauri_muya_cancel_composition(state: CompositionState) -> Value {
 #[tauri::command]
 pub fn tauri_muya_editor_snapshot(state: EditState) -> Value {
   editor_snapshot(&state)
+}
+
+#[tauri::command]
+pub fn tauri_muya_engine_create(markdown: String) -> Value {
+  json!(MuyaEditorState::new(markdown))
+}
+
+#[tauri::command]
+pub fn tauri_muya_engine_apply(
+  state: MuyaEditorState,
+  command: MuyaEditorCommand,
+) -> Result<Value, String> {
+  apply_command(state, command).map(|transaction| json!(transaction))
+}
+
+#[tauri::command]
+pub fn tauri_muya_engine_apply_batch(
+  state: MuyaEditorState,
+  commands: Vec<MuyaEditorCommand>,
+) -> Result<Value, String> {
+  apply_commands(state, commands).map(|transaction| json!(transaction))
+}
+
+#[tauri::command]
+pub fn tauri_muya_engine_capabilities() -> Value {
+  json!({
+    "engine": "rust",
+    "version": 1,
+    "offsetEncoding": "utf16",
+    "history": { "undo": true, "redo": true, "maximumEntries": 100 },
+    "commands": [
+      "insertText",
+      "replaceSelection",
+      "deleteBackward",
+      "deleteForward",
+      "setSelection",
+      "toggleInline",
+      "transformBlock",
+      "insertLineBreak",
+      "undo",
+      "redo"
+    ],
+    "inlineMarkers": ["**", "*", "~~", "`", "=="],
+    "blockKinds": [
+      "paragraph",
+      "heading1",
+      "heading2",
+      "heading3",
+      "heading4",
+      "heading5",
+      "heading6",
+      "bullet",
+      "ordered",
+      "task",
+      "quote"
+    ]
+  })
 }

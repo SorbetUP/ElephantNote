@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const success = vi.fn()
+const { success } = vi.hoisted(() => ({ success: vi.fn() }))
 vi.mock('element-plus', () => ({ ElMessage: { success } }))
 
 import { dailyNotesAddon } from '../../../../Elephant/frontend/src/renderer/src/addons/builtin/dailyNotes.js'
@@ -77,7 +77,8 @@ describe('improved built-in addons', () => {
     expect(markdown).toContain('- Link coverage: 67%')
     expect(markdown).toContain('## Most connected notes')
     expect(markdown).toContain('[[B|B]] — 2 incoming, 0 outgoing')
-    expect(markdown.indexOf('[[A|A]]')).toBeLessThan(markdown.indexOf('[[B|B]]', markdown.indexOf('## Note index')))
+    const indexSection = markdown.slice(markdown.indexOf('## Note index'))
+    expect(indexSection.indexOf('[[A|A]]')).toBeLessThan(indexSection.indexOf('[[B|B]]'))
     expect(markdown).toContain('[[Orphan|Orphan]]')
   })
 })

@@ -87,7 +87,18 @@ jobs:
         run: pnpm lint
 
       - name: Rust formatting
-        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check 2>&1 | tee rustfmt-check.log
+
+      - name: Upload rustfmt diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustfmt-check-${{ github.run_id }}
+          path: rustfmt-check.log
+          if-no-files-found: error
 
       - name: Rust check
         run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features

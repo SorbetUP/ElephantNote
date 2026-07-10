@@ -90,7 +90,8 @@ jobs:
         run: |
           set -o pipefail
           {
-            rustfmt --edition 2021 --check --config skip_children=true \
+            rustfmt --edition 2021 --check \
+              --config skip_children=true,tab_spaces=2,max_width=200,reorder_imports=false,reorder_modules=false \
               Elephant/backend/tauri/src/lib_min.rs \
               Elephant/backend/tauri/src/markdown/mod.rs
             rustfmt --edition 2021 --check \

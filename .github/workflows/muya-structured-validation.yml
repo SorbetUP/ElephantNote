@@ -28,7 +28,8 @@ jobs:
           ref: feature/rust-muya-editor-core
           fetch-depth: 0
 
-      - name: Install Linux dependencies
+      - id: linux_dependencies
+        name: Install Linux dependencies
         shell: bash
         run: |
           set -euxo pipefail
@@ -50,44 +51,102 @@ jobs:
             wget \
             xz-utils
 
-      - uses: ./.github/actions/setup
+      - id: setup
+        uses: ./.github/actions/setup
 
-      - name: Critical flow guard
+      - id: critical
+        name: Critical flow guard
         run: node build/scripts/verify-critical-flows.mjs
 
-      - name: Security guardrails
+      - id: security
+        name: Security guardrails
         run: pnpm security:guard
 
-      - name: Tauri platform compatibility
+      - id: platform
+        name: Tauri platform compatibility
         run: pnpm tauri:platform:check
 
-      - name: Lint
+      - id: lint
+        name: Lint
         run: pnpm lint
 
-      - name: Rust formatting
+      - id: rustfmt
+        name: Rust formatting
         run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
 
-      - name: Rust check
+      - id: rust_check
+        name: Rust check
         run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
 
-      - name: Rust tests
+      - id: rust_tests
+        name: Rust tests
         run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features
 
-      - name: Structured Muya unit contracts
+      - id: structured_tests
+        name: Structured Muya unit contracts
         run: pnpm exec vitest run tests/app/unit/muyaRustSessionRuntime.spec.js tests/app/unit/muyaRustStructuredSession.spec.js tests/app/unit/muyaRealSurfaceRustMirror.spec.js tests/app/unit/muyaRustEditorActivation.spec.js
 
-      - name: Build renderer
+      - id: renderer
+        name: Build renderer
         run: pnpm tauri:web:build
 
-      - name: Full unit suite
+      - id: unit_tests
+        name: Full unit suite
         run: pnpm test:unit
 
-      - name: Record successful validation and remove temporary workflow
+      - name: Persist validation result
+        if: always()
         shell: bash
+        env:
+          LINUX_DEPENDENCIES: ${{ steps.linux_dependencies.outcome }}
+          SETUP: ${{ steps.setup.outcome }}
+          CRITICAL: ${{ steps.critical.outcome }}
+          SECURITY: ${{ steps.security.outcome }}
+          PLATFORM: ${{ steps.platform.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          RUSTFMT: ${{ steps.rustfmt.outcome }}
+          RUST_CHECK: ${{ steps.rust_check.outcome }}
+          RUST_TESTS: ${{ steps.rust_tests.outcome }}
+          STRUCTURED_TESTS: ${{ steps.structured_tests.outcome }}
+          RENDERER: ${{ steps.renderer.outcome }}
+          UNIT_TESTS: ${{ steps.unit_tests.outcome }}
         run: |
           set -euxo pipefail
+          mkdir -p .github/validation
+          cat > .github/validation/structured-rust-muya.json <<EOF
+          {
+            "linuxDependencies": "$LINUX_DEPENDENCIES",
+            "setup": "$SETUP",
+            "critical": "$CRITICAL",
+            "security": "$SECURITY",
+            "platform": "$PLATFORM",
+            "lint": "$LINT",
+            "rustfmt": "$RUSTFMT",
+            "rustCheck": "$RUST_CHECK",
+            "rustTests": "$RUST_TESTS",
+            "structuredTests": "$STRUCTURED_TESTS",
+            "renderer": "$RENDERER",
+            "unitTests": "$UNIT_TESTS",
+            "validatedCommit": "${GITHUB_SHA}"
+          }
+          EOF
+
+          all_success=true
+          for outcome in \
+            "$LINUX_DEPENDENCIES" "$SETUP" "$CRITICAL" "$SECURITY" "$PLATFORM" \
+            "$LINT" "$RUSTFMT" "$RUST_CHECK" "$RUST_TESTS" "$STRUCTURED_TESTS" \
+            "$RENDERER" "$UNIT_TESTS"; do
+            if [ "$outcome" != success ]; then
+              all_success=false
+            fi
+          done
+
+          if [ "$all_success" = true ]; then
+            rm .github/workflows/muya-structured-validation.yml
+          fi
+
           git config user.name 'ElephantNote CI'
           git config user.email 'actions@users.noreply.github.com'
-          git rm .github/workflows/muya-structured-validation.yml
-          git commit -m 'ci: complete structured Rust Muya validation'
+          git add -A
+          git commit -m "ci: record structured Rust Muya validation ($all_success)"
           git push origin HEAD:feature/rust-muya-editor-core

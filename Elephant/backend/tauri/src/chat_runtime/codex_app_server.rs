@@ -667,7 +667,7 @@ impl CodexClient {
             .ok_or_else(|| "Codex app-server stderr is unavailable.".to_string())?;
         let child = Arc::new(Mutex::new(child));
         let stdin = Arc::new(Mutex::new(stdin));
-        let pending = Arc::new(Mutex::new(HashMap::<u64, oneshot::Sender<R<Value>>>::new()));
+        let pending = Arc::new(Mutex::new(HashMap::<u64, oneshot::Sender<R<Value>>>>::new()));
         let (events, _) = broadcast::channel(256);
 
         {
@@ -1111,7 +1111,7 @@ mod tests {
 
     #[test]
     fn failed_turn_returns_message() {
-        let event = json!({ "method": "turn/completed", "params": { "turn": { "status": "failed", "error": { "message": "quota" } } });
+        let event = json!({ "method": "turn/completed", "params": { "turn": { "status": "failed", "error": { "message": "quota" } } } });
         assert_eq!(turn_failure(&event).as_deref(), Some("quota"));
     }
 

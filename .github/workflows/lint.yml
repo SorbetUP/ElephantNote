@@ -28,33 +28,39 @@ jobs:
         run: |
           python3 <<'PY'
           from pathlib import Path
+          import re
 
           panel_path = Path('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
           panel = panel_path.read_text()
-          nav_end = panel.index('      </nav>') + len('      </nav>\n')
-          actions_start = panel.index('      <div class="en-ai-actions">', nav_end)
-          toolbar_end = panel.index('    </div>\n\n    <template', actions_start)
-          panel = panel[:actions_start] + panel[toolbar_end:]
-          panel = panel.replace(
-              "import { Activity, Cpu, Link2, Plus, RotateCw, Save, Server, Trash2 } from '@lucide/vue'",
-              "import { Activity, Cpu, Link2, Plus, RotateCw, Server, Trash2 } from '@lucide/vue'",
-              1,
+          toolbar_pattern = re.compile(
+              r'\n\s*<div class="en-ai-actions">\s*'
+              r'<span class="en-ai-save-status">.*?</div>'
+              r'(?=\s*</div>\s*<template v-if="activePage)',
+              re.S,
           )
+          panel, removed = toolbar_pattern.subn('', panel, count=1)
+          if removed != 1:
+              raise SystemExit(f'Expected to remove one redundant toolbar action block, removed {removed}')
+          panel = panel.replace(', Save,', ',', 1)
           if 'en-ai-save-status' in panel or '<Save aria-hidden' in panel:
               raise SystemExit('Redundant AI toolbar controls remain')
           panel_path.write_text(panel)
 
           card_path = Path('Elephant/frontend/app/components/settings/ChatgptSubscriptionCard.vue')
           card = card_path.read_text()
-          global_style = '''<style>
-          .en-ai-settings > .en-ai-toolbar > .en-ai-actions { display: none !important; }
-          </style>'''
-          if card.count(global_style) != 1:
-              raise SystemExit(f'Expected one temporary global toolbar style, found {card.count(global_style)}')
-          card = card.replace(global_style, '', 1).rstrip() + '\n'
+          card, removed = re.subn(
+              r'\n<style>\s*\.en-ai-settings > \.en-ai-toolbar > \.en-ai-actions '
+              r'\{ display: none !important; \}\s*</style>\s*$',
+              '\n',
+              card,
+              count=1,
+              flags=re.S,
+          )
+          if removed != 1:
+              raise SystemExit(f'Expected to remove one temporary global toolbar style, removed {removed}')
           if '<svg' not in card or 'fill="currentColor"' not in card:
               raise SystemExit('Inline theme-aware ChatGPT SVG is missing')
-          card_path.write_text(card)
+          card_path.write_text(card.rstrip() + '\n')
 
           test_path = Path('tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js')
           test = test_path.read_text()

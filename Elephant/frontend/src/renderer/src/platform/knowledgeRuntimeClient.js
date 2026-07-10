@@ -87,6 +87,12 @@ export const knowledgeRuntimeClient = Object.freeze({
   listWikiDrafts: ({ status = null, limit = 100 } = {}) => invokeKnowledgeCommand('tauri_knowledge_wikis_list', { status, limit }),
   acceptWikiDraft: (draftId) => invokeKnowledgeCommand('tauri_knowledge_wiki_accept', { draftId }),
   rejectWikiDraft: (draftId) => invokeKnowledgeCommand('tauri_knowledge_wiki_reject', { draftId }),
+  listWikiLibrary: ({ limit = 500 } = {}) => invokeKnowledgeCommand('tauri_knowledge_wiki_library_list', { limit }),
+  generateWikiLibraryItem: ({ topic, title = null, sourcePaths = [], payload = {} }) =>
+    invokeKnowledgeCommand('tauri_knowledge_wiki_library_generate', { topic, title, sourcePaths, payload }),
+  rejectWikiSuggestion: (topic) => invokeKnowledgeCommand('tauri_knowledge_wiki_library_reject', { topic }),
+  deleteWikiLibraryItem: (draftId, suppressFuture = true) =>
+    invokeKnowledgeCommand('tauri_knowledge_wiki_library_delete', { draftId, suppressFuture }),
   listRelations: ({ status = null, limit = 1000 } = {}) => invokeKnowledgeCommand('tauri_knowledge_relations_list', { status, limit }),
   relationsForNode: (node, includeRejected = false) => invokeKnowledgeCommand('tauri_knowledge_relations_for_node', { node, includeRejected }),
   setRelationStatus: (relationId, status) => invokeKnowledgeCommand('tauri_knowledge_relation_status_set', { relationId, status })

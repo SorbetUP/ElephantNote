@@ -43,7 +43,8 @@ const normalizePermissions = (value) => {
       hosts: Object.freeze(normalizeStringArray(network.hosts))
     }),
     storage: permissions.storage === true,
-    commands: permissions.commands === true
+    commands: permissions.commands === true,
+    views: permissions.views === true
   })
 }
 

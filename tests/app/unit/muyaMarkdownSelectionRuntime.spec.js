@@ -24,9 +24,23 @@ const editorForState = (state) => {
   return { dom, root }
 }
 
+const textNodeContaining = (element, text = '') => {
+  const walker = element.ownerDocument.createTreeWalker(
+    element,
+    element.ownerDocument.defaultView.NodeFilter.SHOW_TEXT
+  )
+  let node = walker.nextNode()
+  while (node) {
+    if (!text || node.nodeValue?.includes(text)) return node
+    node = walker.nextNode()
+  }
+  return null
+}
+
 const select = (dom, node, offset) => {
   const range = dom.window.document.createRange()
-  range.setStart(node, offset)
+  const safeOffset = Math.min(offset, node?.nodeValue?.length || node?.childNodes?.length || 0)
+  range.setStart(node, safeOffset)
   range.collapse(true)
   const selection = dom.window.getSelection()
   selection.removeAllRanges()
@@ -37,14 +51,14 @@ const select = (dom, node, offset) => {
 describe('Muya Markdown selection runtime', () => {
   it('adds invisible heading prefixes to Rust UTF-16 offsets', () => {
     const { dom, root } = editorFor('## Title')
-    const text = root.querySelector('h2').firstChild
+    const text = textNodeContaining(root.querySelector('h2'), 'Title')
     const selection = select(dom, text, 3)
     expect(readMarkdownSelection(root, selection)).toEqual({ anchor: 6, focus: 6 })
   })
 
   it('accounts for blank lines between rendered blocks', () => {
     const { dom, root } = editorFor('## Title\n\nBody')
-    const text = root.querySelectorAll('p')[0].firstChild
+    const text = textNodeContaining(root.querySelectorAll('p')[0], 'Body')
     const selection = select(dom, text, 2)
     expect(readMarkdownSelection(root, selection)).toEqual({ anchor: 12, focus: 12 })
   })
@@ -57,7 +71,7 @@ describe('Muya Markdown selection runtime', () => {
 
   it('maps table cell positions into serialized Markdown rows', () => {
     const { dom, root } = editorFor('| A | B |\n| - | - |\n| 1 | 2 |')
-    const secondCell = root.querySelectorAll('tbody td')[1].firstChild
+    const secondCell = textNodeContaining(root.querySelectorAll('tbody td')[1], '2')
     const selection = select(dom, secondCell, 1)
     expect(readMarkdownSelection(root, selection)).toEqual({ anchor: 27, focus: 27 })
   })
@@ -78,7 +92,7 @@ describe('Muya Markdown selection runtime', () => {
         }]
       }]
     })
-    const visibleText = root.querySelector('strong').firstChild
+    const visibleText = textNodeContaining(root.querySelector('strong'), 'bold')
     expect(readMarkdownSelection(root, select(dom, visibleText, 2))).toEqual({ anchor: 4, focus: 4 })
 
     expect(restoreMarkdownSelection(root, { anchor: 2, focus: 2 }, dom.window.document)).toBe(true)
@@ -100,7 +114,7 @@ describe('Muya Markdown selection runtime', () => {
         children: [{ type: 'text', text: 'abc' }]
       }]
     })
-    const codeText = root.querySelector('code').firstChild
+    const codeText = textNodeContaining(root.querySelector('code'), 'abc')
     expect(readMarkdownSelection(root, select(dom, codeText, 1))).toEqual({ anchor: 11, focus: 11 })
     expect(restoreMarkdownSelection(root, { anchor: 11, focus: 11 }, dom.window.document)).toBe(true)
     expect(dom.window.getSelection().anchorNode).toBe(codeText)

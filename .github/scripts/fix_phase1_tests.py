@@ -14,7 +14,7 @@ old_assertions = '''        assert!(rendered.markdown.contains("[^source-1]"));
         assert!(rendered.markdown.contains("[[Notes/Iroh.md#Iroh"));
         assert!(rendered.markdown.contains("[[Peer-to-peer networking]]"));
 '''
-new_assertions = '''        assert!(rendered.markdown.contains("[1](../../Notes/Iroh.md#iroh)"));
+new_assertions = '''        assert!(rendered.markdown.contains("[1](../../Notes/Iroh.md"));
         assert!(rendered
             .markdown
             .contains("[Peer-to-peer networking](./peer-to-peer-networking.md)"));

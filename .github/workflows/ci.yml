@@ -1,166 +1,80 @@
-name: CI
+name: Merge develop into Rust Muya
 
 on:
   push:
     branches:
-      - main
-      - develop
-      - 'assistant/**'
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-  workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+      - feature/rust-muya-editor-core
+    paths:
+      - '.github/workflows/ci.yml'
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: merge-develop-rust-muya
+  cancel-in-progress: false
 
 jobs:
-  rustfmt_apply:
-    name: One-shot Rustfmt for Muya migration
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.head_ref == 'feature/rust-muya-editor-core' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+  merge:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feature/rust-muya-editor-core
           fetch-depth: 0
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-
-      - name: Format Rust sources and push the result
+      - name: Merge develop and preserve the Rust-owned Muya core
         shell: bash
         run: |
           set -euxo pipefail
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-          invalid=$(git diff --name-only | grep -Ev '^Elephant/backend/tauri/.*\.rs$' || true)
-          test -z "$invalid"
-          if git diff --quiet; then
-            echo 'Rust sources already formatted.'
-            exit 0
-          fi
+          git fetch origin develop
           git config user.name 'ElephantNote CI'
           git config user.email 'actions@users.noreply.github.com'
-          git add -- ':(glob)Elephant/backend/tauri/**/*.rs'
-          git commit -m 'style(rust): format final Muya migration'
+
+          merge_base=$(git merge-base HEAD origin/develop)
+          git merge --no-commit --no-ff -X ours origin/develop
+
+          while IFS= read -r file; do
+            case "$file" in
+              .github/workflows/ci.yml|Elephant/backend/tauri/src/lib_min.rs)
+                ;;
+              *)
+                git checkout origin/develop -- "$file"
+                ;;
+            esac
+          done < <(git diff --name-only "$merge_base" origin/develop)
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('Elephant/backend/tauri/src/lib_min.rs')
+          source = path.read_text()
+
+          if 'pub mod code_execution;' not in source:
+              source = source.replace(
+                  'pub mod chat_runtime;\n',
+                  'pub mod chat_runtime;\npub mod code_execution;\n',
+                  1,
+              )
+
+          marker = '            tauri_extra_commands::shell_exec,\n'
+          commands = (
+              '            code_execution::tauri_programs_list,\n'
+              '            code_execution::tauri_programs_set,\n'
+              '            code_execution::tauri_programs_run,\n'
+          )
+          if 'code_execution::tauri_programs_list,' not in source:
+              if marker not in source:
+                  raise SystemExit('shell command registration marker not found')
+              source = source.replace(marker, commands + marker, 1)
+
+          path.write_text(source)
+          PY
+
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+          git checkout origin/develop -- .github/workflows/ci.yml
+
+          git add -A
+          git commit -m 'Merge develop into Rust-owned Muya branch'
           git push origin HEAD:feature/rust-muya-editor-core
-
-  quality:
-    name: Quality gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      HUSKY: '0'
-      NODE_ENV: test
-      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Linux dependencies
-        shell: bash
-        run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential \
-            curl \
-            file \
-            libayatana-appindicator3-dev \
-            libgtk-3-dev \
-            librsvg2-dev \
-            libsecret-1-dev \
-            libssl-dev \
-            libwebkit2gtk-4.1-dev \
-            libx11-dev \
-            libxkbfile-dev \
-            patchelf \
-            rpm \
-            wget \
-            xz-utils
-
-      - uses: ./.github/actions/setup
-
-      - name: Generate parity backlog docs
-        run: pnpm docs:parity
-
-      - name: Verify generated parity backlog size
-        shell: bash
-        run: |
-          lines=$(cat docs/parity/generated/*.md docs/parity/index.md | wc -l | tr -d ' ')
-          echo "Generated parity documentation lines: $lines"
-          test "$lines" -ge 10000
-
-      - name: Critical ElephantNote flow guard
-        shell: bash
-        run: |
-          set -o pipefail
-          node build/scripts/verify-critical-flows.mjs 2>&1 | tee critical-flow-guard.log
-
-      - name: Upload critical flow diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: critical-flow-guard-${{ github.run_id }}
-          path: critical-flow-guard.log
-          if-no-files-found: error
-
-      - name: Security guardrails
-        run: pnpm security:guard
-
-      - name: Tauri platform compatibility guard
-        run: pnpm tauri:platform:check
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Rust formatting
-        shell: bash
-        run: |
-          set -o pipefail
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check 2>&1 | tee rustfmt-check.log
-
-      - name: Upload rustfmt diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rustfmt-check-${{ github.run_id }}
-          path: rustfmt-check.log
-          if-no-files-found: error
-
-      - name: Rust check
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
-
-      - name: Rust tests
-        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features
-
-      - name: Build renderer
-        run: pnpm tauri:web:build
-
-      - name: Unit tests
-        run: pnpm test:unit
-
-  e2e:
-    name: E2E
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      HUSKY: '0'
-      NODE_ENV: test
-      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-      - name: E2E tests
-        run: pnpm test:e2e

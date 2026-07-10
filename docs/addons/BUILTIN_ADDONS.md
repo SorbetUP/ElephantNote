@@ -67,6 +67,26 @@ The report is derived from the real Markdown index and resolved wiki graph. It i
 - orphan notes;
 - a deterministic path-sorted note index.
 
+## Addon Profiles
+
+**ID:** `elephant.addon-profiles`  
+**Version:** `1.0.0`  
+**Enabled by default:** no
+
+Creates and applies a versioned configuration file:
+
+```text
+Addon Profiles/default.json
+```
+
+The profile can install, update, enable and disable addons from the official catalogue. It deliberately rejects unknown addon IDs and cannot install arbitrary URLs or local packages. Enabling community addons through a profile still requires Community Addons consent to be active first.
+
+Each application writes an auditable result to:
+
+```text
+Reports/Addon Profile.md
+```
+
 ## Addon Inspector
 
 **ID:** `elephant.addon-inspector`  

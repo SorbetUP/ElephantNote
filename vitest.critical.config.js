@@ -5,14 +5,18 @@ export default mergeConfig(
   baseConfig,
   defineConfig({
     test: {
-      include: ['tests/app/unit/specs/main/elephantnote/coreUtilities.contract.spec.js'],
+      include: [
+        'tests/app/unit/specs/main/elephantnote/coreUtilities.contract.spec.js',
+        'tests/app/unit/specs/main/elephantnote/testIntegrity.contract.spec.js'
+      ],
       coverage: {
         provider: 'v8',
         reportsDirectory: 'build/coverage-critical',
         reporter: ['text', 'json-summary', 'html'],
         include: [
           'Elephant/frontend/app/utils/noteCardView.js',
-          'Elephant/frontend/src/renderer/src/platform/rendererPathFacade.js'
+          'Elephant/frontend/src/renderer/src/platform/rendererPathFacade.js',
+          'build/scripts/test-integrity-core.mjs'
         ],
         thresholds: {
           lines: 95,

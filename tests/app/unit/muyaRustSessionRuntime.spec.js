@@ -61,13 +61,18 @@ describe('Rust-owned Muya session client', () => {
     })
   })
 
-  it('routes mutations and queries to the same Rust session', async() => {
+  it('routes editor, parity and query commands to the same Rust session', async() => {
     let state = compactState('text')
     const invoke = vi.fn(async(command, payload) => {
       if (command === 'tauri_muya_session_create') return state
       if (command === 'tauri_muya_session_apply') {
         expect(payload.editorId).toBe('muya:test:2')
         state = compactState('**text**', 1, { anchor: 2, focus: 6 })
+        return { state, documentChanged: true, selectionChanged: true }
+      }
+      if (command === 'tauri_muya_session_apply_parity') {
+        expect(payload.editorId).toBe('muya:test:2')
+        state = compactState('**text**\n\n[^note]: ', 2)
         return { state, documentChanged: true, selectionChanged: true }
       }
       if (command === 'tauri_muya_session_query') {
@@ -80,13 +85,19 @@ describe('Rust-owned Muya session client', () => {
 
     await client.create('text')
     const transaction = await client.toggleInline('**')
+    const footnote = await client.upsertFootnote('note', '')
     const jsonState = await client.jsonState()
 
     expect(transaction.state.markdown).toBe('**text**')
+    expect(footnote.state.markdown).toContain('[^note]: ')
     expect(jsonState.blocks).toHaveLength(1)
     expect(invoke).toHaveBeenCalledWith('tauri_muya_session_apply', {
       editorId: 'muya:test:2',
       command: { type: 'toggleInline', marker: '**' }
+    })
+    expect(invoke).toHaveBeenCalledWith('tauri_muya_session_apply_parity', {
+      editorId: 'muya:test:2',
+      command: { type: 'upsertFootnote', label: 'note', text: '' }
     })
   })
 

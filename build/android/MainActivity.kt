@@ -1,7 +1,5 @@
 package com.elephantnote.app
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import android.view.WindowInsets
@@ -10,40 +8,37 @@ import android.view.WindowInsetsController
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    requestCameraPermissionIfNeeded()
-    enterImmersiveMode()
+    // Camera access is requested by the WebView only after the user taps
+    // "Scan with camera" in Sync. Never interrupt application startup with it.
+    scheduleImmersiveMode()
   }
 
   override fun onResume() {
     super.onResume()
-    enterImmersiveMode()
+    scheduleImmersiveMode()
   }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
-    if (hasFocus) enterImmersiveMode()
+    if (hasFocus) scheduleImmersiveMode()
   }
 
-  private fun requestCameraPermissionIfNeeded() {
-    if (
-      android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M &&
-      checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
-    ) {
-      requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST)
-    }
+  private fun scheduleImmersiveMode() {
+    val decorView = window.decorView
+    decorView.post { enterImmersiveMode(decorView) }
   }
 
-  private fun enterImmersiveMode() {
+  private fun enterImmersiveMode(decorView: View) {
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
       window.setDecorFitsSystemWindows(false)
-      window.insetsController?.let { controller ->
+      decorView.windowInsetsController?.let { controller ->
         controller.hide(WindowInsets.Type.systemBars())
         controller.systemBarsBehavior =
           WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
       }
     } else {
       @Suppress("DEPRECATION")
-      window.decorView.systemUiVisibility =
+      decorView.systemUiVisibility =
         View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
           View.SYSTEM_UI_FLAG_FULLSCREEN or
           View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
@@ -51,9 +46,5 @@ class MainActivity : TauriActivity() {
           View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
           View.SYSTEM_UI_FLAG_LAYOUT_STABLE
     }
-  }
-
-  companion object {
-    private const val CAMERA_PERMISSION_REQUEST = 4102
   }
 }

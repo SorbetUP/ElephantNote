@@ -114,7 +114,7 @@ assert(
 )
 assert(
   packageJson.scripts['tauri:mac:smoke'] === 'node build/scripts/tauri-macos-window-smoke.mjs',
-  'macOS smoke script must run the packaged window verifier'
+  'macOS Tauri window smoke verifier must run the packaged window verifier'
 )
 assert(
   existsSync(resolve(root, 'build/scripts/tauri-macos-window-smoke.mjs')),
@@ -147,13 +147,14 @@ assert(
 assert(
   androidActivity.includes('enterImmersiveMode') &&
     androidActivity.includes('WindowInsets.Type.systemBars()') &&
-    androidActivity.includes('requestCameraPermissionIfNeeded'),
-  'Android MainActivity must hide system bars and request camera permission'
+    !androidActivity.includes('requestPermissions(') &&
+    !androidActivity.includes('requestCameraPermissionIfNeeded'),
+  'Android MainActivity must hide system bars without requesting camera during startup'
 )
 assert(
   buildAndroid.includes('android.permission.CAMERA') &&
     buildAndroid.includes('android.hardware.camera.any'),
-  'Android build must install camera manifest declarations'
+  'Android build must install camera manifest declarations for on-demand QR scanning'
 )
 assert(
   buildAndroid.includes('cargo tauri android init --config "$ANDROID_CONFIG"'),
@@ -190,8 +191,16 @@ assert(
   'Vault config must normalize existing config without inventing a first-run vault'
 )
 assert(
-  tauriBridge.includes('openVaultDirectory') && tauriBridge.includes('tauri_vaults_select_path'),
-  'Tauri bridge must expose native vault directory selection'
+  tauriBridge.includes('openVaultDirectory') &&
+    tauriBridge.includes('directory: true') &&
+    tauriBridge.includes('tauri_vaults_select_path'),
+  'Tauri bridge must expose native system folder selection for scoped vault access'
+)
+assert(
+  !buildAndroid.includes('READ_EXTERNAL_STORAGE') &&
+    !buildAndroid.includes('WRITE_EXTERNAL_STORAGE') &&
+    !buildAndroid.includes('MANAGE_EXTERNAL_STORAGE'),
+  'Android build must not request deprecated broad storage permissions'
 )
 assert(
   mobileVaultBridge.includes('/vaults/Personal') &&

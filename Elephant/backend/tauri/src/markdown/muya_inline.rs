@@ -147,7 +147,7 @@ fn parse_paired(
     return None;
   }
   let body_start = marker.len();
-  let body_end = source.get(body_start..)?.find(marker)? + body_start;
+  let body_end = closing_marker_offset(source, marker, body_start)?;
   if body_end == body_start {
     return None;
   }
@@ -164,6 +164,33 @@ fn parse_paired(
     },
     consumed,
   ))
+}
+
+fn closing_marker_offset(source: &str, marker: &str, from: usize) -> Option<usize> {
+  let delimiter = marker.chars().next()?;
+  let marker_width = marker.len();
+  let mut search = from;
+
+  while search < source.len() {
+    let relative = source.get(search..)?.find(delimiter)?;
+    let run_start = search + relative;
+    let run_length = source
+      .get(run_start..)?
+      .chars()
+      .take_while(|character| *character == delimiter)
+      .map(char::len_utf8)
+      .sum::<usize>();
+
+    if run_length >= marker_width {
+      // Use the rightmost part of a delimiter run. For `***`, this allows
+      // the first star to close nested emphasis and the final two to close
+      // the surrounding strong marker, matching Muya/CommonMark behavior.
+      return Some(run_start + run_length - marker_width);
+    }
+    search = run_start + run_length.max(delimiter.len_utf8());
+  }
+
+  None
 }
 
 fn parse_destination(value: &str) -> (String, Option<String>) {
@@ -225,6 +252,14 @@ mod tests {
     assert_eq!(nodes[2].node_type, "link");
     assert_eq!(nodes[2].href.as_deref(), Some("https://example.com"));
     assert_eq!(nodes[2].title.as_deref(), Some("Docs"));
+  }
+
+  #[test]
+  fn closes_separate_strong_ranges_independently() {
+    let nodes = parse_inlines("**one** and **two**");
+    assert_eq!(nodes.iter().filter(|node| node.node_type == "strong").count(), 2);
+    assert_eq!(nodes[0].text, "one");
+    assert_eq!(nodes[2].text, "two");
   }
 
   #[test]

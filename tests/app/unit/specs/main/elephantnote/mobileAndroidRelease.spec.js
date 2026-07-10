@@ -35,6 +35,37 @@ describe('ElephantNote mobile Android release', () => {
     expect(mobileStyles).toContain('.en-qr-preview')
   })
 
+  it('enforces a readable and stable phone workspace instead of shrinking desktop UI', () => {
+    const mobileStyles = read('Elephant/frontend/src/renderer/src/mobile-android.css')
+
+    expect(mobileStyles).toContain('--en-mobile-tap-target: 46px')
+    expect(mobileStyles).toContain('.en-mobile-topbar')
+    expect(mobileStyles).toContain('backdrop-filter: blur(18px)')
+    expect(mobileStyles).toContain('.en-library-toolbar')
+    expect(mobileStyles).toContain('position: sticky')
+    expect(mobileStyles).toContain('.en-library-grid:not(.list)')
+    expect(mobileStyles).toContain('grid-template-columns: 1fr')
+    expect(mobileStyles).toContain('.en-note-card')
+    expect(mobileStyles).toContain('min-height: 142px')
+    expect(mobileStyles).toContain('.en-mobile-fab')
+    expect(mobileStyles).toContain('width: 58px')
+  })
+
+  it('keeps synchronization readable and actionable with one-handed mobile controls', () => {
+    const mobileStyles = read('Elephant/frontend/src/renderer/src/mobile-android.css')
+
+    expect(mobileStyles).toContain('.en-sync-hero h3')
+    expect(mobileStyles).toContain('font-size: 20px')
+    expect(mobileStyles).toContain('.en-sync-row-copy strong')
+    expect(mobileStyles).toContain('font-size: 14px')
+    expect(mobileStyles).toContain('.en-sync-advanced-content > div')
+    expect(mobileStyles).toContain('overflow-wrap: anywhere')
+    expect(mobileStyles).toContain('.en-pair-pane textarea')
+    expect(mobileStyles).toContain('min-height: 120px')
+    expect(mobileStyles).toContain('.en-pair-share button')
+    expect(mobileStyles).toContain('min-height: 48px')
+  })
+
   it('builds an optimized signed ARM64 release APK by default and rejects oversized output', () => {
     const script = read('build/scripts/build_dev_apk.sh')
     const cargo = read('Elephant/backend/tauri/Cargo.toml')

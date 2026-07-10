@@ -1,5 +1,0 @@
-Traceback (most recent call last):
-  File "<stdin>", line 6, in <module>
-  File "patch-ai-wiki-codex-once", line 1
-    from pathlib import Path
-IndentationError: unexpected indent

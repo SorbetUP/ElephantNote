@@ -1,6 +1,8 @@
 pub mod commands;
 pub mod commands_contract;
 pub mod muya_clipboard;
+pub mod muya_clipboard_commands;
+pub mod muya_clipboard_html;
 pub mod muya_compat;
 pub mod muya_deterministic;
 pub mod muya_edges;

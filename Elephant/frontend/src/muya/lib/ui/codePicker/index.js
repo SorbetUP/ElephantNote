@@ -9,7 +9,7 @@ const defaultOptions = {
   placement: 'bottom-start',
   modifiers: {
     offset: {
-      offset: '0, 0'
+      offset: '0, 6'
     }
   },
   showArrow: false
@@ -53,8 +53,6 @@ class CodePicker extends BaseScrollFloat {
         iconClassNames = fileIcons.getClassByLanguage(item.name)
       }
 
-      // Because `markdown mode in Codemirror` don't have extensions.
-      // if still can not get the className, add a common className 'atom-icon light-cyan'
       if (!iconClassNames) {
         iconClassNames =
           item.name === 'markdown'
@@ -68,11 +66,20 @@ class CodePicker extends BaseScrollFloat {
           .map((s) => `.${s}`)
           .join('')
       const icon = h('div.icon-wrapper', h(iconSelector))
-      const text = h('div.language', item.name)
+      const displayName = item.title || item.name
+      const alias = displayName.toLowerCase() === item.name.toLowerCase() ? '' : item.name
+      const text = h('div.language', [
+        h('span.language-name', displayName),
+        alias ? h('span.language-alias', alias) : null
+      ].filter(Boolean))
       const selector = activeItem === item ? 'li.item.active' : 'li.item'
       return h(
         selector,
         {
+          attrs: {
+            role: 'option',
+            'aria-selected': activeItem === item ? 'true' : 'false'
+          },
           dataset: {
             label: item.name
           },
@@ -87,9 +94,9 @@ class CodePicker extends BaseScrollFloat {
     })
 
     if (children.length === 0) {
-      children = h('div.no-result', 'No result')
+      children = h('div.no-result', 'No matching language')
     }
-    const vnode = h('ul', children)
+    const vnode = h('ul', { attrs: { role: 'listbox' } }, children)
 
     if (oldVnode) {
       patch(oldVnode, vnode)

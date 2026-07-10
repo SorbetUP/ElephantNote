@@ -4,6 +4,10 @@ import { footnoteJumpIcon } from './renderFootnoteJump'
 import { renderEditIcon } from './renderContainerEditIcon'
 // import renderLineNumberRows from './renderLineNumber'
 import renderCopyButton from './renderCopyButton'
+import {
+  renderExecutableOutput,
+  renderExecutableRunButton
+} from './renderExecutableCodeRuntime'
 import { renderLeftBar, renderBottomBar } from './renderTableDargBar'
 import { h } from '../snabbdom'
 
@@ -62,6 +66,10 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
     }
     if (type === 'pre') {
       children.unshift(renderCopyButton(t))
+      if (functionType === 'fencecode') {
+        children.unshift(renderExecutableRunButton(block))
+        children.push(renderExecutableOutput(block))
+      }
     }
     // FIXME: Disabled due to #1648 - be consistent.
     // if (this.muya.options.codeBlockLineNumbers) {

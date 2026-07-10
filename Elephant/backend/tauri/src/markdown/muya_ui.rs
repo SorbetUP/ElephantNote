@@ -1,7 +1,40 @@
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use super::muya_compat::render_muya_html;
 use super::muya_engine::{utf16_to_byte_index, MuyaEditorState};
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum MuyaUiQuery {
+  Clipboard,
+  ImageToolbar { cursor: Option<usize> },
+  FootnotePopup { cursor: Option<usize> },
+  SlashCommands { #[serde(default)] query: String },
+  PreviewDescriptor { block_type: String, language: Option<String>, text: String },
+}
+
+pub fn execute_ui_query(state: Option<&MuyaEditorState>, query: MuyaUiQuery) -> Result<Value, String> {
+  match query {
+    MuyaUiQuery::Clipboard => Ok(clipboard_payload(require_state(state)?)),
+    MuyaUiQuery::ImageToolbar { cursor } => {
+      let state = require_state(state)?;
+      Ok(image_toolbar_state(&state.markdown, cursor.unwrap_or(state.selection.focus)))
+    }
+    MuyaUiQuery::FootnotePopup { cursor } => {
+      let state = require_state(state)?;
+      Ok(footnote_popup_state(&state.markdown, cursor.unwrap_or(state.selection.focus)))
+    }
+    MuyaUiQuery::SlashCommands { query } => Ok(slash_commands(&query)),
+    MuyaUiQuery::PreviewDescriptor { block_type, language, text } => {
+      Ok(preview_descriptor(&block_type, language.as_deref(), &text))
+    }
+  }
+}
+
+fn require_state(state: Option<&MuyaEditorState>) -> Result<&MuyaEditorState, String> {
+  state.ok_or_else(|| "Muya UI query requires editor state".to_string())
+}
 
 pub fn clipboard_payload(state: &MuyaEditorState) -> Value {
   let start_utf16 = state.selection.anchor.min(state.selection.focus);
@@ -171,5 +204,16 @@ mod tests {
     assert_eq!(preview_descriptor("math_block", None, "x")["type"], "katex");
     assert_eq!(preview_descriptor("code_fence", Some("mermaid"), "graph TD")["type"], "diagram");
     assert_eq!(preview_descriptor("paragraph", None, "x")["type"], "none");
+  }
+
+  #[test]
+  fn dispatches_typed_ui_queries() {
+    let mut state = MuyaEditorState::new("A[^n]\n\n[^n]: note".to_string());
+    state.selection = MuyaSelection::collapsed(5);
+    let popup = execute_ui_query(Some(&state), MuyaUiQuery::FootnotePopup { cursor: None }).unwrap();
+    assert_eq!(popup["label"], "n");
+    let commands = execute_ui_query(None, MuyaUiQuery::SlashCommands { query: "table".to_string() }).unwrap();
+    assert_eq!(commands[0]["id"], "table");
+    assert!(execute_ui_query(None, MuyaUiQuery::Clipboard).is_err());
   }
 }

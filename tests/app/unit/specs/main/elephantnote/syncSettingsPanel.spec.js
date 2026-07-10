@@ -71,7 +71,7 @@ describe('ElephantNote Iroh UI integration', () => {
     expect(panel).toContain('WhatsApp, Messages, Mail')
   })
 
-  it('has a real live-camera scanner and a system camera/image fallback', () => {
+  it('uses native Android QR scanning and a normal image picker fallback', () => {
     const panel = readSyncSettingsPanel()
     const scanner = readSyncQrScanner()
     const pkg = readPackage()
@@ -80,10 +80,14 @@ describe('ElephantNote Iroh UI integration', () => {
     expect(pkg.dependencies['@zxing/library']).toBe('^0.23.0')
     expect(panel).toContain('<SyncQrScanner')
     expect(panel).toContain('@decoded="handleScannedInvite"')
+    expect(scanner).toContain("import('@tauri-apps/plugin-barcode-scanner')")
+    expect(scanner).toContain('checkPermissions')
+    expect(scanner).toContain('requestPermissions')
+    expect(scanner).toContain('formats: [Format.QRCode]')
     expect(scanner).toContain("import('@zxing/browser')")
     expect(scanner).toContain('decodeFromConstraints(')
     expect(scanner).toContain("facingMode: { ideal: 'environment' }")
-    expect(scanner).toContain('capture="environment"')
+    expect(scanner).not.toContain('capture="environment"')
     expect(scanner).toContain('decodeFromImageUrl(objectUrl)')
     expect(scanner).toContain('validateSyncInvitePayload(normalized)')
   })

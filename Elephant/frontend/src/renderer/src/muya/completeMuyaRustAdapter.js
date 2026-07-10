@@ -102,6 +102,7 @@ export default class CompleteMuyaWithRustCore extends RustOwnedMuya {
     hooks.selectAllContent = () => this.selectAll()
     hooks.createTable = (tableChecker) => this.createTable(tableChecker)
     hooks.replaceImage = (imageInfo, image) => this.__replaceImage(imageInfo, image)
+    hooks.setEmoji = (item) => this.__setEmoji(item)
   }
 
   __beforeInput (event) {
@@ -233,6 +234,12 @@ export default class CompleteMuyaWithRustCore extends RustOwnedMuya {
 
   __setCodeLanguage (language) {
     return this.__applyRust('code-language', (engine) => engine.setCodeLanguage(String(language || '')))
+  }
+
+  __setEmoji (item) {
+    const alias = Array.isArray(item?.aliases) ? item.aliases[0] : ''
+    if (!alias) return undefined
+    return this.replaceWordInline(alias)
   }
 
   __switchTableData () {

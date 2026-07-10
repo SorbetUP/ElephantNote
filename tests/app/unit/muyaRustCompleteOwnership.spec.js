@@ -69,7 +69,8 @@ const requiredDirectHooks = [
   '_replaceCurrentWordInlineUnsafe',
   'selectAll',
   'selectAllContent',
-  'createTable'
+  'createTable',
+  'replaceImage'
 ]
 
 describe('complete Rust ownership of Muya document mutations', () => {

@@ -47,6 +47,16 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
     return transaction
   }
 
+  const query = async(queryCommand, { requireState = true } = {}) => {
+    if (requireState && !state) {
+      throw new Error('Muya Rust engine must be initialized before querying editor state.')
+    }
+    return call('tauri_muya_engine_query', {
+      state: state || null,
+      query: ensureCommand(queryCommand)
+    })
+  }
+
   const apply = async(command) => applyTransaction('tauri_muya_engine_apply', command)
   const applyParity = async(command) => applyTransaction('tauri_muya_engine_apply_parity', command)
 
@@ -71,6 +81,7 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
     apply,
     applyParity,
     applyBatch,
+    query,
     insertText: (text) => apply({ type: 'insertText', text: String(text) }),
     replaceSelection: (text) => apply({ type: 'replaceSelection', text: String(text) }),
     deleteBackward: () => apply({ type: 'deleteBackward' }),
@@ -102,7 +113,20 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
       label: String(label),
       text: String(text)
     }),
-    insertTemplate: (id) => applyParity({ type: 'insertTemplate', id: String(id) })
+    insertTemplate: (id) => applyParity({ type: 'insertTemplate', id: String(id) }),
+    clipboard: () => query({ type: 'clipboard' }),
+    imageToolbar: (cursor = null) => query({ type: 'imageToolbar', cursor }),
+    footnotePopup: (cursor = null) => query({ type: 'footnotePopup', cursor }),
+    slashCommands: (queryText = '') => query({
+      type: 'slashCommands',
+      query: String(queryText)
+    }, { requireState: false }),
+    previewDescriptor: (blockType, language = null, text = '') => query({
+      type: 'previewDescriptor',
+      blockType: String(blockType),
+      language: language == null ? null : String(language),
+      text: String(text)
+    }, { requireState: false })
   }
 }
 

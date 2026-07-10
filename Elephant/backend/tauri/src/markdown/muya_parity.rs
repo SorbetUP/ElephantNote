@@ -169,7 +169,7 @@ pub fn apply_table_command(markdown: &str, action: &str, index: usize) -> Result
       for (offset, line) in lines.iter_mut().enumerate().take(end + 1).skip(start) {
         let mut cells = split_table_row(line);
         let at = index.min(cells.len());
-        let value = if offset == start + 1 { "---" } else { "" };
+        let value = if offset == start + 1 { "-" } else { "" };
         cells.insert(at, value.to_string());
         *line = format_table_row(&cells);
       }
@@ -191,9 +191,9 @@ pub fn apply_table_command(markdown: &str, action: &str, index: usize) -> Result
       let mut cells = split_table_row(&lines[separator]);
       if index < cells.len() {
         cells[index] = match action {
-          "align_left" => ":---",
-          "align_center" => ":---:",
-          "align_right" => "---:",
+          "align_left" => ":-",
+          "align_center" => ":-:",
+          "align_right" => "-:",
           _ => unreachable!(),
         }.to_string();
         lines[separator] = format_table_row(&cells);
@@ -226,7 +226,7 @@ fn is_table_row(line: &str) -> bool {
 }
 
 fn is_table_separator(line: &str) -> bool {
-  is_table_row(line) && line.chars().all(|ch| matches!(ch, '|' | '-' | ':' | ' '))
+  is_table_row(line) && line.chars().all(|ch| matches!(ch, '|' | '-' | ':' | ' ' | '\t'))
 }
 
 fn split_table_row(line: &str) -> Vec<String> {
@@ -355,9 +355,9 @@ mod tests {
     let table = "| A | B |\n| - | - |\n| 1 | 2 |";
     assert_eq!(apply_table_command(table, "insert_row", 1).unwrap().lines().count(), 4);
     assert_eq!(apply_table_command(table, "delete_row", 0).unwrap().lines().count(), 2);
-    assert!(apply_table_command(table, "insert_column", 1).unwrap().contains("A |  | B"));
+    assert!(apply_table_command(table, "insert_column", 1).unwrap().contains("| - | - | - |"));
     assert!(apply_table_command(table, "delete_column", 0).unwrap().contains("| B |"));
-    assert!(apply_table_command(table, "align_center", 1).unwrap().contains(":---:"));
+    assert!(apply_table_command(table, "align_center", 1).unwrap().contains(":-:"));
   }
 
   #[test]

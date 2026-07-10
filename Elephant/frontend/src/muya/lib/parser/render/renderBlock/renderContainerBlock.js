@@ -101,31 +101,19 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
       if (cell) {
         const { top, right, bottom, left } = cell
         selector += '.ag-cell-selected'
-        if (top) {
-          selector += '.ag-cell-border-top'
-        }
-        if (right) {
-          selector += '.ag-cell-border-right'
-        }
-        if (bottom) {
-          selector += '.ag-cell-border-bottom'
-        }
-        if (left) {
-          selector += '.ag-cell-border-left'
-        }
+        if (top) selector += '.ag-cell-border-top'
+        if (right) selector += '.ag-cell-border-right'
+        if (bottom) selector += '.ag-cell-border-bottom'
+        if (left) selector += '.ag-cell-border-left'
       }
     } else {
-      // Judge whether to render the table drag bar.
       const { renderingTable, renderingRowContainer } = this
       const findTable = renderingTable ? activeBlocks.find(b => b.key === renderingTable.key) : null
       if (findTable && renderingRowContainer) {
         const { row: tableRow, column: tableColumn } = findTable
         const isLastRow = () => {
-          if (renderingRowContainer.type === 'thead') {
-            return tableRow === 0
-          } else {
-            return !parent.nextSibling
-          }
+          if (renderingRowContainer.type === 'thead') return tableRow === 0
+          return !parent.nextSibling
         }
         if (block.parent === activeBlocks[1].parent && !block.preSibling && tableRow > 0) {
           children.unshift(renderLeftBar())
@@ -137,21 +125,13 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
     }
   } else if (/^h/.test(type)) {
     if (/^h\d$/.test(type)) {
-      // TODO: This should be the best place to create and update the TOC.
-      //       Cache `block.key` and title and update only if necessary.
-      Object.assign(data.dataset, {
-        head: type
-      })
+      Object.assign(data.dataset, { head: type })
       selector += `.${headingStyle}`
     }
-    Object.assign(data.dataset, {
-      role: type
-    })
-    selector += PRE_BLOCK_HASH[block.functionType]
+    Object.assign(data.dataset, { role: type })
   } else if (type === 'figure') {
     if (functionType) {
       Object.assign(data.dataset, { role: functionType.toUpperCase() })
-      selector += PRE_BLOCK_HASH[block.functionType]
       if (functionType === 'table' && activeBlocks[0] && activeBlocks[0].functionType === 'cellContent') {
         children.unshift(renderTableTools(activeBlocks, t))
       } else if (functionType !== 'footnote') {
@@ -161,17 +141,13 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
       }
     }
 
-    if (
-      /html|multiplemath|flowchart|mermaid|sequence|plantuml|vega-lite/.test(functionType)
-    ) {
+    if (/html|multiplemath|flowchart|mermaid|sequence|plantuml|vega-lite/.test(functionType)) {
       selector += `.${CLASS_OR_ID.AG_CONTAINER_BLOCK}`
       Object.assign(data.attrs, { spellcheck: 'false' })
     }
   } else if (/ul|ol/.test(type) && listType) {
     selector += `.ag-${listType}-list`
-    if (type === 'ol') {
-      Object.assign(data.attrs, { start: block.start })
-    }
+    if (type === 'ol') Object.assign(data.attrs, { start: block.start })
   } else if (type === 'li' && listItemType) {
     Object.assign(data.dataset, { marker: bulletMarkerOrDelimiter })
     selector += `.${CLASS_OR_ID.AG_LIST_ITEM}`
@@ -189,9 +165,7 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
     }
   }
 
-  if (!block.parent) {
-    children.unshift(this.renderIcon(block, t))
-  }
+  if (!block.parent) children.unshift(this.renderIcon(block, t))
 
   return h(selector, data, children)
 }

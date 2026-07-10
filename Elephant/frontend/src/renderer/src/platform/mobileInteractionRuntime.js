@@ -8,6 +8,7 @@ const DRAWER_KEEP_OPEN_SELECTOR = [
   '.en-recent-heading',
   '.en-recent-more'
 ].join(', ')
+const OPEN_DRAWER_SELECTOR = '.en-mobile-icon-button[aria-label="Open navigation"]'
 const SWIPE_EDGE_PX = 32
 const SWIPE_DISTANCE_PX = 64
 const SWIPE_VERTICAL_TOLERANCE_PX = 56
@@ -28,7 +29,7 @@ const clickElement = (target, selector) => {
 
 const openDrawer = (target = globalThis) => {
   if (isDrawerOpen(target)) return true
-  return clickElement(target, '.en-mobile-icon-button[aria-label="Open navigation"]')
+  return clickElement(target, OPEN_DRAWER_SELECTOR)
 }
 
 const closeDrawer = (target = globalThis) => {
@@ -43,11 +44,12 @@ const preserveDrawerForLocalToggle = (target, event) => {
   const shell = getShell(target)
   shell?.classList.add('en-mobile-preserve-drawer')
 
-  // AppShell schedules its generic "close on button" callback in requestAnimationFrame.
-  // Register after event propagation, then reopen in the same animation frame before paint.
+  // AppShell schedules its generic close callback in requestAnimationFrame.
+  // Register after propagation, then set the reactive state back to open in
+  // the same frame. Vue therefore paints only the final open state.
   target.queueMicrotask(() => {
     target.requestAnimationFrame(() => {
-      if (!isDrawerOpen(target)) openDrawer(target)
+      clickElement(target, OPEN_DRAWER_SELECTOR)
       target.requestAnimationFrame(() => shell?.classList.remove('en-mobile-preserve-drawer'))
     })
   })
@@ -172,7 +174,9 @@ export const installMobileInteractionRuntime = (target = globalThis) => {
 
   if (installWhenMounted()) return true
 
-  const observer = new MutationObserver(() => {
+  const Observer = target.MutationObserver
+  if (typeof Observer !== 'function') return false
+  const observer = new Observer(() => {
     if (installWhenMounted()) observer.disconnect()
   })
   observer.observe(target.document.documentElement, { childList: true, subtree: true })

@@ -25,7 +25,7 @@ const contentTypes = {
   '.jpeg': 'image/jpeg',
   '.jpg': 'image/jpeg',
   '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
+  '.json': 'application/json',
   '.mjs': 'text/javascript; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
@@ -110,6 +110,10 @@ export default defineConfig({
       '@/elephantnote': resolve(__dirname, 'Elephant/frontend/app'),
       '@': resolve(__dirname, 'Elephant/frontend/src/renderer/src'),
       common: resolve(__dirname, 'Elephant/frontend/src/common'),
+      'muya/lib': resolve(
+        __dirname,
+        'Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js'
+      ),
       muya: resolve(__dirname, 'Elephant/frontend/src/muya')
     },
     extensions: ['.mjs', '.js', '.json', '.vue']

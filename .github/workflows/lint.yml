@@ -46,6 +46,9 @@ jobs:
       - name: Apply reviewed refactor
         run: python3 .github/scripts/apply_codex_bundle_and_limits.py
 
+      - name: Auto-fix generated frontend files
+        run: pnpm exec eslint --fix Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue Elephant/frontend/app/components/settings/codexRateLimits.js tests/app/unit/codexRateLimits.spec.js
+
       - name: Check Codex bundler syntax
         run: node --check build/scripts/ensure-tauri-codex-runtime.mjs
 

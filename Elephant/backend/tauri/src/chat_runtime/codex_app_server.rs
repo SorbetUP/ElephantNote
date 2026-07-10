@@ -290,7 +290,8 @@ async fn shell_candidate() -> Option<PathBuf> {
                 .output(),
         )
         .await
-        .ok()??;
+        .ok()?
+        .ok()?;
         if !result.status.success() {
             return None;
         }
@@ -667,7 +668,7 @@ impl CodexClient {
             .ok_or_else(|| "Codex app-server stderr is unavailable.".to_string())?;
         let child = Arc::new(Mutex::new(child));
         let stdin = Arc::new(Mutex::new(stdin));
-        let pending = Arc::new(Mutex::new(HashMap::<u64, oneshot::Sender<R<Value>>>>::new()));
+        let pending = Arc::new(Mutex::new(HashMap::<u64, oneshot::Sender<R<Value>>>::new()));
         let (events, _) = broadcast::channel(256);
 
         {

@@ -258,6 +258,7 @@ pub fn run() {
             markdown::muya_session::tauri_muya_session_sync_document,
             markdown::muya_session::tauri_muya_session_apply,
             markdown::muya_session::tauri_muya_session_apply_parity,
+            markdown::muya_session::tauri_muya_session_apply_complete,
             markdown::muya_session::tauri_muya_session_paste_clipboard,
             markdown::muya_session::tauri_muya_session_commit_composition,
             markdown::muya_session::tauri_muya_session_query,

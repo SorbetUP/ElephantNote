@@ -18,6 +18,112 @@
     touch-action: manipulation;
   }
 
+  *,
+  *::before,
+  *::after {
+    scrollbar-width: none !important;
+  }
+
+  *::-webkit-scrollbar,
+  *::-webkit-scrollbar-corner {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+    background: transparent !important;
+  }
+
+  .en-mobile-preserve-drawer .en-sidebar,
+  .en-mobile-preserve-drawer .en-mobile-scrim {
+    transition: none !important;
+  }
+
+  .en-library-grid:not(.list) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .en-library-grid.list {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+    padding-top: 10px !important;
+  }
+
+  .en-library-grid.list .en-note-card {
+    min-height: 76px !important;
+    contain-intrinsic-size: 76px 360px !important;
+    justify-content: center !important;
+    border-radius: 14px !important;
+    padding: 13px 72px 13px 14px !important;
+  }
+
+  .en-library-grid.list .en-note-card.is-featured {
+    min-height: 76px !important;
+  }
+
+  .en-library-grid.list .en-note-card > p,
+  .en-library-grid.list .en-note-card > .en-tags,
+  .en-library-grid.list .en-note-card > footer {
+    display: none !important;
+  }
+
+  .en-library-grid.list .en-note-card h3 {
+    max-width: 100% !important;
+    font-size: 16px !important;
+    line-height: 1.25 !important;
+    -webkit-line-clamp: 2 !important;
+  }
+
+  .en-library-grid.list .en-note-document-icon {
+    width: 20px !important;
+    height: 20px !important;
+    margin-top: 0 !important;
+  }
+
+  .en-library-grid.list .en-card-actions {
+    top: 50% !important;
+    right: 8px !important;
+    transform: translateY(-50%) !important;
+  }
+
+  .en-site-preview-panel,
+  .en-settings-nav > button:nth-of-type(6) {
+    display: none !important;
+  }
+
+  .en-settings-row:has(> .en-switch),
+  .en-settings-row:has(> .en-trigger-input) {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding-block: 13px !important;
+  }
+
+  .en-settings-row:has(> .en-switch) > .en-switch,
+  .en-settings-row:has(> .en-trigger-input) > .en-trigger-input {
+    align-self: center !important;
+    justify-self: end !important;
+  }
+
+  .en-settings-row-copy strong {
+    font-size: 14px !important;
+    line-height: 1.25 !important;
+  }
+
+  .en-settings-row-copy span {
+    font-size: 12px !important;
+    line-height: 1.4 !important;
+  }
+
+  .en-settings-nav > button {
+    min-width: 74px !important;
+    flex-basis: 74px !important;
+  }
+
+  .en-settings-nav > button span {
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+
   .en-sync-panel {
     gap: 10px !important;
     padding-bottom: calc(16px + env(safe-area-inset-bottom)) !important;

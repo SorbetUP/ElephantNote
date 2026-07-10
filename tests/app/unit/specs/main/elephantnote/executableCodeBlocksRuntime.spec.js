@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installExecutableCodeBlocks } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocks'
-import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV3'
+import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV4'
 
 const flush = async() => {
   await new Promise((resolve) => setTimeout(resolve, 0))
@@ -36,7 +36,7 @@ const installEditor = (source = 'print("hello")') => {
   return pre
 }
 
-describe('executable code blocks portal runtime', () => {
+describe('executable code blocks consolidated runtime', () => {
   let invoke
   let writeText
 
@@ -61,8 +61,6 @@ describe('executable code blocks portal runtime', () => {
           environment: 'Python',
           stdout: 'hello\n',
           stderr: '',
-          stdoutLines: 1,
-          stderrLines: 0,
           exitCode: 0,
           durationMs: 4,
           interrupted: false,
@@ -81,7 +79,7 @@ describe('executable code blocks portal runtime', () => {
     delete window.__TAURI__
   })
 
-  it('mounts controls outside the editable Muya tree without changing Markdown content', async() => {
+  it('mounts controls outside Muya without changing code text', async() => {
     const pre = installEditor()
     const before = pre.textContent
     const runtime = installExecutableCodeBlocks(window)
@@ -89,35 +87,33 @@ describe('executable code blocks portal runtime', () => {
     await flush()
 
     expect(pre.textContent).toBe(before)
-    expect(document.querySelector('.en-editor-host .en-code-runner-toolbar')).toBeNull()
-    expect(document.querySelector('.en-editor-host .en-code-output')).toBeNull()
+    expect(document.querySelector('.en-editor-host .en-code-v4-toolbar')).toBeNull()
+    expect(document.querySelector('.en-editor-host .en-code-v4-output')).toBeNull()
     expect(runtime.layer.parentElement).toBe(document.body)
-    expect(runtime.layer.querySelector('.en-code-runner-toolbar')).not.toBeNull()
+    expect(runtime.layer.querySelector('.en-code-v4-toolbar')).not.toBeNull()
   })
 
-  it('integrates language, copy and fence chrome using the real Muya elements', async() => {
+  it('integrates language, copy and fence chrome using real Muya elements', async() => {
     installEditor()
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('test')
     await flush()
 
-    expect(document.querySelector('.ag-language-input').classList).toContain('en-code-runtime-language-control')
-    expect(document.querySelector('.ag-copy-code').classList).toContain('en-code-runtime-native-copy')
-    expect(document.querySelector('.ag-fence-label').classList).toContain('en-code-runtime-fence-hint')
-    expect(runtime.layer.querySelector('.en-code-runner-copy')).not.toBeNull()
-
-    runtime.layer.querySelector('.en-code-runner-copy').click()
+    expect(document.querySelector('.ag-language-input').classList.contains('en-code-v4-language')).toBe(true)
+    expect(document.querySelector('.ag-copy-code').classList.contains('en-code-v4-native-copy')).toBe(true)
+    expect(document.querySelector('.ag-fence-label').classList.contains('en-code-v4-fence-hint')).toBe(true)
+    runtime.layer.querySelector('.en-code-v4-copy').click()
     await flush()
     expect(writeText).toHaveBeenCalledWith('print("hello")')
   })
 
-  it('dispatches a real Tauri run request when the visible run control is clicked', async() => {
+  it('dispatches a real Tauri run request from the visible control', async() => {
     installEditor()
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('test')
     await flush()
 
-    runtime.layer.querySelector('.en-code-runner-run').click()
+    runtime.layer.querySelector('.en-code-v4-run').click()
     await flush()
 
     expect(invoke).toHaveBeenCalledWith('tauri_programs_run', expect.objectContaining({
@@ -125,16 +121,16 @@ describe('executable code blocks portal runtime', () => {
       command: 'print("hello")',
       stop: false
     }))
-    expect(runtime.layer.querySelector('.en-code-output')).not.toBeNull()
+    expect(runtime.layer.querySelector('.en-code-v4-output')).not.toBeNull()
     expect(runtime.layer.textContent).toContain('hello')
   })
 
-  it('keeps the same state and output when Muya replaces the pre node', async() => {
+  it('keeps state and output when Muya replaces the pre node', async() => {
     const firstPre = installEditor()
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('initial')
     await flush()
-    runtime.layer.querySelector('.en-code-runner-run').click()
+    runtime.layer.querySelector('.en-code-v4-run').click()
     await flush()
 
     const originalState = [...runtime.states.values()][0]
@@ -150,13 +146,11 @@ describe('executable code blocks portal runtime', () => {
     expect(runtime.layer.textContent).toContain('hello')
   })
 
-  it('turns the run triangle into a stop control and sends a stop request', async() => {
+  it('turns Run into Stop and sends a stop request', async() => {
     let resolveRun
     invoke.mockImplementation(async(command, payload) => {
       if (command === 'tauri_programs_run' && payload.stop) return { stopped: true }
-      if (command === 'tauri_programs_run') {
-        return new Promise((resolve) => { resolveRun = resolve })
-      }
+      if (command === 'tauri_programs_run') return new Promise((resolve) => { resolveRun = resolve })
       if (command === 'tauri_programs_list') return { executionEnabled: true, outputLineLimit: 200, environments: [] }
       return {}
     })
@@ -165,7 +159,7 @@ describe('executable code blocks portal runtime', () => {
     const runtime = installExecutableCodeBlocks(window)
     runtime.scan('test')
     await flush()
-    const button = runtime.layer.querySelector('.en-code-runner-run')
+    const button = runtime.layer.querySelector('.en-code-v4-run')
     button.click()
     await flush()
 

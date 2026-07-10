@@ -3,20 +3,18 @@ export const ensureRendererPathFacade = (target = globalThis) => {
   scope.path = scope.path || {}
   const normalize = scope.path.normalize || ((value = '') => String(value || '').split('\\').join('/'))
   const join = scope.path.join || ((...parts) => normalize(parts.filter(Boolean).join('/')))
+  const pathParts = (value = '') => normalize(value).split('/').filter(Boolean)
 
   if (typeof scope.path.normalize !== 'function') scope.path.normalize = normalize
   if (typeof scope.path.join !== 'function') scope.path.join = join
   if (typeof scope.path.resolve !== 'function') scope.path.resolve = (...parts) => join(...parts)
   if (typeof scope.path.basename !== 'function') {
-    scope.path.basename = (value = '') => {
-      const parts = normalize(value).split('/').filter(Boolean)
-      return parts.at(-1) || ''
-    }
+    scope.path.basename = (value = '') => pathParts(value).at(-1) || ''
   }
   if (typeof scope.path.dirname !== 'function') {
     scope.path.dirname = (value = '') => {
       const normalized = normalize(value)
-      const parts = normalized.split('/').filter(Boolean)
+      const parts = pathParts(normalized)
       if (parts.length <= 1) return normalized.startsWith('/') ? '/' : '.'
       return `${normalized.startsWith('/') ? '/' : ''}${parts.slice(0, -1).join('/')}`
     }
@@ -26,13 +24,15 @@ export const ensureRendererPathFacade = (target = globalThis) => {
   }
   if (typeof scope.path.relative !== 'function') {
     scope.path.relative = (from = '', to = '') => {
-      const fromParts = normalize(from).split('/').filter(Boolean)
-      const toParts = normalize(to).split('/').filter(Boolean)
-      while (fromParts.length && toParts.length && fromParts[0] === toParts[0]) {
-        fromParts.shift()
-        toParts.shift()
+      const fromParts = pathParts(from)
+      const toParts = pathParts(to)
+      const sharedLength = Math.min(fromParts.length, toParts.length)
+      let commonIndex = 0
+      while (commonIndex < sharedLength && fromParts[commonIndex] === toParts[commonIndex]) {
+        commonIndex += 1
       }
-      return [...fromParts.map(() => '..'), ...toParts].join('/') || ''
+      const parentSegments = Array.from({ length: fromParts.length - commonIndex }, () => '..')
+      return [...parentSegments, ...toParts.slice(commonIndex)].join('/') || ''
     }
   }
 

@@ -42,6 +42,12 @@ describe('Muya Markdown selection runtime', () => {
     expect(readMarkdownSelection(root, selection)).toEqual({ anchor: 12, focus: 12 })
   })
 
+  it('maps a root-level cursor between blocks after the Markdown separator', () => {
+    const { dom, root } = editorFor('## Title\n\nBody')
+    const selection = select(dom, root, 1)
+    expect(readMarkdownSelection(root, selection)).toEqual({ anchor: 10, focus: 10 })
+  })
+
   it('maps table cell positions into serialized Markdown rows', () => {
     const { dom, root } = editorFor('| A | B |\n| - | - |\n| 1 | 2 |')
     const secondCell = root.querySelectorAll('tbody td')[1].firstChild

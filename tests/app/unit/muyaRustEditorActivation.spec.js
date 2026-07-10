@@ -35,13 +35,16 @@ describe('real Muya editor activation', () => {
     expect(editor).not.toContain('MuyaRuntimeEditor')
   })
 
-  it('injects Rust behind the real Muya class without replacing its DOM', () => {
+  it('injects Rust behind only the exact Muya class import', () => {
     const viteConfig = read('vite.tauri.config.js')
     const adapter = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js')
     const mirror = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js')
 
-    expect(viteConfig).toContain("'muya/lib': resolve(")
+    expect(viteConfig).toContain('const realMuyaRustMirrorPlugin = () => ({')
+    expect(viteConfig).toContain("if (source !== 'muya/lib') return null")
     expect(viteConfig).toContain('realMuyaRustAdapter.js')
+    expect(viteConfig).toContain('realMuyaRustMirrorPlugin()')
+    expect(viteConfig).not.toContain("'muya/lib': resolve(")
     expect(adapter).toContain("import Muya from '../../../muya/lib'")
     expect(adapter).toContain('export default class RealMuyaWithRustMirror extends Muya')
     expect(adapter).toContain("this.on('change', this.__elephantRustChangeListener)")
@@ -49,6 +52,30 @@ describe('real Muya editor activation', () => {
     expect(adapter).not.toContain('createElement')
     expect(mirror).toContain("target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-mirror'")
     expect(mirror).toContain('client.jsonState()')
+  })
+
+  it('keeps every Muya UI plugin on the untouched original submodule path', () => {
+    const editor = read('Elephant/frontend/src/renderer/src/components/editorWithTabs/editor.vue')
+    const viteConfig = read('vite.tauri.config.js')
+
+    for (const moduleName of [
+      'tablePicker',
+      'quickInsert',
+      'codePicker',
+      'emojiPicker',
+      'imagePicker',
+      'imageSelector',
+      'imageToolbar',
+      'transformer',
+      'formatPicker',
+      'linkTools',
+      'footnoteTool',
+      'tableTools',
+      'frontMenu'
+    ]) {
+      expect(editor).toContain(`muya/lib/ui/${moduleName}`)
+    }
+    expect(viteConfig).toContain("if (source !== 'muya/lib') return null")
   })
 
   it('keeps the experimental Rust renderer opt-in instead of replacing production Muya', () => {

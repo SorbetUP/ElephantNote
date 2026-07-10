@@ -110,10 +110,18 @@ export const createRustMuyaEngineClient = ({
     { continueGroup: Boolean(continueGroup) }
   )
   const applyParity = async(command) => {
-    if (usesSession) {
-      throw new Error('Parity commands are not yet available on Rust-owned Muya sessions.')
-    }
-    return applyTransaction('tauri_muya_engine_apply_parity', command)
+    if (!state) throw new Error('Muya Rust engine must be initialized before applying parity commands.')
+    const transaction = usesSession
+      ? await call('tauri_muya_session_apply_parity', {
+        editorId,
+        command: ensureCommand(command)
+      })
+      : await call('tauri_muya_engine_apply_parity', {
+        state,
+        command: ensureCommand(command)
+      })
+    state = ensureState(transaction?.state)
+    return transaction
   }
 
   const syncDocument = async(markdown, selection, continueGroup = false) => {

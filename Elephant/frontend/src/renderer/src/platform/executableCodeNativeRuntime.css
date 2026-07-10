@@ -1,4 +1,6 @@
 pre.en-code-native-shell {
+  --en-code-header-bg: color-mix(in srgb, var(--editorBgColor, #29292c) 97%, currentColor 3%);
+  --en-code-body-bg: var(--editorBgColor, #29292c);
   position: relative !important;
   display: grid !important;
   grid-template-columns: minmax(112px, 180px) minmax(0, 1fr) 32px 32px;
@@ -13,7 +15,7 @@ pre.en-code-native-shell {
   overflow: hidden !important;
   border: 1px solid color-mix(in srgb, currentColor 13%, transparent) !important;
   border-radius: 9px !important;
-  background: var(--editorBgColor, #29292c) !important;
+  background: var(--en-code-header-bg) !important;
   color: inherit !important;
   white-space: normal !important;
   box-shadow: 0 1px 0 color-mix(in srgb, currentColor 3%, transparent);
@@ -37,7 +39,7 @@ pre.en-code-native-shell > .ag-language-input {
   overflow: hidden;
   border: 0 !important;
   border-radius: 0 !important;
-  background: color-mix(in srgb, var(--editorBgColor, #29292c) 97%, currentColor 3%) !important;
+  background: transparent !important;
   color: color-mix(in srgb, currentColor 66%, transparent) !important;
   font: 600 11.5px/1 var(--font-family, system-ui, sans-serif) !important;
   text-overflow: ellipsis;
@@ -47,7 +49,7 @@ pre.en-code-native-shell > .ag-language-input {
 }
 
 pre.en-code-native-shell > .ag-language-input:focus {
-  background: color-mix(in srgb, var(--editorBgColor, #29292c) 94%, currentColor 6%) !important;
+  background: color-mix(in srgb, currentColor 5%, transparent) !important;
   color: inherit !important;
 }
 
@@ -65,22 +67,30 @@ pre.en-code-native-shell > .en-code-native-run {
   padding: 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
-  background: color-mix(in srgb, var(--editorBgColor, #29292c) 97%, currentColor 3%) !important;
+  background: transparent !important;
   color: color-mix(in srgb, currentColor 62%, transparent) !important;
   cursor: pointer;
 }
 
 pre.en-code-native-shell > .ag-code-copy {
   grid-area: copy;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: none !important;
+  z-index: 2;
 }
 
 pre.en-code-native-shell > .en-code-native-run {
   grid-area: run;
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 2;
 }
 
 pre.en-code-native-shell > .ag-code-copy:hover,
 pre.en-code-native-shell > .en-code-native-run:hover {
-  background: color-mix(in srgb, currentColor 8%, var(--editorBgColor, #29292c)) !important;
+  background: color-mix(in srgb, currentColor 8%, transparent) !important;
   color: inherit !important;
 }
 
@@ -102,9 +112,11 @@ pre.en-code-native-shell > .ag-code-copy > .icon {
   width: 14px !important;
   height: 14px !important;
   overflow: visible !important;
+  visibility: visible !important;
   opacity: 1 !important;
   color: inherit !important;
   pointer-events: none;
+  transform: none !important;
 }
 
 pre.en-code-native-shell > .ag-code-copy > .icon > .icon-inner {
@@ -168,14 +180,25 @@ pre.en-code-native-shell > code {
   min-width: 0;
   width: 100%;
   padding: 14px 16px 16px !important;
-  overflow: auto !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
   border-top: 1px solid color-mix(in srgb, currentColor 7%, transparent);
-  background: transparent !important;
+  background: var(--en-code-body-bg) !important;
   white-space: pre !important;
   overflow-wrap: normal !important;
   word-break: normal !important;
+  tab-size: 4;
   scrollbar-width: thin;
   scrollbar-gutter: stable;
+}
+
+/* Prism and Muya add nested spans. Force the same non-wrapping contract on
+   every token so a continuation can never jump back to column zero. */
+pre.en-code-native-shell > code *,
+pre.en-code-native-shell > code .ag-code-content {
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
 }
 
 /* Remove Muya's active-block "fence" / "Code fence" decoration. */
@@ -188,6 +211,7 @@ pre.en-code-native-shell.ag-active.ag-fence-code > code::after {
 pre.en-code-native-shell > elephant-code-output {
   grid-area: output;
   min-width: 0;
+  background: var(--en-code-body-bg);
 }
 
 pre.en-code-native-shell > .ag-front-icon {

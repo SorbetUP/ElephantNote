@@ -14,6 +14,7 @@
 <script setup>
 import { computed, toRef, watch } from 'vue'
 
+import { clipboardPayloadToMarkdown } from './clipboardRuntime.js'
 import { handleMuyaKeydown } from './inputRulesRuntime.js'
 import { useMuyaRuntimeEditor } from './useMuyaRuntimeEditor.js'
 
@@ -59,8 +60,9 @@ const handlePaste = async(event) => {
   const text = event.clipboardData?.getData('text/plain') || ''
   if (!html && !text) return
   event.preventDefault()
+  const pastedMarkdown = clipboardPayloadToMarkdown({ html, text })
   if (runtimeRef.value.insertText) {
-    await runtimeRef.value.insertText(text || runtimeRef.value.view?.pasteClipboard?.({ html, text }) || '')
+    await runtimeRef.value.insertText(pastedMarkdown)
   } else {
     runtimeRef.value.pasteClipboard({ html, text })
   }

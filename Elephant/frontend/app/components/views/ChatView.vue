@@ -370,7 +370,7 @@ const send = async () => {
 
   chatStore.addMessage({ role: 'user', content: question })
   chatStore.setSending(true)
-  chatStore.setRuntimeMessage('Searching notes and generating with local AI...')
+  chatStore.setRuntimeMessage('Searching indexed notes and generating an answer...')
   chatStore.addToolCall({
     name: 'rag.search',
     label: 'Searching local notes',
@@ -392,11 +392,11 @@ const send = async () => {
       messages
     })
     const toolCalls = shapeToolCallsForAssistant(result)
-    chatStore.setRuntimeMessage('Answered with local RAG.')
+    chatStore.setRuntimeMessage(result?.provider === 'codex' ? 'Answered with Codex and indexed notes.' : 'Answered with the configured AI route.')
     chatStore.addMessage({
       role: 'assistant',
       content: result?.answer || 'I did not find matching local notes.',
-      citations: result?.citations || [],
+      citations: result?.citations || result?.sources || [],
       wikiContext: result?.wikiContext || null,
       toolCalls
     })

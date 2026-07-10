@@ -187,6 +187,9 @@ pub struct WikiCandidate {
     pub title: String,
     pub source_paths: Vec<String>,
     pub reason: String,
+    pub preview: String,
+    pub suggested_sections: Vec<String>,
+    pub source_titles: Vec<String>,
     pub score: usize,
 }
 
@@ -265,6 +268,46 @@ fn normalized_candidate_word(raw: &str) -> Option<String> {
         "folder",
         "getting",
         "started",
+        "elle",
+        "elles",
+        "il",
+        "ils",
+        "lui",
+        "eux",
+        "votre",
+        "vos",
+        "notre",
+        "nos",
+        "leur",
+        "leurs",
+        "celui",
+        "celle",
+        "ceux",
+        "celles",
+        "quel",
+        "quelle",
+        "quels",
+        "quelles",
+        "tout",
+        "tous",
+        "toute",
+        "toutes",
+        "cours",
+        "article",
+        "page",
+        "document",
+        "contenu",
+        "misc",
+        "other",
+        "general",
+        "untitled",
+        "mine",
+        "yours",
+        "ours",
+        "theirs",
+        "some",
+        "each",
+        "every",
     ];
     (!STOP_WORDS.contains(&value.as_str())).then_some(value)
 }
@@ -288,6 +331,7 @@ fn add_candidate_signal(
     match signal {
         "hashtag" => entry.hashtag_hits += 1,
         "folder" => entry.folder_hits += 1,
+        "title_phrase" => entry.title_hits += 2,
         _ => entry.title_hits += 1,
     }
 }
@@ -320,10 +364,13 @@ fn discover_wiki_candidates(
         .map(|draft| draft.topic.trim().to_lowercase())
         .collect::<HashSet<_>>();
     let mut groups = HashMap::<String, CandidateAccumulator>::new();
+    let mut document_titles = HashMap::<String, String>::new();
 
     for row in rows {
         let (path, title, first_chunk) = row.map_err(|error| error.to_string())?;
+        document_titles.insert(path.clone(), title.clone());
         let mut seen_in_document = HashSet::new();
+        let mut title_topics = Vec::new();
         for token in title.split_whitespace() {
             let signal = if token.starts_with('#') {
                 "hashtag"
@@ -332,8 +379,20 @@ fn discover_wiki_candidates(
             };
             if let Some(topic) = normalized_candidate_word(token) {
                 if seen_in_document.insert(topic.clone()) {
-                    add_candidate_signal(&mut groups, topic, &path, signal);
+                    add_candidate_signal(&mut groups, topic.clone(), &path, signal);
                 }
+                if signal == "title" {
+                    title_topics.push(topic);
+                }
+            }
+        }
+        for pair in title_topics.windows(2) {
+            if pair[0] == pair[1] {
+                continue;
+            }
+            let phrase = format!("{} {}", pair[0], pair[1]);
+            if seen_in_document.insert(phrase.clone()) {
+                add_candidate_signal(&mut groups, phrase, &path, "title_phrase");
             }
         }
         for token in first_chunk
@@ -361,12 +420,48 @@ fn discover_wiki_candidates(
                 return None;
             }
             let score = group.hashtag_hits * 4 + group.folder_hits * 2 + group.title_hits;
-            if score < 6 {
+            let phrase_topic = topic.contains(' ');
+            if score < 6
+                || (!phrase_topic
+                    && group.hashtag_hits == 0
+                    && group.folder_hits == 0
+                    && group.title_hits < 5)
+            {
                 return None;
             }
             let mut source_paths = group.paths.into_iter().collect::<Vec<_>>();
             source_paths.sort();
             source_paths.truncate(DEFAULT_MAX_DOCUMENTS);
+            let source_titles = source_paths
+                .iter()
+                .filter_map(|path| document_titles.get(path))
+                .cloned()
+                .collect::<Vec<_>>();
+            let topic_terms = topic.split_whitespace().collect::<HashSet<_>>();
+            let mut section_counts = HashMap::<String, usize>::new();
+            for title in &source_titles {
+                let mut seen = HashSet::new();
+                for token in title
+                    .split_whitespace()
+                    .filter_map(normalized_candidate_word)
+                {
+                    if topic_terms.contains(token.as_str()) || !seen.insert(token.clone()) {
+                        continue;
+                    }
+                    *section_counts.entry(token).or_default() += 1;
+                }
+            }
+            let mut section_scores = section_counts.into_iter().collect::<Vec<_>>();
+            section_scores.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(&right.0)));
+            let mut suggested_sections = section_scores
+                .into_iter()
+                .filter(|(_, count)| *count >= 2)
+                .take(4)
+                .map(|(value, _)| title_for_topic(&value))
+                .collect::<Vec<_>>();
+            if suggested_sections.is_empty() {
+                suggested_sections = vec!["Vue d’ensemble".into(), "Références principales".into()];
+            }
             let reason = if group.hashtag_hits >= group.folder_hits
                 && group.hashtag_hits >= group.title_hits
             {
@@ -376,17 +471,32 @@ fn discover_wiki_candidates(
                     "{} notes forment un groupe de dossier cohérent",
                     source_paths.len()
                 )
+            } else if phrase_topic {
+                format!(
+                    "{} notes partagent le concept spécifique « {} »",
+                    source_paths.len(),
+                    topic
+                )
             } else {
                 format!(
                     "{} notes répètent ce concept dans leur titre",
                     source_paths.len()
                 )
             };
+            let preview = format!(
+                "Synthèse de {} notes autour de {}. Axes probables : {}.",
+                source_paths.len(),
+                title_for_topic(&topic),
+                suggested_sections.join(", ")
+            );
             Some(WikiCandidate {
                 title: title_for_topic(&topic),
                 topic,
                 source_paths,
                 reason,
+                preview,
+                suggested_sections,
+                source_titles,
                 score,
             })
         })

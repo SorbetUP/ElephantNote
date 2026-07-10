@@ -1,6 +1,6 @@
 use crate::knowledge_wikis::{
-    tauri_knowledge_wiki_accept, tauri_knowledge_wiki_candidates,
-    tauri_knowledge_wiki_generate, WikiCandidate,
+    tauri_knowledge_wiki_accept, tauri_knowledge_wiki_candidates, tauri_knowledge_wiki_generate,
+    WikiCandidate,
 };
 use elephantnote_knowledge_core::{KnowledgeStore, WikiDraft, WikiDraftStatus};
 use rusqlite::{params, Connection};
@@ -31,6 +31,9 @@ pub struct WikiLibraryItem {
     pub topic: String,
     pub excerpt: String,
     pub reason: String,
+    pub preview: String,
+    pub suggested_sections: Vec<String>,
+    pub source_titles: Vec<String>,
     pub path: Option<String>,
     pub source_paths: Vec<String>,
     pub score: usize,
@@ -141,8 +144,11 @@ fn candidate_item(candidate: WikiCandidate) -> WikiLibraryItem {
         status: "suggested".into(),
         title: candidate.title,
         topic: candidate.topic,
-        excerpt: candidate.reason.clone(),
+        excerpt: candidate.preview.clone(),
         reason: candidate.reason,
+        preview: candidate.preview,
+        suggested_sections: candidate.suggested_sections,
+        source_titles: candidate.source_titles,
         path: None,
         source_paths: candidate.source_paths,
         score: candidate.score,
@@ -175,14 +181,29 @@ fn draft_item(root: &Path, draft: WikiDraft) -> WikiLibraryItem {
         WikiDraftStatus::Proposed => "draft",
         WikiDraftStatus::Rejected => "rejected",
     };
+    let excerpt = plain_excerpt(&markdown);
+    let source_titles = draft
+        .source_paths
+        .iter()
+        .map(|path| {
+            Path::new(path)
+                .file_stem()
+                .and_then(|name| name.to_str())
+                .unwrap_or(path)
+                .to_string()
+        })
+        .collect::<Vec<_>>();
     WikiLibraryItem {
         id: format!("wiki:{}", draft.id),
         kind: "wiki".into(),
         status: status.into(),
         title: draft.title,
         topic: draft.topic,
-        excerpt: plain_excerpt(&markdown),
+        excerpt: excerpt.clone(),
         reason: String::new(),
+        preview: excerpt,
+        suggested_sections: Vec::new(),
+        source_titles,
         path,
         source_paths: draft.source_paths,
         score: 0,
@@ -279,10 +300,7 @@ pub async fn tauri_knowledge_wiki_library_generate(
 }
 
 #[tauri::command]
-pub fn tauri_knowledge_wiki_library_reject(
-    app: AppHandle,
-    topic: String,
-) -> Result<(), String> {
+pub fn tauri_knowledge_wiki_library_reject(app: AppHandle, topic: String) -> Result<(), String> {
     let root = active_vault_root(&app)?;
     let store = active_store(&root)?;
     set_candidate_decision(&store, &topic, "rejected")?;

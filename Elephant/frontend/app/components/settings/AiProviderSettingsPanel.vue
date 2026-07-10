@@ -165,7 +165,7 @@
           <div><h4>Chat route</h4><p>Select the actual runtime used by ElephantNote chat.</p></div>
           <span class="en-ai-badge active">{{ routeProviderLabel(form.routes.chat.source) }}</span>
         </header>
-        <div class="en-ai-card-body en-ai-grid">
+        <div class="en-ai-card-body en-ai-grid en-ai-chat-route-grid">
           <label>
             <span>Provider</span>
             <select
@@ -896,6 +896,8 @@ button svg { width: 14px; height: 14px; }
 .en-provider-row { padding: 14px 16px; border-top: 1px solid var(--en-border); }
 .en-provider-row:first-child { border-top: 0; }
 .en-provider-form, .en-ai-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.en-ai-chat-route-grid { grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) minmax(150px, .55fr); }
+.en-ai-chat-route-grid label.wide { grid-column: 1 / -1; }
 .en-provider-footer { justify-content: flex-end; margin-top: 12px; }
 .en-provider-footer > span { margin-right: auto; color: var(--en-muted); font-size: 12px; }
 .en-ai-advanced { border-top: 1px solid var(--en-border); }
@@ -910,8 +912,8 @@ code { font-family: ui-monospace, monospace; }
 @media (max-width: 760px) {
   .en-ai-toolbar, .en-login-challenge { align-items: stretch; flex-direction: column; }
   .en-ai-tabs { overflow-x: auto; }
-  .en-provider-form, .en-ai-grid { grid-template-columns: 1fr; }
-  label.wide { grid-column: auto; }
+  .en-provider-form, .en-ai-grid, .en-ai-chat-route-grid { grid-template-columns: 1fr; }
+  label.wide, .en-ai-chat-route-grid label.wide { grid-column: auto; }
   .en-ai-actions { flex-wrap: wrap; }
 }
 </style>

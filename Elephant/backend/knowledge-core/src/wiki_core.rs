@@ -622,7 +622,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_markdown_and_footnotes_from_structured_claims() {
+    fn renders_navigable_markdown_links_from_structured_claims() {
         let sources = sources();
         let synthesis = WikiSynthesis {
             title: "Iroh synchronization".into(),
@@ -641,9 +641,10 @@ mod tests {
         };
         let rendered = render_wiki(&synthesis, "Iroh", &sources).unwrap();
         assert!(rendered.markdown.contains("generated: true"));
-        assert!(rendered.markdown.contains("[^source-1]"));
-        assert!(rendered.markdown.contains("[[Notes/Iroh.md#Iroh"));
-        assert!(rendered.markdown.contains("[[Peer-to-peer networking]]"));
+        assert!(rendered.markdown.contains("[1](../../Notes/Iroh.md"));
+        assert!(rendered
+            .markdown
+            .contains("[Peer-to-peer networking](./peer-to-peer-networking.md)"));
         assert_eq!(rendered.citations.len(), 2);
     }
 

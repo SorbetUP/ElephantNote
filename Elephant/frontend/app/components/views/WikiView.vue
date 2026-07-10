@@ -12,7 +12,7 @@
           class="en-toolbar-button"
           type="button"
           :disabled="loading"
-          @click="loadLibrary"
+          @click="analyseNotes"
         >
           <RotateCw :class="['en-icon', { spinning: loading }]" />
           Analyser les notes
@@ -133,6 +133,27 @@
           {{ entry.excerpt || 'Wiki sans aperçu.' }}
         </p>
 
+        <section
+          v-if="entry.kind === 'suggestion' && selectedSuggestionId === entry.id"
+          class="en-wiki-preview"
+          @click.stop
+        >
+          <strong>Ce Wiki proposerait</strong>
+          <p>{{ entry.preview || entry.reason }}</p>
+          <div v-if="entry.suggestedSections?.length" class="en-wiki-preview-section">
+            <span>Plan probable</span>
+            <ul>
+              <li v-for="section in entry.suggestedSections" :key="section">{{ section }}</li>
+            </ul>
+          </div>
+          <div v-if="entry.sourceTitles?.length" class="en-wiki-preview-section">
+            <span>Notes principales</span>
+            <ul>
+              <li v-for="title in entry.sourceTitles.slice(0, 6)" :key="title">{{ title }}</li>
+            </ul>
+          </div>
+        </section>
+
         <div class="en-wiki-meta">
           <span>{{ entry.sourcePaths?.length || 0 }} source{{ entry.sourcePaths?.length === 1 ? '' : 's' }}</span>
           <span v-if="entry.citationsCount">{{ entry.citationsCount }} citation{{ entry.citationsCount === 1 ? '' : 's' }}</span>
@@ -197,8 +218,10 @@ import {
   X
 } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
+import { useSearchStore } from '../../stores/searchStore'
 
 const store = useVaultStore()
+const searchStore = useSearchStore()
 const entries = ref([])
 const loading = ref(false)
 const globalError = ref('')
@@ -253,6 +276,31 @@ const loadLibrary = async() => {
   }
 }
 
+const refreshKnowledgeViews = async(reason) => {
+  window.dispatchEvent(new CustomEvent('elephantnote:knowledge-changed', { detail: { reason } }))
+  try {
+    await searchStore.inspect()
+  } catch {
+    // The Wiki operation succeeded; a later Graph open can retry inspection.
+  }
+}
+
+const analyseNotes = async() => {
+  if (runtimeUnavailable.value || loading.value) return
+  loading.value = true
+  globalError.value = ''
+  try {
+    await globalThis.elephantnote?.knowledge?.rebuild?.()
+    const result = await runtime.value.libraryList({ limit: 500 })
+    entries.value = Array.isArray(result) ? result : []
+    await refreshKnowledgeViews('wiki-analysis')
+  } catch (error) {
+    globalError.value = normalizeError(error)
+  } finally {
+    loading.value = false
+  }
+}
+
 const handleCardClick = (entry) => {
   if (entry.kind === 'suggestion') {
     selectedSuggestionId.value = selectedSuggestionId.value === entry.id ? '' : entry.id
@@ -277,6 +325,7 @@ const generateSuggestion = async(entry) => {
     })
     selectedSuggestionId.value = ''
     await loadLibrary()
+    await refreshKnowledgeViews('wiki-generated')
   } catch (error) {
     setEntryError(entry.id, normalizeError(error))
   } finally {
@@ -292,6 +341,7 @@ const rejectSuggestion = async(entry) => {
     await runtime.value.libraryReject(entry.topic)
     entries.value = entries.value.filter((item) => item.id !== entry.id)
     selectedSuggestionId.value = ''
+    await refreshKnowledgeViews('wiki-suggestion-rejected')
   } catch (error) {
     setEntryError(entry.id, normalizeError(error))
   } finally {
@@ -306,6 +356,7 @@ const publishDraft = async(entry) => {
   try {
     await runtime.value.accept(entry.draftId)
     await loadLibrary()
+    await refreshKnowledgeViews('wiki-published')
   } catch (error) {
     setEntryError(entry.id, normalizeError(error))
   } finally {
@@ -335,6 +386,7 @@ const deleteWiki = async(entry) => {
   try {
     await runtime.value.libraryDelete(entry.draftId, true)
     entries.value = entries.value.filter((item) => item.id !== entry.id)
+    await refreshKnowledgeViews('wiki-deleted')
   } catch (error) {
     setEntryError(entry.id, normalizeError(error))
   } finally {
@@ -483,7 +535,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 18px;
   padding: 20px;
   align-content: start;
@@ -644,7 +696,7 @@ onBeforeUnmount(() => {
 .en-wiki-title-row h2 {
   min-width: 0;
   margin: 0;
-  font-size: clamp(22px, 1.8vw, 30px);
+  font-size: clamp(19px, 1.35vw, 24px);
   line-height: 1.12;
   overflow-wrap: anywhere;
   display: -webkit-box;
@@ -669,6 +721,42 @@ onBeforeUnmount(() => {
   -webkit-line-clamp: 5;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.en-wiki-preview {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+  border-top: 1px solid var(--en-border);
+  border-bottom: 1px solid var(--en-border);
+  padding: 12px 0;
+  color: var(--en-text);
+}
+
+.en-wiki-preview > p {
+  margin: 0;
+  color: var(--en-muted);
+  line-height: 1.45;
+}
+
+.en-wiki-preview-section {
+  display: grid;
+  gap: 4px;
+}
+
+.en-wiki-preview-section > span {
+  color: var(--en-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.en-wiki-preview-section ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--en-muted);
+  font-size: 13px;
 }
 
 .en-wiki-meta {

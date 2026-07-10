@@ -145,18 +145,41 @@ fn knowledge_hits(app: &AppHandle, query: &str, limit: usize) -> Vec<KnowledgeSe
 }
 
 #[cfg(not(mobile))]
+fn rag_enabled(payload: &Value) -> bool {
+    ai_config(payload)
+        .pointer("/routes/chat/enableRag")
+        .and_then(Value::as_bool)
+        .unwrap_or(true)
+}
+
+#[cfg(not(mobile))]
+fn configured_system_prompt(payload: &Value) -> String {
+    text(
+        ai_config(payload)
+            .pointer("/routes/chat")
+            .unwrap_or(&Value::Null),
+        &["systemPrompt", "system_prompt"],
+    )
+}
+
+#[cfg(not(mobile))]
 fn grounded_messages(
     app: &AppHandle,
     payload: &Value,
     query: &str,
 ) -> (Vec<Value>, Vec<KnowledgeSearchHit>) {
-    let hits = knowledge_hits(app, query, 6);
+    let hits = if rag_enabled(payload) {
+        knowledge_hits(app, query, 6)
+    } else {
+        Vec::new()
+    };
     let context = hits
         .iter()
         .enumerate()
         .map(|(index, hit)| {
             format!(
-                "[{}] {} — {} ({})\n{}",
+                "[{}] {} — {} ({})
+{}",
                 index + 1,
                 hit.title,
                 hit.heading,
@@ -165,16 +188,56 @@ fn grounded_messages(
             )
         })
         .collect::<Vec<_>>()
-        .join("\n\n");
-    let system = if hits.is_empty() {
-        "Tu es l’assistant local d’ElephantNote. Réponds en français par défaut. Aucun passage local n’a été trouvé : ne prétends pas avoir consulté les notes."
-      .to_string()
+        .join(
+            "
+
+",
+        );
+    let access_contract = if !rag_enabled(payload) {
+        "La recherche dans les notes est désactivée pour cette requête. Ne prétends pas avoir consulté la vault."
+            .to_string()
+    } else if hits.is_empty() {
+        "Tu peux interroger l’index local ElephantNote, mais aucun passage pertinent n’a été trouvé pour cette requête. Ne dis pas que tu n’as aucun accès aux notes : précise seulement qu’aucun résultat pertinent n’a été récupéré."
+            .to_string()
     } else {
-        format!("Tu es l’assistant local d’ElephantNote. Utilise les passages locaux ci-dessous pour les affirmations concernant les notes et cite-les avec [1], [2], etc. N’invente aucune source.\n\n{context}")
+        format!(
+            "Tu peux consulter les passages de notes indexées fournis ci-dessous. Utilise-les pour les affirmations concernant la vault et cite-les avec [1], [2], etc. Tu n’as pas un accès libre au disque : ton accès est limité à l’index et aux outils ElephantNote. N’affirme jamais que tu n’as aucun accès aux notes lorsque des passages sont présents.
+
+{context}"
+        )
+    };
+    let custom = configured_system_prompt(payload);
+    let system = if custom.is_empty() {
+        format!("Tu es l’assistant ElephantNote. Réponds en français par défaut. {access_contract}")
+    } else {
+        format!(
+            "{custom}
+
+Capacités ElephantNote : {access_contract}"
+        )
     };
     let mut messages = vec![json!({ "role": "system", "content": system })];
     messages.extend(extract_messages(payload));
     (messages, hits)
+}
+
+#[cfg(not(mobile))]
+fn citations_from_hits(hits: &[KnowledgeSearchHit]) -> Vec<Value> {
+    hits.iter()
+        .map(|hit| {
+            json!({
+                "path": hit.relative_path,
+                "relativePath": hit.relative_path,
+                "title": hit.title,
+                "heading": hit.heading,
+                "chunkId": hit.chunk_id,
+                "excerpt": hit.excerpt,
+                "score": hit.score,
+                "startOffset": hit.start_offset,
+                "endOffset": hit.end_offset
+            })
+        })
+        .collect()
 }
 
 #[cfg(not(mobile))]
@@ -280,9 +343,11 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
         let result =
             codex_app_server::chat_with_effort(&app, &model, &prompt, reasoning_effort.as_deref())
                 .await?;
+        let citations = citations_from_hits(&hits);
         return Ok(json!({
             "answer": result.answer,
             "sources": hits,
+            "citations": citations,
             "runtime": "codex-app-server",
             "provider": "codex",
             "model": result.model,
@@ -312,9 +377,11 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
             local_llama_runtime::chat_with_selected_model(&app, &model, &messages, &payload)
                 .await?
                 .ok_or_else(|| format!("Selected local model could not be resolved: {model}"))?;
+        let citations = citations_from_hits(&hits);
         Ok(json!({
           "answer": local.answer,
           "sources": hits,
+          "citations": citations,
           "runtime": "rust-knowledge-core",
           "provider": local.provider,
           "model": local.model,

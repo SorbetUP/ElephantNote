@@ -19,8 +19,15 @@ const RUST_BLOCK_KINDS = Object.freeze({
   'heading 3': 'heading3',
   'heading 4': 'heading4',
   'heading 5': 'heading5',
-  'heading 6': 'heading6'
+  'heading 6': 'heading6',
+  blockquote: 'quote',
+  'ul-bullet': 'bullet',
+  'ol-order': 'ordered',
+  'ul-task': 'task'
 })
+
+const STRUCTURED_LINE = /^\s*(?:>|[-+*]\s|[-+*]\s+\[[ xX]\]\s|\d+[.)]\s)/
+const HEADING_LINE = /^\s{0,3}#{1,6}\s/
 
 const historyIdentity = (history) => {
   if (!history || typeof history !== 'object') return ''
@@ -28,6 +35,19 @@ const historyIdentity = (history) => {
   const lastEditIndex = Number.isInteger(history.lastEditIndex) ? history.lastEditIndex : -1
   if (index < 0 || lastEditIndex < 0) return ''
   return `${index}:${lastEditIndex}`
+}
+
+const lineAt = (markdown, line) => String(markdown || '').split('\n')[line] || ''
+
+const rustCanTransformLine = (type, line) => {
+  const structured = STRUCTURED_LINE.test(line)
+  const heading = HEADING_LINE.test(line)
+  if (type === 'paragraph' || type === 'reset-to-paragraph') return heading || !structured
+  if (/^heading [1-6]$/.test(type)) return heading || !structured
+  if (['blockquote', 'ul-bullet', 'ol-order', 'ul-task'].includes(type)) {
+    return !structured && !heading
+  }
+  return false
 }
 
 export default class RealMuyaWithRustMirror extends Muya {
@@ -136,8 +156,12 @@ export default class RealMuyaWithRustMirror extends Muya {
     if (!kind) return super.updateParagraph(type)
 
     const cursor = this.contentState.getMuyaIndexCursor()
-    const isSingleCursor = cursor?.anchor?.line === cursor?.focus?.line
-    if (!isSingleCursor) return super.updateParagraph(type)
+    const isSingleLine = cursor?.anchor?.line === cursor?.focus?.line
+    const markdown = this.getMarkdown()
+    const currentLine = isSingleLine ? lineAt(markdown, cursor.anchor.line) : ''
+    if (!isSingleLine || !rustCanTransformLine(type, currentLine)) {
+      return super.updateParagraph(type)
+    }
 
     return this.__applyElephantRustCommand(
       `paragraph-${type}`,

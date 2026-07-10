@@ -43,6 +43,7 @@ describe('ElephantNote mobile Android release', () => {
     expect(script).toContain('ANDROID_BUILD_PROFILE="${ANDROID_BUILD_PROFILE:-release}"')
     expect(script).toContain('ANDROID_APK_MAX_MIB="${ANDROID_APK_MAX_MIB:-24}"')
     expect(script).toContain('rm -rf "$APK_ROOT"')
+    expect(script).toContain('ELEPHANTNOTE_ANDROID_BUILD=1')
     expect(script).toContain('ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1')
     expect(script).toContain('useLegacyPackaging = true')
     expect(script).toContain('native libraries will be compressed in the APK')
@@ -55,6 +56,31 @@ describe('ElephantNote mobile Android release', () => {
     expect(cargo).toContain('opt-level = "z"')
     expect(cargo).toContain('lto = "thin"')
     expect(cargo).toContain('strip = "symbols"')
+    expect(cargo).not.toContain('panic = "abort"')
+  })
+
+  it('installs the tracked minimal activity and rejects unresolved Node browser externals', () => {
+    const script = read('build/scripts/build_dev_apk.sh')
+    const activity = read('build/android/MainActivity.kt')
+    const vite = read('vite.tauri.config.js')
+    const nodeShim = read(
+      'Elephant/frontend/src/renderer/src/platform/mobileNodeBuiltinsShim.js'
+    )
+
+    expect(activity.trim()).toBe(
+      'package com.elephantnote.app\n\nclass MainActivity : TauriActivity()'
+    )
+    expect(script).toContain('cp "$MAIN_ACTIVITY_TEMPLATE" "$MAIN_ACTIVITY"')
+    expect(script).toContain("'__vite-browser-external'")
+    expect(vite).toContain("process.env.ELEPHANTNOTE_ANDROID_BUILD === '1'")
+    expect(vite).toContain("'child_process'")
+    expect(vite).toContain("'fs/promises'")
+    expect(vite).toContain("'crypto'")
+    expect(vite).toContain("'zlib'")
+    expect(nodeShim).toContain('Use the Tauri bridge instead')
+    expect(nodeShim).toContain('export const spawn')
+    expect(nodeShim).toContain('export const statSync')
+    expect(nodeShim).toContain('export const createHash')
   })
 
   it('keeps the Android runtime mobile-only and exposes the Tauri bridge', () => {

@@ -43,7 +43,6 @@ const compatibilityStyleRules = Object.freeze({
 })
 
 export default [
-  // 0. Global ignores (must be first)
   {
     ignores: [
       '**/node_modules/**',
@@ -67,20 +66,13 @@ export default [
     ]
   },
 
-  // 1. ESLint core recommended rules
-
   js.recommended,
-  // 1. Use neostandard instead
   ...neostandard(),
-
   ...pluginVue.configs['flat/recommended'],
 
-  // 3. Custom overrides for JS files
   {
     files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
-    plugins: {
-      html: pluginHtml
-    },
+    plugins: { html: pluginHtml },
     languageOptions: {
       parser: babelParser,
       parserOptions: {
@@ -114,12 +106,9 @@ export default [
     ]
   },
 
-  // 3b. Vue files: add browser globals and relax conventions
   {
     files: ['**/*.vue'],
-    languageOptions: {
-      globals: { ...globals.browser }
-    },
+    languageOptions: { globals: { ...globals.browser } },
     rules: {
       'vue/multi-word-component-names': 'off',
       'vue/require-default-prop': 'off',
@@ -127,19 +116,15 @@ export default [
     }
   },
 
-  // 3c. Test file globals
   {
     files: ['tests/**/*.js'],
-    languageOptions: {
-      globals: { ...globals.vitest }
-    },
+    languageOptions: { globals: { ...globals.vitest } },
     rules: {
       'no-confusing-arrow': 'off',
       ...compatibilityStyleRules
     }
   },
 
-  // 3d. Relax behavioral rules for muya editor engine
   {
     files: ['Elephant/frontend/src/muya/lib/**/*.js'],
     rules: {
@@ -152,31 +137,17 @@ export default [
     }
   },
 
-  // 3e. Keep the portal runtime readable without forcing one-property-per-line objects
-  {
-    files: ['Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV3.js'],
-    rules: {
-      '@stylistic/object-property-newline': 'off'
-    }
-  },
-
-  // 4. JSON files basic validation
   ...pluginJsonc.configs['flat/recommended-with-json'],
 
-  // 5. i18n JSON files validation
   {
     files: ['Elephant/frontend/src/shared/i18n/locales/*.json'],
-    plugins: {
-      'i18n-json': pluginI18nJson
-    },
+    plugins: { 'i18n-json': pluginI18nJson },
     rules: {
       'i18n-json/valid-json': 'error',
       'i18n-json/sorted-keys': 'warn',
       'i18n-json/identical-keys': [
         'error',
-        {
-          filePath: 'Elephant/frontend/src/shared/i18n/locales/en.json'
-        }
+        { filePath: 'Elephant/frontend/src/shared/i18n/locales/en.json' }
       ]
     }
   }

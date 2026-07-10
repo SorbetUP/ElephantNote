@@ -1,0 +1,5 @@
+
+> elephantnote@0.18.9 tauri:platform:check /home/runner/work/ElephantNote/ElephantNote
+> node build/scripts/verify-tauri-platforms.mjs
+
+[tauri-platforms] macOS/Linux/Android compatibility guard passed

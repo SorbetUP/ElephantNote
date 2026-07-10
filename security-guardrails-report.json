@@ -1,9 +1,9 @@
 {
   "summary": {
-    "blockerCount": 1,
+    "blockerCount": 0,
     "warningCount": 0,
     "acceptedCount": 8,
-    "hasBlockingFindings": true
+    "hasBlockingFindings": false
   },
   "acceptedFindings": [
     {
@@ -63,13 +63,5 @@
       "message": "Production Tauri builds must not expose the global window.__TAURI__ bridge; use explicit imports from @tauri-apps/api instead."
     }
   ],
-  "newFindings": [
-    {
-      "severity": "blocker",
-      "id": "GITHUB_ACTIONS_WRITE_PERMISSION",
-      "file": ".github/workflows/muya-structured-validation.yml",
-      "value": "contents: write",
-      "message": "Write permissions in CI must be justified by a dedicated release or reporting workflow."
-    }
-  ]
+  "newFindings": []
 }

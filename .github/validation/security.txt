@@ -1,0 +1,14 @@
+
+> elephantnote@0.18.9 security:guard /home/runner/work/ElephantNote/ElephantNote
+> node build/scripts/verify-security-guardrails.mjs
+
+Security guardrails: 8 known finding(s) are accepted by the baseline and must be reduced over time.
+- [baseline] TAURI_CSP_BROAD_LOCALHOST_CONNECT in Elephant/backend/tauri/tauri.conf.json: connect-src http://127.0.0.1:*
+- [baseline] TAURI_CSP_BROAD_LOCALHOST_CONNECT in Elephant/backend/tauri/tauri.conf.json: connect-src http://localhost:*
+- [baseline] TAURI_FS_DEFAULT_PERMISSION in Elephant/backend/tauri/capabilities/default.json: fs:default
+- [baseline] TAURI_FS_SCOPE_BROAD in Elephant/backend/tauri/capabilities/default.json: $DESKTOP/**/*
+- [baseline] TAURI_FS_SCOPE_BROAD in Elephant/backend/tauri/capabilities/default.json: $DOCUMENT/**/*
+- [baseline] TAURI_FS_SCOPE_BROAD in Elephant/backend/tauri/capabilities/default.json: $DOWNLOAD/**/*
+- [baseline] TAURI_FS_SCOPE_BROAD in Elephant/backend/tauri/capabilities/default.json: $HOME/**/*
+- [baseline] TAURI_GLOBAL_API_ENABLED in Elephant/backend/tauri/tauri.conf.json: withGlobalTauri: true
+Security guardrails passed.

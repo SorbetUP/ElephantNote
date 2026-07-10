@@ -1,15 +1,15 @@
 {
   "linuxDependencies": "success",
   "setup": "success",
-  "critical": "failure",
-  "security": "failure",
-  "platform": "skipped",
-  "lint": "skipped",
-  "rustfmt": "skipped",
-  "rustCheck": "skipped",
-  "rustTests": "skipped",
-  "structuredTests": "skipped",
-  "renderer": "skipped",
-  "unitTests": "skipped",
-  "validatedCommit": "7ba9682f2cfc2272253fc45c4bde26bb1a56a572"
+  "critical": "success",
+  "security": "success",
+  "platform": "success",
+  "lint": "success",
+  "rustfmt": "success",
+  "rustCheck": "success",
+  "rustTests": "success",
+  "structuredTests": "failure",
+  "renderer": "success",
+  "unitTests": "success",
+  "validatedCommit": "12d91e080ccc70d951445ca56a19a015c55aff6c"
 }

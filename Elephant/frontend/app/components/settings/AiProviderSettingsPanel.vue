@@ -629,7 +629,7 @@ const refreshCodex = async() => {
     codexStatus.value = await invokeCodex('status')
     form.value.codex.connected = Boolean(codexStatus.value.connected)
     codexMessage.value = codexStatus.value.error || (codexStatus.value.connected
-      ? 'Authenticated through Codex app-server.'
+      ? ''
       : codexStatus.value.installed
         ? 'Codex is installed but no ChatGPT account is connected.'
         : 'The bundled Codex runtime is missing from this build.')

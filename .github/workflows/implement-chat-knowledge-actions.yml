@@ -29,7 +29,23 @@ jobs:
         run: |
           set +e
           git fetch origin feature/wiki-knowledge-continuation
+          git reset --hard origin/feature/wiki-knowledge-continuation
           git show origin/feature/wiki-knowledge-continuation:.github/scripts/implement_chat_knowledge_actions.py > /tmp/agent.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/agent.py')
+          text = p.read_text()
+          old = '''        let Ok(vault) = crate::vault::config::get_active_vault(app) else {
+              String::new()
+          };
+          let store = KnowledgeStore::open(Path::new(&vault.path)).ok();'''
+          new = '''        let store = crate::vault::config::get_active_vault(app)
+              .ok()
+              .and_then(|vault| KnowledgeStore::open(Path::new(&vault.path)).ok());'''
+          if old not in text:
+              raise SystemExit('Could not repair full-note context helper')
+          p.write_text(text.replace(old, new, 1))
+          PY
           python3 /tmp/agent.py > /tmp/agent-apply.log 2>&1
           status=$?
           set -e
@@ -40,7 +56,7 @@ jobs:
             git config user.email "actions@users.noreply.github.com"
             git add .github/chat-knowledge-actions-error.txt
             git commit -m "Record Chat knowledge action patch failure"
-            git push origin HEAD:${{ github.head_ref }}
+            git push --force-with-lease origin HEAD:${{ github.head_ref }}
             exit "$status"
           fi
           cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
@@ -76,4 +92,4 @@ jobs:
             Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \
             .github/chat-knowledge-actions-error.txt
           git commit -m "Connect Chat to approved note and Wiki actions"
-          git push origin HEAD:${{ github.head_ref }}
+          git push --force-with-lease origin HEAD:${{ github.head_ref }}

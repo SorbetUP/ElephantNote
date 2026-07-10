@@ -61,7 +61,7 @@ describe('Rust-owned Muya session client', () => {
     })
   })
 
-  it('routes editor, parity and query commands to the same Rust session', async() => {
+  it('routes mutations and queries to the same Rust session', async() => {
     let state = compactState('text')
     const invoke = vi.fn(async(command, payload) => {
       if (command === 'tauri_muya_session_create') return state

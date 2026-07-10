@@ -256,6 +256,7 @@ pub fn run() {
       markdown::commands::tauri_muya_commit_composition,
       markdown::commands::tauri_muya_cancel_composition,
       markdown::commands::tauri_muya_editor_snapshot,
+      markdown::muya_assets::tauri_muya_asset_write,
       markdown::muya_session::tauri_muya_session_create,
       markdown::muya_session::tauri_muya_session_sync_document,
       markdown::muya_session::tauri_muya_session_apply,

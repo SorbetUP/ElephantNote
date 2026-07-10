@@ -98,9 +98,16 @@ const refreshControls = (target) => {
   }
   topbar.classList.add('has-library-controls')
   const view = currentView(target)
+  const desiredIcon = view === 'grid' ? 'list' : 'grid'
+  const desiredLabel = view === 'grid' ? 'Show notes as list' : 'Show notes as grid'
   const viewButton = controls.querySelector('.en-mobile-library-view')
-  viewButton.innerHTML = svg(view === 'grid' ? 'list' : 'grid')
-  viewButton.setAttribute('aria-label', view === 'grid' ? 'Show notes as list' : 'Show notes as grid')
+  if (viewButton.dataset.icon !== desiredIcon) {
+    viewButton.dataset.icon = desiredIcon
+    viewButton.innerHTML = svg(desiredIcon)
+  }
+  if (viewButton.getAttribute('aria-label') !== desiredLabel) {
+    viewButton.setAttribute('aria-label', desiredLabel)
+  }
 }
 
 export const installMobileLibraryChromeRuntime = (target = globalThis) => {

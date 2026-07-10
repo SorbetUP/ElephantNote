@@ -24,7 +24,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./.github/actions/setup
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        run: npm install --global pnpm@10.33.4
+
+      - name: Install exact locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Reject fake or disabled test additions
         run: node build/scripts/verify-test-integrity.mjs

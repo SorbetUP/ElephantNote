@@ -33,6 +33,13 @@ const ensureJsonState = (jsonState) => {
   return jsonState
 }
 
+const ensureSelection = (selection) => {
+  if (!selection || !Number.isInteger(selection.anchor) || !Number.isInteger(selection.focus)) {
+    throw new Error('Muya Rust engine requires a valid UTF-16 selection.')
+  }
+  return { anchor: selection.anchor, focus: selection.focus }
+}
+
 export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {}) => {
   const call = invoke || requireInvoke(target)
   let state = null
@@ -77,6 +84,17 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
     return transaction
   }
 
+  const commitComposition = async(selection, text) => {
+    if (!state) throw new Error('Muya Rust engine must be initialized before committing composition.')
+    const transaction = await call('tauri_muya_engine_commit_composition', {
+      state,
+      selection: ensureSelection(selection),
+      text: String(text)
+    })
+    state = ensureState(transaction?.state)
+    return transaction
+  }
+
   const reset = async(markdown = '') => create(markdown)
 
   return {
@@ -88,6 +106,7 @@ export const createRustMuyaEngineClient = ({ invoke, target = globalThis } = {})
     apply,
     applyParity,
     applyBatch,
+    commitComposition,
     query,
     insertText: (text) => apply({ type: 'insertText', text: String(text) }),
     replaceSelection: (text) => apply({ type: 'replaceSelection', text: String(text) }),

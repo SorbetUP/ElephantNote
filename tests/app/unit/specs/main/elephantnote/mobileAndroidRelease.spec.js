@@ -14,8 +14,8 @@ describe('Elephant mobile Android release', () => {
 
     expect(shell).toContain("'en-mobile-shell': isMobileShell")
     expect(shell).toContain('v-if="sidebarVisible || isMobileShell"')
-    expect(shell).toContain(':class="{ visible: sidebarVisible }"')
-    expect(shell).toContain('translate3d(-104%, 0, 0)')
+    expect(shell).toContain(':class="{ visible: drawerProgress > 0 }"')
+    expect(shell).toContain('const drawerProgress = ref(1)')
     expect(shell).toContain('cubic-bezier(0.22, 1, 0.36, 1)')
     expect(shell).toContain("'elephantnote:vault-files-changed'")
     expect(shellStyles).toContain('@media')
@@ -26,8 +26,9 @@ describe('Elephant mobile Android release', () => {
     expect(emptyVault).toContain('@click="emit(\'create-local\')"')
     expect(emptyVault).toContain('@click="emit(\'choose\')"')
     expect(emptyVault).toContain('Opening Android storage…')
-    expect(emptyVault).toContain("../../../../assets/static/icon.png")
-    expect(mobileVaultBridge).toContain('mobile-vault-choice-v3')
+    expect(emptyVault).toContain('../../../../assets/static/icon.png')
+    expect(mobileVaultBridge).toContain('mobile-vault-choice-v4')
+    expect(mobileVaultBridge).toContain('tauri_android_vault_pick')
     expect(mobileVaultBridge).toContain('return { canceled: true }')
     expect(mobileVaultBridge).not.toContain('using phone vault')
   })
@@ -68,11 +69,12 @@ describe('Elephant mobile Android release', () => {
     expect(mobileStyles).toContain('env(safe-area-inset-bottom)')
     expect(mobileStyles).toContain('min-height: 44px')
     expect(mobileStyles).toContain('.en-qr-preview')
-    expect(nativeStyles).toContain('--en-mobile-drawer-offset')
+    expect(nativeStyles).toContain('--en-mobile-drawer-progress')
+    expect(nativeStyles).not.toContain('--en-mobile-drawer-offset')
     expect(nativeStyles).toContain('.en-mobile-editor-toolbar')
   })
 
-  it('allows Tauri file operations inside both Android private path aliases', () => {
+  it('allows Tauri file operations inside both Android private path aliases and hidden assets', () => {
     const capability = JSON.parse(read('Elephant/backend/tauri/capabilities/default.json'))
     const scope = capability.permissions.find((permission) => permission?.identifier === 'fs:scope')
     const paths = scope?.allow?.map((entry) => entry.path) || []
@@ -81,6 +83,8 @@ describe('Elephant mobile Android release', () => {
     expect(paths).toContain('$APPLOCALDATA/**/*')
     expect(paths).toContain('/data/user/0/com.elephantnote.app/**/*')
     expect(paths).toContain('/data/data/com.elephantnote.app/**/*')
+    expect(paths).toContain('/data/user/0/com.elephantnote.app/**/.assets/**/*')
+    expect(paths).toContain('/data/data/com.elephantnote.app/**/.assets/**/*')
   })
 
   it('treats only a clean Iroh code-zero shutdown as successful completion', () => {
@@ -137,7 +141,10 @@ describe('Elephant mobile Android release', () => {
     expect(script).toContain('android.permission.CAMERA')
     expect(script).toContain('android.hardware.camera.any')
     expect(scanner).toContain('@click="startCameraScanner"')
+    expect(scanner).toContain('@tauri-apps/plugin-barcode-scanner')
+    expect(scanner).toContain('requestPermissions')
     expect(scanner).toContain('navigator.mediaDevices?.getUserMedia')
+    expect(scanner).not.toContain('capture="environment"')
     expect(editorRuntime).toContain('requestCameraStream')
     expect(editorRuntime).not.toContain('input.capture =')
     expect(startupSmoke).toContain('camera_not_requested=true')
@@ -156,13 +163,16 @@ describe('Elephant mobile Android release', () => {
     expect(nodeShim).toContain('export const createHash')
   })
 
-  it('uses the Android system folder picker instead of broad storage permission', () => {
-    const bridge = read('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
+  it('uses a persistent Android document tree instead of broad storage permission', () => {
+    const mobileVaultBridge = read('Elephant/frontend/src/renderer/src/platform/mobileVaultBridge.js')
+    const plugin = read('Elephant/backend/tauri-plugin-elephant-android-vault/android/src/main/java/com/elephantnote/androidvault/ElephantAndroidVaultPlugin.kt')
     const buildScript = read('build/scripts/build_dev_apk.sh')
 
-    expect(bridge).toContain('openVaultDirectory')
-    expect(bridge).toContain('directory: true')
-    expect(bridge).toContain('tauri_vaults_select_path')
+    expect(mobileVaultBridge).toContain('tauri_android_vault_pick')
+    expect(mobileVaultBridge).toContain('tauri_android_vault_restore')
+    expect(plugin).toContain('Intent.ACTION_OPEN_DOCUMENT_TREE')
+    expect(plugin).toContain('takePersistableUriPermission')
+    expect(plugin).toContain('DocumentFile.fromTreeUri')
     expect(buildScript).not.toContain('READ_EXTERNAL_STORAGE')
     expect(buildScript).not.toContain('WRITE_EXTERNAL_STORAGE')
     expect(buildScript).not.toContain('MANAGE_EXTERNAL_STORAGE')

@@ -1,9 +1,11 @@
 import { inject } from 'vue'
+import { createAddonHostRuntime } from './addonHostRuntime'
 import { ElephantAddonManager } from './AddonManagerWithState'
 import { builtinAddons } from './builtin'
 import { installExternalAddonRuntime } from './externalAddonRuntime'
 import { useAddonsStore } from '@/store/addons'
 export { ADDON_EXTENSION_POINTS } from './extensionPoints'
+export { createAddonHostRuntime } from './addonHostRuntime'
 export {
   ADDON_ACCESS_LEVEL,
   ADDON_API_VERSION,
@@ -28,7 +30,7 @@ const createDiagnosticsLogger = (logger) => ({
   error: logger?.error || ((...args) => console.error('[addons]', ...args))
 })
 
-const createAddonHostFacade = (managerRef) => Object.freeze({
+const createAddonManagerFacade = (managerRef) => Object.freeze({
   list: (...args) => managerRef.current?.list(...args) || [],
   get: (...args) => managerRef.current?.get(...args) || null,
   getContributions: (...args) => managerRef.current?.getContributions(...args) || [],
@@ -43,13 +45,18 @@ export const createAddonManager = (options = {}) => {
   const logger = createDiagnosticsLogger(options.logger)
   const addonDefinitions = options.addons || builtinAddons
   const managerRef = { current: null }
-  const addonHost = createAddonHostFacade(managerRef)
+  const addonManagerFacade = createAddonManagerFacade(managerRef)
+  const addonHost = options.addonHost || createAddonHostRuntime({ ...options, logger })
   const manager = new ElephantAddonManager({
     ...options,
-    addons: addonHost,
+    addonHost,
+    addons: addonManagerFacade,
     logger
   })
   managerRef.current = manager
+  manager.host = addonHost
+  addonHost.provide('addons', addonManagerFacade)
+  addonHost.provide('addonManager', manager)
 
   logger.info('[addons] register:start', {
     count: addonDefinitions.length,
@@ -81,6 +88,7 @@ export const installAddonSystem = (app, options = {}) => {
   })
   app.provide(ADDON_MANAGER_KEY, manager)
   app.config.globalProperties.$addons = manager
+  app.config.globalProperties.$addonHost = manager.host
 
   if (options.pinia) {
     useAddonsStore(options.pinia).install(manager)
@@ -91,9 +99,13 @@ export const installAddonSystem = (app, options = {}) => {
 
   if (typeof window !== 'undefined') {
     window.__ELEPHANT_ADDONS__ = manager
+    window.__ELEPHANT_ADDON_HOST__ = manager.host
     window.__ELEPHANT_VUE_APP__ = app
     window.dispatchEvent(new CustomEvent('elephantnote:addons-ready', {
-      detail: { ids: manager.list().map((addon) => addon.manifest.id) }
+      detail: {
+        ids: manager.list().map((addon) => addon.manifest.id),
+        resources: manager.host.list()
+      }
     }))
   }
 
@@ -115,7 +127,8 @@ export const installAddonSystem = (app, options = {}) => {
   }
 
   manager.logger.info('[addons] install:done', {
-    registered: manager.list().map((addon) => addon.manifest.id)
+    registered: manager.list().map((addon) => addon.manifest.id),
+    resources: manager.host.list()
   })
   return manager
 }

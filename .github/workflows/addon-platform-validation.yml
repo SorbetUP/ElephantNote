@@ -51,6 +51,8 @@ jobs:
             2>&1 | tee -a addon-functional-tests.txt
           node build/scripts/test-notion-importer.mjs addon-catalog-source \
             2>&1 | tee -a addon-functional-tests.txt
+          node build/scripts/test-popular-note-addons.mjs addon-catalog-source \
+            2>&1 | tee -a addon-functional-tests.txt
 
       - name: Run focused addon and settings tests
         shell: bash

@@ -27,14 +27,12 @@ jobs:
       - name: Apply implementation
         shell: bash
         run: |
-          if grep -q 'class="en-wiki-preview"' Elephant/frontend/app/components/views/WikiView.vue \
-            && grep -q 'fn markdown_note_target' Elephant/backend/knowledge-core/src/wiki_core.rs; then
-            echo 'Wiki experience source is already applied.'
-            exit 0
-          fi
-          git fetch origin feature/wiki-knowledge-continuation
-          git show origin/feature/wiki-knowledge-continuation:.github/scripts/implement_wiki_experience_phase1.py > /tmp/impl.py
-          python3 - <<'PY'
+          set +e
+          {
+            git fetch origin feature/wiki-knowledge-continuation
+            git reset --hard origin/feature/wiki-knowledge-continuation
+            git show origin/feature/wiki-knowledge-continuation:.github/scripts/implement_wiki_experience_phase1.py > /tmp/impl.py
+            python3 - <<'PY'
           from pathlib import Path
           p = Path('/tmp/impl.py')
           text = p.read_text()
@@ -56,14 +54,28 @@ jobs:
               raise SystemExit('Could not patch the generate-specific WikiView replacement')
           p.write_text(text.replace(old, new, 1))
           PY
-          python3 /tmp/impl.py
-          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+            python3 /tmp/impl.py
+            cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+            cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+          } > /tmp/phase1-apply.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/phase1-apply.log
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/phase1-apply.log .github/wiki-experience-phase1-apply-error.txt
+            git config user.name "ElephantNote Bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add .github/wiki-experience-phase1-apply-error.txt
+            git commit -m "Record Wiki experience patch failure"
+            git push --force-with-lease origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
       - name: Persist candidate implementation
         shell: bash
         run: |
           git config user.name "ElephantNote Bot"
           git config user.email "actions@users.noreply.github.com"
+          rm -f .github/wiki-experience-phase1-apply-error.txt
           git add Elephant/backend/knowledge-core/src/wiki_core.rs \
             Elephant/backend/knowledge-core/src/wiki_graph_projection.rs \
             Elephant/backend/tauri/src/chat_runtime.rs \
@@ -71,11 +83,10 @@ jobs:
             Elephant/backend/tauri/src/knowledge_wikis.rs \
             Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
             Elephant/frontend/app/components/views/ChatView.vue \
-            Elephant/frontend/app/components/views/WikiView.vue
-          if ! git diff --cached --quiet; then
-            git commit -m "Implement functional Wiki previews, links and refresh"
-            git push origin HEAD:${{ github.head_ref }}
-          fi
+            Elephant/frontend/app/components/views/WikiView.vue \
+            .github/wiki-experience-phase1-apply-error.txt
+          git commit -m "Implement functional Wiki previews, links and refresh"
+          git push --force-with-lease origin HEAD:${{ github.head_ref }}
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Install Tauri system dependencies
@@ -95,7 +106,6 @@ jobs:
           pnpm tauri:web:build > /tmp/build.log 2>&1
           build_status=$?
           set -e
-          cat /tmp/knowledge.log /tmp/tauri.log /tmp/eslint.log /tmp/build.log
           if [ "$core_status" -ne 0 ] || [ "$tauri_status" -ne 0 ] || [ "$lint_status" -ne 0 ] || [ "$build_status" -ne 0 ]; then
             {
               echo "core=$core_status tauri=$tauri_status lint=$lint_status build=$build_status"
@@ -111,13 +121,4 @@ jobs:
             git push origin HEAD:${{ github.head_ref }}
             exit 1
           fi
-      - name: Mark validation complete
-        shell: bash
-        run: |
-          if [ -f .github/wiki-experience-phase1-validation-error.txt ]; then
-            git config user.name "ElephantNote Bot"
-            git config user.email "actions@users.noreply.github.com"
-            git rm .github/wiki-experience-phase1-validation-error.txt
-            git commit -m "Clear Wiki experience validation diagnostics"
-            git push origin HEAD:${{ github.head_ref }}
-          fi
+          cat /tmp/knowledge.log /tmp/tauri.log /tmp/eslint.log /tmp/build.log

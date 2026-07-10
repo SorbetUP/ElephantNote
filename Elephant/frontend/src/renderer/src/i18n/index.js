@@ -140,6 +140,7 @@ const createFallbackEnglishTranslations = () => ({
     'input-yaml-front-matter': 'Input YAML front matter',
     'input-language-identifier': 'Input language identifier',
     'input-mathematical-formula': 'Input mathematical formula',
+    copyContent: 'Copy code',
     fence: 'Code fence',
     indent: 'Indent',
     'front-matter-delimiter': 'Front matter delimiter',

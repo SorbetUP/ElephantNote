@@ -197,9 +197,7 @@ fn apply_keyboard_rule_to_markdown(
     cursor_utf16: usize,
 ) -> (String, usize) {
     let cursor = utf16_to_byte_index(markdown, cursor_utf16.min(utf16_len(markdown)));
-    let line_start = markdown[..cursor]
-        .rfind('\n')
-        .map_or(0, |index| index + 1);
+    let line_start = markdown[..cursor].rfind('\n').map_or(0, |index| index + 1);
     let line_end = markdown[cursor..]
         .find('\n')
         .map_or(markdown.len(), |offset| cursor + offset);
@@ -214,9 +212,8 @@ fn apply_keyboard_rule_to_markdown(
         if replacement == current {
             return (markdown.to_string(), cursor_utf16);
         }
-        let mut next = String::with_capacity(
-            markdown.len() + replacement.len().saturating_sub(current.len()),
-        );
+        let mut next =
+            String::with_capacity(markdown.len() + replacement.len().saturating_sub(current.len()));
         next.push_str(&markdown[..line_start]);
         next.push_str(&replacement);
         next.push_str(&markdown[line_end..]);

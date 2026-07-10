@@ -2,6 +2,19 @@
   --en-mobile-keyboard-offset: 0px;
 }
 
+.en-mobile-drawer-edge-handle {
+  position: fixed;
+  z-index: 49;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 30px;
+  display: none;
+  touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Excalidraw should devote the viewport to the canvas. The only application
    chrome retained above Excalidraw itself is close/save. */
 .en-excalidraw-shell {
@@ -51,7 +64,101 @@
   color: #2563eb !important;
 }
 
+.en-mobile-tag-manager-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 4100;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.en-mobile-tag-manager {
+  width: 100%;
+  max-height: min(72dvh, 620px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px max(18px, env(safe-area-inset-bottom, 0px));
+  border-radius: 26px 26px 0 0;
+  color: var(--en-text, #eef3fb);
+  background: var(--en-surface, #141a24);
+  box-shadow: 0 -18px 42px rgba(0, 0, 0, 0.32);
+}
+
+.en-mobile-tag-manager header {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.en-mobile-tag-manager header strong {
+  font-size: 20px;
+}
+
+.en-mobile-tag-manager header button {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 14px;
+  color: inherit;
+  background: var(--en-soft, #1b2432);
+  font: inherit;
+  font-size: 24px;
+}
+
+.en-mobile-tag-list {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.en-mobile-tag-list > p {
+  margin: 0;
+  padding: 18px 4px;
+  color: var(--en-muted, #98a3b6);
+}
+
+.en-mobile-tag-row {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--en-border, #283244);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--en-soft, #1b2432) 70%, transparent);
+}
+
+.en-mobile-tag-row button,
+.en-mobile-tag-add {
+  min-height: 44px;
+  border: 0;
+  border-radius: 14px;
+  color: inherit;
+  background: var(--en-soft, #1b2432);
+  font: inherit;
+}
+
+.en-mobile-tag-row button {
+  padding: 0 12px;
+  color: #fca5a5;
+}
+
+.en-mobile-tag-add {
+  width: 100%;
+  font-weight: 700;
+}
+
 @media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  .en-mobile-shell .en-sidebar {
+    touch-action: pan-y !important;
+    overscroll-behavior-x: contain;
+  }
+
   .en-main.has-editor-open .en-note-topbar {
     min-height: 0 !important;
     display: grid !important;

@@ -4,11 +4,13 @@
       ref="rootRef"
       class="muya-runtime-editor"
       data-testid="muya-runtime-editor"
+      @blur="handleHistoryBoundary"
       @compositionstart="handleCompositionStart"
       @compositionend="handleCompositionEnd"
       @input="handleInput"
       @keydown="handleKeydown"
       @paste="handlePaste"
+      @pointerdown="handleHistoryBoundary"
     />
   </div>
 </template>
@@ -38,10 +40,25 @@ const { rootRef, runtimeRef, ready } = runtime
 let inputSyncTimer = null
 let composing = false
 
+const navigationKeys = new Set([
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'End',
+  'Home',
+  'PageDown',
+  'PageUp'
+])
+
 const syncAndEmit = async() => {
   const next = await runtime.syncFromRuntime()
   emit('change', next)
   return next
+}
+
+const handleHistoryBoundary = () => {
+  runtimeRef.value?.closeHistoryGroup?.()
 }
 
 const handleInput = () => {
@@ -78,6 +95,7 @@ const handleCompositionEnd = async(event) => {
 
 const handleKeydown = async(event) => {
   if (composing || event.isComposing) return
+  if (navigationKeys.has(event.key)) handleHistoryBoundary()
   const handled = await handleMuyaKeydown(runtimeRef.value, event)
   if (handled) await syncAndEmit()
 }

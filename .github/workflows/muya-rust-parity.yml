@@ -89,25 +89,21 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          {
-            rustfmt --edition 2021 --check \
-              --config skip_children=true,tab_spaces=2,max_width=200,reorder_imports=false,reorder_modules=false \
-              Elephant/backend/tauri/src/lib_min.rs \
-              Elephant/backend/tauri/src/markdown/mod.rs
-            rustfmt --edition 2021 --check \
-              Elephant/backend/tauri/src/markdown/muya_advanced.rs \
-              Elephant/backend/tauri/src/markdown/muya_assets.rs \
-              Elephant/backend/tauri/src/markdown/muya_clipboard_commands.rs \
-              Elephant/backend/tauri/src/markdown/muya_clipboard_html.rs \
-              Elephant/backend/tauri/src/markdown/muya_complete.rs \
-              Elephant/backend/tauri/src/markdown/muya_engine.rs \
-              Elephant/backend/tauri/src/markdown/muya_inline.rs \
-              Elephant/backend/tauri/src/markdown/muya_parity.rs \
-              Elephant/backend/tauri/src/markdown/muya_session.rs \
-              Elephant/backend/tauri/src/markdown/muya_state.rs \
-              Elephant/backend/tauri/src/markdown/muya_surface.rs \
-              Elephant/backend/tauri/src/markdown/muya_ui.rs
-          } 2>&1 | tee muya-rustfmt.log
+          rustfmt --edition 2021 --check \
+            Elephant/backend/tauri/src/markdown/mod.rs \
+            Elephant/backend/tauri/src/markdown/muya_advanced.rs \
+            Elephant/backend/tauri/src/markdown/muya_assets.rs \
+            Elephant/backend/tauri/src/markdown/muya_clipboard_commands.rs \
+            Elephant/backend/tauri/src/markdown/muya_clipboard_html.rs \
+            Elephant/backend/tauri/src/markdown/muya_complete.rs \
+            Elephant/backend/tauri/src/markdown/muya_engine.rs \
+            Elephant/backend/tauri/src/markdown/muya_inline.rs \
+            Elephant/backend/tauri/src/markdown/muya_parity.rs \
+            Elephant/backend/tauri/src/markdown/muya_session.rs \
+            Elephant/backend/tauri/src/markdown/muya_state.rs \
+            Elephant/backend/tauri/src/markdown/muya_surface.rs \
+            Elephant/backend/tauri/src/markdown/muya_ui.rs \
+            2>&1 | tee muya-rustfmt.log
 
       - name: Compile Tauri Rust backend
         shell: bash

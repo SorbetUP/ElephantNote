@@ -14,8 +14,187 @@
   position: fixed !important;
   top: 0;
   right: auto !important;
-  margin: 0 !important;
   z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+  margin: 0 !important;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+/* The editable language selector already exists on the left of the fence.
+   Repeating it beside Run made the control visually heavy and ambiguous. */
+.en-code-runtime-toolbar .en-code-runner-language {
+  display: none;
+}
+
+.en-code-runtime-toolbar .en-code-runner-run {
+  display: inline-grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--editorColor, currentColor) 58%, transparent);
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 100ms ease;
+}
+
+.en-code-runtime-toolbar .en-code-runner-run:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--editorColor, currentColor) 12%, transparent);
+  background: color-mix(in srgb, var(--editorColor, currentColor) 8%, transparent);
+  color: var(--en-primary, #1687ff);
+}
+
+.en-code-runtime-toolbar .en-code-runner-run:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.en-code-runtime-toolbar .en-code-runner-run:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--en-primary, #1687ff) 46%, transparent);
+  outline-offset: 2px;
+}
+
+.en-code-runtime-toolbar .en-code-runner-run:disabled {
+  cursor: not-allowed;
+  opacity: 0.28;
+}
+
+/* Draw the triangle in CSS instead of relying on a text glyph.
+   This keeps it optically centred with Muya's native copy icon. */
+.en-code-runtime-toolbar .en-code-runner-run-icon {
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 8px solid currentColor;
+  font-size: 0;
+  line-height: 0;
+  transform: translateX(1px);
+}
+
+.en-code-runtime-toolbar .en-code-runner-run.is-running {
+  border-color: color-mix(in srgb, #e06464 18%, transparent);
+  background: color-mix(in srgb, #e06464 9%, transparent);
+  color: color-mix(in srgb, #e06464 84%, var(--editorColor, currentColor));
+}
+
+.en-code-runtime-toolbar .en-code-runner-run.is-running:hover:not(:disabled) {
+  border-color: color-mix(in srgb, #e06464 30%, transparent);
+  background: color-mix(in srgb, #e06464 15%, transparent);
+  color: #e06464;
+}
+
+.en-code-runtime-toolbar .en-code-runner-run.is-running .en-code-runner-run-icon {
+  width: 9px;
+  height: 9px;
+  border: 0;
+  border-radius: 2px;
+  background: currentColor;
+  transform: none;
+}
+
+.en-code-runtime-toolbar .en-code-runner-run.is-stopping .en-code-runner-run-icon {
+  animation: elephant-code-stop-pulse 700ms ease-in-out infinite;
+}
+
+/* Muya owns this control and persists its value in the Markdown fence.
+   Keep it visible, but make it read as compact editor chrome rather than a title. */
+.en-editor-host :is(
+  .ag-language-input,
+  .language-input,
+  .ag-code-language,
+  .code-block-language,
+  [data-function-type='languageInput'],
+  [functiontype='languageInput'],
+  [data-role='language-input'],
+  [data-language-input]
+),
+.muya-container :is(
+  .ag-language-input,
+  .language-input,
+  .ag-code-language,
+  .code-block-language,
+  [data-function-type='languageInput'],
+  [functiontype='languageInput'],
+  [data-role='language-input'],
+  [data-language-input]
+) {
+  min-height: 22px;
+  padding: 1px 7px !important;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--editorColor, currentColor) 55%, transparent) !important;
+  font-family: var(--font-family, system-ui, sans-serif) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.01em !important;
+  line-height: 20px !important;
+  text-transform: capitalize;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.en-editor-host :is(
+  .ag-language-input,
+  .language-input,
+  .ag-code-language,
+  .code-block-language,
+  [data-function-type='languageInput'],
+  [functiontype='languageInput'],
+  [data-role='language-input'],
+  [data-language-input]
+):hover,
+.en-editor-host :is(
+  .ag-language-input,
+  .language-input,
+  .ag-code-language,
+  .code-block-language,
+  [data-function-type='languageInput'],
+  [functiontype='languageInput'],
+  [data-role='language-input'],
+  [data-language-input]
+):focus,
+.muya-container :is(
+  .ag-language-input,
+  .language-input,
+  .ag-code-language,
+  .code-block-language,
+  [data-function-type='languageInput'],
+  [functiontype='languageInput'],
+  [data-role='language-input'],
+  [data-language-input]
+):hover,
+.muya-container :is(
+  .ag-language-input,
+  .language-input,
+  .ag-code-language,
+  .code-block-language,
+  [data-function-type='languageInput'],
+  [functiontype='languageInput'],
+  [data-role='language-input'],
+  [data-language-input]
+):focus {
+  border-color: color-mix(in srgb, var(--editorColor, currentColor) 12%, transparent);
+  background: color-mix(in srgb, var(--editorColor, currentColor) 7%, transparent);
+  color: var(--en-primary, #1687ff) !important;
+  outline: none;
 }
 
 .en-code-runtime-output {

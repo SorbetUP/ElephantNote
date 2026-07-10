@@ -27,36 +27,23 @@ jobs:
       - name: Apply focused repair
         shell: bash
         run: |
+          if grep -q 'pub async fn chat_with_effort' Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs; then
+            echo 'Focused repair is already present on the head branch.'
+            exit 0
+          fi
           git fetch origin feature/wiki-knowledge-continuation
           git show origin/feature/wiki-knowledge-continuation:.github/scripts/repair_ai_wiki.py > /tmp/repair_ai_wiki.py
-          set +e
-          python3 /tmp/repair_ai_wiki.py > /tmp/patch-ai-wiki.log 2>&1
-          status=$?
-          set -e
-          cat /tmp/patch-ai-wiki.log
-          if [ "$status" -ne 0 ]; then
-            cp /tmp/patch-ai-wiki.log .github/patch-ai-wiki-error.txt
-            git config user.name "ElephantNote Bot"
-            git config user.email "actions@users.noreply.github.com"
-            git add .github/patch-ai-wiki-error.txt
-            git commit -m "Record AI Wiki patch failure"
-            git push origin HEAD:${{ github.head_ref }}
-            exit "$status"
-          fi
+          python3 /tmp/repair_ai_wiki.py
           rm -f .github/patch-ai-wiki-error.txt
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
       - name: Format Rust
         run: cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml && cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-      - name: Test knowledge core
-        run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --nocapture
-      - name: Check Tauri
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features
-      - name: Run focused frontend lint
-        run: pnpm exec eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue
-      - name: Commit repair
+      - name: Persist repair source
         shell: bash
         run: |
+          if git diff --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
           git config user.name "ElephantNote Bot"
           git config user.email "actions@users.noreply.github.com"
           git add Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
@@ -67,3 +54,11 @@ jobs:
             Elephant/backend/knowledge-core/src/wiki_core.rs
           git commit -m "Fix Codex reasoning, chat routing and Wiki synthesis"
           git push origin HEAD:${{ github.head_ref }}
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test knowledge core
+        run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --nocapture
+      - name: Check Tauri
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features
+      - name: Run focused frontend lint
+        run: pnpm exec eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue

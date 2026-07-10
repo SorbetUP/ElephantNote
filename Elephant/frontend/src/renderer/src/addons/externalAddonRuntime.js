@@ -62,6 +62,7 @@ ${entrySource}
   const definition = self.elephantAddon;
   const pendingRpc = new Map();
   const commands = new Map();
+  const views = new Map();
   let nextRpcId = 1;
   let disposeActivation = null;
 
@@ -78,12 +79,17 @@ ${entrySource}
     post({ type: 'rpc', id, method, params });
   });
 
+  const requireOwnedId = (value, label) => {
+    const id = String(value || '').trim();
+    if (!id || !id.startsWith(addonId + '.')) {
+      throw new Error(label + ' ids must start with ' + addonId + '.');
+    }
+    return id;
+  };
+
   const registerCommand = (command) => {
     if (!command || typeof command !== 'object') throw new TypeError('Command definition is required');
-    const id = String(command.id || '').trim();
-    if (!id || !id.startsWith(addonId + '.')) {
-      throw new Error('External addon command ids must start with ' + addonId + '.');
-    }
+    const id = requireOwnedId(command.id, 'External addon command');
     if (typeof command.run !== 'function') throw new TypeError('Command run handler is required');
     commands.set(id, command.run);
     post({
@@ -96,6 +102,28 @@ ${entrySource}
       }
     });
     return () => commands.delete(id);
+  };
+
+  const registerView = (view) => {
+    if (!view || typeof view !== 'object') throw new TypeError('View definition is required');
+    const id = requireOwnedId(view.id, 'External addon view');
+    if (typeof view.getState !== 'function') throw new TypeError('View getState handler is required');
+    if (typeof view.dispatch !== 'function') throw new TypeError('View dispatch handler is required');
+    const kind = String(view.kind || '').trim();
+    if (!kind) throw new TypeError('View kind is required');
+    views.set(id, { getState: view.getState, dispatch: view.dispatch });
+    post({
+      type: 'register-view',
+      view: {
+        id,
+        title: String(view.title || id),
+        description: String(view.description || ''),
+        icon: String(view.icon || 'list-todo'),
+        kind,
+        order: Number.isFinite(view.order) ? view.order : 0
+      }
+    });
+    return () => views.delete(id);
   };
 
   const api = Object.freeze({
@@ -114,7 +142,8 @@ ${entrySource}
       remove: (key) => rpc('storage.remove', { key }),
       entries: () => rpc('storage.entries')
     }),
-    commands: Object.freeze({ register: registerCommand })
+    commands: Object.freeze({ register: registerCommand }),
+    views: Object.freeze({ register: registerView })
   });
 
   self.onmessage = async (event) => {
@@ -150,6 +179,30 @@ ${entrySource}
         post({ type: 'command-result', id: message.id, ok: true, result });
       } catch (error) {
         post({ type: 'command-result', id: message.id, ok: false, error: serializeError(error) });
+      }
+      return;
+    }
+
+    if (message.type === 'view-state') {
+      try {
+        const view = views.get(message.viewId);
+        if (!view) throw new Error('Unknown addon view: ' + message.viewId);
+        const result = await view.getState(message.params || {});
+        post({ type: 'view-state-result', id: message.id, ok: true, result });
+      } catch (error) {
+        post({ type: 'view-state-result', id: message.id, ok: false, error: serializeError(error) });
+      }
+      return;
+    }
+
+    if (message.type === 'view-action') {
+      try {
+        const view = views.get(message.viewId);
+        if (!view) throw new Error('Unknown addon view: ' + message.viewId);
+        const result = await view.dispatch(String(message.action || ''), message.params || {});
+        post({ type: 'view-action-result', id: message.id, ok: true, result });
+      } catch (error) {
+        post({ type: 'view-action-result', id: message.id, ok: false, error: serializeError(error) });
       }
       return;
     }
@@ -228,6 +281,11 @@ class ExternalAddonSession {
       return
     }
 
+    if (message.type === 'register-view') {
+      this.registerView(message.view)
+      return
+    }
+
     if (message.type?.endsWith('-result')) {
       const pending = this.pending.get(message.id)
       if (!pending) return
@@ -254,6 +312,36 @@ class ExternalAddonSession {
       description: safeString(action.description),
       order: Number.isFinite(action.order) ? action.order : 0,
       run: (payload) => this.request('run-command', { commandId: id, payload }, 60_000)
+    })
+  }
+
+  registerView(view = {}) {
+    const declaredViews = Array.isArray(this.record.manifest.contributes?.views)
+      ? this.record.manifest.contributes.views
+      : []
+    const id = safeString(view.id)
+    const declared = declaredViews.some((entry) => entry?.id === id && entry?.kind === view.kind)
+    if (!declared) {
+      this.logger?.warn?.('external addon attempted to register an undeclared view', {
+        addonId: this.addonId,
+        id,
+        kind: view.kind
+      })
+      return
+    }
+    if (!id.startsWith(`${this.addonId}.`)) {
+      this.logger?.warn?.('external addon registered an invalid view id', { addonId: this.addonId, id })
+      return
+    }
+    this.context.addView({
+      id,
+      title: safeString(view.title, id),
+      description: safeString(view.description),
+      icon: safeString(view.icon, 'list-todo'),
+      kind: safeString(view.kind),
+      order: Number.isFinite(view.order) ? view.order : 0,
+      getState: (params) => this.request('view-state', { viewId: id, params }, 60_000),
+      dispatch: (action, params) => this.request('view-action', { viewId: id, action, params }, 60_000)
     })
   }
 

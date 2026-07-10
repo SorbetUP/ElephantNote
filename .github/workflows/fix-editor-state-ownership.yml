@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          pnpm exec eslint Elephant/frontend/app/components/editor/NoteEditorHost.vue Elephant/frontend/src/renderer/src/components/editorWithTabs/editor.vue > /tmp/editor-eslint.log 2>&1
+          Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/editor/NoteEditorHost.vue Elephant/frontend/src/renderer/src/components/editorWithTabs/editor.vue > /tmp/editor-eslint.log 2>&1
           lint_status=$?
           pnpm tauri:web:build > /tmp/editor-build.log 2>&1
           build_status=$?

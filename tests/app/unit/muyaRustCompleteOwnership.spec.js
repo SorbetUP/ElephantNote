@@ -8,6 +8,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 
 const baseAdapterPath = 'Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js'
 const completeAdapterPath = 'Elephant/frontend/src/renderer/src/muya/completeMuyaRustAdapter.js'
+const mirrorPath = 'Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js'
 const sessionPath = 'Elephant/backend/tauri/src/markdown/muya_session.rs'
 const completePath = 'Elephant/backend/tauri/src/markdown/muya_complete.rs'
 const surfacePath = 'Elephant/backend/tauri/src/markdown/muya_surface.rs'
@@ -133,10 +134,20 @@ describe('complete Rust ownership of Muya document mutations', () => {
     expect(entry).toContain('markdown::muya_assets::tauri_muya_asset_write')
   })
 
-  it('loads the complete strict adapter only for the exact Muya class import', () => {
+  it('aliases only the exact Muya class import to the complete Rust adapter', () => {
     const vite = read(vitePath)
-    expect(vite).toContain("if (source !== 'muya/lib') return null")
+    expect(vite).toContain('{ find: /^muya\\/lib$/, replacement: completeMuyaRustAdapter }')
     expect(vite).toContain('completeMuyaRustAdapter.js')
+    expect(vite).toContain("{ find: 'muya', replacement:")
     expect(vite).not.toContain("source.startsWith('muya/lib')")
+    expect(vite).not.toContain('rustOwnedMuyaPlugin')
+  })
+
+  it('publishes an unambiguous runtime proof that the Rust session is active', () => {
+    const mirror = read(mirrorPath)
+    expect(mirror).toContain("target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-core'")
+    expect(mirror).toContain('[elephantnote:editor] real Muya UI with Rust-owned core active')
+    expect(mirror).toContain("engine: 'rust'")
+    expect(mirror).toContain("surface: 'muya'")
   })
 })

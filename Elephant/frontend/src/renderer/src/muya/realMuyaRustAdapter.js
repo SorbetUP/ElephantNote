@@ -131,6 +131,7 @@ export default class RealMuyaWithRustMirror extends Muya {
 
     this.__elephantRustHistoryIdentity = ''
     this.__elephantRustExpectedMarkdown = null
+    this.__elephantRustComposition = null
     this.__elephantRustMirror = createRealMuyaRustMirror({
       initialMarkdown: options.markdown || '',
       target: globalThis
@@ -151,6 +152,11 @@ export default class RealMuyaWithRustMirror extends Muya {
         this.__elephantRustExpectedMarkdown = null
         return
       }
+      if (this.__elephantRustComposition) {
+        this.__elephantRustComposition.finalMarkdown = markdown
+        this.__elephantRustComposition.finalCursor = muyaIndexCursor
+        return
+      }
 
       const nextHistoryIdentity = historyIdentity(history)
       const continueGroup = nextHistoryIdentity !== '' &&
@@ -163,7 +169,11 @@ export default class RealMuyaWithRustMirror extends Muya {
     }
 
     this.__elephantRustSelectionListener = () => {
-      if (!this.__elephantRustMirror?.active || this.__elephantRustExpectedMarkdown !== null) return
+      if (
+        !this.__elephantRustMirror?.active ||
+        this.__elephantRustExpectedMarkdown !== null ||
+        this.__elephantRustComposition
+      ) return
       const markdown = this.getMarkdown()
       const muyaIndexCursor = this.contentState.getMuyaIndexCursor()
       this.__elephantRustMirror.sync(markdown, 'selection-change', {
@@ -172,8 +182,31 @@ export default class RealMuyaWithRustMirror extends Muya {
       })
     }
 
+    this.__elephantRustCompositionStartListener = () => {
+      if (!this.__elephantRustMirror?.active || this.__elephantRustComposition) return
+      const markdown = this.getMarkdown()
+      const muyaIndexCursor = this.contentState.getMuyaIndexCursor()
+      const selection = muyaIndexCursorToSelection(markdown, muyaIndexCursor)
+      this.__elephantRustComposition = {
+        markdown,
+        selection,
+        finalMarkdown: markdown,
+        finalCursor: muyaIndexCursor
+      }
+      this.__elephantRustMirror.sync(markdown, 'ime-composition-start', {
+        selection,
+        continueGroup: false
+      })
+    }
+
+    this.__elephantRustCompositionEndListener = (event) => {
+      this.__commitElephantRustComposition(event)
+    }
+
     this.on('change', this.__elephantRustChangeListener)
     this.on('selectionChange', this.__elephantRustSelectionListener)
+    this.container.addEventListener('compositionstart', this.__elephantRustCompositionStartListener)
+    this.container.addEventListener('compositionend', this.__elephantRustCompositionEndListener)
   }
 
   __installElephantRustContentStateHooks () {
@@ -201,6 +234,7 @@ export default class RealMuyaWithRustMirror extends Muya {
     const result = super.setMarkdown(markdown, ...args)
     this.__elephantRustHistoryIdentity = ''
     this.__elephantRustExpectedMarkdown = null
+    this.__elephantRustComposition = null
     const muyaIndexCursor = args[2]
     this.__elephantRustMirror?.reset(markdown, 'set-markdown', {
       muyaIndexCursor
@@ -239,6 +273,53 @@ export default class RealMuyaWithRustMirror extends Muya {
       console.error(`[elephantnote:muya-rust] ${name} failed; using Muya command`, error)
       return fallback()
     }
+  }
+
+  __commitElephantRustComposition (event) {
+    const composition = this.__elephantRustComposition
+    if (!composition || !this.__elephantRustMirror?.active) return
+    this.__elephantRustComposition = null
+
+    const finalMarkdown = composition.finalMarkdown || this.getMarkdown()
+    const finalCursor = composition.finalCursor || this.contentState.getMuyaIndexCursor()
+    const finalSelection = muyaIndexCursorToSelection(finalMarkdown, finalCursor)
+    const text = String(event?.data || '')
+    const start = Math.min(composition.selection.anchor, composition.selection.focus)
+    const end = Math.max(composition.selection.anchor, composition.selection.focus)
+    const expectedMarkdown = composition.markdown.slice(0, start) +
+      text +
+      composition.markdown.slice(end)
+
+    if (!text || expectedMarkdown !== finalMarkdown) {
+      this.__elephantRustMirror.sync(finalMarkdown, 'ime-composition-sync', {
+        selection: finalSelection,
+        continueGroup: false
+      }).then(() => super.clearHistory()).catch((error) => {
+        console.error('[elephantnote:muya-rust] IME synchronization failed', error)
+      })
+      return
+    }
+
+    this.__elephantRustMirror.commitComposition(composition.selection, text)
+      .then((transaction) => {
+        if (transaction?.state?.markdown !== finalMarkdown) {
+          return this.__elephantRustMirror.sync(finalMarkdown, 'ime-composition-reconcile', {
+            selection: finalSelection,
+            continueGroup: false
+          })
+        }
+        this.__elephantRustHistoryIdentity = ''
+        this.__elephantRustExpectedMarkdown = null
+        super.clearHistory()
+        return transaction
+      })
+      .catch((error) => {
+        console.error('[elephantnote:muya-rust] IME commit failed; synchronizing Muya result', error)
+        return this.__elephantRustMirror.sync(finalMarkdown, 'ime-composition-fallback', {
+          selection: finalSelection,
+          continueGroup: false
+        })
+      })
   }
 
   __rustCanFormat (type) {
@@ -540,6 +621,12 @@ export default class RealMuyaWithRustMirror extends Muya {
     if (this.__elephantRustSelectionListener) {
       this.off('selectionChange', this.__elephantRustSelectionListener)
     }
+    if (this.__elephantRustCompositionStartListener) {
+      this.container.removeEventListener('compositionstart', this.__elephantRustCompositionStartListener)
+    }
+    if (this.__elephantRustCompositionEndListener) {
+      this.container.removeEventListener('compositionend', this.__elephantRustCompositionEndListener)
+    }
     if (this.__elephantRustOriginalContentState && this.contentState) {
       Object.assign(this.contentState, this.__elephantRustOriginalContentState)
     }
@@ -548,6 +635,9 @@ export default class RealMuyaWithRustMirror extends Muya {
     this.__elephantRustOriginalContentState = null
     this.__elephantRustChangeListener = null
     this.__elephantRustSelectionListener = null
+    this.__elephantRustCompositionStartListener = null
+    this.__elephantRustCompositionEndListener = null
+    this.__elephantRustComposition = null
     this.__elephantRustHistoryIdentity = ''
     this.__elephantRustExpectedMarkdown = null
     return super.destroy()

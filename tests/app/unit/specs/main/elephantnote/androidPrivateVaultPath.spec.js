@@ -15,7 +15,7 @@ const createTarget = () => {
     if (command === 'tauri_vaults_get') {
       return { activeVault: { path: CANONICAL_VAULT } }
     }
-    return undefined
+    return { ok: true }
   })
   return {
     target: {
@@ -67,8 +67,8 @@ describe('Android private vault path aliases', () => {
     expect(invoke).toHaveBeenCalledWith('tauri_vaults_get')
   })
 
-  it('canonicalizes note and hidden asset writes before calling fileUtils', async () => {
-    const { target, writeFile, ensureDir } = createTarget()
+  it('routes note and hidden asset writes through the Rust-owned vault API', async () => {
+    const { target, writeFile, ensureDir, invoke } = createTarget()
     expect(installTauriFileUtilsPathGuards(target)).toBe(true)
 
     await target.fileUtils.ensureDir(`${ALIAS_VAULT}/.assets`)
@@ -78,8 +78,18 @@ describe('Android private vault path aliases', () => {
       new Blob(['image'], { type: 'image/png' })
     )
 
-    expect(ensureDir).toHaveBeenCalledWith(`${CANONICAL_VAULT}/.assets`)
-    expect(writeFile).toHaveBeenNthCalledWith(1, `${CANONICAL_VAULT}/Untitled 3.md`, '# Note')
-    expect(writeFile.mock.calls[1][0]).toBe(`${CANONICAL_VAULT}/.assets/excalidraw-1782487951450.png`)
+    expect(ensureDir).not.toHaveBeenCalled()
+    expect(writeFile).not.toHaveBeenCalled()
+    expect(invoke).toHaveBeenCalledWith('tauri_vault_ensure_dir', {
+      pathname: `${CANONICAL_VAULT}/.assets`
+    })
+    expect(invoke).toHaveBeenCalledWith('tauri_vault_write_binary', {
+      pathname: `${CANONICAL_VAULT}/Untitled 3.md`,
+      dataBase64: 'IyBOb3Rl'
+    })
+    expect(invoke).toHaveBeenCalledWith('tauri_vault_write_binary', {
+      pathname: `${CANONICAL_VAULT}/.assets/excalidraw-1782487951450.png`,
+      dataBase64: 'aW1hZ2U='
+    })
   })
 })

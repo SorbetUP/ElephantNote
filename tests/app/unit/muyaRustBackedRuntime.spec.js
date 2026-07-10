@@ -206,4 +206,33 @@ describe('Rust-backed Muya runtime', () => {
     await runtime.undo()
     expect(runtime.markdown).toBe('a')
   })
+
+  it('keeps the same DOM node and caret offset after native input reaches Rust', async() => {
+    const dom = new JSDOM('<div id="editor"></div>')
+    const root = dom.window.document.getElementById('editor')
+    const runtime = createRustBackedMuyaFullEditorRuntime(root, 'abc', {
+      document: dom.window.document,
+      invoke: mockRustInvoke
+    })
+    await runtime.readyPromise
+
+    const paragraph = root.querySelector('p')
+    const textNode = paragraph.firstChild
+    textNode.nodeValue = 'axbc'
+
+    const range = dom.window.document.createRange()
+    range.setStart(textNode, 2)
+    range.collapse(true)
+    const selection = dom.window.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    await runtime.syncDomToRust('input')
+
+    expect(runtime.markdown).toBe('axbc')
+    expect(root.querySelector('p')).toBe(paragraph)
+    expect(root.querySelector('p').firstChild).toBe(textNode)
+    expect(selection.anchorNode).toBe(textNode)
+    expect(selection.anchorOffset).toBe(2)
+  })
 })

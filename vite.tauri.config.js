@@ -19,6 +19,29 @@ const npmPackageAliases = Object.fromEntries(
     .map((name) => [name, resolve(__dirname, 'Elephant/node_modules', name)])
 )
 const excalidrawAssetFolders = ['excalidraw-assets', 'excalidraw-assets-dev']
+const isAndroidBuild = process.env.ELEPHANTNOTE_ANDROID_BUILD === '1'
+const mobileNodeShim = resolve(
+  __dirname,
+  'Elephant/frontend/src/renderer/src/platform/mobileNodeBuiltinsShim.js'
+)
+const mobileNodeAliases = isAndroidBuild
+  ? Object.fromEntries(
+      [
+        'fs/promises',
+        'node:fs/promises',
+        'child_process',
+        'node:child_process',
+        'crypto',
+        'node:crypto',
+        'fs',
+        'node:fs',
+        'os',
+        'node:os',
+        'zlib',
+        'node:zlib'
+      ].map((name) => [name, mobileNodeShim])
+    )
+  : {}
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.gif': 'image/gif',
@@ -94,11 +117,13 @@ export default defineConfig({
   define: {
     'process.env.IS_PREACT': JSON.stringify('false'),
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
-    __MARKTEXT_VERSION_STRING__: JSON.stringify(`v${packageJson.version}`)
+    __MARKTEXT_VERSION_STRING__: JSON.stringify(`v${packageJson.version}`),
+    __ELEPHANTNOTE_ANDROID_BUILD__: JSON.stringify(isAndroidBuild)
   },
   resolve: {
     alias: {
       ...npmPackageAliases,
+      ...mobileNodeAliases,
       path: resolve(__dirname, 'Elephant/frontend/src/renderer/src/platform/nodePathShim.js'),
       'node:path': resolve(
         __dirname,

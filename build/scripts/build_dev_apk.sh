@@ -9,6 +9,9 @@ ANDROID_BUILD_PROFILE="${ANDROID_BUILD_PROFILE:-release}"
 ANDROID_APK_MAX_MIB="${ANDROID_APK_MAX_MIB:-24}"
 APK_ROOT="$TAURI_DIR/gen/android/app/build/outputs/apk"
 ANDROID_GRADLE_FILE="$TAURI_DIR/gen/android/app/build.gradle.kts"
+MAIN_ACTIVITY="$TAURI_DIR/gen/android/app/src/main/java/com/elephantnote/app/MainActivity.kt"
+MAIN_ACTIVITY_TEMPLATE="$ROOT_DIR/build/android/MainActivity.kt"
+RENDERER_OUT="$ROOT_DIR/build/out/renderer"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -37,31 +40,52 @@ const fs = require('node:fs')
 const gradlePath = process.argv[2]
 let source = fs.readFileSync(gradlePath, 'utf8')
 
-if (source.includes('useLegacyPackaging = true')) {
-  process.exit(0)
-}
+if (!source.includes('useLegacyPackaging = true')) {
+  const androidBlock = /android\s*\{/
+  if (!androidBlock.test(source)) {
+    throw new Error(`Unable to locate android { block in ${gradlePath}`)
+  }
 
-const androidBlock = /android\s*\{/
-if (!androidBlock.test(source)) {
-  throw new Error(`Unable to locate android { block in ${gradlePath}`)
-}
-
-source = source.replace(
-  androidBlock,
-  `android {
+  source = source.replace(
+    androidBlock,
+    `android {
     // Store native libraries compressed in the APK. Android extracts them on install.
-    // Without this, the 28 MiB Rust .so is stored verbatim and the APK exceeds 30 MiB.
     packaging {
         jniLibs {
             useLegacyPackaging = true
         }
     }`
-)
-fs.writeFileSync(gradlePath, source)
+  )
+  fs.writeFileSync(gradlePath, source)
+}
 NODE
 
   grep -q 'useLegacyPackaging = true' "$gradle_file"
   echo "[android-apk] native libraries will be compressed in the APK"
+}
+
+install_main_activity() {
+  if [ ! -f "$MAIN_ACTIVITY_TEMPLATE" ]; then
+    echo "Missing tracked Android activity template: $MAIN_ACTIVITY_TEMPLATE" >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$MAIN_ACTIVITY")"
+  cp "$MAIN_ACTIVITY_TEMPLATE" "$MAIN_ACTIVITY"
+  cmp -s "$MAIN_ACTIVITY_TEMPLATE" "$MAIN_ACTIVITY"
+  echo "[android-apk] installed tracked MainActivity template"
+}
+
+verify_android_renderer() {
+  if [ ! -f "$RENDERER_OUT/index.html" ]; then
+    echo "Android renderer output is missing: $RENDERER_OUT/index.html" >&2
+    exit 1
+  fi
+  if grep -R -l --include='*.js' '__vite-browser-external' "$RENDERER_OUT" >/dev/null 2>&1; then
+    echo "Android renderer still contains unresolved Node builtin stubs:" >&2
+    grep -R -l --include='*.js' '__vite-browser-external' "$RENDERER_OUT" >&2 || true
+    exit 1
+  fi
+  echo "[android-apk] renderer has no unresolved Vite Node builtin stubs"
 }
 
 require_cmd cargo
@@ -96,9 +120,9 @@ if [ ! -d "$TAURI_DIR/gen/android" ]; then
   cargo tauri android init --config "$ANDROID_CONFIG"
 fi
 
+install_main_activity
 ensure_compressed_native_libraries "$ANDROID_GRADLE_FILE"
 
-# Never report stale APKs from an older profile or ABI as the current result.
 rm -rf "$APK_ROOT"
 mkdir -p "$APK_ROOT"
 
@@ -114,6 +138,8 @@ ELEPHANTNOTE_ANDROID_BUILD=1 \
 ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1 \
   cargo tauri "${BUILD_ARGS[@]}"
 
+verify_android_renderer
+
 FINAL_APK=""
 if [ "$ANDROID_BUILD_PROFILE" = "release" ]; then
   UNSIGNED_APK="$(find "$APK_ROOT" -type f -name '*-release-unsigned.apk' -print | head -n 1)"
@@ -123,7 +149,6 @@ if [ "$ANDROID_BUILD_PROFILE" = "release" ]; then
   fi
 
   require_cmd keytool
-  # Plain lexical ordering is supported by both macOS BSD sort and GNU sort.
   APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner -print 2>/dev/null | sort | tail -n 1)"
   if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
     echo "Unable to find Android SDK apksigner under $SDK_ROOT/build-tools." >&2
@@ -177,3 +202,4 @@ if [ "$ANDROID_BUILD_PROFILE" = "release" ] && [ "$APK_BYTES" -gt "$MAX_BYTES" ]
 fi
 
 printf '[android-apk] install with: adb install -r %q\n' "$FINAL_APK"
+printf '[android-apk] capture startup crash: adb logcat -c && adb shell am force-stop com.elephantnote.app && adb shell monkey -p com.elephantnote.app 1 && adb logcat -d -v threadtime AndroidRuntime:E libc:F elephantnote:I Tauri:I chromium:E \"*:S\"\n'

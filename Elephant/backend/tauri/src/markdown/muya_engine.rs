@@ -231,6 +231,8 @@ fn toggle_inline(state: &mut MuyaEditorState, marker: &str) -> Result<(), String
   let start_byte = utf16_to_byte_index(&state.markdown, start_utf16);
   let end_byte = utf16_to_byte_index(&state.markdown, selection.end());
   let marker_utf16 = utf16_len(marker);
+  let marker_start = start_byte.saturating_sub(marker.len());
+  let marker_end = end_byte.saturating_add(marker.len());
 
   if selection.is_collapsed() {
     let pair = format!("{marker}{marker}");
@@ -240,12 +242,14 @@ fn toggle_inline(state: &mut MuyaEditorState, marker: &str) -> Result<(), String
   }
 
   if start_byte >= marker.len()
-    && end_byte + marker.len() <= state.markdown.len()
-    && &state.markdown[start_byte - marker.len()..start_byte] == marker
-    && &state.markdown[end_byte..end_byte + marker.len()] == marker
+    && marker_end <= state.markdown.len()
+    && state.markdown.is_char_boundary(marker_start)
+    && state.markdown.is_char_boundary(marker_end)
+    && &state.markdown[marker_start..start_byte] == marker
+    && &state.markdown[end_byte..marker_end] == marker
   {
-    state.markdown.replace_range(end_byte..end_byte + marker.len(), "");
-    state.markdown.replace_range(start_byte - marker.len()..start_byte, "");
+    state.markdown.replace_range(end_byte..marker_end, "");
+    state.markdown.replace_range(marker_start..start_byte, "");
     state.selection = MuyaSelection {
       anchor: start_utf16.saturating_sub(marker_utf16),
       focus: selection.end().saturating_sub(marker_utf16),
@@ -469,6 +473,14 @@ mod tests {
     let state = apply(state, MuyaEditorCommand::ToggleInline { marker: "**".to_string() });
     assert_eq!(state.markdown, "hello");
     assert_eq!(state.selection, MuyaSelection { anchor: 0, focus: 5 });
+  }
+
+  #[test]
+  fn marker_detection_does_not_slice_inside_an_emoji() {
+    let mut state = MuyaEditorState::new("😀hello".to_string());
+    state.selection = MuyaSelection { anchor: 2, focus: 7 };
+    let state = apply(state, MuyaEditorCommand::ToggleInline { marker: "**".to_string() });
+    assert_eq!(state.markdown, "😀**hello**");
   }
 
   #[test]

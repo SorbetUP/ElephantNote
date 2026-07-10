@@ -18,55 +18,6 @@ permissions:
   contents: read
 
 jobs:
-  rustfmt_apply:
-    name: One-shot backend Rustfmt
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.head_ref == 'feature/rust-muya-editor-core' &&
-      github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: feature/rust-muya-editor-core
-          fetch-depth: 0
-
-      - name: Install stable Rustfmt
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-
-      - name: Format complete Tauri backend
-        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-
-      - name: Reject non-Rust formatter changes
-        shell: bash
-        run: |
-          set -euo pipefail
-          invalid=$(git diff --name-only | grep -Ev '^Elephant/backend/tauri/.*\.rs$' || true)
-          if [ -n "$invalid" ]; then
-            echo "cargo fmt unexpectedly changed non-Rust paths:"
-            echo "$invalid"
-            exit 1
-          fi
-
-      - name: Commit formatted Rust sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet; then
-            echo "Rust sources already formatted."
-            exit 0
-          fi
-          git config user.name 'ElephantNote CI'
-          git config user.email 'actions@users.noreply.github.com'
-          git add -- ':(glob)Elephant/backend/tauri/**/*.rs'
-          git commit -m 'style(rust): apply cargo fmt to backend'
-          git push origin HEAD:feature/rust-muya-editor-core
-
   quality:
     name: Quality gate
     runs-on: ubuntu-latest

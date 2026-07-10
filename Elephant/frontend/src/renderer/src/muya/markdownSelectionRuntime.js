@@ -1,6 +1,6 @@
 import { blockNodeToMarkdown } from './liveRenderingRuntime.js'
 
-const childBlocks = (root) => [...(root?.childNodes || [])]
+const childBlocks = (root) => [...(root?.children || [])]
 const blockMarkdown = (node) => blockNodeToMarkdown(node) ?? ''
 
 const topLevelBlock = (root, node) => {

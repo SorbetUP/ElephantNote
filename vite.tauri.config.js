@@ -83,6 +83,18 @@ const excalidrawAssetsPlugin = () => ({
   }
 })
 
+const realMuyaRustMirrorPlugin = () => ({
+  name: 'elephantnote-real-muya-rust-mirror',
+  enforce: 'pre',
+  resolveId(source) {
+    if (source !== 'muya/lib') return null
+    return resolve(
+      __dirname,
+      'Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js'
+    )
+  }
+})
+
 export default defineConfig({
   root: resolve(__dirname, 'Elephant/frontend/src/renderer'),
   base: './',
@@ -110,15 +122,11 @@ export default defineConfig({
       '@/elephantnote': resolve(__dirname, 'Elephant/frontend/app'),
       '@': resolve(__dirname, 'Elephant/frontend/src/renderer/src'),
       common: resolve(__dirname, 'Elephant/frontend/src/common'),
-      'muya/lib': resolve(
-        __dirname,
-        'Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js'
-      ),
       muya: resolve(__dirname, 'Elephant/frontend/src/muya')
     },
     extensions: ['.mjs', '.js', '.json', '.vue']
   },
-  plugins: [vue(), svgLoader(), excalidrawAssetsPlugin()],
+  plugins: [realMuyaRustMirrorPlugin(), vue(), svgLoader(), excalidrawAssetsPlugin()],
   css: {
     postcss: {
       plugins: [

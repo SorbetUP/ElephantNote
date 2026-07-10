@@ -68,7 +68,7 @@
     "test:e2e": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/playwright test --config tests/app/e2e/playwright.config.js",
     "prod:check": "pnpm lint && pnpm security:guard && pnpm test:unit && pnpm test:e2e && pnpm validate-licenses && pnpm run build:unpack",
     "gen-third-party": "node build/scripts/generateThirdPartyLicense.js",
-    "validate-licenses": "node build/scripts/validateLicenses.js",
+    "validate-licenses": "NODE_PATH=Elephant/node_modules node build/scripts/validateLicenses.js",
     "tauri:codex:install": "node build/scripts/ensure-tauri-codex-runtime.mjs"
   },
   "dependencies": {
@@ -105,7 +105,7 @@
     "dragula": "^3.7.3",
     "element-plus": "^2.14.0",
     "element-resize-detector": "^1.2.4",
-    "execall": "^3.0.0",
+    "execall": "^5.0.0",
     "flowchart.js": "^1.18.0",
     "font-list": "^2.0.2",
     "fs-extra": "^11.3.5",

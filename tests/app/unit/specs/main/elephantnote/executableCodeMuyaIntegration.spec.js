@@ -3,40 +3,53 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Muya from '../../../../../../Elephant/frontend/src/muya/lib'
 import { installExecutableCodeBlocks } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocks'
-import { resetExecutableCodeBlocksForTests } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocksV6'
-import { registerExecutableCodeLanguageMuyaPlugin } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeLanguageMuyaPlugin'
+import {
+  resetExecutableCodeNativeRuntimeForTests
+} from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeNativeRuntime'
 
 const wait = (milliseconds = 0) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 const settle = async() => {
   await wait(0)
-  await wait(100)
+  await wait(80)
   await wait(0)
 }
 
 const INITIAL_MARKDOWN = '```python\nprint("hello")\n```'
 
-describe('executable code integration with real Muya ContentState', () => {
+describe('native executable code integration with real Muya', () => {
   let muya
+  let invoke
 
   beforeEach(() => {
-    resetExecutableCodeBlocksForTests(window)
-    window.__ELEPHANT_CODE_LANGUAGE_BRIDGE__?.dispose?.()
+    resetExecutableCodeNativeRuntimeForTests(window)
     document.body.innerHTML = '<div class="en-editor-host muya-container"></div>'
-    window.__TAURI__ = {
-      core: {
-        invoke: vi.fn(async(command) => {
-          if (command === 'tauri_programs_list') {
-            return { executionEnabled: true, outputLineLimit: 200, environments: [] }
-          }
-          return {}
-        })
+    invoke = vi.fn(async(command, payload) => {
+      if (command === 'tauri_programs_list') {
+        return { executionEnabled: true, outputLineLimit: 200, environments: [] }
       }
-    }
+      if (command === 'tauri_programs_run' && payload.stop) return { stopped: true }
+      if (command === 'tauri_programs_run') {
+        return {
+          success: true,
+          language: payload.id,
+          environment: payload.id,
+          stdout: 'hello\n',
+          stderr: '',
+          exitCode: 0,
+          durationMs: 3,
+          interrupted: false,
+          timedOut: false,
+          truncated: false,
+          outputLineLimit: 200
+        }
+      }
+      return {}
+    })
+    window.__TAURI__ = { core: { invoke } }
   })
 
   afterEach(() => {
-    window.__ELEPHANT_CODE_LANGUAGE_BRIDGE__?.dispose?.()
-    resetExecutableCodeBlocksForTests(window)
+    resetExecutableCodeNativeRuntimeForTests(window)
     muya?.destroy?.()
     muya = null
     delete window.__TAURI__
@@ -44,7 +57,6 @@ describe('executable code integration with real Muya ContentState', () => {
   })
 
   const createMuya = async() => {
-    registerExecutableCodeLanguageMuyaPlugin()
     const origin = document.querySelector('.en-editor-host')
     muya = new Muya(origin, {
       markdown: INITIAL_MARKDOWN,
@@ -54,64 +66,78 @@ describe('executable code integration with real Muya ContentState', () => {
     return muya
   }
 
-  it('does not modify Markdown when the inline runtime is installed', async() => {
+  const setNativeLanguage = async(language) => {
+    const native = document.querySelector('.ag-language-input')
+    const languageBlock = muya.contentState.getBlock(native.id)
+    muya.contentState.updateCodeLanguage(languageBlock, language)
+    muya.dispatchChange()
+    await settle()
+  }
+
+  it('renders native controls without modifying one Markdown character', async() => {
     await createMuya()
     const baseline = muya.getMarkdown()
     const change = vi.fn()
     muya.on('change', change)
 
     const runtime = installExecutableCodeBlocks(window)
-    runtime.scan('real-muya-test')
     await settle()
 
+    expect(runtime.version).toBe('native-v1')
+    expect(document.querySelector('pre.ag-fence-code > .en-code-native-run')).not.toBeNull()
+    expect(document.querySelector('pre.ag-fence-code > elephant-code-output')).not.toBeNull()
+    expect(document.querySelector('.en-code-v6-toolbar')).toBeNull()
     expect(muya.getMarkdown()).toBe(baseline)
     expect(muya.getMarkdown()).toContain('```python')
     expect(muya.getMarkdown()).toContain('print("hello")')
     expect(change).not.toHaveBeenCalled()
   })
 
-  it('changes the fence through Muya exactly once without synthetic input', async() => {
+  it('uses Muya native language state and runs the selected language', async() => {
     await createMuya()
-    const runtime = installExecutableCodeBlocks(window)
-    runtime.scan('real-muya-test')
+    installExecutableCodeBlocks(window)
     await settle()
 
     const change = vi.fn()
+    const input = vi.fn()
     muya.on('change', change)
-    const nativeInput = vi.fn()
-    muya.container.addEventListener('input', nativeInput)
+    muya.container.addEventListener('input', input)
 
-    const select = document.querySelector('.en-code-v6-language')
-    expect(select).not.toBeNull()
-    select.value = 'javascript'
-    select.dispatchEvent(new Event('change', { bubbles: true }))
+    await setNativeLanguage('javascript')
+    document.querySelector('.en-code-native-run').click()
     await settle()
 
-    expect(nativeInput).not.toHaveBeenCalled()
+    expect(input).not.toHaveBeenCalled()
     expect(change).toHaveBeenCalledTimes(1)
     expect(muya.getMarkdown()).toContain('```javascript')
     expect(muya.getMarkdown()).toContain('print("hello")')
     expect(muya.getMarkdown()).not.toContain('```python')
+    expect(invoke).toHaveBeenCalledWith('tauri_programs_run', expect.objectContaining({
+      id: 'javascript',
+      command: 'print("hello")',
+      stop: false
+    }))
+    const output = document.querySelector('elephant-code-output')
+    expect(output.hidden).toBe(false)
+    expect(output.shadowRoot.textContent).toContain('hello')
   })
 
-  it('survives repeated real Muya language changes without stack growth', async() => {
+  it('survives repeated native Muya language changes without recursion', async() => {
     await createMuya()
-    const runtime = installExecutableCodeBlocks(window)
-    runtime.scan('real-muya-test')
+    installExecutableCodeBlocks(window)
     await settle()
 
     const change = vi.fn()
     muya.on('change', change)
 
     for (let index = 0; index < 20; index += 1) {
-      const select = document.querySelector('.en-code-v6-language')
-      select.value = index % 2 === 0 ? 'javascript' : 'python'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-      await settle()
+      await setNativeLanguage(index % 2 === 0 ? 'javascript' : 'python')
     }
 
     expect(change).toHaveBeenCalledTimes(20)
     expect(muya.getMarkdown()).toContain('```python')
     expect(muya.getMarkdown()).toContain('print("hello")')
+    expect(document.querySelectorAll('.en-code-native-run')).toHaveLength(1)
+    expect(document.querySelectorAll('elephant-code-output')).toHaveLength(1)
   })
 })

@@ -3,11 +3,13 @@ use serde_json::{json, Value};
 
 use super::muya_compat::render_muya_html;
 use super::muya_engine::{utf16_to_byte_index, MuyaEditorState};
+use super::muya_state::markdown_to_json_state;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum MuyaUiQuery {
   Clipboard,
+  JsonState,
   ImageToolbar { cursor: Option<usize> },
   FootnotePopup { cursor: Option<usize> },
   SlashCommands { #[serde(default)] query: String },
@@ -17,6 +19,7 @@ pub enum MuyaUiQuery {
 pub fn execute_ui_query(state: Option<&MuyaEditorState>, query: MuyaUiQuery) -> Result<Value, String> {
   match query {
     MuyaUiQuery::Clipboard => Ok(clipboard_payload(require_state(state)?)),
+    MuyaUiQuery::JsonState => Ok(json!(markdown_to_json_state(&require_state(state)?.markdown))),
     MuyaUiQuery::ImageToolbar { cursor } => {
       let state = require_state(state)?;
       Ok(image_toolbar_state(&state.markdown, cursor.unwrap_or(state.selection.focus)))
@@ -212,6 +215,8 @@ mod tests {
     state.selection = MuyaSelection::collapsed(5);
     let popup = execute_ui_query(Some(&state), MuyaUiQuery::FootnotePopup { cursor: None }).unwrap();
     assert_eq!(popup["label"], "n");
+    let json_state = execute_ui_query(Some(&state), MuyaUiQuery::JsonState).unwrap();
+    assert_eq!(json_state["type"], "muya-json-state");
     let commands = execute_ui_query(None, MuyaUiQuery::SlashCommands { query: "table".to_string() }).unwrap();
     assert_eq!(commands[0]["id"], "table");
     assert!(execute_ui_query(None, MuyaUiQuery::Clipboard).is_err());

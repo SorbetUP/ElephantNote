@@ -58,6 +58,7 @@ jobs:
             tests/app/unit/addons/externalAddonContracts.spec.js \
             tests/app/unit/addons/addonCatalogContracts.spec.js \
             tests/app/unit/addons/builtinAddonsQuality.spec.js \
+            tests/app/unit/addons/addonProfiles.spec.js \
             tests/app/unit/addons/runtimeSecurityContracts.spec.js \
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
             2>&1 | tee addon-tests.txt

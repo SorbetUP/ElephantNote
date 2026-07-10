@@ -30,16 +30,8 @@ jobs:
 
           path = Path('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
           text = path.read_text()
-          old = """    codexMessage.value = codexStatus.value.error || (codexStatus.value.connected
-              ? 'Authenticated through Codex app-server.'
-              : codexStatus.value.installed
-                ? 'Codex is installed but no ChatGPT account is connected.'
-                : 'The bundled Codex runtime is missing from this build.')"""
-          new = """    codexMessage.value = codexStatus.value.error || (codexStatus.value.connected
-              ? ''
-              : codexStatus.value.installed
-                ? 'Codex is installed but no ChatGPT account is connected.'
-                : 'The bundled Codex runtime is missing from this build.')"""
+          old = "? 'Authenticated through Codex app-server.'"
+          new = "? ''"
           if text.count(old) != 1:
               raise SystemExit(f'connected message pattern count={text.count(old)}')
           path.write_text(text.replace(old, new, 1))

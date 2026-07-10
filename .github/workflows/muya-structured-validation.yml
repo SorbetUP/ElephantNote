@@ -1,0 +1,80 @@
+name: Structured Rust Muya Validation
+
+on:
+  push:
+    branches:
+      - feature/rust-muya-editor-core
+    paths:
+      - '.github/workflows/muya-structured-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: structured-rust-muya-validation
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HUSKY: '0'
+      NODE_ENV: test
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libsecret-1-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libx11-dev \
+            libxkbfile-dev \
+            patchelf \
+            rpm \
+            wget \
+            xz-utils
+
+      - uses: ./.github/actions/setup
+
+      - name: Critical flow guard
+        run: node build/scripts/verify-critical-flows.mjs
+
+      - name: Security guardrails
+        run: pnpm security:guard
+
+      - name: Tauri platform compatibility
+        run: pnpm tauri:platform:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Rust formatting
+        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
+
+      - name: Rust check
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+
+      - name: Rust tests
+        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features
+
+      - name: Structured Muya unit contracts
+        run: pnpm exec vitest run tests/app/unit/muyaRustSessionRuntime.spec.js tests/app/unit/muyaRustStructuredSession.spec.js tests/app/unit/muyaRealSurfaceRustMirror.spec.js tests/app/unit/muyaRustEditorActivation.spec.js
+
+      - name: Build renderer
+        run: pnpm tauri:web:build
+
+      - name: Full unit suite
+        run: pnpm test:unit

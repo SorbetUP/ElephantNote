@@ -1,802 +1,790 @@
 <template>
-  <section class="knowledge-wiki-view">
-    <header class="knowledge-wiki-header">
-      <div>
-        <p class="knowledge-wiki-eyebrow">
-          Knowledge core
-        </p>
+  <section class="en-wiki-library">
+    <header class="en-wiki-toolbar">
+      <div class="en-wiki-heading">
         <h1>Wikis</h1>
-        <p class="knowledge-wiki-subtitle">
-          Synthèses générées depuis les notes originales, avec citations vérifiables.
-        </p>
+        <span>{{ wikiCount }} wiki{{ wikiCount === 1 ? '' : 's' }}</span>
+        <span v-if="suggestionCount">{{ suggestionCount }} proposition{{ suggestionCount === 1 ? '' : 's' }}</span>
       </div>
-      <button
-        class="knowledge-button knowledge-button-secondary"
-        type="button"
-        :disabled="busy"
-        @click="refresh"
-      >
-        Actualiser
-      </button>
+
+      <div class="en-wiki-toolbar-actions">
+        <button
+          class="en-toolbar-button"
+          type="button"
+          :disabled="loading"
+          @click="loadLibrary"
+        >
+          <RotateCw :class="['en-icon', { spinning: loading }]" />
+          Analyser les notes
+        </button>
+        <select v-model="store.sort" class="en-select">
+          <option value="updated-newest">Sort: Updated newest</option>
+          <option value="updated-oldest">Sort: Updated oldest</option>
+          <option value="title">Sort: Title A-Z</option>
+        </select>
+        <div class="en-view-toggle">
+          <button
+            type="button"
+            :class="{ active: store.viewMode === 'grid' }"
+            title="Grid"
+            @click="store.viewMode = 'grid'"
+          >
+            <Grid3x3 class="en-icon" />
+          </button>
+          <button
+            type="button"
+            :class="{ active: store.viewMode === 'list' }"
+            title="List"
+            @click="store.viewMode = 'list'"
+          >
+            <List class="en-icon" />
+          </button>
+        </div>
+      </div>
     </header>
 
-    <div
-      v-if="runtimeUnavailable"
-      class="knowledge-notice knowledge-notice-error"
-    >
-      Le moteur Rust de connaissances n’est pas disponible dans ce runtime.
+    <div v-if="runtimeUnavailable" class="en-wiki-message error">
+      Le moteur Wiki Rust n’est pas disponible dans ce runtime.
+    </div>
+    <div v-else-if="globalError" class="en-wiki-message error">
+      <AlertCircle class="en-icon" />
+      <span>{{ globalError }}</span>
+      <button type="button" @click="globalError = ''">Fermer</button>
     </div>
 
     <div
-      v-else
-      class="knowledge-wiki-layout"
+      v-if="!runtimeUnavailable"
+      class="en-wiki-grid"
+      :class="{ list: store.viewMode === 'list', empty: !sortedEntries.length && !loading }"
     >
-      <aside class="knowledge-wiki-sidebar">
-        <section class="knowledge-wiki-generator">
-          <div class="knowledge-section-heading">
-            <h2>Propositions automatiques</h2>
-            <span>{{ candidates.length }} sujet{{ candidates.length === 1 ? '' : 's' }} détecté{{ candidates.length === 1 ? '' : 's' }}</span>
-          </div>
-          <p class="knowledge-auto-copy">
-            ElephantNote détecte des groupes de notes cohérents et prépare des brouillons cités. Les notes originales ne sont jamais modifiées.
-          </p>
+      <div v-if="loading && !sortedEntries.length" class="en-wiki-empty">
+        <LoaderCircle class="en-empty-icon spinning" />
+        <strong>Analyse des notes…</strong>
+      </div>
+
+      <div v-else-if="!sortedEntries.length" class="en-wiki-empty">
+        <FileText class="en-empty-icon" />
+        <strong>Aucun wiki ni sujet suffisamment cohérent</strong>
+        <span>Les propositions apparaîtront ici dès qu’un thème est partagé par plusieurs notes.</span>
+      </div>
+
+      <article
+        v-for="entry in sortedEntries"
+        v-else
+        :key="entry.id"
+        class="en-wiki-card"
+        :class="{
+          suggestion: entry.kind === 'suggestion',
+          selected: selectedSuggestionId === entry.id,
+          outdated: entry.status === 'outdated',
+          busy: isBusy(entry.id)
+        }"
+        @click="handleCardClick(entry)"
+      >
+        <div class="en-card-actions">
+          <span v-if="entry.kind === 'suggestion'" class="en-status suggested">Proposition</span>
+          <span v-else-if="entry.status === 'outdated'" class="en-status outdated">À actualiser</span>
+          <span v-else-if="entry.status === 'draft'" class="en-status draft">Brouillon</span>
           <button
-            class="knowledge-button knowledge-button-primary"
+            v-if="entry.kind === 'wiki'"
+            class="en-card-menu"
             type="button"
-            :disabled="busy || autoProposing"
-            @click="runAutoProposals(true)"
+            title="Wiki actions"
+            aria-label="Wiki actions"
+            @click.stop="toggleMenu(entry.id)"
           >
-            {{ autoProposing ? 'Analyse et génération…' : 'Analyser maintenant' }}
+            <MoreHorizontal class="en-icon" />
           </button>
-          <div v-if="candidates.length" class="knowledge-candidate-list">
-            <article
-              v-for="candidate in candidates.slice(0, 6)"
-              :key="candidate.topic"
-              class="knowledge-candidate"
-            >
-              <strong>{{ candidate.title }}</strong>
-              <span>{{ candidate.reason }}</span>
-              <small>{{ candidate.sourcePaths.length }} notes sources</small>
-            </article>
-          </div>
-        </section>
+        </div>
 
-        <nav
-          class="knowledge-wiki-tabs"
-          aria-label="États des wikis"
+        <div
+          v-if="openMenuId === entry.id"
+          class="en-card-popover"
+          @click.stop
         >
           <button
-            v-for="tab in tabs"
-            :key="tab.status"
+            v-if="entry.path"
             type="button"
-            :class="['knowledge-wiki-tab', { active: activeStatus === tab.status }]"
-            @click="selectStatus(tab.status)"
+            @click="openWiki(entry)"
           >
-            <span>{{ tab.label }}</span>
-            <strong>{{ counts[tab.status] || 0 }}</strong>
+            <FileText class="en-popover-icon" /> Modifier
           </button>
-        </nav>
-      </aside>
-
-      <main class="knowledge-wiki-main">
-        <div
-          v-if="error"
-          class="knowledge-notice knowledge-notice-error"
-        >
-          {{ error }}
-        </div>
-        <div
-          v-if="message"
-          class="knowledge-notice knowledge-notice-success"
-        >
-          {{ message }}
-        </div>
-
-        <div
-          v-if="loading"
-          class="knowledge-empty-state"
-        >
-          Chargement des wikis…
-        </div>
-
-        <div
-          v-else-if="!filteredDrafts.length"
-          class="knowledge-empty-state"
-        >
-          <strong>Aucun wiki {{ activeTabLabel.toLowerCase() }}</strong>
-          <span>Les notes originales ne sont jamais modifiées par cette vue.</span>
-        </div>
-
-        <template v-else>
-          <article
-            v-for="draft in filteredDrafts"
-            :key="draft.id"
-            :class="['knowledge-wiki-card', { selected: selectedDraft?.id === draft.id }]"
+          <button
+            type="button"
+            class="danger"
+            :disabled="isBusy(entry.id)"
+            @click="deleteWiki(entry)"
           >
-            <button
-              class="knowledge-wiki-card-header"
-              type="button"
-              @click="toggleDraft(draft)"
-            >
-              <div>
-                <div class="knowledge-wiki-card-title-row">
-                  <h2>{{ draft.title }}</h2>
-                  <span :class="['knowledge-status', `status-${draft.status}`]">
-                    {{ statusLabel(draft.status) }}
-                  </span>
-                </div>
-                <p>{{ draft.topic }}</p>
-              </div>
-              <span class="knowledge-wiki-chevron">
-                {{ selectedDraft?.id === draft.id ? '−' : '+' }}
-              </span>
-            </button>
+            <Trash2 class="en-popover-icon" /> Supprimer
+          </button>
+        </div>
 
-            <div class="knowledge-wiki-meta">
-              <span>{{ draft.sourcePaths?.length || 0 }} notes</span>
-              <span>{{ draft.citations?.length || 0 }} citations</span>
-              <span>{{ draft.modelId || 'modèle inconnu' }}</span>
-              <span>{{ formatDate(draft.updatedAt) }}</span>
-            </div>
+        <div class="en-wiki-card-head">
+          <div class="en-wiki-title-row">
+            <component
+              :is="entry.kind === 'suggestion' ? Sparkles : FileText"
+              class="en-document-icon"
+            />
+            <h2>{{ entry.title }}</h2>
+          </div>
+        </div>
 
-            <div
-              v-if="selectedDraft?.id === draft.id"
-              class="knowledge-wiki-details"
-            >
-              <section class="knowledge-source-section">
-                <h3>Sources</h3>
-                <div class="knowledge-source-list">
-                  <button
-                    v-for="source in uniqueSources(draft)"
-                    :key="source"
-                    type="button"
-                    class="knowledge-source-chip"
-                    @click="openSource(source)"
-                  >
-                    {{ source }}
-                  </button>
-                </div>
-              </section>
+        <p class="en-wiki-excerpt">
+          {{ entry.excerpt || 'Wiki sans aperçu.' }}
+        </p>
 
-              <section class="knowledge-citation-section">
-                <h3>Citations</h3>
-                <div class="knowledge-citation-list">
-                  <button
-                    v-for="citation in draft.citations || []"
-                    :key="citation.key"
-                    type="button"
-                    class="knowledge-citation-row"
-                    @click="openCitation(citation)"
-                  >
-                    <strong>{{ citation.key }}</strong>
-                    <span>{{ citation.documentTitle }} — {{ citation.heading }}</span>
-                    <small>octets {{ citation.startOffset }}–{{ citation.endOffset }}</small>
-                  </button>
-                </div>
-              </section>
+        <div class="en-wiki-meta">
+          <span>{{ entry.sourcePaths?.length || 0 }} source{{ entry.sourcePaths?.length === 1 ? '' : 's' }}</span>
+          <span v-if="entry.citationsCount">{{ entry.citationsCount }} citation{{ entry.citationsCount === 1 ? '' : 's' }}</span>
+          <span v-if="entry.modelId">{{ entry.modelId }}</span>
+        </div>
 
-              <section class="knowledge-markdown-section">
-                <div class="knowledge-section-heading">
-                  <h3>Aperçu Muya</h3>
-                  <span>{{ draft.slug }}.md</span>
-                </div>
-                <div
-                  class="knowledge-muya-preview"
-                  v-html="renderedWikiHtml[draft.id] || ''"
-                />
-              </section>
+        <div v-if="entryError(entry.id)" class="en-card-error" @click.stop>
+          <AlertCircle class="en-icon" />
+          <span>{{ entryError(entry.id) }}</span>
+        </div>
 
-              <footer class="knowledge-wiki-actions">
-                <button
-                  v-if="draft.status === 'proposed' || draft.status === 'outdated'"
-                  class="knowledge-button knowledge-button-primary"
-                  type="button"
-                  :disabled="busy"
-                  @click="acceptDraft(draft)"
-                >
-                  {{ draft.status === 'outdated' ? 'Accepter la nouvelle version' : 'Accepter le wiki' }}
-                </button>
-                <button
-                  v-if="draft.status === 'proposed' || draft.status === 'outdated'"
-                  class="knowledge-button knowledge-button-danger"
-                  type="button"
-                  :disabled="busy"
-                  @click="rejectDraft(draft)"
-                >
-                  Rejeter
-                </button>
-              </footer>
-            </div>
-          </article>
-        </template>
-      </main>
+        <footer v-if="entry.kind === 'suggestion'" class="en-suggestion-actions" @click.stop>
+          <button
+            class="primary"
+            type="button"
+            :disabled="isBusy(entry.id)"
+            @click="generateSuggestion(entry)"
+          >
+            <LoaderCircle v-if="isBusy(entry.id)" class="en-button-icon spinning" />
+            <Sparkles v-else class="en-button-icon" />
+            {{ isBusy(entry.id) ? 'Génération…' : 'Générer' }}
+          </button>
+          <button
+            type="button"
+            :disabled="isBusy(entry.id)"
+            @click="rejectSuggestion(entry)"
+          >
+            <X class="en-button-icon" /> Refuser
+          </button>
+        </footer>
+
+        <footer v-else class="en-wiki-footer">
+          <span class="en-dot" />
+          <span>{{ formatDate(entry.updatedAt) }}</span>
+          <button
+            v-if="entry.status === 'draft'"
+            type="button"
+            :disabled="isBusy(entry.id)"
+            @click.stop="publishDraft(entry)"
+          >
+            Finaliser
+          </button>
+          <span v-else class="en-edit-hint">Cliquer pour ouvrir et modifier</span>
+        </footer>
+      </article>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  AlertCircle,
+  FileText,
+  Grid3x3,
+  List,
+  LoaderCircle,
+  MoreHorizontal,
+  RotateCw,
+  Sparkles,
+  Trash2,
+  X
+} from '@lucide/vue'
+import { useVaultStore } from '../../stores/vaultStore'
 
-const tabs = Object.freeze([
-  { status: 'proposed', label: 'Propositions' },
-  { status: 'accepted', label: 'Acceptés' },
-  { status: 'outdated', label: 'À actualiser' },
-  { status: 'rejected', label: 'Rejetés' }
-])
-
-const drafts = ref([])
-const renderedWikiHtml = reactive({})
-const activeStatus = ref('proposed')
-const selectedDraft = ref(null)
+const store = useVaultStore()
+const entries = ref([])
 const loading = ref(false)
-const candidates = ref([])
-const discovering = ref(false)
-const autoProposing = ref(false)
-const busy = ref(false)
-const error = ref('')
-const message = ref('')
+const globalError = ref('')
+const selectedSuggestionId = ref('')
+const openMenuId = ref('')
+const busyIds = ref(new Set())
+const errorsById = ref({})
 
-const runtime = computed(() => globalThis.elephantnote?.knowledge)
-const runtimeUnavailable = computed(() => !runtime.value?.wikis)
-const counts = computed(() => drafts.value.reduce((output, draft) => {
-  output[draft.status] = (output[draft.status] || 0) + 1
-  return output
-}, {}))
-const filteredDrafts = computed(() => drafts.value.filter((draft) => draft.status === activeStatus.value))
-const activeTabLabel = computed(() => tabs.find((tab) => tab.status === activeStatus.value)?.label || '')
+const runtime = computed(() => globalThis.elephantnote?.knowledge?.wikis)
+const runtimeUnavailable = computed(() => typeof runtime.value?.libraryList !== 'function')
+const suggestionCount = computed(() => entries.value.filter((entry) => entry.kind === 'suggestion').length)
+const wikiCount = computed(() => entries.value.filter((entry) => entry.kind === 'wiki').length)
 
-const normalizeError = (value) => value?.message || String(value || 'Erreur inconnue')
+const sortedEntries = computed(() => {
+  const suggestions = entries.value.filter((entry) => entry.kind === 'suggestion')
+  const wikis = entries.value.filter((entry) => entry.kind === 'wiki')
+  const compare = (left, right) => {
+    if (store.sort === 'title') return String(left.title || '').localeCompare(String(right.title || ''))
+    const leftDate = Number(left.updatedAt || 0)
+    const rightDate = Number(right.updatedAt || 0)
+    return store.sort === 'updated-oldest' ? leftDate - rightDate : rightDate - leftDate
+  }
+  return [...suggestions.sort((left, right) => Number(right.score || 0) - Number(left.score || 0)), ...wikis.sort(compare)]
+})
 
-const renderDraftWithMuya = async (draft) => {
-  const result = await globalThis.elephantnote?.muya?.renderHtml?.({ markdown: draft.markdown || '' })
-  renderedWikiHtml[draft.id] = result?.html || ''
+const normalizeError = (error) => error?.message || String(error || 'Erreur inconnue')
+const isBusy = (id) => busyIds.value.has(id)
+const entryError = (id) => errorsById.value[id] || ''
+
+const setBusy = (id, value) => {
+  const next = new Set(busyIds.value)
+  if (value) next.add(id)
+  else next.delete(id)
+  busyIds.value = next
 }
 
-const refresh = async () => {
-  if (runtimeUnavailable.value) return
+const setEntryError = (id, value = '') => {
+  errorsById.value = { ...errorsById.value, [id]: value }
+}
+
+const loadLibrary = async() => {
+  if (runtimeUnavailable.value || loading.value) return
   loading.value = true
-  error.value = ''
+  globalError.value = ''
   try {
-    drafts.value = await runtime.value.wikis.list({ limit: 500 })
-    await Promise.all(drafts.value.map(renderDraftWithMuya))
-    if (selectedDraft.value) {
-      selectedDraft.value = drafts.value.find((draft) => draft.id === selectedDraft.value.id) || null
-    }
-  } catch (reason) {
-    error.value = normalizeError(reason)
+    const result = await runtime.value.libraryList({ limit: 500 })
+    entries.value = Array.isArray(result) ? result : []
+  } catch (error) {
+    globalError.value = normalizeError(error)
   } finally {
     loading.value = false
   }
 }
 
-const loadCandidates = async () => {
-  if (runtimeUnavailable.value) return
-  discovering.value = true
-  try {
-    candidates.value = await runtime.value.wikis.candidates({ limit: 12 })
-  } catch (reason) {
-    error.value = normalizeError(reason)
-  } finally {
-    discovering.value = false
+const handleCardClick = (entry) => {
+  if (entry.kind === 'suggestion') {
+    selectedSuggestionId.value = selectedSuggestionId.value === entry.id ? '' : entry.id
+    return
   }
+  if (entry.status === 'draft') return
+  openWiki(entry)
 }
 
-const runAutoProposals = async (force = false) => {
-  if (runtimeUnavailable.value || autoProposing.value) return
-  autoProposing.value = true
-  busy.value = true
-  error.value = ''
-  message.value = ''
+const generateSuggestion = async(entry) => {
+  if (isBusy(entry.id)) return
+  setBusy(entry.id, true)
+  setEntryError(entry.id)
+  globalError.value = ''
   try {
     const aiConfig = await globalThis.elephantnote?.ai?.getConfig?.() || {}
-    const result = await runtime.value.wikis.autoPropose({
-      payload: { aiConfig, modelSelection: aiConfig.localModelSelection || {} },
-      maxProposals: 2,
-      force
+    await runtime.value.libraryGenerate({
+      topic: entry.topic,
+      title: entry.title,
+      sourcePaths: entry.sourcePaths || [],
+      payload: { aiConfig }
     })
-    const count = result.generated?.length || 0
-    if (count) {
-      message.value = `${count} proposition${count === 1 ? '' : 's'} de wiki prête${count === 1 ? '' : 's'} à être relue${count === 1 ? '' : 's'}.`
-      activeStatus.value = 'proposed'
-    } else if (result.errors?.length) {
-      error.value = result.errors[0]
-    } else if (!result.alreadyRan) {
-      message.value = 'Aucun nouveau groupe de notes suffisamment cohérent pour proposer un wiki.'
-    }
-    await refresh()
-    await loadCandidates()
-  } catch (reason) {
-    error.value = normalizeError(reason)
+    selectedSuggestionId.value = ''
+    await loadLibrary()
+  } catch (error) {
+    setEntryError(entry.id, normalizeError(error))
   } finally {
-    autoProposing.value = false
-    busy.value = false
+    setBusy(entry.id, false)
   }
 }
 
-const initializeWiki = async () => {
-  await refresh()
-  await loadCandidates()
-  const hasPending = drafts.value.some((draft) => draft.status === 'proposed')
-  if (!hasPending && candidates.value.length) await runAutoProposals(false)
-}
-
-const acceptDraft = async (draft) => {
-  busy.value = true
-  error.value = ''
-  message.value = ''
+const rejectSuggestion = async(entry) => {
+  if (isBusy(entry.id)) return
+  setBusy(entry.id, true)
+  setEntryError(entry.id)
   try {
-    const accepted = await runtime.value.wikis.accept(draft.id)
-    message.value = `Le wiki « ${accepted.title} » a été écrit dans .elephantnote/wiki/.`
-    await refresh()
-  } catch (reason) {
-    error.value = normalizeError(reason)
+    await runtime.value.libraryReject(entry.topic)
+    entries.value = entries.value.filter((item) => item.id !== entry.id)
+    selectedSuggestionId.value = ''
+  } catch (error) {
+    setEntryError(entry.id, normalizeError(error))
   } finally {
-    busy.value = false
+    setBusy(entry.id, false)
   }
 }
 
-const rejectDraft = async (draft) => {
-  busy.value = true
-  error.value = ''
-  message.value = ''
+const publishDraft = async(entry) => {
+  if (!entry.draftId || isBusy(entry.id)) return
+  setBusy(entry.id, true)
+  setEntryError(entry.id)
   try {
-    await runtime.value.wikis.reject(draft.id)
-    message.value = `La proposition « ${draft.title} » a été rejetée.`
-    selectedDraft.value = null
-    await refresh()
-  } catch (reason) {
-    error.value = normalizeError(reason)
+    await runtime.value.accept(entry.draftId)
+    await loadLibrary()
+  } catch (error) {
+    setEntryError(entry.id, normalizeError(error))
   } finally {
-    busy.value = false
+    setBusy(entry.id, false)
   }
 }
 
-const selectStatus = (status) => {
-  activeStatus.value = status
-  selectedDraft.value = null
-  error.value = ''
-  message.value = ''
+const openWiki = (entry) => {
+  if (!entry.path) return
+  openMenuId.value = ''
+  store.openNote({
+    path: entry.path,
+    title: entry.title,
+    kind: 'note',
+    type: 'note',
+    updatedAt: entry.updatedAt ? new Date(Number(entry.updatedAt) * 1000).toISOString() : new Date().toISOString()
+  })
 }
 
-const toggleDraft = (draft) => {
-  selectedDraft.value = selectedDraft.value?.id === draft.id ? null : draft
-}
-
-const uniqueSources = (draft) => [...new Set(draft.sourcePaths || [])]
-const statusLabel = (status) => ({
-  proposed: 'Proposé',
-  accepted: 'Accepté',
-  outdated: 'À actualiser',
-  rejected: 'Rejeté'
-})[status] || status
-const formatDate = (value) => {
-  const timestamp = Number(value || 0) * 1000
-  return timestamp ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(timestamp) : ''
-}
-
-const openSource = async (relativePath) => {
+const deleteWiki = async(entry) => {
+  openMenuId.value = ''
+  if (!entry.draftId || isBusy(entry.id)) return
+  const confirmed = globalThis.confirm?.(`Supprimer définitivement le wiki « ${entry.title} » ?`)
+  if (confirmed === false) return
+  setBusy(entry.id, true)
+  setEntryError(entry.id)
   try {
-    await globalThis.elephantnote?.notes?.open?.(relativePath)
-  } catch (reason) {
-    error.value = normalizeError(reason)
+    await runtime.value.libraryDelete(entry.draftId, true)
+    entries.value = entries.value.filter((item) => item.id !== entry.id)
+  } catch (error) {
+    setEntryError(entry.id, normalizeError(error))
+  } finally {
+    setBusy(entry.id, false)
   }
 }
 
-const openCitation = async (citation) => {
-  try {
-    if (globalThis.elephantnote?.notes?.openAtOffset) {
-      await globalThis.elephantnote.notes.openAtOffset(
-        citation.documentPath,
-        citation.startOffset,
-        citation.endOffset
-      )
-      return
-    }
-    await openSource(citation.documentPath)
-  } catch (reason) {
-    error.value = normalizeError(reason)
-  }
+const toggleMenu = (id) => {
+  openMenuId.value = openMenuId.value === id ? '' : id
 }
 
-onMounted(initializeWiki)
+const closeMenu = (event) => {
+  if (!openMenuId.value) return
+  if (event?.target?.closest?.('.en-card-popover, .en-card-menu')) return
+  openMenuId.value = ''
+}
+
+const formatDate = (timestamp) => {
+  const value = Number(timestamp || 0)
+  if (!value) return 'Wiki généré'
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value * 1000))
+}
+
+onMounted(() => {
+  window.addEventListener('click', closeMenu)
+  void loadLibrary()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', closeMenu)
+})
 </script>
 
 <style scoped>
-.knowledge-wiki-view {
-  box-sizing: border-box;
-  height: 100%;
+.en-wiki-library {
   min-height: 0;
-  overflow: auto;
-  padding: 28px;
-  color: var(--editorColor, #202124);
-  background: var(--editorBgColor, #fff);
-}
-
-.knowledge-wiki-header,
-.knowledge-section-heading,
-.knowledge-wiki-card-title-row,
-.knowledge-wiki-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.knowledge-wiki-header {
-  margin: 0 auto 24px;
-  max-width: 1420px;
-}
-
-.knowledge-wiki-header h1,
-.knowledge-wiki-card h2,
-.knowledge-wiki-generator h2,
-.knowledge-wiki-details h3 {
-  margin: 0;
-}
-
-.knowledge-wiki-eyebrow {
-  margin: 0 0 4px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  opacity: .58;
-}
-
-.knowledge-wiki-subtitle {
-  margin: 6px 0 0;
-  opacity: .68;
-}
-
-.knowledge-wiki-layout {
-  display: grid;
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
-  gap: 24px;
-  max-width: 1420px;
-  margin: 0 auto;
-}
-
-.knowledge-wiki-sidebar {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-}
-
-.knowledge-wiki-generator,
-.knowledge-wiki-tabs,
-.knowledge-wiki-card,
-.knowledge-notice,
-.knowledge-empty-state {
-  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--editorBgColor, #fff) 94%, currentColor 6%);
-}
-
-.knowledge-wiki-generator {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px;
-}
-
-.knowledge-auto-copy {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  opacity: .72;
-}
-
-.knowledge-candidate-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.knowledge-candidate {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px;
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--editorBgColor, #fff) 97%, currentColor 3%);
-}
-
-.knowledge-candidate span,
-.knowledge-candidate small {
-  font-size: 12px;
-  opacity: .64;
-}
-
-.knowledge-section-heading span,
-.knowledge-field small {
-  font-size: 12px;
-  opacity: .55;
-}
-
-.knowledge-field {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.knowledge-field input,
-.knowledge-field textarea {
-  box-sizing: border-box;
-  width: 100%;
-  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-  border-radius: 9px;
-  padding: 10px 11px;
-  color: inherit;
-  background: var(--editorBgColor, #fff);
-  font: inherit;
-  font-weight: 400;
-  resize: vertical;
-}
-
-.knowledge-button {
-  border: 0;
-  border-radius: 9px;
-  padding: 9px 13px;
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.knowledge-button:disabled {
-  cursor: not-allowed;
-  opacity: .48;
-}
-
-.knowledge-button-primary {
-  color: #fff;
-  background: var(--themeColor, #4f6ef7);
-}
-
-.knowledge-button-secondary {
-  color: inherit;
-  background: color-mix(in srgb, currentColor 9%, transparent);
-}
-
-.knowledge-button-danger {
-  color: #b3261e;
-  background: color-mix(in srgb, #b3261e 10%, transparent);
-}
-
-.knowledge-wiki-tabs {
   overflow: hidden;
+  color: var(--en-text);
+  background: var(--en-bg);
 }
 
-.knowledge-wiki-tab {
+.en-wiki-toolbar {
+  min-height: 112px;
   display: flex;
-  width: 100%;
   align-items: center;
   justify-content: space-between;
-  border: 0;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
-  padding: 12px 14px;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
+  gap: 18px;
+  padding: 0 34px;
 }
 
-.knowledge-wiki-tab:last-child {
-  border-bottom: 0;
-}
-
-.knowledge-wiki-tab.active {
-  color: var(--themeColor, #4f6ef7);
-  background: color-mix(in srgb, var(--themeColor, #4f6ef7) 10%, transparent);
-}
-
-.knowledge-wiki-tab strong {
-  min-width: 24px;
-  border-radius: 999px;
-  padding: 2px 7px;
-  text-align: center;
-  background: color-mix(in srgb, currentColor 9%, transparent);
-}
-
-.knowledge-wiki-main {
-  display: flex;
+.en-wiki-heading {
   min-width: 0;
-  flex-direction: column;
+  display: flex;
+  align-items: baseline;
   gap: 14px;
 }
 
-.knowledge-notice,
-.knowledge-empty-state {
-  padding: 16px;
+.en-wiki-heading h1 {
+  margin: 0;
+  font-size: 30px;
 }
 
-.knowledge-notice-error {
-  color: #b3261e;
-  background: color-mix(in srgb, #b3261e 8%, var(--editorBgColor, #fff));
+.en-wiki-heading span {
+  color: var(--en-muted);
+  font-size: 15px;
 }
 
-.knowledge-notice-success {
-  color: #176b3a;
-  background: color-mix(in srgb, #176b3a 8%, var(--editorBgColor, #fff));
-}
-
-.knowledge-empty-state {
+.en-wiki-toolbar-actions {
   display: flex;
-  min-height: 180px;
   align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 8px;
-  text-align: center;
-  opacity: .68;
+  gap: 14px;
 }
 
-.knowledge-wiki-card {
+.en-toolbar-button,
+.en-select,
+.en-view-toggle {
+  height: 52px;
+  border: 1px solid var(--en-border);
+  border-radius: 12px;
+  color: var(--en-text);
+  background: color-mix(in srgb, var(--en-surface) 52%, transparent);
+  font: inherit;
+  font-size: 16px;
+}
+
+.en-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 16px;
+}
+
+.en-toolbar-button:disabled {
+  opacity: .55;
+}
+
+.en-select {
+  min-width: 230px;
+  padding: 0 18px;
+}
+
+.en-view-toggle {
+  display: inline-flex;
   overflow: hidden;
 }
 
-.knowledge-wiki-card.selected {
-  border-color: color-mix(in srgb, var(--themeColor, #4f6ef7) 55%, transparent);
+.en-view-toggle button {
+  width: 56px;
+  border: 0;
+  color: var(--en-muted);
+  background: transparent;
 }
 
-.knowledge-wiki-card-header {
+.en-view-toggle button.active {
+  color: var(--en-text);
+  background: var(--en-soft);
+}
+
+.en-wiki-message {
+  margin: 0 34px 12px;
   display: flex;
-  width: 100%;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--en-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.en-wiki-message.error,
+.en-card-error {
+  color: var(--en-danger, #ef4444);
+  background: color-mix(in srgb, var(--en-danger, #ef4444) 8%, transparent);
+}
+
+.en-wiki-message button {
+  margin-left: auto;
   border: 0;
-  padding: 18px;
   color: inherit;
   background: transparent;
-  text-align: left;
-  cursor: pointer;
 }
 
-.knowledge-wiki-card-header p {
-  margin: 5px 0 0;
-  opacity: .65;
+.en-wiki-grid {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 18px;
+  padding: 20px;
+  align-content: start;
 }
 
-.knowledge-wiki-chevron {
-  font-size: 24px;
-  font-weight: 300;
-  opacity: .55;
+.en-wiki-grid.list {
+  grid-template-columns: 1fr;
 }
 
-.knowledge-status {
-  border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 700;
+.en-wiki-grid.empty {
+  display: block;
+  padding: 0;
 }
 
-.status-proposed {
-  color: #3156d3;
-  background: color-mix(in srgb, #3156d3 12%, transparent);
-}
-
-.status-accepted {
-  color: #176b3a;
-  background: color-mix(in srgb, #176b3a 12%, transparent);
-}
-
-.status-outdated {
-  color: #8a4b08;
-  background: color-mix(in srgb, #d97706 15%, transparent);
-}
-
-.status-rejected {
-  color: #8b1d17;
-  background: color-mix(in srgb, #b3261e 10%, transparent);
-}
-
-.knowledge-wiki-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
-  border-top: 1px solid color-mix(in srgb, currentColor 9%, transparent);
-  padding: 10px 18px;
-  font-size: 12px;
-  opacity: .62;
-}
-
-.knowledge-wiki-details {
+.en-wiki-empty {
+  min-height: 300px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  border-top: 1px solid color-mix(in srgb, currentColor 9%, transparent);
-  padding: 18px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--en-muted);
+  text-align: center;
 }
 
-.knowledge-source-list {
+.en-wiki-empty strong {
+  color: var(--en-text);
+  font-size: 18px;
+}
+
+.en-empty-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.en-wiki-card {
+  position: relative;
+  min-height: 208px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--en-border);
+  border-radius: 10px;
+  padding: 22px;
+  color: var(--en-text);
+  background: color-mix(in srgb, var(--en-surface) 34%, var(--en-bg));
+  overflow: hidden;
+  cursor: pointer;
+  contain: layout paint style;
+  content-visibility: auto;
+  contain-intrinsic-size: 208px 360px;
+}
+
+.en-wiki-card:hover,
+.en-wiki-card.selected {
+  border-color: var(--en-border-strong);
+}
+
+.en-wiki-card.suggestion {
+  opacity: .74;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--en-primary) 5%, var(--en-bg));
+}
+
+.en-wiki-card.suggestion:hover,
+.en-wiki-card.suggestion.selected {
+  opacity: 1;
+}
+
+.en-wiki-card.outdated {
+  border-color: color-mix(in srgb, #f59e0b 55%, var(--en-border));
+}
+
+.en-wiki-card.busy {
+  pointer-events: none;
+}
+
+.en-card-actions {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.en-card-menu {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  color: var(--en-muted);
+  background: transparent;
+}
+
+.en-status {
+  border: 1px solid var(--en-border);
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 12px;
+}
+
+.en-status.suggested {
+  color: var(--en-primary);
+}
+
+.en-status.outdated {
+  color: #f59e0b;
+}
+
+.en-status.draft {
+  color: var(--en-muted);
+}
+
+.en-card-popover {
+  position: absolute;
+  top: 54px;
+  right: 18px;
+  z-index: 5;
+  min-width: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--en-border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--en-surface);
+}
+
+.en-card-popover button {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  color: var(--en-text);
+  background: transparent;
+  text-align: left;
+}
+
+.en-card-popover button.danger {
+  color: var(--en-danger, #ef4444);
+}
+
+.en-popover-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.en-wiki-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-right: 62px;
+}
+
+.en-wiki-title-row h2 {
+  min-width: 0;
+  margin: 0;
+  font-size: clamp(22px, 1.8vw, 30px);
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.en-document-icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+.en-wiki-excerpt {
+  flex: 1;
+  margin: 18px 0 12px;
+  color: var(--en-muted);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.en-wiki-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
+  margin-bottom: 12px;
 }
 
-.knowledge-source-chip,
-.knowledge-citation-row {
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-  color: inherit;
-  background: color-mix(in srgb, currentColor 5%, transparent);
-  cursor: pointer;
-}
-
-.knowledge-source-chip {
+.en-wiki-meta span {
   border-radius: 999px;
-  padding: 6px 10px;
+  padding: 4px 8px;
+  color: var(--en-muted);
+  background: var(--en-soft);
   font-size: 12px;
 }
 
-.knowledge-citation-list {
-  display: grid;
-  gap: 7px;
-  margin-top: 10px;
-}
-
-.knowledge-citation-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
+.en-card-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   border-radius: 8px;
-  padding: 9px 10px;
-  text-align: left;
+  padding: 9px;
+  font-size: 13px;
 }
 
-.knowledge-citation-row span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.en-suggestion-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 9px;
+  margin-top: 12px;
 }
 
-.knowledge-citation-row small {
-  opacity: .55;
+.en-suggestion-actions button,
+.en-wiki-footer button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--en-border);
+  border-radius: 9px;
+  padding: 0 12px;
+  color: var(--en-text);
+  background: var(--en-soft);
 }
 
-.knowledge-muya-preview {
-  max-height: 520px;
-  overflow: auto;
-  border-radius: 10px;
-  margin: 10px 0 0;
-  padding: 15px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.55;
-  word-break: break-word;
-  background: color-mix(in srgb, currentColor 7%, transparent);
+.en-suggestion-actions button.primary {
+  border-color: var(--en-primary);
+  color: white;
+  background: var(--en-primary);
 }
 
-.knowledge-wiki-actions {
-  justify-content: flex-end;
+.en-button-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.en-wiki-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--en-muted);
+  font-size: 13px;
+}
+
+.en-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--en-primary);
+}
+
+.en-edit-hint {
+  margin-left: auto;
+}
+
+.en-wiki-footer button {
+  min-height: 30px;
+  margin-left: auto;
+}
+
+.en-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.spinning {
+  animation: en-wiki-spin 1s linear infinite;
+}
+
+@keyframes en-wiki-spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 900px) {
-  .knowledge-wiki-view {
-    padding: 16px;
+  .en-wiki-toolbar {
+    min-height: auto;
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 20px;
   }
 
-  .knowledge-wiki-layout {
+  .en-wiki-toolbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .en-select {
+    min-width: 180px;
+    flex: 1;
+  }
+
+  .en-wiki-grid {
     grid-template-columns: 1fr;
-  }
-
-  .knowledge-wiki-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .knowledge-wiki-tab:nth-child(odd) {
-    border-right: 1px solid color-mix(in srgb, currentColor 10%, transparent);
-  }
-
-  .knowledge-citation-row {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .knowledge-citation-row small {
-    grid-column: 2;
+    padding: 14px;
   }
 }
 </style>

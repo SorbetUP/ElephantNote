@@ -1,13 +1,47 @@
-import { createReadStream, existsSync, mkdirSync, statSync, cpSync } from 'fs'
+import {
+  cpSync,
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync
+} from 'fs'
 import { resolve, dirname, join, normalize, extname } from 'path'
-import { fileURLToPath } from 'url'
-import vue from '@vitejs/plugin-vue'
-import svgLoader from 'vite-svg-loader'
-import postcssPresetEnv from 'postcss-preset-env'
+import { fileURLToPath, pathToFileURL } from 'url'
 import packageJson from './package.json' with { type: 'json' }
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+
+const exportedPackageEntry = (value) => {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    return value.map(exportedPackageEntry).find(Boolean) || ''
+  }
+  if (!value || typeof value !== 'object') return ''
+  for (const condition of ['import', 'module', 'node', 'default', 'require']) {
+    const entry = exportedPackageEntry(value[condition])
+    if (entry) return entry
+  }
+  return Object.values(value).map(exportedPackageEntry).find(Boolean) || ''
+}
+
+const importElephantPackage = async (name) => {
+  const packageDir = resolve(__dirname, 'Elephant/node_modules', name)
+  const manifestPath = join(packageDir, 'package.json')
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  const packageExport = manifest.exports?.['.'] ?? manifest.exports
+  const entry = exportedPackageEntry(packageExport) || manifest.module || manifest.main || 'index.js'
+  const module = await import(pathToFileURL(resolve(packageDir, entry)).href)
+  return module.default || module
+}
+
+const [vue, svgLoader, postcssPresetEnv] = await Promise.all([
+  importElephantPackage('@vitejs/plugin-vue'),
+  importElephantPackage('vite-svg-loader'),
+  importElephantPackage('postcss-preset-env')
+])
+
 const excalidrawDistDir = resolve(__dirname, 'Elephant/node_modules/@excalidraw/excalidraw/dist')
 const npmPackageAliases = Object.fromEntries(
   Object.keys({

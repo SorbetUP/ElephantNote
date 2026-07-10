@@ -56,7 +56,10 @@ jobs:
           chunking = validator_pattern.sub(new_validator, chunking, count=1)"""
           if old not in script:
               raise SystemExit('Unable to upgrade wikilink validator patch')
-          Path('/tmp/apply_auto_wiki_patch.py').write_text(script.replace(old, new, 1))
+          script = script.replace(old, new, 1)
+          script = script.replace(r"target.contains('\n')", r"target.contains('\\n')")
+          script = script.replace(r"target.contains('\r')", r"target.contains('\\r')")
+          Path('/tmp/apply_auto_wiki_patch.py').write_text(script)
           PY
           python -m py_compile /tmp/apply_auto_wiki_patch.py
           python /tmp/apply_auto_wiki_patch.py

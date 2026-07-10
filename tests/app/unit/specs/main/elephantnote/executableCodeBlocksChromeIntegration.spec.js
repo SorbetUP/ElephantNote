@@ -190,16 +190,26 @@ describe('inline executable code shell', () => {
     expect(runtime.metrics.scheduledScans).toBe(scheduledBefore)
   })
 
-  it('does not rescan when output is rendered, collapsed, cleared or scrolled', async() => {
+  it('does not rescan through the real output interaction lifecycle', async() => {
     const runtime = await start()
     const scansBefore = runtime.metrics.scans
     document.querySelector('.en-code-v6-run').click()
-    await flush()
     await settle()
-    const output = document.querySelector('.en-code-v6-output')
+    expect(runtime.metrics.scans).toBe(scansBefore)
+
+    let output = document.querySelector('.en-code-v6-output')
     output.querySelector('.en-code-v6-output-actions button:nth-child(2)').click()
+    await flush()
+    expect(runtime.metrics.scans).toBe(scansBefore)
+
+    output = document.querySelector('.en-code-v6-output')
     output.querySelector('.en-code-v6-output-actions button:nth-child(2)').click()
+    await flush()
+    expect(runtime.metrics.scans).toBe(scansBefore)
+
+    output = document.querySelector('.en-code-v6-output')
     output.querySelector('.en-code-v6-output-actions button:nth-child(3)').click()
+    await flush()
     output.dispatchEvent(new Event('scroll'))
     await settle()
     expect(runtime.metrics.scans).toBe(scansBefore)

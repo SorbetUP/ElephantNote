@@ -10,6 +10,7 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
   let ready = false
   let destroyed = false
   let compositionSelection = null
+  let historyGroup = null
   let queue = Promise.resolve()
 
   const initialized = engine.create(markdown).then(async() => {
@@ -26,6 +27,10 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     })
     queue = run.catch(() => {})
     return run
+  }
+
+  const closeHistoryGroup = () => {
+    historyGroup = null
   }
 
   const readDomSelection = () => readMarkdownSelection(
@@ -57,6 +62,7 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     if (compositionSelection) {
       throw new Error('Muya cannot apply a command while an IME composition is active.')
     }
+    closeHistoryGroup()
     if (synchronizeSelection) await synchronizeSelectionToRust()
     const transaction = await operation()
     if (transaction?.documentChanged) {
@@ -74,6 +80,7 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
 
   const setMarkdown = (next, group = 'external') => enqueue(async() => {
     compositionSelection = null
+    closeHistoryGroup()
     await engine.reset(String(next || ''))
     await renderCanonicalState(group)
     return engine.state
@@ -81,6 +88,7 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
 
   const startComposition = () => enqueue(async() => {
     if (compositionSelection) return compositionSelection
+    closeHistoryGroup()
     const selection = await synchronizeSelectionToRust()
     compositionSelection = selection
       ? { anchor: selection.anchor, focus: selection.focus }
@@ -91,6 +99,7 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
   const commitComposition = (text = '') => enqueue(async() => {
     const selection = compositionSelection || engine.state?.selection
     if (!selection) throw new Error('Muya IME composition has no valid selection.')
+    closeHistoryGroup()
     const transaction = await engine.commitComposition(selection, text)
     compositionSelection = null
     if (transaction?.documentChanged) {
@@ -103,6 +112,7 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
 
   const cancelComposition = () => enqueue(async() => {
     compositionSelection = null
+    closeHistoryGroup()
     await renderCanonicalState('composition:cancel')
     return engine.markdown
   })
@@ -114,13 +124,14 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     const next = view.domToMarkdown()
     let documentChanged = false
     if (next !== engine.markdown) {
-      const transaction = await engine.applyOperation({
-        type: 'replace',
-        pos: 0,
-        count: utf16Length(engine.markdown),
-        text: next
-      })
+      const continueGroup = historyGroup === group
+      await engine.setSelection(0, utf16Length(engine.markdown))
+      const transaction = await engine.applyGrouped(
+        { type: 'replaceSelection', text: next },
+        continueGroup
+      )
       documentChanged = Boolean(transaction?.documentChanged)
+      if (documentChanged) historyGroup = group
     }
     if (selection) await engine.setSelection(selection.anchor, selection.focus)
     if (documentChanged) {
@@ -134,6 +145,7 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
   const destroy = () => {
     destroyed = true
     compositionSelection = null
+    closeHistoryGroup()
     view.live?.cancel?.()
   }
 
@@ -150,11 +162,13 @@ export const createRustBackedMuyaFullEditorRuntime = (root, markdown = '', optio
     get markdown() { return ready ? engine.markdown : view.markdown },
     get html() { return view.html },
     get composing() { return Boolean(compositionSelection) },
+    get currentHistoryGroup() { return historyGroup },
     setMarkdown,
     syncDomToRust,
     startComposition,
     commitComposition,
     cancelComposition,
+    closeHistoryGroup,
     synchronizeSelectionToRust: () => enqueue(synchronizeSelectionToRust),
     restoreCanonicalSelection,
     destroy,

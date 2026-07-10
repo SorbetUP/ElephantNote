@@ -46,7 +46,7 @@ const npmPackageAliases = Object.fromEntries(
     ...(packageJson.dependencies || {}),
     ...(packageJson.devDependencies || {})
   })
-    .filter((name) => !['vite', 'prismjs'].includes(name))
+    .filter((name) => !['vite', 'prismjs', 'muya'].includes(name))
     .map((name) => [name, resolve(__dirname, 'Elephant/node_modules', name)])
 )
 const excalidrawAssetFolders = ['excalidraw-assets', 'excalidraw-assets-dev']
@@ -114,17 +114,14 @@ const excalidrawAssetsPlugin = () => ({
   }
 })
 
-const rustOwnedMuyaPlugin = () => ({
-  name: 'elephantnote-rust-owned-muya',
-  enforce: 'pre',
-  resolveId(source) {
-    if (source !== 'muya/lib') return null
-    return resolve(
-      __dirname,
-      'Elephant/frontend/src/renderer/src/muya/completeMuyaRustAdapter.js'
-    )
-  }
-})
+const completeMuyaRustAdapter = resolve(
+  __dirname,
+  'Elephant/frontend/src/renderer/src/muya/completeMuyaRustAdapter.js'
+)
+const aliasEntries = Object.entries(npmPackageAliases).map(([find, replacement]) => ({
+  find,
+  replacement
+}))
 
 export default {
   root: resolve(__dirname, 'Elephant/frontend/src/renderer'),
@@ -140,24 +137,30 @@ export default {
     __MARKTEXT_VERSION_STRING__: JSON.stringify(`v${packageJson.version}`)
   },
   resolve: {
-    alias: {
-      ...npmPackageAliases,
-      path: resolve(__dirname, 'Elephant/frontend/src/renderer/src/platform/nodePathShim.js'),
-      'node:path': resolve(
-        __dirname,
-        'Elephant/frontend/src/renderer/src/platform/nodePathShim.js'
-      ),
-      'elephant-front': resolve(__dirname, 'Elephant/frontend/app'),
-      'elephant-shared': resolve(__dirname, 'Elephant/shared'),
-      'common/elephantnote': resolve(__dirname, 'Elephant/shared'),
-      '@/elephantnote': resolve(__dirname, 'Elephant/frontend/app'),
-      '@': resolve(__dirname, 'Elephant/frontend/src/renderer/src'),
-      common: resolve(__dirname, 'Elephant/frontend/src/common'),
-      muya: resolve(__dirname, 'Elephant/frontend/src/muya')
-    },
+    alias: [
+      // The class itself is Rust-owned. Submodules such as muya/lib/ui/* keep
+      // resolving to the original Muya implementation for exact visual parity.
+      { find: /^muya\/lib$/, replacement: completeMuyaRustAdapter },
+      ...aliasEntries,
+      {
+        find: 'path',
+        replacement: resolve(__dirname, 'Elephant/frontend/src/renderer/src/platform/nodePathShim.js')
+      },
+      {
+        find: 'node:path',
+        replacement: resolve(__dirname, 'Elephant/frontend/src/renderer/src/platform/nodePathShim.js')
+      },
+      { find: 'elephant-front', replacement: resolve(__dirname, 'Elephant/frontend/app') },
+      { find: 'elephant-shared', replacement: resolve(__dirname, 'Elephant/shared') },
+      { find: 'common/elephantnote', replacement: resolve(__dirname, 'Elephant/shared') },
+      { find: '@/elephantnote', replacement: resolve(__dirname, 'Elephant/frontend/app') },
+      { find: '@', replacement: resolve(__dirname, 'Elephant/frontend/src/renderer/src') },
+      { find: 'common', replacement: resolve(__dirname, 'Elephant/frontend/src/common') },
+      { find: 'muya', replacement: resolve(__dirname, 'Elephant/frontend/src/muya') }
+    ],
     extensions: ['.mjs', '.js', '.json', '.vue']
   },
-  plugins: [rustOwnedMuyaPlugin(), vue(), svgLoader(), excalidrawAssetsPlugin()],
+  plugins: [vue(), svgLoader(), excalidrawAssetsPlugin()],
   css: {
     postcss: {
       plugins: [

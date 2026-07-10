@@ -7,6 +7,7 @@ const ANDROID_PRIVATE_PATH_RE = /^\/data\/(?:data|user\/\d+)\/([^/]+)(\/.*)?$/
 let cachedActiveVaultRoot = ''
 let activeVaultLookup = null
 let androidSyncTimer = null
+const ANDROID_ADVANCED_DIRTY_KEY = 'elephantnote:mobile-advanced-vault-dirty-v1'
 
 const normalizeSlashes = (value = '') => String(value || '').replace(/\\/g, '/')
 
@@ -95,13 +96,27 @@ const pathInsideRoot = (pathname, root) => {
 }
 
 const scheduleAndroidTreeSync = (target) => {
+  try {
+    target.localStorage?.setItem(ANDROID_ADVANCED_DIRTY_KEY, '1')
+  } catch {
+    // The native shadow remains intact even if WebView storage is constrained.
+  }
+  target.dispatchEvent?.(new CustomEvent('elephantnote:vault-mutated'))
   target.clearTimeout?.(androidSyncTimer)
   androidSyncTimer = target.setTimeout?.(() => {
-    invoke(target, 'tauri_android_vault_sync').catch((error) => {
-      if (!/unavailable|not configured/i.test(String(error?.message || error))) {
-        console.warn('[tauri:file-utils] Android tree synchronization failed', error)
-      }
-    })
+    invoke(target, 'tauri_android_vault_sync')
+      .then(() => {
+        try {
+          target.localStorage?.removeItem(ANDROID_ADVANCED_DIRTY_KEY)
+        } catch {
+          // Ignore constrained WebView storage.
+        }
+      })
+      .catch((error) => {
+        if (!/unavailable|not configured/i.test(String(error?.message || error))) {
+          console.warn('[tauri:file-utils] Android tree synchronization failed', error)
+        }
+      })
   }, 180)
 }
 

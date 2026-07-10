@@ -16,7 +16,7 @@
       "url": "https://github.com/Jocs"
     },
     {
-      "name": "Felix Häusler",
+      "name": "Felix H\u00e4usler",
       "email": "hfelix@protonmail.ch",
       "url": "https://github.com/fxha"
     },
@@ -86,6 +86,7 @@
     "@schedule-x/vue": "^4.1.0",
     "@sigma/edge-curve": "^3.1.0",
     "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-barcode-scanner": "^2.4.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2.5.4",

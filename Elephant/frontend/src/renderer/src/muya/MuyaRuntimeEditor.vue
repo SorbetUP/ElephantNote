@@ -34,31 +34,37 @@ const runtime = useMuyaRuntimeEditor({ markdown, mode })
 const { rootRef, runtimeRef, ready } = runtime
 let inputSyncTimer = null
 
-const syncAndEmit = () => {
-  const next = runtime.syncFromRuntime()
+const syncAndEmit = async() => {
+  const next = await runtime.syncFromRuntime()
   emit('change', next)
+  return next
 }
 
 const handleInput = () => {
   if (inputSyncTimer) clearTimeout(inputSyncTimer)
   inputSyncTimer = setTimeout(() => {
     inputSyncTimer = null
-    syncAndEmit()
+    void syncAndEmit()
   }, 0)
 }
 
-const handleKeydown = (event) => {
-  if (handleMuyaKeydown(runtimeRef.value, event)) syncAndEmit()
+const handleKeydown = async(event) => {
+  const handled = await handleMuyaKeydown(runtimeRef.value, event)
+  if (handled) await syncAndEmit()
 }
 
-const handlePaste = (event) => {
+const handlePaste = async(event) => {
   if (!runtimeRef.value) return
   const html = event.clipboardData?.getData('text/html') || ''
   const text = event.clipboardData?.getData('text/plain') || ''
   if (!html && !text) return
   event.preventDefault()
-  runtimeRef.value.pasteClipboard({ html, text })
-  syncAndEmit()
+  if (runtimeRef.value.insertText) {
+    await runtimeRef.value.insertText(text || runtimeRef.value.view?.pasteClipboard?.({ html, text }) || '')
+  } else {
+    runtimeRef.value.pasteClipboard({ html, text })
+  }
+  await syncAndEmit()
 }
 
 watch(ready, (value) => {

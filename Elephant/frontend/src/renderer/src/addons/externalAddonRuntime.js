@@ -15,6 +15,7 @@ const externalApi = Object.freeze({
   setEnabled: (addonId, enabled) => invoke('tauri_addons_set_enabled', { addonId, enabled }),
   readEntry: (addonId) => invoke('tauri_addons_read_entry', { addonId }),
   listNotes: (addonId, prefix) => invoke('tauri_addons_notes_list', { addonId, prefix }),
+  httpRequest: (addonId, params = {}) => invoke('tauri_addons_http_request', { addonId, params }),
   call: (addonId, method, params = {}) => invoke('tauri_addons_call', { addonId, method, params }),
   getCommunityEnabled: async () => {
     const value = await invoke('tauri_prefs_get', { key: COMMUNITY_ADDONS_PREF_KEY })
@@ -202,6 +203,9 @@ class ExternalAddonSession {
   callBroker(method, params = {}) {
     if (method === 'notes.list') {
       return externalApi.listNotes(this.addonId, safeString(params?.prefix))
+    }
+    if (method === 'http.request') {
+      return externalApi.httpRequest(this.addonId, params)
     }
     return externalApi.call(this.addonId, method, params)
   }

@@ -1,5 +1,8 @@
 import Muya from '../../../muya/lib'
-import { createRealMuyaRustMirror } from './realMuyaRustMirrorRuntime.js'
+import {
+  createRealMuyaRustMirror,
+  selectionToMuyaIndexCursor
+} from './realMuyaRustMirrorRuntime.js'
 
 const historyIdentity = (history) => {
   if (!history || typeof history !== 'object') return ''
@@ -14,6 +17,7 @@ export default class RealMuyaWithRustMirror extends Muya {
     super(element, options)
 
     this.__elephantRustHistoryIdentity = ''
+    this.__elephantRustExpectedMarkdown = null
     this.__elephantRustMirror = createRealMuyaRustMirror({
       initialMarkdown: options.markdown || '',
       target: globalThis
@@ -21,6 +25,11 @@ export default class RealMuyaWithRustMirror extends Muya {
 
     this.__elephantRustChangeListener = ({ markdown, muyaIndexCursor, history } = {}) => {
       if (typeof markdown !== 'string') return
+      if (this.__elephantRustExpectedMarkdown === markdown) {
+        this.__elephantRustExpectedMarkdown = null
+        return
+      }
+
       const nextHistoryIdentity = historyIdentity(history)
       const continueGroup = nextHistoryIdentity !== '' &&
         nextHistoryIdentity === this.__elephantRustHistoryIdentity
@@ -37,10 +46,43 @@ export default class RealMuyaWithRustMirror extends Muya {
   setMarkdown (markdown, ...args) {
     const result = super.setMarkdown(markdown, ...args)
     this.__elephantRustHistoryIdentity = ''
-    this.__elephantRustMirror?.sync(markdown, 'set-markdown', {
-      continueGroup: false
+    this.__elephantRustExpectedMarkdown = null
+    const muyaIndexCursor = args[2]
+    this.__elephantRustMirror?.reset(markdown, 'set-markdown', {
+      muyaIndexCursor
     })
     return result
+  }
+
+  async __applyElephantRustHistory (action) {
+    if (!this.__elephantRustMirror?.active) {
+      return action === 'undo' ? super.undo() : super.redo()
+    }
+
+    try {
+      const transaction = action === 'undo'
+        ? await this.__elephantRustMirror.undo()
+        : await this.__elephantRustMirror.redo()
+      if (!transaction?.documentChanged) return transaction
+
+      const { state } = transaction
+      this.__elephantRustHistoryIdentity = ''
+      this.__elephantRustExpectedMarkdown = state.markdown
+      const muyaIndexCursor = selectionToMuyaIndexCursor(state.markdown, state.selection)
+      super.setMarkdown(state.markdown, undefined, true, muyaIndexCursor)
+      return transaction
+    } catch (error) {
+      console.error(`[elephantnote:muya-rust] ${action} failed; using Muya history`, error)
+      return action === 'undo' ? super.undo() : super.redo()
+    }
+  }
+
+  undo () {
+    return this.__applyElephantRustHistory('undo')
+  }
+
+  redo () {
+    return this.__applyElephantRustHistory('redo')
   }
 
   destroy () {
@@ -51,6 +93,7 @@ export default class RealMuyaWithRustMirror extends Muya {
     this.__elephantRustMirror = null
     this.__elephantRustChangeListener = null
     this.__elephantRustHistoryIdentity = ''
+    this.__elephantRustExpectedMarkdown = null
     return super.destroy()
   }
 }

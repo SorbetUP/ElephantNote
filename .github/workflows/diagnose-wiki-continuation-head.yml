@@ -39,14 +39,6 @@ jobs:
               if line not in seen:
                   seen.add(line)
                   compact.append(line)
-          output = '\n'.join(compact[-80:]) or '\n'.join(lines[-80:])
-          Path('/tmp/automatic-wiki-patch-compact.log').write_text(output)
+          Path('/tmp/compact.log').write_text('\n'.join(compact[-80:]) or '\n'.join(lines[-80:]))
           PY
-          {
-            echo '### Automatic Wiki patch failure (compact)'
-            echo
-            echo '```text'
-            cat /tmp/automatic-wiki-patch-compact.log
-            echo '```'
-          } > /tmp/comment.md
-          gh pr comment 37 --repo "$GITHUB_REPOSITORY" --body-file /tmp/comment.md
+          gh pr comment 37 --repo "$GITHUB_REPOSITORY" --body "$(printf '### Automatic Wiki patch failure (compact)\n\n```text\n%s\n```' "$(cat /tmp/compact.log)")"

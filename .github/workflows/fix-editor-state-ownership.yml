@@ -1,0 +1,63 @@
+name: Fix editor state ownership
+
+on:
+  pull_request:
+    branches:
+      - feature/wiki-knowledge-continuation
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.head_ref == 'assistant/editor-state-ownership'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Apply editor repair
+        shell: bash
+        run: |
+          set +e
+          git fetch origin feature/wiki-knowledge-continuation
+          git show origin/feature/wiki-knowledge-continuation:.github/scripts/fix_editor_state_ownership.py > /tmp/fix_editor.py
+          python3 /tmp/fix_editor.py > /tmp/editor-apply.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/editor-apply.log
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/editor-apply.log .github/editor-state-ownership-error.txt
+            git config user.name "ElephantNote Bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add .github/editor-state-ownership-error.txt
+            git commit -m "Record editor ownership patch failure"
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate editor repair
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec eslint Elephant/frontend/app/components/editor/NoteEditorHost.vue Elephant/frontend/src/renderer/src/components/editorWithTabs/editor.vue 2>&1 | tee /tmp/editor-eslint.log
+          pnpm tauri:web:build 2>&1 | tee /tmp/editor-build.log
+      - name: Commit editor repair
+        shell: bash
+        run: |
+          git config user.name "ElephantNote Bot"
+          git config user.email "actions@users.noreply.github.com"
+          rm -f .github/editor-state-ownership-error.txt
+          git add Elephant/frontend/app/components/editor/NoteEditorHost.vue \
+            Elephant/frontend/src/renderer/src/components/editorWithTabs/editor.vue \
+            .github/editor-state-ownership-error.txt
+          git commit -m "Prevent editor hydration and tab state from triggering stale saves"
+          git push origin HEAD:${{ github.head_ref }}

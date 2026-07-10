@@ -56,6 +56,7 @@ const createEdgeHandle = (target) => {
   if (existing) return existing
   const handle = target.document.createElement('div')
   handle.className = EDGE_HANDLE_CLASS
+  handle.style.width = `${SWIPE_EDGE_PX}px`
   handle.setAttribute('aria-hidden', 'true')
   target.document.body.appendChild(handle)
   return handle

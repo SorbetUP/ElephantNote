@@ -2,15 +2,27 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   createRealMuyaRustMirror,
-  muyaIndexCursorToSelection
+  muyaIndexCursorToSelection,
+  selectionToMuyaIndexCursor
 } from '../../../Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js'
 
-const stateFor = (markdown, revision = 0, selection = null, undoStack = []) => ({
+const stateFor = (
+  markdown,
+  revision = 0,
+  selection = null,
+  undoStack = [],
+  redoStack = []
+) => ({
   markdown,
   selection: selection || { anchor: markdown.length, focus: markdown.length },
   revision,
   undoStack,
-  redoStack: []
+  redoStack
+})
+
+const snapshot = (state) => ({
+  markdown: state.markdown,
+  selection: { ...state.selection }
 })
 
 const createInvoke = () => {
@@ -22,33 +34,58 @@ const createInvoke = () => {
     }
     if (command === 'tauri_muya_engine_sync_document') {
       const previous = state
+      const undoStack = payload.continueGroup && previous.undoStack.length
+        ? [...previous.undoStack]
+        : [...previous.undoStack, snapshot(previous)]
       state = stateFor(
         String(payload.markdown || ''),
-        (previous?.revision || 0) + 1,
+        previous.revision + 1,
         payload.selection,
-        [...(previous?.undoStack || []), {
-          markdown: previous?.markdown || '',
-          selection: previous?.selection || { anchor: 0, focus: 0 }
-        }]
+        undoStack,
+        []
       )
       return {
         state,
-        documentChanged: previous?.markdown !== state.markdown,
+        documentChanged: previous.markdown !== state.markdown,
         selectionChanged: true
       }
     }
     if (command === 'tauri_muya_engine_apply') {
-      if (payload.command?.type !== 'setSelection') {
-        throw new Error(`Unexpected apply command: ${payload.command?.type}`)
-      }
-      state = {
-        ...state,
-        selection: {
-          anchor: payload.command.anchor,
-          focus: payload.command.focus
+      if (payload.command?.type === 'setSelection') {
+        state = {
+          ...state,
+          selection: {
+            anchor: payload.command.anchor,
+            focus: payload.command.focus
+          }
         }
+        return { state, documentChanged: false, selectionChanged: true }
       }
-      return { state, documentChanged: false, selectionChanged: true }
+      if (payload.command?.type === 'undo') {
+        const previous = state.undoStack.at(-1)
+        if (!previous) return { state, documentChanged: false, selectionChanged: false }
+        state = stateFor(
+          previous.markdown,
+          state.revision + 1,
+          previous.selection,
+          state.undoStack.slice(0, -1),
+          [...state.redoStack, snapshot(state)]
+        )
+        return { state, documentChanged: true, selectionChanged: true }
+      }
+      if (payload.command?.type === 'redo') {
+        const next = state.redoStack.at(-1)
+        if (!next) return { state, documentChanged: false, selectionChanged: false }
+        state = stateFor(
+          next.markdown,
+          state.revision + 1,
+          next.selection,
+          [...state.undoStack, snapshot(state)],
+          state.redoStack.slice(0, -1)
+        )
+        return { state, documentChanged: true, selectionChanged: true }
+      }
+      throw new Error(`Unexpected apply command: ${payload.command?.type}`)
     }
     if (command === 'tauri_muya_engine_query') {
       return {
@@ -60,7 +97,7 @@ const createInvoke = () => {
   })
 }
 
-describe('real Muya Rust mirror', () => {
+describe('real Muya Rust core', () => {
   it('keeps the real Muya surface while validating its Markdown in persistent Rust state', async() => {
     const target = {}
     const invoke = createInvoke()
@@ -78,6 +115,7 @@ describe('real Muya Rust mirror', () => {
     expect(mirror.status.phase).toBe('ready')
     expect(mirror.status.markdownLength).toBe(7)
     expect(mirror.status.blocks).toBe(1)
+    expect(mirror.status.undoDepth).toBe(0)
     expect(target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__).toBe('muya-ui-rust-core')
     expect(target.__ELEPHANT_MUYA_RUST_MIRROR__.phase).toBe('ready')
     expect(invoke).toHaveBeenCalledWith('tauri_muya_engine_create', { markdown: '# Hello' })
@@ -112,14 +150,16 @@ describe('real Muya Rust mirror', () => {
     expect(syncCalls.length).toBeLessThanOrEqual(2)
   })
 
-  it('converts Muya line and column cursors to JavaScript UTF-16 offsets', () => {
+  it('round-trips Muya cursors and Rust UTF-16 selections across lines and emoji', () => {
     const markdown = 'a😀b\nsecond'
-    expect(muyaIndexCursorToSelection(markdown, {
+    const selection = muyaIndexCursorToSelection(markdown, {
       anchor: { line: 0, ch: 3 },
       focus: { line: 1, ch: 2 }
-    })).toEqual({
-      anchor: 3,
-      focus: 7
+    })
+    expect(selection).toEqual({ anchor: 3, focus: 7 })
+    expect(selectionToMuyaIndexCursor(markdown, selection)).toEqual({
+      anchor: { line: 0, ch: 3 },
+      focus: { line: 1, ch: 2 }
     })
   })
 
@@ -148,6 +188,51 @@ describe('real Muya Rust mirror', () => {
       selection: { anchor: 8, focus: 8 },
       continueGroup: true
     }))
+  })
+
+  it('uses Rust for undo and redo while preserving selection', async() => {
+    const mirror = createRealMuyaRustMirror({
+      initialMarkdown: 'one',
+      invoke: createInvoke(),
+      target: {},
+      logger: { info: vi.fn(), debug: vi.fn(), error: vi.fn() }
+    })
+    await mirror.ready
+    await mirror.sync('one!', 'muya-change', {
+      selection: { anchor: 4, focus: 4 }
+    })
+    await mirror.flush()
+
+    const undo = await mirror.undo()
+    expect(undo.documentChanged).toBe(true)
+    expect(undo.state.markdown).toBe('one')
+    expect(undo.state.selection).toEqual({ anchor: 3, focus: 3 })
+    expect(mirror.status.redoDepth).toBe(1)
+
+    const redo = await mirror.redo()
+    expect(redo.documentChanged).toBe(true)
+    expect(redo.state.markdown).toBe('one!')
+    expect(redo.state.selection).toEqual({ anchor: 4, focus: 4 })
+    expect(mirror.status.undoDepth).toBe(1)
+  })
+
+  it('resets Rust history when Muya opens another note', async() => {
+    const mirror = createRealMuyaRustMirror({
+      initialMarkdown: 'first',
+      invoke: createInvoke(),
+      target: {},
+      logger: { info: vi.fn(), debug: vi.fn(), error: vi.fn() }
+    })
+    await mirror.ready
+    await mirror.sync('first!', 'muya-change')
+    await mirror.flush()
+    expect(mirror.status.undoDepth).toBe(1)
+
+    await mirror.reset('second', 'set-markdown')
+    await mirror.flush()
+    expect(mirror.state.markdown).toBe('second')
+    expect(mirror.status.undoDepth).toBe(0)
+    expect(mirror.status.redoDepth).toBe(0)
   })
 
   it('stays disabled outside Tauri instead of replacing Muya with a fallback renderer', async() => {

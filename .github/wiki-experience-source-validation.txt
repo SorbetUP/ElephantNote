@@ -1,0 +1,618 @@
+core=101 tauri=0 lint=0 build=0
+=== CORE ===
+test chunking::tests::extracts_wikilinks_with_alias_and_fragment ... ok
+test chunking::tests::fenced_code_is_not_split_on_blank_lines ... ok
+test chunking::tests::ids_are_stable_for_same_document ... ok
+test chunking::tests::sections_and_chunks_keep_valid_source_offsets ... ok
+test chunking::tests::title_prefers_frontmatter_then_heading ... ok
+test chunking::tests::wikilinks_ignore_fenced_and_inline_code_arrays ... ok
+test chunking::tests::wikilinks_reject_nested_matrix_targets ... ok
+test extraction::tests::accepts_evidence_backed_existing_tag ... ok
+test extraction::tests::parses_only_valid_structured_json ... ok
+test extraction::tests::rejects_hallucinated_chunk_and_ambiguous_target ... ok
+test extraction::tests::request_includes_exact_chunk_identifiers ... ok
+test chat_actions::tests::approved_range_edit_revalidates_hash_and_writes_atomically ... ok
+test chat_actions::tests::execution_fails_if_user_edits_after_approval ... ok
+test chat_action_storage::tests::persists_proposal_and_enforces_transitions ... ok
+[Knowledge][Graph] projection:start include_suggestions=false database=/tmp/elephant-graph-ambiguous-6065-1783713519396155711/.elephantnote/knowledge/knowledge.sqlite
+[Knowledge][Graph] projection:start include_suggestions=false database=/tmp/elephant-graph-wiki-territory-6065-1783713519424319039/.elephantnote/knowledge/knowledge.sqlite
+[Knowledge][Graph] projection:start include_suggestions=false database=/tmp/elephant-graph-suggestions-6065-1783713519424801627/.elephantnote/knowledge/knowledge.sqlite
+[Knowledge][Graph] projection:start include_suggestions=false database=/tmp/elephant-graph-unassigned-6065-1783713519435074630/.elephantnote/knowledge/knowledge.sqlite
+[Knowledge][Graph] data:loaded documents=3 tagged_documents=0 tag_assignments=0 relations=1
+[Knowledge][Graph] relation:unresolved side=target relation_id=rel-7cfa8458a2e3dabda606e449 reference=Same
+[Knowledge][Graph] relations:projected edges=0 rejected=0 suggestions_hidden=0 non_document=0 unresolved=1 duplicates=0
+[Knowledge][Graph][Wiki] projection:start include_suggestions=false indexed_documents=3
+[Knowledge][Graph][Wiki] drafts:loaded visible=0 include_suggestions=false
+[Knowledge][Graph][Wiki] projection:complete wiki_nodes=0 wiki_edges=0 territories=0 assigned_documents=0 duration_ms=1
+[Knowledge][Graph] territories:fallback mode=folders
+[Knowledge][Graph] projection:complete note_nodes=3 wiki_nodes=0 edges=0 wiki_edges=0 territories=3 assigned_notes=0 edge_types={} duration_ms=33
+test graph::tests::ambiguous_basename_does_not_create_false_edge ... ok
+[Knowledge][Graph] data:loaded documents=1 tagged_documents=0 tag_assignments=0 relations=0
+[Knowledge][Graph] relations:projected edges=0 rejected=0 suggestions_hidden=0 non_document=0 unresolved=0 duplicates=0
+[Knowledge][Graph][Wiki] projection:start include_suggestions=false indexed_documents=1
+[Knowledge][Graph][Wiki] drafts:loaded visible=1 include_suggestions=false
+[Knowledge][Graph][Wiki] territory:projected id=wiki-a slug=topic-a status=accepted resolved_sources=1 missing_sources=0 citations=1
+[Knowledge][Graph][Wiki] projection:complete wiki_nodes=1 wiki_edges=1 territories=1 assigned_documents=1 duration_ms=0
+[Knowledge][Graph] projection:complete note_nodes=1 wiki_nodes=1 edges=1 wiki_edges=1 territories=1 assigned_notes=1 edge_types={"wiki-source": 1} duration_ms=36
+test graph::tests::graph_projection_includes_wiki_node_source_edge_and_territory ... ok
+[Knowledge][Rebuild] start requested_vault=/tmp/elephant-knowledge-incremental-6065-1783713519504127906
+[Knowledge][Rebuild] scan:skip reason=ignored path=/tmp/elephant-knowledge-incremental-6065-1783713519504127906/.assets
+[Knowledge][Rebuild] scan:complete vault=/tmp/elephant-knowledge-incremental-6065-1783713519504127906 markdown_files=1
+[Knowledge][Graph] data:loaded documents=2 tagged_documents=0 tag_assignments=0 relations=1
+[Knowledge][Graph] relations:projected edges=0 rejected=0 suggestions_hidden=1 non_document=0 unresolved=0 duplicates=0
+[Knowledge][Graph][Wiki] projection:start include_suggestions=false indexed_documents=2
+[Knowledge][Graph][Wiki] drafts:loaded visible=0 include_suggestions=false
+[Knowledge][Graph][Wiki] projection:complete wiki_nodes=0 wiki_edges=0 territories=0 assigned_documents=0 duration_ms=0
+[Knowledge][Graph] territories:fallback mode=folders
+[Knowledge][Graph] projection:complete note_nodes=2 wiki_nodes=0 edges=0 wiki_edges=0 territories=1 assigned_notes=0 edge_types={} duration_ms=32
+[Knowledge][Graph] projection:start include_suggestions=true database=/tmp/elephant-graph-suggestions-6065-1783713519424801627/.elephantnote/knowledge/knowledge.sqlite
+[Knowledge][Graph] data:loaded documents=2 tagged_documents=0 tag_assignments=0 relations=1
+[Knowledge][Graph] relations:projected edges=1 rejected=0 suggestions_hidden=0 non_document=0 unresolved=0 duplicates=0
+[Knowledge][Graph][Wiki] projection:start include_suggestions=true indexed_documents=2
+[Knowledge][Graph][Wiki] drafts:loaded visible=0 include_suggestions=true
+[Knowledge][Graph][Wiki] projection:complete wiki_nodes=0 wiki_edges=0 territories=0 assigned_documents=0 duration_ms=1
+[Knowledge][Graph] territories:fallback mode=folders
+[Knowledge][Graph] projection:complete note_nodes=2 wiki_nodes=0 edges=1 wiki_edges=0 territories=1 assigned_notes=0 edge_types={"semantic": 1} duration_ms=5
+test graph::tests::hides_suggestions_until_requested ... ok
+[Knowledge][Rebuild] start requested_vault=/tmp/elephant-knowledge-relations-6065-1783713519515283208
+[Knowledge][Rebuild] scan:complete vault=/tmp/elephant-knowledge-relations-6065-1783713519515283208 markdown_files=1
+[Knowledge][Graph] data:loaded documents=2 tagged_documents=0 tag_assignments=0 relations=0
+[Knowledge][Graph] relations:projected edges=0 rejected=0 suggestions_hidden=0 non_document=0 unresolved=0 duplicates=0
+[Knowledge][Graph][Wiki] projection:start include_suggestions=false indexed_documents=2
+[Knowledge][Graph][Wiki] drafts:loaded visible=1 include_suggestions=false
+[Knowledge][Graph][Wiki] territory:projected id=wiki-a slug=topic-a status=accepted resolved_sources=1 missing_sources=0 citations=1
+[Knowledge][Graph][Wiki] projection:complete wiki_nodes=1 wiki_edges=1 territories=1 assigned_documents=1 duration_ms=0
+[Knowledge][Graph] territories:unassigned notes=1
+[Knowledge][Graph] projection:complete note_nodes=2 wiki_nodes=1 edges=1 wiki_edges=1 territories=2 assigned_notes=1 edge_types={"wiki-source": 1} duration_ms=36
+test graph::tests::notes_outside_wikis_are_kept_in_an_unassigned_territory ... ok
+[Knowledge][Rebuild] start requested_vault=/tmp/elephant-knowledge-delete-6065-1783713519518456039
+[Knowledge][Rebuild] scan:complete vault=/tmp/elephant-knowledge-delete-6065-1783713519518456039 markdown_files=1
+[Knowledge][Graph] projection:start include_suggestions=false database=/tmp/elephant-graph-projection-6065-1783713519483728828/.elephantnote/knowledge/knowledge.sqlite
+[Knowledge][Rebuild] file:indexed path=Notes/A.md scanned=1 total=1 sections=1 chunks=1 explicit_links=0 relations=0 outdated_wikis=0 duration_ms=5
+[Knowledge][Rebuild] progress scanned=1 total=1 indexed=1 unchanged=0 failed=0 duration_ms=62
+[Knowledge][Rebuild] complete vault=/tmp/elephant-knowledge-incremental-6065-1783713519504127906 scanned=1 indexed=1 unchanged=0 removed=0 failed=0 duration_ms=62
+[Knowledge][Rebuild] start requested_vault=/tmp/elephant-knowledge-incremental-6065-1783713519504127906
+[Knowledge][Rebuild] scan:skip reason=ignored path=/tmp/elephant-knowledge-incremental-6065-1783713519504127906/.elephantnote
+[Knowledge][Rebuild] scan:skip reason=ignored path=/tmp/elephant-knowledge-incremental-6065-1783713519504127906/.assets
+[Knowledge][Rebuild] scan:complete vault=/tmp/elephant-knowledge-incremental-6065-1783713519504127906 markdown_files=1
+[Knowledge][Graph] data:loaded documents=2 tagged_documents=0 tag_assignments=0 relations=1
+[Knowledge][Graph] relations:projected edges=1 rejected=0 suggestions_hidden=0 non_document=0 unresolved=0 duplicates=0
+[Knowledge][Graph][Wiki] projection:start include_suggestions=false indexed_documents=2
+[Knowledge][Graph][Wiki] drafts:loaded visible=0 include_suggestions=false
+[Knowledge][Graph][Wiki] projection:complete wiki_nodes=0 wiki_edges=0 territories=0 assigned_documents=0 duration_ms=1
+[Knowledge][Graph] territories:fallback mode=folders
+[Knowledge][Graph] projection:complete note_nodes=2 wiki_nodes=0 edges=1 wiki_edges=0 territories=1 assigned_notes=0 edge_types={"explicit-link": 1} duration_ms=37
+test graph::tests::projects_only_resolved_document_relations ... ok
+[Knowledge][Rebuild] start requested_vault=/tmp/elephant-knowledge-relations-code-6065-1783713519571025258
+[Knowledge][Rebuild] scan:complete vault=/tmp/elephant-knowledge-relations-code-6065-1783713519571025258 markdown_files=1
+[Knowledge][Rebuild] file:unchanged path=Notes/A.md scanned=1 total=1 relations=0 duration_ms=1
+[Knowledge][Rebuild] progress scanned=1 total=1 indexed=0 unchanged=1 failed=0 duration_ms=5
+[Knowledge][Rebuild] complete vault=/tmp/elephant-knowledge-incremental-6065-1783713519504127906 scanned=1 indexed=0 unchanged=1 removed=0 failed=0 duration_ms=5
+test pipeline::tests::rebuild_is_incremental_and_ignores_hidden_files ... ok
+test relation_extraction::tests::converts_valid_output_to_model_relation ... ok
+test relation_extraction::tests::prompt_contains_only_supplied_targets_and_chunk_ids ... ok
+test relation_extraction::tests::rejects_targets_not_in_candidate_set ... ok
+[Knowledge][Rebuild] file:indexed path=A.md scanned=1 total=1 sections=1 chunks=1 explicit_links=0 relations=0 outdated_wikis=0 duration_ms=6
+[Knowledge][Rebuild] progress scanned=1 total=1 indexed=1 unchanged=0 failed=0 duration_ms=65
+[Knowledge][Rebuild] complete vault=/tmp/elephant-knowledge-delete-6065-1783713519518456039 scanned=1 indexed=1 unchanged=0 removed=0 failed=0 duration_ms=65
+[Knowledge][Rebuild] start requested_vault=/tmp/elephant-knowledge-delete-6065-1783713519518456039
+[Knowledge][Rebuild] scan:skip reason=ignored path=/tmp/elephant-knowledge-delete-6065-1783713519518456039/.elephantnote
+[Knowledge][Rebuild] scan:complete vault=/tmp/elephant-knowledge-delete-6065-1783713519518456039 markdown_files=0
+[Knowledge][Rebuild] file:indexed path=A.md scanned=1 total=1 sections=1 chunks=1 explicit_links=1 relations=1 outdated_wikis=0 duration_ms=9
+[Knowledge][Rebuild] progress scanned=1 total=1 indexed=1 unchanged=0 failed=0 duration_ms=70
+[Knowledge][Rebuild] complete vault=/tmp/elephant-knowledge-relations-6065-1783713519515283208 scanned=1 indexed=1 unchanged=0 removed=0 failed=0 duration_ms=70
+[Knowledge][Rebuild] start requested_vault=/tmp/elephant-knowledge-relations-6065-1783713519515283208
+[Knowledge][Rebuild] scan:skip reason=ignored path=/tmp/elephant-knowledge-relations-6065-1783713519515283208/.elephantnote
+[Knowledge][Rebuild] scan:complete vault=/tmp/elephant-knowledge-relations-6065-1783713519515283208 markdown_files=1
+[Knowledge][Rebuild] complete vault=/tmp/elephant-knowledge-delete-6065-1783713519518456039 scanned=0 indexed=0 unchanged=0 removed=1 failed=0 duration_ms=7
+[Knowledge][Rebuild] derived:reset explicit_links=1
+test pipeline::tests::rebuild_prunes_deleted_notes ... ok
+[Knowledge][Rebuild] file:unchanged path=A.md scanned=1 total=1 relations=1 duration_ms=2
+[Knowledge][Rebuild] progress scanned=1 total=1 indexed=0 unchanged=1 failed=0 duration_ms=7
+[Knowledge][Rebuild] complete vault=/tmp/elephant-knowledge-relations-6065-1783713519515283208 scanned=1 indexed=0 unchanged=1 removed=0 failed=0 duration_ms=7
+test pipeline::tests::rebuild_projects_explicit_wikilinks_as_typed_relations ... ok
+test relation_storage::tests::duplicate_markdown_wikilinks_are_idempotent ... ok
+[Knowledge][Rebuild] file:indexed path=A.md scanned=1 total=1 sections=1 chunks=1 explicit_links=1 relations=1 outdated_wikis=0 duration_ms=8
+[Knowledge][Rebuild] progress scanned=1 total=1 indexed=1 unchanged=0 failed=0 duration_ms=63
+[Knowledge][Rebuild] complete vault=/tmp/elephant-knowledge-relations-code-6065-1783713519571025258 scanned=1 indexed=1 unchanged=0 removed=0 failed=0 duration_ms=63
+[Knowledge][Rebuild] start requested_vault=/tmp/elephant-knowledge-relations-code-6065-1783713519571025258
+[Knowledge][Rebuild] scan:skip reason=ignored path=/tmp/elephant-knowledge-relations-code-6065-1783713519571025258/.elephantnote
+[Knowledge][Rebuild] scan:complete vault=/tmp/elephant-knowledge-relations-code-6065-1783713519571025258 markdown_files=1
+[Knowledge][Rebuild] derived:reset explicit_links=1
+[Knowledge][Rebuild] file:unchanged path=A.md scanned=1 total=1 relations=1 duration_ms=3
+[Knowledge][Rebuild] progress scanned=1 total=1 indexed=0 unchanged=1 failed=0 duration_ms=10
+test relation_storage::tests::explicit_link_reset_removes_only_rebuildable_links ... ok
+[Knowledge][Rebuild] complete vault=/tmp/elephant-knowledge-relations-code-6065-1783713519571025258 scanned=1 indexed=0 unchanged=1 removed=0 failed=0 duration_ms=10
+test relations::tests::markdown_cannot_claim_semantic_relations ... ok
+test relations::tests::model_relation_requires_evidence_model_and_confidence ... ok
+test relations::tests::relation_ids_are_stable_and_typed ... ok
+test relations::tests::validates_evidence_against_source_document ... ok
+test pipeline::tests::unchanged_rebuild_uses_current_wikilink_parser ... ok
+test relation_storage::tests::saves_and_updates_evidence_backed_relation ... ok
+test storage::tests::inspect_roundtrips_offsets_and_links ... ok
+test taxonomy::tests::canonicalizes_case_spacing_and_hierarchy_separators ... ok
+test taxonomy::tests::keeps_distinct_languages_until_an_alias_is_explicitly_added ... ok
+test taxonomy::tests::rejects_empty_and_reserved_values ... ok
+test taxonomy::tests::stable_ids_change_when_parent_changes ... ok
+test taxonomy_storage::tests::model_assignments_without_evidence_are_rejected ... ok
+test storage::tests::prune_removes_missing_documents_and_search_rows ... ok
+test storage::tests::upsert_replaces_all_derived_rows ... ok
+test wiki_core::tests::accepts_string_summary_with_inline_chunk_citations ... ok
+test wiki_core::tests::output_is_stable_for_same_sources_and_synthesis ... ok
+test wiki_core::tests::rejects_uncited_or_unknown_claims ... ok
+
+thread 'wiki_core::tests::renders_navigable_markdown_links_from_structured_claims' (6119) panicked at src/wiki_core.rs:644:9:
+assertion failed: rendered.markdown.contains("[1](../../Notes/Iroh.md")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test wiki_core::tests::renders_navigable_markdown_links_from_structured_claims ... FAILED
+test relation_storage::tests::syncs_only_real_markdown_wikilinks ... ok
+test wiki_graph_projection::tests::parses_only_related_wiki_section_links ... ok
+[Knowledge][Graph][Wiki] projection:start include_suggestions=false indexed_documents=1
+[Knowledge][Graph][Wiki] drafts:loaded visible=1 include_suggestions=false
+[Knowledge][Graph][Wiki] territory:projected id=wiki-a slug=topic-a status=accepted resolved_sources=1 missing_sources=0 citations=1
+[Knowledge][Graph][Wiki] projection:complete wiki_nodes=1 wiki_edges=1 territories=1 assigned_documents=1 duration_ms=0
+test wiki_graph_projection::tests::accepted_wiki_becomes_a_territory_with_source_edges ... ok
+test taxonomy_storage::tests::resolves_explicit_multilingual_aliases ... ok
+test taxonomy_storage::tests::persists_evidence_backed_model_assignment_and_rejection_memory ... ok
+[Knowledge][Graph][Wiki] projection:start include_suggestions=false indexed_documents=1
+[Knowledge][Graph][Wiki] drafts:loaded visible=0 include_suggestions=false
+[Knowledge][Graph][Wiki] projection:complete wiki_nodes=0 wiki_edges=0 territories=0 assigned_documents=0 duration_ms=0
+[Knowledge][Graph][Wiki] projection:start include_suggestions=true indexed_documents=1
+[Knowledge][Graph][Wiki] drafts:loaded visible=1 include_suggestions=true
+[Knowledge][Graph][Wiki] territory:projected id=wiki-a slug=topic-a status=proposed resolved_sources=1 missing_sources=0 citations=1
+[Knowledge][Graph][Wiki] projection:complete wiki_nodes=1 wiki_edges=1 territories=1 assigned_documents=1 duration_ms=1
+test wiki_graph_projection::tests::proposed_wikis_are_only_visible_with_suggestions ... ok
+[Knowledge][Graph][Wiki] projection:start include_suggestions=false indexed_documents=2
+[Knowledge][Graph][Wiki] drafts:loaded visible=2 include_suggestions=false
+[Knowledge][Graph][Wiki] territory:projected id=wiki-a slug=topic-a status=accepted resolved_sources=1 missing_sources=0 citations=1
+[Knowledge][Graph][Wiki] territory:projected id=wiki-b slug=topic-b status=accepted resolved_sources=1 missing_sources=0 citations=1
+[Knowledge][Graph][Wiki] related:projected wiki_id=wiki-a resolved=1 unresolved=0
+[Knowledge][Graph][Wiki] projection:complete wiki_nodes=2 wiki_edges=3 territories=2 assigned_documents=2 duration_ms=1
+test wiki_graph_projection::tests::related_wikis_create_wiki_to_wiki_edges ... ok
+test wiki_storage::tests::persists_and_accepts_generated_wiki_in_hidden_folder ... ok
+test wiki_storage::tests::source_changes_mark_existing_wiki_outdated ... ok
+
+failures:
+
+failures:
+    wiki_core::tests::renders_navigable_markdown_links_from_structured_claims
+
+test result: FAILED. 59 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+[1m[91merror[0m: test failed, to rerun pass `--lib`
+=== TAURI ===
+[1m[92m    Checking[0m aes-gcm v0.10.3
+[1m[92m    Checking[0m ed25519-dalek v3.0.0-rc.0
+[1m[92m   Compiling[0m zbus_names v4.3.3
+[1m[92m    Checking[0m tower-http v0.6.11
+[1m[92m    Checking[0m async-signal v0.2.14
+[1m[92m    Checking[0m data-encoding-macro v0.1.20
+[1m[92m    Checking[0m hickory-net v0.26.1
+[1m[92m    Checking[0m netlink-packet-route v0.31.0
+[1m[92m    Checking[0m async-lock v3.4.2
+[1m[92m   Compiling[0m num_enum_derive v0.7.6
+[1m[92m   Compiling[0m tauri-plugin-fs v2.5.1
+[1m[92m    Checking[0m piper v0.2.5
+[1m[92m   Compiling[0m iroh-dns v1.0.2
+[1m[92m   Compiling[0m netwatch v0.19.1
+[1m[92m   Compiling[0m noq v1.0.1
+[1m[92m    Checking[0m rand_pcg v0.10.2
+[1m[92m   Compiling[0m enum-assoc v1.3.0
+[1m[92m   Compiling[0m iroh-metrics-derive v1.0.1
+[1m[92m   Compiling[0m strum_macros v0.28.0
+[1m[92m    Checking[0m identity-hash v0.1.0
+[1m[92m    Checking[0m constant_time_eq v0.4.2
+[1m[92m   Compiling[0m vcpkg v0.2.15
+[1m[92m    Checking[0m lru-slab v0.1.2
+[1m[92m    Checking[0m mac-addr v0.3.0
+[1m[92m    Checking[0m arrayref v0.3.9
+[1m[92m    Checking[0m resolv-conf v0.7.6
+[1m[92m    Checking[0m arrayvec v0.7.8
+[1m[92m    Checking[0m fixedbitset v0.5.7
+[1m[92m    Checking[0m xml-rs v0.8.28
+[1m[92m    Checking[0m sorted-index-buffer v0.2.1
+[1m[92m    Checking[0m noq-proto v1.0.1
+[1m[92m    Checking[0m xmltree v0.10.3
+[1m[92m    Checking[0m petgraph v0.8.3
+[1m[92m    Checking[0m strum v0.28.0
+[1m[92m   Compiling[0m libsqlite3-sys v0.30.1
+[1m[92m    Checking[0m hickory-resolver v0.26.1
+[1m[92m    Checking[0m iroh-metrics v1.0.1
+[1m[92m    Checking[0m num_enum v0.7.6
+[1m[92m    Checking[0m blocking v1.6.2
+[1m[92m    Checking[0m wayland-protocols v0.32.13
+[1m[92m    Checking[0m async-process v2.5.0
+[1m[92m   Compiling[0m iroh-relay v1.0.2
+[1m[92m    Checking[0m iroh-base v1.0.2
+[1m[92m   Compiling[0m zbus_macros v5.17.0
+[1m[92m    Checking[0m rustls-platform-verifier v0.7.0
+[1m[92m    Checking[0m netlink-proto v0.12.0
+[1m[92m    Checking[0m async-executor v1.14.0
+[1m[92m    Checking[0m n0-watcher v1.0.0
+[1m[92m    Checking[0m async-broadcast v0.7.2
+[1m[92m    Checking[0m arc-swap v1.9.2
+[1m[92m    Checking[0m tokio-stream v0.1.18
+[1m[92m    Checking[0m attohttpc v0.30.1
+[1m[92m    Checking[0m cobs v0.3.0
+[1m[92m   Compiling[0m acto v0.8.2
+[1m[92m   Compiling[0m postcard-derive v0.2.2
+[1m[92m   Compiling[0m async-recursion v1.1.1
+[1m[92m    Checking[0m simple-dns v0.11.3
+[1m[92m    Checking[0m ordered-stream v0.2.0
+[1m[92m    Checking[0m nom v8.0.0
+[1m[92m    Checking[0m hex v0.4.3
+[1m[92m   Compiling[0m inotify-sys v0.1.8
+[1m[92m    Checking[0m simdutf8 v0.1.5
+[1m[92m    Checking[0m sha1_smol v1.0.1
+[1m[92m    Checking[0m pxfm v0.1.30
+[1m[92m    Checking[0m tokio-websockets v0.13.3
+[1m[92m    Checking[0m zbus v5.17.0
+[1m[92m    Checking[0m wayland-protocols-wlr v0.3.12
+[1m[92m    Checking[0m postcard v1.1.3
+[1m[92m    Checking[0m igd-next v0.17.1
+[1m[92m    Checking[0m moxcms v0.8.1
+[1m[92m    Checking[0m tree_magic_mini v3.2.2
+[1m[92m    Checking[0m png v0.18.1
+[1m[92m    Checking[0m reqwest v0.13.4
+[1m[92m    Checking[0m hashbrown v0.14.5
+[1m[92m    Checking[0m ppv-lite86 v0.2.21
+[1m[92m    Checking[0m rand_core v0.9.5
+[1m[92m   Compiling[0m tauri-plugin-opener v2.5.4
+[1m[92m   Compiling[0m tauri-plugin-notification v2.3.3
+[1m[92m   Compiling[0m tauri-plugin-window-state v2.4.1
+[1m[92m   Compiling[0m tauri-plugin-clipboard-manager v2.3.2
+[1m[92m   Compiling[0m tauri-plugin-dialog v2.7.1
+[1m[92m    Checking[0m gethostname v1.1.0
+[1m[92m   Compiling[0m iroh v1.0.2
+[1m[92m    Checking[0m lru v0.18.0
+[1m[92m    Checking[0m is-docker v0.2.0
+[1m[92m    Checking[0m csv-core v0.1.13
+[1m[92m    Checking[0m serde_bytes v0.11.19
+[1m[92m    Checking[0m seize v0.5.1
+[1m[92m    Checking[0m os_pipe v1.2.3
+[1m[92m   Compiling[0m pulldown-cmark v0.13.4
+[1m[92m   Compiling[0m rfd v0.16.0
+[1m[92m   Compiling[0m rustix v0.38.44
+[1m[92m    Checking[0m smol_str v0.1.24
+[1m[92m    Checking[0m cmov v0.5.4
+[1m[92m    Checking[0m iana-time-zone v0.1.65
+[1m[92m    Checking[0m x11rb-protocol v0.13.2
+[1m[92m    Checking[0m bytemuck v1.25.0
+[1m[92m    Checking[0m byteorder-lite v0.1.0
+[1m[92m    Checking[0m unicode-width v0.2.2
+[1m[92m    Checking[0m image v0.25.10
+[1m[92m    Checking[0m getopts v0.2.24
+[1m[92m    Checking[0m ctutils v0.4.2
+[1m[92m    Checking[0m chrono v0.4.45
+[1m[92m    Checking[0m papaya v0.2.4
+[1m[92m    Checking[0m wl-clipboard-rs v0.9.3
+[1m[92m    Checking[0m csv v1.4.0
+[1m[92m    Checking[0m is-wsl v0.4.0
+[1m[92m    Checking[0m x11rb v0.13.2
+[1m[92m    Checking[0m rand_chacha v0.9.0
+[1m[92m    Checking[0m hashlink v0.9.1
+[1m[92m    Checking[0m portmapper v0.19.1
+[1m[92m    Checking[0m backon v1.6.0
+[1m[92m    Checking[0m linux-raw-sys v0.4.15
+[1m[92m    Checking[0m fallible-iterator v0.3.0
+[1m[92m    Checking[0m unicase v2.9.0
+[1m[92m    Checking[0m fallible-streaming-iterator v0.1.9
+[1m[92m    Checking[0m pulldown-cmark-escape v0.11.0
+[1m[92m    Checking[0m arboard v3.6.1
+[1m[92m    Checking[0m inotify v0.9.6
+[1m[92m    Checking[0m rand v0.9.4
+[1m[92m    Checking[0m open v5.3.6
+[1m[92m    Checking[0m swarm-discovery v0.6.3
+[1m[92m    Checking[0m notify-rust v4.18.0
+[1m[92m    Checking[0m serde_urlencoded v0.7.1
+[1m[92m   Compiling[0m elephantnote-tauri v0.18.9 (/home/runner/work/ElephantNote/ElephantNote/Elephant/backend/tauri)
+[1m[92m    Checking[0m mio v0.8.11
+[1m[92m    Checking[0m thread_local v1.1.9
+[1m[92m    Checking[0m filetime v0.2.29
+[1m[92m    Checking[0m encoding_rs v0.8.35
+[1m[92m    Checking[0m home v0.5.12
+[1m[92m    Checking[0m rusqlite v0.32.1
+[1m[92m    Checking[0m chunked_transfer v1.5.0
+[1m[92m    Checking[0m ascii v1.1.0
+[1m[92m    Checking[0m tiny_http v0.12.0
+[1m[92m    Checking[0m which v6.0.3
+[1m[92m    Checking[0m notify v6.1.1
+[1m[92m    Checking[0m chardetng v0.1.17
+[1m[92m    Checking[0m fuzzy-matcher v0.3.7
+[1m[92m    Checking[0m elephantnote-knowledge-core v0.1.0 (/home/runner/work/ElephantNote/ElephantNote/Elephant/backend/knowledge-core)
+[1m[92m    Checking[0m reqwest v0.12.28
+[1m[92m    Checking[0m keyring v3.6.3
+[1m[92m    Checking[0m iroh-mdns-address-lookup v0.4.0
+[1m[33mwarning[0m[1m: unused imports: `create_directories`, `delete_directories`, `delete_files`, `preserve_paths`, `receive_file`, and `send_file`[0m
+  [1m[94m--> [0msrc/vault/sync_iroh/base.rs:20:3
+   [1m[94m|[0m
+[1m[94m20[0m [1m[94m|[0m   create_directories, delete_directories, delete_files, preserve_paths, receive_file, send_file,
+   [1m[94m|[0m   [1m[33m^^^^^^^^^^^^^^^^^^[0m  [1m[33m^^^^^^^^^^^^^^^^^^[0m  [1m[33m^^^^^^^^^^^^[0m  [1m[33m^^^^^^^^^^^^^^[0m  [1m[33m^^^^^^^^^^^^[0m  [1m[33m^^^^^^^^^[0m
+   [1m[94m|[0m
+   [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m[1m: unused variable: `out`[0m
+   [1m[94m--> [0msrc/chat_runtime/codex_app_server.rs:355:29
+    [1m[94m|[0m
+[1m[94m355[0m [1m[94m|[0m fn add_codex_app_candidates(out: &mut Vec<(PathBuf, String)>, seen: &mut HashSet<PathBuf>) {
+    [1m[94m|[0m                             [1m[33m^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_out`[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mnote[0m: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m[1m: unused variable: `seen`[0m
+   [1m[94m--> [0msrc/chat_runtime/codex_app_server.rs:355:63
+    [1m[94m|[0m
+[1m[94m355[0m [1m[94m|[0m fn add_codex_app_candidates(out: &mut Vec<(PathBuf, String)>, seen: &mut HashSet<PathBuf>) {
+    [1m[94m|[0m                                                               [1m[33m^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_seen`[0m
+
+[1m[33mwarning[0m[1m: unused variable: `cwd`[0m
+   [1m[94m--> [0msrc/vault/sync_iroh/network.rs:443:7
+    [1m[94m|[0m
+[1m[94m443[0m [1m[94m|[0m   let cwd = PathBuf::from(&vault.path);
+    [1m[94m|[0m       [1m[33m^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_cwd`[0m
+
+[1m[33mwarning[0m[1m: function `chat` is never used[0m
+    [1m[94m--> [0msrc/chat_runtime/codex_app_server.rs:1160:14
+     [1m[94m|[0m
+[1m[94m1160[0m [1m[94m|[0m pub async fn chat(app: &AppHandle, model: &str, prompt: &str) -> R<CodexChatResult> {
+     [1m[94m|[0m              [1m[33m^^^^[0m
+     [1m[94m|[0m
+     [1m[94m= [0m[1mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m: `elephantnote-tauri` (lib) generated 5 warnings (run `cargo fix --lib -p elephantnote-tauri` to apply 4 suggestions)
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 1m 56s
+=== LINT ===
+(node:13472) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/runner/work/ElephantNote/ElephantNote/eslint.config.js?mtime=1783713445445 is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNote/ElephantNote/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+/home/runner/work/ElephantNote/ElephantNote/Elephant/frontend/app/components/views/ChatView.vue
+    3:29  warning  'class' should be on a new line                         vue/max-attributes-per-line
+    3:54  warning  '@click' should be on a new line                        vue/max-attributes-per-line
+    5:36  warning  ':class' should be on a new line                        vue/max-attributes-per-line
+    5:72  warning  'aria-label' should be on a new line                    vue/max-attributes-per-line
+   34:9   warning  Disallow self-closing on HTML void elements (<input/>)  vue/html-self-closing
+   38:58  warning  'class' should be on a new line                         vue/max-attributes-per-line
+   59:64  warning  '@click.stop' should be on a new line                   vue/max-attributes-per-line
+  106:28  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  106:51  warning  '@scroll' should be on a new line                       vue/max-attributes-per-line
+  107:58  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  120:48  warning  ':data-icon' should be on a new line                    vue/max-attributes-per-line
+  121:58  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  122:58  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  123:61  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  124:34  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  134:25  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  142:52  warning  ':data-role' should be on a new line                    vue/max-attributes-per-line
+  152:81  warning  ':key' should be on a new line                          vue/max-attributes-per-line
+  157:55  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  167:53  warning  ':data-status' should be on a new line                  vue/max-attributes-per-line
+  172:52  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  176:51  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  177:56  warning  ':key' should be on a new line                          vue/max-attributes-per-line
+  191:51  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  207:38  warning  '@submit.prevent' should be on a new line               vue/max-attributes-per-line
+  219:35  warning  'class' should be on a new line                         vue/max-attributes-per-line
+  219:65  warning  '@click' should be on a new line                        vue/max-attributes-per-line
+  220:72  warning  'aria-hidden' should be on a new line                   vue/max-attributes-per-line
+
+/home/runner/work/ElephantNote/ElephantNote/Elephant/frontend/app/components/views/WikiView.vue
+   20:38  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+   21:42  warning  Expected 1 line break after opening tag (`<option>`), but no line breaks found    vue/singleline-html-element-content-newline
+   21:62  warning  Expected 1 line break before closing tag (`</option>`), but no line breaks found  vue/singleline-html-element-content-newline
+   22:42  warning  Expected 1 line break after opening tag (`<option>`), but no line breaks found    vue/singleline-html-element-content-newline
+   22:62  warning  Expected 1 line break before closing tag (`</option>`), but no line breaks found  vue/singleline-html-element-content-newline
+   23:33  warning  Expected 1 line break after opening tag (`<option>`), but no line breaks found    vue/singleline-html-element-content-newline
+   23:48  warning  Expected 1 line break before closing tag (`</option>`), but no line breaks found  vue/singleline-html-element-content-newline
+   46:36  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+   49:34  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+   52:29  warning  '@click' should be on a new line                                                  vue/max-attributes-per-line
+   52:55  warning  Expected 1 line break after opening tag (`<button>`), but no line breaks found    vue/singleline-html-element-content-newline
+   52:61  warning  Expected 1 line break before closing tag (`</button>`), but no line breaks found  vue/singleline-html-element-content-newline
+   60:52  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+   65:46  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+   85:52  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+   86:57  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+   87:54  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+  143:55  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+  146:62  warning  ':key' should be on a new line                                                    vue/max-attributes-per-line
+  146:77  warning  Expected 1 line break after opening tag (`<li>`), but no line breaks found        vue/singleline-html-element-content-newline
+  146:90  warning  Expected 1 line break before closing tag (`</li>`), but no line breaks found      vue/singleline-html-element-content-newline
+  149:50  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+  152:67  warning  ':key' should be on a new line                                                    vue/max-attributes-per-line
+  152:80  warning  Expected 1 line break after opening tag (`<li>`), but no line breaks found        vue/singleline-html-element-content-newline
+  152:91  warning  Expected 1 line break before closing tag (`</li>`), but no line breaks found      vue/singleline-html-element-content-newline
+  163:42  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+  163:64  warning  '@click.stop' should be on a new line                                             vue/max-attributes-per-line
+  168:52  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+  168:82  warning  '@click.stop' should be on a new line                                             vue/max-attributes-per-line
+  175:51  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+  176:30  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+  188:24  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+  199:24  warning  'class' should be on a new line                                                   vue/max-attributes-per-line
+
+✖ 61 problems (0 errors, 61 warnings)
+  0 errors and 55 warnings potentially fixable with the `--fix` option.
+
+=== BUILD ===
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mgo-BSmAlMn8.js                                  [39m[1m[2m    3.46 kB[22m[1m[22m[2m │ gzip:     1.64 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-haskell-CcUt4Juf.js                       [39m[1m[2m    3.47 kB[22m[1m[22m[2m │ gzip:     1.86 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-haskell.min-CItbjC6k.js                   [39m[1m[2m    3.47 kB[22m[1m[22m[2m │ gzip:     1.86 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-cshtml-OSlLsEZz.js                        [39m[1m[2m    3.49 kB[22m[1m[22m[2m │ gzip:     1.53 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-textile-PryW9CJd.js                       [39m[1m[2m    3.52 kB[22m[1m[22m[2m │ gzip:     1.17 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36moz-DTi_c4pT.js                                  [39m[1m[2m    3.53 kB[22m[1m[22m[2m │ gzip:     1.62 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-rest-Cv9ZKW_h.js                          [39m[1m[2m    3.54 kB[22m[1m[22m[2m │ gzip:     1.08 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-rest.min-Cv9ZKW_h.js                      [39m[1m[2m    3.54 kB[22m[1m[22m[2m │ gzip:     1.08 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mr-B5r_LDbc.js                                   [39m[1m[2m    3.62 kB[22m[1m[22m[2m │ gzip:     1.72 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-arturo.min-BGHCclfb.js                    [39m[1m[2m    3.62 kB[22m[1m[22m[2m │ gzip:     1.92 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-arturo-C-6AqjKG.js                        [39m[1m[2m    3.64 kB[22m[1m[22m[2m │ gzip:     1.93 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mmodelica-Dmh1ieuZ.js                            [39m[1m[2m    3.69 kB[22m[1m[22m[2m │ gzip:     1.75 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-stylus-Eax_o2yj.js                        [39m[1m[2m    3.73 kB[22m[1m[22m[2m │ gzip:     1.63 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-stylus.min-Eax_o2yj.js                    [39m[1m[2m    3.73 kB[22m[1m[22m[2m │ gzip:     1.63 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-nsis-BHjr9BLQ.js                          [39m[1m[2m    3.78 kB[22m[1m[22m[2m │ gzip:     2.08 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-nsis.min-BHjr9BLQ.js                      [39m[1m[2m    3.78 kB[22m[1m[22m[2m │ gzip:     2.08 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mtiki-DM45PUDl.js                                [39m[1m[2m    3.90 kB[22m[1m[22m[2m │ gzip:     1.62 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-arduino-B7pBTGwW.js                       [39m[1m[2m    3.93 kB[22m[1m[22m[2m │ gzip:     1.91 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-arduino.min-0b3TZ5uL.js                   [39m[1m[2m    3.93 kB[22m[1m[22m[2m │ gzip:     1.91 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mvhdl-C_ZzULF0.js                                [39m[1m[2m    3.95 kB[22m[1m[22m[2m │ gzip:     1.85 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-scheme.min-Ct8Z5Mrf.js                    [39m[1m[2m    3.97 kB[22m[1m[22m[2m │ gzip:     1.65 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-ruby.min-DPzFkIeI.js                      [39m[1m[2m    4.01 kB[22m[1m[22m[2m │ gzip:     1.78 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-scheme-C-I0-YuB.js                        [39m[1m[2m    4.03 kB[22m[1m[22m[2m │ gzip:     1.65 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mwast-CaSCyDvn.js                                [39m[1m[2m    4.05 kB[22m[1m[22m[2m │ gzip:     1.90 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36msimple-2x8RMEPs.js                              [39m[1m[2m    4.05 kB[22m[1m[22m[2m │ gzip:     1.73 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mlua-CjY8SR_t.js                                 [39m[1m[2m    4.06 kB[22m[1m[22m[2m │ gzip:     1.79 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-ruby-BVFus-3B.js                          [39m[1m[2m    4.06 kB[22m[1m[22m[2m │ gzip:     1.77 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36msparql-BprKhzYa.js                              [39m[1m[2m    4.15 kB[22m[1m[22m[2m │ gzip:     1.95 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mcoffeescript-CW5B0VX1.js                        [39m[1m[2m    4.20 kB[22m[1m[22m[2m │ gzip:     1.83 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mdiagram-LMA3HP47-Cao1BaUR.js                    [39m[1m[2m    4.24 kB[22m[1m[22m[2m │ gzip:     1.85 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mmscgen-BfNyAvZ_.js                              [39m[1m[2m    4.25 kB[22m[1m[22m[2m │ gzip:     1.35 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36md-FlpNje6j.js                                   [39m[1m[2m    4.39 kB[22m[1m[22m[2m │ gzip:     2.02 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-xquery.min-C6gOKMch.js                    [39m[1m[2m    4.42 kB[22m[1m[22m[2m │ gzip:     1.95 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-xquery-CgpzpmDb.js                        [39m[1m[2m    4.42 kB[22m[1m[22m[2m │ gzip:     1.95 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-asciidoc-D4osZMJ_.js                      [39m[1m[2m    4.44 kB[22m[1m[22m[2m │ gzip:     1.63 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-asciidoc.min-B5O5cBCZ.js                  [39m[1m[2m    4.44 kB[22m[1m[22m[2m │ gzip:     1.63 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mcypher-BHg1nvP7.js                              [39m[1m[2m    4.46 kB[22m[1m[22m[2m │ gzip:     2.03 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-metafont-B1AN7XvS.js                      [39m[1m[2m    4.50 kB[22m[1m[22m[2m │ gzip:     2.04 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-metafont.min-B1AN7XvS.js                  [39m[1m[2m    4.50 kB[22m[1m[22m[2m │ gzip:     2.04 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mhaskell-DTc49AKQ.js                             [39m[1m[2m    4.53 kB[22m[1m[22m[2m │ gzip:     2.04 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mswift-B9sMRD5u.js                               [39m[1m[2m    4.55 kB[22m[1m[22m[2m │ gzip:     2.08 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mvb-CZyG8HXT.js                                  [39m[1m[2m    4.55 kB[22m[1m[22m[2m │ gzip:     2.15 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36masn.1-DsZjcr4c.js                               [39m[1m[2m    4.59 kB[22m[1m[22m[2m │ gzip:     2.31 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-javascript.min-C4fXx1jh.js                [39m[1m[2m    4.60 kB[22m[1m[22m[2m │ gzip:     1.65 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mq-D5vyAOt8.js                                   [39m[1m[2m    4.61 kB[22m[1m[22m[2m │ gzip:     2.00 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mdylan-MIi38jit.js                               [39m[1m[2m    4.62 kB[22m[1m[22m[2m │ gzip:     1.96 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36msass-BEPVlTYY.js                                [39m[1m[2m    4.68 kB[22m[1m[22m[2m │ gzip:     1.74 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mdefaultLocale-CX3T3CIQ.js                       [39m[1m[2m    4.70 kB[22m[1m[22m[2m │ gzip:     2.19 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-javascript-2LMHe_9g.js                    [39m[1m[2m    4.72 kB[22m[1m[22m[2m │ gzip:     1.67 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mgroovy-DJruQSw6.js                              [39m[1m[2m    4.75 kB[22m[1m[22m[2m │ gzip:     2.09 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mlivescript-AWH4pP80.js                          [39m[1m[2m    4.78 kB[22m[1m[22m[2m │ gzip:     1.98 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-renpy.min-x8C_kW01.js                     [39m[1m[2m    4.78 kB[22m[1m[22m[2m │ gzip:     2.30 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-renpy-DzqPnDwk.js                         [39m[1m[2m    4.79 kB[22m[1m[22m[2m │ gzip:     2.30 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mttcn-cfg-NIMzQE0n.js                            [39m[1m[2m    4.80 kB[22m[1m[22m[2m │ gzip:     2.08 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mindex-DohIEGgQ.js                               [39m[1m[2m    4.86 kB[22m[1m[22m[2m │ gzip:     1.93 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mgas-DkSI9x6N.js                                 [39m[1m[2m    4.96 kB[22m[1m[22m[2m │ gzip:     1.60 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36masterisk-YQcj39vV.js                            [39m[1m[2m    5.08 kB[22m[1m[22m[2m │ gzip:     2.10 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-cobol-CImV5aEJ.js                         [39m[1m[2m    5.09 kB[22m[1m[22m[2m │ gzip:     2.39 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-cobol.min-CImV5aEJ.js                     [39m[1m[2m    5.09 kB[22m[1m[22m[2m │ gzip:     2.39 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-markdown.min-DUK61Gtl.js                  [39m[1m[2m    5.13 kB[22m[1m[22m[2m │ gzip:     2.00 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mdjango-wVK1_tMs.js                              [39m[1m[2m    5.17 kB[22m[1m[22m[2m │ gzip:     1.85 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-markdown-4MKFcK2x.js                      [39m[1m[2m    5.24 kB[22m[1m[22m[2m │ gzip:     2.01 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mfortran-D-1iZSnk.js                             [39m[1m[2m    5.27 kB[22m[1m[22m[2m │ gzip:     2.34 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mpieDiagram-4H26LBE5-DbCBqLpX.js                 [39m[1m[2m    5.31 kB[22m[1m[22m[2m │ gzip:     2.36 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mruby-udlz4Rrk.js                                [39m[1m[2m    5.38 kB[22m[1m[22m[2m │ gzip:     2.26 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mmllike-DvP-dH7Z.js                              [39m[1m[2m    5.46 kB[22m[1m[22m[2m │ gzip:     1.86 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-avisynth.min-D-_c64I5.js                  [39m[1m[2m    5.57 kB[22m[1m[22m[2m │ gzip:     2.95 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-keepalived-DbUd_dQM.js                    [39m[1m[2m    5.65 kB[22m[1m[22m[2m │ gzip:     2.23 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-keepalived.min-uehvX2yz.js                [39m[1m[2m    5.67 kB[22m[1m[22m[2m │ gzip:     2.24 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mcrystal-BkCexKXJ.js                             [39m[1m[2m    5.74 kB[22m[1m[22m[2m │ gzip:     2.40 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mecl-CDgdsG9m.js                                 [39m[1m[2m    5.74 kB[22m[1m[22m[2m │ gzip:     2.63 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-avisynth-CL7ZBEji.js                      [39m[1m[2m    5.81 kB[22m[1m[22m[2m │ gzip:     2.96 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mttcn-CB_XGNdf.js                                [39m[1m[2m    5.84 kB[22m[1m[22m[2m │ gzip:     2.62 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mdiagram-2AECGRRQ-eJoVUI-G.js                    [39m[1m[2m    5.85 kB[22m[1m[22m[2m │ gzip:     2.48 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mlinear-D0c6ir0p.js                              [39m[1m[2m    5.99 kB[22m[1m[22m[2m │ gzip:     2.46 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mxml-CeYET5nE.js                                 [39m[1m[2m    6.07 kB[22m[1m[22m[2m │ gzip:     2.36 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mjulia-BvSalpKf.js                               [39m[1m[2m    6.07 kB[22m[1m[22m[2m │ gzip:     2.51 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-bash-DTkDXsAh.js                          [39m[1m[2m    6.15 kB[22m[1m[22m[2m │ gzip:     3.04 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-bash.min-cl4oq_rS.js                      [39m[1m[2m    6.15 kB[22m[1m[22m[2m │ gzip:     3.04 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mvbscript-DWOARmbc.js                            [39m[1m[2m    6.48 kB[22m[1m[22m[2m │ gzip:     2.92 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mmirc-r_R6M5m0.js                                [39m[1m[2m    6.53 kB[22m[1m[22m[2m │ gzip:     3.03 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mpython-BcIR9lAl.js                              [39m[1m[2m    6.66 kB[22m[1m[22m[2m │ gzip:     2.85 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-csharp.min-BTJAvvpb.js                    [39m[1m[2m    6.67 kB[22m[1m[22m[2m │ gzip:     2.77 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mgraph-BfDhObqO.js                               [39m[1m[2m    6.80 kB[22m[1m[22m[2m │ gzip:     2.22 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mcobol-BUJEUTq9.js                               [39m[1m[2m    6.81 kB[22m[1m[22m[2m │ gzip:     3.31 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-php.min-DW_QMurJ.js                       [39m[1m[2m    6.83 kB[22m[1m[22m[2m │ gzip:     2.29 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-php-CLzCIGuc.js                           [39m[1m[2m    6.84 kB[22m[1m[22m[2m │ gzip:     2.29 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mscheme-Ba2xXBV9.js                              [39m[1m[2m    6.97 kB[22m[1m[22m[2m │ gzip:     2.70 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-csharp-BfRaOBce.js                        [39m[1m[2m    6.99 kB[22m[1m[22m[2m │ gzip:     2.79 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mrst-DnvWETVa.js                                 [39m[1m[2m    7.00 kB[22m[1m[22m[2m │ gzip:     2.41 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mxquery-BWiZ0euT.js                              [39m[1m[2m    7.32 kB[22m[1m[22m[2m │ gzip:     2.90 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mnsis-Dop8nNEs.js                                [39m[1m[2m    7.41 kB[22m[1m[22m[2m │ gzip:     3.33 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mtextile-NJdbRCEE.js                             [39m[1m[2m    7.49 kB[22m[1m[22m[2m │ gzip:     2.78 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-core.min-BwqgfjUZ.js                      [39m[1m[2m    7.91 kB[22m[1m[22m[2m │ gzip:     3.42 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-abap-CfUpLXHP.js                          [39m[1m[2m    7.92 kB[22m[1m[22m[2m │ gzip:     3.52 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-abap.min-CfUpLXHP.js                      [39m[1m[2m    7.92 kB[22m[1m[22m[2m │ gzip:     3.52 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-core-D6ga5EDW.js                          [39m[1m[2m    7.93 kB[22m[1m[22m[2m │ gzip:     3.43 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mnginx-DcexiGGl.js                               [39m[1m[2m    7.94 kB[22m[1m[22m[2m │ gzip:     3.06 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mslim-DxZh3lrl.js                                [39m[1m[2m    7.95 kB[22m[1m[22m[2m │ gzip:     2.92 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-sas.min-BuE6bzEk.js                       [39m[1m[2m    7.99 kB[22m[1m[22m[2m │ gzip:     3.36 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-sas-DKC0wK6m.js                           [39m[1m[2m    8.02 kB[22m[1m[22m[2m │ gzip:     3.34 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mpug-6fBXb5g9.js                                 [39m[1m[2m    8.11 kB[22m[1m[22m[2m │ gzip:     2.42 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-apacheconf-Cu6LM2pZ.js                    [39m[1m[2m    8.18 kB[22m[1m[22m[2m │ gzip:     3.54 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-apacheconf.min-Cu6LM2pZ.js                [39m[1m[2m    8.18 kB[22m[1m[22m[2m │ gzip:     3.54 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mpowershell-C_IxBzDN.js                          [39m[1m[2m    8.42 kB[22m[1m[22m[2m │ gzip:     3.67 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mhaxe-BCxrowIX.js                                [39m[1m[2m    8.66 kB[22m[1m[22m[2m │ gzip:     3.31 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-gml-DD9zSDFU.js                           [39m[1m[2m    8.67 kB[22m[1m[22m[2m │ gzip:     4.04 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-gml.min-DD9zSDFU.js                       [39m[1m[2m    8.67 kB[22m[1m[22m[2m │ gzip:     4.04 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36merlang-CDJD1Tcq.js                              [39m[1m[2m    8.75 kB[22m[1m[22m[2m │ gzip:     3.24 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-autohotkey-DAUS9xy1.js                    [39m[1m[2m    9.25 kB[22m[1m[22m[2m │ gzip:     4.34 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-autohotkey.min-iPcHXS4S.js                [39m[1m[2m    9.25 kB[22m[1m[22m[2m │ gzip:     4.34 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-gherkin.min-CI5vZ92s.js                   [39m[1m[2m    9.82 kB[22m[1m[22m[2m │ gzip:     5.36 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-gherkin-Bq6raKtY.js                       [39m[1m[2m    9.83 kB[22m[1m[22m[2m │ gzip:     5.35 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36msas-D8NXT4MC.js                                 [39m[1m[2m    9.91 kB[22m[1m[22m[2m │ gzip:     4.43 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-factor.min-pqKjksDb.js                    [39m[1m[2m   10.06 kB[22m[1m[22m[2m │ gzip:     3.59 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-factor-i5YdR5UA.js                        [39m[1m[2m   10.06 kB[22m[1m[22m[2m │ gzip:     3.60 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mstateDiagram-AJRCARHV-BeHd8FLz.js               [39m[1m[2m   10.39 kB[22m[1m[22m[2m │ gzip:     3.63 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mperl-CeOEdIen.js                                [39m[1m[2m   10.39 kB[22m[1m[22m[2m │ gzip:     3.80 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-opencl-g7Q5MDUo.js                        [39m[1m[2m   10.41 kB[22m[1m[22m[2m │ gzip:     4.53 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-opencl.min-g7Q5MDUo.js                    [39m[1m[2m   10.41 kB[22m[1m[22m[2m │ gzip:     4.53 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-cmake-2k54r3W4.js                         [39m[1m[2m   10.48 kB[22m[1m[22m[2m │ gzip:     4.09 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-cmake.min-2k54r3W4.js                     [39m[1m[2m   10.48 kB[22m[1m[22m[2m │ gzip:     4.09 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mdiagram-KO2AKTUF-B3c0Ir8j.js                    [39m[1m[2m   10.75 kB[22m[1m[22m[2m │ gzip:     4.16 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36msoy-DUcYAyFJ.js                                 [39m[1m[2m   10.81 kB[22m[1m[22m[2m │ gzip:     3.53 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mdiagram-OG6HWLK6-DEMW9q04.js                    [39m[1m[2m   11.10 kB[22m[1m[22m[2m │ gzip:     3.95 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mverilog-uIn5gFeJ.js                             [39m[1m[2m   11.12 kB[22m[1m[22m[2m │ gzip:     4.61 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mdagre-BM42HDAG-BwB098BM.js                      [39m[1m[2m   11.17 kB[22m[1m[22m[2m │ gzip:     4.13 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mgherkin-BycSfiQF.js                             [39m[1m[2m   11.38 kB[22m[1m[22m[2m │ gzip:     5.67 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mclojure-eTHg2bnH.js                             [39m[1m[2m   11.53 kB[22m[1m[22m[2m │ gzip:     4.37 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36midl-D3lNOGgK.js                                 [39m[1m[2m   12.26 kB[22m[1m[22m[2m │ gzip:     4.89 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-vim-uciLQ2PQ.js                           [39m[1m[2m   14.21 kB[22m[1m[22m[2m │ gzip:     5.85 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-vim.min-uciLQ2PQ.js                       [39m[1m[2m   14.21 kB[22m[1m[22m[2m │ gzip:     5.85 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mphp-B4LY4DZv.js                                 [39m[1m[2m   14.35 kB[22m[1m[22m[2m │ gzip:     5.53 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mmarkdown-DCr-LyuC.js                            [39m[1m[2m   15.06 kB[22m[1m[22m[2m │ gzip:     5.39 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mishikawaDiagram-YF4QCWOH-DDIarr73.js            [39m[1m[2m   17.50 kB[22m[1m[22m[2m │ gzip:     6.66 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mtime-jf7vO3NW.js                                [39m[1m[2m   17.57 kB[22m[1m[22m[2m │ gzip:     5.96 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mjavascript-CHDa2zpP.js                          [39m[1m[2m   17.99 kB[22m[1m[22m[2m │ gzip:     6.01 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mkanban-definition-UN3LZRKU-CNjpT8KP.js          [39m[1m[2m   20.33 kB[22m[1m[22m[2m │ gzip:     7.22 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mclike-J2Njsem3.js                               [39m[1m[2m   21.09 kB[22m[1m[22m[2m │ gzip:     7.53 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36msankeyDiagram-5OEKKPKP-BJqvGUWZ.js              [39m[1m[2m   23.17 kB[22m[1m[22m[2m │ gzip:     8.55 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mmindmap-definition-RKZ34NQL-CFDlB41w.js         [39m[1m[2m   23.21 kB[22m[1m[22m[2m │ gzip:     7.84 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mjourneyDiagram-JHISSGLW--YeGc_31.js             [39m[1m[2m   23.60 kB[22m[1m[22m[2m │ gzip:     8.37 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mwardleyDiagram-YWT4CUSO-6LusMz2n.js             [39m[1m[2m   25.53 kB[22m[1m[22m[2m │ gzip:     6.81 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mstylus-DiJ6eBKk.js                              [39m[1m[2m   26.09 kB[22m[1m[22m[2m │ gzip:     8.85 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36merDiagram-TEJ5UH35-BKbJgCoc.js                  [39m[1m[2m   26.89 kB[22m[1m[22m[2m │ gzip:     9.36 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mcss-Cm-BOOJO.js                                 [39m[1m[2m   27.39 kB[22m[1m[22m[2m │ gzip:     8.52 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mlayout-DvNRHXV6.js                              [39m[1m[2m   28.20 kB[22m[1m[22m[2m │ gzip:    10.04 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mgitGraphDiagram-PVQCEYII-pXxaX6PO.js            [39m[1m[2m   29.45 kB[22m[1m[22m[2m │ gzip:     8.72 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mtimeline-definition-PNZ67QCA-C0BPzknE.js        [39m[1m[2m   30.86 kB[22m[1m[22m[2m │ gzip:    10.17 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mrequirementDiagram-4Y6WPE33-0vgPKzto.js         [39m[1m[2m   31.04 kB[22m[1m[22m[2m │ gzip:     9.76 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mstep-WrZc8v-e.js                                [39m[1m[2m   32.28 kB[22m[1m[22m[2m │ gzip:     9.72 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-sqf-sVcglnFV.js                           [39m[1m[2m   33.39 kB[22m[1m[22m[2m │ gzip:    11.04 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mprism-sqf.min-Bq08iVSa.js                       [39m[1m[2m   33.39 kB[22m[1m[22m[2m │ gzip:    11.04 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mquadrantDiagram-W4KKPZXB-B9vKnax3.js            [39m[1m[2m   34.05 kB[22m[1m[22m[2m │ gzip:    10.00 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mchunk-AQP2D5EJ-DlVFsnEa.js                      [39m[1m[2m   37.11 kB[22m[1m[22m[2m │ gzip:    12.11 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mxychartDiagram-2RQKCTM6-BX2Es1zR.js             [39m[1m[2m   40.31 kB[22m[1m[22m[2m │ gzip:    11.50 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mvennDiagram-CIIHVFJN-D7vodzZb.js                [39m[1m[2m   41.46 kB[22m[1m[22m[2m │ gzip:    15.49 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mganttDiagram-6RSMTGT7-DdOK2Hm3.js               [39m[1m[2m   47.63 kB[22m[1m[22m[2m │ gzip:    15.97 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36msql-BEpwMyoS.js                                 [39m[1m[2m   47.92 kB[22m[1m[22m[2m │ gzip:    14.22 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mchunk-727SXJPM-CR7g6_X0.js                      [39m[1m[2m   48.98 kB[22m[1m[22m[2m │ gzip:    15.72 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mflowDiagram-I6XJVG4X-CAR70HiT.js                [39m[1m[2m   60.54 kB[22m[1m[22m[2m │ gzip:    19.39 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mc4Diagram-AAUBKEIU-DXKXCWym.js                  [39m[1m[2m   69.98 kB[22m[1m[22m[2m │ gzip:    19.65 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mblockDiagram-GPEHLZMM-D7_EFWhN.js               [39m[1m[2m   73.55 kB[22m[1m[22m[2m │ gzip:    21.23 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mcose-bilkent-S5V4N54A-BRkZCFrO.js               [39m[1m[2m   81.73 kB[22m[1m[22m[2m │ gzip:    22.49 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36msequenceDiagram-3UESZ5HK-oraWNkXp.js            [39m[1m[2m  116.90 kB[22m[1m[22m[2m │ gzip:    31.07 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36msequence-B-0JEB7J.js                            [39m[1m[2m  116.93 kB[22m[1m[22m[2m │ gzip:    42.83 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mindex-DzYQyISO.js                               [39m[1m[2m  130.79 kB[22m[1m[22m[2m │ gzip:    42.03 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36marchitectureDiagram-3BPJPVTR-Bv0zox4P.js        [39m[1m[2m  149.47 kB[22m[1m[22m[2m │ gzip:    42.21 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mcytoscape.esm-DH6-wILU.js                       [39m[1m[2m  441.80 kB[22m[1m[22m[2m │ gzip:   141.55 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mmermaid.core-BXZTT1xz.js                        [39m[1m[33m  543.30 kB[39m[22m[2m │ gzip:   123.61 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mwardley-L42UT6IY-cZ4lfQW9.js                    [39m[1m[33m  612.67 kB[39m[22m[2m │ gzip:   147.51 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36membed-C1mDjvlB.js                               [39m[1m[33m  759.47 kB[39m[22m[2m │ gzip:   265.00 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mmain-CNK-nAKA.js                                [39m[1m[33m1,210.56 kB[39m[22m[2m │ gzip:   350.86 kB[22m
+[2m../../../../build/out/renderer/[22m[2massets/[22m[36mindex-DwktlNU0.js                               [39m[1m[33m4,762.54 kB[39m[22m[2m │ gzip: 1,396.90 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 34.91s[39m

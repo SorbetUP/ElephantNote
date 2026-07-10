@@ -11,6 +11,11 @@ import {
   setTrustedSafeMode
 } from '../../../../Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js'
 import {
+  beginTrustedActivation,
+  readTrustedActivationMarker,
+  recoverTrustedActivationCrash
+} from '../../../../Elephant/frontend/src/renderer/src/addons/trustedAddonBootGuard.js'
+import {
   ADDON_ACCESS_LEVEL,
   getAddonAccessLevel,
   normalizeAddonManifest
@@ -21,10 +26,12 @@ const createPreferenceTarget = () => {
   const local = new Map()
   return {
     preferences,
+    local,
     target: {
       localStorage: {
         getItem: (key) => local.get(key) ?? null,
-        setItem: (key, value) => local.set(key, String(value))
+        setItem: (key, value) => local.set(key, String(value)),
+        removeItem: (key) => local.delete(key)
       },
       __TAURI__: {
         core: {
@@ -105,6 +112,27 @@ describe('hash-bound trusted approval', () => {
     expect(await getTrustedSafeMode(target)).toBe(true)
     await setTrustedSafeMode(false, target)
     expect(await getTrustedSafeMode(target)).toBe(false)
+  })
+
+  it('enters safe mode after an interrupted trusted activation', async () => {
+    const { target, local, preferences } = createPreferenceTarget()
+    const record = {
+      manifest: { id: 'com.example.crashing' },
+      packageHash: 'crashing-hash'
+    }
+
+    beginTrustedActivation(record, target)
+    expect(readTrustedActivationMarker(target)).toEqual(expect.objectContaining({
+      addonId: 'com.example.crashing',
+      packageHash: 'crashing-hash'
+    }))
+
+    const recovered = await recoverTrustedActivationCrash(target)
+
+    expect(recovered).toEqual(expect.objectContaining({ addonId: 'com.example.crashing' }))
+    expect(readTrustedActivationMarker(target)).toBeNull()
+    expect(local.get('elephantnote:addons:trusted-safe-mode')).toBe('true')
+    expect(preferences.get('addons.trustedSafeMode')).toBe(true)
   })
 })
 

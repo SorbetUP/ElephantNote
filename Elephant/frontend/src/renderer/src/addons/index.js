@@ -4,7 +4,14 @@ import { builtinAddons } from './builtin'
 import { installExternalAddonRuntime } from './externalAddonRuntime'
 import { useAddonsStore } from '@/store/addons'
 export { ADDON_EXTENSION_POINTS } from './extensionPoints'
-export { ADDON_API_VERSION, ADDON_STATUS, normalizeAddonManifest } from './manifest'
+export {
+  ADDON_ACCESS_LEVEL,
+  ADDON_API_VERSION,
+  ADDON_STATUS,
+  getAddonAccessLevel,
+  isTrustedAddonManifest,
+  normalizeAddonManifest
+} from './manifest'
 export { ElephantAddonManager } from './AddonManagerWithState'
 export {
   getAddonActions,
@@ -52,7 +59,11 @@ export const installAddonSystem = (app, options = {}) => {
     hasTauriInvoke: Boolean(globalThis?.__TAURI__?.core?.invoke)
   })
 
-  const manager = createAddonManager({ ...options, logger: bootstrapLogger })
+  const manager = createAddonManager({
+    ...options,
+    vueApp: app,
+    logger: bootstrapLogger
+  })
   app.provide(ADDON_MANAGER_KEY, manager)
   app.config.globalProperties.$addons = manager
 
@@ -65,6 +76,7 @@ export const installAddonSystem = (app, options = {}) => {
 
   if (typeof window !== 'undefined') {
     window.__ELEPHANT_ADDONS__ = manager
+    window.__ELEPHANT_VUE_APP__ = app
     window.dispatchEvent(new CustomEvent('elephantnote:addons-ready', {
       detail: { ids: manager.list().map((addon) => addon.manifest.id) }
     }))
@@ -77,9 +89,7 @@ export const installAddonSystem = (app, options = {}) => {
         actions: manager.getActions().map((entry) => entry.contribution?.id).filter(Boolean)
       })
     })
-    .catch((error) => {
-      manager.logger.error('[addons] defaults:failed', error)
-    })
+    .catch((error) => manager.logger.error('[addons] defaults:failed', error))
 
   if (globalThis?.__TAURI__?.core?.invoke) {
     manager.logger.info('[addons] external-runtime:install:start')
@@ -97,8 +107,6 @@ export const installAddonSystem = (app, options = {}) => {
 
 export const useAddonManager = () => {
   const manager = inject(ADDON_MANAGER_KEY)
-  if (!manager) {
-    throw new Error('Addon manager is not installed')
-  }
+  if (!manager) throw new Error('Addon manager is not installed')
   return manager
 }

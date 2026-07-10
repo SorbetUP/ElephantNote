@@ -76,11 +76,7 @@ fn tauri_platform_info() -> serde_json::Value {
 
 #[cfg(not(mobile))]
 fn codex_binary_name() -> &'static str {
-  if cfg!(windows) {
-    "codex.exe"
-  } else {
-    "codex"
-  }
+  if cfg!(windows) { "codex.exe" } else { "codex" }
 }
 
 #[cfg(not(mobile))]
@@ -130,6 +126,7 @@ pub fn run() {
       app.manage(watcher::WatcherState::new());
       app.manage(sync::IrohSyncState::new());
       app.manage(addons::AddonState::new());
+      app.manage(markdown::muya_session::MuyaEngineSessions::default());
       let sync_handle = handle.clone();
       tauri::async_runtime::spawn(async move {
         let state = sync_handle.state::<sync::IrohSyncState>();
@@ -259,6 +256,15 @@ pub fn run() {
       markdown::commands::tauri_muya_commit_composition,
       markdown::commands::tauri_muya_cancel_composition,
       markdown::commands::tauri_muya_editor_snapshot,
+      markdown::muya_session::tauri_muya_session_create,
+      markdown::muya_session::tauri_muya_session_sync_document,
+      markdown::muya_session::tauri_muya_session_apply,
+      markdown::muya_session::tauri_muya_session_apply_parity,
+      markdown::muya_session::tauri_muya_session_apply_complete,
+      markdown::muya_session::tauri_muya_session_paste_clipboard,
+      markdown::muya_session::tauri_muya_session_commit_composition,
+      markdown::muya_session::tauri_muya_session_query,
+      markdown::muya_session::tauri_muya_session_close,
       code_execution::tauri_programs_list,
       code_execution::tauri_programs_set,
       code_execution::tauri_programs_run,
@@ -310,14 +316,8 @@ mod tests {
     let resource = Path::new("/app/resources");
     let manifest = Path::new("/source/tauri");
     let candidates = bundled_codex_candidates(Some(resource), manifest);
-    assert_eq!(
-      candidates[0],
-      resource.join("bin").join(codex_binary_name())
-    );
-    assert_eq!(
-      candidates.last(),
-      Some(&manifest.join("bin").join(codex_binary_name()))
-    );
+    assert_eq!(candidates[0], resource.join("bin").join(codex_binary_name()));
+    assert_eq!(candidates.last(), Some(&manifest.join("bin").join(codex_binary_name())));
   }
 
   #[test]
@@ -325,9 +325,6 @@ mod tests {
     let info = tauri_platform_info();
     assert!(info.get("os").and_then(|value| value.as_str()).is_some());
     assert!(info.get("arch").and_then(|value| value.as_str()).is_some());
-    assert_eq!(
-      info.get("desktop").and_then(|value| value.as_bool()),
-      Some(!cfg!(mobile))
-    );
+    assert_eq!(info.get("desktop").and_then(|value| value.as_bool()), Some(!cfg!(mobile)));
   }
 }

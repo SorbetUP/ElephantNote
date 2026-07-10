@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::muya_inline::parse_inlines;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MuyaJsonState {
@@ -9,12 +11,33 @@ pub struct MuyaJsonState {
   pub blocks: Vec<MuyaJsonBlock>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MuyaInlineNode {
   #[serde(rename = "type")]
   pub node_type: String,
+  #[serde(default, skip_serializing_if = "String::is_empty")]
   pub text: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub marker: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub href: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub title: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub alt: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub children: Option<Vec<MuyaInlineNode>>,
+}
+
+impl MuyaInlineNode {
+  pub fn text(text: String) -> Self {
+    Self {
+      node_type: "text".to_string(),
+      text,
+      ..Self::default()
+    }
+  }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,7 +78,7 @@ impl MuyaJsonBlock {
     Self {
       block_type: block_type.to_string(),
       text: Some(text.clone()),
-      children: Some(vec![MuyaInlineNode { node_type: "text".to_string(), text }]),
+      children: Some(parse_inlines(&text)),
       ..Self::default()
     }
   }
@@ -90,7 +113,9 @@ pub fn markdown_to_json_state(markdown: &str) -> MuyaJsonState {
         body.push(lines[index]);
         index += 1;
       }
-      if index < lines.len() { index += 1; }
+      if index < lines.len() {
+        index += 1;
+      }
       blocks.push(MuyaJsonBlock::text_block("math_block", body.join("\n")));
       continue;
     }
@@ -105,7 +130,9 @@ pub fn markdown_to_json_state(markdown: &str) -> MuyaJsonState {
         body.push(lines[index]);
         index += 1;
       }
-      if index < lines.len() { index += 1; }
+      if index < lines.len() {
+        index += 1;
+      }
       let mut block = MuyaJsonBlock::text_block("code_fence", body.join("\n"));
       block.marker = Some(marker.to_string());
       block.info = Some(info);
@@ -132,7 +159,11 @@ pub fn markdown_to_json_state(markdown: &str) -> MuyaJsonState {
     }
 
     if trimmed.starts_with('>') {
-      let text = trimmed.strip_prefix('>').unwrap_or("").strip_prefix(' ').unwrap_or_else(|| trimmed.strip_prefix('>').unwrap_or(""));
+      let text = trimmed
+        .strip_prefix('>')
+        .unwrap_or("")
+        .strip_prefix(' ')
+        .unwrap_or_else(|| trimmed.strip_prefix('>').unwrap_or(""));
       blocks.push(MuyaJsonBlock::text_block("blockquote", text.to_string()));
       index += 1;
       continue;
@@ -188,9 +219,13 @@ fn block_to_markdown(block: &MuyaJsonBlock) -> String {
 
 fn parse_heading(line: &str) -> Option<(u8, String)> {
   let level = line.chars().take_while(|character| *character == '#').count();
-  if !(1..=6).contains(&level) { return None; }
+  if !(1..=6).contains(&level) {
+    return None;
+  }
   let rest = line.get(level..)?;
-  if !rest.starts_with(char::is_whitespace) { return None; }
+  if !rest.starts_with(char::is_whitespace) {
+    return None;
+  }
   Some((level as u8, rest.trim_start().to_string()))
 }
 
@@ -199,7 +234,17 @@ fn parse_list_line(line: &str) -> Option<MuyaJsonBlock> {
   let depth = whitespace / 2;
   let trimmed = line.trim();
 
-  for (prefix, checked) in [("- [ ] ", false), ("* [ ] ", false), ("+ [ ] ", false), ("- [x] ", true), ("- [X] ", true), ("* [x] ", true), ("* [X] ", true), ("+ [x] ", true), ("+ [X] ", true)] {
+  for (prefix, checked) in [
+    ("- [ ] ", false),
+    ("* [ ] ", false),
+    ("+ [ ] ", false),
+    ("- [x] ", true),
+    ("- [X] ", true),
+    ("* [x] ", true),
+    ("* [X] ", true),
+    ("+ [x] ", true),
+    ("+ [X] ", true),
+  ] {
     if let Some(text) = trimmed.strip_prefix(prefix) {
       let mut block = MuyaJsonBlock::text_block("task_list_item", text.to_string());
       block.depth = Some(depth);
@@ -235,32 +280,53 @@ fn is_pipe_table_row(line: &str) -> bool {
 }
 
 fn is_table_start(lines: &[&str], index: usize) -> bool {
-  if index + 1 >= lines.len() || !is_pipe_table_row(lines[index]) { return false; }
+  if index + 1 >= lines.len() || !is_pipe_table_row(lines[index]) {
+    return false;
+  }
   let separator = lines[index + 1].trim();
   separator.ends_with('|')
     && !separator.is_empty()
-    && separator.trim_start_matches('|').chars().all(|character| matches!(character, ' ' | '\t' | ':' | '|' | '-'))
+    && separator
+      .trim_start_matches('|')
+      .chars()
+      .all(|character| matches!(character, ' ' | '\t' | ':' | '|' | '-'))
 }
 
 fn parse_table(lines: &[&str]) -> MuyaJsonBlock {
   MuyaJsonBlock {
     block_type: "table".to_string(),
     headers: Some(split_row(lines.first().copied().unwrap_or(""))),
-    alignments: Some(split_row(lines.get(1).copied().unwrap_or("")).into_iter().map(|cell| alignment(&cell).to_string()).collect()),
+    alignments: Some(
+      split_row(lines.get(1).copied().unwrap_or(""))
+        .into_iter()
+        .map(|cell| alignment(&cell).to_string())
+        .collect(),
+    ),
     rows: Some(lines.iter().skip(2).map(|line| split_row(line)).collect()),
     ..MuyaJsonBlock::default()
   }
 }
 
 fn split_row(line: &str) -> Vec<String> {
-  line.trim().trim_start_matches('|').trim_end_matches('|').split('|').map(|cell| cell.trim().to_string()).collect()
+  line
+    .trim()
+    .trim_start_matches('|')
+    .trim_end_matches('|')
+    .split('|')
+    .map(|cell| cell.trim().to_string())
+    .collect()
 }
 
 fn alignment(cell: &str) -> &'static str {
-  if cell.starts_with(':') && cell.ends_with(':') { "center" }
-  else if cell.starts_with(':') { "left" }
-  else if cell.ends_with(':') { "right" }
-  else { "default" }
+  if cell.starts_with(':') && cell.ends_with(':') {
+    "center"
+  } else if cell.starts_with(':') {
+    "left"
+  } else if cell.ends_with(':') {
+    "right"
+  } else {
+    "default"
+  }
 }
 
 fn table_to_markdown(block: &MuyaJsonBlock) -> String {
@@ -268,12 +334,19 @@ fn table_to_markdown(block: &MuyaJsonBlock) -> String {
   let alignments = block.alignments.as_deref().unwrap_or(&[]);
   let rows = block.rows.as_deref().unwrap_or(&[]);
   let header = format!("| {} |", headers.join(" | "));
-  let separator = format!("| {} |", alignments.iter().map(|value| match value.as_str() {
-    "left" => ":-",
-    "center" => ":-:",
-    "right" => "-:",
-    _ => "-",
-  }).collect::<Vec<_>>().join(" | "));
+  let separator = format!(
+    "| {} |",
+    alignments
+      .iter()
+      .map(|value| match value.as_str() {
+        "left" => ":-",
+        "center" => ":-:",
+        "right" => "-:",
+        _ => "-",
+      })
+      .collect::<Vec<_>>()
+      .join(" | ")
+  );
   std::iter::once(header)
     .chain(std::iter::once(separator))
     .chain(rows.iter().map(|row| format!("| {} |", row.join(" | "))))
@@ -289,13 +362,37 @@ mod tests {
   fn parses_all_legacy_json_state_block_types() {
     let markdown = "## Title\n\nParagraph\n\n> Quote\n\n- [x] Task\n\n  3. Ordered\n\n```rust\nfn main() {}\n```\n\n$$\nx+y\n$$\n\n| A | B |\n| :- | -: |\n| 1 | 2 |";
     let state = markdown_to_json_state(markdown);
-    assert_eq!(state.blocks.iter().map(|block| block.block_type.as_str()).collect::<Vec<_>>(), vec![
-      "heading", "paragraph", "blockquote", "task_list_item", "list_item", "code_fence", "math_block", "table"
-    ]);
+    assert_eq!(
+      state.blocks.iter().map(|block| block.block_type.as_str()).collect::<Vec<_>>(),
+      vec![
+        "heading",
+        "paragraph",
+        "blockquote",
+        "task_list_item",
+        "list_item",
+        "code_fence",
+        "math_block",
+        "table"
+      ]
+    );
     assert_eq!(state.blocks[0].level, Some(2));
     assert_eq!(state.blocks[3].checked, Some(true));
     assert_eq!(state.blocks[4].index, Some(3));
-    assert_eq!(state.blocks[7].alignments.as_ref().unwrap(), &vec!["left".to_string(), "right".to_string()]);
+    assert_eq!(
+      state.blocks[7].alignments.as_ref().unwrap(),
+      &vec!["left".to_string(), "right".to_string()]
+    );
+  }
+
+  #[test]
+  fn emits_typed_inline_nodes_from_rust() {
+    let state = markdown_to_json_state(
+      "**bold** and ![drawing](../../.assets/drawing.png) with [link](https://example.com)",
+    );
+    let children = state.blocks[0].children.as_ref().expect("inline children");
+    assert!(children.iter().any(|node| node.node_type == "strong"));
+    assert!(children.iter().any(|node| node.node_type == "image"));
+    assert!(children.iter().any(|node| node.node_type == "link"));
   }
 
   #[test]

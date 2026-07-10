@@ -67,6 +67,17 @@ const createStructuredInvoke = () => {
           revision: state.revision + 1,
           undoDepth: state.undoDepth + 1
         }
+      } else if (parity.type === 'keyboardRule') {
+        state = {
+          ...state,
+          markdown: `${state.markdown}\n- `,
+          selection: {
+            anchor: state.markdown.length + 3,
+            focus: state.markdown.length + 3
+          },
+          revision: state.revision + 1,
+          undoDepth: state.undoDepth + 1
+        }
       } else {
         throw new Error(`unexpected parity command: ${parity.type}`)
       }
@@ -102,7 +113,7 @@ const createStructuredInvoke = () => {
 }
 
 describe('structured operations on the Rust-owned Muya session', () => {
-  it('routes tables, images, footnotes, rich paste and IME through native session IPC', async() => {
+  it('routes tables, images, footnotes, keyboard, rich paste and IME through native session IPC', async() => {
     const invoke = createStructuredInvoke()
     const mirror = createRealMuyaRustMirror({
       initialMarkdown: '| A | B |\n| - | - |\n| 1 | 2 |',
@@ -115,6 +126,7 @@ describe('structured operations on the Rust-owned Muya session', () => {
     await mirror.tableCommand('insert_row', 1)
     await mirror.applyOperation({ type: 'insert', pos: 0, count: 0, text: 'Intro\n' })
     await mirror.upsertFootnote('note', '')
+    await mirror.keyboardRule('Enter')
     await mirror.pasteClipboard('<strong>rich</strong>', 'rich')
     await mirror.commitComposition({ anchor: 0, focus: 0 }, '日')
 
@@ -124,13 +136,18 @@ describe('structured operations on the Rust-owned Muya session', () => {
     expect(parityCalls.map(([, payload]) => payload.command.type)).toEqual([
       'tableCommand',
       'applyOperation',
-      'upsertFootnote'
+      'upsertFootnote',
+      'keyboardRule'
     ])
     for (const [, payload] of parityCalls) {
       expect(payload.editorId).toBe(mirror.sessionId)
       expect(payload.state).toBeUndefined()
       expect(payload.undoStack).toBeUndefined()
     }
+    expect(invoke).toHaveBeenCalledWith('tauri_muya_session_apply_parity', {
+      editorId: mirror.sessionId,
+      command: { type: 'keyboardRule', key: 'Enter', shiftKey: false }
+    })
     expect(invoke).toHaveBeenCalledWith('tauri_muya_session_paste_clipboard', {
       editorId: mirror.sessionId,
       html: '<strong>rich</strong>',
@@ -141,7 +158,7 @@ describe('structured operations on the Rust-owned Muya session', () => {
       selection: { anchor: 0, focus: 0 },
       text: '日'
     })
-    expect(mirror.status.undoDepth).toBe(5)
+    expect(mirror.status.undoDepth).toBe(6)
   })
 
   it('hooks the original Muya content state instead of replacing its DOM renderer', () => {
@@ -153,9 +170,13 @@ describe('structured operations on the Rust-owned Muya session', () => {
     expect(adapter).toContain('this.contentState.deleteImage =')
     expect(adapter).toContain('this.contentState.createFootnote =')
     expect(adapter).toContain('this.contentState.pasteHandler =')
+    expect(adapter).toContain('this.contentState.enterHandler =')
+    expect(adapter).toContain('this.contentState.tabHandler =')
     expect(adapter).toContain("this.container.addEventListener('compositionstart'")
     expect(adapter).toContain("this.container.addEventListener('compositionend'")
     expect(adapter).toContain('engine.commitComposition(selection, String(text))')
+    expect(adapter).toContain("engine.keyboardRule('Enter')")
+    expect(adapter).toContain("engine.keyboardRule('Tab', {")
     expect(adapter).toContain("engine.tableCommand(context.action, context.index)")
     expect(adapter).toContain('engine.applyOperation(mutation.operation)')
     expect(adapter).toContain("engine.upsertFootnote(label, '')")

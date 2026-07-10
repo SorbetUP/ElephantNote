@@ -1,1 +1,2 @@
 Trigger the one-shot AI Wiki repair workflow.
+Retry after diagnostic capture update.

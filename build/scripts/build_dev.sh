@@ -23,6 +23,7 @@ rm -rf "$ROOT_DIR/Elephant/backend/tauri/target/debug/bundle/macos/Elephant.app"
 
 cd "$ROOT_DIR"
 node build/scripts/ensure-tauri-llama-server.mjs
+node build/scripts/ensure-tauri-codex-runtime.mjs
 
 cd "$ROOT_DIR/Elephant/backend/tauri"
 export TAURI_FRONTEND_PATH="$ROOT_DIR"

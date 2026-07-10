@@ -1,5 +1,3 @@
-mod codex_runtime_installer;
-
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, HashSet},
@@ -408,9 +406,6 @@ async fn candidate_paths(app: &AppHandle) -> Vec<(PathBuf, String)> {
     let mut out = Vec::new();
     let mut seen = HashSet::new();
 
-    if let Some(runtime) = codex_runtime_installer::existing(app) {
-        push_candidate(&mut out, &mut seen, runtime.path, "elephantnote-managed");
-    }
     for key in ["ELEPHANTNOTE_CODEX_PATH", "CODEX_PATH"] {
         if let Some(value) = env::var_os(key) {
             push_candidate(
@@ -420,6 +415,21 @@ async fn candidate_paths(app: &AppHandle) -> Vec<(PathBuf, String)> {
                 format!("env:{key}"),
             );
         }
+    }
+
+    // Preserve compatibility with one previously downloaded runtime, but only after the bundled
+    // binary so application updates always use the version shipped with ElephantNote.
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        push_candidate(
+            &mut out,
+            &mut seen,
+            app_data_dir
+                .join("runtimes")
+                .join("codex")
+                .join("bin")
+                .join(binary_name()),
+            "legacy-elephantnote-managed",
+        );
     }
 
     add_codex_app_candidates(&mut out, &mut seen);
@@ -559,20 +569,9 @@ async fn resolve_runtime(app: &AppHandle) -> R<Runtime> {
         }
     }
 
-    log(
-        "installer",
-        "no valid app-server runtime found; installing official managed Codex CLI",
-    );
-    let app_clone = app.clone();
-    let installed =
-        tokio::task::spawn_blocking(move || codex_runtime_installer::ensure_installed(app_clone))
-            .await
-            .map_err(|error| format!("Managed Codex installer task failed: {error}"))??;
-    probe_runtime(installed.path, "elephantnote-managed-download".to_string())
-        .await
-        .ok_or_else(|| {
-            "Downloaded Codex binary does not expose the app-server protocol.".to_string()
-        })
+    Err(
+        "The bundled Codex app-server runtime is missing or invalid. Rebuild ElephantNote with `pnpm tauri:codex:install`; ElephantNote no longer downloads a 100 MB runtime while opening AI settings.".to_string(),
+    )
 }
 
 fn event_thread_id(event: &Value) -> &str {

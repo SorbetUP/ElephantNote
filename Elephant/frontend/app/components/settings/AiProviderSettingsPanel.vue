@@ -1,7 +1,10 @@
 <template>
   <section class="en-ai-settings">
     <div class="en-ai-toolbar">
-      <nav class="en-ai-tabs" aria-label="AI settings pages">
+      <nav
+        class="en-ai-tabs"
+        aria-label="AI settings pages"
+      >
         <button
           v-for="page in aiPages"
           :key="page.id"
@@ -9,16 +12,29 @@
           :class="{ active: activePage === page.id }"
           @click="activePage = page.id"
         >
-          <component :is="page.icon" aria-hidden="true" />
+          <component
+            :is="page.icon"
+            aria-hidden="true"
+          />
           <span>{{ page.label }}</span>
         </button>
       </nav>
       <div class="en-ai-actions">
         <span class="en-ai-save-status">{{ autosaveMessage || 'Saved' }}</span>
-        <button class="secondary compact" type="button" :disabled="loading" @click="loadConfig">
+        <button
+          class="secondary compact"
+          type="button"
+          :disabled="loading"
+          @click="loadConfig"
+        >
           <RotateCw aria-hidden="true" /> Refresh
         </button>
-        <button class="primary compact" type="button" :disabled="saving" @click="saveConfig">
+        <button
+          class="primary compact"
+          type="button"
+          :disabled="saving"
+          @click="saveConfig"
+        >
           <Save aria-hidden="true" />{{ saving ? 'Saving…' : 'Save' }}
         </button>
       </div>
@@ -32,7 +48,10 @@
             <strong>App Local</strong>
             <span>Run downloaded GGUF models with the bundled llama.cpp runtime.</span>
           </div>
-          <span class="en-ai-badge" :class="{ active: form.localAi.enabled }">
+          <span
+            class="en-ai-badge"
+            :class="{ active: form.localAi.enabled }"
+          >
             {{ form.localAi.enabled ? `${localModels.length} models` : 'Off' }}
           </span>
           <button
@@ -42,7 +61,9 @@
             :aria-checked="form.localAi.enabled"
             :class="{ active: form.localAi.enabled }"
             @click="toggleLocalAi"
-          ><span /></button>
+          >
+            <span />
+          </button>
         </div>
       </section>
 
@@ -52,16 +73,30 @@
             <h4>External API providers</h4>
             <p>Stored for features that explicitly support them. API usage is billed separately from ChatGPT subscriptions.</p>
           </div>
-          <button class="secondary compact" type="button" @click="addProvider">
+          <button
+            class="secondary compact"
+            type="button"
+            @click="addProvider"
+          >
             <Plus aria-hidden="true" /> Add provider
           </button>
         </header>
-        <div v-if="form.providerRows.length" class="en-provider-list">
-          <article v-for="provider in form.providerRows" :key="provider.id" class="en-provider-row">
+        <div
+          v-if="form.providerRows.length"
+          class="en-provider-list"
+        >
+          <article
+            v-for="provider in form.providerRows"
+            :key="provider.id"
+            class="en-provider-row"
+          >
             <div class="en-provider-form">
               <label>
                 <span>Type</span>
-                <select v-model="provider.type" @change="applyProviderDefaults(provider)">
+                <select
+                  v-model="provider.type"
+                  @change="applyProviderDefaults(provider)"
+                >
                   <option value="openai-compatible">OpenAI-compatible</option>
                   <option value="openrouter">OpenRouter</option>
                   <option value="mistral">Mistral</option>
@@ -70,10 +105,24 @@
                   <option value="llamacpp">llama.cpp server</option>
                 </select>
               </label>
-              <label><span>Name</span><input v-model.trim="provider.label" type="text"></label>
-              <label class="wide"><span>Base URL</span><input v-model.trim="provider.endpoint" type="url"></label>
-              <label><span>API key</span><input v-model.trim="provider.apiKey" type="password" autocomplete="off"></label>
-              <label><span>Headers JSON</span><input v-model.trim="provider.headersJson" type="text" placeholder='{"Header":"value"}'></label>
+              <label><span>Name</span><input
+                v-model.trim="provider.label"
+                type="text"
+              ></label>
+              <label class="wide"><span>Base URL</span><input
+                v-model.trim="provider.endpoint"
+                type="url"
+              ></label>
+              <label><span>API key</span><input
+                v-model.trim="provider.apiKey"
+                type="password"
+                autocomplete="off"
+              ></label>
+              <label><span>Headers JSON</span><input
+                v-model.trim="provider.headersJson"
+                type="text"
+                placeholder="{&quot;Header&quot;:&quot;value&quot;}"
+              ></label>
             </div>
             <div class="en-provider-footer">
               <button
@@ -83,20 +132,35 @@
                 :aria-checked="provider.enabled"
                 :class="{ active: provider.enabled }"
                 @click="provider.enabled = !provider.enabled"
-              ><span /></button>
+              >
+                <span />
+              </button>
               <span>{{ provider.enabled ? 'Enabled' : 'Disabled' }}</span>
               <div class="en-ai-actions">
-                <button class="secondary compact" type="button" @click="testProvider(provider)">
+                <button
+                  class="secondary compact"
+                  type="button"
+                  @click="testProvider(provider)"
+                >
                   <Activity aria-hidden="true" /> Validate config
                 </button>
-                <button class="danger compact" type="button" @click="removeProvider(provider.id)">
+                <button
+                  class="danger compact"
+                  type="button"
+                  @click="removeProvider(provider.id)"
+                >
                   <Trash2 aria-hidden="true" /> Remove
                 </button>
               </div>
             </div>
           </article>
         </div>
-        <div v-else class="en-ai-empty"><Server aria-hidden="true" /><span>No external API provider configured.</span></div>
+        <div
+          v-else
+          class="en-ai-empty"
+        >
+          <Server aria-hidden="true" /><span>No external API provider configured.</span>
+        </div>
       </section>
       <section class="en-ai-card">
         <header class="en-ai-card-header">
@@ -104,7 +168,10 @@
             <h4>Codex subscription</h4>
             <p>Uses the official <code>codex app-server</code> protocol and your authenticated ChatGPT account.</p>
           </div>
-          <span class="en-ai-badge" :class="{ active: codexStatus.connected, warning: !codexStatus.installed }">
+          <span
+            class="en-ai-badge"
+            :class="{ active: codexStatus.connected, warning: !codexStatus.installed }"
+          >
             {{ codexStatusLabel }}
           </span>
         </header>
@@ -117,7 +184,12 @@
             <small v-if="providerMessage">{{ providerMessage }}</small>
           </div>
           <div class="en-ai-actions en-ai-actions-wrap">
-            <button class="secondary" type="button" :disabled="codexBusy" @click="refreshCodex">
+            <button
+              class="secondary"
+              type="button"
+              :disabled="codexBusy"
+              @click="refreshCodex"
+            >
               <RotateCw aria-hidden="true" /> Check
             </button>
             <button
@@ -140,20 +212,42 @@
             </button>
           </div>
         </div>
-        <div v-if="loginChallenge.userCode" class="en-login-challenge">
+        <div
+          v-if="loginChallenge.userCode"
+          class="en-login-challenge"
+        >
           <strong>Device code: {{ loginChallenge.userCode }}</strong>
-          <button class="secondary compact" type="button" @click="openExternal(loginChallenge.verificationUrl)">
+          <button
+            class="secondary compact"
+            type="button"
+            @click="openExternal(loginChallenge.verificationUrl)"
+          >
             Open authentication page
           </button>
         </div>
-        <div v-if="codexRateLimit" class="en-rate-limit">
-          <span>Usage</span>
-          <progress max="100" :value="codexRateLimit.usedPercent || 0" />
-          <strong>{{ Math.round(codexRateLimit.usedPercent || 0) }}%</strong>
-          <small v-if="codexRateLimit.resetsAt">reset {{ formatReset(codexRateLimit.resetsAt) }}</small>
+        <div
+          v-if="codexRateLimitRows.length"
+          class="en-rate-limits"
+        >
+          <div
+            v-for="limit in codexRateLimitRows"
+            :key="limit.id"
+            class="en-rate-limit"
+          >
+            <div class="en-rate-limit-copy">
+              <strong>{{ limit.label }}</strong>
+              <small v-if="limit.bucketLabel">{{ limit.bucketLabel }}</small>
+            </div>
+            <progress
+              max="100"
+              :value="limit.remainingPercent"
+            />
+            <strong>{{ limit.remainingPercent }}% left</strong>
+            <small>{{ limit.usedPercent }}% used</small>
+            <small v-if="limit.resetsAt">resets {{ formatReset(limit.resetsAt) }}</small>
+          </div>
         </div>
       </section>
-
     </template>
 
     <template v-else-if="activePage === 'chat'">
@@ -165,29 +259,60 @@
         <div class="en-ai-card-body en-ai-grid">
           <label>
             <span>Provider</span>
-            <select v-model="form.routes.chat.source" @change="onChatSourceChanged">
+            <select
+              v-model="form.routes.chat.source"
+              @change="onChatSourceChanged"
+            >
               <option value="disabled">Disabled</option>
-              <option v-if="form.localAi.enabled" value="app-local">App Local</option>
-              <option value="codex" :disabled="!codexStatus.connected">Codex subscription</option>
+              <option
+                v-if="form.localAi.enabled"
+                value="app-local"
+              >App Local</option>
+              <option
+                value="codex"
+                :disabled="!codexStatus.connected"
+              >Codex subscription</option>
             </select>
           </label>
           <label>
             <span>Model</span>
-            <select v-if="form.routes.chat.source === 'codex'" v-model="form.routes.chat.model">
+            <select
+              v-if="form.routes.chat.source === 'codex'"
+              v-model="form.routes.chat.model"
+            >
               <option value="">Select a Codex model</option>
-              <option v-for="model in codexModels" :key="model.id || model.model" :value="model.model || model.id">
+              <option
+                v-for="model in codexModels"
+                :key="model.id || model.model"
+                :value="model.model || model.id"
+              >
                 {{ model.displayName || model.model || model.id }}
               </option>
             </select>
-            <select v-else-if="form.routes.chat.source === 'app-local'" v-model="form.routes.chat.model">
+            <select
+              v-else-if="form.routes.chat.source === 'app-local'"
+              v-model="form.routes.chat.model"
+            >
               <option value="">Select a local model</option>
-              <option v-for="model in localModels" :key="resolveModelId(model)" :value="resolveModelId(model)">
+              <option
+                v-for="model in localModels"
+                :key="resolveModelId(model)"
+                :value="resolveModelId(model)"
+              >
                 {{ resolveModelName(model) }}
               </option>
             </select>
-            <input v-else v-model.trim="form.routes.chat.model" type="text" placeholder="Provider model id">
+            <input
+              v-else
+              v-model.trim="form.routes.chat.model"
+              type="text"
+              placeholder="Provider model id"
+            >
           </label>
-          <label class="wide"><span>System prompt</span><textarea v-model="form.routes.chat.systemPrompt" rows="5"></textarea></label>
+          <label class="wide"><span>System prompt</span><textarea
+            v-model="form.routes.chat.systemPrompt"
+            rows="5"
+          /></label>
         </div>
         <div class="en-ai-setting-row">
           <div class="en-ai-setting-copy">
@@ -201,15 +326,38 @@
             :aria-checked="form.routes.chat.enableRag"
             :class="{ active: form.routes.chat.enableRag }"
             @click="form.routes.chat.enableRag = !form.routes.chat.enableRag"
-          ><span /></button>
+          >
+            <span />
+          </button>
         </div>
         <details class="en-ai-advanced">
           <summary>Advanced generation settings</summary>
           <div class="en-ai-card-body en-ai-grid">
-            <label><span>Temperature</span><input v-model.number="form.routes.chat.temperature" type="number" min="0" max="2" step="0.05"></label>
-            <label><span>Max tokens</span><input v-model.number="form.routes.chat.maxTokens" type="number" min="1" step="128"></label>
-            <label><span>Context window</span><input v-model.number="form.routes.chat.contextWindow" type="number" min="512" step="512"></label>
-            <label><span>RAG notes limit</span><input v-model.number="form.routes.chat.ragTopK" type="number" min="1" max="50"></label>
+            <label><span>Temperature</span><input
+              v-model.number="form.routes.chat.temperature"
+              type="number"
+              min="0"
+              max="2"
+              step="0.05"
+            ></label>
+            <label><span>Max tokens</span><input
+              v-model.number="form.routes.chat.maxTokens"
+              type="number"
+              min="1"
+              step="128"
+            ></label>
+            <label><span>Context window</span><input
+              v-model.number="form.routes.chat.contextWindow"
+              type="number"
+              min="512"
+              step="512"
+            ></label>
+            <label><span>RAG notes limit</span><input
+              v-model.number="form.routes.chat.ragTopK"
+              type="number"
+              min="1"
+              max="50"
+            ></label>
           </div>
         </details>
       </section>
@@ -219,7 +367,12 @@
       <section class="en-ai-card">
         <header class="en-ai-card-header">
           <div><h4>Search and embeddings</h4><p>Configure the embedding route explicitly; no provider is inferred automatically.</p></div>
-          <button class="secondary compact" type="button" :disabled="indexing" @click="rebuildEmbeddings">
+          <button
+            class="secondary compact"
+            type="button"
+            :disabled="indexing"
+            @click="rebuildEmbeddings"
+          >
             <RotateCw aria-hidden="true" />{{ indexing ? 'Rebuilding…' : 'Rebuild index' }}
           </button>
         </header>
@@ -228,23 +381,64 @@
             <span>Provider</span>
             <select v-model="form.routes.embedding.source">
               <option value="disabled">Disabled</option>
-              <option v-if="form.localAi.enabled" value="app-local">App Local</option>
-              <option v-for="provider in enabledProviderRows" :key="provider.id" :value="providerSource(provider)">{{ provider.label }}</option>
+              <option
+                v-if="form.localAi.enabled"
+                value="app-local"
+              >App Local</option>
+              <option
+                v-for="provider in enabledProviderRows"
+                :key="provider.id"
+                :value="providerSource(provider)"
+              >{{ provider.label }}</option>
             </select>
           </label>
-          <label><span>Model</span><input v-model.trim="form.routes.embedding.model" type="text" placeholder="Embedding model id"></label>
-          <label><span>Search result limit</span><input v-model.number="form.routes.embedding.searchTopK" type="number" min="1" max="100"></label>
-          <label><span>Semantic threshold</span><input v-model.number="form.routes.embedding.threshold" type="number" min="0" max="1" step="0.01"></label>
+          <label><span>Model</span><input
+            v-model.trim="form.routes.embedding.model"
+            type="text"
+            placeholder="Embedding model id"
+          ></label>
+          <label><span>Search result limit</span><input
+            v-model.number="form.routes.embedding.searchTopK"
+            type="number"
+            min="1"
+            max="100"
+          ></label>
+          <label><span>Semantic threshold</span><input
+            v-model.number="form.routes.embedding.threshold"
+            type="number"
+            min="0"
+            max="1"
+            step="0.01"
+          ></label>
         </div>
         <details class="en-ai-advanced">
           <summary>Advanced indexing settings</summary>
           <div class="en-ai-card-body en-ai-grid">
             <label><span>Chunk strategy</span><select v-model="form.routes.embedding.chunkStrategy"><option value="markdown-heading">Markdown headings</option><option value="paragraph">Paragraphs</option><option value="fixed">Fixed size</option><option value="hybrid">Hybrid</option></select></label>
             <label><span>Distance</span><select v-model="form.routes.embedding.distance"><option value="cosine">Cosine</option><option value="dot">Dot product</option><option value="euclidean">Euclidean</option></select></label>
-            <label><span>Chunk size</span><input v-model.number="form.routes.embedding.chunkSize" type="number" min="64" step="64"></label>
-            <label><span>Chunk overlap</span><input v-model.number="form.routes.embedding.chunkOverlap" type="number" min="0" step="16"></label>
-            <label><span>Dimensions</span><input v-model.number="form.routes.embedding.dimensions" type="number" min="0"></label>
-            <label><span>Debounce (ms)</span><input v-model.number="form.routes.embedding.debounceMs" type="number" min="0" step="250"></label>
+            <label><span>Chunk size</span><input
+              v-model.number="form.routes.embedding.chunkSize"
+              type="number"
+              min="64"
+              step="64"
+            ></label>
+            <label><span>Chunk overlap</span><input
+              v-model.number="form.routes.embedding.chunkOverlap"
+              type="number"
+              min="0"
+              step="16"
+            ></label>
+            <label><span>Dimensions</span><input
+              v-model.number="form.routes.embedding.dimensions"
+              type="number"
+              min="0"
+            ></label>
+            <label><span>Debounce (ms)</span><input
+              v-model.number="form.routes.embedding.debounceMs"
+              type="number"
+              min="0"
+              step="250"
+            ></label>
           </div>
         </details>
       </section>
@@ -252,23 +446,43 @@
 
     <template v-else>
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>OCR route</h4><p>Configure OCR explicitly. Codex is not advertised as an OCR engine.</p></div></header>
+        <header class="en-ai-card-header">
+          <div><h4>OCR route</h4><p>Configure OCR explicitly. Codex is not advertised as an OCR engine.</p></div>
+        </header>
         <div class="en-ai-card-body en-ai-grid">
           <label>
             <span>Provider</span>
             <select v-model="form.routes.ocr.source">
               <option value="disabled">Disabled</option>
-              <option v-for="provider in enabledProviderRows" :key="provider.id" :value="providerSource(provider)">{{ provider.label }}</option>
+              <option
+                v-for="provider in enabledProviderRows"
+                :key="provider.id"
+                :value="providerSource(provider)"
+              >{{ provider.label }}</option>
             </select>
           </label>
-          <label><span>Model</span><input v-model.trim="form.routes.ocr.model" type="text" placeholder="OCR model id"></label>
-          <label><span>Languages</span><input v-model.trim="form.routes.ocr.languages" type="text" placeholder="eng,fra"></label>
+          <label><span>Model</span><input
+            v-model.trim="form.routes.ocr.model"
+            type="text"
+            placeholder="OCR model id"
+          ></label>
+          <label><span>Languages</span><input
+            v-model.trim="form.routes.ocr.languages"
+            type="text"
+            placeholder="eng,fra"
+          ></label>
           <label><span>Output</span><select v-model="form.routes.ocr.output"><option value="markdown">Markdown</option><option value="plain-text">Plain text</option><option value="layout-markdown">Layout Markdown</option></select></label>
         </div>
         <details class="en-ai-advanced">
           <summary>Advanced OCR settings</summary>
           <div class="en-ai-card-body en-ai-grid">
-            <label><span>Confidence threshold</span><input v-model.number="form.routes.ocr.confidenceThreshold" type="number" min="0" max="1" step="0.01"></label>
+            <label><span>Confidence threshold</span><input
+              v-model.number="form.routes.ocr.confidenceThreshold"
+              type="number"
+              min="0"
+              max="1"
+              step="0.01"
+            ></label>
             <label><span>PDF mode</span><select v-model="form.routes.ocr.pdfMode"><option value="missing-text-only">Only pages without text</option><option value="all-pages">All pages</option><option value="skip-text-pdf">Skip text PDFs</option></select></label>
           </div>
         </details>
@@ -284,6 +498,7 @@ import log from '@/platform/runtimeLogShim'
 import { normalizeAiConfig, normalizeLocalAiConfig } from 'common/elephantnote/aiProviders'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
 import { clonePlainObject } from './settingsModelHelpers'
+import { buildCodexRateLimitRows } from './codexRateLimits'
 import { resolveModelId, resolveModelName } from '../views/modelsViewHelpers'
 
 const props = defineProps({ initialPage: { type: String, default: 'provider' } })
@@ -393,8 +608,8 @@ const stringifyObject = (value) => value && typeof value === 'object' && Object.
 const providerSource = (provider) => provider.type === 'openai-compatible' ? 'api' : provider.type
 const enabledProviderRows = computed(() => form.value.providerRows.filter((provider) => provider.enabled))
 const codexStatusLabel = computed(() => !codexStatus.value.installed ? 'Not installed' : codexStatus.value.connected ? 'Connected' : 'Disconnected')
-const codexAccountLabel = computed(() => codexStatus.value.connected ? `ChatGPT ${codexStatus.value.account?.planType || 'account'}` : codexStatus.value.installed ? 'Codex CLI detected' : 'Codex CLI required')
-const codexRateLimit = computed(() => codexRateLimits.value?.rateLimits?.primary || Object.values(codexRateLimits.value?.rateLimitsByLimitId || {})[0]?.primary || null)
+const codexAccountLabel = computed(() => codexStatus.value.connected ? `ChatGPT ${codexStatus.value.account?.planType || 'account'}` : codexStatus.value.installed ? 'Bundled Codex runtime ready' : 'Bundled Codex runtime missing')
+const codexRateLimitRows = computed(() => buildCodexRateLimitRows(codexRateLimits.value || {}))
 const routeProviderLabel = (source = '') => ({ 'app-local': 'App Local', codex: 'Codex', disabled: 'Disabled' }[source] || source || 'Disabled')
 const formatReset = (timestamp) => new Date(Number(timestamp) * 1000).toLocaleString()
 
@@ -487,7 +702,7 @@ const refreshCodex = async() => {
       ? 'Authenticated through Codex app-server.'
       : codexStatus.value.installed
         ? 'Codex is installed but no ChatGPT account is connected.'
-        : 'Install the official Codex CLI first.')
+        : 'The bundled Codex runtime is missing from this build.')
     if (codexStatus.value.connected) {
       const models = await invokeCodex('models')
       codexModels.value = Array.isArray(models?.data) ? models.data : []
@@ -700,8 +915,10 @@ button svg { width: 14px; height: 14px; }
 .en-ai-switch.small.active span { transform: translateX(14px); }
 .en-codex-row { flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
 .en-ai-actions-wrap { flex-wrap: wrap; justify-content: flex-end; }
-.en-login-challenge, .en-rate-limit { margin: 0 16px 14px; padding: 8px 10px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); }
-.en-login-challenge { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.en-login-challenge { margin: 0 16px 14px; padding: 8px 10px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.en-rate-limits { display: grid; gap: 8px; margin: 0 16px 14px; }
+.en-rate-limit { margin: 0; padding: 10px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); }
+.en-rate-limit-copy { min-width: 120px; display: grid; gap: 2px; }
 .en-rate-limit progress { flex: 1; min-width: 120px; height: 8px; }
 .en-provider-list { display: grid; }
 .en-provider-row { padding: 14px 16px; border-top: 1px solid var(--en-border); }

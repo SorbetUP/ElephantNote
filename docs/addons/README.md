@@ -1,21 +1,37 @@
 # ElephantNote Addon SDK v1
 
-ElephantNote external addons are user-installable `.enaddon` packages. Version 1 deliberately exposes a small capability-based API instead of internal Vue, Pinia, Muya or Tauri objects.
+ElephantNote external addons are user-installable `.enaddon` packages. API v1 exposes a deliberately small capability-based surface instead of internal Vue, Pinia, Muya or Tauri objects.
 
-## Addons included with ElephantNote
+## Built-in addons
 
-ElephantNote includes four built-in addons that use the same manager and contribution contracts as the addon platform:
+ElephantNote ships four compiled addons:
 
-- **Daily Notes**, enabled by default, creates `Daily/YYYY-MM-DD.md` without overwriting an existing note;
-- **Quick Capture**, enabled by default, creates unique timestamped notes under `Inbox/`;
-- **Vault Overview**, enabled by default, builds `Reports/Vault Overview.md` from the real Markdown index and resolved wiki links;
-- **Addon Inspector**, disabled by default, demonstrates developer-oriented action, settings and sidebar contributions.
+- **Daily Notes** creates a linked daily workspace with focus, tasks, notes and end-of-day review sections;
+- **Quick Capture** creates timestamped `Inbox/` notes with an explicit `unprocessed` state;
+- **Vault Overview** generates graph coverage, connected-note and orphan-note reports;
+- **Addon Inspector** is a disabled-by-default developer reference for actions, settings and sidebar contributions.
 
-Built-in addons are compiled with ElephantNote and do not require Community Addons mode. Their commands can be run from **Settings → Addons**. See `BUILTIN_ADDONS.md` for the detailed catalogue.
+Built-in addons do not require Community Addons mode.
 
-## Per-vault addon storage
+## Official catalogue
 
-Every initialized vault contains a hidden addon directory:
+The application loads its official catalogue from the dedicated `addon-catalog` branch. The branch contains only catalogue metadata and addon sources.
+
+The Rust backend:
+
+1. fetches the fixed catalogue URL;
+2. rejects unsafe or cross-addon paths;
+3. verifies catalogue metadata against the addon manifest;
+4. downloads the declared manifest and Worker entry;
+5. creates a temporary `.enaddon` archive;
+6. passes it through the same package validator used for local files;
+7. installs the addon disabled in the active vault.
+
+The application does not accept arbitrary catalogue URLs. See `CATALOG.md`.
+
+## Per-vault storage
+
+Every initialized vault contains:
 
 ```text
 .elephantnote/addons/
@@ -26,7 +42,7 @@ Every initialized vault contains a hidden addon directory:
     └── <addon-id>/storage.json
 ```
 
-External addon installation, enable/disable state, extracted package files and private JSON storage are therefore scoped to the active vault. The `.elephantnote` directory remains hidden from ElephantNote's normal vault explorer.
+Package files, enable state and private addon storage are scoped to the active vault. `.elephantnote` remains hidden from the normal explorer.
 
 ## Package format
 
@@ -40,31 +56,26 @@ example.enaddon
     └── icon.svg
 ```
 
-Current package limits:
+Limits:
 
-- compressed package: 25 MiB maximum;
-- extracted package: 100 MiB maximum;
-- 512 archive entries maximum;
-- JavaScript entry: 5 MiB maximum;
-- symbolic links and archive path traversal are rejected.
+- compressed package: 25 MiB;
+- extracted package: 100 MiB;
+- archive entries: 512;
+- JavaScript entry: 5 MiB;
+- symbolic links and archive traversal are rejected.
 
-External addons are installed disabled. The user reviews their declared capabilities before enabling them.
+External addons are installed disabled.
 
 ## Community Addons mode
 
-Community Addons mode is disabled by default. Before any external addon can execute, the user must explicitly check the risk acknowledgement in **Settings → Addons** and enable Community Addons.
+Community Addons mode is disabled by default and requires explicit risk acknowledgement. Turning it off stops every external addon without uninstalling packages or deleting their private data.
 
-The acknowledgement states that third-party addons can be unsafe, contain bugs, modify permitted notes or transmit permitted data, and that ElephantNote cannot guarantee the safety of every package. This consent is persisted on the device.
+Worker isolation and permission checks reduce risk but do not prove that third-party code is safe. Users should review the publisher, source and requested capabilities.
 
-Turning Community Addons mode off immediately stops every running external addon. Installed packages and their private storage remain available in the active vault, but they cannot execute. At application startup, an addon previously marked as enabled is not restarted unless Community Addons mode is still enabled.
-
-The acknowledgement is a safety boundary, not a claim that an addon is safe. Users should still review the package author, source and requested capabilities.
-
-## Minimal manifest
+## Manifest
 
 ```json
 {
-  "$schema": "../../../docs/addons/manifest.schema.json",
   "id": "com.example.hello",
   "name": "Hello Notes",
   "version": "1.0.0",
@@ -78,41 +89,46 @@ The acknowledgement is a safety boundary, not a claim that an addon is safe. Use
     "commands": true,
     "storage": false,
     "notes": {
-      "read": [],
+      "read": ["Inbox/**"],
       "write": ["Generated/**"]
     },
     "network": {
       "hosts": []
     }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "com.example.hello.generate",
+        "title": "Generate hello note"
+      }
+    ]
   }
 }
 ```
 
-Addon identifiers must use lowercase ASCII letters, numbers, dots, dashes or underscores. Command identifiers must start with the addon identifier followed by a dot.
+Addon identifiers use lowercase ASCII letters, numbers, dots, dashes or underscores. Command identifiers must start with the addon identifier followed by a dot.
 
 ## Entry contract
 
-The entry file runs in a dedicated Web Worker. It must assign an addon definition to `self.elephantAddon`.
+The entry runs in a dedicated Web Worker and assigns `self.elephantAddon`.
 
 ```js
 self.elephantAddon = {
   activate(api) {
     return api.commands.register({
-      id: 'com.example.hello.create-note',
-      title: 'Create hello note',
+      id: 'com.example.hello.generate',
+      title: 'Generate hello note',
       async run() {
         await api.notes.write('Generated/Hello.md', '# Hello\n')
+        return { path: 'Generated/Hello.md' }
       }
     })
-  },
-
-  async deactivate(api) {
-    // Optional cleanup that requires asynchronous work.
   }
 }
 ```
 
-`activate()` may return a cleanup function. Registered contributions are also removed automatically when the addon is disabled.
+`activate()` may return a cleanup function. Contributions are removed automatically when an addon is disabled.
 
 ## API v1
 
@@ -131,52 +147,61 @@ Requires `permissions.commands: true`.
 ```js
 const unregister = api.commands.register({
   id: 'com.example.addon.refresh',
-  title: 'Refresh generated note',
-  description: 'Fetch and regenerate the note.',
+  title: 'Refresh generated report',
   async run(payload) {
-    return { ok: true }
+    return { ok: true, payload }
   }
 })
 ```
 
+The Addons settings page runs commands without a payload. Other internal invocation surfaces may provide one.
+
 ### Notes
 
-Every path is relative to the active vault and checked against the manifest scopes.
+All paths are relative to the active vault and checked in Rust against the manifest scopes.
 
 ```js
-const note = await api.notes.read('Finance/AAPL.md')
-await api.notes.write('Finance/AAPL.md', '# AAPL\n')
+const entries = await api.notes.list('Inbox')
+const note = await api.notes.read(entries[0].path)
+await api.notes.write('Generated/Report.md', '# Report\n')
 ```
 
-Scopes can target one file, a directory tree, or the whole vault:
+`notes.list(prefix)`:
+
+- requires a matching read scope;
+- returns only Markdown files;
+- does not follow symbolic links;
+- excludes hidden files and directories, including `.elephantnote`;
+- is limited to 1,000 notes and 64 directory levels;
+- returns `path`, `size` and `modifiedAt` metadata.
+
+Scopes can target a file, a directory tree, or the whole vault:
 
 ```json
 {
-  "read": ["Reference/README.md", "Research/**"],
+  "read": ["Reference/README.md", "Inbox/**"],
   "write": ["Generated/**"]
 }
 ```
 
-`*` grants access to all relative paths and should be avoided unless genuinely necessary.
+`*` grants access to every visible relative path and should be avoided.
 
 ### HTTPS
 
-The Worker has no direct `fetch`, `WebSocket`, `XMLHttpRequest` or Tauri bridge. Network access goes through the Rust broker.
+The Worker has no direct `fetch`, `WebSocket`, `XMLHttpRequest` or Tauri bridge. Requests use the Rust broker.
 
 ```js
 const response = await api.http.request({
   url: 'https://api.example.com/data',
   method: 'GET',
-  headers: {
-    Accept: 'application/json'
-  }
+  headers: { Accept: 'application/json' }
 })
 
 if (!response.ok) throw new Error(`HTTP ${response.status}`)
 const data = JSON.parse(response.body)
 ```
 
-Every initial hostname must be declared exactly or with a subdomain wildcard:
+Every hostname must be declared exactly or with a subdomain wildcard:
 
 ```json
 {
@@ -184,70 +209,75 @@ Every initial hostname must be declared exactly or with a subdomain wildcard:
 }
 ```
 
-Only HTTPS is accepted. The response body is limited to 5 MiB and requests time out after 30 seconds.
+The broker:
 
-The current preview broker still follows a limited number of redirects. Consequently, network permissions are not yet considered production-hardened: redirect targets, DNS resolution to private addresses and localhost access must be blocked before community network addons can be enabled by default. Until that hardening lands, install and enable only reviewed packages from trusted authors.
+- accepts HTTPS on port 443 only;
+- rejects URL credentials;
+- resolves the hostname and pins the request to a checked public address;
+- blocks loopback, private, link-local, multicast, documentation and other special-use addresses;
+- disables automatic redirects and revalidates every GET redirect;
+- permits at most five redirects;
+- limits request bodies to 1 MiB and responses to 5 MiB;
+- applies a 30-second request timeout.
 
 ### Private storage
 
-Requires `permissions.storage: true`. Storage is namespaced by addon and stored in the active vault under `.elephantnote/addons/data/<addon-id>/storage.json`.
+Requires `permissions.storage: true`.
 
 ```js
-await api.storage.set('settings', { symbol: 'AAPL' })
+await api.storage.set('settings', { symbols: ['AAPL'] })
 const settings = await api.storage.get('settings')
 const allValues = await api.storage.entries()
 await api.storage.remove('settings')
 ```
 
-The current storage quota is 1 MiB per addon.
+Storage is namespaced under `.elephantnote/addons/data/<addon-id>/storage.json` and limited to 1 MiB per addon.
 
 ## Worker isolation
 
 External addons do not receive:
 
 - the DOM;
-- Vue or Pinia instances;
-- the application router or private services;
+- Vue or Pinia;
+- the router or private application services;
 - Muya internals;
 - direct filesystem APIs;
-- the Tauri command bridge;
+- the Tauri bridge;
 - direct browser networking APIs.
 
-All privileged operations are checked again in Rust. Worker isolation protects the main interface from crashes and blocks accidental access to application internals, but community code must still be treated as third-party code and reviewed before installation.
+All privileged operations are checked again in Rust.
 
 ## Lifecycle and failures
 
-- vault initialization creates `.elephantnote/addons`;
-- installation validates and extracts into a staging directory inside the active vault;
-- a package update replaces the previous package with rollback on registry failure;
-- Community Addons consent is required before activation and before startup restoration;
-- disabling Community Addons stops all running external addons;
-- activation has a 10-second timeout;
-- addon commands have a 30-second timeout;
+- installation validates and extracts into a staging directory;
+- package replacement uses rollback if registry persistence fails;
+- Community Addons consent is checked before activation and startup restoration;
+- activation timeout: 10 seconds;
+- command timeout: 60 seconds;
 - a timed-out Worker is terminated;
-- activation errors are displayed in Settings → Addons;
-- per-addon enable/disable state is persisted in the vault and global Community Addons consent is persisted on the device.
+- activation and command errors are surfaced in Settings and diagnostics logs.
 
 ## Build an addon
 
 ```bash
-cd path/to/addon
-zip -r example.enaddon manifest.json main.js assets
+node build/scripts/package-addon.mjs path/to/addon build/my-addon.enaddon
 ```
 
-Then use **Settings → Addons → Install from file**. Review the requested capabilities, acknowledge the Community Addons warning, enable Community Addons mode and then enable the package.
+Then use **Settings → Addons → Install from file**.
 
-See `examples/addons/finance-notes` for a complete HTTP → transform → Markdown pipeline.
+Validate a catalogue checkout with:
+
+```bash
+node build/scripts/validate-addon-catalog.mjs path/to/addon-catalog
+```
 
 ## Deliberately not implemented in API v1
 
-The following capabilities are not represented as working features yet:
-
-- scheduled/background jobs;
+- scheduled or background jobs;
 - Python or WASM compute runtimes;
 - custom panels and iframe views;
 - Muya editor extensions;
-- secrets/keychain access;
-- signed marketplace packages and automatic updates.
+- secrets or keychain access;
+- publisher signatures.
 
-They should be added as explicit, permissioned API versions rather than by exposing application internals.
+These capabilities must be added through explicit, permissioned API versions rather than by exposing application internals.

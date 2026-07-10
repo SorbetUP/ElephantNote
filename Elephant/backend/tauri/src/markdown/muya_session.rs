@@ -12,6 +12,7 @@ use super::muya_engine::{
     MuyaEditorTransaction, MuyaSelection,
 };
 use super::muya_parity::{apply_parity_command, MuyaParityCommand};
+use super::muya_surface::{apply_surface_command, MuyaSurfaceCommand};
 use super::muya_ui::{execute_ui_query, MuyaUiQuery};
 
 const HISTORY_LIMIT: usize = 100;
@@ -206,6 +207,17 @@ pub fn tauri_muya_session_apply_complete(
 ) -> Result<MuyaSessionTransaction, String> {
     session_transaction(&sessions, &editor_id, |state| {
         apply_complete_command(state, command)
+    })
+}
+
+#[tauri::command]
+pub fn tauri_muya_session_apply_surface(
+    sessions: State<'_, MuyaEngineSessions>,
+    editor_id: String,
+    command: MuyaSurfaceCommand,
+) -> Result<MuyaSessionTransaction, String> {
+    session_transaction(&sessions, &editor_id, |state| {
+        apply_surface_command(state, command)
     })
 }
 

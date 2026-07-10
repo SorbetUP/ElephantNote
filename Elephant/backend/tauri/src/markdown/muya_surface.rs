@@ -496,7 +496,10 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(transformed.state.markdown.matches("|  | ").count(), 1);
+        assert_eq!(
+            transformed.state.markdown,
+            "| A |\n| - |\n| 1 |\n\n| B |\n| - |\n| 2 |\n|  |"
+        );
         assert!(transformed
             .state
             .markdown

@@ -1,8 +1,8 @@
 {
   "id": "com.elephantnote.examples.finance-notes",
   "name": "Finance Notes",
-  "version": "0.1.0",
-  "description": "Fetches a current market quote and writes a sourced Markdown note.",
+  "version": "0.2.0",
+  "description": "Builds a sourced multi-asset market dashboard with per-symbol notes and cached fallback data.",
   "author": "ElephantNote",
   "apiVersion": 1,
   "minAppVersion": "0.18.9",
@@ -26,7 +26,7 @@
     "commands": [
       {
         "id": "com.elephantnote.examples.finance-notes.refresh",
-        "title": "Refresh finance note"
+        "title": "Refresh market dashboard"
       }
     ]
   }

@@ -34,20 +34,14 @@ const clamp = (value, minimum, maximum) => Math.min(Math.max(value, minimum), ma
 export const muyaIndexCursorToSelection = (markdown, cursor) => {
   const source = asMarkdown(markdown)
   const lines = source.split('\n')
-
   const pointToOffset = (point) => {
-    if (!point || !Number.isInteger(point.line) || !Number.isInteger(point.ch)) {
-      return source.length
-    }
+    if (!point || !Number.isInteger(point.line) || !Number.isInteger(point.ch)) return source.length
     const line = clamp(point.line, 0, Math.max(0, lines.length - 1))
     const ch = clamp(point.ch, 0, lines[line]?.length || 0)
     let offset = ch
-    for (let index = 0; index < line; index += 1) {
-      offset += lines[index].length + 1
-    }
+    for (let index = 0; index < line; index += 1) offset += lines[index].length + 1
     return offset
   }
-
   return {
     anchor: pointToOffset(cursor?.anchor),
     focus: pointToOffset(cursor?.focus)
@@ -57,7 +51,6 @@ export const muyaIndexCursorToSelection = (markdown, cursor) => {
 export const selectionToMuyaIndexCursor = (markdown, selection) => {
   const source = asMarkdown(markdown)
   const lines = source.split('\n')
-
   const offsetToPoint = (value) => {
     let remaining = clamp(Number.isInteger(value) ? value : source.length, 0, source.length)
     for (let line = 0; line < lines.length; line += 1) {
@@ -69,10 +62,50 @@ export const selectionToMuyaIndexCursor = (markdown, selection) => {
     const line = Math.max(0, lines.length - 1)
     return { line, ch: lines[line]?.length || 0 }
   }
-
   return {
     anchor: offsetToPoint(selection?.anchor),
     focus: offsetToPoint(selection?.focus)
+  }
+}
+
+const unavailableFacade = (status) => {
+  const unavailable = async() => {
+    throw new Error('The canonical Rust Muya engine is unavailable.')
+  }
+  return {
+    active: false,
+    status,
+    ready: Promise.resolve(status),
+    sync: unavailable,
+    reset: unavailable,
+    flush: unavailable,
+    undo: unavailable,
+    redo: unavailable,
+    setSelection: unavailable,
+    toggleInline: unavailable,
+    transformBlock: unavailable,
+    applyOperation: unavailable,
+    keyboardRule: unavailable,
+    tableCommand: unavailable,
+    upsertFootnote: unavailable,
+    insertTemplate: unavailable,
+    pasteClipboard: unavailable,
+    commitComposition: unavailable,
+    replaceRange: unavailable,
+    deleteBackward: unavailable,
+    deleteForward: unavailable,
+    insertParagraph: unavailable,
+    duplicateBlock: unavailable,
+    deleteBlock: unavailable,
+    moveBlock: unavailable,
+    indentSelection: unavailable,
+    toggleTask: unavailable,
+    setCodeLanguage: unavailable,
+    insertLink: unavailable,
+    removeLink: unavailable,
+    searchReplace: unavailable,
+    selectAll: unavailable,
+    destroy: () => {}
   }
 }
 
@@ -88,27 +121,7 @@ export const createRealMuyaRustMirror = ({
   if (!bridgeAvailable) {
     status.reason = 'tauri-invoke-unavailable'
     publishStatus(target, status)
-    return {
-      active: false,
-      status,
-      ready: Promise.resolve(status),
-      sync: async() => status,
-      reset: async() => status,
-      flush: async() => status,
-      undo: async() => null,
-      redo: async() => null,
-      setSelection: async() => null,
-      toggleInline: async() => null,
-      transformBlock: async() => null,
-      applyOperation: async() => null,
-      keyboardRule: async() => null,
-      tableCommand: async() => null,
-      upsertFootnote: async() => null,
-      insertTemplate: async() => null,
-      pasteClipboard: async() => null,
-      commitComposition: async() => null,
-      destroy: () => {}
-    }
+    return unavailableFacade(status)
   }
 
   const client = createRustMuyaEngineClient({
@@ -132,9 +145,7 @@ export const createRealMuyaRustMirror = ({
     status.phase = 'error'
     status.error = error instanceof Error ? error.message : String(error)
     publishStatus(target, status)
-    logger.error?.('[elephantnote:muya-rust] core failed', {
-      error: status.error
-    })
+    logger.error?.('[elephantnote:muya-rust] core failed', { error: status.error })
   }
 
   const refreshStatus = async(reason) => {
@@ -143,7 +154,6 @@ export const createRealMuyaRustMirror = ({
     if (jsonState.type !== 'muya-json-state' || !Array.isArray(jsonState.blocks)) {
       throw new Error('Rust Muya core returned an invalid document tree.')
     }
-
     lastValidatedMarkdown = state.markdown
     lastValidatedSelection = { ...state.selection }
     status.phase = 'ready'
@@ -152,12 +162,8 @@ export const createRealMuyaRustMirror = ({
     status.markdownLength = state.markdown.length
     status.blocks = jsonState.blocks.length
     status.selection = { ...state.selection }
-    status.undoDepth = Number.isInteger(state.undoDepth)
-      ? state.undoDepth
-      : (Array.isArray(state.undoStack) ? state.undoStack.length : 0)
-    status.redoDepth = Number.isInteger(state.redoDepth)
-      ? state.redoDepth
-      : (Array.isArray(state.redoStack) ? state.redoStack.length : 0)
+    status.undoDepth = Number.isInteger(state.undoDepth) ? state.undoDepth : 0
+    status.redoDepth = Number.isInteger(state.redoDepth) ? state.redoDepth : 0
     status.error = ''
     publishStatus(target, status)
     return status
@@ -168,31 +174,16 @@ export const createRealMuyaRustMirror = ({
       ? await client.create(markdown)
       : (await client.syncDocument(markdown, selection, continueGroup)).state
     initialized = true
-
     if (state.markdown !== markdown) {
       throw new Error('Rust Muya core changed the Markdown during synchronization.')
     }
-
     if (state.selection.anchor !== selection.anchor || state.selection.focus !== selection.focus) {
-      const selectionTransaction = await client.setSelection(selection.anchor, selection.focus)
-      if (selectionTransaction.state.markdown !== markdown) {
+      const transaction = await client.setSelection(selection.anchor, selection.focus)
+      if (transaction.state.markdown !== markdown) {
         throw new Error('Rust Muya core changed Markdown while synchronizing selection.')
       }
     }
-
     await refreshStatus(reason)
-    logger.debug?.('[elephantnote:muya-rust] synchronized', {
-      kind,
-      reason,
-      sessionId: client.sessionId,
-      markdownLength: status.markdownLength,
-      blocks: status.blocks,
-      revision: status.revision,
-      selection: status.selection,
-      undoDepth: status.undoDepth,
-      redoDepth: status.redoDepth,
-      continueGroup
-    })
     return status
   }
 
@@ -204,9 +195,7 @@ export const createRealMuyaRustMirror = ({
     const sameSelection = lastValidatedSelection &&
       next.selection.anchor === lastValidatedSelection.anchor &&
       next.selection.focus === lastValidatedSelection.focus
-    if (next.kind === 'reset' || !sameMarkdown || !sameSelection) {
-      await validate(next)
-    }
+    if (next.kind === 'reset' || !sameMarkdown || !sameSelection) await validate(next)
     if (!destroyed && pending) await drain()
   }
 
@@ -214,7 +203,10 @@ export const createRealMuyaRustMirror = ({
     if (draining || destroyed) return draining || Promise.resolve(status)
     draining = Promise.resolve()
       .then(drain)
-      .catch(fail)
+      .catch((error) => {
+        fail(error)
+        throw error
+      })
       .finally(() => {
         draining = null
         if (pending && !destroyed) ensureDrain()
@@ -223,7 +215,7 @@ export const createRealMuyaRustMirror = ({
   }
 
   const enqueue = (kind, markdown, reason, options = {}) => {
-    if (destroyed) return Promise.resolve(status)
+    if (destroyed) return Promise.reject(new Error('Rust Muya session is destroyed.'))
     const source = asMarkdown(markdown)
     const selection = options.selection || muyaIndexCursorToSelection(source, options.muyaIndexCursor)
     pending = {
@@ -236,12 +228,8 @@ export const createRealMuyaRustMirror = ({
     return ensureDrain()
   }
 
-  const sync = (markdown, reason = 'change', options = {}) => (
-    enqueue('sync', markdown, reason, options)
-  )
-  const reset = (markdown, reason = 'set-markdown', options = {}) => (
-    enqueue('reset', markdown, reason, options)
-  )
+  const sync = (markdown, reason = 'change', options = {}) => enqueue('sync', markdown, reason, options)
+  const reset = (markdown, reason = 'set-markdown', options = {}) => enqueue('reset', markdown, reason, options)
 
   const flush = async() => {
     if (draining) await draining
@@ -258,7 +246,7 @@ export const createRealMuyaRustMirror = ({
         if (status.phase === 'error') {
           throw new Error(status.error || 'Rust Muya core is in an error state.')
         }
-        if (destroyed || !initialized) return null
+        if (destroyed || !initialized) throw new Error('Rust Muya session is not initialized.')
         const transaction = await operation(client)
         await refreshStatus(reason)
         logger.info?.(`[elephantnote:muya-rust] ${reason}`, {
@@ -272,6 +260,9 @@ export const createRealMuyaRustMirror = ({
       })
     return commandQueue
   }
+
+  const command = (reason, callback) => () => applyCommand(reason, callback)
+  const commandWith = (reason, callback) => (...args) => applyCommand(reason, (engine) => callback(engine, ...args))
 
   const ready = reset(initialMarkdown, 'initial')
   target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-core'
@@ -288,54 +279,60 @@ export const createRealMuyaRustMirror = ({
     sync,
     reset,
     flush,
-    undo: () => applyCommand('rust-undo', (engine) => engine.undo()),
-    redo: () => applyCommand('rust-redo', (engine) => engine.redo()),
-    setSelection: (anchor, focus = anchor) => applyCommand(
-      'rust-selection',
-      (engine) => engine.setSelection(anchor, focus)
-    ),
-    toggleInline: (marker) => applyCommand(
-      `rust-inline-${String(marker)}`,
-      (engine) => engine.toggleInline(String(marker))
-    ),
-    transformBlock: (kind) => applyCommand(
-      `rust-block-${String(kind)}`,
-      (engine) => engine.transformBlock(String(kind))
-    ),
-    applyOperation: (operation) => applyCommand(
-      `rust-operation-${String(operation?.type || 'unknown')}`,
-      (engine) => engine.applyOperation(operation)
-    ),
-    keyboardRule: (key, options = {}) => applyCommand(
-      `rust-keyboard-${String(key).toLowerCase()}`,
-      (engine) => engine.keyboardRule(String(key), options)
-    ),
-    tableCommand: (action, index = 0) => applyCommand(
-      `rust-table-${String(action)}`,
-      (engine) => engine.tableCommand(String(action), index)
-    ),
-    upsertFootnote: (label, text = '') => applyCommand(
-      'rust-footnote-upsert',
-      (engine) => engine.upsertFootnote(String(label), String(text))
-    ),
-    insertTemplate: (id) => applyCommand(
-      `rust-template-${String(id)}`,
-      (engine) => engine.insertTemplate(String(id))
-    ),
-    pasteClipboard: (html = '', text = '') => applyCommand(
-      'rust-rich-paste',
-      (engine) => engine.pasteClipboard(String(html), String(text))
-    ),
-    commitComposition: (selection, text) => applyCommand(
-      'rust-ime-commit',
-      (engine) => engine.commitComposition(selection, String(text))
-    ),
-    get state() {
-      return client.state
-    },
-    get sessionId() {
-      return client.sessionId
-    },
+    undo: command('rust-undo', (engine) => engine.undo()),
+    redo: command('rust-redo', (engine) => engine.redo()),
+    setSelection: commandWith('rust-selection', (engine, anchor, focus = anchor) => (
+      engine.setSelection(anchor, focus)
+    )),
+    toggleInline: commandWith('rust-inline', (engine, marker) => engine.toggleInline(String(marker))),
+    transformBlock: commandWith('rust-block', (engine, kind) => engine.transformBlock(String(kind))),
+    applyOperation: commandWith('rust-operation', (engine, operation) => engine.applyOperation(operation)),
+    keyboardRule: commandWith('rust-keyboard', (engine, key, options = {}) => (
+      engine.keyboardRule(String(key), options)
+    )),
+    tableCommand: commandWith('rust-table', (engine, action, index = 0) => (
+      engine.tableCommand(String(action), index)
+    )),
+    upsertFootnote: commandWith('rust-footnote-upsert', (engine, label, text = '') => (
+      engine.upsertFootnote(String(label), String(text))
+    )),
+    insertTemplate: commandWith('rust-template', (engine, id) => engine.insertTemplate(String(id))),
+    pasteClipboard: commandWith('rust-rich-paste', (engine, html = '', text = '') => (
+      engine.pasteClipboard(String(html), String(text))
+    )),
+    commitComposition: commandWith('rust-ime-commit', (engine, selection, text) => (
+      engine.commitComposition(selection, String(text))
+    )),
+    replaceRange: commandWith('rust-replace-range', (engine, start, end, text = '') => (
+      engine.replaceRange(start, end, text)
+    )),
+    deleteBackward: command('rust-delete-backward', (engine) => engine.completeDeleteBackward()),
+    deleteForward: command('rust-delete-forward', (engine) => engine.completeDeleteForward()),
+    insertParagraph: commandWith('rust-insert-paragraph', (engine, location, text = '') => (
+      engine.insertParagraph(location, text)
+    )),
+    duplicateBlock: command('rust-duplicate-block', (engine) => engine.duplicateBlock()),
+    deleteBlock: command('rust-delete-block', (engine) => engine.deleteBlock()),
+    moveBlock: commandWith('rust-move-block', (engine, fromStart, fromEnd, targetOffset) => (
+      engine.moveBlock(fromStart, fromEnd, targetOffset)
+    )),
+    indentSelection: commandWith('rust-indent-selection', (engine, options = {}) => (
+      engine.indentSelection(options)
+    )),
+    toggleTask: command('rust-toggle-task', (engine) => engine.toggleTask()),
+    setCodeLanguage: commandWith('rust-code-language', (engine, language) => (
+      engine.setCodeLanguage(language)
+    )),
+    insertLink: commandWith('rust-insert-link', (engine, url, title = '') => (
+      engine.insertLink(url, title)
+    )),
+    removeLink: command('rust-remove-link', (engine) => engine.removeLink()),
+    searchReplace: commandWith('rust-search-replace', (engine, options) => (
+      engine.searchReplace(options)
+    )),
+    selectAll: command('rust-select-all', (engine) => engine.selectAll()),
+    get state() { return client.state },
+    get sessionId() { return client.sessionId },
     destroy: () => {
       destroyed = true
       pending = null
@@ -347,9 +344,7 @@ export const createRealMuyaRustMirror = ({
       if (target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ === 'muya-ui-rust-core') {
         delete target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__
       }
-      if (target.__ELEPHANT_MUYA_RUST_MIRROR__) {
-        delete target.__ELEPHANT_MUYA_RUST_MIRROR__
-      }
+      delete target.__ELEPHANT_MUYA_RUST_MIRROR__
     }
   }
 }

@@ -1,0 +1,33 @@
+{
+  "id": "com.elephantnote.github-release-watcher",
+  "name": "GitHub Release Watcher",
+  "version": "1.0.0",
+  "description": "Tracks releases for configured GitHub repositories and writes a Markdown dashboard.",
+  "author": "ElephantNote",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": {
+    "type": "javascript-worker",
+    "entry": "main.js"
+  },
+  "permissions": {
+    "commands": true,
+    "storage": true,
+    "notes": {
+      "read": ["GitHub Releases/config.json"],
+      "write": ["GitHub Releases/**"]
+    },
+    "network": {
+      "hosts": ["api.github.com"]
+    }
+  },
+  "activationEvents": ["onStartup"],
+  "contributes": {
+    "commands": [
+      {
+        "id": "com.elephantnote.github-release-watcher.refresh",
+        "title": "Refresh GitHub releases"
+      }
+    ]
+  }
+}

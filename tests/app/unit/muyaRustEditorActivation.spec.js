@@ -57,6 +57,19 @@ describe('real Muya editor activation', () => {
     expect(client).toContain("'tauri_muya_engine_sync_document'")
   })
 
+  it('routes undo and redo through Rust and restores the result with real Muya', () => {
+    const adapter = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js')
+    const mirror = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js')
+
+    expect(adapter).toContain("return this.__applyElephantRustHistory('undo')")
+    expect(adapter).toContain("return this.__applyElephantRustHistory('redo')")
+    expect(adapter).toContain('selectionToMuyaIndexCursor(state.markdown, state.selection)')
+    expect(adapter).toContain('super.setMarkdown(state.markdown, undefined, true, muyaIndexCursor)')
+    expect(adapter).toContain("this.__elephantRustMirror?.reset(markdown, 'set-markdown'")
+    expect(mirror).toContain("undo: () => applyHistory('undo')")
+    expect(mirror).toContain("redo: () => applyHistory('redo')")
+  })
+
   it('keeps every Muya UI plugin on the untouched original submodule path', () => {
     const editor = read('Elephant/frontend/src/renderer/src/components/editorWithTabs/editor.vue')
     const viteConfig = read('vite.tauri.config.js')

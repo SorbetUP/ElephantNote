@@ -23,16 +23,6 @@ jobs:
           ref: addon-catalog
           path: addon-catalog-source
 
-      - name: Install Linux Tauri dependencies
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
-
       - uses: ./.github/actions/setup
 
       - name: Validate official addon catalogue
@@ -71,25 +61,6 @@ jobs:
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
             2>&1 | tee addon-tests.txt
 
-      - name: Compile and test Rust addon security modules
-        shell: bash
-        run: |
-          set -o pipefail
-          : > addon-rust-tests.txt
-          for test_filter in \
-            addon_catalog::tests \
-            addon_runtime_access::tests \
-            addon_note_access::tests \
-            addon_http_access::tests
-          do
-            cargo test \
-              --manifest-path Elephant/backend/tauri/Cargo.toml \
-              --no-default-features \
-              "$test_filter" \
-              --lib \
-              2>&1 | tee -a addon-rust-tests.txt
-          done
-
       - name: Package every official catalogue addon
         shell: bash
         run: |
@@ -112,7 +83,7 @@ jobs:
           set -o pipefail
           pnpm tauri:web:build 2>&1 | tee addon-build.txt
 
-      - name: Upload addon validation and installable packages
+      - name: Upload functional validation and installable packages
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -121,8 +92,51 @@ jobs:
             addon-catalog-tests.txt
             addon-functional-tests.txt
             addon-tests.txt
-            addon-rust-tests.txt
             addon-package.txt
             addon-build.txt
             build/addons/*.enaddon
+          if-no-files-found: ignore
+
+  validate-addon-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Tauri dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - uses: ./.github/actions/setup
+
+      - name: Compile and test Rust addon security modules
+        shell: bash
+        run: |
+          set -o pipefail
+          : > addon-rust-tests.txt
+          for test_filter in \
+            addon_catalog::tests \
+            addon_runtime_access::tests \
+            addon_note_access::tests \
+            addon_http_access::tests
+          do
+            cargo test \
+              --manifest-path Elephant/backend/tauri/Cargo.toml \
+              --no-default-features \
+              "$test_filter" \
+              --lib \
+              2>&1 | tee -a addon-rust-tests.txt
+          done
+
+      - name: Upload Rust validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: addon-platform-rust-validation
+          path: addon-rust-tests.txt
           if-no-files-found: ignore

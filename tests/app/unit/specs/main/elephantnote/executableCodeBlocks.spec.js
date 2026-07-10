@@ -78,6 +78,17 @@ describe('native executable fenced code blocks', () => {
     expect(styles).not.toContain('position: absolute;\n  top:')
   })
 
+  it('shows a theme-safe Copy glyph and suppresses Muya code-fence decoration', () => {
+    const styles = readStyles()
+
+    expect(styles).toContain('pre.en-code-native-shell > .ag-code-copy > .icon::before')
+    expect(styles).toContain('pre.en-code-native-shell > .ag-code-copy > .icon::after')
+    expect(styles).toContain('pre.en-code-native-shell > .ag-code-copy > .icon > .icon-inner')
+    expect(styles).toContain('display: none !important;')
+    expect(styles).toContain('pre.en-code-native-shell.ag-active.ag-fence-code > code::before')
+    expect(styles).toContain('content: none !important;')
+  })
+
   it('keeps output state through custom-element reconnect and prunes deletion separately', () => {
     const runtime = readRuntime()
     const lifecycle = readLifecycle()

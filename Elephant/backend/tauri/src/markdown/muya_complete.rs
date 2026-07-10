@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use super::muya_engine::{
-    apply_command, apply_commands, utf16_len, utf16_to_byte_index, MuyaEditorCommand,
+    apply_command, utf16_len, utf16_to_byte_index, MuyaEditorCommand, MuyaEditorSnapshot,
     MuyaEditorState, MuyaEditorTransaction, MuyaSelection,
 };
+
+const HISTORY_LIMIT: usize = 100;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
@@ -69,7 +71,7 @@ pub fn apply_complete_command(
 ) -> Result<MuyaEditorTransaction, String> {
     match command {
         MuyaCompleteCommand::ReplaceRange { start, end, text } => {
-            apply_replace_range(state, start, end, text)
+            replace_range(state, start, end, &text)
         }
         MuyaCompleteCommand::DeleteBackward => {
             apply_command(state, MuyaEditorCommand::DeleteBackward)
@@ -123,61 +125,73 @@ pub fn apply_complete_command(
     }
 }
 
-fn apply_replace_range(
+fn commit_document(
+    mut state: MuyaEditorState,
+    markdown: String,
+    selection: MuyaSelection,
+) -> MuyaEditorTransaction {
+    let before_markdown = state.markdown.clone();
+    let before_selection = state.selection;
+    let maximum = utf16_len(&markdown);
+    let next_selection = MuyaSelection {
+        anchor: selection.anchor.min(maximum),
+        focus: selection.focus.min(maximum),
+    };
+
+    if before_markdown != markdown {
+        while state.undo_stack.len() >= HISTORY_LIMIT {
+            state.undo_stack.remove(0);
+        }
+        state.undo_stack.push(MuyaEditorSnapshot {
+            markdown: before_markdown.clone(),
+            selection: before_selection,
+        });
+        state.redo_stack.clear();
+        state.markdown = markdown;
+        state.selection = next_selection;
+        state.revision = state.revision.saturating_add(1);
+    } else {
+        state.selection = next_selection;
+    }
+
+    MuyaEditorTransaction {
+        document_changed: state.markdown != before_markdown,
+        selection_changed: state.selection != before_selection,
+        state,
+    }
+}
+
+fn replace_range(
     state: MuyaEditorState,
     start: usize,
     end: usize,
-    text: String,
+    text: &str,
 ) -> Result<MuyaEditorTransaction, String> {
     let maximum = utf16_len(&state.markdown);
-    let start = start.min(maximum);
-    let end = end.min(maximum);
-    apply_commands(
+    let start_utf16 = start.min(end).min(maximum);
+    let end_utf16 = start.max(end).min(maximum);
+    let start_byte = utf16_to_byte_index(&state.markdown, start_utf16);
+    let end_byte = utf16_to_byte_index(&state.markdown, end_utf16);
+    let mut markdown = state.markdown.clone();
+    markdown.replace_range(start_byte..end_byte, text);
+    let cursor = start_utf16 + utf16_len(text);
+    Ok(commit_document(
         state,
-        vec![
-            MuyaEditorCommand::SetSelection {
-                anchor: start,
-                focus: end,
-            },
-            MuyaEditorCommand::ReplaceSelection { text },
-        ],
-    )
+        markdown,
+        MuyaSelection::collapsed(cursor),
+    ))
 }
 
-fn replace_document(
-    state: MuyaEditorState,
-    markdown: String,
-    selection: MuyaSelection,
-) -> Result<MuyaEditorTransaction, String> {
-    if state.markdown == markdown {
-        return apply_command(
-            state,
-            MuyaEditorCommand::SetSelection {
-                anchor: selection.anchor,
-                focus: selection.focus,
-            },
-        );
-    }
-    let end = utf16_len(&state.markdown);
-    apply_commands(
-        state,
-        vec![
-            MuyaEditorCommand::SetSelection {
-                anchor: 0,
-                focus: end,
-            },
-            MuyaEditorCommand::ReplaceSelection { text: markdown },
-            MuyaEditorCommand::SetSelection {
-                anchor: selection.anchor,
-                focus: selection.focus,
-            },
-        ],
-    )
+fn byte_to_utf16(markdown: &str, byte_index: usize) -> usize {
+    markdown[..byte_index.min(markdown.len())]
+        .encode_utf16()
+        .count()
 }
 
 fn selected_line_range(markdown: &str, selection: MuyaSelection) -> (usize, usize) {
-    let start = utf16_to_byte_index(markdown, selection.start().min(utf16_len(markdown)));
-    let end = utf16_to_byte_index(markdown, selection.end().min(utf16_len(markdown)));
+    let maximum = utf16_len(markdown);
+    let start = utf16_to_byte_index(markdown, selection.start().min(maximum));
+    let end = utf16_to_byte_index(markdown, selection.end().min(maximum));
     let line_start = markdown[..start]
         .rfind('\n')
         .map_or(0, |index| index + 1);
@@ -185,12 +199,6 @@ fn selected_line_range(markdown: &str, selection: MuyaSelection) -> (usize, usiz
         .find('\n')
         .map_or(markdown.len(), |offset| end + offset);
     (line_start, line_end)
-}
-
-fn byte_to_utf16(markdown: &str, byte_index: usize) -> usize {
-    markdown[..byte_index.min(markdown.len())]
-        .encode_utf16()
-        .count()
 }
 
 fn insert_paragraph(
@@ -213,7 +221,11 @@ fn insert_paragraph(
     let mut markdown = state.markdown.clone();
     markdown.insert_str(insert_at, &insertion);
     let cursor = byte_to_utf16(&markdown, cursor_byte);
-    replace_document(state, markdown, MuyaSelection::collapsed(cursor))
+    Ok(commit_document(
+        state,
+        markdown,
+        MuyaSelection::collapsed(cursor),
+    ))
 }
 
 fn duplicate_selected_lines(state: MuyaEditorState) -> Result<MuyaEditorTransaction, String> {
@@ -222,8 +234,13 @@ fn duplicate_selected_lines(state: MuyaEditorState) -> Result<MuyaEditorTransact
     let mut markdown = state.markdown.clone();
     let insertion = format!("\n{block}");
     markdown.insert_str(end, &insertion);
-    let cursor = byte_to_utf16(&markdown, end + insertion.len());
-    replace_document(state, markdown, MuyaSelection::collapsed(cursor))
+    let anchor = byte_to_utf16(&markdown, end + 1);
+    let focus = anchor + utf16_len(&block);
+    Ok(commit_document(
+        state,
+        markdown,
+        MuyaSelection { anchor, focus },
+    ))
 }
 
 fn delete_selected_lines(state: MuyaEditorState) -> Result<MuyaEditorTransaction, String> {
@@ -236,7 +253,11 @@ fn delete_selected_lines(state: MuyaEditorState) -> Result<MuyaEditorTransaction
     let mut markdown = state.markdown.clone();
     markdown.replace_range(start..end, "");
     let cursor = byte_to_utf16(&markdown, start.min(markdown.len()));
-    replace_document(state, markdown, MuyaSelection::collapsed(cursor))
+    Ok(commit_document(
+        state,
+        markdown,
+        MuyaSelection::collapsed(cursor),
+    ))
 }
 
 fn move_range(
@@ -246,10 +267,10 @@ fn move_range(
     target: usize,
 ) -> Result<MuyaEditorTransaction, String> {
     let maximum = utf16_len(&state.markdown);
-    let start_utf16 = from_start.min(maximum);
-    let end_utf16 = from_end.min(maximum);
-    let start = utf16_to_byte_index(&state.markdown, start_utf16.min(end_utf16));
-    let end = utf16_to_byte_index(&state.markdown, start_utf16.max(end_utf16));
+    let start_utf16 = from_start.min(from_end).min(maximum);
+    let end_utf16 = from_start.max(from_end).min(maximum);
+    let start = utf16_to_byte_index(&state.markdown, start_utf16);
+    let end = utf16_to_byte_index(&state.markdown, end_utf16);
     let target = utf16_to_byte_index(&state.markdown, target.min(maximum));
     if start == end || (target >= start && target <= end) {
         return Ok(MuyaEditorTransaction {
@@ -258,6 +279,7 @@ fn move_range(
             selection_changed: false,
         });
     }
+
     let fragment = state.markdown[start..end].to_string();
     let mut markdown = state.markdown.clone();
     markdown.replace_range(start..end, "");
@@ -269,7 +291,11 @@ fn move_range(
     markdown.insert_str(adjusted_target, &fragment);
     let anchor = byte_to_utf16(&markdown, adjusted_target);
     let focus = anchor + utf16_len(&fragment);
-    replace_document(state, markdown, MuyaSelection { anchor, focus })
+    Ok(commit_document(
+        state,
+        markdown,
+        MuyaSelection { anchor, focus },
+    ))
 }
 
 fn indent_selected_lines(
@@ -280,7 +306,6 @@ fn indent_selected_lines(
     let (start, end) = selected_line_range(&state.markdown, state.selection);
     let selected = &state.markdown[start..end];
     let indent = " ".repeat(width);
-    let mut changed_prefix = 0usize;
     let transformed = selected
         .split('\n')
         .map(|line| {
@@ -290,10 +315,8 @@ fn indent_selected_lines(
                     .take(width)
                     .take_while(|character| *character == ' ')
                     .count();
-                changed_prefix = changed_prefix.max(removable);
                 line[removable..].to_string()
             } else {
-                changed_prefix = width;
                 format!("{indent}{line}")
             }
         })
@@ -301,29 +324,22 @@ fn indent_selected_lines(
         .join("\n");
     let mut markdown = state.markdown.clone();
     markdown.replace_range(start..end, &transformed);
-    let original_start_utf16 = byte_to_utf16(&state.markdown, start);
-    let anchor = if outdent {
-        state.selection.anchor.saturating_sub(changed_prefix)
-    } else {
-        state.selection.anchor.saturating_add(width)
-    };
-    let focus_delta = transformed.encode_utf16().count() as isize - selected.encode_utf16().count() as isize;
-    let focus = if focus_delta >= 0 {
-        state.selection.focus.saturating_add(focus_delta as usize)
-    } else {
-        state.selection.focus.saturating_sub((-focus_delta) as usize)
-    };
-    let selection = MuyaSelection {
-        anchor: anchor.max(original_start_utf16),
-        focus,
-    };
-    replace_document(state, markdown, selection)
+    let anchor = byte_to_utf16(&markdown, start);
+    let focus = anchor + utf16_len(&transformed);
+    Ok(commit_document(
+        state,
+        markdown,
+        MuyaSelection { anchor, focus },
+    ))
 }
 
 fn toggle_task(state: MuyaEditorState) -> Result<MuyaEditorTransaction, String> {
     let (start, end) = selected_line_range(&state.markdown, state.selection);
     let line = &state.markdown[start..end];
-    let indentation = line.len() - line.trim_start_matches([' ', '\t']).len();
+    let indentation = line.len()
+        - line
+            .trim_start_matches(|character| matches!(character, ' ' | '\t'))
+            .len();
     let (prefix, body) = line.split_at(indentation);
     let replacement = if let Some(rest) = body.strip_prefix("- [ ] ") {
         format!("{prefix}- [x] {rest}")
@@ -338,56 +354,77 @@ fn toggle_task(state: MuyaEditorState) -> Result<MuyaEditorTransaction, String> 
     let mut markdown = state.markdown.clone();
     markdown.replace_range(start..end, &replacement);
     let cursor = byte_to_utf16(&markdown, start + replacement.len());
-    replace_document(state, markdown, MuyaSelection::collapsed(cursor))
+    Ok(commit_document(
+        state,
+        markdown,
+        MuyaSelection::collapsed(cursor),
+    ))
 }
 
 fn set_code_language(
     state: MuyaEditorState,
     language: &str,
 ) -> Result<MuyaEditorTransaction, String> {
-    let cursor = utf16_to_byte_index(&state.markdown, state.selection.focus);
-    let line_start = state.markdown[..cursor]
-        .rfind('\n')
-        .map_or(0, |index| index + 1);
-    let before = &state.markdown[..line_start];
-    let fence_start = before
-        .rmatch_indices("\n```")
-        .next()
-        .map(|(index, _)| index + 1)
-        .or_else(|| state.markdown.starts_with("```").then_some(0))
-        .or_else(|| {
-            before
-                .rmatch_indices("\n~~~")
-                .next()
-                .map(|(index, _)| index + 1)
-        })
-        .or_else(|| state.markdown.starts_with("~~~").then_some(0))
-        .ok_or_else(|| "cursor is not inside a fenced code block".to_string())?;
-    let marker = if state.markdown[fence_start..].starts_with("~~~") {
-        "~~~"
-    } else {
-        "```"
-    };
-    let header_end = state.markdown[fence_start..]
-        .find('\n')
-        .map_or(state.markdown.len(), |offset| fence_start + offset);
-    let closing = state.markdown[header_end..]
-        .find(&format!("\n{marker}"))
-        .map(|offset| header_end + offset + 1)
-        .ok_or_else(|| "fenced code block has no closing marker".to_string())?;
-    if cursor > closing {
-        return Err("cursor is not inside the selected fenced code block".to_string());
+    if language.contains('\r') || language.contains('\n') || language.contains('`') {
+        return Err("invalid fenced-code language".to_string());
     }
+    let cursor = utf16_to_byte_index(&state.markdown, state.selection.focus);
+    let lines = state.markdown.split_inclusive('\n').collect::<Vec<_>>();
+    let mut offset = 0usize;
+    let mut active: Option<(usize, &str)> = None;
+    let mut target: Option<(usize, usize, &str)> = None;
+
+    for line in lines {
+        let line_end = offset + line.trim_end_matches('\n').len();
+        let trimmed = line.trim_start();
+        let leading = line.len() - trimmed.len();
+        let marker = if trimmed.starts_with("```") {
+            Some("```")
+        } else if trimmed.starts_with("~~~") {
+            Some("~~~")
+        } else {
+            None
+        };
+        if let Some(marker) = marker {
+            if active.is_some_and(|(_, open_marker)| open_marker == marker) {
+                if let Some((header_start, open_marker)) = active.take() {
+                    if cursor >= header_start && cursor <= line_end {
+                        let header_end = state.markdown[header_start..]
+                            .find('\n')
+                            .map_or(state.markdown.len(), |relative| header_start + relative);
+                        target = Some((header_start, header_end, open_marker));
+                        break;
+                    }
+                }
+            } else if active.is_none() {
+                active = Some((offset + leading, marker));
+            }
+        }
+        offset += line.len();
+    }
+
+    if target.is_none() {
+        if let Some((header_start, marker)) = active {
+            if cursor >= header_start {
+                let header_end = state.markdown[header_start..]
+                    .find('\n')
+                    .map_or(state.markdown.len(), |relative| header_start + relative);
+                target = Some((header_start, header_end, marker));
+            }
+        }
+    }
+
+    let (header_start, header_end, marker) =
+        target.ok_or_else(|| "cursor is not inside a fenced code block".to_string())?;
     let header = format!("{marker}{}", language.trim());
     let mut markdown = state.markdown.clone();
-    markdown.replace_range(fence_start..header_end, &header);
-    let delta = header.len() as isize - (header_end - fence_start) as isize;
-    let focus = if delta >= 0 {
-        state.selection.focus.saturating_add(delta as usize)
-    } else {
-        state.selection.focus.saturating_sub((-delta) as usize)
-    };
-    replace_document(state, markdown, MuyaSelection::collapsed(focus))
+    markdown.replace_range(header_start..header_end, &header);
+    let cursor = byte_to_utf16(&markdown, header_start + header.len());
+    Ok(commit_document(
+        state,
+        markdown,
+        MuyaSelection::collapsed(cursor),
+    ))
 }
 
 fn insert_link(
@@ -395,15 +432,17 @@ fn insert_link(
     url: &str,
     title: &str,
 ) -> Result<MuyaEditorTransaction, String> {
-    if url.trim().is_empty() || url.contains(['\r', '\n']) {
+    if url.trim().is_empty() || url.contains('\r') || url.contains('\n') {
         return Err("Muya link URL must be a non-empty single line".to_string());
     }
-    let start = utf16_to_byte_index(&state.markdown, state.selection.start());
-    let end = utf16_to_byte_index(&state.markdown, state.selection.end());
+    let start_utf16 = state.selection.start();
+    let end_utf16 = state.selection.end();
+    let start = utf16_to_byte_index(&state.markdown, start_utf16);
+    let end = utf16_to_byte_index(&state.markdown, end_utf16);
     let label = if start == end {
-        url
+        url.to_string()
     } else {
-        &state.markdown[start..end]
+        state.markdown[start..end].to_string()
     };
     let suffix = if title.trim().is_empty() {
         String::new()
@@ -411,12 +450,7 @@ fn insert_link(
         format!(" \"{}\"", title.replace('"', "\\\""))
     };
     let replacement = format!("[{label}]({url}{suffix})");
-    apply_replace_range(
-        state,
-        byte_to_utf16(&state.markdown, start),
-        byte_to_utf16(&state.markdown, end),
-        replacement,
-    )
+    replace_range(state, start_utf16, end_utf16, &replacement)
 }
 
 fn remove_link(state: MuyaEditorState) -> Result<MuyaEditorTransaction, String> {
@@ -436,12 +470,9 @@ fn remove_link(state: MuyaEditorState) -> Result<MuyaEditorTransaction, String> 
         return Err("no Markdown link at selection".to_string());
     }
     let label = state.markdown[open + 1..close_label].to_string();
-    apply_replace_range(
-        state,
-        byte_to_utf16(&state.markdown, open),
-        byte_to_utf16(&state.markdown, close + 1),
-        label,
-    )
+    let start_utf16 = byte_to_utf16(&state.markdown, open);
+    let end_utf16 = byte_to_utf16(&state.markdown, close + 1);
+    replace_range(state, start_utf16, end_utf16, &label)
 }
 
 fn search_replace(
@@ -455,34 +486,12 @@ fn search_replace(
     if query.is_empty() {
         return Err("Muya search query must not be empty".to_string());
     }
-    let haystack = if case_sensitive {
-        state.markdown.clone()
+    let matches = find_matches(&state.markdown, query, case_sensitive, whole_word);
+    let matches = if replace_all {
+        matches
     } else {
-        state.markdown.to_lowercase()
+        matches.into_iter().take(1).collect()
     };
-    let needle = if case_sensitive {
-        query.to_string()
-    } else {
-        query.to_lowercase()
-    };
-    let mut matches = Vec::new();
-    let mut offset = 0usize;
-    while let Some(relative) = haystack[offset..].find(&needle) {
-        let start = offset + relative;
-        let end = start + needle.len();
-        let valid = !whole_word
-            || (is_word_boundary(&state.markdown, start) && is_word_boundary(&state.markdown, end));
-        if valid {
-            matches.push((start, end));
-            if !replace_all {
-                break;
-            }
-        }
-        offset = end.max(start + 1);
-        if offset >= haystack.len() {
-            break;
-        }
-    }
     if matches.is_empty() {
         return Ok(MuyaEditorTransaction {
             state,
@@ -490,23 +499,72 @@ fn search_replace(
             selection_changed: false,
         });
     }
+
     let mut markdown = state.markdown.clone();
     for (start, end) in matches.iter().rev() {
         markdown.replace_range(*start..*end, replacement);
     }
-    let (first_start, _) = matches[0];
-    let selection = MuyaSelection {
-        anchor: byte_to_utf16(&markdown, first_start),
-        focus: byte_to_utf16(&markdown, first_start + replacement.len()),
-    };
-    replace_document(state, markdown, selection)
+    let first_start = matches[0].0;
+    let anchor = byte_to_utf16(&markdown, first_start);
+    let focus = anchor + utf16_len(replacement);
+    Ok(commit_document(
+        state,
+        markdown,
+        MuyaSelection { anchor, focus },
+    ))
 }
 
-fn is_word_boundary(text: &str, byte_index: usize) -> bool {
-    let before = text[..byte_index.min(text.len())].chars().next_back();
-    let after = text[byte_index.min(text.len())..].chars().next();
-    before.map_or(true, |character| !character.is_alphanumeric() && character != '_')
-        || after.map_or(true, |character| !character.is_alphanumeric() && character != '_')
+pub fn find_matches(
+    text: &str,
+    query: &str,
+    case_sensitive: bool,
+    whole_word: bool,
+) -> Vec<(usize, usize)> {
+    if query.is_empty() {
+        return Vec::new();
+    }
+    let boundaries = text
+        .char_indices()
+        .map(|(index, _)| index)
+        .chain(std::iter::once(text.len()))
+        .collect::<Vec<_>>();
+    let query_chars = query.chars().count();
+    if query_chars == 0 || boundaries.len() <= query_chars {
+        return Vec::new();
+    }
+
+    let mut matches = Vec::new();
+    for index in 0..boundaries.len() - query_chars {
+        let start = boundaries[index];
+        let end = boundaries[index + query_chars];
+        let candidate = &text[start..end];
+        let equal = if case_sensitive {
+            candidate == query
+        } else {
+            candidate.to_lowercase() == query.to_lowercase()
+        };
+        if equal
+            && (!whole_word
+                || (is_start_boundary(text, start) && is_end_boundary(text, end)))
+        {
+            matches.push((start, end));
+        }
+    }
+    matches
+}
+
+fn is_start_boundary(text: &str, byte_index: usize) -> bool {
+    text[..byte_index.min(text.len())]
+        .chars()
+        .next_back()
+        .is_none_or(|character| !character.is_alphanumeric() && character != '_')
+}
+
+fn is_end_boundary(text: &str, byte_index: usize) -> bool {
+    text[byte_index.min(text.len())..]
+        .chars()
+        .next()
+        .is_none_or(|character| !character.is_alphanumeric() && character != '_')
 }
 
 #[cfg(test)]
@@ -520,13 +578,14 @@ mod tests {
     }
 
     #[test]
-    fn duplicates_and_deletes_complete_lines() {
+    fn duplicates_and_deletes_complete_lines_atomically() {
         let duplicated = apply_complete_command(
             state("alpha\nbeta", 1, 1),
             MuyaCompleteCommand::DuplicateBlock,
         )
         .unwrap();
         assert_eq!(duplicated.state.markdown, "alpha\nalpha\nbeta");
+        assert_eq!(duplicated.state.undo_stack.len(), 1);
         let deleted = apply_complete_command(
             duplicated.state,
             MuyaCompleteCommand::DeleteBlock,
@@ -558,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn toggles_tasks_and_replaces_search_matches() {
+    fn toggles_tasks_and_replaces_unicode_case_insensitively() {
         let task = apply_complete_command(
             state("item", 0, 0),
             MuyaCompleteCommand::ToggleTask,
@@ -566,17 +625,17 @@ mod tests {
         .unwrap();
         assert_eq!(task.state.markdown, "- [ ] item");
         let replaced = apply_complete_command(
-            state("One one ONE", 0, 0),
+            state("Été été", 0, 0),
             MuyaCompleteCommand::SearchReplace {
-                query: "one".to_string(),
-                replacement: "two".to_string(),
+                query: "été".to_string(),
+                replacement: "hiver".to_string(),
                 replace_all: true,
                 case_sensitive: false,
                 whole_word: true,
             },
         )
         .unwrap();
-        assert_eq!(replaced.state.markdown, "two two two");
+        assert_eq!(replaced.state.markdown, "hiver hiver");
     }
 
     #[test]
@@ -597,7 +656,7 @@ mod tests {
     }
 
     #[test]
-    fn moves_ranges_without_losing_unicode() {
+    fn moves_ranges_without_losing_utf16_offsets() {
         let moved = apply_complete_command(
             state("😀A B", 0, 0),
             MuyaCompleteCommand::MoveBlock {

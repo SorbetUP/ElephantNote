@@ -18,7 +18,7 @@
     <sigma-canvas v-else-if="!hasOpenNote && store.activeWorkspaceView === 'canvas'" />
     <calendar-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'calendar'" />
     <site-preview-panel v-if="!hasOpenNote && store.activeWorkspaceView === 'notes'" />
-    <note-editor-host
+    <rust-note-editor-host
       v-if="hasOpenNote"
       class="en-main-editor"
     />
@@ -30,7 +30,7 @@ import { computed } from 'vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import LibraryToolbar from '../library/LibraryToolbar.vue'
 import LibraryGrid from '../library/LibraryGrid.vue'
-import NoteEditorHost from '../editor/NoteEditorHost.vue'
+import RustNoteEditorHost from '../editor/RustNoteEditorHost.vue'
 import SitePreviewPanel from '../../sitePreview/SitePreviewPanel.vue'
 import DashboardView from '../views/DashboardView.vue'
 import WikiView from '../views/WikiView.vue'

@@ -20,9 +20,12 @@
       <top-vault-bar :sidebar-visible="sidebarVisible" />
       <div class="en-layout">
         <icon-rail
+          :active-addon-view-id="activeAddonViewId"
           @open-settings="openSettings"
           @search="openSearch"
           @toggle-sidebar="toggleSidebar"
+          @open-addon-view="openAddonView"
+          @close-addon-view="closeAddonView"
         />
         <div
           class="en-body"
@@ -30,7 +33,10 @@
         >
           <sidebar-nav
             v-if="sidebarVisible"
+            :active-addon-view-id="activeAddonViewId"
             @search="openSearch"
+            @open-addon-view="openAddonView"
+            @close-addon-view="closeAddonView"
           />
           <div
             v-if="sidebarVisible"
@@ -39,7 +45,11 @@
             aria-orientation="vertical"
             @pointerdown="startResize"
           />
-          <main-content class="en-body-main" />
+          <main-content
+            class="en-body-main"
+            :active-addon-view-id="activeAddonViewId"
+            @close-addon-view="closeAddonView"
+          />
         </div>
       </div>
     </div>
@@ -52,6 +62,7 @@
       :vaults="store.vaults"
       :active-vault-name="store.activeVault?.name || 'No vault'"
       :active-vault-path="store.activeVault?.path || ''"
+      :initial-section="settingsInitialSection"
       @close="isSettingsOpen = false"
       @update-theme="setTheme"
       @update-sidebar-width="setSidebarWidth"
@@ -91,6 +102,8 @@ const searchStore = useSearchStore()
 const navigationStore = useNavigationStore()
 const canvasStore = useCanvasStore()
 const isSettingsOpen = ref(false)
+const settingsInitialSection = ref('appearance')
+const activeAddonViewId = ref('')
 const theme = ref(normalizeThemeId(window.localStorage.getItem(ELEPHANTNOTE_THEME_STORAGE_KEY)))
 const sidebarWidth = ref(232)
 const sidebarVisible = ref(true)
@@ -115,12 +128,29 @@ const applyThemeVariables = () => {
   root.dataset.elephantnoteTheme = theme.value
 }
 
-const openSettings = () => {
+const openSettings = (section = 'appearance') => {
+  settingsInitialSection.value = typeof section === 'string' && section ? section : 'appearance'
   isSettingsOpen.value = true
+}
+
+const handleOpenSettingsEvent = (event) => {
+  openSettings(event?.detail?.section || 'appearance')
 }
 
 const openSearch = () => {
   searchStore.open()
+}
+
+const openAddonView = (viewId) => {
+  const normalized = typeof viewId === 'string' ? viewId.trim() : ''
+  if (!normalized) return
+  store.closeNote()
+  store.activeWorkspaceView = 'notes'
+  activeAddonViewId.value = normalized
+}
+
+const closeAddonView = () => {
+  activeAddonViewId.value = ''
 }
 
 const toggleSidebar = () => {
@@ -137,6 +167,18 @@ watch(theme, (mode) => {
   canvasStore.setAppMode(getThemeMode(mode))
   applyThemeVariables()
 }, { immediate: true })
+
+watch(
+  () => [store.activeWorkspaceView, store.openedNotePath, store.activeVaultId],
+  ([workspaceView, openedNotePath]) => {
+    if (workspaceView === 'calendar') {
+      store.setWorkspaceView('notes', { record: false })
+      activeAddonViewId.value = ''
+      return
+    }
+    if (openedNotePath || workspaceView !== 'notes') activeAddonViewId.value = ''
+  }
+)
 
 provide('elephantnoteTheme', theme)
 provide('setElephantnoteTheme', setTheme)
@@ -247,6 +289,7 @@ const handleAiConfigChanged = (event) => {
 onMounted(() => {
   window.addEventListener('keydown', handleShortcut)
   window.addEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
+  window.addEventListener('elephantnote:open-settings', handleOpenSettingsEvent)
   window.tauri.ipcRenderer.on('mt::tab-saved', handleTabSaved)
   setTheme(theme.value)
   const storedWidth = Number(window.localStorage.getItem('elephantnote:sidebarWidth'))
@@ -265,6 +308,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleShortcut)
   window.removeEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
+  window.removeEventListener('elephantnote:open-settings', handleOpenSettingsEvent)
   if (sidebarResizeFrame) {
     window.cancelAnimationFrame(sidebarResizeFrame)
     sidebarResizeFrame = null

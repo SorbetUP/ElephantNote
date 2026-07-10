@@ -28,6 +28,34 @@ const normalizeObject = (value) => {
   return { ...value }
 }
 
+const normalizePermissions = (value) => {
+  if (value == null || typeof value !== 'object') return Object.freeze([])
+  if (Array.isArray(value)) return Object.freeze(normalizeStringArray(value))
+  const permissions = normalizeObject(value)
+  const notes = normalizeObject(permissions.notes)
+  const network = normalizeObject(permissions.network)
+  return Object.freeze({
+    notes: Object.freeze({
+      read: Object.freeze(normalizeStringArray(notes.read)),
+      write: Object.freeze(normalizeStringArray(notes.write))
+    }),
+    network: Object.freeze({
+      hosts: Object.freeze(normalizeStringArray(network.hosts))
+    }),
+    storage: permissions.storage === true,
+    commands: permissions.commands === true,
+    views: permissions.views === true
+  })
+}
+
+const normalizeRuntime = (value) => {
+  const runtime = normalizeObject(value)
+  const type = normalizeString(runtime.type)
+  const entry = normalizeString(runtime.entry)
+  if (!type && !entry) return Object.freeze({})
+  return Object.freeze({ type, entry })
+}
+
 export const normalizeAddonManifest = (manifest = {}) => {
   if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
     throw new TypeError('Addon manifest must be an object')
@@ -57,8 +85,13 @@ export const normalizeAddonManifest = (manifest = {}) => {
     author: normalizeString(manifest.author),
     apiVersion,
     minAppVersion: normalizeString(manifest.minAppVersion),
-    permissions: Object.freeze(normalizeStringArray(manifest.permissions)),
+    permissions: normalizePermissions(manifest.permissions),
     contributes: Object.freeze(normalizeObject(manifest.contributes)),
+    activationEvents: Object.freeze(normalizeStringArray(manifest.activationEvents)),
+    runtime: normalizeRuntime(manifest.runtime),
+    source: normalizeString(manifest.source, 'builtin'),
+    packageHash: normalizeString(manifest.packageHash),
+    installedAt: normalizeString(manifest.installedAt),
     defaultEnabled: manifest.defaultEnabled === true
   })
 }

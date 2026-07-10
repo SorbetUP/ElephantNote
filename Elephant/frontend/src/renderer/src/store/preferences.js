@@ -14,6 +14,8 @@ export const usePreferencesStore = defineStore('preferences', {
     autoSave: false,
     autoSaveDelay: 5000,
     pinnedCardHalo: false,
+    iconRailOrder: ['dashboard', 'wiki', 'graph', 'models', 'search', 'chat'],
+    iconRailHidden: [],
     showTagHashInEditor: true,
     noteEditorMargin: 24,
     titleBarStyle: 'custom',
@@ -169,7 +171,7 @@ export const usePreferencesStore = defineStore('preferences', {
         setLanguage(value)
       }
 
-// Persist to the runtime-backed preference store.
+      // Persist to the runtime-backed preference store.
       persistPortablePreference(type, value)
       if (isPortableRuntime()) {
         return

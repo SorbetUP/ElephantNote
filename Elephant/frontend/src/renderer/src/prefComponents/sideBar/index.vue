@@ -28,30 +28,15 @@
     </section>
     <section class="category">
       <div
-        v-for="c of getCategory()"
-        :key="c.name"
+        v-for="c of categories"
+        :key="c.label"
         class="item"
-        :class="{ active: c.label === currentCategory }"
+        :class="{ active: c.label === currentCategory, featured: c.featured }"
+        :data-settings-category="c.label"
         @click="handleCategoryItemClick(c)"
       >
         <component :is="c.icon" />
         <span>{{ c.name }}</span>
-      </div>
-      <div
-        class="item"
-        :class="{ active: currentCategory === 'rclone' }"
-        @click="handleCategoryItemClick(syncCategory)"
-      >
-        <Search width="28" height="28" />
-        <span>Sync</span>
-      </div>
-      <div
-        class="item"
-        :class="{ active: currentCategory === 'addons' }"
-        @click="handleCategoryItemClick(addonsCategory)"
-      >
-        <Search width="28" height="28" />
-        <span>Addons</span>
       </div>
     </section>
   </div>
@@ -68,11 +53,10 @@ const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 
+const categories = ref(getCategory())
 const currentCategory = ref('general')
 const restaurants = ref([])
 const state = ref('')
-const syncCategory = { name: 'Sync', label: 'rclone', path: '/preference/rclone' }
-const addonsCategory = { name: 'Addons', label: 'addons', path: '/preference/addons' }
 
 watch(
   () => route.name,
@@ -93,7 +77,6 @@ const querySearch = (queryString, cb) => {
 const createFilter = (queryString) => {
   const q = queryString.toLowerCase()
   return (restaurant) => {
-    // Support both the current language and English keywords
     const fields = [
       restaurant.preference,
       restaurant.category,
@@ -114,53 +97,52 @@ const loadAll = () => [
     preference: 'Link this device or phone',
     preferenceEn: 'Link this device or phone',
     routeCategory: 'rclone'
-  },
-  {
-    category: 'Addons',
-    categoryEn: 'Addons',
-    preference: 'Manage installed addons',
-    preferenceEn: 'Manage installed addons',
-    routeCategory: 'addons'
   }
 ]
 
 const handleSelect = (item) => {
-  // Use a safe routeCategory to avoid a blank screen caused by invalid categories
   const target =
     item && item.routeCategory ? item.routeCategory : (item?.category || 'general').toLowerCase()
-  router.push({ path: `/preference/${target}` }).catch(() => {})
+  router.push({ path: `/preference/${target}` }).catch((error) => {
+    console.error('[settings-sidebar] search navigation failed', { target, error })
+  })
 }
 
 const handleCategoryItemClick = (item) => {
+  console.info('[settings-sidebar] navigate', { label: item.label, path: item.path })
   if (item.label !== currentCategory.value) {
-    router.push({
-      path: item.path
-    }).catch(() => {})
+    router.push({ path: item.path }).catch((error) => {
+      console.error('[settings-sidebar] navigation failed', { item, error })
+    })
   }
 }
 
 const onIpcCategoryChange = (event, category) => {
   const validRoute =
-    category && router.getRoutes().findIndex((route) => route.path.endsWith(`/${category}`)) !== -1
+    category && router.getRoutes().findIndex((registeredRoute) => registeredRoute.path.endsWith(`/${category}`)) !== -1
   if (validRoute) {
-    router.push({
-      path: `/preference/${category}`
+    router.push({ path: `/preference/${category}` }).catch((error) => {
+      console.error('[settings-sidebar] ipc navigation failed', { category, error })
     })
   }
 }
 
 onMounted(() => {
+  categories.value = getCategory()
   restaurants.value = loadAll()
   if (route.name) {
     currentCategory.value = route.name
   }
+  console.info('[settings-sidebar] mounted', {
+    route: route.fullPath,
+    categories: categories.value.map(({ label, path }) => ({ label, path }))
+  })
   window.tauri.ipcRenderer.on('settings::change-tab', onIpcCategoryChange)
-  // Listen for language changes and refresh the search index
   const languageChanged = () => {
+    categories.value = getCategory()
     restaurants.value = loadAll()
   }
   window.addEventListener('languageChanged', languageChanged)
-  // Remove listener on unmount
   onUnmounted(() => window.removeEventListener('languageChanged', languageChanged))
 })
 
@@ -237,7 +219,10 @@ onUnmounted(() => {
 }
 .category {
   -webkit-app-region: no-drag;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+
   & .item {
     width: 100%;
     height: 50px;
@@ -251,6 +236,11 @@ onUnmounted(() => {
     cursor: pointer;
     position: relative;
     user-select: none;
+
+    &.featured {
+      font-weight: 600;
+    }
+
     & > svg {
       width: 28px;
       height: 28px;

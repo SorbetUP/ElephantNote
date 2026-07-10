@@ -24,16 +24,22 @@ describe('builtin addons', () => {
     expect(manager.getContributions(ADDON_EXTENSION_POINTS.settingsSections)).toHaveLength(1)
   })
 
-  it('runs the addon inspector open action', async () => {
-    const pushed = []
-    const manager = new ElephantAddonManager({
-      router: { push: (path) => pushed.push(path) }
-    })
+  it('opens the Addons section in the active settings panel', async () => {
+    const openedSections = []
+    const handleOpenSettings = (event) => openedSections.push(event.detail?.section)
+    globalThis.addEventListener('elephantnote:open-settings', handleOpenSettings)
 
-    manager.register(addonInspectorAddon)
-    await manager.enable('elephant.addon-inspector')
-    await manager.runAction('elephant.addon-inspector.open')
+    try {
+      const manager = new ElephantAddonManager()
+      manager.register(addonInspectorAddon)
+      await manager.enable('elephant.addon-inspector')
 
-    expect(pushed).toEqual(['/preference/addons'])
+      const result = await manager.runAction('elephant.addon-inspector.open')
+
+      expect(openedSections).toEqual(['addons'])
+      expect(result).toEqual({ section: 'addons' })
+    } finally {
+      globalThis.removeEventListener('elephantnote:open-settings', handleOpenSettings)
+    }
   })
 })

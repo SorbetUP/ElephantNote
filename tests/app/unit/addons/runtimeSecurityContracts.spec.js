@@ -1,0 +1,53 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+const root = process.cwd()
+const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+
+describe('external addon runtime security contracts', () => {
+  it('routes note listing through a dedicated permission-scoped Tauri command', () => {
+    const runtime = read('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js')
+    const notes = read('Elephant/backend/tauri/src/addon_note_access.rs')
+    const lib = read('Elephant/backend/tauri/src/lib_min.rs')
+
+    expect(runtime).toContain("list: (prefix) => rpc('notes.list', { prefix })")
+    expect(runtime).toContain("invoke('tauri_addons_notes_list', { addonId, prefix })")
+    expect(runtime).toContain("if (method === 'notes.list')")
+    expect(notes).toContain('MAX_LISTED_NOTES: usize = 1_000')
+    expect(notes).toContain('MAX_DIRECTORY_DEPTH: usize = 64')
+    expect(notes).toContain('is_hidden_component(relative)')
+    expect(notes).toContain('file_type.is_symlink()')
+    expect(notes).toContain('scope_matches(scope, &relative_path)')
+    expect(lib).toContain('addon_note_access::tauri_addons_notes_list')
+  })
+
+  it('routes Worker network requests through the hardened broker', () => {
+    const runtime = read('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js')
+    const http = read('Elephant/backend/tauri/src/addon_http_access.rs')
+    const lib = read('Elephant/backend/tauri/src/lib_min.rs')
+
+    expect(runtime).toContain("invoke('tauri_addons_http_request', { addonId, params })")
+    expect(runtime).toContain("if (method === 'http.request')")
+    expect(http).toContain('Network access to a local or private address')
+    expect(http).toContain('External addon HTTPS requests are restricted to port 443')
+    expect(http).toContain('redirect(reqwest::redirect::Policy::none())')
+    expect(http).toContain('resolve(host, address)')
+    expect(http).toContain('MAX_HTTP_RESPONSE_BYTES: u64 = 5 * 1024 * 1024')
+    expect(lib).toContain('addon_http_access::tauri_addons_http_request')
+  })
+
+  it('shares registry and permission logic instead of duplicating it', () => {
+    const shared = read('Elephant/backend/tauri/src/addon_runtime_access.rs')
+    const notes = read('Elephant/backend/tauri/src/addon_note_access.rs')
+    const http = read('Elephant/backend/tauri/src/addon_http_access.rs')
+
+    expect(shared).toContain('pub fn read_enabled_addon')
+    expect(shared).toContain('pub fn scope_matches')
+    expect(shared).toContain('pub fn host_matches')
+    expect(notes).toContain('addon_runtime_access')
+    expect(http).toContain('addon_runtime_access')
+    expect(notes).not.toContain('struct AddonRegistry')
+    expect(http).not.toContain('struct AddonRegistry')
+  })
+})

@@ -1,0 +1,143 @@
+name: Addon Platform Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-addons:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out official addon catalogue
+        uses: actions/checkout@v4
+        with:
+          ref: addon-catalog
+          path: addon-catalog-source
+
+      - uses: ./.github/actions/setup
+
+      - name: Validate official addon catalogue
+        shell: bash
+        run: |
+          set -o pipefail
+          node build/scripts/validate-addon-catalog.mjs addon-catalog-source \
+            2>&1 | tee addon-catalog-tests.txt
+
+      - name: Execute official addon pipelines
+        shell: bash
+        run: |
+          set -o pipefail
+          : > addon-functional-tests.txt
+          node build/scripts/test-official-addons.mjs addon-catalog-source \
+            2>&1 | tee -a addon-functional-tests.txt
+          node build/scripts/test-notion-importer.mjs addon-catalog-source \
+            2>&1 | tee -a addon-functional-tests.txt
+          node build/scripts/test-popular-note-addons.mjs addon-catalog-source \
+            2>&1 | tee -a addon-functional-tests.txt
+          node build/scripts/test-elephant-tasks-v2.mjs addon-catalog-source \
+            2>&1 | tee -a addon-functional-tests.txt
+
+      - name: Run focused addon and settings tests
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules \
+            Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/externalAddonContracts.spec.js \
+            tests/app/unit/addons/addonCatalogContracts.spec.js \
+            tests/app/unit/addons/builtinAddonsQuality.spec.js \
+            tests/app/unit/addons/addonProfiles.spec.js \
+            tests/app/unit/addons/runtimeSecurityContracts.spec.js \
+            tests/app/unit/addons/declarativeViewsContracts.spec.js \
+            tests/app/unit/addons/calendarAndIconRail.spec.js \
+            tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
+            2>&1 | tee addon-tests.txt
+
+      - name: Package every official catalogue addon
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p build/addons
+          : > addon-package.txt
+          for source in addon-catalog-source/addons/*
+          do
+            slug="$(basename "$source")"
+            node build/scripts/package-addon.mjs \
+              "$source" \
+              "build/addons/$slug.enaddon" \
+              2>&1 | tee -a addon-package.txt
+            unzip -t "build/addons/$slug.enaddon"
+          done
+
+      - name: Build Tauri web bundle
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm tauri:web:build 2>&1 | tee addon-build.txt
+
+      - name: Upload functional validation and installable packages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: addon-platform-validation
+          path: |
+            addon-catalog-tests.txt
+            addon-functional-tests.txt
+            addon-tests.txt
+            addon-package.txt
+            addon-build.txt
+            build/addons/*.enaddon
+          if-no-files-found: ignore
+
+  validate-addon-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Tauri dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - uses: ./.github/actions/setup
+
+      - name: Compile and test Rust addon security modules
+        shell: bash
+        run: |
+          set -o pipefail
+          : > addon-rust-tests.txt
+          for test_filter in \
+            addon_catalog::tests \
+            addon_runtime_access::tests \
+            addon_note_access::tests \
+            addon_http_access::tests
+          do
+            cargo test \
+              --manifest-path Elephant/backend/tauri/Cargo.toml \
+              --no-default-features \
+              "$test_filter" \
+              --lib \
+              2>&1 | tee -a addon-rust-tests.txt
+          done
+
+      - name: Upload Rust validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: addon-platform-rust-validation
+          path: addon-rust-tests.txt
+          if-no-files-found: ignore

@@ -18,6 +18,43 @@ permissions:
   contents: read
 
 jobs:
+  rustfmt_apply:
+    name: One-shot Rustfmt for Muya migration
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'feature/rust-muya-editor-core' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-muya-editor-core
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Format Rust sources and push the result
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+          invalid=$(git diff --name-only | grep -Ev '^Elephant/backend/tauri/.*\.rs$' || true)
+          test -z "$invalid"
+          if git diff --quiet; then
+            echo 'Rust sources already formatted.'
+            exit 0
+          fi
+          git config user.name 'ElephantNote CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -- ':(glob)Elephant/backend/tauri/**/*.rs'
+          git commit -m 'style(rust): format final Muya migration'
+          git push origin HEAD:feature/rust-muya-editor-core
+
   quality:
     name: Quality gate
     runs-on: ubuntu-latest

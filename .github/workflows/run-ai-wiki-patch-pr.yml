@@ -88,4 +88,4 @@ jobs:
       - name: Test knowledge core
         run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --nocapture
       - name: Run focused frontend lint
-        run: pnpm exec eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue
+        run: Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue

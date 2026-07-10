@@ -1,0 +1,51 @@
+name: Structured Muya Test Diagnostics
+
+on:
+  push:
+    branches:
+      - feature/rust-muya-editor-core
+    paths:
+      - '.github/workflows/muya-structured-tests-diagnostic.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HUSKY: '0'
+      NODE_ENV: test
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-muya-editor-core
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Run structured Muya contracts
+        continue-on-error: true
+        run: |
+          mkdir -p .github/validation
+          pnpm exec vitest run \
+            tests/app/unit/muyaRustSessionRuntime.spec.js \
+            tests/app/unit/muyaRustStructuredSession.spec.js \
+            tests/app/unit/muyaRealSurfaceRustMirror.spec.js \
+            tests/app/unit/muyaRustEditorActivation.spec.js \
+            --reporter=json \
+            --outputFile=.github/validation/structured-tests-report.json
+
+      - name: Persist report
+        if: always()
+        run: |
+          set -euxo pipefail
+          test -f .github/validation/structured-tests-report.json || echo '{"error":"Vitest did not produce a report"}' > .github/validation/structured-tests-report.json
+          rm .github/workflows/muya-structured-tests-diagnostic.yml
+          git config user.name 'ElephantNote CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'ci: record structured Muya test diagnostics'
+          git push origin HEAD:feature/rust-muya-editor-core

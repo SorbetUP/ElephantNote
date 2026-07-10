@@ -13,7 +13,7 @@ const FRONTMATTER_KEYS = new Set([
   'id'
 ])
 
-const FRONTMATTER_BLOCK_PATTERN = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/
+const FRONTMATTER_BLOCK_PATTERN = /^---[ \t]*\r?\n[\s\S]*?\r?\n[ \t]*---[ \t]*(?:\r?\n|$)/
 const INLINE_FRONTMATTER_PAIR_PATTERN = new RegExp(
   `(?:^|\\s)(?:${Array.from(FRONTMATTER_KEYS).join('|')}):\\s*(?:"[^"]*"|'[^']*'|\\[[^\\]]*\\]|[^\\s]+)`,
   'gi'

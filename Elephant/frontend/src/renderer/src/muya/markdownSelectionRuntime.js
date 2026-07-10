@@ -65,7 +65,7 @@ const rootPointOffset = (root, offset) => {
   const blocks = childBlocks(root)
   const count = Math.max(0, Math.min(Number(offset) || 0, blocks.length))
   return blocks.slice(0, count).reduce((sum, item, index) => (
-    sum + blockMarkdown(item).length + (index < count - 1 ? 2 : 0)
+    sum + blockMarkdown(item).length + (index < blocks.length - 1 ? 2 : 0)
   ), 0)
 }
 

@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: apply-wiki-continuation-head
@@ -39,6 +40,8 @@ jobs:
             patchelf
 
       - name: Extract and run the branch patch
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -70,7 +73,23 @@ jobs:
               raise SystemExit('Extracted patch is not the expected Python script')
           Path('/tmp/apply_auto_wiki_patch.py').write_text(script)
           PY
-          python /tmp/apply_auto_wiki_patch.py
+          set +e
+          python /tmp/apply_auto_wiki_patch.py > /tmp/wiki-patch.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            {
+              echo '### Automatic Wiki patch failure'
+              echo
+              echo '```text'
+              tail -n 100 /tmp/wiki-patch.log
+              echo '```'
+            } > /tmp/wiki-patch-comment.md
+            gh pr comment 37 --repo "$GITHUB_REPOSITORY" --body-file /tmp/wiki-patch-comment.md
+            cat /tmp/wiki-patch.log
+            exit "$status"
+          fi
+          cat /tmp/wiki-patch.log
 
       - name: Format Rust
         run: |

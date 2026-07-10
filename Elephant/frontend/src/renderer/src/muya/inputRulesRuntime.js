@@ -35,9 +35,15 @@ export const applyKeyboardRuleToMarkdown = (markdown = '', key = '', { shiftKey 
 export const handleMuyaKeydown = (runtime, event) => {
   if (!runtime || !event) return false
   if (event.key !== 'Tab' && event.key !== 'Enter') return false
+
+  if (typeof runtime.keyboardRule === 'function') {
+    event.preventDefault?.()
+    return Promise.resolve(runtime.keyboardRule(event.key, { shiftKey: event.shiftKey })).then(() => true)
+  }
+
   const next = applyKeyboardRuleToMarkdown(runtime.markdown, event.key, { shiftKey: event.shiftKey })
   if (next === runtime.markdown) return false
   event.preventDefault?.()
-  runtime.setMarkdown(next, `key:${event.key}`)
-  return true
+  const result = runtime.setMarkdown(next, `key:${event.key}`)
+  return result && typeof result.then === 'function' ? result.then(() => true) : true
 }

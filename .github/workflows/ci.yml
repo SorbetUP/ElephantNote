@@ -23,8 +23,7 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.head_ref == 'feature/rust-muya-editor-core' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.sha == github.sha
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

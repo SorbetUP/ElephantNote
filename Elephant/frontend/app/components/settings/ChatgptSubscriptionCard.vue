@@ -2,27 +2,13 @@
   <section class="en-chatgpt-card">
     <header class="en-chatgpt-header">
       <div class="en-chatgpt-identity">
-        <span
+        <svg
           class="en-chatgpt-logo"
+          viewBox="0 0 24 24"
           aria-hidden="true"
         >
-          <svg
-            viewBox="0 0 24 24"
-            role="img"
-          >
-            <g
-              fill="none"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.65"
-            >
-              <path d="M12 3.1a4.25 4.25 0 0 1 4.12 3.25 4.25 4.25 0 0 1 2.82 6.94 4.25 4.25 0 0 1-1.2 5.63 4.25 4.25 0 0 1-6.05.78 4.25 4.25 0 0 1-5.88-1.84 4.25 4.25 0 0 1-1.32-6.43 4.25 4.25 0 0 1 2.42-6.22A4.25 4.25 0 0 1 12 3.1Z" />
-              <path d="m8.18 7.36 7.64 4.41v4.72L12 18.7l-3.82-2.21v-4.41L12 9.87l3.82 2.21" />
-              <path d="M12 3.1v6.77M18.94 13.29l-5.86 3.39M5.81 17.86l5.87-3.39M4.49 11.43l5.87 3.39M6.91 5.21l5.86 3.39M17.74 18.92l-5.86-3.39" />
-            </g>
-          </svg>
-        </span>
+          <use :href="chatgptLogoHref" />
+        </svg>
         <div class="en-chatgpt-title-line">
           <h4>ChatGPT subscription</h4>
           <span
@@ -57,7 +43,7 @@
           type="button"
           :aria-expanded="usageOpen"
           aria-label="Toggle ChatGPT usage"
-          @click="usageOpen = !usageOpen"
+          @click="toggleUsage"
         >
           <ChevronDown
             :class="{ open: usageOpen }"
@@ -143,39 +129,19 @@
         v-if="resetPickerOpen"
         class="en-chatgpt-reset-picker"
       >
-        <button
+        <div
           v-for="credit in resetCredits"
           :key="credit.id"
           class="en-chatgpt-reset-option"
-          :class="{ selected: selectedResetId === credit.id }"
-          type="button"
-          @click="selectedResetId = credit.id"
         >
-          <span>
-            <strong>{{ credit.title || 'Full reset (Weekly + 5 hr)' }}</strong>
-            <small>{{ creditExpiryLabel(credit.expiresAt) }}</small>
-          </span>
-          <span
-            class="en-chatgpt-radio"
-            aria-hidden="true"
-          ><i /></span>
-        </button>
-        <div class="en-chatgpt-reset-actions">
-          <button
-            class="secondary compact"
-            type="button"
-            :disabled="resetBusy"
-            @click="closeResetPicker"
-          >
-            Cancel
-          </button>
+          <strong>Full reset ({{ resetDateLabel(credit.expiresAt) }})</strong>
           <button
             class="primary compact"
             type="button"
-            :disabled="resetBusy || !selectedResetId"
-            @click="confirmReset"
+            :disabled="resetBusy"
+            @click="useReset(credit.id)"
           >
-            {{ resetBusy ? 'Applying…' : 'Use selected reset' }}
+            {{ resetBusy && activeResetId === credit.id ? 'Applying…' : 'Use' }}
           </button>
         </div>
       </div>
@@ -186,6 +152,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { ChevronDown } from '@lucide/vue'
+import chatgptLogoUrl from './chatgpt-logo.svg'
 
 const props = defineProps({
   status: { type: Object, required: true },
@@ -201,8 +168,9 @@ const props = defineProps({
 const emit = defineEmits(['connect', 'disconnect', 'open-auth', 'consume-reset'])
 const usageOpen = ref(false)
 const resetPickerOpen = ref(false)
-const selectedResetId = ref('')
+const activeResetId = ref('')
 
+const chatgptLogoHref = `${chatgptLogoUrl}#chatgpt-mark`
 const accountName = computed(() => props.status?.account?.displayName || props.status?.account?.email || '')
 const formatTimestamp = (timestamp, options) => {
   const numeric = Number(timestamp)
@@ -213,21 +181,30 @@ const resetLabel = (timestamp) => {
   const value = formatTimestamp(timestamp, { dateStyle: 'medium', timeStyle: 'short' })
   return value ? `Resets ${value}` : 'Reset time unavailable'
 }
-const creditExpiryLabel = (timestamp) => {
-  const value = formatTimestamp(timestamp, { dateStyle: 'medium' })
-  return value ? `Expires ${value}` : 'No expiration date'
+const resetDateLabel = (timestamp) => {
+  const numeric = Number(timestamp)
+  if (!Number.isFinite(numeric) || numeric <= 0) return 'date unavailable'
+  const date = new Date(numeric * 1000)
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  return `${day}/${month}/${date.getFullYear()}`
 }
 const closeResetPicker = () => {
   resetPickerOpen.value = false
-  selectedResetId.value = ''
+  activeResetId.value = ''
 }
 const toggleResetPicker = () => {
   if (resetPickerOpen.value) closeResetPicker()
   else resetPickerOpen.value = true
 }
-const confirmReset = () => {
-  if (!selectedResetId.value || props.resetBusy) return
-  emit('consume-reset', selectedResetId.value)
+const toggleUsage = () => {
+  usageOpen.value = !usageOpen.value
+  if (!usageOpen.value) closeResetPicker()
+}
+const useReset = (creditId) => {
+  if (!creditId || props.resetBusy) return
+  activeResetId.value = creditId
+  emit('consume-reset', creditId)
 }
 
 watch(() => props.status.connected, (connected) => {
@@ -244,10 +221,9 @@ watch(() => props.resetBusy, (busy, previous) => {
 <style scoped>
 .en-chatgpt-card { overflow: hidden; border: 1px solid var(--en-border); border-radius: 14px; background: var(--en-surface); }
 .en-chatgpt-header { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; }
-.en-chatgpt-identity, .en-chatgpt-header-actions, .en-chatgpt-title-line, .en-chatgpt-reset-bar, .en-chatgpt-reset-actions { display: flex; align-items: center; }
+.en-chatgpt-identity, .en-chatgpt-header-actions, .en-chatgpt-title-line, .en-chatgpt-reset-bar { display: flex; align-items: center; }
 .en-chatgpt-identity { min-width: 0; gap: 12px; }
-.en-chatgpt-logo { display: grid; place-items: center; flex: 0 0 auto; width: 38px; height: 38px; color: var(--en-text); }
-.en-chatgpt-logo svg { width: 30px; height: 30px; }
+.en-chatgpt-logo { flex: 0 0 auto; width: 30px; height: 30px; color: var(--en-text); }
 .en-chatgpt-title-line { min-width: 0; flex-wrap: wrap; gap: 7px 12px; }
 .en-chatgpt-title-line h4 { margin: 0; font-size: 14px; }
 .en-chatgpt-account { overflow: hidden; max-width: 320px; color: var(--en-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
@@ -264,20 +240,15 @@ watch(() => props.resetBusy, (busy, previous) => {
 .en-chatgpt-limit { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(180px, 1.4fr) auto; align-items: center; gap: 14px; min-height: 62px; border-top: 1px solid var(--en-border); }
 .en-chatgpt-limit:first-child { border-top: 0; }
 .en-chatgpt-limit-copy { min-width: 0; display: grid; gap: 3px; }
-.en-chatgpt-limit-copy small, .en-chatgpt-empty, .en-chatgpt-reset-bar > span, .en-chatgpt-reset-option small { color: var(--en-muted); font-size: 11px; }
+.en-chatgpt-limit-copy small, .en-chatgpt-empty, .en-chatgpt-reset-bar > span { color: var(--en-muted); font-size: 11px; }
 .en-chatgpt-limit progress { width: 100%; height: 7px; accent-color: var(--en-text); }
 .en-chatgpt-remaining { min-width: 102px; text-align: right; font-size: 12px; font-weight: 500; }
 .en-chatgpt-empty { margin: 6px 0 12px; }
 .en-chatgpt-reset-bar { justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--en-border); }
 .en-chatgpt-reset-picker { overflow: hidden; margin-top: 10px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-surface); }
-.en-chatgpt-reset-option { width: 100%; min-height: 58px; justify-content: space-between; border: 0; border-top: 1px solid var(--en-border); border-radius: 0; background: transparent; text-align: left; }
+.en-chatgpt-reset-option { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-top: 1px solid var(--en-border); }
 .en-chatgpt-reset-option:first-child { border-top: 0; }
-.en-chatgpt-reset-option > span:first-child { display: grid; gap: 3px; }
-.en-chatgpt-reset-option.selected { background: var(--en-soft); }
-.en-chatgpt-radio { display: grid; place-items: center; width: 17px; height: 17px; border: 1px solid var(--en-muted); border-radius: 50%; }
-.en-chatgpt-reset-option.selected .en-chatgpt-radio { border-color: var(--en-primary); }
-.en-chatgpt-reset-option.selected .en-chatgpt-radio i { width: 9px; height: 9px; border-radius: 50%; background: var(--en-primary); }
-.en-chatgpt-reset-actions { justify-content: flex-end; gap: 8px; padding: 10px; border-top: 1px solid var(--en-border); }
+.en-chatgpt-reset-option > strong { min-width: 0; overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 button { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 11px; border: 1px solid var(--en-border); border-radius: 9px; background: var(--en-surface); color: var(--en-text); cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 .primary { border-color: var(--en-primary); background: var(--en-primary); color: white; }

@@ -5,11 +5,14 @@ import {
   installExecutableCodeLanguageBridge,
   normalizeCodeLanguage
 } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeLanguageBridge'
+import {
+  CODE_LANGUAGE_EVENT
+} from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeLanguageMuyaPlugin'
 
 const makeRuntime = () => {
   document.body.innerHTML = `
     <section class="ag-code-block en-code-v6-shell">
-      <span class="ag-language-input">python</span>
+      <span id="language-block-1" class="ag-language-input">python</span>
       <div class="en-code-v6-toolbar" contenteditable="false">
         <select class="en-code-v6-language" aria-label="Code language">
           <option value="python">Python</option>
@@ -37,6 +40,16 @@ const makeRuntime = () => {
   return { runtime: { states: new Map([[state.id, state]]) }, state, native, languageSelect }
 }
 
+const installFakeMuyaCommand = (host, native, handler = vi.fn()) => {
+  host.addEventListener(CODE_LANGUAGE_EVENT, (event) => {
+    handler(event.detail)
+    native.textContent = event.detail.language
+    native.dataset.value = event.detail.language
+    event.detail.handled = true
+  })
+  return handler
+}
+
 describe('executable code language bridge', () => {
   beforeEach(() => {
     globalThis.__ELEPHANT_CODE_LANGUAGE_BRIDGE__?.dispose?.()
@@ -53,19 +66,22 @@ describe('executable code language bridge', () => {
     expect(normalizeCodeLanguage('lang-JavaScript')).toBe('javascript')
   })
 
-  it('blocks the legacy recursive select handler and notifies Muya once', () => {
+  it('blocks the recursive V6 handler and sends one command to the real Muya control', () => {
     const bridge = installExecutableCodeLanguageBridge(globalThis)
     const { runtime, state, native, languageSelect } = makeRuntime()
     bridge.bind(runtime)
 
+    // Reproduce the exact application bug: V6 remembered its own select as the
+    // native language control. The bridge must reject it and find the Muya span.
+    state.chrome.languageControl = languageSelect
+
+    const command = installFakeMuyaCommand(state.host, native)
     const nativeInput = vi.fn()
     const nativeChange = vi.fn()
     native.addEventListener('input', nativeInput)
     native.addEventListener('change', nativeChange)
 
     const legacyHandler = vi.fn(() => {
-      // This reproduces the former V6 failure: writeNativeLanguage() selected
-      // the runtime select as its native target and dispatched change again.
       languageSelect.dispatchEvent(new Event('change', { bubbles: true }))
     })
     languageSelect.addEventListener('change', legacyHandler)
@@ -74,38 +90,37 @@ describe('executable code language bridge', () => {
     languageSelect.dispatchEvent(new Event('change', { bubbles: true }))
 
     expect(legacyHandler).not.toHaveBeenCalled()
-    expect(nativeInput).toHaveBeenCalledTimes(1)
-    expect(nativeChange).toHaveBeenCalledTimes(1)
+    expect(command).toHaveBeenCalledTimes(1)
+    expect(command).toHaveBeenCalledWith(expect.objectContaining({
+      blockKey: 'language-block-1',
+      language: 'javascript'
+    }))
+    expect(nativeInput).not.toHaveBeenCalled()
+    expect(nativeChange).not.toHaveBeenCalled()
     expect(native.textContent).toBe('javascript')
-    expect(native.dataset.value).toBe('javascript')
     expect(state.language).toBe('javascript')
     expect(state.pre.classList.contains('language-javascript')).toBe(true)
     expect(state.pre.querySelector('code').classList.contains('language-javascript')).toBe(true)
   })
 
-  it('does not emit duplicate Muya events when selecting the same language', () => {
+  it('does nothing when selecting the current language', () => {
     const bridge = installExecutableCodeLanguageBridge(globalThis)
-    const { runtime, native, languageSelect } = makeRuntime()
+    const { runtime, state, native, languageSelect } = makeRuntime()
     bridge.bind(runtime)
-
-    const nativeInput = vi.fn()
-    const nativeChange = vi.fn()
-    native.addEventListener('input', nativeInput)
-    native.addEventListener('change', nativeChange)
+    const command = installFakeMuyaCommand(state.host, native)
 
     languageSelect.value = 'python'
     languageSelect.dispatchEvent(new Event('change', { bubbles: true }))
     languageSelect.dispatchEvent(new Event('change', { bubbles: true }))
 
-    expect(nativeInput).not.toHaveBeenCalled()
-    expect(nativeChange).not.toHaveBeenCalled()
+    expect(command).not.toHaveBeenCalled()
   })
 
-  it('survives repeated language changes without recursion or duplicate dispatch', () => {
+  it('survives 200 language changes without recursion or keyboard events', () => {
     const bridge = installExecutableCodeLanguageBridge(globalThis)
     const { runtime, state, native, languageSelect } = makeRuntime()
     bridge.bind(runtime)
-
+    const command = installFakeMuyaCommand(state.host, native)
     const nativeInput = vi.fn()
     const nativeChange = vi.fn()
     native.addEventListener('input', nativeInput)
@@ -116,23 +131,26 @@ describe('executable code language bridge', () => {
       languageSelect.dispatchEvent(new Event('change', { bubbles: true }))
     }
 
-    expect(nativeInput).toHaveBeenCalledTimes(200)
-    expect(nativeChange).toHaveBeenCalledTimes(200)
+    expect(command).toHaveBeenCalledTimes(200)
+    expect(nativeInput).not.toHaveBeenCalled()
+    expect(nativeChange).not.toHaveBeenCalled()
     expect(state.language).toBe('python')
     expect(native.textContent).toBe('python')
     expect(state.pre.classList.contains('language-python')).toBe(true)
     expect(state.pre.querySelector('code').classList.contains('language-python')).toBe(true)
   })
 
-  it('mirrors a native Muya language change without dispatching back', () => {
+  it('mirrors a genuine native Muya edit without dispatching back', () => {
     const bridge = installExecutableCodeLanguageBridge(globalThis)
     const { runtime, state, native, languageSelect } = makeRuntime()
     bridge.bind(runtime)
+    const command = installFakeMuyaCommand(state.host, native)
 
     native.textContent = 'javascript'
     native.dataset.value = 'javascript'
     native.dispatchEvent(new Event('input', { bubbles: true }))
 
+    expect(command).not.toHaveBeenCalled()
     expect(languageSelect.value).toBe('javascript')
     expect(state.language).toBe('javascript')
     expect(state.pre.dataset.language).toBe('javascript')

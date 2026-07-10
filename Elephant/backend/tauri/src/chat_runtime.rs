@@ -4,6 +4,7 @@ use tauri::AppHandle;
 #[cfg(not(mobile))]
 use std::path::Path;
 
+mod codex_app_server;
 #[cfg(not(mobile))]
 use crate::local_llama_runtime;
 
@@ -27,10 +28,7 @@ fn extract_messages(payload: &Value) -> Vec<Value> {
             .filter_map(|message| {
                 let role = text(message, &["role"]);
                 let content = text(message, &["content", "text", "message"]);
-                if role.is_empty() {
-                    return None;
-                }
-                if content.is_empty() {
+                if role.is_empty() || content.is_empty() {
                     return None;
                 }
                 Some(json!({ "role": role, "content": content }))
@@ -57,16 +55,53 @@ fn last_user_message(payload: &Value) -> String {
         .unwrap_or_default()
 }
 
-fn selected_chat_model(payload: &Value) -> String {
-    let config = payload
+fn ai_config(payload: &Value) -> &Value {
+    payload
         .get("aiConfig")
         .or_else(|| payload.get("config"))
-        .unwrap_or(&Value::Null);
+        .unwrap_or(&Value::Null)
+}
+
+fn chat_route(payload: &Value) -> &Value {
+    ai_config(payload)
+        .pointer("/routes/chat")
+        .unwrap_or(&Value::Null)
+}
+
+fn selected_chat_source(payload: &Value) -> String {
+    let route = chat_route(payload);
+    [
+        text(route, &["source", "provider"]),
+        text(ai_config(payload), &["provider", "transport"]),
+    ]
+    .into_iter()
+    .find(|value| !value.is_empty())
+    .unwrap_or_default()
+}
+
+fn selected_chat_model(payload: &Value) -> String {
+    let config = ai_config(payload);
+    let route = chat_route(payload);
     let selection = payload.get("modelSelection").unwrap_or(&Value::Null);
     let config_selection = config
         .pointer("/localModelSelection")
         .unwrap_or(&Value::Null);
-    let route = config.pointer("/routes/chat").unwrap_or(&Value::Null);
+    let source = selected_chat_source(payload);
+
+    if source == "codex" {
+        return [
+            text(route, &["model", "modelId", "id"]),
+            text(
+                config.pointer("/providers/codex").unwrap_or(&Value::Null),
+                &["model"],
+            ),
+            text(payload, &["model", "modelId", "chatModel"]),
+        ]
+        .into_iter()
+        .find(|value| !value.is_empty())
+        .unwrap_or_default();
+    }
+
     [
         text(selection, &["chat"]),
         text(config_selection, &["chat"]),
@@ -74,8 +109,32 @@ fn selected_chat_model(payload: &Value) -> String {
         text(payload, &["model", "modelId", "chatModel"]),
     ]
     .into_iter()
-    .find(|value| !value.trim().is_empty())
+    .find(|value| !value.is_empty())
     .unwrap_or_default()
+}
+
+fn codex_prompt(payload: &Value) -> String {
+    let system_prompt = text(chat_route(payload), &["systemPrompt"]);
+    let mut sections = Vec::new();
+    if !system_prompt.is_empty() {
+        sections.push(format!("System instructions:\n{system_prompt}"));
+    }
+    sections.push(
+    "You are answering inside ElephantNote. Do not inspect the filesystem or run commands. Use only the conversation and note context included below. Return only the answer for the user.".to_string(),
+  );
+    let transcript = extract_messages(payload)
+        .into_iter()
+        .map(|message| {
+            let role = text(&message, &["role"]);
+            let content = text(&message, &["content"]);
+            format!("{}:\n{}", role.to_uppercase(), content)
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    sections.push(format!(
+        "Conversation and retrieved note context:\n{transcript}"
+    ));
+    sections.join("\n\n")
 }
 
 #[cfg(not(mobile))]
@@ -101,7 +160,7 @@ fn local_runtime_config(payload: &Value) -> &Value {
 fn configured_server_path(payload: &Value) -> String {
     let runtime = local_runtime_config(payload);
     let from_payload = text(payload, &["llamaServerPath", "serverPath", "llamaBinary"]);
-    if !from_payload.trim().is_empty() {
+    if !from_payload.is_empty() {
         return from_payload;
     }
     text(
@@ -113,7 +172,7 @@ fn configured_server_path(payload: &Value) -> String {
 #[cfg(not(mobile))]
 fn validate_configured_llama_binary(payload: &Value) -> R<()> {
     let configured = configured_server_path(payload);
-    if configured.trim().is_empty() {
+    if configured.is_empty() {
         return Ok(());
     }
     let basename = Path::new(&configured)
@@ -127,7 +186,9 @@ fn validate_configured_llama_binary(payload: &Value) -> R<()> {
         "llama-cpp-server",
     ];
     if !allowed.contains(&basename) {
-        return Err(format!("Refusing to start unsupported llama runtime binary: {basename}. Configure llama-server instead."));
+        return Err(format!(
+      "Refusing to start unsupported llama runtime binary: {basename}. Configure llama-server instead."
+    ));
     }
     let configured_path = Path::new(&configured);
     if configured_path.is_absolute() && !configured_path.is_file() {
@@ -140,11 +201,21 @@ fn validate_configured_llama_binary(payload: &Value) -> R<()> {
 
 #[tauri::command]
 pub async fn tauri_rag_chat(app: AppHandle, payload: Value) -> R<Value> {
+    if payload.get("codexOperation").is_some() {
+        return codex_app_server::command(&app, &payload).await;
+    }
+
     let message = last_user_message(&payload);
     let model = selected_chat_model(&payload);
+    let source = selected_chat_source(&payload);
 
     eprintln!(
-        "[tauri-rag] local GGUF chat request message_len={} selected_chat_model={} mobile={}",
+        "[tauri-rag] request source={} message_len={} selected_chat_model={} mobile={}",
+        if source.is_empty() {
+            "app-local"
+        } else {
+            source.as_str()
+        },
         message.chars().count(),
         if model.is_empty() {
             "<none>"
@@ -154,17 +225,44 @@ pub async fn tauri_rag_chat(app: AppHandle, payload: Value) -> R<Value> {
         cfg!(mobile)
     );
 
-    if message.trim().is_empty() {
+    if message.is_empty() {
         return Ok(json!({
           "answer": "Écris un message pour démarrer le chat.",
           "sources": [],
-          "runtime": "tauri-rust-local-llama.cpp",
-          "provider": "local-llama.cpp",
+          "runtime": "tauri-rust",
+          "provider": source,
           "model": model
         }));
     }
 
-    if model.trim().is_empty() {
+    if source == "codex" {
+        let prompt = codex_prompt(&payload);
+        let result = codex_app_server::chat(&app, &model, &prompt).await?;
+        return Ok(json!({
+          "answer": result.answer,
+          "sources": [],
+          "runtime": "codex-app-server",
+          "provider": "codex",
+          "model": result.model,
+          "threadId": result.thread_id
+        }));
+    }
+
+    let local_sources = [
+        "",
+        "app-local",
+        "local",
+        "tauri-rust",
+        "node-llama-cpp",
+        "local-llama.cpp",
+    ];
+    if !local_sources.contains(&source.as_str()) {
+        return Err(format!(
+      "Chat provider '{source}' is configured but is not implemented in the Tauri chat router. Select Codex or App Local instead."
+    ));
+    }
+
+    if model.is_empty() {
         let warning = "No local GGUF chat model is selected.";
         eprintln!("[tauri-rag][warn] {warning}");
         return Ok(json!({
@@ -250,8 +348,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn selects_chat_model_from_route() {
-        let payload = json!({ "aiConfig": { "routes": { "chat": { "model": "tiny.gguf" } } } });
+    fn selects_codex_model_from_route_before_local_selection() {
+        let payload = json!({
+          "aiConfig": {
+            "routes": { "chat": { "source": "codex", "model": "gpt-codex" } },
+            "localModelSelection": { "chat": "local.gguf" }
+          }
+        });
+        assert_eq!(selected_chat_model(&payload), "gpt-codex");
+    }
+
+    #[test]
+    fn selects_local_chat_model_from_selection() {
+        let payload = json!({ "aiConfig": { "routes": { "chat": { "source": "app-local" } }, "localModelSelection": { "chat": "tiny.gguf" } } });
         assert_eq!(selected_chat_model(&payload), "tiny.gguf");
     }
 
@@ -266,12 +375,25 @@ mod tests {
     }
 
     #[test]
+    fn codex_prompt_contains_system_and_transcript() {
+        let payload = json!({
+          "aiConfig": { "routes": { "chat": { "source": "codex", "systemPrompt": "Be precise" } } },
+          "messages": [{ "role": "user", "content": "Question" }]
+        });
+        let prompt = codex_prompt(&payload);
+        assert!(prompt.contains("Be precise"));
+        assert!(prompt.contains("USER:\nQuestion"));
+    }
+
+    #[cfg(not(mobile))]
+    #[test]
     fn rejects_unexpected_llama_binary_name() {
         let payload =
             json!({ "aiConfig": { "localRuntime": { "llamaServerPath": "/tmp/not-llama" } } });
         assert!(validate_configured_llama_binary(&payload).is_err());
     }
 
+    #[cfg(not(mobile))]
     #[test]
     fn accepts_llama_server_binary_name() {
         let payload =

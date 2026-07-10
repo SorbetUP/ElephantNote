@@ -41,3 +41,7 @@ Elephant/backend/tauri/gen/
 
 # Swift Package Manager generated files
 build/ios/.build/
+
+Elephant/backend/tauri/bin/codex
+Elephant/backend/tauri/bin/codex.exe
+Elephant/backend/tauri/bin/codex-runtime.json

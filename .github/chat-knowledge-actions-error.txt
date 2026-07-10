@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/tmp/agent.py", line 618, in <module>
+    replace_once(
+  File "/tmp/agent.py", line 19, in replace_once
+    raise RuntimeError(f'{path}: expected one occurrence, got {count}: {old[:120]!r}')
+RuntimeError: Elephant/backend/tauri/src/chat_runtime.rs: expected one occurrence, got 0: '    let access_contract = if !rag_enabled(payload) {'

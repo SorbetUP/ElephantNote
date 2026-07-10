@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod commands_contract;
+pub mod muya_advanced;
 pub mod muya_assets;
 pub mod muya_clipboard;
 pub mod muya_clipboard_commands;

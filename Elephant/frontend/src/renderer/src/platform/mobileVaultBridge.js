@@ -1,6 +1,9 @@
 const getInvoke = (target = globalThis) => target?.__TAURI__?.core?.invoke
 
-const MOBILE_VAULT_CHOICE_KEY = 'elephantnote:mobile-vault-choice-v3'
+const MOBILE_VAULT_CHOICE_KEY = 'elephantnote:mobile-vault-choice-v4'
+const MOBILE_ADVANCED_VAULT_KEY = 'elephantnote:mobile-advanced-vault-v1'
+let syncTimer = null
+let lifecycleInstalled = false
 
 const invoke = (target, command, payload = {}) => {
   const invokeCommand = getInvoke(target)
@@ -14,19 +17,36 @@ const normalizePath = (value = '') => String(value || '')
   .replace(/\\/g, '/')
   .replace(/\/+$/g, '')
 
-const hasExplicitVaultChoice = (target) => {
+const readFlag = (target, key) => {
   try {
-    return target?.localStorage?.getItem(MOBILE_VAULT_CHOICE_KEY) === '1'
+    return target?.localStorage?.getItem(key) === '1'
   } catch {
     return false
   }
 }
 
-const rememberExplicitVaultChoice = (target) => {
+const writeFlag = (target, key, enabled) => {
   try {
-    target?.localStorage?.setItem(MOBILE_VAULT_CHOICE_KEY, '1')
+    if (enabled) target?.localStorage?.setItem(key, '1')
+    else target?.localStorage?.removeItem(key)
   } catch {
-    // A constrained WebView may disable localStorage. The selected vault still remains in Rust config.
+    // Rust and Android retain the actual vault state if WebView storage is unavailable.
+  }
+}
+
+const hasExplicitVaultChoice = (target) => readFlag(target, MOBILE_VAULT_CHOICE_KEY)
+const usesAdvancedVault = (target) => readFlag(target, MOBILE_ADVANCED_VAULT_KEY)
+
+const rememberExplicitVaultChoice = (target, advanced = false) => {
+  writeFlag(target, MOBILE_VAULT_CHOICE_KEY, true)
+  writeFlag(target, MOBILE_ADVANCED_VAULT_KEY, advanced)
+}
+
+const isAndroid = async (target) => {
+  try {
+    return (await invoke(target, 'tauri_platform_info'))?.android === true
+  } catch {
+    return false
   }
 }
 
@@ -51,6 +71,40 @@ const hideLegacyAutomaticVaultUntilChoice = async (payload, target) => {
   }
 }
 
+const restoreAdvancedVault = async (target) => {
+  if (!usesAdvancedVault(target) || !(await isAndroid(target))) return null
+  return invoke(target, 'tauri_android_vault_restore')
+}
+
+const scheduleAdvancedSync = (target, immediate = false) => {
+  if (!usesAdvancedVault(target)) return
+  target.clearTimeout?.(syncTimer)
+  syncTimer = target.setTimeout?.(() => {
+    invoke(target, 'tauri_android_vault_sync').catch((error) => {
+      console.warn('[mobile-vault] unable to synchronize Android document tree', error)
+    })
+  }, immediate ? 0 : 350)
+}
+
+const installLifecycleSync = (target) => {
+  if (lifecycleInstalled || !target?.document) return
+  lifecycleInstalled = true
+  target.addEventListener?.('pagehide', () => scheduleAdvancedSync(target, true))
+  target.document.addEventListener('visibilitychange', async () => {
+    if (target.document.visibilityState === 'hidden') {
+      scheduleAdvancedSync(target, true)
+      return
+    }
+    if (!usesAdvancedVault(target)) return
+    try {
+      await restoreAdvancedVault(target)
+      target.dispatchEvent?.(new CustomEvent('elephantnote:vault-files-changed'))
+    } catch (error) {
+      console.warn('[mobile-vault] unable to refresh Android document tree', error)
+    }
+  })
+}
+
 export const patchMobileVaultBridge = (bridge, target = globalThis) => {
   if (!bridge || typeof bridge !== 'object' || bridge.__elephantnoteMobileVaultBridge) return bridge
 
@@ -62,43 +116,56 @@ export const patchMobileVaultBridge = (bridge, target = globalThis) => {
     : null
 
   if (originalGetVaults) {
-    bridge.getVaults = async () => hideLegacyAutomaticVaultUntilChoice(
-      await originalGetVaults(),
-      target
-    )
+    bridge.getVaults = async () => {
+      await restoreAdvancedVault(target)
+      return hideLegacyAutomaticVaultUntilChoice(await originalGetVaults(), target)
+    }
   }
 
   bridge.createLocalVault = async () => {
+    try {
+      await invoke(target, 'tauri_android_vault_clear')
+    } catch {
+      // Desktop and older Android builds do not have a persisted tree to clear.
+    }
     const result = await invoke(target, 'tauri_vaults_select_path', {
       vaultPath: await defaultMobileVaultPath()
     })
-    rememberExplicitVaultChoice(target)
+    rememberExplicitVaultChoice(target, false)
     return result
   }
 
   bridge.selectVault = async () => {
-    if (!originalSelectVault) {
-      throw new Error('The Android folder picker is unavailable in this build.')
+    if (!(await isAndroid(target))) {
+      if (!originalSelectVault) throw new Error('The folder picker is unavailable in this build.')
+      return originalSelectVault()
     }
 
-    const previousPrivatePath = normalizePath(await defaultMobileVaultPath())
-    const result = await originalSelectVault()
-    const selectedPath = normalizePath(result?.activeVault?.path)
-
-    // The base bridge historically returned the current vault when the Android
-    // picker was cancelled. Convert that ambiguous response into a real cancel.
-    if (!selectedPath || (!hasExplicitVaultChoice(target) && selectedPath === previousPrivatePath)) {
-      return { canceled: true }
+    try {
+      const selected = await invoke(target, 'tauri_android_vault_pick')
+      if (!selected?.configured || !selected?.shadowPath) return { canceled: true }
+      const result = await invoke(target, 'tauri_vaults_select_path', {
+        vaultPath: selected.shadowPath
+      })
+      const vaultId = result?.activeVault?.id
+      if (vaultId && selected.displayName) {
+        try {
+          const renamed = await invoke(target, 'tauri_vaults_set_name', {
+            vaultId,
+            name: selected.displayName
+          })
+          if (renamed?.activeVault) Object.assign(result, renamed)
+        } catch {
+          // The selected tree remains functional even if its display label cannot be updated.
+        }
+      }
+      rememberExplicitVaultChoice(target, true)
+      scheduleAdvancedSync(target)
+      return result
+    } catch (error) {
+      if (/cancel/i.test(String(error?.message || error))) return { canceled: true }
+      throw error
     }
-
-    if (selectedPath.startsWith('content://')) {
-      throw new Error(
-        'This Android provider exposed only a document URI. Select a filesystem-backed folder, or use Simple mode while full SAF document-tree support is being added.'
-      )
-    }
-
-    rememberExplicitVaultChoice(target)
-    return result
   }
 
   Object.defineProperty(bridge, '__elephantnoteMobileVaultBridge', {
@@ -111,6 +178,7 @@ export const patchMobileVaultBridge = (bridge, target = globalThis) => {
 export const installMobileVaultBridge = (target = globalThis) => {
   let currentBridge = patchMobileVaultBridge(target.elephantnote, target)
   const descriptor = Object.getOwnPropertyDescriptor(target, 'elephantnote')
+  installLifecycleSync(target)
 
   if (descriptor?.configurable === false) return currentBridge
 

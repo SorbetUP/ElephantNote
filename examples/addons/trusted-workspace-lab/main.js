@@ -4,6 +4,12 @@ export default class TrustedWorkspaceLab {
     this.enabled = false
   }
 
+  toggleFocus() {
+    this.enabled = !this.enabled
+    this.api.experimental.document.documentElement.classList.toggle('elephant-trusted-focus', this.enabled)
+    return { enabled: this.enabled }
+  }
+
   async onload(api) {
     this.api = api
 
@@ -19,17 +25,28 @@ export default class TrustedWorkspaceLab {
         outline: 2px solid color-mix(in srgb, var(--en-primary, #2563eb) 45%, transparent);
         outline-offset: -2px;
       }
+
+      .trusted-workspace-lab-card {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid var(--en-border, #c5cfdd);
+        border-radius: 10px;
+      }
+
+      .trusted-workspace-lab-card p {
+        margin: 0;
+        color: var(--en-muted, #667085);
+        font-size: 11px;
+        line-height: 1.5;
+      }
     `, 'focus-mode')
 
     api.commands.register({
       id: 'com.elephantnote.examples.trusted-workspace-lab.toggle-focus',
       title: 'Toggle trusted focus mode',
       description: 'Modify ElephantNote directly from a full app access addon.',
-      run: () => {
-        this.enabled = !this.enabled
-        api.experimental.document.documentElement.classList.toggle('elephant-trusted-focus', this.enabled)
-        return { enabled: this.enabled }
-      }
+      run: () => this.toggleFocus()
     })
 
     api.workspace.registerSidebarItem({
@@ -44,8 +61,33 @@ export default class TrustedWorkspaceLab {
     api.settings.registerSection({
       id: 'com.elephantnote.examples.trusted-workspace-lab.settings',
       title: 'Trusted Workspace Lab',
-      description: 'Reference implementation for full app access addons.',
-      order: 980
+      description: 'This section is rendered by the addon inside the real Addons settings page.',
+      section: 'addons',
+      order: 980,
+      render: (container) => {
+        const documentRef = api.experimental.document
+        const card = documentRef.createElement('div')
+        card.className = 'trusted-workspace-lab-card'
+
+        const description = documentRef.createElement('p')
+        description.textContent = `Host resources available: ${api.resources.list().join(', ')}`
+
+        const button = documentRef.createElement('button')
+        button.type = 'button'
+        button.className = 'en-secondary-button'
+        const refreshLabel = () => {
+          button.textContent = this.enabled ? 'Disable trusted focus mode' : 'Enable trusted focus mode'
+        }
+        refreshLabel()
+        button.addEventListener('click', () => {
+          this.toggleFocus()
+          refreshLabel()
+        })
+
+        card.append(description, button)
+        container.append(card)
+        return () => card.remove()
+      }
     })
 
     api.editor.registerExtension({
@@ -61,6 +103,8 @@ export default class TrustedWorkspaceLab {
       order: 980
     })
 
+    api.resources.provide('trustedWorkspaceLab', this)
+
     api.ui.on(api.experimental.window, 'beforeunload', () => {
       api.experimental.document.documentElement.classList.remove('elephant-trusted-focus')
     })
@@ -69,7 +113,8 @@ export default class TrustedWorkspaceLab {
       addonId: api.manifest.id,
       routerReady: Boolean(api.app.router),
       piniaReady: Boolean(api.app.pinia),
-      servicesReady: Boolean(api.app.services)
+      servicesReady: Boolean(api.app.services),
+      resources: api.resources.list()
     })
   }
 

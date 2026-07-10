@@ -1,1 +1,2 @@
 Run the validated editor state ownership repair.
+Persist source and validation diagnostics.

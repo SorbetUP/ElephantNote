@@ -1,4 +1,4 @@
-import SystemSitesSettings from 'elephant-front/components/settings/SystemSitesSettings.vue'
+import SitesSettings from './ui/SitesSettings.vue'
 import { mountSettingsComponent } from './settingsComponentHost'
 
 const ADDON_ID = 'elephant.sites'
@@ -30,7 +30,7 @@ export const sitesAddon = {
       title: 'Sites',
       description: 'Generate and preview a static site only when this addon is enabled.',
       order: 50,
-      render: mountSettingsComponent(ctx, SystemSitesSettings)
+      render: mountSettingsComponent(ctx, SitesSettings)
     })
   }
 }

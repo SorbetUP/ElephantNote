@@ -4,29 +4,39 @@ ElephantNote external addons are user-installable `.enaddon` packages. API v1 ex
 
 ## Addon-first application model
 
-ElephantNote keeps a small core and exposes optional application features as independently enabled addons. The built-in catalogue currently includes:
+ElephantNote keeps the vault, editor, navigation shell and addon host in core. Optional application features are independently installable, removable, enabled and disabled addons.
 
-- **Addon Packs** captures and reapplies a complete addon setup, including built-in, official catalogue and already-installed local addons;
+The first-party catalogue contains:
+
+- **Addon Packs** manages portable configurations and is the only required built-in addon;
 - **Google Keep Import** owns Google Keep, web-page and RSS import controls;
 - **Codex Connection** owns ChatGPT subscription connection, account state, usage limits and the Codex provider contribution;
-- **Calendar** owns calendar integration;
+- **Calendar** owns the native ElephantNote calendar workspace;
 - **Sites** owns static-site generation and preview controls;
-- **Daily Notes** creates a linked daily workspace with focus, tasks, notes and end-of-day review sections;
-- **Quick Capture** creates timestamped `Inbox/` notes with an explicit `unprocessed` state;
-- **Vault Overview** generates graph coverage, connected-note and orphan-note reports;
-- **Addon Inspector** is a disabled-by-default developer reference.
+- **AI** owns providers, chat, semantic search, OCR and the local model library;
+- **Sync** owns encrypted Iroh pairing, synchronization and conflict recovery.
 
-Import, Codex and Sites keep their Vue interfaces inside their addon modules. Their Settings categories exist only while the corresponding addon is enabled.
+Daily Notes, Quick Capture, Vault Overview and Addon Inspector were removed from the shipped application. They were narrow examples or duplicate workflows rather than complete product features.
 
-Built-in addons do not require Community Addons mode. Third-party addons always require the single global Community Addons acknowledgement.
+Installation and enabled state are persisted separately. Removing an addon removes its Settings pages, navigation entries, workspaces and runtime behavior. Reinstalling it does not silently enable it. Built-in addons do not require Community Addons mode; third-party addons require the single global Community Addons acknowledgement.
+
+Optional runtimes are lazy. In particular, ElephantNote does not start an Iroh endpoint at application startup. Enabling Sync activates the guarded client; disabling or removing Sync closes the endpoint and blocks later Sync calls. Disabling AI closes its chat sidebar and removes its Settings and model-library views. Disabling Sites stops the preview and clears its feature state.
 
 ## Addon packs
 
-Addon Packs uses the portable `elephantnote-addon-pack` format. The default pack is stored at:
+Addon Packs uses the portable `elephantnote-addon-pack` format. Pack files are stored under:
 
 ```text
-.elephantnote/addons/packs/default.enaddonpack
+.elephantnote/addons/packs/
 ```
+
+ElephantNote creates a protected first-party parity pack at:
+
+```text
+.elephantnote/addons/packs/develop-parity.enaddonpack
+```
+
+Applying that pack installs and enables every useful first-party addon so the modular build reproduces the complete `develop` application. User-created packs capture the currently installed addons, versions and enabled states.
 
 Example:
 
@@ -35,10 +45,11 @@ Example:
   "format": "elephantnote-addon-pack",
   "version": 1,
   "name": "Writing workspace",
-  "description": "Daily writing, capture and publishing tools.",
+  "description": "Import, AI and publishing tools.",
   "addons": [
-    { "id": "elephant.daily-notes", "source": "builtin", "enabled": true },
-    { "id": "elephant.quick-capture", "source": "builtin", "enabled": true },
+    { "id": "elephant.google-keep-import", "source": "builtin", "enabled": true },
+    { "id": "elephant.ai", "source": "builtin", "enabled": true },
+    { "id": "elephant.sites", "source": "builtin", "enabled": true },
     { "id": "com.example.publisher", "source": "catalog", "version": "1.2.0", "enabled": true }
   ]
 }
@@ -46,11 +57,11 @@ Example:
 
 Supported sources:
 
-- `builtin`: a feature shipped with ElephantNote;
+- `builtin`: a first-party feature shipped in the built-in catalogue and installed on demand;
 - `catalog`: an addon installed or updated from the fixed official catalogue;
 - `installed`: a local package that must already exist in the vault.
 
-Applying a pack never bypasses the global Community Addons switch. Full-app-access packages use the same ordinary addon switch and pack application path as other community addons.
+Applying a pack may install missing built-in and official catalogue addons. It never bypasses the global Community Addons switch. Full-app-access packages use the same ordinary addon switch and pack application path as other community addons.
 
 ## Official catalogue
 
@@ -88,12 +99,13 @@ Every initialized vault contains:
 ├── packages/
 │   └── <addon-id>/
 ├── packs/
-│   └── default.enaddonpack
+│   ├── develop-parity.enaddonpack
+│   └── <user-pack>.enaddonpack
 └── data/
     └── <addon-id>/storage.json
 ```
 
-Package files, enable state, packs and private addon storage are scoped to the active vault. `.elephantnote` remains hidden from the normal explorer.
+Community package files, enable state, packs and private addon storage are scoped to the active vault. First-party installation and enabled state are stored by the desktop application. `.elephantnote` remains hidden from the normal explorer.
 
 ## Package format
 
@@ -119,7 +131,7 @@ External addons are installed disabled.
 
 ## Community Addons mode
 
-Community Addons mode is disabled by default and requires one explicit risk acknowledgement. Turning it off stops every external addon without uninstalling packages or deleting private data.
+Community Addons mode is disabled by default and requires one explicit risk acknowledgement. Turning it off stops every external addon, persists every installed third-party package as disabled and prevents those packages from restarting, without uninstalling packages or deleting private data.
 
 After Community Addons is enabled, every package uses its ordinary enable switch. There is no second visible review flow or permanent full-app-access safe-mode setting.
 
@@ -258,65 +270,3 @@ Scopes can target a file, a directory tree, or the whole visible vault:
   "write": ["Generated/**"]
 }
 ```
-
-`*` grants access to every visible relative Markdown path and should be avoided unless an addon genuinely requires vault-wide analysis.
-
-### HTTPS
-
-The Worker has no direct `fetch`, `WebSocket`, `XMLHttpRequest` or Tauri bridge. Requests use the Rust broker.
-
-```js
-const response = await api.http.request({
-  url: 'https://api.example.com/data',
-  method: 'GET',
-  headers: { Accept: 'application/json' }
-})
-
-if (!response.ok) throw new Error(`HTTP ${response.status}`)
-const data = JSON.parse(response.body)
-```
-
-Every hostname must be declared exactly or with a subdomain wildcard:
-
-```json
-{
-  "hosts": ["api.example.com", "*.market.example.com"]
-}
-```
-
-The broker:
-
-- accepts HTTPS on port 443 only;
-- rejects URL credentials;
-- resolves the hostname and pins the request to a checked public address;
-- blocks loopback, private, link-local, multicast, documentation and other special-use addresses;
-- blocks private IPv4 represented as IPv6;
-- disables automatic redirects and revalidates every GET redirect;
-- permits at most five redirects;
-- limits request bodies to 1 MiB and responses to 5 MiB;
-- applies a 30-second request timeout.
-
-### Private storage
-
-Requires `permissions.storage: true`.
-
-```js
-await api.storage.set('settings', { symbols: ['AAPL'] })
-const settings = await api.storage.get('settings')
-const allValues = await api.storage.entries()
-await api.storage.remove('settings')
-```
-
-Storage is namespaced under `.elephantnote/addons/data/<addon-id>/storage.json` and limited to 1 MiB per addon.
-
-## Worker isolation
-
-External isolated addons do not receive:
-
-- the DOM;
-- Vue or Pinia;
-- the router or private application services;
-- Muya internals;
-- direct filesystem APIs;
-- the Tauri bridge;
-- direct browser networking APIs.

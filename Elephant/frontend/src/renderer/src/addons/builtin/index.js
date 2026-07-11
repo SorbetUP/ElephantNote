@@ -1,4 +1,4 @@
-import { addonProfilesAddon } from './addonProfiles'
+import { addonPacksAddon, addonProfilesAddon } from './addonProfiles'
 import { googleKeepImportAddon } from './googleKeepImport'
 import { codexConnectionAddon } from './codexConnection'
 import { calendarAddon } from './calendar'
@@ -9,6 +9,7 @@ import { vaultOverviewAddon } from './vaultOverview'
 import { addonInspectorAddon } from './addonInspector'
 
 export {
+  addonPacksAddon,
   addonProfilesAddon,
   googleKeepImportAddon,
   codexConnectionAddon,
@@ -21,7 +22,7 @@ export {
 }
 
 export const builtinAddons = [
-  addonProfilesAddon,
+  addonPacksAddon,
   googleKeepImportAddon,
   codexConnectionAddon,
   calendarAddon,

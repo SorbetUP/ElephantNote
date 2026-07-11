@@ -22,6 +22,12 @@ const createManifest = (overrides = {}) => ({
   ...overrides
 })
 
+const flush = async () => {
+  await Promise.resolve()
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -137,6 +143,8 @@ describe('built-in starter addons', () => {
     vi.stubGlobal('URL', { createObjectURL: () => 'blob:test', revokeObjectURL: vi.fn() })
 
     const invoke = vi.fn(async (command, payload) => {
+      if (command === 'tauri_addons_list') return []
+      if (command === 'tauri_prefs_get') return true
       if (command === 'tauri_addons_read_entry') return { source: 'self.onmessage = () => {}' }
       if (command === 'tauri_addons_call') {
         if (payload.method === 'app.info') return { name: 'ElephantNote', version: '0.18.9' }
@@ -152,6 +160,7 @@ describe('built-in starter addons', () => {
 
     const manager = new ElephantAddonManager({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } })
     const runtime = installExternalAddonRuntime(manager)
+    await flush()
     runtime.register({
       manifest: normalizeAddonManifest(createManifest({ source: 'external' })),
       packageHash: 'hash',
@@ -161,7 +170,7 @@ describe('built-in starter addons', () => {
     await manager.enable('com.example.addon')
 
     worker.onmessage({ data: { type: 'request', requestId: '1', method: 'app.info', params: {} } })
-    await Promise.resolve()
+    await flush()
     expect(messages).toContainEqual(expect.objectContaining({ type: 'response', requestId: '1', result: expect.objectContaining({ name: 'ElephantNote' }) }))
   })
 
@@ -188,27 +197,24 @@ describe('built-in starter addons', () => {
   })
 
   it('does not restart an external addon when community addons are disabled', async () => {
-    const invoke = vi.fn(async (command, payload) => {
-      if (command === 'tauri_prefs_get') return false
-      if (command === 'tauri_addons_set_enabled') return { ...payload }
-      if (command === 'tauri_addons_read_entry') return { source: 'self.onmessage = () => {}' }
-      throw new Error(`Unexpected command: ${command}`)
-    })
-    vi.stubGlobal('__TAURI__', { core: { invoke } })
-    vi.stubGlobal('Worker', class { postMessage() {} terminate() {} })
-    vi.stubGlobal('Blob', class {})
-    vi.stubGlobal('URL', { createObjectURL: () => 'blob:test', revokeObjectURL: vi.fn() })
-
-    const manager = new ElephantAddonManager()
-    const runtime = installExternalAddonRuntime(manager)
-    runtime.register({
+    const record = {
       manifest: normalizeAddonManifest(createManifest({ source: 'external' })),
       packageHash: 'hash',
       installedAt: '2026-07-10T00:00:00Z',
       enabled: true
+    }
+    const invoke = vi.fn(async (command, payload) => {
+      if (command === 'tauri_addons_list') return [record]
+      if (command === 'tauri_prefs_get') return false
+      if (command === 'tauri_addons_set_enabled') return { ...payload }
+      throw new Error(`Unexpected command: ${command}`)
     })
+    vi.stubGlobal('__TAURI__', { core: { invoke } })
 
-    await runtime.restoreEnabled()
+    const manager = new ElephantAddonManager({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } })
+    installExternalAddonRuntime(manager)
+    await flush()
+
     expect(manager.get('com.example.addon')?.enabled).toBe(false)
     expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', expect.objectContaining({ addonId: 'com.example.addon', enabled: false }))
   })

@@ -19,6 +19,7 @@ export const syncAddon = {
   },
 
   activate(ctx) {
+    irohSyncClient.activate()
     ctx.addSettingsSection({
       id: `${ADDON_ID}.settings`,
       section: 'sync',

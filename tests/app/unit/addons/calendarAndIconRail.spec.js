@@ -41,6 +41,39 @@ describe('optional Calendar addon and configurable icon rail', () => {
     expect(builtins).toContain('calendarAddon')
   })
 
+  it('preserves the original Calendar workspace while the addon owns its data and lifecycle', () => {
+    const workspace = read('Elephant/frontend/app/components/views/CalendarAddonWorkspace.vue')
+
+    expect(workspace).toContain('Offline events plus notes grouped by last edit date.')
+    expect(workspace).toContain('Import Google Calendar')
+    expect(workspace).toContain('store.calendarBuckets')
+    expect(workspace).toContain('bucketCalendarEvents(calendarEvents.value)')
+    expect(workspace).toContain("dispatch('importGoogle')")
+    expect(workspace).not.toContain('ScheduleXCalendar')
+    expect(workspace).not.toContain('Addon workspace')
+    expect(workspace).not.toContain("value: 'month-grid'")
+  })
+
+  it('separates addon management from real portable addon packs and persists community shutdown', () => {
+    const panel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
+    const logic = read('Elephant/frontend/app/components/settings/useAddonsSettings.js')
+    const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js')
+    const packUi = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AddonPacksSettings.vue')
+
+    expect(panel).toContain("activePage === 'addons'")
+    expect(panel).toContain("activePage === 'packs'")
+    expect(panel).toContain('data-elephant-addon-settings-slot="addons.packs"')
+    expect(panel).toContain('Built-in addons')
+    expect(panel).toContain('Installed community addons')
+    expect(logic).toContain("invoke('tauri_addons_set_enabled'")
+    expect(logic).toContain('installedExternalAddons.map')
+    expect(packs).toContain("slot: 'addons.packs'")
+    expect(packs).toContain('options?.path')
+    expect(packUi).toContain("elephantnoteClient.directory.list(PACK_DIRECTORY)")
+    expect(packUi).toContain("addonsStore.runAction('elephant.addon-packs.apply'")
+    expect(packUi).not.toContain('samplePacks')
+  })
+
   it('lets Settings reorder and hide core and addon icons while keeping safety controls fixed', () => {
     const settings = read('Elephant/frontend/app/components/settings/SettingsPanel.vue')
     const organizer = read('Elephant/frontend/app/components/settings/IconRailLayoutSettings.vue')

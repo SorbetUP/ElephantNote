@@ -247,19 +247,25 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('irohSyncClient.deleteConflict')
   })
 
-  it('moves the Codex connection surface into an addon-owned component', () => {
+  it('moves the Codex connection and provider implementation into the addon', () => {
     const ai = readAi()
     const codex = readCodexSettings()
     const addon = readCodexAddon()
 
     expect(ai).toContain('class="en-ai-toolbar"')
-    expect(ai).not.toContain('en-ai-hero')
+    expect(ai).toContain("addonsStore.getContributions('ai.providers')")
+    expect(ai).not.toContain('<ChatgptSubscriptionCard')
+    expect(ai).not.toContain("invokeCodex('status')")
+    expect(ai).not.toContain('codexStatus')
+    expect(ai).not.toContain('elephant-codex-addon-enabled')
     expect(codex).toContain('<ChatgptSubscriptionCard')
     expect(codex).toContain("invokeCodex('status')")
     expect(codex).toContain("invokeCodex('login'")
     expect(codex).toContain("invokeCodex('logout')")
     expect(addon).toContain("ctx.registerContribution('ai.providers'")
-    expect(addon).toContain('elephant-codex-addon-enabled')
+    expect(addon).toContain('async getModels()')
+    expect(addon).toContain("settingsSection: 'codex'")
+    expect(exists('Elephant/frontend/src/renderer/src/addons/builtin/codexConnection.css')).toBe(false)
     expect(exists('Elephant/frontend/app/components/settings/SystemCodexSettings.vue')).toBe(false)
   })
 

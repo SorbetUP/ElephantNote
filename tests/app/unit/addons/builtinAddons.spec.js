@@ -1,45 +1,44 @@
 import { describe, expect, it } from 'vitest'
 import { ADDON_EXTENSION_POINTS, ElephantAddonManager } from '@/addons'
-import { addonInspectorAddon, builtinAddons } from '@/addons/builtin'
+import { addonPacksAddon, builtinAddons } from '@/addons/builtin'
 
 describe('builtin addons', () => {
-  it('exports the addon inspector as a disabled builtin addon', () => {
-    expect(builtinAddons).toContain(addonInspectorAddon)
-    expect(addonInspectorAddon.manifest).toMatchObject({
-      id: 'elephant.addon-inspector',
-      defaultEnabled: false
-    })
+  it('exports only the cleaned first-party catalogue', () => {
+    expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
+      'elephant.addon-packs',
+      'elephant.google-keep-import',
+      'elephant.codex-connection',
+      'elephant.calendar',
+      'elephant.sites',
+      'elephant.ai',
+      'elephant.sync'
+    ])
+    expect(builtinAddons).toContain(addonPacksAddon)
+    expect(builtinAddons.map((addon) => addon.manifest.id)).not.toContain('elephant.addon-inspector')
   })
 
-  it('registers addon inspector contributions when enabled', async () => {
-    const manager = new ElephantAddonManager({
-      router: { push: () => Promise.resolve() }
-    })
+  it('registers the required Addon Packs actions and settings contribution', async () => {
+    const manager = new ElephantAddonManager()
 
-    manager.register(addonInspectorAddon)
-    await manager.enable('elephant.addon-inspector')
+    manager.register(addonPacksAddon)
+    await manager.enable('elephant.addon-packs')
 
-    expect(manager.getContributions(ADDON_EXTENSION_POINTS.actions)).toHaveLength(1)
-    expect(manager.getContributions(ADDON_EXTENSION_POINTS.sidebarItems)).toHaveLength(1)
+    expect(manager.getContributions(ADDON_EXTENSION_POINTS.actions)
+      .map((entry) => entry.contribution.id)
+      .sort())
+      .toEqual([
+        'elephant.addon-packs.apply',
+        'elephant.addon-packs.create',
+        'elephant.addon-packs.ensure-develop-parity'
+      ])
     expect(manager.getContributions(ADDON_EXTENSION_POINTS.settingsSections)).toHaveLength(1)
   })
 
-  it('opens the Addons section in the active settings panel', async () => {
-    const openedSections = []
-    const handleOpenSettings = (event) => openedSections.push(event.detail?.section)
-    globalThis.addEventListener('elephantnote:open-settings', handleOpenSettings)
+  it('marks every optional first-party feature as disabled and removable by default', () => {
+    const optional = builtinAddons.filter((addon) => addon.manifest.id !== 'elephant.addon-packs')
 
-    try {
-      const manager = new ElephantAddonManager()
-      manager.register(addonInspectorAddon)
-      await manager.enable('elephant.addon-inspector')
-
-      const result = await manager.runAction('elephant.addon-inspector.open')
-
-      expect(openedSections).toEqual(['addons'])
-      expect(result).toEqual({ section: 'addons' })
-    } finally {
-      globalThis.removeEventListener('elephantnote:open-settings', handleOpenSettings)
-    }
+    expect(optional.every((addon) => addon.manifest.defaultEnabled === false)).toBe(true)
+    expect(optional.every((addon) => addon.manifest.removable === true)).toBe(true)
+    expect(addonPacksAddon.manifest.removable).toBe(false)
   })
 })

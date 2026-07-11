@@ -1,7 +1,7 @@
 <template>
   <article class="en-addon-row" :class="{ expanded }">
     <button class="en-addon-summary" type="button" @click="emit('toggle-details')">
-      <span class="en-addon-logo"><Package aria-hidden="true" /></span>
+      <span class="en-addon-logo"><AddonIcon :name="addon.manifest.icon" /></span>
       <span class="en-addon-copy">
         <span class="en-addon-title">
           <strong>{{ addon.manifest.name }}</strong>
@@ -62,18 +62,18 @@
         </button>
       </div>
 
-      <div v-if="addon.manifest.source === 'external'" class="en-addon-uninstall">
+      <div v-if="addon.manifest.removable !== false" class="en-addon-uninstall">
         <button
           v-if="!confirmingUninstall"
           class="en-danger-link"
           type="button"
           :disabled="busy"
           @click="confirmingUninstall = true"
-        ><Trash2 aria-hidden="true" /> Uninstall</button>
+        ><Trash2 aria-hidden="true" /> {{ removeLabel }}</button>
         <template v-else>
-          <span>The package will be removed. Private addon data will be kept.</span>
+          <span>{{ removeWarning }}</span>
           <button class="en-danger-link" type="button" :disabled="busy" @click="confirmUninstall">
-            <Trash2 aria-hidden="true" /> Confirm uninstall
+            <Trash2 aria-hidden="true" /> Confirm {{ removeLabel.toLowerCase() }}
           </button>
           <button class="en-secondary-button" type="button" :disabled="busy" @click="confirmingUninstall = false">Cancel</button>
         </template>
@@ -84,8 +84,9 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { BadgeCheck, ChevronDown, Package, Play, ShieldAlert, ShieldCheck, Trash2 } from '@lucide/vue'
+import { BadgeCheck, ChevronDown, Play, ShieldAlert, ShieldCheck, Trash2 } from '@lucide/vue'
 import { getAddonAccessLevel } from '@/addons/manifest'
+import AddonIcon from './AddonIcon.vue'
 
 const props = defineProps({
   addon: { type: Object, required: true },
@@ -112,6 +113,11 @@ const accessDescription = computed(() => ({
   trusted: 'Runs inside ElephantNote and can change the interface, editor and application behavior.',
   system: 'Ships with ElephantNote and is tested as part of the application.'
 }[accessLevel.value] || ''))
+const isExternal = computed(() => props.addon?.manifest?.source === 'external')
+const removeLabel = computed(() => isExternal.value ? 'Uninstall' : 'Remove')
+const removeWarning = computed(() => isExternal.value
+  ? 'The package will be removed. Private addon data will be kept.'
+  : 'The built-in addon will disappear from ElephantNote until you install it again.')
 
 const confirmUninstall = () => {
   confirmingUninstall.value = false
@@ -143,7 +149,7 @@ const permissionLabels = computed(() => {
 .en-addon-summary { min-width: 0; display: grid; grid-template-columns: 34px minmax(0, 1fr) 16px; align-items: center; gap: 11px; padding: 13px 14px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .en-addon-summary:hover { background: color-mix(in srgb, var(--en-soft, #e9eff7) 52%, transparent); }
 .en-addon-logo { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: var(--en-soft, #e9eff7); color: var(--en-primary, #2563eb); }
-.en-addon-logo svg { width: 17px; height: 17px; }
+.en-addon-logo :deep(svg) { width: 17px; height: 17px; }
 .en-addon-copy { min-width: 0; display: grid; gap: 3px; }
 .en-addon-copy > span:last-child { overflow: hidden; color: var(--en-muted, #667085); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
 .en-addon-title { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }

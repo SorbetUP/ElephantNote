@@ -55,6 +55,7 @@ jobs:
         run: |
           python build/scripts/finalize-android-followup.py
           python build/scripts/finalize-android-followup-hotfix.py
+          python build/scripts/finalize-android-followup-safety.py
           git rm -r --ignore-unmatch \
             Elephant/backend/tauri-plugin-elephant-android-vault/android/build \
             Elephant/backend/tauri-plugin-elephant-android-vault/android/.tauri
@@ -63,7 +64,8 @@ jobs:
             .github/workflows/android-foundations-rework.yml \
             android-followup-source-diagnosis.txt \
             build/scripts/finalize-android-followup.py \
-            build/scripts/finalize-android-followup-hotfix.py
+            build/scripts/finalize-android-followup-hotfix.py \
+            build/scripts/finalize-android-followup-safety.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \

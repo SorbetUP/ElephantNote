@@ -39,7 +39,8 @@ const createAddonManagerFacade = (managerRef) => Object.freeze({
   enable: (...args) => managerRef.current?.enable(...args),
   disable: (...args) => managerRef.current?.disable(...args),
   runAction: (...args) => managerRef.current?.runAction(...args),
-  on: (...args) => managerRef.current?.on(...args) || (() => {})
+  on: (...args) => managerRef.current?.on(...args) || (() => {}),
+  get external() { return managerRef.current?.external || null }
 })
 
 export const createAddonManager = (options = {}) => {

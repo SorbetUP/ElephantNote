@@ -10,17 +10,23 @@ It deliberately demonstrates capabilities that are impossible in the isolated Wo
 - access the Vue application, router, Pinia and application services through the trusted API;
 - receive automatic cleanup when the addon is disabled.
 
-## Package
+## Install and enable
+
+Trusted Workspace Lab is embedded in ElephantNote's official catalogue. In **Settings → Addons**:
+
+1. turn on Community Addons once;
+2. install Trusted Workspace Lab from the catalogue;
+3. use its ordinary addon switch.
+
+There is no separate full-access review panel or second confirmation flow. The access badge and description make clear that this package runs inside ElephantNote and is not sandboxed.
+
+For local development, build the same installable package with:
 
 ```bash
 node build/scripts/package-addon.mjs \
   examples/addons/trusted-workspace-lab \
   build/addons/trusted-workspace-lab.enaddon
 ```
-
-Install the package from **Settings → Addons → Install from file**. Enabling it opens a separate consent surface explaining that the addon runs inside ElephantNote and is not sandboxed.
-
-Approval is bound to the exact package hash. Rebuilding or updating the package requires approval again.
 
 ## Contract
 
@@ -35,4 +41,4 @@ export default {
 
 or a class with the same lifecycle methods.
 
-Full app access addons are expected to use the registration helpers whenever possible so ElephantNote can automatically remove commands, views, listeners and styles during deactivation. The `experimental` namespace exposes unstable internals for deeper integrations and can break between releases.
+Full app access addons are expected to use the registration helpers whenever possible so ElephantNote can automatically remove commands, views, listeners and styles during deactivation. The `experimental` namespace exposes unstable internals for deeper integrations and can break between ElephantNote releases.

@@ -22,9 +22,9 @@ const readBuiltinIndex = () => read('Elephant/frontend/src/renderer/src/addons/b
 const readImportAddon = () => read('Elephant/frontend/src/renderer/src/addons/builtin/googleKeepImport.js')
 const readSitesAddon = () => read('Elephant/frontend/src/renderer/src/addons/builtin/sites.js')
 const readCodexAddon = () => read('Elephant/frontend/src/renderer/src/addons/builtin/codexConnection.js')
-const readImportSettings = () => read('Elephant/frontend/app/components/settings/SystemImportSettings.vue')
-const readSitesSettings = () => read('Elephant/frontend/app/components/settings/SystemSitesSettings.vue')
-const readCodexSettings = () => read('Elephant/frontend/app/components/settings/SystemCodexSettings.vue')
+const readImportSettings = () => read('Elephant/frontend/src/renderer/src/addons/builtin/ui/ImportSettings.vue')
+const readSitesSettings = () => read('Elephant/frontend/src/renderer/src/addons/builtin/ui/SitesSettings.vue')
+const readCodexSettings = () => read('Elephant/frontend/src/renderer/src/addons/builtin/ui/CodexConnectionSettings.vue')
 
 
 describe('ElephantNote settings redesign', () => {
@@ -83,7 +83,7 @@ describe('ElephantNote settings redesign', () => {
     expect(importAddon).toContain("section: 'import'")
     expect(sitesAddon).toContain("section: 'sites'")
     expect(codexAddon).toContain("section: 'codex'")
-    expect(builtins.indexOf('addonProfilesAddon')).toBeLessThan(builtins.indexOf('googleKeepImportAddon'))
+    expect(builtins.indexOf('addonPacksAddon')).toBeLessThan(builtins.indexOf('googleKeepImportAddon'))
     expect(builtins.indexOf('googleKeepImportAddon')).toBeLessThan(builtins.indexOf('codexConnectionAddon'))
     expect(builtins.indexOf('codexConnectionAddon')).toBeLessThan(builtins.indexOf('calendarAddon'))
     expect(builtins.indexOf('calendarAddon')).toBeLessThan(builtins.indexOf('sitesAddon'))
@@ -213,7 +213,7 @@ describe('ElephantNote settings redesign', () => {
     expect(primitives).toContain('.en-settings-panel :deep(.en-ai-switch.small.active > span)')
   })
 
-  it('moves import and generated-site actions into system addon components', () => {
+  it('moves import and generated-site actions into addon-owned components', () => {
     const settings = readSettings()
     const imports = readImportSettings()
     const sites = readSitesSettings()
@@ -226,6 +226,8 @@ describe('ElephantNote settings redesign', () => {
     expect(sites).toContain("elephantnoteClient.features.set('sitePreview'")
     expect(sites).toContain('sitePreviewStore.openPreviewExternal')
     expect(sites).toContain('sitePreviewStore.stopPreview()')
+    expect(exists('Elephant/frontend/app/components/settings/SystemImportSettings.vue')).toBe(false)
+    expect(exists('Elephant/frontend/app/components/settings/SystemSitesSettings.vue')).toBe(false)
   })
 
   it('keeps Sync navigation at the top and makes retention directly editable', () => {
@@ -245,7 +247,7 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('irohSyncClient.deleteConflict')
   })
 
-  it('moves the Codex connection surface into a system addon', () => {
+  it('moves the Codex connection surface into an addon-owned component', () => {
     const ai = readAi()
     const codex = readCodexSettings()
     const addon = readCodexAddon()
@@ -258,6 +260,7 @@ describe('ElephantNote settings redesign', () => {
     expect(codex).toContain("invokeCodex('logout')")
     expect(addon).toContain("ctx.registerContribution('ai.providers'")
     expect(addon).toContain('elephant-codex-addon-enabled')
+    expect(exists('Elephant/frontend/app/components/settings/SystemCodexSettings.vue')).toBe(false)
   })
 
   it('separates common AI controls from advanced technical tuning', () => {

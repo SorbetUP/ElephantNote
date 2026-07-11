@@ -50,7 +50,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feature/rust-muya-complete
-          fetch-depth: 0
+          fetch-depth: 1
+
+      - name: Setup Rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
 
       - name: Patch only the verified Muya race and warnings
         shell: bash
@@ -130,6 +135,8 @@ jobs:
 
   parity:
     name: Rust and renderer parity
+    needs: guarded-programmatic-load-fix
+    if: always() && (needs.guarded-programmatic-load-fix.result == 'success' || needs.guarded-programmatic-load-fix.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:

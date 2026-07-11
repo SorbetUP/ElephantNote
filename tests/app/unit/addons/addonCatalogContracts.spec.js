@@ -10,15 +10,16 @@ describe('official addon branch catalogue', () => {
     const panel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
 
     expect(panel).toContain('<h3>Installed addons</h3>')
+    expect(panel).toContain('<h3>Built-in addon catalogue</h3>')
     expect(panel).not.toContain('<h3>Core addons</h3>')
   })
 
-  it('shows catalogue entries with real install and update actions', () => {
+  it('shows community catalogue entries with real install and update actions', () => {
     const panel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
     const logic = read('Elephant/frontend/app/components/settings/useAddonsSettings.js')
     const store = read('Elephant/frontend/src/renderer/src/store/addons.js')
 
-    expect(panel).toContain('<h3>Browse official addons</h3>')
+    expect(panel).toContain('<h3>Browse official community addons</h3>')
     expect(panel).toContain('v-for="addon in availableCatalogAddons"')
     expect(panel).toContain("addon.updateAvailable ? 'Update' : addon.installed ? 'Installed' : 'Install'")
     expect(logic).toContain('await addonsStore.loadAddonCatalog()')

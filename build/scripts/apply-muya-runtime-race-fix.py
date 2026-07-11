@@ -48,10 +48,16 @@ if adapter.count(old_error) != 1:
     raise SystemExit('legacy rejection log is not unique')
 adapter = adapter.replace(old_error, new_error, 1)
 
-state_assignment = '      this.__rustExpectedMarkdown = state.markdown\n'
-if adapter.count(state_assignment) != 2:
-    raise SystemExit('expected exactly two Rust render state assignments')
-adapter = adapter.replace(state_assignment, '')
+adapter, state_assignment_count = re.subn(
+    r'^\s*this\.__rustExpectedMarkdown = state\.markdown\n',
+    '',
+    adapter,
+    flags=re.MULTILINE,
+)
+if state_assignment_count != 2:
+    raise SystemExit(
+        f'expected exactly two Rust render state assignments, found {state_assignment_count}'
+    )
 
 external_clear = '    this.__rustExpectedMarkdown = null\n'
 if adapter.count(external_clear) != 1:

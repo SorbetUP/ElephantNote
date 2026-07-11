@@ -1,9 +1,14 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ElephantAddonManager } from '../../../../Elephant/frontend/src/renderer/src/addons/AddonManager.js'
 import { builtinAddons } from '../../../../Elephant/frontend/src/renderer/src/addons/builtin/index.js'
 import { normalizeAddonManifest } from '../../../../Elephant/frontend/src/renderer/src/addons/manifest.js'
 import { installExternalAddonRuntime } from '../../../../Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js'
+
+const root = process.cwd()
+const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 const createManifest = (overrides = {}) => ({
   id: 'com.example.addon',
@@ -103,6 +108,19 @@ describe('built-in addon catalogue', () => {
       'elephant.addon-packs.create',
       'elephant.addon-packs.ensure-develop-parity'
     ])
+  })
+
+  it('persists installation and enabled state separately for removable built-ins', () => {
+    const source = read('Elephant/frontend/src/renderer/src/addons/index.js')
+
+    expect(source).toContain("BUILTIN_INSTALL_STORAGE_KEY = 'elephantnote:installed-built-in-addons:v1'")
+    expect(source).toContain("BUILTIN_ENABLED_STORAGE_KEY = 'elephantnote:enabled-built-in-addons:v1'")
+    expect(source).toContain('manager.installBuiltin = async (id) =>')
+    expect(source).toContain('manager.uninstallBuiltin = async (id) =>')
+    expect(source).toContain('manager.restoreBuiltinEnabledState = async () =>')
+    expect(source).toContain("manager.on('enabled', persistEnabledState)")
+    expect(source).toContain("manager.on('disabled', persistEnabledState)")
+    expect(source).not.toContain('manager.enableDefaultAddons()')
   })
 
   it('keeps AI and Iroh Sync inert until their addons are enabled', async () => {

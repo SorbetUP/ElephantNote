@@ -62,9 +62,9 @@ describe('external addon manifest contracts', () => {
 })
 
 describe('built-in starter addons', () => {
-  it('ships setup first, extracted system features, useful workflows and one developer inspector', () => {
+  it('ships addon packs first, extracted system features, useful workflows and one developer inspector', () => {
     expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
-      'elephant.addon-profiles',
+      'elephant.addon-packs',
       'elephant.google-keep-import',
       'elephant.codex-connection',
       'elephant.calendar',
@@ -74,9 +74,9 @@ describe('built-in starter addons', () => {
       'elephant.vault-overview',
       'elephant.addon-inspector'
     ])
-    expect(builtinAddons.filter((addon) => addon.manifest.defaultEnabled)).toHaveLength(3)
+    expect(builtinAddons.filter((addon) => addon.manifest.defaultEnabled)).toHaveLength(4)
+    expect(builtinAddons.find((addon) => addon.manifest.id === 'elephant.addon-packs')?.manifest.defaultEnabled).toBe(true)
     for (const id of [
-      'elephant.addon-profiles',
       'elephant.google-keep-import',
       'elephant.codex-connection',
       'elephant.calendar',
@@ -95,16 +95,18 @@ describe('built-in starter addons', () => {
 
     await manager.enableDefaultAddons()
 
+    expect(manager.get('elephant.addon-packs')?.enabled).toBe(true)
     expect(manager.get('elephant.daily-notes')?.enabled).toBe(true)
     expect(manager.get('elephant.quick-capture')?.enabled).toBe(true)
     expect(manager.get('elephant.vault-overview')?.enabled).toBe(true)
-    expect(manager.get('elephant.addon-profiles')?.enabled).toBe(false)
     expect(manager.get('elephant.google-keep-import')?.enabled).toBe(false)
     expect(manager.get('elephant.codex-connection')?.enabled).toBe(false)
     expect(manager.get('elephant.calendar')?.enabled).toBe(false)
     expect(manager.get('elephant.sites')?.enabled).toBe(false)
     expect(manager.get('elephant.addon-inspector')?.enabled).toBe(false)
     expect(manager.getActions().map((entry) => entry.contribution.id).sort()).toEqual([
+      'elephant.addon-packs.apply',
+      'elephant.addon-packs.create',
       'elephant.daily-notes.open-today',
       'elephant.quick-capture.create',
       'elephant.vault-overview.generate'

@@ -22,8 +22,9 @@ export const googleKeepImportAddon = {
       navigationLabel: 'Import',
       navigationIcon: 'download',
       standalone: true,
+      chrome: false,
       title: 'Import',
-      description: 'Import Google Keep archives, web pages and RSS feeds without adding these tools to the vanilla app.',
+      description: 'Import Google Keep archives, web pages and RSS feeds.',
       order: 20,
       render: mountSettingsComponent(ctx, ImportSettings)
     })

@@ -121,6 +121,7 @@ export const normalizeAddonManifest = (manifest = {}) => {
     version,
     description: normalizeString(manifest.description),
     author: normalizeString(manifest.author),
+    icon: normalizeString(manifest.icon, 'package'),
     apiVersion,
     minAppVersion: normalizeString(manifest.minAppVersion),
     permissions: normalizePermissions(manifest.permissions),
@@ -131,7 +132,8 @@ export const normalizeAddonManifest = (manifest = {}) => {
     source: normalizeString(manifest.source, 'builtin'),
     packageHash: normalizeString(manifest.packageHash),
     installedAt: normalizeString(manifest.installedAt),
-    defaultEnabled: manifest.defaultEnabled === true
+    defaultEnabled: manifest.defaultEnabled === true,
+    removable: manifest.removable !== false
   })
 }
 

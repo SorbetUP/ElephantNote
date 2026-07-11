@@ -27,6 +27,9 @@
         </template>
       </section>
 
+      <p v-if="message" class="en-addons-feedback" :class="{ error: messageIsError }">{{ message }}</p>
+      <p v-if="lastError" class="en-addons-feedback error">{{ lastError }}</p>
+
       <section class="en-addons-list-section">
         <header>
           <h3>Installed addons</h3>
@@ -49,6 +52,28 @@
         </div>
       </section>
 
+      <section class="en-addons-list-section">
+        <header>
+          <div>
+            <h3>Built-in addon catalogue</h3>
+            <p>Install only the ElephantNote features you actually use.</p>
+          </div>
+          <span>{{ availableBuiltInAddons.length }}</span>
+        </header>
+        <div class="en-addons-card en-catalog-list">
+          <article v-for="addon in availableBuiltInAddons" :key="addon.id" class="en-catalog-row">
+            <span class="en-catalog-icon"><AddonIcon :name="addon.icon" /></span>
+            <div class="en-catalog-copy">
+              <div><strong>{{ addon.name }}</strong><small>v{{ addon.version }}</small></div>
+              <p>{{ addon.description }}</p>
+              <span>Built in by ElephantNote</span>
+            </div>
+            <button class="en-primary-button" type="button" :disabled="operationInProgress" @click="installBuiltinAddon(addon)">Install</button>
+          </article>
+          <div v-if="!availableBuiltInAddons.length" class="en-addons-empty">{{ query ? 'No available built-in addon matches this search.' : 'Every available built-in addon is installed.' }}</div>
+        </div>
+      </section>
+
       <section v-if="!communityConsentLoaded" class="en-addons-card en-addons-loading">
         <span>Loading community addon settings…</span>
       </section>
@@ -68,7 +93,6 @@
         <button class="en-primary-button" type="button" :disabled="!riskAccepted || operationInProgress" @click="enableCommunityAddons">
           Turn on community addons
         </button>
-        <p v-if="lastError" class="en-addons-feedback error">{{ lastError }}</p>
       </section>
 
       <template v-else>
@@ -79,9 +103,6 @@
           </div>
           <button class="en-switch active" type="button" role="switch" aria-label="Community addons enabled" aria-checked="true" :disabled="operationInProgress" @click="disableCommunityAddons"><span /></button>
         </section>
-
-        <p v-if="message" class="en-addons-feedback" :class="{ error: messageIsError }">{{ message }}</p>
-        <p v-if="lastError" class="en-addons-feedback error">{{ lastError }}</p>
 
         <section class="en-addons-list-section">
           <header>
@@ -107,12 +128,12 @@
 
         <section class="en-addons-list-section">
           <header>
-            <h3>Browse official addons</h3>
+            <h3>Browse official community addons</h3>
             <span>{{ availableCatalogAddons.length }}</span>
           </header>
           <div class="en-addons-card en-catalog-list">
             <article v-for="addon in availableCatalogAddons" :key="addon.id" class="en-catalog-row">
-              <span class="en-catalog-icon"><Download aria-hidden="true" /></span>
+              <span class="en-catalog-icon"><AddonIcon :name="addon.icon || 'package'" /></span>
               <div class="en-catalog-copy">
                 <div><strong>{{ addon.name }}</strong><small>v{{ addon.version }}</small></div>
                 <p>{{ addon.description }}</p>
@@ -149,7 +170,8 @@
 
 <script setup>
 import { ref } from 'vue'
-import { Download, Layers3, Package, Plus, RefreshCw, Search, ShieldAlert } from '@lucide/vue'
+import { Layers3, Package, Plus, RefreshCw, Search, ShieldAlert } from '@lucide/vue'
+import AddonIcon from './AddonIcon.vue'
 import AddonSettingsRow from './AddonSettingsRow.vue'
 import { useAddonsSettings } from './useAddonsSettings'
 
@@ -169,12 +191,14 @@ const {
   addonPacksEnabled,
   filteredBuiltInAddons,
   filteredExternalAddons,
+  availableBuiltInAddons,
   availableCatalogAddons,
   actionsForAddon,
   toggleDetails,
   refreshCatalog,
   enableCommunityAddons,
   disableCommunityAddons,
+  installBuiltinAddon,
   installAddonPackage,
   installCatalogAddon,
   toggleAddon,

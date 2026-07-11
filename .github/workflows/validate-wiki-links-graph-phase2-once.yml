@@ -34,9 +34,9 @@ jobs:
         shell: bash
         run: |
           set +e
-          pnpm exec vitest run tests/app/unit/wikiGraphSurface.spec.js > /tmp/wiki-vitest.log 2>&1
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run tests/app/unit/wikiGraphSurface.spec.js > /tmp/wiki-vitest.log 2>&1
           vitest_status=$?
-          pnpm exec eslint Elephant/frontend/app/components/views/semanticGraphViewHelpers.js tests/app/unit/wikiGraphSurface.spec.js > /tmp/wiki-eslint.log 2>&1
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/views/semanticGraphViewHelpers.js tests/app/unit/wikiGraphSurface.spec.js > /tmp/wiki-eslint.log 2>&1
           eslint_status=$?
           cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features > /tmp/wiki-cargo-check.log 2>&1
           cargo_check_status=$?

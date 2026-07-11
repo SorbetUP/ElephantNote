@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{json, Value};
 use tauri::{AppHandle, State};
 
 use crate::sync::IrohSyncState;
@@ -56,6 +56,13 @@ pub async fn iroh_sync_status(
     sync::sync_status_iroh(None, &runtime.endpoint_id().to_string())?
   };
   Ok(with_running(value, running))
+}
+
+#[tauri::command(rename = "tauri_sync_shutdown")]
+pub async fn iroh_sync_shutdown(state: State<'_, IrohSyncState>) -> R<Value> {
+  let _operation = state.lock_operation().await;
+  state.shutdown().await;
+  Ok(json!({ "running": false, "started": false }))
 }
 
 #[tauri::command(rename = "tauri_sync_enqueue")]

@@ -34,15 +34,9 @@ Full app access is intentionally not a sandbox. The permissions shown for such a
 
 The user accepts the general third-party-code risk once when enabling Community Addons.
 
-After that, the ordinary switch is the only activation control for every addon. Enabling a full app access addon:
+After that, the ordinary switch is the only activation control for every addon. Enabling a full app access addon starts that package directly; there is no second review dialog, extra checkbox, grant button or visible safe-mode setting.
 
-1. records approval for the exact installed package hash;
-2. clears internal crash-recovery mode when necessary;
-3. starts the addon.
-
-There is no second review dialog, extra checkbox or visible trusted-safe-mode setting. Updating or rebuilding the package changes its hash, so the new package is approved only when the user explicitly enables that version.
-
-Before a trusted addon starts, ElephantNote writes an activation marker. If the renderer stops before activation completes, the next launch prevents trusted startup. The user can recover by enabling the addon again with its normal switch.
+Internally, activation is associated with the exact installed package hash and interrupted startup is recovered automatically. These mechanisms do not add another user-facing consent step. Updating or rebuilding the package changes its hash, and explicitly enabling the updated package is the approval action.
 
 ## Built in by ElephantNote
 
@@ -50,7 +44,7 @@ System addons ship with the application, are tested with it and remain independe
 
 The first extracted system features are listed first in Settings:
 
-1. Addon Profiles;
+1. Addon Packs;
 2. Google Keep Import and web/RSS import;
 3. Codex Connection;
 4. Calendar;
@@ -182,4 +176,4 @@ It exercises:
 
 ## Security expectations
 
-Only enable a full app access addon when you trust its publisher, source, dependencies and installed package. Publisher signatures remain a future hardening increment. Hash-bound approval and interrupted-activation recovery are implemented now.
+Only enable a full app access addon when you trust its publisher, source, dependencies and installed package. Publisher signatures remain a future hardening increment.

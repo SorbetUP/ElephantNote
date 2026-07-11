@@ -11,7 +11,7 @@
       `en-theme-${themeClassId}`,
       {
         'en-pinned-card-halo': preferences.pinnedCardHalo,
-        'en-local-ai-disabled': !showLocalModelLibrary
+        'en-local-ai-disabled': !aiAddonEnabled
       }
     ]"
     :style="shellStyle"
@@ -53,7 +53,7 @@
         </div>
       </div>
     </div>
-    <ChatSidebar v-if="store.chatSidebarOpen" />
+    <ChatSidebar v-if="aiAddonEnabled && store.chatSidebarOpen" />
     <search-modal />
     <settings-panel
       v-if="isSettingsOpen"
@@ -75,6 +75,7 @@ import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { usePreferencesStore } from '@/store/preferences'
+import { useAddonsStore } from '@/store/addons'
 import { useEditorStore } from '@/store/editor'
 import { useSearchStore } from '../../stores/searchStore'
 import { useCanvasStore } from '../../stores/canvasStore'
@@ -84,7 +85,6 @@ import {
   getThemeTokens,
   normalizeThemeId
 } from 'common/elephantnote/appearance'
-import { elephantnoteClient } from '../../services/elephantnoteClient'
 import EmptyVaultPicker from './EmptyVaultPicker.vue'
 import TopVaultBar from './TopVaultBar.vue'
 import IconRail from '../navigation/IconRail.vue'
@@ -97,6 +97,7 @@ import '../../styles/app-shell.css'
 
 const store = useVaultStore()
 const preferences = usePreferencesStore()
+const addonsStore = useAddonsStore()
 const editorStore = useEditorStore()
 const searchStore = useSearchStore()
 const navigationStore = useNavigationStore()
@@ -107,14 +108,18 @@ const activeAddonViewId = ref('')
 const theme = ref(normalizeThemeId(window.localStorage.getItem(ELEPHANTNOTE_THEME_STORAGE_KEY)))
 const sidebarWidth = ref(232)
 const sidebarVisible = ref(true)
-const localAi = ref({ enabled: true, showModelLibraryInSidebar: true })
 let sidebarResizeFrame = null
 let pendingSidebarWidth = null
 
 const activeThemeTokens = computed(() => getThemeTokens(theme.value))
 const themeMode = computed(() => getThemeMode(theme.value))
 const themeClassId = computed(() => theme.value.replace(/[^a-z0-9-]/gi, '-'))
-const showLocalModelLibrary = computed(() => localAi.value.enabled !== false && localAi.value.showModelLibraryInSidebar !== false)
+const aiAddonEnabled = computed(() => addonsStore.items.some(
+  (addon) => addon.manifest.id === 'elephant.ai' && addon.enabled
+))
+const availableAddonViewIds = computed(() => addonsStore.getContributions('views')
+  .map((entry) => entry?.contribution?.id)
+  .filter(Boolean))
 const shellStyle = computed(() => ({
   ...activeThemeTokens.value,
   '--en-sidebar-width': `${sidebarWidth.value}px`
@@ -143,7 +148,7 @@ const openSearch = () => {
 
 const openAddonView = (viewId) => {
   const normalized = typeof viewId === 'string' ? viewId.trim() : ''
-  if (!normalized) return
+  if (!normalized || !availableAddonViewIds.value.includes(normalized)) return
   store.closeNote()
   store.activeWorkspaceView = 'notes'
   activeAddonViewId.value = normalized
@@ -171,7 +176,7 @@ watch(theme, (mode) => {
 watch(
   () => [store.activeWorkspaceView, store.openedNotePath, store.activeVaultId],
   ([workspaceView, openedNotePath]) => {
-    if (workspaceView === 'calendar') {
+    if (workspaceView === 'calendar' || workspaceView === 'models' || workspaceView === 'chat') {
       store.setWorkspaceView('notes', { record: false })
       activeAddonViewId.value = ''
       return
@@ -179,6 +184,14 @@ watch(
     if (openedNotePath || workspaceView !== 'notes') activeAddonViewId.value = ''
   }
 )
+
+watch(availableAddonViewIds, (ids) => {
+  if (activeAddonViewId.value && !ids.includes(activeAddonViewId.value)) closeAddonView()
+})
+
+watch(aiAddonEnabled, (enabled) => {
+  if (!enabled) store.chatSidebarOpen = false
+}, { immediate: true })
 
 provide('elephantnoteTheme', theme)
 provide('setElephantnoteTheme', setTheme)
@@ -266,29 +279,8 @@ const handleTabSaved = (_event, tabId) => {
   }
 }
 
-const applyAiConfigVisibility = (config = {}) => {
-  localAi.value = { ...localAi.value, ...(config.localAi || {}) }
-  if (!showLocalModelLibrary.value && store.activeWorkspaceView === 'models') {
-    store.setWorkspaceView('notes')
-  }
-}
-
-const loadAiConfigVisibility = async () => {
-  try {
-    const config = await elephantnoteClient.ai.getConfig()
-    applyAiConfigVisibility(config)
-  } catch (error) {
-    console.warn('Unable to load ElephantNote AI visibility settings:', error)
-  }
-}
-
-const handleAiConfigChanged = (event) => {
-  applyAiConfigVisibility(event.detail || {})
-}
-
 onMounted(() => {
   window.addEventListener('keydown', handleShortcut)
-  window.addEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
   window.addEventListener('elephantnote:open-settings', handleOpenSettingsEvent)
   window.tauri.ipcRenderer.on('mt::tab-saved', handleTabSaved)
   setTheme(theme.value)
@@ -302,12 +294,10 @@ onMounted(() => {
     preferences.SET_SINGLE_PREFERENCE({ type: 'autoSave', value: true })
   }
   store.load()
-  loadAiConfigVisibility()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleShortcut)
-  window.removeEventListener('elephantnote:ai-config-changed', handleAiConfigChanged)
   window.removeEventListener('elephantnote:open-settings', handleOpenSettingsEvent)
   if (sidebarResizeFrame) {
     window.cancelAnimationFrame(sidebarResizeFrame)
@@ -378,10 +368,6 @@ onBeforeUnmount(() => {
 .en-sidebar-resizer {
   background: var(--en-border);
   cursor: col-resize;
-}
-
-:global(.en-local-ai-disabled .en-rail-icon[title="Models"]) {
-  display: none !important;
 }
 
 :global(.en-settings-close) {

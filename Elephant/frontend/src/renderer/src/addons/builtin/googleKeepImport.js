@@ -1,4 +1,4 @@
-import SystemImportSettings from 'elephant-front/components/settings/SystemImportSettings.vue'
+import ImportSettings from './ui/ImportSettings.vue'
 import { mountSettingsComponent } from './settingsComponentHost'
 
 const ADDON_ID = 'elephant.google-keep-import'
@@ -25,7 +25,7 @@ export const googleKeepImportAddon = {
       title: 'Import',
       description: 'Import Google Keep archives, web pages and RSS feeds without adding these tools to the vanilla app.',
       order: 20,
-      render: mountSettingsComponent(ctx, SystemImportSettings)
+      render: mountSettingsComponent(ctx, ImportSettings)
     })
   }
 }

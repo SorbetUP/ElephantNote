@@ -1,13 +1,16 @@
 <template>
   <div v-if="!view" class="en-addon-router-empty">
     <h2>Addon view unavailable</h2>
-    <p>The addon may have been disabled or uninstalled.</p>
+    <p>The addon may have been disabled, removed or uninstalled.</p>
     <button type="button" @click="emit('close')">Back to notes</button>
   </div>
   <calendar-addon-workspace
     v-else-if="view.contribution.kind === 'calendar-v1'"
     :view="view"
     @close="emit('close')"
+  />
+  <models-view
+    v-else-if="view.contribution.kind === 'ai-models-v1'"
   />
   <addon-workspace-host
     v-else-if="view.contribution.kind === 'task-manager-v1'"
@@ -26,6 +29,7 @@ import { computed } from 'vue'
 import { useAddonsStore } from '@/store/addons'
 import AddonWorkspaceHost from './AddonWorkspaceHost.vue'
 import CalendarAddonWorkspace from './CalendarAddonWorkspace.vue'
+import ModelsView from './ModelsView.vue'
 
 const props = defineProps({ viewId: { type: String, required: true } })
 const emit = defineEmits(['close'])

@@ -19,7 +19,7 @@
     <wiki-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'wiki'" />
     <atomic-graph-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'graph'" />
     <sigma-canvas v-else-if="!hasOpenNote && store.activeWorkspaceView === 'canvas'" />
-    <site-preview-panel v-if="!hasOpenNote && !activeAddonViewId && store.activeWorkspaceView === 'notes'" />
+    <site-preview-panel v-if="sitesAddonEnabled && !hasOpenNote && !activeAddonViewId && store.activeWorkspaceView === 'notes'" />
     <note-editor-host
       v-if="hasOpenNote"
       class="en-main-editor"
@@ -30,6 +30,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useVaultStore } from '../../stores/vaultStore'
+import { useAddonsStore } from '@/store/addons'
 import LibraryToolbar from '../library/LibraryToolbar.vue'
 import LibraryGrid from '../library/LibraryGrid.vue'
 import NoteEditorHost from '../editor/NoteEditorHost.vue'
@@ -48,8 +49,12 @@ const props = defineProps({
 })
 const emit = defineEmits(['close-addon-view'])
 const store = useVaultStore()
+const addonsStore = useAddonsStore()
 const hasOpenNote = computed(() => !!store.openedNotePath)
 const activeAddonViewId = computed(() => props.activeAddonViewId)
+const sitesAddonEnabled = computed(() => addonsStore.items.some(
+  (addon) => addon.manifest.id === 'elephant.sites' && addon.enabled
+))
 </script>
 
 <style scoped>

@@ -76,6 +76,7 @@ const activateActions = (manager) => {
 const createInvoke = (files) => vi.fn(async (command, payload = {}) => {
   if (command === 'tauri_addons_catalog_list') return catalog
   if (command === 'tauri_prefs_get') return true
+  if (command === 'tauri_addons_set_enabled') return { addonId: payload.addonId, enabled: payload.enabled === true }
   if (command === 'tauri_notes_write') {
     files.set(payload.relativePath, payload.content)
     return { ok: true, path: payload.relativePath }
@@ -116,7 +117,8 @@ describe('Addon Packs built-in', () => {
       snapshot('com.example.alpha', { name: 'Alpha', version: '1.0.0', enabled: true }),
       snapshot('elephant.calendar', { source: 'builtin', enabled: false })
     ])
-    vi.stubGlobal('__TAURI__', { core: { invoke: createInvoke(files) } })
+    const invoke = createInvoke(files)
+    vi.stubGlobal('__TAURI__', { core: { invoke } })
 
     const actions = activateActions(manager)
     const created = await actions.get('elephant.addon-packs.create').run()
@@ -147,7 +149,24 @@ describe('Addon Packs built-in', () => {
     expect(records.get('com.example.alpha').enabled).toBe(false)
     expect(records.get('com.example.beta').enabled).toBe(true)
     expect(records.get('elephant.calendar').enabled).toBe(true)
+    expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', { addonId: 'com.example.alpha', enabled: false })
+    expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', { addonId: 'com.example.beta', enabled: true })
     expect(files.get(REPORT_PATH)).toContain('| `com.example.beta` | catalog | 2.0.0 | Enabled | Installed |')
+  })
+
+  it('creates and applies a named pack selected by path', async () => {
+    const files = new Map()
+    const { manager } = createManager([snapshot('elephant.calendar', { source: 'builtin', enabled: true })])
+    vi.stubGlobal('__TAURI__', { core: { invoke: createInvoke(files) } })
+    const actions = activateActions(manager)
+    const path = '.elephantnote/addons/packs/work.enaddonpack'
+
+    const created = await actions.get('elephant.addon-packs.create').run({ path, name: 'Work' })
+    expect(created.path).toBe(path)
+    expect(JSON.parse(files.get(path)).name).toBe('Work')
+
+    const applied = await actions.get('elephant.addon-packs.apply').run({ path })
+    expect(applied.packPath).toBe(path)
   })
 
   it('rejects catalogue entries that are not in the official catalogue', async () => {

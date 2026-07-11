@@ -1,3 +1,4 @@
+import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
 import { useSitePreviewStore } from 'elephant-front/sitePreview/sitePreviewStore'
 import SitesSettings from './ui/SitesSettings.vue'
 import { mountSettingsComponent } from './settingsComponentHost'
@@ -10,6 +11,7 @@ const stopSitesRuntime = async () => {
     await previewStore.stopPreview().catch(() => {})
   }
   previewStore.clear()
+  await elephantnoteClient.features.set('sitePreview', false).catch(() => {})
 }
 
 export const sitesAddon = {

@@ -1,5 +1,5 @@
 <template>
-  <div class="en-addon-import-settings">
+  <section class="en-settings-group">
     <div class="en-settings-row">
       <div class="en-settings-row-copy">
         <strong>Google Keep archive</strong>
@@ -19,7 +19,7 @@
       <button type="button" :disabled="isImportingSource || !sourceUrl" @click="importRssSource">Import RSS</button>
       <span>{{ sourceImportMessage || importMessage }}</span>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup>
@@ -75,7 +75,3 @@ const importRssSource = async () => {
   }
 }
 </script>
-
-<style scoped>
-.en-addon-import-settings { display: grid; gap: 14px; }
-</style>

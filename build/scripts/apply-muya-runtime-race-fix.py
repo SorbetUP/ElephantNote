@@ -14,85 +14,96 @@ if guard_import not in adapter:
     adapter = adapter.replace(import_line, import_line + guard_import, 1)
 
 constructor_line = '    this.__rustExpectedMarkdown = null\n'
-if constructor_line not in adapter:
-    raise SystemExit('legacy expected-markdown constructor state is missing')
+if adapter.count(constructor_line) != 1:
+    raise SystemExit('legacy expected-markdown constructor state is not unique')
 adapter = adapter.replace(
     constructor_line,
     '    this.__rustProgrammaticChanges = this.__rustProgrammaticChanges || createProgrammaticChangeGuard()\n',
     1,
 )
 
-expected_block = dedent('''\
-      if (this.__rustExpectedMarkdown === markdown) {
-        this.__rustExpectedMarkdown = null
-        return
-      }
-''')
-if expected_block not in adapter:
-    raise SystemExit('legacy expected-markdown listener block is missing')
-adapter = adapter.replace(expected_block, '      if (this.__programmaticGuard().consume()) return\n', 1)
+expected_block = (
+    '      if (this.__rustExpectedMarkdown === markdown) {\n'
+    '        this.__rustExpectedMarkdown = null\n'
+    '        return\n'
+    '      }\n'
+)
+if adapter.count(expected_block) != 1:
+    raise SystemExit('legacy expected-markdown listener block is not unique')
+adapter = adapter.replace(
+    expected_block,
+    '      if (this.__programmaticGuard().consume()) return\n',
+    1,
+)
 
 old_error = "      console.error('[elephantnote:muya-rust] rejected non-canonical JavaScript mutation')\n"
-new_error = dedent('''\
-      console.error('[elephantnote:muya-rust] rejected non-canonical JavaScript mutation', {
-        canonicalLength: state.markdown.length,
-        receivedLength: markdown.length,
-        revision: state.revision
-      })
-''')
+new_error = (
+    "      console.error('[elephantnote:muya-rust] rejected non-canonical JavaScript mutation', {\n"
+    '        canonicalLength: state.markdown.length,\n'
+    '        receivedLength: markdown.length,\n'
+    '        revision: state.revision\n'
+    '      })\n'
+)
 if adapter.count(old_error) != 1:
     raise SystemExit('legacy rejection log is not unique')
 adapter = adapter.replace(old_error, new_error, 1)
 
-adapter = re.sub(r'^\s*this\.__rustExpectedMarkdown = state\.markdown\n', '', adapter, flags=re.MULTILINE)
-adapter = re.sub(r'^\s*this\.__rustExpectedMarkdown = null\n', '', adapter, flags=re.MULTILINE)
+state_assignment = '      this.__rustExpectedMarkdown = state.markdown\n'
+if adapter.count(state_assignment) != 2:
+    raise SystemExit('expected exactly two Rust render state assignments')
+adapter = adapter.replace(state_assignment, '')
+
+external_clear = '    this.__rustExpectedMarkdown = null\n'
+if adapter.count(external_clear) != 1:
+    raise SystemExit('expected exactly one external expected-markdown clear')
+adapter = adapter.replace(external_clear, '', 1)
 
 old_super_calls = adapter.count('super.setMarkdown(')
 if old_super_calls != 3:
     raise SystemExit(f'expected three historical super.setMarkdown calls, found {old_super_calls}')
 adapter = adapter.replace('super.setMarkdown(', 'this.__setProgrammaticMarkdown(')
 
-listener_anchor = dedent('''\
-    this.on('change', this.__rustChangeListener)
-    this.on('selectionChange', this.__rustSelectionListener)
-  }
-
-  __reportRustError = (error) => {
-''')
-helper_block = dedent('''\
-    this.on('change', this.__rustChangeListener)
-    this.on('selectionChange', this.__rustSelectionListener)
-  }
-
-  __programmaticGuard () {
-    if (!this.__rustProgrammaticChanges) {
-      this.__rustProgrammaticChanges = createProgrammaticChangeGuard()
-    }
-    return this.__rustProgrammaticChanges
-  }
-
-  __setProgrammaticMarkdown (markdown, cursor, isRenderCursor = true, muyaIndexCursor, blocks) {
-    return this.__programmaticGuard().run(() => super.setMarkdown(
-      markdown,
-      cursor,
-      isRenderCursor,
-      muyaIndexCursor,
-      blocks
-    ))
-  }
-
-  __reportRustError = (error) => {
-''')
-if listener_anchor not in adapter:
-    raise SystemExit('listener anchor for the programmatic guard is missing')
+listener_anchor = (
+    "    this.on('change', this.__rustChangeListener)\n"
+    "    this.on('selectionChange', this.__rustSelectionListener)\n"
+    '  }\n\n'
+    '  __reportRustError = (error) => {\n'
+)
+helper_block = (
+    "    this.on('change', this.__rustChangeListener)\n"
+    "    this.on('selectionChange', this.__rustSelectionListener)\n"
+    '  }\n\n'
+    '  __programmaticGuard () {\n'
+    '    if (!this.__rustProgrammaticChanges) {\n'
+    '      this.__rustProgrammaticChanges = createProgrammaticChangeGuard()\n'
+    '    }\n'
+    '    return this.__rustProgrammaticChanges\n'
+    '  }\n\n'
+    '  __setProgrammaticMarkdown (markdown, cursor, isRenderCursor = true, muyaIndexCursor, blocks) {\n'
+    '    return this.__programmaticGuard().run(() => super.setMarkdown(\n'
+    '      markdown,\n'
+    '      cursor,\n'
+    '      isRenderCursor,\n'
+    '      muyaIndexCursor,\n'
+    '      blocks\n'
+    '    ))\n'
+    '  }\n\n'
+    '  __reportRustError = (error) => {\n'
+)
+if adapter.count(listener_anchor) != 1:
+    raise SystemExit('listener anchor for the programmatic guard is not unique')
 adapter = adapter.replace(listener_anchor, helper_block, 1)
 
-selection_guard = '      if (!this.__rustMirror?.active || this.__rustApplying || this.__rustComposition) return\n'
+selection_guard = (
+    '      if (!this.__rustMirror?.active || this.__rustApplying || '
+    'this.__rustComposition) return\n'
+)
 if adapter.count(selection_guard) != 1:
     raise SystemExit('selection listener guard is not unique')
 adapter = adapter.replace(
     selection_guard,
-    '      if (!this.__rustMirror?.active || this.__rustApplying || this.__rustComposition || this.__programmaticGuard().pending) return\n',
+    '      if (!this.__rustMirror?.active || this.__rustApplying || '
+    'this.__rustComposition || this.__programmaticGuard().pending) return\n',
     1,
 )
 
@@ -119,9 +130,13 @@ if '__rustExpectedMarkdown' in adapter:
     raise SystemExit('legacy expected-markdown state remains after patch')
 if adapter.count('super.setMarkdown(') != 1:
     raise SystemExit('only the guarded internal super.setMarkdown call may remain')
+if adapter.count('this.__setProgrammaticMarkdown(') != 3:
+    raise SystemExit('all three programmatic render paths must use the guard')
 adapter_path.write_text(adapter)
 
 guard_path = Path('Elephant/frontend/src/renderer/src/muya/rustProgrammaticChangeGuard.js')
+if guard_path.exists():
+    raise SystemExit(f'{guard_path} already exists')
 guard_path.write_text(dedent('''\
 export const createProgrammaticChangeGuard = () => {
   let pending = 0
@@ -152,6 +167,8 @@ export const createProgrammaticChangeGuard = () => {
 '''))
 
 test_path = Path('tests/app/unit/muyaRustProgrammaticLoad.spec.js')
+if test_path.exists():
+    raise SystemExit(f'{test_path} already exists')
 test_path.write_text(dedent('''\
 import { describe, expect, it, vi } from 'vitest'
 
@@ -184,7 +201,12 @@ describe('Muya Rust programmatic render guard', () => {
 for rust_name in ['muya_advanced.rs', 'muya_surface.rs']:
     path = Path('Elephant/backend/tauri/src/markdown') / rust_name
     text = path.read_text()
-    updated, count = re.subn(r'MuyaEditorTransaction,\s*MuyaSelection,', 'MuyaEditorTransaction,', text, count=1)
+    updated, count = re.subn(
+        r'MuyaEditorTransaction,\s*MuyaSelection,',
+        'MuyaEditorTransaction,',
+        text,
+        count=1,
+    )
     if count != 1:
         raise SystemExit(f'unused MuyaSelection import is not unique in {path}')
     path.write_text(updated)

@@ -1,4 +1,4 @@
-import SystemCodexSettings from 'elephant-front/components/settings/SystemCodexSettings.vue'
+import CodexConnectionSettings from './ui/CodexConnectionSettings.vue'
 import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
 import './codexConnection.css'
 import { mountSettingsComponent } from './settingsComponentHost'
@@ -60,7 +60,7 @@ export const codexConnectionAddon = {
       title: 'Codex Connection',
       description: 'Connect or disconnect the existing ChatGPT subscription runtime and review usage limits.',
       order: 30,
-      render: mountSettingsComponent(ctx, SystemCodexSettings)
+      render: mountSettingsComponent(ctx, CodexConnectionSettings)
     })
   },
 

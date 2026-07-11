@@ -1,7 +1,16 @@
+import { useSitePreviewStore } from 'elephant-front/sitePreview/sitePreviewStore'
 import SitesSettings from './ui/SitesSettings.vue'
 import { mountSettingsComponent } from './settingsComponentHost'
 
 const ADDON_ID = 'elephant.sites'
+
+const stopSitesRuntime = async () => {
+  const previewStore = useSitePreviewStore()
+  if (previewStore.status !== 'idle' || previewStore.info || previewStore.lastBuild) {
+    await previewStore.stopPreview().catch(() => {})
+  }
+  previewStore.clear()
+}
 
 export const sitesAddon = {
   manifest: {
@@ -35,5 +44,9 @@ export const sitesAddon = {
       order: 50,
       render: mountSettingsComponent(ctx, SitesSettings)
     })
+  },
+
+  async deactivate() {
+    await stopSitesRuntime()
   }
 }

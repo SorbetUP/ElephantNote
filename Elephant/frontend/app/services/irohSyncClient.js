@@ -44,8 +44,15 @@ const run = async () => {
   }
 }
 
+const shutdown = async () => {
+  const result = await invoke('tauri_sync_shutdown')
+  lastPublishedStatus = null
+  return publishStatus({ ...(result || {}), running: false, started: false })
+}
+
 export const irohSyncClient = {
   status: readStatus,
+  shutdown,
   createInvite: (payload = {}) =>
     invoke('tauri_sync_create_invite', { payload: normalizeObject(payload) }),
   acceptInvite,

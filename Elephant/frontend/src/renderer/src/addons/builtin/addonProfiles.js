@@ -100,28 +100,16 @@ const createPack = async (ctx) => {
   return { path: PACK_PATH, count: addons.length, pack }
 }
 
-const replaceRegisteredAddon = async (manager, record) => {
-  const external = manager.external
-  if (!external) throw new Error('The community addon runtime is not available')
-  const current = manager.get(record.manifest.id)
-  if (current) {
-    if (current.enabled || current.status === 'error') {
-      await manager.disable(record.manifest.id).catch(() => {})
-    }
-    manager.current?.unregister?.(record.manifest.id)
-  }
-  return external.register(record)
-}
-
 const registerCatalogRecord = async (ctx, record) => {
   const manager = ctx.addons
   const external = manager.external
   if (!external) throw new Error('The community addon runtime is not available')
   const current = manager.get(record.manifest.id)
+  const rawManager = external.manager || ctx.addonHost?.get?.('addonManager')
+  if (!rawManager) throw new Error('The addon manager is unavailable')
   if (current) {
     if (current.enabled || current.status === 'error') await manager.disable(record.manifest.id).catch(() => {})
-    const rawManager = ctx.addonHost?.get?.('addonManager')
-    rawManager?.unregister?.(record.manifest.id)
+    rawManager.unregister(record.manifest.id)
   }
   external.register(record)
 }

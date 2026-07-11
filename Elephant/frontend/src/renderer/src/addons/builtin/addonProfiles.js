@@ -1,8 +1,11 @@
 import { isTrustedAddonManifest } from '../manifest'
+import AddonPacksSettings from './ui/AddonPacksSettings.vue'
+import { mountSettingsComponent } from './settingsComponentHost'
 import { invokeTauri, logAction, notifySuccess, readNote, writeNote } from './shared'
 
 const ADDON_ID = 'elephant.addon-packs'
-const PACK_PATH = '.elephantnote/addons/packs/default.enaddonpack'
+const PACK_DIRECTORY = '.elephantnote/addons/packs'
+const DEFAULT_PACK_PATH = `${PACK_DIRECTORY}/default.enaddonpack`
 const REPORT_PATH = 'Reports/Addon Pack.md'
 const PACK_FORMAT = 'elephantnote-addon-pack'
 const PACK_VERSION = 1
@@ -13,6 +16,17 @@ const readCommunityEnabled = async () => {
   return value === true
 }
 
+const normalizePackPath = (value = DEFAULT_PACK_PATH) => {
+  const path = String(value || DEFAULT_PACK_PATH).trim().replaceAll('\\', '/')
+  if (!path.startsWith(`${PACK_DIRECTORY}/`) || path.includes('/../') || path.endsWith('/..')) {
+    throw new Error(`Addon packs must be stored inside ${PACK_DIRECTORY}`)
+  }
+  if (!path.toLowerCase().endsWith('.enaddonpack')) {
+    throw new Error('Addon pack paths must end with .enaddonpack')
+  }
+  return path
+}
+
 const normalizeSource = (value, fallback = 'builtin') => {
   const source = String(value || fallback).trim().toLowerCase()
   if (!['builtin', 'catalog', 'installed'].includes(source)) {
@@ -21,12 +35,12 @@ const normalizeSource = (value, fallback = 'builtin') => {
   return source
 }
 
-const validatePack = (raw) => {
+const validatePack = (raw, sourcePath = DEFAULT_PACK_PATH) => {
   let pack
   try {
     pack = JSON.parse(raw)
   } catch (error) {
-    throw new Error(`Invalid JSON in ${PACK_PATH}: ${error.message}`)
+    throw new Error(`Invalid JSON in ${sourcePath}: ${error.message}`)
   }
   if (!pack || typeof pack !== 'object' || Array.isArray(pack)) {
     throw new Error('Addon pack must be a JSON object')
@@ -71,7 +85,8 @@ const validatePack = (raw) => {
   }
 }
 
-const createPack = async (ctx) => {
+const createPack = async (ctx, options = {}) => {
+  const path = normalizePackPath(options?.path)
   const catalogue = await invokeTauri('tauri_addons_catalog_list')
   const catalogueById = new Map((Array.isArray(catalogue) ? catalogue : []).map((addon) => [addon.id, addon]))
   const addons = ctx.addons.list()
@@ -91,13 +106,15 @@ const createPack = async (ctx) => {
   const pack = {
     format: PACK_FORMAT,
     version: PACK_VERSION,
-    name: 'Default ElephantNote pack',
-    description: 'A portable set of built-in and community addons with their enabled state.',
+    name: typeof options?.name === 'string' && options.name.trim() ? options.name.trim() : 'Default ElephantNote pack',
+    description: typeof options?.description === 'string'
+      ? options.description.trim()
+      : 'A portable set of built-in and community addons with their enabled state.',
     createdAt: new Date().toISOString(),
     addons
   }
-  await writeNote(PACK_PATH, `${JSON.stringify(pack, null, 2)}\n`)
-  return { path: PACK_PATH, count: addons.length, pack }
+  await writeNote(path, `${JSON.stringify(pack, null, 2)}\n`)
+  return { path, count: addons.length, pack }
 }
 
 const registerCatalogRecord = async (ctx, record) => {
@@ -122,9 +139,15 @@ const prepareTrustedAddon = async (ctx, snapshot) => {
   await external.approveTrusted(snapshot.manifest.id)
 }
 
-const applyPack = async (ctx) => {
-  const note = await readNote(PACK_PATH)
-  const pack = validatePack(note.content)
+const setExternalEnabled = (id, enabled) => invokeTauri('tauri_addons_set_enabled', {
+  addonId: id,
+  enabled: enabled === true
+})
+
+const applyPack = async (ctx, options = {}) => {
+  const path = normalizePackPath(options?.path)
+  const note = await readNote(path)
+  const pack = validatePack(note.content, path)
   const catalogue = await invokeTauri('tauri_addons_catalog_list')
   const catalogueById = new Map((Array.isArray(catalogue) ? catalogue : []).map((addon) => [addon.id, addon]))
   const requiresCommunity = pack.addons.some((entry) => entry.enabled && entry.source !== 'builtin')
@@ -154,18 +177,29 @@ const applyPack = async (ctx) => {
     }
 
     if (!snapshot) throw new Error(`Unable to register addon from pack: ${entry.id}`)
+    const external = snapshot.manifest.source === 'external'
     if (entry.enabled && !snapshot.enabled) {
       await prepareTrustedAddon(ctx, snapshot)
-      await ctx.addons.enable(entry.id)
+      if (external) await setExternalEnabled(entry.id, true)
+      try {
+        await ctx.addons.enable(entry.id)
+      } catch (error) {
+        if (external) await setExternalEnabled(entry.id, false).catch(() => {})
+        throw error
+      }
     } else if (!entry.enabled && (snapshot.enabled || snapshot.status === 'error')) {
+      if (external) await setExternalEnabled(entry.id, false)
       await ctx.addons.disable(entry.id)
+    } else if (!entry.enabled && external) {
+      await setExternalEnabled(entry.id, false)
     }
 
+    const current = ctx.addons.get(entry.id) || snapshot
     results.push({
       id: entry.id,
       source: entry.source,
-      version: snapshot.manifest.version || entry.version,
-      enabled: entry.enabled,
+      version: current.manifest.version || entry.version,
+      enabled: current.enabled === true,
       installed,
       updated
     })
@@ -182,7 +216,7 @@ const applyPack = async (ctx) => {
     '',
     '# Addon Pack Result',
     '',
-    `Pack: \`${PACK_PATH}\``,
+    `Pack: \`${path}\``,
     `Name: ${pack.name}`,
     `Applied: ${generatedAt}`,
     '',
@@ -195,30 +229,31 @@ const applyPack = async (ctx) => {
     ''
   ].join('\n')
   await writeNote(REPORT_PATH, report)
-  return { path: REPORT_PATH, packPath: PACK_PATH, applied: results.length, results }
+  return { path: REPORT_PATH, packPath: path, applied: results.length, results }
 }
 
 export const addonPacksAddon = {
   manifest: {
     id: ADDON_ID,
     name: 'Addon Packs',
-    version: '1.0.0',
-    description: 'Creates and applies portable addon packs that configure built-in and community addons together.',
+    version: '1.1.0',
+    description: 'Creates, lists and applies portable addon packs that configure built-in and community addons together.',
     author: 'ElephantNote',
     defaultEnabled: true,
     permissions: ['notes.read', 'notes.write', 'addons.manage'],
-    contributes: { actions: true }
+    contributes: { actions: true, settings: true }
   },
 
   activate(ctx) {
     ctx.addAction({
       id: `${ADDON_ID}.create`,
       title: 'Create addon pack from current setup',
-      description: `Capture the installed addons and their enabled state in ${PACK_PATH}.`,
-      async run() {
-        logAction(ctx, 'addon-pack-create:start', { path: PACK_PATH })
-        const result = await createPack(ctx)
-        notifySuccess(`Addon pack created: ${PACK_PATH}`)
+      description: `Capture the installed addons and their enabled state inside ${PACK_DIRECTORY}.`,
+      async run(options = {}) {
+        const path = normalizePackPath(options?.path)
+        logAction(ctx, 'addon-pack-create:start', { path })
+        const result = await createPack(ctx, options)
+        notifySuccess(`Addon pack created: ${result.path}`)
         logAction(ctx, 'addon-pack-create:done', result)
         return result
       }
@@ -226,15 +261,27 @@ export const addonPacksAddon = {
 
     ctx.addAction({
       id: `${ADDON_ID}.apply`,
-      title: 'Apply default addon pack',
-      description: `Install, update, enable and disable addons from ${PACK_PATH}.`,
-      async run() {
-        logAction(ctx, 'addon-pack-apply:start', { path: PACK_PATH })
-        const result = await applyPack(ctx)
+      title: 'Apply addon pack',
+      description: 'Install, update, enable and disable addons from a selected .enaddonpack file.',
+      async run(options = {}) {
+        const path = normalizePackPath(options?.path)
+        logAction(ctx, 'addon-pack-apply:start', { path })
+        const result = await applyPack(ctx, options)
         notifySuccess(`Addon pack applied: ${result.applied} addons`)
         logAction(ctx, 'addon-pack-apply:done', result)
         return result
       }
+    })
+
+    ctx.addSettingsSection?.({
+      id: `${ADDON_ID}.settings`,
+      section: 'addons',
+      slot: 'addons.packs',
+      chrome: false,
+      title: 'Addon packs',
+      description: 'Create and apply portable addon configurations.',
+      order: 10,
+      render: mountSettingsComponent(ctx, AddonPacksSettings)
     })
   }
 }

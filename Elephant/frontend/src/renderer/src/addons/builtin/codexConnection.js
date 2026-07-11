@@ -55,7 +55,8 @@ export const codexConnectionAddon = {
       description: 'ChatGPT subscription through the bundled Codex app server.',
       transport: 'codex',
       endpoint: 'codex://app-server',
-      settingsSection: 'codex',
+      settingsSection: 'ai',
+      settingsSubpage: 'provider',
       capabilities: ['chat'],
       async getModels() {
         const result = await invokeCodex('models')
@@ -64,11 +65,10 @@ export const codexConnectionAddon = {
     })
     ctx.addSettingsSection({
       id: `${ADDON_ID}.settings`,
-      section: 'codex',
-      navigationLabel: 'Codex',
-      navigationIcon: 'sparkles',
-      standalone: true,
-      title: 'Codex Connection',
+      section: 'ai',
+      slot: 'ai.providers.after-external',
+      chrome: false,
+      title: 'ChatGPT subscription',
       description: 'Connect or disconnect the existing ChatGPT subscription runtime and review usage limits.',
       order: 30,
       render: mountSettingsComponent(ctx, CodexConnectionSettings)

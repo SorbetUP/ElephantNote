@@ -31,4 +31,11 @@ patch(
     "          title: Object.prototype.hasOwnProperty.call(entry, 'title') ? entry.title : (entry.path.split('/').pop()?.replace(/\\.md$/i, '') || 'Untitled'),"
 )
 
+# Keep the existing release contract aligned with the clearer SAF authorization wording.
+patch(
+    'tests/app/unit/specs/main/elephantnote/mobileAndroidRelease.spec.js',
+    "    expect(emptyVault).toContain('Simple mode')\n    expect(emptyVault).toContain('Advanced mode')\n    expect(emptyVault).toContain('Choose a vault folder')",
+    "    expect(emptyVault).toContain('Stockage privé')\n    expect(emptyVault).toContain('Dossier Android')\n    expect(emptyVault).toContain('Choisir un dossier et autoriser l’accès')"
+)
+
 print('Android follow-up safety pass complete')

@@ -110,8 +110,6 @@
             </template>
 
             <template v-else-if="activeSection === 'addons'"><addons-settings-panel /></template>
-            <template v-else-if="activeSection === 'sync'"><sync-settings-panel :vaults="vaults" :active-vault-path="activeVaultPath" :initial-page="syncInitialPage" /></template>
-            <template v-else-if="activeSection === 'ai'"><ai-provider-settings-panel :initial-page="aiInitialPage" /></template>
             <template v-else><div class="en-addon-settings-page-anchor" /></template>
           </template>
         </main>
@@ -123,14 +121,12 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import log from '@/platform/runtimeLogShim'
-import { CalendarDays, Check, ChevronRight, Cloud, Download, FolderOpen, Globe2, HardDrive, Moon, Package, Palette, PenLine, Search, Sparkles, SunMedium, X } from '@lucide/vue'
+import { CalendarDays, Check, ChevronRight, Cloud, Database, Download, FolderOpen, Globe2, HardDrive, Moon, Package, Palette, PenLine, Search, Sparkles, SunMedium, X } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import { useAddonsStore } from '@/store/addons'
 import { ELEPHANTNOTE_THEME_FAMILIES, getThemeFamily, getThemeLabel, getThemeMode, getThemeTokens, getThemeVariant } from 'common/elephantnote/appearance'
 import AddonsSettingsPanel from './AddonsSettingsPanel.vue'
-import AiProviderSettingsPanel from './AiProviderSettingsPanel.vue'
 import IconRailLayoutSettings from './IconRailLayoutSettings.vue'
-import SyncSettingsPanel from './SyncSettingsPanel.vue'
 import { useVaultStore } from '../../stores/vaultStore'
 
 const props = defineProps({
@@ -147,11 +143,17 @@ const CORE_SECTIONS = Object.freeze([
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'editor', label: 'Editor', icon: PenLine },
   { id: 'vaults', label: 'Vaults', icon: FolderOpen },
-  { id: 'addons', label: 'Addons', icon: Package },
-  { id: 'sync', label: 'Sync', icon: Cloud },
-  { id: 'ai', label: 'AI', icon: Sparkles }
+  { id: 'addons', label: 'Addons', icon: Package }
 ])
-const ICONS = Object.freeze({ calendar: CalendarDays, download: Download, globe: Globe2, package: Package, sparkles: Sparkles })
+const ICONS = Object.freeze({
+  calendar: CalendarDays,
+  cloud: Cloud,
+  database: Database,
+  download: Download,
+  globe: Globe2,
+  package: Package,
+  sparkles: Sparkles
+})
 const CORE_SETTINGS_INDEX = Object.freeze([
   { id: 'appearance-mode', section: 'appearance', label: 'Color mode', description: 'Light and dark appearance.' },
   { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Apple, Graphite, Nord, Solar and Forest themes.' },
@@ -171,16 +173,10 @@ const CORE_SETTINGS_INDEX = Object.freeze([
   { id: 'editor-autosave-delay', section: 'editor', label: 'Autosave delay', description: 'Delay before writing the latest edit.' },
   { id: 'vault-active', section: 'vaults', label: 'Active vault', description: 'Current local workspace folder.' },
   { id: 'vault-open', section: 'vaults', label: 'Open vaults', description: 'Review or remove registered vaults.' },
-  { id: 'addons-installed', section: 'addons', label: 'Installed addons', description: 'Built-in and community addon packages.' },
+  { id: 'addons-installed', section: 'addons', label: 'Installed addons', description: 'Installed first-party and community addon packages.' },
+  { id: 'addons-builtins', section: 'addons', label: 'Built-in addon catalogue', description: 'Install or remove optional ElephantNote features.' },
   { id: 'addons-community', section: 'addons', label: 'Community addons', description: 'Risk acknowledgement and third-party addon activation.' },
-  { id: 'addons-commands', section: 'addons', label: 'Addon commands', description: 'Run commands contributed by enabled addons.' },
-  { id: 'sync-overview', section: 'sync', subpage: 'overview', label: 'Synchronization status', description: 'Active vault, device identity and last transfer.' },
-  { id: 'sync-devices', section: 'sync', subpage: 'devices', label: 'Pair devices', description: 'Create or accept an encrypted Iroh invitation.' },
-  { id: 'sync-conflicts', section: 'sync', subpage: 'conflicts', label: 'Conflict retention', description: 'Keep, restore or delete temporary conflict copies.' },
-  { id: 'ai-providers', section: 'ai', subpage: 'provider', label: 'AI providers', description: 'Local runtime and external API providers.' },
-  { id: 'ai-chat', section: 'ai', subpage: 'chat', label: 'Chat model and RAG', description: 'Model, tools, streaming, prompt and generation settings.' },
-  { id: 'ai-search', section: 'ai', subpage: 'embedding', label: 'Semantic search and embeddings', description: 'Indexing, chunking and retrieval settings.' },
-  { id: 'ai-ocr', section: 'ai', subpage: 'ocr', label: 'OCR', description: 'Recognition model, languages and image processing.' }
+  { id: 'addons-packs', section: 'addons', label: 'Addon packs', description: 'Restore or share complete addon configurations.' }
 ])
 
 const addonsStore = useAddonsStore()
@@ -222,8 +218,6 @@ const settingsIndex = computed(() => [
 
 const activeSection = ref(normalizeSection(props.initialSection))
 const settingsQuery = ref('')
-const syncInitialPage = ref('overview')
-const aiInitialPage = ref('provider')
 const searchInput = ref(null)
 const settingsContent = ref(null)
 const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
@@ -271,8 +265,6 @@ const scrollContentToTop = () => nextTick(() => settingsContent.value?.scrollTo(
 const selectSection = (section) => { activeSection.value = section; settingsQuery.value = ''; log.info('[settings] section:selected', { section }); scrollContentToTop() }
 const openSearchResult = (result) => {
   activeSection.value = result.section
-  if (result.section === 'sync') syncInitialPage.value = result.subpage || 'overview'
-  if (result.section === 'ai') aiInitialPage.value = result.subpage || 'provider'
   settingsQuery.value = ''
   log.info('[settings] search-result:opened', { id: result.id, section: result.section })
   scrollContentToTop()

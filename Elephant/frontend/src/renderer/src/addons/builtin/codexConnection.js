@@ -1,14 +1,20 @@
 import CodexConnectionSettings from './ui/CodexConnectionSettings.vue'
 import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
-import './codexConnection.css'
 import { mountSettingsComponent } from './settingsComponentHost'
 
 const ADDON_ID = 'elephant.codex-connection'
+const PROVIDER_ID = 'codex'
+
+const invokeCodex = (codexOperation, payload = {}) => {
+  const invoke = globalThis.window?.__TAURI__?.core?.invoke
+  if (typeof invoke !== 'function') throw new Error(`Tauri command API is unavailable for Codex ${codexOperation}`)
+  return invoke('tauri_rag_chat', { payload: { codexOperation, ...payload } })
+}
 
 const disableCodexRoute = async () => {
   const config = await elephantnoteClient.ai.getConfig()
   const chat = config?.routes?.chat || {}
-  if (chat.source !== 'codex' && chat.provider !== 'codex' && config?.transport !== 'codex') return
+  if (chat.source !== PROVIDER_ID && chat.provider !== PROVIDER_ID && config?.transport !== PROVIDER_ID) return
   await elephantnoteClient.ai.setConfig({
     ...config,
     provider: 'disabled',
@@ -21,6 +27,7 @@ const disableCodexRoute = async () => {
         ...chat,
         source: 'disabled',
         provider: 'disabled',
+        transport: 'disabled',
         endpoint: '',
         model: ''
       }
@@ -41,15 +48,19 @@ export const codexConnectionAddon = {
   },
 
   activate(ctx) {
-    document.documentElement.classList.add('elephant-codex-addon-enabled')
-    ctx.addDisposable(() => document.documentElement.classList.remove('elephant-codex-addon-enabled'))
-
     ctx.registerContribution('ai.providers', {
       id: `${ADDON_ID}.provider`,
-      providerId: 'codex',
+      providerId: PROVIDER_ID,
       title: 'Codex subscription',
+      description: 'ChatGPT subscription through the bundled Codex app server.',
       transport: 'codex',
-      endpoint: 'codex://app-server'
+      endpoint: 'codex://app-server',
+      settingsSection: 'codex',
+      capabilities: ['chat'],
+      async getModels() {
+        const result = await invokeCodex('models')
+        return Array.isArray(result?.data) ? result.data : []
+      }
     })
     ctx.addSettingsSection({
       id: `${ADDON_ID}.settings`,
@@ -65,7 +76,6 @@ export const codexConnectionAddon = {
   },
 
   async deactivate() {
-    document.documentElement.classList.remove('elephant-codex-addon-enabled')
     await disableCodexRoute().catch(() => {})
   }
 }

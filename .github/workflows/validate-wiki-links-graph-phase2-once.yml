@@ -1,0 +1,68 @@
+name: Validate Wiki links graph phase 2 once
+
+on:
+  pull_request:
+    branches:
+      - feature/wiki-knowledge-continuation
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.head_ref == 'assistant/wiki-links-graph-integration'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
+      - name: Validate and persist diagnostics
+        shell: bash
+        run: |
+          set +e
+          pnpm exec vitest run tests/app/unit/wikiGraphSurface.spec.js > /tmp/wiki-vitest.log 2>&1
+          vitest_status=$?
+          pnpm exec eslint Elephant/frontend/app/components/views/semanticGraphViewHelpers.js tests/app/unit/wikiGraphSurface.spec.js > /tmp/wiki-eslint.log 2>&1
+          eslint_status=$?
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features > /tmp/wiki-cargo-check.log 2>&1
+          cargo_check_status=$?
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features knowledge_wiki_library -- --nocapture > /tmp/wiki-cargo-test.log 2>&1
+          cargo_test_status=$?
+          pnpm tauri:web:build > /tmp/wiki-build.log 2>&1
+          build_status=$?
+          {
+            echo "vitest=$vitest_status eslint=$eslint_status cargo_check=$cargo_check_status cargo_test=$cargo_test_status build=$build_status"
+            echo "=== vitest ==="
+            tail -n 160 /tmp/wiki-vitest.log
+            echo "=== eslint ==="
+            tail -n 160 /tmp/wiki-eslint.log
+            echo "=== cargo check ==="
+            tail -n 240 /tmp/wiki-cargo-check.log
+            echo "=== cargo test ==="
+            tail -n 240 /tmp/wiki-cargo-test.log
+            echo "=== build ==="
+            tail -n 200 /tmp/wiki-build.log
+          } > .github/wiki-links-graph-validation.txt
+          cat .github/wiki-links-graph-validation.txt
+          git config user.name "ElephantNote Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/wiki-links-graph-validation.txt
+          git commit -m "[skip ci] Record Wiki links graph validation"
+          git push origin HEAD:${{ github.head_ref }}
+          if [ "$vitest_status" -ne 0 ] || [ "$eslint_status" -ne 0 ] || [ "$cargo_check_status" -ne 0 ] || [ "$cargo_test_status" -ne 0 ] || [ "$build_status" -ne 0 ]; then
+            exit 1
+          fi

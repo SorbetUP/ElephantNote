@@ -12,7 +12,6 @@ import {
   Download,
   Globe2,
   Layers3,
-  MessageSquareText,
   Package,
   Sparkles
 } from '@lucide/vue'
@@ -30,7 +29,6 @@ const ICONS = Object.freeze({
   'globe-2': Globe2,
   layers: Layers3,
   'layers-3': Layers3,
-  message: MessageSquareText,
   package: Package,
   sparkles: Sparkles
 })

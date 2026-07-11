@@ -10,12 +10,14 @@ const flush = async () => {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-const mountSettingsPage = (section) => {
+const mountSettingsPage = (section, body = '<section class="en-settings-group" data-native-settings="true"></section>') => {
   document.body.innerHTML = `
-    <main class="en-settings-content" data-active-section="${section}">
-      <div class="en-settings-page-title"><h1>${section[0].toUpperCase()}${section.slice(1)}</h1></div>
-      <section class="en-settings-group" data-native-settings="true"></section>
-    </main>
+    <section class="en-settings-panel" data-v-settings-test>
+      <main class="en-settings-content" data-v-settings-test data-active-section="${section}">
+        <div class="en-settings-page-title" data-v-settings-test><h1>${section[0].toUpperCase()}${section.slice(1)}</h1></div>
+        ${body}
+      </main>
+    </section>
   `
   return document.querySelector('.en-settings-content')
 }
@@ -117,6 +119,84 @@ describe('addon settings contribution runtime', () => {
 
     expect(content.querySelector('[data-elephant-addon-settings-host]')).toBeNull()
     expect(cleanup).toHaveBeenCalledOnce()
+    runtime.dispose()
+  })
+
+  it('mounts a bare contribution in a named slot without adding duplicate chrome', async () => {
+    const content = mountSettingsPage(
+      'ai',
+      '<section class="en-ai-card">External providers</section><div data-elephant-addon-settings-slot="ai.providers.after-external"></div>'
+    )
+    const manager = new ElephantAddonManager()
+    manager.host = { list: () => [] }
+    manager.register({
+      manifest: { id: 'com.example.codex', name: 'Codex', version: '1.0.0' },
+      activate(context) {
+        context.addSettingsSection({
+          id: 'com.example.codex.settings',
+          title: 'Should not be rendered as duplicate chrome',
+          description: 'Should not be rendered as duplicate chrome.',
+          section: 'ai',
+          slot: 'ai.providers.after-external',
+          chrome: false,
+          render(container) {
+            const card = document.createElement('section')
+            card.className = 'en-ai-card'
+            card.textContent = 'ChatGPT subscription'
+            container.append(card)
+          }
+        })
+      }
+    })
+
+    const runtime = installSettingsContributionRuntime(manager)
+    await manager.enable('com.example.codex')
+    await flush()
+
+    const slot = content.querySelector('[data-elephant-addon-settings-slot="ai.providers.after-external"]')
+    const host = slot.querySelector('[data-elephant-addon-settings-host]')
+    const card = slot.querySelector('.en-ai-card')
+    expect(host).not.toBeNull()
+    expect(host.classList.contains('en-addon-settings-bare-host')).toBe(true)
+    expect(host.textContent).toBe('ChatGPT subscription')
+    expect(host.textContent).not.toContain('Should not be rendered as duplicate chrome')
+    expect(card.hasAttribute('data-v-settings-test')).toBe(true)
+
+    await manager.disable('com.example.codex')
+    await flush()
+    expect(slot.querySelector('[data-elephant-addon-settings-host]')).toBeNull()
+    runtime.dispose()
+  })
+
+  it('waits for a named slot instead of appending the contribution to the wrong page location', async () => {
+    const content = mountSettingsPage('ai', '<section class="en-ai-card">Chat route</section>')
+    const manager = new ElephantAddonManager()
+    manager.host = { list: () => [] }
+    manager.register({
+      manifest: { id: 'com.example.slot', name: 'Slot extension', version: '1.0.0' },
+      activate(context) {
+        context.addSettingsSection({
+          id: 'com.example.slot.panel',
+          section: 'ai',
+          slot: 'ai.providers.after-external',
+          chrome: false,
+          render(container) {
+            container.textContent = 'Provider-only control'
+          }
+        })
+      }
+    })
+
+    const runtime = installSettingsContributionRuntime(manager)
+    await manager.enable('com.example.slot')
+    await flush()
+    expect(content.textContent).not.toContain('Provider-only control')
+
+    const slot = document.createElement('div')
+    slot.setAttribute('data-elephant-addon-settings-slot', 'ai.providers.after-external')
+    content.append(slot)
+    await flush()
+    expect(slot.textContent).toContain('Provider-only control')
     runtime.dispose()
   })
 

@@ -39,6 +39,186 @@ permissions:
   contents: read
 
 jobs:
+  guarded-programmatic-render-fix:
+    name: Guarded programmatic render fix
+    if: github.event_name == 'pull_request' && github.head_ref == 'feature/rust-muya-complete' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-muya-complete
+          fetch-depth: 0
+
+      - name: Patch only Muya programmatic render guard files
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          adapter = Path('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js')
+          text = adapter.read_text()
+          old = """      if (typeof markdown !== 'string') return
+      if (this.__programmaticGuard().consume()) return
+      if (this.__rustComposition) {
+"""
+          new = """      if (typeof markdown !== 'string') return
+      const programmaticGuard = this.__programmaticGuard()
+      if (programmaticGuard.consume(markdown)) return
+      if (programmaticGuard.pending) {
+        console.warn('[elephantnote:muya-rust] ignored non-canonical programmatic mutation', {
+          expectedLength: programmaticGuard.expectedMarkdown?.length ?? null,
+          receivedLength: markdown.length
+        })
+        return
+      }
+      if (this.__rustComposition) {
+"""
+          if text.count(old) != 1:
+            raise SystemExit(f'expected one change-listener guard block, found {text.count(old)}')
+          text = text.replace(old, new)
+
+          old = """    return this.__programmaticGuard().run(() => super.setMarkdown(
+      markdown,
+      cursor,
+      isRenderCursor,
+      muyaIndexCursor,
+      blocks
+    ))
+"""
+          new = """    return this.__programmaticGuard().run(() => super.setMarkdown(
+      markdown,
+      cursor,
+      isRenderCursor,
+      muyaIndexCursor,
+      blocks
+    ), { expectedMarkdown: String(markdown ?? '') })
+"""
+          if text.count(old) != 1:
+            raise SystemExit(f'expected one setMarkdown guard block, found {text.count(old)}')
+          adapter.write_text(text.replace(old, new))
+
+          Path('Elephant/frontend/src/renderer/src/muya/rustProgrammaticChangeGuard.js').write_text("""const DEFAULT_BURST = 256
+const DEFAULT_TTL_MS = 750
+
+export const createProgrammaticChangeGuard = ({
+  now = () => Date.now(),
+  burst = DEFAULT_BURST,
+  ttlMs = DEFAULT_TTL_MS
+} = {}) => {
+  let pending = 0
+  let deadline = 0
+  let expectedMarkdown = null
+
+  const currentTime = () => Number(now()) || 0
+  const clearIfExpired = () => {
+    if (pending <= 0 && deadline > 0 && currentTime() > deadline) {
+      deadline = 0
+      expectedMarkdown = null
+    }
+  }
+  const arm = ({ expectedMarkdown: nextExpectedMarkdown } = {}) => {
+    pending = Math.max(pending, Number(burst) || DEFAULT_BURST)
+    deadline = currentTime() + (Number(ttlMs) || DEFAULT_TTL_MS)
+    expectedMarkdown = typeof nextExpectedMarkdown === 'string' ? nextExpectedMarkdown : null
+  }
+
+  return {
+    run (render, options = {}) {
+      if (typeof render !== 'function') throw new TypeError('A programmatic Muya render callback is required.')
+      arm(options)
+      try {
+        return render()
+      } catch (error) {
+        pending = 0
+        deadline = 0
+        expectedMarkdown = null
+        throw error
+      }
+    },
+
+    consume (markdown) {
+      clearIfExpired()
+      if (pending <= 0 && deadline <= 0) return false
+      if (expectedMarkdown !== null && String(markdown ?? '') !== expectedMarkdown) return false
+      pending = Math.max(0, pending - 1)
+      deadline = currentTime() + (Number(ttlMs) || DEFAULT_TTL_MS)
+      return true
+    },
+
+    clear () {
+      pending = 0
+      deadline = 0
+      expectedMarkdown = null
+    },
+
+    get pending () {
+      clearIfExpired()
+      return pending > 0 || deadline > 0
+    },
+
+    get expectedMarkdown () {
+      clearIfExpired()
+      return expectedMarkdown
+    }
+  }
+}
+""")
+
+          Path('tests/app/unit/muyaRustProgrammaticGuard.spec.js').write_text("""import { describe, expect, it } from 'vitest'
+import { createProgrammaticChangeGuard } from '../../../Elephant/frontend/src/renderer/src/muya/rustProgrammaticChangeGuard.js'
+
+describe('Muya Rust programmatic change guard', () => {
+  it('accepts repeated matching changes emitted by one programmatic render', () => {
+    let now = 1000
+    const guard = createProgrammaticChangeGuard({ now: () => now, burst: 3, ttlMs: 50 })
+    guard.run(() => 'rendered', { expectedMarkdown: 'canonical' })
+    expect(guard.consume('canonical')).toBe(true)
+    expect(guard.consume('canonical')).toBe(true)
+    now += 25
+    expect(guard.consume('canonical')).toBe(true)
+  })
+
+  it('keeps stale cleanup rollbacks out of the canonical Rust path during a guarded render', () => {
+    const guard = createProgrammaticChangeGuard({ now: () => 1000, burst: 3, ttlMs: 50 })
+    guard.run(() => null, { expectedMarkdown: 'canonical' })
+    expect(guard.consume('stale rollback')).toBe(false)
+    expect(guard.pending).toBe(true)
+    expect(guard.expectedMarkdown).toBe('canonical')
+  })
+
+  it('expires the programmatic window before later user mutations', () => {
+    let now = 1000
+    const guard = createProgrammaticChangeGuard({ now: () => now, burst: 1, ttlMs: 50 })
+    guard.run(() => null, { expectedMarkdown: 'canonical' })
+    now += 51
+    expect(guard.pending).toBe(false)
+    expect(guard.consume('canonical')).toBe(false)
+  })
+})
+""")
+          PY
+          changed="$(git diff --name-only | sort)"
+          expected="Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js
+Elephant/frontend/src/renderer/src/muya/rustProgrammaticChangeGuard.js
+tests/app/unit/muyaRustProgrammaticGuard.spec.js"
+          test "$changed" = "$expected"
+
+      - name: Commit the guarded fix
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js \
+            Elephant/frontend/src/renderer/src/muya/rustProgrammaticChangeGuard.js \
+            tests/app/unit/muyaRustProgrammaticGuard.spec.js
+          git commit -m 'fix(muya): tolerate programmatic render bursts'
+          git push origin HEAD:feature/rust-muya-complete
+
   parity:
     name: Rust and renderer parity
     runs-on: ubuntu-latest
@@ -138,6 +318,7 @@ jobs:
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
             tests/app/unit/muyaRustCompleteOwnership.spec.js \
             tests/app/unit/muyaRustCompleteSession.spec.js \
+            tests/app/unit/muyaRustProgrammaticGuard.spec.js \
             tests/app/unit/muyaRustProgrammaticLoad.spec.js \
             tests/app/unit/muyaRustEngineRuntime.spec.js \
             tests/app/unit/muyaRustSessionRuntime.spec.js \

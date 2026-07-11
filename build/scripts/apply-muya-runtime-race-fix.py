@@ -14,8 +14,8 @@ if guard_import not in adapter:
     adapter = adapter.replace(import_line, import_line + guard_import, 1)
 
 constructor_line = '    this.__rustExpectedMarkdown = null\n'
-if adapter.count(constructor_line) != 1:
-    raise SystemExit('legacy expected-markdown constructor state is not unique')
+if adapter.count(constructor_line) != 2:
+    raise SystemExit('expected constructor initialization and external reset')
 adapter = adapter.replace(
     constructor_line,
     '    this.__rustProgrammaticChanges = this.__rustProgrammaticChanges || createProgrammaticChangeGuard()\n',

@@ -3,10 +3,8 @@ import { googleKeepImportAddon } from './googleKeepImport'
 import { codexConnectionAddon } from './codexConnection'
 import { calendarAddon } from './calendar'
 import { sitesAddon } from './sites'
-import { dailyNotesAddon } from './dailyNotes'
-import { quickCaptureAddon } from './quickCapture'
-import { vaultOverviewAddon } from './vaultOverview'
-import { addonInspectorAddon } from './addonInspector'
+import { aiAddon } from './ai'
+import { syncAddon } from './sync'
 
 export {
   addonPacksAddon,
@@ -15,10 +13,8 @@ export {
   codexConnectionAddon,
   calendarAddon,
   sitesAddon,
-  dailyNotesAddon,
-  quickCaptureAddon,
-  vaultOverviewAddon,
-  addonInspectorAddon
+  aiAddon,
+  syncAddon
 }
 
 export const builtinAddons = [
@@ -27,8 +23,6 @@ export const builtinAddons = [
   codexConnectionAddon,
   calendarAddon,
   sitesAddon,
-  dailyNotesAddon,
-  quickCaptureAddon,
-  vaultOverviewAddon,
-  addonInspectorAddon
+  aiAddon,
+  syncAddon
 ]

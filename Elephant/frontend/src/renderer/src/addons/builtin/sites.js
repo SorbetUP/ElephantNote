@@ -27,8 +27,9 @@ export const sitesAddon = {
       navigationLabel: 'Sites',
       navigationIcon: 'globe',
       standalone: true,
+      chrome: false,
       title: 'Sites',
-      description: 'Generate and preview a static site only when this addon is enabled.',
+      description: 'Generate and preview a static site.',
       order: 50,
       render: mountSettingsComponent(ctx, SitesSettings)
     })

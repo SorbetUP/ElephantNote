@@ -15,6 +15,7 @@ import {
   Package,
   Sparkles
 } from '@lucide/vue'
+import OpenAiMark from './OpenAiMark.vue'
 
 const props = defineProps({ name: { type: String, default: 'package' } })
 
@@ -29,6 +30,7 @@ const ICONS = Object.freeze({
   'globe-2': Globe2,
   layers: Layers3,
   'layers-3': Layers3,
+  openai: OpenAiMark,
   package: Package,
   sparkles: Sparkles
 })

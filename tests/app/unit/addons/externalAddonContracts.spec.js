@@ -49,45 +49,46 @@ describe('external addon manifest contracts', () => {
     expect(manifest.permissions.notes.read).toEqual(['Inbox/**'])
   })
 
-  it('keeps legacy builtin permission arrays compatible', () => {
+  it('keeps legacy builtin permission arrays and addon presentation fields compatible', () => {
     const manifest = normalizeAddonManifest({
       id: 'elephant.example',
       name: 'Example',
       version: '1.0.0',
+      icon: 'sparkles',
+      removable: false,
       permissions: ['notes.read']
     })
 
     expect(manifest.permissions).toEqual(['notes.read'])
+    expect(manifest.icon).toBe('sparkles')
+    expect(manifest.removable).toBe(false)
   })
 })
 
-describe('built-in starter addons', () => {
-  it('ships addon packs first, extracted system features, useful workflows and one developer inspector', () => {
+describe('built-in addon catalogue', () => {
+  it('ships only useful first-party features with distinct logos', () => {
     expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
       'elephant.addon-packs',
       'elephant.google-keep-import',
       'elephant.codex-connection',
       'elephant.calendar',
       'elephant.sites',
+      'elephant.ai',
+      'elephant.sync'
+    ])
+    expect(builtinAddons.filter((addon) => addon.manifest.defaultEnabled).map((addon) => addon.manifest.id))
+      .toEqual(['elephant.addon-packs'])
+    expect(builtinAddons.find((addon) => addon.manifest.id === 'elephant.addon-packs')?.manifest.removable).toBe(false)
+    expect(new Set(builtinAddons.map((addon) => addon.manifest.icon)).size).toBe(builtinAddons.length)
+    expect(builtinAddons.map((addon) => addon.manifest.id)).not.toEqual(expect.arrayContaining([
       'elephant.daily-notes',
       'elephant.quick-capture',
       'elephant.vault-overview',
       'elephant.addon-inspector'
-    ])
-    expect(builtinAddons.filter((addon) => addon.manifest.defaultEnabled)).toHaveLength(4)
-    expect(builtinAddons.find((addon) => addon.manifest.id === 'elephant.addon-packs')?.manifest.defaultEnabled).toBe(true)
-    for (const id of [
-      'elephant.google-keep-import',
-      'elephant.codex-connection',
-      'elephant.calendar',
-      'elephant.sites',
-      'elephant.addon-inspector'
-    ]) {
-      expect(builtinAddons.find((addon) => addon.manifest.id === id)?.manifest.defaultEnabled).toBe(false)
-    }
+    ]))
   })
 
-  it('registers starter actions through the same addon manager contract', async () => {
+  it('enables only the addon pack manager by default', async () => {
     const manager = new ElephantAddonManager({
       logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
     })
@@ -95,43 +96,39 @@ describe('built-in starter addons', () => {
 
     await manager.enableDefaultAddons()
 
-    expect(manager.get('elephant.addon-packs')?.enabled).toBe(true)
-    expect(manager.get('elephant.daily-notes')?.enabled).toBe(true)
-    expect(manager.get('elephant.quick-capture')?.enabled).toBe(true)
-    expect(manager.get('elephant.vault-overview')?.enabled).toBe(true)
-    expect(manager.get('elephant.google-keep-import')?.enabled).toBe(false)
-    expect(manager.get('elephant.codex-connection')?.enabled).toBe(false)
-    expect(manager.get('elephant.calendar')?.enabled).toBe(false)
-    expect(manager.get('elephant.sites')?.enabled).toBe(false)
-    expect(manager.get('elephant.addon-inspector')?.enabled).toBe(false)
+    expect(manager.list().filter((addon) => addon.enabled).map((addon) => addon.manifest.id))
+      .toEqual(['elephant.addon-packs'])
     expect(manager.getActions().map((entry) => entry.contribution.id).sort()).toEqual([
       'elephant.addon-packs.apply',
       'elephant.addon-packs.create',
-      'elephant.daily-notes.open-today',
-      'elephant.quick-capture.create',
-      'elephant.vault-overview.generate'
+      'elephant.addon-packs.ensure-develop-parity'
     ])
   })
 
-  it('executes Daily Notes through the registered Tauri read/write commands', async () => {
-    const invoke = vi.fn(async (command, payload) => {
-      if (command === 'tauri_notes_read') throw new Error('not found')
-      if (command === 'tauri_notes_write') return { changed: true, path: payload.relativePath }
-      throw new Error(`Unexpected command: ${command}`)
+  it('keeps AI and Iroh Sync inert until their addons are enabled', async () => {
+    const manager = new ElephantAddonManager({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
     })
-    vi.stubGlobal('__TAURI__', { core: { invoke } })
+    const ai = builtinAddons.find((addon) => addon.manifest.id === 'elephant.ai')
+    const sync = builtinAddons.find((addon) => addon.manifest.id === 'elephant.sync')
+    manager.register(ai)
+    manager.register(sync)
 
-    const manager = new ElephantAddonManager({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } })
-    const daily = builtinAddons.find((addon) => addon.manifest.id === 'elephant.daily-notes')
-    manager.register(daily)
-    await manager.enable(daily.manifest.id)
-    const action = manager.getActions()[0]
-    const result = await action.contribution.run()
+    expect(manager.getContributions('settings.sections')).toEqual([])
+    expect(manager.getContributions('views')).toEqual([])
+    expect(manager.getActions()).toEqual([])
 
-    expect(result.path).toMatch(/^Daily\/\d{4}-\d{2}-\d{2}\.md$/)
-    expect(invoke).toHaveBeenCalledWith('tauri_notes_write', expect.objectContaining({ relativePath: result.path }))
+    await manager.enable(ai.manifest.id)
+    expect(manager.getContributions('settings.sections').some((entry) => entry.addonId === 'elephant.ai')).toBe(true)
+    expect(manager.getContributions('views').some((entry) => entry.addonId === 'elephant.ai')).toBe(true)
+
+    await manager.disable(ai.manifest.id)
+    expect(manager.getContributions('settings.sections')).toEqual([])
+    expect(manager.getContributions('views')).toEqual([])
   })
+})
 
+describe('external addon runtime', () => {
   it('uses app info, persistent storage and note write/read-back through the public API', async () => {
     const messages = []
     let worker
@@ -154,11 +151,8 @@ describe('built-in starter addons', () => {
       }
 
       addEventListener(type, listener) { this.listeners.set(type, listener) }
-
       removeEventListener(type) { this.listeners.delete(type) }
-
       emit(type, data) { this.listeners.get(type)?.({ data }) }
-
       terminate = vi.fn()
     }
     vi.stubGlobal('Worker', FakeWorker)

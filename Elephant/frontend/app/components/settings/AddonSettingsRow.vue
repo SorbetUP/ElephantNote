@@ -49,20 +49,6 @@
 
       <p v-if="addon.error" class="en-addon-error">{{ addon.error.message }}</p>
 
-      <div v-if="isTrustedExternal" class="en-addon-trust-actions">
-        <button
-          v-if="!trustedApproved"
-          class="en-danger-link"
-          type="button"
-          :disabled="busy"
-          @click="emit('request-trust')"
-        ><ShieldAlert aria-hidden="true" /> Review and grant full app access</button>
-        <template v-else>
-          <span class="en-addon-trust-approved"><ShieldCheck aria-hidden="true" /> Approved for this package version</span>
-          <button class="en-secondary-button" type="button" :disabled="busy" @click="emit('revoke-trust')">Revoke access</button>
-        </template>
-      </div>
-
       <div v-if="actions.length" class="en-addon-commands">
         <button
           v-for="action in actions"
@@ -105,18 +91,10 @@ const props = defineProps({
   addon: { type: Object, required: true },
   actions: { type: Array, default: () => [] },
   expanded: { type: Boolean, default: false },
-  busy: { type: Boolean, default: false },
-  trustedApproved: { type: Boolean, default: false }
+  busy: { type: Boolean, default: false }
 })
 
-const emit = defineEmits([
-  'toggle-details',
-  'toggle-addon',
-  'run-action',
-  'uninstall',
-  'request-trust',
-  'revoke-trust'
-])
+const emit = defineEmits(['toggle-details', 'toggle-addon', 'run-action', 'uninstall'])
 const confirmingUninstall = ref(false)
 
 watch(() => props.expanded, (expanded) => {
@@ -124,7 +102,6 @@ watch(() => props.expanded, (expanded) => {
 })
 
 const accessLevel = computed(() => getAddonAccessLevel(props.addon?.manifest))
-const isTrustedExternal = computed(() => accessLevel.value === 'trusted' && props.addon?.manifest?.source === 'external')
 const accessLabel = computed(() => ({
   isolated: 'Limited access',
   trusted: 'Full app access',
@@ -132,7 +109,7 @@ const accessLabel = computed(() => ({
 }[accessLevel.value] || 'Unknown access'))
 const accessDescription = computed(() => ({
   isolated: 'Runs in an isolated Worker and can only use the capabilities listed below.',
-  trusted: 'Runs inside ElephantNote and can change the interface, editor and application behavior. Enable only if you trust its source.',
+  trusted: 'Runs inside ElephantNote and can change the interface, editor and application behavior.',
   system: 'Ships with ElephantNote and is tested as part of the application.'
 }[accessLevel.value] || ''))
 
@@ -180,7 +157,7 @@ const permissionLabels = computed(() => {
 .en-addon-chevron.rotated { transform: rotate(180deg); }
 .en-addon-controls { display: flex; align-items: center; padding: 0 14px 0 8px; }
 .en-addon-details { grid-column: 1 / -1; display: grid; gap: 10px; padding: 0 14px 14px 59px; }
-.en-addon-details-meta, .en-addon-permissions, .en-addon-uninstall, .en-addon-trust-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.en-addon-details-meta, .en-addon-permissions, .en-addon-uninstall { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .en-addon-details-meta code, .en-addon-details-meta span, .en-addon-permissions span, .en-addon-uninstall > span { color: var(--en-muted, #667085); font-size: 9.5px; }
 .en-addon-permissions span { padding: 2px 6px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 999px; }
 .en-addon-access-explanation { display: flex; gap: 9px; padding: 10px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 10px; }
@@ -192,8 +169,7 @@ const permissionLabels = computed(() => {
 .en-addon-error { margin: 0; color: #b91c1c; font-size: 10.5px; }
 .en-addon-commands { display: flex; flex-wrap: wrap; gap: 7px; }
 .en-addon-commands button, .en-danger-link, .en-addon-uninstall .en-secondary-button { font-size: 10.5px; }
-.en-addon-commands svg, .en-danger-link svg, .en-addon-trust-approved svg { width: 13px; height: 13px; }
-.en-addon-trust-approved { display: inline-flex; align-items: center; gap: 5px; color: #15803d; font-size: 10px; }
+.en-addon-commands svg, .en-danger-link svg { width: 13px; height: 13px; }
 .en-danger-link { justify-self: start; }
 @media (max-width: 720px) { .en-addon-details { padding-left: 14px; } }
 </style>

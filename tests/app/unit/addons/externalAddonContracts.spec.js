@@ -138,7 +138,17 @@ describe('built-in starter addons', () => {
         worker = this
         this.listeners = new Map()
       }
-      postMessage(message) { messages.push(message) }
+      postMessage(message) {
+        messages.push(message)
+        if (message.type === 'activate') {
+          queueMicrotask(() => this.emit('message', {
+            type: 'activation-result',
+            id: message.id,
+            ok: true,
+            result: { activated: true }
+          }))
+        }
+      }
       addEventListener(type, listener) { this.listeners.set(type, listener) }
       removeEventListener(type) { this.listeners.delete(type) }
       emit(type, data) { this.listeners.get(type)?.({ data }) }
@@ -175,9 +185,14 @@ describe('built-in starter addons', () => {
     })
     await manager.enable('com.example.addon')
 
-    worker.emit('message', { type: 'request', requestId: '1', method: 'app.info', params: {} })
+    worker.emit('message', { type: 'rpc', id: 'rpc-1', method: 'app.info', params: {} })
     await flush()
-    expect(messages).toContainEqual(expect.objectContaining({ type: 'response', requestId: '1', result: expect.objectContaining({ name: 'ElephantNote' }) }))
+    expect(messages).toContainEqual(expect.objectContaining({
+      type: 'rpc-result',
+      id: 'rpc-1',
+      ok: true,
+      result: expect.objectContaining({ name: 'ElephantNote' })
+    }))
   })
 
   it('unregisters a disabled addon and clears its contributions', async () => {

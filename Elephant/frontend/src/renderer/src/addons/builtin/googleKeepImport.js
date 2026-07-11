@@ -10,7 +10,9 @@ export const googleKeepImportAddon = {
     version: '1.0.0',
     description: 'Imports Google Keep archives, web pages and RSS feeds into the active vault.',
     author: 'ElephantNote',
+    icon: 'download',
     defaultEnabled: false,
+    removable: true,
     permissions: ['imports.google-keep', 'sources.web', 'sources.rss'],
     contributes: { settings: true }
   },

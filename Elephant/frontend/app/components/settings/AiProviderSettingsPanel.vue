@@ -37,31 +37,11 @@
         </div>
       </section>
 
-      <section v-if="addonProviders.length" class="en-ai-card">
-        <header class="en-ai-card-header">
-          <div>
-            <h4>Addon providers</h4>
-            <p>Providers contributed by enabled addons. Their connection and account settings remain inside the addon.</p>
-          </div>
-        </header>
-        <div class="en-addon-provider-list">
-          <article v-for="provider in addonProviders" :key="provider.providerId" class="en-addon-provider-row">
-            <div>
-              <strong>{{ provider.title }}</strong>
-              <span>{{ provider.description || provider.transport || provider.providerId }}</span>
-            </div>
-            <button class="secondary compact" type="button" @click="openAddonProviderSettings(provider)">
-              Configure addon
-            </button>
-          </article>
-        </div>
-      </section>
-
       <section class="en-ai-card">
         <header class="en-ai-card-header">
           <div>
             <h4>External API providers</h4>
-            <p>Stored for features that explicitly support them. API usage is billed separately.</p>
+            <p>Stored for features that explicitly support them. API usage is billed separately from ChatGPT subscriptions.</p>
           </div>
           <button class="secondary compact" type="button" @click="addProvider">
             <Plus aria-hidden="true" /> Add provider
@@ -109,13 +89,15 @@
         </div>
         <div v-else class="en-ai-empty"><Server aria-hidden="true" /><span>No external API provider configured.</span></div>
       </section>
+
+      <div class="en-addon-settings-slot" data-elephant-addon-settings-slot="ai.providers.after-external" />
       <p v-if="providerMessage" class="en-ai-feedback">{{ providerMessage }}</p>
     </template>
 
     <template v-else-if="activePage === 'chat'">
       <section class="en-ai-card">
         <header class="en-ai-card-header">
-          <div><h4>Chat route</h4><p>Select the runtime used by ElephantNote chat.</p></div>
+          <div><h4>Chat route</h4><p>Select the actual runtime used by ElephantNote chat.</p></div>
           <span class="en-ai-badge active">{{ routeProviderLabel(form.routes.chat.source) }}</span>
         </header>
         <div class="en-ai-card-body en-ai-grid">
@@ -222,7 +204,7 @@
 
     <template v-else>
       <section class="en-ai-card">
-        <header class="en-ai-card-header"><div><h4>OCR route</h4><p>Configure a provider that explicitly supports image recognition.</p></div></header>
+        <header class="en-ai-card-header"><div><h4>OCR route</h4><p>Configure OCR explicitly. Codex is not advertised as an OCR engine.</p></div></header>
         <div class="en-ai-card-body en-ai-grid">
           <label>
             <span>Provider</span>
@@ -244,8 +226,6 @@
         </details>
       </section>
     </template>
-
-    <p v-if="autosaveMessage" class="en-ai-save-state">{{ autosaveMessage }}</p>
   </section>
 </template>
 
@@ -281,7 +261,6 @@ const activePage = ref(aiPages.some((page) => page.id === props.initialPage) ? p
 const saving = ref(false)
 const indexing = ref(false)
 const providerMessage = ref('')
-const autosaveMessage = ref('')
 const currentConfig = ref(normalizeAiConfig())
 const localModels = ref([])
 const addonModels = ref({})
@@ -479,11 +458,6 @@ const loadAddonModels = async (provider) => {
     return []
   }
 }
-const openAddonProviderSettings = (provider) => {
-  window.dispatchEvent(new CustomEvent('elephantnote:open-settings', {
-    detail: { section: provider.settingsSection || provider.providerId }
-  }))
-}
 const onChatSourceChanged = async () => {
   const source = form.value.routes.chat.source
   if (source === 'app-local') {
@@ -559,10 +533,8 @@ const saveConfig = async ({ silent = false, reason = 'manual' } = {}) => {
     const saved = await elephantnoteClient.ai.setConfig(clonePlainObject(payload))
     currentConfig.value = normalizeAiConfig(saved || payload)
     localStorage.setItem(CACHE_KEY, JSON.stringify(currentConfig.value))
-    autosaveMessage.value = 'Saved'
     window.dispatchEvent(new CustomEvent('elephantnote:ai-config-changed', { detail: currentConfig.value }))
   } catch (error) {
-    autosaveMessage.value = 'Save failed'
     providerMessage.value = error instanceof Error ? error.message : String(error)
   } finally {
     if (!silent) saving.value = false
@@ -571,7 +543,6 @@ const saveConfig = async ({ silent = false, reason = 'manual' } = {}) => {
 const scheduleAutosave = (reason = 'change') => {
   if (!hydrated.value) return
   clearTimeout(autosaveTimer)
-  autosaveMessage.value = 'Saving…'
   autosaveTimer = setTimeout(() => saveConfig({ silent: true, reason }), 700)
 }
 const loadConfig = async () => {
@@ -583,7 +554,6 @@ const loadConfig = async () => {
     await loadLocalModels()
     const provider = addonProviderFor(form.value.routes.chat.source)
     if (provider) await loadAddonModels(provider)
-    autosaveMessage.value = 'Saved'
   } catch (error) {
     providerMessage.value = error instanceof Error ? error.message : String(error)
   } finally {
@@ -617,7 +587,7 @@ onBeforeUnmount(() => {
 .en-ai-settings { display: grid; gap: 14px; color: var(--en-text, #101828); }
 h4, p { margin: 0; }
 h4 { font-size: 14px; }
-p, small, .en-ai-setting-copy span, .en-addon-provider-row span { color: var(--en-muted, #667085); font-size: 12px; }
+p, small, .en-ai-setting-copy span { color: var(--en-muted, #667085); font-size: 12px; }
 .en-ai-toolbar, .en-ai-card-header, .en-ai-setting-row, .en-provider-footer, .en-ai-actions { display: flex; align-items: center; gap: 10px; }
 .en-ai-toolbar { position: sticky; top: -28px; z-index: 3; justify-content: space-between; padding: 6px; border: 1px solid var(--en-border); border-radius: 12px; background: var(--en-surface); }
 .en-ai-tabs { display: flex; gap: 4px; }
@@ -641,24 +611,21 @@ button svg { width: 15px; height: 15px; }
 .en-ai-grid .wide, .en-provider-form .wide { grid-column: 1 / -1; }
 input, select, textarea { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid var(--en-border); border-radius: 8px; background: var(--en-surface); color: var(--en-text); padding: 8px 9px; }
 textarea { resize: vertical; }
-.en-provider-list, .en-addon-provider-list { display: grid; }
-.en-provider-row, .en-addon-provider-row { padding: 14px 16px; border-top: 1px solid var(--en-border); }
-.en-provider-row:first-child, .en-addon-provider-row:first-child { border-top: 0; }
+.en-provider-list { display: grid; }
+.en-provider-row { padding: 14px 16px; border-top: 1px solid var(--en-border); }
+.en-provider-row:first-child { border-top: 0; }
 .en-provider-footer { justify-content: space-between; margin-top: 10px; }
 .en-provider-footer > span { flex: 1; color: var(--en-muted); font-size: 11px; }
-.en-addon-provider-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.en-addon-provider-row > div { min-width: 0; display: grid; gap: 3px; }
 .en-ai-actions { justify-content: flex-end; }
 .en-ai-empty { display: flex; align-items: center; gap: 8px; padding: 16px; color: var(--en-muted); }
 .en-ai-empty svg { width: 16px; height: 16px; }
 .en-ai-advanced { border-top: 1px solid var(--en-border); }
 .en-ai-advanced summary { padding: 12px 16px; cursor: pointer; color: var(--en-muted); font-size: 12px; }
-.en-ai-feedback, .en-ai-save-state { margin: 0; color: var(--en-muted); font-size: 11px; }
-.en-ai-save-state { justify-self: end; }
+.en-ai-feedback { margin: 0; color: var(--en-muted); font-size: 11px; }
 .en-ai-switch { flex: 0 0 auto; }
+.en-addon-settings-slot { display: contents; }
 @media (max-width: 760px) {
   .en-ai-grid, .en-provider-form { grid-template-columns: 1fr; }
   .en-ai-grid .wide, .en-provider-form .wide { grid-column: auto; }
-  .en-addon-provider-row { align-items: flex-start; flex-direction: column; }
 }
 </style>

@@ -1,3 +1,4 @@
+import { irohSyncClient } from 'elephant-front/services/irohSyncClient'
 import SyncAddonSettings from './ui/SyncAddonSettings.vue'
 import { mountSettingsComponent } from './settingsComponentHost'
 
@@ -30,5 +31,9 @@ export const syncAddon = {
       order: 50,
       render: mountSettingsComponent(ctx, SyncAddonSettings)
     })
+  },
+
+  async deactivate() {
+    await irohSyncClient.shutdown().catch(() => {})
   }
 }

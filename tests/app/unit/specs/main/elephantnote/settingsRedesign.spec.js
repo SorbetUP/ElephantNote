@@ -16,12 +16,16 @@ const readAddonStyles = () => read('Elephant/frontend/app/components/settings/ad
 const readAddonRow = () => read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
 const readAddonStore = () => read('Elephant/frontend/src/renderer/src/store/addons.js')
 const readAppShell = () => read('Elephant/frontend/app/components/shell/AppShell.vue')
+const readMainContent = () => read('Elephant/frontend/app/components/shell/MainContent.vue')
+const readIconRail = () => read('Elephant/frontend/app/components/navigation/IconRail.vue')
 const readRouter = () => read('Elephant/frontend/src/renderer/src/router/index.js')
 const readPreferences = () => read('Elephant/frontend/src/renderer/src/store/preferences.js')
 const readBuiltinIndex = () => read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
 const readImportAddon = () => read('Elephant/frontend/src/renderer/src/addons/builtin/googleKeepImport.js')
 const readSitesAddon = () => read('Elephant/frontend/src/renderer/src/addons/builtin/sites.js')
 const readCodexAddon = () => read('Elephant/frontend/src/renderer/src/addons/builtin/codexConnection.js')
+const readAiAddon = () => read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
+const readSyncAddon = () => read('Elephant/frontend/src/renderer/src/addons/builtin/sync.js')
 const readImportSettings = () => read('Elephant/frontend/src/renderer/src/addons/builtin/ui/ImportSettings.vue')
 const readSitesSettings = () => read('Elephant/frontend/src/renderer/src/addons/builtin/ui/SitesSettings.vue')
 const readCodexSettings = () => read('Elephant/frontend/src/renderer/src/addons/builtin/ui/CodexConnectionSettings.vue')
@@ -42,19 +46,19 @@ describe('ElephantNote settings redesign', () => {
     expect(styles).toContain('grid-template-areas: "close title search"')
   })
 
-  it('searches core and addon-contributed settings and opens nested pages', () => {
+  it('searches core and currently installed addon-contributed settings', () => {
     const source = readSettings()
 
     expect(source).toContain('placeholder="Search all settings"')
     expect(source).toContain('const settingsIndex = computed')
     expect(source).toContain("label: 'Quick insert trigger'")
     expect(source).toContain("label: 'Installed addons'")
-    expect(source).toContain("label: 'Conflict retention'")
-    expect(source).toContain("label: 'Semantic search and embeddings'")
+    expect(source).toContain("label: 'Built-in addon catalogue'")
+    expect(source).toContain("label: 'Addon packs'")
     expect(source).toContain("addonsStore.getContributions('settings.sections')")
     expect(source).toContain('const openSearchResult = (result) =>')
-    expect(source).toContain('syncInitialPage.value = result.subpage')
-    expect(source).toContain('aiInitialPage.value = result.subpage')
+    expect(source).not.toContain('syncInitialPage')
+    expect(source).not.toContain('aiInitialPage')
   })
 
   it('opens a requested section through the active modal instead of a legacy route', () => {
@@ -66,17 +70,21 @@ describe('ElephantNote settings redesign', () => {
     expect(settings).toContain("initialSection: { type: String, default: 'appearance' }")
     expect(settings).toContain('const normalizeSection = (section) =>')
     expect(settings).toContain('const activeSection = ref(normalizeSection(props.initialSection))')
-    expect(settings).toContain("watch(() => props.initialSection")
+    expect(settings).toContain('watch(() => props.initialSection')
   })
 
-  it('keeps only core settings in vanilla navigation and restores optional pages through addons', () => {
+  it('keeps only indispensable settings in core and restores optional pages through addons', () => {
     const settings = readSettings()
     const builtins = readBuiltinIndex()
     const importAddon = readImportAddon()
     const sitesAddon = readSitesAddon()
     const codexAddon = readCodexAddon()
+    const aiAddon = readAiAddon()
+    const syncAddon = readSyncAddon()
 
     expect(settings).toContain("{ id: 'addons', label: 'Addons', icon: Package }")
+    expect(settings).not.toContain("{ id: 'sync', label: 'Sync', icon: Cloud }")
+    expect(settings).not.toContain("{ id: 'ai', label: 'AI', icon: Sparkles }")
     expect(settings).not.toContain("{ id: 'sites', label: 'Sites', icon: Globe2 }")
     expect(settings).not.toContain("{ id: 'import', label: 'Import', icon: Download }")
     expect(settings).toContain('addonStandaloneSections')
@@ -84,14 +92,17 @@ describe('ElephantNote settings redesign', () => {
     expect(importAddon).toContain('standalone: true')
     expect(sitesAddon).toContain("section: 'sites'")
     expect(sitesAddon).toContain('standalone: true')
+    expect(aiAddon).toContain("section: 'ai'")
+    expect(aiAddon).toContain('standalone: true')
+    expect(syncAddon).toContain("section: 'sync'")
+    expect(syncAddon).toContain('standalone: true')
     expect(codexAddon).toContain("section: 'ai'")
     expect(codexAddon).toContain("slot: 'ai.providers.after-external'")
-    expect(codexAddon).not.toContain("section: 'codex'")
     expect(codexAddon).not.toContain('standalone: true')
-    expect(builtins.indexOf('addonPacksAddon')).toBeLessThan(builtins.indexOf('googleKeepImportAddon'))
-    expect(builtins.indexOf('googleKeepImportAddon')).toBeLessThan(builtins.indexOf('codexConnectionAddon'))
-    expect(builtins.indexOf('codexConnectionAddon')).toBeLessThan(builtins.indexOf('calendarAddon'))
-    expect(builtins.indexOf('calendarAddon')).toBeLessThan(builtins.indexOf('sitesAddon'))
+    expect(builtins).not.toContain('dailyNotesAddon')
+    expect(builtins).not.toContain('quickCaptureAddon')
+    expect(builtins).not.toContain('vaultOverviewAddon')
+    expect(builtins).not.toContain('addonInspectorAddon')
   })
 
   it('uses one consent gate and the normal addon switch for all access levels', () => {
@@ -112,7 +123,7 @@ describe('ElephantNote settings redesign', () => {
     expect(logic).toContain('setTrustedSafeMode(false)')
   })
 
-  it('integrates compact real addon controls into the active settings panel', () => {
+  it('integrates installed and available first-party addons into the active settings panel', () => {
     const settings = readSettings()
     const addons = readAddons()
     const logic = readAddonLogic()
@@ -121,20 +132,24 @@ describe('ElephantNote settings redesign', () => {
     expect(settings).toContain("activeSection === 'addons'")
     expect(settings).toContain('<addons-settings-panel />')
     expect(settings).toContain("import AddonsSettingsPanel from './AddonsSettingsPanel.vue'")
+    expect(addons).toContain('Built-in addon catalogue')
+    expect(addons).toContain('<AddonIcon :name="addon.icon"')
     expect(addons).toContain("import { useAddonsSettings } from './useAddonsSettings'")
     expect(logic).toContain('useAddonsStore()')
     expect(logic).toContain('getAddonActions(contributions.value)')
+    expect(logic).toContain('installBuiltin(addon.id)')
+    expect(logic).toContain('uninstallBuiltin(addon.manifest.id)')
     expect(logic).toContain('installExternalAddon(selected)')
     expect(logic).toContain('setAddonEnabled(addon.manifest.id')
-    expect(logic).toContain('runAction(action.id)')
+    expect(logic).toContain('runAction(action.id, payload)')
     expect(addons).toContain('<addon-settings-row')
     expect(row).toContain('role="switch"')
     expect(row).toContain("emit('run-action', action)")
-    expect(row).toContain("addon.manifest.source === 'external'")
+    expect(row).toContain('<AddonIcon :name="addon.manifest.icon"')
     expect(logic).toContain("log.info('[settings:addons] mounted'")
   })
 
-  it('uses inline destructive confirmation and no unsupported native confirm command', () => {
+  it('uses inline destructive confirmation and supports removable built-ins', () => {
     const addons = readAddons()
     const logic = readAddonLogic()
     const row = readAddonRow()
@@ -142,8 +157,9 @@ describe('ElephantNote settings redesign', () => {
     expect(addons).not.toContain('window.confirm')
     expect(logic).not.toContain('window.confirm')
     expect(row).not.toContain('window.confirm')
-    expect(row).toContain('Confirm uninstall')
     expect(row).toContain('confirmingUninstall')
+    expect(row).toContain("isExternal.value ? 'Uninstall' : 'Remove'")
+    expect(row).toContain('addon.manifest.removable !== false')
     expect(logic).toContain('setCommunityAddonsEnabled(false)')
   })
 
@@ -250,6 +266,7 @@ describe('ElephantNote settings redesign', () => {
 
   it('keeps Sync navigation at the top and makes retention directly editable', () => {
     const source = readSync()
+    const addon = readSyncAddon()
 
     expect(source).toContain('class="en-sync-toolbar"')
     expect(source).toContain("activeSyncPage === 'overview'")
@@ -257,12 +274,13 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain("activeSyncPage === 'conflicts'")
     expect(source).toContain('v-model.number="retentionDays"')
     expect(source).toContain('@click="saveRetention"')
-    expect(source).toContain('initialPage: { type: String')
     expect(source).toContain('irohSyncClient.createInvite')
     expect(source).toContain('irohSyncClient.acceptInvite')
     expect(source).toContain('irohSyncClient.run()')
     expect(source).toContain('irohSyncClient.restoreConflict')
     expect(source).toContain('irohSyncClient.deleteConflict')
+    expect(addon).toContain('defaultEnabled: false')
+    expect(addon).toContain("render: mountSettingsComponent(ctx, SyncAddonSettings)")
   })
 
   it('keeps Codex visually inside AI while its implementation remains addon-owned', () => {
@@ -305,8 +323,12 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('form.routes.ocr.confidenceThreshold')
   })
 
-  it('keeps AI configuration, provider tests and autosave connected to real clients', () => {
+  it('keeps AI configuration connected to real clients but removes every AI shell element when the addon is absent', () => {
     const source = readAi()
+    const addon = readAiAddon()
+    const shell = readAppShell()
+    const main = readMainContent()
+    const rail = readIconRail()
 
     expect(source).toContain('await elephantnoteClient.ai.getConfig()')
     expect(source).toContain('await elephantnoteClient.ai.setConfig')
@@ -314,5 +336,15 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('await elephantnoteClient.search.rebuild?.()')
     expect(source).toContain("scheduleAutosave('form-watch')")
     expect(source).toContain("saveConfig({ silent: true, reason: 'settings-close' })")
+    expect(addon).toContain("id: `${ADDON_ID}.models`")
+    expect(addon).toContain("kind: 'ai-models-v1'")
+    expect(addon).toContain('store.chatSidebarOpen = false')
+    expect(shell).toContain('aiAddonEnabled && store.chatSidebarOpen')
+    expect(shell).toContain("addon.manifest.id === 'elephant.ai' && addon.enabled")
+    expect(shell).not.toContain('elephantnote:ai-config-changed')
+    expect(main).not.toContain('<chat-view')
+    expect(main).not.toContain('<models-view')
+    expect(rail).not.toContain("{ id: 'models'")
+    expect(rail).not.toContain("{ id: 'chat'")
   })
 })

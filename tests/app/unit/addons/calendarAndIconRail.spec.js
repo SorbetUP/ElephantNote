@@ -70,6 +70,8 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(runtime).toContain('guard.take()')
     expect(commands).toContain('rename = "tauri_sync_shutdown"')
     expect(client).toContain("invoke('tauri_sync_shutdown')")
+    expect(client).toContain("throw new Error('The Sync addon is disabled.')")
+    expect(addon).toContain('irohSyncClient.activate()')
     expect(addon).toContain('await irohSyncClient.shutdown()')
     expect(addon).toContain('defaultEnabled: false')
   })

@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia'
 import { open } from '@tauri-apps/plugin-dialog'
 import log from '@/platform/runtimeLogShim'
 import { getAddonActions } from '@/addons'
+import { isTrustedAddonManifest } from '@/addons/manifest'
 import { useAddonsStore } from '@/store/addons'
 
 export const useAddonsSettings = () => {
@@ -119,6 +120,13 @@ export const useAddonsSettings = () => {
   const toggleAddon = async (addon) => {
     const nextEnabled = !addon.enabled
     try {
+      if (nextEnabled && addon.manifest.source === 'external' && isTrustedAddonManifest(addon.manifest)) {
+        if (!addonsStore.trustedStateLoaded) await addonsStore.loadTrustedState()
+        if (addonsStore.trustedSafeMode) await addonsStore.setTrustedSafeMode(false)
+        if (!addonsStore.isTrustedApproved(addon.manifest.id)) {
+          await addonsStore.approveTrustedAddon(addon.manifest.id)
+        }
+      }
       await addonsStore.setAddonEnabled(addon.manifest.id, nextEnabled)
       showMessage(`${addon.manifest.name} ${nextEnabled ? 'enabled' : 'disabled'}.`)
     } catch (error) {

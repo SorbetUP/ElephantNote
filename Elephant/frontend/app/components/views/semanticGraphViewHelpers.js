@@ -18,14 +18,20 @@ const normalizeGraphNode = (node = {}) => {
   }
 }
 
-const normalizeGraphEdge = (edge = {}) => ({
-  ...edge,
-  source: String(edge.source || '').trim(),
-  target: String(edge.target || '').trim(),
-  type: String(edge.type || 'semantic').trim(),
-  reason: String(edge.reason || edge.type || 'semantic').trim(),
-  weight: Number(edge.weight ?? edge.score ?? 0) || 0
-})
+const normalizeGraphEdge = (edge = {}) => {
+  const type = String(
+    edge.type || edge.edgeType || edge.edge_type || edge.relationType || edge.relation_type || 'semantic'
+  ).trim()
+  return {
+    ...edge,
+    source: String(edge.source || '').trim(),
+    target: String(edge.target || '').trim(),
+    type,
+    relationType: String(edge.relationType || edge.relation_type || '').trim(),
+    reason: String(edge.reason || type || 'semantic').trim(),
+    weight: Number(edge.weight ?? edge.score ?? 0) || 0
+  }
+}
 
 const groupNodeCluster = (node = {}) => {
   if ((node.kind || node.type) === 'folder') return node.id
@@ -36,6 +42,12 @@ const groupNodeCluster = (node = {}) => {
 
 const semanticViewModelCache = new WeakMap()
 const vaultGraphCache = new WeakMap()
+const VISIBLE_KNOWLEDGE_EDGE_TYPES = new Set([
+  'semantic',
+  'explicit-link',
+  'wiki-source',
+  'wiki-link'
+])
 
 export const selectSemanticGraphSource = ({
   inspectionGraph = null,
@@ -75,7 +87,7 @@ export const buildSemanticGraphSurface = ({
   const edges = resolved.edges.filter((edge) => {
     if (!allowedNodeIds.has(edge.source) || !allowedNodeIds.has(edge.target)) return false
     if (includeStructure) return true
-    return edge.type === 'semantic' || edge.type === 'explicit-link'
+    return VISIBLE_KNOWLEDGE_EDGE_TYPES.has(edge.type)
   })
   const clusters = resolved.clusters.filter((cluster) =>
     Array.isArray(cluster.paths) && cluster.paths.some((path) => allowedNodeIds.has(path))

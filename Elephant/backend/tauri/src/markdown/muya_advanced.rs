@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::muya_complete::{apply_complete_command, MuyaCompleteCommand};
 use super::muya_engine::{
     apply_command, utf16_len, utf16_to_byte_index, MuyaEditorCommand, MuyaEditorState,
-    MuyaEditorTransaction, MuyaSelection,
+    MuyaEditorTransaction,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

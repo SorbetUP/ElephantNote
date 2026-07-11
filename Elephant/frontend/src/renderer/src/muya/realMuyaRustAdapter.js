@@ -1,4 +1,5 @@
 import Muya from '../../../muya/lib'
+import { createProgrammaticChangeGuard } from './rustProgrammaticChangeGuard.js'
 import {
   createRealMuyaRustMirror,
   muyaIndexCursorToSelection,
@@ -73,7 +74,7 @@ const tokenRangeAtSelection = (markdown, selection, token) => {
 export default class RustOwnedMuya extends Muya {
   constructor (element, options = {}) {
     super(element, options)
-    this.__rustExpectedMarkdown = null
+    this.__rustProgrammaticChanges = this.__rustProgrammaticChanges || createProgrammaticChangeGuard()
     this.__rustApplying = false
     this.__rustComposition = null
     this.__rustClipboard = { markdown: '', html: '' }
@@ -86,10 +87,7 @@ export default class RustOwnedMuya extends Muya {
 
     this.__rustChangeListener = ({ markdown, muyaIndexCursor } = {}) => {
       if (typeof markdown !== 'string') return
-      if (this.__rustExpectedMarkdown === markdown) {
-        this.__rustExpectedMarkdown = null
-        return
-      }
+      if (this.__programmaticGuard().consume()) return
       if (this.__rustComposition) {
         this.__rustComposition.finalMarkdown = markdown
         this.__rustComposition.finalCursor = muyaIndexCursor
@@ -98,9 +96,12 @@ export default class RustOwnedMuya extends Muya {
       if (this.__rustApplying) return
       const state = this.__rustMirror?.state
       if (!state || state.markdown === markdown) return
-      console.error('[elephantnote:muya-rust] rejected non-canonical JavaScript mutation')
-      this.__rustExpectedMarkdown = state.markdown
-      super.setMarkdown(
+      console.error('[elephantnote:muya-rust] rejected non-canonical JavaScript mutation', {
+        canonicalLength: state.markdown.length,
+        receivedLength: markdown.length,
+        revision: state.revision
+      })
+      this.__setProgrammaticMarkdown(
         state.markdown,
         undefined,
         true,
@@ -109,7 +110,7 @@ export default class RustOwnedMuya extends Muya {
     }
 
     this.__rustSelectionListener = () => {
-      if (!this.__rustMirror?.active || this.__rustApplying || this.__rustComposition) return
+      if (!this.__rustMirror?.active || this.__rustApplying || this.__rustComposition || this.__programmaticGuard().pending) return
       const markdown = this.getMarkdown()
       const muyaIndexCursor = this.contentState.getMuyaIndexCursor()
       this.__rustMirror.sync(markdown, 'selection-change', {
@@ -120,6 +121,23 @@ export default class RustOwnedMuya extends Muya {
 
     this.on('change', this.__rustChangeListener)
     this.on('selectionChange', this.__rustSelectionListener)
+  }
+
+  __programmaticGuard () {
+    if (!this.__rustProgrammaticChanges) {
+      this.__rustProgrammaticChanges = createProgrammaticChangeGuard()
+    }
+    return this.__rustProgrammaticChanges
+  }
+
+  __setProgrammaticMarkdown (markdown, cursor, isRenderCursor = true, muyaIndexCursor, blocks) {
+    return this.__programmaticGuard().run(() => super.setMarkdown(
+      markdown,
+      cursor,
+      isRenderCursor,
+      muyaIndexCursor,
+      blocks
+    ))
   }
 
   __reportRustError = (error) => {
@@ -149,6 +167,7 @@ export default class RustOwnedMuya extends Muya {
     const engine = this.__requireRust()
     this.__rustApplying = true
     try {
+      await engine.flush()
       const { markdown, cursor } = this.__selection()
       const canonical = engine.state?.markdown
       if (typeof canonical === 'string' && canonical !== markdown) {
@@ -172,8 +191,7 @@ export default class RustOwnedMuya extends Muya {
     if (!transaction?.state) return transaction
     if (!transaction.documentChanged && !transaction.selectionChanged) return transaction
     const { state } = transaction
-    this.__rustExpectedMarkdown = state.markdown
-    super.setMarkdown(
+    this.__setProgrammaticMarkdown(
       state.markdown,
       undefined,
       true,
@@ -470,8 +488,7 @@ export default class RustOwnedMuya extends Muya {
   }
 
   setMarkdown (markdown, ...args) {
-    const result = super.setMarkdown(markdown, ...args)
-    this.__rustExpectedMarkdown = null
+    const result = this.__setProgrammaticMarkdown(markdown, ...args)
     this.__rustComposition = null
     this.__rustMirror?.reset(markdown, 'set-markdown', { muyaIndexCursor: args[2] })
       .then(() => this.__refreshClipboard())

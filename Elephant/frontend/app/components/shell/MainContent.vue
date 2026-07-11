@@ -17,9 +17,7 @@
     </section>
     <dashboard-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'dashboard'" />
     <wiki-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'wiki'" />
-    <chat-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'chat'" />
     <atomic-graph-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'graph'" />
-    <models-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'models'" />
     <sigma-canvas v-else-if="!hasOpenNote && store.activeWorkspaceView === 'canvas'" />
     <site-preview-panel v-if="!hasOpenNote && !activeAddonViewId && store.activeWorkspaceView === 'notes'" />
     <note-editor-host
@@ -38,8 +36,6 @@ import NoteEditorHost from '../editor/NoteEditorHost.vue'
 import SitePreviewPanel from '../../sitePreview/SitePreviewPanel.vue'
 import DashboardView from '../views/DashboardView.vue'
 import WikiView from '../views/WikiView.vue'
-import ChatView from '../views/ChatView.vue'
-import ModelsView from '../views/ModelsView.vue'
 import SigmaCanvas from '../views/SigmaCanvas.vue'
 import AtomicGraphView from '../views/AtomicGraphView.vue'
 import AddonWorkspaceRouter from '../views/AddonWorkspaceRouter.vue'

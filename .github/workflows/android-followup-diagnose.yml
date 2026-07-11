@@ -1,4 +1,4 @@
-name: Android follow-up source diagnosis
+name: Android isolated follow-up validation
 
 on:
   push:
@@ -11,35 +11,144 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-followup-source-diagnosis
+  group: android-isolated-followup-validation
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
 jobs:
-  diagnose:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/android-foundations-rework
-          fetch-depth: 1
-      - name: Locate mobile camera, share and image code
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Tauri CLI when absent
+        run: command -v cargo-tauri >/dev/null || cargo install tauri-cli --version '^2' --locked
+
+      - name: Apply and stage Android follow-up corrections
         run: |
-          set -euxo pipefail
-          {
-            echo '=== mobile toolbar ==='
-            grep -RIn --exclude-dir=node_modules --exclude-dir=build --exclude-dir=target --exclude-dir=.git 'en-mobile-editor-toolbar\|en-mobile-camera-backdrop\|en-mobile-camera' Elephant build tests || true
-            echo '=== sharing ==='
-            grep -RIn --exclude-dir=node_modules --exclude-dir=build --exclude-dir=target --exclude-dir=.git 'navigator\.share\|clipboard\.writeText\|shareText\|Share note\|ACTION_SEND' Elephant build tests || true
-            echo '=== camera streams ==='
-            grep -RIn --exclude-dir=node_modules --exclude-dir=build --exclude-dir=target --exclude-dir=.git 'getUserMedia\|srcObject\|MediaStream\|stop()' Elephant build tests || true
-            echo '=== image errors ==='
-            grep -RIn --exclude-dir=node_modules --exclude-dir=build --exclude-dir=target --exclude-dir=.git 'Failed to load image\|resolveLocalImageSource\|normalizeInsertedImageSource' Elephant build tests || true
-          } | tee android-followup-source-diagnosis.txt
-      - name: Publish source map on branch
-        run: |
+          python build/scripts/finalize-android-followup.py
+          python build/scripts/finalize-android-followup-hotfix.py
+          git rm -r --ignore-unmatch \
+            Elephant/backend/tauri-plugin-elephant-android-vault/android/build \
+            Elephant/backend/tauri-plugin-elephant-android-vault/android/.tauri
+          git rm --ignore-unmatch \
+            .github/workflows/android-followup-diagnose.yml \
+            .github/workflows/android-foundations-rework.yml \
+            android-followup-source-diagnosis.txt \
+            build/scripts/finalize-android-followup.py \
+            build/scripts/finalize-android-followup-hotfix.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f android-followup-source-diagnosis.txt
-          git commit -m "chore(android): publish follow-up source map [skip ci]"
-          git push origin HEAD:fix/android-foundations-rework
+          git add \
+            Elephant/backend/tauri-plugin-elephant-android-vault/android/.gitignore \
+            Elephant/backend/tauri-plugin-elephant-android-vault/android/build.gradle.kts \
+            Elephant/backend/tauri-plugin-elephant-android-vault/android/src/main/java/com/elephantnote/androidvault/ElephantAndroidVaultPlugin.kt \
+            Elephant/backend/tauri-plugin-elephant-android-vault/src/desktop.rs \
+            Elephant/backend/tauri-plugin-elephant-android-vault/src/mobile.rs \
+            Elephant/backend/tauri-plugin-elephant-android-vault/src/models.rs \
+            Elephant/backend/tauri/src/android_vault_commands.rs \
+            Elephant/backend/tauri/src/lib_min.rs \
+            Elephant/backend/tauri/src/vault/entries.rs \
+            Elephant/backend/tauri/tauri.android.conf.json \
+            Elephant/frontend/app/components/editor/NoteEditorHost.vue \
+            Elephant/frontend/app/components/editor/NoteEditorTopBar.vue \
+            Elephant/frontend/app/components/settings/SettingsPanel.vue \
+            Elephant/frontend/app/components/shell/EmptyVaultPicker.vue \
+            Elephant/frontend/app/stores/vaultStore.js \
+            Elephant/frontend/src/renderer/src/mobile-native-ux.css \
+            Elephant/frontend/src/renderer/src/platform/mobileEditorRuntime.js \
+            Elephant/frontend/src/renderer/src/platform/mobileInteractionRuntime.js \
+            Elephant/frontend/src/renderer/src/platform/tauriFileUtilsPathGuards.js \
+            Elephant/shared/markdownDocument.js \
+            tests/app/unit/specs/main/elephantnote/androidFollowupRegression.spec.js
+          git commit -m "fix(android): repair storage text images sharing and camera back [skip ci]"
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Format Rust
+        run: |
+          cargo fmt --manifest-path Elephant/backend/tauri-plugin-elephant-android-vault/Cargo.toml -- --check
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
+
+      - name: Lint changed frontend
+        run: >-
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint
+          Elephant/frontend/app/components/editor/NoteEditorHost.vue
+          Elephant/frontend/app/components/editor/NoteEditorTopBar.vue
+          Elephant/frontend/app/components/settings/SettingsPanel.vue
+          Elephant/frontend/app/components/shell/EmptyVaultPicker.vue
+          Elephant/frontend/app/stores/vaultStore.js
+          Elephant/frontend/src/renderer/src/platform/mobileEditorRuntime.js
+          Elephant/frontend/src/renderer/src/platform/mobileInteractionRuntime.js
+          Elephant/frontend/src/renderer/src/platform/tauriFileUtilsPathGuards.js
+          Elephant/shared/markdownDocument.js
+          tests/app/unit/specs/main/elephantnote/androidFollowupRegression.spec.js
+
+      - name: Run Android focused regressions
+        run: >-
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run
+          --reporter=verbose
+          tests/app/unit/specs/main/elephantnote/androidFollowupRegression.spec.js
+          tests/app/unit/specs/main/elephantnote/androidFoundationsRegression.spec.js
+          tests/app/unit/specs/main/elephantnote/androidPrivateVaultPath.spec.js
+          tests/app/unit/specs/main/elephantnote/mobileAndroidRelease.spec.js
+          tests/app/unit/specs/main/elephantnote/mobileInteractionRegression.spec.js
+
+      - name: Build renderer
+        run: pnpm tauri:web:build
+
+      - name: Build signed ARM64 Android APK
+        run: |
+          set -o pipefail
+          pnpm tauri:android:build 2>&1 | tee android-followup-apk-build.log
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-isolated-followup-diagnostics
+          path: |
+            android-followup-apk-build.log
+            build/**/*.log
+            Elephant/backend/tauri/gen/android/**/*.log
+          if-no-files-found: warn
+
+      - name: Upload validated APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Elephant-android-followup-arm64
+          path: |
+            Elephant/backend/tauri/gen/android/app/build/outputs/apk/**/*.apk
+            build/**/*.apk
+          if-no-files-found: error
+
+      - name: Publish validated source
+        run: git push origin HEAD:fix/android-foundations-rework

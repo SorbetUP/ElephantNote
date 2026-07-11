@@ -1,5 +1,5 @@
 <template>
-  <div class="en-addon-sites-settings">
+  <section class="en-settings-group">
     <div class="en-settings-row">
       <div class="en-settings-row-copy">
         <strong>Site preview</strong>
@@ -24,7 +24,7 @@
       <button type="button" :disabled="!sitePreviewStore.info || busy" @click="stopSitePreview">Stop preview</button>
       <span v-if="message">{{ message }}</span>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup>
@@ -78,7 +78,3 @@ onMounted(async () => {
   await Promise.allSettled([loadFeature(), sitePreviewStore.refresh?.()])
 })
 </script>
-
-<style scoped>
-.en-addon-sites-settings { display: grid; gap: 14px; }
-</style>

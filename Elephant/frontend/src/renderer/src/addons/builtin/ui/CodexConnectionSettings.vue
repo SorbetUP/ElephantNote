@@ -1,20 +1,18 @@
 <template>
-  <div class="en-addon-codex-settings">
-    <ChatgptSubscriptionCard
-      :status="status"
-      :rate-limit-rows="rateLimitRows"
-      :reset-credits="resetCredits"
-      :available-reset-count="availableResetCount"
-      :busy="busy"
-      :reset-busy="resetBusy"
-      :message="message"
-      :login-challenge="loginChallenge"
-      @connect="connect"
-      @disconnect="disconnect"
-      @open-auth="openExternal"
-      @consume-reset="consumeReset"
-    />
-  </div>
+  <ChatgptSubscriptionCard
+    :status="status"
+    :rate-limit-rows="rateLimitRows"
+    :reset-credits="resetCredits"
+    :available-reset-count="availableResetCount"
+    :busy="busy"
+    :reset-busy="resetBusy"
+    :message="message"
+    :login-challenge="loginChallenge"
+    @connect="connect"
+    @disconnect="disconnect"
+    @open-auth="openExternal"
+    @consume-reset="consumeReset"
+  />
 </template>
 
 <script setup>
@@ -139,7 +137,3 @@ onBeforeUnmount(() => {
   if (typeof unlistenCodex === 'function') unlistenCodex()
 })
 </script>
-
-<style scoped>
-.en-addon-codex-settings { display: grid; gap: 14px; }
-</style>

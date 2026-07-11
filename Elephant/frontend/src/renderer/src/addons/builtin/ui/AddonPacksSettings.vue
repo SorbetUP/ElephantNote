@@ -30,14 +30,20 @@
         <article v-for="pack in packs" :key="pack.path" class="en-addon-pack-row">
           <span class="en-addon-pack-icon"><Layers3 aria-hidden="true" /></span>
           <div class="en-addon-pack-copy">
-            <div><strong>{{ pack.name }}</strong><small>{{ pack.addonCount }} addon{{ pack.addonCount === 1 ? '' : 's' }}</small></div>
+            <div>
+              <strong>{{ pack.name }}</strong>
+              <small>{{ pack.addonCount }} addon{{ pack.addonCount === 1 ? '' : 's' }}</small>
+              <span v-if="pack.protected" class="en-addon-pack-badge">Built in</span>
+            </div>
             <p>{{ pack.description || pack.path }}</p>
             <code>{{ pack.path }}</code>
           </div>
           <div class="en-addon-pack-actions">
-            <button class="en-primary-button" type="button" :disabled="busy" @click="applyPack(pack)">Apply</button>
-            <button v-if="confirmDeletePath !== pack.path" class="en-danger-button" type="button" :disabled="busy" @click="confirmDeletePath = pack.path">Delete</button>
-            <template v-else>
+            <button class="en-primary-button" type="button" :disabled="busy" @click="applyPack(pack)">
+              {{ pack.protected ? 'Restore complete app' : 'Apply' }}
+            </button>
+            <button v-if="!pack.protected && confirmDeletePath !== pack.path" class="en-danger-button" type="button" :disabled="busy" @click="confirmDeletePath = pack.path">Delete</button>
+            <template v-else-if="!pack.protected">
               <button class="en-danger-button" type="button" :disabled="busy" @click="deletePack(pack)">Confirm</button>
               <button class="en-secondary-button" type="button" :disabled="busy" @click="confirmDeletePath = ''">Cancel</button>
             </template>
@@ -60,6 +66,7 @@ import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
 
 const PACK_DIRECTORY = '.elephantnote/addons/packs'
 const DEFAULT_PACK_PATH = `${PACK_DIRECTORY}/default.enaddonpack`
+const DEVELOP_PARITY_PACK_PATH = `${PACK_DIRECTORY}/develop-parity.enaddonpack`
 const addonsStore = useAddonsStore()
 const packs = ref([])
 const packName = ref('My addon pack')
@@ -100,7 +107,8 @@ const readPack = async (path) => {
     name: String(parsed.name || path.split('/').pop()?.replace(/\.enaddonpack$/i, '') || 'Unnamed addon pack'),
     description: String(parsed.description || ''),
     addonCount: parsed.addons.length,
-    createdAt: String(parsed.createdAt || '')
+    createdAt: String(parsed.createdAt || ''),
+    protected: parsed.protected === true || path === DEVELOP_PARITY_PACK_PATH
   }
 }
 
@@ -110,25 +118,30 @@ const discoverPackPaths = async () => {
     const paths = entries.map(packPath).filter((path) => path.toLowerCase().endsWith('.enaddonpack'))
     if (paths.length) return [...new Set(paths)]
   } catch {
-    // The hidden pack directory may not exist yet. The default path is checked below.
+    // The hidden pack directory may not exist yet. Known paths are checked below.
   }
-  try {
-    await elephantnoteClient.notes.read(DEFAULT_PACK_PATH)
-    return [DEFAULT_PACK_PATH]
-  } catch {
-    return []
+  const paths = []
+  for (const path of [DEVELOP_PARITY_PACK_PATH, DEFAULT_PACK_PATH]) {
+    try {
+      await elephantnoteClient.notes.read(path)
+      paths.push(path)
+    } catch {
+      // Optional pack is absent.
+    }
   }
+  return paths
 }
 
 const loadPacks = async () => {
   loading.value = true
   try {
+    await addonsStore.runAction('elephant.addon-packs.ensure-develop-parity')
     const paths = await discoverPackPaths()
     const results = await Promise.allSettled(paths.map(readPack))
     packs.value = results
       .filter((result) => result.status === 'fulfilled')
       .map((result) => result.value)
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || left.name.localeCompare(right.name))
+      .sort((left, right) => Number(right.protected) - Number(left.protected) || right.createdAt.localeCompare(left.createdAt) || left.name.localeCompare(right.name))
     const invalidCount = results.filter((result) => result.status === 'rejected').length
     if (invalidCount) showMessage(`${invalidCount} invalid addon pack${invalidCount === 1 ? ' was' : 's were'} ignored.`, true)
   } catch (error) {
@@ -171,7 +184,7 @@ const applyPack = async (pack) => {
 }
 
 const deletePack = async (pack) => {
-  if (!pack?.path || busy.value) return
+  if (!pack?.path || pack.protected || busy.value) return
   busy.value = true
   try {
     await elephantnoteClient.entries.delete(pack.path)
@@ -203,11 +216,12 @@ onMounted(loadPacks)
 .en-addon-pack-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 9px; background: var(--en-soft, #e9eff7); color: var(--en-primary, #2563eb); }
 .en-addon-pack-icon svg { width: 17px; height: 17px; }
 .en-addon-pack-copy { min-width: 0; display: grid; gap: 3px; }
-.en-addon-pack-copy > div { display: flex; align-items: baseline; gap: 8px; }
+.en-addon-pack-copy > div { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .en-addon-pack-copy strong { font-size: 12.5px; }
 .en-addon-pack-copy small, .en-addon-pack-copy p, .en-addon-pack-copy code { color: var(--en-muted, #667085); font-size: 10px; }
 .en-addon-pack-copy p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .en-addon-pack-copy code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.en-addon-pack-badge { padding: 2px 6px; border-radius: 999px; background: color-mix(in srgb, var(--en-primary, #2563eb) 14%, transparent); color: var(--en-primary, #2563eb); font-size: 9px; font-weight: 700; }
 .en-addon-pack-actions { display: flex; align-items: center; gap: 6px; }
 .en-addon-pack-empty { padding: 24px; color: var(--en-muted, #667085); font-size: 11.5px; text-align: center; }
 @media (max-width: 720px) {

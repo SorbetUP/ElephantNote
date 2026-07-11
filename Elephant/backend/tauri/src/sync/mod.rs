@@ -71,6 +71,10 @@ impl IrohSyncState {
     self.running.load(Ordering::Acquire)
   }
 
+  pub async fn is_started(&self) -> bool {
+    self.runtime.lock().await.is_some()
+  }
+
   pub async fn runtime(&self, app: &AppHandle) -> Result<Arc<IrohRuntime>, String> {
     let mut guard = self.runtime.lock().await;
     if let Some(runtime) = guard.as_ref() {
@@ -80,6 +84,18 @@ impl IrohSyncState {
     let runtime = Arc::new(IrohRuntime::start(app.clone()).await?);
     *guard = Some(runtime.clone());
     Ok(runtime)
+  }
+
+  pub async fn shutdown(&self) {
+    let runtime = {
+      let mut guard = self.runtime.lock().await;
+      guard.take()
+    };
+    if let Some(runtime) = runtime {
+      logging::log_global("runtime:stop", "addon disabled");
+      runtime.endpoint.close().await;
+    }
+    self.running.store(false, Ordering::Release);
   }
 }
 
@@ -290,6 +306,14 @@ mod tests {
       assert!(state.begin_activity().is_err());
     }
     assert!(!state.is_running());
+  }
+
+  #[tokio::test]
+  async fn sync_state_does_not_start_iroh_until_requested() {
+    let state = IrohSyncState::new();
+    assert!(!state.is_started().await);
+    state.shutdown().await;
+    assert!(!state.is_started().await);
   }
 
   #[tokio::test]

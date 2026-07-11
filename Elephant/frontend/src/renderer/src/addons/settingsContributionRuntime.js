@@ -2,6 +2,7 @@ import { ADDON_EXTENSION_POINTS } from './extensionPoints'
 
 const SETTINGS_CONTENT = '.en-settings-content'
 const SETTINGS_HOST_ATTR = 'data-elephant-addon-settings-host'
+const SETTINGS_SLOT_ATTR = 'data-elephant-addon-settings-slot'
 
 const normalizeText = (value, fallback = '') => {
   if (typeof value !== 'string') return fallback
@@ -30,11 +31,57 @@ const targetSection = (contribution = {}) => {
   ).toLowerCase()
 }
 
+const targetSlot = (contribution = {}) => normalizeText(
+  contribution.slot || contribution.mountSlot || contribution.settingsSlot
+)
+
 const hasRenderableSettings = (contribution = {}) => {
   return typeof contribution.render === 'function' || (Array.isArray(contribution.fields) && contribution.fields.length > 0)
 }
 
 const removeNode = (node) => node?.remove?.()
+
+const collectScopeAttributes = (content) => {
+  const names = new Set()
+  let current = content
+  while (current) {
+    for (const attribute of current.attributes || []) {
+      if (attribute.name.startsWith('data-v-')) names.add(attribute.name)
+    }
+    if (current.classList?.contains('en-settings-panel')) break
+    current = current.parentElement
+  }
+  return [...names]
+}
+
+const applyScopeAttributes = (root, attributeNames) => {
+  if (!root || !attributeNames.length) return
+  const elements = [root, ...root.querySelectorAll?.('*') || []]
+  for (const element of elements) {
+    if (!element?.setAttribute) continue
+    for (const name of attributeNames) element.setAttribute(name, '')
+  }
+}
+
+const observeScopedContent = (root, attributeNames) => {
+  applyScopeAttributes(root, attributeNames)
+  if (!attributeNames.length || typeof MutationObserver !== 'function') return () => {}
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes || []) {
+        if (node?.nodeType === 1) applyScopeAttributes(node, attributeNames)
+      }
+    }
+  })
+  observer.observe(root, { childList: true, subtree: true })
+  return () => observer.disconnect()
+}
+
+const findSlot = (content, slotName) => {
+  if (!slotName) return content
+  return [...content.querySelectorAll(`[${SETTINGS_SLOT_ATTR}]`)]
+    .find((node) => normalizeText(node.getAttribute(SETTINGS_SLOT_ATTR)) === slotName) || null
+}
 
 const renderField = (documentRef, field, contribution) => {
   const row = documentRef.createElement('div')
@@ -104,26 +151,32 @@ const renderField = (documentRef, field, contribution) => {
   return row
 }
 
-const renderContribution = (documentRef, entry, manager, addonHost) => {
+const renderContribution = (documentRef, content, target, entry, manager, addonHost) => {
   const contribution = entry.contribution || {}
-  const section = documentRef.createElement('section')
-  section.className = 'en-settings-group en-addon-settings-extension'
+  const bare = contribution.chrome === false || contribution.renderMode === 'bare'
+  const section = documentRef.createElement(bare ? 'div' : 'section')
+  section.className = bare
+    ? 'en-addon-settings-bare-host'
+    : 'en-settings-group en-addon-settings-extension'
   section.setAttribute(SETTINGS_HOST_ATTR, 'true')
   section.dataset.addonId = entry.addonId
   section.dataset.contributionId = normalizeText(contribution.id)
 
-  const heading = documentRef.createElement('div')
-  heading.className = 'en-addon-settings-extension-heading'
-  const title = documentRef.createElement('strong')
-  title.textContent = normalizeText(contribution.title, contribution.id || entry.addonId)
-  const description = documentRef.createElement('span')
-  description.textContent = normalizeText(contribution.description)
-  heading.append(title, description)
-  section.append(heading)
+  let body = section
+  if (!bare) {
+    const heading = documentRef.createElement('div')
+    heading.className = 'en-addon-settings-extension-heading'
+    const title = documentRef.createElement('strong')
+    title.textContent = normalizeText(contribution.title, contribution.id || entry.addonId)
+    const description = documentRef.createElement('span')
+    description.textContent = normalizeText(contribution.description)
+    heading.append(title, description)
+    section.append(heading)
 
-  const body = documentRef.createElement('div')
-  body.className = 'en-addon-settings-extension-body'
-  section.append(body)
+    body = documentRef.createElement('div')
+    body.className = 'en-addon-settings-extension-body'
+    section.append(body)
+  }
 
   const cleanup = []
   for (const field of contribution.fields || []) body.append(renderField(documentRef, field, contribution))
@@ -143,9 +196,14 @@ const renderContribution = (documentRef, entry, manager, addonHost) => {
     }
   }
 
+  target.append(section)
+  const stopScopeObserver = observeScopedContent(section, collectScopeAttributes(content))
+
   return {
     section,
+    target,
     dispose() {
+      stopScopeObserver()
       for (const dispose of cleanup.reverse()) {
         try { dispose() } catch {}
       }
@@ -176,22 +234,27 @@ export const installSettingsContributionRuntime = (manager, options = {}) => {
       return
     }
     const activeSection = activeSettingsSection(content)
-    const contributions = [
+    const candidates = [
       ...manager.getContributions(ADDON_EXTENSION_POINTS.settingsSections),
       ...manager.getContributions(ADDON_EXTENSION_POINTS.settingsPages)
     ].filter((entry) => targetSection(entry.contribution) === activeSection && hasRenderableSettings(entry.contribution))
 
-    const signature = contributions.map((entry) => `${entry.addonId}:${entry.contribution?.id || ''}`).join('|')
+    const contributions = candidates
+      .map((entry) => ({ entry, target: findSlot(content, targetSlot(entry.contribution)) }))
+      .filter(({ target: mountTarget }) => Boolean(mountTarget))
+
+    const signature = contributions
+      .map(({ entry, target: mountTarget }) => `${entry.addonId}:${entry.contribution?.id || ''}:${targetSlot(entry.contribution)}:${mountTarget.dataset?.activeAddonSlotKey || ''}`)
+      .join('|')
     const currentSignature = mounted.map((entry) => entry.signature).join('|')
-    if (signature === currentSignature && mounted.every((entry) => entry.section.isConnected)) return
+    if (signature === currentSignature && mounted.every((entry) => entry.section.isConnected && entry.target.isConnected)) return
 
     clear()
     if (!activeSection || !contributions.length) return
 
-    for (const entry of contributions) {
-      const rendered = renderContribution(documentRef, entry, manager, manager.host)
-      rendered.signature = `${entry.addonId}:${entry.contribution?.id || ''}`
-      content.append(rendered.section)
+    for (const { entry, target: mountTarget } of contributions) {
+      const rendered = renderContribution(documentRef, content, mountTarget, entry, manager, manager.host)
+      rendered.signature = `${entry.addonId}:${entry.contribution?.id || ''}:${targetSlot(entry.contribution)}:${mountTarget.dataset?.activeAddonSlotKey || ''}`
       mounted.push(rendered)
     }
   }

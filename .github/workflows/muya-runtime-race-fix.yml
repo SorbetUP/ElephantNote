@@ -1,0 +1,85 @@
+name: Muya Runtime Race Fix
+
+on:
+  push:
+    branches:
+      - feature/rust-muya-complete
+    paths:
+      - '.github/workflows/muya-runtime-race-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-muya-complete
+
+      - name: Apply guarded Muya runtime race fix
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          adapter_path = Path('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js')
+          adapter = adapter_path.read_text()
+          replacements = [
+              ("import Muya from '../../../muya/lib'\n", "import Muya from '../../../muya/lib'\nimport { createProgrammaticChangeGuard } from './rustProgrammaticChangeGuard.js'\n"),
+              ("    this.__rustExpectedMarkdown = null\n    this.__rustApplying = false\n", "    this.__rustProgrammaticChanges = this.__rustProgrammaticChanges || createProgrammaticChangeGuard()\n    this.__rustApplying = false\n"),
+              ("      if (typeof markdown !== 'string') return\n      if (this.__rustExpectedMarkdown === markdown) {\n        this.__rustExpectedMarkdown = null\n        return\n      }\n", "      if (typeof markdown !== 'string') return\n      if (this.__programmaticGuard().consume()) return\n"),
+              ("      console.error('[elephantnote:muya-rust] rejected non-canonical JavaScript mutation')\n      this.__rustExpectedMarkdown = state.markdown\n      super.setMarkdown(\n", "      console.error('[elephantnote:muya-rust] rejected non-canonical JavaScript mutation', {\n        canonicalLength: state.markdown.length,\n        receivedLength: markdown.length,\n        revision: state.revision\n      })\n      this.__setProgrammaticMarkdown(\n"),
+              ("    this.on('change', this.__rustChangeListener)\n    this.on('selectionChange', this.__rustSelectionListener)\n  }\n\n  __reportRustError = (error) => {\n", "    this.on('change', this.__rustChangeListener)\n    this.on('selectionChange', this.__rustSelectionListener)\n  }\n\n  __programmaticGuard () {\n    if (!this.__rustProgrammaticChanges) {\n      this.__rustProgrammaticChanges = createProgrammaticChangeGuard()\n    }\n    return this.__rustProgrammaticChanges\n  }\n\n  __setProgrammaticMarkdown (markdown, cursor, isRenderCursor = true, muyaIndexCursor, blocks) {\n    return this.__programmaticGuard().run(() => super.setMarkdown(\n      markdown, cursor, isRenderCursor, muyaIndexCursor, blocks\n    ))\n  }\n\n  __reportRustError = (error) => {\n"),
+              ("      if (!this.__rustMirror?.active || this.__rustApplying || this.__rustComposition) return\n", "      if (!this.__rustMirror?.active || this.__rustApplying || this.__rustComposition || this.__programmaticGuard().pending) return\n"),
+              ("    try {\n      const { markdown, cursor } = this.__selection()\n", "    try {\n      await engine.flush()\n      const { markdown, cursor } = this.__selection()\n"),
+              ("    this.__rustExpectedMarkdown = state.markdown\n    super.setMarkdown(\n", "    this.__setProgrammaticMarkdown(\n"),
+              ("  setMarkdown (markdown, ...args) {\n    const result = super.setMarkdown(markdown, ...args)\n    this.__rustExpectedMarkdown = null\n    this.__rustComposition = null\n    this.__rustMirror?.reset(markdown, 'set-markdown', { muyaIndexCursor: args[2] })\n      .then(() => this.__refreshClipboard())\n      .catch(this.__reportRustError)\n    return result\n  }\n", "  setMarkdown (markdown, ...args) {\n    const result = this.__setProgrammaticMarkdown(markdown, ...args)\n    this.__rustComposition = null\n    this.__rustMirror?.reset(markdown, 'set-markdown', { muyaIndexCursor: args[2] })\n      .then(() => this.__refreshClipboard())\n      .catch(this.__reportRustError)\n    return result\n  }\n"),
+          ]
+          for index, (old, new) in enumerate(replacements, start=1):
+              count = adapter.count(old)
+              if count != 1:
+                  raise SystemExit(f'adapter replacement {index} expected one match, found {count}')
+              adapter = adapter.replace(old, new)
+          adapter_path.write_text(adapter)
+
+          Path('Elephant/frontend/src/renderer/src/muya/rustProgrammaticChangeGuard.js').write_text("""export const createProgrammaticChangeGuard = () => {\n  let pending = 0\n  return {\n    run (render) {\n      if (typeof render !== 'function') throw new TypeError('A programmatic Muya render callback is required.')\n      pending += 1\n      try {\n        return render()\n      } catch (error) {\n        pending = Math.max(0, pending - 1)\n        throw error\n      }\n    },\n    consume () {\n      if (pending <= 0) return false\n      pending -= 1\n      return true\n    },\n    get pending () { return pending }\n  }\n}\n""")
+
+          Path('tests/app/unit/muyaRustProgrammaticLoad.spec.js').write_text("""import { describe, expect, it, vi } from 'vitest'\nimport { createProgrammaticChangeGuard } from '../../../Elephant/frontend/src/renderer/src/muya/rustProgrammaticChangeGuard.js'\n\ndescribe('Muya Rust programmatic render guard', () => {\n  it('consumes consecutive deferred loads without hiding the next real mutation', () => {\n    const guard = createProgrammaticChangeGuard()\n    const render = vi.fn((markdown) => markdown.length)\n    expect(guard.run(() => render('old note'))).toBe(8)\n    expect(guard.run(() => render('x'.repeat(722)))).toBe(722)\n    expect(guard.pending).toBe(2)\n    expect(guard.consume()).toBe(true)\n    expect(guard.consume()).toBe(true)\n    expect(guard.consume()).toBe(false)\n    expect(render).toHaveBeenCalledTimes(2)\n  })\n\n  it('releases its slot when rendering throws', () => {\n    const guard = createProgrammaticChangeGuard()\n    expect(() => guard.run(() => { throw new Error('render failed') })).toThrow('render failed')\n    expect(guard.pending).toBe(0)\n    expect(guard.consume()).toBe(false)\n  })\n})\n""")
+
+          for rust_name in ['muya_advanced.rs', 'muya_surface.rs']:
+              path = Path('Elephant/backend/tauri/src/markdown') / rust_name
+              text = path.read_text()
+              old = '    MuyaEditorTransaction, MuyaSelection,\n'
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected one unused MuyaSelection import in {path}')
+              path.write_text(text.replace(old, '    MuyaEditorTransaction,\n'))
+          PY
+
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            Elephant/backend/tauri/src/markdown/muya_advanced.rs \
+            Elephant/backend/tauri/src/markdown/muya_surface.rs \
+            Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js \
+            Elephant/frontend/src/renderer/src/muya/rustProgrammaticChangeGuard.js \
+            tests/app/unit/muyaRustProgrammaticLoad.spec.js | sort)"
+          test "$changed" = "$expected"
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Elephant/backend/tauri/src/markdown/muya_advanced.rs \
+            Elephant/backend/tauri/src/markdown/muya_surface.rs \
+            Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js \
+            Elephant/frontend/src/renderer/src/muya/rustProgrammaticChangeGuard.js \
+            tests/app/unit/muyaRustProgrammaticLoad.spec.js
+          git commit -m 'fix(muya): serialize programmatic Rust document loads'
+          git push origin HEAD:feature/rust-muya-complete

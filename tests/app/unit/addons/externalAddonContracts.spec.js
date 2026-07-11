@@ -138,6 +138,7 @@ describe('built-in starter addons', () => {
         worker = this
         this.listeners = new Map()
       }
+
       postMessage(message) {
         messages.push(message)
         if (message.type === 'activate') {
@@ -149,9 +150,13 @@ describe('built-in starter addons', () => {
           }))
         }
       }
+
       addEventListener(type, listener) { this.listeners.set(type, listener) }
+
       removeEventListener(type) { this.listeners.delete(type) }
+
       emit(type, data) { this.listeners.get(type)?.({ data }) }
+
       terminate = vi.fn()
     }
     vi.stubGlobal('Worker', FakeWorker)

@@ -1,66 +1,181 @@
 name: Muya Rust Parity
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - 'feature/**'
+      - 'assistant/**'
     paths:
+      - 'Elephant/backend/tauri/src/markdown/**'
+      - 'Elephant/backend/tauri/src/lib_min.rs'
+      - 'Elephant/frontend/src/renderer/src/muya/**'
+      - 'Elephant/frontend/src/renderer/src/components/editorWithTabs/**'
+      - 'Elephant/frontend/app/components/shell/MainContent.vue'
+      - 'Elephant/shared/muyaParityCases.json'
+      - 'Elephant/shared/muyaJsonStateCases.json'
+      - 'tests/app/unit/muya*.spec.js'
+      - 'vite.tauri.config.mjs'
+      - '.github/workflows/muya-rust-parity.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'Elephant/backend/tauri/src/markdown/**'
+      - 'Elephant/backend/tauri/src/lib_min.rs'
+      - 'Elephant/frontend/src/renderer/src/muya/**'
+      - 'Elephant/frontend/src/renderer/src/components/editorWithTabs/**'
+      - 'Elephant/frontend/app/components/shell/MainContent.vue'
+      - 'Elephant/shared/muyaParityCases.json'
+      - 'Elephant/shared/muyaJsonStateCases.json'
+      - 'tests/app/unit/muya*.spec.js'
+      - 'vite.tauri.config.mjs'
       - '.github/workflows/muya-rust-parity.yml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  guarded-test-import-fix:
-    name: Add test-only Muya selection imports
-    if: github.event_name == 'pull_request' && github.head_ref == 'feature/rust-muya-complete' && github.actor != 'github-actions[bot]'
+  parity:
+    name: Rust and renderer parity
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
+    timeout-minutes: 40
+    env:
+      CARGO_TERM_COLOR: always
+      DEBIAN_FRONTEND: noninteractive
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Tauri Linux dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf \
+            wget
+
+      - uses: ./.github/actions/setup
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          ref: feature/rust-muya-complete
-          fetch-depth: 1
+          components: rustfmt
 
-      - name: Add imports only for Rust test builds
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Elephant/backend/tauri/target
+          key: ${{ runner.os }}-muya-rust-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-muya-rust-
+            ${{ runner.os }}-cargo-
+
+      - name: Check Rust migration formatting
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
+          {
+            rustfmt --edition 2021 --check --config skip_children=true \
+              Elephant/backend/tauri/src/markdown/mod.rs
+            rustfmt --edition 2021 --check \
+              Elephant/backend/tauri/src/markdown/muya_advanced.rs \
+              Elephant/backend/tauri/src/markdown/muya_assets.rs \
+              Elephant/backend/tauri/src/markdown/muya_clipboard_commands.rs \
+              Elephant/backend/tauri/src/markdown/muya_clipboard_html.rs \
+              Elephant/backend/tauri/src/markdown/muya_complete.rs \
+              Elephant/backend/tauri/src/markdown/muya_engine.rs \
+              Elephant/backend/tauri/src/markdown/muya_inline.rs \
+              Elephant/backend/tauri/src/markdown/muya_parity.rs \
+              Elephant/backend/tauri/src/markdown/muya_session.rs \
+              Elephant/backend/tauri/src/markdown/muya_state.rs \
+              Elephant/backend/tauri/src/markdown/muya_surface.rs \
+              Elephant/backend/tauri/src/markdown/muya_ui.rs
+          } 2>&1 | tee muya-rustfmt.log
 
-          for name in ['muya_advanced.rs', 'muya_surface.rs']:
-              path = Path('Elephant/backend/tauri/src/markdown') / name
-              text = path.read_text()
-              anchor = 'use serde::{Deserialize, Serialize};\n\n'
-              replacement = (
-                  'use serde::{Deserialize, Serialize};\n\n'
-                  '#[cfg(test)]\n'
-                  'use super::muya_engine::MuyaSelection;\n\n'
-              )
-              if text.count(anchor) != 1:
-                  raise SystemExit(f'expected one serde import anchor in {path}')
-              if 'use super::muya_engine::MuyaSelection;' in text:
-                  raise SystemExit(f'test-only selection import already exists in {path}')
-              path.write_text(text.replace(anchor, replacement, 1))
-          PY
-
-          changed="$(git diff --name-only | sort)"
-          expected="$(printf '%s\n' \
-            Elephant/backend/tauri/src/markdown/muya_advanced.rs \
-            Elephant/backend/tauri/src/markdown/muya_surface.rs | sort)"
-          test "$changed" = "$expected"
-
-      - name: Commit fix
+      - name: Compile Tauri Rust backend
         shell: bash
         run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            Elephant/backend/tauri/src/markdown/muya_advanced.rs \
-            Elephant/backend/tauri/src/markdown/muya_surface.rs
-          git commit -m 'fix(muya): scope selection imports to Rust tests'
-          git push origin HEAD:feature/rust-muya-complete
+          set -o pipefail
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features 2>&1 | tee muya-cargo-check.log
+
+      - name: Run Rust Muya tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib markdown:: --no-default-features -- --nocapture 2>&1 | tee muya-rust-tests.log
+
+      - name: Upload Rust diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-rust-diagnostics-${{ github.run_id }}
+          path: |
+            muya-rustfmt.log
+            muya-cargo-check.log
+            muya-rust-tests.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Run renderer Muya parity tests
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/muyaRustCompleteOwnership.spec.js \
+            tests/app/unit/muyaRustCompleteSession.spec.js \
+            tests/app/unit/muyaRustProgrammaticLoad.spec.js \
+            tests/app/unit/muyaRustEngineRuntime.spec.js \
+            tests/app/unit/muyaRustSessionRuntime.spec.js \
+            tests/app/unit/muyaRustGroupedHistoryClient.spec.js \
+            tests/app/unit/muyaRustBackedRuntime.spec.js \
+            tests/app/unit/muyaRustEditorActivation.spec.js \
+            tests/app/unit/muyaRustMuyaDomParity.spec.js \
+            tests/app/unit/muyaRealSurfaceRustMirror.spec.js \
+            tests/app/unit/muyaRuntimeFlags.spec.js \
+            tests/app/unit/muyaRuntimeVueIntegration.spec.js \
+            tests/app/unit/muyaSharedParityMatrix.spec.js \
+            tests/app/unit/muyaJsonStateSharedParity.spec.js \
+            tests/app/unit/muyaMarkdownSelectionRuntime.spec.js \
+            tests/app/unit/muyaFullEditorRuntime.spec.js \
+            tests/app/unit/muyaRuntimeInputParity.spec.js 2>&1 | tee muya-renderer-tests.log
+
+      - name: Build Tauri renderer with Rust-owned Muya
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm tauri:web:build 2>&1 | tee muya-renderer-build.log
+
+      - name: Verify Rust-owned Muya code is shipped
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -d build/out/renderer
+          grep -R -F -q 'muya-ui-rust-core' build/out/renderer
+          grep -R -F -q 'real Muya UI with Rust-owned core active' build/out/renderer
+          grep -R -F -q 'JavaScript fallback is disabled' build/out/renderer
+
+      - name: Upload renderer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-renderer-diagnostics-${{ github.run_id }}
+          path: |
+            muya-renderer-tests.log
+            muya-renderer-build.log
+          if-no-files-found: warn
+          retention-days: 14

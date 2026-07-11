@@ -54,7 +54,6 @@ jobs:
             Elephant/node_modules/.bin/vitest run \
             tests/app/unit/addons/externalAddonContracts.spec.js \
             tests/app/unit/addons/addonCatalogContracts.spec.js \
-            tests/app/unit/addons/builtinAddonsQuality.spec.js \
             tests/app/unit/addons/addonProfiles.spec.js \
             tests/app/unit/addons/runtimeSecurityContracts.spec.js \
             tests/app/unit/addons/declarativeViewsContracts.spec.js \

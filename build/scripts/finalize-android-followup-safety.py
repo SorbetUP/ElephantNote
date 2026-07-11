@@ -17,6 +17,13 @@ config = json.loads(config_path.read_text())
 config.get('app', {}).get('security', {}).pop('csp', None)
 config_path.write_text(json.dumps(config, indent=2) + '\n')
 
+# The editor imports helpers through this public facade.
+patch(
+    'Elephant/frontend/app/utils/noteDocument.js',
+    '  getDocumentCreatedAt,\n  getDocumentTitle,\n',
+    '  getDocumentCreatedAt,\n  getDocumentTitle,\n  getExplicitDocumentTitle,\n'
+)
+
 # Do not attempt to resolve an already converted Tauri asset URL as a local path.
 patch(
     'Elephant/frontend/app/components/editor/NoteEditorHost.vue',

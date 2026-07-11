@@ -17,12 +17,25 @@
         "height": 844,
         "resizable": true
       }
-    ]
+    ],
+    "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/**",
+          "$APPLOCALDATA/**",
+          "/data/user/0/com.elephantnote.app/**",
+          "/data/data/com.elephantnote.app/**"
+        ]
+      }
+    }
   },
   "bundle": {
     "active": true,
     "targets": "all",
     "resources": [],
-    "icon": ["../../assets/static/icon.png"]
+    "icon": [
+      "../../assets/static/icon.png"
+    ]
   }
 }

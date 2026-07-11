@@ -66,6 +66,7 @@
 
 <script setup>
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { convertFileSrc } from '@tauri-apps/api/core'
 import { Moon, SunMedium } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import EditorWithTabs from '@/components/editorWithTabs'
@@ -84,6 +85,7 @@ import {
   getEditorMarkdownStats,
   getDocumentCreatedAt,
   getDocumentTitle,
+  getExplicitDocumentTitle,
   mergeEditorMarkdown,
   renameDocumentTitle,
   toEditorMarkdown
@@ -209,16 +211,50 @@ const muyaIndexCursor = computed(() => activeNoteFile.value?.muyaIndexCursor || 
 const fallbackTitle = computed(
   () => activeNoteFile.value?.filename?.replace(/\.md$/i, '') || 'Untitled'
 )
+const isGeneratedStorageTitle = (value = '') => /^(?:untitled|untilted)(?:[ _-]*\d+)?$/i.test(String(value || '').trim())
+const renderedImageSources = new Map()
+const splitImageDestination = (raw = '') => {
+  const value = String(raw || '').trim()
+  if (!value) return { source: '', suffix: '' }
+  if (value.startsWith('<')) {
+    const end = value.indexOf('>')
+    if (end > 0) return { source: value.slice(1, end), suffix: value.slice(end + 1) }
+  }
+  const match = value.match(/^(\S+)(.*)$/)
+  return { source: match?.[1] || value, suffix: match?.[2] || '' }
+}
+const renderLocalImages = (editorMarkdown = '') => String(editorMarkdown || '').replace(
+  MARKDOWN_IMAGE_RE,
+  (whole, prefix, destination, closing) => {
+    const { source, suffix } = splitImageDestination(destination)
+    if (!source || isExternalAssetReference(source)) return whole
+    const absolute = resolveLocalImageSource(source, currentNoteDirectory.value)
+    if (!absolute) return whole
+    const rendered = convertFileSrc(absolute)
+    renderedImageSources.set(rendered, source)
+    return `${prefix}${rendered}${suffix}${closing}`
+  }
+)
+const restoreLocalImageSources = (editorMarkdown = '') => {
+  let restored = String(editorMarkdown || '')
+  for (const [rendered, source] of renderedImageSources) {
+    restored = restored.split(rendered).join(source)
+  }
+  return restored
+}
 const documentToEditorMarkdown = (documentMarkdown) =>
-  toEditorMarkdown(documentMarkdown, fallbackTitle.value)
+  renderLocalImages(toEditorMarkdown(documentMarkdown, fallbackTitle.value))
 const editorToDocumentMarkdown = (editorMarkdown) =>
-  mergeEditorMarkdown(markdown.value, editorMarkdown, fallbackTitle.value)
+  mergeEditorMarkdown(markdown.value, restoreLocalImageSources(editorMarkdown), noteTitle.value)
 const visibleMarkdown = computed(() => documentToEditorMarkdown(markdown.value))
 const documentMeta = computed(() => {
   const content = markdown.value || ''
   const createdAt = getDocumentCreatedAt(content)
+  const explicitTitle = getExplicitDocumentTitle(content)
+  const fallback = fallbackTitle.value
+  const title = explicitTitle || (!content.trim() && isGeneratedStorageTitle(fallback) ? '' : getDocumentTitle(content, fallback))
   return {
-    title: getDocumentTitle(content, fallbackTitle.value),
+    title,
     tags: parseMarkdownTags(content),
     date: createdAt ? formatShortDate(createdAt) : formatShortDate(new Date())
   }
@@ -272,7 +308,7 @@ const applyNoteMetadata = (entry, pathname, metadata = {}) => {
   if (!entry || entry.path !== pathname) return entry
   return {
     ...entry,
-    title: metadata.title || entry.title,
+    title: Object.prototype.hasOwnProperty.call(metadata, 'title') ? metadata.title : entry.title,
     tags: Array.isArray(metadata.tags) ? metadata.tags : entry.tags,
     updatedAt: metadata.updatedAt || entry.updatedAt
   }
@@ -343,7 +379,7 @@ const refreshSavedEntries = async (notePath, result) => {
 const pathExists = (pathname) => !!pathname && !!window.fileUtils?.pathExistsSync?.(pathname)
 const normalizeSlashPath = (pathname = '') => String(pathname || '').replace(/\\/g, '/')
 const isExternalAssetReference = (value = '') =>
-  /^(?:https?:|data:|blob:|#)/i.test(String(value || '').trim())
+  /^(?:https?:|asset:|data:|blob:|#)/i.test(String(value || '').trim())
 const isVaultAssetAbsolutePath = (pathname = '') => {
   const root = store.activeVault?.path
   if (!root || !pathname) return false
@@ -716,7 +752,7 @@ const updateCurrentFileMarkdown = (nextMarkdown, metadata = {}) => {
 }
 
 const updateTitle = (nextTitle) => {
-  const title = String(nextTitle || '').trim() || fallbackTitle.value
+  const title = String(nextTitle ?? '').trim()
   updateCurrentFileMarkdown(renameDocumentTitle(markdown.value, title, fallbackTitle.value), {
     title
   })

@@ -21,6 +21,12 @@ class ShadowArgs {
   var shadowPath: String = ""
 }
 
+@InvokeArg
+class ShareTextArgs {
+  var title: String = "Note"
+  var text: String = ""
+}
+
 @TauriPlugin
 class ElephantAndroidVaultPlugin(private val activity: Activity) : Plugin(activity) {
   private val preferences by lazy {
@@ -122,6 +128,23 @@ class ElephantAndroidVaultPlugin(private val activity: Activity) : Plugin(activi
   }
 
   @Command
+  fun shareText(invoke: Invoke) {
+    try {
+      val args = invoke.parseArgs(ShareTextArgs::class.java)
+      val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TITLE, args.title)
+        putExtra(Intent.EXTRA_SUBJECT, args.title)
+        putExtra(Intent.EXTRA_TEXT, args.text)
+      }
+      activity.startActivity(Intent.createChooser(sendIntent, args.title.ifBlank { "Share note" }))
+      invoke.resolve()
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "Unable to open Android sharing.")
+    }
+  }
+
+  @Command
   fun clear(invoke: Invoke) {
     val args = invoke.parseArgs(ShadowArgs::class.java)
     val oldUri = persistedUri()
@@ -138,8 +161,17 @@ class ElephantAndroidVaultPlugin(private val activity: Activity) : Plugin(activi
     invoke.resolve(state(args.shadowPath, null, null, 0))
   }
 
-  private fun persistedUri(): Uri? =
-    preferences.getString("tree_uri", null)?.let(Uri::parse)
+  private fun persistedUri(): Uri? {
+    val uri = preferences.getString("tree_uri", null)?.let(Uri::parse) ?: return null
+    val granted = activity.contentResolver.persistedUriPermissions.any { permission ->
+      permission.uri == uri && permission.isReadPermission && permission.isWritePermission
+    }
+    if (!granted) {
+      preferences.edit().clear().apply()
+      return null
+    }
+    return uri
+  }
 
   private fun openRoot(uri: Uri): DocumentFile {
     val root = DocumentFile.fromTreeUri(activity, uri)

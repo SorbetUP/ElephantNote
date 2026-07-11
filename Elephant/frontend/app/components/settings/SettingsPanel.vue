@@ -183,6 +183,10 @@
                   <div class="en-settings-row-copy"><strong>Active vault</strong><span>{{ activeVaultPath || 'No vault is currently open.' }}</span></div>
                   <span class="en-status-badge active"><HardDrive aria-hidden="true" />{{ activeVaultName }}</span>
                 </div>
+                <div class="en-settings-row">
+                  <div class="en-settings-row-copy"><strong>Android folder access</strong><span>Open Android's system folder picker. Selecting a folder grants Elephant persistent access only to that folder.</span></div>
+                  <button class="en-primary-button" type="button" :disabled="isChoosingAndroidVault" @click="chooseAndroidVault"><FolderOpen aria-hidden="true" />{{ isChoosingAndroidVault ? 'Opening…' : 'Authorize a folder' }}</button>
+                </div>
                 <div v-if="vaults.length" class="en-vault-list">
                   <article v-for="vault in vaults" :key="vault.id" class="en-vault-row">
                     <span class="en-vault-icon"><FolderOpen aria-hidden="true" /></span>
@@ -304,6 +308,7 @@ const settingsIndex = [
   { id: 'editor-autosave-delay', section: 'editor', label: 'Autosave delay', description: 'Delay before writing the latest edit.' },
   { id: 'vault-active', section: 'vaults', label: 'Active vault', description: 'Current local workspace folder.' },
   { id: 'vault-open', section: 'vaults', label: 'Open vaults', description: 'Review or remove registered vaults.' },
+  { id: 'vault-android-access', section: 'vaults', label: 'Android folder access', description: 'Authorize or reconnect a folder with Android system storage.' },
   { id: 'sync-overview', section: 'sync', subpage: 'overview', label: 'Synchronization status', description: 'Active vault, device identity and last transfer.' },
   { id: 'sync-devices', section: 'sync', subpage: 'devices', label: 'Pair devices', description: 'Create or accept an encrypted Iroh invitation.' },
   { id: 'sync-conflicts', section: 'sync', subpage: 'conflicts', label: 'Conflict retention', description: 'Keep, restore or delete temporary conflict copies.' },
@@ -363,6 +368,7 @@ const sourceImportMessage = ref('')
 const importMessage = ref('')
 const vaultMessage = ref('')
 const removingVaultId = ref('')
+const isChoosingAndroidVault = ref(false)
 const isImporting = ref(false)
 const isImportingSource = ref(false)
 const siteStatusLabel = computed(() => sitePreviewStore.previewUrl ? 'Preview running' : sitePreviewStore.lastBuild?.outputDir ? 'Static build ready' : 'No generated site active')
@@ -383,6 +389,21 @@ const openSearchResult = (result) => {
 const setPreference = (type, value) => preferences.SET_SINGLE_PREFERENCE({ type, value })
 const setQuickInsertTrigger = (value) => setPreference('quickInsertTrigger', String(value || '/').slice(0, 1))
 const setNoteEditorMargin = (value) => setPreference('noteEditorMargin', Math.max(8, Math.min(160, Number(value) || 24)))
+
+const chooseAndroidVault = async () => {
+  isChoosingAndroidVault.value = true
+  vaultMessage.value = ''
+  try {
+    const result = await vaultStore.chooseVault()
+    vaultMessage.value = result === false
+      ? 'Folder authorization canceled.'
+      : 'Android folder access granted and vault connected.'
+  } catch (error) {
+    vaultMessage.value = error instanceof Error ? error.message : 'Unable to authorize the Android folder.'
+  } finally {
+    isChoosingAndroidVault.value = false
+  }
+}
 
 const removeVaultFromApp = async (vault) => {
   if (!vault?.id) return

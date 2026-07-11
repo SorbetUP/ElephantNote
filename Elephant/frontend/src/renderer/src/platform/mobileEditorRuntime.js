@@ -111,6 +111,17 @@ const createSheet = (title, actions) => {
   return { backdrop, close }
 }
 
+const requestNativeCameraPermission = async (target) => {
+  const scanner = target.__TAURI__?.barcodeScanner
+  if (!scanner?.checkPermissions || !scanner?.requestPermissions) return
+  const raw = await scanner.checkPermissions()
+  const state = typeof raw === 'string' ? raw : (raw?.camera || raw?.permission || raw?.state)
+  if (state === 'granted') return
+  const requested = await scanner.requestPermissions()
+  const next = typeof requested === 'string' ? requested : (requested?.camera || requested?.permission || requested?.state)
+  if (next !== 'granted') throw new Error('Camera permission was refused.')
+}
+
 const requestCameraStream = async (target, facingMode) => {
   if (!target.navigator.mediaDevices?.getUserMedia) {
     throw new Error('Camera capture is not available on this Android WebView.')
@@ -128,6 +139,7 @@ const openCamera = async (target, onCaptured) => {
   // Request Android permission before mounting the camera UI. The permission
   // sheet now appears over the note instead of over a half-initialized camera.
   try {
+    await requestNativeCameraPermission(target)
     stream = await requestCameraStream(target, facingMode)
   } catch (error) {
     if (error?.name === 'NotAllowedError') {
@@ -159,10 +171,20 @@ const openCamera = async (target, onCaptured) => {
     errorHost.textContent = ''
   }
 
+  let stopped = false
+  const onAndroidBack = (event) => {
+    event.preventDefault()
+    stop()
+  }
   const stop = () => {
+    if (stopped) return
+    stopped = true
     stream?.getTracks?.().forEach((track) => track.stop())
+    if (video) video.srcObject = null
+    target.removeEventListener('elephantnote:android-back', onAndroidBack)
     backdrop.remove()
   }
+  target.addEventListener('elephantnote:android-back', onAndroidBack)
 
   const switchCamera = async () => {
     stream?.getTracks?.().forEach((track) => track.stop())
@@ -246,13 +268,19 @@ const moreActions = () => [
 ]
 
 const shareCurrentNote = async (target) => {
-  const title = target.document.querySelector('.en-note-title-input')?.value || 'Note'
-  const text = target.document.querySelector('.en-main.has-editor-open .ag-editor')?.innerText?.trim() || title
+  const title = target.document.querySelector('.en-note-title-input')?.value?.trim() || 'Note'
+  const body = target.document.querySelector('.en-main.has-editor-open .ag-editor')?.innerText?.trim() || ''
+  const text = body || title
+  const invoke = target.__TAURI__?.core?.invoke
+  if (typeof invoke === 'function') {
+    await invoke('tauri_android_share_text', { title, text })
+    return
+  }
   if (typeof target.navigator.share === 'function') {
     await target.navigator.share({ title, text })
     return
   }
-  await target.navigator.clipboard?.writeText?.(`${title}\n\n${text}`)
+  throw new Error('System sharing is unavailable on this platform.')
 }
 
 const attachSheetActions = (target, sheet) => {

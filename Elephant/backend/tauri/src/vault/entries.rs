@@ -336,14 +336,7 @@ pub fn create_note(
         true,
     )?;
     let path = unique_path(directory.join(file_name));
-    let note_title = title.unwrap_or_else(|| {
-        title_from_name(
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("Untitled.md"),
-        )
-    });
-    fs::write(&path, format!("# {}\n", note_title)).map_err(|error| error.to_string())?;
+    fs::write(&path, "").map_err(|error| error.to_string())?;
     let root = canonical_root(&vault.path)?;
     let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
     Ok(entry_summary(&root, &path, &metadata, true))
@@ -472,5 +465,29 @@ mod tests {
         assert!(is_ignored_entry(".git"));
         assert!(is_ignored_entry(".elephantnote"));
         assert!(!is_ignored_entry("note.md"));
+    }
+
+    #[test]
+    fn new_notes_have_empty_content() {
+        let temp = std::env::temp_dir().join(format!(
+            "elephantnote-empty-note-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&temp).unwrap();
+        let vault = VaultDescriptor {
+            id: "test".to_string(),
+            name: "Test".to_string(),
+            path: temp.to_string_lossy().to_string(),
+            icon: String::new(),
+            last_opened_at: "0".to_string(),
+        };
+        let entry = create_note(&vault, None, None, None).unwrap();
+        let full_path = entry.get("fullPath").and_then(Value::as_str).unwrap();
+        assert_eq!(fs::read_to_string(full_path).unwrap(), "");
+        fs::remove_dir_all(temp).unwrap();
     }
 }

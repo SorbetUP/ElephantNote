@@ -25,8 +25,8 @@
           :disabled="store.loading"
           @click="emit('create-local')"
         >
-          <span class="en-storage-mode-label">Simple mode</span>
-          <strong>Let Elephant manage it</strong>
+          <span class="en-storage-mode-label">Stockage privé</span>
+          <strong>Continuer sans accès aux fichiers</strong>
           <small>
             Uses the private app folder. It works immediately and remains isolated from other apps.
           </small>
@@ -38,8 +38,8 @@
           :disabled="store.loading"
           @click="emit('choose')"
         >
-          <span class="en-storage-mode-label">Advanced mode</span>
-          <strong>Choose a vault folder</strong>
+          <span class="en-storage-mode-label">Dossier Android</span>
+          <strong>Choisir un dossier et autoriser l’accès</strong>
           <small>
             Opens Android's folder picker and grants Elephant access only to the selected folder.
           </small>
@@ -181,7 +181,7 @@ const store = useVaultStore()
   opacity: 0.58;
 }
 
-.en-storage-mode-simple {
+.en-storage-mode-advanced {
   border-color: color-mix(in srgb, var(--en-primary, #5ea1ff) 58%, var(--en-border, #2b3546));
   background: color-mix(in srgb, var(--en-primary, #5ea1ff) 11%, var(--en-surface, #182233));
 }

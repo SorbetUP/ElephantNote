@@ -28,6 +28,10 @@ impl<R: Runtime> ElephantAndroidVault<R> {
     pub fn sync_to_tree(&self, _payload: ShadowRequest) -> Result<TreeState> {
         self.unsupported()
     }
+    pub fn share_text(&self, _request: ShareTextRequest) -> Result<()> {
+        self.unsupported()
+    }
+
     pub fn clear(&self, _payload: ShadowRequest) -> Result<TreeState> {
         self.unsupported()
     }

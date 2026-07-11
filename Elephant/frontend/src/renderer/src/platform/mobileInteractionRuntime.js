@@ -31,6 +31,10 @@ const installAndroidBackNavigation = (target = globalThis) => {
     let handled = false
 
     try {
+      const backEvent = new CustomEvent('elephantnote:android-back', { cancelable: true })
+      if (!target.dispatchEvent(backEvent)) {
+        handled = true
+      } else {
       const settingsClose = target.document.querySelector('.en-settings-close')
       if (settingsClose) {
         settingsClose.click()
@@ -56,6 +60,7 @@ const installAndroidBackNavigation = (target = globalThis) => {
             }
           }
         }
+      }
       }
     } catch (error) {
       console.error('[mobile-navigation] Android back handling failed', error)

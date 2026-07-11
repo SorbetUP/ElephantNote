@@ -2,6 +2,7 @@ export {
   ensureNoteDocument,
   getDocumentCreatedAt,
   getDocumentTitle,
+  getExplicitDocumentTitle,
   getEditorMarkdownStats,
   mergeEditorMarkdown,
   parseFrontmatter,

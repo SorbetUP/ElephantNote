@@ -15,3 +15,10 @@ pub struct TreeState {
     pub shadow_path: String,
     pub files_copied: u64,
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareTextRequest {
+    pub title: String,
+    pub text: String,
+}

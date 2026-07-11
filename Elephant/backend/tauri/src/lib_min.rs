@@ -106,6 +106,7 @@ pub fn run() {
             android_vault_commands::tauri_android_vault_restore,
             android_vault_commands::tauri_android_vault_sync,
             android_vault_commands::tauri_android_vault_clear,
+            android_vault_commands::tauri_android_share_text,
             sync_commands::iroh_sync_create_invite,
             sync_commands::iroh_sync_accept_invite,
             sync_commands::iroh_sync_status,

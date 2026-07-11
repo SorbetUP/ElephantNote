@@ -2,6 +2,7 @@ const KNOWN_EXISTING_PATHS = new Set()
 const HIDDEN_VAULT_ASSET_RE = /(?:^|\/)\.assets\//i
 const IMAGE_ASSET_RE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico)(?:[?#].*)?$/i
 const EXCALIDRAW_SCENE_RE = /(?:^|\/)\.assets\/excalidraw-[^/]+\.excalidraw(?:[?#].*)?$/i
+const TEXT_FILE_RE = /\.(?:md|markdown|txt|json|jsonl|ya?ml|toml|csv|tsv|html?|css|s[ac]ss|less|jsx?|mjs|cjs|tsx?|vue|xml|svg|excalidraw)(?:[?#].*)?$/i
 const ANDROID_PRIVATE_PATH_RE = /^\/data\/(?:data|user\/\d+)\/([^/]+)(\/.*)?$/
 
 let cachedActiveVaultRoot = ''
@@ -143,9 +144,11 @@ const base64ToBytes = (encoded) => {
 }
 
 const readEncoding = (option) => typeof option === 'string' ? option : (option?.encoding || '')
-const formatReadResult = (bytes, option) => {
+const formatReadResult = (bytes, option, pathname = '') => {
   const encoding = readEncoding(option)
-  if (encoding) return new TextDecoder(encoding === 'utf8' ? 'utf-8' : encoding).decode(bytes)
+  if (encoding || TEXT_FILE_RE.test(String(pathname || ''))) {
+    return new TextDecoder(encoding === 'utf8' ? 'utf-8' : (encoding || 'utf-8')).decode(bytes)
+  }
   if (globalThis.Buffer?.from) return globalThis.Buffer.from(bytes)
   return bytes
 }
@@ -175,7 +178,7 @@ const wrapVaultAwareRead = (target, fileUtils) => {
     const resolved = canonicalizeAndroidPrivateVaultPath(pathname, root)
     if (!pathInsideRoot(resolved, root)) return original.call(fileUtils, resolved, options, ...rest)
     const result = await invoke(target, 'tauri_vault_read_binary', { pathname: resolved })
-    return formatReadResult(base64ToBytes(result.dataBase64), options)
+    return formatReadResult(base64ToBytes(result.dataBase64), options, resolved)
   }
 }
 

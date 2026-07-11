@@ -9,6 +9,8 @@
       type="text"
       :value="title"
       aria-label="Note title"
+      placeholder="Titre"
+      autocomplete="off"
       enterkeyhint="next"
       @change="$emit('update-title', $event.target.value)"
       @keydown.enter.stop.prevent="$event.target.blur()"

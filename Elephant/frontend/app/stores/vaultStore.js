@@ -487,7 +487,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.openedNotes = [
         {
           path: entry.path,
-          title: entry.title || entry.path.split('/').pop()?.replace(/\.md$/i, '') || 'Untitled',
+          title: Object.prototype.hasOwnProperty.call(entry, 'title') ? entry.title : (entry.path.split('/').pop()?.replace(/\.md$/i, '') || 'Untitled'),
           kind: 'note',
           type: entry.type || 'note',
           updatedAt: entry.updatedAt || new Date().toISOString()
@@ -502,7 +502,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         if (!entry || entry.path !== pathname) return entry
         return {
           ...entry,
-          title: metadata.title || entry.title,
+          title: Object.prototype.hasOwnProperty.call(metadata, 'title') ? metadata.title : entry.title,
           tags: Array.isArray(metadata.tags) ? metadata.tags : entry.tags,
           updatedAt: metadata.updatedAt || entry.updatedAt
         }

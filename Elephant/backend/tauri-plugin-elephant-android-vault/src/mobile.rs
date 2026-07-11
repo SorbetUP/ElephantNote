@@ -44,4 +44,10 @@ impl<R: Runtime> ElephantAndroidVault<R> {
             .run_mobile_plugin("clear", payload)
             .map_err(Into::into)
     }
+
+    pub fn share_text(&self, payload: ShareTextRequest) -> Result<()> {
+        self.0
+            .run_mobile_plugin("shareText", payload)
+            .map_err(Into::into)
+    }
 }

@@ -23,6 +23,18 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(moveIconRailItem(['dashboard', 'wiki', tasks], tasks, 0)).toEqual([tasks, 'dashboard', 'wiki'])
   })
 
+  it('deletes the narrow example addons instead of merely hiding them', () => {
+    for (const file of [
+      'dailyNotes.js',
+      'quickCapture.js',
+      'vaultOverview.js',
+      'addonInspector.js'
+    ]) {
+      expect(exists(`Elephant/frontend/src/renderer/src/addons/builtin/${file}`)).toBe(false)
+    }
+    expect(exists('tests/app/unit/addons/builtinAddonsQuality.spec.js')).toBe(false)
+  })
+
   it('removes Calendar from the vanilla shell and registers it as disabled addon', () => {
     const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
     const rail = read('Elephant/frontend/app/components/navigation/IconRail.vue')

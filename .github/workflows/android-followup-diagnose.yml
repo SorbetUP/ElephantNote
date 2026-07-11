@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - fix/android-foundations-rework
+    paths:
+      - .github/workflows/android-followup-diagnose.yml
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-followup-source-diagnosis
@@ -34,7 +36,10 @@ jobs:
             echo '=== image errors ==='
             grep -RIn --exclude-dir=node_modules --exclude-dir=build --exclude-dir=target --exclude-dir=.git 'Failed to load image\|resolveLocalImageSource\|normalizeInsertedImageSource' Elephant build tests || true
           } | tee android-followup-source-diagnosis.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android-followup-source-diagnosis
-          path: android-followup-source-diagnosis.txt
+      - name: Publish source map on branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f android-followup-source-diagnosis.txt
+          git commit -m "chore(android): publish follow-up source map [skip ci]"
+          git push origin HEAD:fix/android-foundations-rework

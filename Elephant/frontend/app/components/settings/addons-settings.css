@@ -1,4 +1,8 @@
 .en-addons-panel { display: grid; gap: 16px; }
+.en-addons-tabs { position: sticky; top: -28px; z-index: 3; display: flex; align-items: center; gap: 4px; padding: 5px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 12px; background: color-mix(in srgb, var(--en-surface, #fff) 94%, transparent); backdrop-filter: blur(14px) saturate(130%); }
+.en-addons-tabs button { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 11px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--en-muted, #667085); font: inherit; cursor: pointer; }
+.en-addons-tabs button.active { border-color: var(--en-border, #c5cfdd); background: var(--en-surface, #fff); color: var(--en-text, #101828); box-shadow: 0 1px 4px rgba(2, 6, 23, 0.08); }
+.en-addons-tabs svg { width: 14px; height: 14px; }
 .en-addons-loading, .en-addons-empty { padding: 24px; color: var(--en-muted, #667085); font-size: 11.5px; text-align: center; }
 .en-addons-empty.error { color: #b91c1c; }
 .en-addons-empty strong, .en-addons-empty span { display: block; }
@@ -39,7 +43,10 @@
 .en-catalog-copy strong { font-size: 12.5px; }
 .en-catalog-copy small, .en-catalog-copy > span { color: var(--en-muted, #667085); font-size: 9.5px; }
 .en-catalog-copy p { margin: 0; overflow: hidden; color: var(--en-muted, #667085); font-size: 10.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.en-addon-packs-slot { min-height: 1px; }
+.en-addon-packs-disabled { border: 1px solid var(--en-border, #c5cfdd); border-radius: 14px; background: var(--en-surface, #fff); }
 @media (max-width: 720px) {
+  .en-addons-tabs { overflow-x: auto; }
   .en-addons-toolbar { align-items: stretch; flex-direction: column; }
   .en-addons-search { width: 100%; }
   .en-catalog-row { grid-template-columns: 34px minmax(0, 1fr); }

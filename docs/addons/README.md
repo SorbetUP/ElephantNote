@@ -10,7 +10,7 @@ The first-party catalogue contains:
 
 - **Addon Packs** manages portable configurations and is the only required built-in addon;
 - **Google Keep Import** owns Google Keep, web-page and RSS import controls;
-- **Codex Connection** owns ChatGPT subscription connection, account state, usage limits and the Codex provider contribution;
+- **Codex Connection** owns ChatGPT subscription connection, account state, usage limits and the Codex provider contribution, and uses the monochrome OpenAI mark in the addon catalogue;
 - **Calendar** owns the native ElephantNote calendar workspace;
 - **Sites** owns static-site generation and preview controls;
 - **AI** owns providers, chat, semantic search, OCR and the local model library;

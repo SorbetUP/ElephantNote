@@ -38,7 +38,9 @@ export const calendarAddon = {
     version: '1.1.0',
     description: 'Restores the native ElephantNote calendar workspace for offline events, imported calendars and recently edited notes.',
     author: 'ElephantNote',
+    icon: 'calendar-days',
     defaultEnabled: false,
+    removable: true,
     permissions: ['calendar.read', 'calendar.sync'],
     contributes: {
       actions: true,

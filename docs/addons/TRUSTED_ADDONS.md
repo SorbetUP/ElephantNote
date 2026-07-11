@@ -1,40 +1,21 @@
 # Full app access addons
 
-ElephantNote supports two external addon execution models.
+ElephantNote supports three addon access models.
 
 ## Limited access
 
-Limited access addons run in a dedicated Worker. They receive a small capability API and cannot directly access Vue, Pinia, Muya, the DOM, Tauri or browser networking.
+Limited access addons run in a dedicated Worker. They receive a small capability API and cannot directly access Vue, Pinia, Muya, the DOM, Tauri or unrestricted browser networking.
 
-Use this mode for reports, importers, task engines, templates, API clients and other features that can be expressed through the public brokered API.
+Use this mode for reports, task engines, templates, importers and API clients that fit the brokered API.
 
 ## Full app access
 
-Full app access addons run as JavaScript modules inside ElephantNote's renderer. They can modify the application deeply, including the editor, workspace, layout, settings, services and DOM.
+Full app access addons run as JavaScript modules inside ElephantNote's renderer. They can modify the application, editor, workspace, layout, settings, services and DOM.
 
-A full app access addon can reach:
-
-- the Vue application;
-- the router and Pinia stores;
-- ElephantNote services;
-- the addon manager and contribution registry;
-- the mutable application host registry;
-- the DOM and browser globals;
-- the Tauri bridge;
-- unstable application internals.
-
-This is intentionally comparable to the power available to desktop Obsidian plugins. It is not a security sandbox.
-
-## Declaration
-
-The package keeps the standard Worker-compatible runtime declaration so the current Rust package validator remains the single installation path. Full app access is declared in `contributes`:
+A package requests this mode with:
 
 ```json
 {
-  "id": "com.example.deep-plugin",
-  "name": "Deep Plugin",
-  "version": "1.0.0",
-  "apiVersion": 1,
   "runtime": {
     "type": "javascript-worker",
     "entry": "main.js"
@@ -45,50 +26,41 @@ The package keeps the standard Worker-compatible runtime declaration so the curr
 }
 ```
 
-The entry is an ESM module:
+The Worker-compatible runtime declaration keeps one `.enaddon` package format and one Rust installation validator. `runtimeMode: "trusted"` changes how the installed entry is executed.
 
-```js
-export default class DeepPlugin {
-  async onload(api) {
-    api.ui.registerStyle('.my-class { color: red; }')
-    api.commands.register({
-      id: 'com.example.deep-plugin.run',
-      title: 'Run deep plugin',
-      run() {}
-    })
-  }
+Full app access is intentionally not a sandbox. The permissions shown for such an addon are descriptive rather than a strict security boundary.
 
-  async onunload() {}
-}
-```
+## One consent flow
 
-## Trust approval
+The user accepts the general third-party-code risk once when enabling Community Addons.
 
-Full app access approval is bound to:
+After that, the ordinary switch is the only activation control for every addon. Enabling a full app access addon:
 
-- the addon id;
-- the exact installed package hash.
+1. records approval for the exact installed package hash;
+2. clears internal crash-recovery mode when necessary;
+3. starts the addon.
 
-Updating or rebuilding the package changes its hash and invalidates approval. The addon remains installed but cannot start until the user reviews and approves the new package.
+There is no second review dialog, extra checkbox or visible trusted-safe-mode setting. Updating or rebuilding the package changes its hash, so the new package is approved only when the user explicitly enables that version.
 
-The approval screen states that the addon may read or modify the application, editor, active vault and any capability available to ElephantNote.
+Before a trusted addon starts, ElephantNote writes an activation marker. If the renderer stops before activation completes, the next launch prevents trusted startup. The user can recover by enabling the addon again with its normal switch.
 
-## Safe mode and crash recovery
+## Built in by ElephantNote
 
-**Settings → Addons → Full app access safe mode** stops every running full app access addon and prevents trusted addons from starting automatically.
+System addons ship with the application, are tested with it and remain independently enabled or disabled.
 
-Safe mode does not:
+The first extracted system features are listed first in Settings:
 
-- uninstall packages;
-- delete addon data;
-- disable built-in addons;
-- disable limited access addons.
+1. Addon Profiles;
+2. Google Keep Import and web/RSS import;
+3. Codex Connection;
+4. Calendar;
+5. Sites.
 
-Before a trusted addon starts, ElephantNote writes an activation marker. If the renderer stops before activation completes, the next launch detects that marker, enables safe mode and clears the persisted startup state of trusted packages. This breaks addon-induced crash loops.
+Google Keep Import, Codex Connection, Calendar and Sites are disabled by default. Their navigation and Settings surfaces exist only while the corresponding addon is enabled. Their existing backend services remain host capabilities so enabling the addon restores the same functionality instead of a reduced reimplementation.
 
 ## Application host registry
 
-The host registry is the stable escape hatch for changing application behavior without guessing globals:
+The host registry is the escape hatch for changing real application behavior without guessing globals:
 
 ```js
 const services = api.resources.get('services')
@@ -100,9 +72,9 @@ const disposeWatch = api.resources.watch('editor', ({ value }) => {
 })
 ```
 
-ElephantNote initially publishes resources including `window`, `document`, `tauri`, `marktext`, `elephantnote`, `fileUtils`, `router`, `pinia`, `services`, `vueApp`, `runtime`, `addons` and `addonManager`. Other runtime components can publish themselves later.
+ElephantNote publishes resources including `window`, `document`, `tauri`, `marktext`, `elephantnote`, `fileUtils`, `router`, `pinia`, `services`, `vueApp`, `runtime`, `addons` and `addonManager`. Runtime components can publish further resources later.
 
-Published resources and watchers are removed automatically when the addon is disabled.
+Resources and watchers registered through the API are removed automatically when the addon is disabled.
 
 ## Reversible patches
 
@@ -120,7 +92,7 @@ api.patch.property(service, 'mode', 'custom')
 api.patch.hook('before-save', (payload) => ({ ...payload, taggedByAddon: true }))
 ```
 
-Every patch records the previous method or property descriptor and restores it on unload.
+Every helper records the previous method or property descriptor and restores it on unload.
 
 ## Vue and router mutation
 
@@ -135,7 +107,7 @@ api.router.beforeEach((to) => {
 })
 ```
 
-Components, directives, injections, routes and guards are cleaned up automatically where Vue Router and Vue expose removal APIs.
+Components, directives, providers, routes and guards are cleaned up automatically where Vue and Vue Router expose removal APIs.
 
 ## Settings extensions
 
@@ -153,9 +125,11 @@ api.settings.registerSection({
 })
 ```
 
-Valid built-in targets are `appearance`, `editor`, `vaults`, `addons`, `sync`, `ai`, `sites` and `import`.
-
 A contribution may alternatively define `render(container, context)` for arbitrary controls. It is mounted only in the requested category and removed on category change or addon disable.
+
+Metadata-only contributions are ignored. An addon therefore cannot create an empty title-and-description block without providing controls or a renderer.
+
+System addons may create standalone Settings categories with `standalone`, `navigationLabel`, `navigationIcon` and `order`.
 
 ## Stable API
 
@@ -163,17 +137,15 @@ The trusted API exposes registration helpers for:
 
 - commands;
 - workspace views and sidebar entries;
-- targeted settings sections and pages;
+- targeted and standalone Settings sections;
 - editor extensions, block types, inline types, input rules, toolbar items and paste handlers;
 - Markdown post-processors, code block processors and embed renderers;
 - layout items and zones;
 - status bar items;
 - styles, events, mutation observers and DOM mounts;
-- Vue components, directives and provides;
+- Vue components, directives and providers;
 - routes and navigation guards;
 - resources, hooks and reversible patches.
-
-Resources registered through these helpers are cleaned up automatically when the addon is disabled.
 
 ## Experimental API
 
@@ -191,32 +163,23 @@ api.experimental.host
 api.experimental.rawContext
 ```
 
-This namespace exists so addons can change behavior beyond the stable API. It may change between ElephantNote releases and should be used only when no stable helper is sufficient.
+This namespace allows addons to change behavior beyond the stable API. It may change between ElephantNote releases. Direct mutations made through it remain the addon author's cleanup responsibility.
 
 ## Trusted Workspace Lab
 
-The reference addon is bundled with the application catalogue. Open **Settings → Addons**, refresh the catalogue and install **Trusted Workspace Lab**. No manually downloaded `.enaddon` is required.
+Trusted Workspace Lab is embedded in the application catalogue. Open **Settings → Addons**, refresh the catalogue, install it, then enable it with its ordinary switch. No manually downloaded `.enaddon` is required.
 
 It exercises:
 
-- package installation through the real Rust validator;
-- hash-bound Full app access approval;
+- installation through the real Rust validator;
+- full application access;
 - global style injection;
-- a real command and sidebar entry;
-- a visible addon-owned Settings section;
+- a command and sidebar entry;
+- a visible addon-owned Settings control;
 - editor and layout contributions;
 - host resource publication;
 - complete cleanup on disable.
 
 ## Security expectations
 
-The permissions shown for a full app access addon are descriptive, not a strict security boundary. Code running in the renderer can bypass capability wrappers by using the raw application context and Tauri bridge.
-
-Only enable a full app access addon when you trust:
-
-- its publisher;
-- its source repository;
-- its dependencies;
-- the exact package version being installed.
-
-Publisher signatures remain a future hardening increment. Hash-bound approval, emergency safe mode and interrupted-activation crash recovery are implemented now.
+Only enable a full app access addon when you trust its publisher, source, dependencies and installed package. Publisher signatures remain a future hardening increment. Hash-bound approval and interrupted-activation recovery are implemented now.

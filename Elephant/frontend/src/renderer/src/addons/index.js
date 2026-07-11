@@ -27,6 +27,7 @@ export {
 export const ADDON_MANAGER_KEY = Symbol('ElephantAddonManager')
 
 const BUILTIN_INSTALL_STORAGE_KEY = 'elephantnote:installed-built-in-addons:v1'
+const BUILTIN_ENABLED_STORAGE_KEY = 'elephantnote:enabled-built-in-addons:v1'
 const REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs'])
 
 const createDiagnosticsLogger = (logger) => ({
@@ -43,20 +44,38 @@ const getLocalStorage = () => {
   }
 }
 
+const parseStoredIds = (storage, key, allowedIds) => {
+  try {
+    const raw = storage?.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return null
+    return parsed.filter((id) => allowedIds.has(id))
+  } catch {
+    return null
+  }
+}
+
 const readInstalledBuiltinIds = (availableIds) => {
   const available = new Set(availableIds)
   const required = REQUIRED_BUILTIN_ADDON_IDS.filter((id) => available.has(id))
   const storage = getLocalStorage()
   if (!storage) return new Set(required)
-  try {
-    const raw = storage.getItem(BUILTIN_INSTALL_STORAGE_KEY)
-    if (!raw) return new Set(required)
-    const parsed = JSON.parse(raw)
-    const ids = Array.isArray(parsed) ? parsed.filter((id) => available.has(id)) : []
-    return new Set([...required, ...ids])
-  } catch {
-    return new Set(required)
-  }
+  const stored = parseStoredIds(storage, BUILTIN_INSTALL_STORAGE_KEY, available)
+  return new Set([...required, ...(stored || [])])
+}
+
+const readEnabledBuiltinIds = (manager, availableIds) => {
+  const installed = manager.list()
+    .filter((addon) => addon.manifest.source === 'builtin')
+  const installedIds = new Set(installed.map((addon) => addon.manifest.id))
+  const allowed = new Set(availableIds.filter((id) => installedIds.has(id)))
+  const storage = getLocalStorage()
+  const stored = storage ? parseStoredIds(storage, BUILTIN_ENABLED_STORAGE_KEY, allowed) : null
+  if (stored) return new Set(stored)
+  return new Set(installed
+    .filter((addon) => addon.manifest.defaultEnabled)
+    .map((addon) => addon.manifest.id))
 }
 
 const persistInstalledBuiltinIds = (manager, availableIds) => {
@@ -68,6 +87,17 @@ const persistInstalledBuiltinIds = (manager, availableIds) => {
     .map((addon) => addon.manifest.id)
     .sort()
   storage.setItem(BUILTIN_INSTALL_STORAGE_KEY, JSON.stringify(installed))
+}
+
+const persistEnabledBuiltinIds = (manager, availableIds) => {
+  const storage = getLocalStorage()
+  if (!storage) return
+  const available = new Set(availableIds)
+  const enabled = manager.list()
+    .filter((addon) => addon.manifest.source === 'builtin' && addon.enabled && available.has(addon.manifest.id))
+    .map((addon) => addon.manifest.id)
+    .sort()
+  storage.setItem(BUILTIN_ENABLED_STORAGE_KEY, JSON.stringify(enabled))
 }
 
 const createAddonManagerFacade = (managerRef) => Object.freeze({
@@ -120,7 +150,10 @@ export const createAddonManager = (options = {}) => {
     const existing = manager.get(id)
     if (existing) return existing
     const registered = manager.register(definition)
-    if (usesDefaultBuiltinCatalog) persistInstalledBuiltinIds(manager, availableIds)
+    if (usesDefaultBuiltinCatalog) {
+      persistInstalledBuiltinIds(manager, availableIds)
+      persistEnabledBuiltinIds(manager, availableIds)
+    }
     logger.info('[addons] builtin:installed', { id })
     return registered
   }
@@ -133,9 +166,25 @@ export const createAddonManager = (options = {}) => {
     }
     if (current.enabled || current.status === 'error') await manager.disable(id)
     const removed = manager.unregister(id)
-    if (usesDefaultBuiltinCatalog) persistInstalledBuiltinIds(manager, availableIds)
+    if (usesDefaultBuiltinCatalog) {
+      persistInstalledBuiltinIds(manager, availableIds)
+      persistEnabledBuiltinIds(manager, availableIds)
+    }
     logger.info('[addons] builtin:removed', { id })
     return removed
+  }
+
+  manager.restoreBuiltinEnabledState = async () => {
+    const enabledIds = usesDefaultBuiltinCatalog
+      ? readEnabledBuiltinIds(manager, availableIds)
+      : new Set(manager.list()
+        .filter((addon) => addon.manifest.defaultEnabled)
+        .map((addon) => addon.manifest.id))
+    for (const addon of manager.list()) {
+      if (addon.manifest.source !== 'builtin' || !enabledIds.has(addon.manifest.id)) continue
+      await manager.enable(addon.manifest.id)
+    }
+    if (usesDefaultBuiltinCatalog) persistEnabledBuiltinIds(manager, availableIds)
   }
 
   logger.info('[addons] register:start', {
@@ -151,6 +200,14 @@ export const createAddonManager = (options = {}) => {
       id: registered.manifest.id,
       defaultEnabled: Boolean(registered.manifest.defaultEnabled)
     })
+  }
+
+  if (usesDefaultBuiltinCatalog) {
+    const persistEnabledState = (snapshot) => {
+      if (snapshot?.manifest?.source === 'builtin') persistEnabledBuiltinIds(manager, availableIds)
+    }
+    manager.on('enabled', persistEnabledState)
+    manager.on('disabled', persistEnabledState)
   }
 
   return manager
@@ -194,14 +251,14 @@ export const installAddonSystem = (app, options = {}) => {
     }))
   }
 
-  manager.enableDefaultAddons()
+  manager.restoreBuiltinEnabledState()
     .then(() => {
-      manager.logger.info('[addons] defaults:enabled', {
+      manager.logger.info('[addons] builtin-state:restored', {
         enabled: manager.list().filter((addon) => addon.enabled).map((addon) => addon.manifest.id),
         actions: manager.getActions().map((entry) => entry.contribution?.id).filter(Boolean)
       })
     })
-    .catch((error) => manager.logger.error('[addons] defaults:failed', error))
+    .catch((error) => manager.logger.error('[addons] builtin-state:failed', error))
 
   if (globalThis?.__TAURI__?.core?.invoke) {
     manager.logger.info('[addons] external-runtime:install:start')

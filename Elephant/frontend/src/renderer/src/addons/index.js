@@ -4,6 +4,7 @@ import { ElephantAddonManager } from './AddonManagerWithState'
 import { builtinAddons } from './builtin'
 import { installExternalAddonRuntime } from './externalAddonRuntime'
 import { installSettingsContributionRuntime } from './settingsContributionRuntime'
+import { normalizeAddonManifest } from './manifest'
 import { useAddonsStore } from '@/store/addons'
 export { ADDON_EXTENSION_POINTS } from './extensionPoints'
 export { createAddonHostRuntime } from './addonHostRuntime'
@@ -25,17 +26,58 @@ export {
 
 export const ADDON_MANAGER_KEY = Symbol('ElephantAddonManager')
 
+const BUILTIN_INSTALL_STORAGE_KEY = 'elephantnote:installed-built-in-addons:v1'
+const REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs'])
+
 const createDiagnosticsLogger = (logger) => ({
   info: logger?.info || ((...args) => console.info('[addons]', ...args)),
   warn: logger?.warn || ((...args) => console.warn('[addons]', ...args)),
   error: logger?.error || ((...args) => console.error('[addons]', ...args))
 })
 
+const getLocalStorage = () => {
+  try {
+    return globalThis?.window?.localStorage || globalThis?.localStorage || null
+  } catch {
+    return null
+  }
+}
+
+const readInstalledBuiltinIds = (availableIds) => {
+  const available = new Set(availableIds)
+  const required = REQUIRED_BUILTIN_ADDON_IDS.filter((id) => available.has(id))
+  const storage = getLocalStorage()
+  if (!storage) return new Set(required)
+  try {
+    const raw = storage.getItem(BUILTIN_INSTALL_STORAGE_KEY)
+    if (!raw) return new Set(required)
+    const parsed = JSON.parse(raw)
+    const ids = Array.isArray(parsed) ? parsed.filter((id) => available.has(id)) : []
+    return new Set([...required, ...ids])
+  } catch {
+    return new Set(required)
+  }
+}
+
+const persistInstalledBuiltinIds = (manager, availableIds) => {
+  const storage = getLocalStorage()
+  if (!storage) return
+  const available = new Set(availableIds)
+  const installed = manager.list()
+    .filter((addon) => addon.manifest.source === 'builtin' && available.has(addon.manifest.id))
+    .map((addon) => addon.manifest.id)
+    .sort()
+  storage.setItem(BUILTIN_INSTALL_STORAGE_KEY, JSON.stringify(installed))
+}
+
 const createAddonManagerFacade = (managerRef) => Object.freeze({
   list: (...args) => managerRef.current?.list(...args) || [],
   get: (...args) => managerRef.current?.get(...args) || null,
   getContributions: (...args) => managerRef.current?.getContributions(...args) || [],
   getContributionMap: () => managerRef.current?.getContributionMap() || {},
+  listBuiltinCatalog: () => managerRef.current?.listBuiltinCatalog?.() || [],
+  installBuiltin: (...args) => managerRef.current?.installBuiltin?.(...args),
+  uninstallBuiltin: (...args) => managerRef.current?.uninstallBuiltin?.(...args),
   enable: (...args) => managerRef.current?.enable(...args),
   disable: (...args) => managerRef.current?.disable(...args),
   runAction: (...args) => managerRef.current?.runAction(...args),
@@ -45,7 +87,10 @@ const createAddonManagerFacade = (managerRef) => Object.freeze({
 
 export const createAddonManager = (options = {}) => {
   const logger = createDiagnosticsLogger(options.logger)
+  const usesDefaultBuiltinCatalog = !Object.prototype.hasOwnProperty.call(options, 'addons')
   const addonDefinitions = options.addons || builtinAddons
+  const definitionsById = new Map(addonDefinitions.map((addon) => [addon?.manifest?.id, addon]).filter(([id]) => id))
+  const availableIds = [...definitionsById.keys()]
   const managerRef = { current: null }
   const addonManagerFacade = createAddonManagerFacade(managerRef)
   const addonHost = options.addonHost || createAddonHostRuntime({ ...options, logger })
@@ -60,11 +105,47 @@ export const createAddonManager = (options = {}) => {
   addonHost.provide('addons', addonManagerFacade)
   addonHost.provide('addonManager', manager)
 
-  logger.info('[addons] register:start', {
-    count: addonDefinitions.length,
-    ids: addonDefinitions.map((addon) => addon?.manifest?.id || 'unknown')
+  const installedIds = usesDefaultBuiltinCatalog
+    ? readInstalledBuiltinIds(availableIds)
+    : new Set(availableIds)
+
+  manager.listBuiltinCatalog = () => addonDefinitions.map((definition) => {
+    const manifest = manager.get(definition.manifest.id)?.manifest || normalizeAddonManifest(definition.manifest)
+    return { manifest, installed: Boolean(manager.get(manifest.id)) }
   })
-  for (const addon of addonDefinitions) {
+
+  manager.installBuiltin = async (id) => {
+    const definition = definitionsById.get(id)
+    if (!definition) throw new Error(`Unknown built-in addon: ${id}`)
+    const existing = manager.get(id)
+    if (existing) return existing
+    const registered = manager.register(definition)
+    if (usesDefaultBuiltinCatalog) persistInstalledBuiltinIds(manager, availableIds)
+    logger.info('[addons] builtin:installed', { id })
+    return registered
+  }
+
+  manager.uninstallBuiltin = async (id) => {
+    const current = manager.get(id)
+    if (!current || current.manifest.source !== 'builtin') throw new Error(`Built-in addon is not installed: ${id}`)
+    if (current.manifest.removable === false || REQUIRED_BUILTIN_ADDON_IDS.includes(id)) {
+      throw new Error(`${current.manifest.name} is required by the addon manager and cannot be removed.`)
+    }
+    if (current.enabled || current.status === 'error') await manager.disable(id)
+    const removed = manager.unregister(id)
+    if (usesDefaultBuiltinCatalog) persistInstalledBuiltinIds(manager, availableIds)
+    logger.info('[addons] builtin:removed', { id })
+    return removed
+  }
+
+  logger.info('[addons] register:start', {
+    count: installedIds.size,
+    available: addonDefinitions.length,
+    ids: [...installedIds]
+  })
+  for (const id of installedIds) {
+    const addon = definitionsById.get(id)
+    if (!addon) continue
     const registered = manager.register(addon)
     logger.info('[addons] register:done', {
       id: registered.manifest.id,
@@ -132,6 +213,7 @@ export const installAddonSystem = (app, options = {}) => {
 
   manager.logger.info('[addons] install:done', {
     registered: manager.list().map((addon) => addon.manifest.id),
+    availableBuiltins: manager.listBuiltinCatalog().map((entry) => entry.manifest.id),
     resources: manager.host.list()
   })
   return manager

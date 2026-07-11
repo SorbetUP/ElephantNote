@@ -31,5 +31,28 @@ replace(path,
 
 '''
 text = text[:desktop_start] + desktop_replacement + text[android_commands:]
+
+settings_start_marker = "path = 'Elephant/frontend/app/components/settings/SettingsPanel.vue'\n"
+asset_comment_marker = "# 7. Enable Tauri's supported asset protocol for images stored in the app data vault.\n"
+settings_start = text.find(settings_start_marker)
+asset_comment = text.find(asset_comment_marker, settings_start)
+if settings_start < 0 or asset_comment < 0:
+    raise SystemExit('Unable to locate SettingsPanel transformer block')
+settings_replacement = '''path = 'Elephant/frontend/app/components/settings/SettingsPanel.vue'
+replace(path,
+"                <div class=\\\"en-settings-row\\\">\\n                  <div class=\\\"en-settings-row-copy\\\"><strong>Active vault</strong><span>{{ activeVaultPath || 'No vault is currently open.' }}</span></div>\\n                  <span class=\\\"en-status-badge active\\\"><HardDrive aria-hidden=\\\"true\\\" />{{ activeVaultName }}</span>\\n                </div>\\n",
+"                <div class=\\\"en-settings-row\\\">\\n                  <div class=\\\"en-settings-row-copy\\\"><strong>Active vault</strong><span>{{ activeVaultPath || 'No vault is currently open.' }}</span></div>\\n                  <span class=\\\"en-status-badge active\\\"><HardDrive aria-hidden=\\\"true\\\" />{{ activeVaultName }}</span>\\n                </div>\\n                <div class=\\\"en-settings-row\\\">\\n                  <div class=\\\"en-settings-row-copy\\\"><strong>Android folder access</strong><span>Open Android's system folder picker. Selecting a folder grants Elephant persistent access only to that folder.</span></div>\\n                  <button class=\\\"en-primary-button\\\" type=\\\"button\\\" :disabled=\\\"isChoosingAndroidVault\\\" @click=\\\"chooseAndroidVault\\\"><FolderOpen aria-hidden=\\\"true\\\" />{{ isChoosingAndroidVault ? 'Opening…' : 'Authorize a folder' }}</button>\\n                </div>\\n")
+replace(path,
+"  { id: 'vault-open', section: 'vaults', label: 'Open vaults', description: 'Review or remove registered vaults.' },\\n",
+"  { id: 'vault-open', section: 'vaults', label: 'Open vaults', description: 'Review or remove registered vaults.' },\\n  { id: 'vault-android-access', section: 'vaults', label: 'Android folder access', description: 'Authorize or reconnect a folder with Android system storage.' },\\n")
+replace(path,
+"const removingVaultId = ref('')\\n",
+"const removingVaultId = ref('')\\nconst isChoosingAndroidVault = ref(false)\\n")
+replace(path,
+"const removeVaultFromApp = async (vault) => {\\n",
+"const chooseAndroidVault = async () => {\\n  isChoosingAndroidVault.value = true\\n  vaultMessage.value = ''\\n  try {\\n    const result = await vaultStore.chooseVault()\\n    vaultMessage.value = result?.canceled\\n      ? 'Folder authorization canceled.'\\n      : 'Android folder access granted and vault connected.'\\n  } catch (error) {\\n    vaultMessage.value = error instanceof Error ? error.message : 'Unable to authorize the Android folder.'\\n  } finally {\\n    isChoosingAndroidVault.value = false\\n  }\\n}\\n\\nconst removeVaultFromApp = async (vault) => {\\n")
+
+'''
+text = text[:settings_start] + settings_replacement + text[asset_comment:]
 path.write_text(text)
 print('Android follow-up transformer prepared')

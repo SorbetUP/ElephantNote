@@ -32,13 +32,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          changed="$(git diff --name-only | sort)"
+          changed="$({ git diff --name-only; git ls-files --others --exclude-standard; } | sort -u)"
           expected="$(printf '%s\n' \
             Elephant/backend/tauri/src/markdown/muya_advanced.rs \
             Elephant/backend/tauri/src/markdown/muya_surface.rs \
             Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js \
             Elephant/frontend/src/renderer/src/muya/rustProgrammaticChangeGuard.js \
             tests/app/unit/muyaRustProgrammaticLoad.spec.js | sort)"
+          printf 'Changed files:\n%s\n' "$changed"
           test "$changed" = "$expected"
 
       - name: Commit fix

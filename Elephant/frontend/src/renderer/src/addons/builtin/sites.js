@@ -10,7 +10,9 @@ export const sitesAddon = {
     version: '1.0.0',
     description: 'Builds, opens and stops the existing ElephantNote static site preview.',
     author: 'ElephantNote',
+    icon: 'globe-2',
     defaultEnabled: false,
+    removable: true,
     permissions: ['sites.build', 'sites.preview'],
     contributes: { settings: true, siteGenerator: true }
   },

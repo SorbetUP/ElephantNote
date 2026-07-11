@@ -18,6 +18,14 @@ const readAddonStore = () => read('Elephant/frontend/src/renderer/src/store/addo
 const readAppShell = () => read('Elephant/frontend/app/components/shell/AppShell.vue')
 const readRouter = () => read('Elephant/frontend/src/renderer/src/router/index.js')
 const readPreferences = () => read('Elephant/frontend/src/renderer/src/store/preferences.js')
+const readBuiltinIndex = () => read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
+const readImportAddon = () => read('Elephant/frontend/src/renderer/src/addons/builtin/googleKeepImport.js')
+const readSitesAddon = () => read('Elephant/frontend/src/renderer/src/addons/builtin/sites.js')
+const readCodexAddon = () => read('Elephant/frontend/src/renderer/src/addons/builtin/codexConnection.js')
+const readImportSettings = () => read('Elephant/frontend/app/components/settings/SystemImportSettings.vue')
+const readSitesSettings = () => read('Elephant/frontend/app/components/settings/SystemSitesSettings.vue')
+const readCodexSettings = () => read('Elephant/frontend/app/components/settings/SystemCodexSettings.vue')
+
 
 describe('ElephantNote settings redesign', () => {
   it('keeps the floating scene with theme-aware blur and native platform chrome', () => {
@@ -34,15 +42,16 @@ describe('ElephantNote settings redesign', () => {
     expect(styles).toContain('grid-template-areas: "close title search"')
   })
 
-  it('searches individual settings across every section and opens nested pages', () => {
+  it('searches core and addon-contributed settings and opens nested pages', () => {
     const source = readSettings()
 
     expect(source).toContain('placeholder="Search all settings"')
-    expect(source).toContain('const settingsIndex = [')
+    expect(source).toContain('const settingsIndex = computed')
     expect(source).toContain("label: 'Quick insert trigger'")
     expect(source).toContain("label: 'Installed addons'")
     expect(source).toContain("label: 'Conflict retention'")
     expect(source).toContain("label: 'Semantic search and embeddings'")
+    expect(source).toContain("addonsStore.getContributions('settings.sections')")
     expect(source).toContain('const openSearchResult = (result) =>')
     expect(source).toContain('syncInitialPage.value = result.subpage')
     expect(source).toContain('aiInitialPage.value = result.subpage')
@@ -60,28 +69,42 @@ describe('ElephantNote settings redesign', () => {
     expect(settings).toContain("watch(() => props.initialSection")
   })
 
-  it('uses a minimal flat navigation and keeps Addons, Sites and Import separate', () => {
-    const source = readSettings()
+  it('keeps only core settings in vanilla navigation and adds feature pages through addons', () => {
+    const settings = readSettings()
+    const builtins = readBuiltinIndex()
+    const importAddon = readImportAddon()
+    const sitesAddon = readSitesAddon()
+    const codexAddon = readCodexAddon()
 
-    expect(source).toContain("{ id: 'addons', label: 'Addons', icon: Package }")
-    expect(source).toContain("{ id: 'sites', label: 'Sites', icon: Globe2 }")
-    expect(source).toContain("{ id: 'import', label: 'Import', icon: Download }")
-    expect(source).not.toContain("label: 'Workspace'")
-    expect(source).not.toContain("label: 'Services'")
-    expect(source).not.toContain("label: 'Data'")
-    expect(source).not.toContain('Import & sites')
+    expect(settings).toContain("{ id: 'addons', label: 'Addons', icon: Package }")
+    expect(settings).not.toContain("{ id: 'sites', label: 'Sites', icon: Globe2 }")
+    expect(settings).not.toContain("{ id: 'import', label: 'Import', icon: Download }")
+    expect(settings).toContain('addonStandaloneSections')
+    expect(importAddon).toContain("section: 'import'")
+    expect(sitesAddon).toContain("section: 'sites'")
+    expect(codexAddon).toContain("section: 'codex'")
+    expect(builtins.indexOf('addonProfilesAddon')).toBeLessThan(builtins.indexOf('googleKeepImportAddon'))
+    expect(builtins.indexOf('googleKeepImportAddon')).toBeLessThan(builtins.indexOf('codexConnectionAddon'))
+    expect(builtins.indexOf('codexConnectionAddon')).toBeLessThan(builtins.indexOf('calendarAddon'))
+    expect(builtins.indexOf('calendarAddon')).toBeLessThan(builtins.indexOf('sitesAddon'))
   })
 
-  it('uses one consent gate before rendering addon management', () => {
+  it('uses one consent gate and the normal addon switch for all access levels', () => {
     const addons = readAddons()
     const logic = readAddonLogic()
+    const row = readAddonRow()
 
     expect(addons).toContain('v-else-if="!communityAddonsEnabled"')
     expect(addons).toContain('Turn on community addons')
     expect(addons).toContain('v-model="riskAccepted"')
     expect(logic).toContain('setCommunityAddonsEnabled(true)')
     expect(addons).toContain('<template v-else>')
-    expect(addons).not.toContain('en-addons-summary')
+    expect(addons).not.toContain('pendingTrustedAddon')
+    expect(addons).not.toContain('Full app access safe mode')
+    expect(addons).not.toContain('Grant access and enable')
+    expect(row).not.toContain('Review and grant full app access')
+    expect(logic).toContain('approveTrustedAddon(addon.manifest.id)')
+    expect(logic).toContain('setTrustedSafeMode(false)')
   })
 
   it('integrates compact real addon controls into the active settings panel', () => {
@@ -142,6 +165,7 @@ describe('ElephantNote settings redesign', () => {
   it('uses semantic controls and exposes real quick-insert preferences', () => {
     const source = readSettings()
     const preferences = readPreferences()
+    const sites = readSitesSettings()
 
     expect(source).toContain('role="switch"')
     expect(source).toContain(':aria-checked="preferences.showEditorFooter"')
@@ -149,7 +173,7 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain("setPreference('quickInsertTrigger'")
     expect(source).toContain("setPreference('autoPairBracket'")
     expect(source).toContain("setPreference('spellcheckerEnabled'")
-    expect(source).toContain(':aria-checked="featureFlags.sitePreview"')
+    expect(sites).toContain(':aria-checked="featureEnabled"')
     expect(preferences).toContain('hideQuickInsertHint: false')
     expect(preferences).toContain("quickInsertTrigger: '/'")
     expect(preferences).toContain('autoPairBracket: true')
@@ -189,15 +213,19 @@ describe('ElephantNote settings redesign', () => {
     expect(primitives).toContain('.en-settings-panel :deep(.en-ai-switch.small.active > span)')
   })
 
-  it('retains real vault, import and generated-site actions', () => {
-    const source = readSettings()
+  it('moves import and generated-site actions into system addon components', () => {
+    const settings = readSettings()
+    const imports = readImportSettings()
+    const sites = readSitesSettings()
 
-    expect(source).toContain('await vaultStore.removeVault(vault.id)')
-    expect(source).toContain('await elephantnoteClient.imports.googleKeep()')
-    expect(source).toContain('await elephantnoteClient.sources.ingestUrl')
-    expect(source).toContain('await elephantnoteClient.sources.importRss')
-    expect(source).toContain("toggleFeature('sitePreview')")
-    expect(source).toContain('sitePreviewStore.openPreviewExternal')
+    expect(settings).not.toContain('await elephantnoteClient.imports.googleKeep()')
+    expect(settings).not.toContain("toggleFeature('sitePreview')")
+    expect(imports).toContain('await elephantnoteClient.imports.googleKeep()')
+    expect(imports).toContain('await elephantnoteClient.sources.ingestUrl')
+    expect(imports).toContain('await elephantnoteClient.sources.importRss')
+    expect(sites).toContain("elephantnoteClient.features.set('sitePreview'")
+    expect(sites).toContain('sitePreviewStore.openPreviewExternal')
+    expect(sites).toContain('sitePreviewStore.stopPreview()')
   })
 
   it('keeps Sync navigation at the top and makes retention directly editable', () => {
@@ -217,19 +245,19 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('irohSyncClient.deleteConflict')
   })
 
-  it('removes the redundant AI hero, provider action and Codex duplication', () => {
-    const source = readAi()
-    const addProviderButtons = source.match(/@click="addProvider"/g) || []
+  it('moves the Codex connection surface into a system addon', () => {
+    const ai = readAi()
+    const codex = readCodexSettings()
+    const addon = readCodexAddon()
 
-    expect(source).toContain('class="en-ai-toolbar"')
-    expect(source).not.toContain('en-ai-hero')
-    expect(source).not.toContain('Elephant AI')
-    expect(addProviderButtons).toHaveLength(1)
-    expect(source).toContain('<ChatgptSubscriptionCard')
-    expect(source).not.toContain('en-ai-save-status')
-    expect(source).not.toContain('<Save aria-hidden')
-    expect(source).not.toContain('<h4>Codex account</h4>')
-    expect(source).toContain('initialPage: { type: String')
+    expect(ai).toContain('class="en-ai-toolbar"')
+    expect(ai).not.toContain('en-ai-hero')
+    expect(codex).toContain('<ChatgptSubscriptionCard')
+    expect(codex).toContain("invokeCodex('status')")
+    expect(codex).toContain("invokeCodex('login'")
+    expect(codex).toContain("invokeCodex('logout')")
+    expect(addon).toContain("ctx.registerContribution('ai.providers'")
+    expect(addon).toContain('elephant-codex-addon-enabled')
   })
 
   it('separates common AI controls from advanced technical tuning', () => {

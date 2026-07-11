@@ -18,9 +18,7 @@ const activeSettingsSection = (content) => {
     vaults: 'vaults',
     addons: 'addons',
     sync: 'sync',
-    ai: 'ai',
-    sites: 'sites',
-    import: 'import'
+    ai: 'ai'
   }
   return labels[title] || ''
 }
@@ -30,6 +28,10 @@ const targetSection = (contribution = {}) => {
     contribution.section || contribution.targetSection || contribution.parentSection,
     'addons'
   ).toLowerCase()
+}
+
+const hasRenderableSettings = (contribution = {}) => {
+  return typeof contribution.render === 'function' || (Array.isArray(contribution.fields) && contribution.fields.length > 0)
 }
 
 const removeNode = (node) => node?.remove?.()
@@ -59,7 +61,7 @@ const renderField = (documentRef, field, contribution) => {
     button.type = 'button'
     button.setAttribute('role', 'switch')
     button.setAttribute('aria-checked', read() === true ? 'true' : 'false')
-    button.addEventListener('click', async() => {
+    button.addEventListener('click', async () => {
       const next = !(read() === true)
       await write(next)
       button.classList.toggle('active', next)
@@ -177,7 +179,7 @@ export const installSettingsContributionRuntime = (manager, options = {}) => {
     const contributions = [
       ...manager.getContributions(ADDON_EXTENSION_POINTS.settingsSections),
       ...manager.getContributions(ADDON_EXTENSION_POINTS.settingsPages)
-    ].filter((entry) => targetSection(entry.contribution) === activeSection)
+    ].filter((entry) => targetSection(entry.contribution) === activeSection && hasRenderableSettings(entry.contribution))
 
     const signature = contributions.map((entry) => `${entry.addonId}:${entry.contribution?.id || ''}`).join('|')
     const currentSignature = mounted.map((entry) => entry.signature).join('|')

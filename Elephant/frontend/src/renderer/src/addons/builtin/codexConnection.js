@@ -42,7 +42,7 @@ export const codexConnectionAddon = {
     version: '1.0.0',
     description: 'Connects a ChatGPT subscription and exposes Codex as an ElephantNote chat provider.',
     author: 'ElephantNote',
-    icon: 'bot',
+    icon: 'openai',
     defaultEnabled: false,
     removable: true,
     permissions: ['ai.provider', 'codex.account', 'codex.models', 'codex.usage'],

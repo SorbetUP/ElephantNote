@@ -6,6 +6,12 @@ import { getAddonActions } from '@/addons'
 import { isTrustedAddonManifest } from '@/addons/manifest'
 import { useAddonsStore } from '@/store/addons'
 
+const persistExternalAddonState = async (addonId, enabled) => {
+  const invoke = globalThis?.__TAURI__?.core?.invoke
+  if (typeof invoke !== 'function') throw new Error('Tauri addon registry is unavailable')
+  return invoke('tauri_addons_set_enabled', { addonId, enabled: enabled === true })
+}
+
 export const useAddonsSettings = () => {
   const addonsStore = useAddonsStore()
   const riskAccepted = ref(false)
@@ -29,6 +35,7 @@ export const useAddonsSettings = () => {
   const actions = computed(() => getAddonActions(contributions.value))
   const builtInAddons = computed(() => items.value.filter((addon) => addon.manifest.source !== 'external'))
   const externalAddons = computed(() => items.value.filter((addon) => addon.manifest.source === 'external'))
+  const addonPacksEnabled = computed(() => items.value.some((addon) => addon.manifest.id === 'elephant.addon-packs' && addon.enabled))
   const normalizedQuery = computed(() => query.value.toLocaleLowerCase())
   const matchesQuery = (addon) => {
     if (!normalizedQuery.value) return true
@@ -84,8 +91,15 @@ export const useAddonsSettings = () => {
 
   const disableCommunityAddons = async () => {
     try {
+      const installedExternalAddons = [...externalAddons.value]
       await addonsStore.setCommunityAddonsEnabled(false)
+      const persistenceResults = await Promise.allSettled(
+        installedExternalAddons.map((addon) => persistExternalAddonState(addon.manifest.id, false))
+      )
+      const failed = persistenceResults.filter((result) => result.status === 'rejected')
+      if (failed.length) throw new Error(`Community addons stopped, but ${failed.length} addon state${failed.length === 1 ? '' : 's'} could not be persisted.`)
       expandedAddonId.value = ''
+      showMessage(`Community addons disabled. ${installedExternalAddons.length} installed package${installedExternalAddons.length === 1 ? '' : 's'} will remain off.`)
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
     }
@@ -128,6 +142,9 @@ export const useAddonsSettings = () => {
         }
       }
       await addonsStore.setAddonEnabled(addon.manifest.id, nextEnabled)
+      if (!nextEnabled && addon.manifest.source === 'external') {
+        await persistExternalAddonState(addon.manifest.id, false)
+      }
       showMessage(`${addon.manifest.name} ${nextEnabled ? 'enabled' : 'disabled'}.`)
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
@@ -178,6 +195,7 @@ export const useAddonsSettings = () => {
     communityConsentLoaded,
     operationInProgress,
     lastError,
+    addonPacksEnabled,
     filteredBuiltInAddons,
     filteredExternalAddons,
     availableCatalogAddons,

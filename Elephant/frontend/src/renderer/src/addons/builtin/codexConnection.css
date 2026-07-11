@@ -1,0 +1,7 @@
+.en-ai-settings > .en-chatgpt-card {
+  display: none !important;
+}
+
+html:not(.elephant-codex-addon-enabled) .en-ai-settings option[value="codex"] {
+  display: none;
+}

@@ -29,7 +29,7 @@
           :title="entry.contribution.description || entry.contribution.title"
           @click="emit('open-addon-view', entry.contribution.id)"
         >
-          <ListTodo />
+          <AddonIcon :name="entry.contribution.icon" />
           <span>{{ entry.contribution.title }}</span>
         </button>
       </section>
@@ -119,12 +119,12 @@ import {
   CalendarClock,
   ChevronDown,
   Inbox,
-  ListTodo,
   Search
 } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useEditorStore } from '@/store/editor'
 import { useAddonsStore } from '@/store/addons'
+import AddonIcon from '../settings/AddonIcon.vue'
 import SidebarTreeEntry from './SidebarTreeEntry.vue'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
 import {
@@ -258,213 +258,5 @@ const handleRootDrop = async (event) => {
   cursor: pointer;
 }
 
-.en-all-notes:hover {
-  background: var(--en-soft-strong);
-}
-
-.en-all-notes.active {
-  background: color-mix(in srgb, var(--en-primary, #7c3aed) 20%, var(--en-soft));
-  color: var(--en-text);
-}
-
-.en-all-notes.is-drop-target {
-  outline: 1px solid var(--en-primary);
-  background: color-mix(in srgb, var(--en-primary) 16%, var(--en-soft));
-}
-
-.en-all-notes.is-drop-disabled {
-  outline: 1px solid var(--en-danger);
-}
-
-.en-all-notes-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-
-.en-addon-views {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0 6px 9px;
-}
-
-.en-addon-views-label {
-  margin: 0;
-  padding: 5px 8px;
-  color: var(--en-muted);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-}
-
-.en-addon-view-button {
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  border: 0;
-  border-radius: 8px;
-  padding: 0 10px;
-  color: var(--en-muted);
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.en-addon-view-button svg {
-  width: 16px;
-  height: 16px;
-}
-
-.en-addon-view-button:hover,
-.en-addon-view-button.active {
-  color: var(--en-text);
-  background: color-mix(in srgb, var(--en-primary, #7c3aed) 16%, var(--en-soft));
-}
-
-.en-tags-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 14px 8px;
-}
-
-.en-tags-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--en-muted);
-}
-
-.en-tags-search-btn {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 6px;
-  color: var(--en-muted);
-  background: transparent;
-  cursor: pointer;
-}
-
-.en-tags-search-btn:hover {
-  color: var(--en-text);
-  background: var(--en-soft);
-}
-
-.en-tags-search-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.en-sidebar-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-height: 0;
-  padding: 0 6px;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.en-recent-notes {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: auto;
-  border-top: 1px solid var(--en-border);
-  padding: 10px 8px 8px;
-}
-
-.en-recent-heading,
-.en-recent-note,
-.en-recent-more {
-  width: 100%;
-  min-height: 32px;
-  border: 0;
-  border-radius: 6px;
-  padding: 0 8px;
-  color: var(--en-muted);
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.en-recent-heading {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) 16px;
-  align-items: center;
-  gap: 7px;
-  color: var(--en-text);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.en-recent-heading svg {
-  width: 14px;
-  height: 14px;
-  color: var(--en-muted);
-}
-
-.en-recent-chevron,
-.en-recent-more-icon {
-  transition: transform 0.16s ease;
-}
-
-.en-recent-chevron.collapsed {
-  transform: rotate(-90deg);
-}
-
-.en-recent-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.en-recent-note {
-  display: block;
-  min-height: 30px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-}
-
-.en-recent-note:hover,
-.en-recent-note.active {
-  color: var(--en-text);
-  background: var(--en-soft);
-}
-
-.en-recent-more {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--en-muted);
-  font-size: 12px;
-}
-
-.en-recent-more-icon {
-  width: 13px;
-  height: 13px;
-}
-
-.en-recent-more-icon.expanded {
-  transform: rotate(180deg);
-}
-
-.en-recent-empty {
-  margin: 0;
-  padding: 6px 8px;
-  color: var(--en-muted);
-  font-size: 12px;
-}
+.en-addon-view-button :deep(svg) { width: 16px; height: 16px; flex: 0 0 auto; }
 </style>

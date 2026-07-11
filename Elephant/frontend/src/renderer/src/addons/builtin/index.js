@@ -1,23 +1,23 @@
-import { addonInspectorAddon } from './addonInspector'
 import { addonProfilesAddon } from './addonProfiles'
-import { calendarAddon } from './calendar'
-import { codexConnectionAddon } from './codexConnection'
-import { dailyNotesAddon } from './dailyNotes'
 import { googleKeepImportAddon } from './googleKeepImport'
-import { quickCaptureAddon } from './quickCapture'
+import { codexConnectionAddon } from './codexConnection'
+import { calendarAddon } from './calendar'
 import { sitesAddon } from './sites'
+import { dailyNotesAddon } from './dailyNotes'
+import { quickCaptureAddon } from './quickCapture'
 import { vaultOverviewAddon } from './vaultOverview'
+import { addonInspectorAddon } from './addonInspector'
 
 export {
-  addonInspectorAddon,
   addonProfilesAddon,
-  calendarAddon,
-  codexConnectionAddon,
-  dailyNotesAddon,
   googleKeepImportAddon,
-  quickCaptureAddon,
+  codexConnectionAddon,
+  calendarAddon,
   sitesAddon,
-  vaultOverviewAddon
+  dailyNotesAddon,
+  quickCaptureAddon,
+  vaultOverviewAddon,
+  addonInspectorAddon
 }
 
 export const builtinAddons = [

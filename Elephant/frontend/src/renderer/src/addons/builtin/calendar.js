@@ -24,7 +24,7 @@ const loadCalendarState = async () => {
   return {
     schema: 'calendar-v1',
     title: 'Calendar',
-    subtitle: 'Local and connected calendar events',
+    subtitle: 'Offline events plus notes grouped by last edit date.',
     events,
     sources,
     refreshedAt: new Date().toISOString()
@@ -35,15 +35,14 @@ export const calendarAddon = {
   manifest: {
     id: ADDON_ID,
     name: 'Calendar',
-    version: '1.0.0',
-    description: 'Adds an optional calendar workspace for local and Google Calendar events.',
+    version: '1.1.0',
+    description: 'Restores the native ElephantNote calendar workspace for offline events, imported calendars and recently edited notes.',
     author: 'ElephantNote',
     defaultEnabled: false,
     permissions: ['calendar.read', 'calendar.sync'],
     contributes: {
       actions: true,
-      views: true,
-      settings: true
+      views: true
     }
   },
 
@@ -51,7 +50,7 @@ export const calendarAddon = {
     ctx.addView({
       id: VIEW_ID,
       title: 'Calendar',
-      description: 'Month, week, day and agenda views for calendar events.',
+      description: 'Offline events plus notes grouped by last edit date.',
       icon: 'calendar-days',
       kind: 'calendar-v1',
       order: 40,
@@ -90,13 +89,6 @@ export const calendarAddon = {
         ctx.logger?.info?.('[addons] calendar:import-google', result)
         return result
       }
-    })
-
-    ctx.addSettingsSection({
-      id: `${ADDON_ID}.settings`,
-      title: 'Calendar',
-      description: 'Calendar is optional and disabled by default. Enable it to add its workspace to navigation.',
-      order: 140
     })
   }
 }

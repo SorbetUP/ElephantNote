@@ -128,15 +128,10 @@ pub fn run() {
       let handle = app.handle().clone();
       app.manage(state::AppState::new(&handle));
       app.manage(watcher::WatcherState::new());
+      // Iroh is intentionally only state-managed here. Its endpoint is created
+      // lazily by Sync addon commands and closed again when that addon stops.
       app.manage(sync::IrohSyncState::new());
       app.manage(addons::AddonState::new());
-      let sync_handle = handle.clone();
-      tauri::async_runtime::spawn(async move {
-        let state = sync_handle.state::<sync::IrohSyncState>();
-        if let Err(error) = state.runtime(&sync_handle).await {
-          eprintln!("[ElephantNote Sync] Failed to start Iroh runtime: {error}");
-        }
-      });
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -155,6 +150,7 @@ pub fn run() {
       sync_commands::iroh_sync_create_invite,
       sync_commands::iroh_sync_accept_invite,
       sync_commands::iroh_sync_status,
+      sync_commands::iroh_sync_shutdown,
       sync_commands::iroh_sync_enqueue,
       sync_commands::iroh_sync_run,
       sync_commands::iroh_sync_conflict_settings_get,

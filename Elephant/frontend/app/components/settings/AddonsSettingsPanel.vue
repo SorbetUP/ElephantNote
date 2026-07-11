@@ -29,7 +29,7 @@
 
       <section class="en-addons-list-section">
         <header>
-          <h3>Built-in addons</h3>
+          <h3>Installed addons</h3>
           <span>{{ filteredBuiltInAddons.length }}</span>
         </header>
         <div class="en-addons-card en-addons-list">
@@ -45,7 +45,7 @@
             @run-action="runAction"
             @uninstall="uninstallAddon(addon)"
           />
-          <div v-if="!filteredBuiltInAddons.length" class="en-addons-empty">No built-in addon matches this search.</div>
+          <div v-if="!filteredBuiltInAddons.length" class="en-addons-empty">No installed addon matches this search.</div>
         </div>
       </section>
 

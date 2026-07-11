@@ -6,10 +6,20 @@ import { invokeTauri, logAction, notifySuccess, readNote, writeNote } from './sh
 const ADDON_ID = 'elephant.addon-packs'
 const PACK_DIRECTORY = '.elephantnote/addons/packs'
 const DEFAULT_PACK_PATH = `${PACK_DIRECTORY}/default.enaddonpack`
+const DEVELOP_PARITY_PACK_PATH = `${PACK_DIRECTORY}/develop-parity.enaddonpack`
 const REPORT_PATH = 'Reports/Addon Pack.md'
 const PACK_FORMAT = 'elephantnote-addon-pack'
 const PACK_VERSION = 1
 const MAX_PACK_ADDONS = 200
+
+const DEVELOP_PARITY_ADDONS = Object.freeze([
+  { id: 'elephant.google-keep-import', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.codex-connection', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.calendar', version: '1.1.0', source: 'builtin', enabled: true },
+  { id: 'elephant.sites', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.ai', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.sync', version: '1.0.0', source: 'builtin', enabled: true }
+])
 
 const readCommunityEnabled = async () => {
   const value = await invokeTauri('tauri_prefs_get', { key: 'addons.communityEnabled' })
@@ -85,6 +95,28 @@ const validatePack = (raw, sourcePath = DEFAULT_PACK_PATH) => {
   }
 }
 
+const createDevelopParityPack = () => ({
+  format: PACK_FORMAT,
+  version: PACK_VERSION,
+  name: 'ElephantNote Develop parity',
+  description: 'Installs and enables every useful first-party addon to reproduce the complete develop application.',
+  createdAt: new Date().toISOString(),
+  protected: true,
+  addons: DEVELOP_PARITY_ADDONS.map((entry) => ({ ...entry }))
+})
+
+const ensureDevelopParityPack = async () => {
+  try {
+    const existing = await readNote(DEVELOP_PARITY_PACK_PATH)
+    validatePack(existing.content, DEVELOP_PARITY_PACK_PATH)
+    return { packPath: DEVELOP_PARITY_PACK_PATH, created: false }
+  } catch {
+    const pack = createDevelopParityPack()
+    await writeNote(DEVELOP_PARITY_PACK_PATH, `${JSON.stringify(pack, null, 2)}\n`)
+    return { packPath: DEVELOP_PARITY_PACK_PATH, created: true, pack }
+  }
+}
+
 const createPack = async (ctx, options = {}) => {
   const path = normalizePackPath(options?.path)
   const catalogue = await invokeTauri('tauri_addons_catalog_list')
@@ -109,7 +141,7 @@ const createPack = async (ctx, options = {}) => {
     name: typeof options?.name === 'string' && options.name.trim() ? options.name.trim() : 'Default ElephantNote pack',
     description: typeof options?.description === 'string'
       ? options.description.trim()
-      : 'A portable set of built-in and community addons with their enabled state.',
+      : 'A portable set of installed built-in and community addons with their enabled state.',
     createdAt: new Date().toISOString(),
     addons
   }
@@ -161,7 +193,10 @@ const applyPack = async (ctx, options = {}) => {
     let installed = false
     let updated = false
 
-    if (entry.source === 'catalog') {
+    if (entry.source === 'builtin' && !snapshot) {
+      snapshot = await ctx.addons.installBuiltin(entry.id)
+      installed = true
+    } else if (entry.source === 'catalog') {
       const catalogueAddon = catalogueById.get(entry.id)
       if (!catalogueAddon) throw new Error(`Addon pack references an addon outside the official catalogue: ${entry.id}`)
       if (!snapshot || snapshot.manifest.version !== catalogueAddon.version) {
@@ -172,8 +207,7 @@ const applyPack = async (ctx, options = {}) => {
         snapshot = ctx.addons.get(entry.id)
       }
     } else if (!snapshot) {
-      const qualifier = entry.source === 'builtin' ? 'built-in addon' : 'locally installed addon'
-      throw new Error(`Addon pack requires ${qualifier} ${entry.id}, but it is not available`)
+      throw new Error(`Addon pack requires locally installed addon ${entry.id}, but it is not available`)
     }
 
     if (!snapshot) throw new Error(`Unable to register addon from pack: ${entry.id}`)
@@ -236,15 +270,28 @@ export const addonPacksAddon = {
   manifest: {
     id: ADDON_ID,
     name: 'Addon Packs',
-    version: '1.1.0',
+    version: '1.2.0',
     description: 'Creates, lists and applies portable addon packs that configure built-in and community addons together.',
     author: 'ElephantNote',
+    icon: 'layers-3',
     defaultEnabled: true,
+    removable: false,
     permissions: ['notes.read', 'notes.write', 'addons.manage'],
     contributes: { actions: true, settings: true }
   },
 
   activate(ctx) {
+    ctx.addAction({
+      id: `${ADDON_ID}.ensure-develop-parity`,
+      title: 'Create Develop parity pack',
+      description: 'Ensure the complete first-party ElephantNote configuration is available as an addon pack.',
+      async run() {
+        const result = await ensureDevelopParityPack()
+        logAction(ctx, 'addon-pack-develop-parity', result)
+        return result
+      }
+    })
+
     ctx.addAction({
       id: `${ADDON_ID}.create`,
       title: 'Create addon pack from current setup',

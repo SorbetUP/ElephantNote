@@ -134,8 +134,14 @@ describe('built-in starter addons', () => {
     const messages = []
     let worker
     class FakeWorker {
-      constructor() { worker = this }
+      constructor() {
+        worker = this
+        this.listeners = new Map()
+      }
       postMessage(message) { messages.push(message) }
+      addEventListener(type, listener) { this.listeners.set(type, listener) }
+      removeEventListener(type) { this.listeners.delete(type) }
+      emit(type, data) { this.listeners.get(type)?.({ data }) }
       terminate = vi.fn()
     }
     vi.stubGlobal('Worker', FakeWorker)
@@ -169,7 +175,7 @@ describe('built-in starter addons', () => {
     })
     await manager.enable('com.example.addon')
 
-    worker.onmessage({ data: { type: 'request', requestId: '1', method: 'app.info', params: {} } })
+    worker.emit('message', { type: 'request', requestId: '1', method: 'app.info', params: {} })
     await flush()
     expect(messages).toContainEqual(expect.objectContaining({ type: 'response', requestId: '1', result: expect.objectContaining({ name: 'ElephantNote' }) }))
   })

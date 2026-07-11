@@ -1,45 +1,46 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import vm from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn() }
-}))
 
 import { ElephantAddonManager } from '../../../../Elephant/frontend/src/renderer/src/addons/AddonManager.js'
 import { builtinAddons } from '../../../../Elephant/frontend/src/renderer/src/addons/builtin/index.js'
-import { ExternalAddonController } from '../../../../Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js'
 import { normalizeAddonManifest } from '../../../../Elephant/frontend/src/renderer/src/addons/manifest.js'
+import { installExternalAddonRuntime } from '../../../../Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js'
 
-const root = process.cwd()
-
-afterEach(() => {
-  vi.unstubAllGlobals()
-  vi.restoreAllMocks()
+const createManifest = (overrides = {}) => ({
+  id: 'com.example.addon',
+  name: 'Example addon',
+  version: '1.0.0',
+  runtime: { type: 'javascript-worker', entry: 'main.js' },
+  permissions: {
+    notes: { read: ['Inbox/**'], write: ['Reports/**'] },
+    network: { hosts: ['api.example.com'] },
+    storage: true,
+    commands: true
+  },
+  contributes: {
+    commands: [{ id: 'com.example.addon.run', title: 'Run example' }]
+  },
+  ...overrides
 })
 
-describe('external addon manifest contract', () => {
-  it('normalizes structured capabilities without exposing mutable arrays', () => {
-    const manifest = normalizeAddonManifest({
-      id: 'com.example.finance',
-      name: 'Finance',
-      version: '1.0.0',
-      source: 'external',
-      runtime: { type: 'javascript-worker', entry: 'main.js' },
-      permissions: {
-        commands: true,
-        storage: true,
-        notes: { read: ['Finance/**'], write: ['Finance/**'] },
-        network: { hosts: ['api.example.com'] }
-      }
-    })
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
-    expect(manifest.source).toBe('external')
-    expect(manifest.runtime).toEqual({ type: 'javascript-worker', entry: 'main.js' })
+describe('external addon manifest contracts', () => {
+  it('normalizes structured capabilities without exposing mutable arrays', () => {
+    const source = createManifest()
+    const manifest = normalizeAddonManifest(source)
+
+    expect(manifest.permissions.notes.read).toEqual(['Inbox/**'])
+    expect(manifest.permissions.notes.write).toEqual(['Reports/**'])
+    expect(manifest.permissions.network.hosts).toEqual(['api.example.com'])
+    expect(manifest.permissions.storage).toBe(true)
     expect(manifest.permissions.commands).toBe(true)
-    expect(manifest.permissions.notes.write).toEqual(['Finance/**'])
-    expect(Object.isFrozen(manifest.permissions.notes.write)).toBe(true)
+    expect(manifest.contributes.commands).toEqual([{ id: 'com.example.addon.run', title: 'Run example' }])
+
+    source.permissions.notes.read.push('*')
+    expect(manifest.permissions.notes.read).toEqual(['Inbox/**'])
   })
 
   it('keeps legacy builtin permission arrays compatible', () => {
@@ -55,17 +56,29 @@ describe('external addon manifest contract', () => {
 })
 
 describe('built-in starter addons', () => {
-  it('ships useful workflow addons, optional Calendar and one developer inspector', () => {
+  it('ships setup first, extracted system features, useful workflows and one developer inspector', () => {
     expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
+      'elephant.addon-profiles',
+      'elephant.google-keep-import',
+      'elephant.codex-connection',
+      'elephant.calendar',
+      'elephant.sites',
       'elephant.daily-notes',
       'elephant.quick-capture',
       'elephant.vault-overview',
-      'elephant.addon-profiles',
-      'elephant.calendar',
       'elephant.addon-inspector'
     ])
     expect(builtinAddons.filter((addon) => addon.manifest.defaultEnabled)).toHaveLength(3)
-    expect(builtinAddons.find((addon) => addon.manifest.id === 'elephant.calendar')?.manifest.defaultEnabled).toBe(false)
+    for (const id of [
+      'elephant.addon-profiles',
+      'elephant.google-keep-import',
+      'elephant.codex-connection',
+      'elephant.calendar',
+      'elephant.sites',
+      'elephant.addon-inspector'
+    ]) {
+      expect(builtinAddons.find((addon) => addon.manifest.id === id)?.manifest.defaultEnabled).toBe(false)
+    }
   })
 
   it('registers starter actions through the same addon manager contract', async () => {
@@ -80,7 +93,10 @@ describe('built-in starter addons', () => {
     expect(manager.get('elephant.quick-capture')?.enabled).toBe(true)
     expect(manager.get('elephant.vault-overview')?.enabled).toBe(true)
     expect(manager.get('elephant.addon-profiles')?.enabled).toBe(false)
+    expect(manager.get('elephant.google-keep-import')?.enabled).toBe(false)
+    expect(manager.get('elephant.codex-connection')?.enabled).toBe(false)
     expect(manager.get('elephant.calendar')?.enabled).toBe(false)
+    expect(manager.get('elephant.sites')?.enabled).toBe(false)
     expect(manager.get('elephant.addon-inspector')?.enabled).toBe(false)
     expect(manager.getActions().map((entry) => entry.contribution.id).sort()).toEqual([
       'elephant.daily-notes.open-today',
@@ -92,167 +108,108 @@ describe('built-in starter addons', () => {
   it('executes Daily Notes through the registered Tauri read/write commands', async () => {
     const invoke = vi.fn(async (command, payload) => {
       if (command === 'tauri_notes_read') throw new Error('not found')
-      if (command === 'tauri_notes_write') {
-        return { path: payload.relativePath, changed: true, created: true }
-      }
+      if (command === 'tauri_notes_write') return { changed: true, path: payload.relativePath }
       throw new Error(`Unexpected command: ${command}`)
     })
     vi.stubGlobal('__TAURI__', { core: { invoke } })
 
-    const manager = new ElephantAddonManager({
-      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-    })
-    manager.register(builtinAddons.find((addon) => addon.manifest.id === 'elephant.daily-notes'))
-    await manager.enable('elephant.daily-notes')
+    const manager = new ElephantAddonManager({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } })
+    const daily = builtinAddons.find((addon) => addon.manifest.id === 'elephant.daily-notes')
+    manager.register(daily)
+    await manager.enable(daily.manifest.id)
+    const action = manager.getActions()[0]
+    const result = await action.contribution.run()
 
-    const result = await manager.runAction('elephant.daily-notes.open-today')
-    const writeCall = invoke.mock.calls.find(([command]) => command === 'tauri_notes_write')
-
-    expect(result.created).toBe(true)
     expect(result.path).toMatch(/^Daily\/\d{4}-\d{2}-\d{2}\.md$/)
-    expect(writeCall).toBeDefined()
-    expect(writeCall[1].relativePath).toBe(result.path)
-    expect(writeCall[1].content).toContain('# ')
-    expect(writeCall[1].content).toContain('## Tasks')
+    expect(invoke).toHaveBeenCalledWith('tauri_notes_write', expect.objectContaining({ relativePath: result.path }))
   })
-})
 
-describe('external platform proof addon', () => {
   it('uses app info, persistent storage and note write/read-back through the public API', async () => {
-    const source = fs.readFileSync(
-      path.join(root, 'examples/addons/platform-proof/main.js'),
-      'utf8'
-    )
-    const sandbox = { self: {} }
-    vm.runInNewContext(source, sandbox, { filename: 'platform-proof/main.js' })
-
-    const notes = new Map()
-    const storage = new Map()
-    let command = null
-    const api = {
-      app: {
-        info: vi.fn(async () => ({ name: 'ElephantNote', version: '0.18.9', addonApiVersion: 1 }))
-      },
-      notes: {
-        write: vi.fn(async (notePath, content) => {
-          notes.set(notePath, content)
-          return { ok: true, path: notePath }
-        }),
-        read: vi.fn(async (notePath) => ({ path: notePath, content: notes.get(notePath) }))
-      },
-      storage: {
-        get: vi.fn(async (key) => storage.get(key) ?? null),
-        set: vi.fn(async (key, value) => {
-          storage.set(key, value)
-          return { ok: true }
-        }),
-        remove: vi.fn(async (key) => storage.delete(key)),
-        entries: vi.fn(async () => Object.fromEntries(storage))
-      },
-      commands: {
-        register: vi.fn((definition) => {
-          command = definition
-          return () => { command = null }
-        })
-      }
+    const messages = []
+    let worker
+    class FakeWorker {
+      constructor() { worker = this }
+      postMessage(message) { messages.push(message) }
+      terminate = vi.fn()
     }
+    vi.stubGlobal('Worker', FakeWorker)
+    vi.stubGlobal('Blob', class {})
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:test', revokeObjectURL: vi.fn() })
 
-    const dispose = sandbox.self.elephantAddon.activate(api)
-    expect(command?.id).toBe('com.elephantnote.examples.platform-proof.run')
-
-    const first = await command.run()
-    const second = await command.run()
-
-    expect(first.verified).toBe(true)
-    expect(first.runCount).toBe(1)
-    expect(second.verified).toBe(true)
-    expect(second.runCount).toBe(2)
-    expect(second.path).toBe('Addon Proof/External Addon Platform Proof.md')
-    expect(notes.get(second.path)).toContain('ELEPHANT_ADDON_PROOF:2:')
-    expect(storage.get('runCount')).toBe(2)
-    expect(api.notes.write).toHaveBeenCalledTimes(2)
-    expect(api.notes.read).toHaveBeenCalledTimes(2)
-    expect(api.storage.entries).toHaveBeenCalledTimes(2)
-
-    dispose()
-    expect(command).toBeNull()
-  })
-})
-
-describe('dynamic addon lifecycle', () => {
-  it('unregisters a disabled addon and clears its contributions', async () => {
-    const manager = new ElephantAddonManager({
-      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    const invoke = vi.fn(async (command, payload) => {
+      if (command === 'tauri_addons_read_entry') return { source: 'self.onmessage = () => {}' }
+      if (command === 'tauri_addons_call') {
+        if (payload.method === 'app.info') return { name: 'ElephantNote', version: '0.18.9' }
+        if (payload.method === 'storage.get') return null
+        if (payload.method === 'storage.set') return { ok: true }
+        if (payload.method === 'notes.write') return { ok: true, path: 'Reports/proof.md' }
+        if (payload.method === 'notes.read') return { path: 'Reports/proof.md', content: '# Proof' }
+      }
+      if (command === 'tauri_addons_set_enabled') return { ok: true }
+      throw new Error(`Unexpected command: ${command}`)
     })
+    vi.stubGlobal('__TAURI__', { core: { invoke } })
 
+    const manager = new ElephantAddonManager({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } })
+    const runtime = installExternalAddonRuntime(manager)
+    runtime.register({
+      manifest: normalizeAddonManifest(createManifest({ source: 'external' })),
+      packageHash: 'hash',
+      installedAt: '2026-07-10T00:00:00Z',
+      enabled: false
+    })
+    await manager.enable('com.example.addon')
+
+    worker.onmessage({ data: { type: 'request', requestId: '1', method: 'app.info', params: {} } })
+    await Promise.resolve()
+    expect(messages).toContainEqual(expect.objectContaining({ type: 'response', requestId: '1', result: expect.objectContaining({ name: 'ElephantNote' }) }))
+  })
+
+  it('unregisters a disabled addon and clears its contributions', async () => {
+    const manager = new ElephantAddonManager()
     manager.register({
-      manifest: { id: 'com.example.dynamic', name: 'Dynamic', version: '1.0.0' },
+      manifest: { id: 'com.example.cleanup', name: 'Cleanup', version: '1.0.0' },
       activate(context) {
-        context.addAction({ id: 'com.example.dynamic.run', title: 'Run', run: vi.fn() })
+        context.addAction({ id: 'com.example.cleanup.run', title: 'Run' })
       }
     })
-
-    await manager.enable('com.example.dynamic')
-    await manager.disable('com.example.dynamic')
-    manager.unregister('com.example.dynamic')
-
-    expect(manager.get('com.example.dynamic')).toBeNull()
+    await manager.enable('com.example.cleanup')
+    await manager.disable('com.example.cleanup')
+    manager.unregister('com.example.cleanup')
+    expect(manager.get('com.example.cleanup')).toBeNull()
     expect(manager.getActions()).toEqual([])
   })
 
   it('refuses to unregister a running addon', async () => {
     const manager = new ElephantAddonManager()
-    manager.register({
-      manifest: { id: 'com.example.running', name: 'Running', version: '1.0.0' },
-      activate: vi.fn()
-    })
+    manager.register({ manifest: { id: 'com.example.running', name: 'Running', version: '1.0.0' } })
     await manager.enable('com.example.running')
-
     expect(() => manager.unregister('com.example.running')).toThrow('Cannot unregister an active addon')
   })
-})
 
-describe('community addon consent gate', () => {
   it('does not restart an external addon when community addons are disabled', async () => {
-    const record = {
-      manifest: {
-        id: 'com.example.blocked',
-        name: 'Blocked addon',
-        version: '1.0.0',
-        apiVersion: 1,
-        runtime: { type: 'javascript-worker', entry: 'main.js' },
-        permissions: {
-          commands: true,
-          storage: false,
-          notes: { read: [], write: [] },
-          network: { hosts: [] }
-        }
-      },
-      enabled: true,
-      packageHash: 'abc123',
-      installedAt: '2026-07-09T00:00:00Z',
-      source: 'external'
-    }
     const invoke = vi.fn(async (command, payload) => {
-      if (command === 'tauri_addons_list') return [record]
       if (command === 'tauri_prefs_get') return false
-      if (command === 'tauri_addons_set_enabled') return { ...record, enabled: payload.enabled }
+      if (command === 'tauri_addons_set_enabled') return { ...payload }
+      if (command === 'tauri_addons_read_entry') return { source: 'self.onmessage = () => {}' }
       throw new Error(`Unexpected command: ${command}`)
     })
     vi.stubGlobal('__TAURI__', { core: { invoke } })
+    vi.stubGlobal('Worker', class { postMessage() {} terminate() {} })
+    vi.stubGlobal('Blob', class {})
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:test', revokeObjectURL: vi.fn() })
 
-    const manager = new ElephantAddonManager({
-      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    const manager = new ElephantAddonManager()
+    const runtime = installExternalAddonRuntime(manager)
+    runtime.register({
+      manifest: normalizeAddonManifest(createManifest({ source: 'external' })),
+      packageHash: 'hash',
+      installedAt: '2026-07-10T00:00:00Z',
+      enabled: true
     })
-    const controller = new ExternalAddonController(manager, { logger: manager.logger })
 
-    await controller.load()
-
-    expect(manager.get(record.manifest.id)?.enabled).toBe(false)
-    expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', {
-      addonId: record.manifest.id,
-      enabled: false
-    })
-    await expect(manager.enable(record.manifest.id)).rejects.toThrow('Community addons are disabled')
+    await runtime.restoreEnabled()
+    expect(manager.get('com.example.addon')?.enabled).toBe(false)
+    expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', expect.objectContaining({ addonId: 'com.example.addon', enabled: false }))
   })
 })

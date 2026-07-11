@@ -20,8 +20,8 @@ config_path.write_text(json.dumps(config, indent=2) + '\n')
 # Do not attempt to resolve an already converted Tauri asset URL as a local path.
 patch(
     'Elephant/frontend/app/components/editor/NoteEditorHost.vue',
-    "const isExternalAssetReference = (source = '') => /^(?:https?:|data:|blob:|#)/i.test(String(source || '').trim())",
-    "const isExternalAssetReference = (source = '') => /^(?:https?:|asset:|data:|blob:|#)/i.test(String(source || '').trim())"
+    "const isExternalAssetReference = (value = '') =>\n  /^(?:https?:|data:|blob:|#)/i.test(String(value || '').trim())",
+    "const isExternalAssetReference = (value = '') =>\n  /^(?:https?:|asset:|data:|blob:|#)/i.test(String(value || '').trim())"
 )
 
 # A title-less note must stay title-less in recent-note metadata too.

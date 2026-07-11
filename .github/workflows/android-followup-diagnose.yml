@@ -1,0 +1,40 @@
+name: Android follow-up source diagnosis
+
+on:
+  push:
+    branches:
+      - fix/android-foundations-rework
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-followup-source-diagnosis
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/android-foundations-rework
+          fetch-depth: 1
+      - name: Locate mobile camera, share and image code
+        run: |
+          set -euxo pipefail
+          {
+            echo '=== mobile toolbar ==='
+            grep -RIn --exclude-dir=node_modules --exclude-dir=build --exclude-dir=target --exclude-dir=.git 'en-mobile-editor-toolbar\|en-mobile-camera-backdrop\|en-mobile-camera' Elephant build tests || true
+            echo '=== sharing ==='
+            grep -RIn --exclude-dir=node_modules --exclude-dir=build --exclude-dir=target --exclude-dir=.git 'navigator\.share\|clipboard\.writeText\|shareText\|Share note\|ACTION_SEND' Elephant build tests || true
+            echo '=== camera streams ==='
+            grep -RIn --exclude-dir=node_modules --exclude-dir=build --exclude-dir=target --exclude-dir=.git 'getUserMedia\|srcObject\|MediaStream\|stop()' Elephant build tests || true
+            echo '=== image errors ==='
+            grep -RIn --exclude-dir=node_modules --exclude-dir=build --exclude-dir=target --exclude-dir=.git 'Failed to load image\|resolveLocalImageSource\|normalizeInsertedImageSource' Elephant build tests || true
+          } | tee android-followup-source-diagnosis.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-followup-source-diagnosis
+          path: android-followup-source-diagnosis.txt

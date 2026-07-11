@@ -60,7 +60,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import {
   BookOpenText,
   CalendarDays,
@@ -69,8 +69,8 @@ import {
   GitFork,
   GraduationCap,
   Home,
-  LayoutDashboard,
   Landmark,
+  LayoutDashboard,
   ListTodo,
   PanelLeft,
   Pencil,
@@ -98,7 +98,6 @@ const addonsStore = useAddonsStore()
 const preferences = usePreferencesStore()
 const WIKI_ROOT = '.elephantnote/wiki'
 const WIKI_PAGE_LIMIT = 121
-const featureFlags = ref({ askAi: true })
 const editingVaultId = ref('')
 const showVaultMenu = ref(false)
 
@@ -108,6 +107,7 @@ const VAULT_ICON_COMPONENTS = { Database, FileText, GraduationCap, Home, Landmar
 const ADDON_ICON_COMPONENTS = {
   'calendar-days': CalendarDays,
   calendar: CalendarDays,
+  database: Database,
   'list-todo': ListTodo,
   tasks: ListTodo,
   dashboard: LayoutDashboard,
@@ -130,10 +130,8 @@ const coreRailItems = computed(() => [
   { id: 'dashboard', title: 'Dashboard', icon: LayoutDashboard, active: !props.activeAddonViewId && store.activeWorkspaceView === 'dashboard', run: () => closeAddonAndOpen('dashboard') },
   { id: 'wiki', title: 'Wiki', icon: BookOpenText, active: !props.activeAddonViewId && store.activeWorkspaceView === 'wiki', run: openWikiRoot },
   { id: 'graph', title: 'Graph', icon: GitFork, active: !props.activeAddonViewId && store.activeWorkspaceView === 'graph', run: () => closeAddonAndOpen('graph') },
-  { id: 'models', title: 'Models', icon: Database, active: !props.activeAddonViewId && store.activeWorkspaceView === 'models', run: () => closeAddonAndOpen('models') },
-  { id: 'search', title: 'Search', icon: Search, active: false, run: () => emit('search') },
-  { id: 'chat', title: 'Chat', icon: Sparkles, active: store.chatSidebarOpen, run: () => store.toggleChatSidebar(), available: featureFlags.value.askAi !== false }
-].filter((item) => item.available !== false))
+  { id: 'search', title: 'Search', icon: Search, active: false, run: () => emit('search') }
+])
 
 const addonViewItems = computed(() => addonsStore.getContributions('views')
   .filter((entry) => entry?.contribution?.id && entry?.contribution?.title)
@@ -194,13 +192,6 @@ const handleAddonSidebarItem = async (item) => {
   if (item.actionId) return addonsStore.runAction(item.actionId)
   if (item.view) closeAddonAndOpen(item.view)
 }
-const handleFeatureFlagsChanged = (event) => { featureFlags.value = { ...featureFlags.value, ...(event.detail || {}) } }
-
-onMounted(async () => {
-  try { featureFlags.value = await elephantnoteClient.features.get() } catch { featureFlags.value = { askAi: true } }
-  window.addEventListener('elephantnote:feature-flags-changed', handleFeatureFlagsChanged)
-})
-onBeforeUnmount(() => window.removeEventListener('elephantnote:feature-flags-changed', handleFeatureFlagsChanged))
 </script>
 
 <style scoped>

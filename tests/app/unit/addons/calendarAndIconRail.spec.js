@@ -63,7 +63,7 @@ describe('optional Calendar addon and configurable icon rail', () => {
     expect(panel).toContain("activePage === 'addons'")
     expect(panel).toContain("activePage === 'packs'")
     expect(panel).toContain('data-elephant-addon-settings-slot="addons.packs"')
-    expect(panel).toContain('Built-in addons')
+    expect(panel).toContain('Installed addons')
     expect(panel).toContain('Installed community addons')
     expect(logic).toContain("invoke('tauri_addons_set_enabled'")
     expect(logic).toContain('installedExternalAddons.map')

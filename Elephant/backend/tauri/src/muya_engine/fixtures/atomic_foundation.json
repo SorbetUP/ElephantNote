@@ -1,0 +1,22 @@
+{
+  "primitives": {
+    "metaKeys": [["Shift", true], ["Control", true], ["Alt", true], ["Meta", true], ["Enter", false]],
+    "odd": [[-4, false], [-3, true], [0, false], [1, true], [1.5, false], [2, false], [3, true]],
+    "even": [[-4, true], [-3, false], [0, true], [1, false], [1.5, false], [2, true], [3, false]],
+    "lengthEven": [["", true], ["a", false], ["ab", true], ["😀", true], ["😀a", false], ["é", false]],
+    "snakeToCamel": [["hello_world", "helloWorld"], ["hello__world", "hello_World"], ["_start", "Start"], ["alreadyCamel", "alreadyCamel"], ["ümlaut_test", "ümlautTest"]],
+    "camelToSnake": [["HTMLValue", "-h-t-m-l-value"], ["camelCase", "camel-case"], ["already-snake", "already-snake"], ["éValue", "é-value"]],
+    "conflicts": [[[0, 2], [2, 4], true], [[0, 1], [2, 3], false], [[-3, -1], [-2, 0], true]],
+    "unions": [
+      [{"start": 4, "end": 9}, {"start": 2, "end": 7, "active": true}, {"start": 4, "end": 7, "active": true}],
+      [{"start": 7, "end": 9}, {"start": 2, "end": 7, "active": true}, null],
+      [{"start": 0, "end": 5}, {"start": 2, "end": 7, "active": "x"}, {"start": 2, "end": 5, "active": "x"}]
+    ]
+  },
+  "stringTools": {
+    "rtrim": [["hello///", "/", false, "hello"], ["https://host/path", "/", true, "https://host/"], ["abc", "xx", false, "abc"], ["", "/", false, ""], ["😀///", "/", false, "😀"]],
+    "closingBracket": [["a[b]c]", ["[", "]"], 5], ["a\\]b]", ["[", "]"], 4], ["😀]", ["[", "]"], 2], ["abc", ["[", "]"], -1], ["(a(b)c)d)", ["(", ")"], 8]]
+  },
+  "tableTools": [["a | b\\|c | d", 3, ["a", "b|c", "d"]], ["a|b", 4, ["a", "b", "", ""]], ["a|b|c", 2, ["a", "b"]], ["a\\\\|b|c", 3, ["a\\\\", "b", "c"]], ["😀|x", 2, ["😀", "x"]]],
+  "uniqueIds": [1, 2, 3]
+}

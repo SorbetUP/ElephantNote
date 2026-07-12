@@ -8,6 +8,7 @@ import { useAddonsStore } from '@/store/addons'
 
 const INTERNAL_ADDON_IDS = new Set(['elephant.addon-packs'])
 const OBSOLETE_DEMO_ADDON_IDS = new Set(['com.elephantnote.examples.trusted-workspace-lab'])
+// Replaced the narrower filter: !INTERNAL_ADDON_IDS.has(addon.manifest.id)
 const isHiddenAddonId = (id) => INTERNAL_ADDON_IDS.has(id) || OBSOLETE_DEMO_ADDON_IDS.has(id)
 
 const persistExternalAddonState = async (addonId, enabled) => {

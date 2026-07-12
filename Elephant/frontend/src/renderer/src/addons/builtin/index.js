@@ -104,7 +104,7 @@ export const aiAddon = createLazyBuiltinAddon({
   manifest: {
     id: 'elephant.ai',
     name: 'AI',
-    version: '2.1.0',
+    version: '2.0.0',
     description: 'Configures AI providers and owns the optional Chat, Search, OCR, Wiki and Graph modules.',
     author: 'ElephantNote',
     icon: 'sparkles',
@@ -245,7 +245,7 @@ export const codeExecutionAddon = createLazyBuiltinAddon({
   manifest: {
     id: 'elephant.code-execution',
     name: 'Code execution',
-    version: '2.1.0',
+    version: '2.0.0',
     description: 'Runs trusted fenced code blocks with selectable local interpreters.',
     author: 'ElephantNote',
     icon: 'terminal',
@@ -262,7 +262,7 @@ export const excalidrawAddon = createLazyBuiltinAddon({
   manifest: {
     id: 'elephant.excalidraw',
     name: 'Excalidraw',
-    version: '1.2.0',
+    version: '1.1.0',
     description: 'Adds Excalidraw drawings, editable image embeds and drawing cleanup to notes.',
     author: 'ElephantNote',
     icon: 'excalidraw',

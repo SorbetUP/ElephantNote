@@ -29,6 +29,7 @@ futures-util = "0.3"
 fuzzy-matcher = "0.3"
 iroh = "1.0.2"
 iroh-mdns-address-lookup = "0.4.0"
+muya-core = { path = "../../crates/muya-core" }
 notify = "6"
 pulldown-cmark = "0.13"
 reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls", "stream"] }

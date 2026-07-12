@@ -92,7 +92,7 @@
         </header>
         <div class="en-addons-card en-catalog-list">
           <article v-for="addon in availableAddons" :key="addon.id" class="en-catalog-row">
-            <span class="en-catalog-icon"><AddonIcon :name="addon.icon || 'package'" /></span>
+            <span class="en-catalog-icon"><AddonIcon :name="addon.icon" /></span>
             <div class="en-catalog-copy">
               <div><strong>{{ addon.name }}</strong><small>v{{ addon.version }}</small></div>
               <p>{{ addon.description }}</p>

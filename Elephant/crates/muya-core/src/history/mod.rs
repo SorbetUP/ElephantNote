@@ -78,8 +78,8 @@ mod tests {
   use super::*;
   use crate::edit::Command;
   use crate::model::{InlineKind, NodeKind};
-  use crate::parse_markdown;
   use crate::selection::{Selection, SelectionPoint};
+  use crate::{parse_markdown, to_markdown};
 
   #[test]
   fn applies_undoes_and_redoes_transactions() {
@@ -105,6 +105,38 @@ mod tests {
 
     history.redo(&mut document).unwrap();
     assert_text(&document, node, "aXbc");
+  }
+
+  #[test]
+  fn undoes_and_redoes_paragraph_splits_without_changing_ids() {
+    let mut document = parse_markdown("hello");
+    let paragraph = document.children(document.root).next().unwrap();
+    let node = document.children(paragraph.id).next().unwrap().id;
+    let new_block = document.next_available_id();
+    let new_text = crate::model::NodeId(new_block.0 + 1);
+    let selection = Selection::collapsed(SelectionPoint {
+      node,
+      offset_utf16: 2,
+    });
+    let transaction = Command::InsertParagraph
+      .build(&document, selection)
+      .unwrap();
+    let mut history = History::default();
+
+    history.apply(&mut document, &transaction).unwrap();
+    assert_eq!(to_markdown(&document), "he\n\nllo");
+    assert!(document.node(new_block).is_some());
+    assert!(document.node(new_text).is_some());
+
+    history.undo(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "hello");
+    assert!(document.node(new_block).is_none());
+    assert!(document.node(new_text).is_none());
+
+    history.redo(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "he\n\nllo");
+    assert!(document.node(new_block).is_some());
+    assert!(document.node(new_text).is_some());
   }
 
   fn assert_text(document: &Document, node: crate::model::NodeId, expected: &str) {

@@ -19,14 +19,16 @@ export const excalidrawAddon = {
     defaultEnabled: false,
     removable: true,
     permissions: ['notes.read', 'notes.write', 'assets.read', 'assets.write'],
-    contributes: { editor: true },
-    contentTypes: [{
-      id: 'drawing-image',
-      kind: 'image',
-      sourcePattern: '**/.assets/excalidraw-*.png',
-      disabledPresentation: 'static-preview',
-      disabledLabel: 'Excalidraw drawing'
-    }]
+    contributes: {
+      editor: true,
+      contentTypes: [{
+        id: 'drawing-image',
+        kind: 'image',
+        sourcePattern: '**/.assets/excalidraw-*.png',
+        disabledPresentation: 'static-preview',
+        disabledLabel: 'Excalidraw drawing'
+      }]
+    }
   },
 
   activate() {

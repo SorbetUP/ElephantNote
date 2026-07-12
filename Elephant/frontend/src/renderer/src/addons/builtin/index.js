@@ -93,7 +93,7 @@ export const sitesAddon = createLazyBuiltinAddon({
     defaultEnabled: false,
     removable: true,
     permissions: ['sites.build', 'sites.preview'],
-    contributes: { settings: true, siteGenerator: true }
+    contributes: { settings: true, siteGenerator: true, layout: true }
   }
 })
 
@@ -110,7 +110,7 @@ export const aiAddon = createLazyBuiltinAddon({
     defaultEnabled: false,
     removable: true,
     permissions: ['ai.configure', 'ai.chat', 'ai.models', 'search.manage', 'ocr.run'],
-    contributes: { actions: true, sidebar: true, settings: true, views: true }
+    contributes: { actions: true, sidebar: true, settings: true, views: true, layout: true }
   }
 })
 

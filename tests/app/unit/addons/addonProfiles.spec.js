@@ -6,6 +6,8 @@ vi.mock('element-plus', () => ({ ElMessage: { success } }))
 import { addonPacksAddon } from '../../../../Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js'
 
 const PACK_PATH = '.elephantnote/addons/packs/default.enaddonpack'
+const BASE_PACK_PATH = '.elephantnote/addons/packs/base.enaddonpack'
+const DEVELOP_PARITY_PACK_PATH = '.elephantnote/addons/packs/develop-parity.enaddonpack'
 const REPORT_PATH = 'Reports/Addon Pack.md'
 const catalog = [
   { id: 'com.example.alpha', name: 'Alpha', version: '1.0.0' },
@@ -152,6 +154,33 @@ describe('Addon Packs built-in', () => {
     expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', { addonId: 'com.example.alpha', enabled: false })
     expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', { addonId: 'com.example.beta', enabled: true })
     expect(files.get(REPORT_PATH)).toContain('| `com.example.beta` | catalog | 2.0.0 | Enabled | Installed |')
+  })
+
+  it('creates protected complete and base packs, with Calendar absent from the base pack', async () => {
+    const files = new Map()
+    const { manager } = createManager()
+    vi.stubGlobal('__TAURI__', { core: { invoke: createInvoke(files) } })
+    const actions = activateActions(manager)
+
+    const result = await actions.get('elephant.addon-packs.ensure-develop-parity').run()
+
+    expect(result.packPath).toBe(DEVELOP_PARITY_PACK_PATH)
+    expect(result.basePackPath).toBe(BASE_PACK_PATH)
+
+    const completePack = JSON.parse(files.get(DEVELOP_PARITY_PACK_PATH))
+    const basePack = JSON.parse(files.get(BASE_PACK_PATH))
+    expect(completePack.protected).toBe(true)
+    expect(completePack.addons).toContainEqual(expect.objectContaining({ id: 'elephant.calendar', enabled: true }))
+    expect(basePack).toMatchObject({
+      name: 'ElephantNote Base',
+      protected: true
+    })
+    expect(basePack.addons).not.toContainEqual(expect.objectContaining({ id: 'elephant.calendar' }))
+    expect(basePack.addons).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'elephant.ai-chat', enabled: true }),
+      expect.objectContaining({ id: 'elephant.sync', enabled: true }),
+      expect.objectContaining({ id: 'elephant.code-execution', enabled: true })
+    ]))
   })
 
   it('creates and applies a named pack selected by path', async () => {

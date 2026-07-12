@@ -15,11 +15,11 @@ vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => windowApi
 }))
 
-vi.mock('../../../../Elephant/frontend/src/renderer/src/store', () => ({
-  default: {},
+vi.mock('@/store', () => ({
+  default: {}
 }))
 
-vi.mock('../../../../Elephant/frontend/src/renderer/src/store/preferences', () => ({
+vi.mock('@/store/preferences', () => ({
   usePreferencesStore: () => preferenceStore
 }))
 

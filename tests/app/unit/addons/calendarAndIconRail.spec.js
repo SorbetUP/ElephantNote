@@ -99,10 +99,11 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(navigation).toContain(':is="entry.contribution.component"')
   })
 
-  it('keeps AI views, chat and runtime outside the base shell', () => {
+  it('keeps AI, Open Models, chat and local runtime outside the base shell', () => {
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
     const router = read('Elephant/frontend/app/components/views/AddonWorkspaceRouter.vue')
     const ai = read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
+    const openModels = read('Elephant/frontend/src/renderer/src/addons/builtin/openModels.js')
     const renderer = read('Elephant/frontend/src/renderer/src/main.js')
     const graphRuntime = read('Elephant/frontend/app/runtime/graphRuntimeFixes.js')
 
@@ -114,10 +115,12 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(router).not.toContain('ModelsView')
     expect(ai).toContain('component: WikiView')
     expect(ai).toContain('component: AtomicGraphView')
-    expect(ai).toContain('component: ModelsView')
+    expect(ai).not.toContain('component: ModelsView')
     expect(ai).toContain('component: ChatSidebar')
     expect(ai).toContain('installGraphRuntimeFixes(globalThis)')
-    expect(ai).toContain('autostartLlamaRuntime')
+    expect(ai).not.toContain('autostartLlamaRuntime')
+    expect(openModels).toContain('component: ModelsView')
+    expect(openModels).toContain('autostartLlamaRuntime')
     expect(renderer).not.toContain('installGraphRuntimeFixes')
     expect(renderer).not.toContain('autostartLlamaRuntime')
     expect(graphRuntime).toContain('dispose()')
@@ -140,8 +143,10 @@ describe('optional first-party addons and configurable icon rail', () => {
 
     expect(builtins).toContain('const createLazyBuiltinAddon')
     expect(builtins).toContain("load: () => import('./ai')")
+    expect(builtins).toContain("load: () => import('./openModels')")
     expect(builtins).toContain("load: () => import('./excalidraw')")
     expect(builtins).not.toContain("import { aiAddon } from './ai'")
+    expect(builtins).not.toContain("import { openModelsAddon } from './openModels'")
     expect(builtins).not.toContain("import { excalidrawAddon } from './excalidraw'")
     expect(runtime).toContain("REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs'])")
   })

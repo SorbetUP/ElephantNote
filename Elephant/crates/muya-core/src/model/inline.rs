@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum InlineKind {
   Text { value: String },
+  Escaped { value: char },
   Emphasis,
   Strong,
   Strike,

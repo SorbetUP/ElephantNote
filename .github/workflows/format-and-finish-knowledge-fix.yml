@@ -1,0 +1,65 @@
+name: Format and finish knowledge fix
+
+on:
+  push:
+    branches:
+      - feature/rust-knowledge-core
+
+permissions:
+  contents: write
+
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/rust-knowledge-core
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Remove native renderer graph cap
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
+          text = path.read_text()
+          old = '''        const allNodes = Array.isArray(fullGraph.nodes) ? fullGraph.nodes : []
+                  const nodes = allNodes.slice(0, 240)
+                  const visibleIds = new Set(nodes.map((node) => node.id))
+                  const edges = (Array.isArray(fullGraph.edges) ? fullGraph.edges : [])
+                    .filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+                  const graph = {
+                    ...fullGraph,
+                    nodes,
+                    edges,
+                    totalNodeCount: allNodes.length,
+                    hiddenNodeCount: Math.max(0, allNodes.length - nodes.length),
+                    rendererLimited: allNodes.length > nodes.length
+                  }'''
+          new = '''        const nodes = Array.isArray(fullGraph.nodes) ? fullGraph.nodes : []
+                  const edges = Array.isArray(fullGraph.edges) ? fullGraph.edges : []
+                  const graph = {
+                    ...fullGraph,
+                    nodes,
+                    edges,
+                    totalNodeCount: nodes.length,
+                    hiddenNodeCount: 0,
+                    rendererLimited: false
+                  }'''
+          if old not in text:
+              raise SystemExit('native graph cap block not found')
+          path.write_text(text.replace(old, new))
+      - name: Format Rust
+        run: |
+          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+      - name: Remove one-shot workflow
+        run: rm .github/workflows/format-and-finish-knowledge-fix.yml
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Elephant/backend/knowledge-core/src/chunking.rs Elephant/backend/knowledge-core/src/pipeline.rs Elephant/backend/tauri/src/knowledge_wikis.rs Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js .github/workflows/format-and-finish-knowledge-fix.yml
+          git commit -m 'fix(knowledge): format fixes and remove native graph cap'
+          git push origin HEAD:feature/rust-knowledge-core

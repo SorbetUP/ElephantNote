@@ -127,11 +127,12 @@ describe('native executable fenced code blocks', () => {
 
   it('provides real Run, Stop, bounded output and keyboard execution', () => {
     const runtime = readRuntime()
+    const lifecycle = readLifecycle()
     const backend = readBackend()
 
     expect(runtime).toContain("action === 'stop'")
-    expect(runtime).toContain("event.key !== 'Enter'")
-    expect(runtime).toContain('event.metaKey || event.ctrlKey')
+    expect(lifecycle).toContain("event.key !== 'Enter'")
+    expect(lifecycle).toContain('event.metaKey || event.ctrlKey')
     expect(runtime).toContain('state.executionId')
     expect(runtime).toContain('max-height: 300px')
     expect(backend).toContain('RUNNING_EXECUTIONS')
@@ -148,7 +149,7 @@ describe('native executable fenced code blocks', () => {
     expect(settings).toContain('target.elephantnote.programs.set')
     expect(settings).toContain('MutationObserver')
     expect(settings).not.toContain('ag-fence-code')
-    expect(settings).not.toContain('querySelectorAll(\'pre\')')
+    expect(settings).not.toContain("querySelectorAll('pre')")
   })
 
   it('keeps the public runtime separated and starts it only from the addon', () => {
@@ -161,9 +162,11 @@ describe('native executable fenced code blocks', () => {
     expect(addon).toContain("import { installExecutableCodeBlocks } from '../../platform/executableCodeBlocks'")
     expect(addon).toContain('installExecutableCodeBlocks(globalThis)')
     expect(addon).toContain('runtime?.dispose?.()')
+    expect(addon).toContain('CodeExecutionSettings')
+    expect(addon).toContain("section: 'editor'")
     expect(entry).toContain("from './executableCodeNativeRuntime'")
     expect(entry).toContain("from './executableCodeNativeLifecycle'")
-    expect(entry).toContain("from './executableCodeSettings'")
+    expect(entry).not.toContain("from './executableCodeSettings'")
     expect(entry).not.toContain('executableCodeBlocksV6')
   })
 })

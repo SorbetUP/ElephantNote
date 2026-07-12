@@ -1,12 +1,13 @@
 .en-addons-panel { position: relative; display: grid; gap: 16px; }
-.en-community-title-check { position: absolute; top: -67px; right: 2px; z-index: 4; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 1px solid var(--en-border, #c5cfdd); border-radius: 6px; background: var(--en-surface, #fff); color: var(--en-primary, #2563eb); cursor: pointer; }
+.en-community-title-check { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid var(--en-border, #c5cfdd); border-radius: 8px; background: var(--en-surface, #fff); color: transparent; cursor: pointer; }
+.en-community-title-check.active { border-color: color-mix(in srgb, var(--en-primary, #2563eb) 42%, var(--en-border, #c5cfdd)); background: color-mix(in srgb, var(--en-primary, #2563eb) 10%, var(--en-surface, #fff)); color: var(--en-primary, #2563eb); }
 .en-community-title-check:hover:not(:disabled) { background: var(--en-soft, #e9eff7); }
 .en-community-title-check:disabled { opacity: .45; cursor: default; }
-.en-community-title-check svg { width: 14px; height: 14px; stroke-width: 2.6; }
+.en-community-title-check svg { width: 17px; height: 17px; stroke-width: 2.6; }
 .en-addons-tabs { position: sticky; top: -28px; z-index: 3; display: grid; grid-template-columns: auto minmax(180px, 1fr) 34px 34px; align-items: center; gap: 6px; padding: 5px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 12px; background: color-mix(in srgb, var(--en-surface, #fff) 94%, transparent); backdrop-filter: blur(14px) saturate(130%); }
 .en-addons-tab-buttons { display: flex; align-items: center; gap: 4px; }
 .en-addons-tab-buttons button { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 11px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--en-muted, #667085); font: inherit; cursor: pointer; }
-.en-addons-tab-buttons button.active { border-color: var(--en-border, #c5cfdd); background: var(--en-surface, #fff); color: var(--en-text, #101828); box-shadow: 0 1px 4px rgba(2, 6, 23, 0.08); }
+.en-addons-tab-buttons button.active { border-color: var(--en-border, #c5cfdd); background: var(--en-surface, #fff); color: var(--en-text, #101828); box-shadow: 0 1px 4px rgba(2, 6, 23, .08); }
 .en-addons-tab-buttons svg { width: 14px; height: 14px; }
 .en-addons-search { min-width: 0; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 8px; background: var(--en-bg, #fff); color: var(--en-muted, #667085); }
 .en-addons-search svg { width: 14px; height: 14px; flex: 0 0 auto; }

@@ -1,8 +1,8 @@
 import { filter } from 'fuzzaldrin'
-import { patch, h } from '../../parser/render/snabbdom'
 import { deepCopy } from '../../utils'
 import BaseScrollFloat from '../baseScrollFloat'
 import { createQuickInsertObj } from './config'
+import { renderQuickInsert } from './view'
 import './index.css'
 
 const normalizeQuickInsertTrigger = (trigger) => {
@@ -21,7 +21,6 @@ class QuickInsert extends BaseScrollFloat {
     this.renderArray = null
     this.activeItem = null
     this.block = null
-    // Get the translation function from muya.options, or use the default config if absent
     const translateFn = muya.options && muya.options.t ? muya.options.t : null
     this.originalQuickInsertObj = createQuickInsertObj(translateFn)
     this.renderObj = this.originalQuickInsertObj
@@ -48,69 +47,7 @@ class QuickInsert extends BaseScrollFloat {
   }
 
   render() {
-    const { scrollElement, activeItem, _renderObj } = this
-    let children = Object.keys(_renderObj)
-      .filter((key) => {
-        return _renderObj[key].length !== 0
-      })
-      .map((key) => {
-        const titleVnode = h('div.title', key.toUpperCase())
-        const items = []
-        for (const item of _renderObj[key]) {
-          const { title, subTitle, label, icon, shortCut } = item
-          const iconVnode = h(
-            'div.icon-container',
-            h(
-              'i.icon',
-              h(
-                `i.icon-${label.replace(/\s/g, '-')}`,
-                {
-                  style: {
-                    background: `url(${icon}) no-repeat`,
-                    'background-size': '100%'
-                  }
-                },
-                ''
-              )
-            )
-          )
-
-          const description = h('div.description', [
-            h('div.big-title', title),
-            h('div.sub-title', subTitle)
-          ])
-          const shortCutVnode = h('div.short-cut', [h('span', shortCut)])
-          const selector = activeItem.label === label ? 'div.item.active' : 'div.item'
-          items.push(
-            h(
-              selector,
-              {
-                dataset: { label },
-                on: {
-                  click: () => {
-                    this.selectItem(item)
-                  }
-                }
-              },
-              [iconVnode, description, shortCutVnode]
-            )
-          )
-        }
-
-        return h('section', [titleVnode, ...items])
-      })
-
-    if (children.length === 0) {
-      children = h('div.no-result', 'No result')
-    }
-    const vnode = h('div', children)
-
-    if (this.oldVnode) {
-      patch(this.oldVnode, vnode)
-    } else {
-      patch(scrollElement, vnode)
-    }
-    this.oldVnode = vnode
+    return renderQuickInsert(this)
   }
 
   listen() {
@@ -133,13 +70,11 @@ class QuickInsert extends BaseScrollFloat {
     const canInserFrontMatter = contentState.canInserFrontMatter(this.block)
     const obj = deepCopy(this.originalQuickInsertObj)
     if (!canInserFrontMatter) {
-      // Find the basic block group containing front-matter
       const basicBlockKey = Object.keys(obj).find((key) => {
         const items = obj[key]
         return Array.isArray(items) && items.some((item) => item.label === 'front-matter')
       })
       if (basicBlockKey && obj[basicBlockKey]) {
-        // Find the index of the front-matter item and remove it
         const frontMatterIndex = obj[basicBlockKey].findIndex(
           (item) => item.label === 'front-matter'
         )
@@ -161,7 +96,6 @@ class QuickInsert extends BaseScrollFloat {
 
   selectItem(item) {
     const { contentState } = this.muya
-    // Check that block exists to avoid a null reference error
     if (!this.block) {
       console.warn('QuickInsert: block is null, cannot select item')
       this.hide()
@@ -197,7 +131,6 @@ class QuickInsert extends BaseScrollFloat {
         contentState.updateParagraph(item.label, true)
         break
     }
-    // delay hide to avoid dispatch enter hander
     setTimeout(this.hide.bind(this))
   }
 

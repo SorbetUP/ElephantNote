@@ -1,0 +1,1056 @@
+name: Implement Wiki embeddings once
+
+on:
+  push:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/implement-wiki-embeddings-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-links-graph-integration
+          fetch-depth: 0
+      - name: Apply real embedding-backed Wiki graph support
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+
+          embedding_store = r'''use rusqlite::{params, Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+
+const EMBEDDING_SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS document_embeddings (
+  document_path TEXT PRIMARY KEY,
+  content_hash TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  dimensions INTEGER NOT NULL,
+  vector_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  FOREIGN KEY(document_path) REFERENCES documents(relative_path) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS document_embeddings_model_idx
+  ON document_embeddings(model_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS embedding_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+"#;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingInput {
+    pub relative_path: String,
+    pub title: String,
+    pub content_hash: String,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingSimilarity {
+    pub source: String,
+    pub target: String,
+    pub score: f32,
+    pub model_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingStatus {
+    pub documents: usize,
+    pub model_id: String,
+    pub dimensions: usize,
+    pub threshold: String,
+}
+
+pub struct EmbeddingStore {
+    database_path: PathBuf,
+}
+
+impl EmbeddingStore {
+    pub fn open(database_path: &Path) -> Result<Self, String> {
+        let conn = Connection::open(database_path).map_err(|error| error.to_string())?;
+        conn.execute_batch(EMBEDDING_SCHEMA)
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            database_path: database_path.to_path_buf(),
+        })
+    }
+
+    fn connection(&self) -> Result<Connection, String> {
+        let conn = Connection::open(&self.database_path).map_err(|error| error.to_string())?;
+        conn.execute_batch(EMBEDDING_SCHEMA)
+            .map_err(|error| error.to_string())?;
+        Ok(conn)
+    }
+
+    pub fn wiki_source_paths(&self) -> Result<HashSet<String>, String> {
+        let conn = self.connection()?;
+        let mut statement = match conn.prepare(
+            "SELECT source_paths_json FROM wiki_drafts WHERE status IN ('accepted', 'outdated', 'proposed')",
+        ) {
+            Ok(statement) => statement,
+            Err(_) => return Ok(HashSet::new()),
+        };
+        let rows = statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|error| error.to_string())?;
+        let mut paths = HashSet::new();
+        for row in rows {
+            let raw = row.map_err(|error| error.to_string())?;
+            for path in serde_json::from_str::<Vec<String>>(&raw).unwrap_or_default() {
+                if !path.trim().is_empty() {
+                    paths.insert(path);
+                }
+            }
+        }
+        Ok(paths)
+    }
+
+    pub fn pending_inputs(
+        &self,
+        model_id: &str,
+        only_paths: Option<&HashSet<String>>,
+        limit: usize,
+    ) -> Result<Vec<EmbeddingInput>, String> {
+        let conn = self.connection()?;
+        let existing = {
+            let mut statement = conn
+                .prepare(
+                    "SELECT document_path, content_hash FROM document_embeddings WHERE model_id=?1",
+                )
+                .map_err(|error| error.to_string())?;
+            let rows = statement
+                .query_map(params![model_id], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(|error| error.to_string())?;
+            rows.collect::<Result<HashMap<_, _>, _>>()
+                .map_err(|error| error.to_string())?
+        };
+        let mut statement = conn
+            .prepare(
+                "SELECT d.relative_path, d.title, d.content_hash,
+                        COALESCE((SELECT group_concat(text, '\n\n') FROM
+                          (SELECT c.text AS text FROM chunks c
+                           WHERE c.document_path=d.relative_path ORDER BY c.ordinal LIMIT 6)), '')
+                 FROM documents d ORDER BY d.relative_path",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(|error| error.to_string())?;
+        let mut output = Vec::new();
+        for row in rows {
+            let (relative_path, title, content_hash, body) =
+                row.map_err(|error| error.to_string())?;
+            if only_paths.is_some_and(|paths| !paths.contains(&relative_path)) {
+                continue;
+            }
+            if existing
+                .get(&relative_path)
+                .is_some_and(|hash| hash == &content_hash)
+            {
+                continue;
+            }
+            let text = format!("{title}\n\n{body}")
+                .chars()
+                .take(8_000)
+                .collect::<String>();
+            if text.trim().is_empty() {
+                continue;
+            }
+            output.push(EmbeddingInput {
+                relative_path,
+                title,
+                content_hash,
+                text,
+            });
+            if output.len() >= limit.clamp(1, 100_000) {
+                break;
+            }
+        }
+        Ok(output)
+    }
+
+    pub fn save_batch(
+        &self,
+        model_id: &str,
+        threshold: f32,
+        rows: &[(EmbeddingInput, Vec<f32>)],
+    ) -> Result<usize, String> {
+        let mut conn = self.connection()?;
+        let transaction = conn.transaction().map_err(|error| error.to_string())?;
+        let mut written = 0usize;
+        for (input, raw_vector) in rows {
+            let vector = normalize_vector(raw_vector)?;
+            let vector_json =
+                serde_json::to_string(&vector).map_err(|error| error.to_string())?;
+            transaction
+                .execute(
+                    "INSERT INTO document_embeddings(
+                       document_path, content_hash, model_id, dimensions, vector_json, updated_at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, unixepoch())
+                     ON CONFLICT(document_path) DO UPDATE SET
+                       content_hash=excluded.content_hash,
+                       model_id=excluded.model_id,
+                       dimensions=excluded.dimensions,
+                       vector_json=excluded.vector_json,
+                       updated_at=unixepoch()",
+                    params![
+                        input.relative_path,
+                        input.content_hash,
+                        model_id,
+                        vector.len() as i64,
+                        vector_json,
+                    ],
+                )
+                .map_err(|error| error.to_string())?;
+            written += 1;
+        }
+        transaction
+            .execute(
+                "INSERT INTO embedding_meta(key, value) VALUES ('model_id', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                params![model_id],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "INSERT INTO embedding_meta(key, value) VALUES ('threshold', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                params![threshold.to_string()],
+            )
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(written)
+    }
+
+    pub fn status(&self) -> Result<EmbeddingStatus, String> {
+        let conn = self.connection()?;
+        let documents = conn
+            .query_row("SELECT COUNT(*) FROM document_embeddings", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .map_err(|error| error.to_string())? as usize;
+        let model_id = meta_value(&conn, "model_id")?.unwrap_or_default();
+        let threshold = meta_value(&conn, "threshold")?.unwrap_or_else(|| "0.35".into());
+        let dimensions = conn
+            .query_row(
+                "SELECT dimensions FROM document_embeddings ORDER BY updated_at DESC LIMIT 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .unwrap_or(0) as usize;
+        Ok(EmbeddingStatus {
+            documents,
+            model_id,
+            dimensions,
+            threshold,
+        })
+    }
+
+    pub fn semantic_edges_for_paths(
+        &self,
+        paths: &[String],
+        max_neighbors: usize,
+    ) -> Result<Vec<EmbeddingSimilarity>, String> {
+        if paths.len() < 2 {
+            return Ok(Vec::new());
+        }
+        let wanted = paths.iter().cloned().collect::<HashSet<_>>();
+        let conn = self.connection()?;
+        let model_id = meta_value(&conn, "model_id")?.unwrap_or_default();
+        if model_id.is_empty() {
+            return Ok(Vec::new());
+        }
+        let threshold = meta_value(&conn, "threshold")?
+            .and_then(|value| value.parse::<f32>().ok())
+            .unwrap_or(0.35)
+            .clamp(-1.0, 1.0);
+        let mut statement = conn
+            .prepare(
+                "SELECT document_path, vector_json FROM document_embeddings WHERE model_id=?1",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![model_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|error| error.to_string())?;
+        let mut vectors = HashMap::<String, Vec<f32>>::new();
+        for row in rows {
+            let (path, raw) = row.map_err(|error| error.to_string())?;
+            if !wanted.contains(&path) {
+                continue;
+            }
+            if let Ok(vector) = serde_json::from_str::<Vec<f32>>(&raw) {
+                if !vector.is_empty() {
+                    vectors.insert(path, vector);
+                }
+            }
+        }
+        let mut selected = HashMap::<(String, String), f32>::new();
+        for source in paths {
+            let Some(source_vector) = vectors.get(source) else {
+                continue;
+            };
+            let mut candidates = paths
+                .iter()
+                .filter(|target| *target != source)
+                .filter_map(|target| {
+                    vectors
+                        .get(target)
+                        .map(|target_vector| (target.clone(), dot(source_vector, target_vector)))
+                })
+                .filter(|(_, score)| *score >= threshold)
+                .collect::<Vec<_>>();
+            candidates.sort_by(|left, right| right.1.total_cmp(&left.1));
+            for (target, score) in candidates.into_iter().take(max_neighbors.clamp(1, 8)) {
+                let pair = if source < &target {
+                    (source.clone(), target)
+                } else {
+                    (target, source.clone())
+                };
+                selected
+                    .entry(pair)
+                    .and_modify(|current| *current = current.max(score))
+                    .or_insert(score);
+            }
+        }
+        let mut output = selected
+            .into_iter()
+            .map(|((source, target), score)| EmbeddingSimilarity {
+                source,
+                target,
+                score,
+                model_id: model_id.clone(),
+            })
+            .collect::<Vec<_>>();
+        output.sort_by(|left, right| {
+            left.source
+                .cmp(&right.source)
+                .then_with(|| left.target.cmp(&right.target))
+        });
+        Ok(output)
+    }
+}
+
+fn meta_value(conn: &Connection, key: &str) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT value FROM embedding_meta WHERE key=?1",
+        params![key],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|error| error.to_string())
+}
+
+fn normalize_vector(vector: &[f32]) -> Result<Vec<f32>, String> {
+    if vector.is_empty() {
+        return Err("Embedding provider returned an empty vector.".into());
+    }
+    let norm = vector
+        .iter()
+        .map(|value| (*value as f64) * (*value as f64))
+        .sum::<f64>()
+        .sqrt();
+    if !norm.is_finite() || norm <= f64::EPSILON {
+        return Err("Embedding provider returned a zero or invalid vector.".into());
+    }
+    Ok(vector.iter().map(|value| (*value as f64 / norm) as f32).collect())
+}
+
+fn dot(left: &[f32], right: &[f32]) -> f32 {
+    if left.len() != right.len() || left.is_empty() {
+        return -1.0;
+    }
+    left.iter()
+        .zip(right)
+        .map(|(a, b)| a * b)
+        .sum::<f32>()
+        .clamp(-1.0, 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chunking::analyze_markdown;
+    use crate::KnowledgeStore;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_vault() -> PathBuf {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("elephant-embedding-store-{stamp}"))
+    }
+
+    #[test]
+    fn creates_real_similarity_edges_from_persisted_vectors() {
+        let root = temp_vault();
+        fs::create_dir_all(&root).unwrap();
+        let mut store = KnowledgeStore::open(&root).unwrap();
+        let alpha = analyze_markdown("alpha.md", "# Alpha\n\nMinecraft mod server", 1);
+        let beta = analyze_markdown("beta.md", "# Beta\n\nMinecraft plugin server", 1);
+        let gamma = analyze_markdown("gamma.md", "# Gamma\n\nCooking recipe", 1);
+        store.upsert_document(&alpha).unwrap();
+        store.upsert_document(&beta).unwrap();
+        store.upsert_document(&gamma).unwrap();
+        let embeddings = EmbeddingStore::open(store.database_path()).unwrap();
+        embeddings
+            .save_batch(
+                "test",
+                0.7,
+                &[
+                    (EmbeddingInput { relative_path: "alpha.md".into(), title: "Alpha".into(), content_hash: alpha.content_hash, text: "alpha".into() }, vec![1.0, 0.0]),
+                    (EmbeddingInput { relative_path: "beta.md".into(), title: "Beta".into(), content_hash: beta.content_hash, text: "beta".into() }, vec![0.98, 0.2]),
+                    (EmbeddingInput { relative_path: "gamma.md".into(), title: "Gamma".into(), content_hash: gamma.content_hash, text: "gamma".into() }, vec![0.0, 1.0]),
+                ],
+            )
+            .unwrap();
+        let edges = embeddings
+            .semantic_edges_for_paths(
+                &["alpha.md".into(), "beta.md".into(), "gamma.md".into()],
+                2,
+            )
+            .unwrap();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].source, "alpha.md");
+        assert_eq!(edges[0].target, "beta.md");
+        fs::remove_dir_all(root).ok();
+    }
+}
+'''
+          (root / 'Elephant/backend/knowledge-core/src/embedding_store.rs').write_text(embedding_store)
+
+          knowledge_embeddings = r'''use elephantnote_knowledge_core::{EmbeddingInput, EmbeddingStatus, EmbeddingStore, KnowledgeStore};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use serde::Serialize;
+use serde_json::{json, Value};
+use std::collections::HashSet;
+use std::path::Path;
+use tauri::AppHandle;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingRebuildReport {
+    pub model_id: String,
+    pub source: String,
+    pub scanned: usize,
+    pub updated: usize,
+    pub dimensions: usize,
+    pub wiki_only: bool,
+}
+
+#[derive(Clone)]
+struct EmbeddingRoute {
+    source: String,
+    model: String,
+    endpoint: String,
+    threshold: f32,
+    api_key: String,
+    headers: HeaderMap,
+    config: Value,
+}
+
+fn text(value: &Value, keys: &[&str]) -> String {
+    keys.iter()
+        .find_map(|key| value.get(*key).and_then(Value::as_str))
+        .map(str::trim)
+        .unwrap_or("")
+        .to_string()
+}
+
+fn provider_source(provider: &Value) -> String {
+    match text(provider, &["type"]).as_str() {
+        "openai-compatible" => "api".into(),
+        value => value.to_string(),
+    }
+}
+
+fn header_map(provider: &Value) -> Result<HeaderMap, String> {
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    let api_key = text(provider, &["apiKey", "api_key"]);
+    if !api_key.is_empty() {
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {api_key}"))
+                .map_err(|error| error.to_string())?,
+        );
+    }
+    if let Some(values) = provider.get("headers").and_then(Value::as_object) {
+        for (name, value) in values {
+            let Some(value) = value.as_str() else {
+                continue;
+            };
+            headers.insert(
+                HeaderName::from_bytes(name.as_bytes()).map_err(|error| error.to_string())?,
+                HeaderValue::from_str(value).map_err(|error| error.to_string())?,
+            );
+        }
+    }
+    Ok(headers)
+}
+
+fn embedding_route(app: &AppHandle) -> Result<EmbeddingRoute, String> {
+    let config = crate::tauri_extra_commands::load_ai_config(app)?;
+    let route = config
+        .pointer("/routes/embedding")
+        .cloned()
+        .unwrap_or(Value::Null);
+    let source = text(&route, &["source", "provider"]);
+    let model = text(&route, &["model", "modelId"]);
+    if source.is_empty() || source == "disabled" {
+        return Err("Embedding search is disabled. Select a provider in AI > Search.".into());
+    }
+    if model.is_empty() {
+        return Err("No embedding model is selected in AI > Search.".into());
+    }
+    let provider = config
+        .pointer("/providers/list")
+        .and_then(Value::as_array)
+        .and_then(|providers| {
+            providers.iter().find(|provider| {
+                provider.get("enabled").and_then(Value::as_bool).unwrap_or(true)
+                    && provider_source(provider) == source
+            })
+        })
+        .cloned()
+        .unwrap_or(Value::Null);
+    let endpoint = text(&route, &["endpoint"]);
+    let endpoint = if endpoint.is_empty() {
+        text(&provider, &["endpoint", "baseUrl", "base_url"])
+    } else {
+        endpoint
+    };
+    let threshold = route
+        .get("threshold")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.35) as f32;
+    Ok(EmbeddingRoute {
+        source,
+        model,
+        endpoint,
+        threshold,
+        api_key: text(&provider, &["apiKey", "api_key"]),
+        headers: header_map(&provider)?,
+        config,
+    })
+}
+
+fn endpoint_join(base: &str, suffix: &str) -> String {
+    format!("{}/{}", base.trim_end_matches('/'), suffix.trim_start_matches('/'))
+}
+
+fn parse_openai_embeddings(value: &Value) -> Result<Vec<Vec<f32>>, String> {
+    let data = value
+        .get("data")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "Embedding provider returned no data array.".to_string())?;
+    data.iter()
+        .map(|entry| {
+            entry
+                .get("embedding")
+                .and_then(Value::as_array)
+                .ok_or_else(|| "Embedding provider returned a malformed vector.".to_string())?
+                .iter()
+                .map(|value| {
+                    value
+                        .as_f64()
+                        .map(|number| number as f32)
+                        .ok_or_else(|| "Embedding vector contains a non-number.".to_string())
+                })
+                .collect()
+        })
+        .collect()
+}
+
+async fn embed_openai_compatible(
+    route: &EmbeddingRoute,
+    texts: &[String],
+) -> Result<Vec<Vec<f32>>, String> {
+    if route.endpoint.trim().is_empty() {
+        return Err(format!("Embedding provider `{}` has no endpoint.", route.source));
+    }
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .default_headers(route.headers.clone())
+        .build()
+        .map_err(|error| error.to_string())?;
+    let response = client
+        .post(endpoint_join(&route.endpoint, "embeddings"))
+        .json(&json!({ "model": route.model, "input": texts }))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+    let status = response.status();
+    let value = response.json::<Value>().await.map_err(|error| error.to_string())?;
+    if !status.is_success() {
+        return Err(value
+            .pointer("/error/message")
+            .and_then(Value::as_str)
+            .unwrap_or("Embedding provider request failed.")
+            .to_string());
+    }
+    parse_openai_embeddings(&value)
+}
+
+async fn embed_ollama(route: &EmbeddingRoute, texts: &[String]) -> Result<Vec<Vec<f32>>, String> {
+    let base = if route.endpoint.trim().is_empty() {
+        crate::ollama::OllamaRuntime::base_url()
+    } else {
+        route.endpoint.clone()
+    };
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|error| error.to_string())?;
+    let response = client
+        .post(endpoint_join(&base, "api/embed"))
+        .json(&json!({ "model": route.model, "input": texts }))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+    if response.status().is_success() {
+        let value = response.json::<Value>().await.map_err(|error| error.to_string())?;
+        if let Some(vectors) = value.get("embeddings").and_then(Value::as_array) {
+            return vectors
+                .iter()
+                .map(|vector| {
+                    vector
+                        .as_array()
+                        .ok_or_else(|| "Ollama returned a malformed embedding.".to_string())?
+                        .iter()
+                        .map(|value| {
+                            value
+                                .as_f64()
+                                .map(|number| number as f32)
+                                .ok_or_else(|| "Ollama embedding contains a non-number.".to_string())
+                        })
+                        .collect()
+                })
+                .collect();
+        }
+    }
+    let mut output = Vec::with_capacity(texts.len());
+    for text in texts {
+        output.push(crate::ollama::OllamaRuntime::embed(&route.model, text).await?);
+    }
+    Ok(output)
+}
+
+async fn embed_batch(
+    app: &AppHandle,
+    route: &EmbeddingRoute,
+    texts: &[String],
+) -> Result<Vec<Vec<f32>>, String> {
+    match route.source.as_str() {
+        "app-local" => {
+            let mut output = Vec::with_capacity(texts.len());
+            for text in texts {
+                output.push(
+                    crate::local_llama_runtime::embed_with_selected_model(
+                        app,
+                        &route.model,
+                        text,
+                        &json!({ "aiConfig": route.config }),
+                    )
+                    .await?,
+                );
+            }
+            Ok(output)
+        }
+        "ollama" => embed_ollama(route, texts).await,
+        "api" | "openrouter" | "mistral" | "lmstudio" | "llamacpp" => {
+            embed_openai_compatible(route, texts).await
+        }
+        source => Err(format!("Unsupported embedding provider: {source}")),
+    }
+}
+
+#[tauri::command]
+pub async fn tauri_knowledge_embeddings_rebuild(
+    app: AppHandle,
+    only_wiki_sources: Option<bool>,
+) -> Result<EmbeddingRebuildReport, String> {
+    let route = embedding_route(&app)?;
+    let vault = crate::vault::config::get_active_vault(&app)?;
+    let store = KnowledgeStore::open(Path::new(&vault.path))?;
+    store.initialize_wikis()?;
+    let embeddings = EmbeddingStore::open(store.database_path())?;
+    let wiki_only = only_wiki_sources.unwrap_or(false);
+    let paths = if wiki_only {
+        Some(embeddings.wiki_source_paths()?)
+    } else {
+        None
+    };
+    let inputs = embeddings.pending_inputs(&route.model, paths.as_ref(), 100_000)?;
+    let scanned = inputs.len();
+    let mut updated = 0usize;
+    let mut dimensions = 0usize;
+    for batch in inputs.chunks(16) {
+        let texts = batch.iter().map(|input| input.text.clone()).collect::<Vec<_>>();
+        let vectors = embed_batch(&app, &route, &texts).await?;
+        if vectors.len() != batch.len() {
+            return Err(format!(
+                "Embedding provider returned {} vectors for {} documents.",
+                vectors.len(),
+                batch.len()
+            ));
+        }
+        dimensions = vectors.first().map(Vec::len).unwrap_or(dimensions);
+        let rows = batch
+            .iter()
+            .cloned()
+            .zip(vectors)
+            .collect::<Vec<(EmbeddingInput, Vec<f32>)>>();
+        updated += embeddings.save_batch(&route.model, route.threshold, &rows)?;
+    }
+    let _ = app.emit(
+        "elephantnote:knowledge-changed",
+        json!({ "reason": "embeddings-rebuilt", "updated": updated }),
+    );
+    Ok(EmbeddingRebuildReport {
+        model_id: route.model,
+        source: route.source,
+        scanned,
+        updated,
+        dimensions,
+        wiki_only,
+    })
+}
+
+#[tauri::command]
+pub fn tauri_knowledge_embeddings_status(app: AppHandle) -> Result<EmbeddingStatus, String> {
+    let vault = crate::vault::config::get_active_vault(&app)?;
+    let store = KnowledgeStore::open(Path::new(&vault.path))?;
+    EmbeddingStore::open(store.database_path())?.status()
+}
+'''
+          (root / 'Elephant/backend/tauri/src/knowledge_embeddings.rs').write_text(knowledge_embeddings)
+
+          def replace(path, old, new):
+              p = root / path
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'missing marker in {path}: {old[:80]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace(
+              'Elephant/backend/knowledge-core/src/lib.rs',
+              'pub mod extraction;\n',
+              'pub mod embedding_store;\npub mod extraction;\n',
+          )
+          replace(
+              'Elephant/backend/knowledge-core/src/lib.rs',
+              'pub use chunking::analyze_markdown;\n',
+              'pub use chunking::analyze_markdown;\npub use embedding_store::{EmbeddingInput, EmbeddingSimilarity, EmbeddingStatus, EmbeddingStore};\n',
+          )
+
+          replace(
+              'Elephant/backend/knowledge-core/src/wiki_graph_projection.rs',
+              'use crate::graph::{KnowledgeGraphCluster, KnowledgeGraphEdge, KnowledgeGraphNode};\n',
+              'use crate::embedding_store::EmbeddingStore;\nuse crate::graph::{KnowledgeGraphCluster, KnowledgeGraphEdge, KnowledgeGraphNode};\n',
+          )
+          marker = '''        projection.clusters.push(KnowledgeGraphCluster {
+            id: wiki_node_id.clone(),
+'''
+          insertion = '''        let mut embedding_edge_count = 0usize;
+        if resolved_sources.len() > 1 {
+            match EmbeddingStore::open(store.database_path())
+                .and_then(|embeddings| embeddings.semantic_edges_for_paths(&resolved_sources, 3))
+            {
+                Ok(similarities) => {
+                    for similarity in similarities {
+                        let pair_hash = blake3::hash(
+                            format!("{}:{}:{}", similarity.source, similarity.target, similarity.model_id)
+                                .as_bytes(),
+                        )
+                        .to_hex();
+                        let edge_id = format!("wiki-semantic:{}:{}", draft.id, pair_hash);
+                        if !seen_edges.insert(edge_id.clone()) {
+                            continue;
+                        }
+                        projection.edges.push(KnowledgeGraphEdge {
+                            id: edge_id,
+                            source: similarity.source,
+                            target: similarity.target,
+                            edge_type: "wiki-semantic".into(),
+                            relation_type: "embedding_similarity".into(),
+                            reason: format!(
+                                "Embedding similarity {:.3} ({})",
+                                similarity.score, similarity.model_id
+                            ),
+                            weight: similarity.score,
+                            origin: "embedding".into(),
+                            status: "accepted".into(),
+                            evidence_chunk_ids: Vec::new(),
+                        });
+                        embedding_edge_count += 1;
+                    }
+                }
+                Err(error) => eprintln!(
+                    "[Knowledge][Graph][Wiki] embeddings:unavailable wiki_id={} error={}",
+                    draft.id, error
+                ),
+            }
+        }
+
+        projection.clusters.push(KnowledgeGraphCluster {
+            id: wiki_node_id.clone(),
+'''
+          replace('Elephant/backend/knowledge-core/src/wiki_graph_projection.rs', marker, insertion)
+          replace(
+              'Elephant/backend/knowledge-core/src/wiki_graph_projection.rs',
+              '"[Knowledge][Graph][Wiki] territory:projected id={} slug={} status={} resolved_sources={} missing_sources={} citations={}",\n',
+              '"[Knowledge][Graph][Wiki] territory:projected id={} slug={} status={} resolved_sources={} missing_sources={} citations={} embedding_edges={}",\n',
+          )
+          replace(
+              'Elephant/backend/knowledge-core/src/wiki_graph_projection.rs',
+              '            draft.citations.len()\n        );\n',
+              '            draft.citations.len(),\n            embedding_edge_count\n        );\n',
+          )
+
+          replace(
+              'Elephant/backend/tauri/src/lib_min.rs',
+              'pub mod knowledge_chat_actions;\n',
+              'pub mod knowledge_chat_actions;\npub mod knowledge_embeddings;\n',
+          )
+          replace(
+              'Elephant/backend/tauri/src/lib_min.rs',
+              '            knowledge_chat_actions::tauri_knowledge_chat_action_execute,\n',
+              '            knowledge_chat_actions::tauri_knowledge_chat_action_execute,\n            knowledge_embeddings::tauri_knowledge_embeddings_rebuild,\n            knowledge_embeddings::tauri_knowledge_embeddings_status,\n',
+          )
+
+          local_path = root / 'Elephant/backend/tauri/src/local_llama_runtime.rs'
+          local = local_path.read_text()
+          local = local.replace(
+              'const DEFAULT_BASE_URL: &str = "http://127.0.0.1:39281/v1";\n',
+              'const DEFAULT_BASE_URL: &str = "http://127.0.0.1:39281/v1";\nconst DEFAULT_EMBEDDING_BASE_URL: &str = "http://127.0.0.1:39282/v1";\n',
+              1,
+          )
+          local = local.replace(
+              'fn llama_server_args(model_path: &str, port: u16, context: &str, model_name: &str) -> Vec<String> {\n    vec![\n',
+              'fn llama_server_args(\n    model_path: &str,\n    port: u16,\n    context: &str,\n    model_name: &str,\n    embedding: bool,\n) -> Vec<String> {\n    let mut args = vec![\n',
+              1,
+          )
+          local = local.replace(
+              '        model_name.to_string(),\n    ]\n}\n',
+              '        model_name.to_string(),\n    ];\n    if embedding {\n        args.push("--embedding".to_string());\n    }\n    args\n}\n',
+              1,
+          )
+          local = local.replace(
+              '    payload: &Value,\n) -> R<()> {\n',
+              '    payload: &Value,\n    embedding: bool,\n) -> R<()> {\n',
+              1,
+          )
+          local = local.replace(
+              '    let args = llama_server_args(&model_path_string, port, &context, model_name);\n',
+              '    let args = llama_server_args(&model_path_string, port, &context, model_name, embedding);\n',
+              1,
+          )
+          local = local.replace(
+              '    start_server_if_needed(app, &model_path, &model_name, &base_url, payload).await?;\n',
+              '    start_server_if_needed(app, &model_path, &model_name, &base_url, payload, false).await?;\n',
+              1,
+          )
+          embed_fn = r'''
+pub async fn embed_with_selected_model(
+    app: &AppHandle,
+    selection: &str,
+    text: &str,
+    payload: &Value,
+) -> R<Vec<f32>> {
+    let Some(model_path) = resolve_model_path(selection)? else {
+        return Err("No local embedding model is selected.".into());
+    };
+    let base_url = DEFAULT_EMBEDDING_BASE_URL.to_string();
+    let model_name = model_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("embedding.gguf")
+        .to_string();
+    start_server_if_needed(app, &model_path, &model_name, &base_url, payload, true).await?;
+    let response = Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .map_err(|error| error.to_string())?
+        .post(format!("{}/embeddings", base_url))
+        .json(&json!({ "model": model_name, "input": text }))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+    let status = response.status();
+    let data = response.json::<Value>().await.unwrap_or_else(|_| json!({}));
+    if !status.is_success() {
+        return Err(error_text(
+            &data,
+            format!("Local embedding server returned HTTP {status}."),
+        ));
+    }
+    data.pointer("/data/0/embedding")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "Local embedding server returned no embedding vector.".to_string())?
+        .iter()
+        .map(|value| {
+            value
+                .as_f64()
+                .map(|number| number as f32)
+                .ok_or_else(|| "Local embedding vector contains a non-number.".to_string())
+        })
+        .collect()
+}
+
+'''
+          local = local.replace('fn error_text(data: &Value, fallback: String) -> String {\n', embed_fn + 'fn error_text(data: &Value, fallback: String) -> String {\n', 1)
+          local = local.replace(
+              'let args = llama_server_args("/models/smol.gguf", 39281, "4096", "smol.gguf");',
+              'let args = llama_server_args("/models/smol.gguf", 39281, "4096", "smol.gguf", false);',
+              1,
+          )
+          local_path.write_text(local)
+
+          graph_path = root / 'Elephant/frontend/app/components/views/AtomicGraphView.vue'
+          graph = graph_path.read_text()
+          graph = graph.replace(
+              "edge.type === 'wiki-source' || edge.type === 'wiki-link' || edge.type === 'semantic' || edge.type === 'explicit-link'",
+              "edge.type === 'wiki-source' || edge.type === 'wiki-link' || edge.type === 'wiki-semantic' || edge.type === 'semantic' || edge.type === 'explicit-link'",
+              1,
+          )
+          graph = graph.replace(
+              "  if (type === 'wiki-link') return '#e8b15a'\n",
+              "  if (type === 'wiki-link') return '#e8b15a'\n  if (type === 'wiki-semantic') return '#8f7ee7'\n",
+              1,
+          )
+          graph = graph.replace(
+              "        const knowledgeEdge = attrs.edgeType === 'wiki-source' || attrs.edgeType === 'wiki-link'\n        const desiredDistance = knowledgeEdge ? Math.min(78, forceLinkDistance.value) : forceLinkDistance.value\n        const strength = forceLink.value * (knowledgeEdge ? 2.4 : 1)\n",
+              "        const wikiEdge = attrs.edgeType === 'wiki-source' || attrs.edgeType === 'wiki-link'\n        const embeddingEdge = attrs.edgeType === 'wiki-semantic'\n        const similarity = Math.max(0, Math.min(1, Number(attrs.weight) || 0))\n        const desiredDistance = embeddingEdge\n          ? 38 + (1 - similarity) * 54\n          : wikiEdge ? Math.min(78, forceLinkDistance.value) : forceLinkDistance.value\n        const strength = forceLink.value * (embeddingEdge ? 1.5 + similarity * 2.2 : wikiEdge ? 2.4 : 1)\n",
+              1,
+          )
+          graph = graph.replace(
+              '  renderer.refresh()\n}\n\nfunction destroySigma () {\n',
+              "  renderer.refresh()\n  const hasEmbeddingEdges = graph.edges().some((edge) => graph.getEdgeAttribute(edge, 'edgeType') === 'wiki-semantic')\n  if (hasEmbeddingEdges) setTimeout(() => runForceSimulation(1200), 0)\n}\n\nfunction destroySigma () {\n",
+              1,
+          )
+          graph_path.write_text(graph)
+
+          settings_path = root / 'Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue'
+          settings = settings_path.read_text()
+          old = '''const rebuildEmbeddings = async() => {
+  indexing.value = true
+  try {
+    await elephantnoteClient.search.rebuild?.()
+    providerMessage.value = 'Embedding rebuild started.'
+  } catch (error) {
+    providerMessage.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    indexing.value = false
+  }
+}
+'''
+          new = '''const rebuildEmbeddings = async() => {
+  indexing.value = true
+  try {
+    await saveConfig({ silent: true, reason: 'embedding-rebuild' })
+    await elephantnoteClient.search.rebuild?.()
+    const report = await invoke('tauri_knowledge_embeddings_rebuild', { onlyWikiSources: false })
+    providerMessage.value = report?.updated
+      ? `Embedded ${report.updated} notes with ${report.modelId} (${report.dimensions} dimensions).`
+      : `Embedding index is already current for ${report?.modelId || form.value.routes.embedding.model}.`
+    window.dispatchEvent(new CustomEvent('elephantnote:knowledge-changed', { detail: { reason: 'embeddings-rebuilt' } }))
+  } catch (error) {
+    providerMessage.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    indexing.value = false
+  }
+}
+'''
+          if old not in settings:
+              raise SystemExit('missing rebuildEmbeddings marker')
+          settings_path.write_text(settings.replace(old, new, 1))
+
+          test_path = root / 'tests/app/unit/wikiEmbeddingSurface.spec.js'
+          test_path.write_text(r'''import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, test } from 'vitest'
+
+const ROOT = process.cwd()
+const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8')
+
+describe('Wiki embedding graph surface', () => {
+  test('persists real vectors and projects embedding edges', () => {
+    const store = read('Elephant/backend/knowledge-core/src/embedding_store.rs')
+    const projection = read('Elephant/backend/knowledge-core/src/wiki_graph_projection.rs')
+    expect(store).toContain('document_embeddings')
+    expect(store).toContain('semantic_edges_for_paths')
+    expect(projection).toContain('wiki-semantic')
+    expect(projection).toContain('Embedding similarity')
+  })
+
+  test('uses the configured embedding provider instead of lexical labels', () => {
+    const runtime = read('Elephant/backend/tauri/src/knowledge_embeddings.rs')
+    expect(runtime).toContain('/routes/embedding')
+    expect(runtime).toContain('embed_openai_compatible')
+    expect(runtime).toContain('embed_ollama')
+    expect(runtime).toContain('embed_with_selected_model')
+  })
+
+  test('lets embedding weights influence the Wiki territory layout', () => {
+    const graph = read('Elephant/frontend/app/components/views/AtomicGraphView.vue')
+    expect(graph).toContain("attrs.edgeType === 'wiki-semantic'")
+    expect(graph).toContain('38 + (1 - similarity) * 54')
+  })
+})
+''')
+          PY
+      - name: Format and validate
+        shell: bash
+        run: |
+          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+          pnpm exec vitest run tests/app/unit/wikiEmbeddingSurface.spec.js tests/app/unit/wikiGraphSurface.spec.js tests/app/unit/chatAgentSurface.spec.js
+          pnpm exec eslint Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue tests/app/unit/wikiEmbeddingSurface.spec.js
+          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml embedding_store -- --nocapture
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features --message-format short
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name "OpenAI"
+          git config user.email "openai@users.noreply.github.com"
+          git add Elephant/backend/knowledge-core/src/embedding_store.rs \
+            Elephant/backend/knowledge-core/src/lib.rs \
+            Elephant/backend/knowledge-core/src/wiki_graph_projection.rs \
+            Elephant/backend/tauri/src/knowledge_embeddings.rs \
+            Elephant/backend/tauri/src/lib_min.rs \
+            Elephant/backend/tauri/src/local_llama_runtime.rs \
+            Elephant/frontend/app/components/views/AtomicGraphView.vue \
+            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
+            tests/app/unit/wikiEmbeddingSurface.spec.js
+          git commit -m "Add real embedding edges inside Wiki territories"
+          git push origin HEAD:assistant/wiki-links-graph-integration

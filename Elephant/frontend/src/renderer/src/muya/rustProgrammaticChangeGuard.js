@@ -51,7 +51,7 @@ export const createProgrammaticChangeGuard = ({
 
     get pending () {
       clearIfExpired()
-      return pending > 0 ? pending : false
+      return pending
     }
   }
 }

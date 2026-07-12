@@ -4,6 +4,7 @@ use elephantnote_knowledge_core::{
 };
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
@@ -37,8 +38,7 @@ pub fn tauri_knowledge_chat_action_prepare(
     if !proposal.action.requires_approval() {
         proposal.status = ChatActionStatus::Approved;
         store.save_chat_action_proposal(&proposal)?;
-        let execution = execute_approved_chat_action(&root, &store, &proposal)?;
-        store.save_chat_action_proposal(&execution.proposal)?;
+        let execution = execute_non_wiki_action(&root, &store, &proposal)?;
         return Ok(PreparedChatAction {
             proposal: execution.proposal.clone(),
             execution: Some(execution),
@@ -100,6 +100,76 @@ fn completed_execution(
     proposal.updated_at = unix_timestamp();
     store.save_chat_action_proposal(&proposal)?;
     Ok(ChatActionExecution { proposal, result })
+}
+
+fn meaningful_search_terms(query: &str) -> Vec<String> {
+    const STOP_WORDS: &[&str] = &[
+        "afin", "avec", "dans", "des", "est", "faire", "les", "mais", "mes", "mon",
+        "pour", "que", "quel", "quelle", "sur", "une", "un", "the", "and", "for",
+        "from", "this", "with",
+    ];
+    let mut terms = query
+        .split(|character: char| !character.is_alphanumeric())
+        .map(|term| term.trim().to_lowercase())
+        .filter(|term| term.chars().count() >= 3)
+        .filter(|term| !STOP_WORDS.contains(&term.as_str()))
+        .collect::<Vec<_>>();
+    terms.sort();
+    terms.dedup();
+    terms
+}
+
+fn relaxed_note_search(
+    store: &KnowledgeStore,
+    query: &str,
+    limit: usize,
+) -> Result<Value, String> {
+    let limit = limit.clamp(1, 100);
+    let mut hits = store.search(query, limit)?;
+    let mut seen = hits
+        .iter()
+        .map(|hit| hit.chunk_id.clone())
+        .collect::<HashSet<_>>();
+    if hits.len() < limit {
+        for term in meaningful_search_terms(query) {
+            for hit in store.search(&term, limit)? {
+                if seen.insert(hit.chunk_id.clone()) {
+                    hits.push(hit);
+                }
+                if hits.len() >= limit {
+                    break;
+                }
+            }
+            if hits.len() >= limit {
+                break;
+            }
+        }
+    }
+    hits.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    hits.truncate(limit);
+    serde_json::to_value(hits).map_err(|error| error.to_string())
+}
+
+fn execute_non_wiki_action(
+    root: &Path,
+    store: &KnowledgeStore,
+    proposal: &ChatActionProposal,
+) -> Result<ChatActionExecution, String> {
+    if let ChatKnowledgeAction::SearchNotes { query, limit } = &proposal.action {
+        return completed_execution(
+            store,
+            proposal.clone(),
+            relaxed_note_search(store, query, *limit)?,
+        );
+    }
+    let execution = execute_approved_chat_action(root, store, proposal)?;
+    store.save_chat_action_proposal(&execution.proposal)?;
+    Ok(execution)
 }
 
 async fn execute_wiki_action(
@@ -212,10 +282,7 @@ pub async fn tauri_knowledge_chat_action_execute(
         execute_wiki_action(app.clone(), proposal.clone()).await
     } else {
         let store = active_store(&root)?;
-        execute_approved_chat_action(&root, &store, &proposal).and_then(|execution| {
-            store.save_chat_action_proposal(&execution.proposal)?;
-            Ok(execution)
-        })
+        execute_non_wiki_action(&root, &store, &proposal)
     };
 
     match result {

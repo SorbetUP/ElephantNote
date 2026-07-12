@@ -122,6 +122,7 @@ const canonicalizeSourceRoots = (html) => html
 
 export const normalizeRuntimeText = (value) => String(value || '')
   .replace(/mermaid-\d+/g, 'mermaid-dynamic')
+  .replace(/([?&]msec=)\d+/g, '$1dynamic')
   .replace(/blob:muya-characterization[^\s"']*/g, 'blob:muya-characterization')
 
 export const normalizeDom = (container, keyMap) => {

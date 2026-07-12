@@ -1,0 +1,122 @@
+name: Update Iroh critical guard once
+
+on:
+  push:
+    branches:
+      - assistant/validate-knowledge-graph-wiki
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/validate-knowledge-graph-wiki
+      - name: Replace obsolete local-sync invariants
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path('build/scripts/verify-critical-flows.mjs')
+          text = path.read_text()
+
+          old_ci = """ordered(
+            '.github/workflows/ci.yml',
+            [
+              '- name: Critical ElephantNote flow guard',
+              'run: node build/scripts/verify-critical-flows.mjs',
+              '- name: Security guardrails',
+              'run: pnpm security:guard',
+              'pnpm exec vitest run tests/app/unit/specs/main/elephantnote'
+            ],
+            'main CI must run the guard, security gate and ElephantNote contract tests'
+          )"""
+          new_ci = """ordered(
+            '.github/workflows/ci.yml',
+            [
+              '- name: Critical ElephantNote flow guard',
+              'node build/scripts/verify-critical-flows.mjs 2>&1 | tee critical-flow-output.txt',
+              '- name: Security guardrails',
+              'run: pnpm security:guard',
+              'pnpm exec vitest run tests/app/unit/specs/main/elephantnote'
+            ],
+            'main CI must run the guard, security gate and ElephantNote contract tests'
+          )"""
+          if old_ci not in text:
+              raise SystemExit('CI guard invariant block not found')
+          text = text.replace(old_ci, new_ci)
+
+          sync_pattern = re.compile(
+              r"ordered\(\n  'Elephant/backend/tauri/src/vault/sync\.rs',.*?has\(\n  '\.github/workflows/sync-docker\.yml',\n  'node build/scripts/sync-two-docker-smoke\.mjs',\n  'Docker pair sync workflow'\n\)\n",
+              re.S,
+          )
+          new_sync = """has(
+            'Elephant/backend/tauri/src/vault/sync.rs',
+            'include!(\"sync_iroh/base.rs\");',
+            'Iroh sync base module'
+          )
+          ordered(
+            'Elephant/backend/tauri/src/vault/sync_iroh/base.rs',
+            [
+              'const BACKEND_IROH: &str = \"iroh\";',
+              'fn planned_operations(payload: &Value, paired: bool) -> Vec<String> {',
+              'fn security_value() -> Value {',
+              '\"transport\": \"iroh-quic\"',
+              '\"requiresExternalBinary\": false',
+              '\"runtime\": \"tauri-rust-iroh\"'
+            ],
+            'native Iroh synchronization runtime and security contract'
+          )
+          for (const needle of [
+            'two_real_iroh_endpoints_exchange_modify_and_delete_vault_content',
+            'sync_run_iroh(',
+            'assert_eq!(fourth.conflicts, vec![\"A.md\"]);',
+            'assert!(manifest_a.content_equals(&manifest_b));'
+          ])
+            has(
+              'Elephant/backend/tauri/src/vault/sync_iroh/e2e_tests.rs',
+              needle,
+              `real Iroh two-endpoint invariant ${needle}`
+            )
+          for (const needle of [
+            'status_initializes_real_iroh_sync_metadata_without_git',
+            'whole_vault_manifest_includes_content_but_excludes_device_configuration',
+            'three_way_plan_propagates_deletion_and_preserves_concurrent_edits',
+            'public_sync_plan_declares_iroh_without_external_binary'
+          ])
+            has(
+              'Elephant/backend/tauri/src/sync_contract_tests.rs',
+              needle,
+              `Iroh synchronization contract test ${needle}`
+            )
+          ordered(
+            '.github/workflows/sync-docker.yml',
+            [
+              'name: Iroh Sync Validation',
+              'Two real Iroh endpoints',
+              'two_real_iroh_endpoints_exchange_modify_and_delete_vault_content',
+              'Verify structured terminal synchronization logs',
+              "grep -F '[Sync] conflict:preserved'"
+            ],
+            'real two-endpoint Iroh workflow and structured log verification'
+          )
+          """
+          text, count = sync_pattern.subn(new_sync, text, count=1)
+          if count != 1:
+              raise SystemExit(f'obsolete sync guard replacement count={count}')
+
+          path.write_text(text)
+          Path('.github/workflows/update-iroh-critical-guard-once.yml').unlink()
+          Path('.github/iroh-critical-guard-trigger.txt').unlink(missing_ok=True)
+
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add build/scripts/verify-critical-flows.mjs .github/workflows/update-iroh-critical-guard-once.yml .github/iroh-critical-guard-trigger.txt
+          git commit -m 'fix(ci): validate the real Iroh synchronization runtime'
+          git push origin HEAD:assistant/validate-knowledge-graph-wiki

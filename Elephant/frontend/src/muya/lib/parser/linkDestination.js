@@ -3,7 +3,7 @@ export const parseSrcAndTitle = (text = '') => {
   if (parts.length === 1) return { src: text.trim(), title: '' }
 
   const rawTitle = text.replace(/^[^ ]+ +/, '')
-  const titleReg = /^('|\")(.*?)\1$/
+  const titleReg = /^(['"])(.*?)\1$/
   const title = rawTitle && titleReg.test(rawTitle)
     ? rawTitle.replace(titleReg, '$2')
     : ''

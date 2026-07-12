@@ -24,7 +24,12 @@ jobs:
           node-version: 22
           cache: pnpm
       - name: Apply product patch
-        run: python3 .github/scripts/apply_internal_wiki_links_and_layout.py
+        run: |
+          if [ -f Elephant/frontend/app/components/editor/internalNoteLinks.js ]; then
+            echo "Product patch already present."
+          else
+            python3 .github/scripts/apply_internal_wiki_links_and_layout.py
+          fi
       - name: Persist product changes
         run: |
           git config user.name "ElephantNote Bot"
@@ -36,15 +41,18 @@ jobs:
             tests/app/unit/internalNoteLinks.spec.js \
             tests/app/unit/wikiGraphSurface.spec.js
           if git diff --cached --quiet; then
-            echo "Product patch already present."
+            echo "No product changes to persist."
           else
             git commit -m "Fix internal Wiki links and edge-aware graph layout"
             git push origin HEAD:${{ github.head_ref }}
           fi
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Validate focused changes
-        run: |
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run tests/app/unit/internalNoteLinks.spec.js tests/app/unit/wikiGraphSurface.spec.js
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/editor/internalNoteLinks.js Elephant/frontend/app/components/editor/NoteEditorHost.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/components/views/AtomicGraphView.vue tests/app/unit/internalNoteLinks.spec.js tests/app/unit/wikiGraphSurface.spec.js
-          pnpm tauri:web:build
+      - name: Internal Wiki link tests
+        run: NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run tests/app/unit/internalNoteLinks.spec.js
+      - name: Wiki graph layout tests
+        run: NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run tests/app/unit/wikiGraphSurface.spec.js
+      - name: Focused lint
+        run: NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/editor/internalNoteLinks.js Elephant/frontend/app/components/editor/NoteEditorHost.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/components/views/AtomicGraphView.vue tests/app/unit/internalNoteLinks.spec.js tests/app/unit/wikiGraphSurface.spec.js
+      - name: Web build
+        run: pnpm tauri:web:build

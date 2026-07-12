@@ -1,4 +1,5 @@
 import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
+import { disableProviderRoutes } from './aiProviderRouteOwnership'
 import OpenModelsView from './ui/OpenModelsView.vue'
 
 const ADDON_ID = 'elephant.open-models'
@@ -42,5 +43,12 @@ export const openModelsAddon = {
         return Array.isArray(result?.models) ? result.models : []
       }
     })
+  },
+
+  async deactivate() {
+    await disableProviderRoutes(PROVIDER_ID, {
+      capabilities: ['chat', 'embedding'],
+      disableLocalAi: true
+    }).catch(() => {})
   }
 }

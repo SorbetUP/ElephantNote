@@ -99,10 +99,12 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(navigation).toContain(':is="entry.contribution.component"')
   })
 
-  it('keeps every AI capability in an independently removable addon', () => {
+  it('keeps AI capabilities independently removable but groups them under the AI parent', () => {
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
     const router = read('Elephant/frontend/app/components/views/AddonWorkspaceRouter.vue')
     const providers = read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
+    const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
+    const panel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
     const chat = read('Elephant/frontend/src/renderer/src/addons/builtin/aiChat.js')
     const search = read('Elephant/frontend/src/renderer/src/addons/builtin/aiSearch.js')
     const ocr = read('Elephant/frontend/src/renderer/src/addons/builtin/aiOcr.js')
@@ -117,11 +119,15 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(router).not.toContain('AtomicGraphView')
     expect(router).not.toContain('ModelsView')
 
-    expect(providers).toContain("name: 'AI Providers'")
+    expect(providers).toContain("name: 'AI'")
+    expect(providers).not.toContain("name: 'AI Providers'")
     expect(providers).not.toContain('ChatSidebar')
     expect(providers).not.toContain('WikiView')
     expect(providers).not.toContain('AtomicGraphView')
     expect(providers).not.toContain('ModelsView')
+    expect(builtins.match(/parentAddonId: 'elephant\.ai'/g)).toHaveLength(5)
+    expect(panel).toContain('const GROUPED_ADDON_IDS = new Set(AI_SUBMODULE_IDS)')
+    expect(panel).toContain('class="en-ai-module-list"')
 
     expect(chat).toContain('component: ChatSidebar')
     expect(chat).toContain("icon: 'message-circle'")

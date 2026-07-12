@@ -6,6 +6,25 @@ import * as os from 'os'
 import dayjs from '@/util/day'
 import { Octokit } from '@octokit/rest'
 
+const toUint8Array = (value) => {
+  if (value instanceof Uint8Array) return value
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+  }
+  if (value instanceof ArrayBuffer) return new Uint8Array(value)
+  return new Uint8Array(value || [])
+}
+
+const toBase64 = (value) => {
+  const bytes = toUint8Array(value)
+  const chunkSize = 0x8000
+  let binary = ''
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
+  }
+  return globalThis.btoa(binary)
+}
+
 export const create = async(pathname, type) => {
   return type === 'directory'
     ? window.fileUtils.ensureDir(pathname)
@@ -62,8 +81,8 @@ export const moveImageToFolder = async(
       `${dayjs().format('YYYY-MM-DD-HH-mm-ss')}-${image.name}`
     )
 
-    const buffer = Buffer.from(await image.arrayBuffer())
-    await window.fileUtils.writeFile(imagePath, buffer, 'binary')
+    const bytes = new Uint8Array(await image.arrayBuffer())
+    await window.fileUtils.writeFile(imagePath, bytes, 'binary')
 
     if (isRelative && currentPathname) {
       return window.path.relative(window.path.dirname(currentPathname), imagePath)
@@ -290,8 +309,7 @@ export const uploadImage = async(pathname, image, preferences) => {
             break
           case 'github': {
             const fileBuffer = await window.fileUtils.readFile(imagePath)
-            const base64 = Buffer.from(fileBuffer).toString('base64')
-            uploadByGithub(base64, window.path.basename(imagePath))
+            uploadByGithub(toBase64(fileBuffer), window.path.basename(imagePath))
             break
           }
         }
@@ -311,7 +329,7 @@ export const uploadImage = async(pathname, image, preferences) => {
             uploadByCommand(currentUploader, reader.result, window.path.extname(image.name))
             break
           default:
-            uploadByGithub(Buffer.from(reader.result).toString('base64'), image.name)
+            uploadByGithub(toBase64(reader.result), image.name)
         }
       }
       reader.readAsArrayBuffer(image)

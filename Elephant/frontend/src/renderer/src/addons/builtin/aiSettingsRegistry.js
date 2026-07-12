@@ -48,6 +48,13 @@ export const AI_SETTINGS_PAGE_BY_ID = Object.freeze(Object.fromEntries(
   AI_SETTINGS_PAGES.map((page) => [page.id, page])
 ))
 
+export const AI_PARENT_ADDON_ID = AI_SETTINGS_PAGE_BY_ID.providers.addonId
+export const AI_CHILD_ADDON_IDS = Object.freeze([
+  ...AI_SETTINGS_PAGES.filter((page) => page.slot).map((page) => page.addonId),
+  'elephant.wiki',
+  'elephant.graph'
+])
+
 export const visibleAiSettingsPages = (settingsContributions = []) => {
   const activeSlots = new Set(settingsContributions
     .filter((entry) => entry?.contribution?.section === 'ai')

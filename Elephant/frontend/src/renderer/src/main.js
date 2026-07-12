@@ -32,7 +32,6 @@ import services from './services/index'
 import createRoutes from './router'
 import { resolveRendererRoutes } from './router/resolveRendererRoutes'
 import Main from './Main.vue'
-import { installGraphRuntimeFixes } from 'elephant-front/runtime/graphRuntimeFixes'
 
 import './assets/styles/index.css'
 import './assets/styles/printService.css'
@@ -42,67 +41,6 @@ const clearBootstrapFileUtilsFallbackForTauri = () => {
   if (window.__TAURI__ && window.fileUtils?.__elephantnoteBootstrapFallback) {
     delete window.fileUtils
   }
-}
-
-const selectedChatModelFromConfig = (config = {}) => {
-  const route = config.routes?.chat || {}
-  return String(
-    config.localModelSelection?.chat ||
-    route.model ||
-    route.modelId ||
-    route.id ||
-    ''
-  ).trim()
-}
-
-const shouldAutostartLlama = (config = {}) => {
-  const route = config.routes?.chat || {}
-  const localAi = config.localAi || {}
-  if (localAi.enabled === false) return false
-  if (localAi.allowLocalRuntimeAutostart === false) return false
-  if (!selectedChatModelFromConfig(config)) return false
-  return ['app-local', 'local', 'node-llama-cpp', 'local-llama.cpp', ''].includes(String(route.provider || route.source || '').trim())
-}
-
-const autostartLlamaRuntime = async(target = globalThis) => {
-  if (!target.__TAURI__ || !target.elephantnote?.ai?.getConfig || !target.elephantnote?.rag?.chat) return false
-  try {
-    const config = await target.elephantnote.ai.getConfig()
-    const model = selectedChatModelFromConfig(config)
-    const enabled = shouldAutostartLlama(config)
-    console.info('[llama-autostart] config:loaded', {
-      enabled,
-      model: model || '<none>',
-      localAi: config.localAi || {},
-      chatRoute: config.routes?.chat || {}
-    })
-    if (!enabled) return false
-    void target.elephantnote.rag.chat({
-      message: 'warmup',
-      messages: [{ role: 'user', content: 'warmup' }],
-      maxTokens: 1,
-      temperature: 0,
-      aiConfig: config,
-      modelSelection: config.localModelSelection || {}
-    }).then((result) => {
-      console.info('[llama-autostart] done', {
-        model,
-        runtime: result?.runtime || '',
-        provider: result?.provider || '',
-        warning: result?.warning || ''
-      })
-    }).catch((error) => {
-      console.warn('[llama-autostart] failed', { model, error: error?.message || String(error) })
-    })
-    return true
-  } catch (error) {
-    console.warn('[llama-autostart] config failed', { error: error?.message || String(error) })
-    return false
-  }
-}
-
-const handleAiAddonEnabled = () => {
-  void autostartLlamaRuntime()
 }
 
 installRendererDiagnostics()
@@ -119,7 +57,6 @@ installTauriMarkTextSaveBridge()
 installTauriLocalIpcBridge()
 installSlashMenuDiagnostics()
 installWritingCommandBridge()
-window.addEventListener('elephantnote:ai-addon-enabled', handleAiAddonEnabled)
 
 const bootstrapTauriRuntime = async() => {
   pushDiagnosticLog('info', 'bootstrapTauriRuntime:start', { runtime: window.__MARKTEXT_RUNTIME__ })
@@ -187,7 +124,6 @@ const mountRendererApp = (runtime, windowType) => {
   })
   app.mount('#app')
 
-  installGraphRuntimeFixes()
   installStoreDiagnostics()
 }
 

@@ -9,6 +9,8 @@ pub enum Command {
   InsertText(String),
   InsertParagraph,
   DeleteBackward,
+  SetParagraph,
+  SetHeading(u8),
 }
 
 impl Command {
@@ -21,6 +23,13 @@ impl Command {
       Self::InsertText(inserted) => build_insert_text(document, selection, inserted),
       Self::InsertParagraph => build_insert_paragraph(document, selection),
       Self::DeleteBackward => build_delete_backward(document, selection),
+      Self::SetParagraph => build_set_block_kind(document, selection, BlockKind::Paragraph),
+      Self::SetHeading(level) => {
+        if !(1..=6).contains(level) {
+          return Err(EditError::InvalidHeadingLevel(*level));
+        }
+        build_set_block_kind(document, selection, BlockKind::Heading { level: *level })
+      }
     }
   }
 }
@@ -206,18 +215,53 @@ fn build_join_previous_paragraph(
   })
 }
 
-fn plain_paragraph_for_text(
+fn build_set_block_kind(
+  document: &Document,
+  selection: Selection,
+  kind: BlockKind,
+) -> Result<Transaction, EditError> {
+  let node = if selection.anchor.node == selection.focus.node {
+    selection.focus.node
+  } else {
+    return Err(EditError::CrossNodeSelection);
+  };
+  let block = editable_text_block_for_text(document, node)?;
+  Ok(Transaction {
+    operations: vec![Operation::SetBlockKind { node: block, kind }],
+    selection_before: selection,
+    selection_after: selection,
+  })
+}
+
+fn editable_text_block_for_text(
   document: &Document,
   text: NodeId,
-) -> Result<(NodeId, NodeId, usize), EditError> {
+) -> Result<NodeId, EditError> {
   let text_node = document.node(text).ok_or(EditError::NodeNotFound(text))?;
+  text_value(document, text)?;
   let block = text_node.parent.ok_or(EditError::UnsupportedStructure(text))?;
   let block_node = document
     .node(block)
     .ok_or(EditError::NodeNotFound(block))?;
-  if !matches!(block_node.kind, NodeKind::Block(BlockKind::Paragraph))
-    || block_node.children.as_slice() != [text]
+  if !matches!(
+    block_node.kind,
+    NodeKind::Block(BlockKind::Paragraph | BlockKind::Heading { .. })
+  ) || block_node.children.as_slice() != [text]
   {
+    return Err(EditError::UnsupportedStructure(block));
+  }
+  Ok(block)
+}
+
+fn plain_paragraph_for_text(
+  document: &Document,
+  text: NodeId,
+) -> Result<(NodeId, NodeId, usize), EditError> {
+  let block = editable_text_block_for_text(document, text)?;
+  let block_node = document
+    .node(block)
+    .ok_or(EditError::NodeNotFound(block))?;
+  if !matches!(block_node.kind, NodeKind::Block(BlockKind::Paragraph)) {
     return Err(EditError::UnsupportedStructure(block));
   }
   let parent = block_node
@@ -333,6 +377,38 @@ mod tests {
 
     inverse.apply(&mut document).unwrap();
     assert_eq!(to_markdown(&document), "One\n\nTwo");
+  }
+
+  #[test]
+  fn transforms_paragraphs_to_headings_and_back() {
+    let mut document = parse_markdown("Title");
+    let node = block_text(&document, 0);
+    let selection = Selection::collapsed(SelectionPoint {
+      node,
+      offset_utf16: 5,
+    });
+    let heading = Command::SetHeading(2)
+      .build(&document, selection)
+      .unwrap();
+    let inverse = heading.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "## Title");
+
+    inverse.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "Title");
+  }
+
+  #[test]
+  fn rejects_invalid_heading_levels() {
+    let document = parse_markdown("Title");
+    let node = block_text(&document, 0);
+    let selection = Selection::collapsed(SelectionPoint {
+      node,
+      offset_utf16: 0,
+    });
+    assert_eq!(
+      Command::SetHeading(7).build(&document, selection),
+      Err(EditError::InvalidHeadingLevel(7))
+    );
   }
 
   #[test]

@@ -12,33 +12,25 @@ const makeClient = (handler) => {
 }
 
 describe('RAG chat client', () => {
-  it('initializes search for the active vault before chat', async () => {
+  it('calls RAG directly without implicitly initializing or rebuilding search', async () => {
     const { calls, clients } = makeClient((action) => {
-      if (action === API.VAULTS_GET) return { activeVault: { path: '/vault' } }
-      if (action === API.SEARCH_INIT_VAULT) return { status: 'ready' }
       if (action === API.RAG_CHAT) return { answer: 'ok', citations: [{ path: 'A.md' }] }
       return {}
     })
 
     await clients.rag.chat('question', 4)
 
-    expect(calls.slice(0, 3)).toEqual([
-      { action: API.VAULTS_GET, payload: {} },
-      { action: API.SEARCH_INIT_VAULT, payload: { vaultPath: '/vault' } },
+    expect(calls).toEqual([
       { action: API.RAG_CHAT, payload: { message: 'question', limit: 4, messages: [] } }
     ])
   })
 
-  it('returns the first answer when the model already answered', async () => {
+  it('returns the first answer without an automatic retry or index mutation', async () => {
     let ragCalls = 0
     const { calls, clients } = makeClient((action) => {
-      if (action === API.VAULTS_GET) return { activeVault: { path: '/vault-retry' } }
-      if (action === API.SEARCH_INIT_VAULT) return { status: 'ready' }
       if (action === API.RAG_CHAT) {
         ragCalls += 1
-        return ragCalls === 1
-          ? { answer: 'no citations', citations: [] }
-          : { answer: 'ok', citations: [{ path: 'B.md' }] }
+        return { answer: 'no citations', citations: [] }
       }
       return {}
     })
@@ -46,10 +38,9 @@ describe('RAG chat client', () => {
     const result = await clients.rag.chat('semantic question', 8)
 
     expect(result.answer).toBe('no citations')
-    expect(calls.map((entry) => entry.action)).toEqual([
-      API.VAULTS_GET,
-      API.SEARCH_INIT_VAULT,
-      API.RAG_CHAT
+    expect(ragCalls).toBe(1)
+    expect(calls).toEqual([
+      { action: API.RAG_CHAT, payload: { message: 'semantic question', limit: 8, messages: [] } }
     ])
   })
 })

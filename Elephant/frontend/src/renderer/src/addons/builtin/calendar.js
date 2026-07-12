@@ -1,3 +1,4 @@
+import CalendarAddonWorkspace from 'elephant-front/components/views/CalendarAddonWorkspace.vue'
 import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
 
 const ADDON_ID = 'elephant.calendar'
@@ -55,6 +56,7 @@ export const calendarAddon = {
       description: 'Offline events plus notes grouped by last edit date.',
       icon: 'calendar-days',
       kind: 'calendar-v1',
+      component: CalendarAddonWorkspace,
       order: 40,
       getState: loadCalendarState,
       async dispatch(action) {

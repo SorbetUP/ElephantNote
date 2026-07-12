@@ -105,6 +105,19 @@ const registerEvents = (editor, events) => {
   }
 }
 
+const createPasteEvent = action => ({
+  preventDefault() {},
+  stopPropagation() {},
+  clipboardData: {
+    items: [],
+    getData(type) {
+      return type === 'text/html'
+        ? action.html || ''
+        : action.text || ''
+    }
+  }
+})
+
 const applyAction = async(editor, action) => {
   if (action.type === 'cursor') {
     return editor.setMarkdown(editor.getMarkdown(), undefined, true, {
@@ -123,6 +136,14 @@ const applyAction = async(editor, action) => {
       throw new TypeError(`Missing ContentState method: ${action.method}`)
     }
     return method.apply(editor.contentState, action.args || [])
+  }
+  if (action.type === 'paste') {
+    return editor.contentState.pasteHandler(
+      createPasteEvent(action),
+      action.mode || 'normal',
+      action.text,
+      action.html
+    )
   }
   if (action.type === 'key') {
     editor.container.focus()

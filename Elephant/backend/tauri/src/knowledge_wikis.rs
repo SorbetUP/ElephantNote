@@ -280,8 +280,7 @@ fn selected_wiki_route(payload: &Value) -> Result<WikiModelRoute, String> {
 fn is_bundled_local_provider(provider: &str) -> bool {
     matches!(
         provider,
-        ""
-            | "app-local"
+        "" | "app-local"
             | "local"
             | "tauri-rust"
             | "tauri-rust-local-bundled"

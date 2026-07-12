@@ -421,7 +421,7 @@ fn extract_line_wikilinks(line: &str, absolute_offset: usize, links: &mut Vec<Ex
         }
 
         let content_start = cursor + 2;
-        let Some(relative_end) = line[content_start..].find("]]" ) else {
+        let Some(relative_end) = line[content_start..].find("]]") else {
             break;
         };
         let content_end = content_start + relative_end;

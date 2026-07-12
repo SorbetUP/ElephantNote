@@ -406,18 +406,15 @@ const createBridge = (target) => {
           invoke(target, 'tauri_knowledge_graph', { includeSuggestions: false }),
           invoke(target, 'tauri_knowledge_status')
         ])
-        const allNodes = Array.isArray(fullGraph.nodes) ? fullGraph.nodes : []
-        const nodes = allNodes.slice(0, 240)
-        const visibleIds = new Set(nodes.map((node) => node.id))
-        const edges = (Array.isArray(fullGraph.edges) ? fullGraph.edges : [])
-          .filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+        const nodes = Array.isArray(fullGraph.nodes) ? fullGraph.nodes : []
+        const edges = Array.isArray(fullGraph.edges) ? fullGraph.edges : []
         const graph = {
           ...fullGraph,
           nodes,
           edges,
-          totalNodeCount: allNodes.length,
-          hiddenNodeCount: Math.max(0, allNodes.length - nodes.length),
-          rendererLimited: allNodes.length > nodes.length
+          totalNodeCount: nodes.length,
+          hiddenNodeCount: 0,
+          rendererLimited: false
         }
         return {
           indexPath: status.databasePath || status.database_path || '',

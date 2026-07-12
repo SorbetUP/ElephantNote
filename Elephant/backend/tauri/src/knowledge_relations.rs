@@ -5,12 +5,40 @@ use elephantnote_knowledge_core::{
 use std::path::Path;
 use tauri::AppHandle;
 
+const BUILTIN_EMBEDDING_MODEL: &str = "elephantnote-feature-hash-384-v1";
+
 fn active_store(app: &AppHandle) -> Result<KnowledgeStore, String> {
     let root = crate::vault::config::get_active_vault(app)?.path;
     KnowledgeStore::open(Path::new(&root))
 }
 
-fn wiki_embeddings_are_missing(store: &KnowledgeStore) -> bool {
+fn desired_embedding_model(app: &AppHandle) -> String {
+    let Ok(config) = crate::tauri_extra_commands::load_ai_config(app) else {
+        return BUILTIN_EMBEDDING_MODEL.into();
+    };
+    let route = config
+        .pointer("/routes/embedding")
+        .unwrap_or(&serde_json::Value::Null);
+    let source = route
+        .get("source")
+        .or_else(|| route.get("provider"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .unwrap_or("");
+    let model = route
+        .get("model")
+        .or_else(|| route.get("modelId"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .unwrap_or("");
+    if source.is_empty() || source == "disabled" || model.is_empty() {
+        BUILTIN_EMBEDDING_MODEL.into()
+    } else {
+        model.to_string()
+    }
+}
+
+fn wiki_embeddings_are_missing(app: &AppHandle, store: &KnowledgeStore) -> bool {
     let Ok(embeddings) = EmbeddingStore::open(store.database_path()) else {
         return true;
     };
@@ -20,14 +48,15 @@ fn wiki_embeddings_are_missing(store: &KnowledgeStore) -> bool {
     if paths.is_empty() {
         return false;
     }
+    let desired_model = desired_embedding_model(app);
     let Ok(status) = embeddings.status() else {
         return true;
     };
-    if status.model_id.trim().is_empty() {
+    if status.model_id != desired_model {
         return true;
     }
     embeddings
-        .pending_inputs(&status.model_id, Some(&paths), 1)
+        .pending_inputs(&desired_model, Some(&paths), 1)
         .map(|pending| !pending.is_empty())
         .unwrap_or(true)
 }
@@ -38,7 +67,7 @@ pub async fn tauri_knowledge_graph(
     include_suggestions: Option<bool>,
 ) -> Result<KnowledgeGraph, String> {
     let store = active_store(&app)?;
-    if wiki_embeddings_are_missing(&store) {
+    if wiki_embeddings_are_missing(&app, &store) {
         match crate::knowledge_embeddings::tauri_knowledge_embeddings_rebuild(
             app.clone(),
             Some(true),

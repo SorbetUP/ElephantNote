@@ -1,7 +1,0 @@
-Wiki organization continuation validation scope
-
-- hybrid note retrieval: phrase FTS, term expansion, title/path boosts, Wiki-link expansion, stored embedding expansion
-- iterative Codex tool loop with up to five search/action rounds
-- backend auto-accept execution for mutating actions
-- idempotent manual approval and rejection handling
-- aggregated citations from initial and follow-up searches

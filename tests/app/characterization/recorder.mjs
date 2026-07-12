@@ -5,6 +5,7 @@ import {
   normalizeBlocks,
   normalizeCursor,
   normalizeDom,
+  normalizeRuntimeText,
   normalizeValue
 } from './normalize.mjs'
 
@@ -68,7 +69,7 @@ const capture = (editor, events) => {
     toc: toc.ok ? { ok: true, value: normalizeValue(toc.value, keyMap) } : toc,
     searchMatches: normalizeValue(editor.contentState?.searchMatches || null, keyMap),
     dom: normalizeDom(editor.container, keyMap),
-    documentText: editor.container?.textContent || '',
+    documentText: normalizeRuntimeText(editor.container?.textContent || ''),
     events: events.map((event) => normalizeValue(event, keyMap))
   }
 }

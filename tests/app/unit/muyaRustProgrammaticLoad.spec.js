@@ -53,4 +53,13 @@ describe('Muya Rust programmatic render guard', () => {
     expect(renderMethod.match(/getMuyaIndexCursor/g)).toHaveLength(1)
     expect(renderMethod).not.toContain('for (')
   })
+
+  it('blocks Muya stale dispatchChange calls while an async Rust command is pending', () => {
+    const wrapper = fs.readFileSync(wrapperPath, 'utf8')
+
+    expect(wrapper).toContain('this.__rustPendingOperationCount = 0')
+    expect(wrapper).toContain('if (this.__rustPendingOperationCount > 0) return undefined')
+    expect(wrapper).toContain('this.__rustPendingOperationCount = (this.__rustPendingOperationCount || 0) + 1')
+    expect(wrapper).toContain('this.__rustPendingOperationCount = Math.max(0, this.__rustPendingOperationCount - 1)')
+  })
 })

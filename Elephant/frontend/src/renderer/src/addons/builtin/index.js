@@ -7,6 +7,7 @@ import { aiAddon } from './ai'
 import { syncAddon } from './sync'
 import { codeExecutionAddon } from './codeExecution'
 import { excalidrawAddon } from './excalidraw'
+import { recentlyEditedAddon } from './recentlyEdited'
 
 export {
   addonPacksAddon,
@@ -18,7 +19,8 @@ export {
   aiAddon,
   syncAddon,
   codeExecutionAddon,
-  excalidrawAddon
+  excalidrawAddon,
+  recentlyEditedAddon
 }
 
 export const builtinAddons = [
@@ -30,5 +32,6 @@ export const builtinAddons = [
   aiAddon,
   syncAddon,
   codeExecutionAddon,
-  excalidrawAddon
+  excalidrawAddon,
+  recentlyEditedAddon
 ]

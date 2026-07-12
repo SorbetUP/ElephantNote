@@ -99,7 +99,7 @@ ordered(
   '.github/workflows/ci.yml',
   [
     '- name: Critical ElephantNote flow guard',
-    'run: node build/scripts/verify-critical-flows.mjs',
+    'node build/scripts/verify-critical-flows.mjs 2>&1 | tee critical-flow-output.txt',
     '- name: Security guardrails',
     'run: pnpm security:guard',
     'pnpm exec vitest run tests/app/unit/specs/main/elephantnote'
@@ -435,66 +435,55 @@ ordered(
   ],
   'shared sync plan'
 )
-ordered(
+has(
   'Elephant/backend/tauri/src/vault/sync.rs',
+  'include!("sync_iroh/base.rs");',
+  'Iroh sync base module'
+)
+ordered(
+  'Elephant/backend/tauri/src/vault/sync_iroh/base.rs',
   [
-    'const BACKEND_LOCAL: &str = "elephant-local";',
-    'fn planned_operations(payload_by_operation: &Value) -> Vec<String> {',
-    'if payload_has(payload_by_operation, SYNC_OPERATION_SYNC)',
-    'fn copy_tree_safely(source_root: &Path, target_root: &Path, conflict_tag: &str) -> R<Vec<Value>> {',
-    'fn run_sync(&mut self, payload: &Value) -> R<Vec<Value>>'
+    'const BACKEND_IROH: &str = "iroh";',
+    'fn planned_operations(payload: &Value, paired: bool) -> Vec<String> {',
+    'fn security_value() -> Value {',
+    '"transport": "iroh-quic"',
+    '"requiresExternalBinary": false',
+    '"runtime": "tauri-rust-iroh"'
   ],
-  'Tauri embedded local sync engine'
+  'native Iroh synchronization runtime and security contract'
 )
 for (const needle of [
-  'desktopRclone": false',
-  'mobileRcloneBinary": false',
-  'mobileSyncRequiresBackend": false',
-  'requiresExternalBinary": false'
+  'two_real_iroh_endpoints_exchange_modify_and_delete_vault_content',
+  'sync_run_iroh(',
+  'assert_eq!(fourth.conflicts, vec!["A.md"]);',
+  'assert!(manifest_a.content_equals(&manifest_b));'
 ])
   has(
-    'Elephant/backend/tauri/src/vault/sync.rs',
+    'Elephant/backend/tauri/src/vault/sync_iroh/e2e_tests.rs',
     needle,
-    `Tauri external-free sync invariant ${needle}`
+    `real Iroh two-endpoint invariant ${needle}`
   )
 for (const needle of [
-  'sync_push_copies_visible_vault_files_to_local_target',
-  'sync_pull_copies_target_files_back_to_vault',
-  'sync_preserves_both_versions_on_conflict',
-  'sync_run_reports_actionable_missing_target_error'
+  'status_initializes_real_iroh_sync_metadata_without_git',
+  'whole_vault_manifest_includes_content_but_excludes_device_configuration',
+  'three_way_plan_propagates_deletion_and_preserves_concurrent_edits',
+  'public_sync_plan_declares_iroh_without_external_binary'
 ])
-  has('Elephant/backend/tauri/src/vault/sync.rs', needle, `Tauri embedded sync unit test ${needle}`)
-has(
-  'Elephant/backend/tauri/src/sync_contract_tests.rs',
-  'tauri_sync_runtime_is_embedded_local_and_external_free',
-  'Tauri local sync runtime contract test'
-)
-has(
-  'tests/app/unit/specs/main/elephantnote/syncPlan.spec.js',
-  'can pull into a second device without creating a local snapshot first',
-  'sync plan pull regression test'
-)
-has(
-  'tests/elephant/unit/sync/GitSyncEngine.spec.js',
-  'persists remote path and first run state after a successful sync',
-  'compatibility sync engine persistence regression test'
-)
+  has(
+    'Elephant/backend/tauri/src/sync_contract_tests.rs',
+    needle,
+    `Iroh synchronization contract test ${needle}`
+  )
 ordered(
-  'build/scripts/sync-two-docker-smoke.mjs',
-  [
-    'assertPeerIdentity',
-    'stopDevice(deviceB)',
-    'device B reconnect auto-pull',
-    "await assertNoTrackedSyncMetadata(deviceB, 'device B reconnect auto-pull')",
-    'assertResourceBudget',
-    'local sync metadata files stay untracked in each container git repository'
-  ],
-  'Docker pair sync smoke invariants'
-)
-has(
   '.github/workflows/sync-docker.yml',
-  'node build/scripts/sync-two-docker-smoke.mjs',
-  'Docker pair sync workflow'
+  [
+    'name: Iroh Sync Validation',
+    'Two real Iroh endpoints',
+    'two_real_iroh_endpoints_exchange_modify_and_delete_vault_content',
+    'Verify structured terminal synchronization logs',
+    "grep -F '[Sync] conflict:preserved'"
+  ],
+  'real two-endpoint Iroh workflow and structured log verification'
 )
 
 if (failures.length) {

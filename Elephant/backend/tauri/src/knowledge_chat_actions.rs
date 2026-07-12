@@ -84,7 +84,7 @@ pub fn tauri_knowledge_chat_action_approve(
     let proposal = store
         .chat_action_proposal(&proposal_id)?
         .ok_or_else(|| format!("Unknown chat action proposal: {proposal_id}"))?;
-    match proposal.status {
+    match proposal.status.clone() {
         ChatActionStatus::Proposed => {
             store.transition_chat_action(&proposal_id, ChatActionStatus::Approved)
         }
@@ -107,7 +107,7 @@ pub fn tauri_knowledge_chat_action_reject(
     let proposal = store
         .chat_action_proposal(&proposal_id)?
         .ok_or_else(|| format!("Unknown chat action proposal: {proposal_id}"))?;
-    match proposal.status {
+    match proposal.status.clone() {
         ChatActionStatus::Proposed | ChatActionStatus::Approved => {
             store.transition_chat_action(&proposal_id, ChatActionStatus::Rejected)
         }

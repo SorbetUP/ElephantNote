@@ -9,7 +9,7 @@ const CHAT_ACTION_ID = `${ADDON_ID}.toggle`
 export const aiChatAddon = {
   manifest: {
     id: ADDON_ID,
-    name: 'AI Chat',
+    name: 'Chat',
     version: '1.0.0',
     description: 'Adds the AI chat sidebar and chat-route settings.',
     author: 'ElephantNote',
@@ -23,12 +23,10 @@ export const aiChatAddon = {
   activate(ctx) {
     ctx.addSettingsSection({
       id: `${ADDON_ID}.settings`,
-      section: 'ai-chat',
-      navigationLabel: 'AI Chat',
-      navigationIcon: 'message-circle',
-      standalone: true,
+      section: 'ai',
+      slot: 'ai.chat',
       chrome: false,
-      title: 'AI Chat',
+      title: 'Chat',
       description: 'Choose the provider, model and generation settings used by chat.',
       order: 61,
       render: mountSettingsComponent(ctx, AiChatSettings)

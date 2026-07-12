@@ -355,43 +355,47 @@ fn load_documents(
 
 #[cfg(not(mobile))]
 async fn document_vectors(
-    connection: &Connection,
+    root: &Path,
     route: &EmbeddingRoute,
 ) -> Result<Vec<DocumentVector>, String> {
     let model_key = format!("{}|{}|{}", route.source, route.endpoint, route.model);
-    let documents = load_documents(connection)?;
-    let mut output = Vec::<Option<DocumentVector>>::with_capacity(documents.len());
-    let mut missing = Vec::<(usize, String, String, String, String)>::new();
-    for (path, title, content_hash, body) in documents {
-        let excerpt = body.chars().take(3_000).collect::<String>();
-        if title.trim().is_empty() && excerpt.trim().is_empty() {
-            continue;
-        }
-        let cached = connection
-            .query_row(
-                "SELECT vector_json FROM wiki_embedding_cache WHERE document_path=?1 AND model_key=?2 AND content_hash=?3",
-                params![path, model_key, content_hash],
-                |row| row.get::<_, String>(0),
-            )
-            .optional()
-            .map_err(|error| error.to_string())?;
-        let index = output.len();
-        if let Some(raw) = cached {
-            if let Ok(vector) = serde_json::from_str::<Vec<f32>>(&raw)
-                .and_then(|value| normalize_vector(value).map_err(serde_json::Error::custom))
-            {
-                output.push(Some(DocumentVector {
-                    path,
-                    title,
-                    excerpt,
-                    vector,
-                }));
+    let (mut output, missing) = {
+        let connection = open_connection(root)?;
+        let documents = load_documents(&connection)?;
+        let mut output = Vec::<Option<DocumentVector>>::with_capacity(documents.len());
+        let mut missing = Vec::<(usize, String, String, String, String)>::new();
+        for (path, title, content_hash, body) in documents {
+            let excerpt = body.chars().take(3_000).collect::<String>();
+            if title.trim().is_empty() && excerpt.trim().is_empty() {
                 continue;
             }
+            let cached = connection
+                .query_row(
+                    "SELECT vector_json FROM wiki_embedding_cache WHERE document_path=?1 AND model_key=?2 AND content_hash=?3",
+                    params![path, model_key, content_hash],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()
+                .map_err(|error| error.to_string())?;
+            let index = output.len();
+            if let Some(raw) = cached {
+                if let Ok(values) = serde_json::from_str::<Vec<f32>>(&raw) {
+                    if let Ok(vector) = normalize_vector(values) {
+                        output.push(Some(DocumentVector {
+                            path,
+                            title,
+                            excerpt,
+                            vector,
+                        }));
+                        continue;
+                    }
+                }
+            }
+            output.push(None);
+            missing.push((index, path, title, content_hash, excerpt));
         }
-        output.push(None);
-        missing.push((index, path, title, content_hash, excerpt));
-    }
+        (output, missing)
+    };
 
     for batch in missing.chunks(32) {
         let inputs = batch
@@ -399,24 +403,27 @@ async fn document_vectors(
             .map(|(_, _, title, _, excerpt)| format!("Title: {title}\n\n{excerpt}"))
             .collect::<Vec<_>>();
         let vectors = embed_batch(route, &inputs).await?;
-        for ((index, path, title, content_hash, excerpt), vector) in batch.iter().zip(vectors) {
-            connection
-                .execute(
-                    "INSERT INTO wiki_embedding_cache(document_path, model_key, content_hash, vector_json, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, unixepoch())
-                     ON CONFLICT(document_path, model_key) DO UPDATE SET
-                       content_hash=excluded.content_hash,
-                       vector_json=excluded.vector_json,
-                       updated_at=unixepoch()",
-                    params![path, model_key, content_hash, serde_json::to_string(&vector).map_err(|error| error.to_string())?],
-                )
-                .map_err(|error| error.to_string())?;
-            output[*index] = Some(DocumentVector {
-                path: path.clone(),
-                title: title.clone(),
-                excerpt: excerpt.clone(),
-                vector,
-            });
+        {
+            let connection = open_connection(root)?;
+            for ((index, path, title, content_hash, excerpt), vector) in batch.iter().zip(vectors) {
+                connection
+                    .execute(
+                        "INSERT INTO wiki_embedding_cache(document_path, model_key, content_hash, vector_json, updated_at)
+                         VALUES (?1, ?2, ?3, ?4, unixepoch())
+                         ON CONFLICT(document_path, model_key) DO UPDATE SET
+                           content_hash=excluded.content_hash,
+                           vector_json=excluded.vector_json,
+                           updated_at=unixepoch()",
+                        params![path, model_key, content_hash, serde_json::to_string(&vector).map_err(|error| error.to_string())?],
+                    )
+                    .map_err(|error| error.to_string())?;
+                output[*index] = Some(DocumentVector {
+                    path: path.clone(),
+                    title: title.clone(),
+                    excerpt: excerpt.clone(),
+                    vector,
+                });
+            }
         }
     }
     Ok(output.into_iter().flatten().collect())
@@ -457,7 +464,7 @@ fn cluster_documents(documents: &[DocumentVector], threshold: f32) -> Vec<Cluste
                 (cluster_index, cosine(&cluster.centroid, &document.vector))
             })
             .max_by(|left, right| left.1.total_cmp(&right.1));
-        if let Some((cluster_index, similarity)) =
+        if let Some((cluster_index, _similarity)) =
             best.filter(|(_, similarity)| *similarity >= threshold)
         {
             clusters[cluster_index].members.push(index);
@@ -534,10 +541,9 @@ fn persist_candidates(
 #[cfg(not(mobile))]
 async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandidate>, String> {
     let root = active_vault_root(app)?;
-    let connection = open_connection(&root)?;
     let config = crate::tauri_extra_commands::load_ai_config(app)?;
     let route = embedding_route(&config)?;
-    let documents = document_vectors(&connection, &route).await?;
+    let documents = document_vectors(&root, &route).await?;
     if documents.len() < 3 {
         return Err(
             "Semantic discovery needs at least three indexed notes with embeddings.".into(),
@@ -657,7 +663,10 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
     }
     candidates.sort_by(|left, right| right.score.cmp(&left.score));
     candidates.truncate(limit.clamp(1, 24));
-    persist_candidates(&connection, &candidates)?;
+    {
+        let connection = open_connection(&root)?;
+        persist_candidates(&connection, &candidates)?;
+    }
     eprintln!(
         "[knowledge] wiki:semantic-discovery documents={} clusters={} accepted={} embedding_model={} label_model={}",
         documents.len(),

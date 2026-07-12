@@ -104,7 +104,6 @@ fn completed_execution(
 
 async fn execute_wiki_action(
     app: AppHandle,
-    store: &KnowledgeStore,
     proposal: ChatActionProposal,
 ) -> Result<ChatActionExecution, String> {
     if !matches!(proposal.status, ChatActionStatus::Approved) {
@@ -118,7 +117,7 @@ async fn execute_wiki_action(
         } => {
             let config = crate::tauri_extra_commands::load_ai_config(&app)?;
             let item = crate::knowledge_wiki_library::tauri_knowledge_wiki_library_generate(
-                app,
+                app.clone(),
                 topic.clone(),
                 Some(title.clone()),
                 source_paths.clone(),
@@ -133,7 +132,7 @@ async fn execute_wiki_action(
             source_paths,
         } => {
             let item = crate::knowledge_wiki_library::tauri_knowledge_wiki_library_add_candidate(
-                app,
+                app.clone(),
                 topic.clone(),
                 Some(title.clone()),
                 Some(source_paths.clone()),
@@ -141,7 +140,10 @@ async fn execute_wiki_action(
             serde_json::to_value(item).map_err(|error| error.to_string())?
         }
         ChatKnowledgeAction::RejectWikiSuggestion { topic } => {
-            crate::knowledge_wiki_library::tauri_knowledge_wiki_library_reject(app, topic.clone())?;
+            crate::knowledge_wiki_library::tauri_knowledge_wiki_library_reject(
+                app.clone(),
+                topic.clone(),
+            )?;
             json!({ "operation": "reject_wiki_suggestion", "topic": topic })
         }
         ChatKnowledgeAction::DeleteWiki { draft_id } => {
@@ -150,7 +152,7 @@ async fn execute_wiki_action(
                 .unwrap_or(draft_id)
                 .to_string();
             crate::knowledge_wiki_library::tauri_knowledge_wiki_library_delete(
-                app,
+                app.clone(),
                 draft_id.clone(),
                 Some(true),
             )?;
@@ -158,7 +160,9 @@ async fn execute_wiki_action(
         }
         _ => return Err("Not a Wiki action.".into()),
     };
-    completed_execution(store, proposal, result)
+    let root = active_vault_root(&app)?;
+    let store = active_store(&root)?;
+    completed_execution(&store, proposal, result)
 }
 
 #[tauri::command]
@@ -167,10 +171,12 @@ pub async fn tauri_knowledge_chat_action_execute(
     proposal_id: String,
 ) -> Result<ChatActionExecution, String> {
     let root = active_vault_root(&app)?;
-    let store = active_store(&root)?;
-    let proposal = store
-        .chat_action_proposal(&proposal_id)?
-        .ok_or_else(|| format!("Unknown chat action proposal: {proposal_id}"))?;
+    let proposal = {
+        let store = active_store(&root)?;
+        store
+            .chat_action_proposal(&proposal_id)?
+            .ok_or_else(|| format!("Unknown chat action proposal: {proposal_id}"))?
+    };
 
     let is_wiki = matches!(
         proposal.action,
@@ -180,8 +186,9 @@ pub async fn tauri_knowledge_chat_action_execute(
             | ChatKnowledgeAction::DeleteWiki { .. }
     );
     let result = if is_wiki {
-        execute_wiki_action(app, &store, proposal.clone()).await
+        execute_wiki_action(app.clone(), proposal.clone()).await
     } else {
+        let store = active_store(&root)?;
         execute_approved_chat_action(&root, &store, &proposal).and_then(|execution| {
             store.save_chat_action_proposal(&execution.proposal)?;
             Ok(execution)
@@ -195,7 +202,7 @@ pub async fn tauri_knowledge_chat_action_execute(
             failed.status = ChatActionStatus::Failed;
             failed.error = Some(error.clone());
             failed.updated_at = unix_timestamp();
-            store.save_chat_action_proposal(&failed)?;
+            active_store(&root)?.save_chat_action_proposal(&failed)?;
             Err(error)
         }
     }

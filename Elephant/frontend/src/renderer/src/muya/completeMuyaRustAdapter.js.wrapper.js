@@ -1,6 +1,5 @@
 import CompleteMuyaWithRustCore from './completeMuyaRustAdapter.js'
 import { selectionToMuyaIndexCursor } from './realMuyaRustMirrorRuntime.js'
-import { stabilizeProgrammaticMarkdown } from './rustMarkdownStabilizer.js'
 
 const cloneState = (state) => state && ({
   ...state,
@@ -12,6 +11,9 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     super(element, options)
     this.__rustOperationQueue = Promise.resolve()
 
+    // Muya may normalize loaded Markdown while parsing it. The Rust session must
+    // start from the document that Muya actually rendered, not from the raw file
+    // and not from repeated parse/export passes.
     const markdown = this.getMarkdown()
     const muyaIndexCursor = this.contentState.getMuyaIndexCursor()
     this.__rustMirror?.reset(markdown, 'constructor-canonical', { muyaIndexCursor })
@@ -26,25 +28,22 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     muyaIndexCursor,
     blocks
   ) {
-    const rendered = stabilizeProgrammaticMarkdown({
+    const result = this.__setProgrammaticMarkdown(
       markdown,
       cursor,
       isRenderCursor,
       muyaIndexCursor,
-      blocks,
-      render: (...args) => this.__setProgrammaticMarkdown(...args),
-      readMarkdown: () => this.getMarkdown(),
-      readMuyaIndexCursor: () => this.contentState.getMuyaIndexCursor()
-    })
+      blocks
+    )
 
-    if (!rendered.stable) {
-      console.warn('[elephantnote:muya-rust] Muya Markdown round trip did not reach a fixed point', {
-        cycle: rendered.cycle,
-        passes: rendered.passes,
-        markdownLength: rendered.markdown.length
-      })
+    // Reading once after the synchronous Muya render is sufficient. Re-rendering
+    // the exported Markdown with an index cursor re-injects Muya cursor DNA and
+    // can grow the document on every pass.
+    return {
+      result,
+      markdown: this.getMarkdown(),
+      muyaIndexCursor: this.contentState.getMuyaIndexCursor()
     }
-    return rendered
   }
 
   setMarkdown (

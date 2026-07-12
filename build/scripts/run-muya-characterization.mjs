@@ -15,12 +15,13 @@ const valueFor = (name) => {
 }
 
 const run = (command, commandArgs, options = {}) => {
+  const defaultStdio = options.input == null ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe']
   const result = spawnSync(command, commandArgs, {
     cwd: root,
     encoding: options.encoding || 'utf8',
     env: options.env || process.env,
     input: options.input,
-    stdio: options.stdio || ['ignore', 'pipe', 'pipe'],
+    stdio: options.stdio || defaultStdio,
     maxBuffer: 64 * 1024 * 1024
   })
   if (result.error) throw result.error

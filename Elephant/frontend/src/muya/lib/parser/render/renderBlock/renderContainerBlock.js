@@ -94,9 +94,7 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
       const cell = cells.find(c => c.key === key)
       if (cell) {
         const { top, right, bottom, left } = cell
-        if (top) {
-          selector += '.ag-cell-selected'
-        }
+        selector += '.ag-cell-selected'
         if (top) {
           selector += '.ag-cell-border-top'
         }

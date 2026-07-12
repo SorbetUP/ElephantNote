@@ -171,11 +171,34 @@ pub async fn tauri_knowledge_chat_action_execute(
     proposal_id: String,
 ) -> Result<ChatActionExecution, String> {
     let root = active_vault_root(&app)?;
-    let proposal = {
+    let initial = {
         let store = active_store(&root)?;
         store
             .chat_action_proposal(&proposal_id)?
             .ok_or_else(|| format!("Unknown chat action proposal: {proposal_id}"))?
+    };
+    let proposal = match initial.status.clone() {
+        ChatActionStatus::Proposed => {
+            eprintln!("[Knowledge][ChatAction] approve-and-execute id={proposal_id}");
+            active_store(&root)?
+                .transition_chat_action(&proposal_id, ChatActionStatus::Approved)?
+        }
+        ChatActionStatus::Approved => initial,
+        ChatActionStatus::Executed => {
+            let result = initial.result.clone().unwrap_or(Value::Null);
+            return Ok(ChatActionExecution {
+                proposal: initial,
+                result,
+            });
+        }
+        ChatActionStatus::Rejected => {
+            return Err("Rejected chat actions cannot be executed.".into());
+        }
+        ChatActionStatus::Failed => {
+            return Err(initial.error.clone().unwrap_or_else(|| {
+                "Failed chat action cannot be retried without a new proposal.".into()
+            }));
+        }
     };
 
     let is_wiki = matches!(

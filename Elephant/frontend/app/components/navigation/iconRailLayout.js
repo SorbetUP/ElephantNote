@@ -1,4 +1,6 @@
 export const CORE_ICON_RAIL_ITEMS = Object.freeze([
+  { id: 'vault', label: 'Vault', description: 'Open the active vault switcher.' },
+  { id: 'sidebar-toggle', label: 'Sidebar', description: 'Show or hide the navigation sidebar.' },
   { id: 'dashboard', label: 'Dashboard', description: 'Overview of the active vault.' },
   { id: 'search', label: 'Search', description: 'Open global search.' }
 ])
@@ -20,6 +22,26 @@ const normalizeIds = (values) => {
     result.push(id)
   }
   return result
+}
+
+export const pushIconRailLog = (event, details = {}) => {
+  const message = `[icon-rail] ${event}`
+  const entry = {
+    at: new Date().toISOString(),
+    level: 'info',
+    message,
+    details
+  }
+  const target = typeof window !== 'undefined' ? window : globalThis
+  target.__ELEPHANT_DEBUG_LOGS__ = Array.isArray(target.__ELEPHANT_DEBUG_LOGS__)
+    ? target.__ELEPHANT_DEBUG_LOGS__
+    : []
+  target.__ELEPHANT_DEBUG_LOGS__.push(entry)
+  if (target.__ELEPHANT_DEBUG_LOGS__.length > 1000) {
+    target.__ELEPHANT_DEBUG_LOGS__.splice(0, target.__ELEPHANT_DEBUG_LOGS__.length - 1000)
+  }
+  console.info(message, details)
+  return entry
 }
 
 export const addonViewRailId = (viewId) => `addon-view:${String(viewId || '').trim()}`

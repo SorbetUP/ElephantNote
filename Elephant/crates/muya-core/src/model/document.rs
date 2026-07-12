@@ -23,7 +23,12 @@ impl Document {
     let root = NodeId(1);
     let mut nodes = BTreeMap::new();
     nodes.insert(root, Node::new(root, NodeKind::Document, None));
-    Self { root, nodes, revision: 0, next_id: 2 }
+    Self {
+      root,
+      nodes,
+      revision: 0,
+      next_id: 2,
+    }
   }
 
   pub fn allocate(&mut self, kind: NodeKind, source: Option<SourceRange>) -> NodeId {
@@ -34,16 +39,30 @@ impl Document {
   }
 
   pub fn append_child(&mut self, parent: NodeId, child: NodeId) {
-    self.nodes.get_mut(&child).expect("child node must exist").parent = Some(parent);
-    self.nodes.get_mut(&parent).expect("parent node must exist").children.push(child);
+    self
+      .nodes
+      .get_mut(&child)
+      .expect("child node must exist")
+      .parent = Some(parent);
+    self
+      .nodes
+      .get_mut(&parent)
+      .expect("parent node must exist")
+      .children
+      .push(child);
   }
 
   pub fn node(&self, id: NodeId) -> Option<&Node> {
     self.nodes.get(&id)
   }
 
+  pub fn node_mut(&mut self, id: NodeId) -> Option<&mut Node> {
+    self.nodes.get_mut(&id)
+  }
+
   pub fn children(&self, id: NodeId) -> impl Iterator<Item = &Node> {
-    self.nodes
+    self
+      .nodes
       .get(&id)
       .into_iter()
       .flat_map(|node| node.children.iter())

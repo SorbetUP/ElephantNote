@@ -41,7 +41,12 @@ export const useAddonsSettings = () => {
 
   const actions = computed(() => getAddonActions(contributions.value))
   const externalAddons = computed(() => items.value.filter((addon) => addon.manifest.source === 'external'))
-  const builtInCatalog = computed(() => addonsStore.manager?.listBuiltinCatalog?.() || [])
+  const builtInCatalog = computed(() => {
+    // items is deliberately read here so catalogue installation state is
+    // recalculated immediately after register/unregister operations.
+    void items.value.length
+    return addonsStore.manager?.listBuiltinCatalog?.() || []
+  })
   const normalizedQuery = computed(() => query.value.toLocaleLowerCase())
   const matchesQuery = (addon) => {
     if (!normalizedQuery.value) return true
@@ -58,10 +63,11 @@ export const useAddonsSettings = () => {
 
   const availableAddons = computed(() => {
     const available = new Map()
+    const installedById = new Map(items.value.map((addon) => [addon.manifest.id, addon]))
 
     for (const entry of builtInCatalog.value) {
       const manifest = entry?.manifest
-      if (!manifest?.id || entry.installed || isHiddenAddonId(manifest.id)) continue
+      if (!manifest?.id || installedById.has(manifest.id) || isHiddenAddonId(manifest.id)) continue
       available.set(manifest.id, {
         ...manifest,
         installSource: 'builtin',
@@ -75,7 +81,7 @@ export const useAddonsSettings = () => {
     if (communityAddonsEnabled.value) {
       for (const entry of catalog.value) {
         if (!entry?.id || isHiddenAddonId(entry.id) || available.has(entry.id)) continue
-        const installed = items.value.find((addon) => addon.manifest.id === entry.id)
+        const installed = installedById.get(entry.id)
         const updateAvailable = Boolean(installed && installed.manifest.version !== entry.version)
         if (installed && !updateAvailable) continue
         available.set(entry.id, {
@@ -232,7 +238,7 @@ export const useAddonsSettings = () => {
         operationInProgress.value = true
         await addonsStore.manager.uninstallBuiltin(addon.manifest.id)
         addonsStore.refresh()
-        showMessage(`Removed ${addon.manifest.name}. You can install it again from the addon list.`)
+        showMessage(`Uninstalled ${addon.manifest.name}. You can install it again from the addon list.`)
       }
       if (expandedAddonId.value === addon.manifest.id) expandedAddonId.value = ''
     } catch (error) {

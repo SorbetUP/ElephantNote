@@ -10,6 +10,7 @@ export const DEFAULT_ICON_RAIL_ORDER = Object.freeze(
 )
 
 export const ICON_RAIL_SEPARATOR_PREFIX = 'separator:'
+const LEADING_CORE_ICON_RAIL_IDS = Object.freeze(['vault', 'sidebar-toggle'])
 
 const normalizeIds = (values) => {
   if (!Array.isArray(values)) return []
@@ -53,6 +54,14 @@ export const normalizeIconRailOrder = (order, availableIds) => {
   const allowed = new Set(available)
   const normalized = normalizeIds(order).filter((id) => allowed.has(id) || isIconRailSeparatorId(id))
   const seen = new Set(normalized)
+
+  for (const id of [...LEADING_CORE_ICON_RAIL_IDS].reverse()) {
+    if (allowed.has(id) && !seen.has(id)) {
+      normalized.unshift(id)
+      seen.add(id)
+    }
+  }
+
   for (const id of available) {
     if (!seen.has(id)) normalized.push(id)
   }

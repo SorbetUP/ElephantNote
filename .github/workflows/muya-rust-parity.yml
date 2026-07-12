@@ -1,0 +1,27 @@
+name: Muya Rust Parity
+
+on:
+  pull_request:
+    paths:
+      - 'Elephant/backend/tauri/src/muya_engine/**'
+      - 'Elephant/backend/tauri/src/markdown/mod.rs'
+      - 'Elephant/backend/tauri/Cargo.toml'
+      - '.github/workflows/muya-rust-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.91.0'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Elephant/backend/tauri
+      - name: Test Muya Rust modules
+        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml muya_engine::

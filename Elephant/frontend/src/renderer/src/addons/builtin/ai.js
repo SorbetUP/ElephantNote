@@ -15,7 +15,7 @@ export const aiAddon = {
     id: ADDON_ID,
     name: 'AI',
     version: '1.0.0',
-    description: 'Adds AI providers, chat, semantic search, OCR and the local model library.',
+    description: 'Adds AI providers, chat, semantic search, OCR, Wiki, Graph and the local model library.',
     author: 'ElephantNote',
     icon: 'sparkles',
     defaultEnabled: false,
@@ -36,6 +36,24 @@ export const aiAddon = {
       description: 'Configure providers, chat, embeddings, semantic search and OCR.',
       order: 60,
       render: mountSettingsComponent(ctx, AiAddonSettings)
+    })
+
+    ctx.addView({
+      id: `${ADDON_ID}.wiki`,
+      title: 'Wiki',
+      description: 'Browse AI-organized knowledge pages and clusters.',
+      icon: 'book-open-text',
+      kind: 'ai-wiki-v1',
+      order: 30
+    })
+
+    ctx.addView({
+      id: `${ADDON_ID}.graph`,
+      title: 'Graph',
+      description: 'Explore note, Wiki and semantic relationships.',
+      icon: 'git-fork',
+      kind: 'ai-graph-v1',
+      order: 35
     })
 
     ctx.addView({

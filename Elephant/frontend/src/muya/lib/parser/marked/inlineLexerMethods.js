@@ -8,7 +8,7 @@ export const installInlineLexerMethods = InlineLexer => {
   InlineLexer.prototype.outputLink = function(cap, link) {
     const href = link.href
     const title = link.title ? escape(link.title) : null
-    const text = cap[1].replace(/\\([\[\]])/g, '$1')
+    const text = cap[1].replace(/\\([\[\]])/g, '$1') // eslint-disable-line no-useless-escape
     return cap[0].charAt(0) !== '!'
       ? this.renderer.link(href, title, this.output(text))
       : this.renderer.image(href, title, escape(text))

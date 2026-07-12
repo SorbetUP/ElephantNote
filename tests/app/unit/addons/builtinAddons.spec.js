@@ -1,8 +1,13 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ADDON_EXTENSION_POINTS, ElephantAddonManager } from '@/addons'
 import { addonPacksAddon, builtinAddons } from '@/addons/builtin'
 
-const OPTIONAL_EDITOR_ADDONS = ['elephant.code-execution', 'elephant.excalidraw']
+const root = process.cwd()
+const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const OPTIONAL_EDITOR_ADDONS = ['elephant.code-execution']
+const CORE_EDITOR_ADDONS = ['elephant.excalidraw']
 
 describe('builtin addons', () => {
   it('exports only the cleaned first-party catalogue', () => {
@@ -45,15 +50,17 @@ describe('builtin addons', () => {
     expect(manager.getContributions(ADDON_EXTENSION_POINTS.settingsSections)).toHaveLength(1)
   })
 
-  it('marks every optional first-party feature as disabled and removable by default', () => {
-    const optional = builtinAddons.filter((addon) => addon.manifest.id !== 'elephant.addon-packs')
+  it('marks optional first-party features as disabled and removable by default', () => {
+    const optional = builtinAddons.filter((addon) => (
+      addon.manifest.id !== 'elephant.addon-packs' && !CORE_EDITOR_ADDONS.includes(addon.manifest.id)
+    ))
 
     expect(optional.every((addon) => addon.manifest.defaultEnabled === false)).toBe(true)
     expect(optional.every((addon) => addon.manifest.removable === true)).toBe(true)
     expect(addonPacksAddon.manifest.removable).toBe(false)
   })
 
-  it('keeps code execution and Excalidraw as real optional addons', () => {
+  it('keeps code execution optional but makes Excalidraw a required vanilla editor capability', () => {
     for (const addonId of OPTIONAL_EDITOR_ADDONS) {
       const addon = builtinAddons.find((entry) => entry.manifest.id === addonId)
       expect(addon).toBeDefined()
@@ -61,6 +68,14 @@ describe('builtin addons', () => {
       expect(addon.manifest.removable).toBe(true)
       expect(typeof addon.activate).toBe('function')
     }
+
+    const excalidraw = builtinAddons.find((entry) => entry.manifest.id === 'elephant.excalidraw')
+    const addonSystem = read('Elephant/frontend/src/renderer/src/addons/index.js')
+    const main = read('Elephant/frontend/src/renderer/src/main.js')
+    expect(excalidraw).toBeDefined()
+    expect(typeof excalidraw.activate).toBe('function')
+    expect(addonSystem).toContain("REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs', 'elephant.excalidraw'])")
+    expect(main).toContain('await ensureCoreExcalidraw(addonManager)')
   })
 
   it('moves Recently edited into an optional sidebar layout contribution', async () => {

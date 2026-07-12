@@ -89,7 +89,7 @@
               type="button"
               role="option"
               :aria-selected="selectedAddonId === entry.id"
-              @click="selectedAddonId = entry.id"
+              @click="openAddon(entry)"
             >
               <span class="en-addon-browser-item-icon"><AddonIcon :name="entry.manifest.icon" /></span>
               <span class="en-addon-browser-item-copy">
@@ -106,6 +106,8 @@
         </aside>
 
         <main v-if="selectedEntry" class="en-addon-browser-detail">
+          <button class="en-addon-detail-back" type="button" @click="selectedAddonId = ''"><ArrowLeft aria-hidden="true" /> All addons</button>
+
           <header class="en-addon-detail-header">
             <span class="en-addon-detail-logo"><AddonIcon :name="selectedEntry.manifest.icon" /></span>
             <div class="en-addon-detail-heading">
@@ -187,9 +189,25 @@
           </section>
         </main>
 
-        <main v-else class="en-addon-browser-detail en-addon-browser-detail-empty">
-          <Package aria-hidden="true" />
-          <p>Select an addon to view its details.</p>
+        <main v-else class="en-addon-browser-overview">
+          <header class="en-addon-overview-header">
+            <div><h2>All addons</h2><p>Browse the complete catalogue. Open an addon to manage it.</p></div>
+            <span>{{ browserEntries.length }}</span>
+          </header>
+          <div class="en-addon-overview-grid">
+            <button v-for="entry in browserEntries" :key="`overview-${entry.id}`" class="en-addon-overview-card" type="button" @click="openAddon(entry)">
+              <span class="en-addon-overview-icon"><AddonIcon :name="entry.manifest.icon" /></span>
+              <span class="en-addon-overview-copy">
+                <strong>{{ entry.manifest.name }}</strong>
+                <small>By {{ entry.manifest.author || 'ElephantNote' }}</small>
+                <span>{{ entry.manifest.description || 'No description.' }}</span>
+              </span>
+              <span class="en-addon-overview-status" :class="{ active: entry.snapshot?.enabled }">
+                {{ entry.installed ? (entry.snapshot.enabled ? 'Enabled' : 'Installed') : 'Available' }}
+              </span>
+            </button>
+          </div>
+          <div v-if="!browserEntries.length" class="en-addons-empty">{{ query ? 'No addon matches this search.' : 'No addon is available.' }}</div>
         </main>
       </section>
     </template>
@@ -203,7 +221,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { open } from '@tauri-apps/plugin-dialog'
-import { Check, Layers3, Package, Plus, RefreshCw, Search } from '@lucide/vue'
+import { ArrowLeft, Check, Layers3, Package, Plus, RefreshCw, Search } from '@lucide/vue'
 import { useAddonsStore } from '@/store/addons'
 import AddonIcon from './AddonIcon.vue'
 import { useAddonsSettings } from './useAddonsSettings'
@@ -219,7 +237,6 @@ const AI_SUBMODULE_IDS = Object.freeze([
   'elephant.wiki',
   'elephant.graph'
 ])
-const CORE_ADDON_IDS = new Set(['elephant.excalidraw'])
 const GROUPED_ADDON_IDS = new Set(AI_SUBMODULE_IDS)
 
 const addonsStore = useAddonsStore()
@@ -258,9 +275,9 @@ const builtinCatalogById = computed(() => new Map(
 const availableById = computed(() => new Map(availableAddons.value.map((addon) => [addon.id, addon])))
 
 const visibleInstalledAddons = computed(() => filteredInstalledAddons.value
-  .filter((addon) => !CORE_ADDON_IDS.has(addon?.manifest?.id) && !GROUPED_ADDON_IDS.has(addon?.manifest?.id)))
+  .filter((addon) => !GROUPED_ADDON_IDS.has(addon?.manifest?.id)))
 const visibleAvailableAddons = computed(() => availableAddons.value
-  .filter((addon) => !CORE_ADDON_IDS.has(addon?.id) && !GROUPED_ADDON_IDS.has(addon?.id)))
+  .filter((addon) => !GROUPED_ADDON_IDS.has(addon?.id)))
 
 const browserEntries = computed(() => {
   const entries = [
@@ -284,7 +301,7 @@ const browserEntries = computed(() => {
     .sort((left, right) => Number(right.installed) - Number(left.installed) || left.manifest.name.localeCompare(right.manifest.name))
 })
 
-const selectedEntry = computed(() => browserEntries.value.find((entry) => entry.id === selectedAddonId.value) || browserEntries.value[0] || null)
+const selectedEntry = computed(() => browserEntries.value.find((entry) => entry.id === selectedAddonId.value) || null)
 const selectedActions = computed(() => selectedEntry.value?.installed ? actionsForAddon(selectedEntry.value.id) : [])
 const selectedPermissions = computed(() => {
   const permissions = selectedEntry.value?.manifest?.permissions
@@ -307,8 +324,12 @@ const aiModules = computed(() => AI_SUBMODULE_IDS.map((id) => {
 const installedAiModuleCount = computed(() => aiModules.value.filter((module) => module.installed).length)
 
 watch(browserEntries, (entries) => {
-  if (!entries.some((entry) => entry.id === selectedAddonId.value)) selectedAddonId.value = entries[0]?.id || ''
-}, { immediate: true })
+  if (selectedAddonId.value && !entries.some((entry) => entry.id === selectedAddonId.value)) selectedAddonId.value = ''
+})
+
+const openAddon = (entry) => {
+  selectedAddonId.value = entry?.id || ''
+}
 
 const dispatchPackEvent = (name, detail = undefined) => {
   window.dispatchEvent(new CustomEvent(name, { detail }))
@@ -346,8 +367,9 @@ const addFromFile = async () => {
 
 const installSelectedAddon = async () => {
   if (!selectedEntry.value?.available) return
+  const id = selectedEntry.value.id
   await installAvailableAddon(selectedEntry.value.available)
-  selectedAddonId.value = selectedEntry.value.id
+  selectedAddonId.value = id
 }
 
 const toggleSelectedAddon = async () => {

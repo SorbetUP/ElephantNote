@@ -41,6 +41,15 @@ describe('addon UI regression contracts', () => {
     expect(row).toContain('>Uninstall</button>')
   })
 
+  it('turns an installed addon pack into an uninstall action without removing core Excalidraw', () => {
+    const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AddonPacksSettings.vue')
+
+    expect(packs).toContain("NON_REMOVABLE_ADDON_IDS = new Set(['elephant.addon-packs', 'elephant.excalidraw'])")
+    expect(packs).toContain("isPackInstalled(pack) ? 'Uninstall'")
+    expect(packs).toContain('addonsStore.manager.uninstallBuiltin(entry.id)')
+    expect(packs).toContain('addonsStore.uninstallExternalAddon(entry.id)')
+  })
+
   it('keeps addon workspaces in the icon rail rather than below All notes', () => {
     const sidebar = read('Elephant/frontend/app/components/navigation/SidebarNav.vue')
     const rail = read('Elephant/frontend/app/components/navigation/IconRail.vue')

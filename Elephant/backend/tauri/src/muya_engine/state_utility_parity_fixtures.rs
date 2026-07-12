@@ -49,7 +49,7 @@ fn footnotes_match_the_javascript_map_contract() {
     .iter()
     .map(|(identifier, block)| Value::Array(vec![Value::String(identifier.to_string()), block.clone()]))
     .collect::<Vec<_>>();
-  assert_eq!(actual, fixture["footnotes"]);
+  assert_eq!(Value::Array(actual), fixture["footnotes"]);
 }
 
 #[test]

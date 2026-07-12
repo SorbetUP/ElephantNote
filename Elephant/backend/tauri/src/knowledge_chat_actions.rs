@@ -1,10 +1,13 @@
+mod hybrid_search;
+
+pub(crate) use hybrid_search::hybrid_note_search;
+
 use elephantnote_knowledge_core::{
     execute_approved_chat_action, prepare_chat_action, ChatActionExecution, ChatActionProposal,
     ChatActionStatus, ChatKnowledgeAction, KnowledgeStore,
 };
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
@@ -77,7 +80,21 @@ pub fn tauri_knowledge_chat_action_approve(
     proposal_id: String,
 ) -> Result<ChatActionProposal, String> {
     let root = active_vault_root(&app)?;
-    active_store(&root)?.transition_chat_action(&proposal_id, ChatActionStatus::Approved)
+    let store = active_store(&root)?;
+    let proposal = store
+        .chat_action_proposal(&proposal_id)?
+        .ok_or_else(|| format!("Unknown chat action proposal: {proposal_id}"))?;
+    match proposal.status {
+        ChatActionStatus::Proposed => {
+            store.transition_chat_action(&proposal_id, ChatActionStatus::Approved)
+        }
+        ChatActionStatus::Approved | ChatActionStatus::Executed => Ok(proposal),
+        ChatActionStatus::Rejected => Err("Rejected chat actions cannot be approved.".into()),
+        ChatActionStatus::Failed => Err(proposal
+            .error
+            .clone()
+            .unwrap_or_else(|| "Failed chat actions require a new proposal.".into())),
+    }
 }
 
 #[tauri::command]
@@ -86,7 +103,18 @@ pub fn tauri_knowledge_chat_action_reject(
     proposal_id: String,
 ) -> Result<ChatActionProposal, String> {
     let root = active_vault_root(&app)?;
-    active_store(&root)?.transition_chat_action(&proposal_id, ChatActionStatus::Rejected)
+    let store = active_store(&root)?;
+    let proposal = store
+        .chat_action_proposal(&proposal_id)?
+        .ok_or_else(|| format!("Unknown chat action proposal: {proposal_id}"))?;
+    match proposal.status {
+        ChatActionStatus::Proposed | ChatActionStatus::Approved => {
+            store.transition_chat_action(&proposal_id, ChatActionStatus::Rejected)
+        }
+        ChatActionStatus::Rejected => Ok(proposal),
+        ChatActionStatus::Executed => Err("Executed chat actions cannot be rejected.".into()),
+        ChatActionStatus::Failed => Err("Failed chat actions cannot be rejected.".into()),
+    }
 }
 
 fn completed_execution(
@@ -102,69 +130,22 @@ fn completed_execution(
     Ok(ChatActionExecution { proposal, result })
 }
 
-fn meaningful_search_terms(query: &str) -> Vec<String> {
-    const STOP_WORDS: &[&str] = &[
-        "afin", "avec", "dans", "des", "est", "faire", "les", "mais", "mes", "mon",
-        "pour", "que", "quel", "quelle", "sur", "une", "un", "the", "and", "for",
-        "from", "this", "with",
-    ];
-    let mut terms = query
-        .split(|character: char| !character.is_alphanumeric())
-        .map(|term| term.trim().to_lowercase())
-        .filter(|term| term.chars().count() >= 3)
-        .filter(|term| !STOP_WORDS.contains(&term.as_str()))
-        .collect::<Vec<_>>();
-    terms.sort();
-    terms.dedup();
-    terms
-}
-
-fn relaxed_note_search(
-    store: &KnowledgeStore,
-    query: &str,
-    limit: usize,
-) -> Result<Value, String> {
-    let limit = limit.clamp(1, 100);
-    let mut hits = store.search(query, limit)?;
-    let mut seen = hits
-        .iter()
-        .map(|hit| hit.chunk_id.clone())
-        .collect::<HashSet<_>>();
-    if hits.len() < limit {
-        for term in meaningful_search_terms(query) {
-            for hit in store.search(&term, limit)? {
-                if seen.insert(hit.chunk_id.clone()) {
-                    hits.push(hit);
-                }
-                if hits.len() >= limit {
-                    break;
-                }
-            }
-            if hits.len() >= limit {
-                break;
-            }
-        }
-    }
-    hits.sort_by(|left, right| {
-        right
-            .score
-            .partial_cmp(&left.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    hits.truncate(limit);
-    serde_json::to_value(hits).map_err(|error| error.to_string())
-}
-
 fn execute_non_wiki_action(
     root: &Path,
     store: &KnowledgeStore,
     proposal: &ChatActionProposal,
 ) -> Result<ChatActionExecution, String> {
     if let ChatKnowledgeAction::SearchNotes { query, limit } = &proposal.action {
+        let hits = hybrid_note_search(store, query, *limit)?;
+        eprintln!(
+            "[Knowledge][ChatSearch] query={:?} results={} strategy=hybrid",
+            query,
+            hits.len()
+        );
         return completed_execution(
             store,
             proposal.clone(),
-            relaxed_note_search(store, query, *limit)?,
+            serde_json::to_value(hits).map_err(|error| error.to_string())?,
         );
     }
     let execution = execute_approved_chat_action(root, store, proposal)?;
@@ -286,7 +267,13 @@ pub async fn tauri_knowledge_chat_action_execute(
     };
 
     match result {
-        Ok(execution) => Ok(execution),
+        Ok(execution) => {
+            eprintln!(
+                "[Knowledge][ChatAction] executed id={} status=executed",
+                execution.proposal.id
+            );
+            Ok(execution)
+        }
         Err(error) => {
             let mut failed = proposal;
             failed.status = ChatActionStatus::Failed;

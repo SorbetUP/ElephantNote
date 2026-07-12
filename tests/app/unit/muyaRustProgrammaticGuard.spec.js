@@ -17,14 +17,14 @@ describe('Muya Rust programmatic change guard', () => {
     const guard = createProgrammaticChangeGuard({ now: () => now, burst: 1, ttlMs: 50 })
     guard.run(() => null)
     now += 51
-    expect(guard.pending).toBe(false)
+    expect(guard.pending).toBe(0)
     expect(guard.consume()).toBe(false)
   })
 
   it('clears immediately when the guarded render throws', () => {
     const guard = createProgrammaticChangeGuard({ now: () => 1000, burst: 3, ttlMs: 50 })
     expect(() => guard.run(() => { throw new Error('render failed') })).toThrow('render failed')
-    expect(guard.pending).toBe(false)
+    expect(guard.pending).toBe(0)
     expect(guard.consume()).toBe(false)
   })
 })

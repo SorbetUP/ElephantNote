@@ -38,18 +38,22 @@ The parser builds structural list, item, row and cell nodes rather than flatteni
 
 - logical DOM-independent selections expressed in UTF-16 offsets;
 - same-node selected-text replacement and deletion;
+- replacement across direct sibling text endpoints in one inline container;
+- removal and exact restoration of fully covered nested inline subtrees;
 - `InsertText`, `DeleteBackward` and `InsertParagraph` commands;
+- `ToggleStrong`, `ToggleEmphasis` and `ToggleStrike` commands;
+- full-mark unwrapping for a mark containing one selected text node;
 - plain paragraph splitting and adjacent paragraph joining;
 - `SetParagraph` and validated `SetHeading(1..=6)` transformations;
 - stable explicit node IDs for structural operations;
 - validation against offsets inside surrogate pairs;
-- invertible text replacement, insertion, removal and block-kind operations;
+- invertible text replacement, insertion, subtree removal/restoration and block-kind operations;
 - atomic transactions applied on a cloned document before commit;
 - document revision increments;
 - bounded transaction-based undo and redo history;
-- logical view patches derived from transactions.
+- logical view patches, including detached subtree insertion patches.
 
-Structural undo/redo restores exact node IDs. The current boundary is intentionally narrow: cross-node selections, rich-inline splitting, grapheme clusters, list/table commands, IME grouping and actual DOM patch application are not yet active.
+Structural undo/redo restores exact node IDs and parent/child topology. The current cross-node boundary requires direct sibling endpoint text nodes. Endpoints nested inside different marks, partial mark unwrapping, rich-inline splitting, grapheme clusters, list/table commands, IME grouping and actual DOM patch application are not yet active.
 
 The executable slices have Rust unit and round-trip tests. Full JavaScript-vs-Rust characterization is still required before runtime activation or JavaScript deletion.
 

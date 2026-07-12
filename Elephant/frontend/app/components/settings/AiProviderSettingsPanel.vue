@@ -789,8 +789,13 @@ const testProvider = async(provider) => {
 const rebuildEmbeddings = async() => {
   indexing.value = true
   try {
+    await saveConfig({ silent: true, reason: 'embedding-rebuild' })
     await elephantnoteClient.search.rebuild?.()
-    providerMessage.value = 'Embedding rebuild started.'
+    const report = await invoke('tauri_knowledge_embeddings_rebuild', { onlyWikiSources: false })
+    providerMessage.value = report?.updated
+      ? `Embedded ${report.updated} notes with ${report.modelId} (${report.dimensions} dimensions).`
+      : `Embedding index is already current for ${report?.modelId || form.value.routes.embedding.model}.`
+    window.dispatchEvent(new CustomEvent('elephantnote:knowledge-changed', { detail: { reason: 'embeddings-rebuilt' } }))
   } catch (error) {
     providerMessage.value = error instanceof Error ? error.message : String(error)
   } finally {

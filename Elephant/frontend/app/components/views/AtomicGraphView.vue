@@ -591,7 +591,7 @@ const classifiedNodeIds = computed(() => {
     if ((node.kind || node.type) === 'wiki') ids.add(node.id)
   }
   for (const edge of semanticModel.value.edges) {
-    if (edge.type === 'wiki-source' || edge.type === 'wiki-link' || edge.type === 'semantic' || edge.type === 'explicit-link') {
+    if (edge.type === 'wiki-source' || edge.type === 'wiki-link' || edge.type === 'wiki-semantic' || edge.type === 'semantic' || edge.type === 'explicit-link') {
       ids.add(edge.source)
       ids.add(edge.target)
     }
@@ -680,6 +680,7 @@ function edgeColorFor (type) {
   if (type === 'explicit-link') return '#3b9b96'
   if (type === 'wiki-source') return '#d98545'
   if (type === 'wiki-link') return '#e8b15a'
+  if (type === 'wiki-semantic') return '#8f7ee7'
   if (type === 'folder') return '#d98a3b'
   if (type === 'tag') return '#9b6cff'
   if (type === 'lexical') return '#9b6cff'
@@ -1177,6 +1178,8 @@ function mountSigma () {
   })
 
   renderer.refresh()
+  const hasEmbeddingEdges = graph.edges().some((edge) => graph.getEdgeAttribute(edge, 'edgeType') === 'wiki-semantic')
+  if (hasEmbeddingEdges) setTimeout(() => runForceSimulation(1200), 0)
 }
 
 function destroySigma () {
@@ -1372,9 +1375,13 @@ function runForceSimulation (duration = 1500) {
         const dx = b.x - a.x
         const dy = b.y - a.y
         const dist = Math.sqrt(dx * dx + dy * dy) || 1
-        const knowledgeEdge = attrs.edgeType === 'wiki-source' || attrs.edgeType === 'wiki-link'
-        const desiredDistance = knowledgeEdge ? Math.min(78, forceLinkDistance.value) : forceLinkDistance.value
-        const strength = forceLink.value * (knowledgeEdge ? 2.4 : 1)
+        const wikiEdge = attrs.edgeType === 'wiki-source' || attrs.edgeType === 'wiki-link'
+        const embeddingEdge = attrs.edgeType === 'wiki-semantic'
+        const similarity = Math.max(0, Math.min(1, Number(attrs.weight) || 0))
+        const desiredDistance = embeddingEdge
+          ? 38 + (1 - similarity) * 54
+          : wikiEdge ? Math.min(78, forceLinkDistance.value) : forceLinkDistance.value
+        const strength = forceLink.value * (embeddingEdge ? 1.5 + similarity * 2.2 : wikiEdge ? 2.4 : 1)
         const f = strength * (dist - desiredDistance) * damping
         forces.get(s).fx += (dx / dist) * f
         forces.get(s).fy += (dy / dist) * f

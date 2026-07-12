@@ -1,3 +1,4 @@
+use crate::embedding_store::EmbeddingStore;
 use crate::graph::{KnowledgeGraphCluster, KnowledgeGraphEdge, KnowledgeGraphNode};
 use crate::wiki_core::{WikiDraft, WikiDraftStatus};
 use crate::KnowledgeStore;
@@ -100,6 +101,50 @@ pub(crate) fn project_wiki_territories(
             });
         }
 
+        let mut embedding_edge_count = 0usize;
+        if resolved_sources.len() > 1 {
+            match EmbeddingStore::open(store.database_path())
+                .and_then(|embeddings| embeddings.semantic_edges_for_paths(&resolved_sources, 3))
+            {
+                Ok(similarities) => {
+                    for similarity in similarities {
+                        let pair_hash = blake3::hash(
+                            format!(
+                                "{}:{}:{}",
+                                similarity.source, similarity.target, similarity.model_id
+                            )
+                            .as_bytes(),
+                        )
+                        .to_hex();
+                        let edge_id = format!("wiki-semantic:{}:{}", draft.id, pair_hash);
+                        if !seen_edges.insert(edge_id.clone()) {
+                            continue;
+                        }
+                        projection.edges.push(KnowledgeGraphEdge {
+                            id: edge_id,
+                            source: similarity.source,
+                            target: similarity.target,
+                            edge_type: "wiki-semantic".into(),
+                            relation_type: "embedding_similarity".into(),
+                            reason: format!(
+                                "Embedding similarity {:.3} ({})",
+                                similarity.score, similarity.model_id
+                            ),
+                            weight: similarity.score,
+                            origin: "embedding".into(),
+                            status: "accepted".into(),
+                            evidence_chunk_ids: Vec::new(),
+                        });
+                        embedding_edge_count += 1;
+                    }
+                }
+                Err(error) => eprintln!(
+                    "[Knowledge][Graph][Wiki] embeddings:unavailable wiki_id={} error={}",
+                    draft.id, error
+                ),
+            }
+        }
+
         projection.clusters.push(KnowledgeGraphCluster {
             id: wiki_node_id.clone(),
             label: draft.title.clone(),
@@ -109,13 +154,14 @@ pub(crate) fn project_wiki_territories(
         });
 
         eprintln!(
-            "[Knowledge][Graph][Wiki] territory:projected id={} slug={} status={} resolved_sources={} missing_sources={} citations={}",
+            "[Knowledge][Graph][Wiki] territory:projected id={} slug={} status={} resolved_sources={} missing_sources={} citations={} embedding_edges={}",
             draft.id,
             draft.slug,
             status,
             resolved_sources.len(),
             missing_sources.len(),
-            draft.citations.len()
+            draft.citations.len(),
+            embedding_edge_count
         );
         for path in missing_sources {
             eprintln!(

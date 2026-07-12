@@ -2,6 +2,7 @@ pub mod actions;
 pub mod chat_action_storage;
 pub mod chat_actions;
 pub mod chunking;
+pub mod embedding_store;
 pub mod extraction;
 pub mod graph;
 pub mod model;
@@ -22,6 +23,7 @@ pub use chat_actions::{
     ChatActionProposal, ChatActionStatus,
 };
 pub use chunking::analyze_markdown;
+pub use embedding_store::{EmbeddingInput, EmbeddingSimilarity, EmbeddingStatus, EmbeddingStore};
 pub use extraction::{
     build_tagging_request, parse_tagging_response, ExtractionValidation, StructuredModelRequest,
     StructuredTask, TagSuggestion, TaggingExtraction,

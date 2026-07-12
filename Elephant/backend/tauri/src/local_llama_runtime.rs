@@ -11,6 +11,7 @@ type R<T> = Result<T, String>;
 const MODEL_PROVIDER: &str = "tauri-rust";
 const DEFAULT_PORT: u16 = 39281;
 const DEFAULT_BASE_URL: &str = "http://127.0.0.1:39281/v1";
+const DEFAULT_EMBEDDING_BASE_URL: &str = "http://127.0.0.1:39282/v1";
 
 #[cfg(windows)]
 const LLAMA_SERVER_BIN: &str = "llama-server.exe";
@@ -332,8 +333,14 @@ fn server_binary_candidates(app: &AppHandle, payload: &Value) -> Vec<String> {
     out
 }
 
-fn llama_server_args(model_path: &str, port: u16, context: &str, model_name: &str) -> Vec<String> {
-    vec![
+fn llama_server_args(
+    model_path: &str,
+    port: u16,
+    context: &str,
+    model_name: &str,
+    embedding: bool,
+) -> Vec<String> {
+    let mut args = vec![
         "-m".to_string(),
         model_path.to_string(),
         "--host".to_string(),
@@ -344,7 +351,11 @@ fn llama_server_args(model_path: &str, port: u16, context: &str, model_name: &st
         context.to_string(),
         "--alias".to_string(),
         model_name.to_string(),
-    ]
+    ];
+    if embedding {
+        args.push("--embedding".to_string());
+    }
+    args
 }
 
 async fn server_ready(base_url: &str) -> bool {
@@ -381,6 +392,7 @@ async fn start_server_if_needed(
     model_name: &str,
     base_url: &str,
     payload: &Value,
+    embedding: bool,
 ) -> R<()> {
     if server_ready(base_url).await {
         eprintln!("[tauri-rag] llama server already reachable at {base_url}");
@@ -408,7 +420,7 @@ async fn start_server_if_needed(
         runtime_mode(payload),
         candidates.join(", ")
     );
-    let args = llama_server_args(&model_path_string, port, &context, model_name);
+    let args = llama_server_args(&model_path_string, port, &context, model_name, embedding);
     let mut errors = Vec::new();
     for binary in candidates {
         eprintln!(
@@ -458,7 +470,7 @@ pub async fn chat_with_selected_model(
         .and_then(|name| name.to_str())
         .unwrap_or("local.gguf")
         .to_string();
-    start_server_if_needed(app, &model_path, &model_name, &base_url, payload).await?;
+    start_server_if_needed(app, &model_path, &model_name, &base_url, payload, false).await?;
 
     let temperature = payload
         .get("temperature")
@@ -513,6 +525,52 @@ pub async fn chat_with_selected_model(
         model: model_name,
         base_url,
     }))
+}
+
+pub async fn embed_with_selected_model(
+    app: &AppHandle,
+    selection: &str,
+    text: &str,
+    payload: &Value,
+) -> R<Vec<f32>> {
+    let Some(model_path) = resolve_model_path(selection)? else {
+        return Err("No local embedding model is selected.".into());
+    };
+    let base_url = DEFAULT_EMBEDDING_BASE_URL.to_string();
+    let model_name = model_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("embedding.gguf")
+        .to_string();
+    start_server_if_needed(app, &model_path, &model_name, &base_url, payload, true).await?;
+    let response = Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .map_err(|error| error.to_string())?
+        .post(format!("{}/embeddings", base_url))
+        .json(&json!({ "model": model_name, "input": text }))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+    let status = response.status();
+    let data = response.json::<Value>().await.unwrap_or_else(|_| json!({}));
+    if !status.is_success() {
+        return Err(error_text(
+            &data,
+            format!("Local embedding server returned HTTP {status}."),
+        ));
+    }
+    data.pointer("/data/0/embedding")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "Local embedding server returned no embedding vector.".to_string())?
+        .iter()
+        .map(|value| {
+            value
+                .as_f64()
+                .map(|number| number as f32)
+                .ok_or_else(|| "Local embedding vector contains a non-number.".to_string())
+        })
+        .collect()
 }
 
 fn error_text(data: &Value, fallback: String) -> String {
@@ -620,7 +678,7 @@ mod tests {
 
     #[test]
     fn llama_server_args_set_model_alias() {
-        let args = llama_server_args("/models/smol.gguf", 39281, "4096", "smol.gguf");
+        let args = llama_server_args("/models/smol.gguf", 39281, "4096", "smol.gguf", false);
         assert!(args
             .windows(2)
             .any(|window| window == ["--alias", "smol.gguf"]));

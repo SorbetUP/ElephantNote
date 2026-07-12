@@ -7,6 +7,7 @@ pub mod drawing_domain;
 pub mod folder_domain;
 pub mod knowledge;
 pub mod knowledge_chat_actions;
+pub mod knowledge_embeddings;
 pub mod knowledge_relations;
 pub mod knowledge_wiki_discovery;
 pub mod knowledge_wiki_library;
@@ -141,6 +142,8 @@ pub fn run() {
             knowledge_chat_actions::tauri_knowledge_chat_action_approve,
             knowledge_chat_actions::tauri_knowledge_chat_action_reject,
             knowledge_chat_actions::tauri_knowledge_chat_action_execute,
+            knowledge_embeddings::tauri_knowledge_embeddings_rebuild,
+            knowledge_embeddings::tauri_knowledge_embeddings_status,
             knowledge_wikis::tauri_knowledge_wiki_generate,
             knowledge_wikis::tauri_knowledge_wiki_candidates,
             knowledge_wikis::tauri_knowledge_wikis_auto_propose,

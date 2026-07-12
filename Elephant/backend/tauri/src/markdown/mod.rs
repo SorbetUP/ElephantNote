@@ -14,6 +14,10 @@ pub mod parser_v4;
 pub mod renderer_v2;
 pub mod types;
 
+/// New DOM-independent architecture. The legacy `muya_engine` module remains
+/// temporarily available as the file-by-file parity staging area.
+pub use muya_core as core;
+
 #[cfg(test)]
 mod compat_extra_tests;
 

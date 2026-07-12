@@ -12,6 +12,9 @@
 - Generated relations and citations must keep source evidence.
 - Chat writes require explicit approval and an expected content hash.
 - The core crate does not depend on Tauri, Vue, or the renderer.
+- The graph API returns the complete projected graph; renderer code must not apply a silent note-count cap.
+- Wikilinks inside fenced or inline code are data, not knowledge relations.
+- App-local GGUF wiki generation is routed through the bundled llama runtime.
 
 ## Current implementation
 
@@ -19,9 +22,10 @@
 - stable document, section, and chunk identifiers;
 - exact byte offsets for source navigation and guarded edits;
 - block-aware chunking that preserves fenced code blocks;
-- explicit wikilink extraction;
+- explicit wikilink extraction outside Markdown code spans and fences;
 - SQLite storage with FTS5 chunk search;
 - incremental vault rebuild based on BLAKE3 content hashes;
+- relation refresh for unchanged notes so parser improvements clean stale derived edges;
 - stale-document pruning;
 - validated chat action contracts.
 

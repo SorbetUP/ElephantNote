@@ -2,7 +2,6 @@ const enterHeading = ContentState => {
   ContentState.prototype.enterInHeading = function(block) {
     const { start, end } = this.cursor
     const parent = this.getParent(block)
-    const { key } = block
     const { text } = block
     const preText = text.substring(0, start.offset)
     const postText = text.substring(end.offset)

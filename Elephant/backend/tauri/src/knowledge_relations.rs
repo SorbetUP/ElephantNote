@@ -1,5 +1,6 @@
 use elephantnote_knowledge_core::{
-    KnowledgeGraph, KnowledgeNodeRef, KnowledgeRelation, KnowledgeStore, RelationStatus,
+    EmbeddingStore, KnowledgeGraph, KnowledgeNodeRef, KnowledgeRelation, KnowledgeStore,
+    RelationStatus,
 };
 use std::path::Path;
 use tauri::AppHandle;
@@ -9,22 +10,40 @@ fn active_store(app: &AppHandle) -> Result<KnowledgeStore, String> {
     KnowledgeStore::open(Path::new(&root))
 }
 
+fn wiki_embeddings_are_missing(store: &KnowledgeStore) -> bool {
+    let Ok(embeddings) = EmbeddingStore::open(store.database_path()) else {
+        return true;
+    };
+    let expected = embeddings
+        .wiki_source_paths()
+        .map(|paths| paths.len())
+        .unwrap_or(0);
+    let available = embeddings.status().map(|status| status.documents).unwrap_or(0);
+    expected > available
+}
+
 #[tauri::command]
 pub async fn tauri_knowledge_graph(
     app: AppHandle,
     include_suggestions: Option<bool>,
 ) -> Result<KnowledgeGraph, String> {
-    match crate::knowledge_embeddings::tauri_knowledge_embeddings_rebuild(app.clone(), Some(true))
+    let store = active_store(&app)?;
+    if wiki_embeddings_are_missing(&store) {
+        match crate::knowledge_embeddings::tauri_knowledge_embeddings_rebuild(
+            app.clone(),
+            Some(true),
+        )
         .await
-    {
-        Ok(report) if report.updated > 0 => eprintln!(
-            "[Knowledge][Graph] embeddings:updated model={} documents={} dimensions={}",
-            report.model_id, report.updated, report.dimensions
-        ),
-        Ok(_) => {}
-        Err(error) => eprintln!(
-            "[Knowledge][Graph] embeddings:unavailable reason={error}"
-        ),
+        {
+            Ok(report) if report.updated > 0 => eprintln!(
+                "[Knowledge][Graph] embeddings:updated model={} documents={} dimensions={}",
+                report.model_id, report.updated, report.dimensions
+            ),
+            Ok(_) => {}
+            Err(error) => eprintln!(
+                "[Knowledge][Graph] embeddings:unavailable reason={error}"
+            ),
+        }
     }
     active_store(&app)?.graph_projection(include_suggestions.unwrap_or(false))
 }

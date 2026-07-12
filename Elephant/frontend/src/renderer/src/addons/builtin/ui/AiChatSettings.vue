@@ -1,9 +1,9 @@
 <template>
-  <AiAddonSettings class="en-ai-chat-only" initial-page="chat" />
+  <AiProviderSettingsPanel class="en-ai-chat-only" initial-page="chat" />
 </template>
 
 <script setup>
-import AiAddonSettings from './AiAddonSettings.vue'
+import AiProviderSettingsPanel from 'elephant-front/components/settings/AiProviderSettingsPanel.vue'
 </script>
 
 <style scoped>

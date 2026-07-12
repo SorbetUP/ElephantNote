@@ -556,7 +556,7 @@ fn render_claims(
                 .get(chunk_id.as_str())
                 .ok_or_else(|| format!("Unknown source chunk while rendering: {chunk_id}"))?;
             let next = citation_numbers.len() + 1;
-            let number = *citation_numbers.entry(chunk_id.clone()).or_insert(next);
+            citation_numbers.entry(chunk_id.clone()).or_insert(next);
             references.push(format!(
                 "[{}]({})",
                 citation_label(source),
@@ -715,7 +715,7 @@ mod tests {
         };
         let rendered = render_wiki(&synthesis, "Iroh", &sources).unwrap();
         assert!(rendered.markdown.contains("generated: true"));
-        assert!(rendered.markdown.contains("[1](../../Notes/Iroh.md"));
+        assert!(rendered.markdown.contains("[Iroh](../../Notes/Iroh.md"));
         assert!(rendered
             .markdown
             .contains("[Peer-to-peer networking](./peer-to-peer-networking.md)"));

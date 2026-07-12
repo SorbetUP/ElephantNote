@@ -47,3 +47,5 @@ jobs:
           git add Elephant tests || true
           git commit -m "fix: repair real vault chat wiki and embedding flows"
           git push origin HEAD:assistant/wiki-organization-continuation
+
+# Retriggered after the real-vault acceptance review.

@@ -7,6 +7,8 @@ import { isTrustedAddonManifest } from '@/addons/manifest'
 import { useAddonsStore } from '@/store/addons'
 
 const INTERNAL_ADDON_IDS = new Set(['elephant.addon-packs'])
+const OBSOLETE_DEMO_ADDON_IDS = new Set(['com.elephantnote.examples.trusted-workspace-lab'])
+const isHiddenAddonId = (id) => INTERNAL_ADDON_IDS.has(id) || OBSOLETE_DEMO_ADDON_IDS.has(id)
 
 const persistExternalAddonState = async (addonId, enabled) => {
   const invoke = globalThis?.__TAURI__?.core?.invoke
@@ -19,7 +21,6 @@ const sortByName = (left, right) => addonName(left).localeCompare(addonName(righ
 
 export const useAddonsSettings = () => {
   const addonsStore = useAddonsStore()
-  const riskAccepted = ref(false)
   const query = ref('')
   const expandedAddonId = ref('')
   const message = ref('')
@@ -50,7 +51,7 @@ export const useAddonsSettings = () => {
   }
 
   const filteredInstalledAddons = computed(() => items.value
-    .filter((addon) => !INTERNAL_ADDON_IDS.has(addon.manifest.id))
+    .filter((addon) => !isHiddenAddonId(addon.manifest.id))
     .filter(matchesQuery)
     .sort(sortByName))
 
@@ -59,7 +60,7 @@ export const useAddonsSettings = () => {
 
     for (const entry of builtInCatalog.value) {
       const manifest = entry?.manifest
-      if (!manifest?.id || entry.installed || INTERNAL_ADDON_IDS.has(manifest.id)) continue
+      if (!manifest?.id || entry.installed || isHiddenAddonId(manifest.id)) continue
       available.set(manifest.id, {
         ...manifest,
         installSource: 'builtin',
@@ -69,7 +70,7 @@ export const useAddonsSettings = () => {
     }
 
     for (const entry of catalog.value) {
-      if (!entry?.id || INTERNAL_ADDON_IDS.has(entry.id) || available.has(entry.id)) continue
+      if (!entry?.id || isHiddenAddonId(entry.id) || available.has(entry.id)) continue
       const installed = items.value.find((addon) => addon.manifest.id === entry.id)
       const updateAvailable = Boolean(installed && installed.manifest.version !== entry.version)
       if (installed && !updateAvailable) continue
@@ -105,11 +106,9 @@ export const useAddonsSettings = () => {
   }
 
   const enableCommunityAddons = async () => {
-    if (!riskAccepted.value) return
     try {
       await addonsStore.setCommunityAddonsEnabled(true)
-      riskAccepted.value = false
-      showMessage('Community addons are available. Enable only the addons you trust.')
+      showMessage('Community addons enabled.')
       await refreshCatalog()
       await addonsStore.loadTrustedState()
     } catch (error) {
@@ -127,7 +126,7 @@ export const useAddonsSettings = () => {
       const failed = persistenceResults.filter((result) => result.status === 'rejected')
       if (failed.length) throw new Error(`Community addons stopped, but ${failed.length} addon state${failed.length === 1 ? '' : 's'} could not be persisted.`)
       expandedAddonId.value = ''
-      showMessage(`Community addons disabled. ${installedExternalAddons.length} installed package${installedExternalAddons.length === 1 ? '' : 's'} will remain off.`)
+      showMessage('Community addons disabled.')
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
     }
@@ -149,6 +148,10 @@ export const useAddonsSettings = () => {
   }
 
   const installAddonPackage = async () => {
+    if (!communityAddonsEnabled.value) {
+      showMessage('Enable community addons before installing a package from file.', true)
+      return
+    }
     try {
       const selected = await open({
         multiple: false,
@@ -177,7 +180,7 @@ export const useAddonsSettings = () => {
   const installAvailableAddon = async (addon) => {
     if (addon?.installSource === 'builtin') return installBuiltinAddon(addon)
     if (!communityAddonsEnabled.value) {
-      showMessage('Turn on community addons before installing this package.', true)
+      showMessage('Enable community addons before installing this package.', true)
       return
     }
     return installCatalogAddon(addon)
@@ -223,6 +226,16 @@ export const useAddonsSettings = () => {
     }
   }
 
+  const removeObsoleteDemoAddons = async () => {
+    const obsolete = items.value.filter((addon) => OBSOLETE_DEMO_ADDON_IDS.has(addon.manifest.id))
+    if (!obsolete.length) return
+    const results = await Promise.allSettled(obsolete.map((addon) => addonsStore.uninstallExternalAddon(addon.manifest.id)))
+    const failures = results.filter((result) => result.status === 'rejected')
+    if (failures.length) {
+      log.warn('[settings:addons] obsolete demo cleanup failed', { failures: failures.length })
+    }
+  }
+
   const runAction = async (action, payload = undefined) => {
     try {
       const result = await addonsStore.runAction(action.id, payload)
@@ -236,6 +249,7 @@ export const useAddonsSettings = () => {
   }
 
   onMounted(async () => {
+    await removeObsoleteDemoAddons()
     if (!communityConsentLoaded.value) await addonsStore.loadCommunityAddonsConsent()
     if (communityAddonsEnabled.value) {
       await Promise.allSettled([refreshCatalog(), addonsStore.loadTrustedState()])
@@ -249,7 +263,6 @@ export const useAddonsSettings = () => {
   })
 
   return {
-    riskAccepted,
     query,
     expandedAddonId,
     message,

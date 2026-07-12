@@ -1,10 +1,12 @@
 import ChatSidebar from 'elephant-front/components/shell/ChatSidebar.vue'
 import { useVaultStore } from 'elephant-front/stores/vaultStore'
 import AiChatSettings from './ui/AiChatSettings.vue'
+import { AI_SETTINGS_PAGE_BY_ID } from './aiSettingsRegistry'
 import { mountSettingsComponent } from './settingsComponentHost'
 
 const ADDON_ID = 'elephant.ai-chat'
 const CHAT_ACTION_ID = `${ADDON_ID}.toggle`
+const SETTINGS_PAGE = AI_SETTINGS_PAGE_BY_ID.chat
 
 export const aiChatAddon = {
   manifest: {
@@ -24,11 +26,11 @@ export const aiChatAddon = {
     ctx.addSettingsSection({
       id: `${ADDON_ID}.settings`,
       section: 'ai',
-      slot: 'ai.chat',
+      slot: SETTINGS_PAGE.slot,
       chrome: false,
-      title: 'Chat',
+      title: SETTINGS_PAGE.label,
       description: 'Choose the provider, model and generation settings used by chat.',
-      order: 61,
+      order: SETTINGS_PAGE.order,
       render: mountSettingsComponent(ctx, AiChatSettings)
     })
 

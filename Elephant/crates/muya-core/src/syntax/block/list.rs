@@ -15,11 +15,7 @@ pub fn parse(line: &str) -> Option<ListMarker<'_>> {
     return None;
   }
 
-  if let Some(marker) = parse_unordered(trimmed) {
-    return Some(marker);
-  }
-
-  parse_ordered(trimmed)
+  parse_unordered(trimmed).or_else(|| parse_ordered(trimmed))
 }
 
 fn parse_unordered(line: &str) -> Option<ListMarker<'_>> {
@@ -42,26 +38,24 @@ fn parse_unordered(line: &str) -> Option<ListMarker<'_>> {
 }
 
 fn parse_task(rest: &str) -> Option<ListMarker<'_>> {
-  let checked = if let Some(content) = rest.strip_prefix("[ ] ") {
+  if let Some(content) = rest.strip_prefix("[ ] ") {
     return Some(ListMarker {
       kind: ListKind::Task,
       start: None,
       checked: Some(false),
       content,
     });
-  } else if let Some(content) = rest.strip_prefix("[x] ").or_else(|| rest.strip_prefix("[X] ")) {
-    return Some(ListMarker {
+  }
+
+  rest
+    .strip_prefix("[x] ")
+    .or_else(|| rest.strip_prefix("[X] "))
+    .map(|content| ListMarker {
       kind: ListKind::Task,
       start: None,
       checked: Some(true),
       content,
-    });
-  } else {
-    false
-  };
-
-  let _ = checked;
-  None
+    })
 }
 
 fn parse_ordered(line: &str) -> Option<ListMarker<'_>> {

@@ -35,6 +35,8 @@ export const disableProviderRoutes = async (providerId, options = {}) => {
 
   const chatWasOwned = routeUsesProvider(config?.routes?.chat, providerId)
     || config?.provider === providerId
+  if (chatWasOwned) changed = true
+
   const localAi = { ...(config?.localAi || {}) }
   if (options.disableLocalAi === true && localAi.enabled === true) {
     localAi.enabled = false

@@ -5,7 +5,7 @@
       <div class="en-rail-layout-header-actions">
         <button type="button" title="Add divider" aria-label="Add divider" @click="addDivider"><Plus aria-hidden="true" /></button>
         <button type="button" title="Reset icon bar" aria-label="Reset icon bar" @click="resetLayout"><RotateCcw aria-hidden="true" /></button>
-        <button type="button" :title="collapsed ? 'Expand icon bar settings' : 'Collapse icon bar settings'" :aria-expanded="!collapsed" @click="collapsed = !collapsed">
+        <button type="button" :title="collapsed ? 'Expand icon bar settings' : 'Collapse icon bar settings'" :aria-expanded="!collapsed" @click="toggleCollapsed">
           <ChevronDown :class="{ collapsed }" aria-hidden="true" />
         </button>
       </div>
@@ -20,11 +20,16 @@
         draggable="true"
         role="listitem"
         @dragstart="startDrag(item.id, $event)"
-        @dragend="draggingId = ''"
+        @dragend="endDrag(item.id)"
         @dragover.prevent
         @drop.prevent="dropOn(item.id)"
       >
         <GripVertical class="en-rail-layout-grip" aria-hidden="true" />
+        <span class="en-rail-layout-icon-preview" :class="{ divider: item.separator }" aria-hidden="true">
+          <component :is="item.iconComponent" v-if="item.iconComponent" />
+          <span v-else-if="item.separator" />
+          <Star v-else />
+        </span>
         <div class="en-rail-layout-copy">
           <strong>{{ item.separator ? 'Divider' : item.label }}</strong>
           <span v-if="item.separator" class="en-rail-layout-divider-preview" aria-hidden="true" />
@@ -44,8 +49,28 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { ChevronDown, ChevronUp, Eye, EyeOff, GripVertical, Plus, RotateCcw, Trash2 } from '@lucide/vue'
+import { computed, onMounted, ref } from 'vue'
+import {
+  BookOpenText,
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  Database,
+  Eye,
+  EyeOff,
+  GitFork,
+  GripVertical,
+  LayoutDashboard,
+  ListTodo,
+  PanelLeft,
+  Plus,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Star,
+  Trash2,
+  Vault
+} from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import { useAddonsStore } from '@/store/addons'
 import { getAddonSidebarItems } from '@/addons'
@@ -57,7 +82,8 @@ import {
   isIconRailSeparatorId,
   moveIconRailItem,
   normalizeIconRailHidden,
-  normalizeIconRailOrder
+  normalizeIconRailOrder,
+  pushIconRailLog
 } from '../navigation/iconRailLayout'
 
 const preferences = usePreferencesStore()
@@ -65,22 +91,48 @@ const addonsStore = useAddonsStore()
 const draggingId = ref('')
 const collapsed = ref(false)
 
+const CORE_ICON_COMPONENTS = {
+  vault: Vault,
+  'sidebar-toggle': PanelLeft,
+  dashboard: LayoutDashboard,
+  search: Search
+}
+const ADDON_ICON_COMPONENTS = {
+  'book-open-text': BookOpenText,
+  'calendar-days': CalendarDays,
+  calendar: CalendarDays,
+  database: Database,
+  'git-fork': GitFork,
+  'list-todo': ListTodo,
+  tasks: ListTodo,
+  dashboard: LayoutDashboard,
+  graph: GitFork,
+  search: Search,
+  sparkles: Sparkles
+}
+
 const addonItems = computed(() => addonsStore.getContributions('views')
   .filter((entry) => entry?.contribution?.id && entry?.contribution?.title)
   .map((entry) => ({
     id: addonViewRailId(entry.contribution.id),
     label: entry.contribution.title,
-    source: 'addon'
+    source: 'addon',
+    iconComponent: ADDON_ICON_COMPONENTS[entry.contribution.icon] || Star
   })))
 
 const legacyAddonItems = computed(() => getAddonSidebarItems(addonsStore.contributions).map((item) => ({
   id: `addon-item:${item.addonId}:${item.id}`,
   label: item.title || item.tooltip || item.id,
-  source: 'addon'
+  source: 'addon',
+  iconComponent: ADDON_ICON_COMPONENTS[item.icon] || Star
 })))
 
 const availableItems = computed(() => [
-  ...CORE_ICON_RAIL_ITEMS.map((item) => ({ ...item, source: 'core' })),
+  ...CORE_ICON_RAIL_ITEMS.map((item) => ({
+    ...item,
+    source: 'core',
+    iconComponent: CORE_ICON_COMPONENTS[item.id] || Star
+  })),
   ...addonItems.value,
   ...legacyAddonItems.value
 ])
@@ -92,48 +144,111 @@ const orderedItems = computed(() => {
   return orderedIds.value.map((id) => isIconRailSeparatorId(id) ? { id, separator: true } : byId.get(id)).filter(Boolean)
 })
 
-const persistOrder = (order) => preferences.SET_SINGLE_PREFERENCE({
-  type: 'iconRailOrder',
-  value: normalizeIconRailOrder(order, availableIds.value)
-})
+const persistOrder = (order, reason, details = {}) => {
+  const normalized = normalizeIconRailOrder(order, availableIds.value)
+  pushIconRailLog('settings:order-persist', {
+    reason,
+    previous: orderedIds.value,
+    next: normalized,
+    ...details
+  })
+  preferences.SET_SINGLE_PREFERENCE({
+    type: 'iconRailOrder',
+    value: normalized
+  })
+}
 
-const persistHidden = (hidden) => preferences.SET_SINGLE_PREFERENCE({
-  type: 'iconRailHidden',
-  value: normalizeIconRailHidden(hidden, availableIds.value)
-})
+const persistHidden = (hidden, reason, details = {}) => {
+  const normalized = normalizeIconRailHidden(hidden, availableIds.value)
+  pushIconRailLog('settings:hidden-persist', {
+    reason,
+    previous: hiddenIds.value,
+    next: normalized,
+    ...details
+  })
+  preferences.SET_SINGLE_PREFERENCE({
+    type: 'iconRailHidden',
+    value: normalized
+  })
+}
 
 const isHidden = (id) => hiddenIds.value.includes(id)
-const move = (id, index) => persistOrder(moveIconRailItem(orderedIds.value, id, index))
-const addDivider = () => persistOrder([...orderedIds.value, createIconRailSeparatorId()])
-const removeDivider = (id) => persistOrder(orderedIds.value.filter((candidate) => candidate !== id))
+const move = (id, index) => persistOrder(
+  moveIconRailItem(orderedIds.value, id, index),
+  'button-move',
+  { id, targetIndex: index }
+)
+const addDivider = () => {
+  const dividerId = createIconRailSeparatorId()
+  persistOrder([...orderedIds.value, dividerId], 'divider-add', { dividerId })
+}
+const removeDivider = (id) => persistOrder(
+  orderedIds.value.filter((candidate) => candidate !== id),
+  'divider-remove',
+  { id }
+)
 
 const toggleVisibility = (id) => {
   const next = new Set(hiddenIds.value)
-  if (next.has(id)) next.delete(id)
+  const willShow = next.has(id)
+  if (willShow) next.delete(id)
   else next.add(id)
-  persistHidden([...next])
+  persistHidden([...next], 'visibility-toggle', {
+    id,
+    visible: willShow
+  })
 }
 
 const startDrag = (id, event) => {
   draggingId.value = id
+  pushIconRailLog('settings:drag-start', { id })
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', id)
   }
 }
 
+const endDrag = (id) => {
+  draggingId.value = ''
+  pushIconRailLog('settings:drag-end', { id })
+}
+
 const dropOn = (targetId) => {
   const sourceId = draggingId.value
   draggingId.value = ''
-  if (!sourceId || sourceId === targetId) return
+  if (!sourceId || sourceId === targetId) {
+    pushIconRailLog('settings:drop-ignored', { sourceId, targetId })
+    return
+  }
   const targetIndex = orderedIds.value.indexOf(targetId)
-  persistOrder(moveIconRailItem(orderedIds.value, sourceId, targetIndex))
+  persistOrder(
+    moveIconRailItem(orderedIds.value, sourceId, targetIndex),
+    'drag-drop',
+    { sourceId, targetId, targetIndex }
+  )
 }
 
 const resetLayout = () => {
-  persistOrder(normalizeIconRailOrder(DEFAULT_ICON_RAIL_ORDER, availableIds.value))
-  persistHidden([])
+  pushIconRailLog('settings:reset', {
+    availableIds: availableIds.value,
+    defaultOrder: DEFAULT_ICON_RAIL_ORDER
+  })
+  persistOrder(normalizeIconRailOrder(DEFAULT_ICON_RAIL_ORDER, availableIds.value), 'reset')
+  persistHidden([], 'reset')
 }
+
+const toggleCollapsed = () => {
+  collapsed.value = !collapsed.value
+  pushIconRailLog('settings:collapsed', { collapsed: collapsed.value })
+}
+
+onMounted(() => {
+  pushIconRailLog('settings:mounted', {
+    available: availableItems.value.map((item) => ({ id: item.id, label: item.label, source: item.source })),
+    order: orderedIds.value,
+    hidden: hiddenIds.value
+  })
+})
 </script>
 
 <style scoped>
@@ -146,12 +261,16 @@ const resetLayout = () => {
 .en-rail-layout-header-actions svg, .en-rail-layout-actions svg { width: 14px; height: 14px; }
 .en-rail-layout-header-actions .collapsed { transform: rotate(-90deg); }
 .en-rail-layout-list { display: grid; border: 1px solid var(--en-border); border-radius: 10px; overflow: hidden; }
-.en-rail-layout-item { min-height: 48px; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 9px; background: var(--en-surface); }
+.en-rail-layout-item { min-height: 48px; display: grid; grid-template-columns: 22px 24px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 9px; background: var(--en-surface); }
 .en-rail-layout-item + .en-rail-layout-item { border-top: 1px solid var(--en-border); }
 .en-rail-layout-item.dragging { opacity: .48; }
-.en-rail-layout-item.hidden .en-rail-layout-copy { opacity: .55; }
+.en-rail-layout-item.hidden .en-rail-layout-copy, .en-rail-layout-item.hidden .en-rail-layout-icon-preview { opacity: .55; }
 .en-rail-layout-item.separator { min-height: 42px; }
 .en-rail-layout-grip { width: 16px; height: 16px; color: var(--en-muted); cursor: grab; }
+.en-rail-layout-icon-preview { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; color: var(--en-muted); background: var(--en-soft); }
+.en-rail-layout-icon-preview svg { width: 15px; height: 15px; display: block; stroke: currentColor; }
+.en-rail-layout-icon-preview.divider { background: transparent; }
+.en-rail-layout-icon-preview.divider > span { width: 20px; height: 1px; background: var(--en-border-strong, var(--en-border)); }
 .en-rail-layout-copy { min-width: 0; display: flex; align-items: center; gap: 10px; }
 .en-rail-layout-copy strong { flex: 0 0 auto; font-size: 12px; }
 .en-rail-layout-divider-preview { width: 34px; height: 1px; background: var(--en-border-strong, var(--en-border)); }

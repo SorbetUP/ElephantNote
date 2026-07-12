@@ -1,3 +1,4 @@
+import SyncNavigationControl from 'elephant-front/components/navigation/SyncNavigationControl.vue'
 import { irohSyncClient } from 'elephant-front/services/irohSyncClient'
 import SyncAddonSettings from './ui/SyncAddonSettings.vue'
 import { mountSettingsComponent } from './settingsComponentHost'
@@ -35,6 +36,7 @@ export const syncAddon = {
     ctx.registerContribution('top-bar.items', {
       id: `${ADDON_ID}.navigation-control`,
       kind: 'sync-control-v1',
+      component: SyncNavigationControl,
       order: 30
     })
   },

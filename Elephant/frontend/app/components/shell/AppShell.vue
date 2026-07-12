@@ -9,10 +9,7 @@
     :class="[
       `en-theme-${themeMode}`,
       `en-theme-${themeClassId}`,
-      {
-        'en-pinned-card-halo': preferences.pinnedCardHalo,
-        'en-local-ai-disabled': !aiAddonEnabled
-      }
+      { 'en-pinned-card-halo': preferences.pinnedCardHalo }
     ]"
     :style="shellStyle"
   >
@@ -21,6 +18,7 @@
       <div class="en-layout">
         <icon-rail
           :active-addon-view-id="activeAddonViewId"
+          :sidebar-visible="sidebarVisible"
           @open-settings="openSettings"
           @search="openSearch"
           @toggle-sidebar="toggleSidebar"
@@ -53,7 +51,12 @@
         </div>
       </div>
     </div>
-    <ChatSidebar v-if="aiAddonEnabled && store.chatSidebarOpen" />
+    <template v-for="entry in shellRightZones" :key="entry.contribution.id">
+      <component
+        :is="entry.contribution.component"
+        v-if="isLayoutZoneVisible(entry)"
+      />
+    </template>
     <search-modal />
     <settings-panel
       v-if="isSettingsOpen"
@@ -90,11 +93,11 @@ import TopVaultBar from './TopVaultBar.vue'
 import IconRail from '../navigation/IconRail.vue'
 import SidebarNav from '../navigation/SidebarNav.vue'
 import MainContent from './MainContent.vue'
-import ChatSidebar from './ChatSidebar.vue'
 import SettingsPanel from '../settings/SettingsPanel.vue'
 import SearchModal from '../../search/SearchModal.vue'
 import '../../styles/app-shell.css'
 
+const CORE_WORKSPACE_VIEWS = new Set(['notes', 'dashboard', 'canvas'])
 const store = useVaultStore()
 const preferences = usePreferencesStore()
 const addonsStore = useAddonsStore()
@@ -114,16 +117,30 @@ let pendingSidebarWidth = null
 const activeThemeTokens = computed(() => getThemeTokens(theme.value))
 const themeMode = computed(() => getThemeMode(theme.value))
 const themeClassId = computed(() => theme.value.replace(/[^a-z0-9-]/gi, '-'))
-const aiAddonEnabled = computed(() => addonsStore.items.some(
-  (addon) => addon.manifest.id === 'elephant.ai' && addon.enabled
-))
 const availableAddonViewIds = computed(() => addonsStore.getContributions('views')
   .map((entry) => entry?.contribution?.id)
   .filter(Boolean))
+const shellRightZones = computed(() => addonsStore.getContributions('layout.zones')
+  .filter((entry) => entry?.contribution?.zone === 'shell.right' && entry?.contribution?.component)
+  .sort((left, right) => Number(left.contribution.order || 0) - Number(right.contribution.order || 0)))
 const shellStyle = computed(() => ({
   ...activeThemeTokens.value,
   '--en-sidebar-width': `${sidebarWidth.value}px`
 }))
+
+const isLayoutZoneVisible = (entry) => {
+  const predicate = entry?.contribution?.when
+  if (typeof predicate !== 'function') return true
+  try {
+    return predicate() === true
+  } catch (error) {
+    console.warn('[addons] layout visibility predicate failed', {
+      id: entry?.contribution?.id || '',
+      error
+    })
+    return false
+  }
+}
 
 const applyThemeVariables = () => {
   const root = document.documentElement
@@ -176,7 +193,7 @@ watch(theme, (mode) => {
 watch(
   () => [store.activeWorkspaceView, store.openedNotePath, store.activeVaultId],
   ([workspaceView, openedNotePath]) => {
-    if (workspaceView === 'calendar' || workspaceView === 'models' || workspaceView === 'chat') {
+    if (!CORE_WORKSPACE_VIEWS.has(workspaceView)) {
       store.setWorkspaceView('notes', { record: false })
       activeAddonViewId.value = ''
       return
@@ -188,10 +205,6 @@ watch(
 watch(availableAddonViewIds, (ids) => {
   if (activeAddonViewId.value && !ids.includes(activeAddonViewId.value)) closeAddonView()
 })
-
-watch(aiAddonEnabled, (enabled) => {
-  if (!enabled) store.chatSidebarOpen = false
-}, { immediate: true })
 
 provide('elephantnoteTheme', theme)
 provide('setElephantnoteTheme', setTheme)

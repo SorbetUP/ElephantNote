@@ -4,7 +4,7 @@ import { addonPacksAddon, builtinAddons } from '@/addons/builtin'
 
 const OPTIONAL_EDITOR_ADDONS = ['elephant.code-execution', 'elephant.excalidraw']
 
- describe('builtin addons', () => {
+describe('builtin addons', () => {
   it('exports only the cleaned first-party catalogue', () => {
     expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
       'elephant.addon-packs',

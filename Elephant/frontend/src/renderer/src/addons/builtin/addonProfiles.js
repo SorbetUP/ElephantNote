@@ -4,6 +4,7 @@ import { mountSettingsComponent } from './settingsComponentHost'
 import { invokeTauri, logAction, readNote, writeNote } from './shared'
 
 const ADDON_ID = 'elephant.addon-packs'
+const CORE_ADDON_IDS = new Set(['elephant.excalidraw'])
 const PACK_DIRECTORY = '.elephantnote/addons/packs'
 const DEFAULT_PACK_PATH = `${PACK_DIRECTORY}/default.enaddonpack`
 const BASE_PACK_PATH = `${PACK_DIRECTORY}/base.enaddonpack`
@@ -27,7 +28,6 @@ const DEVELOP_PARITY_ADDONS = Object.freeze([
   { id: 'elephant.open-models', version: '1.1.0', source: 'builtin', enabled: true },
   { id: 'elephant.sync', version: '1.0.0', source: 'builtin', enabled: true },
   { id: 'elephant.code-execution', version: '2.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.excalidraw', version: '1.1.0', source: 'builtin', enabled: true },
   { id: 'elephant.recently-edited', version: '1.0.0', source: 'builtin', enabled: true }
 ])
 
@@ -100,7 +100,7 @@ const validatePack = (raw, sourcePath = DEFAULT_PACK_PATH) => {
       source: normalizeSource(entry.source),
       version: typeof entry.version === 'string' ? entry.version.trim() : ''
     }
-  })
+  }).filter((entry) => !CORE_ADDON_IDS.has(entry.id))
 
   return {
     format: PACK_FORMAT,
@@ -173,7 +173,7 @@ const createPack = async (ctx, options = {}) => {
   const catalogue = await invokeTauri('tauri_addons_catalog_list')
   const catalogueById = new Map((Array.isArray(catalogue) ? catalogue : []).map((addon) => [addon.id, addon]))
   const addons = ctx.addons.list()
-    .filter((addon) => addon?.manifest?.id && addon.manifest.id !== ADDON_ID)
+    .filter((addon) => addon?.manifest?.id && addon.manifest.id !== ADDON_ID && !CORE_ADDON_IDS.has(addon.manifest.id))
     .map((addon) => {
       const external = addon.manifest.source === 'external'
       const catalogued = catalogueById.has(addon.manifest.id)
@@ -218,11 +218,6 @@ const prepareTrustedAddon = async (ctx, snapshot) => {
   if (!isTrustedAddonManifest(snapshot?.manifest)) return
   const external = ctx.addons.external
   if (!external) throw new Error('The full app access addon runtime is unavailable')
-  const approved = globalThis.confirm?.(
-    `${snapshot.manifest.name} requests Full app access.\n\n` +
-    'It can modify the interface, editor and application behavior. Continue?'
-  )
-  if (approved !== true) throw new Error(`Full app access was not approved for ${snapshot.manifest.name}`)
   await external.setSafeMode(false)
   await external.approveTrusted(snapshot.manifest.id)
 }

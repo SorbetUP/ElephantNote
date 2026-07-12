@@ -5,6 +5,8 @@ import {
   renderExecutableOutput,
   renderExecutableRunButton
 } from '../../../../muya/lib/parser/render/renderBlock/renderExecutableCodeRuntime'
+import CodeExecutionSettings from './ui/CodeExecutionSettings.vue'
+import { mountSettingsComponent } from './settingsComponentHost'
 
 const ADDON_ID = 'elephant.code-execution'
 
@@ -28,7 +30,7 @@ export const codeExecutionAddon = {
   manifest: {
     id: ADDON_ID,
     name: 'Code execution',
-    version: '1.1.0',
+    version: '2.0.0',
     description: 'Runs trusted fenced code blocks with locally installed interpreters.',
     author: 'ElephantNote',
     icon: 'terminal',
@@ -40,6 +42,20 @@ export const codeExecutionAddon = {
 
   activate(ctx) {
     const runtime = installExecutableCodeBlocks(globalThis)
+
+    ctx.addSettingsSection({
+      id: `${ADDON_ID}.settings`,
+      section: 'code-execution',
+      navigationLabel: 'Code execution',
+      navigationIcon: 'package',
+      standalone: true,
+      chrome: false,
+      title: 'Code execution',
+      description: 'Configure local interpreters, execution and retained output.',
+      order: 55,
+      render: mountSettingsComponent(ctx, CodeExecutionSettings)
+    })
+
     ctx.addEditorExtension({
       id: `${ADDON_ID}.fenced-code-runtime`,
       decorateContainer({ block, children }) {

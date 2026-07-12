@@ -15,7 +15,7 @@ export const syncAddon = {
     defaultEnabled: false,
     removable: true,
     permissions: ['sync.status', 'sync.pair', 'sync.run', 'sync.conflicts'],
-    contributes: { settings: true }
+    contributes: { settings: true, topBar: true }
   },
 
   activate(ctx) {
@@ -31,6 +31,11 @@ export const syncAddon = {
       description: 'Pair devices and synchronize vaults over encrypted Iroh connections.',
       order: 50,
       render: mountSettingsComponent(ctx, SyncAddonSettings)
+    })
+    ctx.registerContribution('top-bar.items', {
+      id: `${ADDON_ID}.navigation-control`,
+      kind: 'sync-control-v1',
+      order: 30
     })
   },
 

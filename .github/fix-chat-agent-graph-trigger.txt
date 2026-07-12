@@ -1,1 +1,1 @@
-trigger: chat-agent-graph-fixes-2026-07-12-5
+trigger: chat-agent-graph-fixes-2026-07-12-6

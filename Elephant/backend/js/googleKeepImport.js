@@ -162,7 +162,8 @@ const extractZip = async(zipPath) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'elephantnote-keep-'))
 
   try {
-    const extractZipModule = await import('extract-zip')
+    const optionalExtractorPackage = 'extract-zip'
+    const extractZipModule = await import(/* @vite-ignore */ optionalExtractorPackage)
     const extractZip = extractZipModule.default || extractZipModule
     await extractZip(zipPath, { dir: tempRoot })
     return tempRoot

@@ -26,3 +26,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Audit Muya module sizes
         run: node build/scripts/check-muya-module-size.mjs
+      - name: Upload Muya module inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-module-size-${{ github.run_id }}
+          path: build/muya-module-size.json
+          if-no-files-found: error
+          retention-days: 14

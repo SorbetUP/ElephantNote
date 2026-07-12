@@ -1,13 +1,19 @@
 <template>
   <div class="en-ai-parent-settings">
     <nav class="en-ai-module-tabs" aria-label="AI settings">
-      <button type="button" :class="{ active: activeTab === 'providers' }" @click="activeTab = 'providers'"><Server aria-hidden="true" /> Providers</button>
-      <button v-if="moduleEnabled.chat" type="button" :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'"><MessageCircle aria-hidden="true" /> Chat</button>
-      <button v-if="moduleEnabled.search" type="button" :class="{ active: activeTab === 'search' }" @click="activeTab = 'search'"><Search aria-hidden="true" /> Search</button>
-      <button v-if="moduleEnabled.ocr" type="button" :class="{ active: activeTab === 'ocr' }" @click="activeTab = 'ocr'"><ScanText aria-hidden="true" /> OCR</button>
+      <button
+        v-for="page in visiblePages"
+        :key="page.id"
+        type="button"
+        :class="{ active: activeTab === page.id }"
+        @click="activeTab = page.id"
+      >
+        <component :is="TAB_ICONS[page.icon]" aria-hidden="true" />
+        {{ page.label }}
+      </button>
     </nav>
 
-    <template v-if="activeTab === 'providers'">
+    <template v-if="activeTab === AI_SETTINGS_PAGE_IDS.providers">
       <section class="en-ai-card">
         <header class="en-ai-card-header">
           <div>
@@ -53,9 +59,12 @@
       <p v-if="providerMessage" class="en-ai-feedback">{{ providerMessage }}</p>
     </template>
 
-    <div v-else-if="activeTab === 'chat'" class="en-ai-submodule-slot" data-elephant-addon-settings-slot="ai.chat" />
-    <div v-else-if="activeTab === 'search'" class="en-ai-submodule-slot" data-elephant-addon-settings-slot="ai.search" />
-    <div v-else-if="activeTab === 'ocr'" class="en-ai-submodule-slot" data-elephant-addon-settings-slot="ai.ocr" />
+    <div
+      v-else-if="activePage?.slot"
+      :key="activePage.slot"
+      class="en-ai-submodule-slot"
+      :data-elephant-addon-settings-slot="activePage.slot"
+    />
   </div>
 </template>
 
@@ -66,8 +75,19 @@ import log from '@/platform/runtimeLogShim'
 import { useAddonsStore } from '@/store/addons'
 import { normalizeAiConfig } from 'common/elephantnote/aiProviders'
 import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
+import {
+  AI_SETTINGS_PAGE_BY_ID,
+  AI_SETTINGS_PAGE_IDS,
+  visibleAiSettingsPages
+} from '../aiSettingsRegistry'
 
 const CACHE_KEY = 'elephantnote:ai-settings-draft'
+const TAB_ICONS = Object.freeze({
+  server: Server,
+  'message-circle': MessageCircle,
+  search: Search,
+  'scan-text': ScanText
+})
 const providerDefaults = Object.freeze({
   'openai-compatible': { label: 'OpenAI-compatible API', endpoint: 'https://api.openai.com/v1' },
   openrouter: { label: 'OpenRouter', endpoint: 'https://openrouter.ai/api/v1' },
@@ -78,7 +98,7 @@ const providerDefaults = Object.freeze({
 })
 
 const addonsStore = useAddonsStore()
-const activeTab = ref('providers')
+const activeTab = ref(AI_SETTINGS_PAGE_IDS.providers)
 const currentConfig = ref(normalizeAiConfig())
 const providerRows = ref([])
 const providerMessage = ref('')
@@ -86,15 +106,8 @@ const hydrated = ref(false)
 const dirty = ref(false)
 let autosaveTimer = 0
 
-const activeAiSlots = computed(() => new Set(addonsStore.getContributions('settings.sections')
-  .filter((entry) => entry?.contribution?.section === 'ai')
-  .map((entry) => entry?.contribution?.slot)
-  .filter(Boolean)))
-const moduleEnabled = computed(() => ({
-  chat: activeAiSlots.value.has('ai.chat'),
-  search: activeAiSlots.value.has('ai.search'),
-  ocr: activeAiSlots.value.has('ai.ocr')
-}))
+const visiblePages = computed(() => visibleAiSettingsPages(addonsStore.getContributions('settings.sections')))
+const activePage = computed(() => AI_SETTINGS_PAGE_BY_ID[activeTab.value] || AI_SETTINGS_PAGE_BY_ID.providers)
 
 const clone = (value) => JSON.parse(JSON.stringify(value ?? {}))
 const parseHeaders = (value = '') => {
@@ -209,9 +222,9 @@ const handleConfigChanged = (event) => {
   if (!dirty.value) applyConfig(next)
 }
 
-watch(moduleEnabled, (modules) => {
-  if (activeTab.value !== 'providers' && !modules[activeTab.value]) activeTab.value = 'providers'
-}, { deep: true })
+watch(visiblePages, (pages) => {
+  if (!pages.some((page) => page.id === activeTab.value)) activeTab.value = AI_SETTINGS_PAGE_IDS.providers
+})
 watch(providerRows, () => scheduleAutosave('provider-watch'), { deep: true, flush: 'sync' })
 onMounted(() => {
   window.addEventListener('elephantnote:ai-config-changed', handleConfigChanged)

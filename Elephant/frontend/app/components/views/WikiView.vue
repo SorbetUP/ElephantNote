@@ -16,7 +16,6 @@ const store = useVaultStore()
 
 const loadEmptyWiki = () => {
   store.currentPath = ''
-  store.activeWorkspaceView = 'wiki'
   store.openedNotePath = ''
   store.entries = []
   log.info('[wiki] empty wiki view', {

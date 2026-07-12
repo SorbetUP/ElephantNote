@@ -1,0 +1,15 @@
+{
+  "rendererTables": {
+    "table": [["<tr>h</tr>\n", "<tr>b</tr>\n", "<table>\n<thead>\n<tr>h</tr>\n</thead>\n<tbody><tr>b</tr>\n</tbody></table>\n"], ["header", "", "<table>\n<thead>\nheader</thead>\n</table>\n"]],
+    "row": [["", "<tr>\n</tr>\n"], ["cell", "<tr>\ncell</tr>\n"]],
+    "cell": [["A", {"header": true, "align": "center"}, "<th align=\"center\">A</th>\n"], ["B", {"header": false, "align": null}, "<td>B</td>\n"], ["", {"header": false, "align": "right"}, "<td align=\"right\"></td>\n"]]
+  },
+  "textRenderer": {
+    "identity": [["hello", "hello", "hello", "hello", "hello", "hello", "hello", "hello"], ["", "", "", "", "", "", "", ""], ["😀", "😀", "😀", "😀", "😀", "😀", "😀", "😀"]],
+    "emoji": [[":smile:", "😄", "😄"], ["x", "", ""]],
+    "script": [["x", "^", "<sup>x</sup>"], ["y", "~", "<sub>y</sub>"], ["", "^", "<sup></sup>"]],
+    "footnote": [["a", {"footnoteId": 2, "footnoteIdentifierId": 3, "order": 1}, "<a href=\"#fn2\" class=\"footnote-ref\" id=\"fnref3\" role=\"doc-noteref\"><sup>1</sup></a>"], ["label", {"footnoteId": 0, "footnoteIdentifierId": "x", "order": 0}, "<a href=\"#\" class=\"footnote-ref\" id=\"fnrefx\" role=\"doc-noteref\"><sup>label</sup></a>"]],
+    "linkImage": [["u", "t", "text", "text", "text"], ["", null, "", "", ""]],
+    "br": ""
+  }
+}

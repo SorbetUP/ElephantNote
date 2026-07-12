@@ -5,6 +5,8 @@ import { calendarAddon } from './calendar'
 import { sitesAddon } from './sites'
 import { aiAddon } from './ai'
 import { syncAddon } from './sync'
+import { codeExecutionAddon } from './codeExecution'
+import { excalidrawAddon } from './excalidraw'
 
 export {
   addonPacksAddon,
@@ -14,7 +16,9 @@ export {
   calendarAddon,
   sitesAddon,
   aiAddon,
-  syncAddon
+  syncAddon,
+  codeExecutionAddon,
+  excalidrawAddon
 }
 
 export const builtinAddons = [
@@ -24,5 +28,7 @@ export const builtinAddons = [
   calendarAddon,
   sitesAddon,
   aiAddon,
-  syncAddon
+  syncAddon,
+  codeExecutionAddon,
+  excalidrawAddon
 ]

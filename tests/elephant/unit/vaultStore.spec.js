@@ -351,9 +351,10 @@ describe('ElephantNote vault store pinned notes', () => {
       entries: []
     })
 
-    await store.setVaultIcon('folder')
+    await store.setVaultIcon('vault-1', 'rocket')
 
-    expect(store.activeVault.icon).toBe('folder')
+    expect(store.activeVault.icon).toBe('rocket')
+    expect(store.vaults[0].icon).toBe('rocket')
   })
 
   it('renames and removes vault metadata without deleting files', async() => {
@@ -366,33 +367,50 @@ describe('ElephantNote vault store pinned notes', () => {
       entries: []
     })
 
-    await store.renameVault('Renamed')
-    expect(store.activeVault.name).toBe('Renamed')
+    await expect(store.setVaultName('vault-1', 'Renamed vault')).resolves.toBe(true)
+    expect(store.activeVault.name).toBe('Renamed vault')
 
-    await store.removeVault()
+    await expect(store.removeVault('vault-1')).resolves.toBe(true)
     expect(store.activeVaultId).toBe('vault-2')
-    expect(store.activeVault.name).toBe('Vault 2')
+    expect(store.vaults.map((vault) => vault.id)).toEqual(['vault-2'])
   })
 
-  it('navigates back and forward through app history entries', () => {
+  it('navigates back and forward through app history entries', async() => {
+    window.elephantnote.listDirectory = async(relativePath = '') => {
+      if (relativePath === 'folder-a') {
+        return [
+          { kind: 'note', path: 'folder-a/note.md', title: 'Note', updatedAt: '2026-05-20T10:00:00.000Z' }
+        ]
+      }
+      return [
+        { kind: 'folder', path: 'folder-a', title: 'Folder A', updatedAt: '2026-05-20T09:00:00.000Z' }
+      ]
+    }
+
     const store = useVaultStore()
-    const navigationStore = useNavigationStore()
+    const navigation = useNavigationStore()
     store.applyPayload({
       vaults: [createVault()],
       activeVaultId: 'vault-1',
       activeVault: createVault(),
       workspace: { sidebar: [] },
-      entries: [{ kind: 'note', path: 'a.md', title: 'A' }]
+      entries: [
+        { kind: 'folder', path: 'folder-a', title: 'Folder A', updatedAt: '2026-05-20T09:00:00.000Z' }
+      ]
     })
+    navigation.reset({ type: 'all_notes' })
 
-    store.openNote({ path: 'a.md', title: 'A' })
-    store.setWorkspaceView('graph')
+    await store.openDirectory('folder-a')
+    store.openNote({ kind: 'note', path: 'folder-a/note.md', title: 'Note' })
 
-    navigationStore.goBack()
-    expect(store.openedNotePath).toBe('a.md')
+    expect(navigation.canGoBack).toBe(true)
+    await store.navigateTo(navigation.back())
+    expect(store.currentPath).toBe('folder-a')
+    expect(store.openedNotePath).toBe('')
 
-    navigationStore.goForward()
-    expect(store.activeWorkspaceView).toBe('graph')
+    expect(navigation.canGoForward).toBe(true)
+    await store.navigateTo(navigation.forward())
+    expect(store.openedNotePath).toBe('folder-a/note.md')
   })
 
   it('persists folder sidebar visibility in the workspace', async() => {
@@ -405,12 +423,35 @@ describe('ElephantNote vault store pinned notes', () => {
       entries: []
     })
 
-    await store.setFolderSidebarVisibility(false)
-
-    expect(store.workspace.showFolderSidebar).toBe(false)
+    await expect(store.toggleEntrySidebarVisibility({
+      kind: 'folder',
+      path: 'folder-a',
+      title: 'Folder A'
+    })).resolves.toBe(true)
+    expect(store.sidebarAttachedItems.map((item) => item.path)).toEqual(['folder-a'])
+    await expect(store.toggleEntrySidebarVisibility({
+      kind: 'folder',
+      path: 'folder-a',
+      title: 'Folder A'
+    })).resolves.toBe(false)
+    expect(store.sidebarAttachedItems).toEqual([])
   })
 
-  it('updates pinned folders when a folder is renamed', () => {
+  it('updates pinned folders when a folder is renamed', async() => {
+    window.elephantnote.renameEntry = async() => ({
+      workspace: {
+        sidebar: [
+          {
+            id: 'sidebar-renamed',
+            path: 'Getting Started/Renamed',
+            title: 'Renamed',
+            type: 'folder'
+          }
+        ]
+      },
+      entries: []
+    })
+
     const store = useVaultStore()
     store.applyPayload({
       vaults: [createVault()],
@@ -420,9 +461,16 @@ describe('ElephantNote vault store pinned notes', () => {
       entries: []
     })
 
-    store.togglePinnedEntry('folder')
-    store.updatePinnedPath('folder', 'renamed')
+    await store.attachEntryToSidebar({
+      kind: 'folder',
+      path: 'Getting Started/New Folder',
+      title: 'New Folder'
+    })
+    store.togglePinnedEntry('Getting Started/New Folder')
 
-    expect(store.pinnedEntryPaths).toEqual(['renamed'])
+    await store.renameEntry({ kind: 'folder', path: 'Getting Started/New Folder' }, 'Renamed')
+
+    expect(store.sidebarAttachedItems.map((item) => item.path)).toEqual(['Getting Started/Renamed'])
+    expect(store.pinnedNotePaths).toEqual(['Getting Started/Renamed'])
   })
 })

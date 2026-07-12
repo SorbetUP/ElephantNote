@@ -9,6 +9,7 @@ describe('optional editor feature addons', () => {
   it('keeps the base code block in Muya and contributes execution separately', () => {
     const main = read('Elephant/frontend/src/renderer/src/main.js')
     const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/codeExecution.js')
+    const settings = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/CodeExecutionSettings.vue')
     const runtime = read('Elephant/frontend/src/renderer/src/platform/executableCodeBlocks.js')
     const renderer = read('Elephant/frontend/src/muya/lib/parser/render/renderBlock/renderContainerBlock.js')
     const bridge = read('Elephant/frontend/src/muya/lib/parser/render/renderBlock/editorExtensionRenderBridge.js')
@@ -21,6 +22,10 @@ describe('optional editor feature addons', () => {
     expect(addon).toContain('ctx.addEditorExtension')
     expect(addon).toContain('renderExecutableRunButton(block)')
     expect(addon).toContain('runtime?.dispose?.()')
+    expect(settings).toContain('INTERPRETERS_COLLAPSED_KEY')
+    expect(settings).toContain('interpretersExpanded')
+    expect(settings).toContain("'Hide interpreters'")
+    expect(settings).toContain('id="en-code-interpreters-content"')
     expect(runtime).toContain('settings.dispose()')
     expect(renderer).toContain('children.unshift(renderCopyButton(t))')
     expect(renderer).not.toContain('renderExecutableRunButton')
@@ -77,12 +82,16 @@ describe('optional editor feature addons', () => {
     expect(manifest).toContain('contributes.contentTypes')
   })
 
-  it('includes editor and sidebar addons in the refreshed Develop parity pack', () => {
+  it('includes editor and sidebar addons in the refreshed first-party packs', () => {
     const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js')
 
     expect(packs).toContain("id: 'elephant.code-execution'")
     expect(packs).toContain("id: 'elephant.excalidraw'")
     expect(packs).toContain("id: 'elephant.recently-edited'")
+    expect(packs).toContain("const BASE_PACK_PATH = `${PACK_DIRECTORY}/base.enaddonpack`")
+    expect(packs).toContain(".filter((entry) => entry.id !== 'elephant.calendar')")
+    expect(packs).toContain("name: 'ElephantNote Base'")
+    expect(packs).toContain('ensureBasePack')
     expect(packs).toContain('isDevelopParityCurrent')
     expect(packs).toContain('Missing, invalid or stale protected packs are regenerated below.')
   })

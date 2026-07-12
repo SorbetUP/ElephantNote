@@ -1,4 +1,5 @@
 import bus from '@/bus'
+import '@/i18n/editorUiFallbacks'
 
 const COMMAND_LOG_PREFIX = '[writing-command]'
 const DUPLICATE_COMMAND_WINDOW_MS = 350

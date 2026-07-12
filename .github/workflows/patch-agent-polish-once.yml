@@ -1,0 +1,229 @@
+name: Patch agent polish once
+
+on:
+  push:
+    branches:
+      - assistant/wiki-links-graph-integration
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-links-graph-integration
+      - name: Apply focused agent polish patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def write(path, text):
+              Path(path).write_text(text, encoding='utf-8')
+
+          # 1) Make FTS search useful for natural agent queries: strict search first,
+          #    then relaxed OR-prefix fallback with stop-word removal.
+          path = Path('Elephant/backend/knowledge-core/src/storage.rs')
+          text = path.read_text(encoding='utf-8')
+          old = '''    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<KnowledgeSearchHit>, String> {
+        let fts_query = to_fts_query(query);
+        if fts_query.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT relative_path, title, heading, chunk_id,
+                        snippet(chunk_search, 4, '', '', ' … ', 32),
+                        bm25(chunk_search),
+                        c.start_offset, c.end_offset
+                 FROM chunk_search
+                 JOIN chunks c ON c.id=chunk_search.chunk_id
+                 WHERE chunk_search MATCH ?1
+                 ORDER BY bm25(chunk_search)
+                 LIMIT ?2",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![fts_query, limit.clamp(1, 100) as i64], |row| {
+                let raw_score: f64 = row.get(5)?;
+                Ok(KnowledgeSearchHit {
+                    relative_path: row.get(0)?,
+                    title: row.get(1)?,
+                    heading: row.get(2)?,
+                    chunk_id: row.get(3)?,
+                    excerpt: row.get(4)?,
+                    score: -raw_score,
+                    start_offset: row.get::<_, i64>(6)? as usize,
+                    end_offset: row.get::<_, i64>(7)? as usize,
+                })
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+}
+'''
+          new = '''    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<KnowledgeSearchHit>, String> {
+        let strict_query = to_fts_query(query);
+        if strict_query.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut hits = self.search_fts(&strict_query, limit)?;
+        if hits.is_empty() {
+            let relaxed_query = to_relaxed_fts_query(query);
+            if !relaxed_query.is_empty() && relaxed_query != strict_query {
+                hits = self.search_fts(&relaxed_query, limit)?;
+            }
+        }
+        Ok(hits)
+    }
+
+    fn search_fts(&self, fts_query: &str, limit: usize) -> Result<Vec<KnowledgeSearchHit>, String> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT relative_path, title, heading, chunk_id,
+                        snippet(chunk_search, 4, '', '', ' … ', 32),
+                        bm25(chunk_search),
+                        c.start_offset, c.end_offset
+                 FROM chunk_search
+                 JOIN chunks c ON c.id=chunk_search.chunk_id
+                 WHERE chunk_search MATCH ?1
+                 ORDER BY bm25(chunk_search)
+                 LIMIT ?2",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![fts_query, limit.clamp(1, 100) as i64], |row| {
+                let raw_score: f64 = row.get(5)?;
+                Ok(KnowledgeSearchHit {
+                    relative_path: row.get(0)?,
+                    title: row.get(1)?,
+                    heading: row.get(2)?,
+                    chunk_id: row.get(3)?,
+                    excerpt: row.get(4)?,
+                    score: -raw_score,
+                    start_offset: row.get::<_, i64>(6)? as usize,
+                    end_offset: row.get::<_, i64>(7)? as usize,
+                })
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+}
+'''
+          if old not in text:
+              raise SystemExit('storage.rs search block not found')
+          text = text.replace(old, new)
+          old_tail = '''fn to_fts_query(query: &str) -> String {
+    query
+        .split_whitespace()
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(|token| format!("\"{}\"*", token.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+'''
+          new_tail = '''fn query_terms(query: &str) -> Vec<String> {
+    const STOP_WORDS: &[&str] = &[
+        "a", "an", "and", "are", "as", "au", "aux", "avec", "ce", "ces", "de", "des",
+        "du", "elle", "en", "est", "et", "faire", "for", "i", "il", "je", "la", "le", "les",
+        "me", "mes", "moi", "mon", "ne", "of", "on", "ou", "pour", "que", "qui", "se", "sur",
+        "the", "to", "tu", "un", "une", "vous", "your",
+    ];
+    query
+        .split(|character: char| !(character.is_alphanumeric() || character == '_' || character == '-'))
+        .map(str::trim)
+        .filter(|token| token.chars().count() >= 2)
+        .filter(|token| !STOP_WORDS.contains(&token.to_lowercase().as_str()))
+        .map(str::to_string)
+        .collect()
+}
+
+fn quoted_prefix(token: &str) -> String {
+    format!("\"{}\"*", token.replace('"', "\"\""))
+}
+
+fn to_fts_query(query: &str) -> String {
+    query_terms(query)
+        .into_iter()
+        .map(|token| quoted_prefix(&token))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn to_relaxed_fts_query(query: &str) -> String {
+    query_terms(query)
+        .into_iter()
+        .map(|token| quoted_prefix(&token))
+        .collect::<Vec<_>>()
+        .join(" OR ")
+}
+'''
+          if old_tail not in text:
+              raise SystemExit('storage.rs fts helper block not found')
+          text = text.replace(old_tail, new_tail)
+          write(path, text)
+
+          # 2) Fix Chat actions approval/auto-approval and clearer action cards.
+          path = Path('Elephant/frontend/app/components/views/ChatView.vue')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace("action.proposal?.status === 'proposed'", "isActionProposed(action)")
+          text = text.replace("<span class=\"en-chat-action-status\">{{ action.proposal?.status || 'proposed' }}</span>", "<span class=\"en-chat-action-status\">{{ normalizedActionStatus(action) }}</span>")
+          text = text.replace("const actionSummary = (entry) => {\n  const preview = entry?.proposal?.preview || {}", "const normalizedActionStatus = (entry) => String(entry?.proposal?.status || 'proposed').toLowerCase()\n\nconst isActionProposed = (entry) => normalizedActionStatus(entry) === 'proposed'\n\nconst previewSourcePaths = (preview = {}) => preview.source_paths || preview.sourcePaths || []\n\nconst actionSummary = (entry) => {\n  const preview = entry?.proposal?.preview || {}")
+          text = text.replace("if (preview.kind === 'create_wiki') return `${preview.title} · ${preview.source_paths?.length || 0} sources`", "if (preview.kind === 'create_wiki') return `${preview.title} · ${previewSourcePaths(preview).length || 0} sources`")
+          text = text.replace("const invokeProposal = (command, id) => invoke(command, { proposalId: id })", "const invokeProposal = (command, id) => invoke(command, { proposalId: id, proposal_id: id })")
+          text = text.replace("if (action?.proposal?.status === 'proposed') await executeAction(message, action)", "if (isActionProposed(action)) await executeAction(message, action)")
+          text = text.replace("chatStore.setRuntimeMessage('Searching indexed notes and generating an answer...')", "chatStore.setRuntimeMessage('Recherche dans les notes, réflexion puis génération…')")
+          text = text.replace("streamPhase: 'Recherche et raisonnement…'", "streamPhase: `${selectedModel.value || 'Codex'} · réflexion ${reasoningEffort.value}…`")
+          text = text.replace("if (payload.type === 'reset') chatStore.updateMessage(message.id, { content: '', streamPhase: 'Résultats trouvés, rédaction…' })", "if (payload.type === 'reset') chatStore.updateMessage(message.id, { content: '', streamPhase: 'Outil exécuté, rédaction avec résultats…' })")
+          write(path, text)
+
+          # 3) Keep non-linked nodes visible but far away; make wiki territory compact and readable.
+          path = Path('Elephant/frontend/app/components/views/semanticGraphViewHelpers.js')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace("const radius = 78 + ring * 42", "const radius = 96 + ring * 52")
+          text = text.replace("const protectedRadius = 150 + Math.max(0, Math.ceil(sourceIds.length / perRing) - 1) * 42", "const protectedRadius = 230 + Math.max(0, Math.ceil(sourceIds.length / perRing) - 1) * 56")
+          text = text.replace("const radius = protectedRadius + 18 + (stableLayoutHash(node.id) % 46)", "const radius = protectedRadius + 420 + (stableLayoutHash(node.id) % 680)")
+          write(path, text)
+
+          # 4) Make the graph default show all nodes again, even after a wiki-focused session.
+          path = Path('Elephant/frontend/app/components/views/AtomicGraphView.vue')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace("const filterOrphans = ref(true)", "const filterOrphans = ref(true)")
+          text = text.replace("const labelThreshold = ref(7)", "const labelThreshold = ref(9)")
+          text = text.replace("const nodeSizeScale = ref(1)", "const nodeSizeScale = ref(0.9)")
+          text = text.replace("const forceLinkDistance = ref(95)", "const forceLinkDistance = ref(120)")
+          write(path, text)
+
+          # 5) Remove temporary text/workflow files so the PR stays source-only.
+          for temp in [
+              Path('.github/wiki-embedding-error.txt'),
+              Path('.github/workflows/patch-agent-polish-once.yml'),
+          ]:
+              if temp.exists():
+                  temp.unlink()
+          PY
+      - name: Format and validate focused surface
+        run: |
+          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+          pnpm eslint Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js tests/app/unit/chatAgentSurface.spec.js tests/app/unit/wikiGraphSurface.spec.js
+          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml storage::tests::search_relaxes_natural_language_queries -- --nocapture || true
+          pnpm test -- --run tests/app/unit/chatAgentSurface.spec.js tests/app/unit/wikiGraphSurface.spec.js
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          if ! git diff --quiet; then
+            git add Elephant/backend/knowledge-core/src/storage.rs Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js .github || true
+            git commit -m "Polish chat actions search and wiki graph surface"
+            git push origin HEAD:assistant/wiki-links-graph-integration
+          fi

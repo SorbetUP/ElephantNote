@@ -69,6 +69,24 @@ describe('addon UI regression contracts', () => {
     expect(railSettings).toContain("'message-circle': MessageCircle")
   })
 
+  it('owns the open model library in a separate removable addon', () => {
+    const ai = read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
+    const openModels = read('Elephant/frontend/src/renderer/src/addons/builtin/openModels.js')
+    const registry = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
+    const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js')
+
+    expect(ai).not.toContain('ModelsView')
+    expect(ai).not.toContain("kind: 'ai-models-v1'")
+    expect(ai).not.toContain('autostartLlamaRuntime')
+    expect(openModels).toContain("id: 'elephant.open-models'")
+    expect(openModels).toContain('component: ModelsView')
+    expect(openModels).toContain("kind: 'open-models-v1'")
+    expect(openModels).toContain('autostartLlamaRuntime')
+    expect(registry).toContain("id: 'elephant.open-models'")
+    expect(registry).toContain('openModelsAddon,')
+    expect(packs).toContain("{ id: 'elephant.open-models', version: '1.0.0', source: 'builtin', enabled: true }")
+  })
+
   it('mounts a root settings page and its nested provider slot without remounting the root', async () => {
     const content = mountSettingsPage('ai')
     const manager = new ElephantAddonManager()

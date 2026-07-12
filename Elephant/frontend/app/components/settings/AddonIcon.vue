@@ -15,7 +15,7 @@ import {
   Package,
   PenTool,
   Sparkles,
-  TerminalSquare
+  Terminal
 } from '@lucide/vue'
 import OpenAiMark from './OpenAiMark.vue'
 
@@ -36,7 +36,7 @@ const ICONS = Object.freeze({
   package: Package,
   'pen-tool': PenTool,
   sparkles: Sparkles,
-  terminal: TerminalSquare
+  terminal: Terminal
 })
 
 const iconComponent = computed(() => ICONS[String(props.name || '').toLowerCase()] || Package)

@@ -3,6 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Muya from '../../../../../../Elephant/frontend/src/muya/lib'
 import { search as searchLanguages } from '../../../../../../Elephant/frontend/src/muya/lib/prism'
+import {
+  renderExecutableOutput,
+  renderExecutableRunButton
+} from '../../../../../../Elephant/frontend/src/muya/lib/parser/render/renderBlock/renderExecutableCodeRuntime'
 import { installExecutableCodeBlocks } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocks'
 import {
   resetExecutableCodeNativeRuntimeForTests
@@ -16,6 +20,13 @@ const settle = async() => {
 }
 
 const INITIAL_MARKDOWN = '```python\nprint("hello")\n```'
+const executableCodeExtension = {
+  id: 'elephant.code-execution.fenced-code-runtime',
+  decorateContainer({ block, children }) {
+    if (block?.type !== 'pre' || block?.functionType !== 'fencecode') return children
+    return [renderExecutableRunButton(block), ...children, renderExecutableOutput(block)]
+  }
+}
 
 describe('native executable code integration with real Muya', () => {
   let muya
@@ -47,6 +58,13 @@ describe('native executable code integration with real Muya', () => {
       return {}
     })
     window.__TAURI__ = { core: { invoke } }
+    globalThis.__ELEPHANT_ADDONS__ = {
+      getContributions(area) {
+        return area === 'editor.extensions'
+          ? [{ addonId: 'elephant.code-execution', contribution: executableCodeExtension }]
+          : []
+      }
+    }
   })
 
   afterEach(() => {
@@ -54,17 +72,19 @@ describe('native executable code integration with real Muya', () => {
     muya?.destroy?.()
     muya = null
     delete window.__TAURI__
+    delete globalThis.__ELEPHANT_ADDONS__
     document.body.innerHTML = ''
   })
 
   const createMuya = async() => {
+    const runtime = installExecutableCodeBlocks(window)
     const origin = document.querySelector('.en-editor-host')
     muya = new Muya(origin, {
       markdown: INITIAL_MARKDOWN,
       t: (key) => key
     })
     await settle()
-    return muya
+    return { muya, runtime }
   }
 
   const setNativeLanguage = async(language) => {
@@ -75,16 +95,13 @@ describe('native executable code integration with real Muya', () => {
     await settle()
   }
 
-  it('renders native controls without modifying one Markdown character', async() => {
-    await createMuya()
+  it('renders addon controls without modifying one Markdown character', async() => {
+    const created = await createMuya()
     const baseline = muya.getMarkdown()
     const change = vi.fn()
     muya.on('change', change)
 
-    const runtime = installExecutableCodeBlocks(window)
-    await settle()
-
-    expect(runtime.version).toBe('native-v1')
+    expect(created.runtime.version).toBe('native-v1')
     expect(document.querySelector('pre.ag-fence-code > .en-code-native-run')).not.toBeNull()
     expect(document.querySelector('pre.ag-fence-code > elephant-code-output')).not.toBeNull()
     expect(document.querySelector('.en-code-v6-toolbar')).toBeNull()
@@ -128,8 +145,6 @@ describe('native executable code integration with real Muya', () => {
 
   it('uses Muya native language state and runs the selected language', async() => {
     await createMuya()
-    installExecutableCodeBlocks(window)
-    await settle()
 
     const change = vi.fn()
     const input = vi.fn()
@@ -157,8 +172,6 @@ describe('native executable code integration with real Muya', () => {
 
   it('survives repeated native Muya language changes without recursion', async() => {
     await createMuya()
-    installExecutableCodeBlocks(window)
-    await settle()
 
     const change = vi.fn()
     muya.on('change', change)

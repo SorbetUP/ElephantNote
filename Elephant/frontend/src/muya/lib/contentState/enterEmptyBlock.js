@@ -5,7 +5,6 @@ const enterEmptyBlock = ContentState => {
   ContentState.prototype.enterInEmptyBlock = function(block, event) {
     const { start, end } = this.cursor
     const parent = this.getParent(block)
-    const { key } = block
     if (parent.type === 'p' && parent.parent) {
       const parentOfParagraph = this.getParent(parent)
       if (parentOfParagraph.type === 'li') {

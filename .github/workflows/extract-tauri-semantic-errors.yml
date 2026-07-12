@@ -1,0 +1,32 @@
+name: Extract Tauri semantic validation errors
+
+on:
+  pull_request:
+    branches:
+      - feature/wiki-knowledge-continuation
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    if: github.head_ref == 'assistant/wiki-links-graph-integration'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Extract errors
+        run: |
+          if [ ! -f .github/tauri-semantic-validation-error.txt ]; then
+            echo "diagnostic file missing" > .github/tauri-semantic-error-summary.txt
+          else
+            grep -nE 'error(\[[A-Z0-9]+\])?:|future cannot|not (Send|Sync)|unresolved import|cannot (borrow|move|find)|mismatched types|failed to compile|could not compile' .github/tauri-semantic-validation-error.txt > .github/tauri-semantic-error-summary.txt || true
+            tail -n 120 .github/tauri-semantic-validation-error.txt >> .github/tauri-semantic-error-summary.txt
+          fi
+          git config user.name "ElephantNote Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/tauri-semantic-error-summary.txt
+          git commit -m "chore: summarize Tauri semantic errors" || true
+          git push origin HEAD:${{ github.head_ref }}

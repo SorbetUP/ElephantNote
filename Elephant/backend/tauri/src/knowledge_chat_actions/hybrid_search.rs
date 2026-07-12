@@ -13,6 +13,61 @@ struct RankedHit {
     signals: HashSet<&'static str>,
 }
 
+pub(crate) fn exact_note_search(
+    store: &KnowledgeStore,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<KnowledgeSearchHit>, String> {
+    let needle = query.trim();
+    if needle.is_empty() {
+        return Ok(Vec::new());
+    }
+    let limit = limit.clamp(1, 100);
+    let candidate_limit = (limit * 12).clamp(48, 1_200) as i64;
+    let conn = Connection::open(store.database_path()).map_err(|error| error.to_string())?;
+    let mut statement = conn
+        .prepare(
+            "SELECT c.id, d.relative_path, d.title, s.heading, c.text,
+                    c.start_offset, c.end_offset,
+                    CASE WHEN instr(lower(d.title), lower(?1)) > 0 THEN 2 ELSE 1 END AS exact_rank
+             FROM chunks c
+             JOIN documents d ON d.relative_path=c.document_path
+             JOIN sections s ON s.id=c.section_id
+             WHERE instr(lower(d.title), lower(?1)) > 0
+                OR instr(lower(c.text), lower(?1)) > 0
+             ORDER BY exact_rank DESC, d.relative_path, c.ordinal
+             LIMIT ?2",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(params![needle, candidate_limit], |row| {
+            let text = row.get::<_, String>(4)?;
+            Ok(KnowledgeSearchHit {
+                chunk_id: row.get(0)?,
+                relative_path: row.get(1)?,
+                title: row.get(2)?,
+                heading: row.get(3)?,
+                excerpt: excerpt(&text, 360),
+                score: row.get::<_, i64>(7)? as f64,
+                start_offset: row.get::<_, i64>(5)?.max(0) as usize,
+                end_offset: row.get::<_, i64>(6)?.max(0) as usize,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    let mut seen_paths = HashSet::new();
+    let mut output = Vec::new();
+    for row in rows {
+        let hit = row.map_err(|error| error.to_string())?;
+        if seen_paths.insert(hit.relative_path.clone()) {
+            output.push(hit);
+            if output.len() >= limit {
+                break;
+            }
+        }
+    }
+    Ok(output)
+}
+
 pub(crate) fn hybrid_note_search(
     store: &KnowledgeStore,
     query: &str,
@@ -70,16 +125,9 @@ pub(crate) fn hybrid_note_search(
             .then_with(|| left.start_offset.cmp(&right.start_offset))
     });
 
-    // Avoid returning ten chunks from the same note when several notes are relevant.
-    let mut per_document = HashMap::<String, usize>::new();
-    output.retain(|hit| {
-        let count = per_document.entry(hit.relative_path.clone()).or_default();
-        if *count >= 3 {
-            return false;
-        }
-        *count += 1;
-        true
-    });
+    // Search results represent distinct notes, not repeated chunks from one note.
+    let mut seen_documents = HashSet::<String>::new();
+    output.retain(|hit| seen_documents.insert(hit.relative_path.clone()));
     output.truncate(limit);
     Ok(output)
 }
@@ -244,11 +292,7 @@ fn merge_graph_neighbors(
     Ok(())
 }
 
-fn apply_title_path_boosts(
-    query: &str,
-    terms: &[String],
-    ranked: &mut HashMap<String, RankedHit>,
-) {
+fn apply_title_path_boosts(query: &str, terms: &[String], ranked: &mut HashMap<String, RankedHit>) {
     let normalized_query = query.trim().to_lowercase();
     for entry in ranked.values_mut() {
         let Some(hit) = entry.hit.as_ref() else {
@@ -265,7 +309,11 @@ fn apply_title_path_boosts(
         }
         let matches = terms
             .iter()
-            .filter(|term| title.contains(term.as_str()) || heading.contains(term.as_str()) || path.contains(term.as_str()))
+            .filter(|term| {
+                title.contains(term.as_str())
+                    || heading.contains(term.as_str())
+                    || path.contains(term.as_str())
+            })
             .count();
         entry.score += matches as f64 * 0.006;
     }
@@ -273,10 +321,41 @@ fn apply_title_path_boosts(
 
 fn meaningful_search_terms(query: &str) -> Vec<String> {
     const STOP_WORDS: &[&str] = &[
-        "afin", "avec", "dans", "des", "est", "faire", "les", "mais", "mes", "mon",
-        "pour", "que", "quel", "quelle", "sur", "une", "un", "the", "and", "for",
-        "from", "this", "with", "what", "where", "when", "comment", "peux", "peut",
-        "notes", "note", "cherche", "recherche", "trouve", "trouver",
+        "afin",
+        "avec",
+        "dans",
+        "des",
+        "est",
+        "faire",
+        "les",
+        "mais",
+        "mes",
+        "mon",
+        "pour",
+        "que",
+        "quel",
+        "quelle",
+        "sur",
+        "une",
+        "un",
+        "the",
+        "and",
+        "for",
+        "from",
+        "this",
+        "with",
+        "what",
+        "where",
+        "when",
+        "comment",
+        "peux",
+        "peut",
+        "notes",
+        "note",
+        "cherche",
+        "recherche",
+        "trouve",
+        "trouver",
     ];
     let mut terms = query
         .split(|character: char| !character.is_alphanumeric())
@@ -328,7 +407,10 @@ fn load_vectors(
     Ok(output)
 }
 
-fn normalized_centroid<'a>(vectors: impl Iterator<Item = &'a Vec<f32>>, dimensions: usize) -> Vec<f32> {
+fn normalized_centroid<'a>(
+    vectors: impl Iterator<Item = &'a Vec<f32>>,
+    dimensions: usize,
+) -> Vec<f32> {
     if dimensions == 0 {
         return Vec::new();
     }
@@ -349,7 +431,11 @@ fn normalized_centroid<'a>(vectors: impl Iterator<Item = &'a Vec<f32>>, dimensio
     for value in &mut centroid {
         *value /= count;
     }
-    let norm = centroid.iter().map(|value| value * value).sum::<f32>().sqrt();
+    let norm = centroid
+        .iter()
+        .map(|value| value * value)
+        .sum::<f32>()
+        .sqrt();
     if norm <= f32::EPSILON {
         return Vec::new();
     }
@@ -363,7 +449,11 @@ fn dot(left: &[f32], right: &[f32]) -> f32 {
     if left.len() != right.len() || left.is_empty() {
         return -1.0;
     }
-    left.iter().zip(right).map(|(a, b)| a * b).sum::<f32>().clamp(-1.0, 1.0)
+    left.iter()
+        .zip(right)
+        .map(|(a, b)| a * b)
+        .sum::<f32>()
+        .clamp(-1.0, 1.0)
 }
 
 fn excerpt(value: &str, max_chars: usize) -> String {
@@ -382,7 +472,9 @@ mod tests {
 
     #[test]
     fn removes_instruction_noise_from_queries() {
-        let terms = meaningful_search_terms("Peux-tu rechercher dans mes notes comment fonctionne Iroh sync ?");
+        let terms = meaningful_search_terms(
+            "Peux-tu rechercher dans mes notes comment fonctionne Iroh sync ?",
+        );
         assert!(terms.contains(&"iroh".to_string()));
         assert!(terms.contains(&"sync".to_string()));
         assert!(!terms.contains(&"notes".to_string()));
@@ -392,7 +484,11 @@ mod tests {
     fn centroid_is_normalized() {
         let vectors = [vec![1.0, 0.0], vec![0.0, 1.0]];
         let centroid = normalized_centroid(vectors.iter(), 2);
-        let norm = centroid.iter().map(|value| value * value).sum::<f32>().sqrt();
+        let norm = centroid
+            .iter()
+            .map(|value| value * value)
+            .sum::<f32>()
+            .sqrt();
         assert!((norm - 1.0).abs() < 0.0001);
     }
 }

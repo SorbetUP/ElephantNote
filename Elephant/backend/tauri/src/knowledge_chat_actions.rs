@@ -1,6 +1,6 @@
 mod hybrid_search;
 
-pub(crate) use hybrid_search::hybrid_note_search;
+pub(crate) use hybrid_search::{exact_note_search, hybrid_note_search};
 
 use elephantnote_knowledge_core::{
     execute_approved_chat_action, prepare_chat_action, ChatActionExecution, ChatActionProposal,
@@ -23,10 +23,41 @@ fn active_store(root: &Path) -> Result<KnowledgeStore, String> {
 
 fn meaningful_search_terms(query: &str) -> Vec<String> {
     const STOP_WORDS: &[&str] = &[
-        "afin", "avec", "dans", "des", "est", "faire", "les", "mais", "mes", "mon",
-        "pour", "que", "quel", "quelle", "sur", "une", "un", "the", "and", "for",
-        "from", "this", "with", "what", "where", "when", "comment", "peux", "peut",
-        "notes", "note", "cherche", "recherche", "trouve", "trouver",
+        "afin",
+        "avec",
+        "dans",
+        "des",
+        "est",
+        "faire",
+        "les",
+        "mais",
+        "mes",
+        "mon",
+        "pour",
+        "que",
+        "quel",
+        "quelle",
+        "sur",
+        "une",
+        "un",
+        "the",
+        "and",
+        "for",
+        "from",
+        "this",
+        "with",
+        "what",
+        "where",
+        "when",
+        "comment",
+        "peux",
+        "peut",
+        "notes",
+        "note",
+        "cherche",
+        "recherche",
+        "trouve",
+        "trouver",
     ];
     let mut terms = query
         .split(|character: char| !character.is_alphanumeric())
@@ -45,12 +76,23 @@ fn relaxed_note_search(
     limit: usize,
 ) -> Result<Vec<KnowledgeSearchHit>, String> {
     let meaningful_terms = meaningful_search_terms(query);
-    let hits = hybrid_note_search(store, query, limit)?;
+    let trimmed = query.trim();
+    let exact_query = trimmed
+        .strip_prefix("exact:")
+        .or_else(|| trimmed.strip_prefix('='))
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let (hits, strategy) = if let Some(exact_query) = exact_query {
+        (exact_note_search(store, exact_query, limit)?, "exact")
+    } else {
+        (hybrid_note_search(store, query, limit)?, "hybrid")
+    };
     eprintln!(
-        "[Knowledge][ChatSearch] query={:?} terms={} results={} strategy=hybrid",
+        "[Knowledge][ChatSearch] query={:?} terms={} results={} strategy={}",
         query,
         meaningful_terms.len(),
-        hits.len()
+        hits.len(),
+        strategy
     );
     Ok(hits)
 }
@@ -211,12 +253,15 @@ async fn execute_wiki_action(
             topic,
             source_paths,
         } => {
-            let item = crate::knowledge_wiki_library::tauri_knowledge_wiki_library_add_candidate(
+            let config = crate::tauri_extra_commands::load_ai_config(&app)?;
+            let item = crate::knowledge_wiki_library::tauri_knowledge_wiki_library_add_or_update(
                 app.clone(),
+                title.clone(),
                 topic.clone(),
-                Some(title.clone()),
-                Some(source_paths.clone()),
-            )?;
+                source_paths.clone(),
+                json!({ "aiConfig": config }),
+            )
+            .await?;
             serde_json::to_value(item).map_err(|error| error.to_string())?
         }
         ChatKnowledgeAction::RejectWikiSuggestion { topic } => {
@@ -260,8 +305,7 @@ pub async fn tauri_knowledge_chat_action_execute(
     let proposal = match initial.status.clone() {
         ChatActionStatus::Proposed => {
             eprintln!("[Knowledge][ChatAction] approve-and-execute id={proposal_id}");
-            active_store(&root)?
-                .transition_chat_action(&proposal_id, ChatActionStatus::Approved)?
+            active_store(&root)?.transition_chat_action(&proposal_id, ChatActionStatus::Approved)?
         }
         ChatActionStatus::Approved => initial,
         ChatActionStatus::Executed => {

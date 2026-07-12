@@ -214,6 +214,23 @@ pub async fn prewarm_saved_codex(app: &AppHandle) {
 }
 
 #[cfg(not(mobile))]
+fn looks_like_exact_count_request(query: &str) -> bool {
+    let normalized = query.to_lowercase();
+    [
+        "combien de note",
+        "combien de notes",
+        "nombre de note",
+        "nombre de notes",
+        "compte les note",
+        "compte le nombre",
+        "count notes",
+        "how many notes",
+    ]
+    .iter()
+    .any(|needle| normalized.contains(needle))
+}
+
+#[cfg(not(mobile))]
 fn knowledge_hits(app: &AppHandle, query: &str, limit: usize) -> Vec<KnowledgeSearchHit> {
     let Ok(vault) = crate::vault::config::get_active_vault(app) else {
         return Vec::new();
@@ -221,7 +238,17 @@ fn knowledge_hits(app: &AppHandle, query: &str, limit: usize) -> Vec<KnowledgeSe
     let Ok(store) = KnowledgeStore::open(Path::new(&vault.path)) else {
         return Vec::new();
     };
-    crate::knowledge_chat_actions::hybrid_note_search(&store, query, limit).unwrap_or_default()
+    if looks_like_exact_count_request(query) {
+        let literal = query
+            .split_whitespace()
+            .rev()
+            .find(|value| value.chars().any(char::is_alphanumeric))
+            .unwrap_or(query)
+            .trim_matches(|character: char| !character.is_alphanumeric());
+        crate::knowledge_chat_actions::exact_note_search(&store, literal, 100).unwrap_or_default()
+    } else {
+        crate::knowledge_chat_actions::hybrid_note_search(&store, query, limit).unwrap_or_default()
+    }
 }
 
 #[cfg(not(mobile))]
@@ -260,15 +287,41 @@ fn configured_system_prompt(payload: &Value) -> String {
 }
 
 #[cfg(not(mobile))]
+fn existing_wiki_catalog(app: &AppHandle) -> String {
+    let Ok(vault) = crate::vault::config::get_active_vault(app) else {
+        return String::new();
+    };
+    let Ok(store) = KnowledgeStore::open(Path::new(&vault.path)) else {
+        return String::new();
+    };
+    store
+        .list_wiki_drafts(None, 100)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|draft| {
+            matches!(
+                draft.status,
+                elephantnote_knowledge_core::WikiDraftStatus::Accepted
+                    | elephantnote_knowledge_core::WikiDraftStatus::Outdated
+            )
+        })
+        .map(|draft| {
+            format!(
+                "- draft_id={} | title={} | topic={}",
+                draft.id, draft.title, draft.topic
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[cfg(not(mobile))]
 fn grounded_messages(
     app: &AppHandle,
     payload: &Value,
     query: &str,
 ) -> (Vec<Value>, Vec<KnowledgeSearchHit>) {
-    let requested_limit = payload
-        .get("limit")
-        .and_then(Value::as_u64)
-        .unwrap_or(8) as usize;
+    let requested_limit = payload.get("limit").and_then(Value::as_u64).unwrap_or(8) as usize;
     let hits = if rag_enabled(payload) {
         knowledge_hits(app, query, requested_limit.clamp(4, 20))
     } else {
@@ -300,6 +353,15 @@ fn grounded_messages(
             "Tu peux consulter les passages de notes indexées ci-dessous. Ils proviennent d’une recherche hybride combinant texte, titres, liens Wiki et embeddings. Utilise-les pour les affirmations concernant la vault et cite-les avec [1], [2], etc. Tu peux lancer des recherches search_notes supplémentaires si ces passages sont insuffisants.\n\n{context}"
         )
     };
+    let mut access_contract = access_contract;
+    let wiki_catalog = existing_wiki_catalog(app);
+    if !wiki_catalog.is_empty() {
+        access_contract.push_str("\n\nWikis existants dans la vault :\n");
+        access_contract.push_str(&wiki_catalog);
+        access_contract.push_str(
+            "\nLorsqu’un utilisateur demande de modifier ou d’améliorer un Wiki existant, conserve exactement son titre dans add_wiki_suggestion. Elephant mettra ce Wiki à jour sur place après approbation ; ne crée jamais un second Wiki concurrent.",
+        );
+    }
     let custom = configured_system_prompt(payload);
     let tools = if tools_enabled(payload) {
         format!("\n\n{}", tool_contract())
@@ -307,7 +369,9 @@ fn grounded_messages(
         String::new()
     };
     let system = if custom.is_empty() {
-        format!("Tu es l’assistant Elephant. Réponds en français par défaut. {access_contract}{tools}")
+        format!(
+            "Tu es l’assistant Elephant. Réponds en français par défaut. {access_contract}{tools}"
+        )
     } else {
         format!("{custom}\n\nCapacités Elephant : {access_contract}{tools}")
     };
@@ -318,7 +382,9 @@ fn grounded_messages(
 
 #[cfg(not(mobile))]
 fn citations_from_hits(hits: &[KnowledgeSearchHit]) -> Vec<Value> {
+    let mut seen_paths = HashSet::new();
     hits.iter()
+        .filter(|hit| seen_paths.insert(hit.relative_path.clone()))
         .map(|hit| {
             json!({
                 "path": hit.relative_path,
@@ -343,12 +409,12 @@ Append exactly one machine-readable action block after the human answer:
 <elephantnote_actions>[{"action":"search_notes","query":"...","limit":10}]</elephantnote_actions>
 The block may contain several actions.
 Supported action names and fields:
-- search_notes: query, limit
+- search_notes: query, limit. Prefix query with exact: for literal occurrence counting, for example exact:serpent.
 - create_note: relative_path, title, content
 - append_to_note: relative_path, content (omit expected_hash; Elephant adds the current hash)
 - replace_note: relative_path, content (omit expected_hash)
 - replace_note_range: relative_path, start_offset, end_offset, replacement (omit expected_hash)
-- add_wiki_suggestion: title, topic, source_paths
+- add_wiki_suggestion: title, topic, source_paths. If a Wiki with that exact title already exists, this is an in-place improvement request, not a new Wiki.
 - create_wiki: title, topic, source_paths
 - reject_wiki_suggestion: topic
 - delete_wiki: draft_id
@@ -506,10 +572,10 @@ fn search_hits_from_tool_results(results: &[Value]) -> Vec<KnowledgeSearchHit> {
 fn merge_hits(target: &mut Vec<KnowledgeSearchHit>, additions: Vec<KnowledgeSearchHit>) {
     let mut known = target
         .iter()
-        .map(|hit| hit.chunk_id.clone())
+        .map(|hit| hit.relative_path.clone())
         .collect::<HashSet<_>>();
     for hit in additions {
-        if known.insert(hit.chunk_id.clone()) {
+        if known.insert(hit.relative_path.clone()) {
             target.push(hit);
         }
     }

@@ -370,14 +370,67 @@ fn validate_claims(
     }
 }
 
+fn shared_prefix_length(left: &str, right: &str) -> usize {
+    left.bytes()
+        .zip(right.bytes())
+        .take_while(|(left, right)| left == right)
+        .count()
+}
+
+fn recover_chunk_id(candidate: &str, allowed: &[String]) -> Option<String> {
+    if allowed.iter().any(|value| value == candidate) {
+        return Some(candidate.to_string());
+    }
+    if let Some(value) = allowed
+        .iter()
+        .find(|value| candidate.contains(value.as_str()) || value.contains(candidate))
+    {
+        return Some(value.clone());
+    }
+    allowed
+        .iter()
+        .map(|value| (shared_prefix_length(candidate, value), value))
+        .max_by_key(|(prefix, _)| *prefix)
+        .filter(|(prefix, _)| *prefix >= 18)
+        .map(|(_, value)| value.clone())
+}
+
+fn normalize_claim_citations(claims: &mut [WikiClaim], allowed: &[String]) {
+    for claim in claims {
+        let mut normalized = Vec::new();
+        for candidate in &claim.citation_chunk_ids {
+            if let Some(chunk_id) = recover_chunk_id(candidate, allowed) {
+                if !normalized.contains(&chunk_id) {
+                    normalized.push(chunk_id);
+                }
+            } else {
+                normalized.push(candidate.clone());
+            }
+        }
+        claim.citation_chunk_ids = normalized;
+    }
+}
+
+fn normalize_synthesis_citations(synthesis: &mut WikiSynthesis, sources: &[WikiSourceChunk]) {
+    let allowed = sources
+        .iter()
+        .map(|source| source.chunk_id.clone())
+        .collect::<Vec<_>>();
+    normalize_claim_citations(&mut synthesis.summary, &allowed);
+    for section in &mut synthesis.sections {
+        normalize_claim_citations(&mut section.claims, &allowed);
+    }
+}
+
 pub fn parse_and_render_wiki(
     response_json: &str,
     topic: &str,
     sources: &[WikiSourceChunk],
     max_sections: usize,
 ) -> Result<RenderedWiki, String> {
-    let synthesis: WikiSynthesis = serde_json::from_str(response_json)
+    let mut synthesis: WikiSynthesis = serde_json::from_str(response_json)
         .map_err(|error| format!("Invalid wiki synthesis JSON: {error}"))?;
+    normalize_synthesis_citations(&mut synthesis, sources);
     let validation = synthesis.validate(sources, max_sections);
     if !validation.valid {
         return Err(validation.errors.join(" "));

@@ -79,9 +79,7 @@ pub async fn tauri_knowledge_graph(
                 report.model_id, report.updated, report.dimensions
             ),
             Ok(_) => {}
-            Err(error) => eprintln!(
-                "[Knowledge][Graph] embeddings:unavailable reason={error}"
-            ),
+            Err(error) => eprintln!("[Knowledge][Graph] embeddings:unavailable reason={error}"),
         }
     }
     active_store(&app)?.graph_projection(include_suggestions.unwrap_or(false))

@@ -172,7 +172,10 @@ fn embedding_route(config: &Value) -> Result<EmbeddingRoute, String> {
                 None
             }
         })
-        .ok_or_else(|| "The selected embedding route has no endpoint. ElephantNote will not fake semantic discovery with lexical matching.".to_string())?;
+        .or_else(|| {
+            (source == "app-local").then_some("http://127.0.0.1:39282/v1".to_string())
+        })
+        .ok_or_else(|| "The selected embedding route has no endpoint. Elephant will not replace semantic discovery with lexical matching.".to_string())?;
     let api_key = provider
         .and_then(|row| row.get("apiKey").and_then(Value::as_str))
         .unwrap_or("")
@@ -263,7 +266,27 @@ fn request_headers(route: &EmbeddingRoute) -> Result<HeaderMap, String> {
 }
 
 #[cfg(not(mobile))]
-async fn embed_batch(route: &EmbeddingRoute, inputs: &[String]) -> Result<Vec<Vec<f32>>, String> {
+async fn embed_batch(
+    app: &AppHandle,
+    route: &EmbeddingRoute,
+    inputs: &[String],
+) -> Result<Vec<Vec<f32>>, String> {
+    if route.source == "app-local" {
+        let config = crate::tauri_extra_commands::load_ai_config(app)?;
+        let payload = json!({ "aiConfig": config });
+        let mut vectors = Vec::with_capacity(inputs.len());
+        for input in inputs {
+            let vector = crate::local_llama_runtime::embed_with_selected_model(
+                app,
+                &route.model,
+                input,
+                &payload,
+            )
+            .await?;
+            vectors.push(normalize_vector(vector)?);
+        }
+        return Ok(vectors);
+    }
     let client = reqwest::Client::new();
     let body = if route.source == "ollama" {
         json!({ "model": route.model, "input": inputs })
@@ -355,6 +378,7 @@ fn load_documents(
 
 #[cfg(not(mobile))]
 async fn document_vectors(
+    app: &AppHandle,
     root: &Path,
     route: &EmbeddingRoute,
 ) -> Result<Vec<DocumentVector>, String> {
@@ -402,7 +426,7 @@ async fn document_vectors(
             .iter()
             .map(|(_, _, title, _, excerpt)| format!("Title: {title}\n\n{excerpt}"))
             .collect::<Vec<_>>();
-        let vectors = embed_batch(route, &inputs).await?;
+        let vectors = embed_batch(app, route, &inputs).await?;
         {
             let connection = open_connection(root)?;
             for ((index, path, title, content_hash, excerpt), vector) in batch.iter().zip(vectors) {
@@ -543,7 +567,7 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
     let root = active_vault_root(app)?;
     let config = crate::tauri_extra_commands::load_ai_config(app)?;
     let route = embedding_route(&config)?;
-    let documents = document_vectors(&root, &route).await?;
+    let documents = document_vectors(app, &root, &route).await?;
     if documents.len() < 3 {
         return Err(
             "Semantic discovery needs at least three indexed notes with embeddings.".into(),

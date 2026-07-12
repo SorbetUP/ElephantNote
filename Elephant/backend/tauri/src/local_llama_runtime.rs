@@ -401,7 +401,11 @@ async fn start_server_if_needed(
 
     let port = local_port_from_base_url(base_url).unwrap_or(DEFAULT_PORT);
     let model_path_string = model_path.to_string_lossy().to_string();
-    let context = context_size_from_payload(payload);
+    let context = if embedding {
+        "512".to_string()
+    } else {
+        context_size_from_payload(payload)
+    };
     let candidates = server_binary_candidates(app, payload);
     if candidates.is_empty() {
         if is_path_mode(payload) {
@@ -527,6 +531,18 @@ pub async fn chat_with_selected_model(
     }))
 }
 
+fn truncate_embedding_input(text: &str) -> String {
+    const MAX_BYTES: usize = 900;
+    if text.len() <= MAX_BYTES {
+        return text.to_string();
+    }
+    let mut end = MAX_BYTES;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text[..end].to_string()
+}
+
 pub async fn embed_with_selected_model(
     app: &AppHandle,
     selection: &str,
@@ -543,12 +559,13 @@ pub async fn embed_with_selected_model(
         .unwrap_or("embedding.gguf")
         .to_string();
     start_server_if_needed(app, &model_path, &model_name, &base_url, payload, true).await?;
+    let input = truncate_embedding_input(text);
     let response = Client::builder()
         .timeout(Duration::from_secs(120))
         .build()
         .map_err(|error| error.to_string())?
         .post(format!("{}/embeddings", base_url))
-        .json(&json!({ "model": model_name, "input": text }))
+        .json(&json!({ "model": model_name, "input": input }))
         .send()
         .await
         .map_err(|error| error.to_string())?;

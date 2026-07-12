@@ -359,7 +359,7 @@
             >
               <button
                 v-for="(citation, index) in message.citations"
-                :key="citation.path"
+                :key="`${citation.path || citation.relativePath}:${citation.chunkId || index}`"
                 type="button"
                 class="en-chat-citation"
                 @click="openNote(citation.path, citation.title)"
@@ -550,7 +550,7 @@ const actionLabel = (entry) => {
     append_to_note: 'Ajouter à une note',
     replace_note: 'Mettre à jour une note',
     replace_note_range: 'Modifier un passage',
-    add_wiki_suggestion: 'Ajouter une proposition de Wiki',
+    add_wiki_suggestion: 'Améliorer ou proposer un Wiki',
     create_wiki: 'Générer un Wiki',
     reject_wiki_suggestion: 'Refuser une proposition de Wiki',
     delete_wiki: 'Supprimer un Wiki'
@@ -589,7 +589,6 @@ const executeAction = async(message, entry) => {
   if (!id || entry.busy) return
   persistActionPatch(message, entry, { busy: true, error: '' })
   try {
-    await invokeProposal('tauri_knowledge_chat_action_approve', id)
     const execution = await invokeProposal('tauri_knowledge_chat_action_execute', id)
     persistActionPatch(message, entry, { busy: false, proposal: execution.proposal, execution })
     await refreshAfterAction()
@@ -744,12 +743,7 @@ const send = async () => {
       streamPhase: '',
       reasoningEffort: result?.reasoningEffort || reasoningEffort.value
     })
-    if (autoApproveTools.value) {
-      const message = chatStore.activeMessages.find((entry) => entry.id === assistantMessage.id)
-      for (const action of message?.actions || []) {
-        if (action?.proposal?.status === 'proposed') await executeAction(message, action)
-      }
-    }
+    // Auto mode is executed atomically by the Rust backend before this response arrives.
   } catch (error) {
     chatStore.setRuntimeMessage(error instanceof Error ? error.message : 'Local AI chat failed.')
     chatStore.updateMessage(assistantMessage.id, { content: chatStore.runtimeMessage, streaming: false, streamPhase: '' })

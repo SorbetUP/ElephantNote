@@ -682,6 +682,123 @@ pub fn tauri_knowledge_wiki_library_add_candidate(
     Ok(item)
 }
 
+fn rewrite_generated_wiki_identity(markdown: &str, topic: &str, title: &str) -> String {
+    let encoded_topic = serde_json::to_string(topic).unwrap_or_else(|_| "\"wiki\"".into());
+    let mut replaced_title = false;
+    markdown
+        .lines()
+        .map(|line| {
+            if line.starts_with("topic: ") {
+                return format!("topic: {encoded_topic}");
+            }
+            if !replaced_title && line.starts_with("# ") {
+                replaced_title = true;
+                return format!("# {}", title.trim());
+            }
+            line.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn matching_existing_wiki(
+    store: &KnowledgeStore,
+    title: &str,
+    topic: &str,
+) -> Result<Option<WikiDraft>, String> {
+    let title_key = wiki_slug(title);
+    let topic_key = normalize_topic(topic);
+    Ok(store
+        .list_wiki_drafts(None, 1_000)?
+        .into_iter()
+        .filter(|draft| {
+            matches!(
+                draft.status,
+                WikiDraftStatus::Accepted | WikiDraftStatus::Outdated
+            )
+        })
+        .find(|draft| {
+            wiki_slug(&draft.title) == title_key
+                || (!topic_key.is_empty() && normalize_topic(&draft.topic) == topic_key)
+        }))
+}
+
+pub async fn tauri_knowledge_wiki_library_add_or_update(
+    app: AppHandle,
+    title: String,
+    instruction: String,
+    source_paths: Vec<String>,
+    payload: Value,
+) -> Result<WikiLibraryItem, String> {
+    let root = active_vault_root(&app)?;
+    let store = active_store(&root)?;
+    let Some(existing) = matching_existing_wiki(&store, &title, &instruction)? else {
+        return tauri_knowledge_wiki_library_add_candidate(
+            app,
+            instruction,
+            Some(title),
+            Some(source_paths),
+        );
+    };
+
+    let mut combined_paths = existing.source_paths.clone();
+    combined_paths.extend(source_paths);
+    if combined_paths.is_empty() {
+        combined_paths.extend(
+            store
+                .search(&instruction, 24)?
+                .into_iter()
+                .map(|hit| hit.relative_path),
+        );
+    }
+    combined_paths.sort();
+    combined_paths.dedup();
+    combined_paths.truncate(24);
+
+    let current_context = existing.markdown.chars().take(6_000).collect::<String>();
+    let generation_topic = format!(
+        "Mets à jour le Wiki existant « {} ». Demande utilisateur : {}. Préserve les informations utiles, améliore la structure et intègre la demande sans créer un nouveau Wiki. Contenu actuel :\n{}",
+        existing.title,
+        instruction.trim(),
+        current_context
+    );
+    eprintln!(
+        "[knowledge] wiki-library:update existing={} title={} sources={}",
+        existing.id,
+        existing.title,
+        combined_paths.len()
+    );
+    let generated = tauri_knowledge_wiki_generate(
+        app.clone(),
+        generation_topic,
+        Some(existing.title.clone()),
+        Some(combined_paths),
+        sanitize_generation_payload(payload),
+        Some(16),
+        Some(80),
+        Some(12),
+    )
+    .await?;
+
+    let mut revised = generated.draft;
+    revised.id = existing.id.clone();
+    revised.topic = existing.topic.clone();
+    revised.title = existing.title.clone();
+    revised.slug = existing.slug.clone();
+    revised.created_at = existing.created_at;
+    revised.updated_at = unix_timestamp();
+    revised.status = WikiDraftStatus::Proposed;
+    revised.markdown =
+        rewrite_generated_wiki_identity(&revised.markdown, &existing.topic, &existing.title);
+    store.save_wiki_draft(&revised)?;
+    let accepted = tauri_knowledge_wiki_accept(app, revised.id)?;
+    eprintln!(
+        "[knowledge] wiki-library:updated draft={} path=.elephantnote/wiki/{}.md",
+        accepted.id, accepted.slug
+    );
+    Ok(draft_item(&root, accepted))
+}
+
 #[tauri::command]
 pub async fn tauri_knowledge_wiki_library_generate(
     app: AppHandle,

@@ -4,7 +4,6 @@ use elephantnote_knowledge_core::{
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::collections::HashSet;
 use std::path::Path;
 use tauri::{AppHandle, Emitter};
 
@@ -281,11 +280,7 @@ fn builtin_embedding(text: &str) -> Vec<f32> {
             vector[bigram_slot] += bigram_sign * 0.65;
         }
     }
-    let norm = vector
-        .iter()
-        .map(|value| value * value)
-        .sum::<f32>()
-        .sqrt();
+    let norm = vector.iter().map(|value| value * value).sum::<f32>().sqrt();
     if norm > 0.0 {
         for value in &mut vector {
             *value /= norm;

@@ -77,6 +77,7 @@
             :actions="actionsForAddon(addon.manifest.id)"
             :expanded="expandedAddonId === addon.manifest.id"
             :busy="operationInProgress"
+            :locked="isCommunityLocked(addon)"
             @toggle-details="toggleDetails(addon.manifest.id)"
             @toggle-addon="toggleAddon(addon)"
             @run-action="runAction"
@@ -146,6 +147,7 @@ const {
   filteredInstalledAddons,
   availableAddons,
   actionsForAddon,
+  isCommunityLocked,
   toggleDetails,
   refreshCatalog,
   enableCommunityAddons,

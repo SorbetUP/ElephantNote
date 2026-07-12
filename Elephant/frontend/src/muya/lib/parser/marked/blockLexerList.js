@@ -77,7 +77,7 @@ export default function consumeList(lexer, state) {
       bull = newBull
       isOrdered = newIsOrdered
       isTaskList = newIsTaskListItem
-      pushListStart(lexer, bull, itemWithBullet)
+      pushListStart(lexer, bull, itemWithBullet, isOrdered)
     }
 
     item = outdentListItem(lexer, item, space)

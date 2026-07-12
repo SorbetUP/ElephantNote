@@ -1,0 +1,66 @@
+name: Apply semantic Wiki and agent phase
+
+on:
+  push:
+    branches:
+      - assistant/wiki-links-graph-integration
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    if: github.actor != 'github-actions[bot]' || !contains(github.event.head_commit.message, 'Implement semantic Wiki discovery and agent actions')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-links-graph-integration
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Apply product patch
+        run: python3 .github/scripts/apply_wiki_semantic_agent_phase.py
+      - name: Format Rust
+        run: |
+          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+      - name: Persist product changes
+        run: |
+          git config user.name "ElephantNote Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add Elephant/backend Elephant/frontend tests
+          if git diff --cached --quiet; then
+            echo "Product patch already present."
+          else
+            git commit -m "Implement semantic Wiki discovery and agent actions"
+            git push origin HEAD:assistant/wiki-links-graph-integration
+          fi
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+      - name: Knowledge core tests
+        run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --nocapture
+      - name: Tauri check and focused tests
+        run: |
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features --message-format short
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features knowledge_wiki -- --nocapture
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features knowledge_chat_actions -- --nocapture
+      - name: Frontend lint and tests
+        run: |
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \
+            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
+            Elephant/frontend/app/components/views/AtomicGraphView.vue \
+            Elephant/frontend/app/components/views/ChatView.vue \
+            Elephant/frontend/app/components/views/WikiView.vue
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/internalNoteLinks.spec.js \
+            tests/app/unit/wikiGraphSurface.spec.js
+      - name: Web build
+        run: pnpm tauri:web:build

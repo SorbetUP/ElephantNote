@@ -34,6 +34,17 @@ const safe = (callback) => {
   }
 }
 
+const publicApi = (Constructor) => {
+  const descriptors = Object.getOwnPropertyDescriptors(Constructor.prototype)
+  return Object.keys(descriptors).sort().map((name) => ({
+    name,
+    kind: typeof descriptors[name].value === 'function' ? 'method' : 'property',
+    enumerable: Boolean(descriptors[name].enumerable),
+    configurable: Boolean(descriptors[name].configurable),
+    writable: Boolean(descriptors[name].writable)
+  }))
+}
+
 const historySnapshot = (editor, keyMap) => {
   const result = safe(() => editor.getHistory())
   if (!result.ok) return result
@@ -129,6 +140,7 @@ const runCase = async(Muya, testCase, seed) => {
 
   if (!editor) return { name: testCase.name, constructionError, steps: [] }
 
+  const contentStateApi = publicApi(editor.contentState.constructor)
   const steps = [{ name: 'initial', state: capture(editor, events) }]
   for (const [index, action] of (testCase.actions || []).entries()) {
     let result
@@ -152,18 +164,7 @@ const runCase = async(Muya, testCase, seed) => {
   }
 
   const destroyResult = safe(() => editor.destroy())
-  return { name: testCase.name, constructionError, steps, destroyResult }
-}
-
-const publicApi = (Muya) => {
-  const descriptors = Object.getOwnPropertyDescriptors(Muya.prototype)
-  return Object.keys(descriptors).sort().map((name) => ({
-    name,
-    kind: typeof descriptors[name].value === 'function' ? 'method' : 'property',
-    enumerable: Boolean(descriptors[name].enumerable),
-    configurable: Boolean(descriptors[name].configurable),
-    writable: Boolean(descriptors[name].writable)
-  }))
+  return { name: testCase.name, constructionError, contentStateApi, steps, destroyResult }
 }
 
 export const runCharacterization = async(Muya) => {
@@ -174,7 +175,7 @@ export const runCharacterization = async(Muya) => {
     results.push(await runCase(Muya, testCase, index + 1))
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     publicApi: publicApi(Muya),
     cases: results
   }

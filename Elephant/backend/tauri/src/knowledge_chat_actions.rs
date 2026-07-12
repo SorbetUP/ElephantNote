@@ -77,11 +77,15 @@ fn relaxed_note_search(
 ) -> Result<Vec<KnowledgeSearchHit>, String> {
     let meaningful_terms = meaningful_search_terms(query);
     let trimmed = query.trim();
-    let exact_query = trimmed
+    let explicit_exact = trimmed
         .strip_prefix("exact:")
         .or_else(|| trimmed.strip_prefix('='))
         .map(str::trim)
         .filter(|value| !value.is_empty());
+    let implicit_exact = (meaningful_terms.len() == 1
+        && trimmed.eq_ignore_ascii_case(&meaningful_terms[0]))
+    .then_some(trimmed);
+    let exact_query = explicit_exact.or(implicit_exact);
     let (hits, strategy) = if let Some(exact_query) = exact_query {
         (exact_note_search(store, exact_query, limit)?, "exact")
     } else {

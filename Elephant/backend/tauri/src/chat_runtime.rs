@@ -214,9 +214,9 @@ pub async fn prewarm_saved_codex(app: &AppHandle) {
 }
 
 #[cfg(not(mobile))]
-fn looks_like_exact_count_request(query: &str) -> bool {
+fn exact_count_literal(query: &str) -> Option<String> {
     let normalized = query.to_lowercase();
-    [
+    let is_count = [
         "combien de note",
         "combien de notes",
         "nombre de note",
@@ -227,7 +227,55 @@ fn looks_like_exact_count_request(query: &str) -> bool {
         "how many notes",
     ]
     .iter()
-    .any(|needle| normalized.contains(needle))
+    .any(|needle| normalized.contains(needle));
+    if !is_count {
+        return None;
+    }
+    const FILLERS: &[&str] = &[
+        "a",
+        "au",
+        "aux",
+        "avec",
+        "combien",
+        "compte",
+        "compter",
+        "contenant",
+        "contiennent",
+        "contient",
+        "dans",
+        "de",
+        "dedans",
+        "des",
+        "du",
+        "ecrit",
+        "écrit",
+        "est",
+        "fois",
+        "how",
+        "le",
+        "les",
+        "many",
+        "mot",
+        "mots",
+        "nombre",
+        "note",
+        "notes",
+        "please",
+        "qui",
+        "stp",
+        "svp",
+        "the",
+        "un",
+        "une",
+        "y",
+    ];
+    let terms = query
+        .split(|character: char| !character.is_alphanumeric())
+        .map(|value| value.trim().to_lowercase())
+        .filter(|value| value.chars().count() >= 2)
+        .filter(|value| !FILLERS.contains(&value.as_str()))
+        .collect::<Vec<_>>();
+    (!terms.is_empty()).then(|| terms.join(" "))
 }
 
 #[cfg(not(mobile))]
@@ -238,14 +286,8 @@ fn knowledge_hits(app: &AppHandle, query: &str, limit: usize) -> Vec<KnowledgeSe
     let Ok(store) = KnowledgeStore::open(Path::new(&vault.path)) else {
         return Vec::new();
     };
-    if looks_like_exact_count_request(query) {
-        let literal = query
-            .split_whitespace()
-            .rev()
-            .find(|value| value.chars().any(char::is_alphanumeric))
-            .unwrap_or(query)
-            .trim_matches(|character: char| !character.is_alphanumeric());
-        crate::knowledge_chat_actions::exact_note_search(&store, literal, 100).unwrap_or_default()
+    if let Some(literal) = exact_count_literal(query) {
+        crate::knowledge_chat_actions::exact_note_search(&store, &literal, 100).unwrap_or_default()
     } else {
         crate::knowledge_chat_actions::hybrid_note_search(&store, query, limit).unwrap_or_default()
     }

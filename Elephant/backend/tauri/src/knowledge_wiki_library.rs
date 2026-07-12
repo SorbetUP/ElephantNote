@@ -718,7 +718,11 @@ fn matching_existing_wiki(
             )
         })
         .find(|draft| {
-            wiki_slug(&draft.title) == title_key
+            let draft_title = wiki_slug(&draft.title);
+            let related_title = draft_title.chars().count().min(title_key.chars().count()) >= 5
+                && (draft_title.contains(&title_key) || title_key.contains(&draft_title));
+            draft_title == title_key
+                || related_title
                 || (!topic_key.is_empty() && normalize_topic(&draft.topic) == topic_key)
         }))
 }
@@ -780,7 +784,11 @@ pub async fn tauri_knowledge_wiki_library_add_or_update(
     )
     .await?;
 
+    let temporary_id = generated.draft.id.clone();
     let mut revised = generated.draft;
+    if temporary_id != existing.id {
+        let _ = store.set_wiki_draft_status(&temporary_id, WikiDraftStatus::Rejected);
+    }
     revised.id = existing.id.clone();
     revised.topic = existing.topic.clone();
     revised.title = existing.title.clone();

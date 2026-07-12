@@ -116,6 +116,10 @@ const canonicalizeDynamicIds = (html, keyMap) => {
   })
 }
 
+const canonicalizeSourceRoots = (html) => html
+  .replace(/\/Elephant\/frontend\/src\/(?:\.muya-characterization-reference|muya)\//g, '/MUYA_SOURCE/')
+  .replace(/file:\/\/[^"']*\/Elephant\/frontend\/src\/(?:\.muya-characterization-reference|muya)\//g, 'file:///MUYA_SOURCE/')
+
 export const normalizeDom = (container, keyMap) => {
   if (!container) return null
   const clone = container.cloneNode(true)
@@ -125,7 +129,7 @@ export const normalizeDom = (container, keyMap) => {
   const html = clone.outerHTML
     .replace(/ style=""/g, '')
     .replace(/>\s+</g, '><')
-  return canonicalizeDynamicIds(html, keyMap)
+  return canonicalizeDynamicIds(canonicalizeSourceRoots(html), keyMap)
 }
 
 export const firstDifference = (reference, candidate, path = '$') => {

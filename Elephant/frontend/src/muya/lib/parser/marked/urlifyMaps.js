@@ -1,4 +1,4 @@
-/* eslint-disable quote-props, object-property-newline */
+/* eslint-disable @stylistic/quote-props, @stylistic/object-property-newline */
 
 const LATIN_MAP = {
   'À': 'A', 'Á': 'A', 'Â': 'A', 'Ã': 'A', 'Ä': 'AE', 'Å': 'A', 'Æ': 'AE',

@@ -25,14 +25,21 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           source = Path('.github/workflows/implement-wiki-embeddings-once.yml').read_text()
-          start_marker = "          python3 - <<'PY'\n"
-          end_marker = "          PY\n      - name: Format and validate"
-          start = source.index(start_marker) + len(start_marker)
-          end = source.index(end_marker, start)
-          lines = source[start:end].splitlines()
-          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines)
-          namespace = {'__name__': '__main__'}
-          exec(compile(script, 'wiki-embedding-implementation', 'exec'), namespace)
+          lines = source.splitlines()
+          start = next(index for index, line in enumerate(lines) if "python3 - <<'PY'" in line) + 1
+          end = next(
+              index for index in range(start, len(lines) - 1)
+              if lines[index].strip() == 'PY' and 'Format and validate' in lines[index + 1]
+          )
+          script_lines = lines[start:end]
+          indentation = min(
+              len(line) - len(line.lstrip())
+              for line in script_lines
+              if line.strip()
+          )
+          script = '\n'.join(line[indentation:] if line.strip() else '' for line in script_lines)
+          compile(script, 'wiki-embedding-implementation', 'exec')
+          exec(script, {'__name__': '__main__'})
           PY
       - name: Fix generated module imports
         shell: bash

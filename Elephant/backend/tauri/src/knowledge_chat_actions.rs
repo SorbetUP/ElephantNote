@@ -4,7 +4,7 @@ pub(crate) use hybrid_search::hybrid_note_search;
 
 use elephantnote_knowledge_core::{
     execute_approved_chat_action, prepare_chat_action, ChatActionExecution, ChatActionProposal,
-    ChatActionStatus, ChatKnowledgeAction, KnowledgeStore,
+    ChatActionStatus, ChatKnowledgeAction, KnowledgeSearchHit, KnowledgeStore,
 };
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -19,6 +19,40 @@ fn active_vault_root(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn active_store(root: &Path) -> Result<KnowledgeStore, String> {
     KnowledgeStore::open(root)
+}
+
+fn meaningful_search_terms(query: &str) -> Vec<String> {
+    const STOP_WORDS: &[&str] = &[
+        "afin", "avec", "dans", "des", "est", "faire", "les", "mais", "mes", "mon",
+        "pour", "que", "quel", "quelle", "sur", "une", "un", "the", "and", "for",
+        "from", "this", "with", "what", "where", "when", "comment", "peux", "peut",
+        "notes", "note", "cherche", "recherche", "trouve", "trouver",
+    ];
+    let mut terms = query
+        .split(|character: char| !character.is_alphanumeric())
+        .map(|term| term.trim().to_lowercase())
+        .filter(|term| term.chars().count() >= 3)
+        .filter(|term| !STOP_WORDS.contains(&term.as_str()))
+        .collect::<Vec<_>>();
+    terms.sort();
+    terms.dedup();
+    terms
+}
+
+fn relaxed_note_search(
+    store: &KnowledgeStore,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<KnowledgeSearchHit>, String> {
+    let meaningful_terms = meaningful_search_terms(query);
+    let hits = hybrid_note_search(store, query, limit)?;
+    eprintln!(
+        "[Knowledge][ChatSearch] query={:?} terms={} results={} strategy=hybrid",
+        query,
+        meaningful_terms.len(),
+        hits.len()
+    );
+    Ok(hits)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -136,12 +170,7 @@ fn execute_non_wiki_action(
     proposal: &ChatActionProposal,
 ) -> Result<ChatActionExecution, String> {
     if let ChatKnowledgeAction::SearchNotes { query, limit } = &proposal.action {
-        let hits = hybrid_note_search(store, query, *limit)?;
-        eprintln!(
-            "[Knowledge][ChatSearch] query={:?} results={} strategy=hybrid",
-            query,
-            hits.len()
-        );
+        let hits = relaxed_note_search(store, query, *limit)?;
         return completed_execution(
             store,
             proposal.clone(),

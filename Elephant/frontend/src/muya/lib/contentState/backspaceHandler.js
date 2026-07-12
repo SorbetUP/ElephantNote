@@ -1,78 +1,52 @@
 import selection from '../selection'
+import { findNearestParagraph } from '../selection/dom'
+import handleBackspaceInitial from './backspaceInitialCases'
+import handleBackspaceInline from './backspaceInlineCases'
+import handleBackspaceStructured from './backspaceStructuredCases'
+import handleBackspaceDegrade from './backspaceDegrade'
+import mergeBackspacePrevious from './backspaceMergePrevious'
 
 const backspaceHandler = ContentState => {
   ContentState.prototype.backspaceHandler = function(event) {
     const { start, end } = selection.getCursorRange()
     if (!start || !end) return
-    this.cursor = { start, end, isEdit: true }
-    const block = this.getBlock(start.key)
-    if (!block) return
-    const { functionType } = block
 
-    if (functionType === 'cellContent') {
-      return this.deleteInTable(block, event)
-    }
-    if (functionType === 'codeContent') {
-      return this.backspaceInCodeBlock(block)
-    }
-    if (functionType === 'languageInput') return
+    const initial = handleBackspaceInitial(this, event, start, end)
+    if (initial.handled) return initial.value
+    const { startBlock } = initial.context
+    const node = selection.getSelectionStart()
+    const parentNode = node && node.nodeType === 1 ? node.parentNode : null
+    const paragraph = findNearestParagraph(node)
+    let block = this.getBlock(paragraph.id)
+    let parent = this.getBlock(block.parent)
+    const preBlock = this.findPreBlockInLocation(block)
+    const { left, right } = selection.getCaretOffsets(paragraph)
+    const inlineDegrade = this.checkBackspaceCase()
+    let result = handleBackspaceInline(this, event, {
+      start,
+      end,
+      startBlock,
+      node,
+      parentNode,
+      paragraph,
+      block,
+      parent,
+      preBlock,
+      left,
+      right,
+      inlineDegrade
+    })
+    if (result.handled) return result.value
 
-    if (this.backspaceInEmptyParagraph(block)) return
-    const parent = this.getParent(block)
-    if (parent && parent.type === 'li') {
-      if (this.backspaceInListItem(block)) return
-    }
+    result = handleBackspaceStructured(this, event, result.context)
+    if (result.handled) return result.value
+    ;({ block, parent } = result.context)
 
-    const { text } = block
-    const isCollapsed = start.key === end.key && start.offset === end.offset
-    if (!isCollapsed) {
-      const startBlock = this.getBlock(start.key)
-      const endBlock = this.getBlock(end.key)
-      startBlock.text =
-        startBlock.text.substring(0, start.offset) +
-        endBlock.text.substring(end.offset)
-      if (start.key !== end.key) this.removeBlocks(startBlock, endBlock)
-      this.cursor = { start, end: start, isEdit: true }
-      this.checkInlineUpdate(startBlock)
-      this.partialRender()
-      return this.muya.dispatchChange()
-    }
+    result = handleBackspaceDegrade(this, event, result.context)
+    if (result.handled) return result.value
 
-    if (
-      event.key === 'Backspace' &&
-      start.offset > 0
-    ) {
-      block.text =
-        text.substring(0, start.offset - 1) +
-        text.substring(start.offset)
-      const offset = start.offset - 1
-      this.cursor = {
-        start: { key: start.key, offset },
-        end: { key: start.key, offset },
-        isEdit: true
-      }
-      this.checkInlineUpdate(block)
-      return this.partialRender()
-    }
-
-    if (
-      event.key === 'Delete' &&
-      start.offset < text.length
-    ) {
-      block.text =
-        text.substring(0, start.offset) +
-        text.substring(start.offset + 1)
-      const offset = start.offset
-      this.cursor = {
-        start: { key: start.key, offset },
-        end: { key: start.key, offset },
-        isEdit: true
-      }
-      this.checkInlineUpdate(block)
-      return this.partialRender()
-    }
-
-    return this.mergeBlock(block, event)
+    result = mergeBackspacePrevious(this, event, result.context)
+    if (result.handled) return result.value
   }
 }
 

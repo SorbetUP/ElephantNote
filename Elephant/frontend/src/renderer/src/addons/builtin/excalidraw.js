@@ -6,7 +6,7 @@ import { installExcalidrawImageRuntimeFixes } from '../../platform/excalidrawIma
 
 const ADDON_ID = 'elephant.excalidraw'
 const EXCALIDRAW_ASSET_RE = /(?:^|\/)\.assets\/excalidraw-[^/?#]+\.png(?:[?#].*)?$/i
-const EXCALIDRAW_ICON = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTgiIGZpbGw9IiM2QzYzRkYiLz48cGF0aCBkPSJNMjAgNDRjNy41LTE1LjUgMTUuNS0yMy41IDI0LTI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PHBhdGggZD0iTTE4IDQ2bDgtMi02LTYtMiA4eiIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik00MiAxOGw0IDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSI0IiBmaWxsPSIjZmZmIiBvcGFjaXR5PSIuODUiLz48cGF0aCBkPSJNNDIgNDJoNyIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgb3BhY2l0eT0iLjg1Ii8+PC9zdmc+'
+const EXCALIDRAW_ICON = 'data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgNjQgNjQiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjU4IiBoZWlnaHQ9IjU4IiByeD0iMTciIGZpbGw9IiM2OTY1REIiLz48cGF0aCBkPSJNMTguNSAzOS41IDM0LjggMTguOGMxLjctMi4xIDQuOC0yLjQgNi45LS43bDQuMiAzLjRjMi4xIDEuNyAyLjQgNC44LjcgNi45TDMwLjMgNDkuMWwtMTEuOCAyLjd2LTEyLjNaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjQuNCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxwYXRoIGQ9Im0yMSAzOSA5LjYgNy41TTM1IDE5LjRsMTEgOC43IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjQuNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PC9zdmc+'
 
 const normalizeSource = (value = '') => String(value || '')
   .replaceAll('\\', '/')
@@ -46,10 +46,10 @@ export const excalidrawAddon = {
   manifest: {
     id: ADDON_ID,
     name: 'Excalidraw',
-    version: '1.1.0',
+    version: '1.2.0',
     description: 'Adds Excalidraw drawings, editable image embeds and drawing cleanup to notes.',
     author: 'ElephantNote',
-    icon: 'pen-tool',
+    icon: 'excalidraw',
     defaultEnabled: false,
     removable: true,
     permissions: ['notes.read', 'notes.write', 'assets.read', 'assets.write'],

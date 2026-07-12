@@ -1,15 +1,6 @@
 name: Muya JS Characterization
 
 on:
-  push:
-    branches:
-      - 'refactor/muya-js-modular-parity'
-    paths:
-      - 'Elephant/frontend/src/muya/**'
-      - 'tests/app/characterization/**'
-      - 'build/scripts/run-muya-characterization.mjs'
-      - '.github/workflows/muya-js-characterization.yml'
-      - 'package.json'
   pull_request:
     paths:
       - 'Elephant/frontend/src/muya/**'
@@ -20,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: muya-js-characterization-${{ github.ref }}
+  group: muya-js-characterization-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:

@@ -1,4 +1,4 @@
-use crate::model::{Document, InlineKind, NodeId, NodeKind};
+use crate::model::{Document, InlineKind, Node, NodeId, NodeKind};
 
 use super::EditError;
 
@@ -21,6 +21,14 @@ pub enum Operation {
     range: Utf16Range,
     inserted: String,
   },
+  InsertNode {
+    parent: NodeId,
+    index: usize,
+    node: Node,
+  },
+  RemoveNode {
+    node: NodeId,
+  },
 }
 
 impl Operation {
@@ -31,6 +39,12 @@ impl Operation {
         range,
         inserted,
       } => apply_replace_text(document, *node, *range, inserted),
+      Self::InsertNode {
+        parent,
+        index,
+        node,
+      } => apply_insert_node(document, *parent, *index, node),
+      Self::RemoveNode { node } => apply_remove_node(document, *node),
     }
   }
 }
@@ -41,27 +55,30 @@ fn apply_replace_text(
   range: Utf16Range,
   inserted: &str,
 ) -> Result<Operation, EditError> {
-  let node = document
-    .node_mut(node_id)
-    .ok_or(EditError::NodeNotFound(node_id))?;
-  let NodeKind::Inline(InlineKind::Text { value }) = &mut node.kind else {
-    return Err(EditError::NotTextNode(node_id));
+  let deleted = {
+    let node = document
+      .node_mut(node_id)
+      .ok_or(EditError::NodeNotFound(node_id))?;
+    let NodeKind::Inline(InlineKind::Text { value }) = &mut node.kind else {
+      return Err(EditError::NotTextNode(node_id));
+    };
+
+    let utf16_length = value.encode_utf16().count() as u32;
+    if range.start > range.end || range.end > utf16_length {
+      return Err(EditError::RangeOutOfBounds {
+        node: node_id,
+        start: range.start,
+        end: range.end,
+      });
+    }
+
+    let start = utf16_to_byte(value, node_id, range.start)?;
+    let end = utf16_to_byte(value, node_id, range.end)?;
+    let deleted = value[start..end].to_string();
+    value.replace_range(start..end, inserted);
+    deleted
   };
-
-  let utf16_length = value.encode_utf16().count() as u32;
-  if range.start > range.end || range.end > utf16_length {
-    return Err(EditError::RangeOutOfBounds {
-      node: node_id,
-      start: range.start,
-      end: range.end,
-    });
-  }
-
-  let start = utf16_to_byte(value, node_id, range.start)?;
-  let end = utf16_to_byte(value, node_id, range.end)?;
-  let deleted = value[start..end].to_string();
-  value.replace_range(start..end, inserted);
-  node.source = None;
+  document.invalidate_source_chain(node_id);
 
   Ok(Operation::ReplaceText {
     node: node_id,
@@ -70,6 +87,59 @@ fn apply_replace_text(
       range.start + inserted.encode_utf16().count() as u32,
     ),
     inserted: deleted,
+  })
+}
+
+fn apply_insert_node(
+  document: &mut Document,
+  parent: NodeId,
+  index: usize,
+  node: &Node,
+) -> Result<Operation, EditError> {
+  if document.node(node.id).is_some() {
+    return Err(EditError::NodeAlreadyExists(node.id));
+  }
+  if !node.children.is_empty() {
+    return Err(EditError::NodeHasChildren(node.id));
+  }
+  let parent_node = document
+    .node(parent)
+    .ok_or(EditError::NodeNotFound(parent))?;
+  if index > parent_node.children.len() {
+    return Err(EditError::InvalidChildIndex { parent, index });
+  }
+
+  if !document.insert_detached_node(parent, index, node.clone()) {
+    return Err(EditError::UnsupportedStructure(node.id));
+  }
+  document.invalidate_source_chain(parent);
+  Ok(Operation::RemoveNode { node: node.id })
+}
+
+fn apply_remove_node(
+  document: &mut Document,
+  node_id: NodeId,
+) -> Result<Operation, EditError> {
+  let node = document
+    .node(node_id)
+    .ok_or(EditError::NodeNotFound(node_id))?;
+  if !node.children.is_empty() {
+    return Err(EditError::NodeHasChildren(node_id));
+  }
+  let parent = node.parent.ok_or(EditError::UnsupportedStructure(node_id))?;
+  let index = document
+    .child_index(parent, node_id)
+    .ok_or(EditError::UnsupportedStructure(node_id))?;
+  let (removed, removed_parent, removed_index) = document
+    .remove_leaf_node(node_id)
+    .ok_or(EditError::UnsupportedStructure(node_id))?;
+  debug_assert_eq!((removed_parent, removed_index), (parent, index));
+  document.invalidate_source_chain(parent);
+
+  Ok(Operation::InsertNode {
+    parent,
+    index,
+    node: removed,
   })
 }
 
@@ -110,7 +180,7 @@ pub(crate) fn utf16_to_byte(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::model::{InlineKind, NodeKind};
+  use crate::model::{BlockKind, InlineKind, NodeKind};
 
   #[test]
   fn replaces_text_and_returns_its_inverse() {
@@ -136,6 +206,29 @@ mod tests {
       &document.node(node).unwrap().kind,
       NodeKind::Inline(InlineKind::Text { value }) if value == "A😀B"
     ));
+  }
+
+  #[test]
+  fn inserts_and_removes_nodes_with_stable_ids() {
+    let mut document = Document::new();
+    let paragraph = Node::new(
+      document.next_available_id(),
+      NodeKind::Block(BlockKind::Paragraph),
+      None,
+    );
+    let remove = Operation::InsertNode {
+      parent: document.root,
+      index: 0,
+      node: paragraph.clone(),
+    }
+    .apply(&mut document)
+    .unwrap();
+    assert!(document.node(paragraph.id).is_some());
+
+    let insert = remove.apply(&mut document).unwrap();
+    assert!(document.node(paragraph.id).is_none());
+    insert.apply(&mut document).unwrap();
+    assert!(document.node(paragraph.id).is_some());
   }
 
   #[test]

@@ -16,6 +16,7 @@ import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBrid
 import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
 import { installSlashMenuDiagnostics } from './platform/slashMenuDiagnostics'
 import { installWritingCommandBridge } from './platform/writingCommandBridge'
+import { installMuyaPluginRegistrationGuard } from './platform/muyaPluginRegistrationGuard'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
 import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
@@ -59,6 +60,7 @@ installTauriMarkTextSaveBridge()
 installTauriLocalIpcBridge()
 installSlashMenuDiagnostics()
 installWritingCommandBridge()
+installMuyaPluginRegistrationGuard()
 
 const bootstrapTauriRuntime = async() => {
   pushDiagnosticLog('info', 'bootstrapTauriRuntime:start', { runtime: window.__MARKTEXT_RUNTIME__ })

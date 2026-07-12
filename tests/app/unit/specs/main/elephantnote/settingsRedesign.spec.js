@@ -83,7 +83,7 @@ describe('ElephantNote settings redesign', () => {
     const row = read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
     const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AddonPacksSettings.vue')
 
-    expect(panel).toContain('v-if="filteredInstalledAddons.length || query"')
+    expect(panel).toContain('v-if="visibleInstalledAddons.length || query"')
     expect(panel).not.toContain('No optional addon is installed.')
     expect(panel).toContain('Available addons')
     expect(logic).toContain('installBuiltin(addon.id)')

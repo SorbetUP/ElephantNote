@@ -15,7 +15,8 @@ describe('code execution settings contribution', () => {
 
     expect(fs.existsSync(path.join(root, obsoleteInjectorPath))).toBe(false)
     expect(addon).toContain("section: 'editor'")
-    expect(addon).toContain("component: () => import('./ui/CodeExecutionSettings.vue')")
+    expect(addon).toContain("import CodeExecutionSettings from './ui/CodeExecutionSettings.vue'")
+    expect(addon).toContain('render: mountSettingsComponent(ctx, CodeExecutionSettings)')
     expect(addon).not.toContain('MutationObserver')
   })
 

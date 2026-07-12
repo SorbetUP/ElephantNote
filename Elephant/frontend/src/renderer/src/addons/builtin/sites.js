@@ -1,3 +1,4 @@
+import SitePreviewPanel from 'elephant-front/sitePreview/SitePreviewPanel.vue'
 import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
 import { useSitePreviewStore } from 'elephant-front/sitePreview/sitePreviewStore'
 import SitesSettings from './ui/SitesSettings.vue'
@@ -25,7 +26,7 @@ export const sitesAddon = {
     defaultEnabled: false,
     removable: true,
     permissions: ['sites.build', 'sites.preview'],
-    contributes: { settings: true, siteGenerator: true }
+    contributes: { settings: true, siteGenerator: true, layout: true }
   },
 
   activate(ctx) {
@@ -33,6 +34,12 @@ export const sitesAddon = {
       id: `${ADDON_ID}.generator`,
       title: 'ElephantNote Sites',
       description: 'The built-in static site generator and preview service.'
+    })
+    ctx.registerContribution('layout.zones', {
+      id: `${ADDON_ID}.preview-panel`,
+      zone: 'workspace.notes',
+      order: 80,
+      component: SitePreviewPanel
     })
     ctx.addSettingsSection({
       id: `${ADDON_ID}.settings`,

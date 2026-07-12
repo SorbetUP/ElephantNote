@@ -1,0 +1,703 @@
+name: Fix chat agent and graph once
+
+on:
+  push:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/fix-chat-agent-graph-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-links-graph-integration
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply source fixes
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"missing patch anchor in {path}: {old[:120]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          # Preserve per-request AI route, stream id and auto-approval options.
+          replace_once(
+              'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
+              """const normalizeRagChatPayload = (payload, limit = 6) => {
+  if (payload && typeof payload === 'object') {
+    return {
+      message: String(payload.message || '').trim(),
+      limit: Number.isFinite(Number(payload.limit)) ? Number(payload.limit) : limit,
+      messages: Array.isArray(payload.messages) ? payload.messages : []
+    }
+  }
+  return {
+    message: String(payload || '').trim(),
+    limit,
+    messages: []
+  }
+}
+""",
+              """const normalizeRagChatPayload = (payload, limit = 6) => {
+  if (payload && typeof payload === 'object') {
+    return {
+      ...payload,
+      message: String(payload.message || '').trim(),
+      limit: Number.isFinite(Number(payload.limit)) ? Number(payload.limit) : limit,
+      messages: Array.isArray(payload.messages) ? payload.messages : []
+    }
+  }
+  return {
+    message: String(payload || '').trim(),
+    limit,
+    messages: []
+  }
+}
+"""
+          )
+
+          # All graph nodes remain visible by default; the Wiki territory is a focus, not a destructive filter.
+          replace_once(
+              'Elephant/frontend/app/components/views/AtomicGraphView.vue',
+              "const filterOrphans = ref(false)",
+              "const filterOrphans = ref(true)"
+          )
+
+          # Real Codex delta streaming over a scoped Tauri event channel.
+          p = Path('Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs')
+          text = p.read_text()
+          old = """pub async fn chat_with_effort(
+    app: &AppHandle,
+    model: &str,
+    prompt: &str,
+    reasoning_effort: Option<&str>,
+) -> R<CodexChatResult> {
+    let started = Instant::now();
+"""
+          new = """pub async fn chat_with_effort(
+    app: &AppHandle,
+    model: &str,
+    prompt: &str,
+    reasoning_effort: Option<&str>,
+) -> R<CodexChatResult> {
+    chat_with_effort_streaming(app, model, prompt, reasoning_effort, None).await
+}
+
+pub async fn chat_with_effort_streaming(
+    app: &AppHandle,
+    model: &str,
+    prompt: &str,
+    reasoning_effort: Option<&str>,
+    stream_id: Option<&str>,
+) -> R<CodexChatResult> {
+    let started = Instant::now();
+"""
+          if old not in text:
+              raise SystemExit('missing codex streaming function anchor')
+          text = text.replace(old, new, 1)
+          old = """            \"item/agentMessage/delta\" => {
+                delta_count += 1;
+                answer.push_str(delta_text(&event));
+            }
+"""
+          new = """            \"item/agentMessage/delta\" => {
+                delta_count += 1;
+                let delta = delta_text(&event);
+                answer.push_str(delta);
+                if let Some(stream_id) = stream_id {
+                    let _ = app.emit(
+                        \"elephantnote://chat-stream\",
+                        json!({ \"streamId\": stream_id, \"type\": \"delta\", \"delta\": delta }),
+                    );
+                }
+            }
+"""
+          if old not in text:
+              raise SystemExit('missing codex delta anchor')
+          text = text.replace(old, new, 1)
+          old = """            \"turn/completed\" => {
+                if let Some(error) = turn_failure(&event) {
+                    break Err(error);
+                }
+                break Ok(());
+            }
+"""
+          new = """            \"turn/completed\" => {
+                if let Some(error) = turn_failure(&event) {
+                    break Err(error);
+                }
+                if let Some(stream_id) = stream_id {
+                    let _ = app.emit(
+                        \"elephantnote://chat-stream\",
+                        json!({ \"streamId\": stream_id, \"type\": \"phase\", \"phase\": \"finalizing\" }),
+                    );
+                }
+                break Ok(());
+            }
+"""
+          if old not in text:
+              raise SystemExit('missing codex completion anchor')
+          text = text.replace(old, new, 1)
+          p.write_text(text)
+
+          # Stream final answers and run read-only search actions as a real two-pass tool call.
+          p = Path('Elephant/backend/tauri/src/chat_runtime.rs')
+          text = p.read_text()
+          text = text.replace('use tauri::AppHandle;', 'use tauri::{AppHandle, Emitter};', 1)
+          old = """        let result =
+            codex_app_server::chat_with_effort(&app, &model, &prompt, reasoning_effort.as_deref())
+                .await?;
+        let (answer, raw_actions) = if tools_enabled(&payload) {
+            action_block(&result.answer)
+        } else {
+            (result.answer.clone(), Vec::new())
+        };
+        let (actions, action_errors) = prepare_assistant_actions(&app, raw_actions);
+        let citations = citations_from_hits(&hits);
+        return Ok(json!({
+            \"answer\": answer,
+"""
+          new = """        let stream_id = text(&payload, &[\"streamId\", \"stream_id\"]);
+        let stream_id = (!stream_id.is_empty()).then_some(stream_id);
+        let result = codex_app_server::chat_with_effort_streaming(
+            &app,
+            &model,
+            &prompt,
+            reasoning_effort.as_deref(),
+            stream_id.as_deref(),
+        )
+        .await?;
+        let (mut answer, raw_actions) = if tools_enabled(&payload) {
+            action_block(&result.answer)
+        } else {
+            (result.answer.clone(), Vec::new())
+        };
+        let (actions, action_errors) = prepare_assistant_actions(&app, raw_actions);
+        let search_results = actions
+            .iter()
+            .filter_map(|entry| entry.pointer(\"/execution/result\"))
+            .filter(|value| value.is_array())
+            .cloned()
+            .collect::<Vec<_>>();
+        if !search_results.is_empty() {
+            if let Some(stream_id) = stream_id.as_deref() {
+                let _ = app.emit(
+                    \"elephantnote://chat-stream\",
+                    json!({ \"streamId\": stream_id, \"type\": \"reset\", \"phase\": \"tool-results\" }),
+                );
+            }
+            let tool_context = serde_json::to_string_pretty(&search_results)
+                .map_err(|error| error.to_string())?;
+            let followup_prompt = format!(
+                \"{prompt}\\n\\nThe ElephantNote search tool returned the following real indexed-note results:\\n{tool_context}\\n\\nAnswer the user's request using these results. Cite note titles naturally. Do not emit another elephantnote_actions block.\"
+            );
+            answer = codex_app_server::chat_with_effort_streaming(
+                &app,
+                &model,
+                &followup_prompt,
+                reasoning_effort.as_deref(),
+                stream_id.as_deref(),
+            )
+            .await?
+            .answer;
+        }
+        let citations = citations_from_hits(&hits);
+        return Ok(json!({
+            \"answer\": answer,
+"""
+          if old not in text:
+              raise SystemExit('missing chat runtime Codex block anchor')
+          text = text.replace(old, new, 1)
+          p.write_text(text)
+
+          # Chat UI: stable action updates, auto-approval, route controls, real stream consumption and search results.
+          p = Path('Elephant/frontend/app/components/views/ChatView.vue')
+          text = p.read_text()
+          text = text.replace(
+              "import { computed, nextTick, onMounted, ref, watch } from 'vue'",
+              "import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'",
+              1
+          )
+          text = text.replace(
+              "  Link,\n  Menu,",
+              "  Link,\n  LoaderCircle,\n  Menu,",
+              1
+          )
+          old = """        <div class=\"en-chat-topbar-actions\">
+          <span
+            v-if=\"chatStore.isSending\"
+            class=\"en-chat-status en-chat-status-pulse\"
+            aria-label=\"Assistant is working\"
+          />
+"""
+          new = """        <div class=\"en-chat-topbar-actions\">
+          <select v-model=\"selectedModel\" class=\"en-chat-route-select\" title=\"Modèle\" @change=\"saveChatRoute\">
+            <option v-for=\"model in availableModels\" :key=\"model\" :value=\"model\">{{ model }}</option>
+          </select>
+          <select v-model=\"reasoningEffort\" class=\"en-chat-route-select en-chat-reasoning-select\" title=\"Niveau de réflexion\" @change=\"saveChatRoute\">
+            <option value=\"low\">Faible</option>
+            <option value=\"medium\">Moyen</option>
+            <option value=\"high\">Élevé</option>
+          </select>
+          <label class=\"en-chat-auto-approve\" title=\"Approuver automatiquement les actions demandées\">
+            <input v-model=\"autoApproveTools\" type=\"checkbox\" @change=\"persistAutoApprove\">
+            <span>Auto</span>
+          </label>
+          <span
+            v-if=\"chatStore.isSending\"
+            class=\"en-chat-status en-chat-status-pulse\"
+            aria-label=\"Assistant is working\"
+          />
+"""
+          if old not in text:
+              raise SystemExit('missing chat topbar anchor')
+          text = text.replace(old, new, 1)
+
+          old = """            <div class=\"en-chat-message-body\">
+              <p v-for=\"(paragraph, index) in splitParagraphs(message.content)\" :key=\"index\">
+                {{ paragraph }}
+              </p>
+            </div>
+"""
+          new = """            <div class=\"en-chat-message-body\">
+              <div v-if=\"message.streaming && !message.content\" class=\"en-chat-thinking\">
+                <LoaderCircle class=\"en-icon en-spin\" />
+                <span>{{ message.streamPhase || 'Raisonnement…' }}</span>
+              </div>
+              <p v-for=\"(paragraph, index) in splitParagraphs(message.content)\" :key=\"index\">
+                {{ paragraph }}
+              </p>
+              <small v-if=\"message.reasoningEffort\" class=\"en-chat-reasoning-meta\">Réflexion : {{ message.reasoningEffort }}</small>
+            </div>
+"""
+          if old not in text:
+              raise SystemExit('missing message body anchor')
+          text = text.replace(old, new, 1)
+
+          old = """                <div class=\"en-chat-action-controls\">
+                  <span class=\"en-chat-action-status\">{{ action.proposal?.status || 'proposed' }}</span>
+                  <template v-if=\"action.proposal?.status === 'proposed'\">
+                    <button type=\"button\" :disabled=\"action.busy\" @click=\"approveAction(message, action)\">Approuver</button>
+                    <button type=\"button\" :disabled=\"action.busy\" @click=\"rejectAction(message, action)\">Refuser</button>
+                  </template>
+                </div>
+"""
+          new = """                <div class=\"en-chat-action-controls\">
+                  <span class=\"en-chat-action-status\">{{ action.proposal?.status || 'proposed' }}</span>
+                  <template v-if=\"action.proposal?.status === 'proposed'\">
+                    <button type=\"button\" :disabled=\"action.busy\" @click.stop=\"approveAction(message, action)\">Approuver</button>
+                    <button type=\"button\" :disabled=\"action.busy\" @click.stop=\"rejectAction(message, action)\">Refuser</button>
+                  </template>
+                </div>
+                <ul v-if=\"actionSearchResults(action).length\" class=\"en-chat-action-results\">
+                  <li v-for=\"result in actionSearchResults(action)\" :key=\"result.relative_path || result.relativePath || result.path\">
+                    <button type=\"button\" @click.stop=\"openNote(result.relative_path || result.relativePath || result.path, result.title)\">
+                      <strong>{{ result.title || result.relative_path || result.path }}</strong>
+                      <span>{{ result.excerpt || result.heading || '' }}</span>
+                    </button>
+                  </li>
+                </ul>
+"""
+          if old not in text:
+              raise SystemExit('missing action controls anchor')
+          text = text.replace(old, new, 1)
+
+          old = """const expandedTools = ref({})
+const stickToBottom = ref(true)
+"""
+          new = """const expandedTools = ref({})
+const stickToBottom = ref(true)
+const activeAiConfig = ref(null)
+const selectedModel = ref('')
+const reasoningEffort = ref('medium')
+const codexModels = ref([])
+const autoApproveTools = ref(window.localStorage.getItem('elephantnote:chat:auto-approve') === 'true')
+let activeStream = null
+let unlistenChatStream = null
+
+const availableModels = computed(() => {
+  const values = new Set(codexModels.value)
+  if (selectedModel.value) values.add(selectedModel.value)
+  return [...values]
+})
+"""
+          if old not in text:
+              raise SystemExit('missing chat refs anchor')
+          text = text.replace(old, new, 1)
+
+          old = """const persistActionPatch = (message, target, patch) => {
+  const actions = (message.actions || []).map((entry) => entry === target ? { ...entry, ...patch } : entry)
+  chatStore.updateMessage(message.id, { actions })
+}
+"""
+          new = """const persistActionPatch = (message, target, patch) => {
+  const targetId = target?.proposal?.id
+  const actions = (message.actions || []).map((entry) => {
+    const matches = targetId ? entry?.proposal?.id === targetId : entry === target
+    return matches ? { ...entry, ...patch } : entry
+  })
+  chatStore.updateMessage(message.id, { actions })
+}
+
+const actionSearchResults = (entry) => {
+  const result = entry?.execution?.result
+  return Array.isArray(result) ? result : []
+}
+
+const persistAutoApprove = () => {
+  window.localStorage.setItem('elephantnote:chat:auto-approve', String(autoApproveTools.value))
+}
+
+const invokeProposal = (command, id) => invoke(command, { proposalId: id, proposal_id: id })
+
+const executeAction = async(message, entry) => {
+  const id = entry?.proposal?.id
+  if (!id || entry.busy) return
+  persistActionPatch(message, entry, { busy: true, error: '' })
+  try {
+    await invokeProposal('tauri_knowledge_chat_action_approve', id)
+    const execution = await invokeProposal('tauri_knowledge_chat_action_execute', id)
+    persistActionPatch(message, entry, { busy: false, proposal: execution.proposal, execution })
+    await refreshAfterAction()
+  } catch (error) {
+    persistActionPatch(message, entry, { busy: false, error: error?.message || String(error) })
+  }
+}
+"""
+          if old not in text:
+              raise SystemExit('missing persistActionPatch anchor')
+          text = text.replace(old, new, 1)
+
+          old = """const approveAction = async(message, entry) => {
+  const id = entry?.proposal?.id
+  if (!id || entry.busy) return
+  persistActionPatch(message, entry, { busy: true, error: '' })
+  try {
+    await invoke('tauri_knowledge_chat_action_approve', { proposalId: id })
+    const execution = await invoke('tauri_knowledge_chat_action_execute', { proposalId: id })
+    persistActionPatch(message, entry, { busy: false, proposal: execution.proposal, execution })
+    await refreshAfterAction()
+  } catch (error) {
+    persistActionPatch(message, entry, { busy: false, error: error?.message || String(error) })
+  }
+}
+"""
+          new = """const approveAction = async(message, entry) => executeAction(message, entry)
+"""
+          if old not in text:
+              raise SystemExit('missing approveAction anchor')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              "const proposal = await invoke('tauri_knowledge_chat_action_reject', { proposalId: id })",
+              "const proposal = await invokeProposal('tauri_knowledge_chat_action_reject', id)",
+              1
+          )
+
+          insert_before = """const send = async () => {
+"""
+          helper = """const extractModelIds = (value) => {
+  const output = new Set()
+  const visit = (entry) => {
+    if (Array.isArray(entry)) return entry.forEach(visit)
+    if (!entry || typeof entry !== 'object') return
+    const id = entry.id || entry.model || entry.slug
+    if (typeof id === 'string' && id.trim()) output.add(id.trim())
+    Object.values(entry).forEach(visit)
+  }
+  visit(value)
+  return [...output].filter((id) => id.startsWith('gpt-'))
+}
+
+const loadChatRoute = async() => {
+  try {
+    const config = await elephantnoteClient.ai.getConfig()
+    activeAiConfig.value = config && typeof config === 'object' ? config : {}
+    selectedModel.value = activeAiConfig.value?.routes?.chat?.model || activeAiConfig.value?.providers?.codex?.model || ''
+    reasoningEffort.value = activeAiConfig.value?.routes?.chat?.reasoningEffort || 'medium'
+  } catch {}
+  try {
+    const models = await invoke('tauri_knowledge_chat', { payload: { codexOperation: 'models' } })
+    codexModels.value = extractModelIds(models)
+  } catch {}
+}
+
+const saveChatRoute = async() => {
+  const config = structuredClone(activeAiConfig.value || {})
+  config.routes ||= {}
+  config.routes.chat ||= {}
+  Object.assign(config.routes.chat, {
+    source: 'codex',
+    provider: 'codex',
+    transport: 'codex',
+    endpoint: 'codex://app-server',
+    model: selectedModel.value,
+    reasoningEffort: reasoningEffort.value,
+    enableTools: true,
+    stream: true
+  })
+  config.providers ||= {}
+  config.providers.codex ||= {}
+  config.providers.codex.model = selectedModel.value
+  activeAiConfig.value = config
+  await elephantnoteClient.ai.setConfig(config)
+}
+
+const handleStreamEvent = (event) => {
+  const payload = event?.payload || event
+  if (!activeStream || payload?.streamId !== activeStream.id) return
+  const message = chatStore.activeMessages.find((entry) => entry.id === activeStream.messageId)
+  if (!message) return
+  if (payload.type === 'reset') {
+    chatStore.updateMessage(message.id, { content: '', streamPhase: 'Résultats trouvés, rédaction…' })
+  } else if (payload.type === 'delta') {
+    chatStore.updateMessage(message.id, { content: `${message.content || ''}${payload.delta || ''}`, streamPhase: 'Rédaction…' })
+  } else if (payload.type === 'phase') {
+    chatStore.updateMessage(message.id, { streamPhase: payload.phase === 'finalizing' ? 'Finalisation…' : 'Raisonnement…' })
+  }
+  nextTick(scrollToBottom)
+}
+
+"""
+          if insert_before not in text:
+              raise SystemExit('missing send insertion anchor')
+          text = text.replace(insert_before, helper + insert_before, 1)
+
+          old = """  chatStore.addMessage({ role: 'user', content: question })
+  chatStore.setSending(true)
+"""
+          new = """  chatStore.addMessage({ role: 'user', content: question })
+  const streamId = `chat-stream-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const assistantMessage = chatStore.addMessage({
+    role: 'assistant',
+    content: '',
+    streaming: true,
+    streamPhase: 'Recherche et raisonnement…',
+    reasoningEffort: reasoningEffort.value
+  })
+  activeStream = { id: streamId, messageId: assistantMessage.id }
+  chatStore.setSending(true)
+"""
+          if old not in text:
+              raise SystemExit('missing send start anchor')
+          text = text.replace(old, new, 1)
+
+          old = """    const result = await elephantnoteClient.rag.chat({
+      message: question,
+      limit,
+      messages
+    })
+"""
+          new = """    const result = await elephantnoteClient.rag.chat({
+      message: question,
+      limit,
+      messages,
+      aiConfig: activeAiConfig.value,
+      streamId,
+      autoApproveTools: autoApproveTools.value
+    })
+"""
+          if old not in text:
+              raise SystemExit('missing rag payload anchor')
+          text = text.replace(old, new, 1)
+
+          old = """    chatStore.addMessage({
+      role: 'assistant',
+      content: result?.answer || 'I did not find matching local notes.',
+      citations: result?.citations || result?.sources || [],
+      wikiContext: result?.wikiContext || null,
+      actions: result?.actions || [],
+      actionErrors: result?.actionErrors || [],
+      toolCalls
+    })
+"""
+          new = """    chatStore.updateMessage(assistantMessage.id, {
+      content: result?.answer || 'I did not find matching local notes.',
+      citations: result?.citations || result?.sources || [],
+      wikiContext: result?.wikiContext || null,
+      actions: result?.actions || [],
+      actionErrors: result?.actionErrors || [],
+      toolCalls,
+      streaming: false,
+      streamPhase: '',
+      reasoningEffort: result?.reasoningEffort || reasoningEffort.value
+    })
+    if (autoApproveTools.value) {
+      const message = chatStore.activeMessages.find((entry) => entry.id === assistantMessage.id)
+      for (const action of message?.actions || []) {
+        if (action?.proposal?.status === 'proposed') await executeAction(message, action)
+      }
+    }
+"""
+          if old not in text:
+              raise SystemExit('missing assistant result anchor')
+          text = text.replace(old, new, 1)
+
+          old = """    chatStore.addMessage({
+      role: 'assistant',
+      content: chatStore.runtimeMessage
+    })
+"""
+          new = """    chatStore.updateMessage(assistantMessage.id, {
+      content: chatStore.runtimeMessage,
+      streaming: false,
+      streamPhase: ''
+    })
+"""
+          if old not in text:
+              raise SystemExit('missing error assistant anchor')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              "    chatStore.setSending(false)\n    nextTick(scrollToBottom)",
+              "    activeStream = null\n    chatStore.setSending(false)\n    nextTick(scrollToBottom)",
+              1
+          )
+
+          old = """onMounted(() => {
+  searchStore.inspect().catch(() => {})
+  chatStore.ensureActiveConversation()
+  nextTick(scrollToBottom)
+})
+"""
+          new = """onMounted(async() => {
+  searchStore.inspect().catch(() => {})
+  chatStore.ensureActiveConversation()
+  await loadChatRoute()
+  const listen = window.__TAURI__?.event?.listen
+  if (typeof listen === 'function') {
+    unlistenChatStream = await listen('elephantnote://chat-stream', handleStreamEvent)
+  }
+  nextTick(scrollToBottom)
+})
+
+onBeforeUnmount(() => {
+  if (typeof unlistenChatStream === 'function') unlistenChatStream()
+})
+"""
+          if old not in text:
+              raise SystemExit('missing onMounted anchor')
+          text = text.replace(old, new, 1)
+
+          text += """
+
+<style scoped>
+.en-chat-route-select {
+  min-width: 112px;
+  max-width: 170px;
+  height: 32px;
+  border: 1px solid var(--chat-border);
+  border-radius: 9px;
+  background: var(--chat-surface);
+  color: var(--chat-text);
+  padding: 0 28px 0 10px;
+  font-size: 12px;
+}
+.en-chat-reasoning-select { min-width: 82px; }
+.en-chat-auto-approve {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--chat-border);
+  border-radius: 9px;
+  font-size: 12px;
+  color: var(--chat-text-secondary);
+}
+.en-chat-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--chat-text-secondary);
+  min-height: 28px;
+}
+.en-spin { animation: en-chat-spin 0.9s linear infinite; }
+@keyframes en-chat-spin { to { transform: rotate(360deg); } }
+.en-chat-reasoning-meta {
+  display: block;
+  margin-top: 8px;
+  color: var(--chat-text-muted);
+}
+.en-chat-action-results {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.en-chat-action-results button {
+  width: 100%;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  border: 1px solid var(--chat-border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--chat-surface) 88%, transparent);
+  color: var(--chat-text);
+  padding: 9px 10px;
+}
+.en-chat-action-results span {
+  color: var(--chat-text-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>
+"""
+          p.write_text(text)
+          PY
+
+      - name: Format Rust
+        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+
+      - name: Lint focused frontend files
+        run: pnpm exec eslint Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/services/elephantnoteClient/domainClients.js
+
+      - name: Check Tauri backend
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features
+
+      - name: Build Tauri web frontend
+        run: pnpm tauri:web:build
+
+      - name: Commit validated fixes and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "ElephantNote automation"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/fix-chat-agent-graph-once.yml
+          git add Elephant/frontend/app/services/elephantnoteClient/domainClients.js \
+                  Elephant/frontend/app/components/views/AtomicGraphView.vue \
+                  Elephant/frontend/app/components/views/ChatView.vue \
+                  Elephant/backend/tauri/src/chat_runtime.rs \
+                  Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          git commit -m "Fix chat actions, search, streaming and graph visibility"
+          git push origin HEAD:assistant/wiki-links-graph-integration

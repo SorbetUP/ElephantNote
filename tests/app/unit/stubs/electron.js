@@ -2,9 +2,9 @@ const noop = () => {}
 const asyncUndefined = async() => undefined
 
 export const app = {
-  getAppPath: () => '',
+  getAppPath: () => '/tmp/elephantnote-test-app',
   getName: () => 'Elephant',
-  getPath: () => '',
+  getPath: () => '/tmp/elephantnote-test-appdata',
   getVersion: () => '0.0.0-test',
   isPackaged: false,
   on: noop,

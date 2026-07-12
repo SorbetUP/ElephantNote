@@ -1,4 +1,4 @@
-use crate::model::{Document, InlineKind, Node, NodeId, NodeKind};
+use crate::model::{BlockKind, Document, InlineKind, Node, NodeId, NodeKind};
 
 use super::EditError;
 
@@ -29,6 +29,10 @@ pub enum Operation {
   RemoveNode {
     node: NodeId,
   },
+  SetBlockKind {
+    node: NodeId,
+    kind: BlockKind,
+  },
 }
 
 impl Operation {
@@ -45,6 +49,7 @@ impl Operation {
         node,
       } => apply_insert_node(document, *parent, *index, node),
       Self::RemoveNode { node } => apply_remove_node(document, *node),
+      Self::SetBlockKind { node, kind } => apply_set_block_kind(document, *node, kind),
     }
   }
 }
@@ -143,6 +148,27 @@ fn apply_remove_node(
   })
 }
 
+fn apply_set_block_kind(
+  document: &mut Document,
+  node_id: NodeId,
+  kind: &BlockKind,
+) -> Result<Operation, EditError> {
+  let previous = {
+    let node = document
+      .node_mut(node_id)
+      .ok_or(EditError::NodeNotFound(node_id))?;
+    let NodeKind::Block(previous) = &mut node.kind else {
+      return Err(EditError::UnsupportedStructure(node_id));
+    };
+    std::mem::replace(previous, kind.clone())
+  };
+  document.invalidate_source_chain(node_id);
+  Ok(Operation::SetBlockKind {
+    node: node_id,
+    kind: previous,
+  })
+}
+
 pub(crate) fn utf16_to_byte(
   value: &str,
   node: NodeId,
@@ -229,6 +255,27 @@ mod tests {
     assert!(document.node(paragraph.id).is_none());
     insert.apply(&mut document).unwrap();
     assert!(document.node(paragraph.id).is_some());
+  }
+
+  #[test]
+  fn changes_block_kind_and_restores_it() {
+    let mut document = Document::new();
+    let block = document.allocate(NodeKind::Block(BlockKind::Paragraph), None);
+    let inverse = Operation::SetBlockKind {
+      node: block,
+      kind: BlockKind::Heading { level: 2 },
+    }
+    .apply(&mut document)
+    .unwrap();
+    assert!(matches!(
+      document.node(block).unwrap().kind,
+      NodeKind::Block(BlockKind::Heading { level: 2 })
+    ));
+    inverse.apply(&mut document).unwrap();
+    assert!(matches!(
+      document.node(block).unwrap().kind,
+      NodeKind::Block(BlockKind::Paragraph)
+    ));
   }
 
   #[test]

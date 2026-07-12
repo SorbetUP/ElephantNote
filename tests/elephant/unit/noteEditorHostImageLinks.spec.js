@@ -6,7 +6,7 @@ const source = readFileSync('Elephant/frontend/app/components/editor/NoteEditorH
 describe('NoteEditorHost Excalidraw image link formatting', () => {
   it('inserts Excalidraw previews through the markdown image source formatter', () => {
     expect(source).toContain('toMarkdownImageSource')
-    expect(source).toContain('const assetMarkdownSource = (targetPath) => toMarkdownImageSource(targetPath, store.activeVault?.path || currentNoteDirectory.value)')
+    expect(source).toMatch(/const assetMarkdownSource = \(targetPath\)\s*=>\s*toMarkdownImageSource\(\s*targetPath,\s*store\.activeVault\?\.path \|\| currentNoteDirectory\.value\s*\)/)
     expect(source).toContain('const source = assetMarkdownSource(targetPath)')
     expect(source).toContain('const imageMarkdown = `![${resolvedName}](${source})`')
     expect(source).toContain("filter(Boolean).join('\\n\\n')")

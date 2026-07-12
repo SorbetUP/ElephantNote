@@ -50,8 +50,8 @@ const isMac = navigator.platform
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(48px + var(--en-sidebar-width) - 1px);
-  width: 2px;
+  left: calc(48px + var(--en-sidebar-width));
+  width: 1px;
   background: var(--en-border);
   z-index: 1;
   pointer-events: none;

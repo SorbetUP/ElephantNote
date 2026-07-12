@@ -1495,6 +1495,26 @@ onBeforeUnmount(() => {
     max-width: 82px;
   }
 }
+
+@media (max-width: 560px) {
+  .en-chat-topbar-title {
+    display: none;
+  }
+
+  .en-chat-topbar-actions {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
+  .en-chat-route-select {
+    min-width: 0;
+    width: min(36vw, 132px);
+  }
+
+  .en-chat-reasoning-select {
+    width: min(24vw, 86px);
+  }
+}
 </style>
 
 

@@ -1,0 +1,49 @@
+name: Apply Chat Wiki Acceptance Fixes
+
+on:
+  push:
+    branches:
+      - assistant/wiki-organization-continuation
+    paths:
+      - .github/workflows/apply-chat-wiki-acceptance-fixes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Apply acceptance fixes
+        run: python3 .github/scripts/apply_chat_wiki_acceptance_fixes.py
+
+      - name: Format Rust
+        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+
+      - name: Run knowledge-core tests
+        run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+
+      - name: Verify frontend syntax contracts
+        run: |
+          grep -q "tauri_knowledge_chat_action_execute" Elephant/frontend/app/components/views/ChatView.vue
+          ! grep -A2 "const execution" Elephant/frontend/app/components/views/ChatView.vue | grep -q "chat_action_approve"
+          grep -q "Auto mode is executed atomically" Elephant/frontend/app/components/views/ChatView.vue
+
+      - name: Commit validated source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-chat-wiki-acceptance-fixes.yml
+          git rm .github/scripts/apply_chat_wiki_acceptance_fixes.py
+          git add Elephant tests || true
+          git commit -m "fix: repair real vault chat wiki and embedding flows"
+          git push origin HEAD:assistant/wiki-organization-continuation

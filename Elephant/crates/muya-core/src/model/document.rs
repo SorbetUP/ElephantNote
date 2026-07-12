@@ -163,11 +163,12 @@ impl Document {
   }
 
   pub fn remove_leaf_node(&mut self, node_id: NodeId) -> Option<(Node, NodeId, usize)> {
-    let (subtree, parent, index) = self.remove_subtree(node_id)?;
-    let [node] = subtree.nodes.as_slice() else {
+    if !self.nodes.get(&node_id)?.children.is_empty() {
       return None;
-    };
-    Some((node.clone(), parent, index))
+    }
+    let (subtree, parent, index) = self.remove_subtree(node_id)?;
+    let mut nodes = subtree.nodes;
+    Some((nodes.pop()?, parent, index))
   }
 
   pub fn remove_subtree(

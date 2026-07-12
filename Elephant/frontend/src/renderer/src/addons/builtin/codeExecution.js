@@ -26,12 +26,44 @@ const refreshCurrentEditor = () => {
   })
 }
 
+const setExecutionEnabled = async (enabled, logger = console) => {
+  const programs = globalThis.elephantnote?.programs
+  if (!programs?.list || !programs?.set) return
+  try {
+    const state = await programs.list()
+    const environments = Object.fromEntries((state.environments || []).map((environment) => [environment.id, {
+      enabled: environment.enabled !== false,
+      executable: environment.configuredExecutable || ''
+    }]))
+    const customEnvironments = (state.customEnvironments || []).map((environment) => ({
+      id: environment.id,
+      label: environment.label,
+      aliases: environment.aliases || [],
+      executable: environment.configuredExecutable || environment.executable || '',
+      args: environment.args || [],
+      enabled: environment.enabled !== false,
+      template: environment.template || 'custom'
+    }))
+    await programs.set({
+      environments: {
+        executionEnabled: enabled === true,
+        outputLineLimit: state.outputLineLimit || 200,
+        environments,
+        customEnvironments
+      }
+    })
+    logger.info?.('[code-addon] execution-state', { enabled: enabled === true })
+  } catch (error) {
+    logger.warn?.('[code-addon] execution-state:failed', { enabled: enabled === true, error: error?.message || String(error) })
+  }
+}
+
 export const codeExecutionAddon = {
   manifest: {
     id: ADDON_ID,
     name: 'Code execution',
-    version: '2.0.0',
-    description: 'Runs trusted fenced code blocks with locally installed interpreters.',
+    version: '2.1.0',
+    description: 'Runs trusted fenced code blocks with selectable local interpreters.',
     author: 'ElephantNote',
     icon: 'terminal',
     defaultEnabled: false,
@@ -45,13 +77,10 @@ export const codeExecutionAddon = {
 
     ctx.addSettingsSection({
       id: `${ADDON_ID}.settings`,
-      section: 'code-execution',
-      navigationLabel: 'Code execution',
-      navigationIcon: 'package',
-      standalone: true,
+      section: 'editor',
       chrome: false,
       title: 'Code execution',
-      description: 'Configure local interpreters, execution and retained output.',
+      description: 'Configure retained output and interpreters.',
       order: 55,
       render: mountSettingsComponent(ctx, CodeExecutionSettings)
     })
@@ -64,11 +93,13 @@ export const codeExecutionAddon = {
       }
     })
     globalThis.__ELEPHANT_CODE_EXECUTION_ENABLED__ = true
+    void setExecutionEnabled(true, ctx.logger)
     queueMicrotask(refreshCurrentEditor)
 
     return () => {
       runtime?.dispose?.()
       delete globalThis.__ELEPHANT_CODE_EXECUTION_ENABLED__
+      void setExecutionEnabled(false, ctx.logger)
       for (const element of document.querySelectorAll('.en-code-native-run, .en-code-native-output')) {
         element.remove()
       }

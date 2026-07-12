@@ -59,12 +59,14 @@ describe('addon UI regression contracts', () => {
     expect(rail).toContain("addonsStore.getContributions('views')")
   })
 
-  it('uses a chat bubble instead of the fallback star', () => {
+  it('uses a chat bubble instead of the fallback star everywhere the rail is rendered', () => {
     const ai = read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
     const rail = read('Elephant/frontend/app/components/navigation/IconRail.vue')
+    const railSettings = read('Elephant/frontend/app/components/settings/IconRailLayoutSettings.vue')
 
     expect(ai).toContain("icon: 'message-circle'")
     expect(rail).toContain("'message-circle': MessageCircle")
+    expect(railSettings).toContain("'message-circle': MessageCircle")
   })
 
   it('mounts a root settings page and its nested provider slot without remounting the root', async () => {

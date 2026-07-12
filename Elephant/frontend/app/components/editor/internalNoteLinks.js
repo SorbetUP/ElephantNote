@@ -53,6 +53,7 @@ export const resolveInternalNoteLink = ({
 
   let pathPart = raw
   let anchor = ''
+  let vaultRooted = false
 
   if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) {
     if (EXTERNAL_PROTOCOL_RE.test(raw)) {
@@ -65,6 +66,7 @@ export const resolveInternalNoteLink = ({
       if (!appOrigin || parsed.origin !== appOrigin) return null
       pathPart = parsed.pathname.replace(/^\/+/, '')
       anchor = decodeComponent(parsed.hash.replace(/^#/, ''))
+      vaultRooted = true
     } else {
       return null
     }
@@ -75,12 +77,13 @@ export const resolveInternalNoteLink = ({
       pathPart = raw.slice(0, hashIndex)
     }
     pathPart = pathPart.split('?')[0]
+    vaultRooted = pathPart.startsWith('/')
   }
 
   pathPart = decodeComponent(pathPart).replace(/\\/g, '/')
   if (!MARKDOWN_PATH_RE.test(pathPart)) return null
 
-  const path = pathPart.startsWith('/')
+  const path = vaultRooted
     ? normalizeVaultPath(pathPart.replace(/^\/+/, ''))
     : normalizeVaultPath(`${parentPath(current)}/${pathPart}`)
   if (!path || !MARKDOWN_PATH_RE.test(path)) return null

@@ -5,9 +5,10 @@ test.describe('Elephant Tauri renderer', () => {
   test('boots a non-empty application shell', async({ page }) => {
     await openTauriRenderer(page)
 
+    const app = page.locator('#app[data-v-app]').first()
     await expect(page).toHaveTitle(/Elephant/i)
-    await expect(page.locator('#app')).toBeAttached()
-    await expect.poll(async() => page.locator('#app').evaluate((element) => element.childElementCount)).toBeGreaterThan(0)
+    await expect(app).toBeAttached()
+    await expect.poll(async() => app.evaluate((element) => element.childElementCount)).toBeGreaterThan(0)
     await expect(page.locator('#elephant-diagnostic-overlay')).toHaveCount(0)
 
     const body = await page.locator('body').boundingBox()

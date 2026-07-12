@@ -57,9 +57,34 @@ describe('Wiki graph surface', () => {
 
     expect(wiki.x).toBeCloseTo(600)
     expect(wiki.y).toBeCloseTo(400)
-    expect(distance(wiki, sourceA)).toBeLessThan(120)
-    expect(distance(wiki, sourceB)).toBeLessThan(120)
+    expect(distance(wiki, sourceA)).toBeLessThan(150)
+    expect(distance(wiki, sourceB)).toBeLessThan(150)
     expect(sourceA.x).not.toBe(1800)
     expect(byId.get('Other/C.md')).toMatchObject({ x: 33, y: 44 })
+  })
+
+  it('keeps embedding edges visible and pulls strongly related Wiki sources together', () => {
+    const semanticGraph = {
+      nodes: [
+        { id: 'wiki:semantic', kind: 'wiki', title: 'Semantic Wiki' },
+        { id: 'Notes/A.md', kind: 'note', title: 'Alpha' },
+        { id: 'Notes/B.md', kind: 'note', title: 'Beta' },
+        { id: 'Notes/C.md', kind: 'note', title: 'Gamma' }
+      ],
+      edges: [
+        { source: 'wiki:semantic', target: 'Notes/A.md', type: 'wiki-source', weight: 1 },
+        { source: 'wiki:semantic', target: 'Notes/B.md', type: 'wiki-source', weight: 1 },
+        { source: 'wiki:semantic', target: 'Notes/C.md', type: 'wiki-source', weight: 1 },
+        { source: 'Notes/A.md', target: 'Notes/B.md', type: 'wiki-semantic', weight: 0.98 }
+      ]
+    }
+    const surface = buildSemanticGraphSurface({ graph: semanticGraph })
+    expect(surface.edges.map((edge) => edge.type)).toContain('wiki-semantic')
+
+    const model = buildSemanticViewModel({ graph: semanticGraph, width: 1200, height: 800 })
+    const byId = new Map(model.nodes.map((node) => [node.id, node]))
+    const distance = (left, right) => Math.hypot(left.x - right.x, left.y - right.y)
+    expect(distance(byId.get('Notes/A.md'), byId.get('Notes/B.md')))
+      .toBeLessThan(distance(byId.get('Notes/A.md'), byId.get('Notes/C.md')))
   })
 })

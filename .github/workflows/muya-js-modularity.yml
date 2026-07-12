@@ -34,3 +34,11 @@ jobs:
           path: build/muya-module-size.json
           if-no-files-found: error
           retention-days: 14
+      - name: Upload Muya source snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-source-${{ github.run_id }}
+          path: Elephant/frontend/src/muya
+          if-no-files-found: error
+          retention-days: 2

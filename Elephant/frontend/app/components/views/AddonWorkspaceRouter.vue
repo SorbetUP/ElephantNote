@@ -9,6 +9,12 @@
     :view="view"
     @close="emit('close')"
   />
+  <wiki-view
+    v-else-if="view.contribution.kind === 'ai-wiki-v1'"
+  />
+  <atomic-graph-view
+    v-else-if="view.contribution.kind === 'ai-graph-v1'"
+  />
   <models-view
     v-else-if="view.contribution.kind === 'ai-models-v1'"
   />
@@ -28,8 +34,10 @@
 import { computed } from 'vue'
 import { useAddonsStore } from '@/store/addons'
 import AddonWorkspaceHost from './AddonWorkspaceHost.vue'
+import AtomicGraphView from './AtomicGraphView.vue'
 import CalendarAddonWorkspace from './CalendarAddonWorkspace.vue'
 import ModelsView from './ModelsView.vue'
+import WikiView from './WikiView.vue'
 
 const props = defineProps({ viewId: { type: String, required: true } })
 const emit = defineEmits(['close'])

@@ -1,3 +1,7 @@
+import AtomicGraphView from 'elephant-front/components/views/AtomicGraphView.vue'
+import ChatSidebar from 'elephant-front/components/shell/ChatSidebar.vue'
+import ModelsView from 'elephant-front/components/views/ModelsView.vue'
+import WikiView from 'elephant-front/components/views/WikiView.vue'
 import { useVaultStore } from 'elephant-front/stores/vaultStore'
 import AiAddonSettings from './ui/AiAddonSettings.vue'
 import { mountSettingsComponent } from './settingsComponentHost'
@@ -21,7 +25,7 @@ export const aiAddon = {
     defaultEnabled: false,
     removable: true,
     permissions: ['ai.configure', 'ai.chat', 'ai.models', 'search.manage', 'ocr.run'],
-    contributes: { actions: true, sidebar: true, settings: true, views: true }
+    contributes: { actions: true, sidebar: true, settings: true, views: true, layout: true }
   },
 
   activate(ctx) {
@@ -44,6 +48,7 @@ export const aiAddon = {
       description: 'Browse AI-organized knowledge pages and clusters.',
       icon: 'book-open-text',
       kind: 'ai-wiki-v1',
+      component: WikiView,
       order: 30
     })
 
@@ -53,6 +58,7 @@ export const aiAddon = {
       description: 'Explore note, Wiki and semantic relationships.',
       icon: 'git-fork',
       kind: 'ai-graph-v1',
+      component: AtomicGraphView,
       order: 35
     })
 
@@ -62,7 +68,16 @@ export const aiAddon = {
       description: 'Browse, download and manage local AI models.',
       icon: 'database',
       kind: 'ai-models-v1',
+      component: ModelsView,
       order: 45
+    })
+
+    ctx.registerContribution('layout.zones', {
+      id: `${ADDON_ID}.chat-sidebar`,
+      zone: 'shell.right',
+      order: 40,
+      component: ChatSidebar,
+      when: () => useVaultStore().chatSidebarOpen === true
     })
 
     ctx.addAction({

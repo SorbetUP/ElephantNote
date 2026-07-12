@@ -24,7 +24,6 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      # Run the full postinstall and locale minification.
       - name: Run postinstall
         run: node build/scripts/postinstall.js
         env:
@@ -39,8 +38,22 @@ jobs:
 
       - name: Run E2E Tests
         if: steps.build-app.outcome == 'success'
-        run: xvfb-run --auto-servernum pnpm test:e2e
+        shell: bash
+        run: |
+          set -o pipefail
+          xvfb-run --auto-servernum pnpm test:e2e 2>&1 | tee playwright-output.txt
 
       - name: Skip E2E after build diagnostic failure
         if: steps.build-app.outcome != 'success'
         run: echo "Skipping E2E because the web build is currently diagnostic during the Tauri migration."
+
+      - name: Upload E2E diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-diagnostics
+          path: |
+            playwright-output.txt
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore

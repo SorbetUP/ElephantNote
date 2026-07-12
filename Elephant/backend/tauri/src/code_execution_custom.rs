@@ -354,6 +354,10 @@ pub async fn run(
     stderr_text.push_str("Execution interrupted by user.");
   }
   if stdout_text.ends_with('\n') { stdout_text.pop(); }
+  let stdout_lines = stdout_text.lines().count();
+  let stderr_lines = stderr_text.lines().count();
+  let success = outcome.0.success() && !outcome.1 && !outcome.2;
+  let exit_code = outcome.0.code();
 
   Ok(json!({
     "runtime": "tauri-rust-custom",
@@ -361,12 +365,12 @@ pub async fn run(
     "language": interpreter.id,
     "environment": interpreter.label,
     "executable": executable.to_string_lossy(),
-    "success": outcome.0.success() && !outcome.1 && !outcome.2,
-    "exitCode": outcome.0.code(),
+    "success": success,
+    "exitCode": exit_code,
     "stdout": stdout_text,
     "stderr": stderr_text,
-    "stdoutLines": stdout_text.lines().count(),
-    "stderrLines": stderr_text.lines().count(),
+    "stdoutLines": stdout_lines,
+    "stderrLines": stderr_lines,
     "stdoutDroppedLines": stdout_dropped_lines,
     "stderrDroppedLines": stderr_dropped_lines,
     "stdoutDroppedBytes": 0,

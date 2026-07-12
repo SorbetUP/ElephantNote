@@ -6,7 +6,7 @@
         <span class="en-addon-title">
           <strong>{{ addon.manifest.name }}</strong>
           <small>v{{ addon.manifest.version }}</small>
-          <span class="en-addon-access" :class="`is-${accessLevel}`">{{ accessLabel }}</span>
+          <span v-if="accessLevel !== 'system'" class="en-addon-access" :class="`is-${accessLevel}`">{{ accessLabel }}</span>
         </span>
         <span>{{ addon.manifest.description || 'No description.' }}</span>
       </span>
@@ -35,10 +35,9 @@
         <span>{{ addon.status }}</span>
       </div>
 
-      <div class="en-addon-access-explanation" :class="`is-${accessLevel}`">
+      <div v-if="accessLevel !== 'system'" class="en-addon-access-explanation" :class="`is-${accessLevel}`">
         <ShieldCheck v-if="accessLevel === 'isolated'" aria-hidden="true" />
-        <ShieldAlert v-else-if="accessLevel === 'trusted'" aria-hidden="true" />
-        <BadgeCheck v-else aria-hidden="true" />
+        <ShieldAlert v-else aria-hidden="true" />
         <div>
           <strong>{{ accessLabel }}</strong>
           <span>{{ accessDescription }}</span>
@@ -86,7 +85,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { BadgeCheck, ChevronDown, Play, ShieldAlert, ShieldCheck, Trash2 } from '@lucide/vue'
+import { ChevronDown, Play, ShieldAlert, ShieldCheck, Trash2 } from '@lucide/vue'
 import { getAddonAccessLevel } from '@/addons/manifest'
 import AddonIcon from './AddonIcon.vue'
 
@@ -107,20 +106,18 @@ watch(() => props.expanded, (expanded) => {
 const accessLevel = computed(() => getAddonAccessLevel(props.addon?.manifest))
 const accessLabel = computed(() => ({
   isolated: 'Limited access',
-  trusted: 'Full app access',
-  system: 'Built in by ElephantNote'
+  trusted: 'Full app access'
 }[accessLevel.value] || 'Unknown access'))
 const accessDescription = computed(() => ({
   isolated: 'Runs in an isolated Worker and can only use the capabilities listed below.',
-  trusted: 'Runs inside ElephantNote and can change the interface, editor and application behavior.',
-  system: 'Ships with ElephantNote and is tested as part of the application.'
+  trusted: 'Runs inside ElephantNote and can change the interface, editor and application behavior.'
 }[accessLevel.value] || ''))
 const isRequired = computed(() => props.addon?.manifest?.removable === false)
 const isExternal = computed(() => props.addon?.manifest?.source === 'external')
 const removeLabel = computed(() => isExternal.value ? 'Uninstall' : 'Remove')
 const removeWarning = computed(() => isExternal.value
   ? 'The package will be removed. Private addon data will be kept.'
-  : 'The built-in addon will disappear from ElephantNote until you install it again.')
+  : 'The addon will disappear from ElephantNote until you install it again.')
 
 const confirmUninstall = () => {
   confirmingUninstall.value = false
@@ -161,7 +158,7 @@ const permissionLabels = computed(() => {
 .en-addon-access, .en-addon-required { padding: 2px 6px; border-radius: 999px; font-size: 9px; font-weight: 650; }
 .en-addon-access.is-isolated { background: color-mix(in srgb, #16a34a 13%, transparent); color: #15803d; }
 .en-addon-access.is-trusted { background: color-mix(in srgb, #d97706 15%, transparent); color: #b45309; }
-.en-addon-access.is-system, .en-addon-required { background: color-mix(in srgb, var(--en-primary, #2563eb) 13%, transparent); color: var(--en-primary, #2563eb); }
+.en-addon-required { background: color-mix(in srgb, var(--en-primary, #2563eb) 13%, transparent); color: var(--en-primary, #2563eb); }
 .en-addon-chevron { width: 15px; height: 15px; color: var(--en-muted, #667085); transition: transform 140ms ease; }
 .en-addon-chevron.rotated { transform: rotate(180deg); }
 .en-addon-controls { display: flex; align-items: center; padding: 0 14px 0 8px; }

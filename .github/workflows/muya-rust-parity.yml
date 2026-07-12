@@ -1,6 +1,9 @@
 name: Muya Rust Parity
 
 on:
+  push:
+    branches:
+      - 'refactor/muya-rust-file-by-file'
   pull_request:
     paths:
       - 'Elephant/backend/tauri/src/muya_engine/**'

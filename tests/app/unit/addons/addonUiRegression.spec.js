@@ -48,6 +48,7 @@ describe('addon UI regression contracts', () => {
     expect(packs).toContain("isPackInstalled(pack) ? 'Uninstall'")
     expect(packs).toContain('addonsStore.manager.uninstallBuiltin(entry.id)')
     expect(packs).toContain('addonsStore.uninstallExternalAddon(entry.id)')
+    expect(packs).not.toContain('Installed ${pack.name}:')
   })
 
   it('keeps addon workspaces in the icon rail rather than below All notes', () => {
@@ -59,32 +60,38 @@ describe('addon UI regression contracts', () => {
     expect(rail).toContain("addonsStore.getContributions('views')")
   })
 
-  it('uses a chat bubble instead of the fallback star everywhere the rail is rendered', () => {
-    const ai = read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
+  it('preserves the chat icon instead of falling back to a star', () => {
+    const chat = read('Elephant/frontend/src/renderer/src/addons/builtin/aiChat.js')
+    const selectors = read('Elephant/frontend/src/renderer/src/addons/contributionSelectors.js')
     const rail = read('Elephant/frontend/app/components/navigation/IconRail.vue')
     const railSettings = read('Elephant/frontend/app/components/settings/IconRailLayoutSettings.vue')
 
-    expect(ai).toContain("icon: 'message-circle'")
+    expect(chat).toContain("icon: 'message-circle'")
+    expect(selectors).toContain("icon: normalizeText(entry.contribution.icon, 'star')")
     expect(rail).toContain("'message-circle': MessageCircle")
     expect(railSettings).toContain("'message-circle': MessageCircle")
   })
 
-  it('owns the open model library in a separate removable addon', () => {
-    const ai = read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
+  it('keeps the open model library separate and removes role assignment from its catalogue UI', () => {
+    const providers = read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
     const openModels = read('Elephant/frontend/src/renderer/src/addons/builtin/openModels.js')
+    const openModelsView = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/OpenModelsView.vue')
     const registry = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
     const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js')
 
-    expect(ai).not.toContain('ModelsView')
-    expect(ai).not.toContain("kind: 'ai-models-v1'")
-    expect(ai).not.toContain('autostartLlamaRuntime')
-    expect(openModels).toContain("id: 'elephant.open-models'")
-    expect(openModels).toContain('component: ModelsView')
+    expect(providers).not.toContain('ModelsView')
+    expect(providers).not.toContain("kind: 'ai-models-v1'")
+    expect(providers).not.toContain('autostartLlamaRuntime')
+    expect(openModels).toContain("const ADDON_ID = 'elephant.open-models'")
+    expect(openModels).toContain('component: OpenModelsView')
     expect(openModels).toContain("kind: 'open-models-v1'")
-    expect(openModels).toContain('autostartLlamaRuntime')
+    expect(openModels).not.toContain('autostartLlamaRuntime')
+    expect(openModels).toContain("ctx.registerContribution('ai.providers'")
+    expect(openModelsView).toContain('.en-role-grid')
+    expect(openModelsView).toContain('display: none')
     expect(registry).toContain("id: 'elephant.open-models'")
     expect(registry).toContain('openModelsAddon,')
-    expect(packs).toContain("{ id: 'elephant.open-models', version: '1.0.0', source: 'builtin', enabled: true }")
+    expect(packs).toContain("{ id: 'elephant.open-models', version: '1.1.0', source: 'builtin', enabled: true }")
   })
 
   it('mounts a root settings page and its nested provider slot without remounting the root', async () => {

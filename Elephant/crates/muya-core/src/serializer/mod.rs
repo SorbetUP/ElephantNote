@@ -12,7 +12,11 @@ fn serialize_block(document: &Document, node: &Node) -> String {
   match &node.kind {
     NodeKind::Block(BlockKind::Paragraph) => serialize_inlines(document, node),
     NodeKind::Block(BlockKind::Heading { level }) => {
-      format!("{} {}", "#".repeat((*level).into()), serialize_inlines(document, node))
+      format!(
+        "{} {}",
+        "#".repeat((*level).into()),
+        serialize_inlines(document, node)
+      )
     }
     NodeKind::Block(BlockKind::ThematicBreak) => "---".to_string(),
     NodeKind::Block(BlockKind::BlockQuote) => serialize_inlines(document, node)
@@ -21,7 +25,11 @@ fn serialize_block(document: &Document, node: &Node) -> String {
       .collect::<Vec<_>>()
       .join("\n"),
     NodeKind::Block(BlockKind::CodeBlock { language, .. }) => {
-      format!("```{}\n{}\n```", language.as_deref().unwrap_or(""), serialize_inlines(document, node))
+      format!(
+        "```{}\n{}\n```",
+        language.as_deref().unwrap_or(""),
+        serialize_inlines(document, node)
+      )
     }
     NodeKind::Block(BlockKind::List { kind, start }) => {
       serialize_list(document, node, *kind, *start)
@@ -47,7 +55,9 @@ fn serialize_list(
         ListKind::Ordered => format!("{}. {content}", start.unwrap_or(1) + index as u64),
         ListKind::Task => {
           let checked = match &item.kind {
-            NodeKind::Block(BlockKind::ListItem { checked: Some(true) }) => "x",
+            NodeKind::Block(BlockKind::ListItem {
+              checked: Some(true),
+            }) => "x",
             _ => " ",
           };
           format!("- [{checked}] {content}")
@@ -95,8 +105,24 @@ fn serialize_table(document: &Document, table: &Node) -> String {
 fn table_cells(document: &Document, row: &Node) -> Vec<String> {
   document
     .children(row.id)
-    .map(|cell| serialize_inlines(document, cell).replace('|', "\\|"))
+    .map(|cell| escape_unescaped_pipes(&serialize_inlines(document, cell)))
     .collect()
+}
+
+fn escape_unescaped_pipes(value: &str) -> String {
+  let mut result = String::with_capacity(value.len());
+  let mut escaped = false;
+  for character in value.chars() {
+    if character == '|' && !escaped {
+      result.push('\\');
+    }
+    result.push(character);
+    escaped = character == '\\' && !escaped;
+    if character != '\\' {
+      escaped = false;
+    }
+  }
+  result
 }
 
 fn format_table_row(cells: &[String]) -> String {
@@ -107,15 +133,65 @@ fn serialize_inlines(document: &Document, node: &Node) -> String {
   node.children
     .iter()
     .filter_map(|child| document.node(*child))
-    .map(|child| match &child.kind {
-      NodeKind::Inline(InlineKind::Text { value }) => value.clone(),
-      NodeKind::Inline(InlineKind::CodeSpan { code }) => format!("`{code}`"),
-      NodeKind::Inline(InlineKind::SoftBreak) => "\n".to_string(),
-      NodeKind::Inline(InlineKind::HardBreak) => "  \n".to_string(),
-      _ => serialize_inlines(document, child),
-    })
+    .map(|child| serialize_inline(document, child))
     .collect::<Vec<_>>()
     .join("")
+}
+
+fn serialize_inline(document: &Document, node: &Node) -> String {
+  match &node.kind {
+    NodeKind::Inline(InlineKind::Text { value }) => value.clone(),
+    NodeKind::Inline(InlineKind::Escaped { value }) => format!("\\{value}"),
+    NodeKind::Inline(InlineKind::Emphasis) => {
+      format!("*{}*", serialize_inlines(document, node))
+    }
+    NodeKind::Inline(InlineKind::Strong) => {
+      format!("**{}**", serialize_inlines(document, node))
+    }
+    NodeKind::Inline(InlineKind::Strike) => {
+      format!("~~{}~~", serialize_inlines(document, node))
+    }
+    NodeKind::Inline(InlineKind::CodeSpan { code }) => {
+      let delimiter = if code.contains('`') { "``" } else { "`" };
+      format!("{delimiter}{code}{delimiter}")
+    }
+    NodeKind::Inline(InlineKind::Link { destination, title }) => {
+      format!(
+        "[{}]({}{})",
+        serialize_inlines(document, node),
+        destination,
+        serialize_title(title)
+      )
+    }
+    NodeKind::Inline(InlineKind::Image { source, title, alt }) => {
+      format!("![{alt}]({source}{})", serialize_title(title))
+    }
+    NodeKind::Inline(InlineKind::AutoLink { destination }) => {
+      format!("<{destination}>")
+    }
+    NodeKind::Inline(InlineKind::InlineHtml { raw }) => raw.clone(),
+    NodeKind::Inline(InlineKind::InlineMath { source }) => format!("${source}$"),
+    NodeKind::Inline(InlineKind::Emoji { shortcode, .. }) => format!(":{shortcode}:"),
+    NodeKind::Inline(InlineKind::Superscript) => {
+      format!("^{}^", serialize_inlines(document, node))
+    }
+    NodeKind::Inline(InlineKind::Subscript) => {
+      format!("~{}~", serialize_inlines(document, node))
+    }
+    NodeKind::Inline(InlineKind::FootnoteReference { label }) => {
+      format!("[^{label}]")
+    }
+    NodeKind::Inline(InlineKind::SoftBreak) => "\n".to_string(),
+    NodeKind::Inline(InlineKind::HardBreak) => "  \n".to_string(),
+    _ => serialize_inlines(document, node),
+  }
+}
+
+fn serialize_title(title: &Option<String>) -> String {
+  title
+    .as_ref()
+    .map(|value| format!(" \"{}\"", value.replace('"', "\\\"")))
+    .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -149,5 +225,12 @@ mod tests {
       to_markdown(&document),
       "# Title\n\n3. three\n4. four\n\n- [x] done\n- [ ] todo\n\n| Name | Score |\n| :--- | ---: |\n| Ada | 10 |"
     );
+  }
+
+  #[test]
+  fn round_trips_the_executable_inline_slice() {
+    let markdown = "A **bold** *soft* ~~gone~~ [link](https://example.com \"Title\") ![alt](image.png) `code` \\*.";
+    let document = parse_markdown(markdown);
+    assert_eq!(to_markdown(&document), markdown);
   }
 }

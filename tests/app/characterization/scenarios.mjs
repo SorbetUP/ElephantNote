@@ -121,6 +121,31 @@ export const operationCases = [
     ]
   },
   {
+    name: 'paste-markdown-fragments',
+    markdown: 'Before after',
+    actions: [
+      { type: 'cursor', anchor: { line: 0, ch: 6 }, focus: { line: 0, ch: 6 } },
+      {
+        type: 'paste',
+        mode: 'pasteAsPlainText',
+        text: '**bold**\n\n- item'
+      }
+    ]
+  },
+  {
+    name: 'paste-rich-html',
+    markdown: 'Start',
+    actions: [
+      { type: 'cursor', anchor: { line: 0, ch: 5 }, focus: { line: 0, ch: 5 } },
+      {
+        type: 'paste',
+        mode: 'normal',
+        text: 'Heading',
+        html: '<h2>Heading</h2>'
+      }
+    ]
+  },
+  {
     name: 'history-round-trip',
     markdown: 'Paragraph',
     actions: [

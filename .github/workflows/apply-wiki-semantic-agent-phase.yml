@@ -44,6 +44,7 @@ jobs:
           fi
       - name: Format Rust
         run: |
+          python3 .github/scripts/fix_semantic_validation.py
           cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all
           cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
       - name: Persist product changes
@@ -54,7 +55,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No formatted product changes."
           else
-            git commit -m "Format semantic Wiki discovery and agent actions"
+            git commit -m "Fix contextual Wiki citation tests"
             git push origin HEAD:${{ github.head_ref }}
           fi
       - name: Install frontend dependencies

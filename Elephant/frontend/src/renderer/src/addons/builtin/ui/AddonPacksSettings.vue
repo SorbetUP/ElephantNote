@@ -47,7 +47,9 @@ import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
 
 const PACK_DIRECTORY = '.elephantnote/addons/packs'
 const DEFAULT_PACK_PATH = `${PACK_DIRECTORY}/default.enaddonpack`
+const BASE_PACK_PATH = `${PACK_DIRECTORY}/base.enaddonpack`
 const DEVELOP_PARITY_PACK_PATH = `${PACK_DIRECTORY}/develop-parity.enaddonpack`
+const PROTECTED_PACK_PATHS = new Set([BASE_PACK_PATH, DEVELOP_PARITY_PACK_PATH])
 const PACK_SEARCH_EVENT = 'elephantnote:addon-packs-search'
 const PACK_REFRESH_EVENT = 'elephantnote:addon-packs-refresh'
 const PACK_IMPORT_EVENT = 'elephantnote:addon-packs-import'
@@ -123,7 +125,7 @@ const readPack = async (path) => {
       enabled: entry?.enabled === true
     })).filter((entry) => entry.id),
     createdAt: String(parsed.createdAt || ''),
-    protected: parsed.protected === true || path === DEVELOP_PARITY_PACK_PATH
+    protected: parsed.protected === true || PROTECTED_PACK_PATHS.has(path)
   }
 }
 
@@ -136,7 +138,7 @@ const discoverPackPaths = async () => {
     // The hidden pack directory may not exist yet. Known paths are checked below.
   }
   const paths = []
-  for (const path of [DEVELOP_PARITY_PACK_PATH, DEFAULT_PACK_PATH]) {
+  for (const path of [BASE_PACK_PATH, DEVELOP_PARITY_PACK_PATH, DEFAULT_PACK_PATH]) {
     try {
       await elephantnoteClient.notes.read(path)
       paths.push(path)
@@ -207,8 +209,7 @@ const applyPack = async (pack) => {
   busy.value = true
   showMessage('')
   try {
-    const result = await addonsStore.runAction('elephant.addon-packs.apply', { path: pack.path })
-    showMessage(`Installed ${pack.name}: ${result?.applied || 0} addons processed.`)
+    await addonsStore.runAction('elephant.addon-packs.apply', { path: pack.path })
     addonsStore.refresh()
   } catch (error) {
     showMessage(error instanceof Error ? error.message : String(error), true)
@@ -221,17 +222,14 @@ const uninstallPack = async (pack) => {
   if (!pack || busy.value) return
   busy.value = true
   showMessage('')
-  let removed = 0
   try {
     for (const entry of [...removablePackEntries(pack)].reverse()) {
       const current = addonsStore.manager?.get(entry.id)
       if (!current) continue
       if (current.manifest.source === 'external') await addonsStore.uninstallExternalAddon(entry.id)
       else await addonsStore.manager.uninstallBuiltin(entry.id)
-      removed += 1
     }
     addonsStore.refresh()
-    showMessage(`Uninstalled ${pack.name}: ${removed} addons removed.`)
   } catch (error) {
     addonsStore.refresh()
     showMessage(error instanceof Error ? error.message : String(error), true)

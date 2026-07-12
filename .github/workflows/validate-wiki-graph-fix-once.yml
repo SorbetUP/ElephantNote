@@ -27,7 +27,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          Elephant/node_modules/.bin/vitest run tests/app/unit/wikiGraphSurface.spec.js > .github/wiki-graph-test-output.txt 2>&1
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run tests/app/unit/wikiGraphSurface.spec.js > .github/wiki-graph-test-output.txt 2>&1
           status=$?
           cat .github/wiki-graph-test-output.txt
           git config user.name "ElephantNote Bot"
@@ -37,6 +37,6 @@ jobs:
           git push origin HEAD:${{ github.head_ref }}
           exit $status
       - name: Wiki graph lint
-        run: Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/components/views/GraphView.vue tests/app/unit/wikiGraphSurface.spec.js
+        run: NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/components/views/GraphView.vue tests/app/unit/wikiGraphSurface.spec.js
       - name: Web build
         run: pnpm tauri:web:build

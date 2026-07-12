@@ -6,6 +6,7 @@ import commands from './core/commands'
 import historyClipboard from './core/historyClipboard'
 import options from './core/options'
 import events from './core/events'
+import { installAsClassMembers } from './shared/installPrototypeMethods'
 import './assets/styles/index.css'
 
 const controllers = [
@@ -30,6 +31,6 @@ class Muya {
   }
 }
 
-controllers.forEach((install) => install(Muya))
+controllers.forEach((install) => installAsClassMembers(Muya, install))
 
 export default Muya

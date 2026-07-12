@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
-describe('optional editor feature addons', () => {
+describe('editor feature addons', () => {
   it('keeps the base code block in Muya and contributes execution separately', () => {
     const main = read('Elephant/frontend/src/renderer/src/main.js')
     const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/codeExecution.js')
@@ -55,10 +55,12 @@ describe('optional editor feature addons', () => {
     expect(bridge).toContain("const EDITOR_EXTENSION_AREA = 'editor.extensions'")
   })
 
-  it('keeps Excalidraw out of every base editor surface and contributes it only while enabled', () => {
+  it('keeps Excalidraw as a required vanilla editor capability behind a modular boundary', () => {
     const main = read('Elephant/frontend/src/renderer/src/main.js')
+    const addonSystem = read('Elephant/frontend/src/renderer/src/addons/index.js')
     const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/excalidraw.js')
     const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
+    const addonPanel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
     const addonIcon = read('Elephant/frontend/app/components/settings/AddonIcon.vue')
     const excalidrawMark = read('Elephant/frontend/app/components/settings/ExcalidrawMark.vue')
     const toolbar = read('Elephant/frontend/src/muya/lib/ui/imageToolbar/index.js')
@@ -72,8 +74,12 @@ describe('optional editor feature addons', () => {
     const fallbacks = read('Elephant/frontend/src/renderer/src/addons/addonContentFallbackRuntime.js')
     const manifest = read('Elephant/frontend/src/renderer/src/addons/manifest.js')
 
+    expect(main).toContain("const CORE_EXCALIDRAW_ADDON_ID = 'elephant.excalidraw'")
+    expect(main).toContain('await ensureCoreExcalidraw(addonManager)')
     expect(main).not.toContain('installExcalidrawMarkdownCleanup')
     expect(main).not.toContain('installExcalidrawImageRuntimeFixes')
+    expect(addonSystem).toContain("REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs', 'elephant.excalidraw'])")
+    expect(addonPanel).toContain("const CORE_ADDON_IDS = new Set(['elephant.excalidraw'])")
     expect(toolbarConfig).not.toContain('Excalidraw')
     expect(toolbar).not.toContain('edit-excalidraw')
     expect(toolbar).toContain('getEditorImageToolbarItems')
@@ -84,7 +90,6 @@ describe('optional editor feature addons', () => {
     expect(writingBridge).toContain('addonWritingCommands')
     expect(bridge).toContain('imageToolbarItems')
     expect(addon).toContain("const ADDON_ID = 'elephant.excalidraw'")
-    expect(addon).toContain('defaultEnabled: false')
     expect(addon).toContain("icon: 'excalidraw'")
     expect(addon).toContain('EXCALIDRAW_ICON')
     expect(addon).toContain('installExcalidrawMarkdownCleanup()')
@@ -127,12 +132,14 @@ describe('optional editor feature addons', () => {
     expect(panel).toContain('installAiModule(module)')
   })
 
-  it('includes editor and sidebar addons in the refreshed first-party packs', () => {
+  it('keeps core Excalidraw outside portable packs while including optional editor and sidebar modules', () => {
     const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js')
 
     expect(packs).toContain("id: 'elephant.code-execution'")
-    expect(packs).toContain("id: 'elephant.excalidraw'")
     expect(packs).toContain("id: 'elephant.recently-edited'")
+    expect(packs).toContain("const CORE_ADDON_IDS = new Set(['elephant.excalidraw'])")
+    expect(packs).not.toContain("{ id: 'elephant.excalidraw', version:")
+    expect(packs).toContain('!CORE_ADDON_IDS.has(addon.manifest.id)')
     expect(packs).toContain("const BASE_PACK_PATH = `${PACK_DIRECTORY}/base.enaddonpack`")
     expect(packs).toContain(".filter((entry) => entry.id !== 'elephant.calendar')")
     expect(packs).toContain("name: 'ElephantNote Base'")

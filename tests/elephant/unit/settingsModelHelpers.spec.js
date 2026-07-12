@@ -5,7 +5,7 @@ import {
 } from '../../front/app/components/settings/settingsModelHelpers.js'
 
 describe('settings model helpers', () => {
-  it('creates a plain node-llama-cpp test payload from reactive state', () => {
+  it('creates a plain Tauri Rust local test payload from reactive state', () => {
     const aiConfig = new Proxy(
       {
         preset: 'custom',
@@ -30,9 +30,9 @@ describe('settings model helpers', () => {
     })
 
     expect(payload).toMatchObject({
-      preset: 'nodeLlamaCpp',
-      transport: 'node-llama-cpp',
-      endpoint: 'node-llama-cpp://local',
+      preset: 'tauriRustLocal',
+      transport: 'tauri-rust',
+      endpoint: 'tauri-rust://local',
       model: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M',
       apiKey: 'secret',
       codexLinkEnabled: true

@@ -11,6 +11,7 @@ const OPTIONAL_BUILTIN_CHUNK_PATTERNS = Object.freeze({
   codeExecution: /code[-_.]?execution/i,
   codexConnection: /codex[-_.]?connection/i,
   googleKeepImport: /google[-_.]?keep[-_.]?import/i,
+  openModels: /open[-_.]?models/i,
   recentlyEdited: /recently[-_.]?edited/i,
   sites: /(?:^|[-_.])sites?(?:[-_.]|$)/i,
   sync: /(?:^|[-_.])sync(?:[-_.]|$)/i

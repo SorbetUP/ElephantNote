@@ -368,10 +368,10 @@
                 :key="`${citation.path || citation.relativePath}:${citation.chunkId || index}`"
                 type="button"
                 class="en-chat-citation"
-                @click="openNote(citation.path, citation.title)"
+                @click="openNote(citation.path || citation.relativePath, citation.title)"
               >
                 <span class="en-chat-citation-index">{{ index + 1 }}</span>
-                <span>{{ citation.title || citation.path }}</span>
+                <span>{{ citation.title || citation.path || citation.relativePath }}</span>
               </button>
             </div>
           </article>

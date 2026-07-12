@@ -20,10 +20,8 @@ export const aiSearchAddon = {
   activate(ctx) {
     ctx.addSettingsSection({
       id: `${ADDON_ID}.settings`,
-      section: 'ai-search',
-      navigationLabel: 'Semantic Search',
-      navigationIcon: 'search',
-      standalone: true,
+      section: 'ai',
+      slot: 'ai.search',
       chrome: false,
       title: 'Semantic Search',
       description: 'Configure embeddings, chunking and semantic retrieval.',

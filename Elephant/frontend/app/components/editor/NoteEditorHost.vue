@@ -46,7 +46,6 @@
         @toggle-typography="isTypographyOpen = !isTypographyOpen"
         @set-text-scale="setTextScale"
         @toggle-theme="toggleTheme"
-        @open-graph="openGraphView"
       />
     </section>
 
@@ -67,7 +66,6 @@ import { useMainStore } from '@/store'
 import { usePreferencesStore } from '@/store/preferences'
 import { useEditorStore } from '@/store/editor'
 import { useAddonsStore } from '@/store/addons'
-import bus from '@/bus'
 import { useVaultStore } from '../../stores/vaultStore'
 import NoteEditorFooter from './NoteEditorFooter.vue'
 import NoteEditorTopBar from './NoteEditorTopBar.vue'
@@ -788,7 +786,6 @@ const toggleTheme = () => {
   shellTheme.value = next
   setShellTheme(next)
 }
-const openGraphView = () => bus.emit('ELEPHANT::set-main-view', 'graph')
 
 onMounted(() => {
   pushEditorLog('info', '[elephantnote:editor] mounted', {

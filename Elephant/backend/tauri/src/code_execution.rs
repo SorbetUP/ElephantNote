@@ -1,5 +1,5 @@
 // Keep the mature built-in runtime implementation isolated while this entrypoint
-// adds user-defined interpreters without changing the public Tauri command names.
+// adds user-defined interpreters without changing its internal execution logic.
 #![allow(dead_code, unused_mut)]
 
 #[path = "code_execution_v2.rs"]
@@ -23,13 +23,13 @@ fn merge_custom_payload(app: &AppHandle, mut base: Value) -> R<Value> {
 }
 
 #[tauri::command]
-pub fn tauri_programs_list(app: AppHandle) -> R<Value> {
+pub fn tauri_programs_list_with_custom(app: AppHandle) -> R<Value> {
   let base = builtin::tauri_programs_list(app.clone())?;
   merge_custom_payload(&app, base)
 }
 
 #[tauri::command]
-pub fn tauri_programs_set(app: AppHandle, environments: Option<Value>) -> R<Value> {
+pub fn tauri_programs_set_with_custom(app: AppHandle, environments: Option<Value>) -> R<Value> {
   let value = environments.unwrap_or_else(|| json!({}));
   let custom_value = value
     .get("customEnvironments")
@@ -41,7 +41,7 @@ pub fn tauri_programs_set(app: AppHandle, environments: Option<Value>) -> R<Valu
 }
 
 #[tauri::command]
-pub async fn tauri_programs_run(
+pub async fn tauri_programs_run_with_custom(
   app: AppHandle,
   id: String,
   command: String,

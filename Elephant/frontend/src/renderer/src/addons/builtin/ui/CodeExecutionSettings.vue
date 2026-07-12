@@ -28,25 +28,47 @@
     </section>
 
     <section class="en-code-card">
-      <header class="en-code-section-header">
-        <div><strong>Interpreters</strong><span>Enable runtimes and optionally override their executable path.</span></div>
-        <button class="en-code-refresh" type="button" :disabled="loading || saving" @click="loadConfig"><RefreshCw :class="{ spinning: loading }" aria-hidden="true" /> Detect again</button>
+      <header class="en-code-section-header" :class="{ collapsed: !interpretersExpanded }">
+        <button
+          class="en-code-section-toggle-copy"
+          type="button"
+          :aria-expanded="interpretersExpanded"
+          aria-controls="en-code-interpreters-content"
+          @click="toggleInterpreters"
+        >
+          <strong>Interpreters</strong>
+          <span>Enable runtimes and optionally override their executable path.</span>
+        </button>
+        <div class="en-code-section-actions">
+          <button v-if="interpretersExpanded" class="en-code-refresh" type="button" :disabled="loading || saving" @click="loadConfig"><RefreshCw :class="{ spinning: loading }" aria-hidden="true" /> Detect again</button>
+          <button
+            class="en-code-collapse"
+            type="button"
+            :title="interpretersExpanded ? 'Hide interpreters' : 'Show interpreters'"
+            :aria-label="interpretersExpanded ? 'Hide interpreters' : 'Show interpreters'"
+            :aria-expanded="interpretersExpanded"
+            aria-controls="en-code-interpreters-content"
+            @click="toggleInterpreters"
+          ><ChevronDown :class="{ collapsed: !interpretersExpanded }" aria-hidden="true" /></button>
+        </div>
       </header>
 
-      <div v-if="loading" class="en-code-empty">Detecting local environments…</div>
-      <div v-else-if="!form.environments.length" class="en-code-empty">No interpreter definition is available.</div>
-      <article v-for="environment in form.environments" v-else :key="environment.id" class="en-code-environment">
-        <div class="en-code-environment-main">
-          <div class="en-code-environment-title"><strong>{{ environment.label }}</strong><span class="en-code-status" :class="{ active: environment.available }">{{ environment.available ? 'Detected' : 'Not detected' }}</span></div>
-          <span>{{ environment.available ? [environment.version, environment.configuredExecutable ? 'Custom path' : 'Auto-detected'].filter(Boolean).join(' · ') : 'Install the runtime or provide an executable path.' }}</span>
-        </div>
-        <label class="en-code-path">
-          <span>Executable</span>
-          <input v-model.trim="environment.configuredExecutable" class="en-compact-input" type="text" :placeholder="environment.executable || 'Executable path'" :disabled="loading || saving" @change="saveConfig(`path:${environment.id}`)">
-        </label>
-        <button v-if="environment.configuredExecutable" class="en-code-reset" type="button" :disabled="loading || saving" title="Use automatic detection" @click="clearExecutable(environment)"><RotateCcw aria-hidden="true" /></button>
-        <button class="en-switch" type="button" role="switch" :aria-label="`Enable ${environment.label}`" :aria-checked="environment.enabled !== false" :class="{ active: environment.enabled !== false }" :disabled="loading || saving" @click="toggleEnvironment(environment)"><span /></button>
-      </article>
+      <div v-if="interpretersExpanded" id="en-code-interpreters-content">
+        <div v-if="loading" class="en-code-empty">Detecting local environments…</div>
+        <div v-else-if="!form.environments.length" class="en-code-empty">No interpreter definition is available.</div>
+        <article v-for="environment in form.environments" v-else :key="environment.id" class="en-code-environment">
+          <div class="en-code-environment-main">
+            <div class="en-code-environment-title"><strong>{{ environment.label }}</strong><span class="en-code-status" :class="{ active: environment.available }">{{ environment.available ? 'Detected' : 'Not detected' }}</span></div>
+            <span>{{ environment.available ? [environment.version, environment.configuredExecutable ? 'Custom path' : 'Auto-detected'].filter(Boolean).join(' · ') : 'Install the runtime or provide an executable path.' }}</span>
+          </div>
+          <label class="en-code-path">
+            <span>Executable</span>
+            <input v-model.trim="environment.configuredExecutable" class="en-compact-input" type="text" :placeholder="environment.executable || 'Executable path'" :disabled="loading || saving" @change="saveConfig(`path:${environment.id}`)">
+          </label>
+          <button v-if="environment.configuredExecutable" class="en-code-reset" type="button" :disabled="loading || saving" title="Use automatic detection" @click="clearExecutable(environment)"><RotateCcw aria-hidden="true" /></button>
+          <button class="en-switch" type="button" role="switch" :aria-label="`Enable ${environment.label}`" :aria-checked="environment.enabled !== false" :class="{ active: environment.enabled !== false }" :disabled="loading || saving" @click="toggleEnvironment(environment)"><span /></button>
+        </article>
+      </div>
     </section>
 
     <p v-if="message" class="en-code-message" :class="{ error: messageIsError }">{{ message }}</p>
@@ -55,14 +77,23 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { RefreshCw, RotateCcw, ShieldAlert, Terminal } from '@lucide/vue'
+import { ChevronDown, RefreshCw, RotateCcw, ShieldAlert, Terminal } from '@lucide/vue'
 import log from '@/platform/runtimeLogShim'
 
 const OUTPUT_LINE_LIMITS = [10, 20, 50, 100, 200, 500, 1000, 5000]
+const INTERPRETERS_COLLAPSED_KEY = 'elephantnote:code-settings:interpreters-collapsed'
+const readInterpretersExpanded = () => {
+  try {
+    return globalThis.localStorage?.getItem(INTERPRETERS_COLLAPSED_KEY) !== 'true'
+  } catch {
+    return true
+  }
+}
 const loading = ref(false)
 const saving = ref(false)
 const message = ref('')
 const messageIsError = ref(false)
+const interpretersExpanded = ref(readInterpretersExpanded())
 const form = reactive({ executionEnabled: false, outputLineLimit: 200, environments: [] })
 
 const programs = () => {
@@ -147,6 +178,15 @@ const clearExecutable = async (environment) => {
   await saveConfig(`environment-auto:${environment.id}`)
 }
 
+const toggleInterpreters = () => {
+  interpretersExpanded.value = !interpretersExpanded.value
+  try {
+    globalThis.localStorage?.setItem(INTERPRETERS_COLLAPSED_KEY, String(!interpretersExpanded.value))
+  } catch {
+    // The collapse state is a convenience only; settings still work without storage.
+  }
+}
+
 onMounted(loadConfig)
 </script>
 
@@ -163,6 +203,9 @@ onMounted(loadConfig)
 .en-code-warning svg { width: 18px; height: 18px; flex: 0 0 auto; color: #d97706; }
 .en-code-warning > div { display: grid; gap: 2px; }
 .en-code-section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--en-border, #c5cfdd); }
+.en-code-section-header.collapsed { border-bottom: 0; }
+.en-code-section-toggle-copy { min-width: 0; display: grid; flex: 1; gap: 3px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.en-code-section-actions { display: flex !important; flex: 0 0 auto; grid-auto-flow: column; align-items: center; gap: 8px !important; }
 .en-code-row, .en-code-environment { display: grid; align-items: center; gap: 12px; padding: 13px 16px; }
 .en-code-row { grid-template-columns: minmax(0, 1fr) auto; }
 .en-code-environment { grid-template-columns: minmax(150px, 1fr) minmax(220px, 1.2fr) 30px auto; }
@@ -173,10 +216,12 @@ onMounted(loadConfig)
 .en-code-path input { width: 100%; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .en-code-status { padding: 3px 7px; border-radius: 999px; background: var(--en-soft, #e9eff7); color: var(--en-muted, #667085); font-size: 9.5px; font-weight: 650; }
 .en-code-status.active { background: color-mix(in srgb, #16a34a 14%, transparent); color: #15803d; }
-.en-code-refresh, .en-code-reset { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--en-border, #c5cfdd); background: transparent; color: inherit; cursor: pointer; }
+.en-code-refresh, .en-code-reset, .en-code-collapse { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--en-border, #c5cfdd); background: transparent; color: inherit; cursor: pointer; }
 .en-code-refresh { min-height: 30px; gap: 6px; padding: 0 10px; border-radius: 8px; font-size: 10.5px; }
-.en-code-refresh svg, .en-code-reset svg { width: 14px; height: 14px; }
-.en-code-reset { width: 30px; height: 30px; border-radius: 8px; }
+.en-code-refresh svg, .en-code-reset svg, .en-code-collapse svg { width: 14px; height: 14px; }
+.en-code-reset, .en-code-collapse { width: 30px; height: 30px; border-radius: 8px; }
+.en-code-collapse svg { transition: transform 150ms ease; }
+.en-code-collapse svg.collapsed { transform: rotate(-90deg); }
 .en-code-empty { padding: 22px; color: var(--en-muted, #667085); font-size: 11px; text-align: center; }
 .en-code-message { margin: 0; color: var(--en-muted, #667085); font-size: 10.5px; }
 .en-code-message.error { color: #b91c1c; }

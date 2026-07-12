@@ -1,3 +1,4 @@
+#[cfg(not(mobile))]
 use crate::chat_runtime::codex_app_server;
 use elephantnote_knowledge_core::KnowledgeStore;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
@@ -45,6 +46,7 @@ pub struct SemanticWikiCandidate {
     pub coherence: f32,
 }
 
+#[cfg(not(mobile))]
 #[derive(Debug, Clone)]
 struct EmbeddingRoute {
     source: String,
@@ -55,6 +57,7 @@ struct EmbeddingRoute {
     threshold: f32,
 }
 
+#[cfg(not(mobile))]
 #[derive(Debug, Clone)]
 struct DocumentVector {
     path: String,
@@ -63,6 +66,7 @@ struct DocumentVector {
     vector: Vec<f32>,
 }
 
+#[cfg(not(mobile))]
 #[derive(Debug, Clone)]
 struct Cluster {
     centroid: Vec<f32>,
@@ -70,12 +74,14 @@ struct Cluster {
     coherence: f32,
 }
 
+#[cfg(not(mobile))]
 #[derive(Debug, Deserialize)]
 struct DiscoveryEnvelope {
     #[serde(default)]
     candidates: Vec<DiscoveryLabel>,
 }
 
+#[cfg(not(mobile))]
 #[derive(Debug, Deserialize)]
 struct DiscoveryLabel {
     cluster_id: usize,
@@ -89,12 +95,15 @@ struct DiscoveryLabel {
     suggested_sections: Vec<String>,
 }
 
+#[cfg(not(mobile))]
 fn default_true() -> bool {
     true
 }
 
 fn active_vault_root(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(PathBuf::from(crate::vault::config::get_active_vault(app)?.path))
+    Ok(PathBuf::from(
+        crate::vault::config::get_active_vault(app)?.path,
+    ))
 }
 
 fn open_connection(root: &Path) -> Result<Connection, String> {
@@ -106,6 +115,7 @@ fn open_connection(root: &Path) -> Result<Connection, String> {
     Ok(connection)
 }
 
+#[cfg(not(mobile))]
 fn string_at(value: &Value, pointer: &str) -> String {
     value
         .pointer(pointer)
@@ -115,6 +125,7 @@ fn string_at(value: &Value, pointer: &str) -> String {
         .to_string()
 }
 
+#[cfg(not(mobile))]
 fn provider_source(provider: &Value) -> String {
     match provider.get("type").and_then(Value::as_str).unwrap_or("") {
         "openai-compatible" => "api".into(),
@@ -122,6 +133,7 @@ fn provider_source(provider: &Value) -> String {
     }
 }
 
+#[cfg(not(mobile))]
 fn embedding_route(config: &Value) -> Result<EmbeddingRoute, String> {
     let route = config.pointer("/routes/embedding").unwrap_or(&Value::Null);
     let source = route
@@ -170,7 +182,9 @@ fn embedding_route(config: &Value) -> Result<EmbeddingRoute, String> {
         .map(|object| {
             object
                 .iter()
-                .filter_map(|(key, value)| value.as_str().map(|value| (key.clone(), value.to_string())))
+                .filter_map(|(key, value)| {
+                    value.as_str().map(|value| (key.clone(), value.to_string()))
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -190,6 +204,7 @@ fn embedding_route(config: &Value) -> Result<EmbeddingRoute, String> {
     })
 }
 
+#[cfg(not(mobile))]
 fn normalize_vector(mut vector: Vec<f32>) -> Result<Vec<f32>, String> {
     if vector.is_empty() || vector.iter().any(|value| !value.is_finite()) {
         return Err("Embedding provider returned an empty or invalid vector.".into());
@@ -204,6 +219,7 @@ fn normalize_vector(mut vector: Vec<f32>) -> Result<Vec<f32>, String> {
     Ok(vector)
 }
 
+#[cfg(not(mobile))]
 fn cosine(left: &[f32], right: &[f32]) -> f32 {
     if left.len() != right.len() || left.is_empty() {
         return -1.0;
@@ -211,6 +227,7 @@ fn cosine(left: &[f32], right: &[f32]) -> f32 {
     left.iter().zip(right).map(|(a, b)| a * b).sum()
 }
 
+#[cfg(not(mobile))]
 fn embedding_url(route: &EmbeddingRoute) -> String {
     let base = route.endpoint.trim_end_matches('/');
     if route.source == "ollama" {
@@ -228,6 +245,7 @@ fn embedding_url(route: &EmbeddingRoute) -> String {
     }
 }
 
+#[cfg(not(mobile))]
 fn request_headers(route: &EmbeddingRoute) -> Result<HeaderMap, String> {
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -244,9 +262,14 @@ fn request_headers(route: &EmbeddingRoute) -> Result<HeaderMap, String> {
     Ok(headers)
 }
 
+#[cfg(not(mobile))]
 async fn embed_batch(route: &EmbeddingRoute, inputs: &[String]) -> Result<Vec<Vec<f32>>, String> {
     let client = reqwest::Client::new();
-    let body = json!({ "model": route.model, "input": inputs });
+    let body = if route.source == "ollama" {
+        json!({ "model": route.model, "input": inputs })
+    } else {
+        json!({ "model": route.model, "input": inputs })
+    };
     let response = client
         .post(embedding_url(route))
         .headers(request_headers(route)?)
@@ -304,6 +327,7 @@ async fn embed_batch(route: &EmbeddingRoute, inputs: &[String]) -> Result<Vec<Ve
         .collect()
 }
 
+#[cfg(not(mobile))]
 fn load_documents(
     connection: &Connection,
 ) -> Result<Vec<(String, String, String, String)>, String> {
@@ -329,6 +353,7 @@ fn load_documents(
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(mobile))]
 async fn document_vectors(
     root: &Path,
     route: &EmbeddingRoute,
@@ -404,6 +429,7 @@ async fn document_vectors(
     Ok(output.into_iter().flatten().collect())
 }
 
+#[cfg(not(mobile))]
 fn recompute_centroid(cluster: &mut Cluster, documents: &[DocumentVector]) {
     if cluster.members.is_empty() {
         return;
@@ -426,6 +452,7 @@ fn recompute_centroid(cluster: &mut Cluster, documents: &[DocumentVector]) {
         / cluster.members.len() as f32;
 }
 
+#[cfg(not(mobile))]
 fn cluster_documents(documents: &[DocumentVector], threshold: f32) -> Vec<Cluster> {
     let mut clusters = Vec::<Cluster>::new();
     for (index, document) in documents.iter().enumerate() {
@@ -461,6 +488,7 @@ fn cluster_documents(documents: &[DocumentVector], threshold: f32) -> Vec<Cluste
     clusters
 }
 
+#[cfg(not(mobile))]
 fn json_object_from_text(text: &str) -> Result<&str, String> {
     let start = text
         .find('{')
@@ -474,6 +502,7 @@ fn json_object_from_text(text: &str) -> Result<&str, String> {
     Ok(&text[start..=end])
 }
 
+#[cfg(not(mobile))]
 fn persist_candidates(
     connection: &Connection,
     candidates: &[SemanticWikiCandidate],
@@ -509,6 +538,7 @@ fn persist_candidates(
     Ok(())
 }
 
+#[cfg(not(mobile))]
 async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandidate>, String> {
     let root = active_vault_root(app)?;
     let config = crate::tauri_extra_commands::load_ai_config(app)?;
@@ -653,10 +683,18 @@ pub async fn tauri_knowledge_wiki_semantic_discover(
     app: AppHandle,
     limit: Option<usize>,
 ) -> Result<Vec<SemanticWikiCandidate>, String> {
-    discover(&app, limit.unwrap_or(12).clamp(1, 24)).await
+    #[cfg(mobile)]
+    {
+        let _ = (app, limit);
+        Err("Semantic Wiki discovery is unavailable on mobile in this build.".into())
+    }
+    #[cfg(not(mobile))]
+    {
+        discover(&app, limit.unwrap_or(12).clamp(1, 24)).await
+    }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(mobile)))]
 mod tests {
     use super::*;
 

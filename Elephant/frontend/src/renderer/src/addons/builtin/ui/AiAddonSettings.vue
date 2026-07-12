@@ -1,7 +1,7 @@
 <template>
-  <AiProviderSettingsPanel initial-page="provider" />
+  <AiProvidersSettings />
 </template>
 
 <script setup>
-import AiProviderSettingsPanel from 'elephant-front/components/settings/AiProviderSettingsPanel.vue'
+import AiProvidersSettings from './AiProvidersSettings.vue'
 </script>

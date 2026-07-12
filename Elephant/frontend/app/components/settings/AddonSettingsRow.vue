@@ -1,5 +1,5 @@
 <template>
-  <article class="en-addon-row" :class="{ expanded }">
+  <article class="en-addon-row" :class="{ expanded, locked }">
     <button class="en-addon-summary" type="button" @click="emit('toggle-details')">
       <span class="en-addon-logo"><AddonIcon :name="addon.manifest.icon" /></span>
       <span class="en-addon-copy">
@@ -23,7 +23,7 @@
         :aria-label="`Enable ${addon.manifest.name}`"
         :aria-checked="addon.enabled"
         :class="{ active: addon.enabled }"
-        :disabled="busy || addon.status === 'activating'"
+        :disabled="busy || locked || addon.status === 'activating'"
         @click="emit('toggle-addon')"
       ><span /></button>
     </div>
@@ -33,6 +33,7 @@
         <code>{{ addon.manifest.id }}</code>
         <span>{{ addon.manifest.author || 'Unknown author' }}</span>
         <span>{{ addon.status }}</span>
+        <span v-if="locked">Community addons disabled</span>
       </div>
 
       <div v-if="accessLevel !== 'system'" class="en-addon-access-explanation" :class="`is-${accessLevel}`">
@@ -56,7 +57,7 @@
           :key="action.id"
           class="en-secondary-button"
           type="button"
-          :disabled="busy || !addon.enabled || !action.enabled"
+          :disabled="busy || locked || !addon.enabled || !action.enabled"
           @click="emit('run-action', action)"
         >
           <Play aria-hidden="true" /> {{ action.title }}
@@ -93,7 +94,8 @@ const props = defineProps({
   addon: { type: Object, required: true },
   actions: { type: Array, default: () => [] },
   expanded: { type: Boolean, default: false },
-  busy: { type: Boolean, default: false }
+  busy: { type: Boolean, default: false },
+  locked: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['toggle-details', 'toggle-addon', 'run-action', 'uninstall'])
@@ -146,6 +148,7 @@ const permissionLabels = computed(() => {
 <style scoped>
 .en-addon-row + .en-addon-row { border-top: 1px solid var(--en-border, #c5cfdd); }
 .en-addon-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.en-addon-row.locked .en-addon-summary { opacity: .72; }
 .en-addon-summary { min-width: 0; display: grid; grid-template-columns: 34px minmax(0, 1fr) 16px; align-items: center; gap: 11px; padding: 13px 14px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .en-addon-summary:hover { background: color-mix(in srgb, var(--en-soft, #e9eff7) 52%, transparent); }
 .en-addon-logo { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: var(--en-soft, #e9eff7); color: var(--en-primary, #2563eb); }

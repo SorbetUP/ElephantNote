@@ -139,6 +139,9 @@ export const normalizeAddonManifest = (manifest = {}) => {
   const name = normalizeString(manifest.name, id)
   const version = normalizeString(manifest.version, '0.0.0')
   const contributes = Object.freeze(normalizeObject(manifest.contributes))
+  const declaredContentTypes = Array.isArray(manifest.contentTypes)
+    ? manifest.contentTypes
+    : contributes.contentTypes
 
   return Object.freeze({
     id,
@@ -151,7 +154,7 @@ export const normalizeAddonManifest = (manifest = {}) => {
     minAppVersion: normalizeString(manifest.minAppVersion),
     permissions: normalizePermissions(manifest.permissions),
     contributes,
-    contentTypes: normalizeContentTypes(manifest.contentTypes),
+    contentTypes: normalizeContentTypes(declaredContentTypes),
     activationEvents: Object.freeze(normalizeStringArray(manifest.activationEvents)),
     runtime: normalizeRuntime(manifest.runtime, manifest, contributes),
     platforms: Object.freeze(normalizeStringArray(manifest.platforms)),

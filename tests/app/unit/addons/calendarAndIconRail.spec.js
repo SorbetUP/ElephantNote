@@ -3,6 +3,8 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   addonViewRailId,
+  createIconRailSeparatorId,
+  isIconRailSeparatorId,
   moveIconRailItem,
   normalizeIconRailHidden,
   normalizeIconRailOrder
@@ -13,14 +15,16 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 const exists = (relativePath) => fs.existsSync(path.join(root, relativePath))
 
 describe('optional first-party addons and configurable icon rail', () => {
-  it('normalizes persisted order as features and addon views change', () => {
+  it('normalizes persisted order as features, dividers and addon views change', () => {
     const tasks = addonViewRailId('com.elephantnote.elephant-tasks.workspace')
+    const divider = createIconRailSeparatorId()
     const available = ['dashboard', tasks, 'search']
 
-    expect(normalizeIconRailOrder(['search', 'unknown', 'search', tasks], available))
-      .toEqual(['search', tasks, 'dashboard'])
-    expect(normalizeIconRailHidden(['unknown', tasks, tasks], available)).toEqual([tasks])
-    expect(moveIconRailItem(['dashboard', tasks], tasks, 0)).toEqual([tasks, 'dashboard'])
+    expect(isIconRailSeparatorId(divider)).toBe(true)
+    expect(normalizeIconRailOrder(['search', divider, 'unknown', 'search', tasks], available))
+      .toEqual(['search', divider, tasks, 'dashboard'])
+    expect(normalizeIconRailHidden(['unknown', divider, tasks, tasks], available)).toEqual([tasks])
+    expect(moveIconRailItem(['dashboard', divider, tasks], tasks, 0)).toEqual([tasks, 'dashboard', divider])
   })
 
   it('deletes the narrow example addons instead of merely hiding them', () => {
@@ -35,8 +39,10 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(exists('tests/app/unit/addons/builtinAddonsQuality.spec.js')).toBe(false)
   })
 
-  it('preserves the complete sidebar styling while using addon-owned icons', () => {
+  it('preserves the complete sidebar styling while rendering addon layout zones', () => {
     const sidebar = read('Elephant/frontend/app/components/navigation/SidebarNav.vue')
+    const recent = read('Elephant/frontend/app/components/navigation/RecentlyEditedSidebarSection.vue')
+    const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/recentlyEdited.js')
 
     expect(sidebar).toContain('<AddonIcon :name="entry.contribution.icon" />')
     expect(sidebar).toContain('.en-all-notes:hover')
@@ -44,7 +50,12 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(sidebar).toContain('.en-tags-header {')
     expect(sidebar).toContain('.en-tags-search-btn {')
     expect(sidebar).toContain('.en-sidebar-main {')
-    expect(sidebar).toContain('.en-recent-notes {')
+    expect(sidebar).toContain("addonsStore.getContributions('layout.zones')")
+    expect(sidebar).toContain("entry?.contribution?.zone === 'sidebar.after-tree'")
+    expect(recent).toContain('.en-recent-notes')
+    expect(recent).toContain('Recently edited')
+    expect(addon).toContain("zone: 'sidebar.after-tree'")
+    expect(addon).toContain('defaultEnabled: false')
   })
 
   it('removes Calendar from the vanilla shell and registers it as disabled addon', () => {
@@ -115,7 +126,7 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(runtime).toContain("REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs'])")
     expect(runtime).toContain('if (REQUIRED_BUILTIN_ADDON_IDS.includes(id))')
     expect(logic).toContain("INTERNAL_ADDON_IDS = new Set(['elephant.addon-packs'])")
-    expect(logic).toContain('!INTERNAL_ADDON_IDS.has(addon.manifest.id)')
+    expect(logic).toContain('!isHiddenAddonId(addon.manifest.id)')
     expect(panel).not.toContain('Addon Packs is disabled')
   })
 
@@ -172,6 +183,7 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(panel).toContain("activePage === 'packs'")
     expect(panel).toContain('data-elephant-addon-settings-slot="addons.packs"')
     expect(panel).toContain('Installed addons')
+    expect(panel).toContain('v-if="filteredInstalledAddons.length || query"')
     expect(panel).toContain('Available addons')
     expect(panel).not.toContain('<h3>Built-in addon catalogue</h3>')
     expect(panel).not.toContain('Installed community addons')
@@ -185,6 +197,7 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(packs).toContain("DEVELOP_PARITY_PACK_PATH = `${PACK_DIRECTORY}/develop-parity.enaddonpack`")
     expect(packs).toContain("id: 'elephant.ai'")
     expect(packs).toContain("id: 'elephant.sync'")
+    expect(packs).toContain("id: 'elephant.recently-edited'")
     expect(packs).toContain('ctx.addons.installBuiltin(entry.id)')
     expect(packUi).toContain("addonsStore.runAction('elephant.addon-packs.ensure-develop-parity')")
     expect(packUi).toContain("pack.protected ? 'Install' : 'Apply'")
@@ -192,7 +205,7 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(packUi).not.toContain('samplePacks')
   })
 
-  it('lets Settings reorder and hide core and addon icons while keeping safety controls fixed', () => {
+  it('lets Settings reorder, divide and hide core and addon icons', () => {
     const settings = read('Elephant/frontend/app/components/settings/SettingsPanel.vue')
     const organizer = read('Elephant/frontend/app/components/settings/IconRailLayoutSettings.vue')
     const rail = read('Elephant/frontend/app/components/navigation/IconRail.vue')
@@ -202,11 +215,14 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(settings).toContain("label: 'Vertical icon bar'")
     expect(organizer).toContain('@dragstart="startDrag(item.id, $event)"')
     expect(organizer).toContain('toggleVisibility(item.id)')
+    expect(organizer).toContain('addDivider')
+    expect(organizer).toContain('removeDivider(item.id)')
     expect(organizer).toContain('resetLayout')
+    expect(organizer).toContain('collapsed = !collapsed')
     expect(rail).toContain('normalizeIconRailOrder(preferences.iconRailOrder')
+    expect(rail).toContain('isIconRailSeparatorId(id)')
     expect(rail).toContain("addonsStore.getContributions('views')")
     expect(preferences).toContain('iconRailOrder:')
     expect(preferences).toContain('iconRailHidden: []')
-    expect(organizer).toContain('Settings button remain fixed')
   })
 })

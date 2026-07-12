@@ -46,7 +46,7 @@ fn serialize_list(
         ListKind::Unordered => format!("- {content}"),
         ListKind::Ordered => format!("{}. {content}", start.unwrap_or(1) + index as u64),
         ListKind::Task => {
-          let checked = match item.kind {
+          let checked = match &item.kind {
             NodeKind::Block(BlockKind::ListItem { checked: Some(true) }) => "x",
             _ => " ",
           };
@@ -67,8 +67,8 @@ fn serialize_table(document: &Document, table: &Node) -> String {
   let header_cells = table_cells(document, header);
   let alignments = document
     .children(header.id)
-    .map(|cell| match cell.kind {
-      NodeKind::Block(BlockKind::TableCell { alignment, .. }) => alignment,
+    .map(|cell| match &cell.kind {
+      NodeKind::Block(BlockKind::TableCell { alignment, .. }) => *alignment,
       _ => Alignment::Default,
     })
     .collect::<Vec<_>>();

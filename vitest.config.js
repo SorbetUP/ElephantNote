@@ -66,6 +66,7 @@ export default defineConfig({
     alias: {
       ...npmPackageAliases,
       electron: resolve(__dirname, 'tests/app/unit/stubs/electron.js'),
+      'electron-store': resolve(__dirname, 'tests/app/unit/stubs/electronStore.js'),
       'electron-log/renderer': resolve(__dirname, 'tests/app/unit/stubs/electronLog.js'),
       'electron-log': resolve(__dirname, 'tests/app/unit/stubs/electronLog.js'),
       'elephant-front': resolve(__dirname, 'Elephant/frontend/app'),

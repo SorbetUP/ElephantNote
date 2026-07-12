@@ -1,9 +1,9 @@
 <template>
-  <AiAddonSettings class="en-ai-providers-only" initial-page="provider" />
+  <AiProviderSettingsPanel class="en-ai-providers-only" initial-page="provider" />
 </template>
 
 <script setup>
-import AiAddonSettings from './AiAddonSettings.vue'
+import AiProviderSettingsPanel from 'elephant-front/components/settings/AiProviderSettingsPanel.vue'
 </script>
 
 <style scoped>

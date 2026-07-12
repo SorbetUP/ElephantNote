@@ -15,17 +15,25 @@
 
     <div class="en-addon-controls">
       <span v-if="isRequired" class="en-addon-required">Required</span>
-      <button
-        v-else
-        class="en-switch"
-        type="button"
-        role="switch"
-        :aria-label="`Enable ${addon.manifest.name}`"
-        :aria-checked="addon.enabled"
-        :class="{ active: addon.enabled }"
-        :disabled="busy || locked || addon.status === 'activating'"
-        @click="emit('toggle-addon')"
-      ><span /></button>
+      <template v-else>
+        <button
+          class="en-switch"
+          type="button"
+          role="switch"
+          :aria-label="`Enable ${addon.manifest.name}`"
+          :aria-checked="addon.enabled"
+          :class="{ active: addon.enabled }"
+          :disabled="busy || locked || addon.status === 'activating'"
+          @click="emit('toggle-addon')"
+        ><span /></button>
+        <button
+          v-if="addon.manifest.removable !== false"
+          class="en-addon-uninstall-button"
+          type="button"
+          :disabled="busy"
+          @click="requestUninstall"
+        >Uninstall</button>
+      </template>
     </div>
 
     <div v-if="expanded" class="en-addon-details">
@@ -64,21 +72,12 @@
         </button>
       </div>
 
-      <div v-if="addon.manifest.removable !== false" class="en-addon-uninstall">
-        <button
-          v-if="!confirmingUninstall"
-          class="en-danger-link"
-          type="button"
-          :disabled="busy"
-          @click="confirmingUninstall = true"
-        ><Trash2 aria-hidden="true" /> {{ removeLabel }}</button>
-        <template v-else>
-          <span>{{ removeWarning }}</span>
-          <button class="en-danger-link" type="button" :disabled="busy" @click="confirmUninstall">
-            <Trash2 aria-hidden="true" /> Confirm {{ removeLabel.toLowerCase() }}
-          </button>
-          <button class="en-secondary-button" type="button" :disabled="busy" @click="confirmingUninstall = false">Cancel</button>
-        </template>
+      <div v-if="addon.manifest.removable !== false && confirmingUninstall" class="en-addon-uninstall">
+        <span>{{ removeWarning }}</span>
+        <button class="en-danger-link" type="button" :disabled="busy" @click="confirmUninstall">
+          <Trash2 aria-hidden="true" /> Confirm uninstall
+        </button>
+        <button class="en-secondary-button" type="button" :disabled="busy" @click="confirmingUninstall = false">Cancel</button>
       </div>
     </div>
   </article>
@@ -116,10 +115,14 @@ const accessDescription = computed(() => ({
 }[accessLevel.value] || ''))
 const isRequired = computed(() => props.addon?.manifest?.removable === false)
 const isExternal = computed(() => props.addon?.manifest?.source === 'external')
-const removeLabel = computed(() => isExternal.value ? 'Uninstall' : 'Remove')
 const removeWarning = computed(() => isExternal.value
   ? 'The package will be removed. Private addon data will be kept.'
   : 'The addon will disappear from ElephantNote until you install it again.')
+
+const requestUninstall = () => {
+  confirmingUninstall.value = true
+  if (!props.expanded) emit('toggle-details')
+}
 
 const confirmUninstall = () => {
   confirmingUninstall.value = false
@@ -164,7 +167,9 @@ const permissionLabels = computed(() => {
 .en-addon-required { background: color-mix(in srgb, var(--en-primary, #2563eb) 13%, transparent); color: var(--en-primary, #2563eb); }
 .en-addon-chevron { width: 15px; height: 15px; color: var(--en-muted, #667085); transition: transform 140ms ease; }
 .en-addon-chevron.rotated { transform: rotate(180deg); }
-.en-addon-controls { display: flex; align-items: center; padding: 0 14px 0 8px; }
+.en-addon-controls { display: flex; align-items: center; gap: 8px; padding: 0 14px 0 8px; }
+.en-addon-uninstall-button { min-height: 28px; padding: 0 9px; border: 1px solid var(--en-border, #c5cfdd); border-radius: 8px; background: transparent; color: var(--en-muted, #667085); font-size: 10px; cursor: pointer; }
+.en-addon-uninstall-button:hover { border-color: color-mix(in srgb, #dc2626 45%, var(--en-border, #c5cfdd)); color: #dc2626; }
 .en-addon-details { grid-column: 1 / -1; display: grid; gap: 10px; padding: 0 14px 14px 59px; }
 .en-addon-details-meta, .en-addon-permissions, .en-addon-uninstall { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .en-addon-details-meta code, .en-addon-details-meta span, .en-addon-permissions span, .en-addon-uninstall > span { color: var(--en-muted, #667085); font-size: 9.5px; }
@@ -180,5 +185,9 @@ const permissionLabels = computed(() => {
 .en-addon-commands button, .en-danger-link, .en-addon-uninstall .en-secondary-button { font-size: 10.5px; }
 .en-addon-commands svg, .en-danger-link svg { width: 13px; height: 13px; }
 .en-danger-link { justify-self: start; }
-@media (max-width: 720px) { .en-addon-details { padding-left: 14px; } }
+@media (max-width: 720px) {
+  .en-addon-details { padding-left: 14px; }
+  .en-addon-controls { gap: 5px; padding-right: 8px; }
+  .en-addon-uninstall-button { padding: 0 7px; }
+}
 </style>

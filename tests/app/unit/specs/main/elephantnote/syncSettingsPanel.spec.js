@@ -64,16 +64,20 @@ describe('ElephantNote Iroh UI integration', () => {
     expect(client).toContain("invoke('tauri_sync_conflict_delete'")
   })
 
-  it('connects an addon-contributed top navigation icon to active-vault Iroh synchronization', () => {
+  it('connects an addon-owned top navigation component to active-vault Iroh synchronization', () => {
     const navigation = readNavigationBar()
     const control = readSyncNavigationControl()
     const addon = readSyncAddon()
     const store = readNavigationStore()
 
     expect(navigation).toContain("addonsStore.getContributions('top-bar.items')")
-    expect(navigation).toContain("entry.contribution.kind === 'sync-control-v1'")
+    expect(navigation).toContain(':is="entry.contribution.component"')
+    expect(navigation).not.toContain('SyncNavigationControl')
+    expect(navigation).not.toContain("entry.contribution.kind === 'sync-control-v1'")
+    expect(addon).toContain("import SyncNavigationControl from 'elephant-front/components/navigation/SyncNavigationControl.vue'")
     expect(addon).toContain("ctx.registerContribution('top-bar.items'")
     expect(addon).toContain("kind: 'sync-control-v1'")
+    expect(addon).toContain('component: SyncNavigationControl')
     expect(control).toContain('@click.stop="syncWorkspace"')
     expect(control).toContain('await nav.syncWorkspace(activeVaultPath.value)')
     expect(control).toContain("nav.syncStatus === 'syncing'")

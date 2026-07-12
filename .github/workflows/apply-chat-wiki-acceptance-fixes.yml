@@ -1,17 +1,17 @@
 name: Apply Chat Wiki Acceptance Fixes
 
 on:
-  push:
+  pull_request:
     branches:
-      - assistant/wiki-organization-continuation
-    paths:
-      - .github/workflows/apply-chat-wiki-acceptance-fixes.yml
+      - assistant/wiki-links-graph-integration
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.head_ref == 'assistant/wiki-organization-continuation'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,5 +47,3 @@ jobs:
           git add Elephant tests || true
           git commit -m "fix: repair real vault chat wiki and embedding flows"
           git push origin HEAD:assistant/wiki-organization-continuation
-
-# Retriggered after the real-vault acceptance review.

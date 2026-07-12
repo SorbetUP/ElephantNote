@@ -8,7 +8,6 @@ const EXCALIDRAW_IMAGE_RE = /!\[[^\]]*\]\([^)]*\.assets\/excalidraw-[^)]+\.png[^
 const cleanedTabs = new Map()
 
 const normalizeMarkdown = (value = '') => String(value || '').replace(/\r\n?/g, '\n')
-
 const isTransientRollback = (previousMarkdown = '', nextMarkdown = '') => {
   const previous = normalizeMarkdown(previousMarkdown)
   const next = normalizeMarkdown(nextMarkdown)
@@ -18,11 +17,24 @@ const isTransientRollback = (previousMarkdown = '', nextMarkdown = '') => {
 }
 
 const installStaleContentGuard = (editorStore) => {
-  if (editorStore.__ELEPHANT_EXCALIDRAW_STALE_CONTENT_GUARD__) return
-  const original = editorStore.LISTEN_FOR_CONTENT_CHANGE?.bind(editorStore)
-  if (typeof original !== 'function') return
-  editorStore.__ELEPHANT_EXCALIDRAW_STALE_CONTENT_GUARD__ = true
-  editorStore.LISTEN_FOR_CONTENT_CHANGE = (change = {}) => {
+  if (editorStore.__ELEPHANT_EXCALIDRAW_STALE_CONTENT_GUARD__?.dispose) {
+    return editorStore.__ELEPHANT_EXCALIDRAW_STALE_CONTENT_GUARD__
+  }
+  const original = editorStore.LISTEN_FOR_CONTENT_CHANGE
+  if (typeof original !== 'function') return { dispose() {} }
+
+  const runtime = {
+    dispose() {
+      if (editorStore.LISTEN_FOR_CONTENT_CHANGE === guarded) {
+        editorStore.LISTEN_FOR_CONTENT_CHANGE = original
+      }
+      if (editorStore.__ELEPHANT_EXCALIDRAW_STALE_CONTENT_GUARD__ === runtime) {
+        delete editorStore.__ELEPHANT_EXCALIDRAW_STALE_CONTENT_GUARD__
+      }
+    }
+  }
+
+  const guarded = (change = {}) => {
     const tab = change.id ? editorStore.tabs.find((item) => item.id === change.id) : null
     const previousMarkdown = typeof tab?.markdown === 'string' ? tab.markdown : ''
     const nextMarkdown = typeof change.markdown === 'string' ? change.markdown : ''
@@ -35,8 +47,12 @@ const installStaleContentGuard = (editorStore) => {
       })
       return
     }
-    return original(change)
+    return original.call(editorStore, change)
   }
+
+  editorStore.LISTEN_FOR_CONTENT_CHANGE = guarded
+  editorStore.__ELEPHANT_EXCALIDRAW_STALE_CONTENT_GUARD__ = runtime
+  return runtime
 }
 
 const nextMeaningfulLine = (lines, startIndex) => {
@@ -105,16 +121,27 @@ const cleanCurrentTab = (editorStore) => {
 
 export const installExcalidrawMarkdownCleanup = () => {
   const editorStore = useEditorStore()
-  if (editorStore.__ELEPHANT_EXCALIDRAW_MARKDOWN_CLEANUP__) return false
-  editorStore.__ELEPHANT_EXCALIDRAW_MARKDOWN_CLEANUP__ = true
-  installStaleContentGuard(editorStore)
+  const existing = editorStore.__ELEPHANT_EXCALIDRAW_MARKDOWN_CLEANUP__
+  if (existing?.dispose) return existing
+
+  const staleGuard = installStaleContentGuard(editorStore)
+  const handleInvalidate = () => cleanCurrentTab(editorStore)
   cleanCurrentTab(editorStore)
-  editorStore.$subscribe(() => {
-    cleanCurrentTab(editorStore)
-  })
-  bus.on('invalidate-image-cache', () => {
-    cleanCurrentTab(editorStore)
-  })
+  const unsubscribe = editorStore.$subscribe(handleInvalidate)
+  bus.on('invalidate-image-cache', handleInvalidate)
+
+  const runtime = {
+    dispose() {
+      unsubscribe?.()
+      bus.off?.('invalidate-image-cache', handleInvalidate)
+      staleGuard?.dispose?.()
+      cleanedTabs.clear()
+      if (editorStore.__ELEPHANT_EXCALIDRAW_MARKDOWN_CLEANUP__ === runtime) {
+        delete editorStore.__ELEPHANT_EXCALIDRAW_MARKDOWN_CLEANUP__
+      }
+    }
+  }
+  editorStore.__ELEPHANT_EXCALIDRAW_MARKDOWN_CLEANUP__ = runtime
   console.info('[excalidraw-cleanup] installed')
-  return true
+  return runtime
 }

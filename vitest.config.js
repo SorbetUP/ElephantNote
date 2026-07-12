@@ -16,6 +16,29 @@ const npmPackageAliases = Object.fromEntries(
     .map((name) => [name, resolve(__dirname, 'Elephant/node_modules', name)])
 )
 
+const legacyElephantTestImports = () => ({
+  name: 'elephantnote-legacy-test-imports',
+  enforce: 'pre',
+  resolveId(source, importer) {
+    const normalizedImporter = String(importer || '').replace(/\\/g, '/')
+    if (!normalizedImporter.includes('/tests/elephant/unit/')) return null
+
+    const mappings = [
+      ['../../../../Elephant/', 'Elephant/'],
+      ['../../front/app/', 'Elephant/frontend/app/'],
+      ['../../front/', 'Elephant/frontend/'],
+      ['../../back/app/', 'Elephant/backend/js/'],
+      ['../../back/', 'Elephant/backend/'],
+      ['../../shared/', 'Elephant/shared/']
+    ]
+
+    const mapping = mappings.find(([prefix]) => source.startsWith(prefix))
+    if (!mapping) return null
+    const [prefix, replacement] = mapping
+    return resolve(__dirname, replacement, source.slice(prefix.length))
+  }
+})
+
 export default defineConfig({
   test: {
     environment: 'jsdom',
@@ -38,10 +61,11 @@ export default defineConfig({
       }
     }
   },
-  plugins: [vue()],
+  plugins: [legacyElephantTestImports(), vue()],
   resolve: {
     alias: {
       ...npmPackageAliases,
+      electron: resolve(__dirname, 'tests/app/unit/stubs/electron.js'),
       'electron-log/renderer': resolve(__dirname, 'tests/app/unit/stubs/electronLog.js'),
       'electron-log': resolve(__dirname, 'tests/app/unit/stubs/electronLog.js'),
       'elephant-front': resolve(__dirname, 'Elephant/frontend/app'),

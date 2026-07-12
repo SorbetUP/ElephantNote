@@ -171,6 +171,10 @@ const openAddonView = (viewId) => {
   activeAddonViewId.value = normalized
 }
 
+const handleOpenAddonViewEvent = (event) => {
+  openAddonView(event?.detail?.viewId)
+}
+
 const closeAddonView = () => {
   activeAddonViewId.value = ''
 }
@@ -295,6 +299,7 @@ const handleTabSaved = (_event, tabId) => {
 onMounted(() => {
   window.addEventListener('keydown', handleShortcut)
   window.addEventListener('elephantnote:open-settings', handleOpenSettingsEvent)
+  window.addEventListener('elephantnote:open-addon-view', handleOpenAddonViewEvent)
   window.tauri.ipcRenderer.on('mt::tab-saved', handleTabSaved)
   setTheme(theme.value)
   const storedWidth = Number(window.localStorage.getItem('elephantnote:sidebarWidth'))
@@ -312,6 +317,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleShortcut)
   window.removeEventListener('elephantnote:open-settings', handleOpenSettingsEvent)
+  window.removeEventListener('elephantnote:open-addon-view', handleOpenAddonViewEvent)
   if (sidebarResizeFrame) {
     window.cancelAnimationFrame(sidebarResizeFrame)
     sidebarResizeFrame = null

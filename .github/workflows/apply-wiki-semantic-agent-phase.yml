@@ -26,7 +26,7 @@ jobs:
       - name: Apply product patch
         run: |
           set +e
-          python3 .github/scripts/apply_wiki_semantic_agent_phase.py > /tmp/semantic-patch.log 2>&1
+          python3 .github/scripts/run_wiki_semantic_agent_phase.py > /tmp/semantic-patch.log 2>&1
           code=$?
           cat /tmp/semantic-patch.log
           if [ "$code" -ne 0 ]; then

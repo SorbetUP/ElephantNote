@@ -3,7 +3,7 @@ pub(crate) mod codex_app_server;
 
 use elephantnote_knowledge_core::{ChatKnowledgeAction, KnowledgeSearchHit, KnowledgeStore};
 use serde_json::{json, Value};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 #[cfg(not(mobile))]
 use crate::local_llama_runtime;
@@ -546,15 +546,50 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
             "You are answering inside ElephantNote. Do not inspect the filesystem or run commands. Use only the conversation and retrieved note context below. Return only the answer.\n\n{}",
             transcript
         );
-        let result =
-            codex_app_server::chat_with_effort(&app, &model, &prompt, reasoning_effort.as_deref())
-                .await?;
-        let (answer, raw_actions) = if tools_enabled(&payload) {
+        let stream_id = text(&payload, &["streamId", "stream_id"]);
+        let stream_id = (!stream_id.is_empty()).then_some(stream_id);
+        let result = codex_app_server::chat_with_effort_streaming(
+            &app,
+            &model,
+            &prompt,
+            reasoning_effort.as_deref(),
+            stream_id.as_deref(),
+        )
+        .await?;
+        let (mut answer, raw_actions) = if tools_enabled(&payload) {
             action_block(&result.answer)
         } else {
             (result.answer.clone(), Vec::new())
         };
         let (actions, action_errors) = prepare_assistant_actions(&app, raw_actions);
+        let search_results = actions
+            .iter()
+            .filter_map(|entry| entry.pointer("/execution/result"))
+            .filter(|value| value.is_array())
+            .cloned()
+            .collect::<Vec<_>>();
+        if !search_results.is_empty() {
+            if let Some(stream_id) = stream_id.as_deref() {
+                let _ = app.emit(
+                    "elephantnote://chat-stream",
+                    json!({ "streamId": stream_id, "type": "reset", "phase": "tool-results" }),
+                );
+            }
+            let tool_context =
+                serde_json::to_string_pretty(&search_results).map_err(|error| error.to_string())?;
+            let followup_prompt = format!(
+                "{prompt}\n\nThe ElephantNote search tool returned the following real indexed-note results:\n{tool_context}\n\nAnswer the user's request using these results. Cite note titles naturally. Do not emit another elephantnote_actions block."
+            );
+            answer = codex_app_server::chat_with_effort_streaming(
+                &app,
+                &model,
+                &followup_prompt,
+                reasoning_effort.as_deref(),
+                stream_id.as_deref(),
+            )
+            .await?
+            .answer;
+        }
         let citations = citations_from_hits(&hits);
         return Ok(json!({
             "answer": answer,

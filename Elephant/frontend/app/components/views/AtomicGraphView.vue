@@ -528,7 +528,7 @@ const cardDragging = ref(false)
 const filterQuery = ref('')
 const filterTags = ref(true)
 const filterExisting = ref(true)
-const filterOrphans = ref(false)
+const filterOrphans = ref(true)
 
 const showLabels = ref(true)
 const showStats = ref(true)

@@ -19,6 +19,7 @@ const normalizeVaultPathPayload = (payload = '') => {
 const normalizeRagChatPayload = (payload, limit = 6) => {
   if (payload && typeof payload === 'object') {
     return {
+      ...payload,
       message: String(payload.message || '').trim(),
       limit: Number.isFinite(Number(payload.limit)) ? Number(payload.limit) : limit,
       messages: Array.isArray(payload.messages) ? payload.messages : []

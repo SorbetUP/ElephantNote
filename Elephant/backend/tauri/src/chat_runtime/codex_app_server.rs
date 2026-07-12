@@ -1167,6 +1167,16 @@ pub async fn chat_with_effort(
     prompt: &str,
     reasoning_effort: Option<&str>,
 ) -> R<CodexChatResult> {
+    chat_with_effort_streaming(app, model, prompt, reasoning_effort, None).await
+}
+
+pub async fn chat_with_effort_streaming(
+    app: &AppHandle,
+    model: &str,
+    prompt: &str,
+    reasoning_effort: Option<&str>,
+    stream_id: Option<&str>,
+) -> R<CodexChatResult> {
     let started = Instant::now();
     log(
         "chat",
@@ -1275,7 +1285,14 @@ pub async fn chat_with_effort(
         match event.get("method").and_then(Value::as_str).unwrap_or("") {
             "item/agentMessage/delta" => {
                 delta_count += 1;
-                answer.push_str(delta_text(&event));
+                let delta = delta_text(&event);
+                answer.push_str(delta);
+                if let Some(stream_id) = stream_id {
+                    let _ = app.emit(
+                        "elephantnote://chat-stream",
+                        json!({ "streamId": stream_id, "type": "delta", "delta": delta }),
+                    );
+                }
             }
             "item/completed" => {
                 let text = completed_agent_text(&event);
@@ -1286,6 +1303,12 @@ pub async fn chat_with_effort(
             "turn/completed" => {
                 if let Some(error) = turn_failure(&event) {
                     break Err(error);
+                }
+                if let Some(stream_id) = stream_id {
+                    let _ = app.emit(
+                        "elephantnote://chat-stream",
+                        json!({ "streamId": stream_id, "type": "phase", "phase": "finalizing" }),
+                    );
                 }
                 break Ok(());
             }

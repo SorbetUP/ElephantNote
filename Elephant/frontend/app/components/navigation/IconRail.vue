@@ -84,7 +84,6 @@ import {
   Workflow
 } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
-import { elephantnoteClient } from '../../services/elephantnoteClient'
 import { getAddonSidebarItems } from '@/addons'
 import { useAddonsStore } from '@/store/addons'
 import { usePreferencesStore } from '@/store/preferences'
@@ -96,18 +95,16 @@ const emit = defineEmits(['open-settings', 'search', 'toggle-sidebar', 'open-add
 const store = useVaultStore()
 const addonsStore = useAddonsStore()
 const preferences = usePreferencesStore()
-const WIKI_ROOT = '.elephantnote/wiki'
-const WIKI_PAGE_LIMIT = 121
 const editingVaultId = ref('')
 const showVaultMenu = ref(false)
 
-const wikiDirectoryPayload = (relativePath) => ({ relativePath, offset: 0, limit: WIKI_PAGE_LIMIT, includePreview: true })
-
 const VAULT_ICON_COMPONENTS = { Database, FileText, GraduationCap, Home, Landmark, Rocket, Star, Terminal, Workflow }
 const ADDON_ICON_COMPONENTS = {
+  'book-open-text': BookOpenText,
   'calendar-days': CalendarDays,
   calendar: CalendarDays,
   database: Database,
+  'git-fork': GitFork,
   'list-todo': ListTodo,
   tasks: ListTodo,
   dashboard: LayoutDashboard,
@@ -128,8 +125,6 @@ const closeAddonAndOpen = (view) => {
 
 const coreRailItems = computed(() => [
   { id: 'dashboard', title: 'Dashboard', icon: LayoutDashboard, active: !props.activeAddonViewId && store.activeWorkspaceView === 'dashboard', run: () => closeAddonAndOpen('dashboard') },
-  { id: 'wiki', title: 'Wiki', icon: BookOpenText, active: !props.activeAddonViewId && store.activeWorkspaceView === 'wiki', run: openWikiRoot },
-  { id: 'graph', title: 'Graph', icon: GitFork, active: !props.activeAddonViewId && store.activeWorkspaceView === 'graph', run: () => closeAddonAndOpen('graph') },
   { id: 'search', title: 'Search', icon: Search, active: false, run: () => emit('search') }
 ])
 
@@ -169,24 +164,6 @@ const switchVault = (vaultId) => { store.setActiveVault(vaultId); showVaultMenu.
 const addVault = async () => { showVaultMenu.value = false; if (await store.chooseVault()) { editingVaultId.value = store.activeVaultId; showVaultMenu.value = true } }
 const toggleIconPicker = (vaultId) => { editingVaultId.value = editingVaultId.value === vaultId ? '' : vaultId }
 const setVaultIcon = async (vaultId, icon) => { await store.setVaultIcon(vaultId, icon); editingVaultId.value = '' }
-const shouldApplyWikiRootResult = (vaultId) => store.activeWorkspaceView === 'wiki' && store.currentPath === WIKI_ROOT && store.activeVaultId === vaultId
-
-async function openWikiRoot () {
-  emit('close-addon-view')
-  const wasAlreadyInWiki = store.activeWorkspaceView === 'wiki'
-  const vaultId = store.activeVaultId
-  store.currentPath = WIKI_ROOT
-  store.openedNotePath = ''
-  store.entries = []
-  store.setWorkspaceView('wiki')
-  if (!wasAlreadyInWiki || !store.activeVault?.path) return
-  try {
-    const entries = await elephantnoteClient.directory.list(wikiDirectoryPayload(WIKI_ROOT))
-    if (shouldApplyWikiRootResult(vaultId)) store.entries = Array.isArray(entries) ? entries : []
-  } catch {
-    if (shouldApplyWikiRootResult(vaultId)) store.entries = []
-  }
-}
 
 const handleAddonSidebarItem = async (item) => {
   if (item.actionId) return addonsStore.runAction(item.actionId)

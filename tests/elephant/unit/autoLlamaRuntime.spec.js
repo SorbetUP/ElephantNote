@@ -12,42 +12,38 @@ afterEach(() => {
 })
 
 describe('AutoLlamaRuntime', () => {
-  it('chooses the node runtime outside the browser', async() => {
-    const nodeRuntime = {
-      status: async() => ({
-        available: true,
-        supportedBackends: ['cpu', 'openvino'],
-        selectedBackend: 'cpu'
-      }),
-      loadModel: async(model) => ({ model, source: 'node' }),
-      generateChat: async() => 'node chat ok',
-      embedText: async() => [1, 2, 3]
-    }
+  it('chooses the WASM runtime outside Tauri', async() => {
     const wasmRuntime = {
       status: async() => ({
         available: true,
         supportedBackends: ['cpu'],
         selectedBackend: 'cpu'
       }),
-      loadModel: async(model) => ({ backend: 'cpu', modelLabel: model.modelLabel || 'wasm', chat: async() => ({ text: 'wasm chat ok' }), complete: async() => ({ text: 'wasm completion ok' }), embed: async() => ({ vector: [7, 8, 9] }) })
+      loadModel: async(model) => ({
+        backend: 'cpu',
+        modelLabel: model.modelLabel || 'wasm',
+        chat: async() => ({ text: 'wasm chat ok' }),
+        complete: async() => ({ text: 'wasm completion ok' }),
+        embed: async() => ({ vector: [7, 8, 9] })
+      })
     }
 
-    const runtime = new AutoLlamaRuntime({ nodeRuntime, wasmRuntime })
+    const runtime = new AutoLlamaRuntime({ wasmRuntime })
     const status = await runtime.status()
     const session = await runtime.loadModel({ model: { id: 'test-model', name: 'Test Model' } })
 
     expect(status).toMatchObject({
       runtime: 'auto',
-      engine: 'node-llama-cpp',
+      engine: 'wasm',
       selectedBackend: 'cpu'
     })
     await expect(session.chat({ prompt: 'hello' })).resolves.toMatchObject({
       backend: 'cpu',
-      text: 'node chat ok'
+      text: 'wasm chat ok'
     })
     await expect(session.embed({ text: 'abc' })).resolves.toMatchObject({
       backend: 'cpu',
-      vector: [1, 2, 3]
+      vector: [7, 8, 9]
     })
   })
 

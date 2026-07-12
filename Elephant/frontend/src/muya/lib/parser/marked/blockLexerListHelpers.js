@@ -1,9 +1,13 @@
-export const pushListStart = (lexer, bull, source) => {
-  const ordered = bull.length > 1
+export const pushListStart = (
+  lexer,
+  bull,
+  source,
+  ordered = bull.length > 1
+) => {
   lexer.tokens.push({
     type: 'list_start',
     ordered,
-    listType: ordered
+    listType: bull.length > 1
       ? 'order'
       : /^( {0,3})([-*+]) \[[xX ]\]/.test(source)
         ? 'task'

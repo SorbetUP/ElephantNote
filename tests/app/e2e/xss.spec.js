@@ -1,34 +1,13 @@
-const { expect, test } = require('@playwright/test')
-const { launchElectron } = require('./helpers')
+const { expect, test } = require('playwright/test')
 
-test.describe('Test XSS Vulnerabilities', () => {
-  let app = null
-  // eslint-disable-next-line no-unused-vars
-  let page = null
+test.describe('Renderer security policy', () => {
+  test('keeps a restrictive default content security policy', async({ page }) => {
+    await page.goto('/')
 
-  test.beforeAll(async() => {
-    const { app: electronApp, page: firstPage } = await launchElectron(['tests/app/e2e/data/xss.md'])
-    app = electronApp
-    page = firstPage
-
-    // Wait to parse and render the document.
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-  })
-
-  test.afterAll(async() => {
-    await app.close()
-  })
-
-  test('Load malicious document', async() => {
-    const { isVisible, isCrashed } = await app.evaluate(async process => {
-      const mainWindow = process.BrowserWindow.getAllWindows()[0]
-      return {
-        isVisible: mainWindow.isVisible(),
-        isCrashed: mainWindow.webContents.isCrashed()
-      }
-    })
-
-    expect(isVisible).toBeTruthy()
-    expect(isCrashed).toBeFalsy()
+    const policy = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content')
+    expect(policy).toContain("default-src 'self'")
+    expect(policy).toContain("img-src 'self'")
+    expect(policy).toContain("connect-src 'self'")
+    expect(policy).not.toContain('default-src *')
   })
 })

@@ -1,7 +1,7 @@
 import BaseFloat from '../baseFloat'
-import { patch, h } from '../../parser/render/snabbdom'
 import getIcons from './config'
 import { URL_REG } from '../../config'
+import { renderImageToolbar } from './view'
 
 import './index.css'
 
@@ -51,77 +51,7 @@ class ImageToolbar extends BaseFloat {
   }
 
   render() {
-    const { muya, oldVnode, toolbarContainer, imageInfo } = this
-    const icons = getIcons(muya?.options?.t)
-    const { attrs } = imageInfo.token
-    const dataAlign = attrs['data-align']
-    let isLocalImage = false
-    if (this.isLocalFile(imageInfo)) {
-      isLocalImage = true
-    }
-    const canEditWithExcalidraw = this.canEditWithExcalidraw(imageInfo)
-    const children = icons
-      .filter((i) => {
-        if (i.type === 'edit-excalidraw') return canEditWithExcalidraw
-        return !i.localOnly || isLocalImage
-      })
-      .map((i) => {
-        let icon
-        let iconWrapperSelector
-        if (i.icon) {
-        // SVG icon Asset
-          iconWrapperSelector = 'div.icon-wrapper'
-          icon = h(
-            'i.icon',
-            h(
-              'i.icon-inner',
-              {
-                style: {
-                  background: `url(${i.icon}) no-repeat`,
-                  'background-size': '100%'
-                }
-              },
-              ''
-            )
-          )
-        }
-        const iconWrapper = h(iconWrapperSelector, icon)
-        let itemSelector = `li.item.${i.type}`
-
-        if (i.type === 'open' || i.type === 'edit-excalidraw') {
-          if (isLocalImage) {
-            itemSelector += '.enable'
-          } else {
-            itemSelector += '.disable'
-          }
-        }
-        if (i.type === dataAlign || (!dataAlign && i.type === 'inline')) {
-          itemSelector += '.active'
-        }
-        return h(
-          itemSelector,
-          {
-            dataset: {
-              tip: i.tooltip
-            },
-            on: {
-              click: (event) => {
-                this.selectItem(event, i)
-              }
-            }
-          },
-          [h('div.tooltip', i.tooltip), iconWrapper]
-        )
-      })
-
-    const vnode = h('ul', children)
-
-    if (oldVnode) {
-      patch(oldVnode, vnode)
-    } else {
-      patch(toolbarContainer, vnode)
-    }
-    this.oldVnode = vnode
+    return renderImageToolbar(this)
   }
 
   selectItem(event, item) {
@@ -129,20 +59,14 @@ class ImageToolbar extends BaseFloat {
     event.stopPropagation()
 
     const { imageInfo } = this
-    let isLocalImage = false
-    if (this.isLocalFile(imageInfo)) {
-      isLocalImage = true
-    }
+    const isLocalImage = this.isLocalFile(imageInfo)
     switch (item.type) {
-      // Delete image.
       case 'delete':
         this.muya.contentState.deleteImage(imageInfo)
-        // Hide image transformer
         this.muya.eventCenter.dispatch('muya-transformer', {
           reference: null
         })
         return this.hide()
-      // Edit image, for example: editor alt and title, replace image.
       case 'edit': {
         const rect = this.reference.getBoundingClientRect()
         const reference = {
@@ -151,7 +75,6 @@ class ImageToolbar extends BaseFloat {
             return rect
           }
         }
-        // Hide image transformer
         this.muya.eventCenter.dispatch('muya-transformer', {
           reference: null
         })

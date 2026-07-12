@@ -41,6 +41,7 @@
             class="en-sidebar-resizer"
             role="separator"
             aria-orientation="vertical"
+            aria-label="Resize sidebar"
             @pointerdown="startResize"
           />
           <main-content
@@ -61,14 +62,12 @@
     <settings-panel
       v-if="isSettingsOpen"
       :theme="theme"
-      :sidebar-width="sidebarWidth"
       :vaults="store.vaults"
       :active-vault-name="store.activeVault?.name || 'No vault'"
       :active-vault-path="store.activeVault?.path || ''"
       :initial-section="settingsInitialSection"
       @close="isSettingsOpen = false"
       @update-theme="setTheme"
-      @update-sidebar-width="setSidebarWidth"
     />
   </div>
 </template>
@@ -96,6 +95,7 @@ import MainContent from './MainContent.vue'
 import SettingsPanel from '../settings/SettingsPanel.vue'
 import SearchModal from '../../search/SearchModal.vue'
 import '../../styles/app-shell.css'
+import '../../styles/app-shell-runtime-fixes.css'
 
 const CORE_WORKSPACE_VIEWS = new Set(['notes', 'dashboard', 'canvas'])
 const store = useVaultStore()
@@ -125,7 +125,8 @@ const shellRightZones = computed(() => addonsStore.getContributions('layout.zone
   .sort((left, right) => Number(left.contribution.order || 0) - Number(right.contribution.order || 0)))
 const shellStyle = computed(() => ({
   ...activeThemeTokens.value,
-  '--en-sidebar-width': `${sidebarWidth.value}px`
+  '--en-sidebar-width': `${sidebarWidth.value}px`,
+  '--en-sidebar-runtime-width': `${sidebarWidth.value}px`
 }))
 
 const isLayoutZoneVisible = (entry) => {
@@ -235,6 +236,7 @@ const startResize = (event) => {
   const startX = event.clientX
   const startWidth = sidebarWidth.value
   event.currentTarget.setPointerCapture(event.pointerId)
+  document.documentElement.classList.add('en-resizing-sidebar')
 
   const onMove = (moveEvent) => {
     scheduleSidebarWidth(startWidth + moveEvent.clientX - startX)
@@ -242,6 +244,7 @@ const startResize = (event) => {
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
+    document.documentElement.classList.remove('en-resizing-sidebar')
     if (sidebarResizeFrame) {
       window.cancelAnimationFrame(sidebarResizeFrame)
       sidebarResizeFrame = null
@@ -303,7 +306,7 @@ onMounted(() => {
   window.tauri.ipcRenderer.on('mt::tab-saved', handleTabSaved)
   setTheme(theme.value)
   const storedWidth = Number(window.localStorage.getItem('elephantnote:sidebarWidth'))
-  if (storedWidth && storedWidth <= 260) {
+  if (storedWidth && storedWidth <= 320) {
     setSidebarWidth(storedWidth)
   } else {
     setSidebarWidth(232)
@@ -318,6 +321,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleShortcut)
   window.removeEventListener('elephantnote:open-settings', handleOpenSettingsEvent)
   window.removeEventListener('elephantnote:open-addon-view', handleOpenAddonViewEvent)
+  document.documentElement.classList.remove('en-resizing-sidebar')
   if (sidebarResizeFrame) {
     window.cancelAnimationFrame(sidebarResizeFrame)
     sidebarResizeFrame = null
@@ -385,8 +389,28 @@ onBeforeUnmount(() => {
 }
 
 .en-sidebar-resizer {
+  position: relative;
+  z-index: 9;
   background: var(--en-border);
   cursor: col-resize;
+  touch-action: none;
+}
+
+.en-sidebar-resizer::before {
+  content: '';
+  position: absolute;
+  inset: 0 -5px;
+  cursor: col-resize;
+}
+
+.en-sidebar-resizer:hover {
+  background: var(--en-primary);
+}
+
+:global(.en-resizing-sidebar),
+:global(.en-resizing-sidebar *) {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 :global(.en-settings-close) {

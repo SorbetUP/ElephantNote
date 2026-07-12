@@ -179,7 +179,7 @@ describe('ElephantNote settings redesign', () => {
     expect(wiki).toContain('component: WikiView')
     expect(graph).toContain('component: AtomicGraphView')
     expect(openModels).toContain('component: OpenModelsView')
-    expect(codeExecution).toContain('component: CodeExecutionSettings')
+    expect(codeExecution).toContain('mountSettingsComponent(ctx, CodeExecutionSettings)')
   })
 
   it('keeps addon-specific shell components absent until their lazy addon loads', () => {

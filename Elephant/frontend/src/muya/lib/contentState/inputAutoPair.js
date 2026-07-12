@@ -55,7 +55,7 @@ export default function applyInputAutoPair(contentState, event, block, text, sta
     inputChar === postInputChar &&
     ((autoPairQuote && /[']{1}/.test(inputChar)) ||
       (autoPairQuote && /["]{1}/.test(inputChar)) ||
-      (autoPairBracket && /[\}\]\)]{1}/.test(inputChar)) ||
+      (autoPairBracket && '}])'.includes(inputChar)) ||
       (autoPairMarkdownSyntax && /[$]{1}/.test(inputChar)) ||
       (autoPairMarkdownSyntax &&
         /[*$`~_]{1}/.test(inputChar) &&
@@ -83,7 +83,7 @@ export default function applyInputAutoPair(contentState, event, block, text, sta
         !/[\S]{1}/.test(postInputChar) &&
         !/[a-zA-Z\d]{1}/.test(preInputChar)) ||
         (autoPairQuote && /["]{1}/.test(inputChar) && !/[\S]{1}/.test(postInputChar)) ||
-        (autoPairBracket && /[\{\[\(]{1}/.test(inputChar) && !/[\S]{1}/.test(postInputChar)) ||
+        (autoPairBracket && '{[('.includes(inputChar) && !/[\S]{1}/.test(postInputChar)) ||
         (block.functionType !== 'codeContent' &&
           !isInInlineMath &&
           !isInInlineCode &&

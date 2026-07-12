@@ -7,9 +7,9 @@ import { isTrustedAddonManifest } from '@/addons/manifest'
 import { useAddonsStore } from '@/store/addons'
 
 const INTERNAL_ADDON_IDS = new Set(['elephant.addon-packs'])
-const OBSOLETE_DEMO_ADDON_IDS = new Set(['com.elephantnote.examples.trusted-workspace-lab'])
-// Replaced the narrower filter: !INTERNAL_ADDON_IDS.has(addon.manifest.id)
-const isHiddenAddonId = (id) => INTERNAL_ADDON_IDS.has(id) || OBSOLETE_DEMO_ADDON_IDS.has(id)
+const OBSOLETE_ADDON_IDS = new Set(['com.elephantnote.examples.trusted-workspace-lab'])
+
+const isHiddenAddonId = (id) => INTERNAL_ADDON_IDS.has(id) || OBSOLETE_ADDON_IDS.has(id)
 
 const persistExternalAddonState = async (addonId, enabled) => {
   const invoke = globalThis?.__TAURI__?.core?.invoke
@@ -94,6 +94,11 @@ export const useAddonsSettings = () => {
     messageIsError.value = error
   }
 
+  const clearMessage = () => {
+    message.value = ''
+    messageIsError.value = false
+  }
+
   const toggleDetails = (addonId) => {
     expandedAddonId.value = expandedAddonId.value === addonId ? '' : addonId
   }
@@ -107,9 +112,9 @@ export const useAddonsSettings = () => {
   }
 
   const enableCommunityAddons = async () => {
+    clearMessage()
     try {
       await addonsStore.setCommunityAddonsEnabled(true)
-      showMessage('Community addons enabled.')
       await refreshCatalog()
       await addonsStore.loadTrustedState()
     } catch (error) {
@@ -118,6 +123,7 @@ export const useAddonsSettings = () => {
   }
 
   const disableCommunityAddons = async () => {
+    clearMessage()
     try {
       const installedExternalAddons = [...externalAddons.value]
       await addonsStore.setCommunityAddonsEnabled(false)
@@ -127,7 +133,6 @@ export const useAddonsSettings = () => {
       const failed = persistenceResults.filter((result) => result.status === 'rejected')
       if (failed.length) throw new Error(`Community addons stopped, but ${failed.length} addon state${failed.length === 1 ? '' : 's'} could not be persisted.`)
       expandedAddonId.value = ''
-      showMessage('Community addons disabled.')
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
     }
@@ -149,10 +154,6 @@ export const useAddonsSettings = () => {
   }
 
   const installAddonPackage = async () => {
-    if (!communityAddonsEnabled.value) {
-      showMessage('Enable community addons before installing a package from file.', true)
-      return
-    }
     try {
       const selected = await open({
         multiple: false,
@@ -181,7 +182,7 @@ export const useAddonsSettings = () => {
   const installAvailableAddon = async (addon) => {
     if (addon?.installSource === 'builtin') return installBuiltinAddon(addon)
     if (!communityAddonsEnabled.value) {
-      showMessage('Enable community addons before installing this package.', true)
+      showMessage('Turn on community addons before installing this package.', true)
       return
     }
     return installCatalogAddon(addon)
@@ -227,16 +228,6 @@ export const useAddonsSettings = () => {
     }
   }
 
-  const removeObsoleteDemoAddons = async () => {
-    const obsolete = items.value.filter((addon) => OBSOLETE_DEMO_ADDON_IDS.has(addon.manifest.id))
-    if (!obsolete.length) return
-    const results = await Promise.allSettled(obsolete.map((addon) => addonsStore.uninstallExternalAddon(addon.manifest.id)))
-    const failures = results.filter((result) => result.status === 'rejected')
-    if (failures.length) {
-      log.warn('[settings:addons] obsolete demo cleanup failed', { failures: failures.length })
-    }
-  }
-
   const runAction = async (action, payload = undefined) => {
     try {
       const result = await addonsStore.runAction(action.id, payload)
@@ -249,8 +240,22 @@ export const useAddonsSettings = () => {
     }
   }
 
+  const removeObsoleteAddons = async () => {
+    for (const addon of items.value.filter((item) => OBSOLETE_ADDON_IDS.has(item.manifest.id))) {
+      try {
+        if (addon.enabled || addon.status === 'error') await addonsStore.setAddonEnabled(addon.manifest.id, false)
+        if (addon.manifest.source === 'external') await addonsStore.uninstallExternalAddon(addon.manifest.id)
+      } catch (error) {
+        log.warn('[settings:addons] obsolete-addon:cleanup-failed', {
+          id: addon.manifest.id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }
+  }
+
   onMounted(async () => {
-    await removeObsoleteDemoAddons()
+    await removeObsoleteAddons()
     if (!communityConsentLoaded.value) await addonsStore.loadCommunityAddonsConsent()
     if (communityAddonsEnabled.value) {
       await Promise.allSettled([refreshCatalog(), addonsStore.loadTrustedState()])

@@ -95,8 +95,8 @@ jobs:
           {
             cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
             cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-            pnpm exec vitest run tests/app/unit/wikiEmbeddingSurface.spec.js tests/app/unit/wikiGraphSurface.spec.js tests/app/unit/chatAgentSurface.spec.js
-            pnpm exec eslint Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue tests/app/unit/wikiEmbeddingSurface.spec.js
+            NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run tests/app/unit/wikiEmbeddingSurface.spec.js tests/app/unit/wikiGraphSurface.spec.js tests/app/unit/chatAgentSurface.spec.js
+            NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue tests/app/unit/wikiEmbeddingSurface.spec.js
             cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml embedding_store -- --nocapture
             cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features --message-format short
           } 2>&1 | tee .github/wiki-embedding-validation.txt

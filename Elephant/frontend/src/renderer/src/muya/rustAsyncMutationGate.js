@@ -1,13 +1,19 @@
-export const createRustAsyncMutationGate = ({ dispatch } = {}) => {
+export const createRustAsyncMutationGate = ({ dispatch, onSuppressed = () => {} } = {}) => {
   if (typeof dispatch !== 'function') {
     throw new TypeError('A Muya dispatchChange callback is required.')
+  }
+  if (typeof onSuppressed !== 'function') {
+    throw new TypeError('A suppressed-dispatch callback must be a function.')
   }
 
   let pending = 0
   let tail = Promise.resolve()
 
   const guardedDispatch = (...args) => {
-    if (pending > 0) return undefined
+    if (pending > 0) {
+      onSuppressed(...args)
+      return undefined
+    }
     return dispatch(...args)
   }
 

@@ -54,6 +54,27 @@ describe('external addon manifest contracts', () => {
     expect(manifest.permissions.notes.read).toEqual(['Inbox/**'])
   })
 
+  it('normalizes addon-owned embedded content fallbacks', () => {
+    const manifest = normalizeAddonManifest(createManifest({
+      contentTypes: [{
+        id: 'drawing',
+        kind: 'image',
+        sourcePattern: '**/.assets/drawing-*.png',
+        disabledPresentation: 'static-preview',
+        disabledLabel: 'Drawing'
+      }]
+    }))
+
+    expect(manifest.contentTypes).toEqual([{
+      id: 'drawing',
+      kind: 'image',
+      sourcePattern: '**/.assets/drawing-*.png',
+      disabledPresentation: 'static-preview',
+      disabledLabel: 'Drawing'
+    }])
+    expect(Object.isFrozen(manifest.contentTypes)).toBe(true)
+  })
+
   it('keeps legacy builtin permission arrays and addon presentation fields compatible', () => {
     const manifest = normalizeAddonManifest({
       id: 'elephant.example',
@@ -81,7 +102,8 @@ describe('built-in addon catalogue', () => {
       'elephant.ai',
       'elephant.sync',
       'elephant.code-execution',
-      'elephant.excalidraw'
+      'elephant.excalidraw',
+      'elephant.recently-edited'
     ])
     expect(builtinAddons.filter((addon) => addon.manifest.defaultEnabled).map((addon) => addon.manifest.id))
       .toEqual(['elephant.addon-packs'])

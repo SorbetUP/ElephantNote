@@ -70,24 +70,29 @@ export const useAddonsSettings = () => {
       })
     }
 
-    for (const entry of catalog.value) {
-      if (!entry?.id || isHiddenAddonId(entry.id) || available.has(entry.id)) continue
-      const installed = items.value.find((addon) => addon.manifest.id === entry.id)
-      const updateAvailable = Boolean(installed && installed.manifest.version !== entry.version)
-      if (installed && !updateAvailable) continue
-      available.set(entry.id, {
-        ...entry,
-        installSource: 'catalog',
-        installed: Boolean(installed),
-        installedVersion: installed?.manifest?.version || '',
-        updateAvailable
-      })
+    // The remote catalogue is third-party code. Turning Community Addons off
+    // must remove it from the actionable UI as well as stop its runtimes.
+    if (communityAddonsEnabled.value) {
+      for (const entry of catalog.value) {
+        if (!entry?.id || isHiddenAddonId(entry.id) || available.has(entry.id)) continue
+        const installed = items.value.find((addon) => addon.manifest.id === entry.id)
+        const updateAvailable = Boolean(installed && installed.manifest.version !== entry.version)
+        if (installed && !updateAvailable) continue
+        available.set(entry.id, {
+          ...entry,
+          installSource: 'catalog',
+          installed: Boolean(installed),
+          installedVersion: installed?.manifest?.version || '',
+          updateAvailable
+        })
+      }
     }
 
     return [...available.values()].filter(matchesQuery).sort(sortByName)
   })
 
   const actionsForAddon = (addonId) => actions.value.filter((action) => action.addonId === addonId)
+  const isCommunityLocked = (addon) => addon?.manifest?.source === 'external' && !communityAddonsEnabled.value
 
   const showMessage = (text, error = false) => {
     message.value = text
@@ -104,6 +109,7 @@ export const useAddonsSettings = () => {
   }
 
   const refreshCatalog = async () => {
+    if (!communityAddonsEnabled.value) return
     try {
       await addonsStore.loadAddonCatalog()
     } catch (error) {
@@ -154,6 +160,10 @@ export const useAddonsSettings = () => {
   }
 
   const installAddonPackage = async () => {
+    if (!communityAddonsEnabled.value) {
+      showMessage('Turn on community addons before installing this package.', true)
+      return
+    }
     try {
       const selected = await open({
         multiple: false,
@@ -190,6 +200,10 @@ export const useAddonsSettings = () => {
 
   const toggleAddon = async (addon) => {
     const nextEnabled = !addon.enabled
+    if (nextEnabled && isCommunityLocked(addon)) {
+      showMessage('Turn on community addons before enabling this package.', true)
+      return
+    }
     try {
       if (nextEnabled && addon.manifest.source === 'external' && isTrustedAddonManifest(addon.manifest)) {
         if (!addonsStore.trustedStateLoaded) await addonsStore.loadTrustedState()
@@ -231,7 +245,7 @@ export const useAddonsSettings = () => {
   const runAction = async (action, payload = undefined) => {
     try {
       const result = await addonsStore.runAction(action.id, payload)
-      showMessage(`${action.title} completed${result?.path ? `: ${result.path}` : '.'}`)
+      showMessage(`${action.title} completed.`)
       return result
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
@@ -282,6 +296,7 @@ export const useAddonsSettings = () => {
     filteredInstalledAddons,
     availableAddons,
     actionsForAddon,
+    isCommunityLocked,
     toggleDetails,
     refreshCatalog,
     enableCommunityAddons,

@@ -6,3 +6,6 @@
 
 pub mod parser;
 pub mod utils;
+
+#[cfg(test)]
+mod parity_fixtures;

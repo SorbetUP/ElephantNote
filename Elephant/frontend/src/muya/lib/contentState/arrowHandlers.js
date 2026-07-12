@@ -52,14 +52,16 @@ const handleMathArrowRight = (event, node, start, end) => {
     !node.classList ||
     !node.classList.contains(CLASS_OR_ID.AG_MATH_TEXT)
   ) {
-    return false
+    return { handled: false }
   }
   const { right } = selection.getCaretOffsets(node)
   if (right === 0 && start.key === end.key && start.offset === end.offset) {
-    selection.select(node.parentNode.nextElementSibling, 0)
-    return true
+    return {
+      handled: true,
+      value: selection.select(node.parentNode.nextElementSibling, 0)
+    }
   }
-  return false
+  return { handled: false }
 }
 
 const selectActiveBlock = (contentState, event, activeBlock) => {
@@ -109,7 +111,8 @@ export function arrowHandler(event) {
   const { topOffset, bottomOffset } = selection.getCursorYOffset(paragraph)
   if (!start || !end) return
 
-  if (handleMathArrowRight(event, node, start, end)) return
+  const mathNavigation = handleMathArrowRight(event, node, start, end)
+  if (mathNavigation.handled) return mathNavigation.value
 
   if (
     (start.key === end.key && start.offset !== end.offset) ||

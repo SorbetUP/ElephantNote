@@ -36,12 +36,13 @@ jobs:
                   if lines[index].strip() == 'PY' and 'Format and validate' in lines[index + 1]
               )
               script_lines = lines[start:end]
-              indentation = min(
-                  len(line) - len(line.lstrip())
+              first = next(line for line in script_lines if line.strip())
+              indentation = len(first) - len(first.lstrip())
+              prefix = ' ' * indentation
+              script = '\n'.join(
+                  line[indentation:] if line.startswith(prefix) else line
                   for line in script_lines
-                  if line.strip()
               )
-              script = '\n'.join(line[indentation:] if line.strip() else '' for line in script_lines)
               compile(script, 'wiki-embedding-implementation', 'exec')
               exec(script, {'__name__': '__main__'})
           except Exception:

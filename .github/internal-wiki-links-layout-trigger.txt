@@ -1,1 +1,0 @@
-Apply the internal Wiki link interception and edge-aware graph layout patch.

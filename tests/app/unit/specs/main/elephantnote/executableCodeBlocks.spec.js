@@ -53,13 +53,20 @@ describe('native executable fenced code blocks', () => {
     expect(backend).not.toContain('cmd /C')
   })
 
-  it('renders Run and Output as native children of Muya fenced code', () => {
+  it('keeps base fenced code native and injects Run and Output only through the addon bridge', () => {
     const renderer = readRenderer()
     const helper = readRendererHelper()
+    const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/codeExecution.js')
+    const bridge = read('Elephant/frontend/src/muya/lib/parser/render/renderBlock/editorExtensionRenderBridge.js')
 
-    expect(renderer).toContain("functionType === 'fencecode'")
-    expect(renderer).toContain('renderExecutableRunButton(block)')
-    expect(renderer).toContain('renderExecutableOutput(block)')
+    expect(renderer).toContain('children.unshift(renderCopyButton(t))')
+    expect(renderer).toContain('applyEditorContainerExtensions')
+    expect(renderer).not.toContain('renderExecutableRunButton')
+    expect(renderer).not.toContain('renderExecutableOutput')
+    expect(addon).toContain("block?.functionType !== 'fencecode'")
+    expect(addon).toContain('renderExecutableRunButton(block)')
+    expect(addon).toContain('renderExecutableOutput(block)')
+    expect(bridge).toContain("const EDITOR_EXTENSION_AREA = 'editor.extensions'")
     expect(helper).toContain('button.en-code-native-run')
     expect(helper).toContain('elephant-code-output.en-code-native-output')
     expect(helper).toContain("contenteditable: 'false'")

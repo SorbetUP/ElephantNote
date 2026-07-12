@@ -162,7 +162,7 @@ export const aiAddon = {
       id: `${ADDON_ID}.chat`,
       title: 'Chat',
       tooltip: 'AI chat',
-      icon: 'sparkles',
+      icon: 'message-circle',
       actionId: CHAT_ACTION_ID,
       order: 46
     })

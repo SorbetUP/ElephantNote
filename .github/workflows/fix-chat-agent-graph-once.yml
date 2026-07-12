@@ -50,8 +50,17 @@ jobs:
       - name: Fail on focused lint errors
         if: steps.focused_lint.outcome == 'failure'
         run: exit 1
-      - name: Check Tauri backend
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features
+      - name: Capture Tauri backend check
+        id: tauri_check
+        continue-on-error: true
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features --message-format short > focused-tauri-check.txt 2>&1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: focused-tauri-check
+          path: focused-tauri-check.txt
+      - name: Fail on Tauri check errors
+        if: steps.tauri_check.outcome == 'failure'
+        run: exit 1
       - name: Build Tauri web frontend
         run: pnpm tauri:web:build
       - name: Commit validated fixes and remove temporary files

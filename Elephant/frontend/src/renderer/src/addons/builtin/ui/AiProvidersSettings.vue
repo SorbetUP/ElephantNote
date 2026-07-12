@@ -83,12 +83,17 @@ const currentConfig = ref(normalizeAiConfig())
 const providerRows = ref([])
 const providerMessage = ref('')
 const hydrated = ref(false)
+const dirty = ref(false)
 let autosaveTimer = 0
 
+const activeAiSlots = computed(() => new Set(addonsStore.getContributions('settings.sections')
+  .filter((entry) => entry?.contribution?.section === 'ai')
+  .map((entry) => entry?.contribution?.slot)
+  .filter(Boolean)))
 const moduleEnabled = computed(() => ({
-  chat: Boolean(addonsStore.manager?.get?.('elephant.ai-chat')?.enabled),
-  search: Boolean(addonsStore.manager?.get?.('elephant.ai-search')?.enabled),
-  ocr: Boolean(addonsStore.manager?.get?.('elephant.ai-ocr')?.enabled)
+  chat: activeAiSlots.value.has('ai.chat'),
+  search: activeAiSlots.value.has('ai.search'),
+  ocr: activeAiSlots.value.has('ai.ocr')
 }))
 
 const clone = (value) => JSON.parse(JSON.stringify(value ?? {}))
@@ -121,7 +126,6 @@ const applyConfig = (config = {}) => {
     headersJson: stringifyHeaders(row.headers) || row.headersJson || ''
   }))
 }
-
 const buildConfig = () => ({
   ...clone(currentConfig.value),
   providers: {
@@ -137,12 +141,14 @@ const buildConfig = () => ({
 
 const saveConfig = async (reason = 'change') => {
   if (!hydrated.value) return
+  clearTimeout(autosaveTimer)
   const payload = buildConfig()
   log.info('[ai-providers] save:start', { reason, providers: providerRows.value.length })
   try {
     const saved = await elephantnoteClient.ai.setConfig(payload)
     currentConfig.value = normalizeAiConfig(saved || payload)
     localStorage.setItem(CACHE_KEY, JSON.stringify(currentConfig.value))
+    dirty.value = false
     window.dispatchEvent(new CustomEvent('elephantnote:ai-config-changed', { detail: currentConfig.value }))
     log.info('[ai-providers] save:done', { reason, providers: providerRows.value.length })
   } catch (error) {
@@ -150,9 +156,9 @@ const saveConfig = async (reason = 'change') => {
     log.warn('[ai-providers] save:failed', { reason, error: providerMessage.value })
   }
 }
-
 const scheduleAutosave = (reason) => {
   if (!hydrated.value) return
+  dirty.value = true
   clearTimeout(autosaveTimer)
   autosaveTimer = window.setTimeout(() => saveConfig(reason), 700)
 }
@@ -197,15 +203,24 @@ const loadConfig = async () => {
     hydrated.value = true
   }
 }
+const handleConfigChanged = (event) => {
+  const next = normalizeAiConfig(event?.detail || {})
+  currentConfig.value = next
+  if (!dirty.value) applyConfig(next)
+}
 
 watch(moduleEnabled, (modules) => {
   if (activeTab.value !== 'providers' && !modules[activeTab.value]) activeTab.value = 'providers'
 }, { deep: true })
-watch(providerRows, () => scheduleAutosave('provider-watch'), { deep: true })
-onMounted(loadConfig)
+watch(providerRows, () => scheduleAutosave('provider-watch'), { deep: true, flush: 'sync' })
+onMounted(() => {
+  window.addEventListener('elephantnote:ai-config-changed', handleConfigChanged)
+  loadConfig()
+})
 onBeforeUnmount(() => {
+  window.removeEventListener('elephantnote:ai-config-changed', handleConfigChanged)
   clearTimeout(autosaveTimer)
-  void saveConfig('settings-close')
+  if (dirty.value) void saveConfig('settings-close')
 })
 </script>
 

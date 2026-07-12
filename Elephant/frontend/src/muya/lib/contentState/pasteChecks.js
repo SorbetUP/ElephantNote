@@ -1,7 +1,6 @@
 import {
   PARAGRAPH_TYPES,
-  PREVIEW_DOMPURIFY_CONFIG,
-  URL_REG
+  PREVIEW_DOMPURIFY_CONFIG
 } from '../config'
 import { sanitize } from '../utils'
 
@@ -56,10 +55,6 @@ const pasteChecks = ContentState => {
       }
     }
     return type
-  }
-
-  ContentState.prototype.isFirefoxPastedUrl = function(text, html) {
-    return URL_REG.test(text) && !/\s/.test(text) && !html
   }
 }
 

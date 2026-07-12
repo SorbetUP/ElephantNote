@@ -10,7 +10,7 @@ describe('Android follow-up regressions', () => {
     const source = read('Elephant/frontend/src/renderer/src/platform/tauriFileUtilsPathGuards.js')
     expect(source).toContain('TEXT_FILE_RE')
     expect(source).toContain("formatReadResult(base64ToBytes(result.dataBase64), options, resolved)")
-    expect(source).toContain("new TextDecoder")
+    expect(source).toContain('new TextDecoder')
   })
 
   it('creates empty notes and presents a title placeholder', () => {
@@ -43,6 +43,7 @@ describe('Android follow-up regressions', () => {
     const config = JSON.parse(read('Elephant/backend/tauri/tauri.android.conf.json'))
     expect(host).toContain('convertFileSrc')
     expect(host).toContain('restoreLocalImageSources')
+    expect(host).toContain('/^(?:https?:|asset:|data:|blob:|#)/i')
     expect(config.app.security.assetProtocol.enable).toBe(true)
   })
 

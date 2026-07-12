@@ -6,12 +6,16 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 describe('AI settings navigation', () => {
-  it('shows only the addon-owned AI tab strip', () => {
+  it('owns one tab strip and no longer embeds the legacy monolithic panel', () => {
     const parentSettings = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiProvidersSettings.vue')
 
     expect(parentSettings).toContain('class="en-ai-module-tabs"')
-    expect(parentSettings).toContain(':global(.en-ai-providers-only .en-ai-toolbar)')
-    expect(parentSettings).toContain('display: none !important')
+    expect(parentSettings.match(/class="en-ai-module-tabs"/g)).toHaveLength(1)
+    expect(parentSettings).not.toContain('AiProviderSettingsPanel')
+    expect(parentSettings).not.toContain('en-ai-toolbar')
+    expect(parentSettings).toContain('data-elephant-addon-settings-slot="ai.chat"')
+    expect(parentSettings).toContain('data-elephant-addon-settings-slot="ai.search"')
+    expect(parentSettings).toContain('data-elephant-addon-settings-slot="ai.ocr"')
   })
 })
 

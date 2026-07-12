@@ -54,15 +54,18 @@ describe('external addon manifest contracts', () => {
     expect(manifest.permissions.notes.read).toEqual(['Inbox/**'])
   })
 
-  it('normalizes addon-owned embedded content fallbacks', () => {
+  it('normalizes addon-owned embedded content fallbacks from package-safe contributions', () => {
     const manifest = normalizeAddonManifest(createManifest({
-      contentTypes: [{
-        id: 'drawing',
-        kind: 'image',
-        sourcePattern: '**/.assets/drawing-*.png',
-        disabledPresentation: 'static-preview',
-        disabledLabel: 'Drawing'
-      }]
+      contributes: {
+        commands: [{ id: 'com.example.addon.run', title: 'Run example' }],
+        contentTypes: [{
+          id: 'drawing',
+          kind: 'image',
+          sourcePattern: '**/.assets/drawing-*.png',
+          disabledPresentation: 'static-preview',
+          disabledLabel: 'Drawing'
+        }]
+      }
     }))
 
     expect(manifest.contentTypes).toEqual([{

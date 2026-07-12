@@ -40,7 +40,9 @@ watch(moduleEnabled, (modules) => {
 .en-ai-module-tabs button.active { border-color: var(--en-border, #c5cfdd); background: var(--en-surface, #fff); color: var(--en-text, #101828); box-shadow: 0 1px 4px rgba(2, 6, 23, .08); }
 .en-ai-module-tabs svg { width: 14px; height: 14px; }
 .en-ai-submodule-slot { min-height: 1px; }
-.en-ai-providers-only :deep(.en-ai-tabs) { display: none; }
+/* AiProviderSettingsPanel predates the addon-owned parent navigation. Hide its legacy
+   toolbar structurally from this host so only one tab strip can ever be visible. */
+:global(.en-ai-providers-only .en-ai-toolbar) { display: none !important; }
 /* Local model discovery belongs to the Open Models addon, not the provider base. */
-.en-ai-providers-only :deep(.en-ai-card:first-of-type) { display: none; }
+:global(.en-ai-providers-only .en-ai-card:first-of-type) { display: none !important; }
 </style>

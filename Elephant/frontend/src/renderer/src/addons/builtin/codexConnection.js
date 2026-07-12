@@ -1,5 +1,5 @@
 import CodexConnectionSettings from './ui/CodexConnectionSettings.vue'
-import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
+import { disableProviderRoutes } from './aiProviderRouteOwnership'
 import { mountSettingsComponent } from './settingsComponentHost'
 
 const ADDON_ID = 'elephant.codex-connection'
@@ -9,30 +9,6 @@ const invokeCodex = (codexOperation, payload = {}) => {
   const invoke = globalThis.window?.__TAURI__?.core?.invoke
   if (typeof invoke !== 'function') throw new Error(`Tauri command API is unavailable for Codex ${codexOperation}`)
   return invoke('tauri_rag_chat', { payload: { codexOperation, ...payload } })
-}
-
-const disableCodexRoute = async () => {
-  const config = await elephantnoteClient.ai.getConfig()
-  const chat = config?.routes?.chat || {}
-  if (chat.source !== PROVIDER_ID && chat.provider !== PROVIDER_ID && config?.transport !== PROVIDER_ID) return
-  await elephantnoteClient.ai.setConfig({
-    ...config,
-    provider: 'disabled',
-    transport: 'disabled',
-    endpoint: '',
-    model: '',
-    routes: {
-      ...(config.routes || {}),
-      chat: {
-        ...chat,
-        source: 'disabled',
-        provider: 'disabled',
-        transport: 'disabled',
-        endpoint: '',
-        model: ''
-      }
-    }
-  })
 }
 
 export const codexConnectionAddon = {
@@ -78,6 +54,6 @@ export const codexConnectionAddon = {
   },
 
   async deactivate() {
-    await disableCodexRoute().catch(() => {})
+    await disableProviderRoutes(PROVIDER_ID, { capabilities: ['chat'] }).catch(() => {})
   }
 }

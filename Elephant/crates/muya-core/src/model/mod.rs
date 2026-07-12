@@ -6,7 +6,7 @@ mod node_id;
 mod source_range;
 
 pub use block::{Alignment, BlockKind, ListKind};
-pub use document::Document;
+pub use document::{DetachedSubtree, Document};
 pub use inline::InlineKind;
 pub use node::{Node, NodeKind};
 pub use node_id::NodeId;

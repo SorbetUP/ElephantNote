@@ -112,7 +112,7 @@ const tableToolbar = ContentState => {
           'muya-table-picker',
           { row, column },
           reference,
-          ((nextRow, nextColumn) => resizeTable(this, table, nextRow, nextColumn)).bind(this)
+          (nextRow, nextColumn) => resizeTable(this, table, nextRow, nextColumn)
         )
       }
     }

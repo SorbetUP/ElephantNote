@@ -59,13 +59,15 @@ describe('Muya Rust programmatic render guard', () => {
 describe('Muya Rust asynchronous mutation gate', () => {
   it('suppresses the stale synchronous Muya dispatch until Rust and rendering finish', async() => {
     const dispatch = vi.fn((value) => value)
+    const onSuppressed = vi.fn()
     let release
-    const gate = createRustAsyncMutationGate({ dispatch })
+    const gate = createRustAsyncMutationGate({ dispatch, onSuppressed })
     const operation = gate.enqueue(() => new Promise((resolve) => { release = resolve }))
 
     expect(gate.pending).toBe(1)
     expect(gate.dispatch('stale')).toBeUndefined()
     expect(dispatch).not.toHaveBeenCalled()
+    expect(onSuppressed).toHaveBeenCalledWith('stale')
 
     release('done')
     await expect(operation).resolves.toBe('done')
@@ -73,6 +75,26 @@ describe('Muya Rust asynchronous mutation gate', () => {
     expect(gate.pending).toBe(0)
     expect(gate.dispatch('fresh')).toBe('fresh')
     expect(dispatch).toHaveBeenCalledOnce()
+  })
+
+  it('consumes a programmatic render slot when its deferred dispatch is coalesced', async() => {
+    const guard = createProgrammaticChangeGuard()
+    guard.run(() => undefined)
+    expect(guard.pending).toBe(1)
+
+    let release
+    const gate = createRustAsyncMutationGate({
+      dispatch: vi.fn(),
+      onSuppressed: () => guard.consume()
+    })
+    const operation = gate.enqueue(() => new Promise((resolve) => { release = resolve }))
+
+    gate.dispatch()
+    expect(guard.pending).toBe(0)
+
+    release()
+    await operation
+    expect(gate.pending).toBe(0)
   })
 
   it('runs rapid editor commands strictly in order', async() => {

@@ -4,19 +4,11 @@
     <p>The addon may have been disabled, removed or uninstalled.</p>
     <button type="button" @click="emit('close')">Back to notes</button>
   </div>
-  <calendar-addon-workspace
-    v-else-if="view.contribution.kind === 'calendar-v1'"
+  <component
+    :is="view.contribution.component"
+    v-else-if="view.contribution.component"
     :view="view"
     @close="emit('close')"
-  />
-  <wiki-view
-    v-else-if="view.contribution.kind === 'ai-wiki-v1'"
-  />
-  <atomic-graph-view
-    v-else-if="view.contribution.kind === 'ai-graph-v1'"
-  />
-  <models-view
-    v-else-if="view.contribution.kind === 'ai-models-v1'"
   />
   <addon-workspace-host
     v-else-if="view.contribution.kind === 'task-manager-v1'"
@@ -25,7 +17,7 @@
   />
   <div v-else class="en-addon-router-empty">
     <h2>Unsupported addon view</h2>
-    <p>ElephantNote does not support <code>{{ view.contribution.kind }}</code>.</p>
+    <p>The enabled addon did not provide a workspace component for <code>{{ view.contribution.kind || view.contribution.id }}</code>.</p>
     <button type="button" @click="emit('close')">Back to notes</button>
   </div>
 </template>
@@ -34,10 +26,6 @@
 import { computed } from 'vue'
 import { useAddonsStore } from '@/store/addons'
 import AddonWorkspaceHost from './AddonWorkspaceHost.vue'
-import AtomicGraphView from './AtomicGraphView.vue'
-import CalendarAddonWorkspace from './CalendarAddonWorkspace.vue'
-import ModelsView from './ModelsView.vue'
-import WikiView from './WikiView.vue'
 
 const props = defineProps({ viewId: { type: String, required: true } })
 const emit = defineEmits(['close'])

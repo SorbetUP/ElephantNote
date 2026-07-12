@@ -1,0 +1,28 @@
+name: Validate Wiki graph fix once
+
+on:
+  pull_request:
+    branches:
+      - feature/wiki-knowledge-continuation
+    types: [opened, synchronize]
+
+jobs:
+  validate:
+    if: github.head_ref == 'assistant/wiki-links-graph-integration'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Wiki graph regression test
+        run: Elephant/node_modules/.bin/vitest run tests/app/unit/wikiGraphSurface.spec.js
+      - name: Wiki graph lint
+        run: Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/components/views/GraphView.vue tests/app/unit/wikiGraphSurface.spec.js
+      - name: Web build
+        run: pnpm tauri:web:build

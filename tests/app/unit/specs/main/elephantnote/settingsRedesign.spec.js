@@ -87,17 +87,20 @@ describe('ElephantNote settings redesign', () => {
     expect(row).toContain('role="switch"')
   })
 
-  it('keeps Theme and the vertical icon bar collapsible without redundant copy', () => {
+  it('keeps Theme and the complete vertical icon bar collapsible without redundant copy', () => {
     const source = settings()
     const organizer = read('Elephant/frontend/app/components/settings/IconRailLayoutSettings.vue')
 
     expect(source).toContain('themeExpanded = !themeExpanded')
     expect(source).not.toContain('Choose the visual family used throughout ElephantNote.')
     expect(source).not.toContain('Reorder or hide native features and enabled addon workspaces.')
-    expect(organizer).toContain('collapsed = !collapsed')
+    expect(organizer).toContain('@click="toggleCollapsed"')
     expect(organizer).toContain('addDivider')
     expect(organizer).toContain('removeDivider(item.id)')
     expect(organizer).toContain('resetLayout')
+    expect(organizer).toContain('vault: Vault')
+    expect(organizer).toContain("'sidebar-toggle': PanelLeft")
+    expect(organizer).toContain('en-rail-layout-icon-preview')
   })
 
   it('keeps editor preferences semantic and persistent', () => {

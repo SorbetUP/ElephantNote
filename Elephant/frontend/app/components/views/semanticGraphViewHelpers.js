@@ -48,6 +48,82 @@ const VISIBLE_KNOWLEDGE_EDGE_TYPES = new Set([
   'wiki-source',
   'wiki-link'
 ])
+const WIKI_LAYOUT_EDGE_TYPES = new Set(['wiki-source', 'wiki-link'])
+
+const stableLayoutHash = (value = '') => {
+  let hash = 2166136261
+  for (const character of String(value)) {
+    hash ^= character.charCodeAt(0)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
+
+const applyWikiKnowledgeLayout = ({ nodes = [], edges = [], width = 1800, height = 1200 } = {}) => {
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const wikiNodes = nodes.filter((node) => (node.kind || node.type) === 'wiki')
+  if (!wikiNodes.length) return nodes
+
+  const sourceIdsByWiki = new Map(wikiNodes.map((node) => [node.id, []]))
+  const boundIds = new Set(wikiNodes.map((node) => node.id))
+  for (const edge of edges) {
+    if (edge.type !== 'wiki-source') continue
+    const sourceNode = byId.get(edge.source)
+    const targetNode = byId.get(edge.target)
+    const wikiId = (sourceNode?.kind || sourceNode?.type) === 'wiki'
+      ? edge.source
+      : (targetNode?.kind || targetNode?.type) === 'wiki' ? edge.target : ''
+    const noteId = wikiId === edge.source ? edge.target : edge.source
+    if (!wikiId || !byId.has(noteId)) continue
+    sourceIdsByWiki.get(wikiId)?.push(noteId)
+    boundIds.add(noteId)
+  }
+
+  const positions = new Map(nodes.map((node) => [node.id, { x: node.x, y: node.y }]))
+  if (wikiNodes.length === 1) {
+    positions.set(wikiNodes[0].id, { x: width / 2, y: height / 2 })
+  }
+
+  const proposed = new Map()
+  for (const wiki of wikiNodes.sort((left, right) => String(left.id).localeCompare(String(right.id)))) {
+    const center = positions.get(wiki.id) || { x: width / 2, y: height / 2 }
+    const sourceIds = [...new Set(sourceIdsByWiki.get(wiki.id) || [])]
+      .sort((left, right) => String(byId.get(left)?.title || left).localeCompare(String(byId.get(right)?.title || right)))
+    const perRing = 12
+    sourceIds.forEach((id, index) => {
+      const ring = Math.floor(index / perRing)
+      const ringItems = Math.min(perRing, sourceIds.length - ring * perRing)
+      const angle = -Math.PI / 2 + (Math.PI * 2 * (index % perRing)) / Math.max(1, ringItems)
+      const radius = 78 + ring * 42
+      const target = { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius }
+      if (!proposed.has(id)) proposed.set(id, [])
+      proposed.get(id).push(target)
+    })
+
+    const protectedRadius = 150 + Math.max(0, Math.ceil(sourceIds.length / perRing) - 1) * 42
+    for (const node of nodes) {
+      if (boundIds.has(node.id)) continue
+      const point = positions.get(node.id)
+      if (!point) continue
+      const dx = point.x - center.x
+      const dy = point.y - center.y
+      const distance = Math.hypot(dx, dy)
+      if (distance >= protectedRadius) continue
+      const angle = distance > 1
+        ? Math.atan2(dy, dx)
+        : ((stableLayoutHash(node.id) % 360) / 180) * Math.PI
+      const radius = protectedRadius + 18 + (stableLayoutHash(node.id) % 46)
+      positions.set(node.id, { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius })
+    }
+  }
+
+  for (const [id, targets] of proposed.entries()) {
+    const point = targets.reduce((output, target) => ({ x: output.x + target.x, y: output.y + target.y }), { x: 0, y: 0 })
+    positions.set(id, { x: point.x / targets.length, y: point.y / targets.length })
+  }
+
+  return nodes.map((node) => ({ ...node, ...(positions.get(node.id) || {}) }))
+}
 
 export const selectSemanticGraphSource = ({
   inspectionGraph = null,
@@ -197,10 +273,11 @@ const buildSemanticViewModelBase = ({
     }
     return String(a.title || '').localeCompare(String(b.title || ''))
   })
+  const knowledgePositionedNodes = applyWikiKnowledgeLayout({ nodes: positionedNodes, edges, width, height })
 
   const edgeCounts = new Map()
   const atomCluster = new Map()
-  for (const node of positionedNodes) {
+  for (const node of knowledgePositionedNodes) {
     atomCluster.set(node.id, node.clusterId)
   }
 
@@ -210,7 +287,7 @@ const buildSemanticViewModelBase = ({
   }
 
   return {
-    nodes: positionedNodes,
+    nodes: knowledgePositionedNodes,
     edges,
     clusters,
     edgeCounts,
@@ -240,12 +317,18 @@ export const buildSemanticViewModel = ({
   }
 
   const base = cached.base
+  const knowledgeBoundIds = new Set(
+    base.edges
+      .filter((edge) => WIKI_LAYOUT_EDGE_TYPES.has(edge.type))
+      .flatMap((edge) => [edge.source, edge.target])
+  )
   const hasSavedPositions = savedPositions && Object.keys(savedPositions).length > 0
   if (!hasSavedPositions) return base
 
   return {
     ...base,
     nodes: base.nodes.map((node) => {
+      if (knowledgeBoundIds.has(node.id)) return node
       const saved = savedPositions[node.id]
       if (!saved) return node
       const x = Number.isFinite(saved.x) ? saved.x : node.x

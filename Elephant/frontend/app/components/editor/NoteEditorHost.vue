@@ -22,7 +22,10 @@
       />
 
       <div class="en-note-editor-shell">
-        <div class="en-editor-host">
+        <div
+          class="en-editor-host"
+          @click.capture="handleEditorLinkClick"
+        >
           <editor-with-tabs
             :markdown="visibleMarkdown"
             :cursor="cursor"
@@ -89,6 +92,7 @@ import {
   toEditorMarkdown
 } from '../../utils/noteDocument'
 import { parseMarkdownTags, updateMarkdownTags } from '../../utils/markdownTags'
+import { handleEditorInternalLinkClick } from './internalNoteLinks'
 import { getOppositeThemeVariant, getThemeMode } from 'common/elephantnote/appearance'
 import { useSearchStore } from '../../stores/searchStore'
 import { resolveLocalImageSource, toMarkdownImageSource } from 'elephant-shared/imageSource'
@@ -267,6 +271,8 @@ const isPinned = computed(() => {
   const pathname = currentNoteRelativePath.value
   return !!pathname && store.pinnedNotePaths.includes(pathname)
 })
+const handleEditorLinkClick = (event) => handleEditorInternalLinkClick(event, store)
+
 const currentNoteDirectory = computed(() => {
   const pathname =
     activeNoteFile.value?.pathname || currentFile.value?.pathname || openedNoteAbsolutePath.value

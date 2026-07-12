@@ -660,6 +660,8 @@ function truncLabel (str, max) {
 function edgeColorFor (type) {
   if (type === 'semantic') return '#6d5fd3'
   if (type === 'explicit-link') return '#3b9b96'
+  if (type === 'wiki-source') return '#d98545'
+  if (type === 'wiki-link') return '#e8b15a'
   if (type === 'folder') return '#d98a3b'
   if (type === 'tag') return '#9b6cff'
   if (type === 'lexical') return '#9b6cff'
@@ -700,12 +702,13 @@ function buildGraph (data) {
     const id = node.id
     const connectivity = (edgeCounts.get(id) || 0) / maxEdges
     const clusterIdx = node.clusterIndex || 0
-    const baseSize = 3 + connectivity * 6 + (node.kind === 'folder' ? 3 : 0)
+    const isWiki = node.kind === 'wiki'
+    const baseSize = 3 + connectivity * 6 + (node.kind === 'folder' ? 3 : 0) + (isWiki ? 5 : 0)
     graph.addNode(id, {
       x: node.x,
       y: node.y,
       size: baseSize,
-      color: nodeColor(t, Math.min(1, 0.3 + connectivity), clusterIdx),
+      color: isWiki ? '#d98545' : nodeColor(t, Math.min(1, 0.3 + connectivity), clusterIdx),
       label: truncLabel(node.title, 28),
       fullLabel: node.title,
       connectivity,
@@ -1276,13 +1279,16 @@ function runForceSimulation (duration = 1500) {
         }
       }
 
-      graphInstance.forEachEdge((edge, _attrs, s, t) => {
+      graphInstance.forEachEdge((edge, attrs, s, t) => {
         const a = graphInstance.getNodeAttributes(s)
         const b = graphInstance.getNodeAttributes(t)
         const dx = b.x - a.x
         const dy = b.y - a.y
         const dist = Math.sqrt(dx * dx + dy * dy) || 1
-        const f = forceLink.value * (dist - forceLinkDistance.value) * damping
+        const knowledgeEdge = attrs.edgeType === 'wiki-source' || attrs.edgeType === 'wiki-link'
+        const desiredDistance = knowledgeEdge ? Math.min(78, forceLinkDistance.value) : forceLinkDistance.value
+        const strength = forceLink.value * (knowledgeEdge ? 2.4 : 1)
+        const f = strength * (dist - desiredDistance) * damping
         forces.get(s).fx += (dx / dist) * f
         forces.get(s).fy += (dy / dist) * f
         forces.get(t).fx -= (dx / dist) * f

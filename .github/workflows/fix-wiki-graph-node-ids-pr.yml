@@ -25,15 +25,12 @@ jobs:
           cache: pnpm
       - name: Apply graph identity patch
         run: python3 .github/scripts/fix_wiki_graph_node_ids.py
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Validate focused frontend changes
+      - name: Persist implementation
         run: |
-          Elephant/node_modules/.bin/vitest run tests/app/unit/wikiGraphSurface.spec.js
-          Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/components/views/GraphView.vue tests/app/unit/wikiGraphSurface.spec.js
-          pnpm tauri:web:build
-      - name: Commit implementation
-        run: |
+          if git diff --quiet -- Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/components/views/GraphView.vue tests/app/unit/wikiGraphSurface.spec.js; then
+            echo "Wiki graph identity patch already applied."
+            exit 0
+          fi
           git config user.name "ElephantNote Bot"
           git config user.email "actions@users.noreply.github.com"
           git add Elephant/frontend/app/components/views/semanticGraphViewHelpers.js \
@@ -41,3 +38,10 @@ jobs:
             tests/app/unit/wikiGraphSurface.spec.js
           git commit -m "Fix Wiki graph identities and navigation"
           git push origin HEAD:${{ github.head_ref }}
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate focused frontend changes
+        run: |
+          Elephant/node_modules/.bin/vitest run tests/app/unit/wikiGraphSurface.spec.js
+          Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/components/views/GraphView.vue tests/app/unit/wikiGraphSurface.spec.js
+          pnpm tauri:web:build

@@ -10,6 +10,7 @@ pub enum EditError {
   NotTextNode(NodeId),
   NonCollapsedSelection,
   CrossNodeSelection,
+  InvalidHeadingLevel(u8),
   UnsupportedStructure(NodeId),
   InvalidChildIndex { parent: NodeId, index: usize },
   InvalidUtf16Boundary { node: NodeId, offset: u32 },
@@ -25,6 +26,9 @@ impl fmt::Display for EditError {
       Self::NotTextNode(node) => write!(formatter, "node {node:?} is not an editable text node"),
       Self::NonCollapsedSelection => write!(formatter, "the command requires a collapsed selection"),
       Self::CrossNodeSelection => write!(formatter, "cross-node text selections are not supported yet"),
+      Self::InvalidHeadingLevel(level) => {
+        write!(formatter, "heading level {level} is outside the supported range 1..=6")
+      }
       Self::UnsupportedStructure(node) => {
         write!(formatter, "node {node:?} is not in a supported editable structure")
       }

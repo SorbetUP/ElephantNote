@@ -103,14 +103,31 @@ export const aiAddon = createLazyBuiltinAddon({
   manifest: {
     id: 'elephant.ai',
     name: 'AI',
-    version: '1.0.0',
-    description: 'Adds AI providers, chat, semantic search, OCR, Wiki, Graph and the local model library.',
+    version: '1.1.0',
+    description: 'Adds AI providers, chat, semantic search, OCR, Wiki and Graph. Open models are provided by a separate addon.',
     author: 'ElephantNote',
     icon: 'sparkles',
     defaultEnabled: false,
     removable: true,
-    permissions: ['ai.configure', 'ai.chat', 'ai.models', 'search.manage', 'ocr.run'],
+    permissions: ['ai.configure', 'ai.chat', 'search.manage', 'ocr.run'],
     contributes: { actions: true, sidebar: true, settings: true, views: true, layout: true }
+  }
+})
+
+export const openModelsAddon = createLazyBuiltinAddon({
+  exportName: 'openModelsAddon',
+  load: () => import('./openModels'),
+  manifest: {
+    id: 'elephant.open-models',
+    name: 'Open Models',
+    version: '1.0.0',
+    description: 'Browse, download, assign and run open GGUF models with ElephantNote local runtimes.',
+    author: 'ElephantNote',
+    icon: 'database',
+    defaultEnabled: false,
+    removable: true,
+    permissions: ['ai.models', 'ai.local-runtime'],
+    contributes: { views: true }
   }
 })
 
@@ -203,6 +220,7 @@ export const builtinAddons = [
   calendarAddon,
   sitesAddon,
   aiAddon,
+  openModelsAddon,
   syncAddon,
   codeExecutionAddon,
   excalidrawAddon,

@@ -1,22 +1,15 @@
-const { expect, test } = require('@playwright/test')
-const { launchElectron } = require('./helpers')
+const { expect, test } = require('playwright/test')
 
-test.describe('Check Launch ElephantNote', () => {
-  let app = null
-  let page = null
+test.describe('Elephant Tauri renderer', () => {
+  test('boots a non-empty application shell', async({ page }) => {
+    await page.goto('/')
 
-  test.beforeAll(async() => {
-    const { app: electronApp, page: firstPage } = await launchElectron()
-    app = electronApp
-    page = firstPage
-  })
+    await expect(page).toHaveTitle(/Elephant/i)
+    await expect(page.locator('#app')).toBeAttached()
+    await expect.poll(async() => page.locator('#app').evaluate((element) => element.childElementCount)).toBeGreaterThan(0)
 
-  test.afterAll(async() => {
-    await app.close()
-  })
-
-  test('Empty ElephantNote', async() => {
-    const title = await page.title()
-    expect(/^ElephantNote|Untitled-1 - ElephantNote$/.test(title)).toBeTruthy()
+    const body = await page.locator('body').boundingBox()
+    expect(body?.width || 0).toBeGreaterThan(600)
+    expect(body?.height || 0).toBeGreaterThan(400)
   })
 })

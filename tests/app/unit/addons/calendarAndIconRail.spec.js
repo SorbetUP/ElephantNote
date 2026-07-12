@@ -162,7 +162,7 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(sites).toContain('component: SitePreviewPanel')
   })
 
-  it('lazy-loads optional first-party addon logic and keeps Addon Packs required', () => {
+  it('lazy-loads optional first-party addon logic and keeps Addon Packs plus core Excalidraw required', () => {
     const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
     const runtime = read('Elephant/frontend/src/renderer/src/addons/index.js')
 
@@ -178,6 +178,6 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(builtins).not.toContain("import { aiAddon } from './ai'")
     expect(builtins).not.toContain("import { openModelsAddon } from './openModels'")
     expect(builtins).not.toContain("import { excalidrawAddon } from './excalidraw'")
-    expect(runtime).toContain("REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs'])")
+    expect(runtime).toContain("REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs', 'elephant.excalidraw'])")
   })
 })

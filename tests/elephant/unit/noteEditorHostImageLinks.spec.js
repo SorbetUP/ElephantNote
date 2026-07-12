@@ -1,36 +1,51 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const source = readFileSync('Elephant/frontend/app/components/editor/NoteEditorHost.vue', 'utf8')
+const read = (path) => readFileSync(path, 'utf8')
+const editor = read('Elephant/frontend/app/components/editor/NoteEditorHost.vue')
+const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/excalidraw.js')
+const overlay = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/ExcalidrawEditorOverlay.vue')
+const writingBridge = read('Elephant/frontend/src/renderer/src/platform/writingCommandBridge.js')
 
-describe('NoteEditorHost Excalidraw image link formatting', () => {
-  it('inserts Excalidraw previews through the markdown image source formatter', () => {
-    expect(source).toContain('toMarkdownImageSource')
-    expect(source).toContain('const assetMarkdownSource = (targetPath) => toMarkdownImageSource(targetPath, store.activeVault?.path || currentNoteDirectory.value)')
-    expect(source).toContain('const source = assetMarkdownSource(targetPath)')
-    expect(source).toContain('const imageMarkdown = `![${resolvedName}](${source})`')
-    expect(source).toContain("filter(Boolean).join('\\n\\n')")
+describe('addon-owned Excalidraw note integration', () => {
+  it('keeps the base note editor free of Excalidraw UI and commands', () => {
+    expect(editor).not.toContain('ExcalidrawDialog')
+    expect(editor).not.toContain('isExcalidrawOpen')
+    expect(editor).not.toContain('openExcalidrawFromImage')
+    expect(editor).not.toContain('getExcalidrawScenePath')
+    expect(editor).not.toContain("bus.on('ELEPHANT::open-excalidraw'")
+    expect(editor).not.toContain("bus.on('open-excalidraw-from-image'")
+    expect(editor).toContain("entry?.contribution?.zone === 'editor.overlay'")
+    expect(editor).toContain(':is="entry.contribution.component"')
   })
 
-  it('does not insert raw local filesystem paths for new Excalidraw previews', () => {
-    const saveExcalidrawBody = source.slice(source.indexOf('const saveExcalidraw = async'))
-    expect(saveExcalidrawBody).not.toContain('resolveLocalImageSource(targetPath')
+  it('keeps ordinary image relocation generic and delegates companion files to addons', () => {
+    expect(editor).toContain("from 'elephant-shared/hiddenAssets'")
+    expect(editor).not.toContain("from 'elephant-shared/excalidrawAssets'")
+    expect(editor).toContain('copyAddonAssetCompanions')
+    expect(editor).toContain('extension.copyAssetCompanions')
+    expect(editor).not.toContain('copied excalidraw sidecar')
+    expect(editor).not.toContain('|excalidraw)')
   })
 
-  it('opens existing image-backed drawings from their Excalidraw sidecar', () => {
-    expect(source).toContain('const openExcalidrawFromImage = async(src) => {')
-    expect(source).toContain('const imagePath = resolveLocalImageSource(src, baseDir)')
-    expect(source).toContain('const scenePath = getExcalidrawScenePath(previewPath)')
-    expect(source).toContain("await readLocalBlob(scenePath, 'application/vnd.excalidraw+json')")
-    expect(source).toContain("insertOnSave: false")
-    expect(source).toContain('excalidrawTargetPath.value = previewPath')
-    expect(source).toContain("bus.on('open-excalidraw-from-image', openExcalidrawFromImage)")
-    expect(source).toContain("bus.off('open-excalidraw-from-image', openExcalidrawFromImage)")
+  it('lets the Excalidraw addon own its overlay, writing command and image action', () => {
+    expect(addon).toContain('component: ExcalidrawEditorOverlay')
+    expect(addon).toContain("zone: 'editor.overlay'")
+    expect(addon).toContain('writingCommands: [{')
+    expect(addon).toContain("id: 'excalidraw'")
+    expect(addon).toContain('imageToolbarItems: [{')
+    expect(addon).toContain('copyAssetCompanions: copyDrawingSidecar')
+    expect(overlay).toContain('<ExcalidrawDialog')
+    expect(overlay).toContain('const openFromImage = async')
+    expect(overlay).toContain('const save = async')
+    expect(overlay).toContain("bus.on('ELEPHANT::open-excalidraw', open)")
+    expect(overlay).toContain("bus.on('open-excalidraw-from-image', openFromImage)")
   })
 
-  it('writes edited drawings back to the resolved .assets preview path', () => {
-    expect(source).toContain('const targetPath = await targetAssetPath(resolvedName)')
-    expect(source).toContain('const scenePath = getExcalidrawScenePath(targetPath)')
-    expect(source).toContain('excalidrawTargetPath.value = targetPath')
+  it('removes the hardcoded Excalidraw case from the core writing bridge', () => {
+    expect(writingBridge).toContain('addonWritingCommands')
+    expect(writingBridge).toContain("manager.getContributions('editor.extensions')")
+    expect(writingBridge).not.toContain("case 'excalidraw':")
+    expect(writingBridge).not.toContain('openExcalidraw')
   })
 })

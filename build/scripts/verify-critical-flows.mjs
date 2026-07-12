@@ -361,15 +361,21 @@ ordered(
 ordered(
   'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
   [
-    'const CHAT_REBUILD_COOLDOWN_MS',
-    'const searchVaultInitializedForChat',
-    'const shouldRebuildChatSearch',
+    'const normalizeRagChatPayload',
+    'const callRagChat',
     'notes: {',
     'read: (relativePath) =>',
     'call(API.NOTES_READ',
-    'write: (payload = {}) => call(API.NOTES_WRITE, payload)'
+    'write: (payload = {}) => call(API.NOTES_WRITE, payload)',
+    'rag: {',
+    'chat: (payload, limit = 6) => callRagChat(call, payload, limit)'
   ],
-  'front client note methods and chat search throttling'
+  'front client note methods and explicit chat search lifecycle'
+)
+lacks(
+  'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
+  'shouldRebuildChatSearch',
+  'implicit chat-triggered search rebuild logic'
 )
 has(
   'tests/app/unit/elephantnote/domainClients.spec.js',

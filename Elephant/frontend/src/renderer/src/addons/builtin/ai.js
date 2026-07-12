@@ -7,7 +7,7 @@ export const aiAddon = {
   manifest: {
     id: ADDON_ID,
     name: 'AI',
-    version: '2.1.0',
+    version: '2.0.0',
     description: 'Configures AI providers and owns the optional Chat, Search, OCR, Wiki and Graph modules.',
     author: 'ElephantNote',
     icon: 'sparkles',

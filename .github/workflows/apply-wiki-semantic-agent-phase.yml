@@ -33,7 +33,11 @@ jobs:
       - name: Apply validation fixes and format
         run: |
           python3 .github/scripts/fix_semantic_validation.py
-          python3 .github/scripts/fix_tauri_semantic_send.py
+          if grep -q 'serde_json::Error::custom' Elephant/backend/tauri/src/knowledge_wiki_discovery.rs; then
+            python3 .github/scripts/fix_tauri_semantic_send.py
+          else
+            echo "Async Send fixes already present."
+          fi
           cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all
           cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
       - name: Persist product changes
@@ -44,7 +48,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No product changes."
           else
-            git commit -m "Fix semantic Wiki async execution boundaries"
+            git commit -m "Align contextual Wiki migration tests"
             git push origin HEAD:${{ github.head_ref }}
           fi
       - name: Install frontend dependencies
@@ -57,23 +61,9 @@ jobs:
         run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --nocapture
       - name: Tauri check and focused tests
         run: |
-          set +e
-          {
-            cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features --message-format short &&
-            cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features knowledge_wiki -- --nocapture &&
-            cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features knowledge_chat_actions -- --nocapture
-          } > /tmp/tauri-semantic.log 2>&1
-          code=$?
-          cat /tmp/tauri-semantic.log
-          if [ "$code" -ne 0 ]; then
-            cp /tmp/tauri-semantic.log .github/tauri-semantic-validation-error.txt
-            git config user.name "ElephantNote Bot"
-            git config user.email "actions@users.noreply.github.com"
-            git add .github/tauri-semantic-validation-error.txt
-            git commit -m "chore: record Tauri semantic validation failure" || true
-            git push origin HEAD:${{ github.head_ref }}
-            exit "$code"
-          fi
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features --message-format short
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features knowledge_wiki -- --nocapture
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features knowledge_chat_actions -- --nocapture
       - name: Frontend lint and tests
         run: |
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \

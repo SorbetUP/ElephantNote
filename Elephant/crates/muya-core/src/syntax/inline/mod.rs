@@ -1,3 +1,10 @@
+pub mod code_span;
+pub mod emphasis;
+pub mod escape;
+pub mod line_break;
+pub mod link;
+pub mod text;
+
 use super::{FeatureSpec, SyntaxLayer};
 
 pub static FEATURES: &[FeatureSpec] = &[

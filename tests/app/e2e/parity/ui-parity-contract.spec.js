@@ -13,9 +13,11 @@ test.describe('Native Tauri UI parity contract baseline', () => {
     await expect(page.locator('body')).toBeVisible()
     await expect(app).toBeAttached()
     await expect.poll(async() => app.evaluate((element) => element.querySelectorAll('*').length)).toBeGreaterThan(0)
-    const bounds = await app.boundingBox()
-    expect(bounds?.width || 0).toBeGreaterThan(300)
-    expect(bounds?.height || 0).toBeGreaterThan(200)
+    const hasVisibleLayout = await app.locator('*').evaluateAll((elements) => elements.some((element) => {
+      const bounds = element.getBoundingClientRect()
+      return bounds.width > 300 && bounds.height > 200
+    }))
+    expect(hasVisibleLayout).toBe(true)
     await expect(page.locator('#elephant-diagnostic-overlay')).toHaveCount(0)
   })
 

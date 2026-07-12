@@ -14,6 +14,8 @@ export default {
   root: repoRoot,
   resolve: {
     alias: {
+      '@muya-reference-quick-insert': path.join(referenceRoot, 'lib/ui/quickInsert/config.js'),
+      '@muya-candidate-quick-insert': path.join(candidateRoot, 'lib/ui/quickInsert/config.js'),
       '@muya-reference': path.join(referenceRoot, 'lib/index.js'),
       '@muya-candidate': path.join(candidateRoot, 'lib/index.js')
     }

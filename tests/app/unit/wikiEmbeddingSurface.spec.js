@@ -15,17 +15,20 @@ describe('Wiki embedding graph surface', () => {
     expect(projection).toContain('Embedding similarity')
   })
 
-  test('uses the configured embedding provider instead of lexical labels', () => {
+  test('prefers configured embedding providers and keeps an offline vector fallback', () => {
     const runtime = read('Elephant/backend/tauri/src/knowledge_embeddings.rs')
     expect(runtime).toContain('/routes/embedding')
     expect(runtime).toContain('embed_openai_compatible')
     expect(runtime).toContain('embed_ollama')
     expect(runtime).toContain('embed_with_selected_model')
+    expect(runtime).toContain('elephantnote-feature-hash-384-v1')
+    expect(runtime).toContain('builtin_embedding')
   })
 
   test('lets embedding weights influence the Wiki territory layout', () => {
-    const graph = read('Elephant/frontend/app/components/views/AtomicGraphView.vue')
-    expect(graph).toContain("attrs.edgeType === 'wiki-semantic'")
-    expect(graph).toContain('38 + (1 - similarity) * 54')
+    const graph = read('Elephant/frontend/app/components/views/semanticGraphViewHelpers.js')
+    expect(graph).toContain("edge.type === 'wiki-semantic'")
+    expect(graph).toContain('desiredDistance')
+    expect(graph).toContain('score * 0.05')
   })
 })

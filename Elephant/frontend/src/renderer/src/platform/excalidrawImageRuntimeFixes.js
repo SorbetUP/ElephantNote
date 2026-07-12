@@ -117,17 +117,39 @@ const refreshImageSource = (img, source) => {
   if (img?.dataset?.localImageLoaded === 'true') return
   const pathname = normalizeSlashes(localSourceToPath(source))
   if (!pathname || !EXCALIDRAW_ASSET_RE.test(pathname)) return
-  if (isTransientLocalImageSource(img)) {
-    return
-  }
+  if (isTransientLocalImageSource(img)) return
   const token = `${pathname}:${cacheBustSerial}`
   if (img.getAttribute(CACHE_BUST_ATTR) === token) return
   img.setAttribute(CACHE_BUST_ATTR, token)
   img.dataset.elephantExcalidrawPath = pathname
   const nextSrc = `${pathToDisplayUrl(pathname)}?v=${cacheBustSerial}`
-  if (img.getAttribute('src') !== nextSrc) {
-    img.setAttribute('src', nextSrc)
-  }
+  if (img.getAttribute('src') !== nextSrc) img.setAttribute('src', nextSrc)
+}
+
+const ensureEditButton = (img, source) => {
+  const container = img.closest('.ag-image, .ag-image-container, .image-wrapper') || img.parentElement
+  if (!container || container.getAttribute(INSTALLED_ATTR) === 'true') return
+  container.setAttribute(INSTALLED_ATTR, 'true')
+  container.classList.add('en-excalidraw-image-container')
+  if (getComputedStyle(container).position === 'static') container.style.position = 'relative'
+  img.classList.add('en-excalidraw-image')
+  img.setAttribute('title', 'Edit Excalidraw drawing')
+
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'en-excalidraw-edit-button'
+  button.textContent = '✎ Excalidraw'
+  button.title = 'Edit Excalidraw drawing'
+  button.addEventListener('pointerdown', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+  }, true)
+  button.addEventListener('click', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    bus.emit('open-excalidraw-from-image', img.dataset.elephantExcalidrawPath || localSourceToPath(source))
+  }, true)
+  container.appendChild(button)
 }
 
 const repairFailedImageContainer = async (container) => {
@@ -155,34 +177,6 @@ const repairFailedImageContainer = async (container) => {
   return true
 }
 
-const ensureEditButton = (img, source) => {
-  const container = img.closest('.ag-image, .ag-image-container, .image-wrapper') || img.parentElement
-  if (!container || container.getAttribute(INSTALLED_ATTR) === 'true') return
-  container.setAttribute(INSTALLED_ATTR, 'true')
-  container.classList.add('en-excalidraw-image-container')
-  if (getComputedStyle(container).position === 'static') {
-    container.style.position = 'relative'
-  }
-  img.classList.add('en-excalidraw-image')
-  img.setAttribute('title', 'Edit Excalidraw drawing')
-
-  const button = document.createElement('button')
-  button.type = 'button'
-  button.className = 'en-excalidraw-edit-button'
-  button.textContent = '✎ Excalidraw'
-  button.title = 'Edit Excalidraw drawing'
-  button.addEventListener('pointerdown', (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-  }, true)
-  button.addEventListener('click', (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    bus.emit('open-excalidraw-from-image', img.dataset.elephantExcalidrawPath || localSourceToPath(source))
-  }, true)
-  container.appendChild(button)
-}
-
 const repairImage = (img) => {
   const source = imageSource(img) || img.dataset.elephantExcalidrawPath || ''
   if (!source) return false
@@ -199,9 +193,7 @@ const repairAllImages = () => {
     if (repairImage(img)) repaired += 1
   }
   const failedContainers = document.querySelectorAll('.ag-image-fail[data-image-src], .ag-image-fail[data-image-domsrc]')
-  for (const container of failedContainers) {
-    void repairFailedImageContainer(container)
-  }
+  for (const container of failedContainers) void repairFailedImageContainer(container)
   return repaired
 }
 
@@ -210,41 +202,79 @@ const refreshAllDrawings = () => {
   repairAllImages()
 }
 
-export const installExcalidrawImageRuntimeFixes = (target = globalThis) => {
-  if (!target?.document || target.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__) return false
-  target.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__ = true
+const removeInstalledUi = () => {
+  for (const button of document.querySelectorAll('.en-excalidraw-edit-button')) button.remove()
+  for (const container of document.querySelectorAll(`[${INSTALLED_ATTR}]`)) {
+    container.removeAttribute(INSTALLED_ATTR)
+    container.classList.remove('en-excalidraw-image-container')
+  }
+  for (const img of document.querySelectorAll('.en-excalidraw-image')) {
+    img.classList.remove('en-excalidraw-image')
+    img.removeAttribute('title')
+    img.removeAttribute(CACHE_BUST_ATTR)
+    delete img.dataset.elephantExcalidrawPath
+  }
+}
 
+export const installExcalidrawImageRuntimeFixes = (target = globalThis) => {
+  if (!target?.document) return { dispose() {} }
+  const existing = target.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__
+  if (existing?.dispose) return existing
+
+  let disposed = false
   const repairSoon = () => {
+    if (disposed) return
     const schedule = typeof target.requestAnimationFrame === 'function'
       ? target.requestAnimationFrame.bind(target)
       : (typeof target.setTimeout === 'function' ? target.setTimeout.bind(target) : globalThis.setTimeout.bind(globalThis))
-    schedule(() => repairAllImages())
+    schedule(() => {
+      if (!disposed) repairAllImages()
+    })
   }
   const observer = new MutationObserver((records) => {
+    if (disposed) return
     let closedDialog = false
     for (const record of records) {
       for (const node of record.removedNodes || []) {
-        if (node?.nodeType === 1 && (node.matches?.('.en-excalidraw-overlay') || node.querySelector?.('.en-excalidraw-overlay'))) {
-          closedDialog = true
-        }
+        if (node?.nodeType === 1 && (node.matches?.('.en-excalidraw-overlay') || node.querySelector?.('.en-excalidraw-overlay'))) closedDialog = true
       }
     }
     if (closedDialog) {
       const delay = typeof target.setTimeout === 'function' ? target.setTimeout.bind(target) : globalThis.setTimeout.bind(globalThis)
-      delay(refreshAllDrawings, 80)
+      delay(() => {
+        if (!disposed) refreshAllDrawings()
+      }, 80)
       return
     }
     repairSoon()
   })
+  const handleLoad = (event) => {
+    if (!disposed && event.target?.tagName === 'IMG') repairImage(event.target)
+  }
+  const handleError = (event) => {
+    if (!disposed && event.target?.tagName === 'IMG') repairImage(event.target)
+  }
+
   observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'data-src', 'class'] })
-  document.addEventListener('load', (event) => {
-    if (event.target?.tagName === 'IMG') repairImage(event.target)
-  }, true)
-  document.addEventListener('error', (event) => {
-    if (event.target?.tagName === 'IMG') repairImage(event.target)
-  }, true)
+  document.addEventListener('load', handleLoad, true)
+  document.addEventListener('error', handleError, true)
   bus.on('invalidate-image-cache', refreshAllDrawings)
+
+  const runtime = {
+    dispose() {
+      disposed = true
+      observer.disconnect()
+      document.removeEventListener('load', handleLoad, true)
+      document.removeEventListener('error', handleError, true)
+      bus.off?.('invalidate-image-cache', refreshAllDrawings)
+      removeInstalledUi()
+      if (target.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__ === runtime) {
+        delete target.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__
+      }
+    }
+  }
+  target.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__ = runtime
   repairSoon()
   console.info('[excalidraw-image] runtime fixes installed')
-  return true
+  return runtime
 }

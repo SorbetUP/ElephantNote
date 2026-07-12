@@ -6,9 +6,9 @@ const ADDON_ID = 'elephant.ai'
 export const aiAddon = {
   manifest: {
     id: ADDON_ID,
-    name: 'AI Providers',
-    version: '2.0.0',
-    description: 'Configures external and addon-provided AI providers. Chat, search, OCR, Wiki, Graph and open models are separate addons.',
+    name: 'AI',
+    version: '2.1.0',
+    description: 'Configures AI providers and owns the optional Chat, Search, OCR, Wiki and Graph modules.',
     author: 'ElephantNote',
     icon: 'sparkles',
     defaultEnabled: false,
@@ -21,12 +21,12 @@ export const aiAddon = {
     ctx.addSettingsSection({
       id: `${ADDON_ID}.settings`,
       section: 'ai',
-      navigationLabel: 'AI Providers',
+      navigationLabel: 'AI',
       navigationIcon: 'sparkles',
       standalone: true,
       chrome: false,
-      title: 'AI Providers',
-      description: 'Configure external APIs and providers registered by other addons.',
+      title: 'AI',
+      description: 'Configure providers and the AI modules installed in ElephantNote.',
       order: 60,
       render: mountSettingsComponent(ctx, AiProvidersSettings)
     })

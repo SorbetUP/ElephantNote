@@ -9,7 +9,7 @@
       @close="emit('close-addon-view')"
     />
     <section
-      v-else-if="!hasOpenNote && store.activeWorkspaceView === 'notes'"
+      v-else-if="!hasOpenNote && showLibrary"
       class="en-library"
     >
       <library-toolbar />
@@ -37,6 +37,7 @@ import DashboardView from '../views/DashboardView.vue'
 import SigmaCanvas from '../views/SigmaCanvas.vue'
 import AddonWorkspaceRouter from '../views/AddonWorkspaceRouter.vue'
 
+const LEGACY_ADDON_WORKSPACES = new Set(['calendar', 'models', 'chat', 'wiki', 'graph'])
 const props = defineProps({
   activeAddonViewId: {
     type: String,
@@ -48,6 +49,7 @@ const store = useVaultStore()
 const addonsStore = useAddonsStore()
 const hasOpenNote = computed(() => !!store.openedNotePath)
 const activeAddonViewId = computed(() => props.activeAddonViewId)
+const showLibrary = computed(() => store.activeWorkspaceView === 'notes' || LEGACY_ADDON_WORKSPACES.has(store.activeWorkspaceView))
 const sitesAddonEnabled = computed(() => addonsStore.items.some(
   (addon) => addon.manifest.id === 'elephant.sites' && addon.enabled
 ))

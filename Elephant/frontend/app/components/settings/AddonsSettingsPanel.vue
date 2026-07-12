@@ -64,14 +64,14 @@
       <p v-if="message" class="en-addons-feedback" :class="{ error: messageIsError }">{{ message }}</p>
       <p v-if="lastError" class="en-addons-feedback error">{{ lastError }}</p>
 
-      <section v-if="filteredInstalledAddons.length || query" class="en-addons-list-section">
+      <section v-if="visibleInstalledAddons.length || query" class="en-addons-list-section">
         <header>
           <h3>Installed addons</h3>
-          <span>{{ filteredInstalledAddons.length }}</span>
+          <span>{{ visibleInstalledAddons.length }}</span>
         </header>
         <div class="en-addons-card en-addons-list">
           <addon-settings-row
-            v-for="addon in filteredInstalledAddons"
+            v-for="addon in visibleInstalledAddons"
             :key="addon.manifest.id"
             :addon="addon"
             :actions="actionsForAddon(addon.manifest.id)"
@@ -83,17 +83,17 @@
             @run-action="runAction"
             @uninstall="uninstallAddon(addon)"
           />
-          <div v-if="query && !filteredInstalledAddons.length" class="en-addons-empty">No installed addon matches this search.</div>
+          <div v-if="query && !visibleInstalledAddons.length" class="en-addons-empty">No installed addon matches this search.</div>
         </div>
       </section>
 
       <section class="en-addons-list-section">
         <header>
           <h3>Available addons</h3>
-          <span>{{ availableAddons.length }}</span>
+          <span>{{ visibleAvailableAddons.length }}</span>
         </header>
         <div class="en-addons-card en-catalog-list">
-          <article v-for="addon in availableAddons" :key="addon.id" class="en-catalog-row">
+          <article v-for="addon in visibleAvailableAddons" :key="addon.id" class="en-catalog-row">
             <span class="en-catalog-icon"><AddonIcon :name="addon.icon" /></span>
             <div class="en-catalog-copy">
               <div><strong>{{ addon.name }}</strong><small>v{{ addon.version }}</small></div>
@@ -108,7 +108,7 @@
           </article>
           <div v-if="communityAddonsEnabled && catalogLoading" class="en-addons-empty">Loading the addon catalogue…</div>
           <div v-else-if="communityAddonsEnabled && catalogError" class="en-addons-empty error"><strong>Catalogue unavailable</strong><span>{{ catalogError }}</span></div>
-          <div v-else-if="!availableAddons.length" class="en-addons-empty">{{ query ? 'No available addon matches this search.' : 'Every available addon is installed.' }}</div>
+          <div v-else-if="!visibleAvailableAddons.length" class="en-addons-empty">{{ query ? 'No available addon matches this search.' : 'Every available addon is installed.' }}</div>
         </div>
       </section>
     </template>
@@ -130,6 +130,7 @@ import { useAddonsSettings } from './useAddonsSettings'
 const PACK_SEARCH_EVENT = 'elephantnote:addon-packs-search'
 const PACK_REFRESH_EVENT = 'elephantnote:addon-packs-refresh'
 const PACK_IMPORT_EVENT = 'elephantnote:addon-packs-import'
+const CORE_ADDON_IDS = new Set(['elephant.excalidraw'])
 
 const activePage = ref('addons')
 const packQuery = ref('')
@@ -158,6 +159,11 @@ const {
   uninstallAddon,
   runAction
 } = useAddonsSettings()
+
+const visibleInstalledAddons = computed(() => filteredInstalledAddons.value
+  .filter((addon) => !CORE_ADDON_IDS.has(addon?.manifest?.id)))
+const visibleAvailableAddons = computed(() => availableAddons.value
+  .filter((addon) => !CORE_ADDON_IDS.has(addon?.id)))
 
 const activeQuery = computed({
   get: () => activePage.value === 'addons' ? query.value : packQuery.value,

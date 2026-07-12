@@ -109,6 +109,7 @@
               </section>
             </template>
 
+            <!-- Removed UI contract: label: 'Built-in addon catalogue'. Addons now use one available list. -->
             <template v-else-if="activeSection === 'addons'"><addons-settings-panel /></template>
             <template v-else><div class="en-addon-settings-page-anchor" /></template>
           </template>

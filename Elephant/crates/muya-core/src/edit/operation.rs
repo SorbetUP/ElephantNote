@@ -1,4 +1,6 @@
-use crate::model::{BlockKind, Document, InlineKind, Node, NodeId, NodeKind};
+use crate::model::{
+  BlockKind, DetachedSubtree, Document, InlineKind, Node, NodeId, NodeKind,
+};
 
 use super::EditError;
 
@@ -26,6 +28,11 @@ pub enum Operation {
     index: usize,
     node: Node,
   },
+  InsertSubtree {
+    parent: NodeId,
+    index: usize,
+    subtree: DetachedSubtree,
+  },
   RemoveNode {
     node: NodeId,
   },
@@ -48,6 +55,11 @@ impl Operation {
         index,
         node,
       } => apply_insert_node(document, *parent, *index, node),
+      Self::InsertSubtree {
+        parent,
+        index,
+        subtree,
+      } => apply_insert_subtree(document, *parent, *index, subtree),
       Self::RemoveNode { node } => apply_remove_node(document, *node),
       Self::SetBlockKind { node, kind } => apply_set_block_kind(document, *node, kind),
     }
@@ -121,30 +133,41 @@ fn apply_insert_node(
   Ok(Operation::RemoveNode { node: node.id })
 }
 
+fn apply_insert_subtree(
+  document: &mut Document,
+  parent: NodeId,
+  index: usize,
+  subtree: &DetachedSubtree,
+) -> Result<Operation, EditError> {
+  if document.node(subtree.root).is_some() {
+    return Err(EditError::NodeAlreadyExists(subtree.root));
+  }
+  let parent_node = document
+    .node(parent)
+    .ok_or(EditError::NodeNotFound(parent))?;
+  if index > parent_node.children.len() {
+    return Err(EditError::InvalidChildIndex { parent, index });
+  }
+  if !document.insert_detached_subtree(parent, index, subtree.clone()) {
+    return Err(EditError::UnsupportedStructure(subtree.root));
+  }
+  document.invalidate_source_chain(parent);
+  Ok(Operation::RemoveNode { node: subtree.root })
+}
+
 fn apply_remove_node(
   document: &mut Document,
   node_id: NodeId,
 ) -> Result<Operation, EditError> {
-  let node = document
-    .node(node_id)
-    .ok_or(EditError::NodeNotFound(node_id))?;
-  if !node.children.is_empty() {
-    return Err(EditError::NodeHasChildren(node_id));
-  }
-  let parent = node.parent.ok_or(EditError::UnsupportedStructure(node_id))?;
-  let index = document
-    .child_index(parent, node_id)
+  let (subtree, parent, index) = document
+    .remove_subtree(node_id)
     .ok_or(EditError::UnsupportedStructure(node_id))?;
-  let (removed, removed_parent, removed_index) = document
-    .remove_leaf_node(node_id)
-    .ok_or(EditError::UnsupportedStructure(node_id))?;
-  debug_assert_eq!((removed_parent, removed_index), (parent, index));
   document.invalidate_source_chain(parent);
 
-  Ok(Operation::InsertNode {
+  Ok(Operation::InsertSubtree {
     parent,
     index,
-    node: removed,
+    subtree,
   })
 }
 
@@ -255,6 +278,32 @@ mod tests {
     assert!(document.node(paragraph.id).is_none());
     insert.apply(&mut document).unwrap();
     assert!(document.node(paragraph.id).is_some());
+  }
+
+  #[test]
+  fn removes_and_restores_nested_subtrees() {
+    let mut document = Document::new();
+    let paragraph = document.allocate(NodeKind::Block(BlockKind::Paragraph), None);
+    document.append_child(document.root, paragraph);
+    let strong = document.allocate(NodeKind::Inline(InlineKind::Strong), None);
+    document.append_child(paragraph, strong);
+    let text = document.allocate(
+      NodeKind::Inline(InlineKind::Text {
+        value: "bold".to_string(),
+      }),
+      None,
+    );
+    document.append_child(strong, text);
+
+    let restore = Operation::RemoveNode { node: strong }
+      .apply(&mut document)
+      .unwrap();
+    assert!(document.node(strong).is_none());
+    assert!(document.node(text).is_none());
+
+    restore.apply(&mut document).unwrap();
+    assert_eq!(document.node(strong).unwrap().children, vec![text]);
+    assert_eq!(document.node(text).unwrap().parent, Some(strong));
   }
 
   #[test]

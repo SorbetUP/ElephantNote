@@ -46,7 +46,7 @@ export const excalidrawAddon = {
   manifest: {
     id: ADDON_ID,
     name: 'Excalidraw',
-    version: '1.2.0',
+    version: '1.1.0',
     description: 'Adds Excalidraw drawings, editable image embeds and drawing cleanup to notes.',
     author: 'ElephantNote',
     icon: 'excalidraw',

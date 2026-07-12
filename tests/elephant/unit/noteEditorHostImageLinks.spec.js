@@ -18,11 +18,11 @@ describe('NoteEditorHost Excalidraw image link formatting', () => {
   })
 
   it('opens existing image-backed drawings from their Excalidraw sidecar', () => {
-    expect(source).toContain('const openExcalidrawFromImage = async(src) => {')
+    expect(source).toMatch(/const openExcalidrawFromImage = async\s*\(src\)\s*=>\s*\{/)
     expect(source).toContain('const imagePath = resolveLocalImageSource(src, baseDir)')
     expect(source).toContain('const scenePath = getExcalidrawScenePath(previewPath)')
     expect(source).toContain("await readLocalBlob(scenePath, 'application/vnd.excalidraw+json')")
-    expect(source).toContain("insertOnSave: false")
+    expect(source).toContain('insertOnSave: false')
     expect(source).toContain('excalidrawTargetPath.value = previewPath')
     expect(source).toContain("bus.on('open-excalidraw-from-image', openExcalidrawFromImage)")
     expect(source).toContain("bus.off('open-excalidraw-from-image', openExcalidrawFromImage)")

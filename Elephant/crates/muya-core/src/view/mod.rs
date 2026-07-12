@@ -1,5 +1,5 @@
 use crate::edit::{Operation, Utf16Range};
-use crate::model::{BlockKind, Node, NodeId};
+use crate::model::{BlockKind, DetachedSubtree, Node, NodeId};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ViewPatch {
@@ -12,6 +12,11 @@ pub enum ViewPatch {
     parent: NodeId,
     index: usize,
     node: Node,
+  },
+  InsertSubtree {
+    parent: NodeId,
+    index: usize,
+    subtree: DetachedSubtree,
   },
   RemoveNode {
     node: NodeId,
@@ -42,6 +47,15 @@ impl ViewPatch {
         parent: *parent,
         index: *index,
         node: node.clone(),
+      },
+      Operation::InsertSubtree {
+        parent,
+        index,
+        subtree,
+      } => Self::InsertSubtree {
+        parent: *parent,
+        index: *index,
+        subtree: subtree.clone(),
       },
       Operation::RemoveNode { node } => Self::RemoveNode { node: *node },
       Operation::SetBlockKind { node, kind } => Self::SetBlockKind {

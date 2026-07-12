@@ -14,12 +14,22 @@ fn wiki_embeddings_are_missing(store: &KnowledgeStore) -> bool {
     let Ok(embeddings) = EmbeddingStore::open(store.database_path()) else {
         return true;
     };
-    let expected = embeddings
-        .wiki_source_paths()
-        .map(|paths| paths.len())
-        .unwrap_or(0);
-    let available = embeddings.status().map(|status| status.documents).unwrap_or(0);
-    expected > available
+    let Ok(paths) = embeddings.wiki_source_paths() else {
+        return true;
+    };
+    if paths.is_empty() {
+        return false;
+    }
+    let Ok(status) = embeddings.status() else {
+        return true;
+    };
+    if status.model_id.trim().is_empty() {
+        return true;
+    }
+    embeddings
+        .pending_inputs(&status.model_id, Some(&paths), 1)
+        .map(|pending| !pending.is_empty())
+        .unwrap_or(true)
 }
 
 #[tauri::command]

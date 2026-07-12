@@ -14,10 +14,6 @@
   margin-left: 0 !important;
 }
 
-.en-ai-settings .en-ai-top-actions {
-  display: none !important;
-}
-
 .en-app-logo,
 .en-app-logo img,
 .en-topstrip-logo,
@@ -61,15 +57,6 @@
 .en-library-content,
 .en-settings-content {
   min-width: 0 !important;
-}
-
-.en-graph-premium,
-.en-graph-stage,
-.en-sigma-canvas,
-.en-sigma-stage {
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
 }
 
 .editor-wrapper img[src^="local-file://"] ~ .ag-image-loading,

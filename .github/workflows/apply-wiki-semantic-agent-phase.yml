@@ -25,6 +25,10 @@ jobs:
           cache: pnpm
       - name: Apply product patch
         run: |
+          if [ -f Elephant/backend/tauri/src/knowledge_wiki_discovery.rs ]; then
+            echo "Product patch already present."
+            exit 0
+          fi
           set +e
           python3 .github/scripts/run_wiki_semantic_agent_phase.py > /tmp/semantic-patch.log 2>&1
           code=$?
@@ -48,9 +52,9 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add Elephant/backend Elephant/frontend tests
           if git diff --cached --quiet; then
-            echo "Product patch already present."
+            echo "No formatted product changes."
           else
-            git commit -m "Implement semantic Wiki discovery and agent actions"
+            git commit -m "Format semantic Wiki discovery and agent actions"
             git push origin HEAD:${{ github.head_ref }}
           fi
       - name: Install frontend dependencies
@@ -60,7 +64,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
       - name: Knowledge core tests
-        run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --nocapture
+        run: |
+          set +e
+          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --nocapture > /tmp/knowledge-core.log 2>&1
+          code=$?
+          cat /tmp/knowledge-core.log
+          if [ "$code" -ne 0 ]; then
+            cp /tmp/knowledge-core.log .github/semantic-validation-error.txt
+            git config user.name "ElephantNote Bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add .github/semantic-validation-error.txt
+            git commit -m "chore: record semantic validation failure" || true
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$code"
+          fi
       - name: Tauri check and focused tests
         run: |
           cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features --message-format short

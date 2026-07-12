@@ -1,7 +1,6 @@
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vitest/config'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const referenceRoot = process.env.MUYA_REFERENCE_ROOT
@@ -11,7 +10,7 @@ if (!referenceRoot) {
   throw new Error('MUYA_REFERENCE_ROOT is required for characterization tests.')
 }
 
-export default defineConfig({
+export default {
   root: repoRoot,
   resolve: {
     alias: {
@@ -34,4 +33,4 @@ export default defineConfig({
     hookTimeout: 120000,
     reporters: ['default']
   }
-})
+}

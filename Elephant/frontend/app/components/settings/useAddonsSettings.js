@@ -6,11 +6,16 @@ import { getAddonActions } from '@/addons'
 import { isTrustedAddonManifest } from '@/addons/manifest'
 import { useAddonsStore } from '@/store/addons'
 
+const INTERNAL_ADDON_IDS = new Set(['elephant.addon-packs'])
+
 const persistExternalAddonState = async (addonId, enabled) => {
   const invoke = globalThis?.__TAURI__?.core?.invoke
   if (typeof invoke !== 'function') throw new Error('Tauri addon registry is unavailable')
   return invoke('tauri_addons_set_enabled', { addonId, enabled: enabled === true })
 }
+
+const addonName = (addon) => String(addon?.manifest?.name || addon?.name || addon?.id || '')
+const sortByName = (left, right) => addonName(left).localeCompare(addonName(right))
 
 export const useAddonsSettings = () => {
   const addonsStore = useAddonsStore()
@@ -33,10 +38,8 @@ export const useAddonsSettings = () => {
   } = storeToRefs(addonsStore)
 
   const actions = computed(() => getAddonActions(contributions.value))
-  const builtInAddons = computed(() => items.value.filter((addon) => addon.manifest.source !== 'external'))
   const externalAddons = computed(() => items.value.filter((addon) => addon.manifest.source === 'external'))
   const builtInCatalog = computed(() => addonsStore.manager?.listBuiltinCatalog?.() || [])
-  const addonPacksEnabled = computed(() => items.value.some((addon) => addon.manifest.id === 'elephant.addon-packs' && addon.enabled))
   const normalizedQuery = computed(() => query.value.toLocaleLowerCase())
   const matchesQuery = (addon) => {
     if (!normalizedQuery.value) return true
@@ -45,23 +48,43 @@ export const useAddonsSettings = () => {
       .toLocaleLowerCase()
       .includes(normalizedQuery.value)
   }
-  const filteredBuiltInAddons = computed(() => builtInAddons.value.filter(matchesQuery))
-  const filteredExternalAddons = computed(() => externalAddons.value.filter(matchesQuery))
-  const availableBuiltInAddons = computed(() => builtInCatalog.value
-    .filter((entry) => !entry.installed)
-    .map((entry) => entry.manifest)
-    .filter(matchesQuery))
-  const availableCatalogAddons = computed(() => catalog.value
-    .map((entry) => {
+
+  const filteredInstalledAddons = computed(() => items.value
+    .filter((addon) => !INTERNAL_ADDON_IDS.has(addon.manifest.id))
+    .filter(matchesQuery)
+    .sort(sortByName))
+
+  const availableAddons = computed(() => {
+    const available = new Map()
+
+    for (const entry of builtInCatalog.value) {
+      const manifest = entry?.manifest
+      if (!manifest?.id || entry.installed || INTERNAL_ADDON_IDS.has(manifest.id)) continue
+      available.set(manifest.id, {
+        ...manifest,
+        installSource: 'builtin',
+        installed: false,
+        updateAvailable: false
+      })
+    }
+
+    for (const entry of catalog.value) {
+      if (!entry?.id || INTERNAL_ADDON_IDS.has(entry.id) || available.has(entry.id)) continue
       const installed = items.value.find((addon) => addon.manifest.id === entry.id)
-      return {
+      const updateAvailable = Boolean(installed && installed.manifest.version !== entry.version)
+      if (installed && !updateAvailable) continue
+      available.set(entry.id, {
         ...entry,
+        installSource: 'catalog',
         installed: Boolean(installed),
         installedVersion: installed?.manifest?.version || '',
-        updateAvailable: Boolean(installed && installed.manifest.version !== entry.version)
-      }
-    })
-    .filter(matchesQuery))
+        updateAvailable
+      })
+    }
+
+    return [...available.values()].filter(matchesQuery).sort(sortByName)
+  })
+
   const actionsForAddon = (addonId) => actions.value.filter((action) => action.addonId === addonId)
 
   const showMessage = (text, error = false) => {
@@ -151,6 +174,15 @@ export const useAddonsSettings = () => {
     }
   }
 
+  const installAvailableAddon = async (addon) => {
+    if (addon?.installSource === 'builtin') return installBuiltinAddon(addon)
+    if (!communityAddonsEnabled.value) {
+      showMessage('Turn on community addons before installing this package.', true)
+      return
+    }
+    return installCatalogAddon(addon)
+  }
+
   const toggleAddon = async (addon) => {
     const nextEnabled = !addon.enabled
     try {
@@ -181,7 +213,7 @@ export const useAddonsSettings = () => {
         operationInProgress.value = true
         await addonsStore.manager.uninstallBuiltin(addon.manifest.id)
         addonsStore.refresh()
-        showMessage(`Removed ${addon.manifest.name}. You can install it again from the built-in catalogue.`)
+        showMessage(`Removed ${addon.manifest.name}. You can install it again from the addon list.`)
       }
       if (expandedAddonId.value === addon.manifest.id) expandedAddonId.value = ''
     } catch (error) {
@@ -210,7 +242,7 @@ export const useAddonsSettings = () => {
     }
     log.info('[settings:addons] mounted', {
       registered: items.value.map((addon) => addon.manifest.id),
-      availableBuiltins: availableBuiltInAddons.value.map((addon) => addon.id),
+      available: availableAddons.value.map((addon) => addon.id),
       enabled: items.value.filter((addon) => addon.enabled).map((addon) => addon.manifest.id),
       communityEnabled: communityAddonsEnabled.value
     })
@@ -228,19 +260,15 @@ export const useAddonsSettings = () => {
     communityConsentLoaded,
     operationInProgress,
     lastError,
-    addonPacksEnabled,
-    filteredBuiltInAddons,
-    filteredExternalAddons,
-    availableBuiltInAddons,
-    availableCatalogAddons,
+    filteredInstalledAddons,
+    availableAddons,
     actionsForAddon,
     toggleDetails,
     refreshCatalog,
     enableCommunityAddons,
     disableCommunityAddons,
-    installBuiltinAddon,
+    installAvailableAddon,
     installAddonPackage,
-    installCatalogAddon,
     toggleAddon,
     uninstallAddon,
     runAction

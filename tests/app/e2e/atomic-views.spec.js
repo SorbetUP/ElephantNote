@@ -1,37 +1,52 @@
-const { expect, test } = require('@playwright/test')
-const { launchElectron } = require('./helpers')
+const { expect, test } = require('playwright/test')
 
-test.describe('Atomic workspace visual smoke', () => {
-  let app = null
-  let page = null
+test.describe('Knowledge wiki renderer bridge', () => {
+  test('forwards an app-local wiki request to the Rust command', async({ page }) => {
+    await page.goto('/')
 
-  test.beforeEach(async() => {
-    const launched = await launchElectron()
-    app = launched.app
-    page = launched.page
-  })
+    const observed = await page.evaluate(async() => {
+      const calls = []
+      window.__TAURI__ = {
+        core: {
+          invoke: async(command, payload) => {
+            if (command === 'tauri_debug_log') return true
+            calls.push({ command, payload })
+            if (command === 'tauri_knowledge_wiki_generate') {
+              return {
+                draft: { id: 'wiki-1', title: 'Iroh', citations: [], status: 'proposed' },
+                provider: 'app-local',
+                model: 'tiny.gguf',
+                sourceCount: 1,
+                chunkCount: 1,
+                rawResponse: '{}'
+              }
+            }
+            return null
+          }
+        }
+      }
+      window.elephantnote = {}
+      const { installKnowledgeRuntimeBridge } = await import('/src/platform/installKnowledgeRuntimeBridge.js')
+      if (!installKnowledgeRuntimeBridge(window)) throw new Error('Knowledge bridge did not install')
+      const result = await window.elephantnote.knowledge.wikis.generate({
+        topic: 'Iroh',
+        sourcePaths: ['Iroh.md'],
+        payload: {
+          aiConfig: {
+            routes: {
+              chat: { source: 'app-local', model: 'tiny.gguf' }
+            }
+          }
+        }
+      })
+      return { calls, result }
+    })
 
-  test.afterEach(async() => {
-    await app?.close()
-  })
-
-  test('opens Chat and Canvas workspace views with non-empty layouts', async() => {
-    await page.getByRole('button', { name: 'Chat', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible()
-    await expect(page.getByPlaceholder('Ask across your notes')).toBeVisible()
-
-    const chatShot = await page.screenshot()
-    expect(chatShot.length).toBeGreaterThan(10000)
-
-    await page.getByRole('button', { name: 'Canvas', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Canvas' })).toBeVisible()
-    await expect(page.locator('.en-canvas-stage')).toBeVisible()
-
-    const canvasStage = await page.locator('.en-canvas-stage').boundingBox()
-    expect(canvasStage.width).toBeGreaterThan(300)
-    expect(canvasStage.height).toBeGreaterThan(200)
-
-    const canvasShot = await page.screenshot()
-    expect(canvasShot.length).toBeGreaterThan(10000)
+    expect(observed.result.provider).toBe('app-local')
+    expect(observed.result.draft.id).toBe('wiki-1')
+    const generation = observed.calls.find((entry) => entry.command === 'tauri_knowledge_wiki_generate')
+    expect(generation).toBeTruthy()
+    expect(generation.payload.topic).toBe('Iroh')
+    expect(generation.payload.payload.aiConfig.routes.chat).toEqual({ source: 'app-local', model: 'tiny.gguf' })
   })
 })

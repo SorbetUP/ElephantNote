@@ -35,6 +35,18 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(exists('tests/app/unit/addons/builtinAddonsQuality.spec.js')).toBe(false)
   })
 
+  it('preserves the complete sidebar styling while using addon-owned icons', () => {
+    const sidebar = read('Elephant/frontend/app/components/navigation/SidebarNav.vue')
+
+    expect(sidebar).toContain('<AddonIcon :name="entry.contribution.icon" />')
+    expect(sidebar).toContain('.en-all-notes:hover')
+    expect(sidebar).toContain('.en-addon-views {')
+    expect(sidebar).toContain('.en-tags-header {')
+    expect(sidebar).toContain('.en-tags-search-btn {')
+    expect(sidebar).toContain('.en-sidebar-main {')
+    expect(sidebar).toContain('.en-recent-notes {')
+  })
+
   it('removes Calendar from the vanilla shell and registers it as disabled addon', () => {
     const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
     const rail = read('Elephant/frontend/app/components/navigation/IconRail.vue')
@@ -88,10 +100,22 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(addon).toContain('defaultEnabled: false')
   })
 
+  it('keeps Addon Packs installed and active as required infrastructure', () => {
+    const runtime = read('Elephant/frontend/src/renderer/src/addons/index.js')
+    const row = read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
+
+    expect(runtime).toContain("REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs'])")
+    expect(runtime).toContain('return new Set([...required, ...stored])')
+    expect(runtime).toContain('if (REQUIRED_BUILTIN_ADDON_IDS.includes(id))')
+    expect(row).toContain('v-if="isRequired" class="en-addon-required"')
+    expect(row).toContain('const isRequired = computed(() => props.addon?.manifest?.removable === false)')
+  })
+
   it('removes optional AI and Sites shell elements with their addons', () => {
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
     const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
     const ai = read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
+    const renderer = read('Elephant/frontend/src/renderer/src/main.js')
     const sites = read('Elephant/frontend/src/renderer/src/addons/builtin/sites.js')
 
     expect(shell).toContain('aiAddonEnabled && store.chatSidebarOpen')
@@ -99,8 +123,19 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(main).toContain('sitesAddonEnabled && !hasOpenNote')
     expect(main).toContain("addon.manifest.id === 'elephant.sites' && addon.enabled")
     expect(ai).toContain('store.chatSidebarOpen = false')
+    expect(ai).toContain("dispatchLifecycle('elephantnote:ai-addon-enabled')")
+    expect(renderer).toContain("window.addEventListener('elephantnote:ai-addon-enabled', handleAiAddonEnabled)")
+    expect(renderer).not.toMatch(/\nvoid autostartLlamaRuntime\(\)\n/)
     expect(sites).toContain("features.set('sitePreview', false)")
     expect(sites).toContain('await previewStore.stopPreview()')
+  })
+
+  it('writes renderer images without relying on the Node Buffer global', () => {
+    const fileSystem = read('Elephant/frontend/src/renderer/src/util/fileSystem.js')
+
+    expect(fileSystem).toContain('const toBase64 = (value) =>')
+    expect(fileSystem).toContain('new Uint8Array(await image.arrayBuffer())')
+    expect(fileSystem).not.toContain('Buffer.from(')
   })
 
   it('separates addon management from real portable addon packs and persists community shutdown', () => {

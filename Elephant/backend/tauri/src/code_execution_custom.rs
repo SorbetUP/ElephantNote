@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-  collections::HashMap,
+  collections::{HashMap, VecDeque},
   fs,
   io::ErrorKind,
   path::{Path, PathBuf},
@@ -14,7 +14,7 @@ use std::{
 };
 use tauri::{AppHandle, Manager};
 use tokio::{
-  io::{AsyncReadExt, AsyncWriteExt},
+  io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
   process::Command,
   sync::{oneshot, Mutex},
   time::sleep,
@@ -27,6 +27,7 @@ pub type R<T> = Result<T, String>;
 const CUSTOM_CONFIG_FILE: &str = "code-execution-custom.json";
 const DEFAULT_TIMEOUT_MS: u64 = 15_000;
 const MAX_CODE_BYTES: usize = 256 * 1024;
+const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_CUSTOM_INTERPRETERS: usize = 64;
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static RUNNING: OnceLock<Mutex<HashMap<String, oneshot::Sender<()>>>> = OnceLock::new();
@@ -45,6 +46,13 @@ pub struct CustomInterpreter {
   pub enabled: bool,
   #[serde(default)]
   pub template: String,
+}
+
+#[derive(Debug, Default)]
+struct CapturedStream {
+  bytes: Vec<u8>,
+  total_bytes: usize,
+  dropped_bytes: usize,
 }
 
 fn default_enabled() -> bool {
@@ -247,11 +255,62 @@ fn canonical_working_directory(app: &AppHandle, requested: Option<String>) -> R<
   Ok(candidate)
 }
 
-fn retain_tail(text: String, line_limit: usize) -> (String, usize, bool) {
-  let lines = text.lines().map(str::to_string).collect::<Vec<_>>();
-  let dropped = lines.len().saturating_sub(line_limit);
-  let retained = lines.into_iter().skip(dropped).collect::<Vec<_>>().join("\n");
-  (retained, dropped, dropped > 0)
+async fn capture_stream<Rd>(
+  mut reader: Rd,
+  request_id: String,
+  stream: &'static str,
+) -> R<CapturedStream>
+where
+  Rd: AsyncRead + Unpin,
+{
+  let mut tail = VecDeque::with_capacity(MAX_OUTPUT_BYTES);
+  let mut total_bytes = 0usize;
+  let mut dropped_bytes = 0usize;
+  let mut buffer = vec![0u8; 16 * 1024];
+  code_log("custom:stream:start", &request_id, format!("stream={stream}"));
+
+  loop {
+    let read = reader
+      .read(&mut buffer)
+      .await
+      .map_err(|error| format!("Unable to read custom interpreter {stream}: {error}"))?;
+    if read == 0 {
+      break;
+    }
+    total_bytes = total_bytes.saturating_add(read);
+    for byte in &buffer[..read] {
+      if tail.len() == MAX_OUTPUT_BYTES {
+        tail.pop_front();
+        dropped_bytes = dropped_bytes.saturating_add(1);
+      }
+      tail.push_back(*byte);
+    }
+  }
+
+  let bytes = tail.into_iter().collect::<Vec<_>>();
+  code_log(
+    "custom:stream:complete",
+    &request_id,
+    format!(
+      "stream={stream} total_bytes={total_bytes} retained_bytes={} dropped_bytes={dropped_bytes}",
+      bytes.len()
+    ),
+  );
+  Ok(CapturedStream {
+    bytes,
+    total_bytes,
+    dropped_bytes,
+  })
+}
+
+fn retain_tail(capture: CapturedStream, line_limit: usize) -> (String, usize, usize, bool) {
+  let text = String::from_utf8_lossy(&capture.bytes).to_string();
+  let lines = text.split_inclusive('\n').collect::<Vec<_>>();
+  let dropped_lines = lines.len().saturating_sub(line_limit);
+  let retained = lines.into_iter().skip(dropped_lines).collect::<String>();
+  let dropped_bytes = capture.dropped_bytes;
+  let truncated = dropped_bytes > 0 || dropped_lines > 0;
+  (retained, dropped_lines, dropped_bytes, truncated)
 }
 
 pub async fn stop(execution_id: &str) -> bool {
@@ -304,23 +363,15 @@ pub async fn run(
     .map_err(|error| format!("Unable to start {}: {error}", executable.display()))?;
 
   let mut stdin = child.stdin.take().ok_or_else(|| "Unable to open interpreter stdin.".to_string())?;
-  let mut stdout = child.stdout.take().ok_or_else(|| "Unable to capture interpreter stdout.".to_string())?;
-  let mut stderr = child.stderr.take().ok_or_else(|| "Unable to capture interpreter stderr.".to_string())?;
+  let stdout = child.stdout.take().ok_or_else(|| "Unable to capture interpreter stdout.".to_string())?;
+  let stderr = child.stderr.take().ok_or_else(|| "Unable to capture interpreter stderr.".to_string())?;
   let source = command.into_bytes();
   let stdin_task = tokio::spawn(async move {
     stdin.write_all(&source).await.map_err(|error| error.to_string())?;
     stdin.shutdown().await.map_err(|error| error.to_string())
   });
-  let stdout_task = tokio::spawn(async move {
-    let mut buffer = Vec::new();
-    stdout.read_to_end(&mut buffer).await.map_err(|error| error.to_string())?;
-    Ok::<Vec<u8>, String>(buffer)
-  });
-  let stderr_task = tokio::spawn(async move {
-    let mut buffer = Vec::new();
-    stderr.read_to_end(&mut buffer).await.map_err(|error| error.to_string())?;
-    Ok::<Vec<u8>, String>(buffer)
-  });
+  let stdout_task = tokio::spawn(capture_stream(stdout, request_id.clone(), "stdout"));
+  let stderr_task = tokio::spawn(capture_stream(stderr, request_id.clone(), "stderr"));
 
   let (stop_tx, stop_rx) = oneshot::channel();
   running().lock().await.insert(execution_id.clone(), stop_tx);
@@ -340,10 +391,14 @@ pub async fn run(
   running().lock().await.remove(&execution_id);
 
   let _ = stdin_task.await;
-  let stdout_bytes = stdout_task.await.map_err(|error| error.to_string())??;
-  let stderr_bytes = stderr_task.await.map_err(|error| error.to_string())??;
-  let (mut stdout_text, stdout_dropped_lines, stdout_truncated) = retain_tail(String::from_utf8_lossy(&stdout_bytes).to_string(), output_line_limit);
-  let (stderr_retained, stderr_dropped_lines, stderr_truncated) = retain_tail(String::from_utf8_lossy(&stderr_bytes).to_string(), output_line_limit);
+  let stdout_capture = stdout_task.await.map_err(|error| error.to_string())??;
+  let stderr_capture = stderr_task.await.map_err(|error| error.to_string())??;
+  let stdout_total_bytes = stdout_capture.total_bytes;
+  let stderr_total_bytes = stderr_capture.total_bytes;
+  let (mut stdout_text, stdout_dropped_lines, stdout_dropped_bytes, stdout_truncated) =
+    retain_tail(stdout_capture, output_line_limit);
+  let (stderr_retained, stderr_dropped_lines, stderr_dropped_bytes, stderr_truncated) =
+    retain_tail(stderr_capture, output_line_limit);
   let mut stderr_text = stderr_retained;
   if outcome.1 {
     if !stderr_text.is_empty() { stderr_text.push('\n'); }
@@ -359,6 +414,14 @@ pub async fn run(
   let success = outcome.0.success() && !outcome.1 && !outcome.2;
   let exit_code = outcome.0.code();
 
+  code_log(
+    "custom:run:complete",
+    &request_id,
+    format!(
+      "execution_id={execution_id:?} success={success} stdout_total_bytes={stdout_total_bytes} stderr_total_bytes={stderr_total_bytes} stdout_dropped_bytes={stdout_dropped_bytes} stderr_dropped_bytes={stderr_dropped_bytes}"
+    ),
+  );
+
   Ok(json!({
     "runtime": "tauri-rust-custom",
     "executionId": execution_id,
@@ -373,8 +436,8 @@ pub async fn run(
     "stderrLines": stderr_lines,
     "stdoutDroppedLines": stdout_dropped_lines,
     "stderrDroppedLines": stderr_dropped_lines,
-    "stdoutDroppedBytes": 0,
-    "stderrDroppedBytes": 0,
+    "stdoutDroppedBytes": stdout_dropped_bytes,
+    "stderrDroppedBytes": stderr_dropped_bytes,
     "outputLineLimit": output_line_limit,
     "durationMs": started.elapsed().as_millis(),
     "timedOut": outcome.1,

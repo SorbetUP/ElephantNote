@@ -1,3 +1,4 @@
+pub mod options;
 pub mod renderer_tables;
 pub mod string_tools;
 pub mod table_tools;

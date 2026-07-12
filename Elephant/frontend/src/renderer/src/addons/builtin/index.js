@@ -103,9 +103,9 @@ export const aiAddon = createLazyBuiltinAddon({
   load: () => import('./ai'),
   manifest: {
     id: 'elephant.ai',
-    name: 'AI Providers',
-    version: '2.0.0',
-    description: 'Configures external and addon-provided AI providers.',
+    name: 'AI',
+    version: '2.1.0',
+    description: 'Configures AI providers and owns the optional Chat, Search, OCR, Wiki and Graph modules.',
     author: 'ElephantNote',
     icon: 'sparkles',
     defaultEnabled: false,
@@ -120,7 +120,8 @@ export const aiChatAddon = createLazyBuiltinAddon({
   load: () => import('./aiChat'),
   manifest: {
     id: 'elephant.ai-chat',
-    name: 'AI Chat',
+    parentAddonId: 'elephant.ai',
+    name: 'Chat',
     version: '1.0.0',
     description: 'Adds the AI chat sidebar and chat-route settings.',
     author: 'ElephantNote',
@@ -137,6 +138,7 @@ export const aiSearchAddon = createLazyBuiltinAddon({
   load: () => import('./aiSearch'),
   manifest: {
     id: 'elephant.ai-search',
+    parentAddonId: 'elephant.ai',
     name: 'Semantic Search',
     version: '1.0.0',
     description: 'Adds embedding configuration, semantic indexing and retrieval settings.',
@@ -154,7 +156,8 @@ export const aiOcrAddon = createLazyBuiltinAddon({
   load: () => import('./aiOcr'),
   manifest: {
     id: 'elephant.ai-ocr',
-    name: 'AI OCR',
+    parentAddonId: 'elephant.ai',
+    name: 'OCR',
     version: '1.0.0',
     description: 'Adds OCR provider and document-recognition settings.',
     author: 'ElephantNote',
@@ -171,6 +174,7 @@ export const wikiAddon = createLazyBuiltinAddon({
   load: () => import('./wiki'),
   manifest: {
     id: 'elephant.wiki',
+    parentAddonId: 'elephant.ai',
     name: 'Wiki',
     version: '1.0.0',
     description: 'Adds AI-organized Wiki pages and cluster navigation.',
@@ -188,6 +192,7 @@ export const graphAddon = createLazyBuiltinAddon({
   load: () => import('./graph'),
   manifest: {
     id: 'elephant.graph',
+    parentAddonId: 'elephant.ai',
     name: 'Graph',
     version: '1.0.0',
     description: 'Adds the note, Wiki and semantic relationship graph.',
@@ -240,8 +245,8 @@ export const codeExecutionAddon = createLazyBuiltinAddon({
   manifest: {
     id: 'elephant.code-execution',
     name: 'Code execution',
-    version: '2.0.0',
-    description: 'Runs trusted fenced code blocks with locally installed interpreters.',
+    version: '2.1.0',
+    description: 'Runs trusted fenced code blocks with selectable local interpreters.',
     author: 'ElephantNote',
     icon: 'terminal',
     defaultEnabled: false,
@@ -257,10 +262,10 @@ export const excalidrawAddon = createLazyBuiltinAddon({
   manifest: {
     id: 'elephant.excalidraw',
     name: 'Excalidraw',
-    version: '1.1.0',
+    version: '1.2.0',
     description: 'Adds Excalidraw drawings, editable image embeds and drawing cleanup to notes.',
     author: 'ElephantNote',
-    icon: 'pen-tool',
+    icon: 'excalidraw',
     defaultEnabled: false,
     removable: true,
     permissions: ['notes.read', 'notes.write', 'assets.read', 'assets.write'],

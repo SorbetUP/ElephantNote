@@ -1,5 +1,0 @@
-Traceback (most recent call last):
-  File "<stdin>", line 16, in <module>
-  File "<string>", line 804, in <module>
-  File "<string>", line 738, in replace
-SystemExit: missing marker in Elephant/backend/knowledge-core/src/wiki_graph_projection.rs: '        projection.clusters.push(KnowledgeGraphCluster {\n  id: wiki_node_id.clon'

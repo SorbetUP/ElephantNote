@@ -1,7 +1,9 @@
 import AiSearchSettings from './ui/AiSearchSettings.vue'
+import { AI_SETTINGS_PAGE_BY_ID } from './aiSettingsRegistry'
 import { mountSettingsComponent } from './settingsComponentHost'
 
 const ADDON_ID = 'elephant.ai-search'
+const SETTINGS_PAGE = AI_SETTINGS_PAGE_BY_ID.search
 
 export const aiSearchAddon = {
   manifest: {
@@ -21,11 +23,11 @@ export const aiSearchAddon = {
     ctx.addSettingsSection({
       id: `${ADDON_ID}.settings`,
       section: 'ai',
-      slot: 'ai.search',
+      slot: SETTINGS_PAGE.slot,
       chrome: false,
-      title: 'Semantic Search',
+      title: SETTINGS_PAGE.label,
       description: 'Configure embeddings, chunking and semantic retrieval.',
-      order: 62,
+      order: SETTINGS_PAGE.order,
       render: mountSettingsComponent(ctx, AiSearchSettings)
     })
   }

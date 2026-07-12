@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 
+import { createRustAsyncMutationGate } from '../../../Elephant/frontend/src/renderer/src/muya/rustAsyncMutationGate.js'
 import { createProgrammaticChangeGuard } from '../../../Elephant/frontend/src/renderer/src/muya/rustProgrammaticChangeGuard.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -53,13 +54,57 @@ describe('Muya Rust programmatic render guard', () => {
     expect(renderMethod.match(/getMuyaIndexCursor/g)).toHaveLength(1)
     expect(renderMethod).not.toContain('for (')
   })
+})
 
-  it('blocks Muya stale dispatchChange calls while an async Rust command is pending', () => {
-    const wrapper = fs.readFileSync(wrapperPath, 'utf8')
+describe('Muya Rust asynchronous mutation gate', () => {
+  it('suppresses the stale synchronous Muya dispatch until Rust and rendering finish', async() => {
+    const dispatch = vi.fn((value) => value)
+    let release
+    const gate = createRustAsyncMutationGate({ dispatch })
+    const operation = gate.enqueue(() => new Promise((resolve) => { release = resolve }))
 
-    expect(wrapper).toContain('this.__rustPendingOperationCount = 0')
-    expect(wrapper).toContain('if (this.__rustPendingOperationCount > 0) return undefined')
-    expect(wrapper).toContain('this.__rustPendingOperationCount = (this.__rustPendingOperationCount || 0) + 1')
-    expect(wrapper).toContain('this.__rustPendingOperationCount = Math.max(0, this.__rustPendingOperationCount - 1)')
+    expect(gate.pending).toBe(1)
+    expect(gate.dispatch('stale')).toBeUndefined()
+    expect(dispatch).not.toHaveBeenCalled()
+
+    release('done')
+    await expect(operation).resolves.toBe('done')
+
+    expect(gate.pending).toBe(0)
+    expect(gate.dispatch('fresh')).toBe('fresh')
+    expect(dispatch).toHaveBeenCalledOnce()
+  })
+
+  it('runs rapid editor commands strictly in order', async() => {
+    const order = []
+    let releaseFirst
+    const gate = createRustAsyncMutationGate({ dispatch: vi.fn() })
+    const first = gate.enqueue(async() => {
+      order.push('first:start')
+      await new Promise((resolve) => { releaseFirst = resolve })
+      order.push('first:end')
+    })
+    const second = gate.enqueue(async() => {
+      order.push('second:start')
+      order.push('second:end')
+    })
+
+    await vi.waitFor(() => expect(order).toEqual(['first:start']))
+    expect(gate.pending).toBe(2)
+    releaseFirst()
+    await Promise.all([first, second])
+
+    expect(order).toEqual(['first:start', 'first:end', 'second:start', 'second:end'])
+    expect(gate.pending).toBe(0)
+  })
+
+  it('does not let one rejected command poison later commands', async() => {
+    const gate = createRustAsyncMutationGate({ dispatch: vi.fn() })
+    const failed = gate.enqueue(async() => { throw new Error('broken command') })
+    const recovered = gate.enqueue(async() => 'recovered')
+
+    await expect(failed).rejects.toThrow('broken command')
+    await expect(recovered).resolves.toBe('recovered')
+    expect(gate.pending).toBe(0)
   })
 })

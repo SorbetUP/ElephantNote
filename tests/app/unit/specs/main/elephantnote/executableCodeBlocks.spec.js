@@ -144,12 +144,16 @@ describe('native executable fenced code blocks', () => {
     expect(settings).not.toContain('querySelectorAll(\'pre\')')
   })
 
-  it('keeps the public bootstrap wired only to active, separated modules', () => {
+  it('keeps the public runtime separated and starts it only from the addon', () => {
     const entry = read('Elephant/frontend/src/renderer/src/platform/executableCodeBlocks.js')
+    const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/codeExecution.js')
     const main = readMain()
 
-    expect(main).toContain("import { installExecutableCodeBlocks } from './platform/executableCodeBlocks'")
-    expect(main).toContain('installExecutableCodeBlocks()')
+    expect(main).not.toContain("import { installExecutableCodeBlocks } from './platform/executableCodeBlocks'")
+    expect(main).not.toContain('installExecutableCodeBlocks()')
+    expect(addon).toContain("import { installExecutableCodeBlocks } from '../../platform/executableCodeBlocks'")
+    expect(addon).toContain('installExecutableCodeBlocks(globalThis)')
+    expect(addon).toContain('runtime?.dispose?.()')
     expect(entry).toContain("from './executableCodeNativeRuntime'")
     expect(entry).toContain("from './executableCodeNativeLifecycle'")
     expect(entry).toContain("from './executableCodeSettings'")

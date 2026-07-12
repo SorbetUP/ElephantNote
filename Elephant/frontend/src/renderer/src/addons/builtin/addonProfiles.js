@@ -18,7 +18,9 @@ const DEVELOP_PARITY_ADDONS = Object.freeze([
   { id: 'elephant.calendar', version: '1.1.0', source: 'builtin', enabled: true },
   { id: 'elephant.sites', version: '1.0.0', source: 'builtin', enabled: true },
   { id: 'elephant.ai', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.sync', version: '1.0.0', source: 'builtin', enabled: true }
+  { id: 'elephant.sync', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.code-execution', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.excalidraw', version: '1.0.0', source: 'builtin', enabled: true }
 ])
 
 const readCommunityEnabled = async () => {
@@ -105,16 +107,28 @@ const createDevelopParityPack = () => ({
   addons: DEVELOP_PARITY_ADDONS.map((entry) => ({ ...entry }))
 })
 
+const isDevelopParityCurrent = (pack) => {
+  if (!pack || pack.addons.length !== DEVELOP_PARITY_ADDONS.length) return false
+  const entries = new Map(pack.addons.map((entry) => [entry.id, entry]))
+  return DEVELOP_PARITY_ADDONS.every((expected) => {
+    const entry = entries.get(expected.id)
+    return entry && entry.source === expected.source && entry.version === expected.version && entry.enabled === true
+  })
+}
+
 const ensureDevelopParityPack = async () => {
   try {
     const existing = await readNote(DEVELOP_PARITY_PACK_PATH)
-    validatePack(existing.content, DEVELOP_PARITY_PACK_PATH)
-    return { packPath: DEVELOP_PARITY_PACK_PATH, created: false }
+    const parsed = validatePack(existing.content, DEVELOP_PARITY_PACK_PATH)
+    if (isDevelopParityCurrent(parsed)) {
+      return { packPath: DEVELOP_PARITY_PACK_PATH, created: false, updated: false }
+    }
   } catch {
-    const pack = createDevelopParityPack()
-    await writeNote(DEVELOP_PARITY_PACK_PATH, `${JSON.stringify(pack, null, 2)}\n`)
-    return { packPath: DEVELOP_PARITY_PACK_PATH, created: true, pack }
+    // Missing, invalid or stale protected packs are regenerated below.
   }
+  const pack = createDevelopParityPack()
+  await writeNote(DEVELOP_PARITY_PACK_PATH, `${JSON.stringify(pack, null, 2)}\n`)
+  return { packPath: DEVELOP_PARITY_PACK_PATH, created: true, updated: true, pack }
 }
 
 const createPack = async (ctx, options = {}) => {

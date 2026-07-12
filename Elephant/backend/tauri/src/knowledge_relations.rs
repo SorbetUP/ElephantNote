@@ -2,6 +2,7 @@ use elephantnote_knowledge_core::{
     EmbeddingStore, KnowledgeGraph, KnowledgeNodeRef, KnowledgeRelation, KnowledgeStore,
     RelationStatus,
 };
+use serde_json::Value;
 use std::path::Path;
 use tauri::AppHandle;
 
@@ -16,19 +17,18 @@ fn desired_embedding_model(app: &AppHandle) -> String {
     let Ok(config) = crate::tauri_extra_commands::load_ai_config(app) else {
         return BUILTIN_EMBEDDING_MODEL.into();
     };
-    let route = config
-        .pointer("/routes/embedding")
-        .unwrap_or(&serde_json::Value::Null);
+    let empty_route = Value::Null;
+    let route = config.pointer("/routes/embedding").unwrap_or(&empty_route);
     let source = route
         .get("source")
         .or_else(|| route.get("provider"))
-        .and_then(serde_json::Value::as_str)
+        .and_then(Value::as_str)
         .map(str::trim)
         .unwrap_or("");
     let model = route
         .get("model")
         .or_else(|| route.get("modelId"))
-        .and_then(serde_json::Value::as_str)
+        .and_then(Value::as_str)
         .map(str::trim)
         .unwrap_or("");
     if source.is_empty() || source == "disabled" || model.is_empty() {

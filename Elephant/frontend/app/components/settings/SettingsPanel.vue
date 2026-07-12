@@ -79,11 +79,6 @@
                   </div>
                 </div>
 
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Sidebar width</strong><span>Resize the main navigation rail.</span></div>
-                  <label class="en-range-control"><input type="range" min="184" max="320" :value="sidebarWidth" @input="emit('update-sidebar-width', Number($event.target.value))"><output>{{ sidebarWidth }} px</output></label>
-                </div>
-
                 <div class="en-settings-row en-settings-row-stacked en-settings-row-compact">
                   <icon-rail-layout-settings />
                 </div>
@@ -138,13 +133,12 @@ import { useVaultStore } from '../../stores/vaultStore'
 
 const props = defineProps({
   theme: { type: String, required: true },
-  sidebarWidth: { type: Number, required: true },
   vaults: { type: Array, default: () => [] },
   activeVaultName: { type: String, default: 'No vault' },
   activeVaultPath: { type: String, default: '' },
   initialSection: { type: String, default: 'appearance' }
 })
-const emit = defineEmits(['close', 'update-theme', 'update-sidebar-width'])
+const emit = defineEmits(['close', 'update-theme'])
 
 const CORE_SECTIONS = Object.freeze([
   { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -164,7 +158,6 @@ const ICONS = Object.freeze({
 const CORE_SETTINGS_INDEX = Object.freeze([
   { id: 'appearance-mode', section: 'appearance', label: 'Color mode', description: 'Light and dark appearance.' },
   { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Apple, Graphite, Nord, Solar and Forest themes.' },
-  { id: 'appearance-sidebar', section: 'appearance', label: 'Sidebar width', description: 'Resize the main navigation rail.' },
   { id: 'appearance-icon-rail', section: 'appearance', label: 'Vertical icon bar', description: 'Reorder, hide and divide navigation icons.' },
   { id: 'editor-footer', section: 'editor', label: 'Editor footer', description: 'Word count and typography controls.' },
   { id: 'editor-tags', section: 'editor', label: 'Tag prefix', description: 'Show or hide the # before tags.' },

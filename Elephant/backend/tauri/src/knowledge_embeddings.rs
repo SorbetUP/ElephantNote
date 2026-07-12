@@ -8,6 +8,9 @@ use std::collections::HashSet;
 use std::path::Path;
 use tauri::{AppHandle, Emitter};
 
+const BUILTIN_EMBEDDING_MODEL: &str = "elephantnote-feature-hash-384-v1";
+const BUILTIN_EMBEDDING_DIMENSIONS: usize = 384;
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmbeddingRebuildReport {
@@ -70,6 +73,18 @@ fn header_map(provider: &Value) -> Result<HeaderMap, String> {
     Ok(headers)
 }
 
+fn builtin_embedding_route(config: Value) -> EmbeddingRoute {
+    EmbeddingRoute {
+        source: "builtin".into(),
+        model: BUILTIN_EMBEDDING_MODEL.into(),
+        endpoint: String::new(),
+        threshold: 0.24,
+        api_key: String::new(),
+        headers: HeaderMap::new(),
+        config,
+    }
+}
+
 fn embedding_route(app: &AppHandle) -> Result<EmbeddingRoute, String> {
     let config = crate::tauri_extra_commands::load_ai_config(app)?;
     let route = config
@@ -78,11 +93,8 @@ fn embedding_route(app: &AppHandle) -> Result<EmbeddingRoute, String> {
         .unwrap_or(Value::Null);
     let source = text(&route, &["source", "provider"]);
     let model = text(&route, &["model", "modelId"]);
-    if source.is_empty() || source == "disabled" {
-        return Err("Embedding search is disabled. Select a provider in AI > Search.".into());
-    }
-    if model.is_empty() {
-        return Err("No embedding model is selected in AI > Search.".into());
+    if source.is_empty() || source == "disabled" || model.is_empty() {
+        return Ok(builtin_embedding_route(config));
     }
     let provider = config
         .pointer("/providers/list")
@@ -232,12 +244,63 @@ async fn embed_ollama(route: &EmbeddingRoute, texts: &[String]) -> Result<Vec<Ve
     Ok(output)
 }
 
+fn stable_feature_hash(value: &str) -> usize {
+    let mut hash = 2_166_136_261u32;
+    for byte in value.as_bytes() {
+        hash ^= u32::from(*byte);
+        hash = hash.wrapping_mul(16_777_619);
+    }
+    hash as usize
+}
+
+fn builtin_embedding(text: &str) -> Vec<f32> {
+    let tokens = text
+        .split(|character: char| !character.is_alphanumeric())
+        .map(|token| token.trim().to_lowercase())
+        .filter(|token| token.chars().count() >= 2)
+        .collect::<Vec<_>>();
+    let mut vector = vec![0.0f32; BUILTIN_EMBEDDING_DIMENSIONS];
+    for (index, token) in tokens.iter().enumerate() {
+        let hash = stable_feature_hash(token);
+        let slot = hash % BUILTIN_EMBEDDING_DIMENSIONS;
+        let sign = if (hash / BUILTIN_EMBEDDING_DIMENSIONS) % 2 == 0 {
+            1.0
+        } else {
+            -1.0
+        };
+        vector[slot] += sign;
+        if let Some(next) = tokens.get(index + 1) {
+            let bigram = format!("{token}:{next}");
+            let bigram_hash = stable_feature_hash(&bigram);
+            let bigram_slot = bigram_hash % BUILTIN_EMBEDDING_DIMENSIONS;
+            let bigram_sign = if (bigram_hash / BUILTIN_EMBEDDING_DIMENSIONS) % 2 == 0 {
+                1.0
+            } else {
+                -1.0
+            };
+            vector[bigram_slot] += bigram_sign * 0.65;
+        }
+    }
+    let norm = vector
+        .iter()
+        .map(|value| value * value)
+        .sum::<f32>()
+        .sqrt();
+    if norm > 0.0 {
+        for value in &mut vector {
+            *value /= norm;
+        }
+    }
+    vector
+}
+
 async fn embed_batch(
     app: &AppHandle,
     route: &EmbeddingRoute,
     texts: &[String],
 ) -> Result<Vec<Vec<f32>>, String> {
     match route.source.as_str() {
+        "builtin" => Ok(texts.iter().map(|text| builtin_embedding(text)).collect()),
         "app-local" => {
             let mut output = Vec::with_capacity(texts.len());
             for text in texts {

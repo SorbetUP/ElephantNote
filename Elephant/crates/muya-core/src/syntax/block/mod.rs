@@ -1,7 +1,9 @@
 pub mod blockquote;
 pub mod fenced_code;
 pub mod heading;
+pub mod list;
 pub mod paragraph;
+pub mod table;
 pub mod thematic_break;
 
 use super::{FeatureSpec, SyntaxLayer};

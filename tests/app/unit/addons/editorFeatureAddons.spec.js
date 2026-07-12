@@ -28,9 +28,13 @@ describe('optional editor feature addons', () => {
     expect(bridge).toContain("const EDITOR_EXTENSION_AREA = 'editor.extensions'")
   })
 
-  it('moves Excalidraw observers and cleanup out of renderer core', () => {
+  it('keeps Excalidraw out of the base image toolbar and contributes it only while enabled', () => {
     const main = read('Elephant/frontend/src/renderer/src/main.js')
     const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/excalidraw.js')
+    const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
+    const toolbar = read('Elephant/frontend/src/muya/lib/ui/imageToolbar/index.js')
+    const toolbarConfig = read('Elephant/frontend/src/muya/lib/ui/imageToolbar/config.js')
+    const bridge = read('Elephant/frontend/src/muya/lib/parser/render/renderBlock/editorExtensionRenderBridge.js')
     const markdown = read('Elephant/frontend/src/renderer/src/platform/excalidrawMarkdownCleanup.js')
     const images = read('Elephant/frontend/src/renderer/src/platform/excalidrawImageRuntimeFixes.js')
     const fallbacks = read('Elephant/frontend/src/renderer/src/addons/addonContentFallbackRuntime.js')
@@ -38,12 +42,20 @@ describe('optional editor feature addons', () => {
 
     expect(main).not.toContain('installExcalidrawMarkdownCleanup')
     expect(main).not.toContain('installExcalidrawImageRuntimeFixes')
+    expect(toolbarConfig).not.toContain('Excalidraw')
+    expect(toolbar).not.toContain('edit-excalidraw')
+    expect(toolbar).toContain('getEditorImageToolbarItems')
+    expect(bridge).toContain('imageToolbarItems')
     expect(addon).toContain("const ADDON_ID = 'elephant.excalidraw'")
     expect(addon).toContain('defaultEnabled: false')
     expect(addon).toContain('installExcalidrawMarkdownCleanup()')
     expect(addon).toContain('installExcalidrawImageRuntimeFixes(globalThis)')
+    expect(addon).toContain('imageToolbarItems: [{')
+    expect(addon).toContain("id: 'edit-drawing'")
     expect(addon).toContain('contentTypes: [{')
     expect(addon).toContain("disabledPresentation: 'static-preview'")
+    expect(builtins).toContain("load: () => import('./excalidraw')")
+    expect(builtins).not.toContain("import { excalidrawAddon } from './excalidraw'")
     expect(markdown).toContain('unsubscribe?.()')
     expect(markdown).toContain("bus.off?.('invalidate-image-cache'")
     expect(images).toContain('observer.disconnect()')
@@ -52,6 +64,7 @@ describe('optional editor feature addons', () => {
     expect(fallbacks).toContain('collectDescriptors')
     expect(fallbacks).toContain('isCurrentFallback')
     expect(fallbacks).toContain('blockDisabledInteraction')
+    expect(fallbacks).toContain("'Optional content unavailable'")
     expect(manifest).toContain('contributes.contentTypes')
   })
 

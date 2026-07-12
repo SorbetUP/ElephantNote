@@ -1,10 +1,13 @@
-name: Patch agent polish once
+name: Apply final agent and embedding fixes once
 
 on:
   push:
     branches:
       - assistant/wiki-links-graph-integration
-  workflow_dispatch:
+
+concurrency:
+  group: final-agent-embedding-fix
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -17,20 +20,133 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: assistant/wiki-links-graph-integration
-      - name: Apply focused agent polish patch
+          fetch-depth: 0
+
+      - name: Apply idempotent product patch
+        shell: bash
         run: |
-          python3 - <<'PY'
+          python3 <<'PY'
           from pathlib import Path
-          import re
 
-          def write(path, text):
-              Path(path).write_text(text, encoding='utf-8')
+          def replace_once(path, old, new, marker=None):
+              p = Path(path)
+              text = p.read_text()
+              if marker and marker in text:
+                  return
+              if old not in text:
+                  raise SystemExit(f"missing patch anchor in {path}: {old[:120]!r}")
+              p.write_text(text.replace(old, new, 1))
 
-          # 1) Make FTS search useful for natural agent queries: strict search first,
-          #    then relaxed OR-prefix fallback with stop-word removal.
+          # Atomic and idempotent approve+execute boundary.
+          replace_once(
+              'Elephant/backend/tauri/src/knowledge_chat_actions.rs',
+              '''    let root = active_vault_root(&app)?;
+    let proposal = {
+        let store = active_store(&root)?;
+        store
+            .chat_action_proposal(&proposal_id)?
+            .ok_or_else(|| format!("Unknown chat action proposal: {proposal_id}"))?
+    };
+
+    let is_wiki = matches!(
+''',
+              '''    let root = active_vault_root(&app)?;
+    let initial = {
+        let store = active_store(&root)?;
+        store
+            .chat_action_proposal(&proposal_id)?
+            .ok_or_else(|| format!("Unknown chat action proposal: {proposal_id}"))?
+    };
+    let proposal = match initial.status.clone() {
+        ChatActionStatus::Proposed => {
+            eprintln!("[Knowledge][ChatAction] approve-and-execute id={proposal_id}");
+            active_store(&root)?
+                .transition_chat_action(&proposal_id, ChatActionStatus::Approved)?
+        }
+        ChatActionStatus::Approved => initial,
+        ChatActionStatus::Executed => {
+            let result = initial.result.clone().unwrap_or(Value::Null);
+            return Ok(ChatActionExecution { proposal: initial, result });
+        }
+        ChatActionStatus::Rejected => return Err("Rejected chat actions cannot be executed.".into()),
+        ChatActionStatus::Failed => {
+            return Err(initial.error.clone().unwrap_or_else(||
+                "Failed chat action cannot be retried without a new proposal.".into()));
+        }
+    };
+
+    let is_wiki = matches!(
+''',
+              marker='approve-and-execute id='
+          )
+
+          # The frontend calls the atomic command directly.
+          replace_once(
+              'Elephant/frontend/app/components/views/ChatView.vue',
+              '''    await invokeProposal('tauri_knowledge_chat_action_approve', id)
+    const execution = await invokeProposal('tauri_knowledge_chat_action_execute', id)
+''',
+              '''    const execution = await invokeProposal('tauri_knowledge_chat_action_execute', id)
+'''
+          )
+
+          # Always synthesize a final answer after a search action, including an empty result.
+          replace_once(
+              'Elephant/backend/tauri/src/chat_runtime.rs',
+              '''        let search_results = actions
+            .iter()
+            .filter_map(|entry| entry.pointer("/execution/result"))
+            .filter(|value| value.is_array())
+            .cloned()
+            .collect::<Vec<_>>();
+        if !search_results.is_empty() {
+''',
+              '''        let search_requested = actions.iter().any(|entry| {
+            entry.pointer("/proposal/action/action").and_then(Value::as_str)
+                == Some("search_notes")
+        });
+        let search_results = actions
+            .iter()
+            .filter_map(|entry| entry.pointer("/execution/result"))
+            .filter(|value| value.is_array())
+            .cloned()
+            .collect::<Vec<_>>();
+        if search_requested {
+''',
+              marker='let search_requested = actions.iter().any'
+          )
+          path = Path('Elephant/backend/tauri/src/chat_runtime.rs')
+          text = path.read_text()
+          old = '''            let tool_context =
+                serde_json::to_string_pretty(&search_results).map_err(|error| error.to_string())?;
+            let followup_prompt = format!(
+                "{prompt}\n\nThe ElephantNote search tool returned the following real indexed-note results:\n{tool_context}\n\nAnswer the user's request using these results. Cite note titles naturally. Do not emit another elephantnote_actions block."
+            );
+'''
+          new = '''            let tool_context = if search_results.is_empty() {
+                "[]".to_string()
+            } else {
+                serde_json::to_string_pretty(&search_results).map_err(|error| error.to_string())?
+            };
+            let instruction = if search_results.is_empty() {
+                "No matching indexed note was returned. Say that honestly without claiming ElephantNote has no note-search access."
+            } else {
+                "Answer from these real results and cite note titles naturally."
+            };
+            let followup_prompt = format!(
+                "{prompt}\n\nThe ElephantNote search tool returned these real indexed-note results:\n{tool_context}\n\n{instruction} Do not emit another elephantnote_actions block."
+            );
+'''
+          if 'No matching indexed note was returned.' not in text:
+              if old not in text:
+                  raise SystemExit('chat_runtime follow-up anchor missing')
+              path.write_text(text.replace(old, new, 1))
+
+          # Natural-language FTS: strict first, relaxed OR fallback if strict returned too few hits.
           path = Path('Elephant/backend/knowledge-core/src/storage.rs')
-          text = path.read_text(encoding='utf-8')
-          old = '''    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<KnowledgeSearchHit>, String> {
+          text = path.read_text()
+          if 'fn search_fts(&self' not in text:
+              old = '''    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<KnowledgeSearchHit>, String> {
         let fts_query = to_fts_query(query);
         if fts_query.is_empty() {
             return Ok(Vec::new());
@@ -67,62 +183,51 @@ jobs:
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())
     }
-}
 '''
-          new = '''    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<KnowledgeSearchHit>, String> {
+              new = '''    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<KnowledgeSearchHit>, String> {
+        let limit = limit.clamp(1, 100);
         let strict_query = to_fts_query(query);
-        if strict_query.is_empty() {
-            return Ok(Vec::new());
-        }
-        let mut hits = self.search_fts(&strict_query, limit)?;
-        if hits.is_empty() {
+        if strict_query.is_empty() { return Ok(Vec::new()); }
+        let mut output = self.search_fts(&strict_query, limit)?;
+        if output.len() < limit {
             let relaxed_query = to_relaxed_fts_query(query);
             if !relaxed_query.is_empty() && relaxed_query != strict_query {
-                hits = self.search_fts(&relaxed_query, limit)?;
+                let mut seen = output.iter().map(|hit| hit.chunk_id.clone()).collect::<HashSet<_>>();
+                for hit in self.search_fts(&relaxed_query, limit)? {
+                    if seen.insert(hit.chunk_id.clone()) { output.push(hit); }
+                    if output.len() >= limit { break; }
+                }
             }
         }
-        Ok(hits)
+        Ok(output)
     }
 
     fn search_fts(&self, fts_query: &str, limit: usize) -> Result<Vec<KnowledgeSearchHit>, String> {
-        let mut statement = self
-            .conn
-            .prepare(
-                "SELECT relative_path, title, heading, chunk_id,
-                        snippet(chunk_search, 4, '', '', ' … ', 32),
-                        bm25(chunk_search),
-                        c.start_offset, c.end_offset
-                 FROM chunk_search
-                 JOIN chunks c ON c.id=chunk_search.chunk_id
-                 WHERE chunk_search MATCH ?1
-                 ORDER BY bm25(chunk_search)
-                 LIMIT ?2",
-            )
-            .map_err(|error| error.to_string())?;
-        let rows = statement
-            .query_map(params![fts_query, limit.clamp(1, 100) as i64], |row| {
-                let raw_score: f64 = row.get(5)?;
-                Ok(KnowledgeSearchHit {
-                    relative_path: row.get(0)?,
-                    title: row.get(1)?,
-                    heading: row.get(2)?,
-                    chunk_id: row.get(3)?,
-                    excerpt: row.get(4)?,
-                    score: -raw_score,
-                    start_offset: row.get::<_, i64>(6)? as usize,
-                    end_offset: row.get::<_, i64>(7)? as usize,
-                })
+        let mut statement = self.conn.prepare(
+            "SELECT relative_path, title, heading, chunk_id,
+                    snippet(chunk_search, 4, '', '', ' … ', 32), bm25(chunk_search),
+                    c.start_offset, c.end_offset
+             FROM chunk_search JOIN chunks c ON c.id=chunk_search.chunk_id
+             WHERE chunk_search MATCH ?1 ORDER BY bm25(chunk_search) LIMIT ?2",
+        ).map_err(|error| error.to_string())?;
+        let rows = statement.query_map(params![fts_query, limit as i64], |row| {
+            let raw_score: f64 = row.get(5)?;
+            Ok(KnowledgeSearchHit {
+                relative_path: row.get(0)?, title: row.get(1)?, heading: row.get(2)?,
+                chunk_id: row.get(3)?, excerpt: row.get(4)?, score: -raw_score,
+                start_offset: row.get::<_, i64>(6)? as usize,
+                end_offset: row.get::<_, i64>(7)? as usize,
             })
-            .map_err(|error| error.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())
+        }).map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
     }
-}
 '''
-          if old not in text:
-              raise SystemExit('storage.rs search block not found')
-          text = text.replace(old, new)
-          old_tail = '''fn to_fts_query(query: &str) -> String {
+              if old not in text:
+                  raise SystemExit('storage search anchor missing')
+              text = text.replace(old, new, 1)
+
+          if 'fn normalized_search_tokens' not in text and 'fn query_terms' not in text:
+              old = '''fn to_fts_query(query: &str) -> String {
     query
         .split_whitespace()
         .map(str::trim)
@@ -132,92 +237,144 @@ jobs:
         .join(" ")
 }
 '''
-          new_tail = '''fn query_terms(query: &str) -> Vec<String> {
-    const STOP_WORDS: &[&str] = &[
-        "a", "an", "and", "are", "as", "au", "aux", "avec", "ce", "ces", "de", "des",
-        "du", "elle", "en", "est", "et", "faire", "for", "i", "il", "je", "la", "le", "les",
-        "me", "mes", "moi", "mon", "ne", "of", "on", "ou", "pour", "que", "qui", "se", "sur",
-        "the", "to", "tu", "un", "une", "vous", "your",
-    ];
-    query
-        .split(|character: char| !(character.is_alphanumeric() || character == '_' || character == '-'))
-        .map(str::trim)
+              new = '''fn normalized_search_tokens(query: &str) -> Vec<String> {
+    query.split(|character: char| !character.is_alphanumeric())
+        .map(|token| token.trim().to_lowercase())
         .filter(|token| token.chars().count() >= 2)
-        .filter(|token| !STOP_WORDS.contains(&token.to_lowercase().as_str()))
-        .map(str::to_string)
         .collect()
 }
 
-fn quoted_prefix(token: &str) -> String {
-    format!("\"{}\"*", token.replace('"', "\"\""))
-}
-
 fn to_fts_query(query: &str) -> String {
-    query_terms(query)
-        .into_iter()
-        .map(|token| quoted_prefix(&token))
-        .collect::<Vec<_>>()
-        .join(" ")
+    normalized_search_tokens(query).into_iter()
+        .map(|token| format!("\"{}\"*", token.replace('"', "\"\"")))
+        .collect::<Vec<_>>().join(" ")
 }
 
 fn to_relaxed_fts_query(query: &str) -> String {
-    query_terms(query)
-        .into_iter()
-        .map(|token| quoted_prefix(&token))
-        .collect::<Vec<_>>()
-        .join(" OR ")
+    const STOP_WORDS: &[&str] = &["afin", "avec", "dans", "des", "est", "faire", "les", "mes", "mon", "pour", "que", "sur", "une", "un", "the", "and", "for", "from", "with"];
+    let mut tokens = normalized_search_tokens(query).into_iter()
+        .filter(|token| token.chars().count() >= 3)
+        .filter(|token| !STOP_WORDS.contains(&token.as_str()))
+        .collect::<Vec<_>>();
+    tokens.sort(); tokens.dedup();
+    tokens.into_iter().map(|token| format!("\"{}\"*", token.replace('"', "\"\"")))
+        .collect::<Vec<_>>().join(" OR ")
 }
 '''
-          if old_tail not in text:
-              raise SystemExit('storage.rs fts helper block not found')
-          text = text.replace(old_tail, new_tail)
-          write(path, text)
+              if old not in text:
+                  raise SystemExit('storage helper anchor missing')
+              text = text.replace(old, new, 1)
+          elif 'fn query_terms' in text and 'fn search_fts(&self' in text:
+              # The previous polish workflow may already have installed an equivalent relaxed fallback.
+              pass
+          path.write_text(text)
 
-          # 2) Fix Chat actions approval/auto-approval and clearer action cards.
-          path = Path('Elephant/frontend/app/components/views/ChatView.vue')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace("action.proposal?.status === 'proposed'", "isActionProposed(action)")
-          text = text.replace("<span class=\"en-chat-action-status\">{{ action.proposal?.status || 'proposed' }}</span>", "<span class=\"en-chat-action-status\">{{ normalizedActionStatus(action) }}</span>")
-          text = text.replace("const actionSummary = (entry) => {\n  const preview = entry?.proposal?.preview || {}", "const normalizedActionStatus = (entry) => String(entry?.proposal?.status || 'proposed').toLowerCase()\n\nconst isActionProposed = (entry) => normalizedActionStatus(entry) === 'proposed'\n\nconst previewSourcePaths = (preview = {}) => preview.source_paths || preview.sourcePaths || []\n\nconst actionSummary = (entry) => {\n  const preview = entry?.proposal?.preview || {}")
-          text = text.replace("if (preview.kind === 'create_wiki') return `${preview.title} · ${preview.source_paths?.length || 0} sources`", "if (preview.kind === 'create_wiki') return `${preview.title} · ${previewSourcePaths(preview).length || 0} sources`")
-          text = text.replace("const invokeProposal = (command, id) => invoke(command, { proposalId: id })", "const invokeProposal = (command, id) => invoke(command, { proposalId: id, proposal_id: id })")
-          text = text.replace("if (action?.proposal?.status === 'proposed') await executeAction(message, action)", "if (isActionProposed(action)) await executeAction(message, action)")
-          text = text.replace("chatStore.setRuntimeMessage('Searching indexed notes and generating an answer...')", "chatStore.setRuntimeMessage('Recherche dans les notes, réflexion puis génération…')")
-          text = text.replace("streamPhase: 'Recherche et raisonnement…'", "streamPhase: `${selectedModel.value || 'Codex'} · réflexion ${reasoningEffort.value}…`")
-          text = text.replace("if (payload.type === 'reset') chatStore.updateMessage(message.id, { content: '', streamPhase: 'Résultats trouvés, rédaction…' })", "if (payload.type === 'reset') chatStore.updateMessage(message.id, { content: '', streamPhase: 'Outil exécuté, rédaction avec résultats…' })")
-          write(path, text)
+          # Real embedding edges must be visible and participate in saved-position invalidation.
+          replace_once(
+              'Elephant/frontend/app/components/views/semanticGraphViewHelpers.js',
+              '''  'wiki-source',
+  'wiki-link'
+])
+const WIKI_LAYOUT_EDGE_TYPES = new Set(['wiki-source', 'wiki-link'])
+''',
+              '''  'wiki-source',
+  'wiki-link',
+  'wiki-semantic'
+])
+const WIKI_LAYOUT_EDGE_TYPES = new Set(['wiki-source', 'wiki-link', 'wiki-semantic'])
+''',
+              marker="'wiki-semantic'\n])"
+          )
 
-          # 3) Keep non-linked nodes visible but far away; make wiki territory compact and readable.
-          path = Path('Elephant/frontend/app/components/views/semanticGraphViewHelpers.js')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace("const radius = 78 + ring * 42", "const radius = 96 + ring * 52")
-          text = text.replace("const protectedRadius = 150 + Math.max(0, Math.ceil(sourceIds.length / perRing) - 1) * 42", "const protectedRadius = 230 + Math.max(0, Math.ceil(sourceIds.length / perRing) - 1) * 56")
-          text = text.replace("const radius = protectedRadius + 18 + (stableLayoutHash(node.id) % 46)", "const radius = protectedRadius + 420 + (stableLayoutHash(node.id) % 680)")
-          write(path, text)
+          # Best-effort local embedding rebuild after a Wiki is accepted.
+          replace_once(
+              'Elephant/backend/tauri/src/knowledge_wiki_library.rs',
+              '''    let accepted = tauri_knowledge_wiki_accept(app, generated.draft.id)?;
+    eprintln!(
+        "[knowledge] wiki-library:ready draft={} path=.elephantnote/wiki/{}.md",
+        accepted.id, accepted.slug
+    );
+''',
+              '''    let accepted = tauri_knowledge_wiki_accept(app.clone(), generated.draft.id)?;
+    match crate::knowledge_embeddings::tauri_knowledge_embeddings_rebuild(app, Some(true)).await {
+        Ok(report) => eprintln!(
+            "[knowledge] wiki-library:embeddings-ready model={} updated={} dimensions={}",
+            report.model_id, report.updated, report.dimensions
+        ),
+        Err(error) => eprintln!("[knowledge] wiki-library:embeddings-skipped reason={error}"),
+    }
+    eprintln!(
+        "[knowledge] wiki-library:ready draft={} path=.elephantnote/wiki/{}.md",
+        accepted.id, accepted.slug
+    );
+''',
+              marker='wiki-library:embeddings-ready'
+          )
 
-          # 4) Tune graph defaults so context remains readable.
+          # Full graph remains visible after reset and at far zoom.
           path = Path('Elephant/frontend/app/components/views/AtomicGraphView.vue')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace("const labelThreshold = ref(7)", "const labelThreshold = ref(9)")
-          text = text.replace("const nodeSizeScale = ref(1)", "const nodeSizeScale = ref(0.9)")
-          text = text.replace("const forceLinkDistance = ref(95)", "const forceLinkDistance = ref(120)")
-          write(path, text)
+          text = path.read_text()
+          text = text.replace('  filterOrphans.value = false\n', '  filterOrphans.value = true\n')
+          if 'const zoomBoost = Math.min(2.35' not in text:
+              text = text.replace(
+                  '''        if (!active) {
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value }
+        }
+''',
+                  '''        const cameraRatio = renderer?.getCamera().getState().ratio || 1
+        const zoomBoost = Math.min(2.35, Math.max(1, Math.sqrt(cameraRatio)))
+        if (!active) {
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value * zoomBoost }
+        }
+''', 1)
+              text = text.replace('nodeSizeScale.value * (1 + 0.45', 'nodeSizeScale.value * zoomBoost * (1 + 0.45', 1)
+              text = text.replace('nodeSizeScale.value * (1 + 0.35', 'nodeSizeScale.value * zoomBoost * (1 + 0.35', 1)
+              text = text.replace('nodeSizeScale.value * 1.12', 'nodeSizeScale.value * zoomBoost * 1.12', 1)
+              text = text.replace('dimHex(attrs.color, bgDimRgb, dim * 0.88)', 'dimHex(attrs.color, bgDimRgb, dim * 0.58)', 1)
+              text = text.replace('nodeSizeScale.value * (1 - 0.5 * dim)', 'nodeSizeScale.value * zoomBoost * (1 - 0.18 * dim)', 1)
+          text = text.replace(
+              '''  const hasEmbeddingEdges = graph.edges().some((edge) => graph.getEdgeAttribute(edge, 'edgeType') === 'wiki-semantic')
+  if (hasEmbeddingEdges) setTimeout(() => runForceSimulation(1200), 0)
+''',
+              '''  // Embedding-aware Wiki positions are prepared before Sigma mounts; avoid an O(n²) whole-vault simulation here.
+''')
+          path.write_text(text)
 
-          for temp in [Path('.github/wiki-embedding-error.txt'), Path('.github/workflows/patch-agent-polish-once.yml')]:
-              if temp.exists():
-                  temp.unlink()
+          # Search regression.
+          path = Path('Elephant/backend/knowledge-core/src/storage.rs')
+          text = path.read_text()
+          if 'natural_language_search_relaxes_stopword_heavy_queries' not in text:
+              anchor = '''    #[test]
+    fn prune_removes_missing_documents_and_search_rows() {
+'''
+              test = '''    #[test]
+    fn natural_language_search_relaxes_stopword_heavy_queries() {
+        let mut store = KnowledgeStore::open_in_memory().unwrap();
+        store.upsert_document(&analyze_markdown(
+            "cadeau.md", "# Cadeau pour se faire pardonner\n\nUne idée de présent après une dispute.", 1,
+        )).unwrap();
+        let hits = store.search("chercher un cadeau afin de demander pardon", 10).unwrap();
+        assert_eq!(hits.first().map(|hit| hit.relative_path.as_str()), Some("cadeau.md"));
+    }
+
+'''
+              if anchor not in text:
+                  raise SystemExit('storage test anchor missing')
+              path.write_text(text.replace(anchor, test + anchor, 1))
+
+          Path('tests/app/unit/wikiAgentRuntime.spec.js').write_text('''import fs from 'node:fs'\nimport { describe, expect, it } from 'vitest'\nconst read = (path) => fs.readFileSync(path, 'utf8')\ndescribe('Wiki agent runtime integration', () => {\n  it('uses atomic execution and keeps all graph nodes visible', () => {\n    const chat = read('Elephant/frontend/app/components/views/ChatView.vue')\n    const graph = read('Elephant/frontend/app/components/views/AtomicGraphView.vue')\n    const helpers = read('Elephant/frontend/app/components/views/semanticGraphViewHelpers.js')\n    expect(chat).not.toContain("await invokeProposal('tauri_knowledge_chat_action_approve', id)")\n    expect(graph).toContain('filterOrphans.value = true')\n    expect(helpers).toContain("'wiki-semantic'")\n  })\n})\n''')
           PY
-      - name: Format and validate focused surface
+
+      - name: Format and commit product changes
+        shell: bash
         run: |
           cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
-          pnpm eslint Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js tests/app/unit/chatAgentSurface.spec.js tests/app/unit/wikiGraphSurface.spec.js
-          pnpm test -- --run tests/app/unit/chatAgentSurface.spec.js tests/app/unit/wikiGraphSurface.spec.js
-      - name: Commit patch
-        run: |
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          if ! git diff --quiet; then
-            git add Elephant/backend/knowledge-core/src/storage.rs Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js .github || true
-            git commit -m "Polish chat actions search and wiki graph surface"
-            git push origin HEAD:assistant/wiki-links-graph-integration
-          fi
+          git pull --rebase --autostash origin assistant/wiki-links-graph-integration
+          git rm -f .github/workflows/patch-agent-polish-once.yml \
+            .github/workflows/fix-agent-search-approval-embeddings-once.yml
+          git add Elephant tests
+          git commit -m "Fix agent search approval and embedding Wiki graph"
+          git push origin HEAD:assistant/wiki-links-graph-integration

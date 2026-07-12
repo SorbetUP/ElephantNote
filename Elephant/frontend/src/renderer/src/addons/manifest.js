@@ -15,6 +15,8 @@ export const ADDON_STATUS = Object.freeze({
 })
 
 const ADDON_ID_RE = /^[a-z0-9][a-z0-9._-]*$/
+const CONTENT_KINDS = new Set(['image', 'embed', 'block'])
+const DISABLED_PRESENTATIONS = new Set(['static-preview', 'placeholder', 'hidden'])
 
 const normalizeString = (value, fallback = '') => {
   if (typeof value !== 'string') return fallback
@@ -33,6 +35,29 @@ const normalizeStringArray = (value) => {
 const normalizeObject = (value) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   return { ...value }
+}
+
+const normalizeContentTypes = (value) => {
+  if (!Array.isArray(value)) return Object.freeze([])
+  const ids = new Set()
+  const result = []
+  for (const raw of value) {
+    const entry = normalizeObject(raw)
+    const id = normalizeString(entry.id)
+    const kind = normalizeString(entry.kind, 'embed').toLowerCase()
+    const sourcePattern = normalizeString(entry.sourcePattern)
+    if (!id || ids.has(id) || !CONTENT_KINDS.has(kind) || !sourcePattern) continue
+    ids.add(id)
+    const disabledPresentation = normalizeString(entry.disabledPresentation, 'placeholder').toLowerCase()
+    result.push(Object.freeze({
+      id,
+      kind,
+      sourcePattern,
+      disabledPresentation: DISABLED_PRESENTATIONS.has(disabledPresentation) ? disabledPresentation : 'placeholder',
+      disabledLabel: normalizeString(entry.disabledLabel, id)
+    }))
+  }
+  return Object.freeze(result)
 }
 
 const normalizePermissions = (value) => {
@@ -126,6 +151,7 @@ export const normalizeAddonManifest = (manifest = {}) => {
     minAppVersion: normalizeString(manifest.minAppVersion),
     permissions: normalizePermissions(manifest.permissions),
     contributes,
+    contentTypes: normalizeContentTypes(manifest.contentTypes),
     activationEvents: Object.freeze(normalizeStringArray(manifest.activationEvents)),
     runtime: normalizeRuntime(manifest.runtime, manifest, contributes),
     platforms: Object.freeze(normalizeStringArray(manifest.platforms)),

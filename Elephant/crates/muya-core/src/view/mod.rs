@@ -18,6 +18,11 @@ pub enum ViewPatch {
     index: usize,
     subtree: DetachedSubtree,
   },
+  MoveNode {
+    node: NodeId,
+    new_parent: NodeId,
+    new_index: usize,
+  },
   RemoveNode {
     node: NodeId,
   },
@@ -57,6 +62,15 @@ impl ViewPatch {
         index: *index,
         subtree: subtree.clone(),
       },
+      Operation::MoveNode {
+        node,
+        new_parent,
+        new_index,
+      } => Self::MoveNode {
+        node: *node,
+        new_parent: *new_parent,
+        new_index: *new_index,
+      },
       Operation::RemoveNode { node } => Self::RemoveNode { node: *node },
       Operation::SetBlockKind { node, kind } => Self::SetBlockKind {
         node: *node,
@@ -82,6 +96,23 @@ mod tests {
       ViewPatch::SetBlockKind {
         node: NodeId(7),
         kind: BlockKind::Heading { level: 3 },
+      }
+    );
+  }
+
+  #[test]
+  fn mirrors_subtree_moves() {
+    let operation = Operation::MoveNode {
+      node: NodeId(9),
+      new_parent: NodeId(3),
+      new_index: 2,
+    };
+    assert_eq!(
+      ViewPatch::from_operation(&operation),
+      ViewPatch::MoveNode {
+        node: NodeId(9),
+        new_parent: NodeId(3),
+        new_index: 2,
       }
     );
   }

@@ -10,10 +10,22 @@ fn active_store(app: &AppHandle) -> Result<KnowledgeStore, String> {
 }
 
 #[tauri::command]
-pub fn tauri_knowledge_graph(
+pub async fn tauri_knowledge_graph(
     app: AppHandle,
     include_suggestions: Option<bool>,
 ) -> Result<KnowledgeGraph, String> {
+    match crate::knowledge_embeddings::tauri_knowledge_embeddings_rebuild(app.clone(), Some(true))
+        .await
+    {
+        Ok(report) if report.updated > 0 => eprintln!(
+            "[Knowledge][Graph] embeddings:updated model={} documents={} dimensions={}",
+            report.model_id, report.updated, report.dimensions
+        ),
+        Ok(_) => {}
+        Err(error) => eprintln!(
+            "[Knowledge][Graph] embeddings:unavailable reason={error}"
+        ),
+    }
     active_store(&app)?.graph_projection(include_suggestions.unwrap_or(false))
 }
 

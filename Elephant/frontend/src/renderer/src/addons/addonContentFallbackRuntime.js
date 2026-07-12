@@ -1,6 +1,7 @@
 const FALLBACK_CLASS = 'en-addon-content-disabled'
 const BADGE_CLASS = 'en-addon-content-fallback-badge'
 const STYLE_ID = 'elephant-addon-content-fallback-style'
+const ORIGINAL_TITLE_ATTR = 'data-addon-content-original-title'
 
 const normalizeSlashes = (value = '') => String(value || '').replaceAll('\\', '/')
 
@@ -72,6 +73,15 @@ const findDescriptor = (img, descriptors) => {
 
 const contentContainer = (img) => img.closest('.ag-image, .ag-image-container, .image-wrapper, figure') || img.parentElement
 
+const restoreImage = (img) => {
+  if (!img?.hasAttribute?.(ORIGINAL_TITLE_ATTR)) return
+  const originalTitle = img.getAttribute(ORIGINAL_TITLE_ATTR) || ''
+  if (originalTitle) img.setAttribute('title', originalTitle)
+  else img.removeAttribute('title')
+  img.removeAttribute(ORIGINAL_TITLE_ATTR)
+  img.removeAttribute('aria-hidden')
+}
+
 const clearFallback = (container) => {
   if (!container) return
   container.classList.remove(FALLBACK_CLASS)
@@ -79,23 +89,34 @@ const clearFallback = (container) => {
   container.removeAttribute('data-addon-content-type')
   container.removeAttribute('data-addon-content-presentation')
   container.querySelector?.(`:scope > .${BADGE_CLASS}`)?.remove()
+  for (const img of container.querySelectorAll?.('img') || []) restoreImage(img)
 }
+
+const isCurrentFallback = (container, descriptor) => (
+  container?.classList?.contains(FALLBACK_CLASS) &&
+  container.dataset.addonContentOwner === descriptor.addonId &&
+  container.dataset.addonContentType === descriptor.id &&
+  container.dataset.addonContentPresentation === descriptor.disabledPresentation
+)
 
 const applyFallback = (img, descriptor) => {
   const container = contentContainer(img)
   if (!container) return
+  if (isCurrentFallback(container, descriptor)) {
+    for (const control of container.querySelectorAll('.en-excalidraw-edit-button')) control.remove()
+    return
+  }
+
   clearFallback(container)
   container.classList.add(FALLBACK_CLASS)
   container.dataset.addonContentOwner = descriptor.addonId
   container.dataset.addonContentType = descriptor.id
   container.dataset.addonContentPresentation = descriptor.disabledPresentation
+  if (!img.hasAttribute(ORIGINAL_TITLE_ATTR)) img.setAttribute(ORIGINAL_TITLE_ATTR, img.getAttribute('title') || '')
   img.setAttribute('title', `${descriptor.disabledLabel} — enable ${descriptor.addonName} to edit`)
 
-  if (descriptor.disabledPresentation === 'hidden') {
-    img.setAttribute('aria-hidden', 'true')
-  } else {
-    img.removeAttribute('aria-hidden')
-  }
+  if (descriptor.disabledPresentation === 'hidden') img.setAttribute('aria-hidden', 'true')
+  else img.removeAttribute('aria-hidden')
 
   const badge = document.createElement('span')
   badge.className = BADGE_CLASS

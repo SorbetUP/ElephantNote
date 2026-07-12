@@ -1,0 +1,50 @@
+name: Apply internal Wiki links and layout on PR
+
+on:
+  pull_request:
+    branches:
+      - feature/wiki-knowledge-continuation
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    if: github.head_ref == 'assistant/wiki-links-graph-integration'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Apply product patch
+        run: python3 .github/scripts/apply_internal_wiki_links_and_layout.py
+      - name: Persist product changes
+        run: |
+          git config user.name "ElephantNote Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add Elephant/frontend/app/components/editor/internalNoteLinks.js \
+            Elephant/frontend/app/components/editor/NoteEditorHost.vue \
+            Elephant/frontend/app/components/views/semanticGraphViewHelpers.js \
+            Elephant/frontend/app/components/views/AtomicGraphView.vue \
+            tests/app/unit/internalNoteLinks.spec.js \
+            tests/app/unit/wikiGraphSurface.spec.js
+          if git diff --cached --quiet; then
+            echo "Product patch already present."
+          else
+            git commit -m "Fix internal Wiki links and edge-aware graph layout"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate focused changes
+        run: |
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run tests/app/unit/internalNoteLinks.spec.js tests/app/unit/wikiGraphSurface.spec.js
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/editor/internalNoteLinks.js Elephant/frontend/app/components/editor/NoteEditorHost.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/components/views/AtomicGraphView.vue tests/app/unit/internalNoteLinks.spec.js tests/app/unit/wikiGraphSurface.spec.js
+          pnpm tauri:web:build

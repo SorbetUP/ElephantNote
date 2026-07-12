@@ -86,16 +86,32 @@ jobs:
       - if: steps.apply.outcome == 'success'
         run: pnpm install --frozen-lockfile
       - name: Validate implementation
+        id: validate
+        continue-on-error: true
         if: steps.apply.outcome == 'success'
+        shell: bash
         run: |
-          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-          pnpm exec vitest run tests/app/unit/wikiEmbeddingSurface.spec.js tests/app/unit/wikiGraphSurface.spec.js tests/app/unit/chatAgentSurface.spec.js
-          pnpm exec eslint Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue tests/app/unit/wikiEmbeddingSurface.spec.js
-          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml embedding_store -- --nocapture
-          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features --message-format short
+          set -o pipefail
+          {
+            cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+            cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+            pnpm exec vitest run tests/app/unit/wikiEmbeddingSurface.spec.js tests/app/unit/wikiGraphSurface.spec.js tests/app/unit/chatAgentSurface.spec.js
+            pnpm exec eslint Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue tests/app/unit/wikiEmbeddingSurface.spec.js
+            cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml embedding_store -- --nocapture
+            cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features --message-format short
+          } 2>&1 | tee .github/wiki-embedding-validation.txt
+      - name: Persist validation failure
+        if: steps.validate.outcome == 'failure'
+        shell: bash
+        run: |
+          git config user.name "OpenAI"
+          git config user.email "openai@users.noreply.github.com"
+          git add .github/wiki-embedding-validation.txt
+          git commit -m "Record Wiki embedding validation failure"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          exit 1
       - name: Commit implementation
-        if: steps.apply.outcome == 'success'
+        if: steps.apply.outcome == 'success' && steps.validate.outcome == 'success'
         run: |
           git config user.name "OpenAI"
           git config user.email "openai@users.noreply.github.com"

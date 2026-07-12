@@ -87,6 +87,21 @@ const addonsStore = useAddonsStore()
 const isRootDropTarget = ref(false)
 const isRootDropDisabled = ref(false)
 
+const normalizePath = (value = '') => String(value || '').replaceAll('\\', '/')
+const isHiddenPath = (value = '') => normalizePath(value)
+  .split('/')
+  .filter(Boolean)
+  .some((part) => part.startsWith('.'))
+const isFolderEntry = (entry) => (entry?.kind || entry?.type) === 'folder'
+const isMarkdownEntry = (entry) => /\.md$/i.test(normalizePath(entry?.path || entry?.filename || ''))
+const isVisibleSidebarEntry = (entry) => {
+  if (!entry?.path || isHiddenPath(entry.path)) return false
+  return isFolderEntry(entry) || isMarkdownEntry(entry)
+}
+const filterSidebarEntries = (entries) => Array.isArray(entries)
+  ? entries.filter(isVisibleSidebarEntry)
+  : []
+
 const activeAddonViewId = computed(() => props.activeAddonViewId)
 const addonViews = computed(() => addonsStore.getContributions('views')
   .filter((entry) => entry?.contribution?.id && entry?.contribution?.title)
@@ -97,11 +112,11 @@ const addonViews = computed(() => addonsStore.getContributions('views')
 const sidebarAfterTreeZones = computed(() => addonsStore.getContributions('layout.zones')
   .filter((entry) => entry?.contribution?.zone === 'sidebar.after-tree' && entry?.contribution?.component)
   .sort((left, right) => Number(left.contribution.order || 0) - Number(right.contribution.order || 0)))
-const sidebarEntries = computed(() => store.rootSidebarEntries)
+const sidebarEntries = computed(() => filterSidebarEntries(store.rootSidebarEntries))
 
 const loadDirectory = async (relativePath = '') => {
   if (!store.activeVault?.path) return []
-  return elephantnoteClient.directory.list(relativePath)
+  return filterSidebarEntries(await elephantnoteClient.directory.list(relativePath))
 }
 
 const openAllNotes = async () => {

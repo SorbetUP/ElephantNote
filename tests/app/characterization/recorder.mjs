@@ -9,18 +9,18 @@ import {
   normalizeValue
 } from './normalize.mjs'
 
-const editorOptions = (markdown) => ({
+const editorOptions = markdown => ({
   markdown,
-  t: (key) => key,
+  t: key => key,
   footnote: true,
   superSubScript: true,
   disableHtml: false,
-  imageAction: async(source) => source,
+  imageAction: async source => source,
   imagePathAutoComplete: () => [],
   clipboardFilePath: () => {}
 })
 
-const safe = (callback) => {
+const safe = callback => {
   try {
     return { ok: true, value: callback() }
   } catch (error) {
@@ -34,9 +34,9 @@ const safe = (callback) => {
   }
 }
 
-const publicApi = (Constructor) => {
+const publicApi = Constructor => {
   const descriptors = Object.getOwnPropertyDescriptors(Constructor.prototype)
-  return Object.keys(descriptors).sort().map((name) => ({
+  return Object.keys(descriptors).sort().map(name => ({
     name,
     kind: typeof descriptors[name].value === 'function' ? 'method' : 'property',
     enumerable: Boolean(descriptors[name].enumerable),
@@ -75,19 +75,29 @@ const capture = (editor, events) => {
     markdown,
     blocks: blocksResult.ok ? { ok: true, value: normalizedBlocks.value } : blocksResult,
     cursor: cursor.ok ? { ok: true, value: normalizeCursor(cursor.value, keyMap) } : cursor,
-    indexCursor: indexCursor.ok ? { ok: true, value: normalizeValue(indexCursor.value, keyMap) } : indexCursor,
+    indexCursor: indexCursor.ok
+      ? { ok: true, value: normalizeValue(indexCursor.value, keyMap) }
+      : indexCursor,
     history: historySnapshot(editor, keyMap),
     toc: toc.ok ? { ok: true, value: normalizeValue(toc.value, keyMap) } : toc,
     searchMatches: normalizeValue(editor.contentState?.searchMatches || null, keyMap),
     dom: normalizeDom(editor.container, keyMap),
     documentText: normalizeRuntimeText(editor.container?.textContent || ''),
-    events: events.map((event) => normalizeValue(event, keyMap))
+    events: events.map(event => normalizeValue(event, keyMap))
   }
 }
 
 const registerEvents = (editor, events) => {
-  for (const name of ['change', 'selectionChange', 'selectionFormats', 'scroll', 'focus', 'blur', 'crashed']) {
-    editor.on(name, (payload) => {
+  for (const name of [
+    'change',
+    'selectionChange',
+    'selectionFormats',
+    'scroll',
+    'focus',
+    'blur',
+    'crashed'
+  ]) {
+    editor.on(name, payload => {
       const blocks = editor.contentState?.getBlocks?.() || []
       const keyMap = buildBlockKeyMap(blocks)
       events.push({ name, payload: normalizeValue(payload, keyMap) })
@@ -106,6 +116,13 @@ const applyAction = async(editor, action) => {
     const method = editor[action.method]
     if (typeof method !== 'function') throw new TypeError(`Missing Muya method: ${action.method}`)
     return method.apply(editor, action.args || [])
+  }
+  if (action.type === 'contentStateCall') {
+    const method = editor.contentState?.[action.method]
+    if (typeof method !== 'function') {
+      throw new TypeError(`Missing ContentState method: ${action.method}`)
+    }
+    return method.apply(editor.contentState, action.args || [])
   }
   if (action.type === 'key') {
     editor.container.focus()
@@ -129,7 +146,6 @@ const runCase = async(Muya, testCase, seed) => {
   const events = []
   let editor
   let constructionError = null
-
   try {
     editor = new Muya(createMount(), editorOptions(testCase.markdown))
     registerEvents(editor, events)
@@ -137,7 +153,6 @@ const runCase = async(Muya, testCase, seed) => {
   } catch (error) {
     constructionError = { name: error?.name || 'Error', message: error?.message || String(error) }
   }
-
   if (!editor) return { name: testCase.name, constructionError, steps: [] }
 
   const contentStateApi = publicApi(editor.contentState.constructor)
@@ -167,7 +182,7 @@ const runCase = async(Muya, testCase, seed) => {
   return { name: testCase.name, constructionError, contentStateApi, steps, destroyResult }
 }
 
-export const runCharacterization = async(Muya) => {
+export const runCharacterization = async Muya => {
   if (Array.isArray(Muya.plugins)) Muya.plugins.length = 0
   const cases = [...documentCases, ...operationCases]
   const results = []

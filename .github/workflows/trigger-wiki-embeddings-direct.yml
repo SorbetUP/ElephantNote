@@ -35,10 +35,14 @@ jobs:
                   index for index in range(start, len(lines) - 1)
                   if lines[index].strip() == 'PY' and 'Format and validate' in lines[index + 1]
               )
-              script = '\n'.join(
-                  line[10:] if line.startswith('          ') else line
-                  for line in lines[start:end]
-              )
+              output = []
+              in_triple = False
+              for line in lines[start:end]:
+                  normalized = line if in_triple else (line[10:] if line.startswith('          ') else line)
+                  output.append(normalized)
+                  if normalized.count("'''") % 2 == 1:
+                      in_triple = not in_triple
+              script = '\n'.join(output)
               compile(script, 'wiki-embedding-implementation', 'exec')
               exec(script, {'__name__': '__main__'})
           except BaseException:

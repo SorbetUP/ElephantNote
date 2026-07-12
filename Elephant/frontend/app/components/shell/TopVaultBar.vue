@@ -8,10 +8,7 @@
       class="en-topstrip-nav"
       :class="{ 'en-topstrip-nav-macos': isMac }"
     />
-    <div
-      class="en-topstrip-drag"
-      data-tauri-drag-region
-    />
+    <div class="en-topstrip-drag" data-tauri-drag-region />
   </header>
 </template>
 
@@ -47,11 +44,7 @@ const isMac = navigator.platform
       var(--en-bg) 100%
     );
 }
-
-.en-topstrip-sidebar-hidden {
-  background: var(--en-bg);
-}
-
+.en-topstrip-sidebar-hidden { background: var(--en-bg); }
 .en-topstrip::after {
   content: "";
   position: absolute;
@@ -63,11 +56,7 @@ const isMac = navigator.platform
   z-index: 1;
   pointer-events: none;
 }
-
-.en-topstrip-sidebar-hidden::after {
-  display: none;
-}
-
+.en-topstrip-sidebar-hidden::after { display: none; }
 .en-topstrip-nav {
   position: absolute;
   left: 56px;
@@ -78,11 +67,10 @@ const isMac = navigator.platform
   -webkit-app-region: no-drag;
   pointer-events: auto;
 }
-
 .en-topstrip-nav-macos {
   left: 84px;
+  top: -8px;
 }
-
 .en-topstrip-drag {
   flex: 1;
   height: 100%;

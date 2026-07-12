@@ -29,22 +29,11 @@ jobs:
             echo "Product patch already present."
             exit 0
           fi
-          set +e
-          python3 .github/scripts/run_wiki_semantic_agent_phase.py > /tmp/semantic-patch.log 2>&1
-          code=$?
-          cat /tmp/semantic-patch.log
-          if [ "$code" -ne 0 ]; then
-            cp /tmp/semantic-patch.log .github/semantic-patch-error.txt
-            git config user.name "ElephantNote Bot"
-            git config user.email "actions@users.noreply.github.com"
-            git add .github/semantic-patch-error.txt
-            git commit -m "chore: record semantic patch failure" || true
-            git push origin HEAD:${{ github.head_ref }}
-            exit "$code"
-          fi
-      - name: Format Rust
+          python3 .github/scripts/run_wiki_semantic_agent_phase.py
+      - name: Apply validation fixes and format
         run: |
           python3 .github/scripts/fix_semantic_validation.py
+          python3 .github/scripts/fix_tauri_semantic_send.py
           cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all
           cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
       - name: Persist product changes
@@ -53,9 +42,9 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add Elephant/backend Elephant/frontend tests
           if git diff --cached --quiet; then
-            echo "No formatted product changes."
+            echo "No product changes."
           else
-            git commit -m "Fix contextual Wiki citation tests"
+            git commit -m "Fix semantic Wiki async execution boundaries"
             git push origin HEAD:${{ github.head_ref }}
           fi
       - name: Install frontend dependencies

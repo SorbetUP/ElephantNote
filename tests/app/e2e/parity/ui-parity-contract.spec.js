@@ -8,10 +8,14 @@ test.describe('Native Tauri UI parity contract baseline', () => {
     await openTauriRenderer(page)
   })
 
-  test('opens the Tauri renderer without a blank page', async({ page }) => {
+  test('opens the Tauri renderer without a blank layout', async({ page }) => {
+    const app = page.locator('#app[data-v-app]').first()
     await expect(page.locator('body')).toBeVisible()
-    const bodyText = await getBodyText(page)
-    expect(bodyText.length).toBeGreaterThan(0)
+    await expect(app).toBeAttached()
+    await expect.poll(async() => app.evaluate((element) => element.querySelectorAll('*').length)).toBeGreaterThan(0)
+    const bounds = await app.boundingBox()
+    expect(bounds?.width || 0).toBeGreaterThan(300)
+    expect(bounds?.height || 0).toBeGreaterThan(200)
     await expect(page.locator('#elephant-diagnostic-overlay')).toHaveCount(0)
   })
 

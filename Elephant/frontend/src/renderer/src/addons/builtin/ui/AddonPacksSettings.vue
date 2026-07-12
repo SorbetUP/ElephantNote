@@ -14,8 +14,7 @@
               <strong>{{ pack.name }}</strong>
               <small>{{ pack.addonCount }} addon{{ pack.addonCount === 1 ? '' : 's' }}</small>
             </div>
-            <p>{{ pack.description || pack.path }}</p>
-            <code>{{ pack.path }}</code>
+            <p v-if="pack.description">{{ pack.description }}</p>
           </div>
           <div class="en-addon-pack-actions">
             <button class="en-primary-button" type="button" :disabled="busy" @click="applyPack(pack)">
@@ -61,7 +60,7 @@ const confirmDeletePath = ref('')
 const filteredPacks = computed(() => {
   const normalized = query.value.trim().toLocaleLowerCase()
   if (!normalized) return packs.value
-  return packs.value.filter((pack) => `${pack.name} ${pack.description} ${pack.path}`.toLocaleLowerCase().includes(normalized))
+  return packs.value.filter((pack) => `${pack.name} ${pack.description}`.toLocaleLowerCase().includes(normalized))
 })
 
 const showMessage = (text, error = false) => {
@@ -245,9 +244,8 @@ onBeforeUnmount(() => {
 .en-addon-pack-copy { min-width: 0; display: grid; gap: 3px; }
 .en-addon-pack-copy > div { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .en-addon-pack-copy strong { font-size: 12.5px; }
-.en-addon-pack-copy small, .en-addon-pack-copy p, .en-addon-pack-copy code { color: var(--en-muted, #667085); font-size: 10px; }
+.en-addon-pack-copy small, .en-addon-pack-copy p { color: var(--en-muted, #667085); font-size: 10px; }
 .en-addon-pack-copy p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.en-addon-pack-copy code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .en-addon-pack-actions { display: flex; align-items: center; gap: 6px; }
 .en-addon-pack-empty { padding: 24px; color: var(--en-muted, #667085); font-size: 11.5px; text-align: center; }
 @media (max-width: 720px) {

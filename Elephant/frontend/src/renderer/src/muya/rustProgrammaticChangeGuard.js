@@ -1,4 +1,4 @@
-const DEFAULT_BURST = 256
+const DEFAULT_BURST = 1
 const DEFAULT_TTL_MS = 750
 
 export const createProgrammaticChangeGuard = ({
@@ -11,32 +11,36 @@ export const createProgrammaticChangeGuard = ({
 
   const currentTime = () => Number(now()) || 0
   const ttl = () => Number(ttlMs) || DEFAULT_TTL_MS
+  const slotsPerRender = () => Math.max(1, Math.floor(Number(burst) || DEFAULT_BURST))
   const clearIfExpired = () => {
-    if (pending <= 0 && deadline > 0 && currentTime() > deadline) deadline = 0
-  }
-  const arm = () => {
-    pending = Math.max(pending, Number(burst) || DEFAULT_BURST)
-    deadline = currentTime() + ttl()
+    if (deadline > 0 && currentTime() > deadline) {
+      pending = 0
+      deadline = 0
+    }
   }
 
   return {
     run (render) {
       if (typeof render !== 'function') throw new TypeError('A programmatic Muya render callback is required.')
-      arm()
+      clearIfExpired()
+      const previousPending = pending
+      const previousDeadline = deadline
+      pending += slotsPerRender()
+      deadline = currentTime() + ttl()
       try {
         return render()
       } catch (error) {
-        pending = 0
-        deadline = 0
+        pending = previousPending
+        deadline = previousDeadline
         throw error
       }
     },
 
     consume () {
       clearIfExpired()
-      if (pending <= 0 && deadline <= 0) return false
-      pending = Math.max(0, pending - 1)
-      deadline = currentTime() + ttl()
+      if (pending <= 0) return false
+      pending -= 1
+      if (pending === 0) deadline = 0
       return true
     },
 
@@ -47,7 +51,7 @@ export const createProgrammaticChangeGuard = ({
 
     get pending () {
       clearIfExpired()
-      return pending > 0 || deadline > 0
+      return pending
     }
   }
 }

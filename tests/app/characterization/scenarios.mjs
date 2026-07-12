@@ -8,6 +8,10 @@ export const documentCases = [
     markdown: '# Heading one\n\nParagraph with **bold**, *italic*, ~~strike~~ and `code`.\n\n## Heading two'
   },
   {
+    name: 'multilingual-headings-and-links',
+    markdown: '# Ελληνικά Русский العربية\n\n[ümlaut](https://example.test/über?q=é)\n\n## ქართული Українська'
+  },
+  {
     name: 'nested-lists-and-tasks',
     markdown: '- parent\n  - child\n  - [x] finished\n  - [ ] pending\n\n1. first\n2. second'
   },

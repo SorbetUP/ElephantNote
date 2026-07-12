@@ -61,6 +61,7 @@ export default [
       'package.json',
       'out/**',
       'blinko-offline/**',
+      'Elephant/frontend/src/muya/lib/assets/libs/**',
       'Elephant/frontend/src/vendor/sequence-diagram-snap.js',
       'Elephant/frontend/src/muya/lib/parser/marked/urlify.js',
       'Elephant/frontend/src/renderer/src/assets/symbolIcon/index.js'

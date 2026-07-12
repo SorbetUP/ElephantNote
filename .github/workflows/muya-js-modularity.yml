@@ -24,6 +24,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Capture branch tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          head_sha="${{ github.event.pull_request.head.sha }}"
+          if [ -z "$head_sha" ]; then head_sha="$GITHUB_SHA"; fi
+          git fetch origin "$head_sha" --depth=1
+          mkdir -p build
+          git rev-parse "$head_sha^{tree}" > build/muya-base-tree.txt
       - name: Audit Muya module sizes
         run: node build/scripts/check-muya-module-size.mjs
       - name: Upload Muya module inventory
@@ -31,7 +40,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: muya-module-size-${{ github.run_id }}
-          path: build/muya-module-size.json
+          path: |
+            build/muya-module-size.json
+            build/muya-base-tree.txt
           if-no-files-found: error
           retention-days: 14
       - name: Upload Muya source snapshot

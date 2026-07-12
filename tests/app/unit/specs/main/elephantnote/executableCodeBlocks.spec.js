@@ -7,7 +7,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 const readRuntime = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeNativeRuntime.js')
 const readLifecycle = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeNativeLifecycle.js')
 const readSettings = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeSettings.js')
-const readRenderer = () => read('Elephant/frontend/src/muya/lib/parser/render/renderBlock/renderContainerBlock.js')
+const readRenderer = () => read('Elephant/frontend/src/muya/lib/parser/render/renderBlock/renderContainerCode.js')
 const readRendererHelper = () => read('Elephant/frontend/src/muya/lib/parser/render/renderBlock/renderExecutableCodeRuntime.js')
 const readStyles = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeNativeRuntime.css')
 const readBackend = () => read('Elephant/backend/tauri/src/code_execution_v2.rs')

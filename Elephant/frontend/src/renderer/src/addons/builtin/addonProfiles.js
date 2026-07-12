@@ -19,8 +19,9 @@ const DEVELOP_PARITY_ADDONS = Object.freeze([
   { id: 'elephant.sites', version: '1.0.0', source: 'builtin', enabled: true },
   { id: 'elephant.ai', version: '1.0.0', source: 'builtin', enabled: true },
   { id: 'elephant.sync', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.code-execution', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.excalidraw', version: '1.0.0', source: 'builtin', enabled: true }
+  { id: 'elephant.code-execution', version: '1.1.0', source: 'builtin', enabled: true },
+  { id: 'elephant.excalidraw', version: '1.1.0', source: 'builtin', enabled: true },
+  { id: 'elephant.recently-edited', version: '1.0.0', source: 'builtin', enabled: true }
 ])
 
 const readCommunityEnabled = async () => {

@@ -70,12 +70,14 @@ const readEnabledBuiltinIds = (manager, availableIds) => {
     .filter((addon) => addon.manifest.source === 'builtin')
   const installedIds = new Set(installed.map((addon) => addon.manifest.id))
   const allowed = new Set(availableIds.filter((id) => installedIds.has(id)))
+  const required = REQUIRED_BUILTIN_ADDON_IDS.filter((id) => allowed.has(id))
   const storage = getLocalStorage()
   const stored = storage ? parseStoredIds(storage, BUILTIN_ENABLED_STORAGE_KEY, allowed) : null
-  if (stored) return new Set(stored)
-  return new Set(installed
+  if (stored) return new Set([...required, ...stored])
+  const defaults = installed
     .filter((addon) => addon.manifest.defaultEnabled)
-    .map((addon) => addon.manifest.id))
+    .map((addon) => addon.manifest.id)
+  return new Set([...required, ...defaults])
 }
 
 const persistInstalledBuiltinIds = (manager, availableIds) => {
@@ -156,6 +158,17 @@ export const createAddonManager = (options = {}) => {
     }
     logger.info('[addons] builtin:installed', { id })
     return registered
+  }
+
+  const disableAddon = manager.disable.bind(manager)
+  manager.disable = async (id) => {
+    if (REQUIRED_BUILTIN_ADDON_IDS.includes(id)) {
+      const current = manager.get(id)
+      if (!current) throw new Error(`Required built-in addon is not installed: ${id}`)
+      if (!current.enabled) return manager.enable(id)
+      return current
+    }
+    return disableAddon(id)
   }
 
   manager.uninstallBuiltin = async (id) => {

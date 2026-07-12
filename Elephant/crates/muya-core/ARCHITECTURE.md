@@ -44,17 +44,23 @@ Inline parsing is recursive inside headings, paragraphs, blockquotes, list items
 
 ## Current executable editing slice
 
-The first model-level editing layer now contains:
+The model-level editing layer currently contains:
 
 - DOM-independent logical selections using UTF-16 offsets;
-- `InsertText` and `DeleteBackward` semantic commands;
+- same-node forward and backward selection ordering;
+- selected-text replacement and deletion;
+- `InsertText`, `DeleteBackward` and `InsertParagraph` commands;
+- paragraph splitting with stable newly allocated node IDs;
+- paragraph joining when Backspace is pressed at the start of an adjacent plain paragraph;
+- `SetParagraph` and `SetHeading(1..=6)` block transformations;
 - UTF-16 boundary validation that rejects offsets inside surrogate pairs;
-- invertible `ReplaceText` operations;
+- invertible text, node insertion, node removal and block-kind operations;
 - transactions applied to a cloned document before commit, preventing partially applied failures;
 - revision increments on successful transactions;
-- bounded transaction-based undo and redo history.
+- bounded transaction-based undo and redo history;
+- ordered logical view patches derived directly from operations.
 
-`DeleteBackward` currently removes one Unicode scalar value. Grapheme-cluster deletion, non-collapsed selections, block splitting, block joining, formatting commands and selection mapping across structural operations remain future slices.
+Structural undo and redo restore the same node IDs. `DeleteBackward` inside text currently removes one Unicode scalar value. Grapheme-cluster deletion, cross-node selections, rich-inline paragraph splitting, list/table editing, IME grouping and DOM patch application remain future slices.
 
 The parser, serializer and editing slices have Rust unit tests. They have not yet passed full differential characterization against the original Muya JavaScript behavior, so they are not eligible runtime replacements yet.
 
@@ -97,7 +103,7 @@ A feature's syntax recognizer must not own editing, rendering or DOM behavior. C
 The browser adapter remains responsible for:
 
 - keyboard, beforeinput and composition events;
-- DOM creation and patch application;
+- DOM creation and logical patch application;
 - browser `Selection` and `Range` conversion;
 - geometry, scrolling and floating widgets;
 - asynchronous image, KaTeX and Mermaid integration.

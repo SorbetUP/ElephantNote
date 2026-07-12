@@ -60,9 +60,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/apply-chat-wiki-acceptance-fixes.yml
-          git rm .github/scripts/apply_chat_wiki_acceptance_fixes.py
-          git rm .github/scripts/patch_acceptance_fixer.py
           git add Elephant tests || true
           git commit -m "fix: repair real vault chat wiki and embedding flows"
           git push origin HEAD:assistant/wiki-organization-continuation

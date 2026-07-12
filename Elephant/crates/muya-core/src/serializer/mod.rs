@@ -54,4 +54,13 @@ mod tests {
     let document = parse_markdown("# Title\n\nBody\n\n---\n");
     assert_eq!(to_markdown(&document), "# Title\n\nBody\n\n---");
   }
+
+  #[test]
+  fn serializes_blockquotes_and_fenced_code() {
+    let document = parse_markdown("> Quote\n\n```rust\nfn main() {}\n```\n");
+    assert_eq!(
+      to_markdown(&document),
+      "> Quote\n\n```rust\nfn main() {}\n```"
+    );
+  }
 }

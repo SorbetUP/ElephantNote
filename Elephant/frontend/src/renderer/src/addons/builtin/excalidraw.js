@@ -89,6 +89,13 @@ export const excalidrawAddon = {
         when: ({ imageInfo }) => isExcalidrawImage(imageInfo),
         run: editDrawing
       }],
+      quickInsertItems: [{
+        group: 'Writing tools',
+        title: 'Excalidraw',
+        subTitle: 'Insert drawing',
+        commandId: 'excalidraw',
+        icon: EXCALIDRAW_ICON
+      }],
       writingCommands: [{
         id: 'excalidraw',
         run: createDrawing

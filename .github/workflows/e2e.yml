@@ -31,6 +31,9 @@ jobs:
           npm_config_user_agent: 'pnpm'
           USE_ELECTRON_CLANG: '0'
 
+      - name: Install Playwright Chromium
+        run: Elephant/node_modules/.bin/playwright install chromium
+
       - name: Build app diagnostic
         id: build-app
         continue-on-error: true
@@ -41,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          xvfb-run --auto-servernum pnpm test:e2e 2>&1 | tee playwright-output.txt
+          pnpm test:e2e 2>&1 | tee playwright-output.txt
 
       - name: Skip E2E after build diagnostic failure
         if: steps.build-app.outcome != 'success'

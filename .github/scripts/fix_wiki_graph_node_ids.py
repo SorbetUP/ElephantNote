@@ -14,9 +14,12 @@ def write(path: str, content: str) -> None:
 def replace_once(path: str, old: str, new: str) -> None:
     content = read(path)
     count = content.count(old)
-    if count != 1:
-        raise RuntimeError(f'{path}: expected exactly one match, found {count}')
-    write(path, content.replace(old, new, 1))
+    if count == 1:
+        write(path, content.replace(old, new, 1))
+        return
+    if count == 0 and new in content:
+        return
+    raise RuntimeError(f'{path}: expected one old match or an already-applied replacement, found {count}')
 
 
 helper = 'Elephant/frontend/app/components/views/semanticGraphViewHelpers.js'

@@ -33,11 +33,31 @@ export const installExecutableCodeNativeLifecycle = (runtime, target = globalThi
   runtime.__nativeLifecycleInstalled = true
 
   const documentTarget = target.document || document
+  const clearDetachTimer = (state) => {
+    if (!state?.detachTimer) return
+    clearTimeout(state.detachTimer)
+    state.detachTimer = null
+  }
+  const stopDetachedExecution = async (state) => {
+    if (!state?.executionId) return
+    try {
+      await target.elephantnote?.programs?.stop?.({ executionId: state.executionId })
+    } catch (error) {
+      console.warn('[Code:UI] detached execution stop failed', {
+        executionId: state.executionId,
+        error: error?.message || String(error)
+      })
+    }
+  }
+
   const originalRegisterRunButton = runtime.registerRunButton.bind(runtime)
   runtime.registerRunButton = (element) => {
     originalRegisterRunButton(element)
     const state = stateFor(runtime, element)
-    if (state) element.__elephantCodeStateKey = state.key
+    if (state) {
+      element.__elephantCodeStateKey = state.key
+      clearDetachTimer(state)
+    }
     syncRunButton(state)
   }
 
@@ -61,10 +81,7 @@ export const installExecutableCodeNativeLifecycle = (runtime, target = globalThi
       state.element = button
       button.__elephantCodeStateKey = state.key
     }
-    if (state.detachTimer) {
-      clearTimeout(state.detachTimer)
-      state.detachTimer = null
-    }
+    clearDetachTimer(state)
     syncRunButton(state)
     element.renderState?.(state, runtime)
   }
@@ -78,11 +95,10 @@ export const installExecutableCodeNativeLifecycle = (runtime, target = globalThi
     if (!state) return
 
     if (state.output === element) state.output = null
-    if (state.detachTimer) clearTimeout(state.detachTimer)
+    clearDetachTimer(state)
     state.detachTimer = setTimeout(() => {
-      if (state.output?.isConnected) return
-      const stopTarget = state.element || element
-      if (state.executionId) void runtime.stop(stopTarget)
+      if (state.output?.isConnected || state.element?.isConnected) return
+      void stopDetachedExecution(state)
       runtime.states.delete(key)
     }, DETACHED_TTL_MS)
   }
@@ -142,9 +158,7 @@ export const installExecutableCodeNativeLifecycle = (runtime, target = globalThi
   runtime.dispose = () => {
     documentTarget.removeEventListener('click', onClick)
     documentTarget.removeEventListener('keydown', onKeydown)
-    for (const state of runtime.states.values()) {
-      if (state.detachTimer) clearTimeout(state.detachTimer)
-    }
+    for (const state of runtime.states.values()) clearDetachTimer(state)
     originalDispose()
   }
 

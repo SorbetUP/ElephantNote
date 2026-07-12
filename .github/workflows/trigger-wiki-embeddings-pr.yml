@@ -24,20 +24,21 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          python3 -m pip install --quiet pyyaml
           python3 - <<'PY'
           from pathlib import Path
           import traceback
-          import yaml
           try:
-              workflow = yaml.safe_load(Path('.github/workflows/implement-wiki-embeddings-once.yml').read_text())
-              run = next(
-                  step['run']
-                  for step in workflow['jobs']['implement']['steps']
-                  if step.get('name') == 'Apply real embedding-backed Wiki graph support'
+              source = Path('.github/workflows/implement-wiki-embeddings-once.yml').read_text()
+              lines = source.splitlines()
+              start = next(index for index, line in enumerate(lines) if "python3 - <<'PY'" in line) + 1
+              end = next(
+                  index for index in range(start, len(lines) - 1)
+                  if lines[index].strip() == 'PY' and 'Format and validate' in lines[index + 1]
               )
-              marker = "python3 - <<'PY'\n"
-              script = run.split(marker, 1)[1].rsplit('\nPY', 1)[0]
+              script = '\n'.join(
+                  line[10:] if line.startswith('          ') else line
+                  for line in lines[start:end]
+              )
               compile(script, 'wiki-embedding-implementation', 'exec')
               exec(script, {'__name__': '__main__'})
           except Exception:

@@ -14,7 +14,9 @@
     </button>
 
     <div class="en-addon-controls">
+      <span v-if="isRequired" class="en-addon-required">Required</span>
       <button
+        v-else
         class="en-switch"
         type="button"
         role="switch"
@@ -113,6 +115,7 @@ const accessDescription = computed(() => ({
   trusted: 'Runs inside ElephantNote and can change the interface, editor and application behavior.',
   system: 'Ships with ElephantNote and is tested as part of the application.'
 }[accessLevel.value] || ''))
+const isRequired = computed(() => props.addon?.manifest?.removable === false)
 const isExternal = computed(() => props.addon?.manifest?.source === 'external')
 const removeLabel = computed(() => isExternal.value ? 'Uninstall' : 'Remove')
 const removeWarning = computed(() => isExternal.value
@@ -155,10 +158,10 @@ const permissionLabels = computed(() => {
 .en-addon-title { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .en-addon-title strong { font-size: 12.5px; }
 .en-addon-title small { color: var(--en-muted, #667085); font-size: 9.5px; }
-.en-addon-access { padding: 2px 6px; border-radius: 999px; font-size: 9px; font-weight: 650; }
+.en-addon-access, .en-addon-required { padding: 2px 6px; border-radius: 999px; font-size: 9px; font-weight: 650; }
 .en-addon-access.is-isolated { background: color-mix(in srgb, #16a34a 13%, transparent); color: #15803d; }
 .en-addon-access.is-trusted { background: color-mix(in srgb, #d97706 15%, transparent); color: #b45309; }
-.en-addon-access.is-system { background: color-mix(in srgb, var(--en-primary, #2563eb) 13%, transparent); color: var(--en-primary, #2563eb); }
+.en-addon-access.is-system, .en-addon-required { background: color-mix(in srgb, var(--en-primary, #2563eb) 13%, transparent); color: var(--en-primary, #2563eb); }
 .en-addon-chevron { width: 15px; height: 15px; color: var(--en-muted, #667085); transition: transform 140ms ease; }
 .en-addon-chevron.rotated { transform: rotate(180deg); }
 .en-addon-controls { display: flex; align-items: center; padding: 0 14px 0 8px; }

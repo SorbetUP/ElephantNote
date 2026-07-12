@@ -1,7 +1,7 @@
 <template>
   <section class="en-code-settings-page">
     <section class="en-code-card en-code-primary-card">
-      <div class="en-code-card-icon"><TerminalSquare aria-hidden="true" /></div>
+      <div class="en-code-card-icon"><Terminal aria-hidden="true" /></div>
       <div class="en-code-card-copy">
         <strong>Local code execution</strong>
         <span>Run fenced code blocks with interpreters installed on this computer.</span>
@@ -55,7 +55,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { RefreshCw, RotateCcw, ShieldAlert, TerminalSquare } from '@lucide/vue'
+import { RefreshCw, RotateCcw, ShieldAlert, Terminal } from '@lucide/vue'
 import log from '@/platform/runtimeLogShim'
 
 const OUTPUT_LINE_LIMITS = [10, 20, 50, 100, 200, 500, 1000, 5000]
@@ -100,6 +100,7 @@ const loadConfig = async () => {
   if (loading.value) return
   loading.value = true
   message.value = ''
+  messageIsError.value = false
   try {
     const state = await programs().list()
     applyState(state)
@@ -117,6 +118,7 @@ const saveConfig = async (reason) => {
   if (saving.value) return
   saving.value = true
   message.value = ''
+  messageIsError.value = false
   try {
     const result = await programs().set(buildPayload())
     applyState(result)

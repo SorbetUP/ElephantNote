@@ -6,6 +6,7 @@ import { invokeTauri, logAction, readNote, writeNote } from './shared'
 const ADDON_ID = 'elephant.addon-packs'
 const PACK_DIRECTORY = '.elephantnote/addons/packs'
 const DEFAULT_PACK_PATH = `${PACK_DIRECTORY}/default.enaddonpack`
+const BASE_PACK_PATH = `${PACK_DIRECTORY}/base.enaddonpack`
 const DEVELOP_PARITY_PACK_PATH = `${PACK_DIRECTORY}/develop-parity.enaddonpack`
 const REPORT_PATH = 'Reports/Addon Pack.md'
 const PACK_FORMAT = 'elephantnote-addon-pack'
@@ -29,6 +30,12 @@ const DEVELOP_PARITY_ADDONS = Object.freeze([
   { id: 'elephant.excalidraw', version: '1.1.0', source: 'builtin', enabled: true },
   { id: 'elephant.recently-edited', version: '1.0.0', source: 'builtin', enabled: true }
 ])
+
+const BASE_ADDONS = Object.freeze(
+  DEVELOP_PARITY_ADDONS
+    .filter((entry) => entry.id !== 'elephant.calendar')
+    .map((entry) => Object.freeze({ ...entry }))
+)
 
 const readCommunityEnabled = async () => {
   const value = await invokeTauri('tauri_prefs_get', { key: 'addons.communityEnabled' })
@@ -114,29 +121,52 @@ const createDevelopParityPack = () => ({
   addons: DEVELOP_PARITY_ADDONS.map((entry) => ({ ...entry }))
 })
 
-const isDevelopParityCurrent = (pack) => {
-  if (!pack || pack.addons.length !== DEVELOP_PARITY_ADDONS.length) return false
+const createBasePack = () => ({
+  format: PACK_FORMAT,
+  version: PACK_VERSION,
+  name: 'ElephantNote Base',
+  description: 'Installs and enables the complete first-party ElephantNote setup without Calendar.',
+  createdAt: new Date().toISOString(),
+  protected: true,
+  addons: BASE_ADDONS.map((entry) => ({ ...entry }))
+})
+
+const isAddonSetCurrent = (pack, expectedAddons) => {
+  if (!pack || pack.addons.length !== expectedAddons.length) return false
   const entries = new Map(pack.addons.map((entry) => [entry.id, entry]))
-  return DEVELOP_PARITY_ADDONS.every((expected) => {
+  return expectedAddons.every((expected) => {
     const entry = entries.get(expected.id)
     return entry && entry.source === expected.source && entry.version === expected.version && entry.enabled === true
   })
 }
 
-const ensureDevelopParityPack = async () => {
+const isDevelopParityCurrent = (pack) => isAddonSetCurrent(pack, DEVELOP_PARITY_ADDONS)
+const isBasePackCurrent = (pack) => isAddonSetCurrent(pack, BASE_ADDONS) && !pack.addons.some((entry) => entry.id === 'elephant.calendar')
+
+const ensureProtectedPack = async ({ path, create, isCurrent }) => {
   try {
-    const existing = await readNote(DEVELOP_PARITY_PACK_PATH)
-    const parsed = validatePack(existing.content, DEVELOP_PARITY_PACK_PATH)
-    if (isDevelopParityCurrent(parsed)) {
-      return { packPath: DEVELOP_PARITY_PACK_PATH, created: false, updated: false }
-    }
+    const existing = await readNote(path)
+    const parsed = validatePack(existing.content, path)
+    if (isCurrent(parsed)) return { packPath: path, created: false, updated: false }
   } catch {
     // Missing, invalid or stale protected packs are regenerated below.
   }
-  const pack = createDevelopParityPack()
-  await writeNote(DEVELOP_PARITY_PACK_PATH, `${JSON.stringify(pack, null, 2)}\n`)
-  return { packPath: DEVELOP_PARITY_PACK_PATH, created: true, updated: true, pack }
+  const pack = create()
+  await writeNote(path, `${JSON.stringify(pack, null, 2)}\n`)
+  return { packPath: path, created: true, updated: true, pack }
 }
+
+const ensureDevelopParityPack = () => ensureProtectedPack({
+  path: DEVELOP_PARITY_PACK_PATH,
+  create: createDevelopParityPack,
+  isCurrent: isDevelopParityCurrent
+})
+
+const ensureBasePack = () => ensureProtectedPack({
+  path: BASE_PACK_PATH,
+  create: createBasePack,
+  isCurrent: isBasePackCurrent
+})
 
 const createPack = async (ctx, options = {}) => {
   const path = normalizePackPath(options?.path)
@@ -295,7 +325,7 @@ export const addonPacksAddon = {
   manifest: {
     id: ADDON_ID,
     name: 'Addon Packs',
-    version: '1.3.0',
+    version: '1.4.0',
     description: 'Creates, lists and applies portable addon packs that configure built-in and community addons together.',
     author: 'ElephantNote',
     icon: 'layers-3',
@@ -308,12 +338,19 @@ export const addonPacksAddon = {
   activate(ctx) {
     ctx.addAction({
       id: `${ADDON_ID}.ensure-develop-parity`,
-      title: 'Create Develop parity pack',
-      description: 'Ensure the complete first-party ElephantNote configuration is available as an addon pack.',
+      title: 'Create first-party addon packs',
+      description: 'Ensure the complete and no-calendar first-party configurations are available as addon packs.',
       async run() {
         const result = await ensureDevelopParityPack()
-        logAction(ctx, 'addon-pack-develop-parity', result)
-        return result
+        const base = await ensureBasePack()
+        const combined = {
+          ...result,
+          basePackPath: base.packPath,
+          baseCreated: base.created,
+          baseUpdated: base.updated
+        }
+        logAction(ctx, 'addon-pack-first-party', combined)
+        return combined
       }
     })
 

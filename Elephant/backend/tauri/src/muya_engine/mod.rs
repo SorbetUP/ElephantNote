@@ -9,3 +9,6 @@ pub mod utils;
 
 #[cfg(test)]
 mod parity_fixtures;
+
+#[cfg(test)]
+mod renderer_parity_fixtures;

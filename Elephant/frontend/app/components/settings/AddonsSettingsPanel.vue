@@ -1,32 +1,63 @@
 <template>
   <div class="en-addons-panel">
+    <button
+      class="en-community-title-check"
+      type="button"
+      role="checkbox"
+      aria-label="Community addons"
+      :aria-checked="communityAddonsEnabled"
+      :title="communityAddonsEnabled ? 'Community addons enabled' : 'Community addons disabled'"
+      :disabled="!communityConsentLoaded || operationInProgress"
+      @click="toggleCommunityAddons"
+    >
+      <Check v-if="communityAddonsEnabled" aria-hidden="true" />
+    </button>
+
     <nav class="en-addons-tabs" aria-label="Addon settings pages">
-      <button type="button" :class="{ active: activePage === 'addons' }" @click="activePage = 'addons'">
-        <Package aria-hidden="true" />
-        <span>Addons</span>
+      <div class="en-addons-tab-buttons">
+        <button type="button" :class="{ active: activePage === 'addons' }" @click="activePage = 'addons'">
+          <Package aria-hidden="true" />
+          <span>Addons</span>
+        </button>
+        <button type="button" :class="{ active: activePage === 'packs' }" @click="activePage = 'packs'">
+          <Layers3 aria-hidden="true" />
+          <span>Addon packs</span>
+        </button>
+      </div>
+
+      <label class="en-addons-search">
+        <Search aria-hidden="true" />
+        <input
+          v-model.trim="activeQuery"
+          type="search"
+          :placeholder="activePage === 'addons' ? 'Search addons' : 'Search addon packs'"
+          :aria-label="activePage === 'addons' ? 'Search addons' : 'Search addon packs'"
+        >
+      </label>
+
+      <button
+        class="en-addons-toolbar-icon"
+        type="button"
+        aria-label="Refresh"
+        title="Refresh"
+        :disabled="operationInProgress || (activePage === 'addons' && (!communityAddonsEnabled || catalogLoading))"
+        @click="refreshActivePage"
+      >
+        <RefreshCw aria-hidden="true" />
       </button>
-      <button type="button" :class="{ active: activePage === 'packs' }" @click="activePage = 'packs'">
-        <Layers3 aria-hidden="true" />
-        <span>Addon packs</span>
+      <button
+        class="en-addons-toolbar-icon primary"
+        type="button"
+        :aria-label="activePage === 'addons' ? 'Install addon from file' : 'Add addon pack from file'"
+        :title="activePage === 'addons' ? 'Install addon from file' : 'Add addon pack from file'"
+        :disabled="operationInProgress || (activePage === 'addons' && !communityAddonsEnabled)"
+        @click="addFromFile"
+      >
+        <Plus aria-hidden="true" />
       </button>
     </nav>
 
     <template v-if="activePage === 'addons'">
-      <section class="en-addons-toolbar">
-        <label class="en-addons-search">
-          <Search aria-hidden="true" />
-          <input v-model.trim="query" type="search" placeholder="Search addons" aria-label="Search addons">
-        </label>
-        <template v-if="communityAddonsEnabled">
-          <button class="en-secondary-button" type="button" :disabled="catalogLoading || operationInProgress" @click="refreshCatalog">
-            <RefreshCw aria-hidden="true" /> Refresh
-          </button>
-          <button class="en-primary-button" type="button" :disabled="operationInProgress" @click="installAddonPackage">
-            <Plus aria-hidden="true" /> Install from file
-          </button>
-        </template>
-      </section>
-
       <p v-if="message" class="en-addons-feedback" :class="{ error: messageIsError }">{{ message }}</p>
       <p v-if="lastError" class="en-addons-feedback error">{{ lastError }}</p>
 
@@ -52,42 +83,9 @@
         </div>
       </section>
 
-      <section v-if="!communityConsentLoaded" class="en-addons-card en-addons-loading">
-        <span>Loading community addon settings…</span>
-      </section>
-
-      <section v-else-if="!communityAddonsEnabled" class="en-addons-card en-addons-gate">
-        <div class="en-addons-gate-heading">
-          <span class="en-addons-icon warning"><ShieldAlert aria-hidden="true" /></span>
-          <div>
-            <h3>Turn on community addons</h3>
-            <p>Community addons execute third-party code. Some run with limited access and others can modify the whole application.</p>
-          </div>
-        </div>
-        <label class="en-addons-risk-check">
-          <input v-model="riskAccepted" type="checkbox">
-          <span>I understand the risk and I am responsible for the community addons I enable.</span>
-        </label>
-        <button class="en-primary-button" type="button" :disabled="!riskAccepted || operationInProgress" @click="enableCommunityAddons">
-          Turn on community addons
-        </button>
-      </section>
-
-      <section v-else class="en-addons-card en-addons-mode-row">
-        <div>
-          <strong>Community addons</strong>
-          <p>Turning this off disables every third-party addon and prevents it from starting again. Packages and private data are kept.</p>
-        </div>
-        <button class="en-switch active" type="button" role="switch" aria-label="Community addons enabled" aria-checked="true" :disabled="operationInProgress" @click="disableCommunityAddons"><span /></button>
-      </section>
-
-      <!-- The former Built-in addon catalogue and community catalogue are intentionally unified below. -->
       <section class="en-addons-list-section">
         <header>
-          <div>
-            <h3>Available addons</h3>
-            <p>Install any feature or package from the same list.</p>
-          </div>
+          <h3>Available addons</h3>
           <span>{{ availableAddons.length }}</span>
         </header>
         <div class="en-addons-card en-catalog-list">
@@ -121,15 +119,20 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { Layers3, Package, Plus, RefreshCw, Search, ShieldAlert } from '@lucide/vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { open } from '@tauri-apps/plugin-dialog'
+import { Check, Layers3, Package, Plus, RefreshCw, Search } from '@lucide/vue'
 import AddonIcon from './AddonIcon.vue'
 import AddonSettingsRow from './AddonSettingsRow.vue'
 import { useAddonsSettings } from './useAddonsSettings'
 
+const PACK_SEARCH_EVENT = 'elephantnote:addon-packs-search'
+const PACK_REFRESH_EVENT = 'elephantnote:addon-packs-refresh'
+const PACK_IMPORT_EVENT = 'elephantnote:addon-packs-import'
+
 const activePage = ref('addons')
+const packQuery = ref('')
 const {
-  riskAccepted,
   query,
   expandedAddonId,
   message,
@@ -153,6 +156,50 @@ const {
   uninstallAddon,
   runAction
 } = useAddonsSettings()
+
+const activeQuery = computed({
+  get: () => activePage.value === 'addons' ? query.value : packQuery.value,
+  set: (value) => {
+    if (activePage.value === 'addons') query.value = value
+    else packQuery.value = value
+  }
+})
+
+const dispatchPackEvent = (name, detail = undefined) => {
+  window.dispatchEvent(new CustomEvent(name, { detail }))
+}
+
+watch(packQuery, (value) => dispatchPackEvent(PACK_SEARCH_EVENT, { query: value }))
+watch(activePage, async (page) => {
+  if (page !== 'packs') return
+  await nextTick()
+  dispatchPackEvent(PACK_SEARCH_EVENT, { query: packQuery.value })
+})
+
+const toggleCommunityAddons = async () => {
+  if (communityAddonsEnabled.value) await disableCommunityAddons()
+  else await enableCommunityAddons()
+}
+
+const refreshActivePage = async () => {
+  if (activePage.value === 'addons') await refreshCatalog()
+  else dispatchPackEvent(PACK_REFRESH_EVENT)
+}
+
+const addFromFile = async () => {
+  if (activePage.value === 'addons') {
+    await installAddonPackage()
+    return
+  }
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: 'ElephantNote addon pack', extensions: ['enaddonpack'] }]
+  })
+  if (typeof selected === 'string' && selected) {
+    dispatchPackEvent(PACK_IMPORT_EVENT, { path: selected })
+  }
+}
 </script>
 
 <style scoped src="./addons-settings.css"></style>

@@ -116,7 +116,7 @@ const excalidrawAssetsPlugin = () => ({
 
 const completeMuyaRustAdapter = resolve(
   __dirname,
-  'Elephant/frontend/src/renderer/src/muya/completeMuyaRustAdapter.js'
+  'Elephant/frontend/src/renderer/src/muya/completeMuyaRustAdapter.js.wrapper.js'
 )
 const aliasEntries = Object.entries(npmPackageAliases).map(([find, replacement]) => ({
   find,

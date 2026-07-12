@@ -1,7 +1,7 @@
 import { isTrustedAddonManifest } from '../manifest'
 import AddonPacksSettings from './ui/AddonPacksSettings.vue'
 import { mountSettingsComponent } from './settingsComponentHost'
-import { invokeTauri, logAction, notifySuccess, readNote, writeNote } from './shared'
+import { invokeTauri, logAction, readNote, writeNote } from './shared'
 
 const ADDON_ID = 'elephant.addon-packs'
 const PACK_DIRECTORY = '.elephantnote/addons/packs'
@@ -17,10 +17,15 @@ const DEVELOP_PARITY_ADDONS = Object.freeze([
   { id: 'elephant.codex-connection', version: '1.0.0', source: 'builtin', enabled: true },
   { id: 'elephant.calendar', version: '1.1.0', source: 'builtin', enabled: true },
   { id: 'elephant.sites', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.ai', version: '1.1.0', source: 'builtin', enabled: true },
-  { id: 'elephant.open-models', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.ai', version: '2.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.ai-chat', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.ai-search', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.ai-ocr', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.wiki', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.graph', version: '1.0.0', source: 'builtin', enabled: true },
+  { id: 'elephant.open-models', version: '1.1.0', source: 'builtin', enabled: true },
   { id: 'elephant.sync', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.code-execution', version: '1.1.0', source: 'builtin', enabled: true },
+  { id: 'elephant.code-execution', version: '2.0.0', source: 'builtin', enabled: true },
   { id: 'elephant.excalidraw', version: '1.1.0', source: 'builtin', enabled: true },
   { id: 'elephant.recently-edited', version: '1.0.0', source: 'builtin', enabled: true }
 ])
@@ -183,6 +188,11 @@ const prepareTrustedAddon = async (ctx, snapshot) => {
   if (!isTrustedAddonManifest(snapshot?.manifest)) return
   const external = ctx.addons.external
   if (!external) throw new Error('The full app access addon runtime is unavailable')
+  const approved = globalThis.confirm?.(
+    `${snapshot.manifest.name} requests Full app access.\n\n` +
+    'It can modify the interface, editor and application behavior. Continue?'
+  )
+  if (approved !== true) throw new Error(`Full app access was not approved for ${snapshot.manifest.name}`)
   await external.setSafeMode(false)
   await external.approveTrusted(snapshot.manifest.id)
 }
@@ -266,7 +276,6 @@ const applyPack = async (ctx, options = {}) => {
     '',
     '# Addon Pack Result',
     '',
-    `Pack: \`${path}\``,
     `Name: ${pack.name}`,
     `Applied: ${generatedAt}`,
     '',
@@ -286,7 +295,7 @@ export const addonPacksAddon = {
   manifest: {
     id: ADDON_ID,
     name: 'Addon Packs',
-    version: '1.2.0',
+    version: '1.3.0',
     description: 'Creates, lists and applies portable addon packs that configure built-in and community addons together.',
     author: 'ElephantNote',
     icon: 'layers-3',
@@ -316,7 +325,6 @@ export const addonPacksAddon = {
         const path = normalizePackPath(options?.path)
         logAction(ctx, 'addon-pack-create:start', { path })
         const result = await createPack(ctx, options)
-        notifySuccess(`Addon pack created: ${result.path}`)
         logAction(ctx, 'addon-pack-create:done', result)
         return result
       }
@@ -330,7 +338,6 @@ export const addonPacksAddon = {
         const path = normalizePackPath(options?.path)
         logAction(ctx, 'addon-pack-apply:start', { path })
         const result = await applyPack(ctx, options)
-        notifySuccess(`Addon pack applied: ${result.applied} addons`)
         logAction(ctx, 'addon-pack-apply:done', result)
         return result
       }

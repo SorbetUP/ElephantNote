@@ -1,10 +1,4 @@
-import selection from '../selection'
-
-const FOOTNOTE_REG = /^\[\^([^\^\[\]\s]+?)(?<!\\)\]:$/
-
-const checkAutoIndent = (text, offset) => {
-  return /^(?: *)(?:(?:[-*+] |\d+[.)] )|(?:> ))/.exec(text.substring(0, offset))
-}
+const FOOTNOTE_REG = /^\[\^([^\[\]\s]+?)(?<!\\)\]:$/
 
 const getCodeblockIndentSpace = text => {
   const whitespace = /^ +/.exec(text)
@@ -17,7 +11,6 @@ const enterListItem = ContentState => {
     const parent = this.getParent(block)
     const listItem = this.getParent(parent)
     const list = this.getParent(listItem)
-    const { key } = block
     const { text } = block
     const preText = text.substring(0, start.offset)
     const postText = text.substring(end.offset)

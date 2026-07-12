@@ -19,20 +19,20 @@ describe('ElephantNote AI providers', () => {
     expect(resolveAiEndpoint({ transport: 'ollama', endpoint: '127.0.0.1:11434/api/chat' })).toBe('http://127.0.0.1:11434/api/chat')
   })
 
-  it('uses the node-llama-cpp preset and local transport by default', () => {
+  it('uses the native Tauri Rust preset by default', () => {
     expect(normalizeAiConfig({})).toMatchObject({
-      preset: 'nodeLlamaCpp',
-      transport: 'node-llama-cpp',
-      endpoint: ELEPHANTNOTE_AI_PRESETS.nodeLlamaCpp.endpoint
+      preset: 'tauriRustLocal',
+      transport: 'tauri-rust',
+      endpoint: ELEPHANTNOTE_AI_PRESETS.tauriRustLocal.endpoint
     })
-    expect(resolveAiEndpoint({ transport: 'node-llama-cpp', endpoint: '' })).toBe('')
+    expect(resolveAiEndpoint({ transport: 'tauri-rust', endpoint: 'tauri-rust://local' })).toBe('tauri-rust://local')
   })
 
   it('normalizes known local and remote presets without a global enabled flag', () => {
     expect(normalizeAiConfig({ preset: 'nodeLlamaCpp' })).toMatchObject({
-      preset: 'nodeLlamaCpp',
-      transport: 'node-llama-cpp',
-      endpoint: ELEPHANTNOTE_AI_PRESETS.nodeLlamaCpp.endpoint
+      preset: 'tauriRustLocal',
+      transport: 'tauri-rust',
+      endpoint: ELEPHANTNOTE_AI_PRESETS.tauriRustLocal.endpoint
     })
     expect(normalizeAiConfig({ preset: 'mlx' })).toMatchObject({
       preset: 'mlx',
@@ -51,7 +51,7 @@ describe('ElephantNote AI providers', () => {
 
   it('creates provider request bodies and extracts common response shapes', () => {
     const messages = [{ role: 'user', content: 'Hello' }]
-    expect(createAiRequestBody({ transport: 'node-llama-cpp', model: 'local.gguf', messages })).toEqual({
+    expect(createAiRequestBody({ transport: 'tauri-rust', model: 'local.gguf', messages })).toEqual({
       model: 'local.gguf',
       messages,
       stream: false

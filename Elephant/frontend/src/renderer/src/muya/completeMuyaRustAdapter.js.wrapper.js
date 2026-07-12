@@ -15,7 +15,8 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     // ContentState handler. Rust handlers are asynchronous, so that immediate
     // dispatch observes the old DOM and used to save/reconcile stale Markdown.
     this.__rustMutationGate = createRustAsyncMutationGate({
-      dispatch: this.dispatchChange
+      dispatch: this.dispatchChange,
+      onSuppressed: () => this.__programmaticGuard().consume()
     })
     this.dispatchChange = this.__rustMutationGate.dispatch
 

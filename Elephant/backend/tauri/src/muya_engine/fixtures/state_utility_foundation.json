@@ -1,0 +1,22 @@
+{
+  "upperLower": [["PARAGRAPH", "paragraph"], ["BLOCK_QUOTE", "block-quote"]],
+  "identity": [["div", "div"], ["figure", "figure"]],
+  "markdownExtensions": [[null, false], ["", false], ["README.MD", true], ["note.markdown", true], ["note.mdx", true], ["note.pdf", false], ["md", false], ["folder/note.txt", true]],
+  "footnotes": [
+    ["a", {"type": "figure", "functionType": "footnote", "children": [{"text": "a"}], "value": 3}],
+    ["b", {"type": "figure", "functionType": "footnote", "children": [{"text": "b"}], "value": 2}]
+  ],
+  "footnoteBlocks": [
+    {"type": "figure", "functionType": "footnote", "children": [{"text": "a"}], "value": 1},
+    {"type": "p", "children": [{"text": "ignored"}]},
+    {"type": "figure", "functionType": "footnote", "children": [{"text": "b"}], "value": 2},
+    {"type": "figure", "functionType": "footnote", "children": [{"text": "a"}], "value": 3}
+  ],
+  "blockLexerState": [
+    {"input": ["   \na\n  ", true, null, false], "state": {"src": "\na\n", "top": true, "prevListIsOrdered": null, "checkCursorSignature": false, "foundAnchorSignature": false, "foundFocusSignature": false, "cursorAnchorFocus": ""}},
+    {"input": ["ANCHORFOCUShello", true, false, true], "state": {"src": "hello", "top": true, "prevListIsOrdered": false, "checkCursorSignature": true, "foundAnchorSignature": true, "foundFocusSignature": true, "cursorAnchorFocus": "ANCHORFOCUS"}},
+    {"input": ["FOCUSANCHORhello", false, true, true], "state": {"src": "ANCHORhello", "top": false, "prevListIsOrdered": true, "checkCursorSignature": true, "foundAnchorSignature": false, "foundFocusSignature": true, "cursorAnchorFocus": "FOCUS"}},
+    {"input": ["ANCHORhello", true, null, false], "state": {"src": "ANCHORhello", "top": true, "prevListIsOrdered": null, "checkCursorSignature": false, "foundAnchorSignature": false, "foundFocusSignature": false, "cursorAnchorFocus": ""}},
+    {"input": ["hello", true, null, true], "state": {"src": "hello", "top": true, "prevListIsOrdered": null, "checkCursorSignature": true, "foundAnchorSignature": false, "foundFocusSignature": false, "cursorAnchorFocus": ""}}
+  ]
+}

@@ -17,9 +17,12 @@
             <p v-if="pack.description">{{ pack.description }}</p>
           </div>
           <div class="en-addon-pack-actions">
-            <button class="en-primary-button" type="button" :disabled="busy" @click="applyPack(pack)">
-              {{ pack.protected ? 'Install' : 'Apply' }}
-            </button>
+            <button
+              :class="isPackInstalled(pack) ? 'en-danger-button' : 'en-primary-button'"
+              type="button"
+              :disabled="busy"
+              @click="togglePack(pack)"
+            >{{ isPackInstalled(pack) ? 'Uninstall' : (pack.protected ? 'Install' : 'Apply') }}</button>
             <button v-if="!pack.protected && confirmDeletePath !== pack.path" class="en-danger-button" type="button" :disabled="busy" @click="confirmDeletePath = pack.path">Delete</button>
             <template v-else-if="!pack.protected">
               <button class="en-danger-button" type="button" :disabled="busy" @click="deletePack(pack)">Confirm</button>
@@ -48,6 +51,7 @@ const DEVELOP_PARITY_PACK_PATH = `${PACK_DIRECTORY}/develop-parity.enaddonpack`
 const PACK_SEARCH_EVENT = 'elephantnote:addon-packs-search'
 const PACK_REFRESH_EVENT = 'elephantnote:addon-packs-refresh'
 const PACK_IMPORT_EVENT = 'elephantnote:addon-packs-import'
+const NON_REMOVABLE_ADDON_IDS = new Set(['elephant.addon-packs', 'elephant.excalidraw'])
 const addonsStore = useAddonsStore()
 const packs = ref([])
 const query = ref('')
@@ -113,6 +117,11 @@ const readPack = async (path) => {
     name: String(parsed.name || path.split('/').pop()?.replace(/\.enaddonpack$/i, '') || 'Unnamed addon pack'),
     description: String(parsed.description || ''),
     addonCount: parsed.addons.length,
+    addons: parsed.addons.map((entry) => ({
+      id: String(entry?.id || ''),
+      source: String(entry?.source || 'builtin'),
+      enabled: entry?.enabled === true
+    })).filter((entry) => entry.id),
     createdAt: String(parsed.createdAt || ''),
     protected: parsed.protected === true || path === DEVELOP_PARITY_PACK_PATH
   }
@@ -136,6 +145,16 @@ const discoverPackPaths = async () => {
     }
   }
   return paths
+}
+
+const removablePackEntries = (pack) => (pack?.addons || []).filter((entry) =>
+  !NON_REMOVABLE_ADDON_IDS.has(entry.id) && entry.source !== 'installed')
+
+const isPackInstalled = (pack) => {
+  const removable = removablePackEntries(pack)
+  if (!removable.length) return false
+  const installedIds = new Set(addonsStore.items.map((addon) => addon.manifest.id))
+  return removable.every((entry) => installedIds.has(entry.id))
 }
 
 const loadPacks = async () => {
@@ -189,13 +208,39 @@ const applyPack = async (pack) => {
   showMessage('')
   try {
     const result = await addonsStore.runAction('elephant.addon-packs.apply', { path: pack.path })
-    showMessage(`Applied ${pack.name}: ${result?.applied || 0} addons processed.`)
+    showMessage(`Installed ${pack.name}: ${result?.applied || 0} addons processed.`)
+    addonsStore.refresh()
   } catch (error) {
     showMessage(error instanceof Error ? error.message : String(error), true)
   } finally {
     busy.value = false
   }
 }
+
+const uninstallPack = async (pack) => {
+  if (!pack || busy.value) return
+  busy.value = true
+  showMessage('')
+  let removed = 0
+  try {
+    for (const entry of [...removablePackEntries(pack)].reverse()) {
+      const current = addonsStore.manager?.get(entry.id)
+      if (!current) continue
+      if (current.manifest.source === 'external') await addonsStore.uninstallExternalAddon(entry.id)
+      else await addonsStore.manager.uninstallBuiltin(entry.id)
+      removed += 1
+    }
+    addonsStore.refresh()
+    showMessage(`Uninstalled ${pack.name}: ${removed} addons removed.`)
+  } catch (error) {
+    addonsStore.refresh()
+    showMessage(error instanceof Error ? error.message : String(error), true)
+  } finally {
+    busy.value = false
+  }
+}
+
+const togglePack = (pack) => isPackInstalled(pack) ? uninstallPack(pack) : applyPack(pack)
 
 const deletePack = async (pack) => {
   if (!pack?.path || pack.protected || busy.value) return

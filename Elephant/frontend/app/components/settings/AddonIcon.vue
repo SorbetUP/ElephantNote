@@ -6,6 +6,7 @@
 import { computed } from 'vue'
 import {
   Bot,
+  CalendarClock,
   CalendarDays,
   Cloud,
   Database,
@@ -23,6 +24,7 @@ const props = defineProps({ name: { type: String, default: 'package' } })
 
 const ICONS = Object.freeze({
   bot: Bot,
+  'calendar-clock': CalendarClock,
   calendar: CalendarDays,
   'calendar-days': CalendarDays,
   cloud: Cloud,

@@ -8,6 +8,8 @@ use tauri::{AppHandle, Emitter};
 #[cfg(not(mobile))]
 use crate::local_llama_runtime;
 #[cfg(not(mobile))]
+use std::collections::{HashMap, HashSet};
+#[cfg(not(mobile))]
 use std::path::Path;
 
 type R<T> = Result<T, String>;
@@ -156,6 +158,8 @@ fn promote_saved_codex_route(config: &mut Value) -> bool {
     chat.entry("reasoningEffort")
         .or_insert_with(|| json!("medium"));
     chat.entry("enableTools").or_insert_with(|| json!(true));
+    chat.entry("enableRag").or_insert_with(|| json!(true));
+    chat.entry("stream").or_insert_with(|| json!(true));
     true
 }
 
@@ -209,6 +213,7 @@ pub async fn prewarm_saved_codex(app: &AppHandle) {
     }
 }
 
+#[cfg(not(mobile))]
 fn knowledge_hits(app: &AppHandle, query: &str, limit: usize) -> Vec<KnowledgeSearchHit> {
     let Ok(vault) = crate::vault::config::get_active_vault(app) else {
         return Vec::new();
@@ -216,7 +221,7 @@ fn knowledge_hits(app: &AppHandle, query: &str, limit: usize) -> Vec<KnowledgeSe
     let Ok(store) = KnowledgeStore::open(Path::new(&vault.path)) else {
         return Vec::new();
     };
-    store.search(query, limit).unwrap_or_default()
+    crate::knowledge_chat_actions::hybrid_note_search(&store, query, limit).unwrap_or_default()
 }
 
 #[cfg(not(mobile))]
@@ -236,6 +241,15 @@ fn tools_enabled(payload: &Value) -> bool {
 }
 
 #[cfg(not(mobile))]
+fn auto_accept_enabled(payload: &Value) -> bool {
+    payload
+        .get("autoApproveTools")
+        .or_else(|| payload.get("autoAcceptTools"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+#[cfg(not(mobile))]
 fn configured_system_prompt(payload: &Value) -> String {
     text(
         ai_config(payload)
@@ -251,8 +265,12 @@ fn grounded_messages(
     payload: &Value,
     query: &str,
 ) -> (Vec<Value>, Vec<KnowledgeSearchHit>) {
+    let requested_limit = payload
+        .get("limit")
+        .and_then(Value::as_u64)
+        .unwrap_or(8) as usize;
     let hits = if rag_enabled(payload) {
-        knowledge_hits(app, query, 6)
+        knowledge_hits(app, query, requested_limit.clamp(4, 20))
     } else {
         Vec::new()
     };
@@ -261,8 +279,7 @@ fn grounded_messages(
         .enumerate()
         .map(|(index, hit)| {
             format!(
-                "[{}] {} — {} ({})
-{}",
+                "[{}] {} — {} ({})\n{}",
                 index + 1,
                 hit.title,
                 hit.heading,
@@ -271,43 +288,28 @@ fn grounded_messages(
             )
         })
         .collect::<Vec<_>>()
-        .join(
-            "
-
-",
-        );
+        .join("\n\n");
     let access_contract = if !rag_enabled(payload) {
         "La recherche dans les notes est désactivée pour cette requête. Ne prétends pas avoir consulté la vault."
             .to_string()
     } else if hits.is_empty() {
-        "Tu peux interroger l’index local ElephantNote, mais aucun passage pertinent n’a été trouvé pour cette requête. Ne dis pas que tu n’as aucun accès aux notes : précise seulement qu’aucun résultat pertinent n’a été récupéré."
+        "Tu peux interroger l’index local ElephantNote, mais aucun passage pertinent n’a été trouvé pendant la première passe. Utilise search_notes pour reformuler ou décomposer la recherche si nécessaire."
             .to_string()
     } else {
         format!(
-            "Tu peux consulter les passages de notes indexées fournis ci-dessous. Utilise-les pour les affirmations concernant la vault et cite-les avec [1], [2], etc. Tu n’as pas un accès libre au disque : ton accès est limité à l’index et aux outils ElephantNote. N’affirme jamais que tu n’as aucun accès aux notes lorsque des passages sont présents.
-
-{context}"
+            "Tu peux consulter les passages de notes indexées ci-dessous. Ils proviennent d’une recherche hybride combinant texte, titres, liens Wiki et embeddings. Utilise-les pour les affirmations concernant la vault et cite-les avec [1], [2], etc. Tu peux lancer des recherches search_notes supplémentaires si ces passages sont insuffisants.\n\n{context}"
         )
     };
     let custom = configured_system_prompt(payload);
     let tools = if tools_enabled(payload) {
-        format!(
-            "
-
-{}",
-            tool_contract()
-        )
+        format!("\n\n{}", tool_contract())
     } else {
         String::new()
     };
     let system = if custom.is_empty() {
-        format!("Tu es l’assistant ElephantNote. Réponds en français par défaut. {access_contract}{tools}")
+        format!("Tu es l’assistant Elephant. Réponds en français par défaut. {access_contract}{tools}")
     } else {
-        format!(
-            "{custom}
-
-Capacités ElephantNote : {access_contract}{tools}"
-        )
+        format!("{custom}\n\nCapacités Elephant : {access_contract}{tools}")
     };
     let mut messages = vec![json!({ "role": "system", "content": system })];
     messages.extend(extract_messages(payload));
@@ -335,19 +337,22 @@ fn citations_from_hits(hits: &[KnowledgeSearchHit]) -> Vec<Value> {
 
 #[cfg(not(mobile))]
 fn tool_contract() -> &'static str {
-    r#"You have real ElephantNote tools. Never claim that you cannot search notes, create a note, update a note, add/reject a Wiki suggestion, generate a Wiki, or delete a Wiki. Read-only note context is already supplied when relevant. When the user explicitly requests an action, append exactly one machine-readable block after the human answer:
+    r#"You have real Elephant tools. Never claim that you cannot search notes, create a note, update a note, add or reject a Wiki suggestion, generate a Wiki, or delete a Wiki.
+When more information is needed, perform one or several search_notes actions. You may search repeatedly: inspect the returned results, refine the wording, split a broad question into subqueries, then search again. Do not stop after one weak query.
+Append exactly one machine-readable action block after the human answer:
 <elephantnote_actions>[{"action":"search_notes","query":"...","limit":10}]</elephantnote_actions>
+The block may contain several actions.
 Supported action names and fields:
 - search_notes: query, limit
 - create_note: relative_path, title, content
-- append_to_note: relative_path, content (omit expected_hash; ElephantNote adds the current hash)
+- append_to_note: relative_path, content (omit expected_hash; Elephant adds the current hash)
 - replace_note: relative_path, content (omit expected_hash)
 - replace_note_range: relative_path, start_offset, end_offset, replacement (omit expected_hash)
 - add_wiki_suggestion: title, topic, source_paths
 - create_wiki: title, topic, source_paths
 - reject_wiki_suggestion: topic
 - delete_wiki: draft_id
-Do not invent successful execution. Mutating actions are shown to the user for approval and only execute after approval. Do not put the action block in Markdown fences."#
+Do not invent successful execution. Mutating actions require approval unless Auto mode is enabled. Search actions execute immediately. Do not put the action block in Markdown fences."#
 }
 
 #[cfg(not(mobile))]
@@ -409,10 +414,19 @@ fn enrich_write_guard(app: &AppHandle, value: &mut Value) -> R<()> {
 }
 
 #[cfg(not(mobile))]
-fn prepare_assistant_actions(app: &AppHandle, actions: Vec<Value>) -> (Vec<Value>, Vec<String>) {
+async fn prepare_assistant_actions(
+    app: &AppHandle,
+    actions: Vec<Value>,
+    auto_accept: bool,
+    seen: &mut HashSet<String>,
+) -> (Vec<Value>, Vec<String>) {
     let mut prepared = Vec::new();
     let mut errors = Vec::new();
-    for mut value in actions.into_iter().take(8) {
+    for mut value in actions.into_iter().take(12) {
+        let key = serde_json::to_string(&value).unwrap_or_default();
+        if !key.is_empty() && !seen.insert(key) {
+            continue;
+        }
         let rationale = value
             .get("rationale")
             .and_then(Value::as_str)
@@ -427,7 +441,7 @@ fn prepare_assistant_actions(app: &AppHandle, actions: Vec<Value>) -> (Vec<Value
         let action = match serde_json::from_value::<ChatKnowledgeAction>(value) {
             Ok(action) => action,
             Err(error) => {
-                errors.push(format!("Invalid ElephantNote action: {error}"));
+                errors.push(format!("Invalid Elephant action: {error}"));
                 continue;
             }
         };
@@ -436,14 +450,76 @@ fn prepare_assistant_actions(app: &AppHandle, actions: Vec<Value>) -> (Vec<Value
             action,
             rationale,
         ) {
-            Ok(result) => match serde_json::to_value(result) {
-                Ok(value) => prepared.push(value),
-                Err(error) => errors.push(error.to_string()),
-            },
+            Ok(mut result) => {
+                if auto_accept
+                    && result.execution.is_none()
+                    && matches!(
+                        result.proposal.status,
+                        elephantnote_knowledge_core::ChatActionStatus::Proposed
+                    )
+                {
+                    match crate::knowledge_chat_actions::tauri_knowledge_chat_action_execute(
+                        app.clone(),
+                        result.proposal.id.clone(),
+                    )
+                    .await
+                    {
+                        Ok(execution) => {
+                            result.proposal = execution.proposal.clone();
+                            result.execution = Some(execution);
+                        }
+                        Err(error) => errors.push(error),
+                    }
+                }
+                match serde_json::to_value(result) {
+                    Ok(value) => prepared.push(value),
+                    Err(error) => errors.push(error.to_string()),
+                }
+            }
             Err(error) => errors.push(error),
         }
     }
     (prepared, errors)
+}
+
+#[cfg(not(mobile))]
+fn tool_results(actions: &[Value]) -> Vec<Value> {
+    actions
+        .iter()
+        .filter_map(|entry| entry.pointer("/execution/result"))
+        .filter(|value| !value.is_null())
+        .cloned()
+        .collect()
+}
+
+#[cfg(not(mobile))]
+fn search_hits_from_tool_results(results: &[Value]) -> Vec<KnowledgeSearchHit> {
+    results
+        .iter()
+        .filter_map(Value::as_array)
+        .flat_map(|values| values.iter())
+        .filter_map(|value| serde_json::from_value::<KnowledgeSearchHit>(value.clone()).ok())
+        .collect()
+}
+
+#[cfg(not(mobile))]
+fn merge_hits(target: &mut Vec<KnowledgeSearchHit>, additions: Vec<KnowledgeSearchHit>) {
+    let mut known = target
+        .iter()
+        .map(|hit| hit.chunk_id.clone())
+        .collect::<HashSet<_>>();
+    for hit in additions {
+        if known.insert(hit.chunk_id.clone()) {
+            target.push(hit);
+        }
+    }
+    target.sort_by(|left, right| {
+        right
+            .score
+            .partial_cmp(&left.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    target.truncate(40);
 }
 
 #[cfg(not(mobile))]
@@ -499,6 +575,109 @@ fn validate_configured_llama_binary(payload: &Value) -> R<()> {
     Ok(())
 }
 
+#[cfg(not(mobile))]
+async fn run_codex_tool_loop(
+    app: &AppHandle,
+    payload: &Value,
+    model: &str,
+    reasoning_effort: Option<&str>,
+    initial_prompt: String,
+    initial_hits: Vec<KnowledgeSearchHit>,
+    stream_id: Option<&str>,
+) -> R<Value> {
+    const MAX_TOOL_ROUNDS: usize = 5;
+    let auto_accept = auto_accept_enabled(payload);
+    let mut prompt = initial_prompt.clone();
+    let mut answer = String::new();
+    let mut actions = Vec::<Value>::new();
+    let mut action_errors = Vec::<String>::new();
+    let mut all_hits = initial_hits;
+    let mut seen_actions = HashSet::<String>::new();
+    let mut accumulated_results = Vec::<Value>::new();
+    let mut final_model = model.to_string();
+    let mut final_thread_id = Value::Null;
+
+    for round in 0..MAX_TOOL_ROUNDS {
+        eprintln!(
+            "[Knowledge][ChatLoop] round={} auto_accept={} accumulated_results={}",
+            round + 1,
+            auto_accept,
+            accumulated_results.len()
+        );
+        let result = codex_app_server::chat_with_effort_streaming(
+            app,
+            model,
+            &prompt,
+            reasoning_effort,
+            stream_id,
+        )
+        .await?;
+        final_model = result.model.clone();
+        final_thread_id = result
+            .thread_id
+            .as_ref()
+            .map(|value| json!(value))
+            .unwrap_or(Value::Null);
+        let (visible_answer, raw_actions) = if tools_enabled(payload) {
+            action_block(&result.answer)
+        } else {
+            (result.answer.clone(), Vec::new())
+        };
+        answer = visible_answer;
+
+        if raw_actions.is_empty() {
+            break;
+        }
+        let (prepared, errors) =
+            prepare_assistant_actions(app, raw_actions, auto_accept, &mut seen_actions).await;
+        action_errors.extend(errors);
+        let current_results = tool_results(&prepared);
+        merge_hits(
+            &mut all_hits,
+            search_hits_from_tool_results(&current_results),
+        );
+        actions.extend(prepared);
+
+        if current_results.is_empty() {
+            break;
+        }
+        accumulated_results.extend(current_results);
+        if round + 1 >= MAX_TOOL_ROUNDS {
+            break;
+        }
+        if let Some(stream_id) = stream_id {
+            let _ = app.emit(
+                "elephantnote://chat-stream",
+                json!({
+                    "streamId": stream_id,
+                    "type": "reset",
+                    "phase": "tool-results",
+                    "round": round + 1
+                }),
+            );
+        }
+        let tool_context = serde_json::to_string_pretty(&accumulated_results)
+            .map_err(|error| error.to_string())?;
+        prompt = format!(
+            "{initial_prompt}\n\nElephant executed the following real tool calls and returned these results:\n{tool_context}\n\nContinue the task using all results. Do not repeat an action already executed. If the evidence is still incomplete, emit a new search_notes action with a refined or complementary query. You may perform several consecutive searches. When enough evidence is available, answer fully and emit no action block."
+        );
+    }
+
+    Ok(json!({
+        "answer": answer,
+        "sources": all_hits,
+        "citations": citations_from_hits(&all_hits),
+        "actions": actions,
+        "actionErrors": action_errors,
+        "runtime": "codex-app-server",
+        "provider": "codex",
+        "model": final_model,
+        "reasoningEffort": reasoning_effort,
+        "threadId": final_thread_id,
+        "autoAccepted": auto_accept
+    }))
+}
+
 #[tauri::command]
 pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
     #[cfg(not(mobile))]
@@ -512,14 +691,21 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
     let source = selected_chat_source(&payload);
     let reasoning_effort = selected_chat_reasoning_effort(&payload);
     if message.trim().is_empty() {
-        return Ok(
-            json!({ "answer": "Écris un message pour démarrer le chat.", "sources": [], "runtime": "rust-knowledge-core", "model": model }),
-        );
+        return Ok(json!({
+            "answer": "Écris un message pour démarrer le chat.",
+            "sources": [],
+            "runtime": "rust-knowledge-core",
+            "model": model
+        }));
     }
     if model.trim().is_empty() {
-        return Ok(
-            json!({ "answer": "Aucun modèle n’est sélectionné pour le rôle Chat.", "sources": [], "runtime": "rust-knowledge-core", "model": model, "warning": "No chat model selected" }),
-        );
+        return Ok(json!({
+            "answer": "Aucun modèle n’est sélectionné pour le rôle Chat.",
+            "sources": [],
+            "runtime": "rust-knowledge-core",
+            "model": model,
+            "warning": "No chat model selected"
+        }));
     }
 
     #[cfg(mobile)]
@@ -543,66 +729,21 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
             .collect::<Vec<_>>()
             .join("\n\n");
         let prompt = format!(
-            "You are answering inside ElephantNote. Do not inspect the filesystem or run commands. Use only the conversation and retrieved note context below. Return only the answer.\n\n{}",
+            "You are answering inside Elephant. Do not inspect the filesystem or run shell commands. Use only the conversation, retrieved note context and Elephant tools below. Return a useful human answer, followed by an action block only when a tool is needed.\n\n{}",
             transcript
         );
         let stream_id = text(&payload, &["streamId", "stream_id"]);
         let stream_id = (!stream_id.is_empty()).then_some(stream_id);
-        let result = codex_app_server::chat_with_effort_streaming(
+        return run_codex_tool_loop(
             &app,
+            &payload,
             &model,
-            &prompt,
             reasoning_effort.as_deref(),
+            prompt,
+            hits,
             stream_id.as_deref(),
         )
-        .await?;
-        let (mut answer, raw_actions) = if tools_enabled(&payload) {
-            action_block(&result.answer)
-        } else {
-            (result.answer.clone(), Vec::new())
-        };
-        let (actions, action_errors) = prepare_assistant_actions(&app, raw_actions);
-        let search_results = actions
-            .iter()
-            .filter_map(|entry| entry.pointer("/execution/result"))
-            .filter(|value| value.is_array())
-            .cloned()
-            .collect::<Vec<_>>();
-        if !search_results.is_empty() {
-            if let Some(stream_id) = stream_id.as_deref() {
-                let _ = app.emit(
-                    "elephantnote://chat-stream",
-                    json!({ "streamId": stream_id, "type": "reset", "phase": "tool-results" }),
-                );
-            }
-            let tool_context =
-                serde_json::to_string_pretty(&search_results).map_err(|error| error.to_string())?;
-            let followup_prompt = format!(
-                "{prompt}\n\nThe ElephantNote search tool returned the following real indexed-note results:\n{tool_context}\n\nAnswer the user's request using these results. Cite note titles naturally. Do not emit another elephantnote_actions block."
-            );
-            answer = codex_app_server::chat_with_effort_streaming(
-                &app,
-                &model,
-                &followup_prompt,
-                reasoning_effort.as_deref(),
-                stream_id.as_deref(),
-            )
-            .await?
-            .answer;
-        }
-        let citations = citations_from_hits(&hits);
-        return Ok(json!({
-            "answer": answer,
-            "sources": hits,
-            "citations": citations,
-            "actions": actions,
-            "actionErrors": action_errors,
-            "runtime": "codex-app-server",
-            "provider": "codex",
-            "model": result.model,
-            "reasoningEffort": reasoning_effort,
-            "threadId": result.thread_id
-        }));
+        .await;
     }
 
     #[cfg(not(mobile))]
@@ -628,13 +769,13 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
                 .ok_or_else(|| format!("Selected local model could not be resolved: {model}"))?;
         let citations = citations_from_hits(&hits);
         Ok(json!({
-          "answer": local.answer,
-          "sources": hits,
-          "citations": citations,
-          "runtime": "rust-knowledge-core",
-          "provider": local.provider,
-          "model": local.model,
-          "baseUrl": local.base_url
+            "answer": local.answer,
+            "sources": hits,
+            "citations": citations,
+            "runtime": "rust-knowledge-core",
+            "provider": local.provider,
+            "model": local.model,
+            "baseUrl": local.base_url
         }))
     }
 }
@@ -642,11 +783,13 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn selects_chat_model_from_route() {
         let payload = json!({ "aiConfig": { "routes": { "chat": { "model": "tiny.gguf" } } } });
         assert_eq!(selected_chat_model(&payload), "tiny.gguf");
     }
+
     #[test]
     fn reads_reasoning_effort_from_chat_route() {
         let payload =
@@ -661,5 +804,19 @@ mod tests {
     fn extracts_last_user_message() {
         let payload = json!({ "messages": [{ "role": "user", "content": "first" }, { "role": "user", "content": "second" }] });
         assert_eq!(last_user_message(&payload), "second");
+    }
+
+    #[test]
+    fn reads_auto_accept_from_payload() {
+        let payload = json!({ "autoApproveTools": true });
+        assert!(auto_accept_enabled(&payload));
+    }
+
+    #[test]
+    fn parses_multiple_actions_from_one_block() {
+        let (_, actions) = action_block(
+            "ok<elephantnote_actions>[{\"action\":\"search_notes\",\"query\":\"iroh\",\"limit\":5},{\"action\":\"search_notes\",\"query\":\"sync\",\"limit\":5}]</elephantnote_actions>",
+        );
+        assert_eq!(actions.len(), 2);
     }
 }

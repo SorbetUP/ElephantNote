@@ -13,7 +13,7 @@
 7. `history`: invertible transactions and typing groups.
 8. `view`: logical patches consumed by the browser adapter.
 
-## Current executable slice
+## Current executable parser slice
 
 The Rust parser and Markdown serializer currently execute these block constructions:
 
@@ -42,7 +42,21 @@ The inline tokenizer currently executes:
 
 Inline parsing is recursive inside headings, paragraphs, blockquotes, list items, links and table cells. Fenced code content follows a separate literal path and is never tokenized as Markdown inline content.
 
-This slice has Rust unit and round-trip tests. It has not yet passed full differential characterization against the original Muya JavaScript parser, so it is not an eligible runtime replacement yet.
+## Current executable editing slice
+
+The first model-level editing layer now contains:
+
+- DOM-independent logical selections using UTF-16 offsets;
+- `InsertText` and `DeleteBackward` semantic commands;
+- UTF-16 boundary validation that rejects offsets inside surrogate pairs;
+- invertible `ReplaceText` operations;
+- transactions applied to a cloned document before commit, preventing partially applied failures;
+- revision increments on successful transactions;
+- bounded transaction-based undo and redo history.
+
+`DeleteBackward` currently removes one Unicode scalar value. Grapheme-cluster deletion, non-collapsed selections, block splitting, block joining, formatting commands and selection mapping across structural operations remain future slices.
+
+The parser, serializer and editing slices have Rust unit tests. They have not yet passed full differential characterization against the original Muya JavaScript behavior, so they are not eligible runtime replacements yet.
 
 ## Markdown construction catalogue
 

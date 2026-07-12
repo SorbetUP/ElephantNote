@@ -6,228 +6,82 @@ const { listDirectory } = vi.hoisted(() => ({
   listDirectory: vi.fn()
 }))
 
-vi.mock('electron-log', () => ({
-  default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() }
-}))
-vi.mock('electron-log/renderer', () => ({
-  default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() }
-}))
 vi.mock('../../front/app/services/elephantnoteClient', () => ({
   elephantnoteClient: {
-    directory: {
-      list: listDirectory
-    },
-    features: {
-      get: vi.fn().mockResolvedValue({ askAi: true })
-    }
+    directory: { list: listDirectory },
+    features: { get: vi.fn().mockResolvedValue({ askAi: true }) }
   }
 }))
 
-const createDeferred = () => {
-  let resolve
-  let reject
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise
-    reject = rejectPromise
-  })
-  return { promise, resolve, reject }
-}
-
-const flush = async() => {
-  await nextTick()
-  await new Promise((resolve) => setTimeout(resolve, 0))
-  await nextTick()
-}
-
-const createVault = () => ({
-  id: 'vault-1',
-  name: 'Vault 1',
-  path: '/tmp/vault-1'
+const createVault = (id = 'vault-1') => ({
+  id,
+  name: `Vault ${id}`,
+  path: `/tmp/${id}`
 })
 
-const seedVault = async (entries = []) => {
+const mountWiki = async() => {
   const { useVaultStore } = await import('../../front/app/stores/vaultStore.js')
+  const WikiView = (await import('../../front/app/components/views/WikiView.vue')).default
   const pinia = createPinia()
   setActivePinia(pinia)
   const store = useVaultStore()
   store.applyPayload({
-    vaults: [createVault()],
+    vaults: [createVault('vault-1'), createVault('vault-2')],
     activeVaultId: 'vault-1',
-    activeVault: createVault(),
+    activeVault: createVault('vault-1'),
     workspace: { sidebar: [] },
-    entries
+    entries: []
   })
-  return { pinia, store }
+
+  const app = createApp({ render: () => h(WikiView) })
+  app.use(pinia)
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  app.mount(container)
+  await nextTick()
+  return { app, container, store }
 }
 
-describe('wiki async navigation races', () => {
+describe('wiki asynchronous state isolation', () => {
   beforeEach(() => {
     listDirectory.mockReset()
     window.localStorage.clear()
     window.tauri = {
       ipcRenderer: {
-        send: vi.fn()
+        send: vi.fn(),
+        invoke: vi.fn(),
+        on: vi.fn(),
+        off: vi.fn(),
+        removeListener: vi.fn()
       }
     }
     setActivePinia(createPinia())
   })
 
-  it('ignores a stale wiki root response after the current path changes', async() => {
-    const rootLoad = createDeferred()
-    listDirectory.mockReturnValueOnce(rootLoad.promise)
+  it('does not start obsolete hidden-directory requests on mount', async() => {
+    const { app, container, store } = await mountWiki()
 
-    const WikiView = (await import('../../front/app/components/views/WikiView.vue')).default
-    const { pinia, store } = await seedVault([])
-
-    const app = createApp({ render: () => h(WikiView) })
-    app.use(pinia)
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-    app.mount(container)
-    await nextTick()
-
-    store.currentPath = '.elephantnote/wiki/Cluster'
-    store.entries = [
-      {
-        kind: 'note',
-        path: '.elephantnote/wiki/Cluster/Index.md',
-        title: 'Index',
-        tags: [],
-        updatedAt: '2026-06-24T07:10:00.000Z'
-      }
-    ]
-
-    rootLoad.resolve([
-      {
-        kind: 'note',
-        path: '.elephantnote/wiki/Root.md',
-        title: 'Root',
-        tags: [],
-        updatedAt: '2026-06-24T07:11:00.000Z'
-      }
-    ])
-    await flush()
-
-    expect(store.currentPath).toBe('.elephantnote/wiki/Cluster')
-    expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Cluster/Index.md'])
+    expect(listDirectory).not.toHaveBeenCalled()
+    expect(store.activeWorkspaceView).toBe('wiki')
+    expect(store.currentPath).toBe('')
+    expect(store.entries).toEqual([])
 
     app.unmount()
     container.remove()
   })
 
-  it('ignores a stale wiki folder response after another wiki path becomes active', async() => {
-    const folderLoad = createDeferred()
-    listDirectory
-      .mockResolvedValueOnce([
-        {
-          kind: 'folder',
-          path: '.elephantnote/wiki/Cluster',
-          title: 'Cluster',
-          tags: [],
-          noteCount: 1,
-          updatedAt: '2026-06-24T07:12:00.000Z'
-        }
-      ])
-      .mockReturnValueOnce(folderLoad.promise)
+  it('discards stale wiki state when a later vault change arrives', async() => {
+    const { app, container, store } = await mountWiki()
+    store.currentPath = 'stale/path'
+    store.entries = [{ kind: 'note', path: 'stale/path/Note.md', title: 'Stale' }]
 
-    const WikiView = (await import('../../front/app/components/views/WikiView.vue')).default
-    const { pinia, store } = await seedVault([])
-
-    const app = createApp({ render: () => h(WikiView) })
-    app.use(pinia)
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-    app.mount(container)
-    await flush()
-
-    container.querySelector('.en-note-card')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    store.activeVaultId = 'vault-2'
+    store.activeVault = createVault('vault-2')
     await nextTick()
-    expect(store.currentPath).toBe('.elephantnote/wiki/Cluster')
+
+    expect(store.currentPath).toBe('')
     expect(store.entries).toEqual([])
-
-    store.currentPath = '.elephantnote/wiki/Other'
-    store.entries = [
-      {
-        kind: 'note',
-        path: '.elephantnote/wiki/Other/Index.md',
-        title: 'Other Index',
-        tags: [],
-        updatedAt: '2026-06-24T07:13:00.000Z'
-      }
-    ]
-
-    folderLoad.resolve([
-      {
-        kind: 'note',
-        path: '.elephantnote/wiki/Cluster/Index.md',
-        title: 'Cluster Index',
-        tags: [],
-        updatedAt: '2026-06-24T07:14:00.000Z'
-      }
-    ])
-    await flush()
-
-    expect(store.currentPath).toBe('.elephantnote/wiki/Other')
-    expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Other/Index.md'])
-
-    app.unmount()
-    container.remove()
-  })
-
-  it('ignores a stale rail wiki-root response after another wiki path becomes active', async() => {
-    const rootLoad = createDeferred()
-    listDirectory.mockReturnValueOnce(rootLoad.promise)
-
-    const IconRail = (await import('../../front/app/components/navigation/IconRail.vue')).default
-    const { pinia, store } = await seedVault([])
-    store.activeWorkspaceView = 'wiki'
-    store.currentPath = '.elephantnote/wiki/Cluster'
-    store.entries = [
-      {
-        kind: 'note',
-        path: '.elephantnote/wiki/Cluster/Stale.md',
-        title: 'Stale',
-        tags: [],
-        updatedAt: '2026-06-24T07:15:00.000Z'
-      }
-    ]
-
-    const app = createApp({ render: () => h(IconRail) })
-    app.use(pinia)
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-    app.mount(container)
-    await flush()
-
-    container.querySelector('button[title="Wiki"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    await nextTick()
-    expect(store.currentPath).toBe('.elephantnote/wiki')
-    expect(store.entries).toEqual([])
-
-    store.currentPath = '.elephantnote/wiki/Other'
-    store.entries = [
-      {
-        kind: 'note',
-        path: '.elephantnote/wiki/Other/Index.md',
-        title: 'Other Index',
-        tags: [],
-        updatedAt: '2026-06-24T07:16:00.000Z'
-      }
-    ]
-
-    rootLoad.resolve([
-      {
-        kind: 'note',
-        path: '.elephantnote/wiki/Root.md',
-        title: 'Root',
-        tags: [],
-        updatedAt: '2026-06-24T07:17:00.000Z'
-      }
-    ])
-    await flush()
-
-    expect(store.currentPath).toBe('.elephantnote/wiki/Other')
-    expect(store.entries.map((entry) => entry.path)).toEqual(['.elephantnote/wiki/Other/Index.md'])
+    expect(store.activeWorkspaceView).toBe('wiki')
 
     app.unmount()
     container.remove()

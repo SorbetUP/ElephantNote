@@ -1,3 +1,6 @@
+import bus from '@/bus'
+import ExcalidrawEditorOverlay from './ui/ExcalidrawEditorOverlay.vue'
+import { getExcalidrawScenePath } from 'elephant-front/services/excalidraw'
 import { installExcalidrawMarkdownCleanup } from '../../platform/excalidrawMarkdownCleanup'
 import { installExcalidrawImageRuntimeFixes } from '../../platform/excalidrawImageRuntimeFixes'
 
@@ -12,18 +15,26 @@ const normalizeSource = (value = '') => String(value || '')
 const imageSource = (imageInfo = {}) => imageInfo.token?.attrs?.src || imageInfo.token?.src || ''
 const isExcalidrawImage = (imageInfo) => EXCALIDRAW_ASSET_RE.test(normalizeSource(imageSource(imageInfo)))
 
-const editDrawing = ({ imageInfo, muya }) => {
+const editDrawing = ({ imageInfo }) => {
   const src = imageSource(imageInfo)
-  if (typeof muya?.options?.elephantnoteCommandHandler === 'function') {
-    muya.options.elephantnoteCommandHandler('edit-excalidraw-image', { src, imageInfo })
-    return
-  }
-  globalThis.dispatchEvent?.(new CustomEvent('elephantnote-writing-command', {
-    detail: {
-      command: 'edit-excalidraw-image',
-      payload: { src }
-    }
-  }))
+  if (src) bus.emit('open-excalidraw-from-image', src)
+}
+
+const createDrawing = () => {
+  bus.emit('ELEPHANT::open-excalidraw', {
+    fileName: `excalidraw-${Date.now()}.png`,
+    title: 'Excalidraw',
+    saveMode: 'png',
+    insertOnSave: true
+  })
+}
+
+const copyDrawingSidecar = async ({ sourcePath, targetPath, pathExists, copyFile }) => {
+  if (!EXCALIDRAW_ASSET_RE.test(normalizeSource(sourcePath))) return
+  const sourceScenePath = getExcalidrawScenePath(sourcePath)
+  if (!sourceScenePath || sourceScenePath === sourcePath || !pathExists(sourceScenePath)) return
+  const targetScenePath = getExcalidrawScenePath(targetPath)
+  await copyFile(sourceScenePath, targetScenePath, 'application/vnd.excalidraw+json')
 }
 
 const dispatchLifecycle = (eventName) => {
@@ -44,6 +55,7 @@ export const excalidrawAddon = {
     permissions: ['notes.read', 'notes.write', 'assets.read', 'assets.write'],
     contributes: {
       editor: true,
+      layout: true,
       contentTypes: [{
         id: 'drawing-image',
         kind: 'image',
@@ -60,8 +72,15 @@ export const excalidrawAddon = {
     const cleanupRuntime = installExcalidrawMarkdownCleanup()
     const imageRuntime = installExcalidrawImageRuntimeFixes(globalThis)
 
+    ctx.registerContribution('layout.zones', {
+      id: `${ADDON_ID}.editor-overlay`,
+      zone: 'editor.overlay',
+      order: 40,
+      component: ExcalidrawEditorOverlay
+    })
+
     ctx.addEditorExtension({
-      id: `${ADDON_ID}.image-toolbar`,
+      id: `${ADDON_ID}.editor-integration`,
       imageToolbarItems: [{
         id: 'edit-drawing',
         tooltip: 'Edit Excalidraw drawing',
@@ -69,7 +88,12 @@ export const excalidrawAddon = {
         localOnly: true,
         when: ({ imageInfo }) => isExcalidrawImage(imageInfo),
         run: editDrawing
-      }]
+      }],
+      writingCommands: [{
+        id: 'excalidraw',
+        run: createDrawing
+      }],
+      copyAssetCompanions: copyDrawingSidecar
     })
 
     globalThis.__ELEPHANT_ADDON_CONTENT_FALLBACKS__?.refresh?.()

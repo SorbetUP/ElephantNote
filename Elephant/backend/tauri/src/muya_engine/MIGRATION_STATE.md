@@ -4,7 +4,7 @@ Rust foundation established from Muya JavaScript commit `f482fa928effa4ad6bec4bc
 
 ## Architecture
 
-The migration now has two Rust layers:
+The migration has two Rust layers:
 
 - `Elephant/crates/muya-core`: future DOM-independent editor core;
 - `Elephant/backend/tauri/src/muya_engine`: temporary atomic JavaScript parity staging area.
@@ -34,19 +34,24 @@ The parser builds structural list, item, row and cell nodes rather than flatteni
 
 ## Executable editing foundation
 
-`muya-core` now also contains:
+`muya-core` now contains:
 
 - logical DOM-independent selections expressed in UTF-16 offsets;
-- `InsertText` and `DeleteBackward` commands for text nodes;
+- same-node selected-text replacement and deletion;
+- `InsertText`, `DeleteBackward` and `InsertParagraph` commands;
+- plain paragraph splitting and adjacent paragraph joining;
+- `SetParagraph` and validated `SetHeading(1..=6)` transformations;
+- stable explicit node IDs for structural operations;
 - validation against offsets inside surrogate pairs;
-- invertible UTF-16 text replacement operations;
+- invertible text replacement, insertion, removal and block-kind operations;
 - atomic transactions applied on a cloned document before commit;
 - document revision increments;
-- bounded transaction-based undo and redo history.
+- bounded transaction-based undo and redo history;
+- logical view patches derived from transactions.
 
-This is still a narrow text-editing slice. It does not yet support non-collapsed selection replacement, paragraph splitting and joining, formatting, list behavior, table commands, IME transaction grouping or frontend view patches.
+Structural undo/redo restores exact node IDs. The current boundary is intentionally narrow: cross-node selections, rich-inline splitting, grapheme clusters, list/table commands, IME grouping and actual DOM patch application are not yet active.
 
-The executable slices have Rust unit and round-trip tests, but full JavaScript-vs-Rust characterization is still required before runtime activation or JavaScript deletion.
+The executable slices have Rust unit and round-trip tests. Full JavaScript-vs-Rust characterization is still required before runtime activation or JavaScript deletion.
 
 ## Ported atomic parity modules
 

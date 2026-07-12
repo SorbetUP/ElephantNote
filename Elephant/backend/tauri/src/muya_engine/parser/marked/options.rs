@@ -43,6 +43,6 @@ mod tests {
     assert_eq!(options["frontMatter"], true);
     assert_eq!(options["isHtmlEnabled"], true);
     assert_eq!(options["baseUrl"], Value::Null);
-    assert_eq!(options.as_object().unwrap().len(), 28);
+    assert_eq!(options.as_object().unwrap().len(), 27);
   }
 }

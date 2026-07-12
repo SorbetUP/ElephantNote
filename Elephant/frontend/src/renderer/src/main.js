@@ -104,6 +104,10 @@ const autostartLlamaRuntime = async(target = globalThis) => {
   }
 }
 
+const handleAiAddonEnabled = () => {
+  void autostartLlamaRuntime()
+}
+
 installRendererDiagnostics()
 globalThis.marktext = {}
 clearBootstrapFileUtilsFallbackForTauri()
@@ -119,7 +123,7 @@ installTauriMarkTextSaveBridge()
 installTauriLocalIpcBridge()
 installSlashMenuDiagnostics()
 installWritingCommandBridge()
-void autostartLlamaRuntime()
+window.addEventListener('elephantnote:ai-addon-enabled', handleAiAddonEnabled)
 
 const bootstrapTauriRuntime = async() => {
   pushDiagnosticLog('info', 'bootstrapTauriRuntime:start', { runtime: window.__MARKTEXT_RUNTIME__ })

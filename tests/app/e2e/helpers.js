@@ -3,7 +3,7 @@ const os = require('os')
 const path = require('path')
 const { _electron } = require('playwright')
 
-const projectRoot = path.resolve(__dirname, '../..')
+const projectRoot = path.resolve(__dirname, '../../..')
 
 const getDateAsFilename = () => {
   const date = new Date()

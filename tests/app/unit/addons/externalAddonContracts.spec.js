@@ -103,6 +103,11 @@ describe('built-in addon catalogue', () => {
       'elephant.calendar',
       'elephant.sites',
       'elephant.ai',
+      'elephant.ai-chat',
+      'elephant.ai-search',
+      'elephant.ai-ocr',
+      'elephant.wiki',
+      'elephant.graph',
       'elephant.open-models',
       'elephant.sync',
       'elephant.code-execution',
@@ -151,26 +156,40 @@ describe('built-in addon catalogue', () => {
     expect(source).not.toContain('manager.enableDefaultAddons()')
   })
 
-  it('keeps AI and Iroh Sync inert until their addons are enabled', async () => {
+  it('keeps providers, chat, graph and sync inert until each addon is enabled', async () => {
     const manager = new ElephantAddonManager({
       logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
     })
-    const ai = builtinAddons.find((addon) => addon.manifest.id === 'elephant.ai')
+    const providers = builtinAddons.find((addon) => addon.manifest.id === 'elephant.ai')
+    const chat = builtinAddons.find((addon) => addon.manifest.id === 'elephant.ai-chat')
+    const graph = builtinAddons.find((addon) => addon.manifest.id === 'elephant.graph')
     const sync = builtinAddons.find((addon) => addon.manifest.id === 'elephant.sync')
-    manager.register(ai)
-    manager.register(sync)
+    for (const addon of [providers, chat, graph, sync]) manager.register(addon)
 
     expect(manager.getContributions('settings.sections')).toEqual([])
+    expect(manager.getContributions('views')).toEqual([])
+    expect(manager.getContributions('layout.zones')).toEqual([])
+    expect(manager.getActions()).toEqual([])
+
+    await manager.enable(providers.manifest.id)
+    expect(manager.getContributions('settings.sections').some((entry) => entry.addonId === 'elephant.ai')).toBe(true)
     expect(manager.getContributions('views')).toEqual([])
     expect(manager.getActions()).toEqual([])
 
-    await manager.enable(ai.manifest.id)
-    expect(manager.getContributions('settings.sections').some((entry) => entry.addonId === 'elephant.ai')).toBe(true)
-    expect(manager.getContributions('views').some((entry) => entry.addonId === 'elephant.ai')).toBe(true)
+    await manager.enable(chat.manifest.id)
+    expect(manager.getContributions('layout.zones').some((entry) => entry.addonId === 'elephant.ai-chat')).toBe(true)
+    expect(manager.getActions().some((entry) => entry.addonId === 'elephant.ai-chat')).toBe(true)
 
-    await manager.disable(ai.manifest.id)
+    await manager.enable(graph.manifest.id)
+    expect(manager.getContributions('views').some((entry) => entry.addonId === 'elephant.graph')).toBe(true)
+
+    await manager.disable(graph.manifest.id)
+    await manager.disable(chat.manifest.id)
+    await manager.disable(providers.manifest.id)
     expect(manager.getContributions('settings.sections')).toEqual([])
     expect(manager.getContributions('views')).toEqual([])
+    expect(manager.getContributions('layout.zones')).toEqual([])
+    expect(manager.getActions()).toEqual([])
   })
 })
 

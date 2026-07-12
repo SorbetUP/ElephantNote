@@ -1,3 +1,4 @@
+import './ui/addonPacksFeedback.css'
 import { addonPacksAddon, addonProfilesAddon } from './addonProfiles'
 
 const createLazyBuiltinAddon = ({ manifest, load, exportName }) => {
@@ -102,15 +103,100 @@ export const aiAddon = createLazyBuiltinAddon({
   load: () => import('./ai'),
   manifest: {
     id: 'elephant.ai',
-    name: 'AI',
-    version: '1.1.0',
-    description: 'Adds AI providers, chat, semantic search, OCR, Wiki and Graph. Open models are provided by a separate addon.',
+    name: 'AI Providers',
+    version: '2.0.0',
+    description: 'Configures external and addon-provided AI providers.',
     author: 'ElephantNote',
     icon: 'sparkles',
     defaultEnabled: false,
     removable: true,
-    permissions: ['ai.configure', 'ai.chat', 'search.manage', 'ocr.run'],
-    contributes: { actions: true, sidebar: true, settings: true, views: true, layout: true }
+    permissions: ['ai.configure'],
+    contributes: { settings: true }
+  }
+})
+
+export const aiChatAddon = createLazyBuiltinAddon({
+  exportName: 'aiChatAddon',
+  load: () => import('./aiChat'),
+  manifest: {
+    id: 'elephant.ai-chat',
+    name: 'AI Chat',
+    version: '1.0.0',
+    description: 'Adds the AI chat sidebar and chat-route settings.',
+    author: 'ElephantNote',
+    icon: 'message-circle',
+    defaultEnabled: false,
+    removable: true,
+    permissions: ['ai.chat'],
+    contributes: { actions: true, sidebar: true, settings: true, layout: true }
+  }
+})
+
+export const aiSearchAddon = createLazyBuiltinAddon({
+  exportName: 'aiSearchAddon',
+  load: () => import('./aiSearch'),
+  manifest: {
+    id: 'elephant.ai-search',
+    name: 'Semantic Search',
+    version: '1.0.0',
+    description: 'Adds embedding configuration, semantic indexing and retrieval settings.',
+    author: 'ElephantNote',
+    icon: 'search',
+    defaultEnabled: false,
+    removable: true,
+    permissions: ['search.manage'],
+    contributes: { settings: true }
+  }
+})
+
+export const aiOcrAddon = createLazyBuiltinAddon({
+  exportName: 'aiOcrAddon',
+  load: () => import('./aiOcr'),
+  manifest: {
+    id: 'elephant.ai-ocr',
+    name: 'AI OCR',
+    version: '1.0.0',
+    description: 'Adds OCR provider and document-recognition settings.',
+    author: 'ElephantNote',
+    icon: 'scan-text',
+    defaultEnabled: false,
+    removable: true,
+    permissions: ['ocr.run'],
+    contributes: { settings: true }
+  }
+})
+
+export const wikiAddon = createLazyBuiltinAddon({
+  exportName: 'wikiAddon',
+  load: () => import('./wiki'),
+  manifest: {
+    id: 'elephant.wiki',
+    name: 'Wiki',
+    version: '1.0.0',
+    description: 'Adds AI-organized Wiki pages and cluster navigation.',
+    author: 'ElephantNote',
+    icon: 'book-open-text',
+    defaultEnabled: false,
+    removable: true,
+    permissions: ['notes.read', 'search.read'],
+    contributes: { views: true }
+  }
+})
+
+export const graphAddon = createLazyBuiltinAddon({
+  exportName: 'graphAddon',
+  load: () => import('./graph'),
+  manifest: {
+    id: 'elephant.graph',
+    name: 'Graph',
+    version: '1.0.0',
+    description: 'Adds the note, Wiki and semantic relationship graph.',
+    author: 'ElephantNote',
+    icon: 'git-fork',
+    defaultEnabled: false,
+    removable: true,
+    permissions: ['notes.read', 'search.read'],
+    contributes: { views: true, editor: true }
   }
 })
 
@@ -120,14 +206,14 @@ export const openModelsAddon = createLazyBuiltinAddon({
   manifest: {
     id: 'elephant.open-models',
     name: 'Open Models',
-    version: '1.0.0',
-    description: 'Browse, download, assign and run open GGUF models with ElephantNote local runtimes.',
+    version: '1.1.0',
+    description: 'Browse, download and remove open GGUF models.',
     author: 'ElephantNote',
     icon: 'database',
     defaultEnabled: false,
     removable: true,
-    permissions: ['ai.models', 'ai.local-runtime'],
-    contributes: { views: true }
+    permissions: ['ai.models'],
+    contributes: { views: true, aiProvider: true }
   }
 })
 
@@ -154,7 +240,7 @@ export const codeExecutionAddon = createLazyBuiltinAddon({
   manifest: {
     id: 'elephant.code-execution',
     name: 'Code execution',
-    version: '1.1.0',
+    version: '2.0.0',
     description: 'Runs trusted fenced code blocks with locally installed interpreters.',
     author: 'ElephantNote',
     icon: 'terminal',
@@ -220,6 +306,11 @@ export const builtinAddons = [
   calendarAddon,
   sitesAddon,
   aiAddon,
+  aiChatAddon,
+  aiSearchAddon,
+  aiOcrAddon,
+  wikiAddon,
+  graphAddon,
   openModelsAddon,
   syncAddon,
   codeExecutionAddon,

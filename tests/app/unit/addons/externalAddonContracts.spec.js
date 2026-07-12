@@ -103,6 +103,7 @@ describe('built-in addon catalogue', () => {
       'elephant.calendar',
       'elephant.sites',
       'elephant.ai',
+      'elephant.open-models',
       'elephant.sync',
       'elephant.code-execution',
       'elephant.excalidraw',

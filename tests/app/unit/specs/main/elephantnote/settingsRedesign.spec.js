@@ -114,7 +114,6 @@ describe('ElephantNote settings redesign', () => {
     expect(addons).toContain('Turn on community addons')
     expect(addons).toContain('v-model="riskAccepted"')
     expect(logic).toContain('setCommunityAddonsEnabled(true)')
-    expect(addons).toContain('<template v-else>')
     expect(addons).not.toContain('pendingTrustedAddon')
     expect(addons).not.toContain('Full app access safe mode')
     expect(addons).not.toContain('Grant access and enable')
@@ -123,7 +122,7 @@ describe('ElephantNote settings redesign', () => {
     expect(logic).toContain('setTrustedSafeMode(false)')
   })
 
-  it('integrates installed and available first-party addons into the active settings panel', () => {
+  it('integrates installed and available addons into one active settings panel', () => {
     const settings = readSettings()
     const addons = readAddons()
     const logic = readAddonLogic()
@@ -132,7 +131,8 @@ describe('ElephantNote settings redesign', () => {
     expect(settings).toContain("activeSection === 'addons'")
     expect(settings).toContain('<addons-settings-panel />')
     expect(settings).toContain("import AddonsSettingsPanel from './AddonsSettingsPanel.vue'")
-    expect(addons).toContain('Built-in addon catalogue')
+    expect(addons).toContain('Available addons')
+    expect(addons).not.toContain('<h3>Built-in addon catalogue</h3>')
     expect(addons).toContain('<AddonIcon :name="addon.icon"')
     expect(addons).toContain("import { useAddonsSettings } from './useAddonsSettings'")
     expect(logic).toContain('useAddonsStore()')
@@ -146,6 +146,7 @@ describe('ElephantNote settings redesign', () => {
     expect(row).toContain('role="switch"')
     expect(row).toContain("emit('run-action', action)")
     expect(row).toContain('<AddonIcon :name="addon.manifest.icon"')
+    expect(row).not.toContain('Built in by ElephantNote')
     expect(logic).toContain("log.info('[settings:addons] mounted'")
   })
 
@@ -254,7 +255,6 @@ describe('ElephantNote settings redesign', () => {
     expect(sites).toContain('<section class="en-settings-group">')
     expect(sites).toContain('<div class="en-settings-row">')
     expect(sites).toContain('<div class="en-settings-inline-actions">')
-    expect(sites).not.toContain('en-addon-sites-settings')
     expect(sites).toContain("elephantnoteClient.features.set('sitePreview'")
     expect(sites).toContain('sitePreviewStore.openPreviewExternal')
     expect(sites).toContain('sitePreviewStore.stopPreview()')
@@ -281,6 +281,7 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('irohSyncClient.deleteConflict')
     expect(addon).toContain('defaultEnabled: false')
     expect(addon).toContain("render: mountSettingsComponent(ctx, SyncAddonSettings)")
+    expect(addon).toContain("ctx.registerContribution('top-bar.items'")
   })
 
   it('keeps Codex visually inside AI while its implementation remains addon-owned', () => {
@@ -336,6 +337,8 @@ describe('ElephantNote settings redesign', () => {
     expect(source).toContain('await elephantnoteClient.search.rebuild?.()')
     expect(source).toContain("scheduleAutosave('form-watch')")
     expect(source).toContain("saveConfig({ silent: true, reason: 'settings-close' })")
+    expect(addon).toContain("id: `${ADDON_ID}.wiki`")
+    expect(addon).toContain("id: `${ADDON_ID}.graph`")
     expect(addon).toContain("id: `${ADDON_ID}.models`")
     expect(addon).toContain("kind: 'ai-models-v1'")
     expect(addon).toContain('store.chatSidebarOpen = false')
@@ -344,7 +347,11 @@ describe('ElephantNote settings redesign', () => {
     expect(shell).not.toContain('elephantnote:ai-config-changed')
     expect(main).not.toContain('<chat-view')
     expect(main).not.toContain('<models-view')
+    expect(main).not.toContain('<wiki-view')
+    expect(main).not.toContain('<atomic-graph-view')
     expect(rail).not.toContain("{ id: 'models'")
     expect(rail).not.toContain("{ id: 'chat'")
+    expect(rail).not.toContain("{ id: 'wiki'")
+    expect(rail).not.toContain("{ id: 'graph'")
   })
 })

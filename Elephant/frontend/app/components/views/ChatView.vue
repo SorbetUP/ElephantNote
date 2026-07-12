@@ -239,45 +239,51 @@
                 <LoaderCircle class="en-icon en-spin" />
                 <span>{{ message.streamPhase || 'Raisonnement…' }}</span>
               </div>
-              <p
-                v-for="(paragraph, index) in splitParagraphs(message.content)"
-                :key="index"
-              >
-                {{ paragraph }}
-              </p>
+              <template v-else>
+                <p
+                  v-for="(paragraph, index) in splitParagraphs(message.content)"
+                  :key="`${message.id}-p-${index}`"
+                >
+                  {{ paragraph }}
+                </p>
+              </template>
               <small
-                v-if="message.reasoningEffort"
+                v-if="message.reasoningEffort && message.role === 'assistant'"
                 class="en-chat-reasoning-meta"
-              >Réflexion : {{ message.reasoningEffort }}</small>
+              >
+                Réflexion : {{ message.reasoningEffort }}
+              </small>
             </div>
 
-            <section
+            <div
               v-if="message.toolCalls?.length"
               class="en-chat-tools"
             >
-              <button
-                v-for="tool in message.toolCalls"
+              <article
+                v-for="tool in shapeToolCallsForAssistant(message.toolCalls)"
                 :key="tool.id"
-                type="button"
                 class="en-chat-tool"
                 :class="{ expanded: expandedTools[tool.id] }"
-                @click="toggleTool(tool.id)"
               >
-                <header class="en-chat-tool-head">
+                <button
+                  type="button"
+                  class="en-chat-tool-head"
+                  @click="toggleTool(tool.id)"
+                >
                   <span
                     class="en-chat-tool-status"
                     :data-status="tool.status"
                   />
-                  <span class="en-chat-tool-name">{{ tool.label }}</span>
+                  <span class="en-chat-tool-name">{{ tool.name }}</span>
                   <span class="en-chat-tool-summary">{{ tool.summary }}</span>
-                  <ChevronDown class="en-icon en-chat-tool-chevron" />
-                </header>
+                  <ChevronDown class="en-chat-tool-chevron" />
+                </button>
                 <div
                   v-if="expandedTools[tool.id]"
                   class="en-chat-tool-detail"
                 >
                   <p class="en-chat-tool-detail-meta">
-                    Tool: <code>{{ tool.name }}</code>
+                    {{ tool.detail }}
                   </p>
                   <ul
                     v-if="tool.sources?.length"
@@ -289,69 +295,69 @@
                     >
                       <button
                         type="button"
-                        class="en-chat-citation"
-                        @click.stop="openNote(source.path, source.title)"
+                        @click="openNote(source.path, source.title)"
                       >
-                        {{ source.title }}
+                        <strong>{{ source.title }}</strong>
+                        <span>{{ source.excerpt }}</span>
                       </button>
                     </li>
                   </ul>
                 </div>
-              </button>
-            </section>
+              </article>
+            </div>
 
-            <section
+            <div
               v-if="message.actions?.length"
               class="en-chat-actions"
             >
               <article
-                v-for="action in message.actions"
-                :key="action.proposal?.id"
+                v-for="entry in message.actions"
+                :key="entry?.proposal?.id || JSON.stringify(entry)"
                 class="en-chat-action-card"
               >
                 <div class="en-chat-action-copy">
-                  <strong>{{ actionLabel(action) }}</strong>
-                  <span>{{ actionSummary(action) }}</span>
-                  <small v-if="action.error">{{ action.error }}</small>
+                  <strong>{{ actionLabel(entry) }}</strong>
+                  <span>{{ actionSummary(entry) }}</span>
+                  <small v-if="entry.error">{{ entry.error }}</small>
                 </div>
                 <div class="en-chat-action-controls">
-                  <span class="en-chat-action-status">{{ action.proposal?.status || 'proposed' }}</span>
-                  <template v-if="action.proposal?.status === 'proposed'">
+                  <span class="en-chat-action-status">{{ actionStatus(entry) }}</span>
+                  <template v-if="actionStatus(entry) === 'proposed'">
                     <button
                       type="button"
-                      :disabled="action.busy"
-                      @click.stop="approveAction(message, action)"
+                      :disabled="entry.busy"
+                      @click="executeAction(message, entry)"
                     >
                       Approuver
                     </button>
                     <button
                       type="button"
-                      :disabled="action.busy"
-                      @click.stop="rejectAction(message, action)"
+                      :disabled="entry.busy"
+                      @click="rejectAction(message, entry)"
                     >
                       Refuser
                     </button>
                   </template>
                 </div>
                 <ul
-                  v-if="actionSearchResults(action).length"
+                  v-if="actionSearchResults(entry).length"
                   class="en-chat-action-results"
                 >
                   <li
-                    v-for="result in actionSearchResults(action)"
-                    :key="result.relative_path || result.relativePath || result.path"
+                    v-for="result in actionSearchResults(entry)"
+                    :key="`${result.relativePath}:${result.chunkId}`"
                   >
                     <button
                       type="button"
-                      @click.stop="openNote(result.relative_path || result.relativePath || result.path, result.title)"
+                      @click="openNote(result.relativePath, result.title)"
                     >
-                      <strong>{{ result.title || result.relative_path || result.path }}</strong>
-                      <span>{{ result.excerpt || result.heading || '' }}</span>
+                      <strong>{{ result.title }}</strong>
+                      <span>{{ result.excerpt }}</span>
                     </button>
                   </li>
                 </ul>
               </article>
-            </section>
+            </div>
 
             <div
               v-if="message.citations?.length"
@@ -381,10 +387,10 @@
             ref="composerRef"
             v-model="draft"
             class="en-chat-composer-input"
-            placeholder="Ask"
             rows="1"
-            @keydown="onComposerKeydown"
+            placeholder="Ask"
             @input="autoGrowComposer"
+            @keydown="onComposerKeydown"
           />
           <div class="en-chat-composer-controls">
             <button
@@ -392,10 +398,8 @@
               class="en-chat-composer-mode"
               @click="cycleChatMode"
             >
-              {{ chatModeLabel }} <span
-                class="en-chat-composer-caret"
-                aria-hidden="true"
-              >▾</span>
+              <span>{{ chatModeLabel }}</span>
+              <span class="en-chat-composer-caret">▾</span>
             </button>
             <button
               type="submit"
@@ -474,7 +478,7 @@ const graphSummary = computed(() => {
   const parts = []
   if (summary.nodes) parts.push(`${summary.nodes} nodes`)
   if (summary.semanticEdges) parts.push(`${summary.semanticEdges} semantic links`)
-  return parts.join(' \u00b7 ')
+  return parts.join(' · ')
 })
 
 const canSend = computed(() => Boolean(draft.value.trim()) && !chatStore.isSending)
@@ -519,32 +523,98 @@ const autoGrowComposer = () => {
 const onComposerKeydown = (event) => {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
-    send()
+    if (canSend.value) send()
   }
 }
 
 const onScroll = () => {
   const element = scrollRef.value
   if (!element) return
-  const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 80
-  stickToBottom.value = nearBottom
+  stickToBottom.value = element.scrollHeight - element.scrollTop - element.clientHeight < 80
 }
 
-const scrollToBottom = () => {
+const scrollToBottom = async(force = false) => {
+  await nextTick()
   const element = scrollRef.value
-  if (!element) return
+  if (!element || (!force && !stickToBottom.value)) return
   element.scrollTop = element.scrollHeight
 }
 
-const invoke = (command, payload = {}) => {
-  const fn = globalThis.window?.__TAURI__?.core?.invoke
-  if (typeof fn !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
-  return fn(command, payload)
+const openNote = async(path, title) => {
+  if (!path) return
+  try {
+    await store.openFileByRelativePath?.(path)
+  } catch {
+    chatStore.setRuntimeMessage(`Unable to open ${title || path}.`)
+  }
 }
 
+const normalizeModelEntry = (entry) => {
+  if (typeof entry === 'string') return entry
+  return entry?.id || entry?.model || entry?.slug || entry?.name || ''
+}
+
+const readCodexModels = async() => {
+  try {
+    const result = await elephantnoteClient.ai.codexModels()
+    codexModels.value = (Array.isArray(result) ? result : result?.models || [])
+      .map(normalizeModelEntry)
+      .filter(Boolean)
+  } catch {
+    codexModels.value = []
+  }
+}
+
+const readAiConfig = async() => {
+  const config = await elephantnoteClient.ai.configRead()
+  activeAiConfig.value = config || {}
+  const route = activeAiConfig.value?.routes?.chat || {}
+  selectedModel.value = route.model || 'gpt-5.6-luna'
+  reasoningEffort.value = route.reasoningEffort || 'medium'
+}
+
+const saveChatRoute = async() => {
+  const config = JSON.parse(JSON.stringify(activeAiConfig.value || {}))
+  config.routes ||= {}
+  config.routes.chat ||= {}
+  config.routes.chat.source = 'codex'
+  config.routes.chat.provider = 'codex'
+  config.routes.chat.transport = 'codex'
+  config.routes.chat.endpoint = 'codex://app-server'
+  config.routes.chat.model = selectedModel.value
+  config.routes.chat.reasoningEffort = reasoningEffort.value
+  config.routes.chat.enableRag = true
+  config.routes.chat.enableTools = true
+  config.routes.chat.stream = true
+  activeAiConfig.value = await elephantnoteClient.ai.configWrite(config)
+}
+
+const persistAutoApprove = () => {
+  window.localStorage.setItem('elephantnote:chat:auto-approve', String(autoApproveTools.value))
+}
+
+const handleStreamEvent = (event) => {
+  const payload = event?.payload || event || {}
+  if (!activeStream || (payload.streamId && payload.streamId !== activeStream.streamId)) return
+  if (payload.delta) {
+    const message = chatStore.activeMessages.find((entry) => entry.id === activeStream.messageId)
+    chatStore.updateMessage(activeStream.messageId, { content: `${message?.content || ''}${payload.delta}`, streamPhase: '' })
+    scrollToBottom()
+  }
+  if (payload.phase) chatStore.updateMessage(activeStream.messageId, { streamPhase: payload.phase })
+}
+
+const invokeProposal = async(command, proposalId) => elephantnoteClient.core.invoke(command, { proposalId })
+
+const persistActionPatch = (message, entry, patch) => {
+  const targetId = entry?.proposal?.id
+  const actions = (message.actions || []).map((candidate) => candidate?.proposal?.id === targetId ? { ...candidate, ...patch } : candidate)
+  chatStore.updateMessage(message.id, { actions })
+}
+
+const actionStatus = (entry) => entry?.proposal?.status || 'unknown'
 const actionLabel = (entry) => {
-  const action = entry?.proposal?.action || {}
-  return ({
+  const labels = {
     search_notes: 'Rechercher dans les notes',
     create_note: 'Créer une note',
     append_to_note: 'Ajouter à une note',
@@ -554,35 +624,20 @@ const actionLabel = (entry) => {
     create_wiki: 'Générer un Wiki',
     reject_wiki_suggestion: 'Refuser une proposition de Wiki',
     delete_wiki: 'Supprimer un Wiki'
-  })[action.action] || 'Action ElephantNote'
+  }
+  return labels[entry?.proposal?.action?.action] || 'Action Elephant'
 }
 
 const actionSummary = (entry) => {
-  const preview = entry?.proposal?.preview || {}
-  if (preview.kind === 'search') return preview.query
-  if (preview.kind === 'create_wiki') return `${preview.title} · ${preview.source_paths?.length || 0} sources`
-  if (preview.kind === 'wiki_decision') return preview.topic
-  if (preview.kind === 'delete_wiki') return preview.draft_id
-  if (preview.kind === 'create_note' || preview.kind === 'modify_note') return preview.relative_path
-  return entry?.proposal?.rationale || ''
+  const action = entry?.proposal?.action || {}
+  return action.relativePath || action.title || action.topic || action.query || action.draftId || ''
 }
 
-const persistActionPatch = (message, target, patch) => {
-  const targetId = target?.proposal?.id
-  const actions = (message.actions || []).map((entry) => {
-    const matches = targetId ? entry?.proposal?.id === targetId : entry === target
-    return matches ? { ...entry, ...patch } : entry
-  })
-  chatStore.updateMessage(message.id, { actions })
+const actionSearchResults = (entry) => {
+  if (entry?.proposal?.action?.action !== 'search_notes') return []
+  const result = entry?.execution?.result
+  return Array.isArray(result) ? result : []
 }
-
-const actionSearchResults = (entry) => Array.isArray(entry?.execution?.result) ? entry.execution.result : []
-
-const persistAutoApprove = () => {
-  window.localStorage.setItem('elephantnote:chat:auto-approve', String(autoApproveTools.value))
-}
-
-const invokeProposal = (command, id) => invoke(command, { proposalId: id })
 
 const executeAction = async(message, entry) => {
   const id = entry?.proposal?.id
@@ -593,16 +648,9 @@ const executeAction = async(message, entry) => {
     persistActionPatch(message, entry, { busy: false, proposal: execution.proposal, execution })
     await refreshAfterAction()
   } catch (error) {
-    persistActionPatch(message, entry, { busy: false, error: error?.message || String(error) })
+    persistActionPatch(message, entry, { busy: false, error: error instanceof Error ? error.message : String(error) })
   }
 }
-
-const refreshAfterAction = async() => {
-  window.dispatchEvent(new CustomEvent('elephantnote:knowledge-changed', { detail: { reason: 'chat-action' } }))
-  await searchStore.inspect().catch(() => {})
-}
-
-const approveAction = async(message, entry) => executeAction(message, entry)
 
 const rejectAction = async(message, entry) => {
   const id = entry?.proposal?.id
@@ -611,135 +659,51 @@ const rejectAction = async(message, entry) => {
   try {
     const proposal = await invokeProposal('tauri_knowledge_chat_action_reject', id)
     persistActionPatch(message, entry, { busy: false, proposal })
+    await refreshAfterAction()
   } catch (error) {
-    persistActionPatch(message, entry, { busy: false, error: error?.message || String(error) })
+    persistActionPatch(message, entry, { busy: false, error: error instanceof Error ? error.message : String(error) })
   }
 }
 
-const openNote = (value, fallbackTitle = '') => {
-  const notePath = typeof value === 'string' ? value : value?.path || value?.relativePath || ''
-  if (!notePath) return
-  const note = [...store.entries, ...store.rootEntries, ...store.openedNotes].find(
-    (entry) => entry?.path === notePath
-  )
-  if (note) {
-    store.openNote(note)
-    return
-  }
-  store.openNote({
-    kind: 'note',
-    type: 'note',
-    path: notePath,
-    title: fallbackTitle || notePath.split('/').pop()?.replace(/\.md$/i, '') || notePath
-  })
+const refreshAfterAction = async() => {
+  await Promise.allSettled([
+    searchStore.refreshIndexInspection?.(),
+    window.dispatchEvent(new CustomEvent('elephantnote:wiki-refresh'))
+  ])
 }
 
-const extractModelIds = (value) => {
-  const output = new Set()
-  const visit = (entry) => {
-    if (Array.isArray(entry)) return entry.forEach(visit)
-    if (!entry || typeof entry !== 'object') return
-    const id = entry.id || entry.model || entry.slug
-    if (typeof id === 'string' && id.trim()) output.add(id.trim())
-    Object.values(entry).forEach(visit)
-  }
-  visit(value)
-  return [...output].filter((id) => id.startsWith('gpt-'))
-}
+const appendConversationTranscript = () => chatStore.activeMessages.map((message) => ({ role: message.role, content: message.content }))
 
-const loadChatRoute = async() => {
-  try {
-    const config = await elephantnoteClient.ai.getConfig()
-    activeAiConfig.value = config && typeof config === 'object' ? config : {}
-    selectedModel.value = activeAiConfig.value?.routes?.chat?.model || activeAiConfig.value?.providers?.codex?.model || ''
-    reasoningEffort.value = activeAiConfig.value?.routes?.chat?.reasoningEffort || 'medium'
-  } catch (error) {
-    console.warn('[chat] unable to load the saved AI route', error)
-  }
-  try {
-    codexModels.value = extractModelIds(await invoke('tauri_knowledge_chat', { payload: { codexOperation: 'models' } }))
-  } catch (error) {
-    console.warn('[chat] unable to list Codex models', error)
-  }
-}
-
-const saveChatRoute = async() => {
-  const config = JSON.parse(JSON.stringify(activeAiConfig.value || {}))
-  config.routes ||= {}
-  config.routes.chat ||= {}
-  Object.assign(config.routes.chat, {
-    source: 'codex',
-provider: 'codex',
-transport: 'codex',
-endpoint: 'codex://app-server',
-    model: selectedModel.value,
-reasoningEffort: reasoningEffort.value,
-enableTools: true,
-stream: true
-  })
-  config.providers ||= {}
-  config.providers.codex ||= {}
-  config.providers.codex.model = selectedModel.value
-  activeAiConfig.value = config
-  await elephantnoteClient.ai.setConfig(config)
-}
-
-const handleStreamEvent = (event) => {
-  const payload = event?.payload || event
-  if (!activeStream || payload?.streamId !== activeStream.id) return
-  const message = chatStore.activeMessages.find((entry) => entry.id === activeStream.messageId)
-  if (!message) return
-  if (payload.type === 'reset') chatStore.updateMessage(message.id, { content: '', streamPhase: 'Résultats trouvés, rédaction…' })
-  else if (payload.type === 'delta') chatStore.updateMessage(message.id, { content: `${message.content || ''}${payload.delta || ''}`, streamPhase: 'Rédaction…' })
-  else if (payload.type === 'phase') chatStore.updateMessage(message.id, { streamPhase: 'Finalisation…' })
-  nextTick(scrollToBottom)
-}
-
-const send = async () => {
-  const question = draft.value.trim()
-  if (!question || chatStore.isSending) return
-  draft.value = ''
-  nextTick(autoGrowComposer)
-
-  chatStore.addMessage({ role: 'user', content: question })
-  const streamId = `chat-stream-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  const assistantMessage = chatStore.addMessage({ role: 'assistant', content: '', streaming: true, streamPhase: 'Recherche et raisonnement…', reasoningEffort: reasoningEffort.value })
-  activeStream = { id: streamId, messageId: assistantMessage.id }
+const send = async() => {
+  const query = draft.value.trim()
+  if (!query || chatStore.isSending) return
   chatStore.setSending(true)
-  chatStore.setRuntimeMessage('Searching indexed notes and generating an answer...')
-  chatStore.addToolCall({
-    name: 'rag.search',
-    label: 'Searching local notes',
-    status: 'running',
-    summary: 'Retrieving cited chunks'
-  })
-
-  nextTick(scrollToBottom)
-
+  chatStore.setRuntimeMessage('')
+  chatStore.addMessage('user', query)
+  const assistantMessage = chatStore.addMessage('assistant', '', { streaming: true, streamPhase: 'Recherche et raisonnement…', actions: [], citations: [] })
+  activeStream = { streamId: `chat-${Date.now()}-${assistantMessage.id}`, messageId: assistantMessage.id }
+  draft.value = ''
+  autoGrowComposer()
+  stickToBottom.value = true
+  scrollToBottom(true)
   try {
-    const limit = store.chatMode === 'simple' ? 4 : 8
-    const messages = chatStore.activeMessages.map((message) => ({
-      role: message.role,
-      content: message.content
-    }))
-    const result = await elephantnoteClient.rag.chat({
-      message: question,
-      limit,
-      messages,
-      aiConfig: activeAiConfig.value,
-      streamId,
-      autoApproveTools: autoApproveTools.value
+    const result = await elephantnoteClient.ai.chat({
+      query,
+      messages: appendConversationTranscript(),
+      streamId: activeStream.streamId,
+      model: selectedModel.value,
+      reasoningEffort: reasoningEffort.value,
+      autoApproveTools: autoApproveTools.value,
+      mode: store.chatMode,
+      limit: 8,
+      aiConfig: activeAiConfig.value
     })
-    const toolCalls = shapeToolCallsForAssistant(result)
-    chatStore.setRuntimeMessage(result?.provider === 'codex' ? 'Answered with Codex and indexed notes.' : 'Answered with the configured AI route.')
     chatStore.updateMessage(assistantMessage.id, {
-      content: result?.answer || 'I did not find matching local notes.',
-      citations: result?.citations || result?.sources || [],
-      wikiContext: result?.wikiContext || null,
-      actions: result?.actions || [],
-      actionErrors: result?.actionErrors || [],
-      toolCalls,
+      content: result?.answer || 'No response.',
       streaming: false,
+      citations: Array.isArray(result?.citations) ? result.citations : [],
+      actions: Array.isArray(result?.actions) ? result.actions : [],
+      toolCalls: Array.isArray(result?.toolCalls) ? result.toolCalls : [],
       streamPhase: '',
       reasoningEffort: result?.reasoningEffort || reasoningEffort.value
     })
@@ -748,39 +712,30 @@ const send = async () => {
     chatStore.setRuntimeMessage(error instanceof Error ? error.message : 'Local AI chat failed.')
     chatStore.updateMessage(assistantMessage.id, { content: chatStore.runtimeMessage, streaming: false, streamPhase: '' })
   } finally {
-    chatStore.consumePendingToolCalls()
-    activeStream = null
     chatStore.setSending(false)
-    nextTick(scrollToBottom)
+    activeStream = null
+    scrollToBottom(true)
   }
 }
 
-const sendQuickPrompt = async (prompt) => {
-  draft.value = prompt
-  await send()
+const sendQuickPrompt = (value) => {
+  draft.value = value
+  nextTick(() => {
+    autoGrowComposer()
+    send()
+  })
 }
 
-watch(
-  () => chatStore.activeConversationId,
-  () => {
-    nextTick(scrollToBottom)
-  }
-)
-
-watch(
-  () => chatStore.activeMessages.length,
-  () => {
-    if (stickToBottom.value) nextTick(scrollToBottom)
-  }
-)
+watch(() => chatStore.activeMessages.length, () => scrollToBottom())
 
 onMounted(async() => {
-  searchStore.inspect().catch(() => {})
-  chatStore.ensureActiveConversation()
-  await loadChatRoute()
-  const listen = window.__TAURI__?.event?.listen
-  if (typeof listen === 'function') unlistenChatStream = await listen('elephantnote://chat-stream', handleStreamEvent)
-  nextTick(scrollToBottom)
+  await Promise.allSettled([readAiConfig(), readCodexModels()])
+  try {
+    const { listen } = await import('@tauri-apps/api/event')
+    unlistenChatStream = await listen('elephantnote://chat-stream', handleStreamEvent)
+  } catch {
+    unlistenChatStream = null
+  }
 })
 
 onBeforeUnmount(() => {
@@ -790,31 +745,22 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .en-chat {
+  --chat-surface: color-mix(in srgb, var(--en-bg) 82%, var(--en-text) 18%);
+  --chat-surface-hover: color-mix(in srgb, var(--en-bg) 72%, var(--en-text) 28%);
+  --chat-surface-active: color-mix(in srgb, var(--en-bg) 62%, var(--en-text) 38%);
+  --chat-border: color-mix(in srgb, var(--en-text) 16%, transparent);
+  --chat-text: var(--en-text);
+  --chat-text-secondary: color-mix(in srgb, var(--en-text) 72%, var(--en-bg) 28%);
+  --chat-text-muted: color-mix(in srgb, var(--en-text) 54%, var(--en-bg) 46%);
+  --chat-accent: var(--en-primary);
+  --chat-accent-hover: color-mix(in srgb, var(--en-primary) 84%, white 16%);
   position: relative;
-  min-height: 0;
-  flex: 1;
+  width: 100%;
+  height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
   background: var(--en-bg);
   color: var(--en-text);
-  overflow: hidden;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
-  --chat-surface: color-mix(in srgb, var(--en-surface) 96%, var(--en-bg));
-  --chat-surface-hover: var(--en-soft);
-  --chat-surface-active: color-mix(in srgb, var(--en-soft) 80%, var(--en-border));
-  --chat-border: var(--en-border);
-  --chat-text: var(--en-text);
-  --chat-text-secondary: var(--en-muted);
-  --chat-text-muted: color-mix(in srgb, var(--en-muted) 80%, transparent);
-  --chat-accent: var(--en-primary);
-  --chat-accent-hover: color-mix(in srgb, var(--en-primary) 82%, white);
 }
 
 .en-chat * {
@@ -967,14 +913,17 @@ onBeforeUnmount(() => {
 .en-chat-topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 18px 10px;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px 10px;
   background: var(--en-bg);
+  border-bottom: 1px solid color-mix(in srgb, var(--en-border) 65%, transparent);
 }
 
 .en-chat-topbar-title {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
 }
 
 .en-chat-topbar-title h2 {
@@ -989,15 +938,22 @@ onBeforeUnmount(() => {
 
 .en-chat-topbar-title small {
   display: block;
+  max-width: 100%;
   margin-top: 2px;
+  overflow: hidden;
   color: var(--en-muted);
   font-size: 11px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .en-chat-topbar-actions {
+  flex: 0 0 auto;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .en-chat-status {
@@ -1120,13 +1076,13 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  background: var(--chat-surface);
   color: var(--en-text);
+  background: var(--en-soft);
 }
 
 .en-chat-quick-text {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -1136,14 +1092,17 @@ onBeforeUnmount(() => {
 }
 
 .en-chat-quick-text small {
+  overflow: hidden;
   color: var(--en-muted);
   font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .en-chat-thread {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
   padding: 6px 18px 20px;
 }
 
@@ -1151,50 +1110,51 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: var(--chat-surface);
-  color: var(--en-text);
+  max-width: 100%;
 }
 
 .en-chat-message.user {
   align-self: flex-end;
-  max-width: min(680px, 92%);
-  background: color-mix(in srgb, var(--en-primary) 18%, var(--chat-surface));
+  width: min(84%, 560px);
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--en-primary) 26%, var(--en-surface));
 }
 
 .en-chat-message.assistant {
-  align-self: stretch;
+  width: 100%;
 }
 
 .en-chat-message-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
 }
 
 .en-chat-message-avatar {
   width: 26px;
   height: 26px;
-  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 999px;
   background: var(--chat-surface-active);
   color: var(--en-text);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .en-chat-message-avatar[data-role='user'] {
   background: var(--en-primary);
-  color: #ffffff;
+  color: #fff;
 }
 
 .en-chat-message-meta {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
   gap: 8px;
+  min-width: 0;
 }
 
 .en-chat-message-meta strong {
@@ -1204,57 +1164,60 @@ onBeforeUnmount(() => {
 
 .en-chat-message-meta small {
   color: var(--en-muted);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .en-chat-message-body {
   color: var(--en-text);
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.65;
 }
 
 .en-chat-message-body p {
-  margin: 0 0 8px;
+  margin: 0;
+  white-space: pre-wrap;
 }
 
-.en-chat-message-body p:last-child {
-  margin-bottom: 0;
+.en-chat-message-body p + p {
+  margin-top: 9px;
 }
 
 .en-chat-tools {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 6px;
-  margin-top: 4px;
 }
 
 .en-chat-tool {
-  border: 0;
+  overflow: hidden;
+  border: 1px solid var(--en-border);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--en-bg) 55%, transparent);
-  color: var(--en-text);
-  text-align: left;
-  padding: 0;
-  cursor: pointer;
-}
-
-.en-chat-tool:hover {
-  background: color-mix(in srgb, var(--en-bg) 35%, transparent);
+  background: color-mix(in srgb, var(--en-surface) 82%, transparent);
 }
 
 .en-chat-tool-head {
+  width: 100%;
+  min-height: 38px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 11px;
+  gap: 8px;
+  padding: 0 11px;
+  border: 0;
+  color: var(--en-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.en-chat-tool-head:hover {
+  background: var(--en-soft);
 }
 
 .en-chat-tool-status {
   width: 8px;
   height: 8px;
+  flex: 0 0 auto;
   border-radius: 999px;
   background: var(--en-muted);
-  flex: 0 0 auto;
 }
 
 .en-chat-tool-status[data-status='running'] {
@@ -1507,23 +1470,38 @@ onBeforeUnmount(() => {
   .en-chat-empty {
     padding: 6vh 16px 20px;
   }
+
   .en-chat-thread {
     padding: 6px 12px 20px;
   }
+
   .en-chat-composer {
     padding: 6px 12px 14px;
   }
+
   .en-chat-topbar {
-    padding: 12px 14px 8px;
+    padding: 10px 10px 8px;
+  }
+
+  .en-chat-topbar-title small {
+    display: none;
+  }
+
+  .en-chat-route-select {
+    max-width: 112px;
+  }
+
+  .en-chat-reasoning-select {
+    max-width: 82px;
   }
 }
 </style>
 
 
 <style scoped>
-.en-chat-route-select { min-width: 112px; max-width: 170px; height: 32px; border: 1px solid var(--chat-border); border-radius: 9px; background: var(--chat-surface); color: var(--chat-text); padding: 0 28px 0 10px; font-size: 12px; }
-.en-chat-reasoning-select { min-width: 82px; }
-.en-chat-auto-approve { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 9px; border: 1px solid var(--chat-border); border-radius: 9px; font-size: 12px; color: var(--chat-text-secondary); }
+.en-chat-route-select { min-width: 104px; max-width: 148px; height: 32px; border: 1px solid var(--chat-border); border-radius: 9px; background: var(--chat-surface); color: var(--chat-text); padding: 0 26px 0 9px; font-size: 12px; text-overflow: ellipsis; }
+.en-chat-reasoning-select { min-width: 76px; max-width: 92px; }
+.en-chat-auto-approve { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 9px; border: 1px solid var(--chat-border); border-radius: 9px; font-size: 12px; color: var(--chat-text-secondary); white-space: nowrap; }
 .en-chat-thinking { display: inline-flex; align-items: center; gap: 8px; color: var(--chat-text-secondary); min-height: 28px; }
 .en-spin { animation: en-chat-spin 0.9s linear infinite; }
 @keyframes en-chat-spin { to { transform: rotate(360deg); } }

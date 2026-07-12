@@ -40,17 +40,19 @@
     <div class="en-rail-nav">
       <button class="en-rail-icon" type="button" title="Toggle sidebar" @click="emit('toggle-sidebar')"><PanelLeft class="en-rail-icon-svg" /></button>
       <div class="en-rail-separator" />
-      <button
-        v-for="item in visibleRailItems"
-        :key="item.id"
-        class="en-rail-icon"
-        type="button"
-        :title="item.title"
-        :class="{ active: item.active }"
-        @click="item.run"
-      >
-        <component :is="item.icon" class="en-rail-icon-svg" />
-      </button>
+      <template v-for="item in visibleRailItems" :key="item.id">
+        <div v-if="item.separator" class="en-rail-separator en-rail-separator-custom" aria-hidden="true" />
+        <button
+          v-else
+          class="en-rail-icon"
+          type="button"
+          :title="item.title"
+          :class="{ active: item.active }"
+          @click="item.run"
+        >
+          <component :is="item.icon" class="en-rail-icon-svg" />
+        </button>
+      </template>
     </div>
 
     <div class="en-rail-bottom">
@@ -88,7 +90,7 @@ import { getAddonSidebarItems } from '@/addons'
 import { useAddonsStore } from '@/store/addons'
 import { usePreferencesStore } from '@/store/preferences'
 import { VAULT_ICON_OPTIONS, normalizeVaultIcon } from 'common/elephantnote/appearance'
-import { addonViewRailId, normalizeIconRailHidden, normalizeIconRailOrder } from './iconRailLayout'
+import { addonViewRailId, isIconRailSeparatorId, normalizeIconRailHidden, normalizeIconRailOrder } from './iconRailLayout'
 
 const props = defineProps({ activeAddonViewId: { type: String, default: '' } })
 const emit = defineEmits(['open-settings', 'search', 'toggle-sidebar', 'open-addon-view', 'close-addon-view'])
@@ -154,7 +156,10 @@ const visibleRailItems = computed(() => {
   const ids = allRailItems.value.map((item) => item.id)
   const hidden = new Set(normalizeIconRailHidden(preferences.iconRailHidden, ids))
   const byId = new Map(allRailItems.value.map((item) => [item.id, item]))
-  return normalizeIconRailOrder(preferences.iconRailOrder, ids).filter((id) => !hidden.has(id)).map((id) => byId.get(id)).filter(Boolean)
+  return normalizeIconRailOrder(preferences.iconRailOrder, ids)
+    .filter((id) => isIconRailSeparatorId(id) || !hidden.has(id))
+    .map((id) => isIconRailSeparatorId(id) ? { id, separator: true } : byId.get(id))
+    .filter(Boolean)
 })
 
 const vaultInitial = (vault) => (vault?.name || '?').charAt(0).toUpperCase()
@@ -204,7 +209,8 @@ const handleAddonSidebarItem = async (item) => {
 .en-vault-menu-add-icon { width: 16px; height: 16px; flex-shrink: 0; }
 .en-rail-nav { min-height: 0; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; -webkit-app-region: no-drag; margin-top: 4px; overflow-y: auto; scrollbar-width: none; }
 .en-rail-nav::-webkit-scrollbar { display: none; }
-.en-rail-separator { width: 24px; height: 1px; background: var(--en-border); margin: 4px 0; }
+.en-rail-separator { width: 24px; height: 1px; flex: 0 0 1px; background: var(--en-border); margin: 4px 0; }
+.en-rail-separator-custom { margin: 5px 0; }
 .en-rail-bottom { display: flex; flex-direction: column; align-items: center; gap: 2px; -webkit-app-region: no-drag; padding: 6px 0 8px; }
 .en-rail-icon { width: 34px; height: 34px; flex: 0 0 34px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; color: var(--en-muted); background: transparent; cursor: pointer; transition: color .12s, background .12s; }
 .en-rail-icon:hover { color: var(--en-text); background: var(--en-soft); }

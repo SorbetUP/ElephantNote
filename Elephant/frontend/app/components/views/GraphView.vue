@@ -583,7 +583,17 @@ const openNode = (node) => {
   if (!node?.id) return
   if (node.kind === 'wiki') {
     const draftId = node.id.replace(/^wiki:/, '')
-    log.info('[Graph][Wiki] open', { nodeId: node.id, draftId, title: node.title })
+    const wikiPath = String(node.relativePath || node.path || '').trim()
+    log.info('[Graph][Wiki] open', { nodeId: node.id, draftId, title: node.title, path: wikiPath || null })
+    if (wikiPath && wikiPath.endsWith('.md')) {
+      store.openNote({
+        path: wikiPath,
+        title: node.title || wikiPath.split('/').pop()?.replace(/\.md$/i, '') || 'Wiki',
+        kind: 'note',
+        type: 'note'
+      })
+      return
+    }
     window.sessionStorage.setItem('elephantnote:openWikiDraftId', draftId)
     store.setWorkspaceView('wiki')
     requestAnimationFrame(() => {
@@ -973,7 +983,15 @@ const loadGraph = async(reason) => {
   }
 }
 
-onMounted(() => loadGraph('mount').catch(() => {}))
+const handleKnowledgeChanged = (event) => {
+  const reason = event?.detail?.reason || 'knowledge-changed'
+  void loadGraph(reason).catch(() => {})
+}
+
+onMounted(() => {
+  window.addEventListener('elephantnote:knowledge-changed', handleKnowledgeChanged)
+  void loadGraph('mount').catch(() => {})
+})
 watch(() => store.activeVault?.path, async(newPath, oldPath) => {
   semanticCenterId.value = ''
   semanticHistory.value = []
@@ -1012,6 +1030,7 @@ watch(() => JSON.stringify(territoryStats.value), (value, previous) => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('elephantnote:knowledge-changed', handleKnowledgeChanged)
   cancelCameraAnimation()
   if (nodeClickTimer !== null) clearTimeout(nodeClickTimer)
   if (zoomLogTimer !== null) clearTimeout(zoomLogTimer)

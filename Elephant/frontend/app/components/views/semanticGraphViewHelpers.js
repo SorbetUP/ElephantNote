@@ -1,4 +1,4 @@
-const normalizeNodeId = (node = {}) => String(node.relativePath || node.path || node.id || '').trim()
+const normalizeNodeId = (node = {}) => String(node.id || node.relativePath || node.path || '').trim()
 
 const normalizeGraphNode = (node = {}) => {
   const id = normalizeNodeId(node)

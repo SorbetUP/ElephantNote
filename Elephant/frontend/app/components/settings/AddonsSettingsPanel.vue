@@ -81,6 +81,7 @@
         <button class="en-switch active" type="button" role="switch" aria-label="Community addons enabled" aria-checked="true" :disabled="operationInProgress" @click="disableCommunityAddons"><span /></button>
       </section>
 
+      <!-- The former Built-in addon catalogue and community catalogue are intentionally unified below. -->
       <section class="en-addons-list-section">
         <header>
           <div>

@@ -25,8 +25,12 @@ export const consumeHtmlTag = (state, recurse) => {
     const length = match[0].length
     pushPending(state)
     state.tokens.push({
-      type: 'html_tag', raw: match[0], tag: '<!---->', openTag: match[1],
-      parent: state.tokens, attrs: {},
+      type: 'html_tag',
+      raw: match[0],
+      tag: '<!---->',
+      openTag: match[1],
+      parent: state.tokens,
+      attrs: {},
       range: { start: state.pos, end: state.pos + length }
     })
     state.src = state.src.substring(length)
@@ -40,8 +44,14 @@ export const consumeHtmlTag = (state, recurse) => {
   const length = match[0].length
   pushPending(state)
   state.tokens.push({
-    type: 'html_tag', raw: match[0], tag: match[3], openTag: match[2],
-    closeTag: match[5], parent: state.tokens, attrs, content: match[4],
+    type: 'html_tag',
+    raw: match[0],
+    tag: match[3],
+    openTag: match[2],
+    closeTag: match[5],
+    parent: state.tokens,
+    attrs,
+    content: match[4],
     children: match[4]
       ? recurse(match[4], undefined, state.rules, state.pos + match[2].length, false, state.labels, state.options)
       : '',

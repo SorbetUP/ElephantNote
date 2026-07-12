@@ -22,8 +22,12 @@ export function codeBlockUpdate(block, code = '', lang) {
   if (language) loadLanguage(language)
 
   Object.assign(block, {
-    type: 'pre', functionType: 'fencecode', lang: language,
-    text: '', history: null, children: []
+    type: 'pre',
+    functionType: 'fencecode',
+    lang: language,
+    text: '',
+    history: null,
+    children: []
   })
   this.appendChild(codeBlock, codeContent)
   this.appendChild(block, inputBlock)

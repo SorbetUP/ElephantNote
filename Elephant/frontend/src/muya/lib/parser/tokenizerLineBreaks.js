@@ -28,7 +28,10 @@ export const consumeTailHeader = state => {
   if (!match || !state.top) return false
   pushPending(state)
   state.tokens.push({
-    type: 'tail_header', raw: match[1], marker: match[1], parent: state.tokens,
+    type: 'tail_header',
+    raw: match[1],
+    marker: match[1],
+    parent: state.tokens,
     range: { start: state.pos, end: state.pos + match[1].length }
   })
   state.src = state.src.substring(match[1].length)

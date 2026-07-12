@@ -9,9 +9,16 @@ const labelKey = block => {
   }
   if (type === 'ul') return listType === 'task' ? 'ulTask' : 'ulBullet'
   const keys = {
-    p: 'paragraph', ol: 'olOrder', blockquote: 'blockquote',
-    h1: 'heading1', h2: 'heading2', h3: 'heading3',
-    h4: 'heading4', h5: 'heading5', h6: 'heading6', hr: 'hr'
+    p: 'paragraph',
+    ol: 'olOrder',
+    blockquote: 'blockquote',
+    h1: 'heading1',
+    h2: 'heading2',
+    h3: 'heading3',
+    h4: 'heading4',
+    h5: 'heading5',
+    h6: 'heading6',
+    hr: 'hr'
   }
   return keys[type] || 'paragraph'
 }

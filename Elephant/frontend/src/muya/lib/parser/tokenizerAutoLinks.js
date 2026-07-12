@@ -7,8 +7,12 @@ export const consumeAutoLinkExtension = state => {
   }
   pushPending(state)
   state.tokens.push({
-    type: 'auto_link_extension', raw: match[0], www: match[1], url: match[2],
-    email: match[3], linkType: match[1] ? 'www' : match[2] ? 'url' : 'email',
+    type: 'auto_link_extension',
+    raw: match[0],
+    www: match[1],
+    url: match[2],
+    email: match[3],
+    linkType: match[1] ? 'www' : match[2] ? 'url' : 'email',
     parent: state.tokens,
     range: { start: state.pos, end: state.pos + match[0].length }
   })
@@ -22,8 +26,13 @@ export const consumeAutoLink = state => {
   if (!match) return false
   pushPending(state)
   state.tokens.push({
-    type: 'auto_link', raw: match[0], href: match[1], email: match[2],
-    isLink: !!match[1], marker: '<', parent: state.tokens,
+    type: 'auto_link',
+    raw: match[0],
+    href: match[1],
+    email: match[2],
+    isLink: !!match[1],
+    marker: '<',
+    parent: state.tokens,
     range: { start: state.pos, end: state.pos + match[0].length }
   })
   state.src = state.src.substring(match[0].length)

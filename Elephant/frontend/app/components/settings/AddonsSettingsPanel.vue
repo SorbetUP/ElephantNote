@@ -1,18 +1,20 @@
 <template>
   <div class="en-addons-panel">
-    <!-- Removed gate contract: v-else-if="!communityAddonsEnabled" / Turn on community addons / v-model="riskAccepted". -->
-    <button
-      class="en-community-title-check"
-      type="button"
-      role="checkbox"
-      aria-label="Community addons"
-      :aria-checked="communityAddonsEnabled"
-      :title="communityAddonsEnabled ? 'Community addons enabled' : 'Community addons disabled'"
-      :disabled="!communityConsentLoaded || operationInProgress"
-      @click="toggleCommunityAddons"
-    >
-      <Check v-if="communityAddonsEnabled" aria-hidden="true" />
-    </button>
+    <Teleport defer to="#en-addons-title-actions">
+      <button
+        class="en-community-title-check"
+        :class="{ active: communityAddonsEnabled }"
+        type="button"
+        role="checkbox"
+        aria-label="Community addons"
+        :aria-checked="communityAddonsEnabled"
+        :title="communityAddonsEnabled ? 'Disable community addons' : 'Enable community addons'"
+        :disabled="!communityConsentLoaded || operationInProgress"
+        @click="toggleCommunityAddons"
+      >
+        <Check v-if="communityAddonsEnabled" aria-hidden="true" />
+      </button>
+    </Teleport>
 
     <nav class="en-addons-tabs" aria-label="Addon settings pages">
       <div class="en-addons-tab-buttons">
@@ -62,7 +64,7 @@
       <p v-if="message" class="en-addons-feedback" :class="{ error: messageIsError }">{{ message }}</p>
       <p v-if="lastError" class="en-addons-feedback error">{{ lastError }}</p>
 
-      <section class="en-addons-list-section">
+      <section v-if="filteredInstalledAddons.length || query" class="en-addons-list-section">
         <header>
           <h3>Installed addons</h3>
           <span>{{ filteredInstalledAddons.length }}</span>
@@ -80,7 +82,7 @@
             @run-action="runAction"
             @uninstall="uninstallAddon(addon)"
           />
-          <div v-if="!filteredInstalledAddons.length" class="en-addons-empty">{{ query ? 'No installed addon matches this search.' : 'No optional addon is installed.' }}</div>
+          <div v-if="query && !filteredInstalledAddons.length" class="en-addons-empty">No installed addon matches this search.</div>
         </div>
       </section>
 
@@ -111,10 +113,7 @@
     </template>
 
     <template v-else>
-      <div
-        class="en-addon-packs-slot"
-        data-elephant-addon-settings-slot="addons.packs"
-      />
+      <div class="en-addon-packs-slot" data-elephant-addon-settings-slot="addons.packs" />
     </template>
   </div>
 </template>
@@ -197,9 +196,7 @@ const addFromFile = async () => {
     directory: false,
     filters: [{ name: 'ElephantNote addon pack', extensions: ['enaddonpack'] }]
   })
-  if (typeof selected === 'string' && selected) {
-    dispatchPackEvent(PACK_IMPORT_EVENT, { path: selected })
-  }
+  if (typeof selected === 'string' && selected) dispatchPackEvent(PACK_IMPORT_EVENT, { path: selected })
 }
 </script>
 

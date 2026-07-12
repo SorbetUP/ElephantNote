@@ -8,6 +8,8 @@ pub mod muya_extras;
 pub mod muya_frontmatter;
 pub mod muya_interactions;
 pub mod muya_navigation;
+#[path = "../muya_engine/mod.rs"]
+pub mod muya_engine;
 pub mod parser_v4;
 pub mod renderer_v2;
 pub mod types;

@@ -92,6 +92,35 @@ export const operationCases = [
     ]
   },
   {
+    name: 'table-row-and-column-edits',
+    markdown: '| A | B |\n| --- | --- |\n| C | D |',
+    actions: [
+      { type: 'cursor', anchor: { line: 0, ch: 1 }, focus: { line: 0, ch: 1 } },
+      {
+        type: 'contentStateCall',
+        method: 'editTable',
+        args: [{ location: 'right', action: 'insert', target: 'column' }]
+      },
+      {
+        type: 'contentStateCall',
+        method: 'editTable',
+        args: [{ location: 'next', action: 'insert', target: 'row' }]
+      }
+    ]
+  },
+  {
+    name: 'insert-inline-image',
+    markdown: 'Image here',
+    actions: [
+      { type: 'cursor', anchor: { line: 0, ch: 5 }, focus: { line: 0, ch: 5 } },
+      {
+        type: 'contentStateCall',
+        method: 'insertImage',
+        args: [{ alt: 'demo', src: 'image file.png', title: 'title' }]
+      }
+    ]
+  },
+  {
     name: 'history-round-trip',
     markdown: 'Paragraph',
     actions: [
@@ -108,7 +137,11 @@ export const operationCases = [
       { type: 'call', method: 'setTabSize', args: [2] },
       { type: 'call', method: 'setListIndentation', args: [4] },
       { type: 'call', method: 'setFocusMode', args: [true] },
-      { type: 'call', method: 'setOptions', args: [{ spellcheckEnabled: true, hideQuickInsertHint: true }, false] }
+      {
+        type: 'call',
+        method: 'setOptions',
+        args: [{ spellcheckEnabled: true, hideQuickInsertHint: true }, false]
+      }
     ]
   }
 ]

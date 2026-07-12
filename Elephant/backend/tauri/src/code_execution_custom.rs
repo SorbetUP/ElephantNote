@@ -17,7 +17,7 @@ use tokio::{
   io::{AsyncReadExt, AsyncWriteExt},
   process::Command,
   sync::{oneshot, Mutex},
-  time::timeout,
+  time::sleep,
 };
 
 use crate::vault::config as vault_config;
@@ -324,20 +324,17 @@ pub async fn run(
 
   let (stop_tx, stop_rx) = oneshot::channel();
   running().lock().await.insert(execution_id.clone(), stop_tx);
+  let timeout_sleep = sleep(Duration::from_millis(DEFAULT_TIMEOUT_MS));
+  tokio::pin!(timeout_sleep);
   let outcome = tokio::select! {
     status = child.wait() => (status.map_err(|error| error.to_string())?, false, false),
     _ = stop_rx => {
       child.start_kill().map_err(|error| error.to_string())?;
       (child.wait().await.map_err(|error| error.to_string())?, false, true)
     },
-    result = timeout(Duration::from_millis(DEFAULT_TIMEOUT_MS), async { child.wait().await }) => {
-      match result {
-        Ok(status) => (status.map_err(|error| error.to_string())?, false, false),
-        Err(_) => {
-          child.start_kill().map_err(|error| error.to_string())?;
-          (child.wait().await.map_err(|error| error.to_string())?, true, false)
-        }
-      }
+    _ = &mut timeout_sleep => {
+      child.start_kill().map_err(|error| error.to_string())?;
+      (child.wait().await.map_err(|error| error.to_string())?, true, false)
     }
   };
   running().lock().await.remove(&execution_id);
@@ -346,7 +343,8 @@ pub async fn run(
   let stdout_bytes = stdout_task.await.map_err(|error| error.to_string())??;
   let stderr_bytes = stderr_task.await.map_err(|error| error.to_string())??;
   let (mut stdout_text, stdout_dropped_lines, stdout_truncated) = retain_tail(String::from_utf8_lossy(&stdout_bytes).to_string(), output_line_limit);
-  let (mut stderr_text, stderr_dropped_lines, stderr_truncated) = retain_tail(String::from_utf8_lossy(&stderr_bytes).to_string(), output_line_limit);
+  let (stderr_retained, stderr_dropped_lines, stderr_truncated) = retain_tail(String::from_utf8_lossy(&stderr_bytes).to_string(), output_line_limit);
+  let mut stderr_text = stderr_retained;
   if outcome.1 {
     if !stderr_text.is_empty() { stderr_text.push('\n'); }
     stderr_text.push_str(&format!("Execution timed out after {DEFAULT_TIMEOUT_MS} ms."));

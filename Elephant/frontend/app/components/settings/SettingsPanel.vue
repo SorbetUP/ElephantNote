@@ -173,10 +173,10 @@ const CORE_SETTINGS_INDEX = Object.freeze([
   { id: 'editor-autosave-delay', section: 'editor', label: 'Autosave delay', description: 'Delay before writing the latest edit.' },
   { id: 'vault-active', section: 'vaults', label: 'Active vault', description: 'Current local workspace folder.' },
   { id: 'vault-open', section: 'vaults', label: 'Open vaults', description: 'Review or remove registered vaults.' },
-  { id: 'addons-installed', section: 'addons', label: 'Installed addons', description: 'Installed first-party and community addon packages.' },
-  { id: 'addons-builtins', section: 'addons', label: 'Built-in addon catalogue', description: 'Install or remove optional ElephantNote features.' },
+  { id: 'addons-installed', section: 'addons', label: 'Installed addons', description: 'Installed addon packages.' },
+  { id: 'addons-available', section: 'addons', label: 'Available addons', description: 'Install optional features and community packages.' },
   { id: 'addons-community', section: 'addons', label: 'Community addons', description: 'Risk acknowledgement and third-party addon activation.' },
-  { id: 'addons-packs', section: 'addons', label: 'Addon packs', description: 'Restore or share complete addon configurations.' }
+  { id: 'addons-packs', section: 'addons', label: 'Addon packs', description: 'Install or share complete addon configurations.' }
 ])
 
 const addonsStore = useAddonsStore()

@@ -5,6 +5,7 @@ import WikiView from 'elephant-front/components/views/WikiView.vue'
 import { installGraphRuntimeFixes } from 'elephant-front/runtime/graphRuntimeFixes'
 import { useVaultStore } from 'elephant-front/stores/vaultStore'
 import AiAddonSettings from './ui/AiAddonSettings.vue'
+import AiGraphFooterButton from './ui/AiGraphFooterButton.vue'
 import { mountSettingsComponent } from './settingsComponentHost'
 
 const ADDON_ID = 'elephant.ai'
@@ -83,7 +84,7 @@ export const aiAddon = {
     defaultEnabled: false,
     removable: true,
     permissions: ['ai.configure', 'ai.chat', 'ai.models', 'search.manage', 'ocr.run'],
-    contributes: { actions: true, sidebar: true, settings: true, views: true, layout: true }
+    contributes: { actions: true, sidebar: true, settings: true, views: true, layout: true, editor: true }
   },
 
   activate(ctx) {
@@ -138,6 +139,12 @@ export const aiAddon = {
       order: 40,
       component: ChatSidebar,
       when: () => useVaultStore().chatSidebarOpen === true
+    })
+
+    ctx.registerContribution('editor.footer-items', {
+      id: `${ADDON_ID}.graph-footer-button`,
+      order: 20,
+      component: AiGraphFooterButton
     })
 
     ctx.addAction({

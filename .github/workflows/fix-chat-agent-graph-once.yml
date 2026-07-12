@@ -6,6 +6,11 @@ on:
       - assistant/wiki-links-graph-integration
     paths:
       - .github/fix-chat-agent-graph-trigger.txt
+  pull_request:
+    branches:
+      - feature/wiki-knowledge-continuation
+    paths:
+      - .github/fix-chat-agent-graph-trigger.txt
 
 permissions:
   contents: write

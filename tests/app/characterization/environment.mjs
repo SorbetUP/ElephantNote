@@ -56,7 +56,7 @@ export const installDeterministicBrowser = (scenarioSeed = 1) => {
     takeRecords() { return [] }
   }
 
-  window.requestAnimationFrame = (callback) => setTimeout(() => callback(0), 0)
+  window.requestAnimationFrame = (frameHandler) => setTimeout(() => frameHandler(0), 0)
   window.cancelAnimationFrame = (id) => clearTimeout(id)
   globalThis.requestAnimationFrame = window.requestAnimationFrame
   globalThis.cancelAnimationFrame = window.cancelAnimationFrame

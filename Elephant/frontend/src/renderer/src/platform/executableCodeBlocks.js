@@ -8,5 +8,11 @@ export const installExecutableCodeBlocks = (target = globalThis) => {
     delete target.__ELEPHANT_CODE_RUNTIME__
   }
 
-  return installExecutableCodeNativeLifecycle(installExecutableCodeNativeRuntime(target))
+  return installExecutableCodeNativeLifecycle(installExecutableCodeNativeRuntime(target), target)
+}
+
+export const resetExecutableCodeNativeRuntimeForTests = (target = globalThis) => {
+  target.__ELEPHANT_NATIVE_CODE_RUNTIME__?.dispose?.()
+  delete target.__ELEPHANT_NATIVE_CODE_RUNTIME__
+  delete target.__ELEPHANT_CODE_RUNTIME__
 }

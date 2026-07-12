@@ -1,10 +1,9 @@
 <template>
-  <nav class="en-rail" :class="{ 'en-rail-macos': isMac }">
+  <nav class="en-rail" :class="{ 'en-rail-macos': isMac }" aria-label="Workspace navigation">
     <div class="en-rail-top">
       <div class="en-rail-vault-wrap" @mouseenter="showVaultMenu = true" @mouseleave="showVaultMenu = false">
-        <button class="en-rail-vault" type="button" :title="vaultTooltip" @click="openActiveVaultIconPicker">
-          <component :is="activeVaultIconComponent" v-if="activeVaultIconComponent" class="en-rail-vault-lucide" />
-          <span v-else class="en-rail-vault-initial">{{ vaultInitial(store.activeVault) }}</span>
+        <button class="en-rail-vault" type="button" :title="vaultTooltip" :aria-label="vaultTooltip" @click="openActiveVaultIconPicker">
+          <component :is="activeVaultIconComponent || Vault" class="en-rail-vault-lucide" aria-hidden="true" />
         </button>
         <transition name="en-vault-fade">
           <div v-if="showVaultMenu" class="en-vault-menu" @mouseenter="showVaultMenu = true" @mouseleave="showVaultMenu = false">
@@ -13,8 +12,7 @@
               <div class="en-vault-menu-item" :class="{ active: vault.id === store.activeVaultId }">
                 <button class="en-vault-menu-select" type="button" @click="switchVault(vault.id)">
                   <span class="en-vault-menu-initial">
-                    <component :is="getVaultIconComponent(vault)" v-if="getVaultIconComponent(vault)" class="en-vault-menu-lucide" />
-                    <span v-else>{{ vaultInitial(vault) }}</span>
+                    <component :is="getVaultIconComponent(vault) || Vault" class="en-vault-menu-lucide" aria-hidden="true" />
                   </span>
                   <span class="en-vault-menu-name">{{ vault.name }}</span>
                 </button>
@@ -24,7 +22,7 @@
                 <svg v-if="vault.id === store.activeVaultId" class="en-vault-menu-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
               </div>
               <div v-if="editingVaultId === vault.id" class="en-vault-icon-picker" @click.stop>
-                <button class="en-vault-icon-choice" type="button" title="Use first letter" @mousedown.stop.prevent="setVaultIcon(vault.id, '')" @pointerdown.stop @pointerup.stop.prevent @click.stop.prevent>{{ vaultInitial(vault) }}</button>
+                <button class="en-vault-icon-choice" type="button" title="Use default vault icon" @mousedown.stop.prevent="setVaultIcon(vault.id, '')" @pointerdown.stop @pointerup.stop.prevent @click.stop.prevent><Vault class="en-vault-icon-choice-svg" /></button>
                 <button v-for="icon in vaultIconOptions" :key="icon.name" class="en-vault-icon-choice" :class="{ active: normalizeVaultIcon(vault.icon) === icon.name }" type="button" :title="icon.label" @mousedown.stop.prevent="setVaultIcon(vault.id, icon.name)" @pointerdown.stop @pointerup.stop.prevent @click.stop.prevent>
                   <component :is="icon.component" class="en-vault-icon-choice-svg" />
                 </button>
@@ -38,8 +36,10 @@
     </div>
 
     <div class="en-rail-nav">
-      <button class="en-rail-icon" type="button" title="Toggle sidebar" @click="emit('toggle-sidebar')"><PanelLeft class="en-rail-icon-svg" /></button>
-      <div class="en-rail-separator" />
+      <button class="en-rail-icon en-rail-sidebar-toggle" type="button" :title="sidebarVisible ? 'Hide sidebar' : 'Show sidebar'" :aria-label="sidebarVisible ? 'Hide sidebar' : 'Show sidebar'" @click="emit('toggle-sidebar')">
+        <PanelLeftClose v-if="sidebarVisible" class="en-rail-icon-svg" aria-hidden="true" />
+        <PanelLeftOpen v-else class="en-rail-icon-svg" aria-hidden="true" />
+      </button>
       <template v-for="item in visibleRailItems" :key="item.id">
         <div v-if="item.separator" class="en-rail-separator en-rail-separator-custom" aria-hidden="true" />
         <button
@@ -47,16 +47,17 @@
           class="en-rail-icon"
           type="button"
           :title="item.title"
+          :aria-label="item.title"
           :class="{ active: item.active }"
           @click="item.run"
         >
-          <component :is="item.icon" class="en-rail-icon-svg" />
+          <component :is="item.icon" class="en-rail-icon-svg" aria-hidden="true" />
         </button>
       </template>
     </div>
 
     <div class="en-rail-bottom">
-      <button class="en-rail-icon" type="button" title="Settings" @click="emit('open-settings')"><Settings class="en-rail-icon-svg" /></button>
+      <button class="en-rail-icon" type="button" title="Settings" aria-label="Settings" @click="emit('open-settings')"><Settings class="en-rail-icon-svg" aria-hidden="true" /></button>
     </div>
   </nav>
 </template>
@@ -74,7 +75,8 @@ import {
   Landmark,
   LayoutDashboard,
   ListTodo,
-  PanelLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Plus,
   Rocket,
@@ -83,6 +85,7 @@ import {
   Sparkles,
   Star,
   Terminal,
+  Vault,
   Workflow
 } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
@@ -92,7 +95,10 @@ import { usePreferencesStore } from '@/store/preferences'
 import { VAULT_ICON_OPTIONS, normalizeVaultIcon } from 'common/elephantnote/appearance'
 import { addonViewRailId, isIconRailSeparatorId, normalizeIconRailHidden, normalizeIconRailOrder } from './iconRailLayout'
 
-const props = defineProps({ activeAddonViewId: { type: String, default: '' } })
+const props = defineProps({
+  activeAddonViewId: { type: String, default: '' },
+  sidebarVisible: { type: Boolean, default: true }
+})
 const emit = defineEmits(['open-settings', 'search', 'toggle-sidebar', 'open-addon-view', 'close-addon-view'])
 const store = useVaultStore()
 const addonsStore = useAddonsStore()
@@ -119,6 +125,7 @@ const vaultIconComponentsByName = Object.fromEntries(vaultIconOptions.map((optio
 const isMac = navigator.platform ? navigator.platform.startsWith('Mac') : /mac/i.test(navigator.userAgent)
 const getVaultIconComponent = (vault) => vaultIconComponentsByName[normalizeVaultIcon(vault?.icon)] || null
 const activeVaultIconComponent = computed(() => getVaultIconComponent(store.activeVault))
+const sidebarVisible = computed(() => props.sidebarVisible)
 
 const closeAddonAndOpen = (view) => {
   emit('close-addon-view')
@@ -162,8 +169,7 @@ const visibleRailItems = computed(() => {
     .filter(Boolean)
 })
 
-const vaultInitial = (vault) => (vault?.name || '?').charAt(0).toUpperCase()
-const vaultTooltip = computed(() => `${store.activeVault?.name || 'No vault'} — hover to switch`)
+const vaultTooltip = computed(() => `${store.activeVault?.name || 'No vault'} — open vault switcher`)
 const openActiveVaultIconPicker = () => { showVaultMenu.value = true; editingVaultId.value = store.activeVaultId || '' }
 const switchVault = (vaultId) => { store.setActiveVault(vaultId); showVaultMenu.value = false }
 const addVault = async () => { showVaultMenu.value = false; if (await store.chooseVault()) { editingVaultId.value = store.activeVaultId; showVaultMenu.value = true } }
@@ -177,14 +183,13 @@ const handleAddonSidebarItem = async (item) => {
 </script>
 
 <style scoped>
-.en-rail { width: 48px; display: flex; flex-direction: column; align-items: center; background: var(--en-sidebar-bg, var(--en-bg)); border-right: 1px solid var(--en-border); padding-top: 8px; flex-shrink: 0; -webkit-app-region: drag; }
+.en-rail { position: relative; z-index: 8; width: 48px; height: 100%; min-height: 0; display: flex; flex: 0 0 48px; flex-direction: column; align-items: center; overflow: visible; background: var(--en-sidebar-bg, var(--en-bg)); border-right: 1px solid var(--en-border); padding-top: 8px; -webkit-app-region: drag; }
 .en-rail-macos { padding-top: 36px; }
 .en-rail-top { -webkit-app-region: no-drag; margin-bottom: 4px; position: relative; }
 .en-rail-vault-wrap { position: relative; }
-.en-rail-vault { width: 34px; height: 34px; border-radius: 10px; border: 0; background: var(--en-soft-strong, var(--en-soft)); color: var(--en-text); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity .15s; padding: 0; overflow: hidden; }
+.en-rail-vault { width: 34px; height: 34px; border-radius: 10px; border: 0; background: var(--en-soft-strong, var(--en-soft)); color: var(--en-text); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity .15s; padding: 0; overflow: hidden; visibility: visible; opacity: 1; }
 .en-rail-vault:hover { opacity: .85; }
-.en-rail-vault-initial { font-size: 15px; font-weight: 800; }
-.en-rail-vault-lucide { width: 19px; height: 19px; stroke-width: 2.2; }
+.en-rail-vault-lucide { width: 19px; height: 19px; display: block; color: currentColor; stroke: currentColor; stroke-width: 2.2; }
 .en-vault-menu { position: absolute; left: 52px; top: -4px; min-width: 250px; background: var(--en-surface); border: 1px solid var(--en-border); border-radius: 10px; box-shadow: var(--en-card-shadow, 0 8px 30px rgba(0,0,0,.18)); padding: 6px; z-index: 100; -webkit-app-region: no-drag !important; pointer-events: auto; }
 .en-vault-menu-header { padding: 6px 10px 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--en-muted); }
 .en-vault-menu-item { width: 100%; display: flex; align-items: center; gap: 4px; padding: 4px; border: 0; border-radius: 6px; background: transparent; color: var(--en-text); font: inherit; font-size: 13px; text-align: left; transition: background .1s; }
@@ -209,13 +214,13 @@ const handleAddonSidebarItem = async (item) => {
 .en-vault-menu-add-icon { width: 16px; height: 16px; flex-shrink: 0; }
 .en-rail-nav { min-height: 0; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; -webkit-app-region: no-drag; margin-top: 4px; overflow-y: auto; scrollbar-width: none; }
 .en-rail-nav::-webkit-scrollbar { display: none; }
-.en-rail-separator { width: 24px; height: 1px; flex: 0 0 1px; background: var(--en-border); margin: 4px 0; }
-.en-rail-separator-custom { margin: 5px 0; }
+.en-rail-separator { width: 24px; height: 1px; flex: 0 0 1px; background: var(--en-border); margin: 5px 0; }
 .en-rail-bottom { display: flex; flex-direction: column; align-items: center; gap: 2px; -webkit-app-region: no-drag; padding: 6px 0 8px; }
-.en-rail-icon { width: 34px; height: 34px; flex: 0 0 34px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; color: var(--en-muted); background: transparent; cursor: pointer; transition: color .12s, background .12s; }
+.en-rail-icon { width: 34px; height: 34px; flex: 0 0 34px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; color: var(--en-muted); background: transparent; cursor: pointer; transition: color .12s, background .12s; visibility: visible; opacity: 1; }
+.en-rail-sidebar-toggle { color: var(--en-text); }
 .en-rail-icon:hover { color: var(--en-text); background: var(--en-soft); }
 .en-rail-icon.active { color: var(--en-text); background: var(--en-soft-strong, var(--en-soft)); }
-.en-rail-icon-svg { width: 18px; height: 18px; }
+.en-rail-icon-svg { width: 18px; height: 18px; display: block; color: currentColor; stroke: currentColor; }
 .en-vault-fade-enter-active, .en-vault-fade-leave-active { transition: opacity .12s ease, transform .12s ease; }
 .en-vault-fade-enter-from, .en-vault-fade-leave-to { opacity: 0; transform: translateX(-4px); }
 </style>

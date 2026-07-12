@@ -26,9 +26,11 @@
     >
       <ChevronRight class="en-nav-icon" />
     </button>
-    <template v-for="entry in topBarItems" :key="entry.contribution.id">
-      <sync-navigation-control v-if="entry.contribution.kind === 'sync-control-v1'" />
-    </template>
+    <component
+      :is="entry.contribution.component"
+      v-for="entry in topBarItems"
+      :key="entry.contribution.id"
+    />
   </div>
 </template>
 
@@ -38,13 +40,12 @@ import { ChevronLeft, ChevronRight } from '@lucide/vue'
 import { useAddonsStore } from '@/store/addons'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { useVaultStore } from '../../stores/vaultStore'
-import SyncNavigationControl from './SyncNavigationControl.vue'
 
 const nav = useNavigationStore()
 const vaultStore = useVaultStore()
 const addonsStore = useAddonsStore()
 const topBarItems = computed(() => addonsStore.getContributions('top-bar.items')
-  .filter((entry) => entry?.contribution?.id && entry?.contribution?.kind)
+  .filter((entry) => entry?.contribution?.id && entry?.contribution?.component)
   .sort((left, right) => Number(left.contribution.order || 0) - Number(right.contribution.order || 0)))
 
 const goBack = () => {

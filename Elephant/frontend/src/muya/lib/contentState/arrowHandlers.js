@@ -81,7 +81,7 @@ const selectActiveBlock = (contentState, event, activeBlock) => {
 }
 
 const navigateTableRows = (contentState, event, block) => {
-  if (block.functionType !== 'cellContent') return undefined
+  if (block.functionType !== 'cellContent') return { handled: false }
   let activeBlock
   const cellInNextRow = contentState.findNextRowCell(block)
   const cellInPrevRow = contentState.findPrevRowCell(block)
@@ -92,8 +92,10 @@ const navigateTableRows = (contentState, event, block) => {
   if (event.key === EVENT_KEYS.ArrowDown) {
     activeBlock = cellInNextRow || contentState.findNextBlockInLocation(contentState.getTableBlock())
   }
-  if (activeBlock) return selectActiveBlock(contentState, event, activeBlock)
-  return undefined
+  if (activeBlock) {
+    return { handled: true, value: selectActiveBlock(contentState, event, activeBlock) }
+  }
+  return { handled: false }
 }
 
 export function arrowHandler(event) {
@@ -125,7 +127,7 @@ export function arrowHandler(event) {
   }
 
   const tableNavigation = navigateTableRows(this, event, block)
-  if (tableNavigation !== undefined) return tableNavigation
+  if (tableNavigation.handled) return tableNavigation.value
 
   if (
     event.key === EVENT_KEYS.ArrowUp ||

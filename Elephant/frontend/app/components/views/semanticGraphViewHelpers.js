@@ -46,9 +46,10 @@ const VISIBLE_KNOWLEDGE_EDGE_TYPES = new Set([
   'semantic',
   'explicit-link',
   'wiki-source',
-  'wiki-link'
+  'wiki-link',
+  'wiki-semantic'
 ])
-const WIKI_LAYOUT_EDGE_TYPES = new Set(['wiki-source', 'wiki-link'])
+const WIKI_LAYOUT_EDGE_TYPES = new Set(['wiki-source', 'wiki-link', 'wiki-semantic'])
 
 const stableLayoutHash = (value = '') => {
   let hash = 2166136261
@@ -58,6 +59,8 @@ const stableLayoutHash = (value = '') => {
   }
   return hash >>> 0
 }
+
+const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value))
 
 const applyWikiKnowledgeLayout = ({ nodes = [], edges = [], width = 1800, height = 1200 } = {}) => {
   const byId = new Map(nodes.map((node) => [node.id, node]))
@@ -80,27 +83,99 @@ const applyWikiKnowledgeLayout = ({ nodes = [], edges = [], width = 1800, height
   }
 
   const positions = new Map(nodes.map((node) => [node.id, { x: node.x, y: node.y }]))
-  if (wikiNodes.length === 1) {
-    positions.set(wikiNodes[0].id, { x: width / 2, y: height / 2 })
-  }
-
+  if (wikiNodes.length === 1) positions.set(wikiNodes[0].id, { x: width / 2, y: height / 2 })
   const proposed = new Map()
+
   for (const wiki of wikiNodes.sort((left, right) => String(left.id).localeCompare(String(right.id)))) {
     const center = positions.get(wiki.id) || { x: width / 2, y: height / 2 }
     const sourceIds = [...new Set(sourceIdsByWiki.get(wiki.id) || [])]
       .sort((left, right) => String(byId.get(left)?.title || left).localeCompare(String(byId.get(right)?.title || right)))
-    const perRing = 12
+    const sourceSet = new Set(sourceIds)
+    const targetRadius = Math.max(108, 76 + Math.sqrt(Math.max(1, sourceIds.length)) * 16)
+    const local = new Map()
+    const angleOffset = ((stableLayoutHash(wiki.id) % 360) / 180) * Math.PI
+
     sourceIds.forEach((id, index) => {
-      const ring = Math.floor(index / perRing)
-      const ringItems = Math.min(perRing, sourceIds.length - ring * perRing)
-      const angle = -Math.PI / 2 + (Math.PI * 2 * (index % perRing)) / Math.max(1, ringItems)
-      const radius = 78 + ring * 42
-      const target = { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius }
-      if (!proposed.has(id)) proposed.set(id, [])
-      proposed.get(id).push(target)
+      const angle = angleOffset + (Math.PI * 2 * index) / Math.max(1, sourceIds.length)
+      local.set(id, {
+        x: center.x + Math.cos(angle) * targetRadius,
+        y: center.y + Math.sin(angle) * targetRadius
+      })
     })
 
-    const protectedRadius = 150 + Math.max(0, Math.ceil(sourceIds.length / perRing) - 1) * 42
+    const semanticEdges = edges.filter((edge) =>
+      edge.type === 'wiki-semantic' && sourceSet.has(edge.source) && sourceSet.has(edge.target)
+    )
+
+    for (let iteration = 0; iteration < 80; iteration += 1) {
+      const forces = new Map(sourceIds.map((id) => [id, { x: 0, y: 0 }]))
+
+      for (const id of sourceIds) {
+        const point = local.get(id)
+        const dx = point.x - center.x
+        const dy = point.y - center.y
+        const distance = Math.max(1, Math.hypot(dx, dy))
+        const radialForce = (targetRadius - distance) * 0.055
+        forces.get(id).x += (dx / distance) * radialForce
+        forces.get(id).y += (dy / distance) * radialForce
+      }
+
+      for (let leftIndex = 0; leftIndex < sourceIds.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < sourceIds.length; rightIndex += 1) {
+          const leftId = sourceIds[leftIndex]
+          const rightId = sourceIds[rightIndex]
+          const left = local.get(leftId)
+          const right = local.get(rightId)
+          let dx = left.x - right.x
+          let dy = left.y - right.y
+          let distance = Math.hypot(dx, dy)
+          if (distance < 0.5) {
+            const angle = ((stableLayoutHash(`${leftId}:${rightId}`) % 360) / 180) * Math.PI
+            dx = Math.cos(angle)
+            dy = Math.sin(angle)
+            distance = 1
+          }
+          const repulsion = 2500 / (distance * distance + 100)
+          forces.get(leftId).x += (dx / distance) * repulsion
+          forces.get(leftId).y += (dy / distance) * repulsion
+          forces.get(rightId).x -= (dx / distance) * repulsion
+          forces.get(rightId).y -= (dy / distance) * repulsion
+        }
+      }
+
+      for (const edge of semanticEdges) {
+        const source = local.get(edge.source)
+        const target = local.get(edge.target)
+        if (!source || !target) continue
+        const dx = target.x - source.x
+        const dy = target.y - source.y
+        const distance = Math.max(1, Math.hypot(dx, dy))
+        const score = clamp(Number(edge.weight) || 0, 0, 1)
+        const desiredDistance = 34 + (1 - score) * 78
+        const attraction = (distance - desiredDistance) * (0.018 + score * 0.05)
+        forces.get(edge.source).x += (dx / distance) * attraction
+        forces.get(edge.source).y += (dy / distance) * attraction
+        forces.get(edge.target).x -= (dx / distance) * attraction
+        forces.get(edge.target).y -= (dy / distance) * attraction
+      }
+
+      const damping = 1 - iteration / 115
+      for (const id of sourceIds) {
+        const point = local.get(id)
+        const force = forces.get(id)
+        local.set(id, {
+          x: point.x + clamp(force.x * damping, -8, 8),
+          y: point.y + clamp(force.y * damping, -8, 8)
+        })
+      }
+    }
+
+    for (const id of sourceIds) {
+      if (!proposed.has(id)) proposed.set(id, [])
+      proposed.get(id).push(local.get(id))
+    }
+
+    const protectedRadius = targetRadius + 140
     for (const node of nodes) {
       if (boundIds.has(node.id)) continue
       const point = positions.get(node.id)
@@ -112,13 +187,19 @@ const applyWikiKnowledgeLayout = ({ nodes = [], edges = [], width = 1800, height
       const angle = distance > 1
         ? Math.atan2(dy, dx)
         : ((stableLayoutHash(node.id) % 360) / 180) * Math.PI
-      const radius = protectedRadius + 18 + (stableLayoutHash(node.id) % 46)
-      positions.set(node.id, { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius })
+      const radius = protectedRadius + 60 + (stableLayoutHash(node.id) % 120)
+      positions.set(node.id, {
+        x: center.x + Math.cos(angle) * radius,
+        y: center.y + Math.sin(angle) * radius
+      })
     }
   }
 
   for (const [id, targets] of proposed.entries()) {
-    const point = targets.reduce((output, target) => ({ x: output.x + target.x, y: output.y + target.y }), { x: 0, y: 0 })
+    const point = targets.reduce(
+      (output, target) => ({ x: output.x + target.x, y: output.y + target.y }),
+      { x: 0, y: 0 }
+    )
     positions.set(id, { x: point.x / targets.length, y: point.y / targets.length })
   }
 

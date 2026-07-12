@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installExecutableCodeBlocks } from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocks'
 import {
+  installExecutableCodeBlocks,
   resetExecutableCodeNativeRuntimeForTests
-} from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeNativeRuntime'
+} from '../../../../../../Elephant/frontend/src/renderer/src/platform/executableCodeBlocks'
 
 const wait = (milliseconds = 0) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 const settle = async() => {
@@ -42,12 +42,12 @@ describe('native executable code runtime', () => {
       value: { writeText: clipboardWrite }
     })
     invoke = vi.fn(async(command, payload) => {
-      if (command === 'tauri_programs_list') {
-        return { executionEnabled: true, outputLineLimit: 200, environments: [] }
+      if (command === 'tauri_programs_list_with_custom') {
+        return { executionEnabled: true, outputLineLimit: 200, environments: [], customEnvironments: [] }
       }
-      if (command === 'tauri_programs_set') return payload.environments
-      if (command === 'tauri_programs_run' && payload.stop) return { stopped: true }
-      if (command === 'tauri_programs_run') {
+      if (command === 'tauri_programs_set_with_custom') return payload.environments
+      if (command === 'tauri_programs_run_with_custom' && payload.stop) return { stopped: true }
+      if (command === 'tauri_programs_run_with_custom') {
         return {
           success: true,
           language: payload.id,
@@ -102,7 +102,7 @@ describe('native executable code runtime', () => {
     document.querySelector('.en-code-native-run').click()
     await settle()
 
-    expect(invoke).toHaveBeenCalledWith('tauri_programs_run', expect.objectContaining({
+    expect(invoke).toHaveBeenCalledWith('tauri_programs_run_with_custom', expect.objectContaining({
       id: 'python',
       command: 'print("hello")',
       stop: false
@@ -123,7 +123,7 @@ describe('native executable code runtime', () => {
     document.querySelector('.en-code-native-run').click()
     await settle()
 
-    expect(invoke).toHaveBeenCalledWith('tauri_programs_run', expect.objectContaining({
+    expect(invoke).toHaveBeenCalledWith('tauri_programs_run_with_custom', expect.objectContaining({
       id: 'javascript'
     }))
   })
@@ -131,8 +131,8 @@ describe('native executable code runtime', () => {
   it('turns Run into Stop and sends cancellation for the same execution', async() => {
     let resolveRun
     invoke.mockImplementation(async(command, payload) => {
-      if (command === 'tauri_programs_run' && payload.stop) return { stopped: true }
-      if (command === 'tauri_programs_run') {
+      if (command === 'tauri_programs_run_with_custom' && payload.stop) return { stopped: true }
+      if (command === 'tauri_programs_run_with_custom') {
         return new Promise((resolve) => { resolveRun = resolve })
       }
       return {}
@@ -146,7 +146,7 @@ describe('native executable code runtime', () => {
 
     button.click()
     await settle()
-    expect(invoke).toHaveBeenCalledWith('tauri_programs_run', expect.objectContaining({ stop: true }))
+    expect(invoke).toHaveBeenCalledWith('tauri_programs_run_with_custom', expect.objectContaining({ stop: true }))
 
     resolveRun({ success: false, interrupted: true, stdout: '', stderr: '', exitCode: null })
     await settle()

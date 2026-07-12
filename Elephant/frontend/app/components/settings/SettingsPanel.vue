@@ -48,7 +48,10 @@
           </template>
 
           <template v-else>
-            <div class="en-settings-page-title"><h1>{{ activeSectionMeta.label }}</h1></div>
+            <div class="en-settings-page-title">
+              <h1>{{ activeSectionMeta.label }}</h1>
+              <span v-if="activeSection === 'addons'" id="en-addons-title-actions" class="en-settings-title-actions" />
+            </div>
 
             <template v-if="activeSection === 'appearance'">
               <section class="en-settings-group">
@@ -61,8 +64,13 @@
                 </div>
 
                 <div class="en-settings-row en-settings-row-stacked">
-                  <div class="en-settings-row-copy"><strong>Theme</strong><span>Choose the visual family used throughout ElephantNote.</span></div>
-                  <div class="en-theme-grid">
+                  <header class="en-settings-collapsible-header">
+                    <strong>Theme</strong>
+                    <button type="button" :aria-expanded="themeExpanded" :title="themeExpanded ? 'Collapse themes' : 'Expand themes'" @click="themeExpanded = !themeExpanded">
+                      <ChevronDown :class="{ collapsed: !themeExpanded }" aria-hidden="true" />
+                    </button>
+                  </header>
+                  <div v-if="themeExpanded" class="en-theme-grid">
                     <button v-for="family in themeFamilies" :key="family.id" type="button" class="en-theme-card" :class="{ active: activeThemeFamily.id === family.id }" @click="emit('update-theme', getThemeVariant(family.id, themeMode))">
                       <span class="en-theme-card-preview" :style="{ background: family.swatches[0] }"><i class="sidebar" :style="{ background: family.swatches[1] }" /><i class="canvas" :style="{ background: family.swatches[2] }"><b :style="{ background: family.swatches[3] || family.swatches[2] }" /><b :style="{ background: family.swatches[3] || family.swatches[2] }" /></i></span>
                       <span class="en-theme-card-copy"><strong>{{ family.name }}</strong><small>{{ family.description }}</small></span>
@@ -76,8 +84,7 @@
                   <label class="en-range-control"><input type="range" min="184" max="320" :value="sidebarWidth" @input="emit('update-sidebar-width', Number($event.target.value))"><output>{{ sidebarWidth }} px</output></label>
                 </div>
 
-                <div class="en-settings-row en-settings-row-stacked">
-                  <div class="en-settings-row-copy"><strong>Vertical icon bar</strong><span>Reorder or hide native features and enabled addon workspaces.</span></div>
+                <div class="en-settings-row en-settings-row-stacked en-settings-row-compact">
                   <icon-rail-layout-settings />
                 </div>
               </section>
@@ -109,7 +116,6 @@
               </section>
             </template>
 
-            <!-- Removed UI contract: label: 'Built-in addon catalogue'. Addons now use one available list. -->
             <template v-else-if="activeSection === 'addons'"><addons-settings-panel /></template>
             <template v-else><div class="en-addon-settings-page-anchor" /></template>
           </template>
@@ -122,7 +128,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import log from '@/platform/runtimeLogShim'
-import { CalendarDays, Check, ChevronRight, Cloud, Database, Download, FolderOpen, Globe2, HardDrive, Moon, Package, Palette, PenLine, Search, Sparkles, SunMedium, X } from '@lucide/vue'
+import { CalendarDays, Check, ChevronDown, ChevronRight, Cloud, Database, Download, FolderOpen, Globe2, HardDrive, Moon, Package, Palette, PenLine, Search, Sparkles, SunMedium, X } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import { useAddonsStore } from '@/store/addons'
 import { ELEPHANTNOTE_THEME_FAMILIES, getThemeFamily, getThemeLabel, getThemeMode, getThemeTokens, getThemeVariant } from 'common/elephantnote/appearance'
@@ -159,7 +165,7 @@ const CORE_SETTINGS_INDEX = Object.freeze([
   { id: 'appearance-mode', section: 'appearance', label: 'Color mode', description: 'Light and dark appearance.' },
   { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Apple, Graphite, Nord, Solar and Forest themes.' },
   { id: 'appearance-sidebar', section: 'appearance', label: 'Sidebar width', description: 'Resize the main navigation rail.' },
-  { id: 'appearance-icon-rail', section: 'appearance', label: 'Vertical icon bar', description: 'Reorder or hide navigation icons and addon workspaces.' },
+  { id: 'appearance-icon-rail', section: 'appearance', label: 'Vertical icon bar', description: 'Reorder, hide and divide navigation icons.' },
   { id: 'editor-footer', section: 'editor', label: 'Editor footer', description: 'Word count and typography controls.' },
   { id: 'editor-tags', section: 'editor', label: 'Tag prefix', description: 'Show or hide the # before tags.' },
   { id: 'editor-quick-insert', section: 'editor', label: 'Quick insert menu', description: 'Show block commands when typing the trigger.' },
@@ -176,7 +182,7 @@ const CORE_SETTINGS_INDEX = Object.freeze([
   { id: 'vault-open', section: 'vaults', label: 'Open vaults', description: 'Review or remove registered vaults.' },
   { id: 'addons-installed', section: 'addons', label: 'Installed addons', description: 'Installed addon packages.' },
   { id: 'addons-available', section: 'addons', label: 'Available addons', description: 'Install optional features and community packages.' },
-  { id: 'addons-community', section: 'addons', label: 'Community addons', description: 'Risk acknowledgement and third-party addon activation.' },
+  { id: 'addons-community', section: 'addons', label: 'Community addons', description: 'Third-party addon activation.' },
   { id: 'addons-packs', section: 'addons', label: 'Addon packs', description: 'Install or share complete addon configurations.' }
 ])
 
@@ -221,6 +227,7 @@ const activeSection = ref(normalizeSection(props.initialSection))
 const settingsQuery = ref('')
 const searchInput = ref(null)
 const settingsContent = ref(null)
+const themeExpanded = ref(true)
 const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
 const activeSectionMeta = computed(() => sectionById.value[activeSection.value] || sections.value[0])
 const searchResults = computed(() => {

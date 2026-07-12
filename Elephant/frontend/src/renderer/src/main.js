@@ -37,6 +37,8 @@ import './assets/styles/index.css'
 import './assets/styles/printService.css'
 import 'elephant-front/styles/runtime-layout-fixes.css'
 
+const CORE_EXCALIDRAW_ADDON_ID = 'elephant.excalidraw'
+
 const clearBootstrapFileUtilsFallbackForTauri = () => {
   if (window.__TAURI__ && window.fileUtils?.__elephantnoteBootstrapFallback) {
     delete window.fileUtils
@@ -97,7 +99,23 @@ const bootstrapForRuntime = async(runtime) => {
   return globalThis.marktext?.env?.type || window.__MARKTEXT_WINDOW_TYPE__ || 'editor'
 }
 
-const mountRendererApp = (runtime, windowType) => {
+const ensureCoreExcalidraw = async(addonManager) => {
+  try {
+    const addon = await addonManager.installBuiltin(CORE_EXCALIDRAW_ADDON_ID)
+    if (!addon.enabled) await addonManager.enable(CORE_EXCALIDRAW_ADDON_ID)
+    pushDiagnosticLog('info', '[excalidraw] core editor integration ready', {
+      id: CORE_EXCALIDRAW_ADDON_ID
+    })
+  } catch (error) {
+    pushDiagnosticLog('error', '[excalidraw] core editor integration failed', {
+      id: CORE_EXCALIDRAW_ADDON_ID,
+      error: error?.message || String(error)
+    })
+    throw error
+  }
+}
+
+const mountRendererApp = async(runtime, windowType) => {
   const router = createRouter({
     history: createWebHashHistory(),
     routes: resolveRendererRoutes(createRoutes, windowType)
@@ -111,7 +129,7 @@ const mountRendererApp = (runtime, windowType) => {
   app.use(i18nPlugin)
   app.config.globalProperties.$http = axios
   app.config.globalProperties.$services = services
-  installAddonSystem(app, {
+  const addonManager = installAddonSystem(app, {
     router,
     pinia,
     services,
@@ -122,6 +140,7 @@ const mountRendererApp = (runtime, windowType) => {
       error: (message, payload) => pushDiagnosticLog('error', message, payload)
     }
   })
+  await ensureCoreExcalidraw(addonManager)
   app.mount('#app')
 
   installStoreDiagnostics()
@@ -131,7 +150,7 @@ const startRendererApp = async() => {
   const runtime = 'tauri'
   window.__MARKTEXT_RUNTIME__ = runtime
   const windowType = await bootstrapForRuntime(runtime)
-  mountRendererApp(runtime, windowType)
+  await mountRendererApp(runtime, windowType)
 }
 
 void startRendererApp().catch((error) => {

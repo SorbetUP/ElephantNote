@@ -6,6 +6,9 @@ on:
       - feature/wiki-knowledge-continuation
     types: [opened, synchronize]
 
+permissions:
+  contents: write
+
 jobs:
   validate:
     if: github.head_ref == 'assistant/wiki-links-graph-integration'
@@ -21,7 +24,18 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Wiki graph regression test
-        run: Elephant/node_modules/.bin/vitest run tests/app/unit/wikiGraphSurface.spec.js
+        shell: bash
+        run: |
+          set +e
+          Elephant/node_modules/.bin/vitest run tests/app/unit/wikiGraphSurface.spec.js > .github/wiki-graph-test-output.txt 2>&1
+          status=$?
+          cat .github/wiki-graph-test-output.txt
+          git config user.name "ElephantNote Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/wiki-graph-test-output.txt
+          git commit -m "[skip ci] Record Wiki graph test output"
+          git push origin HEAD:${{ github.head_ref }}
+          exit $status
       - name: Wiki graph lint
         run: Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/components/views/GraphView.vue tests/app/unit/wikiGraphSurface.spec.js
       - name: Web build

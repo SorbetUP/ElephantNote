@@ -7,6 +7,8 @@ export const DEFAULT_ICON_RAIL_ORDER = Object.freeze(
   CORE_ICON_RAIL_ITEMS.map((item) => item.id)
 )
 
+export const ICON_RAIL_SEPARATOR_PREFIX = 'separator:'
+
 const normalizeIds = (values) => {
   if (!Array.isArray(values)) return []
   const result = []
@@ -21,11 +23,13 @@ const normalizeIds = (values) => {
 }
 
 export const addonViewRailId = (viewId) => `addon-view:${String(viewId || '').trim()}`
+export const isIconRailSeparatorId = (id) => String(id || '').startsWith(ICON_RAIL_SEPARATOR_PREFIX)
+export const createIconRailSeparatorId = () => `${ICON_RAIL_SEPARATOR_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 export const normalizeIconRailOrder = (order, availableIds) => {
   const available = normalizeIds(availableIds)
   const allowed = new Set(available)
-  const normalized = normalizeIds(order).filter((id) => allowed.has(id))
+  const normalized = normalizeIds(order).filter((id) => allowed.has(id) || isIconRailSeparatorId(id))
   const seen = new Set(normalized)
   for (const id of available) {
     if (!seen.has(id)) normalized.push(id)
@@ -35,7 +39,7 @@ export const normalizeIconRailOrder = (order, availableIds) => {
 
 export const normalizeIconRailHidden = (hidden, availableIds) => {
   const allowed = new Set(normalizeIds(availableIds))
-  return normalizeIds(hidden).filter((id) => allowed.has(id))
+  return normalizeIds(hidden).filter((id) => allowed.has(id) && !isIconRailSeparatorId(id))
 }
 
 export const moveIconRailItem = (order, id, targetIndex) => {

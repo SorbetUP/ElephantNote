@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const exists = (relativePath) => fs.existsSync(path.join(root, relativePath))
 const readRuntime = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeNativeRuntime.js')
 const readLifecycle = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeNativeLifecycle.js')
-const readSettings = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeSettings.js')
 const readRenderer = () => read('Elephant/frontend/src/muya/lib/parser/render/renderBlock/renderContainerBlock.js')
 const readRendererHelper = () => read('Elephant/frontend/src/muya/lib/parser/render/renderBlock/renderExecutableCodeRuntime.js')
 const readStyles = () => read('Elephant/frontend/src/renderer/src/platform/executableCodeNativeRuntime.css')
@@ -133,6 +133,7 @@ describe('native executable fenced code blocks', () => {
     expect(runtime).toContain("action === 'stop'")
     expect(lifecycle).toContain("event.key !== 'Enter'")
     expect(lifecycle).toContain('event.metaKey || event.ctrlKey')
+    expect(lifecycle).toContain('stopDetachedExecution')
     expect(runtime).toContain('state.executionId')
     expect(runtime).toContain('max-height: 300px')
     expect(backend).toContain('RUNNING_EXECUTIONS')
@@ -141,18 +142,7 @@ describe('native executable fenced code blocks', () => {
     expect(backend).toContain('signal=SIGINT')
   })
 
-  it('keeps Settings isolated from the Muya editor runtime', () => {
-    const settings = readSettings()
-
-    expect(settings).toContain("const SETTINGS_HOST = '.en-settings-content'")
-    expect(settings).toContain('target.elephantnote.programs.list()')
-    expect(settings).toContain('target.elephantnote.programs.set')
-    expect(settings).toContain('MutationObserver')
-    expect(settings).not.toContain('ag-fence-code')
-    expect(settings).not.toContain("querySelectorAll('pre')")
-  })
-
-  it('keeps the public runtime separated and starts it only from the addon', () => {
+  it('keeps the public runtime separated and starts it only from the Editor addon settings', () => {
     const entry = read('Elephant/frontend/src/renderer/src/platform/executableCodeBlocks.js')
     const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/codeExecution.js')
     const main = readMain()
@@ -168,5 +158,7 @@ describe('native executable fenced code blocks', () => {
     expect(entry).toContain("from './executableCodeNativeLifecycle'")
     expect(entry).not.toContain("from './executableCodeSettings'")
     expect(entry).not.toContain('executableCodeBlocksV6')
+    expect(exists('Elephant/frontend/src/renderer/src/platform/executableCodeSettings.js')).toBe(false)
+    expect(exists('Elephant/frontend/src/renderer/src/platform/executableCodeSettings.css')).toBe(false)
   })
 })

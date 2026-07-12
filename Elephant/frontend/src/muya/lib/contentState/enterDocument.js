@@ -6,8 +6,7 @@ const enterDocument = ContentState => {
     if (selectedImage) {
       event.preventDefault()
       event.stopPropagation()
-      const { key, token } = selectedImage
-      const { end } = token.range
+      const { key } = selectedImage
       const block = this.getBlock(key)
       const outMostBlock = this.findOutMostBlock(block)
       const nextBlock = this.findNextBlockInLocation(outMostBlock)

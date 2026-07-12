@@ -14,16 +14,22 @@ pub fn append_inlines(
     let remaining = &source[byte_offset..];
 
     if let Some(parsed) = escape::parse(remaining) {
-      let value = parsed.value.to_string();
       append_leaf(
         document,
         parent,
-        InlineKind::Text { value },
+        InlineKind::Escaped {
+          value: parsed.value,
+        },
         utf16_offset,
         remaining,
         parsed.consumed,
       );
-      advance(remaining, parsed.consumed, &mut byte_offset, &mut utf16_offset);
+      advance(
+        remaining,
+        parsed.consumed,
+        &mut byte_offset,
+        &mut utf16_offset,
+      );
       continue;
     }
 
@@ -38,7 +44,12 @@ pub fn append_inlines(
         remaining,
         parsed.consumed,
       );
-      advance(remaining, parsed.consumed, &mut byte_offset, &mut utf16_offset);
+      advance(
+        remaining,
+        parsed.consumed,
+        &mut byte_offset,
+        &mut utf16_offset,
+      );
       continue;
     }
 
@@ -55,7 +66,12 @@ pub fn append_inlines(
         remaining,
         parsed.consumed,
       );
-      advance(remaining, parsed.consumed, &mut byte_offset, &mut utf16_offset);
+      advance(
+        remaining,
+        parsed.consumed,
+        &mut byte_offset,
+        &mut utf16_offset,
+      );
       continue;
     }
 
@@ -73,7 +89,12 @@ pub fn append_inlines(
       );
       document.append_child(parent, node);
       append_inlines(document, node, parsed.label, utf16_offset + 1);
-      advance(remaining, parsed.consumed, &mut byte_offset, &mut utf16_offset);
+      advance(
+        remaining,
+        parsed.consumed,
+        &mut byte_offset,
+        &mut utf16_offset,
+      );
       continue;
     }
 
@@ -99,7 +120,12 @@ pub fn append_inlines(
         parsed.content,
         utf16_offset + delimiter_bytes as u32,
       );
-      advance(remaining, parsed.consumed, &mut byte_offset, &mut utf16_offset);
+      advance(
+        remaining,
+        parsed.consumed,
+        &mut byte_offset,
+        &mut utf16_offset,
+      );
       continue;
     }
 
@@ -116,7 +142,12 @@ pub fn append_inlines(
         remaining,
         parsed.consumed,
       );
-      advance(remaining, parsed.consumed, &mut byte_offset, &mut utf16_offset);
+      advance(
+        remaining,
+        parsed.consumed,
+        &mut byte_offset,
+        &mut utf16_offset,
+      );
       continue;
     }
 
@@ -131,7 +162,12 @@ pub fn append_inlines(
       remaining,
       plain.len(),
     );
-    advance(remaining, plain.len(), &mut byte_offset, &mut utf16_offset);
+    advance(
+      remaining,
+      plain.len(),
+      &mut byte_offset,
+      &mut utf16_offset,
+    );
   }
 }
 
@@ -204,9 +240,15 @@ mod tests {
       .children(paragraph)
       .map(|node| &node.kind)
       .collect::<Vec<_>>();
-    assert!(kinds.iter().any(|kind| matches!(kind, NodeKind::Inline(InlineKind::Strong))));
-    assert!(kinds.iter().any(|kind| matches!(kind, NodeKind::Inline(InlineKind::Link { .. }))));
-    assert!(kinds.iter().any(|kind| matches!(kind, NodeKind::Inline(InlineKind::CodeSpan { .. }))));
+    assert!(kinds
+      .iter()
+      .any(|kind| matches!(kind, NodeKind::Inline(InlineKind::Strong))));
+    assert!(kinds
+      .iter()
+      .any(|kind| matches!(kind, NodeKind::Inline(InlineKind::Link { .. }))));
+    assert!(kinds
+      .iter()
+      .any(|kind| matches!(kind, NodeKind::Inline(InlineKind::CodeSpan { .. }))));
   }
 
   #[test]
@@ -216,7 +258,7 @@ mod tests {
     append_inlines(&mut document, paragraph, "😀 **x**", 10);
     let strong = document
       .children(paragraph)
-      .find(|node| matches!(node.kind, NodeKind::Inline(InlineKind::Strong)))
+      .find(|node| matches!(&node.kind, NodeKind::Inline(InlineKind::Strong)))
       .unwrap();
     assert_eq!(strong.source, Some(SourceRange::new(13, 18)));
   }

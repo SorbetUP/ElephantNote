@@ -48,13 +48,10 @@ export const createQuickInsertObj = (t) => {
   const translate = t || ((key) => key)
 
   return {
+    // Inline commands use ElephantNote's command bridge. Native Muya blocks stay
+    // in their original groups below so task lists, tables, headings and lists
+    // retain Muya's cursor, selection and block-conversion behavior.
     'Writing tools': [{
-      title: 'Heading 2',
-      subTitle: '## Heading',
-      label: 'elephant-command heading-2',
-      shortCut: '',
-      icon: header2Icon
-    }, {
       title: 'Bold',
       subTitle: '**bold**',
       label: 'elephant-command bold',
@@ -79,53 +76,11 @@ export const createQuickInsertObj = (t) => {
       shortCut: '',
       icon: paragraphIcon
     }, {
-      title: 'Bullet List',
-      subTitle: '- item',
-      label: 'elephant-command bullets',
-      shortCut: '',
-      icon: bulletListIcon
-    }, {
-      title: 'Numbered List',
-      subTitle: '1. item',
-      label: 'elephant-command numbers',
-      shortCut: '',
-      icon: orderListIcon
-    }, {
-      title: 'Task List',
-      subTitle: '- [ ] task',
-      label: 'elephant-command tasks',
-      shortCut: '',
-      icon: todoListIcon
-    }, {
       title: 'Inline Code',
       subTitle: '`code`',
       label: 'elephant-command code',
       shortCut: '',
       icon: codeIcon
-    }, {
-      title: 'Quote',
-      subTitle: '> quote',
-      label: 'elephant-command quote',
-      shortCut: '',
-      icon: quoteIcon
-    }, {
-      title: 'Table',
-      subTitle: '| column |',
-      label: 'elephant-command table',
-      shortCut: '',
-      icon: newTableIcon
-    }, {
-      title: 'Image',
-      subTitle: 'Insert image',
-      label: 'elephant-command image',
-      shortCut: '',
-      icon: paragraphIcon
-    }, {
-      title: 'Horizontal Rule',
-      subTitle: '---',
-      label: 'elephant-command horizontal-rule',
-      shortCut: '',
-      icon: hrIcon
     }, ...addonQuickInsertItems('Writing tools')],
     [translate('quickInsert.basicBlock')]: [{
       title: translate('quickInsert.paragraph.title'),

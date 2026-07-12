@@ -1,3 +1,9 @@
+pub mod blockquote;
+pub mod fenced_code;
+pub mod heading;
+pub mod paragraph;
+pub mod thematic_break;
+
 use super::{FeatureSpec, SyntaxLayer};
 
 pub static FEATURES: &[FeatureSpec] = &[

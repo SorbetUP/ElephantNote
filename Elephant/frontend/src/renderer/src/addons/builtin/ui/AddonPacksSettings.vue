@@ -40,7 +40,7 @@
           </div>
           <div class="en-addon-pack-actions">
             <button class="en-primary-button" type="button" :disabled="busy" @click="applyPack(pack)">
-              {{ pack.protected ? 'Restore complete app' : 'Apply' }}
+              {{ pack.protected ? 'Install' : 'Apply' }}
             </button>
             <button v-if="!pack.protected && confirmDeletePath !== pack.path" class="en-danger-button" type="button" :disabled="busy" @click="confirmDeletePath = pack.path">Delete</button>
             <template v-else-if="!pack.protected">

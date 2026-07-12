@@ -6,7 +6,7 @@ const ADDON_ID = 'elephant.ai-ocr'
 export const aiOcrAddon = {
   manifest: {
     id: ADDON_ID,
-    name: 'AI OCR',
+    name: 'OCR',
     version: '1.0.0',
     description: 'Adds OCR provider and document-recognition settings.',
     author: 'ElephantNote',
@@ -20,10 +20,8 @@ export const aiOcrAddon = {
   activate(ctx) {
     ctx.addSettingsSection({
       id: `${ADDON_ID}.settings`,
-      section: 'ai-ocr',
-      navigationLabel: 'OCR',
-      navigationIcon: 'scan-text',
-      standalone: true,
+      section: 'ai',
+      slot: 'ai.ocr',
       chrome: false,
       title: 'OCR',
       description: 'Configure OCR providers, languages and output format.',

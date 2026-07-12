@@ -1,0 +1,52 @@
+name: Fix chat agent and graph once
+
+on:
+  push:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/fix-chat-agent-graph-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-links-graph-integration
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: pnpm install --frozen-lockfile
+      - name: Apply source fixes
+        run: python3 .github/scripts/fix_chat_agent_graph.py
+      - run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+      - name: Lint focused frontend files
+        run: pnpm exec eslint Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/services/elephantnoteClient/domainClients.js
+      - name: Check Tauri backend
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features
+      - name: Build Tauri web frontend
+        run: pnpm tauri:web:build
+      - name: Commit validated fixes and remove temporary files
+        run: |
+          git config user.name "ElephantNote automation"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/fix-chat-agent-graph-once.yml .github/scripts/fix_chat_agent_graph.py .github/fix-chat-agent-graph-trigger.txt
+          git add Elephant/frontend/app/services/elephantnoteClient/domainClients.js \
+                  Elephant/frontend/app/components/views/AtomicGraphView.vue \
+                  Elephant/frontend/app/components/views/ChatView.vue \
+                  Elephant/backend/tauri/src/chat_runtime.rs \
+                  Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs
+          git commit -m "Fix chat actions, search, streaming and graph visibility"
+          git push origin HEAD:assistant/wiki-links-graph-integration

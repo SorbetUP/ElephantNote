@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  CORE_ICON_RAIL_ITEMS,
+  DEFAULT_ICON_RAIL_ORDER,
   addonViewRailId,
   createIconRailSeparatorId,
   isIconRailSeparatorId,
@@ -14,29 +16,50 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 describe('optional first-party addons and configurable icon rail', () => {
-  it('normalizes persisted order as features, dividers and addon views change', () => {
+  it('normalizes persisted order as core controls, dividers and addon views change', () => {
     const tasks = addonViewRailId('com.elephantnote.elephant-tasks.workspace')
     const divider = createIconRailSeparatorId()
-    const available = ['dashboard', tasks, 'search']
+    const available = ['vault', 'sidebar-toggle', 'dashboard', tasks, 'search']
 
+    expect(CORE_ICON_RAIL_ITEMS.map((item) => item.id)).toEqual([
+      'vault',
+      'sidebar-toggle',
+      'dashboard',
+      'search'
+    ])
+    expect(DEFAULT_ICON_RAIL_ORDER).toEqual(['vault', 'sidebar-toggle', 'dashboard', 'search'])
     expect(isIconRailSeparatorId(divider)).toBe(true)
     expect(normalizeIconRailOrder(['search', divider, 'unknown', 'search', tasks], available))
-      .toEqual(['search', divider, tasks, 'dashboard'])
-    expect(normalizeIconRailHidden(['unknown', divider, tasks, tasks], available)).toEqual([tasks])
-    expect(moveIconRailItem(['dashboard', divider, tasks], tasks, 0)).toEqual([tasks, 'dashboard', divider])
+      .toEqual(['vault', 'sidebar-toggle', 'search', divider, tasks, 'dashboard'])
+    expect(normalizeIconRailHidden(['unknown', divider, 'vault', tasks, tasks], available))
+      .toEqual(['vault', tasks])
+    expect(moveIconRailItem(['vault', 'sidebar-toggle', 'dashboard', divider, tasks], tasks, 0))
+      .toEqual([tasks, 'vault', 'sidebar-toggle', 'dashboard', divider])
   })
 
-  it('does not render an implicit divider and keeps vault/sidebar controls visible', () => {
+  it('renders vault and sidebar through the same customizable icon layout', () => {
     const rail = read('Elephant/frontend/app/components/navigation/IconRail.vue')
+    const organizer = read('Elephant/frontend/app/components/settings/IconRailLayoutSettings.vue')
+    const layout = read('Elephant/frontend/app/components/navigation/iconRailLayout.js')
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
 
+    expect(layout).toContain("{ id: 'vault', label: 'Vault'")
+    expect(layout).toContain("{ id: 'sidebar-toggle', label: 'Sidebar'")
+    expect(rail).toContain("id: 'vault'")
+    expect(rail).toContain("id: 'sidebar-toggle'")
+    expect(rail).toContain('icon: PanelLeft')
+    expect(rail).not.toContain('PanelLeftClose')
+    expect(rail).not.toContain('PanelLeftOpen')
     expect(rail).toContain('activeVaultIconComponent || Vault')
-    expect(rail).toContain('PanelLeftClose')
-    expect(rail).toContain('PanelLeftOpen')
     expect(shell).toContain(':sidebar-visible="sidebarVisible"')
     expect(rail).not.toContain('<div class="en-rail-separator" />')
     expect(rail).toContain('v-if="item.separator"')
     expect(rail).toContain('visibility: visible; opacity: 1;')
+    expect(organizer).toContain('vault: Vault')
+    expect(organizer).toContain("'sidebar-toggle': PanelLeft")
+    expect(organizer).toContain('en-rail-layout-icon-preview')
+    expect(organizer).toContain("pushIconRailLog('settings:mounted'")
+    expect(rail).toContain("pushIconRailLog('layout:resolved'")
   })
 
   it('renders Recently edited only through its optional layout contribution', () => {

@@ -212,6 +212,13 @@ const renderContribution = (documentRef, content, target, entry, manager, addonH
   }
 }
 
+const contributionSignature = (entry, mountTarget) => [
+  entry.addonId,
+  entry.contribution?.id || '',
+  targetSlot(entry.contribution),
+  mountTarget?.dataset?.activeAddonSlotKey || ''
+].join(':')
+
 export const installSettingsContributionRuntime = (manager, options = {}) => {
   const target = options.target || globalThis
   const documentRef = target?.document
@@ -233,30 +240,51 @@ export const installSettingsContributionRuntime = (manager, options = {}) => {
       clear()
       return
     }
+
     const activeSection = activeSettingsSection(content)
     const candidates = [
       ...manager.getContributions(ADDON_EXTENSION_POINTS.settingsSections),
       ...manager.getContributions(ADDON_EXTENSION_POINTS.settingsPages)
     ].filter((entry) => targetSection(entry.contribution) === activeSection && hasRenderableSettings(entry.contribution))
 
-    const contributions = candidates
-      .map((entry) => ({ entry, target: findSlot(content, targetSlot(entry.contribution)) }))
+    const descriptors = candidates
+      .map((entry) => ({
+        entry,
+        slotName: targetSlot(entry.contribution),
+        target: findSlot(content, targetSlot(entry.contribution))
+      }))
       .filter(({ target: mountTarget }) => Boolean(mountTarget))
+      .map((descriptor) => ({
+        ...descriptor,
+        signature: contributionSignature(descriptor.entry, descriptor.target)
+      }))
 
-    const signature = contributions
-      .map(({ entry, target: mountTarget }) => `${entry.addonId}:${entry.contribution?.id || ''}:${targetSlot(entry.contribution)}:${mountTarget.dataset?.activeAddonSlotKey || ''}`)
-      .join('|')
-    const currentSignature = mounted.map((entry) => entry.signature).join('|')
-    if (signature === currentSignature && mounted.every((entry) => entry.section.isConnected && entry.target.isConnected)) return
-
-    clear()
-    if (!activeSection || !contributions.length) return
-
-    for (const { entry, target: mountTarget } of contributions) {
-      const rendered = renderContribution(documentRef, content, mountTarget, entry, manager, manager.host)
-      rendered.signature = `${entry.addonId}:${entry.contribution?.id || ''}:${targetSlot(entry.contribution)}:${mountTarget.dataset?.activeAddonSlotKey || ''}`
-      mounted.push(rendered)
+    const desiredSignatures = new Set(descriptors.map((descriptor) => descriptor.signature))
+    const kept = []
+    for (const current of mounted) {
+      const keep = desiredSignatures.has(current.signature) && current.section.isConnected && current.target.isConnected
+      if (keep) kept.push(current)
+      else current.dispose()
     }
+    mounted = kept
+
+    if (!activeSection || !descriptors.length) return
+
+    const mountedSignatures = new Set(mounted.map((entry) => entry.signature))
+    let mountedRootContribution = false
+    for (const descriptor of descriptors) {
+      if (mountedSignatures.has(descriptor.signature) || !descriptor.target.isConnected) continue
+      const rendered = renderContribution(documentRef, content, descriptor.target, descriptor.entry, manager, manager.host)
+      rendered.signature = descriptor.signature
+      mounted.push(rendered)
+      mountedSignatures.add(descriptor.signature)
+      if (!descriptor.slotName) mountedRootContribution = true
+    }
+
+    // A root settings page can create named slots used by another addon (for
+    // example AI creates the Codex provider slot). Resolve those slots on the
+    // next pass instead of clearing and remounting the root page in a loop.
+    if (mountedRootContribution) schedule()
   }
 
   const schedule = () => {

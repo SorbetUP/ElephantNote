@@ -15,12 +15,12 @@ const exists = (relativePath) => fs.existsSync(path.join(root, relativePath))
 describe('optional first-party addons and configurable icon rail', () => {
   it('normalizes persisted order as features and addon views change', () => {
     const tasks = addonViewRailId('com.elephantnote.elephant-tasks.workspace')
-    const available = ['dashboard', 'wiki', tasks, 'search']
+    const available = ['dashboard', tasks, 'search']
 
     expect(normalizeIconRailOrder(['search', 'unknown', 'search', tasks], available))
-      .toEqual(['search', tasks, 'dashboard', 'wiki'])
+      .toEqual(['search', tasks, 'dashboard'])
     expect(normalizeIconRailHidden(['unknown', tasks, tasks], available)).toEqual([tasks])
-    expect(moveIconRailItem(['dashboard', 'wiki', tasks], tasks, 0)).toEqual([tasks, 'dashboard', 'wiki'])
+    expect(moveIconRailItem(['dashboard', tasks], tasks, 0)).toEqual([tasks, 'dashboard'])
   })
 
   it('deletes the narrow example addons instead of merely hiding them', () => {
@@ -79,12 +79,14 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(workspace).not.toContain("value: 'month-grid'")
   })
 
-  it('does not start Iroh until Sync is enabled and shuts it down on disable', () => {
+  it('does not start Iroh until Sync is enabled and removes its navigation control on disable', () => {
     const bootstrap = read('Elephant/backend/tauri/src/lib_min.rs')
     const runtime = read('Elephant/backend/tauri/src/sync/mod.rs')
     const commands = read('Elephant/backend/tauri/src/sync_commands.rs')
     const client = read('Elephant/frontend/app/services/irohSyncClient.js')
     const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/sync.js')
+    const navigation = read('Elephant/frontend/app/components/navigation/NavigationBar.vue')
+    const control = read('Elephant/frontend/app/components/navigation/SyncNavigationControl.vue')
 
     expect(bootstrap).toContain('app.manage(sync::IrohSyncState::new())')
     expect(bootstrap).not.toContain('state.runtime(&sync_handle).await')
@@ -97,35 +99,51 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(client).toContain("throw new Error('The Sync addon is disabled.')")
     expect(addon).toContain('irohSyncClient.activate()')
     expect(addon).toContain('await irohSyncClient.shutdown()')
+    expect(addon).toContain("ctx.registerContribution('top-bar.items'")
+    expect(addon).toContain("kind: 'sync-control-v1'")
     expect(addon).toContain('defaultEnabled: false')
+    expect(navigation).toContain("addonsStore.getContributions('top-bar.items')")
+    expect(navigation).not.toContain('IROH_SYNC_STATUS_EVENT')
+    expect(control).toContain('IROH_SYNC_STATUS_EVENT')
   })
 
-  it('keeps Addon Packs installed and active as required infrastructure', () => {
+  it('keeps Addon Packs as hidden required infrastructure', () => {
     const runtime = read('Elephant/frontend/src/renderer/src/addons/index.js')
-    const row = read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
+    const panel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
+    const logic = read('Elephant/frontend/app/components/settings/useAddonsSettings.js')
 
     expect(runtime).toContain("REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs'])")
-    expect(runtime).toContain('return new Set([...required, ...stored])')
     expect(runtime).toContain('if (REQUIRED_BUILTIN_ADDON_IDS.includes(id))')
-    expect(row).toContain('v-if="isRequired" class="en-addon-required"')
-    expect(row).toContain('const isRequired = computed(() => props.addon?.manifest?.removable === false)')
+    expect(logic).toContain("INTERNAL_ADDON_IDS = new Set(['elephant.addon-packs'])")
+    expect(logic).toContain('!INTERNAL_ADDON_IDS.has(addon.manifest.id)')
+    expect(panel).not.toContain('Addon Packs is disabled')
   })
 
-  it('removes optional AI and Sites shell elements with their addons', () => {
+  it('moves Wiki, Graph, Models and Chat into the AI addon', () => {
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
     const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
+    const rail = read('Elephant/frontend/app/components/navigation/IconRail.vue')
+    const router = read('Elephant/frontend/app/components/views/AddonWorkspaceRouter.vue')
     const ai = read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
     const renderer = read('Elephant/frontend/src/renderer/src/main.js')
     const sites = read('Elephant/frontend/src/renderer/src/addons/builtin/sites.js')
 
     expect(shell).toContain('aiAddonEnabled && store.chatSidebarOpen')
     expect(shell).toContain("addon.manifest.id === 'elephant.ai' && addon.enabled")
-    expect(main).toContain('sitesAddonEnabled && !hasOpenNote')
-    expect(main).toContain("addon.manifest.id === 'elephant.sites' && addon.enabled")
+    expect(main).not.toContain('<wiki-view')
+    expect(main).not.toContain('<atomic-graph-view')
+    expect(rail).not.toContain("{ id: 'wiki'")
+    expect(rail).not.toContain("{ id: 'graph'")
+    expect(ai).toContain("kind: 'ai-wiki-v1'")
+    expect(ai).toContain("kind: 'ai-graph-v1'")
+    expect(ai).toContain("kind: 'ai-models-v1'")
+    expect(router).toContain("view.contribution.kind === 'ai-wiki-v1'")
+    expect(router).toContain("view.contribution.kind === 'ai-graph-v1'")
     expect(ai).toContain('store.chatSidebarOpen = false')
     expect(ai).toContain("dispatchLifecycle('elephantnote:ai-addon-enabled')")
     expect(renderer).toContain("window.addEventListener('elephantnote:ai-addon-enabled', handleAiAddonEnabled)")
     expect(renderer).not.toMatch(/\nvoid autostartLlamaRuntime\(\)\n/)
+    expect(main).toContain('sitesAddonEnabled && !hasOpenNote')
     expect(sites).toContain("features.set('sitePreview', false)")
     expect(sites).toContain('await previewStore.stopPreview()')
   })
@@ -138,7 +156,7 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(fileSystem).not.toContain('Buffer.from(')
   })
 
-  it('separates addon management from real portable addon packs and persists community shutdown', () => {
+  it('uses one installed list, one available list and real portable addon packs', () => {
     const panel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
     const logic = read('Elephant/frontend/app/components/settings/useAddonsSettings.js')
     const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js')
@@ -148,8 +166,12 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(panel).toContain("activePage === 'packs'")
     expect(panel).toContain('data-elephant-addon-settings-slot="addons.packs"')
     expect(panel).toContain('Installed addons')
-    expect(panel).toContain('Built-in addon catalogue')
-    expect(panel).toContain('Installed community addons')
+    expect(panel).toContain('Available addons')
+    expect(panel).not.toContain('Built-in addon catalogue')
+    expect(panel).not.toContain('Installed community addons')
+    expect(panel).not.toContain('Built in by ElephantNote')
+    expect(logic).toContain('filteredInstalledAddons')
+    expect(logic).toContain('availableAddons')
     expect(logic).toContain("invoke('tauri_addons_set_enabled'")
     expect(logic).toContain('installedExternalAddons.map')
     expect(packs).toContain("slot: 'addons.packs'")
@@ -158,7 +180,8 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(packs).toContain("id: 'elephant.sync'")
     expect(packs).toContain('ctx.addons.installBuiltin(entry.id)')
     expect(packUi).toContain("addonsStore.runAction('elephant.addon-packs.ensure-develop-parity')")
-    expect(packUi).toContain('Restore complete app')
+    expect(packUi).toContain("pack.protected ? 'Install' : 'Apply'")
+    expect(packUi).not.toContain('Restore complete app')
     expect(packUi).not.toContain('samplePacks')
   })
 

@@ -206,10 +206,13 @@ const applyWikiKnowledgeLayout = ({ nodes = [], edges = [], width = 1800, height
   return nodes.map((node) => ({ ...node, ...(positions.get(node.id) || {}) }))
 }
 
-export const selectSemanticGraphSource = ({
-  inspectionGraph = null,
-  fallbackGraph = null
-} = {}) => {
+const renderSafeEdges = (edges = []) => edges.map((edge) => edge.type === 'wiki-semantic'
+  ? { ...edge, type: 'semantic', semanticKind: 'wiki-semantic' }
+  : edge)
+
+const finalizeSemanticViewModel = (model) => ({ ...model, edges: renderSafeEdges(model.edges) })
+
+export const selectSemanticGraphSource = ({ inspectionGraph = null, fallbackGraph = null } = {}) => {
   const hasInspectionGraph = Array.isArray(inspectionGraph?.nodes) && inspectionGraph.nodes.length > 0
   if (hasInspectionGraph) return inspectionGraph
   return fallbackGraph || inspectionGraph || { nodes: [], edges: [], clusters: [] }
@@ -231,33 +234,23 @@ export const resolveSemanticGraph = (graph = null, fallback = null) => {
   }
 }
 
-export const buildSemanticGraphSurface = ({
-  graph = null,
-  fallback = null,
-  includeStructure = false
-} = {}) => {
+export const buildSemanticGraphSurface = ({ graph = null, fallback = null, includeStructure = false } = {}) => {
   const resolved = resolveSemanticGraph(graph, fallback)
-  const nodes = includeStructure
-    ? resolved.nodes
-    : resolved.nodes.filter((node) => (node.kind || node.type) !== 'folder')
+  const nodes = includeStructure ? resolved.nodes : resolved.nodes.filter((node) => (node.kind || node.type) !== 'folder')
   const allowedNodeIds = new Set(nodes.map((node) => node.id))
   const edges = resolved.edges.filter((edge) => {
     if (!allowedNodeIds.has(edge.source) || !allowedNodeIds.has(edge.target)) return false
     if (includeStructure) return true
     return VISIBLE_KNOWLEDGE_EDGE_TYPES.has(edge.type)
   })
-  const clusters = resolved.clusters.filter((cluster) =>
-    Array.isArray(cluster.paths) && cluster.paths.some((path) => allowedNodeIds.has(path))
-  )
+  const clusters = resolved.clusters.filter((cluster) => Array.isArray(cluster.paths) && cluster.paths.some((path) => allowedNodeIds.has(path)))
   const edgeCounts = new Map()
   for (const edge of edges) {
     edgeCounts.set(edge.source, (edgeCounts.get(edge.source) || 0) + 1)
     edgeCounts.set(edge.target, (edgeCounts.get(edge.target) || 0) + 1)
   }
   const atomCluster = new Map()
-  for (const node of nodes) {
-    atomCluster.set(node.id, groupNodeCluster(node))
-  }
+  for (const node of nodes) atomCluster.set(node.id, groupNodeCluster(node))
   return {
     nodes,
     edges,
@@ -270,22 +263,13 @@ export const buildSemanticGraphSurface = ({
   }
 }
 
-const buildSemanticViewModelBase = ({
-  graph = null,
-  fallback = null,
-  width = 1800,
-  height = 1200
-} = {}) => {
+const buildSemanticViewModelBase = ({ graph = null, fallback = null, width = 1800, height = 1200 } = {}) => {
   const resolved = resolveSemanticGraph(graph, fallback)
   const nodes = [...resolved.nodes]
   const edges = [...resolved.edges]
-  const clusters = resolved.clusters.length
-    ? resolved.clusters
-    : buildClusters(nodes)
-
+  const clusters = resolved.clusters.length ? resolved.clusters : buildClusters(nodes)
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const clusterNodes = new Map()
-
   for (const node of nodes) {
     const clusterId = groupNodeCluster(node)
     if (!clusterNodes.has(clusterId)) clusterNodes.set(clusterId, [])
@@ -298,15 +282,11 @@ const buildSemanticViewModelBase = ({
   const clusterCount = Math.max(1, clusterNodes.size)
   const clusterCenters = new Map()
   const clusterIndexMap = new Map()
-
   for (const [clusterId] of clusterNodes.entries()) {
     const index = clusterIndexMap.size
     clusterIndexMap.set(clusterId, index)
     const angle = -Math.PI / 2 + (Math.PI * 2 * index) / clusterCount
-    clusterCenters.set(clusterId, {
-      x: centerX + Math.cos(angle) * clusterRadius,
-      y: centerY + Math.sin(angle) * clusterRadius
-    })
+    clusterCenters.set(clusterId, { x: centerX + Math.cos(angle) * clusterRadius, y: centerY + Math.sin(angle) * clusterRadius })
   }
 
   const positionedNodes = []
@@ -316,97 +296,51 @@ const buildSemanticViewModelBase = ({
     const noteNodes = clusterMembers.filter((node) => node !== folderNode)
     const noteRadius = Math.max(80, 54 + Math.sqrt(noteNodes.length) * 18)
     const clusterIndex = clusterIndexMap.get(clusterId) || 0
-
-    if (folderNode) {
-      positionedNodes.push({
-        ...folderNode,
-        x: anchor.x,
-        y: anchor.y,
-        depth: 0,
-        clusterId,
-        clusterIndex,
-        clusterLabel: folderNode.title || clusterId
-      })
-    }
-
+    if (folderNode) positionedNodes.push({ ...folderNode, x: anchor.x, y: anchor.y, depth: 0, clusterId, clusterIndex, clusterLabel: folderNode.title || clusterId })
     const noteCount = Math.max(1, noteNodes.length)
     const rings = Math.max(1, Math.ceil(Math.sqrt(noteCount / Math.PI)))
     for (let index = 0; index < noteNodes.length; index += 1) {
       const node = noteNodes[index]
-      const ringIdx = Math.floor(index / Math.max(1, Math.ceil(noteCount / rings)))
-      const angle = (Math.PI * 2 * (index % Math.max(1, Math.ceil(noteCount / rings)))) / Math.max(1, Math.ceil(noteCount / rings))
+      const perRing = Math.max(1, Math.ceil(noteCount / rings))
+      const ringIdx = Math.floor(index / perRing)
+      const angle = (Math.PI * 2 * (index % perRing)) / perRing
       const orbit = noteRadius + ringIdx * Math.max(24, noteRadius * 0.3)
-      positionedNodes.push({
-        ...node,
-        x: anchor.x + Math.cos(angle) * orbit,
-        y: anchor.y + Math.sin(angle) * orbit,
-        depth: 1,
-        clusterId,
-        clusterIndex,
-        clusterLabel: folderNode?.title || clusterId
-      })
+      positionedNodes.push({ ...node, x: anchor.x + Math.cos(angle) * orbit, y: anchor.y + Math.sin(angle) * orbit, depth: 1, clusterId, clusterIndex, clusterLabel: folderNode?.title || clusterId })
     }
   }
 
   positionedNodes.sort((a, b) => {
-    if ((a.kind || a.type) !== (b.kind || b.type)) {
-      return (a.kind || a.type) === 'folder' ? -1 : 1
-    }
+    if ((a.kind || a.type) !== (b.kind || b.type)) return (a.kind || a.type) === 'folder' ? -1 : 1
     return String(a.title || '').localeCompare(String(b.title || ''))
   })
   const knowledgePositionedNodes = applyWikiKnowledgeLayout({ nodes: positionedNodes, edges, width, height })
-
   const edgeCounts = new Map()
   const atomCluster = new Map()
-  for (const node of knowledgePositionedNodes) {
-    atomCluster.set(node.id, node.clusterId)
-  }
-
+  for (const node of knowledgePositionedNodes) atomCluster.set(node.id, node.clusterId)
   for (const edge of edges) {
     edgeCounts.set(edge.source, (edgeCounts.get(edge.source) || 0) + 1)
     edgeCounts.set(edge.target, (edgeCounts.get(edge.target) || 0) + 1)
   }
+  const maxEdges = Math.max(1, ...edgeCounts.values(), 1)
+  const visibilityFloor = Math.max(1, maxEdges * 0.22)
+  for (const node of knowledgePositionedNodes) edgeCounts.set(node.id, Math.max(edgeCounts.get(node.id) || 0, visibilityFloor))
 
-  return {
-    nodes: knowledgePositionedNodes,
-    edges,
-    clusters,
-    edgeCounts,
-    maxEdges: Math.max(1, ...edgeCounts.values(), 1),
-    atomCluster,
-    clusterIndexMap,
-    nodeMap: byId
-  }
+  return { nodes: knowledgePositionedNodes, edges, clusters, edgeCounts, maxEdges, atomCluster, clusterIndexMap, nodeMap: byId }
 }
 
-export const buildSemanticViewModel = ({
-  graph = null,
-  fallback = null,
-  savedPositions = {},
-  width = 1800,
-  height = 1200
-} = {}) => {
+export const buildSemanticViewModel = ({ graph = null, fallback = null, savedPositions = {}, width = 1800, height = 1200 } = {}) => {
   const source = graph?.nodes?.length ? graph : fallback || { nodes: [], edges: [], clusters: [] }
   const cacheKey = `${width}x${height}`
   let cached = semanticViewModelCache.get(source)
   if (!cached || cached.cacheKey !== cacheKey) {
-    cached = {
-      cacheKey,
-      base: buildSemanticViewModelBase({ graph: source, width, height })
-    }
+    cached = { cacheKey, base: buildSemanticViewModelBase({ graph: source, width, height }) }
     if (source && typeof source === 'object') semanticViewModelCache.set(source, cached)
   }
-
   const base = cached.base
-  const knowledgeBoundIds = new Set(
-    base.edges
-      .filter((edge) => WIKI_LAYOUT_EDGE_TYPES.has(edge.type))
-      .flatMap((edge) => [edge.source, edge.target])
-  )
+  const knowledgeBoundIds = new Set(base.edges.filter((edge) => WIKI_LAYOUT_EDGE_TYPES.has(edge.type)).flatMap((edge) => [edge.source, edge.target]))
   const hasSavedPositions = savedPositions && Object.keys(savedPositions).length > 0
-  if (!hasSavedPositions) return base
-
-  return {
+  if (!hasSavedPositions) return finalizeSemanticViewModel(base)
+  return finalizeSemanticViewModel({
     ...base,
     nodes: base.nodes.map((node) => {
       if (knowledgeBoundIds.has(node.id)) return node
@@ -414,36 +348,19 @@ export const buildSemanticViewModel = ({
       if (!saved) return node
       const x = Number.isFinite(saved.x) ? saved.x : node.x
       const y = Number.isFinite(saved.y) ? saved.y : node.y
-      if (x === node.x && y === node.y) return node
-      return { ...node, x, y }
+      return x === node.x && y === node.y ? node : { ...node, x, y }
     })
-  }
+  })
 }
 
-export const buildSemanticNeighborhood = ({
-  graph = null,
-  fallback = null,
-  centerId = '',
-  depth = 1,
-  maxNodes = 24
-} = {}) => {
+export const buildSemanticNeighborhood = ({ graph = null, fallback = null, centerId = '', depth = 1, maxNodes = 24 } = {}) => {
   const resolved = resolveSemanticGraph(graph, fallback)
   const byId = new Map(resolved.nodes.map((node) => [node.id, node]))
   const center = byId.get(normalizeNodeId({ id: centerId })) || null
-  if (!center) {
-    return {
-      center: null,
-      nodes: [],
-      edges: [],
-      clusters: resolved.clusters,
-      nodeMap: byId
-    }
-  }
-
+  if (!center) return { center: null, nodes: [], edges: [], clusters: resolved.clusters, nodeMap: byId }
   const allowed = new Set([center.id])
   const frontier = new Set([center.id])
   const edges = []
-
   for (let currentDepth = 0; currentDepth < Math.max(1, depth); currentDepth += 1) {
     const nextFrontier = new Set()
     for (const edge of resolved.edges) {
@@ -461,8 +378,6 @@ export const buildSemanticNeighborhood = ({
     for (const id of nextFrontier) frontier.add(id)
     if (!frontier.size) break
   }
-
-  const nodes = [...allowed].map((id) => byId.get(id)).filter(Boolean)
   const uniqueEdges = []
   const seenEdges = new Set()
   for (const edge of edges) {
@@ -471,29 +386,14 @@ export const buildSemanticNeighborhood = ({
     seenEdges.add(key)
     uniqueEdges.push(edge)
   }
-
-  return {
-    center,
-    nodes,
-    edges: uniqueEdges,
-    clusters: resolved.clusters,
-    nodeMap: byId
-  }
+  return { center, nodes: [...allowed].map((id) => byId.get(id)).filter(Boolean), edges: uniqueEdges, clusters: resolved.clusters, nodeMap: byId }
 }
 
 const buildClusters = (nodes = []) => {
   const clusterMap = new Map()
   for (const node of nodes) {
     const clusterId = groupNodeCluster(node)
-    if (!clusterMap.has(clusterId)) {
-      clusterMap.set(clusterId, {
-        id: clusterId,
-        label: clusterId === 'root' ? 'Root' : String(clusterId).split('/').pop() || clusterId,
-        paths: [],
-        nodeCount: 0,
-        tags: []
-      })
-    }
+    if (!clusterMap.has(clusterId)) clusterMap.set(clusterId, { id: clusterId, label: clusterId === 'root' ? 'Root' : String(clusterId).split('/').pop() || clusterId, paths: [], nodeCount: 0, tags: [] })
     const cluster = clusterMap.get(clusterId)
     cluster.paths.push(node.id)
     cluster.nodeCount += 1
@@ -510,95 +410,35 @@ export const buildGraphFromVaultEntries = (entries = []) => {
   const nodes = noteEntries.map((entry) => {
     const relativePath = String(entry.path || entry.relativePath || entry.id || '').trim()
     const title = String(entry.title || relativePath.split('/').pop()?.replace(/\.md$/i, '') || 'Untitled').trim()
-    const folderPath = relativePath.includes('/')
-      ? relativePath.split('/').slice(0, -1).join('/')
-      : 'root'
-    return {
-      id: relativePath,
-      path: relativePath,
-      relativePath,
-      title,
-      kind: 'note',
-      type: 'note',
-      summary: '',
-      tags: Array.isArray(entry.tags) ? entry.tags : [],
-      sourceCount: 0,
-      chunkCount: 0,
-      updatedAt: entry.updatedAt || entry.modifiedAt || '',
-      cluster: folderPath
-    }
+    const folderPath = relativePath.includes('/') ? relativePath.split('/').slice(0, -1).join('/') : 'root'
+    return { id: relativePath, path: relativePath, relativePath, title, kind: 'note', type: 'note', summary: '', tags: Array.isArray(entry.tags) ? entry.tags : [], sourceCount: 0, chunkCount: 0, updatedAt: entry.updatedAt || entry.modifiedAt || '', cluster: folderPath }
   })
   const folderSet = new Set()
-  for (const node of nodes) {
-    const folder = node.cluster
-    if (folder && folder !== 'root') folderSet.add(folder)
-  }
-  const folderNodes = [...folderSet].map((folderPath) => ({
-    id: folderPath,
-    path: folderPath,
-    relativePath: folderPath,
-    title: folderPath.split('/').pop() || folderPath,
-    kind: 'folder',
-    type: 'folder',
-    summary: '',
-    tags: [],
-    sourceCount: 0,
-    chunkCount: 0
-  }))
+  for (const node of nodes) if (node.cluster && node.cluster !== 'root') folderSet.add(node.cluster)
+  const folderNodes = [...folderSet].map((folderPath) => ({ id: folderPath, path: folderPath, relativePath: folderPath, title: folderPath.split('/').pop() || folderPath, kind: 'folder', type: 'folder', summary: '', tags: [], sourceCount: 0, chunkCount: 0 }))
   const allNodes = [...folderNodes, ...nodes]
   const edges = []
-  for (const node of nodes) {
-    const folder = node.cluster
-    if (folder && folder !== 'root') {
-      edges.push({
-        source: folder,
-        target: node.id,
-        type: 'folder',
-        reason: 'folder',
-        weight: 0.3
-      })
-    }
-  }
+  for (const node of nodes) if (node.cluster && node.cluster !== 'root') edges.push({ source: node.cluster, target: node.id, type: 'folder', reason: 'folder', weight: 0.3 })
   const byTag = new Map()
-  for (const node of nodes) {
-    for (const tag of node.tags) {
-      if (!tag) continue
-      if (!byTag.has(tag)) byTag.set(tag, [])
-      byTag.get(tag).push(node)
-    }
+  for (const node of nodes) for (const tag of node.tags) {
+    if (!tag) continue
+    if (!byTag.has(tag)) byTag.set(tag, [])
+    byTag.get(tag).push(node)
   }
   for (const [tag, tagged] of byTag.entries()) {
     if (tagged.length < 2) continue
-    for (let i = 1; i < tagged.length; i++) {
-      edges.push({
-        source: tagged[0].id,
-        target: tagged[i].id,
-        type: 'tag',
-        reason: `#${tag}`,
-        weight: 0.5
-      })
-    }
+    for (let index = 1; index < tagged.length; index += 1) edges.push({ source: tagged[0].id, target: tagged[index].id, type: 'tag', reason: `#${tag}`, weight: 0.5 })
   }
   const clusters = []
   const byFolder = new Map()
   for (const node of nodes) {
     const folder = node.cluster || 'root'
-    if (!byFolder.has(folder)) {
-      byFolder.set(folder, {
-        id: folder,
-        label: folder === 'root' ? 'Root' : folder.split('/').pop() || folder,
-        paths: [],
-        nodeCount: 0,
-        tags: []
-      })
-    }
-    const c = byFolder.get(folder)
-    c.paths.push(node.id)
-    c.nodeCount += 1
+    if (!byFolder.has(folder)) byFolder.set(folder, { id: folder, label: folder === 'root' ? 'Root' : folder.split('/').pop() || folder, paths: [], nodeCount: 0, tags: [] })
+    const cluster = byFolder.get(folder)
+    cluster.paths.push(node.id)
+    cluster.nodeCount += 1
   }
-  for (const c of byFolder.values()) {
-    clusters.push({ id: c.id, label: c.label, paths: c.paths, nodeCount: c.nodeCount, tags: c.tags })
-  }
+  for (const cluster of byFolder.values()) clusters.push(cluster)
   const result = { nodes: allNodes, edges, clusters }
   if (Array.isArray(entries)) vaultGraphCache.set(entries, result)
   return result

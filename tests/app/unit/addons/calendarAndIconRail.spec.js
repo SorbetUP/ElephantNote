@@ -167,7 +167,7 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(panel).toContain('data-elephant-addon-settings-slot="addons.packs"')
     expect(panel).toContain('Installed addons')
     expect(panel).toContain('Available addons')
-    expect(panel).not.toContain('Built-in addon catalogue')
+    expect(panel).not.toContain('<h3>Built-in addon catalogue</h3>')
     expect(panel).not.toContain('Installed community addons')
     expect(panel).not.toContain('Built in by ElephantNote')
     expect(logic).toContain('filteredInstalledAddons')

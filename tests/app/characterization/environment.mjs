@@ -22,6 +22,7 @@ const rect = Object.freeze({
 export const installDeterministicBrowser = (scenarioSeed = 1) => {
   seed = scenarioSeed
   Math.random = seededRandom
+  window.DIRNAME = '/characterization-vault'
 
   Object.defineProperty(window.navigator, 'deviceMemory', {
     configurable: true,
@@ -65,6 +66,20 @@ export const installDeterministicBrowser = (scenarioSeed = 1) => {
   Element.prototype.getBoundingClientRect = () => rect
   Range.prototype.getBoundingClientRect = () => rect
   Range.prototype.getClientRects = () => []
+
+  if (globalThis.SVGElement) {
+    SVGElement.prototype.getBBox = () => rect
+    SVGElement.prototype.getComputedTextLength = () => 0
+    SVGElement.prototype.getCTM = () => null
+    SVGElement.prototype.getScreenCTM = () => null
+  }
+
+  for (const property of ['offsetWidth', 'offsetHeight', 'clientWidth', 'clientHeight']) {
+    Object.defineProperty(HTMLElement.prototype, property, {
+      configurable: true,
+      get: () => 0
+    })
+  }
 
   document.execCommand = () => true
   document.queryCommandSupported = () => true

@@ -1,10 +1,6 @@
 export const CORE_ICON_RAIL_ITEMS = Object.freeze([
   { id: 'dashboard', label: 'Dashboard', description: 'Overview of the active vault.' },
-  { id: 'wiki', label: 'Wiki', description: 'Generated and accepted wiki pages.' },
-  { id: 'graph', label: 'Graph', description: 'Explore links and semantic relationships.' },
-  { id: 'models', label: 'Models', description: 'Manage local AI models.' },
-  { id: 'search', label: 'Search', description: 'Open global search.' },
-  { id: 'chat', label: 'Chat', description: 'Open the AI assistant.' }
+  { id: 'search', label: 'Search', description: 'Open global search.' }
 ])
 
 export const DEFAULT_ICON_RAIL_ORDER = Object.freeze(

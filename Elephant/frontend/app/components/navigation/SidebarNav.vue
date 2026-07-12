@@ -18,22 +18,6 @@
         <span>All notes</span>
       </button>
 
-      <section v-if="addonViews.length" class="en-addon-views">
-        <p class="en-addon-views-label">Addons</p>
-        <button
-          v-for="entry in addonViews"
-          :key="entry.contribution.id"
-          class="en-addon-view-button"
-          :class="{ active: activeAddonViewId === entry.contribution.id }"
-          type="button"
-          :title="entry.contribution.description || entry.contribution.title"
-          @click="emit('open-addon-view', entry.contribution.id)"
-        >
-          <AddonIcon :name="entry.contribution.icon" />
-          <span>{{ entry.contribution.title }}</span>
-        </button>
-      </section>
-
       <div class="en-tags-header">
         <span class="en-tags-label">Tags</span>
         <button class="en-tags-search-btn" type="button" title="Search tags" @click="emit('search')">
@@ -70,7 +54,6 @@ import { computed, ref } from 'vue'
 import { Inbox, Search } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useAddonsStore } from '@/store/addons'
-import AddonIcon from '../settings/AddonIcon.vue'
 import SidebarTreeEntry from './SidebarTreeEntry.vue'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
 import { canDropEntryOnDirectory, parseDraggedEntry } from '../../utils/entryDragDrop'
@@ -103,12 +86,6 @@ const filterSidebarEntries = (entries) => Array.isArray(entries)
   : []
 
 const activeAddonViewId = computed(() => props.activeAddonViewId)
-const addonViews = computed(() => addonsStore.getContributions('views')
-  .filter((entry) => entry?.contribution?.id && entry?.contribution?.title)
-  .sort((left, right) => {
-    const order = Number(left.contribution.order || 0) - Number(right.contribution.order || 0)
-    return order || left.contribution.title.localeCompare(right.contribution.title)
-  }))
 const sidebarAfterTreeZones = computed(() => addonsStore.getContributions('layout.zones')
   .filter((entry) => entry?.contribution?.zone === 'sidebar.after-tree' && entry?.contribution?.component)
   .sort((left, right) => Number(left.contribution.order || 0) - Number(right.contribution.order || 0)))
@@ -166,11 +143,6 @@ const handleRootDrop = async (event) => {
 .en-all-notes.is-drop-target { outline: 1px solid var(--en-primary); background: color-mix(in srgb, var(--en-primary) 16%, var(--en-soft)); }
 .en-all-notes.is-drop-disabled { outline: 1px solid var(--en-danger); }
 .en-all-notes-icon { width: 18px; height: 18px; flex-shrink: 0; }
-.en-addon-views { display: flex; flex-direction: column; gap: 2px; margin: 0 6px 9px; }
-.en-addon-views-label { margin: 0; padding: 5px 8px; color: var(--en-muted); font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
-.en-addon-view-button { min-height: 34px; display: flex; align-items: center; gap: 9px; border: 0; border-radius: 8px; padding: 0 10px; color: var(--en-muted); background: transparent; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
-.en-addon-view-button :deep(svg) { width: 16px; height: 16px; flex: 0 0 auto; }
-.en-addon-view-button:hover, .en-addon-view-button.active { color: var(--en-text); background: color-mix(in srgb, var(--en-primary, #7c3aed) 16%, var(--en-soft)); }
 .en-tags-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 14px 8px; }
 .en-tags-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--en-muted); }
 .en-tags-search-btn { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; color: var(--en-muted); background: transparent; cursor: pointer; }

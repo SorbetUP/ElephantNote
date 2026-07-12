@@ -1,0 +1,1 @@
+Validation marker for iterative chat search and hybrid retrieval.

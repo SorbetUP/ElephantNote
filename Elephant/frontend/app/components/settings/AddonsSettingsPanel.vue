@@ -33,11 +33,11 @@
       <section class="en-addons-list-section">
         <header>
           <h3>Installed addons</h3>
-          <span>{{ filteredBuiltInAddons.length }}</span>
+          <span>{{ filteredInstalledAddons.length }}</span>
         </header>
         <div class="en-addons-card en-addons-list">
           <addon-settings-row
-            v-for="addon in filteredBuiltInAddons"
+            v-for="addon in filteredInstalledAddons"
             :key="addon.manifest.id"
             :addon="addon"
             :actions="actionsForAddon(addon.manifest.id)"
@@ -48,29 +48,7 @@
             @run-action="runAction"
             @uninstall="uninstallAddon(addon)"
           />
-          <div v-if="!filteredBuiltInAddons.length" class="en-addons-empty">No installed addon matches this search.</div>
-        </div>
-      </section>
-
-      <section class="en-addons-list-section">
-        <header>
-          <div>
-            <h3>Built-in addon catalogue</h3>
-            <p>Install only the ElephantNote features you actually use.</p>
-          </div>
-          <span>{{ availableBuiltInAddons.length }}</span>
-        </header>
-        <div class="en-addons-card en-catalog-list">
-          <article v-for="addon in availableBuiltInAddons" :key="addon.id" class="en-catalog-row">
-            <span class="en-catalog-icon"><AddonIcon :name="addon.icon" /></span>
-            <div class="en-catalog-copy">
-              <div><strong>{{ addon.name }}</strong><small>v{{ addon.version }}</small></div>
-              <p>{{ addon.description }}</p>
-              <span>Built in by ElephantNote</span>
-            </div>
-            <button class="en-primary-button" type="button" :disabled="operationInProgress" @click="installBuiltinAddon(addon)">Install</button>
-          </article>
-          <div v-if="!availableBuiltInAddons.length" class="en-addons-empty">{{ query ? 'No available built-in addon matches this search.' : 'Every available built-in addon is installed.' }}</div>
+          <div v-if="!filteredInstalledAddons.length" class="en-addons-empty">{{ query ? 'No installed addon matches this search.' : 'No optional addon is installed.' }}</div>
         </div>
       </section>
 
@@ -95,75 +73,48 @@
         </button>
       </section>
 
-      <template v-else>
-        <section class="en-addons-card en-addons-mode-row">
+      <section v-else class="en-addons-card en-addons-mode-row">
+        <div>
+          <strong>Community addons</strong>
+          <p>Turning this off disables every third-party addon and prevents it from starting again. Packages and private data are kept.</p>
+        </div>
+        <button class="en-switch active" type="button" role="switch" aria-label="Community addons enabled" aria-checked="true" :disabled="operationInProgress" @click="disableCommunityAddons"><span /></button>
+      </section>
+
+      <section class="en-addons-list-section">
+        <header>
           <div>
-            <strong>Community addons</strong>
-            <p>Turning this off disables every third-party addon and prevents it from starting again. Packages and private data are kept.</p>
+            <h3>Available addons</h3>
+            <p>Install any feature or package from the same list.</p>
           </div>
-          <button class="en-switch active" type="button" role="switch" aria-label="Community addons enabled" aria-checked="true" :disabled="operationInProgress" @click="disableCommunityAddons"><span /></button>
-        </section>
-
-        <section class="en-addons-list-section">
-          <header>
-            <h3>Installed community addons</h3>
-            <span>{{ filteredExternalAddons.length }}</span>
-          </header>
-          <div class="en-addons-card en-addons-list">
-            <addon-settings-row
-              v-for="addon in filteredExternalAddons"
-              :key="addon.manifest.id"
-              :addon="addon"
-              :actions="actionsForAddon(addon.manifest.id)"
-              :expanded="expandedAddonId === addon.manifest.id"
-              :busy="operationInProgress"
-              @toggle-details="toggleDetails(addon.manifest.id)"
-              @toggle-addon="toggleAddon(addon)"
-              @run-action="runAction"
-              @uninstall="uninstallAddon(addon)"
-            />
-            <div v-if="!filteredExternalAddons.length" class="en-addons-empty">{{ query ? 'No installed community addon matches this search.' : 'No community addon installed.' }}</div>
-          </div>
-        </section>
-
-        <section class="en-addons-list-section">
-          <header>
-            <h3>Browse official community addons</h3>
-            <span>{{ availableCatalogAddons.length }}</span>
-          </header>
-          <div class="en-addons-card en-catalog-list">
-            <article v-for="addon in availableCatalogAddons" :key="addon.id" class="en-catalog-row">
-              <span class="en-catalog-icon"><AddonIcon :name="addon.icon || 'package'" /></span>
-              <div class="en-catalog-copy">
-                <div><strong>{{ addon.name }}</strong><small>v{{ addon.version }}</small></div>
-                <p>{{ addon.description }}</p>
-                <span>{{ addon.author || 'Unknown author' }}</span>
-              </div>
-              <button
-                :class="addon.updateAvailable ? 'en-primary-button' : 'en-secondary-button'"
-                type="button"
-                :disabled="operationInProgress || (addon.installed && !addon.updateAvailable)"
-                @click="installCatalogAddon(addon)"
-              >{{ addon.updateAvailable ? 'Update' : addon.installed ? 'Installed' : 'Install' }}</button>
-            </article>
-            <div v-if="catalogLoading" class="en-addons-empty">Loading the official addon catalogue…</div>
-            <div v-else-if="catalogError" class="en-addons-empty error"><strong>Catalogue unavailable</strong><span>{{ catalogError }}</span></div>
-            <div v-else-if="!availableCatalogAddons.length" class="en-addons-empty">{{ query ? 'No catalogue addon matches this search.' : 'The official catalogue is empty.' }}</div>
-          </div>
-        </section>
-      </template>
+          <span>{{ availableAddons.length }}</span>
+        </header>
+        <div class="en-addons-card en-catalog-list">
+          <article v-for="addon in availableAddons" :key="addon.id" class="en-catalog-row">
+            <span class="en-catalog-icon"><AddonIcon :name="addon.icon || 'package'" /></span>
+            <div class="en-catalog-copy">
+              <div><strong>{{ addon.name }}</strong><small>v{{ addon.version }}</small></div>
+              <p>{{ addon.description }}</p>
+            </div>
+            <button
+              :class="addon.updateAvailable ? 'en-primary-button' : 'en-secondary-button'"
+              type="button"
+              :disabled="operationInProgress"
+              @click="installAvailableAddon(addon)"
+            >{{ addon.updateAvailable ? 'Update' : 'Install' }}</button>
+          </article>
+          <div v-if="communityAddonsEnabled && catalogLoading" class="en-addons-empty">Loading the addon catalogue…</div>
+          <div v-else-if="communityAddonsEnabled && catalogError" class="en-addons-empty error"><strong>Catalogue unavailable</strong><span>{{ catalogError }}</span></div>
+          <div v-else-if="!availableAddons.length" class="en-addons-empty">{{ query ? 'No available addon matches this search.' : 'Every available addon is installed.' }}</div>
+        </div>
+      </section>
     </template>
 
     <template v-else>
       <div
         class="en-addon-packs-slot"
         data-elephant-addon-settings-slot="addons.packs"
-        :data-active-addon-slot-key="addonPacksEnabled ? 'enabled' : 'disabled'"
       />
-      <section v-if="!addonPacksEnabled" class="en-addons-card en-addons-empty en-addon-packs-disabled">
-        <strong>Addon Packs is disabled</strong>
-        <span>Return to Addons and enable the built-in Addon Packs addon to manage portable configurations.</span>
-      </section>
     </template>
   </div>
 </template>
@@ -188,19 +139,15 @@ const {
   communityConsentLoaded,
   operationInProgress,
   lastError,
-  addonPacksEnabled,
-  filteredBuiltInAddons,
-  filteredExternalAddons,
-  availableBuiltInAddons,
-  availableCatalogAddons,
+  filteredInstalledAddons,
+  availableAddons,
   actionsForAddon,
   toggleDetails,
   refreshCatalog,
   enableCommunityAddons,
   disableCommunityAddons,
-  installBuiltinAddon,
+  installAvailableAddon,
   installAddonPackage,
-  installCatalogAddon,
   toggleAddon,
   uninstallAddon,
   runAction

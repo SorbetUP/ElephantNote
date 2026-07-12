@@ -29,6 +29,7 @@ import linkCtrl from './linkCtrl'
 import dragDropCtrl from './dragDropCtrl'
 import footnoteCtrl from './footnoteCtrl'
 import importMarkdown from '../utils/importMarkdown'
+import { installAsClassMembers } from '../shared/installPrototypeMethods'
 
 import { initializeContentState } from './stateSetup'
 import stateProperties from './stateProperties'
@@ -88,7 +89,7 @@ class ContentState {
   }
 }
 
-nativeControllers.forEach((install) => install(ContentState))
+nativeControllers.forEach((install) => installAsClassMembers(ContentState, install))
 legacyControllers.forEach((install) => install(ContentState))
 
 export default ContentState

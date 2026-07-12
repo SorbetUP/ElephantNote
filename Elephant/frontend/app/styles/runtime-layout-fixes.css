@@ -1,3 +1,17 @@
+/* The title strip and workspace body must use the same physical rail width.
+   A width-only override left the flex basis at 48px, which shifted the upper
+   sidebar divider relative to the lower divider. */
+.en-rail {
+  width: 56px !important;
+  flex: 0 0 56px !important;
+  box-sizing: border-box !important;
+}
+
+.en-topstrip::after {
+  left: calc(56px + var(--en-sidebar-width)) !important;
+  width: 1px !important;
+}
+
 .en-topstrip.en-topstrip-sidebar-hidden {
   background: var(--en-bg) !important;
 }

@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter};
 #[cfg(not(mobile))]
 use crate::local_llama_runtime;
 #[cfg(not(mobile))]
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 #[cfg(not(mobile))]
 use std::path::Path;
 
@@ -293,7 +293,7 @@ fn grounded_messages(
         "La recherche dans les notes est désactivée pour cette requête. Ne prétends pas avoir consulté la vault."
             .to_string()
     } else if hits.is_empty() {
-        "Tu peux interroger l’index local ElephantNote, mais aucun passage pertinent n’a été trouvé pendant la première passe. Utilise search_notes pour reformuler ou décomposer la recherche si nécessaire."
+        "Tu peux interroger l’index local Elephant, mais aucun passage pertinent n’a été trouvé pendant la première passe. Utilise search_notes pour reformuler ou décomposer la recherche si nécessaire."
             .to_string()
     } else {
         format!(
@@ -454,7 +454,7 @@ async fn prepare_assistant_actions(
                 if auto_accept
                     && result.execution.is_none()
                     && matches!(
-                        result.proposal.status,
+                        &result.proposal.status,
                         elephantnote_knowledge_core::ChatActionStatus::Proposed
                     )
                 {
@@ -613,11 +613,7 @@ async fn run_codex_tool_loop(
         )
         .await?;
         final_model = result.model.clone();
-        final_thread_id = result
-            .thread_id
-            .as_ref()
-            .map(|value| json!(value))
-            .unwrap_or(Value::Null);
+        final_thread_id = json!(result.thread_id.clone());
         let (visible_answer, raw_actions) = if tools_enabled(payload) {
             action_block(&result.answer)
         } else {

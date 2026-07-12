@@ -4,7 +4,6 @@ import {
   isBlockContainer,
   traverseUp
 } from './dom'
-
 const filterOnlyParentElements = node => {
   return isBlockContainer(node)
     ? NodeFilter.FILTER_ACCEPT

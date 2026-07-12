@@ -14,4 +14,7 @@ mod parity_fixtures;
 mod renderer_parity_fixtures;
 
 #[cfg(test)]
+mod state_utility_parity_fixtures;
+
+#[cfg(test)]
 mod utility_parity_fixtures;

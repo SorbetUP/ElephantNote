@@ -10,6 +10,7 @@ export const ADDON_EXTENSION_POINTS = Object.freeze({
   editorInlineTypes: 'editor.inline-types',
   editorInputRules: 'editor.input-rules',
   editorToolbarItems: 'editor.toolbar-items',
+  editorFooterItems: 'editor.footer-items',
   editorPasteHandlers: 'editor.paste-handlers',
   markdownPostProcessors: 'markdown.post-processors',
   markdownCodeBlockProcessors: 'markdown.code-block-processors',

@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
-const exists = (relativePath) => fs.existsSync(path.join(root, relativePath))
 const settings = () => read('Elephant/frontend/app/components/settings/SettingsPanel.vue')
 const addonsPanel = () => read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
 const addonLogic = () => read('Elephant/frontend/app/components/settings/useAddonsSettings.js')
@@ -184,6 +183,6 @@ describe('ElephantNote settings redesign', () => {
     expect(wiki).toContain('component: WikiView')
     expect(graph).toContain('component: AtomicGraphView')
     expect(openModels).toContain('component: OpenModelsView')
-    expect(codeExecution).toContain('component')
+    expect(codeExecution).toContain('CodeExecutionSettings')
   })
 })

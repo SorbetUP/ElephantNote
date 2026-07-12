@@ -5,6 +5,11 @@ import { mountSettingsComponent } from './settingsComponentHost'
 const ADDON_ID = 'elephant.ai'
 const CHAT_ACTION_ID = `${ADDON_ID}.toggle-chat`
 
+const dispatchLifecycle = (eventName) => {
+  if (typeof globalThis.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return
+  globalThis.dispatchEvent(new CustomEvent(eventName, { detail: { addonId: ADDON_ID } }))
+}
+
 export const aiAddon = {
   manifest: {
     id: ADDON_ID,
@@ -62,9 +67,12 @@ export const aiAddon = {
       order: 46
     })
 
+    dispatchLifecycle('elephantnote:ai-addon-enabled')
+
     return () => {
       const store = useVaultStore()
       store.chatSidebarOpen = false
+      dispatchLifecycle('elephantnote:ai-addon-disabled')
     }
   }
 }

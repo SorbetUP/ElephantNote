@@ -1,5 +1,3 @@
-import { languageInputFor } from './keyboardLanguageInput'
-
 export default function bindKeyboardComposition(keyboard) {
   const { container, eventCenter, contentState } = keyboard.muya
   const handler = event => {
@@ -7,7 +5,7 @@ export default function bindKeyboardComposition(keyboard) {
       keyboard.isComposed = true
     } else if (event.type === 'compositionend') {
       keyboard.isComposed = false
-      if (languageInputFor(event.target)) return
+      if (keyboard.languageInputFor(event.target)) return
       contentState.inputHandler(event)
       eventCenter.dispatch('stateChange')
     }

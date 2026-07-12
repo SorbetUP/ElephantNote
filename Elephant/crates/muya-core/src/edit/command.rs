@@ -11,6 +11,35 @@ pub enum Command {
   DeleteBackward,
   SetParagraph,
   SetHeading(u8),
+  ToggleStrong,
+  ToggleEmphasis,
+  ToggleStrike,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MarkKind {
+  Strong,
+  Emphasis,
+  Strike,
+}
+
+impl MarkKind {
+  fn inline(self) -> InlineKind {
+    match self {
+      Self::Strong => InlineKind::Strong,
+      Self::Emphasis => InlineKind::Emphasis,
+      Self::Strike => InlineKind::Strike,
+    }
+  }
+
+  fn matches(self, kind: &NodeKind) -> bool {
+    matches!(
+      (self, kind),
+      (Self::Strong, NodeKind::Inline(InlineKind::Strong))
+        | (Self::Emphasis, NodeKind::Inline(InlineKind::Emphasis))
+        | (Self::Strike, NodeKind::Inline(InlineKind::Strike))
+    )
+  }
 }
 
 impl Command {
@@ -20,7 +49,7 @@ impl Command {
     selection: Selection,
   ) -> Result<Transaction, EditError> {
     match self {
-      Self::InsertText(inserted) => build_insert_text(document, selection, inserted),
+      Self::InsertText(inserted) => build_replace_selection(document, selection, inserted),
       Self::InsertParagraph => build_insert_paragraph(document, selection),
       Self::DeleteBackward => build_delete_backward(document, selection),
       Self::SetParagraph => build_set_block_kind(document, selection, BlockKind::Paragraph),
@@ -30,45 +59,19 @@ impl Command {
         }
         build_set_block_kind(document, selection, BlockKind::Heading { level: *level })
       }
+      Self::ToggleStrong => build_toggle_mark(document, selection, MarkKind::Strong),
+      Self::ToggleEmphasis => build_toggle_mark(document, selection, MarkKind::Emphasis),
+      Self::ToggleStrike => build_toggle_mark(document, selection, MarkKind::Strike),
     }
   }
 }
 
-fn build_insert_text(
+fn build_replace_selection(
   document: &Document,
   selection: Selection,
   inserted: &str,
 ) -> Result<Transaction, EditError> {
-  let (node, start, end) = selection
-    .ordered_same_node()
-    .ok_or(EditError::CrossNodeSelection)?;
-  let value = text_value(document, node)?;
-  utf16_to_byte(value, node, start)?;
-  utf16_to_byte(value, node, end)?;
-  let next = Selection::collapsed(SelectionPoint {
-    node,
-    offset_utf16: start + inserted.encode_utf16().count() as u32,
-  });
-
-  Ok(Transaction {
-    operations: vec![Operation::ReplaceText {
-      node,
-      range: Utf16Range::new(start, end),
-      inserted: inserted.to_string(),
-    }],
-    selection_before: selection,
-    selection_after: next,
-  })
-}
-
-fn build_delete_backward(
-  document: &Document,
-  selection: Selection,
-) -> Result<Transaction, EditError> {
-  if !selection.is_collapsed() {
-    let (node, start, end) = selection
-      .ordered_same_node()
-      .ok_or(EditError::CrossNodeSelection)?;
+  if let Some((node, start, end)) = selection.ordered_same_node() {
     let value = text_value(document, node)?;
     utf16_to_byte(value, node, start)?;
     utf16_to_byte(value, node, end)?;
@@ -76,14 +79,86 @@ fn build_delete_backward(
       operations: vec![Operation::ReplaceText {
         node,
         range: Utf16Range::new(start, end),
-        inserted: String::new(),
+        inserted: inserted.to_string(),
       }],
       selection_before: selection,
       selection_after: Selection::collapsed(SelectionPoint {
         node,
-        offset_utf16: start,
+        offset_utf16: start + inserted.encode_utf16().count() as u32,
       }),
     });
+  }
+
+  let (start, end, parent, start_index, end_index) =
+    ordered_sibling_text_selection(document, selection)?;
+  let start_value = text_value(document, start.node)?;
+  let end_value = text_value(document, end.node)?;
+  let start_byte = utf16_to_byte(start_value, start.node, start.offset_utf16)?;
+  let end_byte = utf16_to_byte(end_value, end.node, end.offset_utf16)?;
+  let suffix = &end_value[end_byte..];
+  let replacement = format!("{inserted}{suffix}");
+  let start_length = start_value.encode_utf16().count() as u32;
+  let covered = document
+    .node(parent)
+    .ok_or(EditError::NodeNotFound(parent))?
+    .children[start_index + 1..=end_index]
+    .to_vec();
+
+  let mut operations = vec![Operation::ReplaceText {
+    node: start.node,
+    range: Utf16Range::new(start.offset_utf16, start_length),
+    inserted: replacement,
+  }];
+  operations.extend(covered.into_iter().map(|node| Operation::RemoveNode { node }));
+
+  Ok(Transaction {
+    operations,
+    selection_before: selection,
+    selection_after: Selection::collapsed(SelectionPoint {
+      node: start.node,
+      offset_utf16: start.offset_utf16 + inserted.encode_utf16().count() as u32,
+    }),
+  })
+}
+
+fn ordered_sibling_text_selection(
+  document: &Document,
+  selection: Selection,
+) -> Result<(SelectionPoint, SelectionPoint, NodeId, usize, usize), EditError> {
+  let anchor = document
+    .node(selection.anchor.node)
+    .ok_or(EditError::NodeNotFound(selection.anchor.node))?;
+  let focus = document
+    .node(selection.focus.node)
+    .ok_or(EditError::NodeNotFound(selection.focus.node))?;
+  text_value(document, anchor.id)?;
+  text_value(document, focus.id)?;
+  let parent = anchor.parent.ok_or(EditError::CrossNodeSelection)?;
+  if focus.parent != Some(parent) {
+    return Err(EditError::CrossNodeSelection);
+  }
+  let anchor_index = document
+    .child_index(parent, anchor.id)
+    .ok_or(EditError::UnsupportedStructure(anchor.id))?;
+  let focus_index = document
+    .child_index(parent, focus.id)
+    .ok_or(EditError::UnsupportedStructure(focus.id))?;
+
+  if anchor_index < focus_index {
+    Ok((selection.anchor, selection.focus, parent, anchor_index, focus_index))
+  } else if focus_index < anchor_index {
+    Ok((selection.focus, selection.anchor, parent, focus_index, anchor_index))
+  } else {
+    Err(EditError::CrossNodeSelection)
+  }
+}
+
+fn build_delete_backward(
+  document: &Document,
+  selection: Selection,
+) -> Result<Transaction, EditError> {
+  if !selection.is_collapsed() {
+    return build_replace_selection(document, selection, "");
   }
 
   let caret = selection.caret().expect("collapsed selection must expose a caret");
@@ -233,6 +308,118 @@ fn build_set_block_kind(
   })
 }
 
+fn build_toggle_mark(
+  document: &Document,
+  selection: Selection,
+  mark: MarkKind,
+) -> Result<Transaction, EditError> {
+  let (text, start, end) = selection
+    .ordered_same_node()
+    .ok_or(EditError::CrossNodeSelection)?;
+  if start == end {
+    return Ok(Transaction {
+      operations: Vec::new(),
+      selection_before: selection,
+      selection_after: selection,
+    });
+  }
+
+  let value = text_value(document, text)?;
+  let start_byte = utf16_to_byte(value, text, start)?;
+  let end_byte = utf16_to_byte(value, text, end)?;
+  let text_node = document.node(text).ok_or(EditError::NodeNotFound(text))?;
+  let parent = text_node.parent.ok_or(EditError::UnsupportedStructure(text))?;
+  let parent_node = document
+    .node(parent)
+    .ok_or(EditError::NodeNotFound(parent))?;
+  let full_length = value.encode_utf16().count() as u32;
+
+  if mark.matches(&parent_node.kind) {
+    if start != 0 || end != full_length || parent_node.children.as_slice() != [text] {
+      return Err(EditError::UnsupportedStructure(parent));
+    }
+    let grandparent = parent_node
+      .parent
+      .ok_or(EditError::UnsupportedStructure(parent))?;
+    let parent_index = document
+      .child_index(grandparent, parent)
+      .ok_or(EditError::UnsupportedStructure(parent))?;
+    let detached_text = Node::new(text, text_node.kind.clone(), None);
+    return Ok(Transaction {
+      operations: vec![
+        Operation::RemoveNode { node: text },
+        Operation::RemoveNode { node: parent },
+        Operation::InsertNode {
+          parent: grandparent,
+          index: parent_index,
+          node: detached_text,
+        },
+      ],
+      selection_before: selection,
+      selection_after: selection,
+    });
+  }
+
+  let parent_index = document
+    .child_index(parent, text)
+    .ok_or(EditError::UnsupportedStructure(text))?;
+  let selected = value[start_byte..end_byte].to_string();
+  let suffix = value[end_byte..].to_string();
+  let wrapper_id = document.next_available_id();
+  let selected_id = NodeId(wrapper_id.0.saturating_add(1));
+  let suffix_id = NodeId(wrapper_id.0.saturating_add(2));
+  let wrapper = Node::new(wrapper_id, NodeKind::Inline(mark.inline()), None);
+  let selected_node = Node::new(
+    selected_id,
+    NodeKind::Inline(InlineKind::Text { value: selected }),
+    None,
+  );
+
+  let mut operations = vec![
+    Operation::ReplaceText {
+      node: text,
+      range: Utf16Range::new(start, full_length),
+      inserted: String::new(),
+    },
+    Operation::InsertNode {
+      parent,
+      index: parent_index + 1,
+      node: wrapper,
+    },
+    Operation::InsertNode {
+      parent: wrapper_id,
+      index: 0,
+      node: selected_node,
+    },
+  ];
+  if !suffix.is_empty() {
+    operations.push(Operation::InsertNode {
+      parent,
+      index: parent_index + 2,
+      node: Node::new(
+        suffix_id,
+        NodeKind::Inline(InlineKind::Text { value: suffix }),
+        None,
+      ),
+    });
+  }
+
+  Ok(Transaction {
+    operations,
+    selection_before: selection,
+    selection_after: Selection {
+      anchor: SelectionPoint {
+        node: selected_id,
+        offset_utf16: 0,
+      },
+      focus: SelectionPoint {
+        node: selected_id,
+        offset_utf16: end - start,
+      },
+    },
+  })
+}
+
 fn editable_text_block_for_text(
   document: &Document,
   text: NodeId,
@@ -326,6 +513,31 @@ mod tests {
   }
 
   #[test]
+  fn replaces_across_sibling_inlines_and_restores_subtrees() {
+    let mut document = parse_markdown("a **bold** z");
+    let paragraph = document.children(document.root).next().unwrap().id;
+    let children = document.children(paragraph).map(|node| node.id).collect::<Vec<_>>();
+    let selection = Selection {
+      anchor: SelectionPoint {
+        node: children[0],
+        offset_utf16: 1,
+      },
+      focus: SelectionPoint {
+        node: children[2],
+        offset_utf16: 1,
+      },
+    };
+    let transaction = Command::InsertText("X".to_string())
+      .build(&document, selection)
+      .unwrap();
+    let inverse = transaction.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "aXz");
+
+    inverse.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "a **bold** z");
+  }
+
+  #[test]
   fn inserts_text_at_a_utf16_caret() {
     let mut document = parse_markdown("A😀B");
     let node = block_text(&document, 0);
@@ -395,6 +607,49 @@ mod tests {
 
     inverse.apply(&mut document).unwrap();
     assert_eq!(to_markdown(&document), "Title");
+  }
+
+  #[test]
+  fn wraps_and_unwraps_strong_text() {
+    let mut document = parse_markdown("abcdef");
+    let node = block_text(&document, 0);
+    let selection = Selection {
+      anchor: SelectionPoint {
+        node,
+        offset_utf16: 2,
+      },
+      focus: SelectionPoint {
+        node,
+        offset_utf16: 5,
+      },
+    };
+    let transaction = Command::ToggleStrong
+      .build(&document, selection)
+      .unwrap();
+    let inverse = transaction.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "ab**cde**f");
+    inverse.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "abcdef");
+
+    let mut marked = parse_markdown("**bold**");
+    let paragraph = marked.children(marked.root).next().unwrap().id;
+    let strong = marked.children(paragraph).next().unwrap().id;
+    let text = marked.children(strong).next().unwrap().id;
+    let selection = Selection {
+      anchor: SelectionPoint {
+        node: text,
+        offset_utf16: 0,
+      },
+      focus: SelectionPoint {
+        node: text,
+        offset_utf16: 4,
+      },
+    };
+    let transaction = Command::ToggleStrong
+      .build(&marked, selection)
+      .unwrap();
+    transaction.apply(&mut marked).unwrap();
+    assert_eq!(to_markdown(&marked), "bold");
   }
 
   #[test]

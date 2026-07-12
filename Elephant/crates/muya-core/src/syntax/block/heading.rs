@@ -16,6 +16,20 @@ pub fn parse_atx(line: &str) -> Option<HeadingMatch<'_>> {
   })
 }
 
+pub fn parse_setext_underline(line: &str) -> Option<u8> {
+  let trimmed = line.trim();
+  if trimmed.len() < 3 {
+    return None;
+  }
+  if trimmed.chars().all(|character| character == '=') {
+    Some(1)
+  } else if trimmed.chars().all(|character| character == '-') {
+    Some(2)
+  } else {
+    None
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -25,5 +39,13 @@ mod tests {
     assert_eq!(parse_atx("## Title"), Some(HeadingMatch { level: 2, text: "Title" }));
     assert_eq!(parse_atx("####### Too deep"), None);
     assert_eq!(parse_atx("#missing-space"), None);
+  }
+
+  #[test]
+  fn parses_setext_underlines() {
+    assert_eq!(parse_setext_underline("===="), Some(1));
+    assert_eq!(parse_setext_underline(" --- "), Some(2));
+    assert_eq!(parse_setext_underline("--"), None);
+    assert_eq!(parse_setext_underline("-=-"), None);
   }
 }

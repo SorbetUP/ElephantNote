@@ -1,0 +1,54 @@
+name: Muya JS Characterization
+
+on:
+  push:
+    branches:
+      - 'refactor/muya-js-modular-parity'
+    paths:
+      - 'Elephant/frontend/src/muya/**'
+      - 'tests/app/characterization/**'
+      - 'build/scripts/run-muya-characterization.mjs'
+      - '.github/workflows/muya-js-characterization.yml'
+      - 'package.json'
+  pull_request:
+    paths:
+      - 'Elephant/frontend/src/muya/**'
+      - 'tests/app/characterization/**'
+      - 'build/scripts/run-muya-characterization.mjs'
+      - '.github/workflows/muya-js-characterization.yml'
+      - 'package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  characterization:
+    name: Compare original and modular Muya behavior
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Run real Muya characterization parity
+        shell: bash
+        env:
+          MUYA_REFERENCE_REF: ${{ github.event.pull_request.base.sha || '' }}
+        run: |
+          set -o pipefail
+          node build/scripts/run-muya-characterization.mjs \
+            2>&1 | tee build/muya-characterization-run.txt
+
+      - name: Upload original, candidate and first difference
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-characterization-${{ github.run_id }}
+          path: |
+            build/muya-characterization-run.txt
+            build/muya-characterization/*.json
+          if-no-files-found: warn
+          retention-days: 14

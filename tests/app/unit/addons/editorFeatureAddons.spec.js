@@ -34,6 +34,7 @@ describe('optional editor feature addons', () => {
     const markdown = read('Elephant/frontend/src/renderer/src/platform/excalidrawMarkdownCleanup.js')
     const images = read('Elephant/frontend/src/renderer/src/platform/excalidrawImageRuntimeFixes.js')
     const fallbacks = read('Elephant/frontend/src/renderer/src/addons/addonContentFallbackRuntime.js')
+    const manifest = read('Elephant/frontend/src/renderer/src/addons/manifest.js')
 
     expect(main).not.toContain('installExcalidrawMarkdownCleanup')
     expect(main).not.toContain('installExcalidrawImageRuntimeFixes')
@@ -41,6 +42,7 @@ describe('optional editor feature addons', () => {
     expect(addon).toContain('defaultEnabled: false')
     expect(addon).toContain('installExcalidrawMarkdownCleanup()')
     expect(addon).toContain('installExcalidrawImageRuntimeFixes(globalThis)')
+    expect(addon).toContain('contentTypes: [{')
     expect(addon).toContain("disabledPresentation: 'static-preview'")
     expect(markdown).toContain('unsubscribe?.()')
     expect(markdown).toContain("bus.off?.('invalidate-image-cache'")
@@ -48,8 +50,9 @@ describe('optional editor feature addons', () => {
     expect(images).toContain("document.removeEventListener('load'")
     expect(images).toContain('removeInstalledUi()')
     expect(fallbacks).toContain('collectDescriptors')
-    expect(fallbacks).toContain('applyFallback')
+    expect(fallbacks).toContain('isCurrentFallback')
     expect(fallbacks).toContain('blockDisabledInteraction')
+    expect(manifest).toContain('contributes.contentTypes')
   })
 
   it('includes editor and sidebar addons in the refreshed Develop parity pack', () => {

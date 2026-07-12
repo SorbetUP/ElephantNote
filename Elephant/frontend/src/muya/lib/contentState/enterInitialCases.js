@@ -1,4 +1,4 @@
-const FOOTNOTE_REG = /^\[\^([^\[\]\s]+?)(?<!\\)\]:$/
+const FOOTNOTE_REG = /^\[\^([^\[\]\s]+?)(?<!\\)\]:$/ // eslint-disable-line no-useless-escape
 
 const checkAutoIndent = (text, offset) => {
   const pair = text.substring(offset - 1, offset + 1)

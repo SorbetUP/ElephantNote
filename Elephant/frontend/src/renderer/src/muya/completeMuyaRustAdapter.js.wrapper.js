@@ -1,4 +1,5 @@
 import CompleteMuyaWithRustCore from './completeMuyaRustAdapter.js'
+import { createRustAsyncMutationGate } from './rustAsyncMutationGate.js'
 import { selectionToMuyaIndexCursor } from './realMuyaRustMirrorRuntime.js'
 
 const cloneState = (state) => state && ({
@@ -9,17 +10,14 @@ const cloneState = (state) => state && ({
 export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRustCore {
   constructor (element, options = {}) {
     super(element, options)
-    this.__rustOperationQueue = Promise.resolve()
-    this.__rustPendingOperationCount = 0
 
     // Muya's keyboard layer calls dispatchChange immediately after invoking a
     // ContentState handler. Rust handlers are asynchronous, so that immediate
     // dispatch observes the old DOM and used to save/reconcile stale Markdown.
-    const dispatchChange = this.dispatchChange
-    this.dispatchChange = (...args) => {
-      if (this.__rustPendingOperationCount > 0) return undefined
-      return dispatchChange(...args)
-    }
+    this.__rustMutationGate = createRustAsyncMutationGate({
+      dispatch: this.dispatchChange
+    })
+    this.dispatchChange = this.__rustMutationGate.dispatch
 
     // Muya may normalize loaded Markdown while parsing it. The Rust session must
     // start from the document that Muya actually rendered, not from the raw file
@@ -132,23 +130,11 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
   }
 
   __applyRust (name, operation) {
-    this.__rustPendingOperationCount = (this.__rustPendingOperationCount || 0) + 1
-
     const execute = async() => {
       await this.__repairVisibleDocumentFromRust(name)
       return super.__applyRust(name, operation)
     }
-    const queued = (this.__rustOperationQueue || Promise.resolve())
-      .catch(() => undefined)
-      .then(execute)
-      .finally(() => {
-        this.__rustPendingOperationCount = Math.max(0, this.__rustPendingOperationCount - 1)
-      })
-
-    // Keep a rejected UI command from poisoning all later editor commands. The
-    // original promise is still returned so explicit callers can observe it.
-    this.__rustOperationQueue = queued.catch(() => undefined)
-    return queued
+    return this.__rustMutationGate.enqueue(execute)
   }
 
   async __renderRust (transaction) {

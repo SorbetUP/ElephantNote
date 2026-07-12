@@ -137,11 +137,12 @@ describe('ElephantNote settings redesign', () => {
     expect(primitives).toContain('.en-addons-panel .en-switch')
   })
 
-  it('keeps Sync, Sites, Codex and AI UI owned by their addon modules', () => {
+  it('keeps Sync, Sites, Codex, AI and Open Models UI owned by their addon modules', () => {
     const sync = read('Elephant/frontend/src/renderer/src/addons/builtin/sync.js')
     const sites = read('Elephant/frontend/src/renderer/src/addons/builtin/sites.js')
     const codex = read('Elephant/frontend/src/renderer/src/addons/builtin/codexConnection.js')
     const ai = read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
+    const openModels = read('Elephant/frontend/src/renderer/src/addons/builtin/openModels.js')
     const navigation = read('Elephant/frontend/app/components/navigation/NavigationBar.vue')
     const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
 
@@ -154,7 +155,8 @@ describe('ElephantNote settings redesign', () => {
     expect(ai).toContain('component: ChatSidebar')
     expect(ai).toContain('component: WikiView')
     expect(ai).toContain('component: AtomicGraphView')
-    expect(ai).toContain('component: ModelsView')
+    expect(ai).not.toContain('component: ModelsView')
+    expect(openModels).toContain('component: ModelsView')
   })
 
   it('keeps addon-specific shell components absent until their lazy addon loads', () => {
@@ -171,6 +173,7 @@ describe('ElephantNote settings redesign', () => {
     expect(router).not.toContain('CalendarAddonWorkspace')
     expect(main).not.toContain('SitePreviewPanel')
     expect(builtins).not.toContain("import { aiAddon } from './ai'")
+    expect(builtins).not.toContain("import { openModelsAddon } from './openModels'")
     expect(builtins).not.toContain("import { excalidrawAddon } from './excalidraw'")
   })
 

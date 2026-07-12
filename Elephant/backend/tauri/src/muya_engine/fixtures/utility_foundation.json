@@ -1,0 +1,51 @@
+{
+  "metrics": [
+    ["", {"word": 0, "paragraph": 0, "character": 0, "all": 0}],
+    ["hello world", {"word": 2, "paragraph": 1, "character": 10, "all": 11}],
+    ["一二三", {"word": 3, "paragraph": 1, "character": 3, "all": 3}],
+    ["A😀 B", {"word": 2, "paragraph": 1, "character": 4, "all": 5}],
+    ["a\n\nb\n\n", {"word": 2, "paragraph": 2, "character": 2, "all": 6}],
+    ["中文 hello\nworld", {"word": 4, "paragraph": 1, "character": 12, "all": 14}],
+    ["﻿a b", {"word": 2, "paragraph": 1, "character": 2, "all": 4}]
+  ],
+  "clone": [
+    {
+      "input": {"a": 1, "b": [2, {"c": "x"}], "d": null},
+      "deepCopy": {"a": 1, "b": [2, {"c": "x"}], "d": null},
+      "deepClone": {"a": 1, "b": [2, {"c": "x"}], "d": null}
+    },
+    {
+      "input": [1, [2], {"x": true}],
+      "deepCopyArray": [1, [2], {"x": true}]
+    }
+  ],
+  "options": {
+    "baseUrl": null,
+    "breaks": false,
+    "gfm": true,
+    "headerIds": true,
+    "headerPrefix": "",
+    "highlight": null,
+    "mathRenderer": null,
+    "emojiRenderer": null,
+    "tocRenderer": null,
+    "langPrefix": "language-",
+    "mangle": true,
+    "pedantic": false,
+    "renderer": null,
+    "silent": false,
+    "smartLists": false,
+    "smartypants": false,
+    "xhtml": false,
+    "disableInline": false,
+    "sanitize": false,
+    "sanitizer": null,
+    "emoji": true,
+    "math": true,
+    "frontMatter": true,
+    "superSubScript": false,
+    "footnote": false,
+    "isGitlabCompatibilityEnabled": false,
+    "isHtmlEnabled": true
+  }
+}

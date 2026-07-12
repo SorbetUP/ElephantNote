@@ -38,11 +38,11 @@ jobs:
           python3 .github/scripts/fix_chat_agent_graph_lint.py
       - run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
       - name: Auto-fix focused frontend files
-        run: pnpm exec eslint --fix Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/services/elephantnoteClient/domainClients.js || true
+        run: NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint --fix Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/services/elephantnoteClient/domainClients.js || true
       - name: Capture focused lint result
         id: focused_lint
         continue-on-error: true
-        run: pnpm exec eslint --format json Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/services/elephantnoteClient/domainClients.js > focused-chat-lint.json
+        run: NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint --format json Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/services/elephantnoteClient/domainClients.js > focused-chat-lint.json
       - uses: actions/upload-artifact@v4
         with:
           name: focused-chat-lint

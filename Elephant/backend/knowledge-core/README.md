@@ -29,6 +29,13 @@
 - stale-document pruning;
 - validated chat action contracts.
 
+## Validation contracts
+
+- renderer integration tests exercise a graph containing 1,389 notes and require all 1,389 to remain visible to the graph API;
+- browser tests run the real Tauri web renderer with a controlled native-command mock;
+- Rust tests verify that code matrices do not create wikilinks and that incremental rebuilds remove stale derived relations;
+- Wiki routing tests verify that `app-local` GGUF selections reach the bundled llama runtime.
+
 ## Planned modules
 
 - canonical tag taxonomy and aliases;

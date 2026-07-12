@@ -29,7 +29,7 @@ export const ADDON_MANAGER_KEY = Symbol('ElephantAddonManager')
 
 const BUILTIN_INSTALL_STORAGE_KEY = 'elephantnote:installed-built-in-addons:v1'
 const BUILTIN_ENABLED_STORAGE_KEY = 'elephantnote:enabled-built-in-addons:v1'
-const REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs'])
+const REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs', 'elephant.excalidraw'])
 
 const createDiagnosticsLogger = (logger) => ({
   info: logger?.info || ((...args) => console.info('[addons]', ...args)),

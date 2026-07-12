@@ -4,6 +4,7 @@ import { ElephantAddonManager } from './AddonManagerWithState'
 import { builtinAddons } from './builtin'
 import { installExternalAddonRuntime } from './externalAddonRuntime'
 import { installSettingsContributionRuntime } from './settingsContributionRuntime'
+import { installAddonContentFallbackRuntime } from './addonContentFallbackRuntime'
 import { normalizeAddonManifest } from './manifest'
 import { useAddonsStore } from '@/store/addons'
 export { ADDON_EXTENSION_POINTS } from './extensionPoints'
@@ -251,6 +252,7 @@ export const installAddonSystem = (app, options = {}) => {
   }
 
   manager.settingsContributions = installSettingsContributionRuntime(manager)
+  manager.contentFallbacks = installAddonContentFallbackRuntime(manager)
 
   if (typeof window !== 'undefined') {
     window.__ELEPHANT_ADDONS__ = manager
@@ -270,6 +272,7 @@ export const installAddonSystem = (app, options = {}) => {
         enabled: manager.list().filter((addon) => addon.enabled).map((addon) => addon.manifest.id),
         actions: manager.getActions().map((entry) => entry.contribution?.id).filter(Boolean)
       })
+      manager.contentFallbacks?.refresh?.()
     })
     .catch((error) => manager.logger.error('[addons] builtin-state:failed', error))
 

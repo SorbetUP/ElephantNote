@@ -38,7 +38,8 @@ fn serialize_inlines(document: &Document, node: &Node) -> String {
       NodeKind::Inline(InlineKind::HardBreak) => "  \n".to_string(),
       _ => serialize_inlines(document, child),
     })
-    .collect()
+    .collect::<Vec<_>>()
+    .join("")
 }
 
 #[cfg(test)]

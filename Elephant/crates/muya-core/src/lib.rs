@@ -15,7 +15,7 @@ pub mod view;
 
 pub use edit::{Command, EditError, Operation, Transaction, Utf16Range};
 pub use history::History;
-pub use model::{Document, Node, NodeId, NodeKind, SourceRange};
+pub use model::{DetachedSubtree, Document, Node, NodeId, NodeKind, SourceRange};
 pub use parser::parse_markdown;
 pub use selection::{Selection, SelectionPoint};
 pub use serializer::to_markdown;

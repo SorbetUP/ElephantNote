@@ -451,7 +451,6 @@ fn migrate_legacy_generated_markdown(draft: &WikiDraft, markdown: &str) -> Optio
 
     body.push_str("\n\n## Sources\n\n");
     for (index, citation) in citations {
-        let number = citation_number(citation, index + 1);
         body.push_str(&format!(
             "- [{} — {}]({})\n",
             citation.document_title,
@@ -814,10 +813,11 @@ mod tests {
         };
         let legacy = "# Iroh\n\nIroh connects peers. [^source-1]\n\n## Related wikis\n\n- [[Peer networking]]\n\n## Sources\n\n[^source-1]: [[Notes/Iroh guide.md#Direct connections|Iroh guide — Direct connections]] (bytes 0–20)";
         let migrated = migrate_legacy_generated_markdown(&draft, legacy).expect("migration");
-        assert!(migrated.contains("[1](../../Notes/Iroh%20guide.md#direct-connections)"));
+        assert!(migrated
+            .contains("[Direct connections](../../Notes/Iroh%20guide.md#direct-connections)"));
         assert!(migrated.contains("- [Peer networking](./peer-networking.md)"));
         assert!(migrated.contains(
-            "1. [Iroh guide — Direct connections](../../Notes/Iroh%20guide.md#direct-connections)"
+            "- [Iroh guide — Direct connections](../../Notes/Iroh%20guide.md#direct-connections)"
         ));
         assert!(!migrated.contains("[^source-1]"));
     }

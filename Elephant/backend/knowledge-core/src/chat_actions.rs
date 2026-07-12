@@ -27,6 +27,14 @@ pub enum ChatActionPreview {
         title: String,
         topic: String,
         source_paths: Vec<String>,
+        operation: String,
+    },
+    WikiDecision {
+        topic: String,
+        operation: String,
+    },
+    DeleteWiki {
+        draft_id: String,
     },
     CreateNote {
         relative_path: String,
@@ -111,8 +119,11 @@ pub fn execute_approved_chat_action(
             let hits = store.search(query, *limit)?;
             serde_json::to_value(hits).map_err(|error| error.to_string())?
         }
-        ChatKnowledgeAction::CreateWiki { .. } => {
-            return Err("Wiki actions require the cited model-backed Wiki generator.".into());
+        ChatKnowledgeAction::CreateWiki { .. }
+        | ChatKnowledgeAction::AddWikiSuggestion { .. }
+        | ChatKnowledgeAction::RejectWikiSuggestion { .. }
+        | ChatKnowledgeAction::DeleteWiki { .. } => {
+            return Err("Wiki actions are executed by the Tauri Wiki library adapter.".into());
         }
         ChatKnowledgeAction::CreateNote {
             relative_path,
@@ -219,6 +230,26 @@ fn preview_action(root: &Path, action: &ChatKnowledgeAction) -> Result<ChatActio
             title: title.clone(),
             topic: topic.clone(),
             source_paths: source_paths.clone(),
+            operation: "generate".into(),
+        }),
+        ChatKnowledgeAction::AddWikiSuggestion {
+            title,
+            topic,
+            source_paths,
+        } => Ok(ChatActionPreview::CreateWiki {
+            title: title.clone(),
+            topic: topic.clone(),
+            source_paths: source_paths.clone(),
+            operation: "suggest".into(),
+        }),
+        ChatKnowledgeAction::RejectWikiSuggestion { topic } => {
+            Ok(ChatActionPreview::WikiDecision {
+                topic: topic.clone(),
+                operation: "reject".into(),
+            })
+        }
+        ChatKnowledgeAction::DeleteWiki { draft_id } => Ok(ChatActionPreview::DeleteWiki {
+            draft_id: draft_id.clone(),
         }),
         ChatKnowledgeAction::CreateNote {
             relative_path,

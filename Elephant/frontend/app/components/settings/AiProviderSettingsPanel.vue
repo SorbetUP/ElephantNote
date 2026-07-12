@@ -221,7 +221,7 @@
           </label>
           <label v-if="form.routes.chat.source === 'codex'">
             <span>Reasoning</span>
-            <select v-model="form.routes.chat.reasoningEffort">
+            <select v-model="form.routes.chat.reasoningEffort" @change="saveConfig({ silent: true, reason: 'codex-reasoning' })">
               <option
                 v-for="effort in codexReasoningOptions"
                 :key="effort.value"
@@ -483,7 +483,7 @@ const defaultForm = () => ({
       contextWindow: 8192,
       ragTopK: 6,
       enableRag: true,
-      enableTools: false,
+      enableTools: true,
       stream: true
     },
     embedding: {
@@ -730,11 +730,11 @@ const consumeCodexReset = async(creditId) => {
     codexResetBusy.value = false
   }
 }
-const onCodexModelChanged = () => {
+const onCodexModelChanged = async() => {
   applyCodexReasoningDefault()
-  scheduleAutosave('codex-model')
+  await saveConfig({ silent: true, reason: 'codex-model' })
 }
-const onChatSourceChanged = () => {
+const onChatSourceChanged = async() => {
   if (form.value.routes.chat.source === 'codex') {
     form.value.routes.chat.model = codexModels.value.find((model) => model.isDefault)?.model || codexModels.value[0]?.model || codexModels.value[0]?.id || ''
     applyCodexReasoningDefault()
@@ -743,7 +743,7 @@ const onChatSourceChanged = () => {
   } else {
     form.value.routes.chat.model = ''
   }
-  scheduleAutosave('chat-source')
+  await saveConfig({ silent: true, reason: 'chat-source' })
 }
 const toggleLocalAi = () => {
   form.value.localAi.enabled = !form.value.localAi.enabled

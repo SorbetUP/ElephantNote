@@ -1,7 +1,7 @@
 #[cfg(not(mobile))]
 pub(crate) mod codex_app_server;
 
-use elephantnote_knowledge_core::{KnowledgeSearchHit, KnowledgeStore};
+use elephantnote_knowledge_core::{ChatKnowledgeAction, KnowledgeSearchHit, KnowledgeStore};
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
@@ -118,6 +118,47 @@ fn selected_chat_reasoning_effort(payload: &Value) -> Option<String> {
     (!effort.is_empty()).then_some(effort)
 }
 
+fn promote_saved_codex_route(config: &mut Value) -> bool {
+    let codex_model = config
+        .pointer("/providers/codex/model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or("")
+        .to_string();
+    if codex_model.is_empty() {
+        return false;
+    }
+    let route = config.pointer("/routes/chat").unwrap_or(&Value::Null);
+    let source = text(route, &["source", "provider"]);
+    let model = text(route, &["model"]);
+    let stale_default = source.is_empty()
+        || source == "disabled"
+        || (source == "app-local" && (model.is_empty() || model == "smollm2-node-llama-cpp"));
+    if !stale_default {
+        return false;
+    }
+    let Some(root) = config.as_object_mut() else {
+        return false;
+    };
+    let routes = root.entry("routes").or_insert_with(|| json!({}));
+    let Some(routes) = routes.as_object_mut() else {
+        return false;
+    };
+    let chat = routes.entry("chat").or_insert_with(|| json!({}));
+    let Some(chat) = chat.as_object_mut() else {
+        return false;
+    };
+    chat.insert("source".into(), json!("codex"));
+    chat.insert("provider".into(), json!("codex"));
+    chat.insert("transport".into(), json!("codex"));
+    chat.insert("endpoint".into(), json!("codex://app-server"));
+    chat.insert("model".into(), json!(codex_model));
+    chat.entry("reasoningEffort")
+        .or_insert_with(|| json!("medium"));
+    chat.entry("enableTools").or_insert_with(|| json!(true));
+    true
+}
+
 fn with_saved_ai_config(app: &AppHandle, payload: Value) -> Value {
     let mut payload = if payload.is_object() {
         payload
@@ -125,13 +166,47 @@ fn with_saved_ai_config(app: &AppHandle, payload: Value) -> Value {
         json!({ "message": payload })
     };
     if ai_config(&payload).pointer("/routes/chat").is_none() {
-        if let Ok(config) = crate::tauri_extra_commands::load_ai_config(app) {
+        if let Ok(mut config) = crate::tauri_extra_commands::load_ai_config(app) {
+            let promoted = promote_saved_codex_route(&mut config);
+            if promoted {
+                let _ = crate::tauri_extra_commands::save_ai_config(app, &config);
+                eprintln!("[Codex][config] promoted saved Codex model to the active Chat route");
+            }
             if let Some(object) = payload.as_object_mut() {
                 object.insert("aiConfig".into(), config);
             }
         }
     }
     payload
+}
+
+#[cfg(not(mobile))]
+pub async fn prewarm_saved_codex(app: &AppHandle) {
+    let Ok(mut config) = crate::tauri_extra_commands::load_ai_config(app) else {
+        return;
+    };
+    let promoted = promote_saved_codex_route(&mut config);
+    let source = config
+        .pointer("/routes/chat/source")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if source != "codex" {
+        return;
+    }
+    if promoted {
+        let _ = crate::tauri_extra_commands::save_ai_config(app, &config);
+    }
+    match codex_app_server::command(app, &json!({ "codexOperation": "status" })).await {
+        Ok(status) => eprintln!(
+            "[Codex][startup] prewarm connected={} promoted={}",
+            status
+                .get("connected")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            promoted
+        ),
+        Err(error) => eprintln!("[Codex][startup] prewarm failed: {error}"),
+    }
 }
 
 fn knowledge_hits(app: &AppHandle, query: &str, limit: usize) -> Vec<KnowledgeSearchHit> {
@@ -148,6 +223,14 @@ fn knowledge_hits(app: &AppHandle, query: &str, limit: usize) -> Vec<KnowledgeSe
 fn rag_enabled(payload: &Value) -> bool {
     ai_config(payload)
         .pointer("/routes/chat/enableRag")
+        .and_then(Value::as_bool)
+        .unwrap_or(true)
+}
+
+#[cfg(not(mobile))]
+fn tools_enabled(payload: &Value) -> bool {
+    ai_config(payload)
+        .pointer("/routes/chat/enableTools")
         .and_then(Value::as_bool)
         .unwrap_or(true)
 }
@@ -207,13 +290,23 @@ fn grounded_messages(
         )
     };
     let custom = configured_system_prompt(payload);
+    let tools = if tools_enabled(payload) {
+        format!(
+            "
+
+{}",
+            tool_contract()
+        )
+    } else {
+        String::new()
+    };
     let system = if custom.is_empty() {
-        format!("Tu es l’assistant ElephantNote. Réponds en français par défaut. {access_contract}")
+        format!("Tu es l’assistant ElephantNote. Réponds en français par défaut. {access_contract}{tools}")
     } else {
         format!(
             "{custom}
 
-Capacités ElephantNote : {access_contract}"
+Capacités ElephantNote : {access_contract}{tools}"
         )
     };
     let mut messages = vec![json!({ "role": "system", "content": system })];
@@ -238,6 +331,119 @@ fn citations_from_hits(hits: &[KnowledgeSearchHit]) -> Vec<Value> {
             })
         })
         .collect()
+}
+
+#[cfg(not(mobile))]
+fn tool_contract() -> &'static str {
+    r#"You have real ElephantNote tools. Never claim that you cannot search notes, create a note, update a note, add/reject a Wiki suggestion, generate a Wiki, or delete a Wiki. Read-only note context is already supplied when relevant. When the user explicitly requests an action, append exactly one machine-readable block after the human answer:
+<elephantnote_actions>[{"action":"search_notes","query":"...","limit":10}]</elephantnote_actions>
+Supported action names and fields:
+- search_notes: query, limit
+- create_note: relative_path, title, content
+- append_to_note: relative_path, content (omit expected_hash; ElephantNote adds the current hash)
+- replace_note: relative_path, content (omit expected_hash)
+- replace_note_range: relative_path, start_offset, end_offset, replacement (omit expected_hash)
+- add_wiki_suggestion: title, topic, source_paths
+- create_wiki: title, topic, source_paths
+- reject_wiki_suggestion: topic
+- delete_wiki: draft_id
+Do not invent successful execution. Mutating actions are shown to the user for approval and only execute after approval. Do not put the action block in Markdown fences."#
+}
+
+#[cfg(not(mobile))]
+fn action_block(answer: &str) -> (String, Vec<Value>) {
+    const START: &str = "<elephantnote_actions>";
+    const END: &str = "</elephantnote_actions>";
+    let Some(start) = answer.find(START) else {
+        return (answer.trim().to_string(), Vec::new());
+    };
+    let body_start = start + START.len();
+    let Some(relative_end) = answer[body_start..].find(END) else {
+        return (answer.trim().to_string(), Vec::new());
+    };
+    let end = body_start + relative_end;
+    let actions = serde_json::from_str::<Value>(answer[body_start..end].trim())
+        .ok()
+        .and_then(|value| match value {
+            Value::Array(values) => Some(values),
+            Value::Object(_) => Some(vec![value]),
+            _ => None,
+        })
+        .unwrap_or_default();
+    let mut visible = String::new();
+    visible.push_str(answer[..start].trim_end());
+    visible.push_str(answer[end + END.len()..].trim_start());
+    (visible.trim().to_string(), actions)
+}
+
+#[cfg(not(mobile))]
+fn enrich_write_guard(app: &AppHandle, value: &mut Value) -> R<()> {
+    let action = value.get("action").and_then(Value::as_str).unwrap_or("");
+    if !matches!(
+        action,
+        "append_to_note" | "replace_note" | "replace_note_range"
+    ) {
+        return Ok(());
+    }
+    if value
+        .get("expected_hash")
+        .and_then(Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        return Ok(());
+    }
+    let path = value
+        .get("relative_path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "A note action is missing relative_path.".to_string())?;
+    let root = Path::new(&crate::vault::config::get_active_vault(app)?.path).to_path_buf();
+    let store = KnowledgeStore::open(&root)?;
+    let hash = store.existing_hash(path)?.ok_or_else(|| {
+        format!("Cannot prepare note action because the note is not indexed: {path}")
+    })?;
+    value
+        .as_object_mut()
+        .ok_or_else(|| "Action payload must be an object.".to_string())?
+        .insert("expected_hash".into(), json!(hash));
+    Ok(())
+}
+
+#[cfg(not(mobile))]
+fn prepare_assistant_actions(app: &AppHandle, actions: Vec<Value>) -> (Vec<Value>, Vec<String>) {
+    let mut prepared = Vec::new();
+    let mut errors = Vec::new();
+    for mut value in actions.into_iter().take(8) {
+        let rationale = value
+            .get("rationale")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        if let Some(object) = value.as_object_mut() {
+            object.remove("rationale");
+        }
+        if let Err(error) = enrich_write_guard(app, &mut value) {
+            errors.push(error);
+            continue;
+        }
+        let action = match serde_json::from_value::<ChatKnowledgeAction>(value) {
+            Ok(action) => action,
+            Err(error) => {
+                errors.push(format!("Invalid ElephantNote action: {error}"));
+                continue;
+            }
+        };
+        match crate::knowledge_chat_actions::tauri_knowledge_chat_action_prepare(
+            app.clone(),
+            action,
+            rationale,
+        ) {
+            Ok(result) => match serde_json::to_value(result) {
+                Ok(value) => prepared.push(value),
+                Err(error) => errors.push(error.to_string()),
+            },
+            Err(error) => errors.push(error),
+        }
+    }
+    (prepared, errors)
 }
 
 #[cfg(not(mobile))]
@@ -343,11 +549,19 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
         let result =
             codex_app_server::chat_with_effort(&app, &model, &prompt, reasoning_effort.as_deref())
                 .await?;
+        let (answer, raw_actions) = if tools_enabled(&payload) {
+            action_block(&result.answer)
+        } else {
+            (result.answer.clone(), Vec::new())
+        };
+        let (actions, action_errors) = prepare_assistant_actions(&app, raw_actions);
         let citations = citations_from_hits(&hits);
         return Ok(json!({
-            "answer": result.answer,
+            "answer": answer,
             "sources": hits,
             "citations": citations,
+            "actions": actions,
+            "actionErrors": action_errors,
             "runtime": "codex-app-server",
             "provider": "codex",
             "model": result.model,

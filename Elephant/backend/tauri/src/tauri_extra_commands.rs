@@ -517,10 +517,14 @@ pub fn tauri_ai_config_get(app: AppHandle) -> R<Value> {
     load_ai_config(&app)
 }
 
+pub(crate) fn save_ai_config(app: &AppHandle, config: &Value) -> R<()> {
+    let path = provider_config_path(app)?;
+    write_json(path, config)
+}
+
 #[tauri::command]
 pub fn tauri_ai_config_set(app: AppHandle, config: Value) -> R<Value> {
-    let path = provider_config_path(&app)?;
-    write_json(path, &config)?;
+    save_ai_config(&app, &config)?;
     Ok(config)
 }
 

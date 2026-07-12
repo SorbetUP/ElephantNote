@@ -188,6 +188,23 @@
               </button>
             </section>
 
+            <section v-if="message.actions?.length" class="en-chat-actions">
+              <article v-for="action in message.actions" :key="action.proposal?.id" class="en-chat-action-card">
+                <div class="en-chat-action-copy">
+                  <strong>{{ actionLabel(action) }}</strong>
+                  <span>{{ actionSummary(action) }}</span>
+                  <small v-if="action.error">{{ action.error }}</small>
+                </div>
+                <div class="en-chat-action-controls">
+                  <span class="en-chat-action-status">{{ action.proposal?.status || 'proposed' }}</span>
+                  <template v-if="action.proposal?.status === 'proposed'">
+                    <button type="button" :disabled="action.busy" @click="approveAction(message, action)">Approuver</button>
+                    <button type="button" :disabled="action.busy" @click="rejectAction(message, action)">Refuser</button>
+                  </template>
+                </div>
+              </article>
+            </section>
+
             <div v-if="message.citations?.length" class="en-chat-citations">
               <button
                 v-for="(citation, index) in message.citations"
@@ -344,6 +361,73 @@ const scrollToBottom = () => {
   element.scrollTop = element.scrollHeight
 }
 
+const invoke = (command, payload = {}) => {
+  const fn = globalThis.window?.__TAURI__?.core?.invoke
+  if (typeof fn !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
+  return fn(command, payload)
+}
+
+const actionLabel = (entry) => {
+  const action = entry?.proposal?.action || {}
+  return ({
+    search_notes: 'Rechercher dans les notes',
+    create_note: 'Créer une note',
+    append_to_note: 'Ajouter à une note',
+    replace_note: 'Mettre à jour une note',
+    replace_note_range: 'Modifier un passage',
+    add_wiki_suggestion: 'Ajouter une proposition de Wiki',
+    create_wiki: 'Générer un Wiki',
+    reject_wiki_suggestion: 'Refuser une proposition de Wiki',
+    delete_wiki: 'Supprimer un Wiki'
+  })[action.action] || 'Action ElephantNote'
+}
+
+const actionSummary = (entry) => {
+  const preview = entry?.proposal?.preview || {}
+  if (preview.kind === 'search') return preview.query
+  if (preview.kind === 'create_wiki') return `${preview.title} · ${preview.source_paths?.length || 0} sources`
+  if (preview.kind === 'wiki_decision') return preview.topic
+  if (preview.kind === 'delete_wiki') return preview.draft_id
+  if (preview.kind === 'create_note' || preview.kind === 'modify_note') return preview.relative_path
+  return entry?.proposal?.rationale || ''
+}
+
+const persistActionPatch = (message, target, patch) => {
+  const actions = (message.actions || []).map((entry) => entry === target ? { ...entry, ...patch } : entry)
+  chatStore.updateMessage(message.id, { actions })
+}
+
+const refreshAfterAction = async() => {
+  window.dispatchEvent(new CustomEvent('elephantnote:knowledge-changed', { detail: { reason: 'chat-action' } }))
+  await searchStore.inspect().catch(() => {})
+}
+
+const approveAction = async(message, entry) => {
+  const id = entry?.proposal?.id
+  if (!id || entry.busy) return
+  persistActionPatch(message, entry, { busy: true, error: '' })
+  try {
+    await invoke('tauri_knowledge_chat_action_approve', { proposalId: id })
+    const execution = await invoke('tauri_knowledge_chat_action_execute', { proposalId: id })
+    persistActionPatch(message, entry, { busy: false, proposal: execution.proposal, execution })
+    await refreshAfterAction()
+  } catch (error) {
+    persistActionPatch(message, entry, { busy: false, error: error?.message || String(error) })
+  }
+}
+
+const rejectAction = async(message, entry) => {
+  const id = entry?.proposal?.id
+  if (!id || entry.busy) return
+  persistActionPatch(message, entry, { busy: true, error: '' })
+  try {
+    const proposal = await invoke('tauri_knowledge_chat_action_reject', { proposalId: id })
+    persistActionPatch(message, entry, { busy: false, proposal })
+  } catch (error) {
+    persistActionPatch(message, entry, { busy: false, error: error?.message || String(error) })
+  }
+}
+
 const openNote = (value, fallbackTitle = '') => {
   const notePath = typeof value === 'string' ? value : value?.path || value?.relativePath || ''
   if (!notePath) return
@@ -398,6 +482,8 @@ const send = async () => {
       content: result?.answer || 'I did not find matching local notes.',
       citations: result?.citations || result?.sources || [],
       wikiContext: result?.wikiContext || null,
+      actions: result?.actions || [],
+      actionErrors: result?.actionErrors || [],
       toolCalls
     })
   } catch (error) {
@@ -969,6 +1055,15 @@ onMounted(() => {
   flex-direction: column;
   gap: 6px;
 }
+
+.en-chat-actions { display: grid; gap: 8px; margin-top: 12px; }
+.en-chat-action-card { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid color-mix(in srgb, var(--en-primary) 38%, var(--en-border)); border-radius: 12px; background: color-mix(in srgb, var(--en-primary) 7%, var(--en-surface)); }
+.en-chat-action-copy { min-width: 0; flex: 1; display: grid; gap: 3px; }
+.en-chat-action-copy span, .en-chat-action-copy small { color: var(--en-muted); font-size: 12px; }
+.en-chat-action-copy small { color: #ef4444; }
+.en-chat-action-controls { display: flex; align-items: center; gap: 7px; }
+.en-chat-action-controls button { min-height: 30px; padding: 0 10px; border: 1px solid var(--en-border); border-radius: 8px; background: var(--en-surface); color: var(--en-text); }
+.en-chat-action-status { color: var(--en-muted); font-size: 11px; text-transform: capitalize; }
 
 .en-chat-citations {
   display: flex;

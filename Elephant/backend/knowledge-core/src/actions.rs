@@ -15,6 +15,18 @@ pub enum ChatKnowledgeAction {
         #[serde(default)]
         source_paths: Vec<String>,
     },
+    AddWikiSuggestion {
+        title: String,
+        topic: String,
+        #[serde(default)]
+        source_paths: Vec<String>,
+    },
+    RejectWikiSuggestion {
+        topic: String,
+    },
+    DeleteWiki {
+        draft_id: String,
+    },
     CreateNote {
         relative_path: String,
         title: String,
@@ -63,7 +75,14 @@ impl ChatKnowledgeAction {
     }
 
     pub fn requires_approval(&self) -> bool {
-        self.mutates_user_content() || matches!(self, Self::CreateWiki { .. })
+        self.mutates_user_content()
+            || matches!(
+                self,
+                Self::CreateWiki { .. }
+                    | Self::AddWikiSuggestion { .. }
+                    | Self::RejectWikiSuggestion { .. }
+                    | Self::DeleteWiki { .. }
+            )
     }
 
     pub fn validate(&self) -> ActionValidation {
@@ -81,6 +100,11 @@ impl ChatKnowledgeAction {
                 title,
                 topic,
                 source_paths,
+            }
+            | Self::AddWikiSuggestion {
+                title,
+                topic,
+                source_paths,
             } => {
                 if title.trim().is_empty() {
                     errors.push("Wiki title cannot be empty.".into());
@@ -90,6 +114,16 @@ impl ChatKnowledgeAction {
                 }
                 for path in source_paths {
                     validate_note_path(path, &mut errors);
+                }
+            }
+            Self::RejectWikiSuggestion { topic } => {
+                if topic.trim().is_empty() {
+                    errors.push("Wiki suggestion topic cannot be empty.".into());
+                }
+            }
+            Self::DeleteWiki { draft_id } => {
+                if draft_id.trim().is_empty() {
+                    errors.push("Wiki draft id cannot be empty.".into());
                 }
             }
             Self::CreateNote {

@@ -19,6 +19,18 @@ CREATE TABLE IF NOT EXISTS wiki_candidate_decisions (
 );
 CREATE INDEX IF NOT EXISTS wiki_candidate_decisions_decision_idx
   ON wiki_candidate_decisions(decision, updated_at DESC);
+CREATE TABLE IF NOT EXISTS wiki_saved_candidates (
+  topic TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  preview TEXT NOT NULL,
+  suggested_sections_json TEXT NOT NULL,
+  source_paths_json TEXT NOT NULL,
+  source_titles_json TEXT NOT NULL,
+  score INTEGER NOT NULL,
+  origin TEXT NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
 "#;
 
 #[derive(Debug, Clone, Serialize)]
@@ -118,8 +130,26 @@ fn clear_candidate_decision(store: &KnowledgeStore, topic: &str) -> Result<(), S
 
 fn plain_excerpt(markdown: &str) -> String {
     let mut output = String::new();
+    let mut frontmatter = false;
+    let mut first_nonempty = true;
     for line in markdown.lines() {
         let trimmed = line.trim();
+        if first_nonempty && trimmed.is_empty() {
+            continue;
+        }
+        if first_nonempty {
+            first_nonempty = false;
+            if trimmed == "---" {
+                frontmatter = true;
+                continue;
+            }
+        }
+        if frontmatter {
+            if trimmed == "---" {
+                frontmatter = false;
+            }
+            continue;
+        }
         if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("<!--") {
             continue;
         }
@@ -158,6 +188,93 @@ fn candidate_item(candidate: WikiCandidate) -> WikiLibraryItem {
         citations_count: 0,
         updated_at: 0,
     }
+}
+
+fn saved_candidate_items(store: &KnowledgeStore) -> Result<Vec<WikiLibraryItem>, String> {
+    let connection = open_library_connection(store)?;
+    let mut statement = connection
+        .prepare(
+            "SELECT topic, title, reason, preview, suggested_sections_json,
+                    source_paths_json, source_titles_json, score, origin, updated_at
+             FROM wiki_saved_candidates ORDER BY score DESC, updated_at DESC",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            let topic = row.get::<_, String>(0)?;
+            let title = row.get::<_, String>(1)?;
+            let reason = row.get::<_, String>(2)?;
+            let preview = row.get::<_, String>(3)?;
+            let sections =
+                serde_json::from_str::<Vec<String>>(&row.get::<_, String>(4)?).unwrap_or_default();
+            let paths =
+                serde_json::from_str::<Vec<String>>(&row.get::<_, String>(5)?).unwrap_or_default();
+            let titles =
+                serde_json::from_str::<Vec<String>>(&row.get::<_, String>(6)?).unwrap_or_default();
+            let score = row.get::<_, i64>(7)?.max(0) as usize;
+            let origin = row.get::<_, String>(8)?;
+            let updated_at = row.get::<_, i64>(9)?;
+            Ok(WikiLibraryItem {
+                id: candidate_id(&topic),
+                kind: "suggestion".into(),
+                status: origin,
+                title,
+                topic,
+                excerpt: preview.clone(),
+                reason,
+                preview,
+                suggested_sections: sections,
+                source_titles: titles,
+                path: None,
+                source_paths: paths,
+                score,
+                model_id: String::new(),
+                markdown: String::new(),
+                draft_id: None,
+                citations_count: 0,
+                updated_at,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn persist_saved_candidate(
+    store: &KnowledgeStore,
+    item: &WikiLibraryItem,
+    origin: &str,
+) -> Result<(), String> {
+    let connection = open_library_connection(store)?;
+    connection
+        .execute(
+            "INSERT INTO wiki_saved_candidates(topic, title, reason, preview, suggested_sections_json,
+                                                source_paths_json, source_titles_json, score, origin, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, unixepoch())
+             ON CONFLICT(topic) DO UPDATE SET
+               title=excluded.title,
+               reason=excluded.reason,
+               preview=excluded.preview,
+               suggested_sections_json=excluded.suggested_sections_json,
+               source_paths_json=excluded.source_paths_json,
+               source_titles_json=excluded.source_titles_json,
+               score=excluded.score,
+               origin=excluded.origin,
+               updated_at=unixepoch()",
+            params![
+                normalize_topic(&item.topic),
+                item.title,
+                item.reason,
+                item.preview,
+                serde_json::to_string(&item.suggested_sections).map_err(|error| error.to_string())?,
+                serde_json::to_string(&item.source_paths).map_err(|error| error.to_string())?,
+                serde_json::to_string(&item.source_titles).map_err(|error| error.to_string())?,
+                item.score as i64,
+                origin,
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 fn disk_markdown(root: &Path, draft: &WikiDraft) -> (Option<String>, String) {
@@ -246,6 +363,19 @@ fn citation_number(citation: &WikiCitation, fallback: usize) -> usize {
         .unwrap_or(fallback)
 }
 
+fn citation_display_label(citation: &WikiCitation) -> String {
+    let heading = citation.heading.trim();
+    let title = citation.document_title.trim();
+    let value = if !heading.is_empty() && !heading.eq_ignore_ascii_case(title) {
+        heading
+    } else if !title.is_empty() {
+        title
+    } else {
+        "Source"
+    };
+    value.chars().take(72).collect()
+}
+
 fn migrate_related_wikilinks(markdown: &str) -> String {
     let mut in_related_section = false;
     markdown
@@ -288,7 +418,11 @@ fn migrate_legacy_generated_markdown(draft: &WikiDraft, markdown: &str) -> Optio
         let trimmed = line.trim();
         trimmed.starts_with("- [[") && trimmed.ends_with("]]")
     });
-    if !has_legacy_citation && !has_legacy_related {
+    let has_numeric_citation = draft.citations.iter().enumerate().any(|(index, citation)| {
+        let number = citation_number(citation, index + 1);
+        markdown.contains(&format!("[{number}]({})", markdown_note_target(citation)))
+    });
+    if !has_legacy_citation && !has_legacy_related && !has_numeric_citation {
         return None;
     }
 
@@ -303,9 +437,15 @@ fn migrate_legacy_generated_markdown(draft: &WikiDraft, markdown: &str) -> Optio
     citations.sort_by_key(|(index, citation)| citation_number(citation, index + 1));
     for (index, citation) in &citations {
         let number = citation_number(citation, index + 1);
+        let target = markdown_note_target(citation);
+        let label = citation_display_label(citation);
         body = body.replace(
             &format!("[^{}]", citation.key),
-            &format!("[{number}]({})", markdown_note_target(citation)),
+            &format!("[{label}]({target})"),
+        );
+        body = body.replace(
+            &format!("[{number}]({target})"),
+            &format!("[{label}]({target})"),
         );
     }
 
@@ -313,7 +453,7 @@ fn migrate_legacy_generated_markdown(draft: &WikiDraft, markdown: &str) -> Optio
     for (index, citation) in citations {
         let number = citation_number(citation, index + 1);
         body.push_str(&format!(
-            "{number}. [{} — {}]({})\n",
+            "- [{} — {}]({})\n",
             citation.document_title,
             citation.heading,
             markdown_note_target(citation)
@@ -424,11 +564,21 @@ pub fn tauri_knowledge_wiki_library_list(
     let limit = limit.unwrap_or(500).clamp(1, 1_000);
     let rejected = rejected_topics(&store)?;
 
-    let mut suggestions = tauri_knowledge_wiki_candidates(app, Some(limit))?
+    let mut suggestions = saved_candidate_items(&store)?
         .into_iter()
         .filter(|candidate| !rejected.contains(&normalize_topic(&candidate.topic)))
-        .map(candidate_item)
         .collect::<Vec<_>>();
+    let mut seen_topics = suggestions
+        .iter()
+        .map(|candidate| normalize_topic(&candidate.topic))
+        .collect::<HashSet<_>>();
+    suggestions.extend(
+        tauri_knowledge_wiki_candidates(app, Some(limit))?
+            .into_iter()
+            .filter(|candidate| !rejected.contains(&normalize_topic(&candidate.topic)))
+            .filter(|candidate| seen_topics.insert(normalize_topic(&candidate.topic)))
+            .map(candidate_item),
+    );
     suggestions.sort_by(|left, right| {
         right
             .score
@@ -450,6 +600,87 @@ pub fn tauri_knowledge_wiki_library_list(
     suggestions.extend(wikis);
     suggestions.truncate(limit);
     Ok(suggestions)
+}
+
+#[tauri::command]
+pub fn tauri_knowledge_wiki_library_add_candidate(
+    app: AppHandle,
+    topic: String,
+    title: Option<String>,
+    source_paths: Option<Vec<String>>,
+) -> Result<WikiLibraryItem, String> {
+    let topic = topic.trim().to_string();
+    if topic.is_empty() {
+        return Err("Wiki suggestion topic cannot be empty.".into());
+    }
+    let root = active_vault_root(&app)?;
+    let store = active_store(&root)?;
+    clear_candidate_decision(&store, &topic)?;
+    let mut paths = source_paths.unwrap_or_default();
+    if paths.is_empty() {
+        paths = store
+            .search(&topic, 32)?
+            .into_iter()
+            .map(|hit| hit.relative_path)
+            .collect::<Vec<_>>();
+    }
+    paths.sort();
+    paths.dedup();
+    paths.truncate(24);
+    let source_titles = paths
+        .iter()
+        .map(|path| {
+            Path::new(path)
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or(path)
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+    let title = title
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| {
+            let mut characters = topic.chars();
+            characters
+                .next()
+                .map(|first| first.to_uppercase().collect::<String>() + characters.as_str())
+                .unwrap_or_else(|| "Wiki".into())
+        });
+    let preview = if paths.is_empty() {
+        format!("Sujet ajouté manuellement. ElephantNote recherchera les sources pertinentes lors de la génération de « {title} ».")
+    } else {
+        format!(
+            "Sujet ajouté manuellement avec {} note(s) déjà retrouvée(s).",
+            paths.len()
+        )
+    };
+    let item = WikiLibraryItem {
+        id: candidate_id(&topic),
+        kind: "suggestion".into(),
+        status: "manual".into(),
+        title,
+        topic,
+        excerpt: preview.clone(),
+        reason: "Proposition ajoutée explicitement par l’utilisateur.".into(),
+        preview,
+        suggested_sections: vec!["Vue d’ensemble".into(), "Concepts et références".into()],
+        source_titles,
+        path: None,
+        source_paths: paths,
+        score: 100_000,
+        model_id: String::new(),
+        markdown: String::new(),
+        draft_id: None,
+        citations_count: 0,
+        updated_at: unix_timestamp(),
+    };
+    persist_saved_candidate(&store, &item, "manual")?;
+    eprintln!(
+        "[knowledge] wiki-library:manual-candidate topic={} sources={}",
+        item.topic,
+        item.source_paths.len()
+    );
+    Ok(item)
 }
 
 #[tauri::command]
@@ -531,6 +762,13 @@ pub fn tauri_knowledge_wiki_library_delete(
         target.display()
     );
     Ok(())
+}
+
+fn unix_timestamp() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 #[cfg(test)]

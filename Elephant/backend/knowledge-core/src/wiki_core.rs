@@ -452,9 +452,8 @@ pub fn render_wiki(
                 .ok_or_else(|| format!("Missing source chunk while rendering: {chunk_id}"))?;
             let key = format!("source-{number}");
             markdown.push_str(&format!(
-                "{}. [{} — {}]({})
+                "- [{} — {}]({})
 ",
-                number,
                 source.document_title,
                 source.heading,
                 markdown_note_target(source)
@@ -531,6 +530,19 @@ fn markdown_note_target(source: &WikiSourceChunk) -> String {
     }
 }
 
+fn citation_label(source: &WikiSourceChunk) -> String {
+    let heading = source.heading.trim();
+    let title = source.document_title.trim();
+    let value = if !heading.is_empty() && !heading.eq_ignore_ascii_case(title) {
+        heading
+    } else if !title.is_empty() {
+        title
+    } else {
+        "Source"
+    };
+    value.chars().take(72).collect()
+}
+
 fn render_claims(
     markdown: &mut String,
     claims: &[WikiClaim],
@@ -545,7 +557,11 @@ fn render_claims(
                 .ok_or_else(|| format!("Unknown source chunk while rendering: {chunk_id}"))?;
             let next = citation_numbers.len() + 1;
             let number = *citation_numbers.entry(chunk_id.clone()).or_insert(next);
-            references.push(format!("[{number}]({})", markdown_note_target(source)));
+            references.push(format!(
+                "[{}]({})",
+                citation_label(source),
+                markdown_note_target(source)
+            ));
         }
         references.sort();
         references.dedup();

@@ -8,6 +8,7 @@ pub mod folder_domain;
 pub mod knowledge;
 pub mod knowledge_chat_actions;
 pub mod knowledge_relations;
+pub mod knowledge_wiki_discovery;
 pub mod knowledge_wiki_library;
 pub mod knowledge_wikis;
 #[cfg(not(mobile))]
@@ -102,6 +103,13 @@ pub fn run() {
                     eprintln!("[ElephantNote Sync] Failed to start Iroh runtime: {error}");
                 }
             });
+            #[cfg(not(mobile))]
+            {
+                let codex_handle = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    chat_runtime::prewarm_saved_codex(&codex_handle).await;
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -140,7 +148,9 @@ pub fn run() {
             knowledge_wikis::tauri_knowledge_wikis_list,
             knowledge_wikis::tauri_knowledge_wiki_accept,
             knowledge_wikis::tauri_knowledge_wiki_reject,
+            knowledge_wiki_discovery::tauri_knowledge_wiki_semantic_discover,
             knowledge_wiki_library::tauri_knowledge_wiki_library_list,
+            knowledge_wiki_library::tauri_knowledge_wiki_library_add_candidate,
             knowledge_wiki_library::tauri_knowledge_wiki_library_generate,
             knowledge_wiki_library::tauri_knowledge_wiki_library_reject,
             knowledge_wiki_library::tauri_knowledge_wiki_library_delete,

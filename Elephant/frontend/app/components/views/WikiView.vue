@@ -8,6 +8,26 @@
       </div>
 
       <div class="en-wiki-toolbar-actions">
+        <div class="en-wiki-topic-entry">
+          <input
+            v-model.trim="manualTopic"
+            type="text"
+            placeholder="Ajouter un sujet de Wiki…"
+            @keydown.enter.prevent="addManualTopic"
+          >
+          <button type="button" :disabled="!manualTopic || loading" @click="addManualTopic">
+            <Plus class="en-icon" /> Ajouter
+          </button>
+        </div>
+        <button
+          class="en-toolbar-button"
+          type="button"
+          :disabled="loading || discovering"
+          @click="discoverWithAi"
+        >
+          <Sparkles class="en-icon" />
+          {{ discovering ? 'Analyse sémantique…' : 'Proposer avec l’IA' }}
+        </button>
         <button
           class="en-toolbar-button"
           type="button"
@@ -212,6 +232,7 @@ import {
   List,
   LoaderCircle,
   MoreHorizontal,
+  Plus,
   RotateCw,
   Sparkles,
   Trash2,
@@ -225,6 +246,8 @@ const searchStore = useSearchStore()
 const entries = ref([])
 const loading = ref(false)
 const globalError = ref('')
+const manualTopic = ref('')
+const discovering = ref(false)
 const selectedSuggestionId = ref('')
 const openMenuId = ref('')
 const busyIds = ref(new Set())
@@ -248,6 +271,11 @@ const sortedEntries = computed(() => {
 })
 
 const normalizeError = (error) => error?.message || String(error || 'Erreur inconnue')
+const invoke = (command, payload = {}) => {
+  const fn = globalThis.window?.__TAURI__?.core?.invoke
+  if (typeof fn !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
+  return fn(command, payload)
+}
 const isBusy = (id) => busyIds.value.has(id)
 const entryError = (id) => errorsById.value[id] || ''
 
@@ -282,6 +310,39 @@ const refreshKnowledgeViews = async(reason) => {
     await searchStore.inspect()
   } catch {
     // The Wiki operation succeeded; a later Graph open can retry inspection.
+  }
+}
+
+
+const addManualTopic = async() => {
+  const topic = manualTopic.value.trim()
+  if (!topic || loading.value) return
+  loading.value = true
+  globalError.value = ''
+  try {
+    await invoke('tauri_knowledge_wiki_library_add_candidate', { topic, title: null, sourcePaths: null })
+    manualTopic.value = ''
+    await loadLibrary()
+    await refreshKnowledgeViews('wiki-manual-candidate')
+  } catch (error) {
+    globalError.value = normalizeError(error)
+  } finally {
+    loading.value = false
+  }
+}
+
+const discoverWithAi = async() => {
+  if (discovering.value || loading.value) return
+  discovering.value = true
+  globalError.value = ''
+  try {
+    await invoke('tauri_knowledge_wiki_semantic_discover', { limit: 12 })
+    await loadLibrary()
+    await refreshKnowledgeViews('wiki-semantic-discovery')
+  } catch (error) {
+    globalError.value = normalizeError(error)
+  } finally {
+    discovering.value = false
   }
 }
 
@@ -851,6 +912,10 @@ onBeforeUnmount(() => {
 @keyframes en-wiki-spin {
   to { transform: rotate(360deg); }
 }
+
+.en-wiki-topic-entry { display: flex; align-items: center; gap: 8px; min-width: min(360px, 34vw); }
+.en-wiki-topic-entry input { min-width: 0; flex: 1; height: 40px; padding: 0 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-surface); color: var(--en-text); }
+.en-wiki-topic-entry button { height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid var(--en-border); border-radius: 10px; background: var(--en-soft); color: var(--en-text); }
 
 @media (max-width: 900px) {
   .en-wiki-toolbar {

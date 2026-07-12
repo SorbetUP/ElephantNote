@@ -154,7 +154,7 @@
                     </button>
                   </div>
                   <div class="en-filter-row">
-                    <span class="en-filter-label">Orphelins</span>
+                    <span class="en-filter-label">Afficher les notes non classées</span>
                     <button
                       type="button"
                       class="en-switch"
@@ -499,6 +499,7 @@ const indexBuilding = ref(false)
 let renderer = null
 let graphInstance = null
 let labelCanvas = null
+let territoryCanvas = null
 let neighborsMap = new Map()
 
 let hoveredNodeRef = null
@@ -513,7 +514,7 @@ let hoverRaf = null
 let graphMountRaf = null
 
 const selectedNode = ref(null)
-const panelOpen = ref(true)
+const panelOpen = ref(false)
 const timelapseActive = ref(false)
 const timelapsePlaying = ref(false)
 const timelapseProgress = ref(0)
@@ -584,8 +585,25 @@ const semanticModel = computed(() => {
   })
 })
 
+const classifiedNodeIds = computed(() => {
+  const ids = new Set()
+  for (const node of semanticModel.value.nodes) {
+    if ((node.kind || node.type) === 'wiki') ids.add(node.id)
+  }
+  for (const edge of semanticModel.value.edges) {
+    if (edge.type === 'wiki-source' || edge.type === 'wiki-link' || edge.type === 'semantic' || edge.type === 'explicit-link') {
+      ids.add(edge.source)
+      ids.add(edge.target)
+    }
+  }
+  return ids
+})
+
 const filteredNodes = computed(() => {
-  const nodes = semanticModel.value.nodes
+  let nodes = semanticModel.value.nodes
+  if (!filterOrphans.value && classifiedNodeIds.value.size) {
+    nodes = nodes.filter((node) => classifiedNodeIds.value.has(node.id))
+  }
   const q = filterQuery.value.trim().toLowerCase()
   if (!q) return nodes
   return nodes.filter((n) => {
@@ -703,7 +721,7 @@ function buildGraph (data) {
     const connectivity = (edgeCounts.get(id) || 0) / maxEdges
     const clusterIdx = node.clusterIndex || 0
     const isWiki = node.kind === 'wiki'
-    const baseSize = 3 + connectivity * 6 + (node.kind === 'folder' ? 3 : 0) + (isWiki ? 5 : 0)
+    const baseSize = isWiki ? 5.5 : 2.5 + connectivity * 4 + (node.kind === 'folder' ? 2 : 0)
     graph.addNode(id, {
       x: node.x,
       y: node.y,
@@ -714,7 +732,9 @@ function buildGraph (data) {
       connectivity,
       clusterIndex: clusterIdx,
       tagIds: node.tags || [],
-      data: node
+      data: node,
+      isWiki,
+      classified: classifiedNodeIds.value.has(id)
     })
   }
 
@@ -763,6 +783,58 @@ function buildNeighbors (graph) {
   neighborsMap = neighbors
 }
 
+function drawTerritories (sigma, graph, container) {
+  if (!territoryCanvas) return
+  const width = container.clientWidth
+  const height = container.clientHeight
+  if (!width || !height) return
+  const ratio = window.devicePixelRatio || 1
+  territoryCanvas.width = width * ratio
+  territoryCanvas.height = height * ratio
+  territoryCanvas.style.width = `${width}px`
+  territoryCanvas.style.height = `${height}px`
+  const ctx = territoryCanvas.getContext('2d')
+  if (!ctx) return
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
+  ctx.clearRect(0, 0, width, height)
+
+  const wikiIds = graph.nodes().filter((id) => graph.getNodeAttribute(id, 'isWiki') === true)
+  for (const wikiId of wikiIds) {
+    const points = []
+    const wikiAttrs = graph.getNodeAttributes(wikiId)
+    points.push(sigma.graphToViewport({ x: wikiAttrs.x, y: wikiAttrs.y }))
+    graph.forEachEdge(wikiId, (_edge, attrs, source, target) => {
+      if (attrs.edgeType !== 'wiki-source') return
+      const other = source === wikiId ? target : source
+      if (!graph.hasNode(other) || graph.getNodeAttribute(other, 'hidden')) return
+      const node = graph.getNodeAttributes(other)
+      points.push(sigma.graphToViewport({ x: node.x, y: node.y }))
+    })
+    if (points.length < 2) continue
+    const center = points.reduce((output, point) => ({ x: output.x + point.x, y: output.y + point.y }), { x: 0, y: 0 })
+    center.x /= points.length
+    center.y /= points.length
+    const radius = Math.max(64, ...points.map((point) => Math.hypot(point.x - center.x, point.y - center.y))) + 34
+    const gradient = ctx.createRadialGradient(center.x, center.y, radius * 0.12, center.x, center.y, radius)
+    gradient.addColorStop(0, 'rgba(217,133,69,0.13)')
+    gradient.addColorStop(0.72, 'rgba(217,133,69,0.07)')
+    gradient.addColorStop(1, 'rgba(217,133,69,0.015)')
+    ctx.fillStyle = gradient
+    ctx.beginPath()
+    ctx.arc(center.x, center.y, radius, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(217,133,69,0.42)'
+    ctx.lineWidth = 1.5
+    ctx.setLineDash([7, 7])
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.fillStyle = 'rgba(235,176,122,0.9)'
+    ctx.font = '600 12px system-ui, -apple-system, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(wikiAttrs.fullLabel || wikiAttrs.label || 'Wiki', center.x, center.y - radius + 20)
+  }
+}
+
 function drawLabels (sigma, graph, container) {
   const width = container.clientWidth
   const height = container.clientHeight
@@ -804,7 +876,9 @@ function drawLabels (sigma, graph, container) {
       vy: pos.y,
       rsize,
       label: attrs.label || '',
-      fullLabel: attrs.fullLabel || attrs.label || ''
+      fullLabel: attrs.fullLabel || attrs.label || '',
+      isWiki: attrs.isWiki === true,
+      classified: attrs.classified === true
     })
   })
 
@@ -823,7 +897,8 @@ function drawLabels (sigma, graph, container) {
     const cameraRatio = sigma.getCamera().getState().ratio
     const effectiveThreshold = labelThreshold.value * Math.max(0.5, cameraRatio)
     if (!pinned && !showLabels.value) continue
-    if (!pinned && c.rsize < effectiveThreshold) continue
+    if (!pinned && !c.isWiki && !c.classified && c.rsize < effectiveThreshold * 1.8) continue
+    if (!pinned && !c.isWiki && c.rsize < effectiveThreshold) continue
 
     const fontSize = isSel ? 14 : isHov ? 13 : 12
     const fontWeight = isSel ? 700 : isHov ? 600 : 500
@@ -1025,6 +1100,13 @@ function mountSigma () {
   renderer = sigma
   updateGraphVisibility()
 
+  territoryCanvas = document.createElement('canvas')
+  territoryCanvas.style.position = 'absolute'
+  territoryCanvas.style.inset = '0'
+  territoryCanvas.style.pointerEvents = 'none'
+  territoryCanvas.style.zIndex = '0'
+  container.prepend(territoryCanvas)
+
   labelCanvas = document.createElement('canvas')
   labelCanvas.style.position = 'absolute'
   labelCanvas.style.inset = '0'
@@ -1034,6 +1116,7 @@ function mountSigma () {
 
   const drawLabelsBound = () => {
     if (renderer && graphInstance && containerRef.value) {
+      drawTerritories(renderer, graphInstance, containerRef.value)
       drawLabels(renderer, graphInstance, containerRef.value)
     }
   }
@@ -1108,6 +1191,10 @@ function destroySigma () {
   if (labelCanvas && labelCanvas.parentNode) {
     labelCanvas.remove()
     labelCanvas = null
+  }
+  if (territoryCanvas && territoryCanvas.parentNode) {
+    territoryCanvas.remove()
+    territoryCanvas = null
   }
   graphInstance = null
   neighborsMap = new Map()

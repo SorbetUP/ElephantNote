@@ -5,6 +5,28 @@ import OpenModelsView from './ui/OpenModelsView.vue'
 const ADDON_ID = 'elephant.open-models'
 const PROVIDER_ID = 'app-local'
 
+const enableOpenModelsRuntime = async () => {
+  const config = await elephantnoteClient.ai.getConfig()
+  const localAi = { ...(config?.localAi || {}) }
+  if (
+    localAi.enabled === true
+    && localAi.showModelLibraryInSidebar === true
+    && localAi.allowHuggingFaceDownloads === true
+    && localAi.allowLocalRuntimeAutostart === true
+  ) return
+
+  await elephantnoteClient.ai.setConfig({
+    ...config,
+    localAi: {
+      ...localAi,
+      enabled: true,
+      showModelLibraryInSidebar: true,
+      allowHuggingFaceDownloads: true,
+      allowLocalRuntimeAutostart: true
+    }
+  })
+}
+
 export const openModelsAddon = {
   manifest: {
     id: ADDON_ID,
@@ -19,7 +41,7 @@ export const openModelsAddon = {
     contributes: { views: true, aiProvider: true }
   },
 
-  activate(ctx) {
+  async activate(ctx) {
     ctx.addView({
       id: `${ADDON_ID}.models`,
       title: 'Models',
@@ -43,6 +65,8 @@ export const openModelsAddon = {
         return Array.isArray(result?.models) ? result.models : []
       }
     })
+
+    await enableOpenModelsRuntime()
   },
 
   async deactivate() {

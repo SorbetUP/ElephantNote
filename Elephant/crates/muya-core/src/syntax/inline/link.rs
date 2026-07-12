@@ -69,7 +69,7 @@ mod tests {
     assert_eq!(
       parse_link("[OpenAI](https://openai.com \"Home\")"),
       Some(LinkMatch {
-        consumed: 39,
+        consumed: 35,
         label: "OpenAI",
         destination: "https://openai.com",
         title: Some("Home"),

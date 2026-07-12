@@ -55,26 +55,33 @@ describe('ElephantNote settings redesign', () => {
     expect(builtins).toContain("load: () => import('./sync')")
   })
 
-  it('uses the compact persisted Community Addons checkbox', () => {
+  it('uses the compact persisted Community Addons checkbox as a real boundary', () => {
     const source = settings()
     const panel = addonsPanel()
     const logic = addonLogic()
+    const row = read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
 
     expect(source).toContain('id="en-addons-title-actions"')
     expect(panel).toContain('<Teleport defer to="#en-addons-title-actions">')
     expect(panel).toContain('role="checkbox"')
     expect(panel).toContain(':aria-checked="communityAddonsEnabled"')
     expect(panel).toContain('@click="toggleCommunityAddons"')
+    expect(panel).toContain(':locked="isCommunityLocked(addon)"')
     expect(logic).toContain('setCommunityAddonsEnabled(true)')
     expect(logic).toContain('setCommunityAddonsEnabled(false)')
+    expect(logic).toContain('if (communityAddonsEnabled.value)')
+    expect(logic).toContain("addon?.manifest?.source === 'external' && !communityAddonsEnabled.value")
+    expect(row).toContain('locked: { type: Boolean, default: false }')
+    expect(row).toContain('busy || locked || addon.status')
     expect(logic).not.toContain("showMessage('Community addons enabled.')")
     expect(logic).not.toContain("showMessage('Community addons disabled.')")
   })
 
-  it('hides the empty installed section and keeps real install/remove actions', () => {
+  it('hides the empty installed section, internal pack paths and keeps real install/remove actions', () => {
     const panel = addonsPanel()
     const logic = addonLogic()
     const row = read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
+    const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AddonPacksSettings.vue')
 
     expect(panel).toContain('v-if="filteredInstalledAddons.length || query"')
     expect(panel).not.toContain('No optional addon is installed.')
@@ -83,8 +90,11 @@ describe('ElephantNote settings redesign', () => {
     expect(logic).toContain('uninstallBuiltin(addon.manifest.id)')
     expect(logic).toContain('installExternalAddon(selected)')
     expect(logic).toContain('setAddonEnabled(addon.manifest.id')
+    expect(logic).not.toContain('result?.path ?')
     expect(row).toContain('confirmingUninstall')
     expect(row).toContain('role="switch"')
+    expect(packs).not.toContain('{{ pack.path }}')
+    expect(packs).not.toContain('pack.description || pack.path')
   })
 
   it('keeps Theme and the complete vertical icon bar collapsible without redundant copy', () => {

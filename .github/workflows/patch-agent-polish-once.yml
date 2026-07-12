@@ -195,20 +195,15 @@ fn to_relaxed_fts_query(query: &str) -> String {
           text = text.replace("const radius = protectedRadius + 18 + (stableLayoutHash(node.id) % 46)", "const radius = protectedRadius + 420 + (stableLayoutHash(node.id) % 680)")
           write(path, text)
 
-          # 4) Make the graph default show all nodes again, even after a wiki-focused session.
+          # 4) Tune graph defaults so context remains readable.
           path = Path('Elephant/frontend/app/components/views/AtomicGraphView.vue')
           text = path.read_text(encoding='utf-8')
-          text = text.replace("const filterOrphans = ref(true)", "const filterOrphans = ref(true)")
           text = text.replace("const labelThreshold = ref(7)", "const labelThreshold = ref(9)")
           text = text.replace("const nodeSizeScale = ref(1)", "const nodeSizeScale = ref(0.9)")
           text = text.replace("const forceLinkDistance = ref(95)", "const forceLinkDistance = ref(120)")
           write(path, text)
 
-          # 5) Remove temporary text/workflow files so the PR stays source-only.
-          for temp in [
-              Path('.github/wiki-embedding-error.txt'),
-              Path('.github/workflows/patch-agent-polish-once.yml'),
-          ]:
+          for temp in [Path('.github/wiki-embedding-error.txt'), Path('.github/workflows/patch-agent-polish-once.yml')]:
               if temp.exists():
                   temp.unlink()
           PY
@@ -216,7 +211,6 @@ fn to_relaxed_fts_query(query: &str) -> String {
         run: |
           cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
           pnpm eslint Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js tests/app/unit/chatAgentSurface.spec.js tests/app/unit/wikiGraphSurface.spec.js
-          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml storage::tests::search_relaxes_natural_language_queries -- --nocapture || true
           pnpm test -- --run tests/app/unit/chatAgentSurface.spec.js tests/app/unit/wikiGraphSurface.spec.js
       - name: Commit patch
         run: |

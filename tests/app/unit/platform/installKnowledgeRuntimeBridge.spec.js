@@ -37,7 +37,7 @@ afterEach(() => {
 })
 
 describe('knowledge search bridge initialization', () => {
-  it('contains no implicit rebuild path in native init or chat helpers', () => {
+  it('contains no implicit rebuild path or hidden graph cap in either renderer bridge', () => {
     const nativeBridge = repositoryFile('Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js')
     const runtimeBridge = repositoryFile('Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js')
     const domainClients = repositoryFile('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
@@ -45,6 +45,9 @@ describe('knowledge search bridge initialization', () => {
 
     expect(nativeBridge).not.toContain("initVault: () => invoke(target, 'tauri_knowledge_rebuild')")
     expect(nativeBridge).toContain("initVault: async(payload = '')")
+    expect(nativeBridge).not.toContain('slice(0, 240)')
+    expect(nativeBridge).not.toContain('hiddenNodeCount: Math.max')
+    expect(nativeBridge).toContain('rendererLimited: false')
     expect(runtimeBridge).not.toContain('MAX_GRAPH_NODES')
     expect(runtimeBridge).not.toContain('graph:renderer-window')
     expect(runtimeBridge).toContain("graphMode: 'full'")

@@ -37,6 +37,7 @@ describe('declarative addon workspace views', () => {
     const calendarAddon = read('Elephant/frontend/src/renderer/src/addons/builtin/calendar.js')
     const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
     const sidebar = read('Elephant/frontend/app/components/navigation/SidebarNav.vue')
+    const rail = read('Elephant/frontend/app/components/navigation/IconRail.vue')
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
 
     expect(taskHost).toContain('contribution.getState')
@@ -50,7 +51,8 @@ describe('declarative addon workspace views', () => {
     expect(calendarHost).toContain('props.view?.contribution?.dispatch')
     expect(calendarHost).not.toContain('v-html')
     expect(main).toContain('<addon-workspace-router')
-    expect(sidebar).toContain("addonsStore.getContributions('views')")
+    expect(sidebar).not.toContain("addonsStore.getContributions('views')")
+    expect(rail).toContain("addonsStore.getContributions('views')")
     expect(shell).toContain('@open-addon-view="openAddonView"')
   })
 

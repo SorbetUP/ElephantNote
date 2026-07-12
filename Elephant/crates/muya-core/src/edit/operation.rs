@@ -33,6 +33,11 @@ pub enum Operation {
     index: usize,
     subtree: DetachedSubtree,
   },
+  MoveNode {
+    node: NodeId,
+    new_parent: NodeId,
+    new_index: usize,
+  },
   RemoveNode {
     node: NodeId,
   },
@@ -60,6 +65,11 @@ impl Operation {
         index,
         subtree,
       } => apply_insert_subtree(document, *parent, *index, subtree),
+      Self::MoveNode {
+        node,
+        new_parent,
+        new_index,
+      } => apply_move_node(document, *node, *new_parent, *new_index),
       Self::RemoveNode { node } => apply_remove_node(document, *node),
       Self::SetBlockKind { node, kind } => apply_set_block_kind(document, *node, kind),
     }
@@ -153,6 +163,52 @@ fn apply_insert_subtree(
   }
   document.invalidate_source_chain(parent);
   Ok(Operation::RemoveNode { node: subtree.root })
+}
+
+fn apply_move_node(
+  document: &mut Document,
+  node_id: NodeId,
+  new_parent: NodeId,
+  new_index: usize,
+) -> Result<Operation, EditError> {
+  if node_id == document.root || node_id == new_parent {
+    return Err(EditError::UnsupportedStructure(node_id));
+  }
+  let node = document
+    .node(node_id)
+    .ok_or(EditError::NodeNotFound(node_id))?;
+  let old_parent = node.parent.ok_or(EditError::UnsupportedStructure(node_id))?;
+  let old_index = document
+    .child_index(old_parent, node_id)
+    .ok_or(EditError::UnsupportedStructure(node_id))?;
+
+  let (subtree, removed_parent, removed_index) = document
+    .remove_subtree(node_id)
+    .ok_or(EditError::UnsupportedStructure(node_id))?;
+  debug_assert_eq!((removed_parent, removed_index), (old_parent, old_index));
+
+  let target = document
+    .node(new_parent)
+    .ok_or(EditError::NodeNotFound(new_parent))?;
+  if new_index > target.children.len() {
+    return Err(EditError::InvalidChildIndex {
+      parent: new_parent,
+      index: new_index,
+    });
+  }
+  if !document.insert_detached_subtree(new_parent, new_index, subtree) {
+    return Err(EditError::UnsupportedStructure(node_id));
+  }
+
+  document.invalidate_source_chain(old_parent);
+  if new_parent != old_parent {
+    document.invalidate_source_chain(new_parent);
+  }
+  Ok(Operation::MoveNode {
+    node: node_id,
+    new_parent: old_parent,
+    new_index: old_index,
+  })
 }
 
 fn apply_remove_node(
@@ -304,6 +360,38 @@ mod tests {
     restore.apply(&mut document).unwrap();
     assert_eq!(document.node(strong).unwrap().children, vec![text]);
     assert_eq!(document.node(text).unwrap().parent, Some(strong));
+  }
+
+  #[test]
+  fn moves_nested_subtrees_and_restores_their_position() {
+    let mut document = Document::new();
+    let first = document.allocate(NodeKind::Block(BlockKind::Paragraph), None);
+    let second = document.allocate(NodeKind::Block(BlockKind::Paragraph), None);
+    document.append_child(document.root, first);
+    document.append_child(document.root, second);
+    let strong = document.allocate(NodeKind::Inline(InlineKind::Strong), None);
+    document.append_child(first, strong);
+    let text = document.allocate(
+      NodeKind::Inline(InlineKind::Text {
+        value: "bold".to_string(),
+      }),
+      None,
+    );
+    document.append_child(strong, text);
+
+    let inverse = Operation::MoveNode {
+      node: strong,
+      new_parent: second,
+      new_index: 0,
+    }
+    .apply(&mut document)
+    .unwrap();
+    assert_eq!(document.node(strong).unwrap().parent, Some(second));
+    assert_eq!(document.node(text).unwrap().parent, Some(strong));
+
+    inverse.apply(&mut document).unwrap();
+    assert_eq!(document.node(strong).unwrap().parent, Some(first));
+    assert_eq!(document.node(first).unwrap().children, vec![strong]);
   }
 
   #[test]

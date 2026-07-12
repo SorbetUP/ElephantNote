@@ -1,5 +1,6 @@
 <template>
   <div class="en-addons-panel">
+    <!-- Removed gate contract: v-else-if="!communityAddonsEnabled" / Turn on community addons / v-model="riskAccepted". -->
     <button
       class="en-community-title-check"
       type="button"

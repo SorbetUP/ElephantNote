@@ -41,7 +41,7 @@ jobs:
               )
               compile(script, 'wiki-embedding-implementation', 'exec')
               exec(script, {'__name__': '__main__'})
-          except Exception:
+          except BaseException:
               Path('.github/wiki-embedding-direct-error.txt').write_text(traceback.format_exc())
               raise
           PY

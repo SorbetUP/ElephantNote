@@ -1,0 +1,698 @@
+name: Fix agent search approval and embeddings once
+
+on:
+  push:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/fix-agent-search-approval-embeddings-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-links-graph-integration
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply source fixes
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"missing patch anchor in {path}: {old[:160]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          # Approval and execution are one idempotent backend boundary.
+          replace_once(
+              'Elephant/backend/tauri/src/knowledge_chat_actions.rs',
+              '''    let root = active_vault_root(&app)?;
+    let proposal = {
+        let store = active_store(&root)?;
+        store
+            .chat_action_proposal(&proposal_id)?
+            .ok_or_else(|| format!("Unknown chat action proposal: {proposal_id}"))?
+    };
+
+    let is_wiki = matches!(
+''',
+              '''    let root = active_vault_root(&app)?;
+    let initial = {
+        let store = active_store(&root)?;
+        store
+            .chat_action_proposal(&proposal_id)?
+            .ok_or_else(|| format!("Unknown chat action proposal: {proposal_id}"))?
+    };
+    let proposal = match initial.status.clone() {
+        ChatActionStatus::Proposed => {
+            eprintln!("[Knowledge][ChatAction] approve-and-execute id={proposal_id}");
+            active_store(&root)?
+                .transition_chat_action(&proposal_id, ChatActionStatus::Approved)?
+        }
+        ChatActionStatus::Approved => initial,
+        ChatActionStatus::Executed => {
+            let result = initial.result.clone().unwrap_or(Value::Null);
+            return Ok(ChatActionExecution {
+                proposal: initial,
+                result,
+            });
+        }
+        ChatActionStatus::Rejected => {
+            return Err("Rejected chat actions cannot be executed.".into());
+        }
+        ChatActionStatus::Failed => {
+            return Err(initial
+                .error
+                .clone()
+                .unwrap_or_else(|| "Failed chat action cannot be retried without a new proposal.".into()));
+        }
+    };
+
+    let is_wiki = matches!(
+'''
+          )
+
+          # Frontend uses the atomic command rather than a race-prone approve then execute pair.
+          replace_once(
+              'Elephant/frontend/app/components/views/ChatView.vue',
+              '''    await invokeProposal('tauri_knowledge_chat_action_approve', id)
+    const execution = await invokeProposal('tauri_knowledge_chat_action_execute', id)
+''',
+              '''    const execution = await invokeProposal('tauri_knowledge_chat_action_execute', id)
+'''
+          )
+
+          # A search tool call always receives a second model pass, even when no hits were returned.
+          replace_once(
+              'Elephant/backend/tauri/src/chat_runtime.rs',
+              '''        let search_results = actions
+            .iter()
+            .filter_map(|entry| entry.pointer("/execution/result"))
+            .filter(|value| value.is_array())
+            .cloned()
+            .collect::<Vec<_>>();
+        if !search_results.is_empty() {
+            if let Some(stream_id) = stream_id.as_deref() {
+                let _ = app.emit(
+                    "elephantnote://chat-stream",
+                    json!({ "streamId": stream_id, "type": "reset", "phase": "tool-results" }),
+                );
+            }
+            let tool_context =
+                serde_json::to_string_pretty(&search_results).map_err(|error| error.to_string())?;
+            let followup_prompt = format!(
+                "{prompt}\n\nThe ElephantNote search tool returned the following real indexed-note results:\n{tool_context}\n\nAnswer the user's request using these results. Cite note titles naturally. Do not emit another elephantnote_actions block."
+            );
+            answer = codex_app_server::chat_with_effort_streaming(
+                &app,
+                &model,
+                &followup_prompt,
+                reasoning_effort.as_deref(),
+                stream_id.as_deref(),
+            )
+            .await?
+            .answer;
+        }
+''',
+              '''        let search_requested = actions.iter().any(|entry| {
+            entry
+                .pointer("/proposal/action/action")
+                .and_then(Value::as_str)
+                == Some("search_notes")
+        });
+        let search_results = actions
+            .iter()
+            .filter_map(|entry| entry.pointer("/execution/result"))
+            .filter(|value| value.is_array())
+            .cloned()
+            .collect::<Vec<_>>();
+        if search_requested {
+            if let Some(stream_id) = stream_id.as_deref() {
+                let _ = app.emit(
+                    "elephantnote://chat-stream",
+                    json!({ "streamId": stream_id, "type": "reset", "phase": "tool-results" }),
+                );
+            }
+            let tool_context = if search_results.is_empty() {
+                "[]".to_string()
+            } else {
+                serde_json::to_string_pretty(&search_results)
+                    .map_err(|error| error.to_string())?
+            };
+            let result_instruction = if search_results.is_empty() {
+                "The indexed search returned no matching note. Say that no matching indexed note was found, without claiming that ElephantNote has no search access."
+            } else {
+                "Answer the user's request from these real results and cite note titles naturally."
+            };
+            let followup_prompt = format!(
+                "{prompt}\n\nThe ElephantNote search tool returned these real indexed-note results:\n{tool_context}\n\n{result_instruction} Do not emit another elephantnote_actions block."
+            );
+            answer = codex_app_server::chat_with_effort_streaming(
+                &app,
+                &model,
+                &followup_prompt,
+                reasoning_effort.as_deref(),
+                stream_id.as_deref(),
+            )
+            .await?
+            .answer;
+        }
+'''
+          )
+
+          # FTS search keeps strict ranking first, then falls back to a relaxed OR query.
+          replace_once(
+              'Elephant/backend/knowledge-core/src/storage.rs',
+              '''    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<KnowledgeSearchHit>, String> {
+        let fts_query = to_fts_query(query);
+        if fts_query.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT relative_path, title, heading, chunk_id,
+                        snippet(chunk_search, 4, '', '', ' … ', 32),
+                        bm25(chunk_search),
+                        c.start_offset, c.end_offset
+                 FROM chunk_search
+                 JOIN chunks c ON c.id=chunk_search.chunk_id
+                 WHERE chunk_search MATCH ?1
+                 ORDER BY bm25(chunk_search)
+                 LIMIT ?2",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![fts_query, limit.clamp(1, 100) as i64], |row| {
+                let raw_score: f64 = row.get(5)?;
+                Ok(KnowledgeSearchHit {
+                    relative_path: row.get(0)?,
+                    title: row.get(1)?,
+                    heading: row.get(2)?,
+                    chunk_id: row.get(3)?,
+                    excerpt: row.get(4)?,
+                    score: -raw_score,
+                    start_offset: row.get::<_, i64>(6)? as usize,
+                    end_offset: row.get::<_, i64>(7)? as usize,
+                })
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+''',
+              '''    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<KnowledgeSearchHit>, String> {
+        let limit = limit.clamp(1, 100);
+        let strict_query = to_fts_query(query);
+        if strict_query.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut output = self.search_fts(&strict_query, limit)?;
+        if output.len() < limit {
+            let relaxed_query = to_relaxed_fts_query(query);
+            if !relaxed_query.is_empty() && relaxed_query != strict_query {
+                let mut seen = output
+                    .iter()
+                    .map(|hit| hit.chunk_id.clone())
+                    .collect::<HashSet<_>>();
+                for hit in self.search_fts(&relaxed_query, limit)? {
+                    if seen.insert(hit.chunk_id.clone()) {
+                        output.push(hit);
+                    }
+                    if output.len() >= limit {
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(output)
+    }
+
+    fn search_fts(&self, fts_query: &str, limit: usize) -> Result<Vec<KnowledgeSearchHit>, String> {
+        let mut statement = self
+            .conn
+            .prepare(
+                "SELECT relative_path, title, heading, chunk_id,
+                        snippet(chunk_search, 4, '', '', ' … ', 32),
+                        bm25(chunk_search),
+                        c.start_offset, c.end_offset
+                 FROM chunk_search
+                 JOIN chunks c ON c.id=chunk_search.chunk_id
+                 WHERE chunk_search MATCH ?1
+                 ORDER BY bm25(chunk_search)
+                 LIMIT ?2",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map(params![fts_query, limit as i64], |row| {
+                let raw_score: f64 = row.get(5)?;
+                Ok(KnowledgeSearchHit {
+                    relative_path: row.get(0)?,
+                    title: row.get(1)?,
+                    heading: row.get(2)?,
+                    chunk_id: row.get(3)?,
+                    excerpt: row.get(4)?,
+                    score: -raw_score,
+                    start_offset: row.get::<_, i64>(6)? as usize,
+                    end_offset: row.get::<_, i64>(7)? as usize,
+                })
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+'''
+          )
+
+          replace_once(
+              'Elephant/backend/knowledge-core/src/storage.rs',
+              '''fn to_fts_query(query: &str) -> String {
+    query
+        .split_whitespace()
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(|token| format!("\"{}\"*", token.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+''',
+              '''fn normalized_search_tokens(query: &str) -> Vec<String> {
+    query
+        .split(|character: char| !character.is_alphanumeric())
+        .map(|token| token.trim().to_lowercase())
+        .filter(|token| token.chars().count() >= 2)
+        .collect()
+}
+
+fn to_fts_query(query: &str) -> String {
+    normalized_search_tokens(query)
+        .into_iter()
+        .map(|token| format!("\"{}\"*", token.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn to_relaxed_fts_query(query: &str) -> String {
+    const STOP_WORDS: &[&str] = &[
+        "afin", "alors", "avec", "dans", "des", "est", "faire", "les", "mais", "mes",
+        "mon", "pour", "que", "quel", "quelle", "quels", "quelles", "sur", "une", "un",
+        "the", "and", "for", "from", "into", "with", "this", "that",
+    ];
+    let mut tokens = normalized_search_tokens(query)
+        .into_iter()
+        .filter(|token| token.chars().count() >= 3)
+        .filter(|token| !STOP_WORDS.contains(&token.as_str()))
+        .collect::<Vec<_>>();
+    tokens.sort();
+    tokens.dedup();
+    tokens
+        .into_iter()
+        .map(|token| format!("\"{}\"*", token.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" OR ")
+}
+'''
+          )
+
+          replace_once(
+              'Elephant/backend/knowledge-core/src/storage.rs',
+              '''    #[test]
+    fn prune_removes_missing_documents_and_search_rows() {
+        let mut store = KnowledgeStore::open_in_memory().unwrap();
+        store
+            .upsert_document(&analyze_markdown("a.md", "# A\nalpha", 1))
+            .unwrap();
+        store
+            .upsert_document(&analyze_markdown("b.md", "# B\nbeta", 1))
+            .unwrap();
+        let present = HashSet::from(["a.md".to_string()]);
+        assert_eq!(store.prune_documents(&present).unwrap(), 1);
+        assert_eq!(store.status().unwrap().documents, 1);
+        assert!(store.search("beta", 10).unwrap().is_empty());
+    }
+''',
+              '''    #[test]
+    fn prune_removes_missing_documents_and_search_rows() {
+        let mut store = KnowledgeStore::open_in_memory().unwrap();
+        store
+            .upsert_document(&analyze_markdown("a.md", "# A\nalpha", 1))
+            .unwrap();
+        store
+            .upsert_document(&analyze_markdown("b.md", "# B\nbeta", 1))
+            .unwrap();
+        let present = HashSet::from(["a.md".to_string()]);
+        assert_eq!(store.prune_documents(&present).unwrap(), 1);
+        assert_eq!(store.status().unwrap().documents, 1);
+        assert!(store.search("beta", 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn natural_language_search_relaxes_stopword_heavy_queries() {
+        let mut store = KnowledgeStore::open_in_memory().unwrap();
+        store
+            .upsert_document(&analyze_markdown(
+                "cadeau.md",
+                "# Cadeau pour se faire pardonner\n\nUne idée de présent après une dispute.",
+                1,
+            ))
+            .unwrap();
+        let hits = store
+            .search("chercher un cadeau afin de demander pardon", 10)
+            .unwrap();
+        assert_eq!(hits.first().map(|hit| hit.relative_path.as_str()), Some("cadeau.md"));
+    }
+'''
+          )
+
+          # Expose real embedding similarities and make the Wiki territory layout react to them.
+          replace_once(
+              'Elephant/frontend/app/components/views/semanticGraphViewHelpers.js',
+              '''  'wiki-source',
+  'wiki-link'
+])
+const WIKI_LAYOUT_EDGE_TYPES = new Set(['wiki-source', 'wiki-link'])
+''',
+              '''  'wiki-source',
+  'wiki-link',
+  'wiki-semantic'
+])
+const WIKI_LAYOUT_EDGE_TYPES = new Set(['wiki-source', 'wiki-link', 'wiki-semantic'])
+'''
+          )
+
+          helper = Path('Elephant/frontend/app/components/views/semanticGraphViewHelpers.js')
+          helper_text = helper.read_text()
+          start = helper_text.index('const applyWikiKnowledgeLayout = ')
+          end = helper_text.index('\n\nexport const selectSemanticGraphSource', start)
+          replacement = '''const applyWikiKnowledgeLayout = ({ nodes = [], edges = [], width = 1800, height = 1200 } = {}) => {
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const wikiNodes = nodes.filter((node) => (node.kind || node.type) === 'wiki')
+  if (!wikiNodes.length) return nodes
+
+  const sourceIdsByWiki = new Map(wikiNodes.map((node) => [node.id, []]))
+  const boundIds = new Set(wikiNodes.map((node) => node.id))
+  for (const edge of edges) {
+    if (edge.type !== 'wiki-source') continue
+    const sourceNode = byId.get(edge.source)
+    const targetNode = byId.get(edge.target)
+    const wikiId = (sourceNode?.kind || sourceNode?.type) === 'wiki'
+      ? edge.source
+      : (targetNode?.kind || targetNode?.type) === 'wiki' ? edge.target : ''
+    const noteId = wikiId === edge.source ? edge.target : edge.source
+    if (!wikiId || !byId.has(noteId)) continue
+    sourceIdsByWiki.get(wikiId)?.push(noteId)
+    boundIds.add(noteId)
+  }
+
+  const positions = new Map(nodes.map((node) => [node.id, { x: node.x, y: node.y }]))
+  if (wikiNodes.length === 1) positions.set(wikiNodes[0].id, { x: width / 2, y: height / 2 })
+  const proposed = new Map()
+
+  for (const wiki of wikiNodes.sort((left, right) => String(left.id).localeCompare(String(right.id)))) {
+    const center = positions.get(wiki.id) || { x: width / 2, y: height / 2 }
+    const sourceIds = [...new Set(sourceIdsByWiki.get(wiki.id) || [])]
+      .sort((left, right) => String(byId.get(left)?.title || left).localeCompare(String(byId.get(right)?.title || right)))
+    const sourceSet = new Set(sourceIds)
+    const local = new Map()
+    const targetRadius = Math.max(84, 62 + Math.sqrt(Math.max(1, sourceIds.length)) * 12)
+    sourceIds.forEach((id, index) => {
+      const angleOffset = ((stableLayoutHash(wiki.id) % 360) / 180) * Math.PI
+      const angle = angleOffset + (Math.PI * 2 * index) / Math.max(1, sourceIds.length)
+      local.set(id, { x: center.x + Math.cos(angle) * targetRadius, y: center.y + Math.sin(angle) * targetRadius })
+    })
+    const semanticEdges = edges.filter((edge) =>
+      edge.type === 'wiki-semantic' && sourceSet.has(edge.source) && sourceSet.has(edge.target)
+    )
+
+    for (let iteration = 0; iteration < 72; iteration += 1) {
+      const forces = new Map(sourceIds.map((id) => [id, { x: 0, y: 0 }]))
+      for (const id of sourceIds) {
+        const point = local.get(id)
+        const dx = point.x - center.x
+        const dy = point.y - center.y
+        const distance = Math.max(1, Math.hypot(dx, dy))
+        const radial = (targetRadius - distance) * 0.055
+        forces.get(id).x += (dx / distance) * radial
+        forces.get(id).y += (dy / distance) * radial
+      }
+      for (let leftIndex = 0; leftIndex < sourceIds.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < sourceIds.length; rightIndex += 1) {
+          const leftId = sourceIds[leftIndex]
+          const rightId = sourceIds[rightIndex]
+          const left = local.get(leftId)
+          const right = local.get(rightId)
+          let dx = left.x - right.x
+          let dy = left.y - right.y
+          let distance = Math.hypot(dx, dy)
+          if (distance < 0.5) {
+            const angle = ((stableLayoutHash(`${leftId}:${rightId}`) % 360) / 180) * Math.PI
+            dx = Math.cos(angle)
+            dy = Math.sin(angle)
+            distance = 1
+          }
+          const repulsion = 2100 / (distance * distance + 80)
+          forces.get(leftId).x += (dx / distance) * repulsion
+          forces.get(leftId).y += (dy / distance) * repulsion
+          forces.get(rightId).x -= (dx / distance) * repulsion
+          forces.get(rightId).y -= (dy / distance) * repulsion
+        }
+      }
+      for (const edge of semanticEdges) {
+        const source = local.get(edge.source)
+        const target = local.get(edge.target)
+        if (!source || !target) continue
+        const dx = target.x - source.x
+        const dy = target.y - source.y
+        const distance = Math.max(1, Math.hypot(dx, dy))
+        const score = Math.max(0, Math.min(1, Number(edge.weight) || 0))
+        const desired = 30 + (1 - score) * 66
+        const attraction = (distance - desired) * (0.018 + score * 0.04)
+        forces.get(edge.source).x += (dx / distance) * attraction
+        forces.get(edge.source).y += (dy / distance) * attraction
+        forces.get(edge.target).x -= (dx / distance) * attraction
+        forces.get(edge.target).y -= (dy / distance) * attraction
+      }
+      const damping = 1 - iteration / 110
+      for (const id of sourceIds) {
+        const point = local.get(id)
+        const force = forces.get(id)
+        const stepX = Math.max(-7, Math.min(7, force.x * damping))
+        const stepY = Math.max(-7, Math.min(7, force.y * damping))
+        local.set(id, { x: point.x + stepX, y: point.y + stepY })
+      }
+    }
+
+    for (const id of sourceIds) {
+      if (!proposed.has(id)) proposed.set(id, [])
+      proposed.get(id).push(local.get(id))
+    }
+    const protectedRadius = targetRadius + 74
+    for (const node of nodes) {
+      if (boundIds.has(node.id)) continue
+      const point = positions.get(node.id)
+      if (!point) continue
+      const dx = point.x - center.x
+      const dy = point.y - center.y
+      const distance = Math.hypot(dx, dy)
+      if (distance >= protectedRadius) continue
+      const angle = distance > 1
+        ? Math.atan2(dy, dx)
+        : ((stableLayoutHash(node.id) % 360) / 180) * Math.PI
+      const radius = protectedRadius + 24 + (stableLayoutHash(node.id) % 52)
+      positions.set(node.id, { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius })
+    }
+  }
+
+  for (const [id, targets] of proposed.entries()) {
+    const point = targets.reduce((output, target) => ({ x: output.x + target.x, y: output.y + target.y }), { x: 0, y: 0 })
+    positions.set(id, { x: point.x / targets.length, y: point.y / targets.length })
+  }
+  return nodes.map((node) => ({ ...node, ...(positions.get(node.id) || {}) }))
+}'''
+          helper.write_text(helper_text[:start] + replacement + helper_text[end:])
+
+          # Rebuild local Wiki-source embeddings after generation, without making Wiki creation depend on the route.
+          replace_once(
+              'Elephant/backend/tauri/src/knowledge_wiki_library.rs',
+              '''    let accepted = tauri_knowledge_wiki_accept(app, generated.draft.id)?;
+    eprintln!(
+        "[knowledge] wiki-library:ready draft={} path=.elephantnote/wiki/{}.md",
+        accepted.id, accepted.slug
+    );
+    Ok(draft_item(&root, accepted))
+''',
+              '''    let accepted = tauri_knowledge_wiki_accept(app.clone(), generated.draft.id)?;
+    match crate::knowledge_embeddings::tauri_knowledge_embeddings_rebuild(app, Some(true)).await {
+        Ok(report) => eprintln!(
+            "[knowledge] wiki-library:embeddings-ready model={} updated={} dimensions={}",
+            report.model_id, report.updated, report.dimensions
+        ),
+        Err(error) => eprintln!(
+            "[knowledge] wiki-library:embeddings-skipped reason={error}"
+        ),
+    }
+    eprintln!(
+        "[knowledge] wiki-library:ready draft={} path=.elephantnote/wiki/{}.md",
+        accepted.id, accepted.slug
+    );
+    Ok(draft_item(&root, accepted))
+'''
+          )
+
+          # Keep the complete graph visible and readable at far zoom levels.
+          replace_once(
+              'Elephant/frontend/app/components/views/AtomicGraphView.vue',
+              '''  filterOrphans.value = false
+''',
+              '''  filterOrphans.value = true
+'''
+          )
+          replace_once(
+              'Elephant/frontend/app/components/views/AtomicGraphView.vue',
+              '''        if (!active) {
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value }
+        }
+        if (node === sel) {
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value * (1 + 0.45 * selectAnimRef), zIndex: 3 }
+        }
+        if (node === hov) {
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value * (1 + 0.35 * hoverAnimRef), zIndex: 2 }
+        }
+''',
+              '''        const cameraRatio = renderer?.getCamera().getState().ratio || 1
+        const zoomBoost = Math.min(2.35, Math.max(1, Math.sqrt(cameraRatio)))
+        if (!active) {
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value * zoomBoost }
+        }
+        if (node === sel) {
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value * zoomBoost * (1 + 0.45 * selectAnimRef), zIndex: 3 }
+        }
+        if (node === hov) {
+          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value * zoomBoost * (1 + 0.35 * hoverAnimRef), zIndex: 2 }
+        }
+'''
+          )
+          replace_once(
+              'Elephant/frontend/app/components/views/AtomicGraphView.vue',
+              '''          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value * 1.12, zIndex: 1 }
+''',
+              '''          return { ...attrs, size: (attrs.size || 4) * nodeSizeScale.value * zoomBoost * 1.12, zIndex: 1 }
+'''
+          )
+          replace_once(
+              'Elephant/frontend/app/components/views/AtomicGraphView.vue',
+              '''          color: dimHex(attrs.color, bgDimRgb, dim * 0.88),
+          size: (attrs.size || 4) * nodeSizeScale.value * (1 - 0.5 * dim)
+''',
+              '''          color: dimHex(attrs.color, bgDimRgb, dim * 0.58),
+          size: (attrs.size || 4) * nodeSizeScale.value * zoomBoost * (1 - 0.18 * dim)
+'''
+          )
+          replace_once(
+              'Elephant/frontend/app/components/views/AtomicGraphView.vue',
+              '''  const hasEmbeddingEdges = graph.edges().some((edge) => graph.getEdgeAttribute(edge, 'edgeType') === 'wiki-semantic')
+  if (hasEmbeddingEdges) setTimeout(() => runForceSimulation(1200), 0)
+''',
+              '''  // Embedding-aware positions are computed deterministically before Sigma mounts.
+  // Do not run an O(n²) whole-vault simulation merely because a Wiki has semantic edges.
+'''
+          )
+
+          # Functional graph regression: semantic edges remain visible and influence local geometry.
+          replace_once(
+              'tests/app/unit/wikiGraphSurface.spec.js',
+              '''  it('places Wiki sources close to their Wiki and ignores stale saved positions for linked nodes', () => {
+''',
+              '''  it('keeps embedding links visible and places strongly related Wiki sources closer together', () => {
+    const semanticGraph = {
+      nodes: [
+        { id: 'wiki:semantic', kind: 'wiki', title: 'Semantic Wiki' },
+        { id: 'Notes/A.md', kind: 'note', title: 'Alpha' },
+        { id: 'Notes/B.md', kind: 'note', title: 'Beta' },
+        { id: 'Notes/C.md', kind: 'note', title: 'Gamma' }
+      ],
+      edges: [
+        { source: 'wiki:semantic', target: 'Notes/A.md', type: 'wiki-source', weight: 1 },
+        { source: 'wiki:semantic', target: 'Notes/B.md', type: 'wiki-source', weight: 1 },
+        { source: 'wiki:semantic', target: 'Notes/C.md', type: 'wiki-source', weight: 1 },
+        { source: 'Notes/A.md', target: 'Notes/B.md', type: 'wiki-semantic', weight: 0.96 }
+      ]
+    }
+    const surface = buildSemanticGraphSurface({ graph: semanticGraph })
+    expect(surface.edges.map((edge) => edge.type)).toContain('wiki-semantic')
+    const model = buildSemanticViewModel({ graph: semanticGraph, width: 1200, height: 800 })
+    const byId = new Map(model.nodes.map((node) => [node.id, node]))
+    const distance = (left, right) => Math.hypot(left.x - right.x, left.y - right.y)
+    expect(distance(byId.get('Notes/A.md'), byId.get('Notes/B.md')))
+      .toBeLessThan(distance(byId.get('Notes/A.md'), byId.get('Notes/C.md')))
+  })
+
+  it('places Wiki sources close to their Wiki and ignores stale saved positions for linked nodes', () => {
+'''
+          )
+
+          # Static integration assertions for the atomic approval boundary and full-graph defaults.
+          Path('tests/app/unit/wikiAgentRuntime.spec.js').write_text('''import fs from 'node:fs'\nimport { describe, expect, it } from 'vitest'\n\nconst read = (path) => fs.readFileSync(path, 'utf8')\n\ndescribe('Wiki agent runtime integration', () => {\n  it('uses atomic approval execution and keeps auto mode request-scoped', () => {\n    const chat = read('Elephant/frontend/app/components/views/ChatView.vue')\n    const client = read('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')\n    expect(chat).toContain("tauri_knowledge_chat_action_execute")\n    expect(chat).not.toContain("await invokeProposal('tauri_knowledge_chat_action_approve', id)")\n    expect(chat).toContain('autoApproveTools: autoApproveTools.value')\n    expect(client).toContain('...payload')\n  })\n\n  it('keeps all graph nodes visible and supports embedding edges', () => {\n    const graph = read('Elephant/frontend/app/components/views/AtomicGraphView.vue')\n    const helpers = read('Elephant/frontend/app/components/views/semanticGraphViewHelpers.js')\n    expect(graph).toContain('const filterOrphans = ref(true)')\n    expect(graph).toContain('filterOrphans.value = true')\n    expect(helpers).toContain("'wiki-semantic'")\n  })\n})\n''')
+          PY
+
+      - name: Format Rust
+        run: |
+          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+
+      - name: Test knowledge core
+        run: cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --nocapture
+
+      - name: Check Tauri backend
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features --message-format short
+
+      - name: Test graph and agent regressions
+        run: pnpm exec vitest run tests/app/unit/wikiGraphSurface.spec.js tests/app/unit/wikiAgentRuntime.spec.js tests/app/unit/internalNoteLinks.spec.js
+
+      - name: Lint touched frontend files
+        run: pnpm exec eslint Elephant/frontend/app/components/views/ChatView.vue Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/services/elephantnoteClient/domainClients.js tests/app/unit/wikiGraphSurface.spec.js tests/app/unit/wikiAgentRuntime.spec.js
+
+      - name: Build Tauri web frontend
+        run: pnpm tauri:web:build
+
+      - name: Commit validated source and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "ElephantNote CI"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/fix-agent-search-approval-embeddings-once.yml
+          git add Elephant tests
+          git commit -m "Fix agent actions search and embedding Wiki territories"
+          git push origin HEAD:assistant/wiki-links-graph-integration

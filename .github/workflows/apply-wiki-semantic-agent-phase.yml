@@ -1,21 +1,22 @@
 name: Apply semantic Wiki and agent phase
 
 on:
-  push:
+  pull_request:
     branches:
-      - assistant/wiki-links-graph-integration
+      - feature/wiki-knowledge-continuation
+    types: [opened, synchronize]
 
 permissions:
   contents: write
 
 jobs:
   patch-and-validate:
-    if: github.actor != 'github-actions[bot]' || !contains(github.event.head_commit.message, 'Implement semantic Wiki discovery and agent actions')
+    if: github.head_ref == 'assistant/wiki-links-graph-integration'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: assistant/wiki-links-graph-integration
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -37,7 +38,7 @@ jobs:
             echo "Product patch already present."
           else
             git commit -m "Implement semantic Wiki discovery and agent actions"
-            git push origin HEAD:assistant/wiki-links-graph-integration
+            git push origin HEAD:${{ github.head_ref }}
           fi
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile

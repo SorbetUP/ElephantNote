@@ -1,0 +1,43 @@
+name: Fix Wiki graph node identities once
+
+on:
+  push:
+    branches:
+      - assistant/wiki-links-graph-integration
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    if: github.event.head_commit.message != 'Fix Wiki graph identities and navigation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-links-graph-integration
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Apply graph identity patch
+        run: |
+          python3 .github/scripts/fix_wiki_graph_node_ids.py
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate focused frontend changes
+        run: |
+          Elephant/node_modules/.bin/vitest run tests/app/unit/wikiGraphSurface.spec.js
+          Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/views/semanticGraphViewHelpers.js Elephant/frontend/app/components/views/GraphView.vue tests/app/unit/wikiGraphSurface.spec.js
+          pnpm tauri:web:build
+      - name: Commit implementation
+        run: |
+          git config user.name "ElephantNote Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add Elephant/frontend/app/components/views/semanticGraphViewHelpers.js \
+            Elephant/frontend/app/components/views/GraphView.vue \
+            tests/app/unit/wikiGraphSurface.spec.js
+          git commit -m "Fix Wiki graph identities and navigation"
+          git push origin HEAD:assistant/wiki-links-graph-integration

@@ -21,6 +21,7 @@ import { restorePortableWindowState, savePortableWindowState } from './platform/
 import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
 import { installAddonSystem } from './addons'
+import { installAddonPermissionConsentGuard } from './addons/permissionConsentGuard'
 import { appDataDir } from '@tauri-apps/api/path'
 
 import ElementPlus from 'element-plus'
@@ -142,6 +143,7 @@ const mountRendererApp = async(runtime, windowType) => {
       error: (message, payload) => pushDiagnosticLog('error', message, payload)
     }
   })
+  installAddonPermissionConsentGuard(addonManager)
   await ensureCoreExcalidraw(addonManager)
   app.mount('#app')
 

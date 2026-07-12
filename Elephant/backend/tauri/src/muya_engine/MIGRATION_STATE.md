@@ -32,7 +32,21 @@ Inline parsing and serialization currently cover:
 
 The parser builds structural list, item, row and cell nodes rather than flattening those constructions into strings. Inline nodes are recursive in normal text containers, while fenced code is kept literal.
 
-This executable slice has Rust unit and round-trip tests, but full JavaScript-vs-Rust characterization is still required before runtime activation or JavaScript deletion.
+## Executable editing foundation
+
+`muya-core` now also contains:
+
+- logical DOM-independent selections expressed in UTF-16 offsets;
+- `InsertText` and `DeleteBackward` commands for text nodes;
+- validation against offsets inside surrogate pairs;
+- invertible UTF-16 text replacement operations;
+- atomic transactions applied on a cloned document before commit;
+- document revision increments;
+- bounded transaction-based undo and redo history.
+
+This is still a narrow text-editing slice. It does not yet support non-collapsed selection replacement, paragraph splitting and joining, formatting, list behavior, table commands, IME transaction grouping or frontend view patches.
+
+The executable slices have Rust unit and round-trip tests, but full JavaScript-vs-Rust characterization is still required before runtime activation or JavaScript deletion.
 
 ## Ported atomic parity modules
 

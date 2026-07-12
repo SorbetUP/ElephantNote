@@ -9,7 +9,6 @@ import { installTauriRuntimeBridge } from './platform/tauriRuntimeBridge'
 import { ensureRendererPathFacade } from './platform/rendererPathFacade'
 import { installTauriFileUtilsPathGuards } from './platform/tauriFileUtilsPathGuards'
 import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
-import { installExecutableCodeBlocks } from './platform/executableCodeBlocks'
 import { installTauriSearchRuntimeGuards } from './platform/tauriSearchRuntimeGuards'
 import { installTauriSearchConceptFallback } from './platform/tauriSearchConceptFallback'
 import { installPiProviderBridge } from './platform/piProviderInterface'
@@ -17,8 +16,6 @@ import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBrid
 import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
 import { installSlashMenuDiagnostics } from './platform/slashMenuDiagnostics'
 import { installWritingCommandBridge } from './platform/writingCommandBridge'
-import { installExcalidrawMarkdownCleanup } from './platform/excalidrawMarkdownCleanup'
-import { installExcalidrawImageRuntimeFixes } from './platform/excalidrawImageRuntimeFixes'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
 import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
@@ -115,7 +112,6 @@ installTauriRuntimeBridge()
 ensureRendererPathFacade()
 installTauriFileUtilsPathGuards()
 installTauriElephantNoteBridge()
-installExecutableCodeBlocks()
 installTauriSearchRuntimeGuards()
 installTauriSearchConceptFallback()
 installPiProviderBridge()
@@ -193,8 +189,6 @@ const mountRendererApp = (runtime, windowType) => {
 
   installGraphRuntimeFixes()
   installStoreDiagnostics()
-  installExcalidrawMarkdownCleanup()
-  installExcalidrawImageRuntimeFixes()
 }
 
 const startRendererApp = async() => {

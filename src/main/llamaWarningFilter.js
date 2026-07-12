@@ -5,7 +5,7 @@ const BENIGN_LLAMA_WARNING_PATTERNS = Object.freeze([
 
 const warningText = (value) => {
   if (value instanceof Error) return `${value.name}: ${value.message}`
-  if (Buffer.isBuffer(value)) return value.toString('utf8')
+  if (globalThis.Buffer?.isBuffer?.(value)) return value.toString('utf8')
   return String(value ?? '')
 }
 

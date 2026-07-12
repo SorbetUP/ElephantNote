@@ -88,40 +88,54 @@ const clearFallback = (container) => {
   container.removeAttribute('data-addon-content-owner')
   container.removeAttribute('data-addon-content-type')
   container.removeAttribute('data-addon-content-presentation')
+  container.removeAttribute('data-addon-content-installed')
   container.querySelector?.(`:scope > .${BADGE_CLASS}`)?.remove()
   for (const img of container.querySelectorAll?.('img') || []) restoreImage(img)
 }
 
-const isCurrentFallback = (container, descriptor) => (
+const fallbackPresentation = (descriptor, installed) => installed
+  ? descriptor.disabledPresentation
+  : 'placeholder'
+
+const isCurrentFallback = (container, descriptor, installed) => (
   container?.classList?.contains(FALLBACK_CLASS) &&
   container.dataset.addonContentOwner === descriptor.addonId &&
   container.dataset.addonContentType === descriptor.id &&
-  container.dataset.addonContentPresentation === descriptor.disabledPresentation
+  container.dataset.addonContentPresentation === fallbackPresentation(descriptor, installed) &&
+  container.dataset.addonContentInstalled === String(installed)
 )
 
-const applyFallback = (img, descriptor) => {
+const applyFallback = (img, descriptor, installed) => {
   const container = contentContainer(img)
   if (!container) return
-  if (isCurrentFallback(container, descriptor)) {
+  if (isCurrentFallback(container, descriptor, installed)) {
     for (const control of container.querySelectorAll('.en-excalidraw-edit-button')) control.remove()
     return
   }
 
   clearFallback(container)
+  const presentation = fallbackPresentation(descriptor, installed)
   container.classList.add(FALLBACK_CLASS)
   container.dataset.addonContentOwner = descriptor.addonId
   container.dataset.addonContentType = descriptor.id
-  container.dataset.addonContentPresentation = descriptor.disabledPresentation
+  container.dataset.addonContentPresentation = presentation
+  container.dataset.addonContentInstalled = String(installed)
   if (!img.hasAttribute(ORIGINAL_TITLE_ATTR)) img.setAttribute(ORIGINAL_TITLE_ATTR, img.getAttribute('title') || '')
-  img.setAttribute('title', `${descriptor.disabledLabel} — enable ${descriptor.addonName} to edit`)
 
-  if (descriptor.disabledPresentation === 'hidden') img.setAttribute('aria-hidden', 'true')
+  const title = installed
+    ? `${descriptor.disabledLabel} — enable ${descriptor.addonName} to edit`
+    : 'Optional content unavailable — install the matching addon to view or edit it'
+  img.setAttribute('title', title)
+
+  if (presentation === 'hidden') img.setAttribute('aria-hidden', 'true')
   else img.removeAttribute('aria-hidden')
 
   const badge = document.createElement('span')
   badge.className = BADGE_CLASS
   badge.setAttribute('contenteditable', 'false')
-  badge.textContent = `${descriptor.disabledLabel} · ${descriptor.addonName} disabled`
+  badge.textContent = installed
+    ? `${descriptor.disabledLabel} · ${descriptor.addonName} disabled`
+    : 'Optional content unavailable'
   container.appendChild(badge)
 
   for (const control of container.querySelectorAll('.en-excalidraw-edit-button')) control.remove()
@@ -161,9 +175,9 @@ export const installAddonContentFallbackRuntime = (manager, target = globalThis)
         if (container?.classList?.contains(FALLBACK_CLASS)) clearFallback(container)
         continue
       }
-      const enabled = manager.get?.(descriptor.addonId)?.enabled === true
-      if (enabled) clearFallback(container)
-      else applyFallback(img, descriptor)
+      const addon = manager.get?.(descriptor.addonId)
+      if (addon?.enabled === true) clearFallback(container)
+      else applyFallback(img, descriptor, Boolean(addon))
     }
   }
 

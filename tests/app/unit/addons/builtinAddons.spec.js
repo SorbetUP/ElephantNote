@@ -4,7 +4,7 @@ import { addonPacksAddon, builtinAddons } from '@/addons/builtin'
 
 const OPTIONAL_EDITOR_ADDONS = ['elephant.code-execution', 'elephant.excalidraw']
 
-describe('builtin addons', () => {
+ describe('builtin addons', () => {
   it('exports only the cleaned first-party catalogue', () => {
     expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
       'elephant.addon-packs',
@@ -15,7 +15,8 @@ describe('builtin addons', () => {
       'elephant.ai',
       'elephant.sync',
       'elephant.code-execution',
-      'elephant.excalidraw'
+      'elephant.excalidraw',
+      'elephant.recently-edited'
     ])
     expect(builtinAddons).toContain(addonPacksAddon)
     expect(builtinAddons.map((addon) => addon.manifest.id)).not.toContain('elephant.addon-inspector')
@@ -54,5 +55,18 @@ describe('builtin addons', () => {
       expect(addon.manifest.removable).toBe(true)
       expect(typeof addon.activate).toBe('function')
     }
+  })
+
+  it('moves Recently edited into an optional sidebar layout contribution', async () => {
+    const addon = builtinAddons.find((entry) => entry.manifest.id === 'elephant.recently-edited')
+    const manager = new ElephantAddonManager()
+    manager.register(addon)
+    expect(manager.getContributions(ADDON_EXTENSION_POINTS.layoutZones)).toEqual([])
+    await manager.enable(addon.manifest.id)
+    expect(manager.getContributions(ADDON_EXTENSION_POINTS.layoutZones))
+      .toEqual([expect.objectContaining({
+        addonId: 'elephant.recently-edited',
+        contribution: expect.objectContaining({ zone: 'sidebar.after-tree' })
+      })])
   })
 })

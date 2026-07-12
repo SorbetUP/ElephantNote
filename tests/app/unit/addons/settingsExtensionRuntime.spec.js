@@ -200,6 +200,51 @@ describe('addon settings contribution runtime', () => {
     runtime.dispose()
   })
 
+  it('keeps a root addon settings page mounted while a nested addon slot appears', async () => {
+    const content = mountSettingsPage('ai', '')
+    const manager = new ElephantAddonManager()
+    manager.host = { list: () => [] }
+    const rootRender = vi.fn((container) => {
+      const slot = document.createElement('div')
+      slot.setAttribute('data-elephant-addon-settings-slot', 'ai.providers.after-external')
+      container.append(slot)
+    })
+    const nestedRender = vi.fn((container) => {
+      container.textContent = 'Codex account'
+    })
+
+    manager.register({
+      manifest: { id: 'com.example.ai', name: 'AI', version: '1.0.0' },
+      activate(context) {
+        context.addSettingsSection({ id: 'com.example.ai.settings', section: 'ai', chrome: false, render: rootRender })
+      }
+    })
+    manager.register({
+      manifest: { id: 'com.example.codex-nested', name: 'Codex', version: '1.0.0' },
+      activate(context) {
+        context.addSettingsSection({
+          id: 'com.example.codex-nested.settings',
+          section: 'ai',
+          slot: 'ai.providers.after-external',
+          chrome: false,
+          render: nestedRender
+        })
+      }
+    })
+
+    const runtime = installSettingsContributionRuntime(manager)
+    await manager.enable('com.example.ai')
+    await manager.enable('com.example.codex-nested')
+    await flush()
+    await flush()
+    await flush()
+
+    expect(rootRender).toHaveBeenCalledTimes(1)
+    expect(nestedRender).toHaveBeenCalledTimes(1)
+    expect(content.querySelectorAll('[data-elephant-addon-settings-host]')).toHaveLength(2)
+    runtime.dispose()
+  })
+
   it('moves contributions when the active settings category changes', async () => {
     const content = mountSettingsPage('addons')
     const manager = new ElephantAddonManager()

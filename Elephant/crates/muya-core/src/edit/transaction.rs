@@ -1,5 +1,6 @@
 use crate::model::Document;
 use crate::selection::Selection;
+use crate::view::ViewPatch;
 
 use super::{EditError, Operation};
 
@@ -27,6 +28,14 @@ impl Transaction {
       selection_before: self.selection_after,
       selection_after: self.selection_before,
     })
+  }
+
+  pub fn view_patches(&self) -> Vec<ViewPatch> {
+    self
+      .operations
+      .iter()
+      .map(ViewPatch::from_operation)
+      .collect()
   }
 }
 
@@ -76,5 +85,33 @@ mod tests {
       &document.node(node).unwrap().kind,
       NodeKind::Inline(InlineKind::Text { value }) if value == "abc"
     ));
+  }
+
+  #[test]
+  fn exposes_ordered_logical_view_patches() {
+    let point = SelectionPoint {
+      node: crate::model::NodeId(4),
+      offset_utf16: 0,
+    };
+    let transaction = Transaction {
+      operations: vec![Operation::ReplaceText {
+        node: point.node,
+        range: Utf16Range::new(0, 0),
+        inserted: "x".to_string(),
+      }],
+      selection_before: Selection::collapsed(point),
+      selection_after: Selection::collapsed(SelectionPoint {
+        node: point.node,
+        offset_utf16: 1,
+      }),
+    };
+    assert_eq!(
+      transaction.view_patches(),
+      vec![ViewPatch::ReplaceText {
+        node: point.node,
+        range: Utf16Range::new(0, 0),
+        inserted: "x".to_string(),
+      }]
+    );
   }
 }

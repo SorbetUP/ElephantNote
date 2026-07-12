@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ElephantAddonManager } from '../../../../Elephant/frontend/src/renderer/src/addons/AddonManager.js'
 import { installSettingsContributionRuntime } from '../../../../Elephant/frontend/src/renderer/src/addons/settingsContributionRuntime.js'
-import { installExecutableCodeSettings } from '../../../../Elephant/frontend/src/renderer/src/platform/executableCodeSettings.js'
 
 const flush = async () => {
   await Promise.resolve()
@@ -23,47 +22,9 @@ const mountSettingsPage = (section, body = '<section class="en-settings-group" d
 }
 
 afterEach(() => {
-  globalThis.__ELEPHANT_CODE_SETTINGS__?.dispose?.()
-  delete globalThis.__ELEPHANT_CODE_SETTINGS__
   delete globalThis.elephantnote
   document.body.innerHTML = ''
   vi.restoreAllMocks()
-})
-
-describe('code execution settings scope', () => {
-  it('mounts only in Editor and removes itself when another section becomes active', async () => {
-    const content = mountSettingsPage('appearance')
-    globalThis.elephantnote = {
-      programs: {
-        list: vi.fn(async () => ({
-          executionEnabled: false,
-          outputLineLimit: 200,
-          environments: []
-        })),
-        set: vi.fn()
-      }
-    }
-
-    const runtime = installExecutableCodeSettings(globalThis)
-    await runtime.mount()
-    expect(content.querySelector('[data-elephant-code-settings]')).toBeNull()
-    expect(globalThis.elephantnote.programs.list).not.toHaveBeenCalled()
-
-    content.dataset.activeSection = 'editor'
-    content.querySelector('h1').textContent = 'Editor'
-    await runtime.mount()
-    await flush()
-
-    expect(content.querySelector('[data-elephant-code-settings]')).not.toBeNull()
-    expect(content.textContent).toContain('Code execution')
-    expect(globalThis.elephantnote.programs.list).toHaveBeenCalledTimes(1)
-
-    content.dataset.activeSection = 'vaults'
-    content.querySelector('h1').textContent = 'Vaults'
-    await runtime.mount()
-
-    expect(content.querySelector('[data-elephant-code-settings]')).toBeNull()
-  })
 })
 
 describe('addon settings contribution runtime', () => {

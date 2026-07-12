@@ -4,7 +4,7 @@ import selection from '../selection'
 import { adjustArrowOffset } from './arrowOffset'
 import { docArrowHandler } from './arrowImageNavigation'
 import { handleMathArrowRight } from './arrowMathNavigation'
-import { navigateTableRows } from './arrowTableNavigation'
+import { navigateTableRows } from './arrowTableRowHandler'
 
 export { docArrowHandler }
 

@@ -4,6 +4,7 @@ use crate::selection::{Selection, SelectionPoint};
 use super::operation::utf16_to_byte;
 use super::{EditError, Operation, Transaction, Utf16Range};
 
+#[derive(Clone, Copy)]
 enum SplitDestination {
   Document {
     parent: NodeId,
@@ -175,7 +176,7 @@ pub(crate) fn build_insert_paragraph(
 
 fn take_id(next_id: &mut u64) -> NodeId {
   let id = NodeId(*next_id);
-  *next_id = next_id.saturating_add(1);
+  *next_id = (*next_id).saturating_add(1);
   id
 }
 

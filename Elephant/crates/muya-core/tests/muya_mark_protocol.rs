@@ -1,6 +1,7 @@
+use muya_core::model::InlineKind;
 use muya_core::{
-  EditorRequest, EditorResponse, EditorSession, InlineKind, NodeId, NodeKind,
-  ProtocolCommand, Selection, SelectionPoint, EDITOR_PROTOCOL_VERSION,
+  EditorRequest, EditorResponse, EditorSession, NodeId, NodeKind, ProtocolCommand,
+  Selection, SelectionPoint, EDITOR_PROTOCOL_VERSION,
 };
 
 fn request(command: ProtocolCommand) -> EditorRequest {

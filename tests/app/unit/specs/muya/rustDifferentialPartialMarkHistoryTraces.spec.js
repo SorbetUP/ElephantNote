@@ -131,7 +131,7 @@ const traces = [
     expected: 'al*p~~ha **be*t~~a** gamma\n',
     checkpoints: [
       'al*p~~ha **be*t~~a** gamma\n',
-      'al*pha **be*ta** gamma\n',
+      'alpha **beta** gamma\n',
       'al*p~~ha **be*t~~a** gamma\n'
     ],
     runJs: async (muya) => {

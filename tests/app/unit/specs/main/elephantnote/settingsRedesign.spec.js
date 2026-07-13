@@ -143,7 +143,7 @@ describe('Elephant settings redesign', () => {
       ['addons/official/sites/main.js', "zone: 'workspace.notes'"],
       ['addons/official/codex-connection/main.js', "registerContribution('ai.providers'"],
       ['addons/official/ai-chat/main.js', "zone: 'shell.right'"],
-      ['addons/official/wiki/main.v2.js', 'api.workspace.registerView'],
+      ['addons/official/wiki/main.js', 'api.workspace.registerView'],
       ['addons/official/graph/main.js', 'api.workspace.registerView'],
       ['addons/official/open-models/main.js', "registerContribution('ai.providers'"],
       ['addons/official/code-execution/main.js', 'class ElephantCodeExecutionAddon'],

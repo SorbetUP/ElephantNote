@@ -50,6 +50,8 @@ export const rustBusCommand = (event, payload) => {
       return editorCommands.insertParagraphAfterBlock()
     case 'insertParagraph':
       return editorCommands.insertParagraph()
+    case 'insert-horizontal-rule':
+      return editorCommands.insertHorizontalRule()
     default:
       return null
   }

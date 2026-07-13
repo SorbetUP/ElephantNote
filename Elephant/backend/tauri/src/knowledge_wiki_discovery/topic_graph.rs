@@ -172,11 +172,7 @@ fn coarse_neighbor_lists(vectors: &[Vec<f32>], k: usize) -> Vec<Vec<(usize, f32)
     neighbors
 }
 
-fn shared_neighbor_ratio(
-    left: usize,
-    right: usize,
-    neighbor_sets: &[HashSet<usize>],
-) -> f32 {
+fn shared_neighbor_ratio(left: usize, right: usize, neighbor_sets: &[HashSet<usize>]) -> f32 {
     let left_set = &neighbor_sets[left];
     let right_set = &neighbor_sets[right];
     let denominator = left_set.len().min(right_set.len());
@@ -210,19 +206,16 @@ fn label_propagation(adjacency: &[Vec<(usize, f32)>]) -> Vec<usize> {
             }
             let current_label = labels[*node];
             let current_score = scores.get(&current_label).copied().unwrap_or((0.0, 0));
-            let best = scores
-                .into_iter()
-                .max_by(|left, right| {
-                    left.1
-                        .0
-                        .total_cmp(&right.1.0)
-                        .then_with(|| left.1.1.cmp(&right.1.1))
-                        .then_with(|| right.0.cmp(&left.0))
-                });
+            let best = scores.into_iter().max_by(|left, right| {
+                left.1
+                     .0
+                    .total_cmp(&right.1 .0)
+                    .then_with(|| left.1 .1.cmp(&right.1 .1))
+                    .then_with(|| right.0.cmp(&left.0))
+            });
             if let Some((best_label, best_score)) = best {
                 let materially_better = best_score.0 > current_score.0 + 1e-5
-                    || (best_score.0 >= current_score.0 - 1e-5
-                        && best_score.1 > current_score.1);
+                    || (best_score.0 >= current_score.0 - 1e-5 && best_score.1 > current_score.1);
                 if best_label != current_label && materially_better {
                     labels[*node] = best_label;
                     changed = true;
@@ -273,8 +266,8 @@ pub(super) fn build_topic_communities(
             }
             let shared = shared_neighbor_ratio(left, *right, &neighbor_sets);
             let strict_similarity = *similarity >= route_threshold + 0.06;
-            let locally_supported = *similarity >= local_floors[left].max(local_floors[*right])
-                && shared >= 0.10;
+            let locally_supported =
+                *similarity >= local_floors[left].max(local_floors[*right]) && shared >= 0.10;
             if !strict_similarity && !locally_supported {
                 continue;
             }
@@ -316,8 +309,7 @@ pub(super) fn build_topic_communities(
             .collect::<Vec<_>>();
         background.sort_by(|left, right| left.total_cmp(right));
         let distinctiveness = coherence - percentile(&background, 0.95);
-        let representatives =
-            representative_members(&members, &community_centroid, vectors, 10);
+        let representatives = representative_members(&members, &community_centroid, vectors, 10);
         communities.push(TopicCommunity {
             centroid: community_centroid,
             members,
@@ -487,8 +479,8 @@ mod tests {
             normalized(&[0.96, 0.08]),
             normalized(&[0.0, 1.0]),
         ];
-        let profile = build_assignment_profile(&[0, 1], &normalized(&[1.0, 0.0]), &vectors, 0.72)
-            .unwrap();
+        let profile =
+            build_assignment_profile(&[0, 1], &normalized(&[1.0, 0.0]), &vectors, 0.72).unwrap();
         let assignments = assign_competitively(&[profile], &vectors);
         assert_eq!(assignments[0], vec![0, 1, 2]);
     }

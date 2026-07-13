@@ -9,6 +9,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
+#[cfg(not(mobile))]
+mod topic_graph;
+#[cfg(not(mobile))]
+use topic_graph::{assign_competitively, build_assignment_profile, build_topic_communities};
+
 const DISCOVERY_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS wiki_saved_candidates (
   topic TEXT PRIMARY KEY,
@@ -67,14 +72,6 @@ struct DocumentVector {
 }
 
 #[cfg(not(mobile))]
-#[derive(Debug, Clone)]
-struct Cluster {
-    centroid: Vec<f32>,
-    members: Vec<usize>,
-    coherence: f32,
-}
-
-#[cfg(not(mobile))]
 #[derive(Debug, Deserialize)]
 struct DiscoveryEnvelope {
     #[serde(default)]
@@ -96,6 +93,17 @@ struct DiscoveryLabel {
     preview: String,
     #[serde(default)]
     suggested_sections: Vec<String>,
+}
+
+#[cfg(not(mobile))]
+#[derive(Debug, Clone)]
+struct PendingTopic {
+    topic: String,
+    title: String,
+    reason: String,
+    preview: String,
+    suggested_sections: Vec<String>,
+    core_members: Vec<usize>,
 }
 
 #[cfg(not(mobile))]
@@ -457,148 +465,6 @@ async fn document_vectors(
 }
 
 #[cfg(not(mobile))]
-fn recompute_centroid(cluster: &mut Cluster, documents: &[DocumentVector]) {
-    if cluster.members.is_empty() {
-        return;
-    }
-    let dimensions = documents[cluster.members[0]].vector.len();
-    let mut centroid = vec![0.0; dimensions];
-    for index in &cluster.members {
-        for (target, value) in centroid.iter_mut().zip(&documents[*index].vector) {
-            *target += *value;
-        }
-    }
-    if let Ok(normalized) = normalize_vector(centroid) {
-        cluster.centroid = normalized;
-    }
-    cluster.coherence = cluster
-        .members
-        .iter()
-        .map(|index| cosine(&cluster.centroid, &documents[*index].vector))
-        .sum::<f32>()
-        / cluster.members.len() as f32;
-}
-
-#[cfg(not(mobile))]
-fn cluster_documents(documents: &[DocumentVector], threshold: f32) -> Vec<Cluster> {
-    let mut clusters = Vec::<Cluster>::new();
-    for (index, document) in documents.iter().enumerate() {
-        let best = clusters
-            .iter()
-            .enumerate()
-            .filter(|(_, cluster)| cluster.members.len() < 400)
-            .map(|(cluster_index, cluster)| {
-                (cluster_index, cosine(&cluster.centroid, &document.vector))
-            })
-            .max_by(|left, right| left.1.total_cmp(&right.1));
-        if let Some((cluster_index, _similarity)) =
-            best.filter(|(_, similarity)| *similarity >= threshold)
-        {
-            clusters[cluster_index].members.push(index);
-            recompute_centroid(&mut clusters[cluster_index], documents);
-        } else {
-            clusters.push(Cluster {
-                centroid: document.vector.clone(),
-                members: vec![index],
-                coherence: 1.0,
-            });
-        }
-    }
-    clusters.retain(|cluster| cluster.members.len() >= 3);
-    clusters.sort_by(|left, right| {
-        right
-            .members
-            .len()
-            .cmp(&left.members.len())
-            .then_with(|| right.coherence.total_cmp(&left.coherence))
-    });
-    clusters
-}
-
-#[cfg(not(mobile))]
-fn minimum_topic_sources(document_count: usize) -> usize {
-    (document_count / 100).clamp(8, 24)
-}
-
-#[cfg(not(mobile))]
-fn centroid_for_members(members: &[usize], documents: &[DocumentVector]) -> Option<Vec<f32>> {
-    let first = *members.first()?;
-    let dimensions = documents.get(first)?.vector.len();
-    let mut centroid = vec![0.0; dimensions];
-    for index in members {
-        let document = documents.get(*index)?;
-        if document.vector.len() != dimensions {
-            return None;
-        }
-        for (target, value) in centroid.iter_mut().zip(&document.vector) {
-            *target += *value;
-        }
-    }
-    normalize_vector(centroid).ok()
-}
-
-#[cfg(not(mobile))]
-fn expanded_members(
-    profile: &[f32],
-    core_members: &[usize],
-    documents: &[DocumentVector],
-    route_threshold: f32,
-) -> (Vec<usize>, f32) {
-    let core_set = core_members.iter().copied().collect::<HashSet<_>>();
-    let mut ranked = documents
-        .iter()
-        .enumerate()
-        .map(|(index, document)| (index, cosine(profile, &document.vector)))
-        .collect::<Vec<_>>();
-    ranked.sort_by(|left, right| right.1.total_cmp(&left.1));
-
-    let mut core_scores = core_members
-        .iter()
-        .filter_map(|index| documents.get(*index))
-        .map(|document| cosine(profile, &document.vector))
-        .collect::<Vec<_>>();
-    core_scores.sort_by(|left, right| left.total_cmp(right));
-    let core_quartile = core_scores
-        .get(core_scores.len().saturating_sub(1) / 4)
-        .copied()
-        .unwrap_or(route_threshold);
-
-    let mut background_scores = ranked
-        .iter()
-        .filter(|(index, _)| !core_set.contains(index))
-        .map(|(_, score)| *score)
-        .collect::<Vec<_>>();
-    background_scores.sort_by(|left, right| left.total_cmp(right));
-    let background_p90 = background_scores
-        .get(background_scores.len().saturating_mul(9) / 10)
-        .copied()
-        .unwrap_or(route_threshold - 0.20);
-
-    let absolute_floor = (route_threshold - 0.24).clamp(0.44, 0.66);
-    let separation_midpoint = (core_quartile + background_p90) / 2.0;
-    let adaptive_floor = separation_midpoint
-        .max(absolute_floor)
-        .min((core_quartile - 0.02).max(absolute_floor));
-
-    let mut selected = core_set;
-    for (index, score) in ranked {
-        if selected.len() >= 400 {
-            break;
-        }
-        if score >= adaptive_floor {
-            selected.insert(index);
-        }
-    }
-    let mut selected = selected.into_iter().collect::<Vec<_>>();
-    selected.sort_by(|left, right| {
-        cosine(profile, &documents[*right].vector)
-            .total_cmp(&cosine(profile, &documents[*left].vector))
-    });
-    selected.truncate(400);
-    (selected, adaptive_floor)
-}
-
-#[cfg(not(mobile))]
 fn candidate_overlap(left: &[String], right: &[String]) -> f32 {
     if left.is_empty() || right.is_empty() {
         return 0.0;
@@ -619,6 +485,53 @@ fn topic_matches_existing(topic: &str, existing_topics: &HashSet<String>) -> boo
         topic == *existing
             || (comparable && (topic.contains(existing) || existing.contains(&topic)))
     })
+}
+
+#[cfg(not(mobile))]
+fn is_generic_topic(title: &str, topic: &str) -> bool {
+    let normalized = format!("{} {}", title, topic)
+        .to_lowercase()
+        .chars()
+        .map(|character| {
+            if character.is_alphanumeric() {
+                character
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>();
+    let tokens = normalized
+        .split_whitespace()
+        .filter(|token| token.len() > 1)
+        .collect::<Vec<_>>();
+    let generic = [
+        "site",
+        "discover",
+        "découvrez",
+        "decouvrez",
+        "comment",
+        "account",
+        "compte",
+        "code",
+        "programming",
+        "programmation",
+        "animation",
+        "photo",
+        "video",
+        "note",
+        "notes",
+        "project",
+        "projet",
+        "content",
+        "contenu",
+    ];
+    tokens.len() <= 2 && tokens.iter().all(|token| generic.contains(token))
+}
+
+#[cfg(not(mobile))]
+fn target_topic_limit(document_count: usize, requested: usize) -> usize {
+    let natural = ((document_count as f32).sqrt() / 4.0).round() as usize;
+    natural.clamp(4, 12).min(requested.clamp(1, 24))
 }
 
 #[cfg(not(mobile))]
@@ -682,7 +595,11 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
             "Semantic discovery needs at least three indexed notes with embeddings.".into(),
         );
     }
-    let clusters = cluster_documents(&documents, route.threshold);
+    let vectors = documents
+        .iter()
+        .map(|document| document.vector.clone())
+        .collect::<Vec<_>>();
+    let clusters = build_topic_communities(&vectors, route.threshold);
     if clusters.is_empty() {
         return Err(
             "The embedding index did not contain a coherent group of at least three notes.".into(),
@@ -713,14 +630,9 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
         .take(limit.saturating_mul(6).clamp(18, 72))
         .enumerate()
         .map(|(cluster_id, cluster)| {
-            let mut representative_members = cluster.members.clone();
-            representative_members.sort_by(|left, right| {
-                cosine(&cluster.centroid, &documents[*right].vector)
-                    .total_cmp(&cosine(&cluster.centroid, &documents[*left].vector))
-            });
-            let notes = representative_members
+            let notes = cluster
+                .representatives
                 .iter()
-                .take(10)
                 .map(|index| {
                     let document = &documents[*index];
                     json!({
@@ -734,13 +646,15 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
                 "cluster_id": cluster_id,
                 "size": cluster.members.len(),
                 "coherence": cluster.coherence,
+                "distinctiveness": cluster.distinctiveness,
                 "notes": notes
             })
         })
         .collect::<Vec<_>>();
+    let proposal_limit = target_topic_limit(documents.len(), limit);
     let prompt = format!(
-        "You are designing a durable knowledge map for a personal note vault. The embedding groups below are MICRO-CLUSTERS, not final Wiki proposals. Merge related micro-clusters into a small set of broad, specific MACRO-TOPICS. Return at most {} candidates. Each included candidate must combine enough evidence to represent a durable subject: at least {} core notes after merging, preferably 25 or more. Reject timestamp dumps, duplicated social posts, generic UI words and vague labels such as Site, Discover, Comment, Account, Code, Programming or Animation unless the notes clearly describe one specific stable subject. A cluster id may belong to at most one candidate. Keep genuinely different subjects separate. Return exactly one JSON object with this shape and no prose:\n{{\"candidates\":[{{\"cluster_ids\":[0,3,7],\"include\":true,\"title\":\"Readable specific title\",\"topic\":\"normalized specific topic\",\"reason\":\"Why the merged evidence deserves a Wiki\",\"preview\":\"What the Wiki would cover\",\"suggested_sections\":[\"Section\"]}}]}}\n\nEmbedding micro-clusters:\n{}",
-        limit.clamp(1, 24),
+        "You are designing a durable knowledge map for a personal note vault. The groups below are deterministic mutual-nearest-neighbor GRAPH COMMUNITIES, not final Wiki proposals. Merge communities only when they form one durable subject. Return at most {} high-value topics, not a quota. Every included topic must have at least {} core notes after merging. Prefer topics that are specific enough to be useful, broad enough to organize a meaningful part of the vault, distinct from the other proposals, and likely to support a substantial reference article. Reject activity fragments, timestamp dumps, duplicated posts, generic interface vocabulary, media-format labels, and vague labels such as Site, Discover, Comment, Account, Code, Programming or Animation. A community id may belong to at most one topic. Use the representative notes, community coherence and distinctiveness to decide. Return exactly one JSON object with this shape and no prose:\n{{\"candidates\":[{{\"cluster_ids\":[0,3,7],\"include\":true,\"title\":\"Readable specific title\",\"topic\":\"normalized specific topic\",\"reason\":\"Why this subject is useful and distinct\",\"preview\":\"Precise scope of the future Wiki\",\"suggested_sections\":[\"Section\"]}}]}}\n\nGraph communities:\n{}",
+        proposal_limit,
         minimum_sources,
         serde_json::to_string_pretty(&cluster_payload).map_err(|error| error.to_string())?
     );
@@ -748,84 +662,82 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
     let envelope: DiscoveryEnvelope = serde_json::from_str(json_object_from_text(&result.answer)?)
         .map_err(|error| format!("Invalid semantic Wiki discovery JSON: {error}"))?;
 
-    let existing_topics = KnowledgeStore::open(&root)?
-        .list_wiki_drafts(None, 1_000)?
-        .into_iter()
+    let existing_wikis = KnowledgeStore::open(&root)?.list_wiki_drafts(None, 1_000)?;
+    let existing_topics = existing_wikis
+        .iter()
         .map(|draft| draft.topic.trim().to_lowercase())
         .collect::<HashSet<_>>();
-    let mut candidates = Vec::new();
+    let existing_source_sets = existing_wikis
+        .iter()
+        .filter(|draft| !draft.source_paths.is_empty())
+        .map(|draft| draft.source_paths.clone())
+        .collect::<Vec<_>>();
+
+    let mut used_communities = HashSet::new();
+    let mut pending = Vec::<PendingTopic>::new();
     for label in envelope
         .candidates
         .into_iter()
         .filter(|candidate| candidate.include)
     {
         let topic = label.topic.trim().to_lowercase();
-        if topic.is_empty()
-            || label.title.trim().is_empty()
-            || topic_matches_existing(&topic, &existing_topics)
+        let title = label.title.trim().to_string();
+        if topic.is_empty() || title.is_empty() || topic_matches_existing(&topic, &existing_topics)
         {
             continue;
         }
-        let mut cluster_ids = label.cluster_ids.clone();
+        let mut community_ids = label.cluster_ids.clone();
         if let Some(cluster_id) = label.cluster_id {
-            cluster_ids.push(cluster_id);
+            community_ids.push(cluster_id);
         }
-        cluster_ids.sort_unstable();
-        cluster_ids.dedup();
-        cluster_ids.retain(|cluster_id| *cluster_id < clusters.len());
-        if cluster_ids.is_empty() {
+        community_ids.sort_unstable();
+        community_ids.dedup();
+        community_ids.retain(|cluster_id| {
+            *cluster_id < clusters.len() && !used_communities.contains(cluster_id)
+        });
+        if community_ids.is_empty() {
             continue;
         }
 
         let mut core_set = HashSet::new();
-        for cluster_id in &cluster_ids {
-            core_set.extend(clusters[*cluster_id].members.iter().copied());
+        let mut weighted_distinctiveness = 0.0;
+        let mut weighted_size = 0usize;
+        for community_id in &community_ids {
+            let community = &clusters[*community_id];
+            core_set.extend(community.members.iter().copied());
+            weighted_distinctiveness += community.distinctiveness * community.members.len() as f32;
+            weighted_size += community.members.len();
         }
         let mut core_members = core_set.into_iter().collect::<Vec<_>>();
+        core_members.sort_unstable();
+        let merged_distinctiveness = weighted_distinctiveness / weighted_size.max(1) as f32;
         if core_members.len() < minimum_sources {
             eprintln!(
-                "[knowledge] wiki:macro-candidate rejected title={} clusters={:?} core_sources={} minimum_sources={}",
-                label.title.trim(),
-                cluster_ids,
+                "[knowledge] wiki:topic-rejected reason=small-core title={} communities={:?} core_sources={} minimum_sources={}",
+                title,
+                community_ids,
                 core_members.len(),
                 minimum_sources
             );
             continue;
         }
-        core_members.sort_unstable();
-        let Some(profile) = centroid_for_members(&core_members, &documents) else {
-            continue;
-        };
-        let (members, expansion_floor) =
-            expanded_members(&profile, &core_members, &documents, route.threshold);
-        if members.len() < minimum_sources {
+        if is_generic_topic(&title, &topic)
+            && (core_members.len() < minimum_sources.saturating_mul(2)
+                || merged_distinctiveness < 0.08)
+        {
+            eprintln!(
+                "[knowledge] wiki:topic-rejected reason=generic title={} communities={:?} core_sources={} distinctiveness={:.4}",
+                title,
+                community_ids,
+                core_members.len(),
+                merged_distinctiveness
+            );
             continue;
         }
-        let source_paths = members
-            .iter()
-            .map(|index| documents[*index].path.clone())
-            .collect::<Vec<_>>();
-        let source_titles = members
-            .iter()
-            .map(|index| documents[*index].title.clone())
-            .collect::<Vec<_>>();
-        let coherence = members
-            .iter()
-            .map(|index| cosine(&profile, &documents[*index].vector))
-            .sum::<f32>()
-            / members.len() as f32;
-        eprintln!(
-            "[knowledge] wiki:macro-candidate topic={} clusters={:?} core_sources={} expanded_sources={} floor={:.4} coherence={:.4}",
+        used_communities.extend(community_ids.iter().copied());
+        pending.push(PendingTopic {
             topic,
-            cluster_ids,
-            core_members.len(),
-            members.len(),
-            expansion_floor,
-            coherence
-        );
-        candidates.push(SemanticWikiCandidate {
-            topic,
-            title: label.title.trim().to_string(),
+            title,
             reason: label.reason.trim().to_string(),
             preview: label.preview.trim().to_string(),
             suggested_sections: label
@@ -835,13 +747,111 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
                 .filter(|value| !value.is_empty())
                 .take(12)
                 .collect(),
+            core_members,
+        });
+    }
+
+    let descriptor_inputs = pending
+        .iter()
+        .map(|topic| {
+            format!(
+                "Knowledge topic: {}\nScope: {}\nSections: {}",
+                topic.title,
+                topic.preview,
+                topic.suggested_sections.join(", ")
+            )
+        })
+        .collect::<Vec<_>>();
+    let descriptor_vectors = if descriptor_inputs.is_empty() {
+        Vec::new()
+    } else {
+        embed_batch(app, &route, &descriptor_inputs).await?
+    };
+
+    let mut qualified = Vec::<PendingTopic>::new();
+    let mut profiles = Vec::new();
+    for (topic, descriptor_vector) in pending.into_iter().zip(descriptor_vectors) {
+        let Some(profile) = build_assignment_profile(
+            &topic.core_members,
+            &descriptor_vector,
+            &vectors,
+            route.threshold,
+        ) else {
+            continue;
+        };
+        if profile.confidence < 0.24
+            || (profile.distinctiveness < -0.02
+                && topic.core_members.len() < minimum_sources.saturating_mul(2))
+        {
+            eprintln!(
+                "[knowledge] wiki:topic-rejected reason=weak-separation title={} core_sources={} confidence={:.4} distinctiveness={:.4}",
+                topic.title,
+                topic.core_members.len(),
+                profile.confidence,
+                profile.distinctiveness
+            );
+            continue;
+        }
+        qualified.push(topic);
+        profiles.push(profile);
+    }
+
+    let assignments = assign_competitively(&profiles, &vectors);
+    let mut candidates = Vec::new();
+    for ((topic, profile), members) in qualified
+        .into_iter()
+        .zip(profiles.into_iter())
+        .zip(assignments)
+    {
+        if members.len() < minimum_sources {
+            continue;
+        }
+        let source_paths = members
+            .iter()
+            .map(|index| documents[*index].path.clone())
+            .collect::<Vec<_>>();
+        if existing_source_sets
+            .iter()
+            .any(|existing| candidate_overlap(&source_paths, existing) >= 0.72)
+        {
+            eprintln!(
+                "[knowledge] wiki:topic-rejected reason=existing-wiki-overlap title={} sources={}",
+                topic.title,
+                source_paths.len()
+            );
+            continue;
+        }
+        let source_titles = members
+            .iter()
+            .map(|index| documents[*index].title.clone())
+            .collect::<Vec<_>>();
+        let core_sources = topic.core_members.len();
+        let related_sources = source_paths.len().saturating_sub(core_sources);
+        eprintln!(
+            "[knowledge] wiki:topic-qualified topic={} core_sources={} related_sources={} total_sources={} floor={:.4} coherence={:.4} distinctiveness={:.4} confidence={:.4}",
+            topic.topic,
+            core_sources,
+            related_sources,
+            source_paths.len(),
+            profile.floor,
+            profile.coherence,
+            profile.distinctiveness,
+            profile.confidence
+        );
+        candidates.push(SemanticWikiCandidate {
+            topic: topic.topic,
+            title: topic.title,
+            reason: topic.reason,
+            preview: topic.preview,
+            suggested_sections: topic.suggested_sections,
             source_paths,
             source_titles,
             score: members
                 .len()
                 .saturating_mul(1_000)
-                .saturating_add((coherence.max(0.0) * 1_000.0) as usize),
-            coherence,
+                .saturating_add(core_sources.saturating_mul(250))
+                .saturating_add((profile.confidence * 1_000.0) as usize),
+            coherence: profile.coherence,
         });
     }
     candidates.sort_by(|left, right| right.score.cmp(&left.score));
@@ -849,13 +859,13 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
     for candidate in candidates {
         let duplicate = deduplicated.iter().any(|existing| {
             candidate.topic == existing.topic
-                || candidate_overlap(&candidate.source_paths, &existing.source_paths) >= 0.72
+                || candidate_overlap(&candidate.source_paths, &existing.source_paths) >= 0.65
         });
         if !duplicate {
             deduplicated.push(candidate);
         }
     }
-    deduplicated.truncate(limit.clamp(1, 24));
+    deduplicated.truncate(proposal_limit);
     let candidates = deduplicated;
     {
         let connection = open_connection(&root)?;
@@ -868,7 +878,7 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
         persist_candidates(&connection, &candidates)?;
     }
     eprintln!(
-        "[knowledge] wiki:semantic-discovery documents={} clusters={} accepted={} embedding_model={} label_model={}",
+        "[knowledge] wiki:semantic-discovery-v2 documents={} communities={} accepted={} embedding_model={} label_model={}",
         documents.len(),
         clusters.len(),
         candidates.len(),

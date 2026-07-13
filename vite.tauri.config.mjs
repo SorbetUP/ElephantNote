@@ -52,6 +52,17 @@ const npmPackageAliases = Object.fromEntries(
     .map((name) => [name, resolve(__dirname, 'Elephant/node_modules', name)])
 )
 const excalidrawAssetFolders = ['excalidraw-assets', 'excalidraw-assets-dev']
+const muyaWasmBundled = process.env.ELEPHANT_EXPERIMENTAL_RUST_EDITOR === '1'
+const muyaWasmGenerated = resolve(
+  __dirname,
+  'Elephant/frontend/src/muya/lib/rust/generated/muya_wasm.js'
+)
+const muyaWasmDisabled = resolve(__dirname, 'Elephant/frontend/src/muya/lib/rust/disabledWasm.js')
+if (muyaWasmBundled && !existsSync(muyaWasmGenerated)) {
+  throw new Error(
+    'Muya Rust WASM bundle is missing. Run `pnpm muya:wasm:build` before the experimental build.'
+  )
+}
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.gif': 'image/gif',
@@ -127,11 +138,13 @@ export default {
   define: {
     'process.env.IS_PREACT': JSON.stringify('false'),
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    __ELEPHANT_MUYA_WASM_BUNDLED__: JSON.stringify(muyaWasmBundled),
     __MARKTEXT_VERSION_STRING__: JSON.stringify(`v${packageJson.version}`)
   },
   resolve: {
     alias: {
       ...npmPackageAliases,
+      'muya-rust-wasm-bundle': muyaWasmBundled ? muyaWasmGenerated : muyaWasmDisabled,
       path: resolve(__dirname, 'Elephant/frontend/src/renderer/src/platform/nodePathShim.js'),
       'node:path': resolve(
         __dirname,

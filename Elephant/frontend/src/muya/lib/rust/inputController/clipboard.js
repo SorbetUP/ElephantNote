@@ -3,12 +3,18 @@ import { normalizedText } from './clipboardInline'
 
 export { htmlToMarkdown }
 
-const MARKDOWN_CLIPBOARD_TYPES = Object.freeze([
+export const MARKDOWN_CLIPBOARD_TYPES = Object.freeze([
   'application/x-elephant-markdown',
   'application/x-muya-markdown',
   'application/x-markdown',
   'text/markdown',
   'text/x-markdown'
+])
+
+export const TEXT_TRANSFER_TYPES = Object.freeze([
+  ...MARKDOWN_CLIPBOARD_TYPES,
+  'text/html',
+  'text/plain'
 ])
 
 const firstClipboardValue = (clipboard, types) => {
@@ -20,7 +26,7 @@ const firstClipboardValue = (clipboard, types) => {
 }
 
 export const markdownFromClipboard = (event, ownerDocument) => {
-  const clipboard = event?.clipboardData
+  const clipboard = event?.clipboardData || event?.dataTransfer
   if (!clipboard?.getData) return null
 
   const nativeMarkdown = firstClipboardValue(clipboard, MARKDOWN_CLIPBOARD_TYPES)

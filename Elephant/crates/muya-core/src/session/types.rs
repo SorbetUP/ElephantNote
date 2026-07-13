@@ -2,8 +2,8 @@ use crate::edit::{
   Command, GraphemeCommand, MarkCommand, ParagraphBoundaryCommand, PasteCommand,
 };
 use crate::features::{
-  BlockCommand, BlockTypeCommand, ListCommand, TableCommand, TableNavigationCommand,
-  TaskCommand,
+  BlockCommand, BlockTypeCommand, InsertHorizontalRule, ListCommand, TableCommand,
+  TableNavigationCommand, TaskCommand,
 };
 use crate::history::History;
 use crate::model::Document;
@@ -22,6 +22,7 @@ pub enum SessionCommand {
   ParagraphBoundary(ParagraphBoundaryCommand),
   Block(BlockCommand),
   BlockType(BlockTypeCommand),
+  HorizontalRule(InsertHorizontalRule),
   List(ListCommand),
   Table(TableCommand),
   TableNavigation(TableNavigationCommand),

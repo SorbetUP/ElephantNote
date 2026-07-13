@@ -8,8 +8,10 @@ import { useAddonsStore } from '@/store/addons'
 
 const INTERNAL_ADDON_IDS = new Set(['elephant.addon-packs'])
 const OBSOLETE_ADDON_IDS = new Set(['com.elephantnote.examples.trusted-workspace-lab'])
-
 const isHiddenAddonId = (id) => INTERNAL_ADDON_IDS.has(id) || OBSOLETE_ADDON_IDS.has(id)
+const isOfficialId = (id = '') => String(id).startsWith('elephant.')
+const isOfficialManifest = (manifest = {}) => manifest.official === true || manifest.source === 'official' || isOfficialId(manifest.id)
+const isOfficialCatalogEntry = (entry = {}) => entry.official === true || entry.source === 'official' || isOfficialId(entry.id)
 
 const persistExternalAddonState = async (addonId, enabled) => {
   const invoke = globalThis?.__TAURI__?.core?.invoke
@@ -40,10 +42,10 @@ export const useAddonsSettings = () => {
   } = storeToRefs(addonsStore)
 
   const actions = computed(() => getAddonActions(contributions.value))
-  const externalAddons = computed(() => items.value.filter((addon) => addon.manifest.source === 'external'))
+  const communityInstalledAddons = computed(() => items.value.filter((addon) => (
+    addon.manifest.source === 'external' && !isOfficialManifest(addon.manifest)
+  )))
   const builtInCatalog = computed(() => {
-    // items is deliberately read here so catalogue installation state is
-    // recalculated immediately after register/unregister operations.
     void items.value.length
     return addonsStore.manager?.listBuiltinCatalog?.() || []
   })
@@ -79,46 +81,46 @@ export const useAddonsSettings = () => {
       })
     }
 
-    // The remote catalogue is third-party code. Turning Community Addons off
-    // must remove it from the actionable UI as well as stop its runtimes.
-    if (communityAddonsEnabled.value) {
-      for (const entry of catalog.value) {
-        if (!entry?.id || isHiddenAddonId(entry.id) || available.has(entry.id)) continue
-        const installed = installedById.get(entry.id)
-        const updateAvailable = Boolean(installed && installed.manifest.version !== entry.version)
-        if (installed && !updateAvailable) continue
-        available.set(entry.id, {
-          ...entry,
-          installSource: 'catalog',
-          installed: Boolean(installed),
-          installedVersion: installed?.manifest?.version || '',
-          updateAvailable
-        })
-      }
+    for (const entry of catalog.value) {
+      if (!entry?.id || isHiddenAddonId(entry.id) || available.has(entry.id)) continue
+      const official = isOfficialCatalogEntry(entry)
+      if (!official && !communityAddonsEnabled.value) continue
+      const installed = installedById.get(entry.id)
+      const updateAvailable = Boolean(installed && installed.manifest.version !== entry.version)
+      if (installed && !updateAvailable) continue
+      available.set(entry.id, {
+        ...entry,
+        official,
+        installSource: official ? 'official' : 'catalog',
+        installed: Boolean(installed),
+        installedVersion: installed?.manifest?.version || '',
+        updateAvailable
+      })
     }
 
     return [...available.values()].filter(matchesQuery).sort(sortByName)
   })
 
   const actionsForAddon = (addonId) => actions.value.filter((action) => action.addonId === addonId)
-  const isCommunityLocked = (addon) => addon?.manifest?.source === 'external' && !communityAddonsEnabled.value
+  const isCommunityLocked = (addon) => (
+    addon?.manifest?.source === 'external' &&
+    !isOfficialManifest(addon.manifest) &&
+    !communityAddonsEnabled.value
+  )
 
   const showMessage = (text, error = false) => {
     message.value = text
     messageIsError.value = error
   }
-
   const clearMessage = () => {
     message.value = ''
     messageIsError.value = false
   }
-
   const toggleDetails = (addonId) => {
     expandedAddonId.value = expandedAddonId.value === addonId ? '' : addonId
   }
 
   const refreshCatalog = async () => {
-    if (!communityAddonsEnabled.value) return
     try {
       await addonsStore.loadAddonCatalog()
     } catch (error) {
@@ -130,8 +132,7 @@ export const useAddonsSettings = () => {
     clearMessage()
     try {
       await addonsStore.setCommunityAddonsEnabled(true)
-      await refreshCatalog()
-      await addonsStore.loadTrustedState()
+      await Promise.allSettled([refreshCatalog(), addonsStore.loadTrustedState()])
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
     }
@@ -140,7 +141,7 @@ export const useAddonsSettings = () => {
   const disableCommunityAddons = async () => {
     clearMessage()
     try {
-      const installedExternalAddons = [...externalAddons.value]
+      const installedExternalAddons = [...communityInstalledAddons.value]
       await addonsStore.setCommunityAddonsEnabled(false)
       const persistenceResults = await Promise.allSettled(
         installedExternalAddons.map((addon) => persistExternalAddonState(addon.manifest.id, false))
@@ -161,6 +162,7 @@ export const useAddonsSettings = () => {
       addonsStore.refresh()
       expandedAddonId.value = result.manifest.id
       showMessage(`Installed ${result.manifest.name}. Enable it when you want its interface and runtime.`)
+      return result
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
     } finally {
@@ -170,7 +172,7 @@ export const useAddonsSettings = () => {
 
   const installAddonPackage = async () => {
     if (!communityAddonsEnabled.value) {
-      showMessage('Turn on community addons before installing this package.', true)
+      showMessage('Turn on community addons before installing an unverified local package.', true)
       return
     }
     try {
@@ -183,6 +185,7 @@ export const useAddonsSettings = () => {
       const result = await addonsStore.installExternalAddon(selected)
       expandedAddonId.value = result.manifest.id
       showMessage(`Installed ${result.manifest.name}. It remains disabled until you enable it.`)
+      return result
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
     }
@@ -193,6 +196,7 @@ export const useAddonsSettings = () => {
       const result = await addonsStore.installCatalogAddon(addon.id)
       expandedAddonId.value = result.manifest.id
       showMessage(`${addon.updateAvailable ? 'Updated' : 'Installed'} ${result.manifest.name}. It remains disabled until you enable it.`)
+      return result
     } catch (error) {
       showMessage(error instanceof Error ? error.message : String(error), true)
     }
@@ -201,11 +205,12 @@ export const useAddonsSettings = () => {
   const installAvailableAddon = async (addon) => {
     const isActuallyBundled = addon?.id && builtinCatalogIds.value.has(addon.id)
     if (addon?.installSource === 'builtin' && isActuallyBundled) return installBuiltinAddon(addon)
-    if (!communityAddonsEnabled.value) {
-      showMessage('Turn on community addons before installing this package.', true)
+    const official = addon?.installSource === 'official' || isOfficialCatalogEntry(addon)
+    if (!official && !communityAddonsEnabled.value) {
+      showMessage('Turn on community addons before installing this third-party package.', true)
       return
     }
-    return installCatalogAddon({ ...addon, installSource: 'catalog' })
+    return installCatalogAddon({ ...addon, installSource: official ? 'official' : 'catalog' })
   }
 
   const toggleAddon = async (addon) => {
@@ -215,7 +220,8 @@ export const useAddonsSettings = () => {
       return
     }
     try {
-      if (nextEnabled && addon.manifest.source === 'external' && isTrustedAddonManifest(addon.manifest)) {
+      const official = isOfficialManifest(addon.manifest)
+      if (nextEnabled && !official && addon.manifest.source === 'external' && isTrustedAddonManifest(addon.manifest)) {
         if (!addonsStore.trustedStateLoaded) await addonsStore.loadTrustedState()
         if (addonsStore.trustedSafeMode) await addonsStore.setTrustedSafeMode(false)
         if (!addonsStore.isTrustedApproved(addon.manifest.id)) {
@@ -281,9 +287,10 @@ export const useAddonsSettings = () => {
   onMounted(async () => {
     await removeObsoleteAddons()
     if (!communityConsentLoaded.value) await addonsStore.loadCommunityAddonsConsent()
-    if (communityAddonsEnabled.value) {
-      await Promise.allSettled([refreshCatalog(), addonsStore.loadTrustedState()])
-    }
+    await Promise.allSettled([
+      refreshCatalog(),
+      communityAddonsEnabled.value ? addonsStore.loadTrustedState() : Promise.resolve()
+    ])
     log.info('[settings:addons] mounted', {
       registered: items.value.map((addon) => addon.manifest.id),
       available: availableAddons.value.map((addon) => addon.id),

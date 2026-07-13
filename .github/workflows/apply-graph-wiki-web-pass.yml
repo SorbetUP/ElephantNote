@@ -51,11 +51,27 @@ jobs:
         run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
 
       - name: Validate Rust
+        id: validate_rust
+        continue-on-error: true
         run: |
-          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml
-          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib local_llama_runtime::tests --no-default-features
-          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib chat_runtime::codex_app_server::tests --no-default-features
-          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+          set -o pipefail
+          {
+            cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+            cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib local_llama_runtime::tests --no-default-features
+            cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib chat_runtime::codex_app_server::tests --no-default-features
+            cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+          } 2>&1 | tee /tmp/graph-wiki-rust.log
+
+      - name: Upload Rust diagnostics
+        if: steps.validate_rust.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: graph-wiki-rust-log
+          path: /tmp/graph-wiki-rust.log
+
+      - name: Stop after Rust failure
+        if: steps.validate_rust.outcome == 'failure'
+        run: exit 1
 
       - name: Validate renderer regressions
         run: |

@@ -66,6 +66,29 @@ fn uses_selected_text_as_alt_and_preserves_the_suffix() {
 }
 
 #[test]
+fn inserts_at_the_focus_of_a_cross_block_selection() {
+  let mut document = crate::parse_markdown("alpha\n\nbeta");
+  let cross_block = Selection {
+    anchor: SelectionPoint {
+      node: text(&document, "alpha"),
+      offset_utf16: 1,
+    },
+    focus: SelectionPoint {
+      node: text(&document, "beta"),
+      offset_utf16: 2,
+    },
+  };
+  let transaction = command("/tmp/picture.png", "", None)
+    .build(&document, cross_block)
+    .unwrap();
+  transaction.apply(&mut document).unwrap();
+  assert_eq!(
+    to_markdown(&document),
+    "alpha\n\nbe![picture](/tmp/picture.png)ta"
+  );
+}
+
+#[test]
 fn preserves_explicit_alt_title_and_inline_marks() {
   let mut document = crate::parse_markdown("**alpha**");
   let transaction = command(

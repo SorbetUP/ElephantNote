@@ -4,9 +4,9 @@ mod grapheme;
 mod list;
 mod mark;
 mod operation;
-#[path = "paragraph_engine.rs"]
 mod paragraph;
 mod paragraph_boundary;
+mod paragraph_engine;
 mod transaction;
 
 pub use command::Command;

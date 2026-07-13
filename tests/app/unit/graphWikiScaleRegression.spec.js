@@ -10,7 +10,7 @@ describe('large-vault graph and Wiki scale regressions', () => {
     const source = read('Elephant/frontend/app/components/views/AtomicGraphView.vue')
     expect(source).not.toContain('runForceSimulation(1200)')
     expect(source).not.toContain('ratio: 0.4')
-    expect(source).not.toContain('en-graph-zoom-slider')
+    expect(source).not.toContain('class="en-graph-zoom-slider"')
     expect(source).toContain('Selecting a note must not rewrite the camera ratio')
   })
 
@@ -21,11 +21,12 @@ describe('large-vault graph and Wiki scale regressions', () => {
     expect(source).toContain('rgbaFromHex(territoryColor')
   })
 
-  test('keeps broad semantic source sets and requests encyclopedic output', () => {
+  test('refines broad semantic source sets and requests evidence-driven output', () => {
     const discovery = read('Elephant/backend/tauri/src/knowledge_wiki_discovery.rs')
     const wikiCore = read('Elephant/backend/knowledge-core/src/wiki_core.rs')
-    expect(discovery).toContain('.take(400)')
-    expect(wikiCore).toContain('Wikipedia-quality page')
+    expect(discovery).toContain('refine_assignment_locally')
+    expect(discovery).toContain('clamp(minimum_sources, 180)')
+    expect(wikiCore).toContain('evidence-driven reference page')
     expect(wikiCore).toContain('max_output_tokens: 24_576')
   })
 

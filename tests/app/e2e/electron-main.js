@@ -7,7 +7,7 @@ const { app, BrowserWindow } = require('electron')
 
 const projectRoot = path.resolve(__dirname, '../../..')
 const rendererRoot = path.join(projectRoot, 'build', 'out', 'renderer')
-const preload = path.join(__dirname, 'tauri-preload.js')
+const preload = path.join(__dirname, 'tauri-preload-entry.js')
 
 const mimeType = (pathname) => {
   switch (path.extname(pathname).toLowerCase()) {

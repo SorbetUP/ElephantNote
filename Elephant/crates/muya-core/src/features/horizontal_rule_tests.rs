@@ -23,9 +23,10 @@ fn selection(document: &Document) -> Selection {
 
 #[test]
 fn inserts_a_rule_before_an_empty_root_paragraph() {
-  let mut document = crate::parse_markdown("");
+  let session = crate::session::EditorSession::from_markdown("");
+  let mut document = session.document().clone();
   let transaction = InsertHorizontalRule
-    .build(&document, selection(&document))
+    .build(&document, session.selection())
     .unwrap();
   let inverse = transaction.apply(&mut document).unwrap();
   assert_eq!(to_markdown(&document), "---\n\n");

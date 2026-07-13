@@ -31,7 +31,20 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          electron_package="$(node -p "require.resolve('electron/package.json')")"
+          electron_package="$(NODE_PATH=Elephant/node_modules node - <<'NODE'
+          const path = require('path')
+          const roots = [process.cwd(), path.join(process.cwd(), 'Elephant')]
+          let resolved = ''
+          for (const root of roots) {
+            try {
+              resolved = require.resolve('electron/package.json', { paths: [root] })
+              break
+            } catch {}
+          }
+          if (!resolved) process.exit(1)
+          process.stdout.write(resolved)
+          NODE
+          )"
           electron_root="$(dirname "$electron_package")"
           echo "Electron package: $electron_root" | tee electron-install.txt
           node "$electron_root/install.js" 2>&1 | tee -a electron-install.txt

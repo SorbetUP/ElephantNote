@@ -24,7 +24,7 @@ describe('Elephant settings redesign', () => {
     expect(styles).toContain('backdrop-filter: blur(30px)')
   })
 
-  it('indexes installed addon settings without restoring legacy catalogue labels', () => {
+  it('indexes installed addon settings and the core Addon Packs section', () => {
     const source = settings()
     expect(source).toContain('const settingsIndex = computed')
     expect(source).toContain("addonsStore.getContributions('settings.sections')")
@@ -36,7 +36,7 @@ describe('Elephant settings redesign', () => {
   it('mounts optional settings pages only through physical addon contributions', () => {
     const source = settings()
     const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
-    const importAddon = read('Elephant/frontend/src/renderer/src/addons/builtin/googleKeepImport.js')
+    const importAddon = read('addons/official/google-keep-import/main.js')
     const providers = read('addons/official/ai/main.js')
     const chat = read('addons/official/ai-chat/main.js')
     const search = read('addons/official/ai-search/main.js')
@@ -55,10 +55,8 @@ describe('Elephant settings redesign', () => {
     expect(code).toContain("section: 'editor'")
     expect(sync).toContain("section: 'sync'")
     expect(sites).toContain("section: 'sites'")
-    expect(builtins).toContain("load: () => import('./googleKeepImport')")
-    for (const module of ['ai', 'aiChat', 'aiSearch', 'aiOcr', 'codeExecution', 'sync', 'sites']) {
-      expect(builtins).not.toContain(`import('./${module}')`)
-    }
+    expect(builtins).toContain('builtinAddons = Object.freeze([])')
+    expect(builtins).not.toContain('import(')
   })
 
   it('keeps official packages independent from the Community Addons boundary', () => {
@@ -92,11 +90,11 @@ describe('Elephant settings redesign', () => {
     expect(panel).toContain('const AI_SUBMODULE_IDS')
     expect(panel).toContain('v-if="selectedEntry.id === AI_PARENT_ID"')
     expect(panel).toContain('class="en-ai-module-list"')
-    expect(logic).toContain('installBuiltin(addon.id)')
     expect(logic).toContain('installCatalogAddon')
     expect(logic).toContain('installExternalAddon(selected)')
     expect(packRuntime).toContain("source: 'official'")
     expect(packRuntime).toContain("'elephant.ai', version: '2.1.0'")
+    expect(packRuntime).toContain("id: 'core.addon-packs'")
     expect(packs).not.toContain('{{ pack.path }}')
   })
 
@@ -143,7 +141,9 @@ describe('Elephant settings redesign', () => {
       ['addons/official/wiki/main.js', 'api.workspace.registerView'],
       ['addons/official/graph/main.js', 'api.workspace.registerView'],
       ['addons/official/open-models/main.js', "registerContribution('ai.providers'"],
-      ['addons/official/code-execution/main.js', 'class ElephantCodeExecutionAddon']
+      ['addons/official/code-execution/main.js', 'class ElephantCodeExecutionAddon'],
+      ['addons/official/google-keep-import/main.js', 'class ElephantGoogleKeepImportAddon'],
+      ['addons/official/recently-edited/main.js', 'class ElephantRecentlyEditedAddon']
     ]
     for (const [file, marker] of physicalEntries) expect(read(file)).toContain(marker)
     expect(navigation).toContain(':is="entry.contribution.component"')

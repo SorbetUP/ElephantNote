@@ -127,7 +127,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     propose: () => call(API.WIKI_PROPOSE),
     accept: (id) => call(API.WIKI_ACCEPT, { id }),
     dismiss: (id) => call(API.WIKI_DISMISS, { id }),
-    sourceInfo: (path) => call(API.WIKI_SOURCE_INFO, { path }),
+    sourceInfo: (path, limit = 12) => call(API.WIKI_SOURCE_INFO, { path, limit }),
     context: (path, limit = 12) => call(API.WIKI_CONTEXT, { path, limit })
   },
   search: {
@@ -246,10 +246,5 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   mcp: {
     listTools: () => call(API.MCP_TOOLS_LIST),
     callTool: (name, args = {}) => call(API.MCP_TOOLS_CALL, { name, arguments: args })
-  },
-  programs: {
-    list: () => call(API.PROGRAMS_LIST),
-    set: (environments = {}) => call(API.PROGRAMS_SET, { environments }),
-    run: (id, command, cwd = '') => call(API.PROGRAMS_RUN, { id, command, cwd })
   }
 })

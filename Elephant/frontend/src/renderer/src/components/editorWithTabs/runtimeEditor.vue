@@ -5,6 +5,7 @@
     :factory="rustRuntimeFactory"
     mode="rust"
     class="rust-editor-runtime"
+    @ready="handleRustRuntimeReady"
     @update:model-value="handleRustMarkdownChange"
   />
   <editor
@@ -22,6 +23,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 
+import bus from '@/bus'
 import { useEditorStore } from '@/store/editor'
 import { debouncedSendBufferedState } from '@/store/bufferedState'
 import {
@@ -30,6 +32,7 @@ import {
   readMuyaRuntimeMode
 } from '@/muya'
 import Editor from './editor.vue'
+import { rustBusCommand } from './runtimeEditorCommands'
 import { applyRustEditorMarkdown } from './runtimeEditorState'
 
 const props = defineProps({
@@ -55,6 +58,7 @@ const props = defineProps({
 const editorStore = useEditorStore()
 const { currentFile } = storeToRefs(editorStore)
 const runtimeMode = ref(readMuyaRuntimeMode(window))
+const rustRuntime = ref(null)
 let runtimeModeTimer = null
 let pendingRuntimeFrame = null
 
@@ -73,6 +77,28 @@ const scheduleRuntimeModeSync = () => {
 
 const rustRuntimeActive = computed(() => isMuyaRustRuntime(runtimeMode.value))
 
+const handleRustRuntimeReady = (runtime) => {
+  rustRuntime.value = runtime
+}
+
+const dispatchRustBusCommand = (event, payload) => {
+  if (!rustRuntimeActive.value || props.sourceCode || !rustRuntime.value) return
+  const command = rustBusCommand(event, payload)
+  if (!command) return
+  rustRuntime.value.bridge.dispatch(command).catch((error) => {
+    console.error(`[Muya Rust] Failed to handle ${event}.`, error)
+  })
+}
+
+const busHandlers = Object.freeze({
+  undo: () => dispatchRustBusCommand('undo'),
+  redo: () => dispatchRustBusCommand('redo'),
+  format: (type) => dispatchRustBusCommand('format', type),
+  paragraph: (type) => dispatchRustBusCommand('paragraph', type),
+  insertParagraph: () => dispatchRustBusCommand('insertParagraph'),
+  createParagraph: () => dispatchRustBusCommand('createParagraph')
+})
+
 const handleRustMarkdownChange = (editorMarkdown) => {
   applyRustEditorMarkdown({
     editorStore,
@@ -88,6 +114,7 @@ onMounted(() => {
   window.addEventListener('focus', scheduleRuntimeModeSync)
   window.addEventListener('visibilitychange', scheduleRuntimeModeSync)
   window.addEventListener('elephantnote:muya-runtime-mode-changed', scheduleRuntimeModeSync)
+  for (const [event, handler] of Object.entries(busHandlers)) bus.on(event, handler)
   runtimeModeTimer = window.setInterval(syncRuntimeMode, 2500)
 })
 
@@ -95,6 +122,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('focus', scheduleRuntimeModeSync)
   window.removeEventListener('visibilitychange', scheduleRuntimeModeSync)
   window.removeEventListener('elephantnote:muya-runtime-mode-changed', scheduleRuntimeModeSync)
+  for (const [event, handler] of Object.entries(busHandlers)) bus.off(event, handler)
+  rustRuntime.value = null
   if (runtimeModeTimer) {
     window.clearInterval(runtimeModeTimer)
     runtimeModeTimer = null

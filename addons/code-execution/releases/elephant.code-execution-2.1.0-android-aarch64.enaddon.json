@@ -1,0 +1,11 @@
+{
+  "blake3": "35e77831561ae4e99004cf5b85aa51447c997f504fb84adc5980900d6f29cac4",
+  "bytes": 4287,
+  "path": "/home/runner/work/ElephantNote/ElephantNote/build/out/addons/releases/elephant.code-execution/elephant.code-execution-2.1.0-android-aarch64.enaddon",
+  "id": "elephant.code-execution",
+  "version": "2.1.0",
+  "platform": "android-aarch64",
+  "file": "elephant.code-execution-2.1.0-android-aarch64.enaddon",
+  "catalogPath": "addons/code-execution/releases/elephant.code-execution-2.1.0-android-aarch64.enaddon",
+  "runtime": "web-worker"
+}

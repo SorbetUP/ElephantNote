@@ -1,0 +1,11 @@
+{
+  "blake3": "f8b2826d8619d2244d37bb66c2077c49ed4afbaaca1fc57b3f9f3692803d1504",
+  "bytes": 4287,
+  "path": "/home/runner/work/ElephantNote/ElephantNote/build/out/addons/releases/elephant.code-execution/elephant.code-execution-2.1.0-ios-x86_64.enaddon",
+  "id": "elephant.code-execution",
+  "version": "2.1.0",
+  "platform": "ios-x86_64",
+  "file": "elephant.code-execution-2.1.0-ios-x86_64.enaddon",
+  "catalogPath": "addons/code-execution/releases/elephant.code-execution-2.1.0-ios-x86_64.enaddon",
+  "runtime": "web-worker"
+}

@@ -85,6 +85,9 @@ fn serialize_list_item(
 
   let mut lines = vec![format!("{marker} {content}")];
   for child in children.into_iter().skip(1) {
+    if matches!(child.kind, NodeKind::Block(BlockKind::CodeBlock { .. })) {
+      lines.push("  ".to_string());
+    }
     let nested = serialize_block(document, child);
     lines.extend(nested.lines().map(|line| format!("  {line}")));
   }

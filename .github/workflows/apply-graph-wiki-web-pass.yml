@@ -28,6 +28,11 @@ jobs:
         with:
           components: rustfmt
 
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+
       - name: Prepare deterministic transformations
         run: python3 .github/scripts/prepare_graph_wiki_web_pass.py
 

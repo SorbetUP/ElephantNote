@@ -7,6 +7,11 @@ pub fn append_inlines(
   source: &str,
   base_utf16: u32,
 ) {
+  if source.is_empty() {
+    append_empty_text(document, parent, base_utf16);
+    return;
+  }
+
   let mut byte_offset = 0usize;
   let mut utf16_offset = base_utf16;
 
@@ -178,6 +183,7 @@ pub fn append_literal(
   base_utf16: u32,
 ) {
   if source.is_empty() {
+    append_empty_text(document, parent, base_utf16);
     return;
   }
   let node = document.allocate(
@@ -188,6 +194,16 @@ pub fn append_literal(
       base_utf16,
       base_utf16 + utf16_len(source),
     )),
+  );
+  document.append_child(parent, node);
+}
+
+fn append_empty_text(document: &mut Document, parent: NodeId, offset: u32) {
+  let node = document.allocate(
+    NodeKind::Inline(InlineKind::Text {
+      value: String::new(),
+    }),
+    Some(SourceRange::new(offset, offset)),
   );
   document.append_child(parent, node);
 }
@@ -261,5 +277,40 @@ mod tests {
       .find(|node| matches!(&node.kind, NodeKind::Inline(InlineKind::Strong)))
       .unwrap();
     assert_eq!(strong.source, Some(SourceRange::new(13, 18)));
+  }
+
+  #[test]
+  fn creates_an_addressable_empty_text_node() {
+    let mut document = Document::new();
+    let paragraph = document.allocate(NodeKind::Block(BlockKind::Paragraph), None);
+    append_inlines(&mut document, paragraph, "", 7);
+
+    let children = document.children(paragraph).collect::<Vec<_>>();
+    assert_eq!(children.len(), 1);
+    assert!(matches!(
+      &children[0].kind,
+      NodeKind::Inline(InlineKind::Text { value }) if value.is_empty()
+    ));
+    assert_eq!(children[0].source, Some(SourceRange::new(7, 7)));
+  }
+
+  #[test]
+  fn creates_an_addressable_empty_literal_node() {
+    let mut document = Document::new();
+    let code = document.allocate(
+      NodeKind::Block(BlockKind::CodeBlock {
+        language: None,
+        fenced: true,
+      }),
+      None,
+    );
+    append_literal(&mut document, code, "", 4);
+
+    let text = document.children(code).next().unwrap();
+    assert!(matches!(
+      &text.kind,
+      NodeKind::Inline(InlineKind::Text { value }) if value.is_empty()
+    ));
+    assert_eq!(text.source, Some(SourceRange::new(4, 4)));
   }
 }

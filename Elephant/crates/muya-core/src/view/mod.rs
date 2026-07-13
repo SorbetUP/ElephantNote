@@ -1,7 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 use crate::edit::{Operation, Utf16Range};
 use crate::model::{BlockKind, DetachedSubtree, Node, NodeId};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ViewPatch {
   ReplaceText {
     node: NodeId,
@@ -115,5 +118,17 @@ mod tests {
         new_index: 2,
       }
     );
+  }
+
+  #[test]
+  fn serializes_stable_patch_tags() {
+    let patch = ViewPatch::ReplaceText {
+      node: NodeId(4),
+      range: Utf16Range::new(1, 3),
+      inserted: "x".into(),
+    };
+    let value = serde_json::to_value(patch).unwrap();
+    assert_eq!(value["type"], "replace_text");
+    assert_eq!(value["range"]["start"], 1);
   }
 }

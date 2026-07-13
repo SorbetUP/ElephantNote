@@ -74,7 +74,11 @@ fn build_terminal_tab(
   };
   let length = value.encode_utf16().count() as u32;
   if caret.offset_utf16 > length {
-    return Err(EditError::RangeOutOfBounds(caret.node));
+    return Err(EditError::RangeOutOfBounds {
+      node: caret.node,
+      start: caret.offset_utf16,
+      end: caret.offset_utf16,
+    });
   }
   let offset = caret.offset_utf16 + TAB_SIZE;
   let selection_after = Selection::collapsed(SelectionPoint {

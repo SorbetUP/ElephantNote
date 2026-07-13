@@ -6,8 +6,10 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 describe('physical Sync package ownership', () => {
-  it('owns identity, wire schema, manifest scanning, deterministic planning and local operations inside the native package', () => {
+  it('owns identity, pairing state, wire schema, manifest scanning, deterministic planning and local operations inside the native package', () => {
     const service = read('addons/official/sync/native/src/main.rs')
+    const library = read('addons/official/sync/native/src/lib.rs')
+    const pairing = read('addons/official/sync/native/src/pairing.rs')
     const protocol = read('addons/official/sync/native/src/protocol.rs')
     const manifest = read('addons/official/sync/native/src/manifest.rs')
     const plan = read('addons/official/sync/native/src/plan.rs')
@@ -21,6 +23,15 @@ describe('physical Sync package ownership', () => {
     expect(service).toContain('"sync.plan" => service.plan(params).await')
     expect(service).toContain('"sync.apply-local" => service.apply_local(params)')
     expect(service).toContain('"ownedCapabilities": ["endpoint", "identity", "manifest", "plan", "local-operations"]')
+    expect(library).toContain('pub mod pairing;')
+    expect(library).toContain('pub mod protocol;')
+    expect(pairing).toContain('pub struct SyncConfig')
+    expect(pairing).toContain('pub struct PendingInvite')
+    expect(pairing).toContain('pub fn create_pending_invite')
+    expect(pairing).toContain('pub fn consume_pair_request')
+    expect(pairing).toContain('pub fn register_accepted_peer')
+    expect(pairing).toContain('pub fn token_hash')
+    expect(pairing).toContain('Pairing invite is invalid, expired or already used')
     expect(protocol).toContain('pub const ALPN: &[u8] = b"elephantnote/vault-sync/1"')
     expect(protocol).toContain('pub const PROTOCOL_NAME: &str = "elephantnote-iroh-sync-v1"')
     expect(protocol).toContain('pub enum ControlMessage')

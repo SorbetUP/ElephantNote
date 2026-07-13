@@ -53,7 +53,13 @@ jobs:
             Elephant/crates/muya-core
             Elephant/crates/muya-wasm
 
-      - name: Check formatting
+      - name: Check core formatting
+        run: cargo fmt --manifest-path Elephant/crates/muya-core/Cargo.toml -- --check
+
+      - name: Test core and protocol on host
+        run: cargo test --manifest-path Elephant/crates/muya-core/Cargo.toml
+
+      - name: Check adapter formatting
         run: cargo fmt --manifest-path Elephant/crates/muya-wasm/Cargo.toml -- --check
 
       - name: Test adapter protocol on host

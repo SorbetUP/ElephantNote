@@ -83,7 +83,9 @@ fn is_muya_nested_emphasis_noop(
     .ok_or(EditError::NodeNotFound(wrapper))?
     .parent;
   Ok(matches!(
-    parent.and_then(|id| document.node(id)).map(|node| &node.kind),
+    parent
+      .and_then(|id| document.node(id))
+      .map(|node| &node.kind),
     Some(NodeKind::Inline(InlineKind::Strong))
   ))
 }

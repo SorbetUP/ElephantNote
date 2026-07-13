@@ -206,7 +206,7 @@ jobs:
         run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all -- --check
 
       - name: Cargo check
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
 
       - name: Cargo tests
         run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib

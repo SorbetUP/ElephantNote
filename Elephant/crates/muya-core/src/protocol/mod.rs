@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::edit::{
   Command, EditError, GraphemeCommand, MarkCommand, ParagraphBoundaryCommand,
+  PasteCommand,
 };
 use crate::features::{ListCommand, TableCommand, TableNavigationCommand};
 use crate::model::{Document, Node, NodeId};
@@ -24,6 +25,7 @@ pub enum ProtocolCommand {
   Snapshot,
   SetSelection { selection: Selection },
   InsertText { text: String },
+  PasteMarkdown { markdown: String },
   InsertParagraph,
   DeleteBackward,
   SetParagraph,
@@ -186,6 +188,9 @@ fn to_session_command(command: ProtocolCommand) -> SessionCommand {
   match command {
     ProtocolCommand::InsertText { text } => {
       SessionCommand::Core(Command::InsertText(text))
+    }
+    ProtocolCommand::PasteMarkdown { markdown } => {
+      SessionCommand::Paste(PasteCommand::new(markdown))
     }
     ProtocolCommand::DeleteBackward => {
       SessionCommand::Grapheme(GraphemeCommand::DeleteBackward)
@@ -380,6 +385,33 @@ mod tests {
     let json = serde_json::to_value(update).unwrap();
     assert_eq!(json["patches"][0]["type"], "replace_text");
     assert_eq!(session.snapshot().markdown, "xabc");
+  }
+
+  #[test]
+  fn routes_markdown_paste_through_one_revisioned_update() {
+    let mut session = EditorSession::from_markdown("alpha");
+    let text = first_text(session.document(), session.document().root);
+    session
+      .handle_request(request(
+        0,
+        ProtocolCommand::SetSelection {
+          selection: Selection::collapsed(SelectionPoint {
+            node: text,
+            offset_utf16: 2,
+          }),
+        },
+      ));
+    let response = session.handle_request(request(
+      0,
+      ProtocolCommand::PasteMarkdown {
+        markdown: "one\n\ntwo".into(),
+      },
+    ));
+    let EditorResponse::Update(update) = response else {
+      panic!("expected an update response");
+    };
+    assert_eq!(update.revision, 1);
+    assert_eq!(session.snapshot().markdown, "alone\n\ntwopha");
   }
 
   #[test]

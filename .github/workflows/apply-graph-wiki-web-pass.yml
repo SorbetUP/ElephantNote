@@ -58,16 +58,10 @@ jobs:
           from pathlib import Path
           path = Path('Elephant/frontend/app/components/views/AtomicGraphView.vue')
           source = path.read_text()
-          replacements = {
-            '  const { nodes, edges, edgeCounts, maxEdges } = data\n': '  const { nodes, edges, edgeCounts } = data\n',
-            '    const clusterIdx = node.clusterIndex || 0\n': '',
-            '    const connectivity = maxEdges ? Math.log1p(degree) / Math.log1p(maxEdges) : 0\n': '',
-            '    const t = nodes.length > 1 ? i / (nodes.length - 1) : 0\n': ''
-          }
-          for old, new in replacements.items():
-              if source.count(old) != 1:
-                  raise SystemExit(f'expected one renderer cleanup match, found {source.count(old)}: {old!r}')
-              source = source.replace(old, new, 1)
+          source = source.replace('  const { nodes, edges, edgeCounts, maxEdges } = data\n', '  const { nodes, edges, edgeCounts } = data\n')
+          source = source.replace('    const clusterIdx = node.clusterIndex || 0\n', '')
+          source = source.replace('    const connectivity = maxEdges ? Math.log1p(degree) / Math.log1p(maxEdges) : 0\n', '')
+          source = source.replace('    const t = nodes.length > 1 ? i / (nodes.length - 1) : 0\n', '')
           path.write_text(source)
           PY
 

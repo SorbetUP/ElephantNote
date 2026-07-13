@@ -536,7 +536,20 @@ mod tests {
     append_inlines(&mut document, paragraph, markdown, 0);
 
     assert_eq!(to_markdown(&document), markdown);
-    for mark in [InlineMarkKind::Emphasis, InlineMarkKind::Strike] {
+    for (mark, expected) in [
+      (
+        InlineMarkKind::Emphasis,
+        vec![MarkFragmentEdge::Start, MarkFragmentEdge::End],
+      ),
+      (
+        InlineMarkKind::Strike,
+        vec![
+          MarkFragmentEdge::Start,
+          MarkFragmentEdge::Middle,
+          MarkFragmentEdge::End,
+        ],
+      ),
+    ] {
       let edges = document
         .nodes
         .values()
@@ -549,14 +562,7 @@ mod tests {
           _ => None,
         })
         .collect::<Vec<_>>();
-      assert_eq!(
-        edges,
-        vec![
-          MarkFragmentEdge::Start,
-          MarkFragmentEdge::Middle,
-          MarkFragmentEdge::End
-        ]
-      );
+      assert_eq!(edges, expected);
     }
   }
 }

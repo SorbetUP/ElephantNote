@@ -1,23 +1,30 @@
 name: Physical Addon Boundary Enforcement
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/physical-boundary-enforcement.yml
+      - Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js
+      - Elephant/backend/tauri/src/lib_min.rs
+      - Elephant/backend/tauri/src/tauri_extra_commands.rs
+      - Elephant/backend/tauri/src/embeddings.rs
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   enforce:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feature/physical-addon-packages'
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: feature/physical-addon-packages
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
@@ -106,9 +113,55 @@ jobs:
               if path.exists():
                   path.unlink()
 
-          Path('tests/app/unit/addons/addonNativeServiceContracts.spec.js').write_text('''import fs from 'node:fs'\nimport path from 'node:path'\nimport { describe, expect, it } from 'vitest'\n\nconst root = process.cwd()\nconst read = (file) => fs.readFileSync(path.join(root, file), 'utf8')\n\ndescribe('persistent native addon services', () => {\n  it('exposes status, start, call and stop to trusted packages', () => {\n    const runtime = read('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')\n    for (const command of ['tauri_addons_service_status', 'tauri_addons_service_start', 'tauri_addons_service_call', 'tauri_addons_service_stop']) expect(runtime).toContain(command)\n    expect(runtime).toContain('service: Object.freeze')\n  })\n  it('keeps the native host generic and package-owned', () => {\n    const rust = read('Elephant/backend/tauri/src/addon_services.rs')\n    expect(rust).toContain('elephant-addon-service-v1')\n    expect(rust).toContain('ELEPHANT_ADDON_PACKAGE_DIR')\n    expect(rust).toContain('ELEPHANT_ADDON_DATA_DIR')\n    expect(rust).toContain('ELEPHANT_VAULT_DIR')\n    expect(rust).toContain('kill_on_drop(true)')\n    expect(rust).not.toContain('iroh::')\n  })\n})\n''')
+          Path('tests/app/unit/addons/addonNativeServiceContracts.spec.js').write_text('''import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
 
-          Path('tests/app/unit/addons/semanticBackendAbsence.spec.js').write_text('''import fs from 'node:fs'\nimport path from 'node:path'\nimport { describe, expect, it } from 'vitest'\n\nconst root = process.cwd()\nconst read = (file) => fs.readFileSync(path.join(root, file), 'utf8')\n\ndescribe('legacy semantic backend physical absence', () => {\n  it('does not ship the old embedding database module in Elephant core', () => {\n    expect(fs.existsSync(path.join(root, 'Elephant/backend/tauri/src/embeddings.rs'))).toBe(false)\n    const lib = read('Elephant/backend/tauri/src/lib_min.rs')\n    expect(lib).not.toContain('pub mod embeddings;')\n    expect(lib).not.toContain('embeddings::tauri_embeddings_')\n  })\n  it('does not expose the old global semantic rebuild command', () => {\n    const lib = read('Elephant/backend/tauri/src/lib_min.rs')\n    const commands = read('Elephant/backend/tauri/src/tauri_extra_commands.rs')\n    expect(lib).not.toContain('tauri_extra_commands::tauri_search_rebuild')\n    expect(commands).not.toContain('pub fn tauri_search_rebuild')\n    expect(commands).toContain('pub fn tauri_search_inspect')\n    expect(lib).toContain('vault::commands::tauri_search_query')\n  })\n})\n''')
+const root = process.cwd()
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+
+describe('persistent native addon services', () => {
+  it('exposes status, start, call and stop to trusted packages', () => {
+    const runtime = read('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')
+    for (const command of ['tauri_addons_service_status', 'tauri_addons_service_start', 'tauri_addons_service_call', 'tauri_addons_service_stop']) expect(runtime).toContain(command)
+    expect(runtime).toContain('service: Object.freeze')
+  })
+  it('keeps the native host generic and package-owned', () => {
+    const rust = read('Elephant/backend/tauri/src/addon_services.rs')
+    expect(rust).toContain('elephant-addon-service-v1')
+    expect(rust).toContain('ELEPHANT_ADDON_PACKAGE_DIR')
+    expect(rust).toContain('ELEPHANT_ADDON_DATA_DIR')
+    expect(rust).toContain('ELEPHANT_VAULT_DIR')
+    expect(rust).toContain('kill_on_drop(true)')
+    expect(rust).not.toContain('iroh::')
+  })
+})
+''')
+
+          Path('tests/app/unit/addons/semanticBackendAbsence.spec.js').write_text('''import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+const root = process.cwd()
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+
+describe('legacy semantic backend physical absence', () => {
+  it('does not ship the old embedding database module in Elephant core', () => {
+    expect(fs.existsSync(path.join(root, 'Elephant/backend/tauri/src/embeddings.rs'))).toBe(false)
+    const lib = read('Elephant/backend/tauri/src/lib_min.rs')
+    expect(lib).not.toContain('pub mod embeddings;')
+    expect(lib).not.toContain('embeddings::tauri_embeddings_')
+  })
+  it('does not expose the old global semantic rebuild command', () => {
+    const lib = read('Elephant/backend/tauri/src/lib_min.rs')
+    const commands = read('Elephant/backend/tauri/src/tauri_extra_commands.rs')
+    expect(lib).not.toContain('tauri_extra_commands::tauri_search_rebuild')
+    expect(commands).not.toContain('pub fn tauri_search_rebuild')
+    expect(commands).toContain('pub fn tauri_search_inspect')
+    expect(lib).toContain('vault::commands::tauri_search_query')
+  })
+})
+''')
           PY
 
           if [ -f Elephant/backend/tauri/src/embeddings.rs ]; then

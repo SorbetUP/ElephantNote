@@ -32,7 +32,20 @@ jobs:
         run: python3 .github/scripts/prepare_graph_wiki_web_pass.py
 
       - name: Apply scale and research fixes
-        run: python3 .github/scripts/apply_graph_wiki_web_pass.py
+        id: apply_patch
+        continue-on-error: true
+        run: python3 .github/scripts/apply_graph_wiki_web_pass.py 2>&1 | tee /tmp/graph-wiki-web-pass.log
+
+      - name: Upload patch diagnostics
+        if: steps.apply_patch.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: graph-wiki-web-pass-log-final
+          path: /tmp/graph-wiki-web-pass.log
+
+      - name: Stop after patch failure
+        if: steps.apply_patch.outcome == 'failure'
+        run: exit 1
 
       - name: Remove obsolete graph scale variables
         run: |

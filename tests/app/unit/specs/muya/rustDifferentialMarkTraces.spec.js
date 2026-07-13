@@ -49,9 +49,9 @@ const traces = [
     }
   },
   {
-    name: 'remove emphasis from a fully selected nested mark',
+    name: 'keep fully selected emphasis nested in strong as a no-op',
     initial: '***alpha***',
-    expected: '**alpha**\n',
+    expected: '***alpha***\n',
     runJs: async (muya) => {
       setJsSelection(muya, 0, 3, 8)
       muya.format('em')

@@ -1,6 +1,18 @@
 'use strict'
 
-const checker = require('license-checker')
+const fs = require('fs')
+const path = require('path')
+
+const configuredModulesDir = path.resolve(__dirname, '../../Elephant/node_modules')
+const checker = (() => {
+  try {
+    return require('license-checker')
+  } catch (error) {
+    const fallback = path.join(configuredModulesDir, 'license-checker')
+    if (!fs.existsSync(fallback)) throw error
+    return require(fallback)
+  }
+})()
 
 const normalizeLicenseValue = (licenses = '') => Array.isArray(licenses) ? licenses.join(' OR ') : String(licenses || '')
 
@@ -11,20 +23,41 @@ const isUsableLicenseMetadata = (licenses = '') => {
   return true
 }
 
-const getLicenses = (rootDir, callback) => {
-  checker.init(
-    {
-      start: rootDir,
-      production: true,
-      development: false,
-      direct: true,
-      excludePackages: '@marktext/file-icons', // MIT licensed but license-checker may not detect it
-      json: true
-    },
-    function(err, packages) {
-      callback(err, packages, checker)
+const withRootNodeModules = (rootDir, callback) => {
+  const rootModules = path.join(rootDir, 'node_modules')
+  if (fs.existsSync(rootModules) || !fs.existsSync(configuredModulesDir)) {
+    callback(() => {})
+    return
+  }
+
+  fs.symlinkSync(configuredModulesDir, rootModules, process.platform === 'win32' ? 'junction' : 'dir')
+  callback(() => {
+    try {
+      const stat = fs.lstatSync(rootModules)
+      if (stat.isSymbolicLink()) fs.unlinkSync(rootModules)
+    } catch {
+      // Validation cleanup must not hide the checker result.
     }
-  )
+  })
+}
+
+const getLicenses = (rootDir, callback) => {
+  withRootNodeModules(rootDir, (cleanup) => {
+    checker.init(
+      {
+        start: rootDir,
+        production: true,
+        development: false,
+        direct: true,
+        excludePackages: '@marktext/file-icons', // MIT licensed but license-checker may not detect it
+        json: true
+      },
+      function(err, packages) {
+        cleanup()
+        callback(err, packages, checker)
+      }
+    )
+  })
 }
 
 // Check that all production dependencies expose usable license metadata.

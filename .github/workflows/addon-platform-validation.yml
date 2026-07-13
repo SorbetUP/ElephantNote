@@ -44,6 +44,8 @@ jobs:
             tests/app/unit/addons/builtinAddons.spec.js \
             tests/app/unit/addons/aiTabsAndRailBorder.spec.js \
             tests/app/unit/addons/physicalAddonIsolation.spec.js \
+            tests/app/unit/addons/nativeMobileCompatibility.spec.js \
+            tests/app/unit/addons/trustedOfficialActivation.spec.js \
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
             2>&1 | tee addon-tests.txt
 

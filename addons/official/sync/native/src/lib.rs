@@ -1,3 +1,4 @@
+pub mod conflicts;
 pub mod invite;
 pub mod local_ops;
 pub mod manifest;

@@ -23,6 +23,7 @@ pub mod search_logic;
 pub mod addons;
 pub mod addon_catalog;
 pub mod addon_dependencies;
+pub mod addon_registry_view;
 pub mod addon_runtime_access;
 pub mod addon_note_access;
 pub mod addon_http_access;
@@ -139,7 +140,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       healthcheck,
       tauri_platform_info,
-      addons::tauri_addons_list,
+      addon_registry_view::tauri_addons_list,
       addons::tauri_addons_install,
       addon_catalog::tauri_addons_catalog_list,
       addon_catalog::tauri_addons_catalog_install,

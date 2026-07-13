@@ -30,6 +30,7 @@ import {
   readMuyaRuntimeMode
 } from '@/muya'
 import Editor from './editor.vue'
+import { applyRustEditorMarkdown } from './runtimeEditorState'
 
 const props = defineProps({
   markdown: { type: String, required: true },
@@ -73,19 +74,13 @@ const scheduleRuntimeModeSync = () => {
 const rustRuntimeActive = computed(() => isMuyaRustRuntime(runtimeMode.value))
 
 const handleRustMarkdownChange = (editorMarkdown) => {
-  const file = currentFile.value
-  if (!file?.id) return
-  const nextMarkdown = props.fromEditorMarkdown(String(editorMarkdown || ''))
-  if (file.markdown === nextMarkdown) return
-
-  file.markdown = nextMarkdown
-  file.isSaved = false
-  const index = editorStore.tabIdToIndex[file.id]
-  if (index !== undefined && editorStore.tabs[index]) {
-    editorStore.tabs[index].markdown = nextMarkdown
-    editorStore.tabs[index].isSaved = false
-  }
-  debouncedSendBufferedState()
+  applyRustEditorMarkdown({
+    editorStore,
+    file: currentFile.value,
+    editorMarkdown,
+    fromEditorMarkdown: props.fromEditorMarkdown,
+    persist: debouncedSendBufferedState
+  })
 }
 
 onMounted(() => {

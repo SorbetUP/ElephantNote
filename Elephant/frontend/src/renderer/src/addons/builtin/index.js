@@ -98,23 +98,6 @@ export const sitesAddon = createLazyBuiltinAddon({
   }
 })
 
-export const aiAddon = createLazyBuiltinAddon({
-  exportName: 'aiAddon',
-  load: () => import('./ai'),
-  manifest: {
-    id: 'elephant.ai',
-    name: 'AI',
-    version: '2.0.0',
-    description: 'Configures AI providers and owns optional Chat, Search, OCR, Wiki and Graph modules.',
-    author: 'ElephantNote',
-    icon: 'sparkles',
-    defaultEnabled: false,
-    removable: true,
-    permissions: ['ai.configure'],
-    contributes: { settings: true }
-  }
-})
-
 export const aiChatAddon = createLazyBuiltinAddon({
   exportName: 'aiChatAddon',
   load: () => import('./aiChat'),
@@ -292,7 +275,6 @@ export const builtinAddons = [
   codexConnectionAddon,
   calendarAddon,
   sitesAddon,
-  aiAddon,
   aiChatAddon,
   aiSearchAddon,
   wikiAddon,

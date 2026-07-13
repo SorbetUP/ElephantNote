@@ -38,6 +38,8 @@ build/android/captures/
 # Tauri / Rust build artifacts
 Elephant/backend/tauri/target/
 Elephant/backend/tauri/gen/
+Elephant/crates/muya-wasm/target/
+Elephant/frontend/src/muya/lib/rust/generated/
 
 # Swift Package Manager generated files
 build/ios/.build/

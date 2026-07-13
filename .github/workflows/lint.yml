@@ -40,11 +40,13 @@ jobs:
         if: github.head_ref == 'feature/physical-addon-packages'
         shell: bash
         run: |
+          set -o pipefail
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
             tests/app/unit/addons/addonNativeServiceContracts.spec.js \
             tests/app/unit/addons/semanticBackendAbsence.spec.js \
             tests/app/unit/addons/syncMigrationBoundary.spec.js \
-            tests/app/unit/addons/trustedAddonModuleGraph.spec.js
+            tests/app/unit/addons/trustedAddonModuleGraph.spec.js \
+            2>&1 | tee focused-migration-tests.txt
 
       - name: Commit validated migration
         if: github.head_ref == 'feature/physical-addon-packages'
@@ -69,4 +71,5 @@ jobs:
           path: |
             eslint-output.txt
             physical-migration-output.txt
+            focused-migration-tests.txt
           if-no-files-found: ignore

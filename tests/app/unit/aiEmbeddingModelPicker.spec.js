@@ -6,7 +6,7 @@ const source = fs.readFileSync(path.join(process.cwd(), 'Elephant/frontend/app/c
 
 describe('local embedding model picker', () => {
   test('lists downloaded embedding-capable models instead of requiring a raw id', () => {
-    expect(source).toContain('v-for=\"model in localEmbeddingModels\"')
+    expect(source).toContain('v-for="model in localEmbeddingModels"')
     expect(source).toContain('elephantnoteClient.models.listLocal?.()')
     expect(source).toContain('elephantnoteClient.models.getSelection?.()')
     expect(source).toContain('getModelCapabilities')
@@ -14,6 +14,6 @@ describe('local embedding model picker', () => {
   })
 
   test('keeps manual model ids for external providers', () => {
-    expect(source).toMatch(/v-else[\s\S]*v-model\.trim=\"form\.routes\.embedding\.model\"/)
+    expect(source).toMatch(/v-else[\s\S]*v-model\.trim="form\.routes\.embedding\.model"/)
   })
 })

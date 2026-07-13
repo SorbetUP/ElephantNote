@@ -1,0 +1,102 @@
+name: Remove Lexical Wiki Fallback
+
+on:
+  pull_request:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/remove-lexical-wiki-fallback.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'assistant/wiki-organization-continuation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+
+      - name: Stop mixing lexical micro-candidates into the Wiki library
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('Elephant/backend/tauri/src/knowledge_wiki_library.rs')
+          source = path.read_text()
+          source = source.replace(
+              '''use crate::knowledge_wikis::{
+              tauri_knowledge_wiki_accept, tauri_knowledge_wiki_candidates, tauri_knowledge_wiki_generate,
+              WikiCandidate,
+          };''',
+              '''use crate::knowledge_wikis::{
+              tauri_knowledge_wiki_accept, tauri_knowledge_wiki_generate,
+          };''',
+              1,
+          )
+
+          start = source.find('fn candidate_item(candidate: WikiCandidate) -> WikiLibraryItem {')
+          end = source.find('\nfn saved_candidate_items', start)
+          if start >= 0 and end >= 0:
+              source = source[:start] + source[end + 1:]
+          elif 'fn candidate_item(' in source:
+              raise SystemExit('candidate_item boundaries not found')
+
+          old = '''    let mut suggestions = saved_candidate_items(&store)?
+              .into_iter()
+              .filter(|candidate| !rejected.contains(&normalize_topic(&candidate.topic)))
+              .collect::<Vec<_>>();
+              let mut seen_topics = suggestions
+              .iter()
+              .map(|candidate| normalize_topic(&candidate.topic))
+              .collect::<HashSet<_>>();
+              suggestions.extend(
+              tauri_knowledge_wiki_candidates(app, Some(limit))?
+                  .into_iter()
+                  .filter(|candidate| !rejected.contains(&normalize_topic(&candidate.topic)))
+                  .filter(|candidate| seen_topics.insert(normalize_topic(&candidate.topic)))
+                  .map(candidate_item),
+              );'''
+          new = '''    let mut suggestions = saved_candidate_items(&store)?
+              .into_iter()
+              .filter(|candidate| !rejected.contains(&normalize_topic(&candidate.topic)))
+              .collect::<Vec<_>>();'''
+          if old not in source:
+              raise SystemExit('library lexical fallback block not found')
+          source = source.replace(old, new, 1)
+          path.write_text(source)
+
+          test_path = Path('tests/app/unit/wikiDiscoveryQualityRegression.spec.js')
+          test = test_path.read_text()
+          test = test.replace(
+              "const wikiView = fs.readFileSync('Elephant/frontend/app/components/views/WikiView.vue', 'utf8')",
+              "const wikiView = fs.readFileSync('Elephant/frontend/app/components/views/WikiView.vue', 'utf8')\nconst library = fs.readFileSync('Elephant/backend/tauri/src/knowledge_wiki_library.rs', 'utf8')",
+              1,
+          )
+          test = test.replace(
+              "  it('uses an inline two-step delete confirmation', () => {",
+              "  it('does not mix legacy lexical micro-candidates into semantic proposals', () => {\n    expect(library).not.toContain('tauri_knowledge_wiki_candidates(app')\n    expect(library).not.toContain('fn candidate_item(candidate: WikiCandidate)')\n  })\n\n  it('uses an inline two-step delete confirmation', () => {",
+              1,
+          )
+          test_path.write_text(test)
+          PY
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+
+      - name: Validate library contracts
+        run: |
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/wikiDiscoveryQualityRegression.spec.js
+
+      - name: Commit library correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Elephant/backend/tauri/src/knowledge_wiki_library.rs \
+            tests/app/unit/wikiDiscoveryQualityRegression.spec.js
+          git commit --no-verify -m "fix: show only qualified Wiki proposals"
+          git push origin HEAD:assistant/wiki-organization-continuation

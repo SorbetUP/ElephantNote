@@ -43,6 +43,14 @@ const browserEvent = (type, values = {}) => {
   return event
 }
 
+const clipboardData = (text, html = '') => ({
+  getData: (type) => {
+    if (type === 'text/plain') return text
+    if (type === 'text/html') return html
+    return ''
+  }
+})
+
 const fakeBridge = () => ({
   setSelection: vi.fn(async () => {}),
   dispatch: vi.fn(async () => {})
@@ -81,6 +89,40 @@ describe('MuyaRustInputController', () => {
     expect(bridge.setSelection.mock.invocationCallOrder[0]).toBeLessThan(
       bridge.dispatch.mock.invocationCallOrder[0]
     )
+  })
+
+  it('routes plain clipboard Markdown through one paste command', async () => {
+    const event = browserEvent('paste', {
+      clipboardData: clipboardData('one\n\ntwo')
+    })
+    container.dispatchEvent(event)
+    await controller.idle()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(bridge.setSelection).toHaveBeenCalledWith({
+      anchor: { node: 3, offset_utf16: 2 },
+      focus: { node: 3, offset_utf16: 2 }
+    })
+    expect(bridge.dispatch).toHaveBeenCalledWith({
+      type: 'paste_markdown',
+      markdown: 'one\n\ntwo'
+    })
+  })
+
+  it('normalizes semantic clipboard HTML before paste', async () => {
+    const event = browserEvent('paste', {
+      clipboardData: clipboardData(
+        'bold and soft',
+        '<p><strong>bold</strong> and <em>soft</em></p>'
+      )
+    })
+    container.dispatchEvent(event)
+    await controller.idle()
+
+    expect(bridge.dispatch).toHaveBeenCalledWith({
+      type: 'paste_markdown',
+      markdown: '**bold** and *soft*'
+    })
   })
 
   it('replaces the active IME range when composition text changes', async () => {

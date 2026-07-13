@@ -2,8 +2,6 @@ use crate::edit::{EditError, Transaction};
 use crate::model::{BlockKind, Document, InlineKind, NodeId, NodeKind};
 use crate::selection::{Selection, SelectionPoint};
 
-use super::table::TableCommand;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TableNavigationCommand {
   NextCell,
@@ -58,7 +56,11 @@ fn build_next_cell(
     );
   }
 
-  TableCommand::InsertRowAfter.build(document, selection)
+  Ok(Transaction {
+    operations: Vec::new(),
+    selection_before: selection,
+    selection_after: selection,
+  })
 }
 
 fn build_previous_cell(
@@ -278,8 +280,8 @@ mod tests {
   }
 
   #[test]
-  fn creates_a_row_when_advancing_from_the_last_cell_and_undoes_it() {
-    let mut document = parse_markdown("| A | B |\n| --- | --- |\n| one | two |");
+  fn keeps_the_selection_at_the_final_cell() {
+    let document = parse_markdown("| A | B |\n| --- | --- |\n| one | two |");
     let table = document.children(document.root).next().unwrap().id;
     let source = text_at(&document, table, 1, 1);
     let selection = Selection::collapsed(SelectionPoint {
@@ -287,20 +289,15 @@ mod tests {
       offset_utf16: 3,
     });
 
-    let inverse = TableNavigationCommand::NextCell
+    let transaction = TableNavigationCommand::NextCell
       .build(&document, selection)
-      .unwrap()
-      .apply(&mut document)
       .unwrap();
-    assert_eq!(document.children(table).count(), 3);
+    assert!(transaction.operations.is_empty());
+    assert_eq!(transaction.selection_after, selection);
+    assert_eq!(document.children(table).count(), 2);
     assert_eq!(
       to_markdown(&document),
-      "| A   | B   |\n| --- | --- |\n| one | two |\n|     |     |"
+      "| A   | B   |\n| --- | --- |\n| one | two |"
     );
-    let new_first_text = text_at(&document, table, 2, 0);
-    assert_eq!(inverse.selection_before.focus.node, new_first_text);
-
-    inverse.apply(&mut document).unwrap();
-    assert_eq!(document.children(table).count(), 2);
   }
 }

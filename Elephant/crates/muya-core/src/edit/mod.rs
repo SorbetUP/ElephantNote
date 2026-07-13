@@ -13,6 +13,8 @@ mod operation;
 mod paragraph;
 mod paragraph_boundary;
 mod paragraph_engine;
+mod paste;
+mod paste_command;
 mod transaction;
 
 pub use command::Command;
@@ -21,5 +23,6 @@ pub use grapheme::GraphemeCommand;
 pub use mark_dispatch::MarkCommand;
 pub use operation::{Operation, Utf16Range};
 pub use paragraph_boundary::ParagraphBoundaryCommand;
+pub use paste_command::PasteCommand;
 pub use transaction::Transaction;
 pub(crate) use mark_fragments::build_partial_cross_wrapper_toggle;

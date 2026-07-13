@@ -62,10 +62,10 @@ const traces = [
     runRust: (rust) => fragmentEdges(rust)
   },
   {
-    name: 'toggle a linked strike group off',
+    name: 'keep a linked strike group on repeated toggle',
     initial: '**alpha** beta *gamma*',
-    expected: '**alpha** beta *gamma*\n',
-    edges: [],
+    expected: '**al~~pha** beta *gam~~ma*\n',
+    edges: ['start', 'middle', 'end'],
     runJs: async (muya) => {
       setJsSelection(muya, 0, 4, 19)
       muya.format('del')

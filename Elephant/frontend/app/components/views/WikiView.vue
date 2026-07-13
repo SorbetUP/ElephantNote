@@ -135,7 +135,7 @@
             :disabled="isBusy(entry.id)"
             @click="deleteWiki(entry)"
           >
-            <Trash2 class="en-popover-icon" /> Supprimer
+            <Trash2 class="en-popover-icon" /> {{ deleteConfirmId === entry.id ? 'Confirmer la suppression' : 'Supprimer' }}
           </button>
         </div>
 
@@ -250,6 +250,7 @@ const manualTopic = ref('')
 const discovering = ref(false)
 const selectedSuggestionId = ref('')
 const openMenuId = ref('')
+const deleteConfirmId = ref('')
 const busyIds = ref(new Set())
 const errorsById = ref({})
 
@@ -438,10 +439,14 @@ const openWiki = (entry) => {
 }
 
 const deleteWiki = async(entry) => {
-  openMenuId.value = ''
   if (!entry.draftId || isBusy(entry.id)) return
-  const confirmed = globalThis.confirm?.(`Supprimer définitivement le wiki « ${entry.title} » ?`)
-  if (confirmed === false) return
+  if (deleteConfirmId.value !== entry.id) {
+    deleteConfirmId.value = entry.id
+    openMenuId.value = entry.id
+    return
+  }
+  deleteConfirmId.value = ''
+  openMenuId.value = ''
   setBusy(entry.id, true)
   setEntryError(entry.id)
   try {
@@ -456,12 +461,14 @@ const deleteWiki = async(entry) => {
 }
 
 const toggleMenu = (id) => {
+  deleteConfirmId.value = ''
   openMenuId.value = openMenuId.value === id ? '' : id
 }
 
 const closeMenu = (event) => {
   if (!openMenuId.value) return
   if (event?.target?.closest?.('.en-card-popover, .en-card-menu')) return
+  deleteConfirmId.value = ''
   openMenuId.value = ''
 }
 

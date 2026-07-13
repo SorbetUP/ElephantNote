@@ -32,7 +32,7 @@ describe('large-vault graph and Wiki scale regressions', () => {
   test('enables Codex hosted live web search while keeping read-only sandboxing', () => {
     const source = read('Elephant/backend/tauri/src/chat_runtime/codex_app_server.rs')
     expect(source).toContain('"web_search": "live"')
-    expect(source).toContain('"context_size": "high"')
+    expect(source).not.toContain('"tools": {\n          "web_search"')
     expect(source).toContain('"type": TURN_READ_ONLY_SANDBOX')
   })
 })

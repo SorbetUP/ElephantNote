@@ -12,6 +12,13 @@ pub enum MarkCommand {
 
 impl MarkCommand {
   pub fn build(self, document: &Document, selection: Selection) -> Result<Transaction, EditError> {
+    if let Some(transaction) = super::mark_linked_same::build_same_mark_linked_toggle(
+      document,
+      selection,
+      self.fragment_kind(),
+    )? {
+      return Ok(transaction);
+    }
     if let Some(transaction) = super::mark_same_subtree::build_partial_same_top_level_toggle(
       document,
       selection,

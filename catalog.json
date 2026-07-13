@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-13T12:22:22Z",
+  "updatedAt": "2026-07-13T13:10:11Z",
   "addons": [
     {
       "id": "elephant.ai",
@@ -29,8 +29,8 @@
       "id": "elephant.ai-search",
       "slug": "ai-search",
       "name": "Semantic Search",
-      "version": "1.1.0",
-      "description": "Adds embedding configuration, semantic indexing and retrieval settings as a physical package.",
+      "version": "1.2.0",
+      "description": "Owns note indexing and retrieval inside the physical addon package.",
       "author": "Elephant",
       "official": true,
       "manifestPath": "addons/ai-search/manifest.json",

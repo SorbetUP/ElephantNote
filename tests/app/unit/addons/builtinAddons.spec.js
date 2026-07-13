@@ -10,7 +10,7 @@ const OPTIONAL_EDITOR_ADDONS = ['elephant.code-execution']
 const CORE_EDITOR_ADDONS = ['elephant.excalidraw']
 
 describe('builtin addons', () => {
-  it('exports only the cleaned first-party catalogue', () => {
+  it('exports only code that is physically bundled with the app', () => {
     expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
       'elephant.addon-packs',
       'elephant.google-keep-import',
@@ -20,7 +20,6 @@ describe('builtin addons', () => {
       'elephant.ai',
       'elephant.ai-chat',
       'elephant.ai-search',
-      'elephant.ai-ocr',
       'elephant.wiki',
       'elephant.graph',
       'elephant.open-models',
@@ -30,6 +29,7 @@ describe('builtin addons', () => {
       'elephant.recently-edited'
     ])
     expect(builtinAddons).toContain(addonPacksAddon)
+    expect(builtinAddons.map((addon) => addon.manifest.id)).not.toContain('elephant.ai-ocr')
     expect(builtinAddons.map((addon) => addon.manifest.id)).not.toContain('elephant.addon-inspector')
   })
 
@@ -50,7 +50,7 @@ describe('builtin addons', () => {
     expect(manager.getContributions(ADDON_EXTENSION_POINTS.settingsSections)).toHaveLength(1)
   })
 
-  it('marks optional first-party features as disabled and removable by default', () => {
+  it('marks optional bundled first-party features as disabled and removable by default', () => {
     const optional = builtinAddons.filter((addon) => (
       addon.manifest.id !== 'elephant.addon-packs' && !CORE_EDITOR_ADDONS.includes(addon.manifest.id)
     ))

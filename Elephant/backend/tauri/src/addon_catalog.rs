@@ -206,9 +206,26 @@ fn temporary_package_path(item: &CatalogAddon) -> PathBuf {
   ))
 }
 
-fn write_temporary_package(item: &CatalogAddon, manifest_bytes: &[u8], entry_bytes: &[u8]) -> R<PathBuf> {
-  let manifest: AddonManifest = serde_json::from_slice(manifest_bytes)
+fn parse_source_manifest(item: &CatalogAddon, manifest_bytes: &[u8]) -> R<(AddonManifest, bool)> {
+  let manifest_value: Value = serde_json::from_slice(manifest_bytes)
     .map_err(|error| format!("Invalid manifest for {}: {error}", item.id))?;
+  let requests_native = manifest_value
+    .pointer("/permissions/native")
+    .and_then(Value::as_bool)
+    .unwrap_or(false);
+  let manifest: AddonManifest = serde_json::from_value(manifest_value)
+    .map_err(|error| format!("Invalid manifest for {}: {error}", item.id))?;
+  Ok((manifest, requests_native))
+}
+
+fn write_temporary_package(item: &CatalogAddon, manifest_bytes: &[u8], entry_bytes: &[u8]) -> R<PathBuf> {
+  let (manifest, requests_native) = parse_source_manifest(item, manifest_bytes)?;
+  if requests_native {
+    return Err(format!(
+      "Native addon {} requires a complete hashed .enaddon packagePath; source-only catalogue entries cannot contain sidecars",
+      item.id
+    ));
+  }
   if manifest.id != item.id || manifest.version != item.version || manifest.name != item.name {
     return Err(format!("Catalogue metadata does not match manifest for {}", item.id));
   }
@@ -345,6 +362,22 @@ mod tests {
   #[test]
   fn requires_source_files_to_stay_inside_the_addon_slug() {
     assert!(validate_catalog_item(&source_item()).is_ok());
+  }
+
+  #[test]
+  fn rejects_source_only_native_packages() {
+    let item = source_item();
+    let manifest = br#"{
+      "id": "com.example.test",
+      "name": "Test",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "runtime": { "type": "javascript-worker", "entry": "main.js" },
+      "permissions": { "native": true }
+    }"#;
+    let error = write_temporary_package(&item, manifest, b"export default class TestAddon {}")
+      .expect_err("native source packages must be rejected");
+    assert!(error.contains("complete hashed .enaddon packagePath"));
   }
 
   #[test]

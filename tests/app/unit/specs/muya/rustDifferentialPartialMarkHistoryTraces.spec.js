@@ -64,6 +64,66 @@ const traces = [
       rust.request({ type: 'redo' })
       return [formatted, undone, rust.markdown()]
     }
+  },
+  {
+    name: 'undo and redo removing a linked emphasis group',
+    initial: 'alpha **beta** gamma',
+    expected: 'alpha **beta** gamma\n',
+    checkpoints: [
+      'alpha **beta** gamma\n',
+      'al*pha **be*ta** gamma\n',
+      'alpha **beta** gamma\n'
+    ],
+    runJs: async (muya) => {
+      setJsSelection(muya, 0, 2, 10)
+      muya.format('em')
+      muya.format('em')
+      const removed = muya.getMarkdown()
+      muya.undo()
+      const restored = muya.getMarkdown()
+      muya.redo()
+      return [removed, restored, muya.getMarkdown()]
+    },
+    runRust: (rust) => {
+      rust.setSelectionBetweenText('alpha ', 2, 'beta', 2)
+      rust.request({ type: 'toggle_emphasis' })
+      rust.request({ type: 'toggle_emphasis' })
+      const removed = rust.markdown()
+      rust.request({ type: 'undo' })
+      const restored = rust.markdown()
+      rust.request({ type: 'redo' })
+      return [removed, restored, rust.markdown()]
+    }
+  },
+  {
+    name: 'skip a phantom history entry for repeated linked strike',
+    initial: '**alpha** beta *gamma*',
+    expected: '**al~~pha** beta *gam~~ma*\n',
+    checkpoints: [
+      '**al~~pha** beta *gam~~ma*\n',
+      '**alpha** beta *gamma*\n',
+      '**al~~pha** beta *gam~~ma*\n'
+    ],
+    runJs: async (muya) => {
+      setJsSelection(muya, 0, 4, 19)
+      muya.format('del')
+      muya.format('del')
+      const repeated = muya.getMarkdown()
+      muya.undo()
+      const undone = muya.getMarkdown()
+      muya.redo()
+      return [repeated, undone, muya.getMarkdown()]
+    },
+    runRust: (rust) => {
+      rust.setSelectionBetweenText('alpha', 2, 'gamma', 3)
+      rust.request({ type: 'toggle_strike' })
+      rust.request({ type: 'toggle_strike' })
+      const repeated = rust.markdown()
+      rust.request({ type: 'undo' })
+      const undone = rust.markdown()
+      rust.request({ type: 'redo' })
+      return [repeated, undone, rust.markdown()]
+    }
   }
 ]
 

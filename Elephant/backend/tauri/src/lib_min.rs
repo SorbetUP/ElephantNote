@@ -1,6 +1,4 @@
 use serde_json::json;
-#[cfg(not(mobile))]
-use std::path::{Path, PathBuf};
 #[allow(unused_imports)]
 use tauri::Manager;
 
@@ -13,7 +11,6 @@ pub mod note_domain;
 pub mod folder_domain;
 pub mod media_domain;
 pub mod drawing_domain;
-pub mod chat_runtime;
 pub mod search_logic;
 pub mod addons;
 pub mod addon_catalog;
@@ -25,7 +22,6 @@ pub mod addon_note_access;
 pub mod addon_http_access;
 pub mod addon_sidecars;
 pub mod addon_services;
-pub mod which;
 
 mod tauri_extra_commands;
 mod debug_commands;
@@ -71,41 +67,6 @@ fn tauri_platform_info() -> serde_json::Value {
   })
 }
 
-#[cfg(not(mobile))]
-fn codex_binary_name() -> &'static str {
-  if cfg!(windows) {
-    "codex.exe"
-  } else {
-    "codex"
-  }
-}
-
-#[cfg(not(mobile))]
-fn bundled_codex_candidates(resource_dir: Option<&Path>, manifest_dir: &Path) -> Vec<PathBuf> {
-  let mut candidates = Vec::new();
-  if let Some(resource_dir) = resource_dir {
-    candidates.push(resource_dir.join("bin").join(codex_binary_name()));
-    candidates.push(resource_dir.join(codex_binary_name()));
-  }
-  candidates.push(manifest_dir.join("bin").join(codex_binary_name()));
-  candidates
-}
-
-#[cfg(not(mobile))]
-fn configure_bundled_codex_runtime(app: &tauri::App) {
-  let resource_dir = app.path().resource_dir().ok();
-  let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-  if let Some(path) = bundled_codex_candidates(resource_dir.as_deref(), manifest_dir)
-    .into_iter()
-    .find(|path| path.is_file())
-  {
-    std::env::set_var("ELEPHANTNOTE_CODEX_PATH", &path);
-    eprintln!("[Codex][bundle] ready path={}", path.display());
-  } else {
-    eprintln!("[Codex][bundle] missing; rebuild with pnpm tauri:codex:install");
-  }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let builder = tauri::Builder::default()
@@ -120,8 +81,6 @@ pub fn run() {
 
   builder
     .setup(|app| {
-      #[cfg(not(mobile))]
-      configure_bundled_codex_runtime(app);
       let handle = app.handle().clone();
       app.manage(state::AppState::new(&handle));
       app.manage(watcher::WatcherState::new());
@@ -261,7 +220,6 @@ pub fn run() {
       tauri_extra_commands::tauri_ai_config_test,
       tauri_extra_commands::tauri_features_get,
       tauri_extra_commands::tauri_features_set,
-      chat_runtime::tauri_rag_chat,
       tauri_extra_commands::tauri_sync_plan
     ])
     .run(tauri::generate_context!())
@@ -271,22 +229,6 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[cfg(not(mobile))]
-  #[test]
-  fn bundled_codex_candidates_prefer_packaged_resources() {
-    let resource = Path::new("/app/resources");
-    let manifest = Path::new("/source/tauri");
-    let candidates = bundled_codex_candidates(Some(resource), manifest);
-    assert_eq!(
-      candidates[0],
-      resource.join("bin").join(codex_binary_name())
-    );
-    assert_eq!(
-      candidates.last(),
-      Some(&manifest.join("bin").join(codex_binary_name()))
-    );
-  }
 
   #[test]
   fn platform_info_contains_target_flags() {

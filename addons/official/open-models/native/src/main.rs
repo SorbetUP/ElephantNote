@@ -88,7 +88,16 @@ impl ModelService {
       .chars()
       .map(|character| if character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_') { character } else { '-' })
       .collect::<String>();
-    let compact = normalized.split('-').filter(|part| !part.is_empty()).collect::<Vec<_>>().join("-");
+    let mut compact = normalized
+      .split('-')
+      .filter(|part| !part.is_empty())
+      .collect::<Vec<_>>()
+      .join("-")
+      .trim_matches('.')
+      .to_string();
+    while compact.contains("..") {
+      compact = compact.replace("..", ".");
+    }
     if compact.is_empty() { "model.gguf".to_string() } else { compact }
   }
 

@@ -25,11 +25,7 @@ on:
       - 'tests/app/unit/specs/muya/rustRuntime.spec.js'
       - 'tests/app/unit/specs/muya/rustWasmFactory.spec.js'
       - 'tests/app/unit/specs/muya/rustVueRuntime.spec.js'
-      - 'tests/app/unit/specs/muya/rustDifferentialHarness.js'
-      - 'tests/app/unit/specs/muya/rustDifferentialTraces.spec.js'
-      - 'tests/app/unit/specs/muya/rustDifferentialStructuralTraces.spec.js'
-      - 'tests/app/unit/specs/muya/rustDifferentialHistoryTraces.spec.js'
-      - 'tests/app/unit/specs/muya/rustDifferentialUnicodeTraces.spec.js'
+      - 'tests/app/unit/specs/muya/rustDifferential*.js'
       - '.github/workflows/muya-wasm.yml'
   pull_request:
     paths:
@@ -53,11 +49,7 @@ on:
       - 'tests/app/unit/specs/muya/rustRuntime.spec.js'
       - 'tests/app/unit/specs/muya/rustWasmFactory.spec.js'
       - 'tests/app/unit/specs/muya/rustVueRuntime.spec.js'
-      - 'tests/app/unit/specs/muya/rustDifferentialHarness.js'
-      - 'tests/app/unit/specs/muya/rustDifferentialTraces.spec.js'
-      - 'tests/app/unit/specs/muya/rustDifferentialStructuralTraces.spec.js'
-      - 'tests/app/unit/specs/muya/rustDifferentialHistoryTraces.spec.js'
-      - 'tests/app/unit/specs/muya/rustDifferentialUnicodeTraces.spec.js'
+      - 'tests/app/unit/specs/muya/rustDifferential*.js'
       - '.github/workflows/muya-wasm.yml'
   workflow_dispatch:
 
@@ -124,11 +116,7 @@ jobs:
             tests/app/unit/specs/muya/rustRuntime.spec.js \
             tests/app/unit/specs/muya/rustWasmFactory.spec.js \
             tests/app/unit/specs/muya/rustVueRuntime.spec.js \
-            tests/app/unit/specs/muya/rustDifferentialHarness.js \
-            tests/app/unit/specs/muya/rustDifferentialTraces.spec.js \
-            tests/app/unit/specs/muya/rustDifferentialStructuralTraces.spec.js \
-            tests/app/unit/specs/muya/rustDifferentialHistoryTraces.spec.js \
-            tests/app/unit/specs/muya/rustDifferentialUnicodeTraces.spec.js \
+            tests/app/unit/specs/muya/rustDifferential*.js \
             2>&1 | tee muya-rust-eslint.txt
 
       - name: Test Rust browser bridge
@@ -220,10 +208,7 @@ jobs:
           ELEPHANT_EXPERIMENTAL_RUST_EDITOR=1 \
           NODE_PATH=Elephant/node_modules \
           Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/specs/muya/rustDifferentialTraces.spec.js \
-            tests/app/unit/specs/muya/rustDifferentialStructuralTraces.spec.js \
-            tests/app/unit/specs/muya/rustDifferentialHistoryTraces.spec.js \
-            tests/app/unit/specs/muya/rustDifferentialUnicodeTraces.spec.js \
+            tests/app/unit/specs/muya/rustDifferential*.spec.js \
             2>&1 | tee muya-rust-differential.txt
 
       - name: Upload differential trace diagnostics

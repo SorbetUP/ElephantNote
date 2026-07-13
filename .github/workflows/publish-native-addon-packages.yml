@@ -7,10 +7,10 @@ on:
     paths:
       - .github/workflows/publish-native-addon-packages.yml
       - build/scripts/build-physical-addon.mjs
+      - build/scripts/build-mobile-addon-package.mjs
       - build/tools/enaddon-packager/**
       - addons/official/ai-ocr/**
       - addons/official/code-execution/**
-      - addons/official/sites/**
   workflow_dispatch:
 
 permissions:
@@ -41,7 +41,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Build and package native addons
+      - name: Build and package desktop native addons
         shell: bash
         env:
           ELEPHANT_ADDON_PLATFORM: ${{ matrix.platform }}
@@ -49,28 +49,58 @@ jobs:
           set -euxo pipefail
           for source in \
             addons/official/ai-ocr \
-            addons/official/code-execution \
-            addons/official/sites
+            addons/official/code-execution
           do
             node build/scripts/build-physical-addon.mjs "$source"
           done
 
-      - name: Upload platform packages
+      - name: Upload desktop packages
         uses: actions/upload-artifact@v4
         with:
-          name: native-addon-packages-${{ matrix.platform }}
+          name: native-addon-package-${{ matrix.platform }}
+          path: build/out/addons/releases/**
+          if-no-files-found: error
+          retention-days: 14
+
+  build-mobile-code-execution:
+    name: Build Code execution ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - android-aarch64
+          - android-x86_64
+          - ios-aarch64
+          - ios-x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/physical-addon-packages
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Package mobile Web Worker runtime
+        run: node build/scripts/build-mobile-addon-package.mjs addons/official/code-execution "${{ matrix.platform }}"
+
+      - name: Upload mobile package
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-addon-package-${{ matrix.platform }}
           path: build/out/addons/releases/**
           if-no-files-found: error
           retention-days: 14
 
   publish-catalog:
-    needs: build-native-packages
+    needs: [build-native-packages, build-mobile-code-execution]
     runs-on: ubuntu-latest
     steps:
       - name: Download all platform packages
         uses: actions/download-artifact@v4
         with:
-          pattern: native-addon-packages-*
+          pattern: '*-addon-package-*'
           path: packages
           merge-multiple: true
 
@@ -97,7 +127,7 @@ jobs:
           entries = {entry['id']: entry for entry in catalog.get('addons', [])}
           metadata_files = sorted(package_root.rglob('*.enaddon.json'))
           if not metadata_files:
-              raise SystemExit('No native addon package metadata was downloaded')
+              raise SystemExit('No addon package metadata was downloaded')
 
           published = set()
           for metadata_path in metadata_files:
@@ -110,7 +140,7 @@ jobs:
                   raise SystemExit(f'Missing archive for {metadata_path}: {archive_path}')
               entry = entries.get(addon_id)
               if entry is None:
-                  raise SystemExit(f'Native package {addon_id} is absent from catalog.json')
+                  raise SystemExit(f'Package {addon_id} is absent from catalog.json')
               relative_path = metadata['catalogPath']
               destination = catalog_root / relative_path
               destination.parent.mkdir(parents=True, exist_ok=True)
@@ -125,12 +155,15 @@ jobs:
               entry.pop('packageHash', None)
               published.add((addon_id, platform))
 
-          required_ids = {'elephant.ai-ocr', 'elephant.code-execution', 'elephant.sites'}
-          required_platforms = {'linux-x86_64', 'windows-x86_64', 'macos-x86_64', 'macos-aarch64'}
-          expected = {(addon_id, platform) for addon_id in required_ids for platform in required_platforms}
+          desktop_platforms = {'linux-x86_64', 'windows-x86_64', 'macos-x86_64', 'macos-aarch64'}
+          mobile_platforms = {'android-aarch64', 'android-x86_64', 'ios-aarch64', 'ios-x86_64'}
+          expected = (
+              {('elephant.ai-ocr', platform) for platform in desktop_platforms}
+              | {('elephant.code-execution', platform) for platform in desktop_platforms | mobile_platforms}
+          )
           missing = sorted(expected - published)
           if missing:
-              raise SystemExit(f'Missing published native addon variants: {missing}')
+              raise SystemExit(f'Missing published addon variants: {missing}')
 
           catalog['updatedAt'] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
           catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + '\n')
@@ -144,8 +177,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add addons catalog.json
           if git diff --cached --quiet; then
-            echo 'Native package catalogue already current.'
+            echo 'Addon package catalogue already current.'
             exit 0
           fi
-          git commit -m "feat(catalog): publish hashed desktop addon packages"
+          git commit -m "feat(catalog): publish hashed desktop and mobile addon packages"
           git push origin HEAD:feature/physical-addon-catalog

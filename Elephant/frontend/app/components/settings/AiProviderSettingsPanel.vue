@@ -314,11 +314,51 @@
               >{{ provider.label }}</option>
             </select>
           </label>
-          <label><span>Model</span><input
-            v-model.trim="form.routes.embedding.model"
-            type="text"
-            placeholder="Embedding model id"
-          ></label>
+          <label>
+            <span>Model</span>
+            <div
+              v-if="form.routes.embedding.source === 'app-local'"
+              class="en-local-model-picker"
+            >
+              <select
+                v-model="form.routes.embedding.model"
+                :disabled="localModelsLoading"
+              >
+                <option value="">
+                  {{ localEmbeddingModelPlaceholder }}
+                </option>
+                <option
+                  v-for="model in localEmbeddingModels"
+                  :key="resolveModelId(model)"
+                  :value="resolveModelId(model)"
+                >
+                  {{ resolveModelName(model) }}
+                </option>
+              </select>
+              <button
+                class="secondary compact"
+                type="button"
+                :disabled="localModelsLoading"
+                title="Refresh downloaded models"
+                aria-label="Refresh downloaded models"
+                @click="loadLocalModels"
+              >
+                <RotateCw
+                  aria-hidden="true"
+                  :class="{ spinning: localModelsLoading }"
+                />
+              </button>
+            </div>
+            <input
+              v-else
+              v-model.trim="form.routes.embedding.model"
+              type="text"
+              placeholder="Embedding model id"
+            >
+            <small v-if="form.routes.embedding.source === 'app-local'">
+              {{ localEmbeddingModelHint }}
+            </small>
+          </label>
           <label><span>Search result limit</span><input
             v-model.number="form.routes.embedding.searchTopK"
             type="number"
@@ -448,7 +488,7 @@ import { elephantnoteClient } from '../../services/elephantnoteClient'
 import { clonePlainObject } from './settingsModelHelpers'
 import { buildCodexRateLimitRows, buildCodexResetCredits, getCodexResetAvailableCount } from './codexRateLimits'
 import ChatgptSubscriptionCard from './ChatgptSubscriptionCard.vue'
-import { resolveModelId, resolveModelName } from '../views/modelsViewHelpers'
+import { getModelCapabilities, resolveModelId, resolveModelName } from '../views/modelsViewHelpers'
 
 const props = defineProps({ initialPage: { type: String, default: 'provider' } })
 const CACHE_KEY = 'elephantnote:ai-settings-draft'
@@ -469,6 +509,8 @@ const providerMessage = ref('')
 const autosaveMessage = ref('')
 const currentConfig = ref(normalizeAiConfig())
 const localModels = ref([])
+const localModelsLoading = ref(false)
+const assignedEmbeddingModelId = ref('')
 const codexModels = ref([])
 const codexStatus = ref({ installed: false, running: false, connected: false, account: null, version: '', error: '' })
 const codexRateLimits = ref(null)
@@ -572,6 +614,29 @@ const codexResetCredits = computed(() => buildCodexResetCredits(codexRateLimits.
 const codexAvailableResetCount = computed(() => getCodexResetAvailableCount(codexRateLimits.value || {}))
 const routeProviderLabel = (source = '') => ({ 'app-local': 'App Local', codex: 'Codex', disabled: 'Disabled' }[source] || source || 'Disabled')
 const selectedCodexModel = computed(() => codexModels.value.find((model) => (model.model || model.id) === form.value.routes.chat.model) || null)
+const modelSupportsEmbedding = (model = {}) => getModelCapabilities(model)
+  .some((capability) => String(capability).toLowerCase() === 'embedding')
+const localEmbeddingModels = computed(() => {
+  const current = String(form.value.routes.embedding.model || '').trim()
+  const assigned = String(assignedEmbeddingModelId.value || '').trim()
+  return localModels.value
+    .filter((model) => {
+      const id = resolveModelId(model)
+      return Boolean(id) && (modelSupportsEmbedding(model) || id === current || id === assigned)
+    })
+    .sort((left, right) => resolveModelName(left).localeCompare(resolveModelName(right)))
+})
+const localEmbeddingModelPlaceholder = computed(() => {
+  if (localModelsLoading.value) return 'Loading downloaded models…'
+  return localEmbeddingModels.value.length
+    ? 'Select a downloaded embedding model'
+    : 'No downloaded embedding model'
+})
+const localEmbeddingModelHint = computed(() => {
+  const count = localEmbeddingModels.value.length
+  if (!count) return 'Download an embedding model from Models, then refresh this list.'
+  return `${count} downloaded embedding model${count === 1 ? '' : 's'} available.`
+})
 const normalizeReasoningEntry = (entry) => {
   const value = typeof entry === 'string'
     ? entry
@@ -679,13 +744,27 @@ const buildConfig = () => ({
 const loadLocalModels = async() => {
   if (!form.value.localAi.enabled) {
     localModels.value = []
+    assignedEmbeddingModelId.value = ''
     return
   }
+  localModelsLoading.value = true
   try {
-    const result = await elephantnoteClient.models.list?.()
-    localModels.value = Array.isArray(result?.models) ? result.models : []
+    const [result, selection] = await Promise.all([
+      elephantnoteClient.models.listLocal?.() || elephantnoteClient.models.list?.(),
+      elephantnoteClient.models.getSelection?.().catch(() => null)
+    ])
+    localModels.value = Array.isArray(result?.models) ? result.models.filter(Boolean) : []
+    assignedEmbeddingModelId.value = String(selection?.embedding || '').trim()
+    if (form.value.routes.embedding.source === 'app-local' && !form.value.routes.embedding.model) {
+      const preferred = assignedEmbeddingModelId.value || resolveModelId(
+        localModels.value.find(modelSupportsEmbedding)
+      )
+      if (preferred) form.value.routes.embedding.model = preferred
+    }
   } catch (error) {
     log.warn('[ai-settings] local-models:failed', error)
+  } finally {
+    localModelsLoading.value = false
   }
 }
 const refreshCodex = async() => {
@@ -887,6 +966,9 @@ watch(form, () => scheduleAutosave('form-watch'), { deep: true })
 watch(() => props.initialPage, (page) => {
   if (aiPages.some((item) => item.id === page)) activePage.value = page
 })
+watch(activePage, (page) => {
+  if (page === 'embedding') void loadLocalModels()
+})
 onMounted(async() => {
   const { listen } = await import('@tauri-apps/api/event')
   unlistenCodex = await listen('elephantnote:codex:event', (event) => {
@@ -905,6 +987,14 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.en-local-model-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.en-local-model-picker button { min-width: 38px; padding-inline: 10px; }
+.en-local-model-picker button svg { width: 16px; height: 16px; }
 .en-ai-settings { display: grid; gap: 14px; color: var(--en-text, #101828); }
 h4, p { margin: 0; }
 h4 { font-size: 14px; }

@@ -191,69 +191,7 @@ fn build_insert_paragraph(
   document: &Document,
   selection: Selection,
 ) -> Result<Transaction, EditError> {
-  let caret = selection.caret().ok_or(EditError::NonCollapsedSelection)?;
-  let value = text_value(document, caret.node)?;
-  let byte_offset = utf16_to_byte(value, caret.node, caret.offset_utf16)?;
-  let suffix = value[byte_offset..].to_string();
-  let (block, parent, block_index, text_index) =
-    direct_paragraph_for_text(document, caret.node)?;
-  let block_node = document
-    .node(block)
-    .ok_or(EditError::NodeNotFound(block))?;
-  let following = block_node.children[text_index + 1..].to_vec();
-
-  let new_block_id = document.next_available_id();
-  let new_text_id = NodeId(new_block_id.0.saturating_add(1));
-  let new_block = Node::new(
-    new_block_id,
-    NodeKind::Block(BlockKind::Paragraph),
-    None,
-  );
-  let new_text = Node::new(
-    new_text_id,
-    NodeKind::Inline(InlineKind::Text { value: suffix }),
-    None,
-  );
-
-  let mut operations = vec![
-    Operation::ReplaceText {
-      node: caret.node,
-      range: Utf16Range::new(
-        caret.offset_utf16,
-        value.encode_utf16().count() as u32,
-      ),
-      inserted: String::new(),
-    },
-    Operation::InsertNode {
-      parent,
-      index: block_index + 1,
-      node: new_block,
-    },
-    Operation::InsertNode {
-      parent: new_block_id,
-      index: 0,
-      node: new_text,
-    },
-  ];
-  operations.extend(
-    following
-      .into_iter()
-      .enumerate()
-      .map(|(offset, node)| Operation::MoveNode {
-        node,
-        new_parent: new_block_id,
-        new_index: offset + 1,
-      }),
-  );
-
-  Ok(Transaction {
-    operations,
-    selection_before: selection,
-    selection_after: Selection::collapsed(SelectionPoint {
-      node: new_text_id,
-      offset_utf16: 0,
-    }),
-  })
+  super::paragraph::build_insert_paragraph(document, selection)
 }
 
 fn build_join_previous_paragraph(

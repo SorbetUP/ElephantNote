@@ -1,13 +1,50 @@
 {
   "id": "elephant.open-models",
   "name": "Open Models",
-  "version": "1.2.0",
-  "description": "Browses, downloads, activates and removes local GGUF models as a separately installed package.",
+  "version": "2.0.0",
+  "description": "Owns GGUF downloads, activation and local llama.cpp chat through a package service.",
   "author": "Elephant",
+  "icon": "database",
   "apiVersion": 1,
   "minAppVersion": "0.18.9",
-  "runtime": { "type": "javascript-worker", "entry": "main.js" },
-  "permissions": { "storage": true, "commands": true, "views": true },
-  "contributes": { "runtimeMode": "trusted" },
+  "runtime": {
+    "type": "javascript-worker",
+    "entry": "main.js",
+    "mode": "trusted"
+  },
+  "permissions": {
+    "storage": true,
+    "commands": true,
+    "views": true,
+    "native": true
+  },
+  "native": {
+    "runner": "service",
+    "protocol": "elephant-addon-service-v1",
+    "sidecars": {
+      "macos-aarch64": "native/macos-aarch64/elephant-open-models-service",
+      "macos-x86_64": "native/macos-x86_64/elephant-open-models-service",
+      "linux-aarch64": "native/linux-aarch64/elephant-open-models-service",
+      "linux-x86_64": "native/linux-x86_64/elephant-open-models-service",
+      "windows-aarch64": "native/windows-aarch64/elephant-open-models-service.exe",
+      "windows-x86_64": "native/windows-x86_64/elephant-open-models-service.exe"
+    },
+    "mobile": {
+      "android": {
+        "supported": false,
+        "reason": "Android requires a package-owned mobile GGUF runtime adapter."
+      },
+      "ios": {
+        "supported": false,
+        "reason": "iOS requires a package-owned mobile GGUF runtime adapter."
+      }
+    }
+  },
+  "contributes": {
+    "runtimeMode": "trusted",
+    "views": true,
+    "aiProvider": true,
+    "native": true
+  },
   "activationEvents": ["onStartup"]
 }

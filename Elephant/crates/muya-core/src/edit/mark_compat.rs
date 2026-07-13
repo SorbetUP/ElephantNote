@@ -1,5 +1,5 @@
-use crate::model::{Document, InlineKind, NodeId, NodeKind};
-use crate::selection::Selection;
+use crate::model::{Document, InlineKind, InlineMarkKind, NodeId, NodeKind};
+use crate::selection::{Selection, SelectionPoint};
 
 use super::{EditError, Operation, Transaction};
 
@@ -10,6 +10,14 @@ pub enum MarkCommand {
   ToggleStrike,
 }
 
+#[derive(Clone, Copy)]
+struct CrossEndpoint {
+  point: SelectionPoint,
+  block: NodeId,
+  top_level: NodeId,
+  top_index: usize,
+}
+
 impl MarkCommand {
   pub fn build(self, document: &Document, selection: Selection) -> Result<Transaction, EditError> {
     if let Some(wrapper) = selected_mark_ancestor(document, selection, self)? {
@@ -17,6 +25,13 @@ impl MarkCommand {
         return Ok(noop(selection));
       }
       return build_unwrap_ancestor(document, selection, wrapper);
+    }
+    if is_partial_cross_wrapper_selection(document, selection)? {
+      return super::mark_fragments::build_partial_cross_wrapper_toggle(
+        document,
+        selection,
+        self.fragment_kind(),
+      );
     }
     self.generic().build(document, selection)
   }
@@ -26,6 +41,14 @@ impl MarkCommand {
       Self::ToggleStrong => super::mark::MarkCommand::ToggleStrong,
       Self::ToggleEmphasis => super::mark::MarkCommand::ToggleEmphasis,
       Self::ToggleStrike => super::mark::MarkCommand::ToggleStrike,
+    }
+  }
+
+  fn fragment_kind(self) -> InlineMarkKind {
+    match self {
+      Self::ToggleStrong => InlineMarkKind::Strong,
+      Self::ToggleEmphasis => InlineMarkKind::Emphasis,
+      Self::ToggleStrike => InlineMarkKind::Strike,
     }
   }
 }
@@ -90,6 +113,100 @@ fn is_muya_nested_emphasis_noop(
   ))
 }
 
+fn is_partial_cross_wrapper_selection(
+  document: &Document,
+  selection: Selection,
+) -> Result<bool, EditError> {
+  if selection.ordered_same_node().is_some() {
+    return Ok(false);
+  }
+  let anchor = cross_endpoint(document, selection.anchor)?;
+  let focus = cross_endpoint(document, selection.focus)?;
+  if anchor.block != focus.block || anchor.top_index == focus.top_index {
+    return Ok(false);
+  }
+  let (start, end) = if anchor.top_index < focus.top_index {
+    (anchor, focus)
+  } else {
+    (focus, anchor)
+  };
+  let end_length = text_value(document, end.point.node)?.encode_utf16().count() as u32;
+  Ok(
+    start.point.offset_utf16 != 0
+      || end.point.offset_utf16 != end_length
+      || first_text_descendant(document, start.top_level)? != start.point.node
+      || last_text_descendant(document, end.top_level)? != end.point.node,
+  )
+}
+
+fn cross_endpoint(
+  document: &Document,
+  point: SelectionPoint,
+) -> Result<CrossEndpoint, EditError> {
+  text_value(document, point.node)?;
+  let mut current = point.node;
+  loop {
+    let node = document
+      .node(current)
+      .ok_or(EditError::NodeNotFound(current))?;
+    let parent = node.parent.ok_or(EditError::UnsupportedStructure(current))?;
+    let parent_node = document
+      .node(parent)
+      .ok_or(EditError::NodeNotFound(parent))?;
+    match &parent_node.kind {
+      NodeKind::Block(_) => {
+        let top_index = document
+          .child_index(parent, current)
+          .ok_or(EditError::UnsupportedStructure(current))?;
+        return Ok(CrossEndpoint {
+          point,
+          block: parent,
+          top_level: current,
+          top_index,
+        });
+      }
+      NodeKind::Inline(_) => current = parent,
+      NodeKind::Document => return Err(EditError::UnsupportedStructure(parent)),
+    }
+  }
+}
+
+fn first_text_descendant(document: &Document, root: NodeId) -> Result<NodeId, EditError> {
+  let mut stack = vec![root];
+  while let Some(current) = stack.pop() {
+    let node = document
+      .node(current)
+      .ok_or(EditError::NodeNotFound(current))?;
+    if matches!(node.kind, NodeKind::Inline(InlineKind::Text { .. })) {
+      return Ok(current);
+    }
+    stack.extend(node.children.iter().rev().copied());
+  }
+  Err(EditError::UnsupportedStructure(root))
+}
+
+fn last_text_descendant(document: &Document, root: NodeId) -> Result<NodeId, EditError> {
+  let mut stack = vec![root];
+  while let Some(current) = stack.pop() {
+    let node = document
+      .node(current)
+      .ok_or(EditError::NodeNotFound(current))?;
+    if matches!(node.kind, NodeKind::Inline(InlineKind::Text { .. })) {
+      return Ok(current);
+    }
+    stack.extend(node.children.iter().copied());
+  }
+  Err(EditError::UnsupportedStructure(root))
+}
+
+fn text_value(document: &Document, node: NodeId) -> Result<&str, EditError> {
+  let node = document.node(node).ok_or(EditError::NodeNotFound(node))?;
+  match &node.kind {
+    NodeKind::Inline(InlineKind::Text { value }) => Ok(value),
+    _ => Err(EditError::NotTextNode(node.id)),
+  }
+}
+
 fn noop(selection: Selection) -> Transaction {
   Transaction {
     operations: Vec::new(),
@@ -136,7 +253,6 @@ fn build_unwrap_ancestor(
 mod tests {
   use super::*;
   use crate::model::Node;
-  use crate::selection::SelectionPoint;
   use crate::{parse_markdown, to_markdown};
 
   fn text_with_value<'a>(document: &'a Document, expected: &str) -> &'a Node {
@@ -201,5 +317,27 @@ mod tests {
       .unwrap();
 
     assert_eq!(to_markdown(&document), "a*lph*a");
+  }
+
+  #[test]
+  fn routes_partial_cross_wrapper_selection_to_fragments() {
+    let mut document = parse_markdown("**alpha** beta *gamma*");
+    let selection = Selection {
+      anchor: SelectionPoint {
+        node: text_with_value(&document, "alpha").id,
+        offset_utf16: 2,
+      },
+      focus: SelectionPoint {
+        node: text_with_value(&document, "gamma").id,
+        offset_utf16: 3,
+      },
+    };
+
+    MarkCommand::ToggleStrike
+      .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
+      .unwrap();
+    assert_eq!(to_markdown(&document), "**al~~pha** beta *gam~~ma*");
   }
 }

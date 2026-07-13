@@ -56,6 +56,20 @@ const traces = [
       rust.request({ type: 'toggle_strong' })
       return fragmentEdges(rust, 'emphasis')
     }
+  },
+  {
+    name: 'reopen overlapping linked emphasis and strike groups',
+    initial: 'al*p~~ha **be*t~~a** gamma',
+    expected: 'al*p~~ha **be*t~~a** gamma\n',
+    groups: {
+      emphasis: ['start', 'middle', 'end'],
+      strike: ['start', 'middle', 'end']
+    },
+    runJs: async () => {},
+    runRust: (rust) => ({
+      emphasis: fragmentEdges(rust, 'emphasis'),
+      strike: fragmentEdges(rust, 'strike')
+    })
   }
 ]
 
@@ -78,6 +92,7 @@ describeBundled('Muya linked-group edit differential traces', () => {
       expect(result.rustMarkdown).toBe(trace.expected)
       if (trace.strikeEdges) expect(result.rustResult).toEqual(trace.strikeEdges)
       if (trace.emphasisEdges) expect(result.rustResult).toEqual(trace.emphasisEdges)
+      if (trace.groups) expect(result.rustResult).toEqual(trace.groups)
     })
   }
 })

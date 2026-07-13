@@ -7,6 +7,7 @@ import {
   startComposition
 } from './composition'
 import { commandForBeforeInput, commandForTableKey } from './commands'
+import { handleCopy, handleCut } from './copyCut'
 import { handleDeleteForward } from './deleteForward'
 import { DELETE_UNIT_INPUTS, handleDeleteUnit } from './deleteUnits'
 import { handleTextDragOver, handleTextDrop } from './drop'
@@ -32,6 +33,8 @@ export class MuyaRustInputController {
     this.attached = false
     this._tail = Promise.resolve()
     this._beforeInput = (event) => this.handleBeforeInput(event)
+    this._copy = (event) => this.handleCopy(event)
+    this._cut = (event) => this.handleCut(event)
     this._paste = (event) => this.handlePaste(event)
     this._dragOver = (event) => this.handleDragOver(event)
     this._drop = (event) => this.handleDrop(event)
@@ -44,6 +47,8 @@ export class MuyaRustInputController {
     if (this.attached) return this
     this.attached = true
     this.container.addEventListener('beforeinput', this._beforeInput)
+    this.container.addEventListener('copy', this._copy)
+    this.container.addEventListener('cut', this._cut)
     this.container.addEventListener('paste', this._paste)
     this.container.addEventListener('dragover', this._dragOver)
     this.container.addEventListener('drop', this._drop)
@@ -57,6 +62,8 @@ export class MuyaRustInputController {
     if (!this.attached) return this
     this.attached = false
     this.container.removeEventListener('beforeinput', this._beforeInput)
+    this.container.removeEventListener('copy', this._copy)
+    this.container.removeEventListener('cut', this._cut)
     this.container.removeEventListener('paste', this._paste)
     this.container.removeEventListener('dragover', this._dragOver)
     this.container.removeEventListener('drop', this._drop)
@@ -96,6 +103,14 @@ export class MuyaRustInputController {
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(command)
     })
+  }
+
+  handleCopy(event) {
+    return handleCopy(this, event)
+  }
+
+  handleCut(event) {
+    return handleCut(this, event)
   }
 
   handlePaste(event) {

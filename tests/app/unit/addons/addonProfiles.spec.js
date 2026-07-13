@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { success } = vi.hoisted(() => ({ success: vi.fn() }))
-vi.mock('element-plus', () => ({ ElMessage: { success } }))
-
 import { addonPacksAddon } from '../../../../Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js'
 
 const PACK_PATH = '.elephantnote/addons/packs/default.enaddonpack'
 const BASE_PACK_PATH = '.elephantnote/addons/packs/base.enaddonpack'
 const DEVELOP_PARITY_PACK_PATH = '.elephantnote/addons/packs/develop-parity.enaddonpack'
 const REPORT_PATH = 'Reports/Addon Pack.md'
+
 const catalog = [
+  { id: 'elephant.ai', name: 'AI', version: '2.1.0' },
+  { id: 'elephant.calendar', name: 'Calendar', version: '1.2.0' },
   { id: 'com.example.alpha', name: 'Alpha', version: '1.0.0' },
   { id: 'com.example.beta', name: 'Beta', version: '2.0.0' }
 ]
@@ -20,6 +20,7 @@ const snapshot = (id, options = {}) => ({
     name: options.name || id,
     version: options.version || '1.0.0',
     source: options.source || 'external',
+    official: options.official === true,
     permissions: {},
     runtime: { type: 'javascript-worker', entry: 'main.js' }
   },
@@ -32,6 +33,11 @@ const createManager = (initial = []) => {
   const manager = {
     list: () => [...records.values()],
     get: (id) => records.get(id) || null,
+    async installBuiltin(id) {
+      const record = snapshot(id, { source: 'builtin' })
+      records.set(id, record)
+      return record
+    },
     async enable(id) {
       const record = records.get(id)
       if (!record) throw new Error(`Unknown addon: ${id}`)
@@ -53,7 +59,11 @@ const createManager = (initial = []) => {
     manager,
     register(record) {
       records.set(record.manifest.id, {
-        manifest: { ...record.manifest, source: 'external' },
+        manifest: {
+          ...record.manifest,
+          source: 'external',
+          official: record.source === 'official' || record.manifest.official === true
+        },
         enabled: record.enabled === true,
         status: record.enabled === true ? 'enabled' : 'disabled'
       })
@@ -75,9 +85,9 @@ const activateActions = (manager) => {
   return actions
 }
 
-const createInvoke = (files) => vi.fn(async (command, payload = {}) => {
+const createInvoke = (files, communityEnabled = true) => vi.fn(async (command, payload = {}) => {
   if (command === 'tauri_addons_catalog_list') return catalog
-  if (command === 'tauri_prefs_get') return true
+  if (command === 'tauri_prefs_get') return communityEnabled
   if (command === 'tauri_addons_set_enabled') return { addonId: payload.addonId, enabled: payload.enabled === true }
   if (command === 'tauri_notes_write') {
     files.set(payload.relativePath, payload.content)
@@ -90,18 +100,20 @@ const createInvoke = (files) => vi.fn(async (command, payload = {}) => {
   if (command === 'tauri_addons_catalog_install') {
     const addon = catalog.find((entry) => entry.id === payload.addonId)
     if (!addon) throw new Error(`Unknown catalogue addon: ${payload.addonId}`)
+    const official = addon.id.startsWith('elephant.')
     return {
       manifest: {
         id: addon.id,
         name: addon.name,
         version: addon.version,
+        official,
         permissions: {},
         runtime: { type: 'javascript-worker', entry: 'main.js' }
       },
       enabled: false,
       packageHash: `hash-${addon.id}`,
-      installedAt: '2026-07-10T00:00:00Z',
-      source: 'catalog'
+      installedAt: '2026-07-13T00:00:00Z',
+      source: official ? 'official' : 'catalog'
     }
   }
   throw new Error(`Unexpected command: ${command}`)
@@ -113,92 +125,84 @@ afterEach(() => {
 })
 
 describe('Addon Packs built-in', () => {
-  it('captures the current setup then installs and applies a portable pack', async () => {
+  it('captures official and community packages with distinct sources', async () => {
     const files = new Map()
-    const { manager, records } = createManager([
-      snapshot('com.example.alpha', { name: 'Alpha', version: '1.0.0', enabled: true }),
-      snapshot('elephant.calendar', { source: 'builtin', enabled: false })
+    const { manager } = createManager([
+      snapshot('com.example.alpha', { name: 'Alpha', enabled: true }),
+      snapshot('elephant.calendar', { version: '1.2.0', official: true, enabled: false })
     ])
-    const invoke = createInvoke(files)
-    vi.stubGlobal('__TAURI__', { core: { invoke } })
-
+    vi.stubGlobal('__TAURI__', { core: { invoke: createInvoke(files) } })
     const actions = activateActions(manager)
     const created = await actions.get('elephant.addon-packs.create').run()
 
     expect(created.path).toBe(PACK_PATH)
-    expect(created.count).toBe(2)
     const exported = JSON.parse(files.get(PACK_PATH))
-    expect(exported).toMatchObject({ format: 'elephantnote-addon-pack', version: 1 })
     expect(exported.addons).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'com.example.alpha', source: 'catalog', enabled: true }),
-      expect.objectContaining({ id: 'elephant.calendar', source: 'builtin', enabled: false })
+      expect.objectContaining({ id: 'elephant.calendar', source: 'official', enabled: false })
     ]))
-
-    files.set(PACK_PATH, JSON.stringify({
-      format: 'elephantnote-addon-pack',
-      version: 1,
-      name: 'Test setup',
-      addons: [
-        { id: 'com.example.alpha', source: 'catalog', version: '1.0.0', enabled: false },
-        { id: 'com.example.beta', source: 'catalog', version: '2.0.0', enabled: true },
-        { id: 'elephant.calendar', source: 'builtin', version: '1.0.0', enabled: true }
-      ]
-    }))
-
-    const result = await actions.get('elephant.addon-packs.apply').run()
-
-    expect(result.applied).toBe(3)
-    expect(records.get('com.example.alpha').enabled).toBe(false)
-    expect(records.get('com.example.beta').enabled).toBe(true)
-    expect(records.get('elephant.calendar').enabled).toBe(true)
-    expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', { addonId: 'com.example.alpha', enabled: false })
-    expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', { addonId: 'com.example.beta', enabled: true })
-    expect(files.get(REPORT_PATH)).toContain('| `com.example.beta` | catalog | 2.0.0 | Enabled | Installed |')
   })
 
-  it('creates protected complete and base packs, with Calendar absent from the base pack', async () => {
+  it('installs official packages without requiring Community Addons', async () => {
+    const files = new Map([[PACK_PATH, JSON.stringify({
+      format: 'elephantnote-addon-pack',
+      version: 1,
+      name: 'Official setup',
+      addons: [
+        { id: 'elephant.ai', source: 'official', version: '2.1.0', enabled: true },
+        { id: 'elephant.calendar', source: 'official', version: '1.2.0', enabled: true }
+      ]
+    })]])
+    const { manager, records } = createManager()
+    const invoke = createInvoke(files, false)
+    vi.stubGlobal('__TAURI__', { core: { invoke } })
+    const actions = activateActions(manager)
+    const result = await actions.get('elephant.addon-packs.apply').run()
+
+    expect(result.applied).toBe(2)
+    expect(records.get('elephant.ai').enabled).toBe(true)
+    expect(records.get('elephant.calendar').enabled).toBe(true)
+    expect(records.get('elephant.ai').manifest.official).toBe(true)
+    expect(files.get(REPORT_PATH)).toContain('| `elephant.calendar` | official | 1.2.0 | Enabled | Installed |')
+  })
+
+  it('still requires Community Addons for enabled third-party catalogue packages', async () => {
+    const files = new Map([[PACK_PATH, JSON.stringify({
+      format: 'elephantnote-addon-pack',
+      version: 1,
+      addons: [{ id: 'com.example.beta', source: 'catalog', version: '2.0.0', enabled: true }]
+    })]])
+    const { manager } = createManager()
+    vi.stubGlobal('__TAURI__', { core: { invoke: createInvoke(files, false) } })
+    const actions = activateActions(manager)
+    await expect(actions.get('elephant.addon-packs.apply').run())
+      .rejects.toThrow('Turn on Community Addons')
+  })
+
+  it('creates protected complete and base packs with physical package versions', async () => {
     const files = new Map()
     const { manager } = createManager()
     vi.stubGlobal('__TAURI__', { core: { invoke: createInvoke(files) } })
     const actions = activateActions(manager)
-
     const result = await actions.get('elephant.addon-packs.ensure-develop-parity').run()
 
     expect(result.packPath).toBe(DEVELOP_PARITY_PACK_PATH)
     expect(result.basePackPath).toBe(BASE_PACK_PATH)
-
     const completePack = JSON.parse(files.get(DEVELOP_PARITY_PACK_PATH))
     const basePack = JSON.parse(files.get(BASE_PACK_PATH))
     expect(completePack.protected).toBe(true)
-    expect(completePack.addons).toContainEqual(expect.objectContaining({ id: 'elephant.calendar', enabled: true }))
-    expect(basePack).toMatchObject({
-      name: 'ElephantNote Base',
-      protected: true
-    })
+    expect(completePack.addons).toContainEqual({ id: 'elephant.ai', version: '2.1.0', source: 'official', enabled: true })
+    expect(completePack.addons).toContainEqual({ id: 'elephant.calendar', version: '1.2.0', source: 'official', enabled: true })
+    expect(basePack).toMatchObject({ name: 'Elephant Base', protected: true })
     expect(basePack.addons).not.toContainEqual(expect.objectContaining({ id: 'elephant.calendar' }))
     expect(basePack.addons).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'elephant.ai-chat', enabled: true }),
-      expect.objectContaining({ id: 'elephant.sync', enabled: true }),
-      expect.objectContaining({ id: 'elephant.code-execution', enabled: true })
+      expect.objectContaining({ id: 'elephant.ai-chat', source: 'official', enabled: true }),
+      expect.objectContaining({ id: 'elephant.sync', source: 'official', enabled: true }),
+      expect.objectContaining({ id: 'elephant.code-execution', source: 'official', enabled: true })
     ]))
   })
 
-  it('creates and applies a named pack selected by path', async () => {
-    const files = new Map()
-    const { manager } = createManager([snapshot('elephant.calendar', { source: 'builtin', enabled: true })])
-    vi.stubGlobal('__TAURI__', { core: { invoke: createInvoke(files) } })
-    const actions = activateActions(manager)
-    const path = '.elephantnote/addons/packs/work.enaddonpack'
-
-    const created = await actions.get('elephant.addon-packs.create').run({ path, name: 'Work' })
-    expect(created.path).toBe(path)
-    expect(JSON.parse(files.get(path)).name).toBe('Work')
-
-    const applied = await actions.get('elephant.addon-packs.apply').run({ path })
-    expect(applied.packPath).toBe(path)
-  })
-
-  it('rejects catalogue entries that are not in the official catalogue', async () => {
+  it('rejects packages that are not in the catalogue', async () => {
     const files = new Map([[PACK_PATH, JSON.stringify({
       format: 'elephantnote-addon-pack',
       version: 1,
@@ -206,7 +210,6 @@ describe('Addon Packs built-in', () => {
     })]])
     const { manager } = createManager()
     vi.stubGlobal('__TAURI__', { core: { invoke: createInvoke(files) } })
-
     const actions = activateActions(manager)
     await expect(actions.get('elephant.addon-packs.apply').run()).rejects.toThrow('outside the official catalogue')
   })

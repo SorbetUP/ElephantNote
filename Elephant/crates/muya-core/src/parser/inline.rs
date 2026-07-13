@@ -1,4 +1,4 @@
-use crate::model::{Document, InlineKind, NodeId, NodeKind, SourceRange};
+use crate::model::{Document, InlineKind, InlineMarkKind, NodeId, NodeKind, SourceRange};
 use crate::selection::{Selection, SelectionPoint};
 use crate::syntax::inline::{code_span, emphasis, escape, line_break, link, text};
 
@@ -10,13 +10,13 @@ pub fn append_inlines(
   source: &str,
   base_utf16: u32,
 ) {
-  if try_append_crossing_mark(document, parent, source, base_utf16) {
+  if try_append_crossing_marks(document, parent, source, base_utf16) {
     return;
   }
   append_inlines_standard(document, parent, source, base_utf16);
 }
 
-fn try_append_crossing_mark(
+fn try_append_crossing_marks(
   document: &mut Document,
   parent: NodeId,
   source: &str,
@@ -28,34 +28,54 @@ fn try_append_crossing_mark(
 
   let mut candidate = document.clone();
   append_inlines_standard(&mut candidate, parent, &crossing.base, base_utf16);
-  let Some(anchor) = source_point(
-    &candidate,
-    parent,
-    base_utf16.saturating_add(crossing.start_utf16),
-  ) else {
-    return false;
-  };
-  let Some(focus) = source_point(
-    &candidate,
-    parent,
-    base_utf16.saturating_add(crossing.end_utf16),
-  ) else {
-    return false;
-  };
-  let selection = Selection { anchor, focus };
-  let Ok(transaction) = crate::edit::build_partial_cross_wrapper_toggle(
-    &candidate,
-    selection,
-    crossing.mark,
-  ) else {
-    return false;
-  };
+  let mut flat_ranges = Vec::with_capacity(crossing.marks.len());
+  for mark in &crossing.marks {
+    let Some(anchor) = source_point(
+      &candidate,
+      parent,
+      base_utf16.saturating_add(mark.start_utf16),
+    ) else {
+      return false;
+    };
+    let Some(focus) = source_point(
+      &candidate,
+      parent,
+      base_utf16.saturating_add(mark.end_utf16),
+    ) else {
+      return false;
+    };
+    let Some(start) = flat_offset(&candidate, parent, anchor) else {
+      return false;
+    };
+    let Some(end) = flat_offset(&candidate, parent, focus) else {
+      return false;
+    };
+    flat_ranges.push((start, end));
+  }
 
   let revision = candidate.revision;
-  if transaction.apply(&mut candidate).is_err() {
-    return false;
+  for (mark, (start, end)) in crossing.marks.iter().zip(flat_ranges) {
+    let Some(anchor) = point_at_flat_offset(&candidate, parent, start) else {
+      return false;
+    };
+    let Some(focus) = point_at_flat_offset(&candidate, parent, end) else {
+      return false;
+    };
+    let selection = Selection { anchor, focus };
+    let command = match mark.mark {
+      InlineMarkKind::Strong => crate::edit::MarkCommand::ToggleStrong,
+      InlineMarkKind::Emphasis => crate::edit::MarkCommand::ToggleEmphasis,
+      InlineMarkKind::Strike => crate::edit::MarkCommand::ToggleStrike,
+    };
+    let Ok(transaction) = command.build(&candidate, selection) else {
+      return false;
+    };
+    if transaction.apply(&mut candidate).is_err() {
+      return false;
+    }
+    candidate.revision = revision;
   }
-  candidate.revision = revision;
+
   *document = candidate;
   true
 }
@@ -79,6 +99,72 @@ fn source_point(document: &Document, root: NodeId, target: u32) -> Option<Select
     stack.extend(node.children.iter().rev().copied());
   }
   None
+}
+
+fn flat_offset(document: &Document, root: NodeId, point: SelectionPoint) -> Option<u32> {
+  let mut offset = 0u32;
+  for node in text_nodes(document, root)? {
+    let NodeKind::Inline(InlineKind::Text { value }) = &node.kind else {
+      continue;
+    };
+    let length = value.encode_utf16().count() as u32;
+    if node.id == point.node {
+      return (point.offset_utf16 <= length).then_some(offset + point.offset_utf16);
+    }
+    offset = offset.saturating_add(length);
+  }
+  None
+}
+
+fn point_at_flat_offset(
+  document: &Document,
+  root: NodeId,
+  target: u32,
+) -> Option<SelectionPoint> {
+  let mut offset = 0u32;
+  let nodes = text_nodes(document, root)?;
+  for node in &nodes {
+    let NodeKind::Inline(InlineKind::Text { value }) = &node.kind else {
+      continue;
+    };
+    let length = value.encode_utf16().count() as u32;
+    if target <= offset.saturating_add(length) {
+      return Some(SelectionPoint {
+        node: node.id,
+        offset_utf16: target.saturating_sub(offset),
+      });
+    }
+    offset = offset.saturating_add(length);
+  }
+  let node = nodes.last()?;
+  let NodeKind::Inline(InlineKind::Text { value }) = &node.kind else {
+    return None;
+  };
+  (target == offset).then_some(SelectionPoint {
+    node: node.id,
+    offset_utf16: value.encode_utf16().count() as u32,
+  })
+}
+
+fn text_nodes(document: &Document, root: NodeId) -> Option<Vec<&crate::model::Node>> {
+  fn visit<'a>(
+    document: &'a Document,
+    node_id: NodeId,
+    output: &mut Vec<&'a crate::model::Node>,
+  ) -> Option<()> {
+    let node = document.node(node_id)?;
+    if matches!(node.kind, NodeKind::Inline(InlineKind::Text { .. })) {
+      output.push(node);
+    }
+    for child in &node.children {
+      visit(document, *child, output)?;
+    }
+    Some(())
+  }
+
+  let mut output = Vec::new();
+  visit(document, root, &mut output)?;
+  Some(output)
 }
 
 fn append_inlines_standard(
@@ -439,5 +525,38 @@ mod tests {
         .count(),
       2
     );
+  }
+
+  #[test]
+  fn reconstructs_multiple_overlapping_crossing_groups_after_reparse() {
+    let mut document = Document::new();
+    let paragraph = document.allocate(NodeKind::Block(BlockKind::Paragraph), None);
+    document.append_child(document.root, paragraph);
+    let markdown = "al*p~~ha **be*t~~a** gamma";
+    append_inlines(&mut document, paragraph, markdown, 0);
+
+    assert_eq!(to_markdown(&document), markdown);
+    for mark in [InlineMarkKind::Emphasis, InlineMarkKind::Strike] {
+      let edges = document
+        .nodes
+        .values()
+        .filter_map(|node| match &node.kind {
+          NodeKind::Inline(InlineKind::MarkFragment {
+            mark: candidate,
+            edge,
+            ..
+          }) if *candidate == mark => Some(*edge),
+          _ => None,
+        })
+        .collect::<Vec<_>>();
+      assert_eq!(
+        edges,
+        vec![
+          MarkFragmentEdge::Start,
+          MarkFragmentEdge::Middle,
+          MarkFragmentEdge::End
+        ]
+      );
+    }
   }
 }

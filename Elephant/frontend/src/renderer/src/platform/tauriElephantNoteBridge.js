@@ -77,7 +77,7 @@ const writeStoredJson = (target, key, value) => {
 const defaultFeatures = () => ({ askAi: true, sitePreview: false, gitSync: false })
 const defaultAiConfig = () => ({
   localAi: { enabled: true, showModelLibraryInSidebar: true },
-  localRuntime: { llamaServerMode: 'bundled', llamaServerPath: '', llamaBaseUrl: '' },
+  localRuntime: { llamaServerMode: 'bundled', llamaServerPath: '', llamaBaseUrl: '', embeddingContextWindow: 2048, embeddingPhysicalBatchSize: 1024 },
   providers: { list: [], codex: { connected: false, mode: 'account', model: '' } },
   routes: {},
   localModelSelection: {}

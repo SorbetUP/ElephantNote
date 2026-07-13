@@ -100,8 +100,30 @@
               Save
             </el-button>
           </div>
+          <div class="local-runtime-capacity-grid">
+            <label>
+              <span>Embedding context window</span>
+              <el-input-number
+                v-model="embeddingContextWindow"
+                :min="512"
+                :max="32768"
+                :step="256"
+                @change="saveLlamaRuntimeConfig"
+              />
+            </label>
+            <label>
+              <span>Physical batch size</span>
+              <el-input-number
+                v-model="embeddingPhysicalBatchSize"
+                :min="256"
+                :max="8192"
+                :step="256"
+                @change="saveLlamaRuntimeConfig"
+              />
+            </label>
+          </div>
           <small>
-            Use the bundled mode for the normal app experience. Use path mode only if llama-server is already installed somewhere else.
+            Use the bundled mode for the normal app experience. Embedding defaults are 2048 context and 1024 physical batch. Restart Elephant after changing runtime capacity.
           </small>
         </section>
       </template>
@@ -251,6 +273,8 @@ const { t } = useI18n()
 const preferenceStore = usePreferencesStore()
 const llamaServerMode = ref('bundled')
 const llamaServerPath = ref('')
+const embeddingContextWindow = ref(2048)
+const embeddingPhysicalBatchSize = ref(1024)
 const llamaRuntimeSaving = ref(false)
 
 const {
@@ -293,7 +317,7 @@ const selectDefaultDirectoryToOpen = () => {
 }
 
 const defaultAiConfig = () => ({
-  localRuntime: { llamaServerMode: 'bundled', llamaServerPath: '', llamaBaseUrl: '' }
+  localRuntime: { llamaServerMode: 'bundled', llamaServerPath: '', llamaBaseUrl: '', embeddingContextWindow: 2048, embeddingPhysicalBatchSize: 1024 }
 })
 const readStoredAiConfig = () => {
   try {
@@ -383,5 +407,18 @@ onMounted(() => {
   grid-template-columns: minmax(220px, 1fr) auto;
   gap: 8px;
   align-items: center;
+}
+</style>
+
+<style scoped>
+.local-runtime-capacity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.local-runtime-capacity-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 </style>

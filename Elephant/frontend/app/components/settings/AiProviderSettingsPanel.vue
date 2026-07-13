@@ -355,6 +355,32 @@
               type="number"
               min="0"
             ></label>
+            <label v-if="form.routes.embedding.source === 'app-local'">
+              <span title="Maximum embedding context passed to the bundled llama.cpp server.">Embedding context window</span>
+              <input
+                v-model.number="form.localRuntime.embeddingContextWindow"
+                type="number"
+                min="512"
+                max="32768"
+                step="256"
+              >
+            </label>
+            <label v-if="form.routes.embedding.source === 'app-local'">
+              <span title="llama.cpp --ubatch-size. Increase this when the server reports that an embedding input is too large for the physical batch.">Physical batch size</span>
+              <input
+                v-model.number="form.localRuntime.embeddingPhysicalBatchSize"
+                type="number"
+                min="256"
+                max="8192"
+                step="256"
+              >
+            </label>
+            <div
+              v-if="form.routes.embedding.source === 'app-local'"
+              class="wide en-ai-setting-copy"
+            >
+              <span>Defaults: 2048 context · 1024 physical batch. Restart Elephant after changing these runtime values.</span>
+            </div>
             <label><span>Debounce (ms)</span><input
               v-model.number="form.routes.embedding.debounceMs"
               type="number"

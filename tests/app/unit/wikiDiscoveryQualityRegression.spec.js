@@ -53,4 +53,15 @@ describe('Wiki macro-topic discovery contracts', () => {
     expect(wikiView).toContain('Confirmer la suppression')
     expect(wikiView).not.toContain('globalThis.confirm')
   })
+    it('configures the local embedding physical batch above the old 512 default', () => {
+      const runtime = fs.readFileSync('Elephant/backend/tauri/src/local_llama_runtime.rs', 'utf8')
+      const aiSettings = fs.readFileSync('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue', 'utf8')
+      expect(runtime).toContain('DEFAULT_EMBEDDING_PHYSICAL_BATCH_SIZE: u64 = 1024')
+      expect(runtime).toContain('--ubatch-size')
+      expect(runtime).toContain('embedding_capacity_error')
+      expect(aiSettings).toContain('Physical batch size')
+      expect(aiSettings).toContain('embeddingPhysicalBatchSize')
+      expect(aiSettings).toContain('1024')
+    })
+    
 })

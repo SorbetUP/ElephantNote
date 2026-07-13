@@ -12,6 +12,8 @@ const MODEL_PROVIDER: &str = "tauri-rust";
 const DEFAULT_PORT: u16 = 39281;
 const DEFAULT_BASE_URL: &str = "http://127.0.0.1:39281/v1";
 const DEFAULT_EMBEDDING_BASE_URL: &str = "http://127.0.0.1:39282/v1";
+const DEFAULT_EMBEDDING_CONTEXT_WINDOW: u64 = 2048;
+const DEFAULT_EMBEDDING_PHYSICAL_BATCH_SIZE: u64 = 1024;
 
 #[cfg(windows)]
 const LLAMA_SERVER_BIN: &str = "llama-server.exe";
@@ -242,6 +244,46 @@ fn context_size_from_payload(payload: &Value) -> String {
     .to_string()
 }
 
+fn embedding_context_window_from_payload(payload: &Value) -> u64 {
+    payload_u64(
+        payload,
+        &[
+            "/embeddingContextWindow",
+            "/routes/embedding/contextWindow",
+            "/aiConfig/routes/embedding/contextWindow",
+            "/config/routes/embedding/contextWindow",
+            "/localRuntime/embeddingContextWindow",
+            "/aiConfig/localRuntime/embeddingContextWindow",
+            "/config/localRuntime/embeddingContextWindow",
+        ],
+    )
+    .filter(|value| *value >= 512)
+    .unwrap_or(DEFAULT_EMBEDDING_CONTEXT_WINDOW)
+    .clamp(512, 32_768)
+}
+
+fn embedding_physical_batch_size_from_payload(payload: &Value) -> u64 {
+    let requested = payload_u64(
+        payload,
+        &[
+            "/embeddingPhysicalBatchSize",
+            "/embeddingUbatchSize",
+            "/routes/embedding/physicalBatchSize",
+            "/routes/embedding/ubatchSize",
+            "/aiConfig/routes/embedding/physicalBatchSize",
+            "/config/routes/embedding/physicalBatchSize",
+            "/localRuntime/embeddingPhysicalBatchSize",
+            "/localRuntime/embeddingUbatchSize",
+            "/aiConfig/localRuntime/embeddingPhysicalBatchSize",
+            "/config/localRuntime/embeddingPhysicalBatchSize",
+        ],
+    )
+    .filter(|value| *value >= 256)
+    .unwrap_or(DEFAULT_EMBEDDING_PHYSICAL_BATCH_SIZE)
+    .clamp(256, 8_192);
+    requested.min(embedding_context_window_from_payload(payload))
+}
+
 fn local_port_from_base_url(base_url: &str) -> Option<u16> {
     let cleaned = base_url.trim_end_matches('/').trim_end_matches("/v1");
     for prefix in ["http://127.0.0.1:", "http://localhost:"] {
@@ -339,6 +381,7 @@ fn llama_server_args(
     context: &str,
     model_name: &str,
     embedding: bool,
+    embedding_physical_batch: Option<&str>,
 ) -> Vec<String> {
     let mut args = vec![
         "-m".to_string(),
@@ -354,6 +397,10 @@ fn llama_server_args(
     ];
     if embedding {
         args.push("--embedding".to_string());
+        args.push("--batch-size".to_string());
+        args.push(context.to_string());
+        args.push("--ubatch-size".to_string());
+        args.push(embedding_physical_batch.unwrap_or("1024").to_string());
     }
     args
 }
@@ -401,8 +448,10 @@ async fn start_server_if_needed(
 
     let port = local_port_from_base_url(base_url).unwrap_or(DEFAULT_PORT);
     let model_path_string = model_path.to_string_lossy().to_string();
+    let embedding_physical_batch =
+        embedding.then(|| embedding_physical_batch_size_from_payload(payload).to_string());
     let context = if embedding {
-        "512".to_string()
+        embedding_context_window_from_payload(payload).to_string()
     } else {
         context_size_from_payload(payload)
     };
@@ -424,7 +473,14 @@ async fn start_server_if_needed(
         runtime_mode(payload),
         candidates.join(", ")
     );
-    let args = llama_server_args(&model_path_string, port, &context, model_name, embedding);
+    let args = llama_server_args(
+        &model_path_string,
+        port,
+        &context,
+        model_name,
+        embedding,
+        embedding_physical_batch.as_deref(),
+    );
     let mut errors = Vec::new();
     for binary in candidates {
         eprintln!(
@@ -531,16 +587,23 @@ pub async fn chat_with_selected_model(
     }))
 }
 
-fn truncate_embedding_input(text: &str) -> String {
-    const MAX_BYTES: usize = 900;
-    if text.len() <= MAX_BYTES {
+fn truncate_embedding_input(text: &str, physical_batch_size: u64) -> String {
+    let max_bytes = physical_batch_size.saturating_sub(64).clamp(192, 8_128) as usize;
+    if text.len() <= max_bytes {
         return text.to_string();
     }
-    let mut end = MAX_BYTES;
+    let mut end = max_bytes;
     while end > 0 && !text.is_char_boundary(end) {
         end -= 1;
     }
     text[..end].to_string()
+}
+
+fn embedding_capacity_error(message: &str) -> bool {
+    let normalized = message.to_lowercase();
+    normalized.contains("physical batch size")
+        || normalized.contains("input") && normalized.contains("too large to process")
+        || normalized.contains("prompt") && normalized.contains("too long")
 }
 
 pub async fn embed_with_selected_model(
@@ -559,35 +622,64 @@ pub async fn embed_with_selected_model(
         .unwrap_or("embedding.gguf")
         .to_string();
     start_server_if_needed(app, &model_path, &model_name, &base_url, payload, true).await?;
-    let input = truncate_embedding_input(text);
-    let response = Client::builder()
+    let configured_batch = embedding_physical_batch_size_from_payload(payload);
+    let mut attempts = vec![
+        configured_batch,
+        configured_batch.saturating_div(2).max(256),
+        512,
+        384,
+        256,
+    ];
+    attempts.sort_unstable_by(|left, right| right.cmp(left));
+    attempts.dedup();
+    let client = Client::builder()
         .timeout(Duration::from_secs(120))
         .build()
-        .map_err(|error| error.to_string())?
-        .post(format!("{}/embeddings", base_url))
-        .json(&json!({ "model": model_name, "input": input }))
-        .send()
-        .await
         .map_err(|error| error.to_string())?;
-    let status = response.status();
-    let data = response.json::<Value>().await.unwrap_or_else(|_| json!({}));
-    if !status.is_success() {
-        return Err(error_text(
+    let mut last_error = String::new();
+    for capacity in attempts {
+        let input = truncate_embedding_input(text, capacity);
+        let response = client
+            .post(format!("{}/embeddings", base_url))
+            .json(&json!({ "model": model_name, "input": input }))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+        let status = response.status();
+        let data = response.json::<Value>().await.unwrap_or_else(|_| json!({}));
+        if status.is_success() {
+            return data
+                .pointer("/data/0/embedding")
+                .and_then(Value::as_array)
+                .ok_or_else(|| "Local embedding server returned no embedding vector.".to_string())?
+                .iter()
+                .map(|value| {
+                    value
+                        .as_f64()
+                        .map(|number| number as f32)
+                        .ok_or_else(|| "Local embedding vector contains a non-number.".to_string())
+                })
+                .collect();
+        }
+        last_error = error_text(
             &data,
             format!("Local embedding server returned HTTP {status}."),
-        ));
+        );
+        if !embedding_capacity_error(&last_error) {
+            return Err(last_error);
+        }
+        eprintln!(
+            "[tauri-rag] embedding input exceeded runtime capacity; retrying with byte_budget={} configured_ubatch={} error={}",
+            capacity.saturating_sub(64),
+            configured_batch,
+            last_error
+        );
     }
-    data.pointer("/data/0/embedding")
-        .and_then(Value::as_array)
-        .ok_or_else(|| "Local embedding server returned no embedding vector.".to_string())?
-        .iter()
-        .map(|value| {
-            value
-                .as_f64()
-                .map(|number| number as f32)
-                .ok_or_else(|| "Local embedding vector contains a non-number.".to_string())
-        })
-        .collect()
+    Err(format!(
+        "Local embedding input still exceeds the active llama.cpp capacity after safe truncation. Restart Elephant to apply the configured embedding physical batch size (currently {}). Last error: {}",
+        configured_batch,
+        last_error
+    ))
 }
 
 fn error_text(data: &Value, fallback: String) -> String {
@@ -695,13 +787,59 @@ mod tests {
 
     #[test]
     fn llama_server_args_set_model_alias() {
-        let args = llama_server_args("/models/smol.gguf", 39281, "4096", "smol.gguf", false);
+        let args = llama_server_args("/models/smol.gguf", 39281, "4096", "smol.gguf", false, None);
         assert!(args
             .windows(2)
             .any(|window| window == ["--alias", "smol.gguf"]));
         assert!(args
             .windows(2)
             .any(|window| window == ["-m", "/models/smol.gguf"]));
+    }
+
+    #[test]
+    fn embedding_capacity_defaults_are_large_enough_for_multi_view_inputs() {
+        let payload = json!({});
+        assert_eq!(embedding_context_window_from_payload(&payload), 2048);
+        assert_eq!(embedding_physical_batch_size_from_payload(&payload), 1024);
+    }
+
+    #[test]
+    fn embedding_capacity_reads_local_runtime_settings() {
+        let payload = json!({
+            "aiConfig": {
+                "localRuntime": {
+                    "embeddingContextWindow": 4096,
+                    "embeddingPhysicalBatchSize": 2048
+                }
+            }
+        });
+        assert_eq!(embedding_context_window_from_payload(&payload), 4096);
+        assert_eq!(embedding_physical_batch_size_from_payload(&payload), 2048);
+    }
+
+    #[test]
+    fn embedding_server_args_include_logical_and_physical_batches() {
+        let args = llama_server_args(
+            "/models/embed.gguf",
+            39282,
+            "2048",
+            "embed.gguf",
+            true,
+            Some("1024"),
+        );
+        assert!(args
+            .windows(2)
+            .any(|window| window == ["--batch-size", "2048"]));
+        assert!(args
+            .windows(2)
+            .any(|window| window == ["--ubatch-size", "1024"]));
+    }
+
+    #[test]
+    fn embedding_truncation_respects_the_active_physical_batch() {
+        let input = "x".repeat(2_000);
+        assert_eq!(truncate_embedding_input(&input, 512).len(), 448);
+        assert_eq!(truncate_embedding_input(&input, 1024).len(), 960);
     }
 
     #[test]

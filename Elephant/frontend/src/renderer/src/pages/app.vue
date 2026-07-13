@@ -7,18 +7,11 @@
       />
       <app-shell
         v-if="init"
-        :class="{ 'muya-runtime-underlay': muyaRuntimeActive }"
-      />
-      <RustMuyaRuntimeEditor
-        v-if="init && muyaRustRuntime"
-        v-model="muyaRuntimeMarkdown"
-        :mode="muyaRuntimeMode"
-        class="muya-runtime-production-editor"
-        @change="handleMuyaRuntimeChange"
+        :class="{ 'muya-runtime-underlay': muyaOverlayActive }"
       />
       <MuyaRuntimeEditor
-        v-else-if="init && muyaRuntimeEnabled"
-        v-show="muyaRuntimeActive"
+        v-if="init && muyaOverlayEnabled"
+        v-show="muyaOverlayActive"
         v-model="muyaRuntimeMarkdown"
         :mode="muyaRuntimeMode"
         class="muya-runtime-production-editor"
@@ -59,7 +52,6 @@ import { useNotificationStore } from '@/store/notification'
 import { debouncedSendBufferedState } from '@/store/bufferedState'
 import {
   MuyaRuntimeEditor,
-  RustMuyaRuntimeEditor,
   isMuyaRuntimeActive,
   isMuyaRuntimeEnabled,
   isMuyaRustRuntime,
@@ -103,9 +95,13 @@ const scheduleMuyaRuntimeModeSync = () => {
   })
 }
 
-const muyaRuntimeEnabled = computed(() => isMuyaRuntimeEnabled(muyaRuntimeMode.value))
-const muyaRuntimeActive = computed(() => isMuyaRuntimeActive(muyaRuntimeMode.value))
 const muyaRustRuntime = computed(() => isMuyaRustRuntime(muyaRuntimeMode.value))
+const muyaOverlayEnabled = computed(
+  () => isMuyaRuntimeEnabled(muyaRuntimeMode.value) && !muyaRustRuntime.value
+)
+const muyaOverlayActive = computed(
+  () => isMuyaRuntimeActive(muyaRuntimeMode.value) && !muyaRustRuntime.value
+)
 
 const muyaRuntimeMarkdown = computed({
   get: () => editorStore.currentFile?.markdown || '',
@@ -305,6 +301,10 @@ onBeforeUnmount(() => {
   & > .editor {
     flex: 1;
   }
+}
+.muva-runtime-underlay {
+  opacity: 0;
+  pointer-events: none;
 }
 .muya-runtime-underlay {
   opacity: 0;

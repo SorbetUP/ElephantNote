@@ -1,6 +1,7 @@
 import { MuyaRustBridge } from './bridge'
 import { createDomPatchAdapter } from './domRenderer'
 import { createRustInputController } from './inputController'
+import { createBundledMuyaRustEngine } from './wasmFactory'
 
 const noop = () => {}
 
@@ -10,6 +11,14 @@ const composeCallbacks = (...callbacks) => {
   return async (...args) => {
     for (const callback of active) await callback(...args)
   }
+}
+
+const resolveFactory = (config) => {
+  if (typeof config.factory === 'function') return config.factory
+  if (config.useBundledWasm) return createBundledMuyaRustEngine
+  throw new TypeError(
+    'experimentalRustEditor requires factory(markdown) or useBundledWasm: true.'
+  )
 }
 
 const resolveDomContainer = (muya, config) => {
@@ -23,11 +32,8 @@ const resolveDomContainer = (muya, config) => {
 }
 
 export const initializeExperimentalRustRuntime = async (muya, config, reportError) => {
-  if (typeof config.factory !== 'function') {
-    throw new TypeError('experimentalRustEditor.factory must be a function.')
-  }
-
-  const engine = await config.factory(muya.markdown)
+  const factory = resolveFactory(config)
+  const engine = await factory(muya.markdown)
   const domContainer = resolveDomContainer(muya, config)
   const adapter = domContainer
     ? createDomPatchAdapter(domContainer, { onRender: config.onRender })

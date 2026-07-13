@@ -9,6 +9,8 @@ describe('Wiki macro-topic discovery contracts', () => {
     expect(discovery).toContain('cluster_ids: Vec<usize>')
     expect(discovery).toContain('fn minimum_topic_sources')
     expect(discovery).toContain('fn expanded_members')
+    expect(discovery).toContain('background_p90')
+    expect(discovery).not.toContain('selected.len() < target')
     expect(discovery).toContain('wiki:macro-candidate')
     expect(discovery).toContain("DELETE FROM wiki_saved_candidates WHERE origin='semantic'")
   })

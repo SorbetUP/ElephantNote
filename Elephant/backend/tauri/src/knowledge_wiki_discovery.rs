@@ -544,6 +544,7 @@ fn expanded_members(
     documents: &[DocumentVector],
     route_threshold: f32,
 ) -> (Vec<usize>, f32) {
+    let core_set = core_members.iter().copied().collect::<HashSet<_>>();
     let mut ranked = documents
         .iter()
         .enumerate()
@@ -561,22 +562,31 @@ fn expanded_members(
         .get(core_scores.len().saturating_sub(1) / 4)
         .copied()
         .unwrap_or(route_threshold);
-    let semantic_floor = (route_threshold - 0.18).clamp(0.48, 0.72);
-    let adaptive_floor = (core_quartile - 0.10).clamp(semantic_floor, 0.74);
-    let target = core_members
-        .len()
-        .saturating_mul(3)
-        .clamp(minimum_topic_sources(documents.len()), 400);
 
-    let mut selected = core_members.iter().copied().collect::<HashSet<_>>();
+    let mut background_scores = ranked
+        .iter()
+        .filter(|(index, _)| !core_set.contains(index))
+        .map(|(_, score)| *score)
+        .collect::<Vec<_>>();
+    background_scores.sort_by(|left, right| left.total_cmp(right));
+    let background_p90 = background_scores
+        .get(background_scores.len().saturating_mul(9) / 10)
+        .copied()
+        .unwrap_or(route_threshold - 0.20);
+
+    let absolute_floor = (route_threshold - 0.24).clamp(0.44, 0.66);
+    let separation_midpoint = (core_quartile + background_p90) / 2.0;
+    let adaptive_floor = separation_midpoint
+        .max(absolute_floor)
+        .min((core_quartile - 0.02).max(absolute_floor));
+
+    let mut selected = core_set;
     for (index, score) in ranked {
         if selected.len() >= 400 {
             break;
         }
-        if score >= adaptive_floor || selected.len() < target {
+        if score >= adaptive_floor {
             selected.insert(index);
-        } else if selected.len() >= target {
-            break;
         }
     }
     let mut selected = selected.into_iter().collect::<Vec<_>>();
@@ -930,7 +940,7 @@ mod tests {
     }
 
     #[test]
-    fn macro_topic_expansion_grows_a_small_core() {
+    fn macro_topic_expansion_uses_semantic_separation_without_quota_fill() {
         let documents = vec![
             DocumentVector {
                 path: "a".into(),
@@ -951,16 +961,20 @@ mod tests {
                 vector: normalize_vector(vec![0.96, 0.08]).unwrap(),
             },
             DocumentVector {
-                path: "d".into(),
-                title: "D".into(),
+                path: "unrelated".into(),
+                title: "Unrelated".into(),
                 excerpt: String::new(),
-                vector: normalize_vector(vec![0.92, 0.15]).unwrap(),
+                vector: normalize_vector(vec![0.0, 1.0]).unwrap(),
             },
         ];
         let profile = centroid_for_members(&[0, 1], &documents).unwrap();
         let (expanded, floor) = expanded_members(&profile, &[0, 1], &documents, 0.72);
-        assert_eq!(expanded.len(), 4);
-        assert!((0.48..=0.74).contains(&floor));
+        assert_eq!(expanded.len(), 3);
+        assert!(expanded.contains(&0));
+        assert!(expanded.contains(&1));
+        assert!(expanded.contains(&2));
+        assert!(!expanded.contains(&3));
+        assert!((0.44..=0.98).contains(&floor));
     }
 
     #[test]

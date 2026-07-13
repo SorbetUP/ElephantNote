@@ -1,0 +1,40 @@
+name: Refresh Muya Cargo Lock
+
+on:
+  push:
+    branches:
+      - refactor/muya-rust-file-by-file
+    paths:
+      - Elephant/crates/muya-core/Cargo.toml
+      - .github/workflows/refresh-muya-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/muya-rust-file-by-file
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve Cargo dependencies
+        run: cargo metadata --format-version 1 --manifest-path Elephant/backend/tauri/Cargo.toml --no-deps >/dev/null
+
+      - name: Commit resolved lockfile
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if git diff --quiet -- Elephant/backend/tauri/Cargo.lock; then
+            echo "Cargo.lock is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Elephant/backend/tauri/Cargo.lock
+          git commit -m "Update Cargo lock for Muya grapheme support"
+          git push origin HEAD:refactor/muya-rust-file-by-file

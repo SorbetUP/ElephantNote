@@ -1,0 +1,79 @@
+name: Sync mobile addon catalog
+
+on:
+  push:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/sync-mobile-addon-catalog.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout application sources
+        uses: actions/checkout@v4
+        with:
+          ref: feature/physical-addon-packages
+          path: app
+
+      - name: Checkout catalog branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/physical-addon-catalog
+          path: catalog
+          fetch-depth: 0
+
+      - name: Synchronize Sites and Code execution mobile sources
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cp app/addons/official/sites/main.js catalog/addons/sites/main.js
+          cp app/addons/official/sites/manifest.json catalog/addons/sites/manifest.json
+          rm -rf catalog/addons/sites/native catalog/addons/sites/addon.build.json
+          cp app/addons/official/code-execution/main.mobile.js catalog/addons/code-execution/main.mobile.js
+
+          python3 - <<'PY'
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import json
+
+          path = Path('catalog/catalog.json')
+          catalog = json.loads(path.read_text())
+          entries = {entry['id']: entry for entry in catalog['addons']}
+
+          sites = entries['elephant.sites']
+          sites.update({
+              'version': '1.3.0',
+              'description': 'Previews static sites directly from a scoped vault directory on desktop, Android and iOS.',
+              'manifestPath': 'addons/sites/manifest.json',
+              'entryPath': 'addons/sites/main.js'
+          })
+          sites.pop('requiresPlatformPackage', None)
+          sites.pop('packages', None)
+          sites.pop('packagePath', None)
+          sites.pop('packageHash', None)
+
+          code = entries['elephant.code-execution']
+          code['description'] = 'Runs local interpreters on desktop and an isolated JavaScript Web Worker on Android and iOS.'
+
+          catalog['updatedAt'] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+          path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + '\n')
+          PY
+
+      - name: Commit synchronized catalog
+        working-directory: catalog
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'Catalog already synchronized.'
+            exit 0
+          fi
+          git commit -m "feat(catalog): add cross-platform Sites and mobile Code runtime"
+          git push origin HEAD:feature/physical-addon-catalog

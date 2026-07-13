@@ -1,7 +1,7 @@
 const fs = require('fs-extra')
 const os = require('os')
 const path = require('path')
-const { expect, test } = require('@playwright/test')
+const { expect, test } = require('playwright/test')
 const { launchElectron } = require('./helpers')
 
 test.describe('ElephantNote search settings inspection', () => {

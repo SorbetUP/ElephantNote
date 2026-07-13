@@ -17,7 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./.github/actions/setup
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: Validate integrated official addon catalogue
         shell: bash
@@ -32,22 +34,6 @@ jobs:
           set -o pipefail
           node build/scripts/validate-integrated-addon-packs.mjs \
             2>&1 | tee addon-pack-tests.txt
-
-      - name: Run focused addon and settings tests
-        shell: bash
-        run: |
-          set -o pipefail
-          NODE_PATH=Elephant/node_modules \
-            Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/addons/addonProfiles.spec.js \
-            tests/app/unit/addons/coreFeatures.spec.js \
-            tests/app/unit/addons/builtinAddons.spec.js \
-            tests/app/unit/addons/aiTabsAndRailBorder.spec.js \
-            tests/app/unit/addons/physicalAddonIsolation.spec.js \
-            tests/app/unit/addons/nativeMobileCompatibility.spec.js \
-            tests/app/unit/addons/trustedOfficialActivation.spec.js \
-            tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
-            2>&1 | tee addon-tests.txt
 
       - name: Package full app access reference addon
         shell: bash
@@ -81,6 +67,24 @@ jobs:
             fi
           done
           find build/out/addons/releases -name '*.enaddon' -print -exec unzip -t {} \; 2>/dev/null || true
+
+      - uses: ./.github/actions/setup
+
+      - name: Run focused addon and settings tests
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules \
+            Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/addonProfiles.spec.js \
+            tests/app/unit/addons/coreFeatures.spec.js \
+            tests/app/unit/addons/builtinAddons.spec.js \
+            tests/app/unit/addons/aiTabsAndRailBorder.spec.js \
+            tests/app/unit/addons/physicalAddonIsolation.spec.js \
+            tests/app/unit/addons/nativeMobileCompatibility.spec.js \
+            tests/app/unit/addons/trustedOfficialActivation.spec.js \
+            tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
+            2>&1 | tee addon-tests.txt
 
       - name: Build Tauri web bundle and verify physical absence
         shell: bash
@@ -142,7 +146,9 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      - uses: ./.github/actions/setup
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: Compile and test Rust addon security modules
         shell: bash

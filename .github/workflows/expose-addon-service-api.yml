@@ -1,6 +1,7 @@
 name: Expose addon service API
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - feature/physical-addon-packages

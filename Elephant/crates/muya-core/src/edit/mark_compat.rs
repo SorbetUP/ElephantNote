@@ -13,6 +13,9 @@ pub enum MarkCommand {
 impl MarkCommand {
   pub fn build(self, document: &Document, selection: Selection) -> Result<Transaction, EditError> {
     if let Some(wrapper) = selected_mark_ancestor(document, selection, self)? {
+      if is_muya_nested_emphasis_noop(document, wrapper, self)? {
+        return Ok(noop(selection));
+      }
       return build_unwrap_ancestor(document, selection, wrapper);
     }
     self.generic().build(document, selection)
@@ -65,6 +68,32 @@ fn matches_command(kind: &InlineKind, command: MarkCommand) -> bool {
       | (InlineKind::Emphasis, MarkCommand::ToggleEmphasis)
       | (InlineKind::Strike, MarkCommand::ToggleStrike)
   )
+}
+
+fn is_muya_nested_emphasis_noop(
+  document: &Document,
+  wrapper: NodeId,
+  command: MarkCommand,
+) -> Result<bool, EditError> {
+  if command != MarkCommand::ToggleEmphasis {
+    return Ok(false);
+  }
+  let parent = document
+    .node(wrapper)
+    .ok_or(EditError::NodeNotFound(wrapper))?
+    .parent;
+  Ok(matches!(
+    parent.and_then(|id| document.node(id)).map(|node| &node.kind),
+    Some(NodeKind::Inline(InlineKind::Strong))
+  ))
+}
+
+fn noop(selection: Selection) -> Transaction {
+  Transaction {
+    operations: Vec::new(),
+    selection_before: selection,
+    selection_after: selection,
+  }
 }
 
 fn build_unwrap_ancestor(
@@ -149,15 +178,14 @@ mod tests {
   }
 
   #[test]
-  fn unwraps_a_nested_emphasis_ancestor_without_removing_strong() {
+  fn keeps_nested_emphasis_inside_strong_as_a_muya_noop() {
     let mut document = parse_markdown("***alpha***");
     let transaction = MarkCommand::ToggleEmphasis
       .build(&document, selection(&document, 0, 5))
       .unwrap();
-    let inverse = transaction.apply(&mut document).unwrap();
 
-    assert_eq!(to_markdown(&document), "**alpha**");
-    inverse.apply(&mut document).unwrap();
+    assert!(transaction.operations.is_empty());
+    transaction.apply(&mut document).unwrap();
     assert_eq!(to_markdown(&document), "***alpha***");
   }
 

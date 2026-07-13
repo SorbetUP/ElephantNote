@@ -1,7 +1,8 @@
 export const MUYA_RUNTIME_FLAGS = Object.freeze({
   disabled: 'disabled',
   shadow: 'shadow',
-  active: 'active'
+  active: 'active',
+  rust: 'rust'
 })
 
 export const defaultMuyaRuntimeMode = (source = globalThis) => {
@@ -14,5 +15,13 @@ export const readMuyaRuntimeMode = (source = globalThis) => {
   return Object.values(MUYA_RUNTIME_FLAGS).includes(raw) ? raw : defaultMuyaRuntimeMode(source)
 }
 
-export const isMuyaRuntimeEnabled = (mode = readMuyaRuntimeMode()) => mode === MUYA_RUNTIME_FLAGS.active || mode === MUYA_RUNTIME_FLAGS.shadow
-export const isMuyaRuntimeActive = (mode = readMuyaRuntimeMode()) => mode === MUYA_RUNTIME_FLAGS.active
+export const isMuyaRuntimeEnabled = (mode = readMuyaRuntimeMode()) =>
+  mode === MUYA_RUNTIME_FLAGS.active ||
+  mode === MUYA_RUNTIME_FLAGS.shadow ||
+  mode === MUYA_RUNTIME_FLAGS.rust
+
+export const isMuyaRuntimeActive = (mode = readMuyaRuntimeMode()) =>
+  mode === MUYA_RUNTIME_FLAGS.active || mode === MUYA_RUNTIME_FLAGS.rust
+
+export const isMuyaRustRuntime = (mode = readMuyaRuntimeMode()) =>
+  mode === MUYA_RUNTIME_FLAGS.rust

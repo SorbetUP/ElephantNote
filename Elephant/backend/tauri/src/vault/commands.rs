@@ -144,21 +144,9 @@ pub fn tauri_entries_delete(app: AppHandle, relative_path: String) -> R<Value> {
 }
 
 #[tauri::command]
-pub fn tauri_calendar_list(app: AppHandle) -> R<Vec<Value>> {
-  let vault = get_active_vault(&app)?;
-  Ok(read_json_or(vault_layout::config_file(&vault.path, vault_layout::CALENDAR_FILE), json!({ "events": [] })).get("events").and_then(Value::as_array).cloned().unwrap_or_default())
-}
-
-#[tauri::command]
 pub fn tauri_sources_list(app: AppHandle) -> R<Vec<Value>> {
   let vault = get_active_vault(&app)?;
   Ok(read_json_or(vault_layout::config_file(&vault.path, vault_layout::SOURCES_FILE), json!({ "sources": [] })).get("sources").and_then(Value::as_array).cloned().unwrap_or_default())
-}
-
-#[tauri::command]
-pub fn tauri_wiki_list(app: AppHandle) -> R<Vec<Value>> {
-  let vault = get_active_vault(&app)?;
-  Ok(read_json_or(vault_layout::wiki_file(&vault.path, vault_layout::WIKI_FILE), json!({ "records": [] })).get("records").and_then(Value::as_array).cloned().unwrap_or_default())
 }
 
 #[tauri::command]

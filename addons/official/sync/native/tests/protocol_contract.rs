@@ -1,12 +1,7 @@
-#[path = "../src/manifest.rs"]
-mod manifest;
-#[path = "../src/plan.rs"]
-mod plan;
-#[path = "../src/protocol.rs"]
-mod protocol;
-
+use elephant_sync_service::protocol::{
+  ControlMessage, PairRequest, ALPN, FILE_CHUNK_SIZE, PROTOCOL_NAME,
+};
 use iroh::{EndpointAddr, SecretKey};
-use protocol::{ControlMessage, PairRequest, ALPN, FILE_CHUNK_SIZE, PROTOCOL_NAME};
 
 #[test]
 fn package_keeps_the_existing_wire_identifiers() {

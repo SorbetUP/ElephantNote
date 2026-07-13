@@ -25,6 +25,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          python3 build/scripts/fix-physical-boundary-script.py
           python3 build/scripts/apply-physical-boundary-fixes.py 2>&1 | tee physical-migration-output.txt
 
       - uses: ./.github/actions/setup

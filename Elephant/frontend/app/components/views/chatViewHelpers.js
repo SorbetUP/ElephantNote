@@ -1,11 +1,9 @@
-import { buildWikiGraphPanel } from './wikiViewHelpers'
-
 const DEFAULT_QUICK_PROMPTS = [
   {
-    label: 'Summarize graph',
-    hint: 'Use the active semantic context',
+    label: 'Summarize context',
+    hint: 'Use the active note context',
     icon: 'graph',
-    prompt: 'Summarize the active note graph context and cite the most relevant sources.'
+    prompt: 'Summarize the active note context and cite the most relevant sources.'
   },
   {
     label: 'Find follow-ups',
@@ -14,10 +12,10 @@ const DEFAULT_QUICK_PROMPTS = [
     prompt: 'Find the best follow-up notes or open questions connected to this context.'
   },
   {
-    label: 'Draft wiki',
-    hint: 'Prepare a cited wiki topic',
+    label: 'Draft summary',
+    hint: 'Prepare a cited topic',
     icon: 'doc',
-    prompt: 'Draft a concise wiki-style summary for the active context with citations.'
+    prompt: 'Draft a concise summary for the active context with citations.'
   },
   {
     label: 'Explain sources',
@@ -27,22 +25,24 @@ const DEFAULT_QUICK_PROMPTS = [
   }
 ]
 
-export const buildChatContextPanel = ({
-  graph = null,
-  limit = 4
-} = {}) => {
-  const graphPanel = buildWikiGraphPanel({
-    inspectionGraph: graph,
-    includeStructure: false
-  })
+const safeArray = (value) => Array.isArray(value) ? value : []
 
+export const buildChatContextPanel = ({ graph = null, limit = 4 } = {}) => {
+  const nodes = safeArray(graph?.nodes)
+  const edges = safeArray(graph?.edges)
+  const clusters = safeArray(graph?.clusters)
+  const normalizedLimit = Math.max(1, Number(limit) || 4)
   return {
-    summary: graphPanel.summary,
-    clusters: graphPanel.clusters.slice(0, Math.max(1, Number(limit) || 4)).map((cluster) => ({
-      id: String(cluster.id || ''),
-      label: String(cluster.label || cluster.id || 'Cluster'),
-      nodeCount: Number(cluster.nodeCount || 0),
-      paths: Array.isArray(cluster.paths) ? cluster.paths : []
+    summary: {
+      nodes: nodes.length,
+      edges: edges.length,
+      clusters: clusters.length
+    },
+    clusters: clusters.slice(0, normalizedLimit).map((cluster) => ({
+      id: String(cluster?.id || cluster?.label || ''),
+      label: String(cluster?.label || cluster?.id || 'Cluster'),
+      nodeCount: Number(cluster?.nodeCount || safeArray(cluster?.nodes).length || 0),
+      paths: safeArray(cluster?.paths)
     })),
     quickPrompts: DEFAULT_QUICK_PROMPTS
   }
@@ -56,7 +56,7 @@ const summarizeWikiContext = (wikiContext = null) => {
     name: 'wiki.context',
     label: source.title || source.path || 'Wiki context',
     status: 'done',
-    summary: `${graphSummary.nodes || 0} nodes \u00b7 ${graphSummary.semanticLinks || 0} semantic links \u00b7 ${graphSummary.clusters || 0} clusters`,
+    summary: `${graphSummary.nodes || 0} nodes · ${graphSummary.semanticLinks || 0} semantic links · ${graphSummary.clusters || 0} clusters`,
     sources: [source].filter((entry) => entry && (entry.path || entry.title))
   }
 }
@@ -108,5 +108,5 @@ export const formatChatTimestamp = (timestamp) => {
   if (sameDay) return time
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
-  return `${month}/${day} \u00b7 ${time}`
+  return `${month}/${day} · ${time}`
 }

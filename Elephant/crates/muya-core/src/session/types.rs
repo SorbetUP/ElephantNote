@@ -2,8 +2,8 @@ use crate::edit::{
   Command, GraphemeCommand, MarkCommand, ParagraphBoundaryCommand, PasteCommand,
 };
 use crate::features::{
-  BlockCommand, BlockTypeCommand, CreateTable, InsertHorizontalRule, ListCommand,
-  TableCommand, TableNavigationCommand, TaskCommand,
+  BlockCommand, BlockTypeCommand, CreateTable, InsertHorizontalRule, InsertImage,
+  ListCommand, TableCommand, TableNavigationCommand, TaskCommand,
 };
 use crate::history::History;
 use crate::model::Document;
@@ -24,6 +24,7 @@ pub enum SessionCommand {
   BlockType(BlockTypeCommand),
   HorizontalRule(InsertHorizontalRule),
   CreateTable(CreateTable),
+  InsertImage(InsertImage),
   List(ListCommand),
   Table(TableCommand),
   TableNavigation(TableNavigationCommand),

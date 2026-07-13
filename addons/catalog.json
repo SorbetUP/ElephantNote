@@ -2,7 +2,7 @@
   "version": 1,
   "branch": "integrated",
   "packageRoot": "official",
-  "updatedAt": "2026-07-13T13:15:00Z",
+  "updatedAt": "2026-07-13T13:50:00Z",
   "addons": [
     { "id": "elephant.ai", "slug": "ai", "name": "AI", "version": "2.1.0", "description": "Owns AI provider configuration and optional AI capability slots.", "author": "Elephant", "official": true, "manifestPath": "official/ai/manifest.json", "entryPath": "official/ai/main.js" },
     { "id": "elephant.ai-chat", "slug": "ai-chat", "name": "Chat", "version": "1.1.0", "description": "Adds the AI chat sidebar and chat route settings.", "author": "Elephant", "official": true, "manifestPath": "official/ai-chat/manifest.json", "entryPath": "official/ai-chat/main.js" },
@@ -12,7 +12,7 @@
     { "id": "elephant.graph", "slug": "graph", "name": "Graph", "version": "1.2.0", "description": "Builds note and Wiki relationship graphs directly inside the physical package.", "author": "Elephant", "official": true, "manifestPath": "official/graph/manifest.json", "entryPath": "official/graph/main.js" },
     { "id": "elephant.open-models", "slug": "open-models", "name": "Open Models", "version": "1.2.0", "description": "Browses, downloads and activates local GGUF models.", "author": "Elephant", "official": true, "manifestPath": "official/open-models/manifest.json", "entryPath": "official/open-models/main.js" },
     { "id": "elephant.codex-connection", "slug": "codex-connection", "name": "Codex Connection", "version": "1.1.0", "description": "Connects a ChatGPT subscription and exposes Codex as an AI provider.", "author": "Elephant", "official": true, "manifestPath": "official/codex-connection/manifest.json", "entryPath": "official/codex-connection/main.js" },
-    { "id": "elephant.sync", "slug": "sync", "name": "Sync", "version": "1.1.0", "description": "Adds encrypted Iroh pairing, synchronization and conflict recovery.", "author": "Elephant", "official": true, "manifestPath": "official/sync/manifest.json", "entryPath": "official/sync/main.js" },
+    { "id": "elephant.sync", "slug": "sync", "name": "Sync", "version": "1.2.0", "description": "Owns a persistent Iroh endpoint while legacy transfer operations are migrated into the package.", "author": "Elephant", "official": true, "manifestPath": "official/sync/manifest.json", "entryPath": "official/sync/main.service.js" },
     { "id": "elephant.calendar", "slug": "calendar", "name": "Calendar", "version": "1.3.0", "description": "Adds package-owned events, ICS import and Google Calendar synchronization.", "author": "Elephant", "official": true, "manifestPath": "official/calendar/manifest.json", "entryPath": "official/calendar/main.js" },
     { "id": "elephant.sites", "slug": "sites", "name": "Sites", "version": "1.3.0", "description": "Previews static folders directly on desktop, Android and iOS.", "author": "Elephant", "official": true, "manifestPath": "official/sites/manifest.json", "entryPath": "official/sites/main.js" },
     { "id": "elephant.code-execution", "slug": "code-execution", "name": "Code execution", "version": "2.1.0", "description": "Runs local interpreters on desktop and isolated JavaScript Workers on Android and iOS.", "author": "Elephant", "official": true, "manifestPath": "official/code-execution/manifest.json", "entryPath": "official/code-execution/main.js" },

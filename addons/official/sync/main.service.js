@@ -63,7 +63,7 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
       plan: (params = {}) => this.buildNativePlan(params),
       applyLocal: (plan) => this.applyNativeLocalPlan(plan),
       stop: () => this.stopNativeService(),
-      capabilities: Object.freeze(['endpoint', 'manifest', 'plan', 'local-operations'])
+      capabilities: Object.freeze(['endpoint', 'identity', 'manifest', 'plan', 'local-operations'])
     }))
     api.app.emit('elephantnote:sync-native-service-ready', { started, status })
   }

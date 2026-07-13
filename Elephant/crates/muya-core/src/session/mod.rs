@@ -1,6 +1,6 @@
 use crate::edit::{
   Command, EditError, GraphemeCommand, MarkCommand, ParagraphBoundaryCommand,
-  Transaction,
+  PasteCommand, Transaction,
 };
 use crate::features::{ListCommand, TableCommand, TableNavigationCommand};
 use crate::history::{History, HistoryStep};
@@ -14,6 +14,7 @@ pub enum SessionCommand {
   Core(Command),
   Grapheme(GraphemeCommand),
   Mark(MarkCommand),
+  Paste(PasteCommand),
   ParagraphBoundary(ParagraphBoundaryCommand),
   List(ListCommand),
   Table(TableCommand),
@@ -144,6 +145,10 @@ impl EditorSession {
         self.apply_transaction(transaction, false)
       }
       SessionCommand::Mark(command) => {
+        let transaction = command.build(&self.document, self.selection)?;
+        self.apply_transaction(transaction, false)
+      }
+      SessionCommand::Paste(command) => {
         let transaction = command.build(&self.document, self.selection)?;
         self.apply_transaction(transaction, false)
       }

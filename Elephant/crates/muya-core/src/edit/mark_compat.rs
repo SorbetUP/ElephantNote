@@ -11,11 +11,7 @@ pub enum MarkCommand {
 }
 
 impl MarkCommand {
-  pub fn build(
-    self,
-    document: &Document,
-    selection: Selection,
-  ) -> Result<Transaction, EditError> {
+  pub fn build(self, document: &Document, selection: Selection) -> Result<Transaction, EditError> {
     if let Some(wrapper) = selected_mark_ancestor(document, selection, self)? {
       return build_unwrap_ancestor(document, selection, wrapper);
     }

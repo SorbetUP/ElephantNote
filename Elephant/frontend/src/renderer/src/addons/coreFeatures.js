@@ -68,10 +68,6 @@ export const activateCoreFeature = async (manager, definition) => {
   if (manager.coreFeatures.has(id)) return manager.coreFeatures.get(id)
 
   const disposables = []
-  const context = createCoreContext(manager, id, disposables)
-  const returnedDispose = await definition.activate?.(context)
-  if (typeof returnedDispose === 'function') disposables.push(returnedDispose)
-
   let active = true
   const handle = Object.freeze({
     id,
@@ -93,7 +89,15 @@ export const activateCoreFeature = async (manager, definition) => {
   })
 
   manager.coreFeatures.set(id, handle)
-  manager.emit('core-feature:enabled', { id })
-  manager.logger?.info?.('[core-feature] enabled', { id })
-  return handle
+  try {
+    const context = createCoreContext(manager, id, disposables)
+    const returnedDispose = await definition.activate?.(context)
+    if (typeof returnedDispose === 'function') disposables.push(returnedDispose)
+    manager.emit('core-feature:enabled', { id })
+    manager.logger?.info?.('[core-feature] enabled', { id })
+    return handle
+  } catch (error) {
+    handle.dispose()
+    throw error
+  }
 }

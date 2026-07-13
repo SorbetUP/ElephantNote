@@ -1,0 +1,64 @@
+import { createNodeElement } from './elements'
+import { NODE_ATTRIBUTE, childElements } from './helpers'
+
+export const applyDomPatch = (renderer, patch) => {
+  switch (patch.type) {
+    case 'replace_text':
+      return syncText(renderer, patch.node)
+    case 'insert_node': {
+      const element = createNodeElement(renderer, renderer.logical.node(patch.node.id))
+      return insertElement(renderer, patch.parent, patch.index, element)
+    }
+    case 'insert_subtree': {
+      const element = renderer.renderSubtree(patch.subtree.root)
+      return insertElement(renderer, patch.parent, patch.index, element)
+    }
+    case 'move_node':
+      return insertElement(renderer, patch.new_parent, patch.new_index, renderer.requiredElement(patch.node))
+    case 'remove_node':
+      return removeElement(renderer, patch.node)
+    case 'set_block_kind':
+      return replaceElementShell(renderer, patch.node)
+    default:
+      throw new TypeError(`Unknown Muya Rust DOM patch: ${String(patch.type)}`)
+  }
+}
+
+const syncText = (renderer, id) => {
+  const node = renderer.logical.node(id)
+  const element = renderer.requiredElement(id)
+  const value = node?.kind?.value?.value
+  if (node?.kind?.value?.type !== 'text' || typeof value !== 'string') {
+    throw new TypeError(`Muya Rust node ${id} is not text.`)
+  }
+  const text = element.firstChild
+  if (!text || text.nodeType !== 3) {
+    element.replaceChildren(renderer.ownerDocument.createTextNode(value))
+  } else {
+    text.data = value
+  }
+}
+
+const insertElement = (renderer, parentId, index, element) => {
+  const parent = renderer.requiredElement(parentId)
+  const children = childElements(parent).filter((child) => child !== element)
+  parent.insertBefore(element, children[index] || null)
+}
+
+const removeElement = (renderer, id) => {
+  const element = renderer.requiredElement(id)
+  const descendants = [element, ...element.querySelectorAll(`[${NODE_ATTRIBUTE}]`)]
+  for (const descendant of descendants) {
+    renderer.elements.delete(Number(descendant.getAttribute(NODE_ATTRIBUTE)))
+  }
+  element.remove()
+}
+
+const replaceElementShell = (renderer, id) => {
+  const node = renderer.logical.node(id)
+  const previous = renderer.requiredElement(id)
+  const replacement = createNodeElement(renderer, node)
+  while (previous.firstChild) replacement.appendChild(previous.firstChild)
+  previous.replaceWith(replacement)
+  renderer.elements.set(id, replacement)
+}

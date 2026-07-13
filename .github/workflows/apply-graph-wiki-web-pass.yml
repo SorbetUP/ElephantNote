@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/apply-graph-wiki-web-pass.yml
       - .github/scripts/apply_graph_wiki_web_pass.py
+      - .github/scripts/prepare_graph_wiki_web_pass.py
 
 permissions:
   contents: write
@@ -26,6 +27,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+
+      - name: Prepare deterministic transformations
+        run: python3 .github/scripts/prepare_graph_wiki_web_pass.py
 
       - name: Apply scale and research fixes
         run: python3 .github/scripts/apply_graph_wiki_web_pass.py
@@ -52,6 +56,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm .github/workflows/apply-graph-wiki-web-pass.yml
           git rm .github/scripts/apply_graph_wiki_web_pass.py
+          git rm .github/scripts/prepare_graph_wiki_web_pass.py
           git add Elephant tests
           git commit -m "feat: scale graph territories and write research-grade Wikis"
           git push origin HEAD:assistant/wiki-organization-continuation

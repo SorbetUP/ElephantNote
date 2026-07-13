@@ -34,6 +34,9 @@ const editableBlocks = (muya) =>
 const allEditableTextBlocks = (muya) =>
   collectBlocks(muya, (block) => typeof block?.text === 'string')
 
+const visibleText = (value) =>
+  String(value || '').replace(/^ {0,3}#{1,6}[\s\u00a0]+/, '')
+
 const applyJsSelection = (muya, block, start, end) => {
   muya.contentState.cursor = {
     start: { key: block.key, offset: start },
@@ -67,7 +70,10 @@ export const setJsSelectionByAnyText = (
   end = start,
   occurrence = 0
 ) => {
-  const matches = allEditableTextBlocks(muya).filter((block) => block.text === value)
+  const expected = visibleText(value)
+  const matches = allEditableTextBlocks(muya).filter(
+    (block) => visibleText(block.text) === expected
+  )
   const block = matches[occurrence]
   if (!block) {
     throw new Error(

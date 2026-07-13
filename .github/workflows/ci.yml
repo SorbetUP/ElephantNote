@@ -227,3 +227,6 @@ jobs:
 
       - name: Cargo tests
         run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features
+
+      - name: Verify Cargo.lock is current
+        run: git diff --exit-code -- Elephant/backend/tauri/Cargo.lock

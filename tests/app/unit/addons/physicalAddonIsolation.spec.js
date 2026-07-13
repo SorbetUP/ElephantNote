@@ -7,33 +7,44 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 const exists = (relativePath) => fs.existsSync(path.join(root, relativePath))
 
 describe('physical addon isolation', () => {
-  it('keeps OCR code and native commands out of Elephant core', () => {
+  it('keeps AI parent and OCR code out of Elephant core', () => {
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
     const builtinIndex = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
 
     expect(core).not.toContain('pub mod ocr;')
     expect(core).not.toContain('tauri_ocr_status')
     expect(core).not.toContain('tauri_ocr_image')
+    expect(builtinIndex).not.toContain("import('./ai')")
+    expect(builtinIndex).not.toContain("id: 'elephant.ai'")
     expect(builtinIndex).not.toContain("import('./aiOcr')")
     expect(builtinIndex).not.toContain("id: 'elephant.ai-ocr'")
     expect(exists('Elephant/backend/tauri/src/ocr.rs')).toBe(false)
+    expect(exists('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')).toBe(false)
+    expect(exists('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiProvidersSettings.vue')).toBe(false)
+    expect(exists('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiAddonSettings.vue')).toBe(false)
     expect(exists('Elephant/frontend/src/renderer/src/addons/builtin/aiOcr.js')).toBe(false)
     expect(exists('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiOcrSettings.vue')).toBe(false)
   })
 
-  it('keeps OCR implementation inside a separately packageable addon', () => {
-    const manifest = JSON.parse(read('addons/official/ai-ocr/manifest.json'))
-    const entry = read('addons/official/ai-ocr/main.js')
+  it('keeps AI parent and OCR implementations inside separately packageable addons', () => {
+    const aiManifest = JSON.parse(read('addons/official/ai/manifest.json'))
+    const aiEntry = read('addons/official/ai/main.js')
+    const ocrManifest = JSON.parse(read('addons/official/ai-ocr/manifest.json'))
+    const ocrEntry = read('addons/official/ai-ocr/main.js')
     const sidecar = read('addons/official/ai-ocr/native/src/main.rs')
 
-    expect(manifest.id).toBe('elephant.ai-ocr')
-    expect(manifest.permissions.native).toBe(true)
-    expect(manifest.requires).toEqual({ 'elephant.ai': '>=2.0.0' })
-    expect(Object.keys(manifest.native.sidecars)).toContain('macos-aarch64')
-    expect(entry).toContain("slot: 'ai.ocr'")
-    expect(entry).toContain('this.api.native.call')
-    expect(entry).toContain('this.api.storage.get')
-    expect(entry).not.toContain('api.experimental')
+    expect(aiManifest.id).toBe('elephant.ai')
+    expect(aiManifest.contributes.runtimeMode).toBe('trusted')
+    expect(aiEntry).toContain("standalone: true")
+    expect(aiEntry).toContain("slot: 'ai.ocr'")
+    expect(ocrManifest.id).toBe('elephant.ai-ocr')
+    expect(ocrManifest.permissions.native).toBe(true)
+    expect(ocrManifest.requires).toEqual({ 'elephant.ai': '>=2.0.0' })
+    expect(Object.keys(ocrManifest.native.sidecars)).toContain('macos-aarch64')
+    expect(ocrEntry).toContain("slot: 'ai.ocr'")
+    expect(ocrEntry).toContain('this.api.native.call')
+    expect(ocrEntry).toContain('this.api.storage.get')
+    expect(ocrEntry).not.toContain('api.experimental')
     expect(sidecar).toContain('elephant-addon-sidecar-v1')
     expect(sidecar).toContain('"ocr.image"')
   })
@@ -53,16 +64,22 @@ describe('physical addon isolation', () => {
     expect(trustedRuntime).toContain("storage: Object.freeze({")
   })
 
-  it('enforces parent addon requirements at the native manager boundary', () => {
+  it('enforces parent addon requirements at native and renderer manager boundaries', () => {
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
     const dependencies = read('Elephant/backend/tauri/src/addon_dependencies.rs')
+    const manager = read('Elephant/frontend/src/renderer/src/addons/AddonManager.js')
+    const registryView = read('Elephant/backend/tauri/src/addon_registry_view.rs')
 
     expect(core).toContain('addon_dependencies::tauri_addons_set_enabled')
     expect(core).toContain('addon_dependencies::tauri_addons_uninstall')
+    expect(core).toContain('addon_registry_view::tauri_addons_list')
     expect(dependencies).toContain('validate_requirements')
     expect(dependencies).toContain('VersionReq::parse')
     expect(dependencies).toContain('Cannot disable')
     expect(dependencies).toContain('Cannot uninstall')
+    expect(manager).toContain('assertDependenciesEnabled')
+    expect(manager).toContain('getDependents')
+    expect(registryView).toContain('physical_manifest')
   })
 
   it('supports catalog downloads of complete hashed enaddon archives', () => {

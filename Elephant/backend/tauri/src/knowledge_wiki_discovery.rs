@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS wiki_saved_candidates (
   source_paths_json TEXT NOT NULL,
   source_titles_json TEXT NOT NULL,
   score INTEGER NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
   origin TEXT NOT NULL,
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
@@ -49,6 +50,9 @@ pub struct SemanticWikiCandidate {
     pub source_titles: Vec<String>,
     pub score: usize,
     pub coherence: f32,
+    pub core_source_count: usize,
+    pub confidence: f32,
+    pub distinctiveness: f32,
 }
 
 #[cfg(not(mobile))]
@@ -123,6 +127,10 @@ fn open_connection(root: &Path) -> Result<Connection, String> {
     connection
         .execute_batch(DISCOVERY_SCHEMA)
         .map_err(|error| error.to_string())?;
+    let _ = connection.execute(
+        "ALTER TABLE wiki_saved_candidates ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'",
+        [],
+    );
     Ok(connection)
 }
 
@@ -971,6 +979,9 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
                 .saturating_add(core_sources.saturating_mul(250))
                 .saturating_add((profile.confidence * 1_000.0) as usize),
             coherence: profile.coherence,
+            core_source_count: core_sources,
+            confidence: profile.confidence,
+            distinctiveness: profile.distinctiveness,
         });
     }
     candidates.sort_by(|left, right| right.score.cmp(&left.score));

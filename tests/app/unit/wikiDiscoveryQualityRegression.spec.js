@@ -39,6 +39,15 @@ describe('Wiki macro-topic discovery contracts', () => {
     expect(library).not.toContain('fn candidate_item(candidate: WikiCandidate)')
   })
 
+  it('shows evidence instead of an opaque source total', () => {
+    expect(discovery).toContain('core_source_count')
+    expect(discovery).toContain('metadata_json')
+    expect(library).toContain('core_source_count')
+    expect(wikiView).toContain('note{{ entry.coreSourceCount === 1')
+    expect(wikiView).toContain('Sujet solide')
+    expect(wikiView).toContain('relatedSourceCount')
+  })
+
   it('uses an inline two-step delete confirmation', () => {
     expect(wikiView).toContain("const deleteConfirmId = ref('')")
     expect(wikiView).toContain('Confirmer la suppression')

@@ -175,7 +175,12 @@
         </section>
 
         <div class="en-wiki-meta">
-          <span>{{ entry.sourcePaths?.length || 0 }} source{{ entry.sourcePaths?.length === 1 ? '' : 's' }}</span>
+          <template v-if="entry.kind === 'suggestion' && entry.status === 'semantic' && entry.coreSourceCount">
+            <span>{{ entry.coreSourceCount }} note{{ entry.coreSourceCount === 1 ? '' : 's' }} cœur</span>
+            <span v-if="relatedSourceCount(entry)">+{{ relatedSourceCount(entry) }} associée{{ relatedSourceCount(entry) === 1 ? '' : 's' }}</span>
+            <span class="en-confidence" :title="confidenceTitle(entry)">{{ confidenceLabel(entry) }}</span>
+          </template>
+          <span v-else>{{ entry.sourcePaths?.length || 0 }} source{{ entry.sourcePaths?.length === 1 ? '' : 's' }}</span>
           <span v-if="entry.citationsCount">{{ entry.citationsCount }} citation{{ entry.citationsCount === 1 ? '' : 's' }}</span>
           <span v-if="entry.modelId">{{ entry.modelId }}</span>
         </div>
@@ -279,6 +284,18 @@ const invoke = (command, payload = {}) => {
 }
 const isBusy = (id) => busyIds.value.has(id)
 const entryError = (id) => errorsById.value[id] || ''
+const relatedSourceCount = (entry) => Math.max(0, Number(entry?.sourcePaths?.length || 0) - Number(entry?.coreSourceCount || 0))
+const confidenceLabel = (entry) => {
+  const value = Number(entry?.confidence || 0)
+  if (value >= 0.72) return 'Sujet solide'
+  if (value >= 0.48) return 'Sujet probable'
+  return 'À explorer'
+}
+const confidenceTitle = (entry) => {
+  const confidence = Math.round(Number(entry?.confidence || 0) * 100)
+  const distinctiveness = Number(entry?.distinctiveness || 0).toFixed(2)
+  return `Confiance ${confidence}% · séparation ${distinctiveness}`
+}
 
 const setBusy = (id, value) => {
   const next = new Set(busyIds.value)

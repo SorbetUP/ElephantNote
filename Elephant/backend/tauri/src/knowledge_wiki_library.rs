@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS wiki_saved_candidates (
   source_paths_json TEXT NOT NULL,
   source_titles_json TEXT NOT NULL,
   score INTEGER NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
   origin TEXT NOT NULL,
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
@@ -47,6 +48,9 @@ pub struct WikiLibraryItem {
     pub path: Option<String>,
     pub source_paths: Vec<String>,
     pub score: usize,
+    pub core_source_count: usize,
+    pub confidence: f32,
+    pub distinctiveness: f32,
     pub model_id: String,
     pub markdown: String,
     pub draft_id: Option<String>,
@@ -69,6 +73,10 @@ fn open_library_connection(store: &KnowledgeStore) -> Result<Connection, String>
     connection
         .execute_batch(LIBRARY_SCHEMA)
         .map_err(|error| error.to_string())?;
+    let _ = connection.execute(
+        "ALTER TABLE wiki_saved_candidates ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'",
+        [],
+    );
     Ok(connection)
 }
 
@@ -170,7 +178,7 @@ fn saved_candidate_items(store: &KnowledgeStore) -> Result<Vec<WikiLibraryItem>,
     let mut statement = connection
         .prepare(
             "SELECT topic, title, reason, preview, suggested_sections_json,
-                    source_paths_json, source_titles_json, score, origin, updated_at
+                    source_paths_json, source_titles_json, score, metadata_json, origin, updated_at
              FROM wiki_saved_candidates ORDER BY score DESC, updated_at DESC",
         )
         .map_err(|error| error.to_string())?;
@@ -187,8 +195,22 @@ fn saved_candidate_items(store: &KnowledgeStore) -> Result<Vec<WikiLibraryItem>,
             let titles =
                 serde_json::from_str::<Vec<String>>(&row.get::<_, String>(6)?).unwrap_or_default();
             let score = row.get::<_, i64>(7)?.max(0) as usize;
-            let origin = row.get::<_, String>(8)?;
-            let updated_at = row.get::<_, i64>(9)?;
+            let metadata =
+                serde_json::from_str::<Value>(&row.get::<_, String>(8)?).unwrap_or(Value::Null);
+            let core_source_count = metadata
+                .get("coreSourceCount")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as usize;
+            let confidence = metadata
+                .get("confidence")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0) as f32;
+            let distinctiveness = metadata
+                .get("distinctiveness")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0) as f32;
+            let origin = row.get::<_, String>(9)?;
+            let updated_at = row.get::<_, i64>(10)?;
             Ok(WikiLibraryItem {
                 id: candidate_id(&topic),
                 kind: "suggestion".into(),
@@ -203,6 +225,9 @@ fn saved_candidate_items(store: &KnowledgeStore) -> Result<Vec<WikiLibraryItem>,
                 path: None,
                 source_paths: paths,
                 score,
+                core_source_count,
+                confidence,
+                distinctiveness,
                 model_id: String::new(),
                 markdown: String::new(),
                 draft_id: None,
@@ -224,8 +249,8 @@ fn persist_saved_candidate(
     connection
         .execute(
             "INSERT INTO wiki_saved_candidates(topic, title, reason, preview, suggested_sections_json,
-                                                source_paths_json, source_titles_json, score, origin, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, unixepoch())
+                                                source_paths_json, source_titles_json, score, metadata_json, origin, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, unixepoch())
              ON CONFLICT(topic) DO UPDATE SET
                title=excluded.title,
                reason=excluded.reason,
@@ -245,6 +270,12 @@ fn persist_saved_candidate(
                 serde_json::to_string(&item.source_paths).map_err(|error| error.to_string())?,
                 serde_json::to_string(&item.source_titles).map_err(|error| error.to_string())?,
                 item.score as i64,
+                serde_json::to_string(&serde_json::json!({
+                    "coreSourceCount": item.core_source_count,
+                    "confidence": item.confidence,
+                    "distinctiveness": item.distinctiveness,
+                }))
+                .map_err(|error| error.to_string())?,
                 origin,
             ],
         )
@@ -507,6 +538,9 @@ fn draft_item(root: &Path, draft: WikiDraft) -> WikiLibraryItem {
         path,
         source_paths: draft.source_paths,
         score: 0,
+        core_source_count: 0,
+        confidence: 0.0,
+        distinctiveness: 0.0,
         model_id: draft.model_id,
         markdown,
         draft_id: Some(draft.id),
@@ -630,6 +664,9 @@ pub fn tauri_knowledge_wiki_library_add_candidate(
         path: None,
         source_paths: paths,
         score: 100_000,
+        core_source_count: 0,
+        confidence: 0.0,
+        distinctiveness: 0.0,
         model_id: String::new(),
         markdown: String::new(),
         draft_id: None,

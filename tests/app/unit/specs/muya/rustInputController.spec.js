@@ -125,6 +125,68 @@ describe('MuyaRustInputController', () => {
     })
   })
 
+  it('normalizes unordered and ordered HTML lists', async () => {
+    container.dispatchEvent(browserEvent('paste', {
+      clipboardData: clipboardData('one\ntwo', '<ul><li>one</li><li>two</li></ul>')
+    }))
+    await controller.idle()
+    expect(bridge.dispatch).toHaveBeenLastCalledWith({
+      type: 'paste_markdown',
+      markdown: '- one\n- two'
+    })
+
+    container.dispatchEvent(browserEvent('paste', {
+      clipboardData: clipboardData('one\ntwo', '<ol><li>one</li><li>two</li></ol>')
+    }))
+    await controller.idle()
+    expect(bridge.dispatch).toHaveBeenLastCalledWith({
+      type: 'paste_markdown',
+      markdown: '1. one\n2. two'
+    })
+  })
+
+  it('normalizes a language-tagged preformatted code block', async () => {
+    container.dispatchEvent(browserEvent('paste', {
+      clipboardData: clipboardData(
+        'console.log(1)',
+        '<pre><code class="language-js">console.log(1)</code></pre>'
+      )
+    }))
+    await controller.idle()
+
+    expect(bridge.dispatch).toHaveBeenLastCalledWith({
+      type: 'paste_markdown',
+      markdown: '```js\nconsole.log(1)\n```'
+    })
+  })
+
+  it('normalizes an HTML table to minimal GFM Markdown', async () => {
+    container.dispatchEvent(browserEvent('paste', {
+      clipboardData: clipboardData(
+        'A\tB\none\ttwo',
+        '<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>one</td><td>two</td></tr></tbody></table>'
+      )
+    }))
+    await controller.idle()
+
+    expect(bridge.dispatch).toHaveBeenLastCalledWith({
+      type: 'paste_markdown',
+      markdown: '| A | B |\n| --- | --- |\n| one | two |'
+    })
+  })
+
+  it('normalizes an HTML image to Markdown', async () => {
+    container.dispatchEvent(browserEvent('paste', {
+      clipboardData: clipboardData('alt', '<p><img src="image.png" alt="alt"></p>')
+    }))
+    await controller.idle()
+
+    expect(bridge.dispatch).toHaveBeenLastCalledWith({
+      type: 'paste_markdown',
+      markdown: '![alt](image.png)'
+    })
+  })
+
   it('replaces the active IME range when composition text changes', async () => {
     container.dispatchEvent(browserEvent('compositionstart'))
     container.dispatchEvent(

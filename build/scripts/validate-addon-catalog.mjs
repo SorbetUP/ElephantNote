@@ -36,6 +36,31 @@ const isTrustedManifest = (manifest = {}) => {
   return ['trusted', 'full', 'full-app', 'full-app-access'].includes(mode)
 }
 
+const validateNativeContract = (entry, manifest) => {
+  if (manifest.permissions?.native !== true) return
+  if (!manifest.native?.protocol) fail(`${entry.id} requests native access without declaring a native protocol`)
+  if (manifest.native?.runner !== 'process') fail(`${entry.id} native package must declare its runner explicitly`)
+
+  const sidecars = manifest.native?.sidecars
+  if (!sidecars || typeof sidecars !== 'object' || Array.isArray(sidecars) || Object.keys(sidecars).length === 0) {
+    fail(`${entry.id} process package must declare desktop sidecars`)
+  }
+  for (const [platform, relativePath] of Object.entries(sidecars)) {
+    if (/^(android|ios)-/.test(platform)) fail(`${entry.id} cannot advertise a process sidecar on ${platform}`)
+    if (!/^(macos|linux|windows)-(aarch64|x86_64)$/.test(platform)) {
+      fail(`${entry.id} uses unsupported process-sidecar platform key ${platform}`)
+    }
+    safePath(relativePath, `${entry.id}.native.sidecars.${platform}`)
+  }
+
+  for (const mobilePlatform of ['android', 'ios']) {
+    const support = manifest.native?.mobile?.[mobilePlatform]
+    if (support?.supported !== false || typeof support?.reason !== 'string' || !support.reason.trim()) {
+      fail(`${entry.id} must declare an explicit ${mobilePlatform} process-sidecar incompatibility reason`)
+    }
+  }
+}
+
 const validateTrustedEntry = (entry, manifest, source) => {
   if (!/export\s+default\s+class\s+[A-Za-z_$][\w$]*/.test(source)) {
     fail(`${entry.id} trusted entry must export one default addon class`)
@@ -44,9 +69,7 @@ const validateTrustedEntry = (entry, manifest, source) => {
   if (/\bfrom\s+['"]|\bimport\s*\(/.test(source)) {
     fail(`${entry.id} trusted catalogue entry must be a self-contained package entry`)
   }
-  if (manifest.permissions?.native === true && !manifest.native?.protocol) {
-    fail(`${entry.id} requests native access without declaring a native protocol`)
-  }
+  validateNativeContract(entry, manifest)
   console.log(`[addon-catalog] ok id=${entry.id} version=${entry.version} runtime=trusted official=${entry.official === true}`)
 }
 
@@ -165,6 +188,7 @@ for (const entry of catalog.addons) {
     validateTrustedEntry(entry, manifest, source)
     trustedCount += 1
   } else {
+    validateNativeContract(entry, manifest)
     const counts = await validateIsolatedEntry(entry, manifest, source)
     commandCount += counts.commands
     viewCount += counts.views

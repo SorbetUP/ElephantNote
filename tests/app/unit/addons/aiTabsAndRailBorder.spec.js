@@ -31,11 +31,13 @@ describe('AI physical package navigation', () => {
     expect(routeSettings).not.toContain('<option v-if="form.localAi.enabled" value="app-local">')
     expect(routeSettings).not.toContain('Unavailable addon provider')
     expect(openModels).toContain('providerId: PROVIDER_ID')
-    expect(openModels).toContain("capabilities: ['chat', 'embedding']")
+    expect(openModels).toContain("capabilities: ['chat']")
+    expect(openModels).toContain('api.native.service.start()')
     expect(codex).toContain("capabilities: ['chat']")
+    expect(codex).toContain('api.native.service.start()')
   })
 
-  it('keeps every migrated AI implementation outside the builtin catalogue', () => {
+  it('keeps every migrated AI implementation outside the builtin catalogue and core backend', () => {
     const builtinIndex = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
     const physicalIds = [
@@ -52,6 +54,9 @@ describe('AI physical package navigation', () => {
     for (const id of physicalIds) expect(builtinIndex).not.toContain(`id: '${id}'`)
     expect(core).not.toContain('pub mod ocr;')
     expect(core).not.toContain('tauri_ocr_')
+    expect(core).not.toContain('pub mod chat_runtime;')
+    expect(core).not.toContain('tauri_rag_chat')
+    expect(core).not.toContain('pub mod model_library;')
     expect(read('addons/official/ai-ocr/manifest.json')).toContain('"native": true')
     expect(read('addons/official/ai-ocr/main.js')).toContain('this.api.native.call')
   })

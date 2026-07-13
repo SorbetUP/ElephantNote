@@ -16,7 +16,7 @@ describe('persistent native addon services', () => {
     ]) {
       expect(runtime).toContain(command)
     }
-    expect(runtime).toContain('service: freeze')
+    expect(runtime).toContain('service: Object.freeze')
   })
 
   it('keeps the native host generic and package-owned', () => {

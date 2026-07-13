@@ -49,6 +49,19 @@ export const createJsEditor = async (markdown) => {
   return muya
 }
 
+const hasInlineAncestor = (node, nodesById, expectedType) => {
+  let parent = node.parent
+  while (parent !== null && parent !== undefined) {
+    const ancestor = nodesById.get(parent)
+    if (!ancestor) return false
+    if (ancestor.kind?.layer === 'inline' && ancestor.kind?.value?.type === expectedType) {
+      return true
+    }
+    parent = ancestor.parent
+  }
+  return false
+}
+
 export class RustTraceEditor {
   constructor(markdown) {
     this.engine = new MuyaEditor(markdown)
@@ -79,12 +92,10 @@ export class RustTraceEditor {
     return response.payload
   }
 
-  textNodes() {
-    return this
-      .snapshot()
-      .document.nodes.filter(
-        (node) => node.kind?.layer === 'inline' && node.kind?.value?.type === 'text'
-      )
+  textNodes(snapshot = this.snapshot()) {
+    return snapshot.document.nodes.filter(
+      (node) => node.kind?.layer === 'inline' && node.kind?.value?.type === 'text'
+    )
   }
 
   setSelection(textIndex, start, end = start) {
@@ -96,6 +107,22 @@ export class RustTraceEditor {
   setSelectionByText(value, start, end = start) {
     const node = this.textNodes().find((candidate) => candidate.kind?.value?.value === value)
     if (!node) throw new Error(`Muya Rust text node with value ${JSON.stringify(value)} was not found.`)
+    this.setSelectionOnNode(node, start, end)
+  }
+
+  setSelectionByTextInMark(value, markType, start, end = start) {
+    const snapshot = this.snapshot()
+    const nodesById = new Map(snapshot.document.nodes.map((node) => [node.id, node]))
+    const node = this.textNodes(snapshot).find(
+      (candidate) =>
+        candidate.kind?.value?.value === value &&
+        hasInlineAncestor(candidate, nodesById, markType)
+    )
+    if (!node) {
+      throw new Error(
+        `Muya Rust text ${JSON.stringify(value)} inside ${markType} was not found.`
+      )
+    }
     this.setSelectionOnNode(node, start, end)
   }
 

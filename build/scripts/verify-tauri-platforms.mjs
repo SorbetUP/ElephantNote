@@ -140,8 +140,12 @@ assert(
   'Chat runtime must import bundled llama runtime only on desktop'
 )
 assert(
-  chatRuntime.includes('#[cfg(not(mobile))]\nfn with_system_prompt'),
-  'Desktop prompt assembly must not be required by mobile chat'
+  chatRuntime.includes('#[cfg(not(mobile))]\nfn knowledge_hits'),
+  'Knowledge-store access for chat must remain desktop-only'
+)
+assert(
+  chatRuntime.includes('#[cfg(not(mobile))]\nfn grounded_messages'),
+  'Desktop grounded prompt assembly must not be required by mobile chat'
 )
 assert(
   libMin.includes('#[cfg(not(mobile))]\npub mod local_llama_runtime;'),

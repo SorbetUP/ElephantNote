@@ -9,10 +9,10 @@ const enableOpenModelsRuntime = async () => {
   const config = await elephantnoteClient.ai.getConfig()
   const localAi = { ...(config?.localAi || {}) }
   if (
-    localAi.enabled === true
-    && localAi.showModelLibraryInSidebar === true
-    && localAi.allowHuggingFaceDownloads === true
-    && localAi.allowLocalRuntimeAutostart === true
+    localAi.enabled === true &&
+    localAi.showModelLibraryInSidebar === true &&
+    localAi.allowHuggingFaceDownloads === true &&
+    localAi.allowLocalRuntimeAutostart === true
   ) return
 
   await elephantnoteClient.ai.setConfig({

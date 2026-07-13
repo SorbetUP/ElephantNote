@@ -60,6 +60,9 @@ jobs:
             tests/app/unit/addons/calendarAndIconRail.spec.js \
             tests/app/unit/addons/trustedAddonRuntime.spec.js \
             tests/app/unit/addons/settingsExtensionRuntime.spec.js \
+            tests/app/unit/addons/builtinAddons.spec.js \
+            tests/app/unit/addons/aiTabsAndRailBorder.spec.js \
+            tests/app/unit/addons/physicalAddonIsolation.spec.js \
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
             2>&1 | tee addon-tests.txt
 
@@ -134,6 +137,8 @@ jobs:
           : > addon-rust-tests.txt
           for test_filter in \
             addon_catalog::tests \
+            addon_dependencies::tests \
+            addon_sidecars::tests \
             addon_runtime_access::tests \
             addon_note_access::tests \
             addon_http_access::tests
@@ -146,10 +151,26 @@ jobs:
               2>&1 | tee -a addon-rust-tests.txt
           done
 
-      - name: Upload Rust validation
+      - name: Compile and package physical OCR addon
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test \
+            --manifest-path addons/official/ai-ocr/native/Cargo.toml \
+            2>&1 | tee physical-addon-tests.txt
+          pnpm addon:build:ocr \
+            2>&1 | tee physical-addon-build.txt
+          find build/out/addons/releases/elephant.ai-ocr -name '*.enaddon' -print -exec unzip -t {} \;
+
+      - name: Upload Rust and physical package validation
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: addon-platform-rust-validation
-          path: addon-rust-tests.txt
+          path: |
+            addon-rust-tests.txt
+            physical-addon-tests.txt
+            physical-addon-build.txt
+            build/out/addons/releases/**/*.enaddon
+            build/out/addons/releases/**/*.json
           if-no-files-found: ignore

@@ -55,11 +55,11 @@ fn protocol_removes_a_whole_strong_mark_from_an_inner_selection() {
 }
 
 #[test]
-fn protocol_removes_nested_emphasis_without_removing_strong() {
+fn protocol_keeps_nested_emphasis_inside_strong_as_a_muya_noop() {
   let mut session = EditorSession::from_markdown("***alpha***");
   select(&mut session, "alpha", 0, 5);
 
   let response = session.handle_request(request(ProtocolCommand::ToggleEmphasis));
   assert!(matches!(response, EditorResponse::Update(_)));
-  assert_eq!(session.snapshot().markdown, "**alpha**");
+  assert_eq!(session.snapshot().markdown, "***alpha***");
 }

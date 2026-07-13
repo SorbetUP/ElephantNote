@@ -119,10 +119,10 @@ const traces = [
     }
   },
   {
-    name: 'keep the final table cell selected on Tab',
+    name: 'insert tab spaces in the final table cell',
     initial: '| A | B |\n| --- | --- |\n| one | two |',
     expected: '| A   | B   |\n| --- | --- |\n| one | two |\n',
-    selectedText: 'two',
+    selectedText: 'two    ',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'two', 3)
       muya.contentState.tabHandler(fakeKeyEvent())

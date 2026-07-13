@@ -2,8 +2,8 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import {
   bundled,
-  createJsEditor,
   initializeRustWasm,
+  runDifferentialTrace,
   settle
 } from './rustDifferentialHarness'
 
@@ -12,20 +12,114 @@ const describeBundled = bundled ? describe : describe.skip
 const taskBoxes = (muya) =>
   Array.from(muya.container.querySelectorAll('input[type="checkbox"]'))
 
-const clickTask = async (muya, index, checked) => {
+const clickTask = async (muya, index, checked, autoCheck = false) => {
+  muya.options.autoCheck = autoCheck
   const checkbox = taskBoxes(muya)[index]
   if (!checkbox) throw new Error(`Task checkbox ${index} is unavailable.`)
   checkbox.checked = checked
   await muya.contentState.listItemCheckBoxClick(checkbox)
   await settle()
-  return {
-    markdown: muya.getMarkdown(),
-    cursor: muya.contentState.cursor,
-    checked: taskBoxes(muya).map((box) => box.checked)
-  }
 }
 
-describeBundled('Muya task checkbox characterization', () => {
+const rustTaskItems = (rust) =>
+  rust.snapshot().document.nodes.filter(
+    (node) =>
+      node.kind?.layer === 'block' &&
+      node.kind?.value?.type === 'list_item' &&
+      typeof node.kind?.value?.checked === 'boolean'
+  )
+
+const setRustTask = (rust, index, checked, autoCheck = false) => {
+  const item = rustTaskItems(rust)[index]
+  if (!item) throw new Error(`Rust task item ${index} is unavailable.`)
+  rust.request({
+    type: 'set_task_checked',
+    item: item.id,
+    checked,
+    auto_check: autoCheck
+  })
+}
+
+const traces = [
+  {
+    name: 'check an unchecked task',
+    initial: '- [ ] alpha',
+    expected: '- [x] alpha\n',
+    runJs: (muya) => clickTask(muya, 0, true),
+    runRust: (rust) => setRustTask(rust, 0, true)
+  },
+  {
+    name: 'uncheck a checked task',
+    initial: '- [x] alpha',
+    expected: '- [ ] alpha\n',
+    runJs: (muya) => clickTask(muya, 0, false),
+    runRust: (rust) => setRustTask(rust, 0, false)
+  },
+  {
+    name: 'keep nested tasks unchanged when autoCheck is disabled',
+    initial: '- [ ] parent\n  - [ ] child',
+    expected: '- [x] parent\n  - [ ] child\n',
+    runJs: (muya) => clickTask(muya, 0, true),
+    runRust: (rust) => setRustTask(rust, 0, true)
+  },
+  {
+    name: 'cascade task state to descendants when autoCheck is enabled',
+    initial: '- [ ] parent\n  - [ ] child',
+    expected: '- [x] parent\n  - [x] child\n',
+    runJs: (muya) => clickTask(muya, 0, true, true),
+    runRust: (rust) => setRustTask(rust, 0, true, true)
+  },
+  {
+    name: 'undo and redo one task checkbox mutation',
+    initial: '- [ ] alpha',
+    expected: '- [x] alpha\n',
+    checkpoints: ['- [x] alpha\n', '- [ ] alpha\n', '- [x] alpha\n'],
+    runJs: async (muya) => {
+      await clickTask(muya, 0, true)
+      const checked = muya.getMarkdown()
+      muya.undo()
+      const undone = muya.getMarkdown()
+      muya.redo()
+      return [checked, undone, muya.getMarkdown()]
+    },
+    runRust: (rust) => {
+      setRustTask(rust, 0, true)
+      const checked = rust.markdown()
+      rust.request({ type: 'undo' })
+      const undone = rust.markdown()
+      rust.request({ type: 'redo' })
+      return [checked, undone, rust.markdown()]
+    }
+  },
+  {
+    name: 'undo and redo an autoCheck task cascade atomically',
+    initial: '- [ ] parent\n  - [ ] child',
+    expected: '- [x] parent\n  - [x] child\n',
+    checkpoints: [
+      '- [x] parent\n  - [x] child\n',
+      '- [ ] parent\n  - [ ] child\n',
+      '- [x] parent\n  - [x] child\n'
+    ],
+    runJs: async (muya) => {
+      await clickTask(muya, 0, true, true)
+      const checked = muya.getMarkdown()
+      muya.undo()
+      const undone = muya.getMarkdown()
+      muya.redo()
+      return [checked, undone, muya.getMarkdown()]
+    },
+    runRust: (rust) => {
+      setRustTask(rust, 0, true, true)
+      const checked = rust.markdown()
+      rust.request({ type: 'undo' })
+      const undone = rust.markdown()
+      rust.request({ type: 'redo' })
+      return [checked, undone, rust.markdown()]
+    }
+  }
+]
+
+describeBundled('Muya task checkbox differential traces', () => {
   let jsEditor = null
 
   beforeAll(initializeRustWasm)
@@ -36,32 +130,16 @@ describeBundled('Muya task checkbox characterization', () => {
     document.body.innerHTML = ''
   })
 
-  it('checks an unchecked task', async () => {
-    jsEditor = await createJsEditor('- [ ] alpha')
-    const result = await clickTask(jsEditor, 0, true)
-    console.log('[muya-task-click]', 'check', JSON.stringify(result))
-    expect(result.markdown).toContain('alpha')
-  })
-
-  it('unchecks a checked task', async () => {
-    jsEditor = await createJsEditor('- [x] alpha')
-    const result = await clickTask(jsEditor, 0, false)
-    console.log('[muya-task-click]', 'uncheck', JSON.stringify(result))
-    expect(result.markdown).toContain('alpha')
-  })
-
-  it('does not propagate to nested tasks when autoCheck is disabled', async () => {
-    jsEditor = await createJsEditor('- [ ] parent\n  - [ ] child')
-    const result = await clickTask(jsEditor, 0, true)
-    console.log('[muya-task-click]', 'default-no-propagation', JSON.stringify(result))
-    expect(result.checked).toHaveLength(2)
-  })
-
-  it('propagates to descendants when autoCheck is enabled', async () => {
-    jsEditor = await createJsEditor('- [ ] parent\n  - [ ] child')
-    jsEditor.options.autoCheck = true
-    const result = await clickTask(jsEditor, 0, true)
-    console.log('[muya-task-click]', 'auto-check-descendants', JSON.stringify(result))
-    expect(result.checked).toHaveLength(2)
-  })
+  for (const trace of traces) {
+    it(trace.name, async () => {
+      const result = await runDifferentialTrace(trace)
+      jsEditor = result.jsEditor
+      expect(result.jsMarkdown).toBe(result.rustMarkdown)
+      expect(result.rustMarkdown).toBe(trace.expected)
+      if (trace.checkpoints) {
+        expect(result.jsResult).toEqual(result.rustResult)
+        expect(result.rustResult).toEqual(trace.checkpoints)
+      }
+    })
+  }
 })

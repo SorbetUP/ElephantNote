@@ -2,7 +2,8 @@ use crate::model::Document;
 use crate::selection::Selection;
 
 use super::{
-  paste::build_paste_markdown, paste_nested::build_nested_paste, EditError, Transaction,
+  paste::build_paste_markdown, paste_nested::build_nested_paste,
+  paste_nested_structured::build_nested_structured_paste, EditError, Transaction,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -22,6 +23,11 @@ impl PasteCommand {
     document: &Document,
     selection: Selection,
   ) -> Result<Transaction, EditError> {
+    if let Some(transaction) =
+      build_nested_structured_paste(document, selection, &self.markdown)?
+    {
+      return Ok(transaction);
+    }
     if let Some(transaction) = build_nested_paste(document, selection, &self.markdown)? {
       return Ok(transaction);
     }

@@ -9,29 +9,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply-local-embedding-picker:
-    if: github.head_ref == 'assistant/wiki-organization-continuation'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: assistant/wiki-organization-continuation
-          fetch-depth: 0
-      - name: Apply downloaded embedding model picker
-        run: python3 scripts/fix_local_embedding_picker.py
-      - name: Commit model picker source changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
-            tests/app/unit/aiEmbeddingModelPicker.spec.js
-          git commit --no-verify -m "fix: list downloaded embedding models in AI settings"
-          git push origin HEAD:assistant/wiki-organization-continuation
-
   lint:
     runs-on: ubuntu-latest
     steps:

@@ -958,7 +958,8 @@ mod tests {
         let migrated = migrate_legacy_generated_markdown(&draft, legacy).expect("migration");
         assert!(migrated
             .contains("[Direct connections](../../Notes/Iroh%20guide.md#direct-connections)"));
-        assert!(migrated.contains("- [Peer networking](./peer-networking.md)"));
+        assert!(migrated.contains("- Peer networking"));
+        assert!(!migrated.contains("./peer-networking.md"));
         assert!(migrated.contains(
             "- [Iroh guide — Direct connections](../../Notes/Iroh%20guide.md#direct-connections)"
         ));

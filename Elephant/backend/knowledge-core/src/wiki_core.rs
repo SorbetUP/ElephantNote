@@ -469,7 +469,7 @@ pub fn render_wiki(
         &synthesis.summary,
         &mut citation_numbers,
         &source_by_id,
-            &mut web_citations,
+        &mut web_citations,
     )?;
     for section in &synthesis.sections {
         markdown.push_str(&format!("\n## {}\n\n", section.heading.trim()));
@@ -490,8 +490,11 @@ pub fn render_wiki(
 ",
         );
         for related in &synthesis.related_wikis {
-            markdown.push_str(&format!("- {}
-", related.trim()));
+            markdown.push_str(&format!(
+                "- {}
+",
+                related.trim()
+            ));
         }
     }
 
@@ -528,7 +531,6 @@ pub fn render_wiki(
             });
         }
     }
-
 
     if !web_citations.is_empty() {
         markdown.push_str("\n## Web sources\n\n");
@@ -610,7 +612,6 @@ fn citation_label(source: &WikiSourceChunk) -> String {
     value.chars().take(72).collect()
 }
 
-
 fn humanize_url_segment(value: &str) -> String {
     value
         .trim_matches('/')
@@ -644,7 +645,10 @@ fn web_citation_label(url: &str) -> String {
     } else if host.contains("arxiv.org") {
         "arXiv".to_string()
     } else {
-        host.split('.').next().map(humanize_url_segment).unwrap_or_else(|| "Web".into())
+        host.split('.')
+            .next()
+            .map(humanize_url_segment)
+            .unwrap_or_else(|| "Web".into())
     };
     let last = path
         .split(['?', '#'])
@@ -806,8 +810,10 @@ mod tests {
             web_citation_label("https://en.wikipedia.org/wiki/Machine_learning"),
             "Wikipedia — Machine Learning"
         );
-        assert!(web_citation_label("https://airc.nist.gov/airmf-resources/airmf/0-ai-rmf-1-0/")
-            .starts_with("NIST"));
+        assert!(
+            web_citation_label("https://airc.nist.gov/airmf-resources/airmf/0-ai-rmf-1-0/")
+                .starts_with("NIST")
+        );
     }
 
     #[test]

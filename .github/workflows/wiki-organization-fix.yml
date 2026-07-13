@@ -1,0 +1,57 @@
+name: Wiki organization fix
+
+on:
+  push:
+    branches:
+      - assistant/wiki-organization-continuation
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Align migration regression with non-clickable related Wiki contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('Elephant/backend/tauri/src/knowledge_wiki_library.rs')
+          source = path.read_text()
+          old = '        assert!(migrated.contains("- [Peer networking](./peer-networking.md)"));\n'
+          new = (
+              '        assert!(migrated.contains("- Peer networking"));\n'
+              '        assert!(!migrated.contains("./peer-networking.md"));\n'
+          )
+          if old not in source:
+              raise SystemExit('expected stale related-Wiki assertion not found')
+          path.write_text(source.replace(old, new, 1))
+          PY
+
+      - name: Format Rust sources
+        run: |
+          cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+
+      - name: Validate focused regressions
+        run: |
+          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml web_citation_labels_are_human_readable
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features knowledge_wiki_library::tests::legacy_generated_markdown_is_upgraded_to_navigable_links -- --exact
+
+      - name: Commit correction
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add Elephant/backend/knowledge-core/src/wiki_core.rs Elephant/backend/tauri/src/knowledge_wiki_library.rs
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(wiki): align migration contract and Rust formatting"
+          git push origin HEAD:assistant/wiki-organization-continuation

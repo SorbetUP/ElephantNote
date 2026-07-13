@@ -37,6 +37,15 @@ const normalizeObject = (value) => {
   return { ...value }
 }
 
+const deepFreezeObject = (value) => {
+  const object = normalizeObject(value)
+  for (const [key, entry] of Object.entries(object)) {
+    if (Array.isArray(entry)) object[key] = Object.freeze([...entry])
+    else if (entry && typeof entry === 'object') object[key] = deepFreezeObject(entry)
+  }
+  return Object.freeze(object)
+}
+
 const normalizeRequires = (value) => {
   const result = {}
   for (const [id, requirement] of Object.entries(normalizeObject(value))) {
@@ -149,7 +158,7 @@ export const normalizeAddonManifest = (manifest = {}) => {
 
   const name = normalizeString(manifest.name, id)
   const version = normalizeString(manifest.version, '0.0.0')
-  const contributes = Object.freeze(normalizeObject(manifest.contributes))
+  const contributes = deepFreezeObject(manifest.contributes)
   const declaredContentTypes = Array.isArray(manifest.contentTypes)
     ? manifest.contentTypes
     : contributes.contentTypes
@@ -170,8 +179,10 @@ export const normalizeAddonManifest = (manifest = {}) => {
     contentTypes: normalizeContentTypes(declaredContentTypes),
     activationEvents: Object.freeze(normalizeStringArray(manifest.activationEvents)),
     runtime: normalizeRuntime(manifest.runtime, manifest, contributes),
+    native: deepFreezeObject(manifest.native),
     platforms: Object.freeze(normalizeStringArray(manifest.platforms)),
     source: normalizeString(manifest.source, 'builtin'),
+    official: manifest.official === true,
     packageHash: normalizeString(manifest.packageHash),
     installedAt: normalizeString(manifest.installedAt),
     defaultEnabled: manifest.defaultEnabled === true,

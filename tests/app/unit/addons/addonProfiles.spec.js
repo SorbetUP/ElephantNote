@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { addonPacksAddon } from '../../../../Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js'
+import { addonPacksCoreFeature } from '../../../../Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js'
 
 const PACK_PATH = '.elephantnote/addons/packs/default.enaddonpack'
 const BASE_PACK_PATH = '.elephantnote/addons/packs/base.enaddonpack'
@@ -8,10 +8,12 @@ const DEVELOP_PARITY_PACK_PATH = '.elephantnote/addons/packs/develop-parity.enad
 const REPORT_PATH = 'Reports/Addon Pack.md'
 
 const catalog = [
-  { id: 'elephant.ai', name: 'AI', version: '2.1.0' },
-  { id: 'elephant.calendar', name: 'Calendar', version: '1.2.0' },
-  { id: 'com.example.alpha', name: 'Alpha', version: '1.0.0' },
-  { id: 'com.example.beta', name: 'Beta', version: '2.0.0' }
+  { id: 'elephant.ai', name: 'AI', version: '2.1.0', official: true },
+  { id: 'elephant.calendar', name: 'Calendar', version: '1.2.0', official: true },
+  { id: 'elephant.google-keep-import', name: 'Google Keep Import', version: '1.1.0', official: true },
+  { id: 'elephant.recently-edited', name: 'Recently edited', version: '1.1.0', official: true },
+  { id: 'com.example.alpha', name: 'Alpha', version: '1.0.0', official: false },
+  { id: 'com.example.beta', name: 'Beta', version: '2.0.0', official: false }
 ]
 
 const snapshot = (id, options = {}) => ({
@@ -33,11 +35,6 @@ const createManager = (initial = []) => {
   const manager = {
     list: () => [...records.values()],
     get: (id) => records.get(id) || null,
-    async installBuiltin(id) {
-      const record = snapshot(id, { source: 'builtin' })
-      records.set(id, record)
-      return record
-    },
     async enable(id) {
       const record = records.get(id)
       if (!record) throw new Error(`Unknown addon: ${id}`)
@@ -76,11 +73,12 @@ const createManager = (initial = []) => {
 
 const activateActions = (manager) => {
   const actions = new Map()
-  addonPacksAddon.activate({
+  addonPacksCoreFeature.activate({
     addons: manager,
     addonHost: { get: (key) => key === 'addonManager' ? manager : null },
     logger: { info: vi.fn() },
-    addAction(action) { actions.set(action.id, action) }
+    addAction(action) { actions.set(action.id, action) },
+    addSettingsSection: vi.fn()
   })
   return actions
 }
@@ -100,20 +98,19 @@ const createInvoke = (files, communityEnabled = true) => vi.fn(async (command, p
   if (command === 'tauri_addons_catalog_install') {
     const addon = catalog.find((entry) => entry.id === payload.addonId)
     if (!addon) throw new Error(`Unknown catalogue addon: ${payload.addonId}`)
-    const official = addon.id.startsWith('elephant.')
     return {
       manifest: {
         id: addon.id,
         name: addon.name,
         version: addon.version,
-        official,
+        official: addon.official === true,
         permissions: {},
         runtime: { type: 'javascript-worker', entry: 'main.js' }
       },
       enabled: false,
       packageHash: `hash-${addon.id}`,
       installedAt: '2026-07-13T00:00:00Z',
-      source: official ? 'official' : 'catalog'
+      source: addon.official ? 'official' : 'catalog'
     }
   }
   throw new Error(`Unexpected command: ${command}`)
@@ -124,7 +121,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('Addon Packs built-in', () => {
+describe('Addon Packs core feature', () => {
   it('captures official and community packages with distinct sources', async () => {
     const files = new Map()
     const { manager } = createManager([
@@ -154,8 +151,7 @@ describe('Addon Packs built-in', () => {
       ]
     })]])
     const { manager, records } = createManager()
-    const invoke = createInvoke(files, false)
-    vi.stubGlobal('__TAURI__', { core: { invoke } })
+    vi.stubGlobal('__TAURI__', { core: { invoke: createInvoke(files, false) } })
     const actions = activateActions(manager)
     const result = await actions.get('elephant.addon-packs.apply').run()
 
@@ -179,7 +175,7 @@ describe('Addon Packs built-in', () => {
       .rejects.toThrow('Turn on Community Addons')
   })
 
-  it('creates protected complete and base packs with physical package versions', async () => {
+  it('creates protected complete and base packs containing only physical addons', async () => {
     const files = new Map()
     const { manager } = createManager()
     vi.stubGlobal('__TAURI__', { core: { invoke: createInvoke(files) } })
@@ -191,18 +187,22 @@ describe('Addon Packs built-in', () => {
     const completePack = JSON.parse(files.get(DEVELOP_PARITY_PACK_PATH))
     const basePack = JSON.parse(files.get(BASE_PACK_PATH))
     expect(completePack.protected).toBe(true)
-    expect(completePack.addons).toContainEqual({ id: 'elephant.ai', version: '2.1.0', source: 'official', enabled: true })
-    expect(completePack.addons).toContainEqual({ id: 'elephant.calendar', version: '1.2.0', source: 'official', enabled: true })
+    expect(completePack.addons).toEqual(expect.arrayContaining([
+      { id: 'elephant.ai', version: '2.1.0', source: 'official', enabled: true },
+      { id: 'elephant.calendar', version: '1.2.0', source: 'official', enabled: true },
+      { id: 'elephant.google-keep-import', version: '1.1.0', source: 'official', enabled: true },
+      { id: 'elephant.recently-edited', version: '1.1.0', source: 'official', enabled: true }
+    ]))
+    expect(completePack.addons).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'elephant.addon-packs' }),
+      expect.objectContaining({ id: 'elephant.excalidraw' }),
+      expect.objectContaining({ source: 'builtin' })
+    ]))
     expect(basePack).toMatchObject({ name: 'Elephant Base', protected: true })
     expect(basePack.addons).not.toContainEqual(expect.objectContaining({ id: 'elephant.calendar' }))
-    expect(basePack.addons).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'elephant.ai-chat', source: 'official', enabled: true }),
-      expect.objectContaining({ id: 'elephant.sync', source: 'official', enabled: true }),
-      expect.objectContaining({ id: 'elephant.code-execution', source: 'official', enabled: true })
-    ]))
   })
 
-  it('rejects packages that are not in the catalogue', async () => {
+  it('rejects packages that are absent from the catalogue', async () => {
     const files = new Map([[PACK_PATH, JSON.stringify({
       format: 'elephantnote-addon-pack',
       version: 1,
@@ -211,6 +211,7 @@ describe('Addon Packs built-in', () => {
     const { manager } = createManager()
     vi.stubGlobal('__TAURI__', { core: { invoke: createInvoke(files) } })
     const actions = activateActions(manager)
-    await expect(actions.get('elephant.addon-packs.apply').run()).rejects.toThrow('outside the official catalogue')
+    await expect(actions.get('elephant.addon-packs.apply').run())
+      .rejects.toThrow('missing catalogue package')
   })
 })

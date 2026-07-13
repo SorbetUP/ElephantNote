@@ -13,6 +13,7 @@ pub mod model;
 pub mod parser;
 pub mod selection;
 pub mod serializer;
+pub mod session;
 pub mod syntax;
 pub mod view;
 
@@ -21,9 +22,10 @@ pub use edit::{
   ParagraphBoundaryCommand, Transaction, Utf16Range,
 };
 pub use features::{ListCommand, TableCommand, TableNavigationCommand};
-pub use history::History;
+pub use history::{History, HistoryStep};
 pub use model::{DetachedSubtree, Document, Node, NodeId, NodeKind, SourceRange};
 pub use parser::parse_markdown;
 pub use selection::{Selection, SelectionPoint};
 pub use serializer::to_markdown;
+pub use session::{EditorSession, SessionCommand, SessionSnapshot, SessionUpdate};
 pub use view::ViewPatch;

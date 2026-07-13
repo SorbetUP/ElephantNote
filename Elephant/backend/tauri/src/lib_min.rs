@@ -25,6 +25,7 @@ pub mod addon_catalog;
 pub mod addon_runtime_access;
 pub mod addon_note_access;
 pub mod addon_http_access;
+pub mod addon_sidecars;
 
 mod tauri_extra_commands;
 mod debug_commands;
@@ -47,7 +48,6 @@ pub mod rag_prompt;
 pub mod atomic_features;
 pub mod ollama;
 pub mod site_preview;
-pub mod ocr;
 
 #[cfg(test)]
 mod sync_contract_tests;
@@ -132,6 +132,7 @@ pub fn run() {
       // lazily by Sync addon commands and closed again when that addon stops.
       app.manage(sync::IrohSyncState::new());
       app.manage(addons::AddonState::new());
+      app.manage(addon_sidecars::AddonSidecarState::new());
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -143,6 +144,8 @@ pub fn run() {
       addon_catalog::tauri_addons_catalog_install,
       addon_note_access::tauri_addons_notes_list,
       addon_http_access::tauri_addons_http_request,
+      addon_sidecars::tauri_addons_sidecar_status,
+      addon_sidecars::tauri_addons_sidecar_call,
       addons::tauri_addons_uninstall,
       addons::tauri_addons_set_enabled,
       addons::tauri_addons_read_entry,
@@ -205,8 +208,6 @@ pub fn run() {
       ollama::tauri_ollama_embed,
       site_preview::tauri_site_preview_open,
       site_preview::tauri_site_preview_status,
-      ocr::tauri_ocr_status,
-      ocr::tauri_ocr_image,
       vault::commands::tauri_vaults_get,
       vault::commands::tauri_vaults_select_path,
       vault::commands::tauri_vaults_set_active,

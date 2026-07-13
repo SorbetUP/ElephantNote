@@ -23,12 +23,6 @@ const readJson = (filename, fallback) => {
   }
 }
 
-const writeJson = (filename, value) => {
-  fs.mkdirSync(path.dirname(filename), { recursive: true })
-  fs.writeFileSync(filename, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
-  return value
-}
-
 const normalizeSlashes = (value = '') => String(value || '').replaceAll('\\', '/')
 const safeRelativePath = (value = '') => {
   const normalized = normalizeSlashes(value).replace(/^\/+/, '')

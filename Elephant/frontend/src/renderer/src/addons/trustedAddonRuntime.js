@@ -1,5 +1,6 @@
 import { ADDON_ACCESS_LEVEL, getAddonAccessLevel } from './manifest'
 import { beginTrustedActivation, clearTrustedActivationMarker } from './trustedAddonBootGuard'
+import { loadTrustedAddonModuleGraph, revokeTrustedAddonModuleGraph } from './trustedAddonModuleLoader'
 
 const COMMUNITY_ADDONS_PREF_KEY = 'addons.communityEnabled'
 const TRUSTED_SAFE_MODE_PREF_KEY = 'addons.trustedSafeMode'
@@ -146,7 +147,21 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
           params,
           timeoutMs
         }, target)
-      }
+      },
+      service: Object.freeze({
+        status: () => invoke('tauri_addons_service_status', { addonId: manifest.id }, target),
+        start: () => invoke('tauri_addons_service_start', { addonId: manifest.id }, target),
+        call(method, params = {}, options = {}) {
+          const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
+          return invoke('tauri_addons_service_call', {
+            addonId: manifest.id,
+            method: safeString(method),
+            params,
+            timeoutMs
+          }, target)
+        },
+        stop: () => invoke('tauri_addons_service_stop', { addonId: manifest.id }, target)
+      })
     }),
     resources: Object.freeze({
       get: (name) => host?.get(name),
@@ -366,20 +381,20 @@ export class TrustedAddonSession {
     this.plugin = null
     this.api = null
     this.moduleUrl = ''
+    this.moduleUrls = []
     this.disposables = []
     this.activationDispose = null
   }
 
   async start(context) {
-    const entry = await invoke('tauri_addons_read_entry', { addonId: this.record.manifest.id }, this.target)
-    const source = safeString(entry?.source)
-    if (!source) throw new Error(`Trusted addon ${this.record.manifest.id} has an empty entry file`)
-
-    const blob = new Blob([
-      source,
-      `\n//# sourceURL=elephant-addon://${this.record.manifest.id}/${this.record.manifest.runtime?.entry || 'main.js'}`
-    ], { type: 'text/javascript' })
-    this.moduleUrl = URL.createObjectURL(blob)
+    const addonId = this.record.manifest.id
+    const graph = await loadTrustedAddonModuleGraph({
+      addonId,
+      entryPath: this.record.manifest.runtime?.entry || 'main.js',
+      readModule: (path) => invoke('tauri_addons_read_module', { addonId, path }, this.target)
+    })
+    this.moduleUrl = graph.entryUrl
+    this.moduleUrls = graph.urls
     this.module = await import(/* @vite-ignore */ this.moduleUrl)
     this.api = createTrustedAddonApi(this.record, context, this.disposables, this.target)
     this.plugin = resolvePluginInstance(this.module, this.api)
@@ -409,7 +424,8 @@ export class TrustedAddonSession {
           })
         }
       }
-      if (this.moduleUrl) URL.revokeObjectURL(this.moduleUrl)
+      revokeTrustedAddonModuleGraph(this.moduleUrls)
+      this.moduleUrls = []
       this.moduleUrl = ''
       this.module = null
       this.plugin = null

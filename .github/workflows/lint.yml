@@ -9,25 +9,13 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
-
-      - name: Apply physical addon boundary migration
-        if: github.head_ref == 'feature/physical-addon-packages'
-        shell: bash
-        run: |
-          set -o pipefail
-          python3 build/scripts/fix-physical-boundary-script.py
-          python3 build/scripts/apply-physical-boundary-fixes.py 2>&1 | tee physical-migration-output.txt
-
       - uses: ./.github/actions/setup
 
       - name: Run ESLint
@@ -36,40 +24,10 @@ jobs:
           set -o pipefail
           pnpm lint 2>&1 | tee eslint-output.txt
 
-      - name: Run focused migration tests
-        if: github.head_ref == 'feature/physical-addon-packages'
-        shell: bash
-        run: |
-          set -o pipefail
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/addons/addonNativeServiceContracts.spec.js \
-            tests/app/unit/addons/semanticBackendAbsence.spec.js \
-            tests/app/unit/addons/syncMigrationBoundary.spec.js \
-            tests/app/unit/addons/trustedAddonModuleGraph.spec.js \
-            2>&1 | tee focused-migration-tests.txt
-
-      - name: Commit validated migration
-        if: github.head_ref == 'feature/physical-addon-packages'
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "Physical boundary migration already applied."
-            exit 0
-          fi
-          git commit -m "fix(addons): wire physical module and service boundaries"
-          git pull --rebase origin feature/physical-addon-packages
-          git push origin HEAD:feature/physical-addon-packages
-
-      - name: Upload lint and migration output
+      - name: Upload ESLint output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: lint-and-migration-output
-          path: |
-            eslint-output.txt
-            physical-migration-output.txt
-            focused-migration-tests.txt
+          name: eslint-output
+          path: eslint-output.txt
           if-no-files-found: ignore

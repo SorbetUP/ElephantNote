@@ -45,7 +45,6 @@ pub mod watcher;
 pub mod recents;
 pub mod keybindings;
 pub mod fts;
-pub mod embeddings;
 #[cfg(not(mobile))]
 pub mod sync;
 pub mod rag_prompt;
@@ -159,6 +158,7 @@ pub fn run() {
       addon_dependencies::tauri_addons_uninstall_checked,
       addon_dependencies::tauri_addons_set_enabled_checked,
       addons::tauri_addons_read_entry,
+      addons::tauri_addons_read_module,
       addons::tauri_addons_call,
       sync_commands::iroh_sync_create_invite,
       sync_commands::iroh_sync_accept_invite,
@@ -201,11 +201,6 @@ pub fn run() {
       state::tauri_recents_clear,
       state::tauri_keybindings_get,
       state::tauri_keybindings_save,
-      embeddings::tauri_embeddings_embed,
-      embeddings::tauri_embeddings_store,
-      embeddings::tauri_embeddings_search,
-      embeddings::tauri_embeddings_count,
-      embeddings::tauri_embeddings_clear_vault,
       rag_prompt::tauri_rag_build_prompt,
       state::tauri_atomic_features_list,
       state::tauri_atomic_features_get,
@@ -292,7 +287,6 @@ pub fn run() {
       model_library::tauri_models_active,
       model_library::tauri_models_refresh_index,
       chat_runtime::tauri_rag_chat,
-      tauri_extra_commands::tauri_search_rebuild,
       tauri_extra_commands::tauri_sync_plan
     ])
     .run(tauri::generate_context!())

@@ -14,6 +14,7 @@ export default {
   root: repoRoot,
   resolve: {
     alias: {
+      'muya-rust-wasm-bundle': path.join(candidateRoot, 'lib/rust/disabledWasm.js'),
       '@muya-reference-quick-insert': path.join(referenceRoot, 'lib/ui/quickInsert/config.js'),
       '@muya-candidate-quick-insert': path.join(candidateRoot, 'lib/ui/quickInsert/config.js'),
       '@muya-reference': path.join(referenceRoot, 'lib/index.js'),

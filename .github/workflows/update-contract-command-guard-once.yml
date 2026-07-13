@@ -1,0 +1,37 @@
+name: Update contract command guard once
+
+on:
+  push:
+    branches:
+      - assistant/validate-knowledge-graph-wiki
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/validate-knowledge-graph-wiki
+      - name: Update Vitest command invariant
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('build/scripts/verify-critical-flows.mjs')
+          text = path.read_text()
+          old = "'pnpm exec vitest run tests/app/unit/specs/main/elephantnote'"
+          new = "'Elephant/node_modules/.bin/vitest run',\n    'tests/app/unit/specs/main/elephantnote'"
+          if old not in text:
+              raise SystemExit('old contract-test command invariant not found')
+          path.write_text(text.replace(old, new, 1))
+          Path('.github/workflows/update-contract-command-guard-once.yml').unlink()
+          Path('.github/contract-command-guard-trigger.txt').unlink(missing_ok=True)
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add build/scripts/verify-critical-flows.mjs .github/workflows/update-contract-command-guard-once.yml .github/contract-command-guard-trigger.txt
+          git commit -m 'fix(ci): guard the installed Vitest contract command'
+          git push origin HEAD:assistant/validate-knowledge-graph-wiki

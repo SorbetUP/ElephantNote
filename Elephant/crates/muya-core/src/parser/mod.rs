@@ -1,3 +1,4 @@
+mod crossing_marks;
 pub mod inline;
 
 use crate::model::{Alignment, BlockKind, Document, ListKind, NodeId, NodeKind, SourceRange};

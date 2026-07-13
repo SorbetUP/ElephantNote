@@ -7,7 +7,11 @@ use std::{
   sync::Mutex,
 };
 use tauri::{AppHandle, State};
-use tokio::{io::AsyncWriteExt, process::Command, time::{timeout, Duration}};
+use tokio::{
+  io::AsyncWriteExt,
+  process::Command,
+  time::{timeout, Duration},
+};
 
 use crate::vault::config as vault_config;
 use crate::vault_layout;
@@ -68,6 +72,18 @@ fn read_registry(app: &AppHandle) -> R<Value> {
   serde_json::from_str(&raw).map_err(|error| format!("Invalid addon registry: {error}"))
 }
 
+fn read_package_manifest(app: &AppHandle, addon_id: &str) -> R<Value> {
+  let path = package_dir(app, addon_id)?.join("manifest.json");
+  let raw = fs::read_to_string(&path)
+    .map_err(|error| format!("Failed to read installed addon manifest for {addon_id}: {error}"))?;
+  let manifest: Value = serde_json::from_str(&raw)
+    .map_err(|error| format!("Invalid installed addon manifest for {addon_id}: {error}"))?;
+  if manifest.get("id").and_then(Value::as_str) != Some(addon_id) {
+    return Err(format!("Installed addon manifest id mismatch: {addon_id}"));
+  }
+  Ok(manifest)
+}
+
 fn safe_relative_path(value: &str) -> R<PathBuf> {
   let path = Path::new(value);
   if value.trim().is_empty() || path.is_absolute() {
@@ -104,7 +120,7 @@ fn platform_key() -> String {
   format!("{os}-{arch}")
 }
 
-fn installed_record<'a>(registry: &'a Value, addon_id: &str) -> R<&'a Value> {
+fn ensure_installed_and_enabled(registry: &Value, addon_id: &str) -> R<()> {
   let record = registry
     .get("addons")
     .and_then(Value::as_object)
@@ -113,29 +129,25 @@ fn installed_record<'a>(registry: &'a Value, addon_id: &str) -> R<&'a Value> {
   if record.get("enabled").and_then(Value::as_bool) != Some(true) {
     return Err(format!("Addon is disabled: {addon_id}"));
   }
-  Ok(record)
-}
-
-fn native_permission(record: &Value) -> bool {
-  record
-    .get("manifest")
-    .and_then(|manifest| manifest.get("permissions"))
-    .and_then(|permissions| permissions.get("native"))
-    .and_then(Value::as_bool)
-    == Some(true)
+  Ok(())
 }
 
 fn resolve_sidecar(app: &AppHandle, addon_id: &str) -> R<(PathBuf, String, String)> {
   let registry = read_registry(app)?;
-  let record = installed_record(&registry, addon_id)?;
-  if !native_permission(record) {
+  ensure_installed_and_enabled(&registry, addon_id)?;
+  let manifest = read_package_manifest(app, addon_id)?;
+  let native_allowed = manifest
+    .get("permissions")
+    .and_then(|permissions| permissions.get("native"))
+    .and_then(Value::as_bool)
+    == Some(true);
+  if !native_allowed {
     return Err(format!("Addon native permission was not granted: {addon_id}"));
   }
 
   let platform = platform_key();
-  let sidecars = record
-    .get("manifest")
-    .and_then(|manifest| manifest.get("native"))
+  let sidecars = manifest
+    .get("native")
     .and_then(|native| native.get("sidecars"))
     .and_then(Value::as_object)
     .ok_or_else(|| format!("Addon does not declare native sidecars: {addon_id}"))?;

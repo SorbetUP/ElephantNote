@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-13T11:38:22Z",
+  "updatedAt": "2026-07-13T11:47:22Z",
   "addons": [
     {
       "id": "elephant.ai",
@@ -45,7 +45,26 @@
       "author": "Elephant",
       "official": true,
       "manifestPath": "addons/ai-ocr/manifest.json",
-      "entryPath": "addons/ai-ocr/main.js"
+      "entryPath": "addons/ai-ocr/main.js",
+      "requiresPlatformPackage": true,
+      "packages": {
+        "linux-x86_64": {
+          "path": "addons/ai-ocr/releases/elephant.ai-ocr-1.0.0-linux-x86_64.enaddon",
+          "hash": "286293fb7aa74736eaa5f678cfc2a69a8380aeafb0e529ccd12dc009d7574bf6"
+        },
+        "macos-aarch64": {
+          "path": "addons/ai-ocr/releases/elephant.ai-ocr-1.0.0-macos-aarch64.enaddon",
+          "hash": "80f6aaac731aac3214f1e57238919cf5d6f0ad71c4026e55ab4ee0036c8887a9"
+        },
+        "macos-x86_64": {
+          "path": "addons/ai-ocr/releases/elephant.ai-ocr-1.0.0-macos-x86_64.enaddon",
+          "hash": "4fedd750a4273400c5cf7fba060d4baae2fd522f14e9486263416ff41750d1b5"
+        },
+        "windows-x86_64": {
+          "path": "addons/ai-ocr/releases/elephant.ai-ocr-1.0.0-windows-x86_64.enaddon",
+          "hash": "545601de3462a277d62c94d83019f5d44ee4cedef4b86ea071f5094dab86e571"
+        }
+      }
     },
     {
       "id": "elephant.wiki",
@@ -122,7 +141,26 @@
       "author": "Elephant",
       "official": true,
       "manifestPath": "addons/sites/manifest.json",
-      "entryPath": "addons/sites/main.js"
+      "entryPath": "addons/sites/main.js",
+      "requiresPlatformPackage": true,
+      "packages": {
+        "linux-x86_64": {
+          "path": "addons/sites/releases/elephant.sites-1.2.0-linux-x86_64.enaddon",
+          "hash": "ab91e9713e63d2c7bb8864b0061390f9f24aff534cfdd7c6cc740aa258f688e1"
+        },
+        "macos-aarch64": {
+          "path": "addons/sites/releases/elephant.sites-1.2.0-macos-aarch64.enaddon",
+          "hash": "0361a73f291f8cb3fe34ad59cadf60812c508947a650c52918bd3165bf9cd325"
+        },
+        "macos-x86_64": {
+          "path": "addons/sites/releases/elephant.sites-1.2.0-macos-x86_64.enaddon",
+          "hash": "e3fc172dde6ca7376c4b202add569034e923a4f7ee1a9893a4747c16c936e524"
+        },
+        "windows-x86_64": {
+          "path": "addons/sites/releases/elephant.sites-1.2.0-windows-x86_64.enaddon",
+          "hash": "5be9fa293462aa6f29dccd5a74a321af67ba85f369510048772578686405120e"
+        }
+      }
     },
     {
       "id": "elephant.code-execution",
@@ -133,7 +171,26 @@
       "author": "Elephant",
       "official": true,
       "manifestPath": "addons/code-execution/manifest.json",
-      "entryPath": "addons/code-execution/main.js"
+      "entryPath": "addons/code-execution/main.js",
+      "requiresPlatformPackage": true,
+      "packages": {
+        "linux-x86_64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-linux-x86_64.enaddon",
+          "hash": "80633b763584adc9eb8eb4b7780212ade34590f2655d203b74734a2ad256aa67"
+        },
+        "macos-aarch64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-macos-aarch64.enaddon",
+          "hash": "4bb9df2313f93f6bb428b2433d0ac87b081d4f4fcaf6d688b2b46d647f89fc8c"
+        },
+        "macos-x86_64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-macos-x86_64.enaddon",
+          "hash": "3c06fc402925184f5d8e4d040df368c6d8a3fa88b0dc23ed71e53f1cec53dd0d"
+        },
+        "windows-x86_64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-windows-x86_64.enaddon",
+          "hash": "394d080712988ba9eb2dc5fa309c03af646d17ea39980d73fe73f646d1082c80"
+        }
+      }
     },
     {
       "id": "elephant.google-keep-import",

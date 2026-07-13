@@ -1,0 +1,10 @@
+{
+  "blake3": "4fedd750a4273400c5cf7fba060d4baae2fd522f14e9486263416ff41750d1b5",
+  "bytes": 270121,
+  "path": "/Users/runner/work/ElephantNote/ElephantNote/build/out/addons/releases/elephant.ai-ocr/elephant.ai-ocr-1.0.0-macos-x86_64.enaddon",
+  "id": "elephant.ai-ocr",
+  "version": "1.0.0",
+  "platform": "macos-x86_64",
+  "file": "elephant.ai-ocr-1.0.0-macos-x86_64.enaddon",
+  "catalogPath": "addons/ai-ocr/releases/elephant.ai-ocr-1.0.0-macos-x86_64.enaddon"
+}

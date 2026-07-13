@@ -1,0 +1,10 @@
+{
+  "blake3": "4bb9df2313f93f6bb428b2433d0ac87b081d4f4fcaf6d688b2b46d647f89fc8c",
+  "bytes": 266422,
+  "path": "/Users/runner/work/ElephantNote/ElephantNote/build/out/addons/releases/elephant.code-execution/elephant.code-execution-2.1.0-macos-aarch64.enaddon",
+  "id": "elephant.code-execution",
+  "version": "2.1.0",
+  "platform": "macos-aarch64",
+  "file": "elephant.code-execution-2.1.0-macos-aarch64.enaddon",
+  "catalogPath": "addons/code-execution/releases/elephant.code-execution-2.1.0-macos-aarch64.enaddon"
+}

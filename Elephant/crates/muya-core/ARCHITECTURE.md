@@ -9,9 +9,10 @@
 3. `parser`: Markdown to `Document`.
 4. `serializer`: `Document` to Markdown, HTML or plain text.
 5. `edit`: semantic commands, atomic operations and transactions.
-6. `selection`: logical selection independent from DOM ranges.
-7. `history`: invertible transactions and typing groups.
-8. `view`: logical patches consumed by the browser adapter.
+6. `features`: isolated structural editing for complex constructs such as tables.
+7. `selection`: logical selection independent from DOM ranges.
+8. `history`: invertible transactions and typing groups.
+9. `view`: logical patches consumed by the browser adapter.
 
 ## Current executable parser slice
 
@@ -40,7 +41,7 @@ The inline tokenizer currently executes:
 - hard and soft line breaks;
 - text fallback.
 
-Inline parsing is recursive inside headings, paragraphs, blockquotes, list items, links and table cells. Fenced code content follows a separate literal path and is never tokenized as Markdown inline content.
+Inline parsing is recursive inside headings, paragraphs, blockquotes, list items, links and table cells. Fenced code content follows a separate literal path and is never tokenized as Markdown inline content. Empty editable containers receive an explicit `Text("")` node so selections always have an addressable target.
 
 ## Current executable editing slice
 
@@ -53,15 +54,21 @@ The model-level editing layer currently contains:
 - `InsertText`, `DeleteBackward` and `InsertParagraph` commands;
 - `ToggleStrong`, `ToggleEmphasis` and `ToggleStrike` commands for same-text-node selections;
 - complete unwrapping when an entire single-text mark is selected;
-- plain and rich paragraph splitting from direct text children;
+- plain and rich paragraph splitting;
 - paragraph splitting from inside nested inline wrappers by cloning only the right-side wrapper chain;
 - movement of following inline subtrees at every nesting level without changing existing IDs;
-- plain and rich paragraph joining when Backspace is pressed at the start of the first direct text child;
+- plain and rich paragraph joining;
 - list-item splitting for unordered, ordered and task lists;
 - new task items created unchecked;
+- Enter on an empty item lifting its paragraph out of the list;
+- middle empty items splitting one list into left and right lists;
+- ordered right-side lists preserving the correct continuation number;
 - Backspace-based merging with the previous list item;
 - removal of the first list marker by lifting the same paragraph out of the list;
 - automatic removal of a list container that becomes empty;
+- `TableCommand` operations for inserting and deleting body rows;
+- `TableCommand` operations for inserting and deleting columns across all rows;
+- table cell alignment and header flags preserved during structural edits;
 - invertible subtree movement between containers;
 - `SetParagraph` and `SetHeading(1..=6)` block transformations;
 - UTF-16 boundary validation that rejects offsets inside surrogate pairs;
@@ -73,7 +80,7 @@ The model-level editing layer currently contains:
 - bounded transaction-based undo and redo history;
 - ordered logical view patches, including subtree restoration and movement patches.
 
-Structural undo and redo restore the same node IDs, topology and inline order. Nested splits currently reject caret positions exactly at the start or end of a marked text node until empty-wrapper normalization is introduced. Cross-node replacement requires both endpoint text nodes to be direct siblings in the same container. Selection endpoints inside different nested marks, partial mark unwrapping, grapheme-cluster deletion, empty-list-item Enter behavior, nested-list editing, table editing, IME grouping and DOM patch application remain future slices.
+Structural undo and redo restore the same node IDs, topology, inline order and table structure. Nested splits currently reject caret positions exactly at the start or end of a marked text node until empty-wrapper normalization is introduced. Cross-node replacement requires both endpoint text nodes to be direct siblings in the same container. Selection endpoints inside different nested marks, partial mark unwrapping, grapheme-cluster deletion, nested-list indentation, table keyboard navigation, IME grouping and DOM patch application remain future slices.
 
 The parser, serializer and editing slices have Rust unit tests. They have not yet passed full differential characterization against the original Muya JavaScript behavior, so they are not eligible runtime replacements yet.
 
@@ -109,7 +116,7 @@ Inline constructions are also registered in precedence order:
 - hard and soft line breaks;
 - text fallback.
 
-A feature's syntax recognizer must not own editing, rendering or DOM behavior. Complex features such as tables receive separate `features/table` modules when their editing commands are introduced.
+A feature's syntax recognizer must not own editing, rendering or DOM behavior. Complex features such as tables use separate `features/table` modules for their semantic commands.
 
 ## Adapter boundary
 

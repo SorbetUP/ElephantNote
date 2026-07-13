@@ -26,6 +26,7 @@ jobs:
           set -o pipefail
           {
             python3 scripts/fix_wiki_patch_script.py
+            python3 scripts/fix_wiki_patch_script_v2.py
             python3 scripts/apply_wiki_pipeline_v3.py
             python3 scripts/apply_search_wiki_fix.py
           } 2>&1 | tee wiki-pipeline-patch.log
@@ -52,7 +53,7 @@ jobs:
             tests/app/unit/graphWikiScaleRegression.spec.js
       - name: Restore workflow and commit functional changes
         run: |
-          rm scripts/apply_wiki_pipeline_v3.py scripts/fix_wiki_patch_script.py scripts/apply_search_wiki_fix.py
+          rm scripts/apply_wiki_pipeline_v3.py scripts/fix_wiki_patch_script.py scripts/fix_wiki_patch_script_v2.py scripts/apply_search_wiki_fix.py
           rm -f wiki-pipeline-patch.log
           cat > .github/workflows/lint.yml <<'YAML'
           name: Lint

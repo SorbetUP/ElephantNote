@@ -16,13 +16,18 @@ const getTempPath = () => {
   return path.join(os.tmpdir(), name)
 }
 
+const electronPackageRoots = () => [
+  path.join(projectRoot, 'node_modules', 'electron'),
+  path.join(projectRoot, 'Elephant', 'node_modules', 'electron')
+]
+
 const getElectronPath = () => {
-  if (process.platform === 'win32') {
-    return path.join(projectRoot, 'Elephant', 'node_modules', '.bin', 'electron.cmd')
+  const packageRoot = electronPackageRoots().find((candidate) => fs.existsSync(path.join(candidate, 'path.txt')))
+  if (!packageRoot) {
+    throw new Error(`Electron test binary is not installed. Checked: ${electronPackageRoots().join(', ')}`)
   }
-  const pathTxt = path.join(projectRoot, 'Elephant/node_modules/electron/path.txt')
-  const relPath = fs.readFileSync(pathTxt, 'utf-8').trim()
-  return path.join(projectRoot, 'Elephant/node_modules/electron/dist', relPath)
+  const relPath = fs.readFileSync(path.join(packageRoot, 'path.txt'), 'utf-8').trim()
+  return path.join(packageRoot, 'dist', relPath)
 }
 
 const createSeededVaultFixture = async () => {
@@ -127,8 +132,6 @@ const launchElectron = async (userArgs, options = {}) => {
   const userDataPath = options.userDataPath || getTempPath()
   const baseArgs =
     process.platform === 'darwin' ? ['--use-mock-keychain', '--password-store=basic'] : []
-  // Chromium switches must be passed before the Electron app path so Safe Storage is disabled
-  // before Chromium initializes the macOS keychain backend.
   const args = baseArgs.concat([projectRoot, '--user-data-dir', userDataPath], userArgs)
   const app = await _electron.launch({
     executablePath,

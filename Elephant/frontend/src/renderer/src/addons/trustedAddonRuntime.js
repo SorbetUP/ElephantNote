@@ -19,6 +19,15 @@ const setPreference = (key, value, target = globalThis) => invoke('tauri_prefs_s
 
 const safeString = (value, fallback = '') => (typeof value === 'string' ? value.trim() || fallback : fallback)
 
+export const isOfficialTrustedRecord = (record = {}) => (
+  record.source === 'official' ||
+  record.official === true ||
+  record.manifest?.source === 'official' ||
+  record.manifest?.official === true
+)
+
+export const shouldEnforceCommunityTrust = (record = {}) => !isOfficialTrustedRecord(record)
+
 const approvalKey = (addonId) => `${TRUST_APPROVAL_PREFIX}${addonId}`
 
 export const isTrustedExternalManifest = (manifest = {}) => {
@@ -421,20 +430,22 @@ export const createTrustedAddonDefinition = (record, logger) => {
       defaultEnabled: false
     },
     async activate(context) {
-      const communityEnabled = await getPreference(COMMUNITY_ADDONS_PREF_KEY)
-      if (communityEnabled !== true) {
-        throw new Error('Community addons are disabled. Turn them on in Settings → Addons first.')
-      }
-      if (await getTrustedSafeMode()) {
-        throw new Error('Trusted addon safe mode is enabled. Disable safe mode before starting full app access addons.')
-      }
-      const approval = await getTrustedApproval(record)
-      if (!approval.approved) {
-        const error = new Error('Full app access approval is required for this exact addon package.')
-        error.code = 'TRUST_REQUIRED'
-        error.addonId = record.manifest.id
-        error.packageHash = record.packageHash
-        throw error
+      if (shouldEnforceCommunityTrust(record)) {
+        const communityEnabled = await getPreference(COMMUNITY_ADDONS_PREF_KEY)
+        if (communityEnabled !== true) {
+          throw new Error('Community addons are disabled. Turn them on in Settings → Addons first.')
+        }
+        if (await getTrustedSafeMode()) {
+          throw new Error('Trusted addon safe mode is enabled. Disable safe mode before starting full app access addons.')
+        }
+        const approval = await getTrustedApproval(record)
+        if (!approval.approved) {
+          const error = new Error('Full app access approval is required for this exact addon package.')
+          error.code = 'TRUST_REQUIRED'
+          error.addonId = record.manifest.id
+          error.packageHash = record.packageHash
+          throw error
+        }
       }
 
       beginTrustedActivation(record)

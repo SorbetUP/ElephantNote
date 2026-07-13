@@ -15,7 +15,7 @@ replacement = """text = replace_once(
     '''    let has_legacy_related = markdown.lines().any(|line| {
         let trimmed = line.trim();
         trimmed.starts_with("- [[") && trimmed.ends_with("]]" )
-    });'''.replace('ends_with("]]" )', 'ends_with("]]" )'),
+    });'''.replace('ends_with("]]" )', 'ends_with("]]"))'),
     '''    let mut in_related_section = false;
     let has_legacy_related = markdown.lines().any(|line| {
         let trimmed = line.trim();

@@ -53,19 +53,21 @@ The model-level editing layer currently contains:
 - `InsertText`, `DeleteBackward` and `InsertParagraph` commands;
 - `ToggleStrong`, `ToggleEmphasis` and `ToggleStrike` commands for same-text-node selections;
 - complete unwrapping when an entire single-text mark is selected;
-- paragraph splitting with stable newly allocated node IDs;
-- paragraph joining when Backspace is pressed at the start of an adjacent plain paragraph;
+- plain and rich paragraph splitting from a direct text child;
+- movement of all following inline subtrees into the newly created paragraph without changing their IDs;
+- plain and rich paragraph joining when Backspace is pressed at the start of the first direct text child;
+- invertible subtree movement between containers;
 - `SetParagraph` and `SetHeading(1..=6)` block transformations;
 - UTF-16 boundary validation that rejects offsets inside surrogate pairs;
 - invertible text replacement, leaf insertion and block-kind operations;
 - detachable subtree snapshots with stable IDs and parent/child topology;
-- invertible subtree removal and restoration;
+- invertible subtree removal, restoration and movement;
 - transactions applied to a cloned document before commit, preventing partially applied failures;
 - revision increments on successful transactions;
 - bounded transaction-based undo and redo history;
-- ordered logical view patches, including subtree restoration patches.
+- ordered logical view patches, including subtree restoration and movement patches.
 
-Structural undo and redo restore the same node IDs. Cross-node replacement currently requires both endpoint text nodes to be direct siblings in the same container. Selection endpoints inside different nested marks, partial unwrapping of an existing mark, rich-inline paragraph splitting, grapheme-cluster deletion, list/table editing, IME grouping and DOM patch application remain future slices.
+Structural undo and redo restore the same node IDs and inline ordering. Rich paragraph splitting and joining currently require the caret text node to be a direct paragraph child. Cross-node replacement requires both endpoint text nodes to be direct siblings in the same container. Selection endpoints inside different nested marks, partial unwrapping of an existing mark, caret splitting from inside a nested mark, grapheme-cluster deletion, list/table editing, IME grouping and DOM patch application remain future slices.
 
 The parser, serializer and editing slices have Rust unit tests. They have not yet passed full differential characterization against the original Muya JavaScript behavior, so they are not eligible runtime replacements yet.
 

@@ -6,12 +6,13 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 describe('physical Sync package ownership', () => {
-  it('owns identity, pairing, wire schema, manifests, planning and local operations inside the native package', () => {
+  it('owns identity, pairing, wire schema, file streams, manifests, planning and local operations inside the native package', () => {
     const service = read('addons/official/sync/native/src/main.rs')
     const library = read('addons/official/sync/native/src/lib.rs')
     const invite = read('addons/official/sync/native/src/invite.rs')
     const pairing = read('addons/official/sync/native/src/pairing.rs')
     const protocol = read('addons/official/sync/native/src/protocol.rs')
+    const transfer = read('addons/official/sync/native/src/transfer.rs')
     const manifest = read('addons/official/sync/native/src/manifest.rs')
     const plan = read('addons/official/sync/native/src/plan.rs')
     const localOps = read('addons/official/sync/native/src/local_ops.rs')
@@ -33,6 +34,7 @@ describe('physical Sync package ownership', () => {
     expect(library).toContain('pub mod invite;')
     expect(library).toContain('pub mod pairing;')
     expect(library).toContain('pub mod protocol;')
+    expect(library).toContain('pub mod transfer;')
     expect(invite).toContain('pub struct PendingInvite')
     expect(invite).toContain('pub struct PairingInvite')
     expect(invite).toContain('pub fn verify_pending_invite')
@@ -47,6 +49,10 @@ describe('physical Sync package ownership', () => {
     expect(protocol).toContain('SyncComplete')
     expect(protocol).toContain('pub async fn write_control')
     expect(protocol).toContain('pub async fn read_control')
+    expect(transfer).toContain('pub async fn send_file')
+    expect(transfer).toContain('pub async fn receive_file')
+    expect(transfer).toContain('pub fn validate_header')
+    expect(transfer).toContain('hash_file(&temporary)')
     expect(manifest).toContain('pub fn scan_vault')
     expect(manifest).toContain('path_is_or_is_below(&normalized, ".elephantnote/addons")')
     expect(plan).toContain('pub fn build_plan')

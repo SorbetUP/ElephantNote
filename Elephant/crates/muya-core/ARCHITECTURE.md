@@ -9,7 +9,7 @@
 3. `parser`: Markdown to `Document`.
 4. `serializer`: `Document` to Markdown, HTML or plain text.
 5. `edit`: semantic commands, atomic operations and transactions.
-6. `features`: isolated structural editing for complex constructs such as tables.
+6. `features`: isolated structural editing for complex constructs such as lists and tables.
 7. `selection`: logical selection independent from DOM ranges.
 8. `history`: invertible transactions and typing groups.
 9. `view`: logical patches consumed by the browser adapter.
@@ -24,9 +24,10 @@ The Rust parser and Markdown serializer currently execute these block constructi
 - thematic breaks;
 - consecutive blockquote lines;
 - fenced code blocks with language information;
-- simple unordered lists;
-- simple ordered lists with their starting number;
+- unordered lists;
+- ordered lists with their starting number;
 - task lists;
+- structurally nested lists with mixed list kinds and preserved indentation;
 - GFM-style tables with column alignment.
 
 The inline tokenizer currently executes:
@@ -52,6 +53,7 @@ The model-level editing layer currently contains:
 - replacement and deletion across direct sibling text endpoints in one inline container;
 - safe removal of fully covered inline subtrees between those endpoints;
 - `InsertText`, `DeleteBackward` and `InsertParagraph` commands;
+- `GraphemeCommand::DeleteBackward`, which removes one extended Unicode grapheme and delegates structural Backspace at offset zero;
 - `ToggleStrong`, `ToggleEmphasis` and `ToggleStrike` commands for same-text-node selections;
 - complete unwrapping when an entire single-text mark is selected;
 - plain and rich paragraph splitting;
@@ -66,9 +68,14 @@ The model-level editing layer currently contains:
 - Backspace-based merging with the previous list item;
 - removal of the first list marker by lifting the same paragraph out of the list;
 - automatic removal of a list container that becomes empty;
+- structural nested-list parsing and serialization;
+- `ListCommand::IndentItem` and `ListCommand::OutdentItem` with exact undo restoration;
+- reuse of compatible existing nested lists and removal of nested containers that become empty;
 - `TableCommand` operations for inserting and deleting body rows;
 - `TableCommand` operations for inserting and deleting columns across all rows;
 - table cell alignment and header flags preserved during structural edits;
+- `TableNavigationCommand::NextCell` and `PreviousCell` for logical Tab navigation;
+- automatic body-row insertion when navigating forward from the last cell;
 - invertible subtree movement between containers;
 - `SetParagraph` and `SetHeading(1..=6)` block transformations;
 - UTF-16 boundary validation that rejects offsets inside surrogate pairs;
@@ -80,7 +87,7 @@ The model-level editing layer currently contains:
 - bounded transaction-based undo and redo history;
 - ordered logical view patches, including subtree restoration and movement patches.
 
-Structural undo and redo restore the same node IDs, topology, inline order and table structure. Nested splits currently reject caret positions exactly at the start or end of a marked text node until empty-wrapper normalization is introduced. Cross-node replacement requires both endpoint text nodes to be direct siblings in the same container. Selection endpoints inside different nested marks, partial mark unwrapping, grapheme-cluster deletion, nested-list indentation, table keyboard navigation, IME grouping and DOM patch application remain future slices.
+Structural undo and redo restore the same node IDs, topology, inline order, list nesting and table structure. Nested splits currently reject caret positions exactly at the start or end of a marked text node until empty-wrapper normalization is introduced. Cross-node replacement requires both endpoint text nodes to be direct siblings in the same container. Selection endpoints inside different nested marks, partial mark unwrapping, IME grouping and DOM patch application remain future slices.
 
 The parser, serializer and editing slices have Rust unit tests. They have not yet passed full differential characterization against the original Muya JavaScript behavior, so they are not eligible runtime replacements yet.
 
@@ -116,13 +123,14 @@ Inline constructions are also registered in precedence order:
 - hard and soft line breaks;
 - text fallback.
 
-A feature's syntax recognizer must not own editing, rendering or DOM behavior. Complex features such as tables use separate `features/table` modules for their semantic commands.
+A feature's syntax recognizer must not own editing, rendering or DOM behavior. Complex features use isolated modules such as `features/list`, `features/table` and `features/table_navigation` for semantic commands.
 
 ## Adapter boundary
 
 The browser adapter remains responsible for:
 
 - keyboard, beforeinput and composition events;
+- mapping physical Tab/Shift+Tab and Backspace events to semantic Rust commands;
 - DOM creation and logical patch application;
 - browser `Selection` and `Range` conversion;
 - geometry, scrolling and floating widgets;

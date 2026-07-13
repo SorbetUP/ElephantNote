@@ -2,7 +2,9 @@ use crate::edit::{
   Command, EditError, GraphemeCommand, MarkCommand, ParagraphBoundaryCommand,
   PasteCommand,
 };
-use crate::features::{ListCommand, TableCommand, TableNavigationCommand};
+use crate::features::{
+  ListCommand, TableCommand, TableNavigationCommand, TaskCommand,
+};
 use crate::session::{EditorSession, SessionCommand};
 
 use super::response::response;
@@ -81,6 +83,15 @@ fn to_session_command(command: ProtocolCommand) -> SessionCommand {
     ProtocolCommand::OutdentListItem => {
       SessionCommand::List(ListCommand::OutdentItem)
     }
+    ProtocolCommand::SetTaskChecked {
+      item,
+      checked,
+      auto_check,
+    } => SessionCommand::Task(TaskCommand::SetChecked {
+      item,
+      checked,
+      auto_check,
+    }),
     ProtocolCommand::InsertTableRowAfter => {
       SessionCommand::Table(TableCommand::InsertRowAfter)
     }

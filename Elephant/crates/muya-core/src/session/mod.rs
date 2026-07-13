@@ -116,14 +116,19 @@ impl EditorSession {
         self.history.commit_group();
         Ok(self.update(Vec::new()))
       }
-      SessionCommand::CancelComposition => self.apply_history_step(
-        self.history.cancel_group_step(&mut self.document)?,
-      ),
+      SessionCommand::CancelComposition => {
+        let step = self
+          .history
+          .cancel_group_step(&mut self.document)?;
+        self.apply_history_step(step)
+      }
       SessionCommand::Undo => {
-        self.apply_history_step(self.history.undo_step(&mut self.document)?)
+        let step = self.history.undo_step(&mut self.document)?;
+        self.apply_history_step(step)
       }
       SessionCommand::Redo => {
-        self.apply_history_step(self.history.redo_step(&mut self.document)?)
+        let step = self.history.redo_step(&mut self.document)?;
+        self.apply_history_step(step)
       }
       SessionCommand::UpdateComposition(inserted) => {
         let transaction = Command::InsertText(inserted)

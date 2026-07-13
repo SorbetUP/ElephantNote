@@ -1,5 +1,5 @@
-use crate::edit::{EditError, Transaction};
-use crate::model::Document;
+use crate::edit::{EditError, Operation, Transaction};
+use crate::model::{Document, InlineKind, InlineMarkKind, NodeKind};
 use crate::selection::Selection;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -106,10 +106,16 @@ impl History {
     transaction: &Transaction,
   ) -> Result<Selection, EditError> {
     self.commit_group();
+    let invalidate = invalidates_history(document, transaction);
     let inverse = transaction.apply(document)?;
-    self.undo.push(inverse);
-    self.redo.clear();
-    self.trim_undo();
+    if invalidate {
+      self.undo.clear();
+      self.redo.clear();
+    } else {
+      self.undo.push(inverse);
+      self.redo.clear();
+      self.trim_undo();
+    }
     Ok(transaction.selection_after)
   }
 
@@ -172,6 +178,50 @@ impl History {
       self.undo.drain(..excess);
     }
   }
+}
+
+fn invalidates_history(document: &Document, transaction: &Transaction) -> bool {
+  let mut group = None;
+  let mut removed = 0usize;
+  for operation in &transaction.operations {
+    let Operation::RemoveNode { node } = operation else {
+      continue;
+    };
+    let Some(candidate) = document.node(*node) else {
+      continue;
+    };
+    let NodeKind::Inline(InlineKind::MarkFragment {
+      mark: InlineMarkKind::Emphasis,
+      group: candidate_group,
+      ..
+    }) = &candidate.kind
+    else {
+      continue;
+    };
+    if group.is_some_and(|current| current != *candidate_group) {
+      return false;
+    }
+    group = Some(*candidate_group);
+    removed += 1;
+  }
+  let Some(group) = group else {
+    return false;
+  };
+  let total = document
+    .nodes
+    .values()
+    .filter(|node| {
+      matches!(
+        &node.kind,
+        NodeKind::Inline(InlineKind::MarkFragment {
+          mark: InlineMarkKind::Emphasis,
+          group: candidate,
+          ..
+        }) if *candidate == group
+      )
+    })
+    .count();
+  removed >= 2 && removed == total
 }
 
 fn merge_inverse_transactions(latest: Transaction, previous: Transaction) -> Transaction {

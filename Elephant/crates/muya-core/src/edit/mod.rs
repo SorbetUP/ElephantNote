@@ -1,6 +1,7 @@
 mod command;
 mod error;
 mod operation;
+mod paragraph;
 mod transaction;
 
 pub use command::Command;

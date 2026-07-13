@@ -34,4 +34,23 @@ describe('native addon mobile compatibility', () => {
     expect(fs.existsSync(path.join(root, 'addons/official/sites/addon.build.json'))).toBe(false)
     expect(fs.existsSync(path.join(root, 'addons/official/sites/native'))).toBe(false)
   })
+
+  it('does not resolve Iroh inside Android or iOS application builds', () => {
+    const cargo = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/Cargo.toml'), 'utf8')
+    const lib = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/src/lib_min.rs'), 'utf8')
+    const vault = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/src/vault/mod.rs'), 'utf8')
+    const commands = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/src/sync_commands.rs'), 'utf8')
+    const marker = '[target.\'cfg(not(any(target_os = "android", target_os = "ios")))\'.dependencies]'
+    const [shared, desktop = ''] = cargo.split(marker)
+
+    expect(shared).not.toMatch(/^iroh\s*=/m)
+    expect(shared).not.toMatch(/^iroh-mdns-address-lookup\s*=/m)
+    expect(desktop).toMatch(/^iroh\s*=/m)
+    expect(desktop).toMatch(/^iroh-mdns-address-lookup\s*=/m)
+    expect(lib).toContain('#[cfg(not(mobile))]\npub mod sync;')
+    expect(lib).toContain('#[cfg(not(mobile))]\n      app.manage(sync::IrohSyncState::new());')
+    expect(vault).toContain('#[cfg(not(mobile))]\npub mod sync;')
+    expect(commands).toContain('#[cfg(mobile)]\nmod mobile')
+    expect(commands).toContain('addon-required')
+  })
 })

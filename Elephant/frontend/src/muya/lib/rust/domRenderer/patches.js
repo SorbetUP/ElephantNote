@@ -58,7 +58,7 @@ const replaceElementShell = (renderer, id) => {
   const node = renderer.logical.node(id)
   const previous = renderer.requiredElement(id)
   const replacement = createNodeElement(renderer, node)
-  while (previous.firstChild) replacement.appendChild(previous.firstChild)
+  for (const child of childElements(previous)) replacement.appendChild(child)
   previous.replaceWith(replacement)
   renderer.elements.set(id, replacement)
 }

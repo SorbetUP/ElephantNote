@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::model::{Node, NodeId};
+use crate::model::{ListKind, Node, NodeId};
 use crate::selection::Selection;
 use crate::view::ViewPatch;
 
@@ -28,6 +28,9 @@ pub enum ProtocolCommand {
   DuplicateBlock,
   DeleteBlock,
   InsertParagraphAfterBlock,
+  ToggleBlockQuote,
+  ToggleCodeBlock,
+  SetListKind { kind: ListKind },
   IndentListItem,
   OutdentListItem,
   SetTaskChecked {

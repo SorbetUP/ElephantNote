@@ -70,7 +70,7 @@ jobs:
           name: wiki-pipeline-validation-log
           path: wiki-pipeline-validation.log
           if-no-files-found: warn
-      - name: Restore workflow and commit functional changes
+      - name: Commit and publish functional changes
         run: |
           set -o pipefail
           {
@@ -79,44 +79,10 @@ jobs:
               scripts/fix_wiki_patch_script_v2.py \
               scripts/apply_search_wiki_fix.py
             rm -f wiki-pipeline-patch.log wiki-pipeline-validation.log
-            cat > .github/workflows/lint.yml <<'YAML'
-          name: Lint
-
-          on:
-            pull_request:
-              types: [opened, synchronize, reopened]
-
-          concurrency:
-            group: ${{ github.workflow }}-${{ github.ref }}
-            cancel-in-progress: true
-
-          permissions:
-            contents: read
-
-          jobs:
-            lint:
-              runs-on: ubuntu-latest
-              steps:
-                - uses: actions/checkout@v4
-                - uses: ./.github/actions/setup
-
-                - name: Run ESLint
-                  shell: bash
-                  run: |
-                    set -o pipefail
-                    pnpm lint 2>&1 | tee eslint-output.txt
-
-                - name: Upload ESLint output
-                  if: always()
-                  uses: actions/upload-artifact@v4
-                  with:
-                    name: eslint-output
-                    path: eslint-output.txt
-                    if-no-files-found: ignore
-          YAML
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add -A
+            git reset -- .github/workflows/lint.yml
             if git diff --cached --quiet; then
               echo "No functional changes to publish."
             else

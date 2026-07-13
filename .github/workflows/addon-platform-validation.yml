@@ -133,6 +133,8 @@ jobs:
             ElephantCalendarAddon
             ElephantSitesAddon
             ElephantCodeExecutionAddon
+            ElephantGoogleKeepImportAddon
+            ElephantRecentlyEditedAddon
           )
           for marker in "${markers[@]}"
           do

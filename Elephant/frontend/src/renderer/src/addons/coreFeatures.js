@@ -61,6 +61,8 @@ const createCoreContext = (manager, featureId, disposables) => {
   })
 }
 
+// Core features use the same contribution bus as addons without becoming
+// installable records. They are absent from the addon registry and catalogue.
 export const activateCoreFeature = async (manager, definition) => {
   const id = requireId(definition?.id)
   if (!manager) throw new Error(`Cannot activate ${id} without the feature host`)

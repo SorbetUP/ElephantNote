@@ -24,6 +24,9 @@ impl MarkCommand {
     if let Some(group) =
       super::mark_fragment_toggle::selected_group(document, selection, fragment_kind)?
     {
+      if self == Self::ToggleStrike {
+        return Ok(noop(selection));
+      }
       return super::mark_fragment_toggle::build_unwrap_group(document, selection, group);
     }
     if let Some(wrapper) = selected_mark_ancestor(document, selection, self)? {
@@ -347,7 +350,7 @@ mod tests {
   }
 
   #[test]
-  fn toggles_a_complete_linked_group_off() {
+  fn keeps_a_complete_linked_strike_group_as_a_muya_noop() {
     let mut document = parse_markdown("**alpha** beta *gamma*");
     let selection = Selection {
       anchor: SelectionPoint {
@@ -365,11 +368,11 @@ mod tests {
     let linked_selection = apply.selection_after;
     apply.apply(&mut document).unwrap();
 
-    MarkCommand::ToggleStrike
+    let repeated = MarkCommand::ToggleStrike
       .build(&document, linked_selection)
-      .unwrap()
-      .apply(&mut document)
       .unwrap();
-    assert_eq!(to_markdown(&document), "**alpha** beta *gamma*");
+    assert!(repeated.operations.is_empty());
+    repeated.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "**al~~pha** beta *gam~~ma*");
   }
 }

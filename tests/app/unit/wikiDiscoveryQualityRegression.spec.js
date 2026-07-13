@@ -61,6 +61,9 @@ describe('Wiki macro-topic discovery contracts', () => {
       expect(runtime).toContain('embedding_capacity_error')
       expect(aiSettings).toContain('Physical batch size')
       expect(aiSettings).toContain('embeddingPhysicalBatchSize')
+      expect(aiSettings).toContain('defaultLocalRuntime')
+      expect(aiSettings).toContain('localRuntime: defaultLocalRuntime()')
+      expect(aiSettings).toContain('...clonePlainObject(form.value.localRuntime)')
       expect(aiSettings).toContain('1024')
     })
     

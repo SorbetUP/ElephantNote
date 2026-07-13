@@ -495,8 +495,16 @@ const createProvider = (type = 'openai-compatible') => ({
   enabled: true
 })
 const defaultRoute = () => ({ source: 'disabled', model: '', endpoint: '', optionsJson: '' })
+const defaultLocalRuntime = () => ({
+  llamaServerMode: 'bundled',
+  llamaServerPath: '',
+  llamaBaseUrl: '',
+  embeddingContextWindow: 2048,
+  embeddingPhysicalBatchSize: 1024
+})
 const defaultForm = () => ({
   localAi: normalizeLocalAiConfig(),
+  localRuntime: defaultLocalRuntime(),
   providerRows: [],
   codex: { connected: false, model: '' },
   routes: {
@@ -612,6 +620,7 @@ const applyConfig = (config = {}) => {
   form.value = {
     ...defaultForm(),
     localAi: normalizeLocalAiConfig(config.localAi),
+    localRuntime: { ...defaultLocalRuntime(), ...(config.localRuntime || {}) },
     providerRows: normalizeProviderRows(config),
     codex: { connected: false, model: config.providers?.codex?.model || '' },
     routes: {
@@ -625,6 +634,12 @@ const providerEndpoint = (source) => form.value.providerRows.find((row) => provi
 const buildConfig = () => ({
   ...clonePlainObject(currentConfig.value),
   localAi: clonePlainObject(form.value.localAi),
+  localRuntime: {
+    ...defaultLocalRuntime(),
+    ...clonePlainObject(form.value.localRuntime),
+    embeddingContextWindow: Math.max(512, Math.min(32768, Math.round(Number(form.value.localRuntime.embeddingContextWindow) || 2048))),
+    embeddingPhysicalBatchSize: Math.max(256, Math.min(8192, Math.round(Number(form.value.localRuntime.embeddingPhysicalBatchSize) || 1024)))
+  },
   provider: form.value.routes.chat.source === 'app-local' ? 'tauri-rust' : form.value.routes.chat.source,
   transport: form.value.routes.chat.source === 'codex' ? 'codex' : form.value.routes.chat.source,
   endpoint: form.value.routes.chat.source === 'codex' ? 'codex://app-server' : providerEndpoint(form.value.routes.chat.source),

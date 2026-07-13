@@ -15,7 +15,7 @@ import {
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
- describe('optional first-party addons and configurable icon rail', () => {
+describe('optional first-party addons and configurable icon rail', () => {
   it('normalizes persisted order as core controls, dividers and addon views change', () => {
     const tasks = addonViewRailId('com.elephantnote.elephant-tasks.workspace')
     const divider = createIconRailSeparatorId()
@@ -135,9 +135,9 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
     expect(chat).toContain('component: ChatSidebar')
     expect(chat).toContain("icon: 'message-circle'")
     expect(chat).toContain("section: 'ai'")
-    expect(chat).toContain("slot: SETTINGS_PAGE.slot")
+    expect(chat).toContain('slot: SETTINGS_PAGE.slot')
     expect(search).toContain("section: 'ai'")
-    expect(search).toContain("slot: SETTINGS_PAGE.slot")
+    expect(search).toContain('slot: SETTINGS_PAGE.slot')
     expect(ocr).toContain("slot: 'ai.ocr'")
     expect(providersUi).toContain(':data-elephant-addon-settings-slot="activePage.slot"')
     expect(wiki).toContain('component: WikiView')

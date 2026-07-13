@@ -15,6 +15,12 @@ export default class ElephantOpenModelsAddon {
     this.window = api.experimental.window
   }
 
+  invoke(command, payload = {}) {
+    const invoke = this.window?.__TAURI__?.core?.invoke
+    if (typeof invoke !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
+    return invoke(command, payload)
+  }
+
   async call(action, payload = {}) {
     const client = this.window?.elephantnote?.api
     if (typeof client?.call !== 'function') throw new Error(`Elephant API is unavailable for ${action}`)
@@ -26,6 +32,36 @@ export default class ElephantOpenModelsAddon {
   async modelList() {
     const result = await this.call('models.list')
     return Array.isArray(result?.models) ? result.models : Array.isArray(result) ? result : []
+  }
+
+  async chat({ messages = [], model = '', route = {}, config = {} } = {}) {
+    const payload = {
+      messages,
+      model,
+      temperature: Number(route.temperature ?? 0.2),
+      maxTokens: Math.max(1, Number(route.maxTokens || 2048)),
+      contextWindow: Math.max(512, Number(route.contextWindow || 8192)),
+      aiConfig: {
+        ...config,
+        provider: PROVIDER_ID,
+        model,
+        routes: {
+          ...(config.routes || {}),
+          chat: {
+            ...route,
+            source: PROVIDER_ID,
+            provider: PROVIDER_ID,
+            model
+          }
+        }
+      }
+    }
+    const result = await this.invoke('tauri_rag_chat', { payload })
+    return {
+      answer: String(result?.answer || '').trim(),
+      provider: PROVIDER_ID,
+      model: String(result?.model || model || '').trim()
+    }
   }
 
   render(container) {
@@ -72,7 +108,7 @@ export default class ElephantOpenModelsAddon {
           const isActive = String(active?.id || active?.modelId || '') === id || model.active === true
           const activate = node(documentRef, 'button', '', isActive ? 'Deactivate' : 'Activate')
           activate.onclick = async () => {
-            await this.call(isActive ? 'models.deactivate' : 'models.activate', isActive ? { id } : { id })
+            await this.call(isActive ? 'models.deactivate' : 'models.activate', { id })
             await refresh()
           }
           const remove = node(documentRef, 'button', '', 'Remove')
@@ -142,7 +178,8 @@ export default class ElephantOpenModelsAddon {
       transport: 'tauri-rust',
       endpoint: 'local://llama.cpp',
       capabilities: ['chat', 'embedding'],
-      getModels: () => this.modelList()
+      getModels: () => this.modelList(),
+      chat: (request) => this.chat(request)
     })
 
     await this.enableLocalRuntime()

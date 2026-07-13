@@ -4,6 +4,7 @@ const path = require('path')
 const { _electron } = require('playwright')
 
 const projectRoot = path.resolve(__dirname, '../../..')
+const electronMain = path.join(__dirname, 'electron-main.js')
 
 const getDateAsFilename = () => {
   const date = new Date()
@@ -132,7 +133,7 @@ const launchElectron = async (userArgs, options = {}) => {
   const userDataPath = options.userDataPath || getTempPath()
   const baseArgs =
     process.platform === 'darwin' ? ['--use-mock-keychain', '--password-store=basic'] : []
-  const args = baseArgs.concat([projectRoot, '--user-data-dir', userDataPath], userArgs)
+  const args = baseArgs.concat([`--user-data-dir=${userDataPath}`, electronMain], userArgs)
   const app = await _electron.launch({
     executablePath,
     args,

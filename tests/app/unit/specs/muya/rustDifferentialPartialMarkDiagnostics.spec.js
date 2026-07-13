@@ -60,6 +60,40 @@ const traces = [
     edges: ['start', 'end'],
     runJs: async () => {},
     runRust: (rust) => fragmentEdges(rust)
+  },
+  {
+    name: 'toggle a linked strike group off',
+    initial: '**alpha** beta *gamma*',
+    expected: '**alpha** beta *gamma*\n',
+    edges: [],
+    runJs: async (muya) => {
+      setJsSelection(muya, 0, 4, 19)
+      muya.format('del')
+      muya.format('del')
+    },
+    runRust: (rust) => {
+      rust.setSelectionBetweenText('alpha', 2, 'gamma', 3)
+      rust.request({ type: 'toggle_strike' })
+      rust.request({ type: 'toggle_strike' })
+      return fragmentEdges(rust)
+    }
+  },
+  {
+    name: 'toggle a linked emphasis group off',
+    initial: 'alpha **beta** gamma',
+    expected: 'alpha **beta** gamma\n',
+    edges: [],
+    runJs: async (muya) => {
+      setJsSelection(muya, 0, 2, 10)
+      muya.format('em')
+      muya.format('em')
+    },
+    runRust: (rust) => {
+      rust.setSelectionBetweenText('alpha ', 2, 'beta', 2)
+      rust.request({ type: 'toggle_emphasis' })
+      rust.request({ type: 'toggle_emphasis' })
+      return fragmentEdges(rust)
+    }
   }
 ]
 

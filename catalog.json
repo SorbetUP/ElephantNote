@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-13T20:01:54Z",
+  "updatedAt": "2026-07-13T20:05:02Z",
   "addons": [
     {
       "id": "elephant.ai",
@@ -62,7 +62,7 @@
         },
         "windows-x86_64": {
           "path": "addons/ai-ocr/releases/elephant.ai-ocr-1.0.0-windows-x86_64.enaddon",
-          "hash": "8be976b43fbb7cf6e58494c88a5c18ee46f93291c9a44c09cc0ebff557891520"
+          "hash": "4ad853d2bf67ea1b52004cf51fbd9ec324c99c97e635d42463bfbd3a38da7c67"
         }
       }
     },
@@ -124,7 +124,7 @@
       "packages": {
         "linux-x86_64": {
           "path": "addons/sync/releases/elephant.sync-1.2.0-linux-x86_64.enaddon",
-          "hash": "a8d2e9f7545d5dd7ec10fb2bae58a4e874089a13b3683bc5b2b5ed5e35aa95d3"
+          "hash": "440d9f48dc7dba9cea967041fc1ca6637013bd62971f007c42e868c6389d5132"
         },
         "macos-aarch64": {
           "path": "addons/sync/releases/elephant.sync-1.2.0-macos-aarch64.enaddon",
@@ -132,11 +132,11 @@
         },
         "macos-x86_64": {
           "path": "addons/sync/releases/elephant.sync-1.2.0-macos-x86_64.enaddon",
-          "hash": "1a96fe02001802a82824be19b78caf7d8da0d39b9410660c7763d5a36c451802"
+          "hash": "6700f828851cf5bec7208057d394887143ffa06b16bc64e5661c5793fccad190"
         },
         "windows-x86_64": {
           "path": "addons/sync/releases/elephant.sync-1.2.0-windows-x86_64.enaddon",
-          "hash": "42ace5d3419610bb0b6f7e9a5c6cdad10434ded546d25ca93c848be22d8f1b92"
+          "hash": "0cf265f11f98e75160a071e42f2f4c5c3920b1741b8bf4a302ef6ae07171c3dc"
         }
       }
     },
@@ -188,7 +188,7 @@
         },
         "windows-x86_64": {
           "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-windows-x86_64.enaddon",
-          "hash": "0d63e6c4c5c562187ba6c32d39b2115970e776fa5666f0404ca8e34e2c85e219"
+          "hash": "6471f567e51684de79db2fdf6cc4cfeb5a367fe4f1f52e750bb2c5531f40678c"
         },
         "android-aarch64": {
           "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-android-aarch64.enaddon",

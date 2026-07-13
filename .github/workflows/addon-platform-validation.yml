@@ -76,6 +76,16 @@ jobs:
             2>&1 | tee trusted-addon-package.txt
           unzip -t build/addons/trusted-workspace-lab.enaddon
 
+      - name: Package physical AI parent addon
+        shell: bash
+        run: |
+          set -o pipefail
+          node build/scripts/package-addon.mjs \
+            addons/official/ai \
+            build/addons/elephant.ai.enaddon \
+            2>&1 | tee physical-ai-package.txt
+          unzip -t build/addons/elephant.ai.enaddon
+
       - name: Package every official catalogue addon
         shell: bash
         run: |
@@ -92,11 +102,19 @@ jobs:
             unzip -t "build/addons/$slug.enaddon"
           done
 
-      - name: Build Tauri web bundle
+      - name: Build Tauri web bundle and verify physical absence
         shell: bash
         run: |
           set -o pipefail
           pnpm tauri:web:build 2>&1 | tee addon-build.txt
+          if grep -R -n -F 'elephant-ai-settings' build/out/renderer; then
+            echo 'Physical AI parent code leaked into the core renderer bundle.' >&2
+            exit 1
+          fi
+          if grep -R -n -F 'elephant-ocr-addon-settings' build/out/renderer; then
+            echo 'Physical OCR addon code leaked into the core renderer bundle.' >&2
+            exit 1
+          fi
 
       - name: Upload functional validation and installable packages
         if: always()
@@ -108,6 +126,7 @@ jobs:
             addon-functional-tests.txt
             addon-tests.txt
             trusted-addon-package.txt
+            physical-ai-package.txt
             addon-package.txt
             addon-build.txt
             build/addons/*.enaddon
@@ -138,6 +157,7 @@ jobs:
           for test_filter in \
             addon_catalog::tests \
             addon_dependencies::tests \
+            addon_registry_view::tests \
             addon_sidecars::tests \
             addon_runtime_access::tests \
             addon_note_access::tests \

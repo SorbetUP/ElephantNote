@@ -97,8 +97,8 @@ jobs:
         run: |
           set -o pipefail
           {
-            pnpm vitest run tests/app/unit/graphWikiScaleRegression.spec.js tests/app/unit/chatAgentSurface.spec.js
-            pnpm eslint Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js
+            pnpm exec vitest run tests/app/unit/graphWikiScaleRegression.spec.js tests/app/unit/chatAgentSurface.spec.js
+            pnpm exec eslint Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js
             pnpm tauri:web:build
           } 2>&1 | tee /tmp/graph-wiki-renderer.log
 

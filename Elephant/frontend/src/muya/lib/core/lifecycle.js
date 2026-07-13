@@ -52,6 +52,7 @@ export default (Muya) => {
     },
 
     destroy() {
+      this._rustEditorDisposed = true
       this.rustEditorRuntime?.destroy()
       this.rustEditorRuntime = null
       this.rustEditorBridge = null

@@ -36,7 +36,9 @@ if (!addonArg || !mobilePlatforms.has(platform)) {
 
 const addonDir = resolve(repoRoot, addonArg)
 const manifestPath = join(addonDir, 'manifest.json')
+const mobileEntry = 'main.mobile.js'
 if (!existsSync(manifestPath)) fail(`missing ${manifestPath}`)
+if (!existsSync(join(addonDir, mobileEntry))) fail(`missing mobile runtime ${mobileEntry}`)
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 if (manifest.id !== 'elephant.code-execution') {
   fail('only the Code execution mobile package is currently supported')
@@ -45,6 +47,7 @@ if (manifest.id !== 'elephant.code-execution') {
 const mobileManifest = structuredClone(manifest)
 if (mobileManifest.permissions) delete mobileManifest.permissions.native
 delete mobileManifest.native
+mobileManifest.runtime.entry = mobileEntry
 mobileManifest.description = 'Runs JavaScript code blocks in an isolated Web Worker on Android and iOS.'
 mobileManifest.mobileRuntime = { kind: 'web-worker', platform }
 
@@ -55,7 +58,7 @@ rmSync(stagingDir, { recursive: true, force: true })
 mkdirSync(stagingDir, { recursive: true })
 mkdirSync(releaseDir, { recursive: true })
 writeFileSync(join(stagingDir, 'manifest.json'), `${JSON.stringify(mobileManifest, null, 2)}\n`)
-cpSync(join(addonDir, manifest.runtime.entry), join(stagingDir, manifest.runtime.entry))
+cpSync(join(addonDir, mobileEntry), join(stagingDir, mobileEntry))
 if (existsSync(join(addonDir, 'assets'))) {
   cpSync(join(addonDir, 'assets'), join(stagingDir, 'assets'), { recursive: true })
 }

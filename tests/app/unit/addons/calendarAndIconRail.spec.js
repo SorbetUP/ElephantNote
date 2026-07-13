@@ -14,6 +14,7 @@ import {
 
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const exists = (relativePath) => fs.existsSync(path.join(root, relativePath))
 
 describe('optional first-party physical addons and configurable icon rail', () => {
   it('normalizes persisted order as core controls, dividers and addon views change', () => {
@@ -48,12 +49,14 @@ describe('optional first-party physical addons and configurable icon rail', () =
     expect(organizer).toContain("'sidebar-toggle': PanelLeft")
   })
 
-  it('keeps Recently edited as the only optional bundled layout contribution', () => {
+  it('loads Recently edited only from its physical package', () => {
     const sidebar = read('Elephant/frontend/app/components/navigation/SidebarNav.vue')
-    const recentAddon = read('Elephant/frontend/src/renderer/src/addons/builtin/recentlyEdited.js')
+    const recentAddon = read('addons/official/recently-edited/main.js')
     expect(sidebar).toContain("addonsStore.getContributions('layout.zones')")
     expect(sidebar).toContain("entry?.contribution?.zone === 'sidebar.after-tree'")
     expect(recentAddon).toContain("zone: 'sidebar.after-tree'")
+    expect(exists('Elephant/frontend/src/renderer/src/addons/builtin/recentlyEdited.js')).toBe(false)
+    expect(exists('Elephant/frontend/app/components/navigation/RecentlyEditedSidebarSection.vue')).toBe(false)
   })
 
   it('loads Calendar, Sync and Sites only from physical package entries', () => {
@@ -98,13 +101,13 @@ describe('optional first-party physical addons and configurable icon rail', () =
     expect(openModels).toContain("registerContribution('ai.providers'")
   })
 
-  it('keeps every migrated feature out of the builtin lazy loader', () => {
+  it('has no builtin addon lazy loader and bootstraps Addon Packs plus Excalidraw as core features', () => {
     const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
-    const runtime = read('Elephant/frontend/src/renderer/src/addons/index.js')
-    for (const module of ['ai', 'aiChat', 'aiSearch', 'aiOcr', 'wiki', 'graph', 'openModels', 'codexConnection', 'sync', 'calendar', 'sites', 'codeExecution']) {
-      expect(builtins).not.toContain(`import('./${module}')`)
-    }
-    expect(builtins).toContain("load: () => import('./excalidraw')")
-    expect(runtime).toContain("REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs', 'elephant.excalidraw'])")
+    const main = read('Elephant/frontend/src/renderer/src/main.js')
+    expect(builtins).toContain('builtinAddons = Object.freeze([])')
+    expect(builtins).not.toContain('import(')
+    expect(main).toContain('addonPacksCoreFeature')
+    expect(main).toContain('excalidrawCoreFeature')
+    expect(main).toContain('activateCoreFeature')
   })
 })

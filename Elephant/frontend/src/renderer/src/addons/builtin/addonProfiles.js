@@ -15,19 +15,19 @@ const PACK_VERSION = 1
 const MAX_PACK_ADDONS = 200
 
 const DEVELOP_PARITY_ADDONS = Object.freeze([
+  { id: 'elephant.ai', version: '2.1.0', source: 'official', enabled: true },
+  { id: 'elephant.ai-chat', version: '1.1.0', source: 'official', enabled: true },
+  { id: 'elephant.ai-search', version: '1.1.0', source: 'official', enabled: true },
+  { id: 'elephant.ai-ocr', version: '1.0.0', source: 'official', enabled: true },
+  { id: 'elephant.wiki', version: '1.1.0', source: 'official', enabled: true },
+  { id: 'elephant.graph', version: '1.1.0', source: 'official', enabled: true },
+  { id: 'elephant.open-models', version: '1.2.0', source: 'official', enabled: true },
+  { id: 'elephant.codex-connection', version: '1.1.0', source: 'official', enabled: true },
+  { id: 'elephant.sync', version: '1.1.0', source: 'official', enabled: true },
+  { id: 'elephant.calendar', version: '1.2.0', source: 'official', enabled: true },
+  { id: 'elephant.sites', version: '1.1.0', source: 'official', enabled: true },
+  { id: 'elephant.code-execution', version: '2.1.0', source: 'official', enabled: true },
   { id: 'elephant.google-keep-import', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.codex-connection', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.calendar', version: '1.1.0', source: 'builtin', enabled: true },
-  { id: 'elephant.sites', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.ai', version: '2.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.ai-chat', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.ai-search', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.ai-ocr', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.wiki', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.graph', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.open-models', version: '1.1.0', source: 'builtin', enabled: true },
-  { id: 'elephant.sync', version: '1.0.0', source: 'builtin', enabled: true },
-  { id: 'elephant.code-execution', version: '2.0.0', source: 'builtin', enabled: true },
   { id: 'elephant.recently-edited', version: '1.0.0', source: 'builtin', enabled: true }
 ])
 
@@ -47,15 +47,13 @@ const normalizePackPath = (value = DEFAULT_PACK_PATH) => {
   if (!path.startsWith(`${PACK_DIRECTORY}/`) || path.includes('/../') || path.endsWith('/..')) {
     throw new Error(`Addon packs must be stored inside ${PACK_DIRECTORY}`)
   }
-  if (!path.toLowerCase().endsWith('.enaddonpack')) {
-    throw new Error('Addon pack paths must end with .enaddonpack')
-  }
+  if (!path.toLowerCase().endsWith('.enaddonpack')) throw new Error('Addon pack paths must end with .enaddonpack')
   return path
 }
 
 const normalizeSource = (value, fallback = 'builtin') => {
   const source = String(value || fallback).trim().toLowerCase()
-  if (!['builtin', 'catalog', 'installed'].includes(source)) {
+  if (!['builtin', 'official', 'catalog', 'installed'].includes(source)) {
     throw new Error(`Unsupported addon pack source: ${source}`)
   }
   return source
@@ -63,26 +61,12 @@ const normalizeSource = (value, fallback = 'builtin') => {
 
 const validatePack = (raw, sourcePath = DEFAULT_PACK_PATH) => {
   let pack
-  try {
-    pack = JSON.parse(raw)
-  } catch (error) {
-    throw new Error(`Invalid JSON in ${sourcePath}: ${error.message}`)
-  }
-  if (!pack || typeof pack !== 'object' || Array.isArray(pack)) {
-    throw new Error('Addon pack must be a JSON object')
-  }
-  if (pack.format !== PACK_FORMAT) {
-    throw new Error(`Unsupported addon pack format: ${pack.format || 'missing'}`)
-  }
-  if (pack.version !== PACK_VERSION) {
-    throw new Error(`Unsupported addon pack version: ${pack.version}`)
-  }
-  if (!Array.isArray(pack.addons)) {
-    throw new Error('Addon pack must contain an addons array')
-  }
-  if (pack.addons.length > MAX_PACK_ADDONS) {
-    throw new Error(`Addon pack contains more than ${MAX_PACK_ADDONS} addons`)
-  }
+  try { pack = JSON.parse(raw) } catch (error) { throw new Error(`Invalid JSON in ${sourcePath}: ${error.message}`) }
+  if (!pack || typeof pack !== 'object' || Array.isArray(pack)) throw new Error('Addon pack must be a JSON object')
+  if (pack.format !== PACK_FORMAT) throw new Error(`Unsupported addon pack format: ${pack.format || 'missing'}`)
+  if (pack.version !== PACK_VERSION) throw new Error(`Unsupported addon pack version: ${pack.version}`)
+  if (!Array.isArray(pack.addons)) throw new Error('Addon pack must contain an addons array')
+  if (pack.addons.length > MAX_PACK_ADDONS) throw new Error(`Addon pack contains more than ${MAX_PACK_ADDONS} addons`)
 
   const ids = new Set()
   const addons = pack.addons.map((entry, index) => {
@@ -91,9 +75,7 @@ const validatePack = (raw, sourcePath = DEFAULT_PACK_PATH) => {
     if (id === ADDON_ID) throw new Error('An addon pack cannot disable or replace the Addon Packs manager itself')
     if (ids.has(id)) throw new Error(`Addon pack contains duplicate id: ${id}`)
     ids.add(id)
-    if (typeof entry.enabled !== 'boolean') {
-      throw new Error(`Addon pack entry ${id} must define enabled as true or false`)
-    }
+    if (typeof entry.enabled !== 'boolean') throw new Error(`Addon pack entry ${id} must define enabled as true or false`)
     return {
       id,
       enabled: entry.enabled,
@@ -111,46 +93,42 @@ const validatePack = (raw, sourcePath = DEFAULT_PACK_PATH) => {
   }
 }
 
-const createDevelopParityPack = () => ({
+const createProtectedPack = (name, description, addons) => ({
   format: PACK_FORMAT,
   version: PACK_VERSION,
-  name: 'ElephantNote Develop parity',
-  description: 'Installs and enables every useful first-party addon to reproduce the complete develop application.',
+  name,
+  description,
   createdAt: new Date().toISOString(),
   protected: true,
-  addons: DEVELOP_PARITY_ADDONS.map((entry) => ({ ...entry }))
+  addons: addons.map((entry) => ({ ...entry }))
 })
 
-const createBasePack = () => ({
-  format: PACK_FORMAT,
-  version: PACK_VERSION,
-  name: 'ElephantNote Base',
-  description: 'Installs and enables the complete first-party ElephantNote setup without Calendar.',
-  createdAt: new Date().toISOString(),
-  protected: true,
-  addons: BASE_ADDONS.map((entry) => ({ ...entry }))
-})
+const createDevelopParityPack = () => createProtectedPack(
+  'Elephant Develop parity',
+  'Installs and enables every first-party physical addon to reproduce the complete develop application.',
+  DEVELOP_PARITY_ADDONS
+)
+const createBasePack = () => createProtectedPack(
+  'Elephant Base',
+  'Installs and enables the first-party Elephant setup without Calendar.',
+  BASE_ADDONS
+)
 
 const isAddonSetCurrent = (pack, expectedAddons) => {
   if (!pack || pack.addons.length !== expectedAddons.length) return false
   const entries = new Map(pack.addons.map((entry) => [entry.id, entry]))
   return expectedAddons.every((expected) => {
     const entry = entries.get(expected.id)
-    return entry && entry.source === expected.source && entry.version === expected.version && entry.enabled === true
+    return entry && entry.source === expected.source && entry.version === expected.version && entry.enabled === expected.enabled
   })
 }
 
-const isDevelopParityCurrent = (pack) => isAddonSetCurrent(pack, DEVELOP_PARITY_ADDONS)
-const isBasePackCurrent = (pack) => isAddonSetCurrent(pack, BASE_ADDONS) && !pack.addons.some((entry) => entry.id === 'elephant.calendar')
-
-const ensureProtectedPack = async ({ path, create, isCurrent }) => {
+const ensureProtectedPack = async ({ path, create, expected }) => {
   try {
     const existing = await readNote(path)
     const parsed = validatePack(existing.content, path)
-    if (isCurrent(parsed)) return { packPath: path, created: false, updated: false }
-  } catch {
-    // Missing, invalid or stale protected packs are regenerated below.
-  }
+    if (isAddonSetCurrent(parsed, expected)) return { packPath: path, created: false, updated: false }
+  } catch {}
   const pack = create()
   await writeNote(path, `${JSON.stringify(pack, null, 2)}\n`)
   return { packPath: path, created: true, updated: true, pack }
@@ -159,13 +137,12 @@ const ensureProtectedPack = async ({ path, create, isCurrent }) => {
 const ensureDevelopParityPack = () => ensureProtectedPack({
   path: DEVELOP_PARITY_PACK_PATH,
   create: createDevelopParityPack,
-  isCurrent: isDevelopParityCurrent
+  expected: DEVELOP_PARITY_ADDONS
 })
-
 const ensureBasePack = () => ensureProtectedPack({
   path: BASE_PACK_PATH,
   create: createBasePack,
-  isCurrent: isBasePackCurrent
+  expected: BASE_ADDONS
 })
 
 const createPack = async (ctx, options = {}) => {
@@ -175,12 +152,14 @@ const createPack = async (ctx, options = {}) => {
   const addons = ctx.addons.list()
     .filter((addon) => addon?.manifest?.id && addon.manifest.id !== ADDON_ID && !CORE_ADDON_IDS.has(addon.manifest.id))
     .map((addon) => {
-      const external = addon.manifest.source === 'external'
-      const catalogued = catalogueById.has(addon.manifest.id)
+      const manifest = addon.manifest
+      const isExternal = manifest.source === 'external'
+      const official = manifest.official === true || (isExternal && String(manifest.id).startsWith('elephant.') && catalogueById.has(manifest.id))
+      const catalogued = catalogueById.has(manifest.id)
       return {
-        id: addon.manifest.id,
-        version: addon.manifest.version || '',
-        source: external ? (catalogued ? 'catalog' : 'installed') : 'builtin',
+        id: manifest.id,
+        version: manifest.version || '',
+        source: official ? 'official' : isExternal ? (catalogued ? 'catalog' : 'installed') : 'builtin',
         enabled: addon.enabled === true
       }
     })
@@ -189,10 +168,10 @@ const createPack = async (ctx, options = {}) => {
   const pack = {
     format: PACK_FORMAT,
     version: PACK_VERSION,
-    name: typeof options?.name === 'string' && options.name.trim() ? options.name.trim() : 'Default ElephantNote pack',
+    name: typeof options?.name === 'string' && options.name.trim() ? options.name.trim() : 'Default Elephant pack',
     description: typeof options?.description === 'string'
       ? options.description.trim()
-      : 'A portable set of installed built-in and community addons with their enabled state.',
+      : 'A portable set of installed built-in, official and community addons with their enabled state.',
     createdAt: new Date().toISOString(),
     addons
   }
@@ -201,20 +180,20 @@ const createPack = async (ctx, options = {}) => {
 }
 
 const registerCatalogRecord = async (ctx, record) => {
-  const manager = ctx.addons
-  const external = manager.external
-  if (!external) throw new Error('The community addon runtime is not available')
-  const current = manager.get(record.manifest.id)
+  const external = ctx.addons.external
+  if (!external) throw new Error('The physical addon runtime is not available')
+  const current = ctx.addons.get(record.manifest.id)
   const rawManager = external.manager || ctx.addonHost?.get?.('addonManager')
   if (!rawManager) throw new Error('The addon manager is unavailable')
   if (current) {
-    if (current.enabled || current.status === 'error') await manager.disable(record.manifest.id).catch(() => {})
+    if (current.enabled || current.status === 'error') await ctx.addons.disable(record.manifest.id).catch(() => {})
     rawManager.unregister(record.manifest.id)
   }
   external.register(record)
 }
 
 const prepareTrustedAddon = async (ctx, snapshot) => {
+  if (snapshot?.manifest?.official === true) return
   if (!isTrustedAddonManifest(snapshot?.manifest)) return
   const external = ctx.addons.external
   if (!external) throw new Error('The full app access addon runtime is unavailable')
@@ -233,9 +212,9 @@ const applyPack = async (ctx, options = {}) => {
   const pack = validatePack(note.content, path)
   const catalogue = await invokeTauri('tauri_addons_catalog_list')
   const catalogueById = new Map((Array.isArray(catalogue) ? catalogue : []).map((addon) => [addon.id, addon]))
-  const requiresCommunity = pack.addons.some((entry) => entry.enabled && entry.source !== 'builtin')
+  const requiresCommunity = pack.addons.some((entry) => entry.enabled && ['catalog', 'installed'].includes(entry.source))
   if (requiresCommunity && !await readCommunityEnabled()) {
-    throw new Error('Turn on Community Addons in Settings before applying a pack that enables third-party addons')
+    throw new Error('Turn on Community Addons before applying a pack that enables third-party addons')
   }
 
   const results = []
@@ -247,9 +226,12 @@ const applyPack = async (ctx, options = {}) => {
     if (entry.source === 'builtin' && !snapshot) {
       snapshot = await ctx.addons.installBuiltin(entry.id)
       installed = true
-    } else if (entry.source === 'catalog') {
+    } else if (entry.source === 'official' || entry.source === 'catalog') {
       const catalogueAddon = catalogueById.get(entry.id)
       if (!catalogueAddon) throw new Error(`Addon pack references an addon outside the official catalogue: ${entry.id}`)
+      if (entry.source === 'official' && !String(entry.id).startsWith('elephant.')) {
+        throw new Error(`Non-first-party addon cannot use the official source: ${entry.id}`)
+      }
       if (!snapshot || snapshot.manifest.version !== catalogueAddon.version) {
         const record = await invokeTauri('tauri_addons_catalog_install', { addonId: entry.id })
         updated = Boolean(snapshot)
@@ -266,9 +248,8 @@ const applyPack = async (ctx, options = {}) => {
     if (entry.enabled && !snapshot.enabled) {
       await prepareTrustedAddon(ctx, snapshot)
       if (external) await setExternalEnabled(entry.id, true)
-      try {
-        await ctx.addons.enable(entry.id)
-      } catch (error) {
+      try { await ctx.addons.enable(entry.id) }
+      catch (error) {
         if (external) await setExternalEnabled(entry.id, false).catch(() => {})
         throw error
       }
@@ -320,9 +301,9 @@ export const addonPacksAddon = {
   manifest: {
     id: ADDON_ID,
     name: 'Addon Packs',
-    version: '1.4.0',
-    description: 'Creates, lists and applies portable addon packs that configure built-in and community addons together.',
-    author: 'ElephantNote',
+    version: '2.0.0',
+    description: 'Creates, lists and applies portable packs combining core, official physical and community addons.',
+    author: 'Elephant',
     icon: 'layers-3',
     defaultEnabled: true,
     removable: false,
@@ -334,25 +315,19 @@ export const addonPacksAddon = {
     ctx.addAction({
       id: `${ADDON_ID}.ensure-develop-parity`,
       title: 'Create first-party addon packs',
-      description: 'Ensure the complete and no-calendar first-party configurations are available as addon packs.',
+      description: 'Ensure complete and no-calendar first-party physical configurations are available.',
       async run() {
         const result = await ensureDevelopParityPack()
         const base = await ensureBasePack()
-        const combined = {
-          ...result,
-          basePackPath: base.packPath,
-          baseCreated: base.created,
-          baseUpdated: base.updated
-        }
+        const combined = { ...result, basePackPath: base.packPath, baseCreated: base.created, baseUpdated: base.updated }
         logAction(ctx, 'addon-pack-first-party', combined)
         return combined
       }
     })
-
     ctx.addAction({
       id: `${ADDON_ID}.create`,
       title: 'Create addon pack from current setup',
-      description: `Capture the installed addons and their enabled state inside ${PACK_DIRECTORY}.`,
+      description: `Capture the installed addons and enabled state inside ${PACK_DIRECTORY}.`,
       async run(options = {}) {
         const path = normalizePackPath(options?.path)
         logAction(ctx, 'addon-pack-create:start', { path })
@@ -361,7 +336,6 @@ export const addonPacksAddon = {
         return result
       }
     })
-
     ctx.addAction({
       id: `${ADDON_ID}.apply`,
       title: 'Apply addon pack',
@@ -374,7 +348,6 @@ export const addonPacksAddon = {
         return result
       }
     })
-
     ctx.addSettingsSection?.({
       id: `${ADDON_ID}.settings`,
       section: 'addons',
@@ -388,5 +361,4 @@ export const addonPacksAddon = {
   }
 }
 
-// Compatibility export for code and tests that still import the previous symbol.
 export const addonProfilesAddon = addonPacksAddon

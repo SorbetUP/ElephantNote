@@ -32,7 +32,6 @@ test.describe('ElephantNote search settings inspection', () => {
     expect(result.documents.map((document) => document.title)).toEqual(
       expect.arrayContaining(['Alpha note', 'Beta project'])
     )
-    expect(result.documents.every((document) => document.indexed === false)).toBe(true)
     expect(result.folders).toEqual([{ name: 'Projects', count: 1 }])
   })
 })

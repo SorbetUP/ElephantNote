@@ -17,7 +17,7 @@ pub mod syntax;
 pub mod view;
 
 pub use edit::{Command, EditError, Operation, Transaction, Utf16Range};
-pub use features::{TableCommand, TableNavigationCommand};
+pub use features::{ListCommand, TableCommand, TableNavigationCommand};
 pub use history::History;
 pub use model::{DetachedSubtree, Document, Node, NodeId, NodeKind, SourceRange};
 pub use parser::parse_markdown;

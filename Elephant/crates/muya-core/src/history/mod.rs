@@ -2,6 +2,12 @@ use crate::edit::{EditError, Transaction};
 use crate::model::Document;
 use crate::selection::Selection;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HistoryStep {
+  pub selection: Selection,
+  pub transaction: Transaction,
+}
+
 #[derive(Clone, Debug)]
 pub struct History {
   undo: Vec<Transaction>,
@@ -71,6 +77,13 @@ impl History {
     &mut self,
     document: &mut Document,
   ) -> Result<Option<Selection>, EditError> {
+    Ok(self.cancel_group_step(document)?.map(|step| step.selection))
+  }
+
+  pub fn cancel_group_step(
+    &mut self,
+    document: &mut Document,
+  ) -> Result<Option<HistoryStep>, EditError> {
     if !self.group_active {
       return Ok(None);
     }
@@ -79,8 +92,12 @@ impl History {
       return Ok(None);
     };
     let selection = inverse.selection_after;
+    let applied = inverse.clone();
     inverse.apply(document)?;
-    Ok(Some(selection))
+    Ok(Some(HistoryStep {
+      selection,
+      transaction: applied,
+    }))
   }
 
   pub fn apply(
@@ -97,26 +114,48 @@ impl History {
   }
 
   pub fn undo(&mut self, document: &mut Document) -> Result<Option<Selection>, EditError> {
+    Ok(self.undo_step(document)?.map(|step| step.selection))
+  }
+
+  pub fn undo_step(
+    &mut self,
+    document: &mut Document,
+  ) -> Result<Option<HistoryStep>, EditError> {
     self.commit_group();
     let Some(transaction) = self.undo.pop() else {
       return Ok(None);
     };
-    let redo = transaction.apply(document)?;
     let selection = transaction.selection_after;
+    let applied = transaction.clone();
+    let redo = transaction.apply(document)?;
     self.redo.push(redo);
-    Ok(Some(selection))
+    Ok(Some(HistoryStep {
+      selection,
+      transaction: applied,
+    }))
   }
 
   pub fn redo(&mut self, document: &mut Document) -> Result<Option<Selection>, EditError> {
+    Ok(self.redo_step(document)?.map(|step| step.selection))
+  }
+
+  pub fn redo_step(
+    &mut self,
+    document: &mut Document,
+  ) -> Result<Option<HistoryStep>, EditError> {
     self.commit_group();
     let Some(transaction) = self.redo.pop() else {
       return Ok(None);
     };
-    let undo = transaction.apply(document)?;
     let selection = transaction.selection_after;
+    let applied = transaction.clone();
+    let undo = transaction.apply(document)?;
     self.undo.push(undo);
     self.trim_undo();
-    Ok(Some(selection))
+    Ok(Some(HistoryStep {
+      selection,
+      transaction: applied,
+    }))
   }
 
   pub fn can_undo(&self) -> bool {
@@ -182,6 +221,21 @@ mod tests {
 
     history.redo(&mut document).unwrap();
     assert_text(&document, node, "xX");
+  }
+
+  #[test]
+  fn undo_steps_expose_the_applied_transaction() {
+    let (mut document, node, selection) = initial_document();
+    let transaction = Command::InsertText("X".to_string())
+      .build(&document, selection)
+      .unwrap();
+    let mut history = History::default();
+    history.apply(&mut document, &transaction).unwrap();
+
+    let step = history.undo_step(&mut document).unwrap().unwrap();
+    assert_eq!(step.selection, selection);
+    assert_eq!(step.transaction.selection_after, selection);
+    assert_text(&document, node, "x");
   }
 
   #[test]

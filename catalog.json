@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-13T02:10:00Z",
+  "updatedAt": "2026-07-13T02:55:00Z",
   "addons": [
     {
       "id": "elephant.ai",
@@ -134,6 +134,28 @@
       "official": true,
       "manifestPath": "addons/code-execution/manifest.json",
       "entryPath": "addons/code-execution/main.js"
+    },
+    {
+      "id": "elephant.google-keep-import",
+      "slug": "google-keep-import",
+      "name": "Google Keep Import",
+      "version": "1.1.0",
+      "description": "Imports Google Keep archives, web pages and RSS feeds.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "addons/google-keep-import/manifest.json",
+      "entryPath": "addons/google-keep-import/main.js"
+    },
+    {
+      "id": "elephant.recently-edited",
+      "slug": "recently-edited",
+      "name": "Recently edited",
+      "version": "1.1.0",
+      "description": "Adds a recently edited notes section to the sidebar.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "addons/recently-edited/manifest.json",
+      "entryPath": "addons/recently-edited/main.js"
     },
     {
       "id": "com.elephantnote.elephant-tasks",

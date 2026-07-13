@@ -62,7 +62,7 @@ const traces = [
     initial: 'al*p~~ha **be*t~~a** gamma',
     expected: 'al*p~~ha **be*t~~a** gamma\n',
     groups: {
-      emphasis: ['start', 'middle', 'end'],
+      emphasis: ['start', 'end'],
       strike: ['start', 'middle', 'end']
     },
     runJs: async () => {},

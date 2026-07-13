@@ -2,6 +2,7 @@ import { isTrustedAddonManifest } from '../manifest'
 import AddonPacksSettings from './ui/AddonPacksSettings.vue'
 import { mountSettingsComponent } from './settingsComponentHost'
 import { invokeTauri, logAction, readNote, writeNote } from './shared'
+import './ui/addonPacksFeedback.css'
 
 const CORE_FEATURE_ID = 'core.addon-packs'
 const LEGACY_ADDON_ID = 'elephant.addon-packs'
@@ -35,6 +36,11 @@ const DEVELOP_PARITY_ADDONS = Object.freeze([
 const BASE_ADDONS = Object.freeze(DEVELOP_PARITY_ADDONS
   .filter((entry) => entry.id !== 'elephant.calendar')
   .map((entry) => Object.freeze({ ...entry })))
+
+const readCommunityEnabled = async () => {
+  const value = await invokeTauri('tauri_prefs_get', { key: 'addons.communityEnabled' })
+  return value === true
+}
 
 const normalizePackPath = (value = DEFAULT_PACK_PATH) => {
   const path = String(value || DEFAULT_PACK_PATH).trim().replaceAll('\\', '/')
@@ -183,6 +189,13 @@ const setExternalEnabled = (id, enabled) => invokeTauri('tauri_addons_set_enable
 const applyPack = async (ctx, options = {}) => {
   const path = normalizePackPath(options.path)
   const pack = validateAddonPack((await readNote(path)).content, path)
+  const requiresCommunity = pack.addons.some((entry) => (
+    entry.enabled && ['catalog', 'installed'].includes(entry.source)
+  ))
+  if (requiresCommunity && !await readCommunityEnabled()) {
+    throw new Error('Turn on Community Addons before applying a pack that enables third-party addons')
+  }
+
   const catalogue = await catalogueMap()
   const results = []
 
@@ -295,3 +308,5 @@ export const addonPacksCoreFeature = Object.freeze({
     })
   }
 })
+
+export const addonProfilesCoreFeature = addonPacksCoreFeature

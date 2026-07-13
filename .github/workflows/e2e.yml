@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          node node_modules/electron/install.js
+          pnpm rebuild electron
           test -s node_modules/electron/path.txt
 
       - name: Run postinstall

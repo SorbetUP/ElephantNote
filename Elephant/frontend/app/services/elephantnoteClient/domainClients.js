@@ -127,7 +127,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     propose: () => call(API.WIKI_PROPOSE),
     accept: (id) => call(API.WIKI_ACCEPT, { id }),
     dismiss: (id) => call(API.WIKI_DISMISS, { id }),
-    sourceInfo: (path, limit = 12) => call(API.WIKI_SOURCE_INFO, { path, limit }),
+    sourceInfo: (path) => call(API.WIKI_SOURCE_INFO, { path }),
     context: (path, limit = 12) => call(API.WIKI_CONTEXT, { path, limit })
   },
   search: {

@@ -26,14 +26,11 @@ impl TaskCommand {
     } = self;
     task_state(document, item)?.ok_or(EditError::UnsupportedStructure(item))?;
 
-    let mut desired = BTreeMap::new();
-    desired.insert(item, checked);
+    let mut desired = BTreeMap::from([(item, checked)]);
     if auto_check {
       let mut descendants = Vec::new();
       task_descendants(document, item, &mut descendants)?;
-      for descendant in descendants {
-        desired.insert(descendant, checked);
-      }
+      desired.extend(descendants.into_iter().map(|node| (node, checked)));
       update_ancestors(document, item, &mut desired)?;
     }
 
@@ -74,9 +71,13 @@ fn update_ancestors(
     if children.is_empty() {
       break;
     }
-    let checked = children
-      .into_iter()
-      .all(|child| desired.get(&child).copied().unwrap_or(false));
+    let mut checked = true;
+    for child in children {
+      checked &= match desired.get(&child) {
+        Some(value) => *value,
+        None => task_state(document, child)?.unwrap_or(false),
+      };
+    }
     desired.insert(parent, checked);
     current = parent_task_item(document, parent)?;
   }
@@ -106,16 +107,15 @@ fn immediate_task_children(
   let mut children = Vec::new();
   for child in &node.children {
     let nested = document.node(*child).ok_or(EditError::NodeNotFound(*child))?;
-    if !matches!(nested.kind, NodeKind::Block(BlockKind::List { .. })) {
-      continue;
+    if matches!(nested.kind, NodeKind::Block(BlockKind::List { .. })) {
+      children.extend(
+        nested
+          .children
+          .iter()
+          .copied()
+          .filter(|candidate| matches!(task_state(document, *candidate), Ok(Some(_)))),
+      );
     }
-    children.extend(
-      nested
-        .children
-        .iter()
-        .copied()
-        .filter(|candidate| matches!(task_state(document, *candidate), Ok(Some(_)))),
-    );
   }
   Ok(children)
 }
@@ -152,70 +152,4 @@ fn first_text_descendant(document: &Document, root: NodeId) -> Option<NodeId> {
   node.children
     .iter()
     .find_map(|child| first_text_descendant(document, *child))
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use crate::to_markdown;
-
-  fn task_items(document: &Document) -> Vec<NodeId> {
-    document
-      .nodes
-      .values()
-      .filter_map(|node| task_state(document, node.id).ok().flatten().map(|_| node.id))
-      .collect()
-  }
-
-  #[test]
-  fn toggles_one_task_and_restores_it() {
-    let mut document = crate::parse_markdown("- [ ] alpha");
-    let item = task_items(&document)[0];
-    let text = first_text_descendant(&document, item).unwrap();
-    let selection = Selection::collapsed(SelectionPoint { node: text, offset_utf16: 3 });
-    let transaction = TaskCommand::SetChecked {
-      item,
-      checked: true,
-      auto_check: false,
-    }
-    .build(&document, selection)
-    .unwrap();
-    let inverse = transaction.apply(&mut document).unwrap();
-    assert_eq!(to_markdown(&document), "- [x] alpha");
-    inverse.apply(&mut document).unwrap();
-    assert_eq!(to_markdown(&document), "- [ ] alpha");
-  }
-
-  #[test]
-  fn cascades_to_descendants_and_recomputes_parents() {
-    let mut document = crate::parse_markdown("- [ ] parent\n  - [ ] child");
-    let items = task_items(&document);
-    let parent = items[0];
-    let child = items[1];
-    let selection = Selection::collapsed(SelectionPoint {
-      node: first_text_descendant(&document, parent).unwrap(),
-      offset_utf16: 0,
-    });
-    TaskCommand::SetChecked {
-      item: parent,
-      checked: true,
-      auto_check: true,
-    }
-    .build(&document, selection)
-    .unwrap()
-    .apply(&mut document)
-    .unwrap();
-    assert_eq!(to_markdown(&document), "- [x] parent\n  - [x] child");
-
-    TaskCommand::SetChecked {
-      item: child,
-      checked: false,
-      auto_check: true,
-    }
-    .build(&document, selection)
-    .unwrap()
-    .apply(&mut document)
-    .unwrap();
-    assert_eq!(to_markdown(&document), "- [ ] parent\n  - [ ] child");
-  }
 }

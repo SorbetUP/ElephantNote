@@ -1,13 +1,48 @@
 {
   "id": "elephant.sites",
   "name": "Sites",
-  "version": "1.1.0",
-  "description": "Builds, previews and stops static sites as a separately installed package.",
+  "version": "1.2.0",
+  "description": "Builds, previews and stops static sites through a package-owned native server.",
   "author": "Elephant",
+  "icon": "globe",
   "apiVersion": 1,
   "minAppVersion": "0.18.9",
-  "runtime": { "type": "javascript-worker", "entry": "main.js" },
-  "permissions": { "storage": true, "commands": true, "views": true },
-  "contributes": { "runtimeMode": "trusted" },
+  "runtime": {
+    "type": "javascript-worker",
+    "entry": "main.js",
+    "mode": "trusted"
+  },
+  "permissions": {
+    "storage": true,
+    "commands": true,
+    "views": true,
+    "native": true,
+    "notes": {
+      "read": ["*"],
+      "write": ["*"]
+    },
+    "network": {
+      "hosts": []
+    }
+  },
+  "native": {
+    "protocol": "elephant-addon-sidecar-v1",
+    "timeoutMs": 15000,
+    "maxOutputBytes": 1048576,
+    "platforms": {
+      "macos-arm64": "native/macos-arm64/elephant-sites",
+      "macos-x64": "native/macos-x64/elephant-sites",
+      "linux-x64": "native/linux-x64/elephant-sites",
+      "linux-arm64": "native/linux-arm64/elephant-sites",
+      "windows-x64": "native/windows-x64/elephant-sites.exe"
+    }
+  },
+  "contributes": {
+    "runtimeMode": "trusted",
+    "settings": true,
+    "layout": true,
+    "views": true,
+    "native": true
+  },
   "activationEvents": ["onStartup"]
 }

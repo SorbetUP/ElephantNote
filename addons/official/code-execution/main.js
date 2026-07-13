@@ -1,6 +1,8 @@
 const ADDON_ID = 'elephant.code-execution'
 const RUN_BUTTON_CLASS = 'elephant-physical-code-run'
+const COPY_BUTTON_CLASS = 'elephant-physical-code-copy'
 const OUTPUT_CLASS = 'elephant-physical-code-output'
+const CONFIG_KEY = 'config'
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -9,14 +11,60 @@ const node = (documentRef, tag, className = '', text = '') => {
   return element
 }
 
-const languageAliases = {
+const DEFAULT_INTERPRETERS = Object.freeze({
+  python: { id: 'python', label: 'Python', executable: 'python3', args: ['-'] },
+  javascript: { id: 'javascript', label: 'JavaScript', executable: 'node', args: ['-'] },
+  shell: { id: 'shell', label: 'Shell', executable: 'bash', args: ['-s'] },
+  ruby: { id: 'ruby', label: 'Ruby', executable: 'ruby', args: ['-'] },
+  php: { id: 'php', label: 'PHP', executable: 'php', args: [] },
+  perl: { id: 'perl', label: 'Perl', executable: 'perl', args: ['-'] },
+  lua: { id: 'lua', label: 'Lua', executable: 'lua', args: ['-'] }
+})
+
+const languageAliases = Object.freeze({
   js: 'javascript',
+  jsx: 'javascript',
   node: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
   py: 'python',
   sh: 'shell',
   bash: 'shell',
   zsh: 'shell',
-  rs: 'rust'
+  rb: 'ruby',
+  pl: 'perl'
+})
+
+const clone = (value) => JSON.parse(JSON.stringify(value))
+
+const defaultConfig = () => ({
+  retainOutput: true,
+  defaultInterpreter: 'python',
+  outputLineLimit: 200,
+  interpreters: clone(DEFAULT_INTERPRETERS)
+})
+
+const normalizeInterpreter = (id, value = {}) => ({
+  id: String(value.id || id).trim(),
+  label: String(value.label || value.id || id).trim(),
+  executable: String(value.executable || '').trim(),
+  args: Array.isArray(value.args) ? value.args.map((entry) => String(entry)) : []
+})
+
+const normalizeConfig = (value = {}) => {
+  const defaults = defaultConfig()
+  const source = value && typeof value === 'object' ? value : {}
+  const interpreters = { ...defaults.interpreters }
+  for (const [id, interpreter] of Object.entries(source.interpreters || {})) {
+    const normalized = normalizeInterpreter(id, interpreter)
+    if (normalized.id) interpreters[normalized.id] = normalized
+  }
+  return {
+    retainOutput: source.retainOutput !== false,
+    defaultInterpreter: String(source.defaultInterpreter || defaults.defaultInterpreter),
+    outputLineLimit: Math.max(1, Math.min(20000, Number(source.outputLineLimit) || defaults.outputLineLimit)),
+    interpreters
+  }
 }
 
 export default class ElephantCodeExecutionAddon {
@@ -24,45 +72,83 @@ export default class ElephantCodeExecutionAddon {
     this.api = api
     this.window = api.experimental.window
     this.observer = null
-    this.executionEnabled = false
+    this.config = defaultConfig()
   }
 
-  programs() {
-    const programs = this.window?.elephantnote?.programs
-    if (!programs?.list || !programs?.set || !programs?.run) throw new Error('Program execution API is unavailable')
-    return programs
+  async loadConfig() {
+    this.config = normalizeConfig(await this.api.storage.get(CONFIG_KEY))
+    return this.config
+  }
+
+  async saveConfig() {
+    this.config = normalizeConfig(this.config)
+    await this.api.storage.set(CONFIG_KEY, this.config)
+    return this.config
   }
 
   getLanguage(block) {
     const direct = block.dataset?.language || block.dataset?.lang || block.getAttribute?.('data-code-language') || ''
     const className = block.querySelector?.('code')?.className || block.className || ''
     const match = String(className).match(/(?:language-|lang-)([\w.+-]+)/i)
-    const raw = String(direct || match?.[1] || 'text').toLowerCase()
+    const raw = String(direct || match?.[1] || this.config.defaultInterpreter || 'text').toLowerCase()
     return languageAliases[raw] || raw
   }
 
   getCode(block) {
     const code = block.querySelector?.('code')
     return String(code?.textContent ?? block.textContent ?? '')
-      .replace(/^(Run|Stop|Copy)\s*/i, '')
+      .replace(/^(Run|Running…|Copy)\s*/i, '')
       .trimEnd()
+  }
+
+  resolveInterpreter(language) {
+    return this.config.interpreters[language] || this.config.interpreters[this.config.defaultInterpreter] || null
+  }
+
+  async copyBlock(block, button) {
+    const code = this.getCode(block)
+    if (!code) return
+    await this.window.navigator.clipboard.writeText(code)
+    const previous = button.textContent
+    button.textContent = 'Copied'
+    this.window.setTimeout(() => { button.textContent = previous }, 900)
   }
 
   async runBlock(block, button, output) {
     const language = this.getLanguage(block)
+    const interpreter = this.resolveInterpreter(language)
     const code = this.getCode(block)
     if (!code) return
+    if (!interpreter?.executable) {
+      output.hidden = false
+      output.textContent = `No interpreter is configured for ${language}.`
+      output.dataset.exitCode = 'configuration-error'
+      return
+    }
+
     button.disabled = true
-    button.textContent = 'Stop'
+    button.textContent = 'Running…'
     output.hidden = false
-    output.textContent = 'Running…'
+    output.textContent = `Running ${interpreter.label || interpreter.id}…`
     try {
-      const result = await this.programs().run(language, code, '')
+      const result = await this.api.native.call('execute', {
+        executable: interpreter.executable,
+        args: interpreter.args,
+        code,
+        cwd: '',
+        outputLineLimit: this.config.outputLineLimit
+      })
       const stdout = String(result?.stdout || '')
       const stderr = String(result?.stderr || '')
-      const text = [stdout, stderr].filter(Boolean).join(stderr && stdout ? '\n' : '') || `Exited with code ${result?.code ?? 0}`
+      const text = [stdout, stderr].filter(Boolean).join(stdout && stderr ? '\n' : '') || `Exited with code ${result?.code ?? 0}`
       output.textContent = text
       output.dataset.exitCode = String(result?.code ?? 0)
+      if (!this.config.retainOutput) {
+        this.window.setTimeout(() => {
+          output.hidden = true
+          output.textContent = ''
+        }, 2500)
+      }
     } catch (error) {
       output.textContent = error instanceof Error ? error.message : String(error)
       output.dataset.exitCode = 'error'
@@ -73,23 +159,35 @@ export default class ElephantCodeExecutionAddon {
   }
 
   decorateBlock(block) {
-    if (!(block instanceof HTMLElement)) return
-    if (block.querySelector(`:scope > .${RUN_BUTTON_CLASS}`)) return
+    if (!(block instanceof this.window.HTMLElement)) return
+    if (block.querySelector(`:scope > .elephant-physical-code-toolbar`)) return
     const code = block.querySelector('code')
     if (!code && !block.matches('[data-function-type="fencecode"], .ag-code-block, pre')) return
+
     const documentRef = block.ownerDocument
     block.classList.add('elephant-physical-code-block')
     const toolbar = node(documentRef, 'div', 'elephant-physical-code-toolbar')
-    const language = node(documentRef, 'span', '', this.getLanguage(block))
+    const language = node(documentRef, 'span', 'elephant-physical-code-language', this.getLanguage(block))
+    const actions = node(documentRef, 'div', 'elephant-physical-code-actions')
+    const copy = node(documentRef, 'button', COPY_BUTTON_CLASS, 'Copy')
+    copy.type = 'button'
     const run = node(documentRef, 'button', RUN_BUTTON_CLASS, 'Run')
     run.type = 'button'
     const output = node(documentRef, 'pre', OUTPUT_CLASS)
     output.hidden = true
+
+    copy.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      void this.copyBlock(block, copy)
+    })
     run.addEventListener('click', (event) => {
-      event.preventDefault(); event.stopPropagation()
+      event.preventDefault()
+      event.stopPropagation()
       void this.runBlock(block, run, output)
     })
-    toolbar.append(language, run)
+    actions.append(copy, run)
+    toolbar.append(language, actions)
     block.prepend(toolbar)
     block.append(output)
   }
@@ -107,7 +205,7 @@ export default class ElephantCodeExecutionAddon {
 
   installEditorRuntime() {
     this.scan()
-    this.observer = new MutationObserver((mutations) => {
+    this.observer = new this.window.MutationObserver((mutations) => {
       for (const mutation of mutations) {
         for (const added of mutation.addedNodes || []) {
           if (added?.nodeType !== 1) continue
@@ -119,88 +217,133 @@ export default class ElephantCodeExecutionAddon {
     this.observer.observe(this.window.document.body, { childList: true, subtree: true })
   }
 
-  async setExecutionEnabled(enabled) {
-    const programs = this.programs()
-    const state = await programs.list()
-    const environments = Object.fromEntries((state.environments || []).map((environment) => [environment.id, {
-      enabled: environment.enabled !== false,
-      executable: environment.configuredExecutable || ''
-    }]))
-    await programs.set({
-      environments: {
-        executionEnabled: enabled === true,
-        outputLineLimit: state.outputLineLimit || 200,
-        environments,
-        customEnvironments: state.customEnvironments || []
-      }
-    })
-    this.executionEnabled = enabled === true
-  }
-
   async renderSettings(container) {
     const documentRef = container.ownerDocument
     const root = node(documentRef, 'section', 'elephant-code-settings')
     container.replaceChildren(root)
-    const state = await this.programs().list()
-    let retainOutput = state.retainOutput !== false
-    let selectedInterpreter = state.defaultEnvironment || state.environments?.find((item) => item.enabled !== false)?.id || 'python'
+    await this.loadConfig()
+
+    const feedback = node(documentRef, 'p', 'elephant-code-feedback')
+    const save = async () => {
+      await this.saveConfig()
+      feedback.textContent = 'Saved.'
+      this.window.setTimeout(() => { feedback.textContent = '' }, 1200)
+    }
 
     const retainRow = node(documentRef, 'label', 'elephant-code-setting-row')
     const retainCopy = node(documentRef, 'div')
     retainCopy.append(node(documentRef, 'strong', '', 'Retain output'), node(documentRef, 'span', '', 'Keep the last result visible inside the note.'))
     const retain = node(documentRef, 'input')
-    retain.type = 'checkbox'; retain.checked = retainOutput
+    retain.type = 'checkbox'
+    retain.checked = this.config.retainOutput
+    retain.onchange = () => { this.config.retainOutput = retain.checked; void save() }
     retainRow.append(retainCopy, retain)
 
-    const interpreterRow = node(documentRef, 'label', 'elephant-code-setting-row')
-    const interpreterCopy = node(documentRef, 'div')
-    interpreterCopy.append(node(documentRef, 'strong', '', 'Interpreter'), node(documentRef, 'span', '', 'Default environment for executable code blocks.'))
+    const defaultRow = node(documentRef, 'label', 'elephant-code-setting-row')
+    const defaultCopy = node(documentRef, 'div')
+    defaultCopy.append(node(documentRef, 'strong', '', 'Interpreter'), node(documentRef, 'span', '', 'Fallback interpreter when a code language has no exact match.'))
     const select = node(documentRef, 'select')
-    for (const environment of [...(state.environments || []), ...(state.customEnvironments || [])]) {
-      const option = node(documentRef, 'option', '', environment.label || environment.id)
-      option.value = environment.id
-      option.selected = environment.id === selectedInterpreter
-      select.append(option)
+    const refreshSelect = () => {
+      select.replaceChildren()
+      for (const interpreter of Object.values(this.config.interpreters)) {
+        const option = node(documentRef, 'option', '', interpreter.label || interpreter.id)
+        option.value = interpreter.id
+        option.selected = interpreter.id === this.config.defaultInterpreter
+        select.append(option)
+      }
     }
-    interpreterRow.append(interpreterCopy, select)
+    refreshSelect()
+    select.onchange = () => { this.config.defaultInterpreter = select.value; void save() }
+    defaultRow.append(defaultCopy, select)
 
-    const feedback = node(documentRef, 'p', 'elephant-code-feedback')
-    const save = async () => {
-      retainOutput = retain.checked
-      selectedInterpreter = select.value
-      const environments = Object.fromEntries((state.environments || []).map((environment) => [environment.id, {
-        enabled: environment.enabled !== false,
-        executable: environment.configuredExecutable || ''
-      }]))
-      await this.programs().set({
-        environments: {
-          executionEnabled: true,
-          retainOutput,
-          defaultEnvironment: selectedInterpreter,
-          outputLineLimit: state.outputLineLimit || 200,
-          environments,
-          customEnvironments: state.customEnvironments || []
+    const interpreterList = node(documentRef, 'div', 'elephant-code-interpreter-list')
+    const renderInterpreters = () => {
+      interpreterList.replaceChildren()
+      for (const interpreter of Object.values(this.config.interpreters)) {
+        const row = node(documentRef, 'div', 'elephant-code-interpreter-row')
+        const id = node(documentRef, 'input')
+        id.value = interpreter.id
+        id.disabled = Object.prototype.hasOwnProperty.call(DEFAULT_INTERPRETERS, interpreter.id)
+        const label = node(documentRef, 'input')
+        label.value = interpreter.label
+        const executable = node(documentRef, 'input')
+        executable.value = interpreter.executable
+        executable.placeholder = 'Executable'
+        const args = node(documentRef, 'input')
+        args.value = interpreter.args.join(' ')
+        args.placeholder = 'Arguments before stdin code'
+        const status = node(documentRef, 'button', '', 'Test')
+        status.type = 'button'
+        status.onclick = async () => {
+          status.disabled = true
+          try {
+            const result = await this.api.native.call('status', { executable: executable.value.trim() })
+            feedback.textContent = result?.available ? `${label.value || interpreter.id}: available` : result?.error || 'Unavailable'
+          } catch (error) {
+            feedback.textContent = error instanceof Error ? error.message : String(error)
+          } finally {
+            status.disabled = false
+          }
         }
-      })
-      feedback.textContent = 'Saved.'
+        const remove = node(documentRef, 'button', 'danger', 'Remove')
+        remove.type = 'button'
+        remove.disabled = Object.prototype.hasOwnProperty.call(DEFAULT_INTERPRETERS, interpreter.id)
+        remove.onclick = () => {
+          delete this.config.interpreters[interpreter.id]
+          if (this.config.defaultInterpreter === interpreter.id) this.config.defaultInterpreter = 'python'
+          refreshSelect()
+          renderInterpreters()
+          void save()
+        }
+        const persist = () => {
+          interpreter.label = label.value.trim() || interpreter.id
+          interpreter.executable = executable.value.trim()
+          interpreter.args = args.value.trim() ? args.value.trim().split(/\s+/) : []
+          void save()
+        }
+        label.onchange = persist
+        executable.onchange = persist
+        args.onchange = persist
+        row.append(id, label, executable, args, status, remove)
+        interpreterList.append(row)
+      }
     }
-    retain.onchange = () => void save()
-    select.onchange = () => void save()
-    root.append(retainRow, interpreterRow, feedback)
+    renderInterpreters()
+
+    const add = node(documentRef, 'button', 'elephant-code-add', 'Add interpreter')
+    add.type = 'button'
+    add.onclick = () => {
+      let index = 1
+      while (this.config.interpreters[`custom-${index}`]) index += 1
+      const id = `custom-${index}`
+      this.config.interpreters[id] = { id, label: `Custom ${index}`, executable: '', args: ['-'] }
+      refreshSelect()
+      renderInterpreters()
+      void save()
+    }
+
+    root.append(retainRow, defaultRow, interpreterList, add, feedback)
     return () => root.remove()
   }
 
   async onload(api) {
+    await this.loadConfig()
     api.ui.registerStyle(`
       .elephant-physical-code-block { position:relative; }
       .elephant-physical-code-toolbar { min-height:32px; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 8px; border-bottom:1px solid var(--en-border); background:var(--en-soft); color:var(--en-muted); font-size:11px; }
-      .elephant-physical-code-toolbar button { min-width:54px; min-height:26px; border:0; border-radius:6px; background:transparent; color:var(--en-text); cursor:pointer; }
+      .elephant-physical-code-actions { display:flex; align-items:center; gap:4px; }
+      .elephant-physical-code-toolbar button { min-width:48px; min-height:26px; border:0; border-radius:6px; background:transparent; color:var(--en-text); cursor:pointer; }
+      .elephant-physical-code-toolbar button:disabled { opacity:.6; cursor:default; }
       .elephant-physical-code-output { margin:0; padding:10px; max-height:260px; overflow:auto; border-top:1px solid var(--en-border); background:var(--en-soft); color:var(--en-text); white-space:pre-wrap; }
-      .elephant-code-settings { display:grid; gap:2px; }
+      .elephant-code-settings { display:grid; gap:8px; }
       .elephant-code-setting-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 0; border-bottom:1px solid var(--en-border); }
       .elephant-code-setting-row > div { display:grid; gap:4px; }
       .elephant-code-setting-row span,.elephant-code-feedback { color:var(--en-muted); font-size:11px; }
-      .elephant-code-setting-row select { min-height:34px; padding:0 9px; border:1px solid var(--en-border); border-radius:8px; background:var(--en-surface); color:var(--en-text); }
+      .elephant-code-setting-row select,.elephant-code-interpreter-row input { min-height:34px; padding:0 9px; border:1px solid var(--en-border); border-radius:8px; background:var(--en-surface); color:var(--en-text); box-sizing:border-box; }
+      .elephant-code-interpreter-list { display:grid; gap:8px; }
+      .elephant-code-interpreter-row { display:grid; grid-template-columns:110px 1fr 1.3fr 1.2fr auto auto; gap:7px; align-items:center; }
+      .elephant-code-interpreter-row button,.elephant-code-add { min-height:34px; padding:0 10px; border:1px solid var(--en-border); border-radius:8px; background:var(--en-surface); color:var(--en-text); cursor:pointer; }
+      .elephant-code-interpreter-row button.danger { color:var(--en-danger,#b42318); }
     `, 'code-execution-package')
 
     api.settings.registerSection({
@@ -208,21 +351,21 @@ export default class ElephantCodeExecutionAddon {
       section: 'editor',
       chrome: false,
       title: 'Code execution',
-      description: 'Configure retained output and interpreters.',
+      description: 'Configure retained output and package-owned interpreters.',
       order: 55,
       render: (container) => this.renderSettings(container)
     })
 
     this.window.__ELEPHANT_CODE_EXECUTION_ENABLED__ = true
-    await this.setExecutionEnabled(true)
     this.installEditorRuntime()
   }
 
-  async onunload() {
+  onunload() {
     this.observer?.disconnect()
     this.observer = null
     delete this.window.__ELEPHANT_CODE_EXECUTION_ENABLED__
-    await this.setExecutionEnabled(false).catch(() => {})
-    for (const element of this.window.document.querySelectorAll(`.${RUN_BUTTON_CLASS}, .${OUTPUT_CLASS}, .elephant-physical-code-toolbar`)) element.remove()
+    for (const element of this.window.document.querySelectorAll(`.${RUN_BUTTON_CLASS}, .${COPY_BUTTON_CLASS}, .${OUTPUT_CLASS}, .elephant-physical-code-toolbar`)) {
+      element.remove()
+    }
   }
 }

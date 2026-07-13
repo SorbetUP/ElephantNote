@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-  collections::BTreeSet,
+  collections::{BTreeMap, BTreeSet},
   fs,
   io::{Read, Write},
   path::{Component, Path, PathBuf},
@@ -29,6 +29,13 @@ const BUNDLED_TRUSTED_LAB_ENTRY: &str = include_str!("../../../../examples/addon
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CatalogPackage {
+  pub path: String,
+  pub hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CatalogAddon {
   pub id: String,
   pub slug: String,
@@ -48,6 +55,8 @@ pub struct CatalogAddon {
   pub package_path: String,
   #[serde(default)]
   pub package_hash: String,
+  #[serde(default)]
+  pub packages: BTreeMap<String, CatalogPackage>,
   #[serde(default)]
   pub readme_path: String,
 }
@@ -75,6 +84,7 @@ fn bundled_trusted_lab_item() -> CatalogAddon {
     entry_path: "bundled/trusted-workspace-lab/main.js".to_string(),
     package_path: String::new(),
     package_hash: String::new(),
+    packages: BTreeMap::new(),
     readme_path: String::new(),
   }
 }
@@ -100,6 +110,34 @@ fn safe_catalog_path(value: &str) -> R<String> {
   Ok(parts.join("/"))
 }
 
+fn valid_platform_key(value: &str) -> bool {
+  let mut parts = value.split('-');
+  let os = parts.next().unwrap_or_default();
+  let arch = parts.next().unwrap_or_default();
+  parts.next().is_none()
+    && matches!(os, "macos" | "linux" | "windows" | "android" | "ios")
+    && matches!(arch, "aarch64" | "x86_64" | "armv7" | "i686")
+}
+
+fn platform_key() -> String {
+  let os = match std::env::consts::OS {
+    "macos" => "macos",
+    "windows" => "windows",
+    "linux" => "linux",
+    "android" => "android",
+    "ios" => "ios",
+    other => other,
+  };
+  let arch = match std::env::consts::ARCH {
+    "aarch64" => "aarch64",
+    "x86_64" => "x86_64",
+    "arm" => "armv7",
+    "x86" => "i686",
+    other => other,
+  };
+  format!("{os}-{arch}")
+}
+
 fn validate_catalog_item(item: &CatalogAddon) -> R<()> {
   if item.id.trim().is_empty() || item.slug.trim().is_empty() || item.name.trim().is_empty() || item.version.trim().is_empty() {
     return Err("Catalogue addons require id, slug, name and version".to_string());
@@ -115,7 +153,29 @@ fn validate_catalog_item(item: &CatalogAddon) -> R<()> {
   }
 
   let expected_prefix = format!("addons/{}/", item.slug);
-  if !item.package_path.trim().is_empty() {
+  if !item.packages.is_empty() {
+    if !item.package_path.trim().is_empty() || !item.package_hash.trim().is_empty() {
+      return Err(format!("Catalogue addon {} cannot mix packages with legacy packagePath/packageHash", item.id));
+    }
+    for (platform, package) in &item.packages {
+      if !valid_platform_key(platform) {
+        return Err(format!("Invalid addon package platform key for {}: {}", item.id, platform));
+      }
+      let package_path = safe_catalog_path(&package.path)?;
+      if !package_path.starts_with(&expected_prefix) || !package_path.ends_with(".enaddon") {
+        return Err(format!(
+          "Catalogue package for {} on {} must be an .enaddon file under {}",
+          item.id, platform, expected_prefix
+        ));
+      }
+      if package.hash.len() != 64 || !package.hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(format!(
+          "Catalogue package for {} on {} requires a 64-character blake3 hash",
+          item.id, platform
+        ));
+      }
+    }
+  } else if !item.package_path.trim().is_empty() {
     let package_path = safe_catalog_path(&item.package_path)?;
     if !package_path.starts_with(&expected_prefix) || !package_path.ends_with(".enaddon") {
       return Err(format!("Catalogue package for {} must be an .enaddon file under {}", item.id, expected_prefix));
@@ -222,7 +282,7 @@ fn write_temporary_package(item: &CatalogAddon, manifest_bytes: &[u8], entry_byt
   let (manifest, requests_native) = parse_source_manifest(item, manifest_bytes)?;
   if requests_native {
     return Err(format!(
-      "Native addon {} requires a complete hashed .enaddon packagePath; source-only catalogue entries cannot contain sidecars",
+      "Native addon {} requires a complete hashed .enaddon package for the current platform; source-only catalogue entries cannot contain sidecars",
       item.id
     ));
   }
@@ -247,10 +307,10 @@ fn write_temporary_package(item: &CatalogAddon, manifest_bytes: &[u8], entry_byt
   Ok(temp_path)
 }
 
-fn download_prebuilt_package(item: &CatalogAddon) -> R<PathBuf> {
-  let bytes = fetch_bytes(&item.package_path, MAX_PACKAGE_BYTES)?;
+fn download_prebuilt_package(item: &CatalogAddon, package_path: &str, package_hash: &str) -> R<PathBuf> {
+  let bytes = fetch_bytes(package_path, MAX_PACKAGE_BYTES)?;
   let actual_hash = blake3::hash(&bytes).to_hex().to_string();
-  if actual_hash != item.package_hash.trim().to_ascii_lowercase() {
+  if actual_hash != package_hash.trim().to_ascii_lowercase() {
     return Err(format!("Addon package hash mismatch for {}", item.id));
   }
   let temp_path = temporary_package_path(item);
@@ -266,9 +326,18 @@ fn create_temporary_package(item: &CatalogAddon) -> R<PathBuf> {
       BUNDLED_TRUSTED_LAB_ENTRY.as_bytes(),
     );
   }
-  if !item.package_path.trim().is_empty() {
-    return download_prebuilt_package(item);
+
+  let platform = platform_key();
+  if let Some(package) = item.packages.get(&platform) {
+    return download_prebuilt_package(item, &package.path, &package.hash);
   }
+  if !item.packages.is_empty() {
+    return Err(format!("Addon {} is not available for platform {}", item.id, platform));
+  }
+  if !item.package_path.trim().is_empty() {
+    return download_prebuilt_package(item, &item.package_path, &item.package_hash);
+  }
+
   let manifest_bytes = fetch_bytes(&item.manifest_path, MAX_MANIFEST_BYTES)?;
   let entry_bytes = fetch_bytes(&item.entry_path, MAX_ENTRY_BYTES)?;
   write_temporary_package(item, &manifest_bytes, &entry_bytes)
@@ -349,6 +418,7 @@ mod tests {
       entry_path: "addons/test/main.js".to_string(),
       package_path: String::new(),
       package_hash: String::new(),
+      packages: BTreeMap::new(),
       readme_path: "addons/test/README.md".to_string(),
     }
   }
@@ -377,7 +447,7 @@ mod tests {
     }"#;
     let error = write_temporary_package(&item, manifest, b"export default class TestAddon {}")
       .expect_err("native source packages must be rejected");
-    assert!(error.contains("complete hashed .enaddon packagePath"));
+    assert!(error.contains("complete hashed .enaddon package"));
   }
 
   #[test]
@@ -394,9 +464,26 @@ mod tests {
       entry_path: String::new(),
       package_path: "addons/native/native-1.0.0-linux-x86_64.enaddon".to_string(),
       package_hash: "a".repeat(64),
+      packages: BTreeMap::new(),
       readme_path: "addons/native/README.md".to_string(),
     };
     assert!(validate_catalog_item(&item).is_ok());
+  }
+
+  #[test]
+  fn accepts_platform_specific_packages_and_rejects_missing_mobile_builds() {
+    let mut item = source_item();
+    item.packages.insert(
+      "linux-x86_64".to_string(),
+      CatalogPackage {
+        path: "addons/test/releases/test-linux-x86_64.enaddon".to_string(),
+        hash: "a".repeat(64),
+      },
+    );
+    item.manifest_path.clear();
+    item.entry_path.clear();
+    assert!(validate_catalog_item(&item).is_ok());
+    assert!(item.packages.get("android-aarch64").is_none());
   }
 
   #[test]

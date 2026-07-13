@@ -31,6 +31,10 @@ import bus from '@/bus'
 import { useEditorStore } from '@/store/editor'
 import { debouncedSendBufferedState } from '@/store/bufferedState'
 import {
+  getImageBaseDirectory,
+  normalizeInsertedImageSource
+} from '@/util/imageSource'
+import {
   RustMuyaRuntimeEditor,
   isMuyaRustRuntime,
   readMuyaRuntimeMode
@@ -108,6 +112,18 @@ const handleCreateTable = (table) => {
   dispatchRustBusCommand('createTable', table)
 }
 
+const handleInsertImage = (image) => {
+  const payload = typeof image === 'string' ? { src: image } : image || {}
+  const baseDirectory = getImageBaseDirectory(currentFile.value?.pathname, window.DIRNAME)
+  const source = normalizeInsertedImageSource(payload.src || payload.source || '', baseDirectory)
+  dispatchRustBusCommand('insert-image', { ...payload, source })
+}
+
+const handleUploadedImage = (url, deletionUrl) => {
+  handleInsertImage(url)
+  editorStore.SHOW_IMAGE_DELETION_URL(deletionUrl)
+}
+
 const busHandlers = Object.freeze({
   undo: () => dispatchRustBusCommand('undo'),
   redo: () => dispatchRustBusCommand('redo'),
@@ -117,7 +133,9 @@ const busHandlers = Object.freeze({
   deleteParagraph: () => dispatchRustBusCommand('deleteParagraph'),
   insertParagraph: () => dispatchRustBusCommand('insertParagraph'),
   createParagraph: () => dispatchRustBusCommand('createParagraph'),
-  'insert-horizontal-rule': () => dispatchRustBusCommand('insert-horizontal-rule')
+  'insert-horizontal-rule': () => dispatchRustBusCommand('insert-horizontal-rule'),
+  'insert-image': handleInsertImage,
+  'image-uploaded': handleUploadedImage
 })
 
 const handleRustMarkdownChange = (editorMarkdown) => {

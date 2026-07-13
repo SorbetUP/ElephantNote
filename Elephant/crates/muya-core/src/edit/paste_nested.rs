@@ -364,13 +364,13 @@ mod tests {
       table,
       "alpha",
       "XYZ",
-      "| A          | B    |\n| ---------- | ---- |\n| alXYZpha   | beta |",
+      "| A        | B    |\n| -------- | ---- |\n| alXYZpha | beta |",
     );
     assert_nested(
       table,
       "alpha",
       "one\n\ntwo",
-      "| A                         | B    |\n| ------------------------- | ---- |\n| alone<br/><br/>twopha     | beta |",
+      "| A                     | B    |\n| --------------------- | ---- |\n| alone<br/><br/>twopha | beta |",
     );
   }
 }

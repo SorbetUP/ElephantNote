@@ -1,7 +1,7 @@
 let modulePromise = null
 
 const loadBundle = async () => {
-  if (!__ELEPHANT_MUYA_WASM_BUNDLED__) {
+  if (!globalThis.__ELEPHANT_MUYA_WASM_BUNDLED__) {
     throw new Error(
       'Bundled Muya Rust support is not present. Use the experimental Rust editor build.'
     )

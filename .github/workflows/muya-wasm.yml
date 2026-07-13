@@ -66,18 +66,36 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Lint Rust bridge modules
-        run: >-
-          pnpm exec eslint
-          Elephant/frontend/src/muya/lib/rust
-          Elephant/frontend/src/muya/lib/core/setup.js
-          Elephant/frontend/src/muya/lib/config/options.js
-          tests/app/unit/specs/muya/rustBridge.spec.js
-          tests/app/unit/specs/muya/rustLogicalDocument.spec.js
-          tests/app/unit/specs/muya/rustDomRenderer.spec.js
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec eslint \
+            Elephant/frontend/src/muya/lib/rust \
+            Elephant/frontend/src/muya/lib/core/setup.js \
+            Elephant/frontend/src/muya/lib/config/options.js \
+            tests/app/unit/specs/muya/rustBridge.spec.js \
+            tests/app/unit/specs/muya/rustLogicalDocument.spec.js \
+            tests/app/unit/specs/muya/rustDomRenderer.spec.js \
+            2>&1 | tee muya-rust-eslint.txt
 
       - name: Test Rust browser bridge
-        run: >-
-          pnpm exec vitest run
-          tests/app/unit/specs/muya/rustBridge.spec.js
-          tests/app/unit/specs/muya/rustLogicalDocument.spec.js
-          tests/app/unit/specs/muya/rustDomRenderer.spec.js
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec vitest run \
+            tests/app/unit/specs/muya/rustBridge.spec.js \
+            tests/app/unit/specs/muya/rustLogicalDocument.spec.js \
+            tests/app/unit/specs/muya/rustDomRenderer.spec.js \
+            2>&1 | tee muya-rust-vitest.txt
+
+      - name: Upload browser bridge diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-rust-browser-diagnostics
+          path: |
+            muya-rust-eslint.txt
+            muya-rust-vitest.txt
+          if-no-files-found: ignore
+          retention-days: 7

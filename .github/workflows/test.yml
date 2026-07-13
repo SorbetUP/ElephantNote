@@ -8,66 +8,23 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: write
-
 jobs:
-  cleanup-obsolete-tests:
-    if: github.head_ref == 'assistant/wiki-organization-continuation'
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: assistant/wiki-organization-continuation
-          fetch-depth: 0
       - uses: ./.github/actions/setup
 
-      - name: Apply Tauri test cleanup
-        run: |
-          set -o pipefail
-          {
-            python3 scripts/cleanup_obsolete_tauri_tests.py
-            python3 scripts/fix_tauri_test_expectation.py
-          } 2>&1 | tee test-cleanup.log
-
-      - name: Run complete unit suite
+      - name: Run Unit Tests
+        shell: bash
         run: |
           set -o pipefail
           pnpm test 2>&1 | tee vitest-output.txt
 
-      - name: Upload test diagnostics
+      - name: Upload Vitest output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-test-cleanup-output
-          path: |
-            test-cleanup.log
-            vitest-output.txt
-          if-no-files-found: warn
-
-      - name: Publish validated test cleanup
-        run: |
-          set -o pipefail
-          {
-            rm -f scripts/cleanup_obsolete_tauri_tests.py scripts/fix_tauri_test_expectation.py test-cleanup.log vitest-output.txt
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git reset -- .github/workflows/test.yml
-            if git diff --cached --quiet; then
-              echo "No test cleanup changes to publish."
-            else
-              git commit --no-verify -m "test: remove obsolete Electron contracts and align Tauri runtime expectations"
-            fi
-            git fetch origin assistant/wiki-organization-continuation
-            git rebase origin/assistant/wiki-organization-continuation
-            git push origin HEAD:assistant/wiki-organization-continuation
-          } 2>&1 | tee test-cleanup-publish.log
-
-      - name: Upload publication diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tauri-test-cleanup-publish-log
-          path: test-cleanup-publish.log
-          if-no-files-found: warn
+          name: vitest-output
+          path: vitest-output.txt
+          if-no-files-found: ignore

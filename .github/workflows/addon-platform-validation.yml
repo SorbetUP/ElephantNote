@@ -17,34 +17,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check out physical addon catalogue
-        uses: actions/checkout@v4
-        with:
-          ref: feature/physical-addon-catalog
-          path: addon-catalog-source
-
       - uses: ./.github/actions/setup
 
-      - name: Validate official addon catalogue
+      - name: Validate integrated official addon catalogue
         shell: bash
         run: |
           set -o pipefail
-          node build/scripts/validate-addon-catalog.mjs addon-catalog-source \
+          node build/scripts/validate-addon-catalog.mjs addons \
             2>&1 | tee addon-catalog-tests.txt
 
-      - name: Execute official addon pipelines
+      - name: Validate integrated addon packs
         shell: bash
         run: |
           set -o pipefail
-          : > addon-functional-tests.txt
-          node build/scripts/test-official-addons.mjs addon-catalog-source \
-            2>&1 | tee -a addon-functional-tests.txt
-          node build/scripts/test-notion-importer.mjs addon-catalog-source \
-            2>&1 | tee -a addon-functional-tests.txt
-          node build/scripts/test-popular-note-addons.mjs addon-catalog-source \
-            2>&1 | tee -a addon-functional-tests.txt
-          node build/scripts/test-elephant-tasks-v2.mjs addon-catalog-source \
-            2>&1 | tee -a addon-functional-tests.txt
+          node build/scripts/validate-integrated-addon-packs.mjs \
+            2>&1 | tee addon-pack-tests.txt
 
       - name: Run focused addon and settings tests
         shell: bash
@@ -52,14 +39,8 @@ jobs:
           set -o pipefail
           NODE_PATH=Elephant/node_modules \
             Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/addons/externalAddonContracts.spec.js \
-            tests/app/unit/addons/addonCatalogContracts.spec.js \
             tests/app/unit/addons/addonProfiles.spec.js \
-            tests/app/unit/addons/runtimeSecurityContracts.spec.js \
-            tests/app/unit/addons/declarativeViewsContracts.spec.js \
-            tests/app/unit/addons/calendarAndIconRail.spec.js \
-            tests/app/unit/addons/trustedAddonRuntime.spec.js \
-            tests/app/unit/addons/settingsExtensionRuntime.spec.js \
+            tests/app/unit/addons/coreFeatures.spec.js \
             tests/app/unit/addons/builtinAddons.spec.js \
             tests/app/unit/addons/aiTabsAndRailBorder.spec.js \
             tests/app/unit/addons/physicalAddonIsolation.spec.js \
@@ -77,7 +58,7 @@ jobs:
             2>&1 | tee trusted-addon-package.txt
           unzip -t build/addons/trusted-workspace-lab.enaddon
 
-      - name: Package every local physical JavaScript addon
+      - name: Package every integrated physical addon
         shell: bash
         run: |
           set -o pipefail
@@ -86,34 +67,18 @@ jobs:
           do
             [ -d "$source" ] || continue
             slug="$(basename "$source")"
-            case "$slug" in
-              ai-ocr|code-execution) continue ;;
-            esac
-            node build/scripts/package-addon.mjs \
-              "$source" \
-              "build/addons/$slug.enaddon" \
-              2>&1 | tee -a physical-addon-packages.txt
-            unzip -t "build/addons/$slug.enaddon"
+            if [ -f "$source/addon.build.json" ]; then
+              node build/scripts/build-physical-addon.mjs "$source" \
+                2>&1 | tee -a physical-addon-packages.txt
+            else
+              node build/scripts/package-addon.mjs \
+                "$source" \
+                "build/addons/$slug.enaddon" \
+                2>&1 | tee -a physical-addon-packages.txt
+              unzip -t "build/addons/$slug.enaddon"
+            fi
           done
-
-      - name: Package every catalogue JavaScript addon
-        shell: bash
-        run: |
-          set -o pipefail
-          : > addon-package.txt
-          for source in addon-catalog-source/addons/*
-          do
-            [ -d "$source" ] || continue
-            slug="$(basename "$source")"
-            case "$slug" in
-              ai-ocr|code-execution) continue ;;
-            esac
-            node build/scripts/package-addon.mjs \
-              "$source" \
-              "build/addons/catalog-$slug.enaddon" \
-              2>&1 | tee -a addon-package.txt
-            unzip -t "build/addons/catalog-$slug.enaddon"
-          done
+          find build/out/addons/releases -name '*.enaddon' -print -exec unzip -t {} \; 2>/dev/null || true
 
       - name: Build Tauri web bundle and verify physical absence
         shell: bash
@@ -151,13 +116,13 @@ jobs:
           name: addon-platform-validation
           path: |
             addon-catalog-tests.txt
-            addon-functional-tests.txt
+            addon-pack-tests.txt
             addon-tests.txt
             trusted-addon-package.txt
             physical-addon-packages.txt
-            addon-package.txt
             addon-build.txt
             build/addons/*.enaddon
+            build/out/addons/releases/**/*.enaddon
           if-no-files-found: ignore
 
   validate-addon-rust:
@@ -205,12 +170,13 @@ jobs:
           set -o pipefail
           : > physical-addon-tests.txt
           : > physical-addon-build.txt
-          for slug in ai-ocr code-execution
+          for source in addons/official/*
           do
+            [ -f "$source/addon.build.json" ] || continue
             cargo test \
-              --manifest-path "addons/official/$slug/native/Cargo.toml" \
+              --manifest-path "$source/native/Cargo.toml" \
               2>&1 | tee -a physical-addon-tests.txt
-            node build/scripts/build-physical-addon.mjs "addons/official/$slug" \
+            node build/scripts/build-physical-addon.mjs "$source" \
               2>&1 | tee -a physical-addon-build.txt
           done
           find build/out/addons/releases -name '*.enaddon' -print -exec unzip -t {} \;

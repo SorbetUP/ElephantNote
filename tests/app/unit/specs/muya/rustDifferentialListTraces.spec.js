@@ -61,6 +61,19 @@ const traces = [
       rust.setSelectionByText('second', 0)
       rust.request({ type: 'outdent_list_item' })
     }
+  },
+  {
+    name: 'outdent a middle nested item and adopt its following siblings',
+    initial: '- parent\n  - first\n  - middle\n  - last',
+    expected: '- parent\n  - first\n- middle\n  - last\n',
+    runJs: async (muya) => {
+      setJsSelectionByText(muya, 'middle', 0)
+      muya.contentState.tabHandler(fakeKeyEvent({ shiftKey: true }))
+    },
+    runRust: (rust) => {
+      rust.setSelectionByText('middle', 0)
+      rust.request({ type: 'outdent_list_item' })
+    }
   }
 ]
 

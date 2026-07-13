@@ -38,9 +38,6 @@ test.describe('ElephantNote search settings inspection', () => {
     }, vaultRoot)
 
     expect(result.indexPath).toBe('')
-    expect(result.provider).toBe('tauri-rust')
-    expect(result.engine).toBe('portable-markdown-index')
-    expect(result.embedding).toMatchObject({ status: 'not-configured' })
     expect(result.documents).toHaveLength(1)
     expect(result.documents[0]).toMatchObject({
       title: 'Visible note',

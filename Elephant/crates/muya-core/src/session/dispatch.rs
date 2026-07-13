@@ -73,6 +73,9 @@ impl EditorSession {
       SessionCommand::HorizontalRule(command) => {
         self.apply_transaction(command.build(&self.document, self.selection)?, false)
       }
+      SessionCommand::CreateTable(command) => {
+        self.apply_transaction(command.build(&self.document, self.selection)?, false)
+      }
       SessionCommand::List(command) => {
         self.apply_transaction(command.build(&self.document, self.selection)?, false)
       }

@@ -42,9 +42,7 @@ const traces = [
     expected: '- alpha\n\n',
     runJs: async (muya) => {
       setJsSelection(muya, 1, 0)
-      muya.contentState.enterInEmptyParagraph(
-        muya.contentState.getBlock(muya.contentState.cursor.start.key)
-      )
+      muya.contentState.enterHandler(fakeKeyEvent())
     },
     runRust: (rust) => {
       rust.setSelection(1, 0)

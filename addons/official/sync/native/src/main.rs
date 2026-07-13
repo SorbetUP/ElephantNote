@@ -1,4 +1,4 @@
-use iroh::Endpoint;
+use iroh::{Endpoint, endpoint::presets};
 use iroh_mdns_address_lookup::MdnsAddressLookup;
 use serde_json::{json, Value};
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
@@ -16,14 +16,16 @@ impl SyncService {
 
   async fn ensure_endpoint(&mut self) -> Result<&Endpoint, String> {
     if self.endpoint.is_none() {
-      let discovery = MdnsAddressLookup::builder()
-        .build()
-        .map_err(|error| format!("Failed to initialize mDNS discovery: {error}"))?;
-      let endpoint = Endpoint::builder()
-        .address_lookup(discovery)
-        .bind()
+      let endpoint = Endpoint::bind(presets::N0)
         .await
         .map_err(|error| format!("Failed to bind Iroh endpoint: {error}"))?;
+      let discovery = MdnsAddressLookup::builder()
+        .build(endpoint.id())
+        .map_err(|error| format!("Failed to initialize mDNS discovery: {error}"))?;
+      endpoint
+        .address_lookup()
+        .map_err(|error| format!("Iroh address lookup is unavailable: {error}"))?
+        .add(discovery);
       self.endpoint = Some(endpoint);
     }
     self.endpoint

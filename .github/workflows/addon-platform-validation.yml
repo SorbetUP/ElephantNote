@@ -86,9 +86,9 @@ jobs:
           do
             [ -d "$source" ] || continue
             slug="$(basename "$source")"
-            if [ "$slug" = "ai-ocr" ]; then
-              continue
-            fi
+            case "$slug" in
+              ai-ocr|code-execution) continue ;;
+            esac
             node build/scripts/package-addon.mjs \
               "$source" \
               "build/addons/$slug.enaddon" \
@@ -96,7 +96,7 @@ jobs:
             unzip -t "build/addons/$slug.enaddon"
           done
 
-      - name: Package every catalogue addon
+      - name: Package every catalogue JavaScript addon
         shell: bash
         run: |
           set -o pipefail
@@ -105,9 +105,9 @@ jobs:
           do
             [ -d "$source" ] || continue
             slug="$(basename "$source")"
-            if [ "$slug" = "ai-ocr" ]; then
-              continue
-            fi
+            case "$slug" in
+              ai-ocr|code-execution) continue ;;
+            esac
             node build/scripts/package-addon.mjs \
               "$source" \
               "build/addons/catalog-$slug.enaddon" \
@@ -197,16 +197,21 @@ jobs:
               2>&1 | tee -a addon-rust-tests.txt
           done
 
-      - name: Compile and package physical OCR addon
+      - name: Compile and package physical native addons
         shell: bash
         run: |
           set -o pipefail
-          cargo test \
-            --manifest-path addons/official/ai-ocr/native/Cargo.toml \
-            2>&1 | tee physical-addon-tests.txt
-          pnpm addon:build:ocr \
-            2>&1 | tee physical-addon-build.txt
-          find build/out/addons/releases/elephant.ai-ocr -name '*.enaddon' -print -exec unzip -t {} \;
+          : > physical-addon-tests.txt
+          : > physical-addon-build.txt
+          for slug in ai-ocr code-execution
+          do
+            cargo test \
+              --manifest-path "addons/official/$slug/native/Cargo.toml" \
+              2>&1 | tee -a physical-addon-tests.txt
+            node build/scripts/build-physical-addon.mjs "addons/official/$slug" \
+              2>&1 | tee -a physical-addon-build.txt
+          done
+          find build/out/addons/releases -name '*.enaddon' -print -exec unzip -t {} \;
 
       - name: Upload Rust and physical package validation
         if: always()

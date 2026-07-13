@@ -37,6 +37,17 @@ const normalizeObject = (value) => {
   return { ...value }
 }
 
+const normalizeRequires = (value) => {
+  const result = {}
+  for (const [id, requirement] of Object.entries(normalizeObject(value))) {
+    const normalizedId = normalizeString(id)
+    const normalizedRequirement = normalizeString(requirement)
+    if (!ADDON_ID_RE.test(normalizedId) || !normalizedRequirement) continue
+    result[normalizedId] = normalizedRequirement
+  }
+  return Object.freeze(result)
+}
+
 const normalizeContentTypes = (value) => {
   if (!Array.isArray(value)) return Object.freeze([])
   const ids = new Set()
@@ -145,6 +156,8 @@ export const normalizeAddonManifest = (manifest = {}) => {
 
   return Object.freeze({
     id,
+    parentAddonId: normalizeString(manifest.parentAddonId),
+    requires: normalizeRequires(manifest.requires),
     name,
     version,
     description: normalizeString(manifest.description),

@@ -38,17 +38,27 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
     }
   }
 
-  async scanNativeVault() {
-    return await this.callNativeService('sync.scan', {}, { timeoutMs: 120_000 })
+  createNativeInvite(params = {}) {
+    return this.callNativeService('sync.create-invite', params, { timeoutMs: 30_000 })
   }
 
-  async buildNativePlan(params = {}) {
-    return await this.callNativeService('sync.plan', params, { timeoutMs: 120_000 })
+  acceptNativeInvite(invite) {
+    if (!invite) throw new TypeError('A Sync invite is required')
+    const params = typeof invite === 'string' ? { manualCode: invite } : invite
+    return this.callNativeService('sync.accept-invite', params, { timeoutMs: 60_000 })
   }
 
-  async applyNativeLocalPlan(plan) {
+  scanNativeVault() {
+    return this.callNativeService('sync.scan', {}, { timeoutMs: 120_000 })
+  }
+
+  buildNativePlan(params = {}) {
+    return this.callNativeService('sync.plan', params, { timeoutMs: 120_000 })
+  }
+
+  applyNativeLocalPlan(plan) {
     if (!plan || typeof plan !== 'object') throw new TypeError('A Sync plan is required')
-    return await this.callNativeService('sync.apply-local', { plan }, { timeoutMs: 120_000 })
+    return this.callNativeService('sync.apply-local', { plan }, { timeoutMs: 120_000 })
   }
 
   async onload(api) {
@@ -59,11 +69,21 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
       start: () => this.startNativeService(),
       status: () => this.nativeStatus(),
       endpoint: () => this.callNativeService('sync.endpoint'),
+      createInvite: (params = {}) => this.createNativeInvite(params),
+      acceptInvite: (invite) => this.acceptNativeInvite(invite),
       scan: () => this.scanNativeVault(),
       plan: (params = {}) => this.buildNativePlan(params),
       applyLocal: (plan) => this.applyNativeLocalPlan(plan),
       stop: () => this.stopNativeService(),
-      capabilities: Object.freeze(['endpoint', 'identity', 'manifest', 'plan', 'local-operations'])
+      capabilities: Object.freeze([
+        'endpoint',
+        'identity',
+        'wire-protocol',
+        'pairing',
+        'manifest',
+        'plan',
+        'local-operations'
+      ])
     }))
     api.app.emit('elephantnote:sync-native-service-ready', { started, status })
   }

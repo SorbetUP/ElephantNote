@@ -153,7 +153,11 @@ jobs:
                   ];
                   let profile = centroid_for_members(&[0, 1], &documents).unwrap();
                   let (expanded, floor) = expanded_members(&profile, &[0, 1], &documents, 0.72);
-                  assert_eq!(expanded, vec![0, 1, 2]);
+                  assert_eq!(expanded.len(), 3);
+                  assert!(expanded.contains(&0));
+                  assert!(expanded.contains(&1));
+                  assert!(expanded.contains(&2));
+                  assert!(!expanded.contains(&3));
                   assert!((0.44..=0.98).contains(&floor));
               }'''
           if old_test not in source:

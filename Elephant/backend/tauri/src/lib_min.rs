@@ -49,7 +49,6 @@ pub mod wiki;
 pub mod rag_prompt;
 pub mod atomic_features;
 pub mod ollama;
-pub mod site_preview;
 
 #[cfg(test)]
 mod sync_contract_tests;
@@ -208,8 +207,6 @@ pub fn run() {
       ollama::tauri_ollama_list,
       ollama::tauri_ollama_generate,
       ollama::tauri_ollama_embed,
-      site_preview::tauri_site_preview_open,
-      site_preview::tauri_site_preview_status,
       vault::commands::tauri_vaults_get,
       vault::commands::tauri_vaults_select_path,
       vault::commands::tauri_vaults_set_active,

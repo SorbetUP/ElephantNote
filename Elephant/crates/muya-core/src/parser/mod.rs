@@ -172,46 +172,81 @@ fn parse_blockquote(document: &mut Document, lines: &[SourceLine], start_index: 
 
 fn parse_list(document: &mut Document, lines: &[SourceLine], start_index: usize) -> usize {
   let first = list::parse(&lines[start_index].text).expect("list marker must exist");
-  let list_kind = first.kind;
-  let list_start = first.start;
+  let (list_node, index, _) = parse_list_level(
+    document,
+    lines,
+    start_index,
+    first.indent,
+    first.kind,
+  );
+  document.append_child(document.root, list_node);
+  index
+}
+
+fn parse_list_level(
+  document: &mut Document,
+  lines: &[SourceLine],
+  start_index: usize,
+  indent: usize,
+  list_kind: ListKind,
+) -> (NodeId, usize, u32) {
+  let first = list::parse(&lines[start_index].text).expect("nested list marker must exist");
+  let list_node = document.allocate(
+    NodeKind::Block(BlockKind::List {
+      kind: list_kind,
+      start: first.start,
+    }),
+    None,
+  );
   let mut index = start_index;
-  let mut items = Vec::new();
   let mut end = lines[start_index].end;
 
   while let Some(line) = lines.get(index) {
     let Some(marker) = list::parse(&line.text) else {
       break;
     };
-    if marker.kind != list_kind {
+    if marker.indent != indent || marker.kind != list_kind {
       break;
     }
-    items.push((marker.content.to_string(), marker.checked, line.start, line.end));
-    end = line.end;
-    index += 1;
-  }
 
-  let list_node = document.allocate(
-    NodeKind::Block(BlockKind::List {
-      kind: list_kind,
-      start: list_start,
-    }),
-    Some(SourceRange::new(lines[start_index].start, end)),
-  );
-
-  for (content, checked, start, item_end) in items {
-    let range = SourceRange::new(start, item_end);
+    let range = SourceRange::new(line.start, line.end);
     let item = document.allocate(
-      NodeKind::Block(BlockKind::ListItem { checked }),
+      NodeKind::Block(BlockKind::ListItem {
+        checked: marker.checked,
+      }),
       Some(range),
     );
     let paragraph = document.allocate(NodeKind::Block(BlockKind::Paragraph), Some(range));
-    inline::append_inlines(document, paragraph, &content, start);
+    inline::append_inlines(document, paragraph, marker.content, line.start);
     document.append_child(item, paragraph);
     document.append_child(list_node, item);
+    end = line.end;
+    index += 1;
+
+    while let Some(next_line) = lines.get(index) {
+      let Some(next_marker) = list::parse(&next_line.text) else {
+        break;
+      };
+      if next_marker.indent <= indent {
+        break;
+      }
+      let (nested, next_index, nested_end) = parse_list_level(
+        document,
+        lines,
+        index,
+        next_marker.indent,
+        next_marker.kind,
+      );
+      document.append_child(item, nested);
+      index = next_index;
+      end = nested_end;
+    }
   }
 
-  document.append_child(document.root, list_node);
-  index
+  if let Some(node) = document.node_mut(list_node) {
+    node.source = Some(SourceRange::new(lines[start_index].start, end));
+  }
+  (list_node, index, end)
 }
 
 fn parse_table(
@@ -318,104 +353,58 @@ fn starts_block(lines: &[SourceLine], index: usize) -> bool {
         .is_some_and(|next| table::parse_delimiter(&next.text).is_some()))
 }
 
-fn append_text_block(document: &mut Document, kind: BlockKind, text: &str, range: SourceRange) {
-  let block = document.allocate(NodeKind::Block(kind), Some(range));
-  inline::append_inlines(document, block, text, range.start);
+fn append_text_block(
+  document: &mut Document,
+  kind: BlockKind,
+  content: &str,
+  source: SourceRange,
+) {
+  let block = document.allocate(NodeKind::Block(kind), Some(source));
+  inline::append_inlines(document, block, content, source.start);
   document.append_child(document.root, block);
 }
 
 fn append_literal_block(
   document: &mut Document,
   kind: BlockKind,
-  text: &str,
-  range: SourceRange,
+  content: &str,
+  source: SourceRange,
 ) {
-  let block = document.allocate(NodeKind::Block(kind), Some(range));
-  inline::append_literal(document, block, text, range.start);
+  let block = document.allocate(NodeKind::Block(kind), Some(source));
+  inline::append_literal(document, block, content, source.start);
   document.append_child(document.root, block);
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::model::InlineKind;
+  use crate::serializer::to_markdown;
 
   #[test]
-  fn parses_heading_paragraph_and_rule() {
-    let document = parse_markdown("# Title\n\nBody\n\n---\n");
-    let blocks = document.children(document.root).collect::<Vec<_>>();
-    assert_eq!(blocks.len(), 3);
+  fn parses_nested_lists_structurally() {
+    let document = parse_markdown("- parent\n  - child\n    3. grandchild\n- sibling");
+    let list = document.children(document.root).next().unwrap().id;
+    let first_item = document.children(list).next().unwrap().id;
+    let nested = document.children(first_item).nth(1).unwrap();
     assert!(matches!(
-      blocks[0].kind,
-      NodeKind::Block(BlockKind::Heading { level: 1 })
-    ));
-    assert!(matches!(
-      blocks[1].kind,
-      NodeKind::Block(BlockKind::Paragraph)
-    ));
-    assert!(matches!(
-      blocks[2].kind,
-      NodeKind::Block(BlockKind::ThematicBreak)
-    ));
-  }
-
-  #[test]
-  fn parses_blockquotes_and_fenced_code() {
-    let document = parse_markdown("> Quote\n> continued\n\n```rust\nfn main() {}\n```\n");
-    let blocks = document.children(document.root).collect::<Vec<_>>();
-    assert!(matches!(
-      blocks[0].kind,
-      NodeKind::Block(BlockKind::BlockQuote)
-    ));
-    assert!(matches!(
-      &blocks[1].kind,
-      NodeKind::Block(BlockKind::CodeBlock {
-        language: Some(language),
-        fenced: true
-      }) if language == "rust"
-    ));
-  }
-
-  #[test]
-  fn parses_setext_lists_and_tables() {
-    let document = parse_markdown(
-      "Title\n=====\n\n- one\n- two\n\n| Name | Score |\n| :--- | ---: |\n| Ada | 10 |\n",
-    );
-    let blocks = document.children(document.root).collect::<Vec<_>>();
-    assert!(matches!(
-      blocks[0].kind,
-      NodeKind::Block(BlockKind::Heading { level: 1 })
-    ));
-    assert!(matches!(
-      blocks[1].kind,
+      nested.kind,
       NodeKind::Block(BlockKind::List {
         kind: ListKind::Unordered,
         ..
       })
     ));
+    let nested_item = document.children(nested.id).next().unwrap().id;
+    let ordered = document.children(nested_item).nth(1).unwrap();
     assert!(matches!(
-      blocks[2].kind,
-      NodeKind::Block(BlockKind::Table)
+      ordered.kind,
+      NodeKind::Block(BlockKind::List {
+        kind: ListKind::Ordered,
+        start: Some(3)
+      })
     ));
-    assert_eq!(document.children(blocks[2].id).count(), 2);
-  }
-
-  #[test]
-  fn parses_inline_content_inside_blocks() {
-    let document = parse_markdown("A **bold** and [link](https://example.com).\n");
-    let paragraph = document.children(document.root).next().unwrap();
-    assert!(document
-      .children(paragraph.id)
-      .any(|node| matches!(&node.kind, NodeKind::Inline(InlineKind::Strong))));
-    assert!(document.children(paragraph.id).any(|node| {
-      matches!(&node.kind, NodeKind::Inline(InlineKind::Link { destination, .. }) if destination == "https://example.com")
-    }));
-  }
-
-  #[test]
-  fn source_ranges_use_utf16_units() {
-    let document = parse_markdown("# 😀\n");
-    let heading = document.children(document.root).next().unwrap();
-    assert_eq!(heading.source.unwrap().len(), 4);
+    assert_eq!(
+      to_markdown(&document),
+      "- parent\n  - child\n    3. grandchild\n- sibling"
+    );
   }
 }

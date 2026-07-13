@@ -1,0 +1,166 @@
+name: Physical Addon Boundary Enforcement
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  enforce:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feature/physical-addon-packages'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enforce trusted service API and semantic backend absence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          runtime = Path('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')
+          text = runtime.read_text()
+          if 'tauri_addons_service_status' not in text:
+              old = '''    native: Object.freeze({
+      status: () => invoke('tauri_addons_sidecar_status', { addonId: manifest.id }, target),
+      call(method, params = {}, options = {}) {
+        const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
+        return invoke('tauri_addons_sidecar_call', {
+          addonId: manifest.id,
+          method: safeString(method),
+          params,
+          timeoutMs
+        }, target)
+      }
+    }),'''
+              new = '''    native: Object.freeze({
+      status: () => invoke('tauri_addons_sidecar_status', { addonId: manifest.id }, target),
+      call(method, params = {}, options = {}) {
+        const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
+        return invoke('tauri_addons_sidecar_call', {
+          addonId: manifest.id,
+          method: safeString(method),
+          params,
+          timeoutMs
+        }, target)
+      },
+      service: Object.freeze({
+        status: () => invoke('tauri_addons_service_status', { addonId: manifest.id }, target),
+        start: () => invoke('tauri_addons_service_start', { addonId: manifest.id }, target),
+        call(method, params = {}, options = {}) {
+          const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
+          return invoke('tauri_addons_service_call', {
+            addonId: manifest.id,
+            method: safeString(method),
+            params,
+            timeoutMs
+          }, target)
+        },
+        stop: () => invoke('tauri_addons_service_stop', { addonId: manifest.id }, target)
+      })
+    }),'''
+              if old not in text:
+                  raise SystemExit('Trusted native API source no longer matches the expected boundary')
+              runtime.write_text(text.replace(old, new))
+
+          lib = Path('Elephant/backend/tauri/src/lib_min.rs')
+          text = lib.read_text()
+          text = text.replace('pub mod embeddings;\n', '')
+          for line in [
+              '      embeddings::tauri_embeddings_embed,\n',
+              '      embeddings::tauri_embeddings_store,\n',
+              '      embeddings::tauri_embeddings_search,\n',
+              '      embeddings::tauri_embeddings_count,\n',
+              '      embeddings::tauri_embeddings_clear_vault,\n',
+              '      tauri_extra_commands::tauri_search_rebuild,\n',
+          ]:
+              text = text.replace(line, '')
+          lib.write_text(text)
+
+          commands = Path('Elephant/backend/tauri/src/tauri_extra_commands.rs')
+          text = commands.read_text()
+          marker = '#[tauri::command]\npub fn tauri_search_rebuild('
+          if marker in text:
+              start = text.index(marker)
+              end_marker = '\n#[tauri::command]\npub fn tauri_sync_plan('
+              end = text.index(end_marker, start)
+              commands.write_text(text[:start] + text[end + 1:])
+
+          for temporary in [
+              '.github/workflows/expose-addon-service-api.yml',
+              '.github/workflows/remove-legacy-semantic-backend.yml',
+          ]:
+              path = Path(temporary)
+              if path.exists():
+                  path.unlink()
+
+          Path('tests/app/unit/addons/addonNativeServiceContracts.spec.js').write_text('''import fs from 'node:fs'\nimport path from 'node:path'\nimport { describe, expect, it } from 'vitest'\n\nconst root = process.cwd()\nconst read = (file) => fs.readFileSync(path.join(root, file), 'utf8')\n\ndescribe('persistent native addon services', () => {\n  it('exposes status, start, call and stop to trusted packages', () => {\n    const runtime = read('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')\n    for (const command of ['tauri_addons_service_status', 'tauri_addons_service_start', 'tauri_addons_service_call', 'tauri_addons_service_stop']) expect(runtime).toContain(command)\n    expect(runtime).toContain('service: Object.freeze')\n  })\n  it('keeps the native host generic and package-owned', () => {\n    const rust = read('Elephant/backend/tauri/src/addon_services.rs')\n    expect(rust).toContain('elephant-addon-service-v1')\n    expect(rust).toContain('ELEPHANT_ADDON_PACKAGE_DIR')\n    expect(rust).toContain('ELEPHANT_ADDON_DATA_DIR')\n    expect(rust).toContain('ELEPHANT_VAULT_DIR')\n    expect(rust).toContain('kill_on_drop(true)')\n    expect(rust).not.toContain('iroh::')\n  })\n})\n''')
+
+          Path('tests/app/unit/addons/semanticBackendAbsence.spec.js').write_text('''import fs from 'node:fs'\nimport path from 'node:path'\nimport { describe, expect, it } from 'vitest'\n\nconst root = process.cwd()\nconst read = (file) => fs.readFileSync(path.join(root, file), 'utf8')\n\ndescribe('legacy semantic backend physical absence', () => {\n  it('does not ship the old embedding database module in Elephant core', () => {\n    expect(fs.existsSync(path.join(root, 'Elephant/backend/tauri/src/embeddings.rs'))).toBe(false)\n    const lib = read('Elephant/backend/tauri/src/lib_min.rs')\n    expect(lib).not.toContain('pub mod embeddings;')\n    expect(lib).not.toContain('embeddings::tauri_embeddings_')\n  })\n  it('does not expose the old global semantic rebuild command', () => {\n    const lib = read('Elephant/backend/tauri/src/lib_min.rs')\n    const commands = read('Elephant/backend/tauri/src/tauri_extra_commands.rs')\n    expect(lib).not.toContain('tauri_extra_commands::tauri_search_rebuild')\n    expect(commands).not.toContain('pub fn tauri_search_rebuild')\n    expect(commands).toContain('pub fn tauri_search_inspect')\n    expect(lib).toContain('vault::commands::tauri_search_query')\n  })\n})\n''')
+          PY
+
+          if [ -f Elephant/backend/tauri/src/embeddings.rs ]; then
+            git rm Elephant/backend/tauri/src/embeddings.rs
+          fi
+
+      - name: Reject surviving legacy references
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'tauri_embeddings_(embed|store|search|count|clear_vault)|crate::embeddings|embeddings::tauri_' \
+            Elephant addons tests build \
+            --exclude-dir=node_modules --exclude-dir=target --exclude-dir=out; then
+            echo 'Legacy semantic backend references remain.' >&2
+            exit 1
+          fi
+
+      - uses: ./.github/actions/setup
+
+      - name: Validate ownership contracts
+        run: |
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/addonNativeServiceContracts.spec.js \
+            tests/app/unit/addons/searchPackageOwnership.spec.js \
+            tests/app/unit/addons/wikiPackageOwnership.spec.js \
+            tests/app/unit/addons/syncServiceOwnership.spec.js \
+            tests/app/unit/addons/semanticBackendAbsence.spec.js
+
+      - name: Install Linux Tauri dependencies
+        shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Compile reduced core and Sync service
+        run: |
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --lib
+          cargo test --manifest-path addons/official/sync/native/Cargo.toml
+
+      - name: Commit enforced boundaries when needed
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'Physical addon boundaries are already enforced.'
+            exit 0
+          fi
+          git commit -m "refactor(addons): enforce service and semantic boundaries"
+          git pull --rebase origin feature/physical-addon-packages
+          git push origin HEAD:feature/physical-addon-packages

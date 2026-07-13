@@ -94,7 +94,7 @@ describe('Elephant settings redesign', () => {
     expect(logic).toContain('installExternalAddon(selected)')
     expect(packRuntime).toContain("source: 'official'")
     expect(packRuntime).toContain("'elephant.ai', version: '2.1.0'")
-    expect(packRuntime).toContain("id: 'core.addon-packs'")
+    expect(packRuntime).toContain("const CORE_FEATURE_ID = 'core.addon-packs'")
     expect(packs).not.toContain('{{ pack.path }}')
   })
 

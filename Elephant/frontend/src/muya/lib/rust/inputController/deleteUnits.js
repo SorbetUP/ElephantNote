@@ -1,6 +1,16 @@
 import { editorCommands } from '../bridge'
 import { planDeleteForward } from './deleteForward'
 
+export const DELETE_UNIT_INPUTS = new Set([
+  'deleteWordBackward',
+  'deleteWordForward',
+  'deleteSoftLineBackward',
+  'deleteSoftLineForward',
+  'deleteHardLineBackward',
+  'deleteHardLineForward',
+  'deleteEntireSoftLine'
+])
+
 const isCollapsed = (selection) =>
   selection.anchor.node === selection.focus.node &&
   selection.anchor.offset_utf16 === selection.focus.offset_utf16

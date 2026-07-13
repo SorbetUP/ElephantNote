@@ -2,7 +2,7 @@
   "id": "elephant.sync",
   "name": "Sync",
   "version": "1.2.0",
-  "description": "Owns a persistent Iroh endpoint while legacy file transfer operations are migrated into the package.",
+  "description": "Owns the persistent Iroh endpoint, vault manifest scanning and deterministic sync planning while file transfer is migrated into the package.",
   "author": "Elephant",
   "apiVersion": 1,
   "minAppVersion": "0.18.9",

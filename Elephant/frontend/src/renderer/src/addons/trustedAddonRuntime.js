@@ -93,6 +93,11 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
   const host = context.addonHost
   const register = (area, contribution) => context.registerContribution(area, contribution)
   const track = (dispose) => addDisposable(context, sessionDisposables, dispose)
+  const callBroker = (method, params = {}) => invoke('tauri_addons_call', {
+    addonId: manifest.id,
+    method,
+    params
+  }, target)
 
   const api = {
     manifest,
@@ -114,6 +119,24 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
       },
       emit(name, detail) {
         target?.dispatchEvent?.(new CustomEvent(name, { detail }))
+      }
+    }),
+    storage: Object.freeze({
+      get: (key) => callBroker('storage.get', { key }),
+      set: (key, value) => callBroker('storage.set', { key, value }),
+      remove: (key) => callBroker('storage.remove', { key }),
+      entries: () => callBroker('storage.entries')
+    }),
+    native: Object.freeze({
+      status: () => invoke('tauri_addons_sidecar_status', { addonId: manifest.id }, target),
+      call(method, params = {}, options = {}) {
+        const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
+        return invoke('tauri_addons_sidecar_call', {
+          addonId: manifest.id,
+          method: safeString(method),
+          params,
+          timeoutMs
+        }, target)
       }
     }),
     resources: Object.freeze({

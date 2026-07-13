@@ -1,4 +1,4 @@
-use crate::edit::{operation::utf16_to_byte, EditError, Operation, Transaction, Utf16Range};
+use crate::edit::{EditError, Operation, Transaction, Utf16Range};
 use crate::model::{BlockKind, Document, InlineKind, Node, NodeId, NodeKind};
 use crate::selection::{Selection, SelectionPoint};
 
@@ -96,7 +96,10 @@ fn text_value(document: &Document, node: NodeId) -> Result<&str, EditError> {
 
 fn forbidden_context(document: &Document, mut node: NodeId) -> bool {
   while let Some(current) = document.node(node) {
-    if matches!(current.kind, NodeKind::Block(BlockKind::CodeBlock { .. } | BlockKind::ThematicBreak)) {
+    if matches!(
+      current.kind,
+      NodeKind::Block(BlockKind::CodeBlock { .. } | BlockKind::ThematicBreak)
+    ) {
       return true;
     }
     let Some(parent) = current.parent else {
@@ -108,11 +111,17 @@ fn forbidden_context(document: &Document, mut node: NodeId) -> bool {
 }
 
 fn infer_alt(source: &str) -> String {
-  let filename = source.rsplit(['/', '\\']).next().unwrap_or(source);
+  let filename = source
+    .rsplit(|character| character == '/' || character == '\\')
+    .next()
+    .unwrap_or(source);
   let Some((stem, extension)) = filename.rsplit_once('.') else {
     return String::new();
   };
-  if stem.is_empty() || extension.is_empty() || !extension.chars().all(|ch| ch.is_ascii_lowercase()) {
+  if stem.is_empty()
+    || extension.is_empty()
+    || !extension.chars().all(|character| character.is_ascii_lowercase())
+  {
     return String::new();
   }
   stem.to_string()
@@ -127,6 +136,31 @@ fn normalize_source(source: &str) -> String {
     encoded_spaces
   } else {
     encoded_spaces.replace('#', "%23")
+  }
+}
+
+fn utf16_to_byte(value: &str, node: NodeId, target: u32) -> Result<usize, EditError> {
+  let mut utf16 = 0u32;
+  for (byte, character) in value.char_indices() {
+    if utf16 == target {
+      return Ok(byte);
+    }
+    utf16 = utf16.saturating_add(character.len_utf16() as u32);
+    if utf16 > target {
+      return Err(EditError::InvalidUtf16Boundary {
+        node,
+        offset: target,
+      });
+    }
+  }
+  if utf16 == target {
+    Ok(value.len())
+  } else {
+    Err(EditError::RangeOutOfBounds {
+      node,
+      start: target,
+      end: target,
+    })
   }
 }
 

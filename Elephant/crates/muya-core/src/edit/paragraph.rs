@@ -8,8 +8,7 @@ pub(crate) fn build_insert_paragraph(
   selection: Selection,
 ) -> Result<Transaction, EditError> {
   let preserved_task_state = middle_task_state(document, selection)?;
-  let mut transaction =
-    super::paragraph_engine::build_insert_paragraph(document, selection)?;
+  let mut transaction = super::paragraph_engine::build_insert_paragraph(document, selection)?;
 
   if let Some(checked) = preserved_task_state {
     preserve_inserted_task_state(&mut transaction, checked);
@@ -17,10 +16,7 @@ pub(crate) fn build_insert_paragraph(
   Ok(transaction)
 }
 
-fn middle_task_state(
-  document: &Document,
-  selection: Selection,
-) -> Result<Option<bool>, EditError> {
+fn middle_task_state(document: &Document, selection: Selection) -> Result<Option<bool>, EditError> {
   let Some(caret) = selection.caret() else {
     return Ok(None);
   };

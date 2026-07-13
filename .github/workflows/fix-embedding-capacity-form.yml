@@ -1,0 +1,104 @@
+name: Fix Embedding Capacity Form
+
+on:
+  pull_request:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/fix-embedding-capacity-form.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.head_ref == 'assistant/wiki-organization-continuation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - name: Bind local runtime capacity to the settings form
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
+          source = path.read_text()
+
+          marker = "const defaultRoute = () => ({ source: 'disabled', model: '', endpoint: '', optionsJson: '' })\n"
+          addition = marker + """const defaultLocalRuntime = () => ({
+            llamaServerMode: 'bundled',
+            llamaServerPath: '',
+            llamaBaseUrl: '',
+            embeddingContextWindow: 2048,
+            embeddingPhysicalBatchSize: 1024
+          })
+          """
+          if 'const defaultLocalRuntime' not in source:
+              if marker not in source:
+                  raise SystemExit('default route marker not found')
+              source = source.replace(marker, addition, 1)
+
+          source = source.replace(
+              "const defaultForm = () => ({\n  localAi: normalizeLocalAiConfig(),",
+              "const defaultForm = () => ({\n  localAi: normalizeLocalAiConfig(),\n  localRuntime: defaultLocalRuntime(),",
+              1,
+          )
+          if 'localRuntime: defaultLocalRuntime()' not in source:
+              raise SystemExit('default form localRuntime binding was not inserted')
+
+          source = source.replace(
+              "    localAi: normalizeLocalAiConfig(config.localAi),\n    providerRows: normalizeProviderRows(config),",
+              "    localAi: normalizeLocalAiConfig(config.localAi),\n    localRuntime: { ...defaultLocalRuntime(), ...(config.localRuntime || {}) },\n    providerRows: normalizeProviderRows(config),",
+              1,
+          )
+          if 'localRuntime: { ...defaultLocalRuntime(), ...(config.localRuntime || {}) }' not in source:
+              raise SystemExit('applyConfig localRuntime binding was not inserted')
+
+          source = source.replace(
+              "  localAi: clonePlainObject(form.value.localAi),\n  provider: form.value.routes.chat.source === 'app-local' ? 'tauri-rust' : form.value.routes.chat.source,",
+              """  localAi: clonePlainObject(form.value.localAi),
+            localRuntime: {
+              ...defaultLocalRuntime(),
+              ...clonePlainObject(form.value.localRuntime),
+              embeddingContextWindow: Math.max(512, Math.min(32768, Math.round(Number(form.value.localRuntime.embeddingContextWindow) || 2048))),
+              embeddingPhysicalBatchSize: Math.max(256, Math.min(8192, Math.round(Number(form.value.localRuntime.embeddingPhysicalBatchSize) || 1024)))
+            },
+            provider: form.value.routes.chat.source === 'app-local' ? 'tauri-rust' : form.value.routes.chat.source,""",
+              1,
+          )
+          if '...clonePlainObject(form.value.localRuntime)' not in source:
+              raise SystemExit('buildConfig localRuntime serialization was not inserted')
+
+          path.write_text(source)
+
+          test_path = Path('tests/app/unit/wikiDiscoveryQualityRegression.spec.js')
+          test = test_path.read_text()
+          test = test.replace(
+              "expect(aiSettings).toContain('embeddingPhysicalBatchSize')\n      expect(aiSettings).toContain('1024')",
+              """expect(aiSettings).toContain('embeddingPhysicalBatchSize')
+                expect(aiSettings).toContain('defaultLocalRuntime')
+                expect(aiSettings).toContain('localRuntime: defaultLocalRuntime()')
+                expect(aiSettings).toContain('...clonePlainObject(form.value.localRuntime)')
+                expect(aiSettings).toContain('1024')""",
+          )
+          test_path.write_text(test)
+          PY
+      - name: Validate settings form
+        run: |
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/wikiDiscoveryQualityRegression.spec.js
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \
+            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue
+      - name: Commit settings form correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
+            tests/app/unit/wikiDiscoveryQualityRegression.spec.js
+          git commit --no-verify -m "fix: persist embedding runtime capacity settings"
+          git push origin HEAD:assistant/wiki-organization-continuation

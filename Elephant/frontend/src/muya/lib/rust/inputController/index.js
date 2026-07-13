@@ -1,41 +1,17 @@
 import { editorCommands } from '../bridge'
-import { markdownFromClipboard, TEXT_TRANSFER_TYPES } from './clipboard'
+import { markdownFromClipboard } from './clipboard'
+import {
+  cancelComposition,
+  finishComposition,
+  replaceComposition,
+  startComposition
+} from './composition'
 import { commandForBeforeInput, commandForTableKey } from './commands'
+import { handleDeleteForward } from './deleteForward'
+import { handleTextDragOver, handleTextDrop } from './drop'
 import { readDomSelection } from './selection'
 
 const noop = () => {}
-const utf16Length = (value) => String(value || '').length
-
-const orderedSameNodeSelection = (selection) => {
-  if (selection.anchor.node !== selection.focus.node) return selection
-  const start = Math.min(selection.anchor.offset_utf16, selection.focus.offset_utf16)
-  const end = Math.max(selection.anchor.offset_utf16, selection.focus.offset_utf16)
-  return {
-    anchor: { node: selection.anchor.node, offset_utf16: start },
-    focus: { node: selection.anchor.node, offset_utf16: end }
-  }
-}
-
-const transferTypes = (transfer) => Array.from(transfer?.types || [])
-const transferHasFiles = (transfer) =>
-  Boolean(transfer?.files?.length) || transferTypes(transfer).includes('Files')
-const transferHasText = (transfer) => {
-  const types = transferTypes(transfer)
-  return TEXT_TRANSFER_TYPES.some((type) => types.includes(type))
-}
-
-const caretRangeFromPoint = (ownerDocument, x, y) => {
-  if (typeof ownerDocument.caretRangeFromPoint === 'function') {
-    return ownerDocument.caretRangeFromPoint(x, y)
-  }
-  if (typeof ownerDocument.caretPositionFromPoint !== 'function') return null
-  const position = ownerDocument.caretPositionFromPoint(x, y)
-  if (!position?.offsetNode) return null
-  const range = ownerDocument.createRange()
-  range.setStart(position.offsetNode, position.offset)
-  range.collapse(true)
-  return range
-}
 
 export class MuyaRustInputController {
   constructor(container, bridge, renderer, options = {}) {
@@ -95,16 +71,21 @@ export class MuyaRustInputController {
 
   handleBeforeInput(event) {
     if (event.inputType === 'insertCompositionText') {
-      if (!this.composition) this.startComposition()
+      if (!this.composition) startComposition(this)
       event.preventDefault()
-      this.replaceComposition(event.data || '')
+      replaceComposition(this, event.data || '')
+      return
+    }
+
+    const selection = this.readSelection()
+    if (!selection) return
+    if (event.inputType === 'deleteContentForward') {
+      handleDeleteForward(this, event, selection)
       return
     }
 
     const command = commandForBeforeInput(event)
     if (!command) return
-    const selection = this.readSelection()
-    if (!selection) return
     event.preventDefault()
     this.schedule(async () => {
       await this.bridge.setSelection(selection)
@@ -126,60 +107,24 @@ export class MuyaRustInputController {
   }
 
   handleDragOver(event) {
-    const transfer = event.dataTransfer
-    if (!transfer || transferHasFiles(transfer) || !transferHasText(transfer)) return
-    event.preventDefault()
-    event.stopPropagation?.()
-    try {
-      transfer.dropEffect = 'copy'
-    } catch {
-      // Some browser DataTransfer implementations expose a read-only dropEffect.
-    }
+    return handleTextDragOver(this, event)
   }
 
   handleDrop(event) {
-    const transfer = event.dataTransfer
-    if (!transfer || transferHasFiles(transfer) || !transferHasText(transfer)) return
-    this.placeDropCaret(event)
-    const selection = this.readSelection()
-    if (!selection) return
-    const markdown = markdownFromClipboard(event, this.container.ownerDocument)
-    if (markdown === null) return
-    event.preventDefault()
-    event.stopPropagation?.()
-    this.schedule(async () => {
-      await this.bridge.setSelection(selection)
-      await this.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
-    })
-  }
-
-  placeDropCaret(event) {
-    const ownerDocument = this.container.ownerDocument
-    const range = caretRangeFromPoint(ownerDocument, event.clientX || 0, event.clientY || 0)
-    if (!range || !this.container.contains(range.startContainer)) return
-    const selection = ownerDocument.defaultView?.getSelection?.()
-    if (!selection) return
-    selection.removeAllRanges()
-    selection.addRange(range)
+    return handleTextDrop(this, event)
   }
 
   handleCompositionStart() {
-    this.startComposition()
+    startComposition(this)
   }
 
   handleCompositionEnd(event) {
-    if (!this.composition) return
-    const finalText = event.data || ''
-    if (finalText !== this.composition.text) this.replaceComposition(finalText)
-    this.composition = null
-    this.schedule(() => this.bridge.dispatch(editorCommands.commitComposition()))
+    finishComposition(this, event)
   }
 
   handleKeyDown(event) {
-    if (event.key === 'Escape' && this.composition) {
+    if (event.key === 'Escape' && cancelComposition(this)) {
       event.preventDefault()
-      this.composition = null
-      this.schedule(() => this.bridge.dispatch(editorCommands.cancelComposition()))
       return
     }
     if (event.key !== 'Tab') return
@@ -192,34 +137,6 @@ export class MuyaRustInputController {
     this.schedule(async () => {
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(command)
-    })
-  }
-
-  startComposition() {
-    if (this.composition) return
-    const selection = this.readSelection()
-    if (!selection) return
-    const range = orderedSameNodeSelection(selection)
-    this.composition = { range, text: '' }
-    this.schedule(async () => {
-      await this.bridge.setSelection(range)
-      await this.bridge.dispatch(editorCommands.beginComposition())
-    })
-  }
-
-  replaceComposition(text) {
-    const composition = this.composition
-    if (!composition) return
-    const range = composition.range
-    const start = range.anchor
-    composition.text = text
-    composition.range = {
-      anchor: start,
-      focus: { node: start.node, offset_utf16: start.offset_utf16 + utf16Length(text) }
-    }
-    this.schedule(async () => {
-      await this.bridge.setSelection(range)
-      await this.bridge.dispatch(editorCommands.updateComposition(text))
     })
   }
 

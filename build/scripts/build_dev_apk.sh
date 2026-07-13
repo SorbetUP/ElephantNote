@@ -33,7 +33,7 @@ if [ ! -d "$TAURI_DIR/gen/android" ]; then
 fi
 
 cd "$TAURI_DIR"
-ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1 cargo tauri android build --debug --apk --config "$ANDROID_CONFIG"
+cargo tauri android build --debug --apk --config "$ANDROID_CONFIG"
 
 for APK_DIR in \
   "$TAURI_DIR/gen/android/app/build/outputs/apk/debug" \

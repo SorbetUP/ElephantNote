@@ -101,8 +101,8 @@ const codeFence = (value) => {
 }
 
 const preMarkdown = (node) => {
-  const code = Array.from(node.children).find((child) => elementTag(child) === 'code')
-    || node.querySelector('code')
+  const code = Array.from(node.children).find((child) => elementTag(child) === 'code') ||
+    node.querySelector('code')
   const value = normalizedText(code?.textContent ?? node.textContent).replace(/\n+$/, '')
   const language = Array.from(code?.classList || [])
     .find((name) => name.startsWith('language-'))

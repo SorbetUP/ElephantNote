@@ -228,5 +228,7 @@ jobs:
       - name: Cargo tests
         run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features
 
+      # Cargo commands may resolve path-dependency changes. Keep the committed
+      # lockfile reproducible instead of accepting an implicit runner-only diff.
       - name: Verify Cargo.lock is current
         run: git diff --exit-code -- Elephant/backend/tauri/Cargo.lock

@@ -5,31 +5,43 @@ on:
     branches:
       - 'refactor/muya-rust-file-by-file'
     paths:
+      - '.gitignore'
       - 'Elephant/crates/muya-core/**'
       - 'Elephant/crates/muya-wasm/**'
       - 'Elephant/frontend/src/muya/lib/rust/**'
       - 'Elephant/frontend/src/muya/lib/core/setup.js'
       - 'Elephant/frontend/src/muya/lib/core/lifecycle.js'
       - 'Elephant/frontend/src/muya/lib/config/options.js'
+      - 'build/scripts/build-muya-wasm.mjs'
+      - 'package.json'
+      - 'vite.tauri.config.mjs'
+      - 'vitest.config.js'
       - 'tests/app/unit/specs/muya/rustBridge.spec.js'
       - 'tests/app/unit/specs/muya/rustLogicalDocument.spec.js'
       - 'tests/app/unit/specs/muya/rustDomRenderer.spec.js'
       - 'tests/app/unit/specs/muya/rustInputController.spec.js'
       - 'tests/app/unit/specs/muya/rustRuntime.spec.js'
+      - 'tests/app/unit/specs/muya/rustWasmFactory.spec.js'
       - '.github/workflows/muya-wasm.yml'
   pull_request:
     paths:
+      - '.gitignore'
       - 'Elephant/crates/muya-core/**'
       - 'Elephant/crates/muya-wasm/**'
       - 'Elephant/frontend/src/muya/lib/rust/**'
       - 'Elephant/frontend/src/muya/lib/core/setup.js'
       - 'Elephant/frontend/src/muya/lib/core/lifecycle.js'
       - 'Elephant/frontend/src/muya/lib/config/options.js'
+      - 'build/scripts/build-muya-wasm.mjs'
+      - 'package.json'
+      - 'vite.tauri.config.mjs'
+      - 'vitest.config.js'
       - 'tests/app/unit/specs/muya/rustBridge.spec.js'
       - 'tests/app/unit/specs/muya/rustLogicalDocument.spec.js'
       - 'tests/app/unit/specs/muya/rustDomRenderer.spec.js'
       - 'tests/app/unit/specs/muya/rustInputController.spec.js'
       - 'tests/app/unit/specs/muya/rustRuntime.spec.js'
+      - 'tests/app/unit/specs/muya/rustWasmFactory.spec.js'
       - '.github/workflows/muya-wasm.yml'
   workflow_dispatch:
 
@@ -80,11 +92,15 @@ jobs:
             Elephant/frontend/src/muya/lib/core/setup.js \
             Elephant/frontend/src/muya/lib/core/lifecycle.js \
             Elephant/frontend/src/muya/lib/config/options.js \
+            build/scripts/build-muya-wasm.mjs \
+            vite.tauri.config.mjs \
+            vitest.config.js \
             tests/app/unit/specs/muya/rustBridge.spec.js \
             tests/app/unit/specs/muya/rustLogicalDocument.spec.js \
             tests/app/unit/specs/muya/rustDomRenderer.spec.js \
             tests/app/unit/specs/muya/rustInputController.spec.js \
             tests/app/unit/specs/muya/rustRuntime.spec.js \
+            tests/app/unit/specs/muya/rustWasmFactory.spec.js \
             2>&1 | tee muya-rust-eslint.txt
 
       - name: Test Rust browser bridge
@@ -98,6 +114,7 @@ jobs:
             tests/app/unit/specs/muya/rustDomRenderer.spec.js \
             tests/app/unit/specs/muya/rustInputController.spec.js \
             tests/app/unit/specs/muya/rustRuntime.spec.js \
+            tests/app/unit/specs/muya/rustWasmFactory.spec.js \
             2>&1 | tee muya-rust-vitest.txt
 
       - name: Upload browser bridge diagnostics
@@ -110,3 +127,59 @@ jobs:
             muya-rust-vitest.txt
           if-no-files-found: ignore
           retention-days: 7
+
+  bundled-web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.91.0'
+          targets: wasm32-unknown-unknown
+
+      - id: wasm-bindgen
+        name: Resolve wasm-bindgen version
+        shell: bash
+        run: |
+          version="$(cargo metadata \
+            --manifest-path Elephant/crates/muya-wasm/Cargo.toml \
+            --format-version 1 | node -e '
+              let input = ""
+              process.stdin.on("data", chunk => input += chunk)
+              process.stdin.on("end", () => {
+                const metadata = JSON.parse(input)
+                const pkg = metadata.packages.find(entry => entry.name === "wasm-bindgen")
+                if (!pkg) process.exit(1)
+                process.stdout.write(pkg.version)
+              })
+            ')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache wasm-bindgen CLI
+        uses: actions/cache@v4
+        with:
+          path: build/tools/wasm-bindgen
+          key: wasm-bindgen-cli-${{ runner.os }}-${{ steps.wasm-bindgen.outputs.version }}
+
+      - name: Install wasm-bindgen CLI
+        shell: bash
+        run: |
+          if [ ! -x build/tools/wasm-bindgen/bin/wasm-bindgen ]; then
+            cargo install wasm-bindgen-cli \
+              --version "${{ steps.wasm-bindgen.outputs.version }}" \
+              --locked \
+              --root build/tools/wasm-bindgen
+          fi
+
+      - name: Build bundled Rust editor frontend
+        shell: bash
+        run: |
+          export PATH="$PWD/build/tools/wasm-bindgen/bin:$PATH"
+          pnpm tauri:web:build:rust-editor
+          test -f Elephant/frontend/src/muya/lib/rust/generated/muya_wasm.js
+          test -f Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm
+          find build/out/renderer -name '*.wasm' -print -quit | grep .

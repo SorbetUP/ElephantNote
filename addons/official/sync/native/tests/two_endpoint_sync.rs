@@ -1,9 +1,10 @@
 use elephant_sync_service::{
+  manifest::scan_vault,
   pairing::{
     consume_pair_request, create_pending_invite, parse_invite, register_accepted_peer,
   },
   protocol::{expect_control, read_control, write_control, ControlMessage, PairRequest, ALPN},
-  session::{run_all_sessions, serve_sync_session},
+  session::{read_baseline, run_all_sessions, serve_sync_session},
 };
 use iroh::{
   endpoint::presets,
@@ -131,6 +132,7 @@ async fn pair(
   };
   send.finish().unwrap();
   recv.read_to_end(0).await.unwrap();
+  connection.close(0_u32.into(), b"pairing-complete");
   register_accepted_peer(
     receiver_vault,
     &receiver_endpoint.id().to_string(),
@@ -160,8 +162,8 @@ async fn physical_package_pairs_and_synchronizes_two_real_iroh_endpoints() {
   fs::write(vault_a.join("From A.md"), "alpha").unwrap();
   fs::write(vault_b.join("From B.md"), "beta").unwrap();
 
-  let endpoint_a = Endpoint::bind(presets::N0).await.unwrap();
-  let endpoint_b = Endpoint::bind(presets::N0).await.unwrap();
+  let endpoint_a = Endpoint::builder(presets::Minimal).bind().await.unwrap();
+  let endpoint_b = Endpoint::builder(presets::Minimal).bind().await.unwrap();
   let router_a = Router::builder(endpoint_a.clone())
     .accept(
       ALPN,
@@ -184,10 +186,26 @@ async fn physical_package_pairs_and_synchronizes_two_real_iroh_endpoints() {
     .spawn();
 
   pair(&endpoint_a, &vault_a, &endpoint_b, &vault_b).await;
-  let sessions = run_all_sessions(&endpoint_b, &vault_b).await.unwrap();
+  let sessions = tokio::time::timeout(
+    Duration::from_secs(60),
+    run_all_sessions(&endpoint_b, &vault_b),
+  )
+  .await
+  .expect("physical package synchronization timed out")
+  .expect("physical package synchronization failed");
+
   assert_eq!(sessions.len(), 1);
+  assert_eq!(sessions[0].transferred_files, 2);
+  assert!(sessions[0].transferred_bytes >= 9);
+  assert!(sessions[0].conflicts.is_empty());
   assert_eq!(fs::read_to_string(vault_a.join("From B.md")).unwrap(), "beta");
   assert_eq!(fs::read_to_string(vault_b.join("From A.md")).unwrap(), "alpha");
+
+  let manifest_a = scan_vault(&vault_a).unwrap();
+  let manifest_b = scan_vault(&vault_b).unwrap();
+  assert!(manifest_a.content_equals(&manifest_b));
+  assert!(read_baseline(&vault_a, &endpoint_b.id().to_string()).content_equals(&manifest_a));
+  assert!(read_baseline(&vault_b, &endpoint_a.id().to_string()).content_equals(&manifest_b));
   assert!(vault_a.join(".elephantnote/sync/sync-manifest.json").is_file());
   assert!(vault_b.join(".elephantnote/sync/sync-manifest.json").is_file());
 

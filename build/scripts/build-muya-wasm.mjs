@@ -5,8 +5,6 @@ import { spawnSync } from 'node:child_process'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const manifest = resolve(root, 'Elephant/crates/muya-wasm/Cargo.toml')
-const target = resolve(root, 'Elephant/crates/muya-wasm/target')
-const wasm = resolve(target, 'wasm32-unknown-unknown/release/muya_wasm.wasm')
 const output = resolve(root, 'Elephant/frontend/src/muya/lib/rust/generated')
 
 const run = (command, args, options = {}) => {
@@ -24,12 +22,14 @@ const run = (command, args, options = {}) => {
   return result.stdout || ''
 }
 
-const dependencyVersion = () => {
-  const metadata = JSON.parse(
+const cargoMetadata = () =>
+  JSON.parse(
     run('cargo', ['metadata', '--manifest-path', manifest, '--format-version', '1'], {
       capture: true
     })
   )
+
+const dependencyVersion = (metadata) => {
   const dependency = metadata.packages.find((entry) => entry.name === 'wasm-bindgen')
   if (!dependency) throw new Error('Unable to resolve the wasm-bindgen dependency version.')
   return dependency.version
@@ -46,7 +46,12 @@ const verifyCli = (expected) => {
 }
 
 const main = () => {
-  const version = dependencyVersion()
+  const metadata = cargoMetadata()
+  const version = dependencyVersion(metadata)
+  const wasm = resolve(
+    metadata.target_directory,
+    'wasm32-unknown-unknown/release/muya_wasm.wasm'
+  )
   verifyCli(version)
   run('cargo', [
     'build',

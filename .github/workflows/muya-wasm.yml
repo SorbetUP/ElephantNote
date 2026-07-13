@@ -54,7 +54,20 @@ jobs:
             Elephant/crates/muya-wasm
 
       - name: Check core formatting
-        run: cargo fmt --manifest-path Elephant/crates/muya-core/Cargo.toml -- --check
+        shell: bash
+        run: |
+          cargo fmt --manifest-path Elephant/crates/muya-core/Cargo.toml
+          git diff -- Elephant/crates/muya-core > muya-core-rustfmt.patch
+          test ! -s muya-core-rustfmt.patch
+
+      - name: Upload core formatting diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-core-rustfmt
+          path: muya-core-rustfmt.patch
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Test core and protocol on host
         run: cargo test --manifest-path Elephant/crates/muya-core/Cargo.toml

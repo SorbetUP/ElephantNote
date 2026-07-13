@@ -54,6 +54,14 @@ export const rustBusCommand = (event, payload) => {
       return editorCommands.insertHorizontalRule()
     case 'createTable':
       return editorCommands.createTable(payload?.rows, payload?.columns)
+    case 'insert-image': {
+      const image = typeof payload === 'string' ? { source: payload } : payload || {}
+      return editorCommands.insertImage(
+        image.source || image.src || '',
+        image.alt || '',
+        image.title || null
+      )
+    }
     default:
       return null
   }

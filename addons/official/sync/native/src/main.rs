@@ -2,20 +2,32 @@ mod local_ops;
 mod manifest;
 mod plan;
 
-use iroh::{endpoint::presets, Endpoint};
+use iroh::{endpoint::presets, Endpoint, EndpointAddr, SecretKey, Watcher as _};
 use iroh_mdns_address_lookup::MdnsAddressLookup;
 use local_ops::apply_local_plan;
 use manifest::{scan_vault, VaultManifest};
 use plan::{build_plan, SyncPlan};
 use serde_json::{json, Value};
-use std::{env, path::PathBuf};
-use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
+use std::{
+  env,
+  fs,
+  path::{Path, PathBuf},
+  time::Duration,
+};
+use tokio::{
+  io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
+  time::timeout,
+};
 
 const PROTOCOL: &str = "elephant-addon-service-v1";
+const IDENTITY_FILE: &str = "iroh-endpoint.key";
+const MDNS_SERVICE: &str = "elephant-sync-addon-v1";
+const ENDPOINT_ADDRESS_TIMEOUT: Duration = Duration::from_secs(10);
 
 struct SyncService {
   endpoint: Option<Endpoint>,
   vault_dir: PathBuf,
+  data_dir: PathBuf,
 }
 
 impl SyncService {
@@ -23,32 +35,41 @@ impl SyncService {
     let vault_dir = env::var_os("ELEPHANT_VAULT_DIR")
       .map(PathBuf::from)
       .ok_or_else(|| "ELEPHANT_VAULT_DIR is unavailable for the Sync addon service".to_string())?;
+    let data_dir = env::var_os("ELEPHANT_ADDON_DATA_DIR")
+      .map(PathBuf::from)
+      .ok_or_else(|| "ELEPHANT_ADDON_DATA_DIR is unavailable for the Sync addon service".to_string())?;
     Ok(Self {
       endpoint: None,
       vault_dir,
+      data_dir,
     })
   }
 
   #[cfg(test)]
   fn with_vault_dir(vault_dir: PathBuf) -> Self {
+    let data_dir = vault_dir.join(".sync-addon-test-data");
     Self {
       endpoint: None,
       vault_dir,
+      data_dir,
     }
+  }
+
+  fn identity_path(&self) -> PathBuf {
+    self.data_dir.join(IDENTITY_FILE)
   }
 
   async fn ensure_endpoint(&mut self) -> Result<&Endpoint, String> {
     if self.endpoint.is_none() {
-      let endpoint = Endpoint::bind(presets::N0)
+      fs::create_dir_all(&self.data_dir).map_err(|error| error.to_string())?;
+      let secret_key = load_or_create_secret_key(&self.identity_path())?;
+      let endpoint = Endpoint::builder(presets::Minimal)
+        .secret_key(secret_key)
+        .address_lookup(MdnsAddressLookup::builder().service_name(MDNS_SERVICE))
+        .bind()
         .await
         .map_err(|error| format!("Failed to bind Iroh endpoint: {error}"))?;
-      let discovery = MdnsAddressLookup::builder()
-        .build(endpoint.id())
-        .map_err(|error| format!("Failed to initialize mDNS discovery: {error}"))?;
-      endpoint
-        .address_lookup()
-        .map_err(|error| format!("Iroh address lookup is unavailable: {error}"))?
-        .add(discovery);
+      wait_for_endpoint_addr(&endpoint).await?;
       self.endpoint = Some(endpoint);
     }
     self.endpoint
@@ -57,15 +78,21 @@ impl SyncService {
   }
 
   async fn status(&mut self) -> Result<Value, String> {
-    let endpoint_id = self.ensure_endpoint().await?.id().to_string();
+    let endpoint = self.ensure_endpoint().await?;
+    let endpoint_id = endpoint.id().to_string();
+    let endpoint_addr = endpoint.addr();
     Ok(json!({
       "running": true,
       "endpointId": endpoint_id,
+      "endpointAddr": endpoint_addr,
       "transport": "iroh",
       "discovery": "mdns",
+      "mdnsService": MDNS_SERVICE,
+      "stableIdentity": true,
       "owner": "elephant.sync",
       "vaultDir": self.vault_dir,
-      "ownedCapabilities": ["endpoint", "manifest", "plan", "local-operations"]
+      "dataDir": self.data_dir,
+      "ownedCapabilities": ["endpoint", "identity", "manifest", "plan", "local-operations"]
     }))
   }
 
@@ -149,6 +176,56 @@ impl SyncService {
       endpoint.close().await;
     }
   }
+}
+
+async fn wait_for_endpoint_addr(endpoint: &Endpoint) -> Result<EndpointAddr, String> {
+  let mut watcher = endpoint.watch_addr();
+  timeout(ENDPOINT_ADDRESS_TIMEOUT, async {
+    loop {
+      let addr = watcher.get();
+      if addr.ip_addrs().next().is_some() || addr.relay_urls().next().is_some() {
+        return Ok(addr);
+      }
+      watcher
+        .updated()
+        .await
+        .map_err(|_| "Iroh endpoint address watcher disconnected".to_string())?;
+    }
+  })
+  .await
+  .map_err(|_| "Iroh endpoint did not publish a dialable address within ten seconds".to_string())?
+}
+
+fn load_or_create_secret_key(path: &Path) -> Result<SecretKey, String> {
+  if path.exists() {
+    let bytes = fs::read(path).map_err(|error| error.to_string())?;
+    let bytes: [u8; 32] = bytes
+      .try_into()
+      .map_err(|_| "Invalid Sync addon Iroh identity file".to_string())?;
+    return Ok(SecretKey::from_bytes(&bytes));
+  }
+
+  if let Some(parent) = path.parent() {
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+  }
+  let key = SecretKey::generate();
+  let temporary = path.with_extension("key.tmp");
+  fs::write(&temporary, key.to_bytes()).map_err(|error| error.to_string())?;
+  set_private_permissions(&temporary)?;
+  fs::rename(&temporary, path).map_err(|error| error.to_string())?;
+  set_private_permissions(path)?;
+  Ok(key)
+}
+
+#[cfg(unix)]
+fn set_private_permissions(path: &Path) -> Result<(), String> {
+  use std::os::unix::fs::PermissionsExt;
+  fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(|error| error.to_string())
+}
+
+#[cfg(not(unix))]
+fn set_private_permissions(_path: &Path) -> Result<(), String> {
+  Ok(())
 }
 
 fn success(id: u64, result: Value) -> Value {
@@ -245,7 +322,6 @@ async fn main() {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::fs;
 
   fn temp_root(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -264,6 +340,29 @@ mod tests {
     assert_eq!(response["protocol"], PROTOCOL);
     assert_eq!(response["id"], 7);
     assert_eq!(response["ok"], true);
+  }
+
+  #[test]
+  fn package_identity_is_stable_across_service_restarts() {
+    let root = temp_root("identity");
+    let path = root.join("data").join(IDENTITY_FILE);
+    let first = load_or_create_secret_key(&path).unwrap();
+    let second = load_or_create_secret_key(&path).unwrap();
+    assert_eq!(first.to_bytes(), second.to_bytes());
+    assert_eq!(fs::read(&path).unwrap(), first.to_bytes());
+    let _ = fs::remove_dir_all(root);
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn package_identity_is_private_on_unix() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = temp_root("permissions");
+    let path = root.join("data").join(IDENTITY_FILE);
+    load_or_create_secret_key(&path).unwrap();
+    let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
+    let _ = fs::remove_dir_all(root);
   }
 
   #[tokio::test]

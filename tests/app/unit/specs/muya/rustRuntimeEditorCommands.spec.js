@@ -36,6 +36,27 @@ describe('Elephant Rust editor command routing', () => {
     })
   })
 
+  it('preserves image source, alt text and title', () => {
+    expect(
+      rustBusCommand('insert-image', {
+        source: 'assets/image.png',
+        alt: 'diagram',
+        title: 'Architecture'
+      })
+    ).toEqual({
+      type: 'insert_image',
+      source: 'assets/image.png',
+      alt: 'diagram',
+      title: 'Architecture'
+    })
+    expect(rustBusCommand('insert-image', 'image.png')).toEqual({
+      type: 'insert_image',
+      source: 'image.png',
+      alt: '',
+      title: null
+    })
+  })
+
   it('does not invent a fallback for unsupported menu entries', () => {
     expect(rustParagraphCommand('table')).toBeNull()
     expect(rustBusCommand('unknown')).toBeNull()

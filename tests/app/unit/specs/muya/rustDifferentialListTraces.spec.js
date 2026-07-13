@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
+import selection from '../../../../../Elephant/frontend/src/muya/lib/selection'
 import {
   bundled,
   fakeKeyEvent,
@@ -10,7 +11,8 @@ import {
 
 const describeJsCursor = (muya, label) => {
   const { contentState } = muya
-  let block = contentState.getBlock(contentState.cursor.start.key)
+  const selectedBlock = contentState.getBlock(contentState.cursor.start.key)
+  let block = selectedBlock
   const path = []
   while (block) {
     path.push({
@@ -31,8 +33,9 @@ const describeJsCursor = (muya, label) => {
     JSON.stringify({
       label,
       cursor: contentState.cursor,
+      domCursor: selection.getCursorRange(),
       indentable: contentState.isIndentableListItem(),
-      unindentable: contentState.isUnindentableListItem(),
+      unindentable: contentState.isUnindentableListItem(selectedBlock),
       path
     })
   )

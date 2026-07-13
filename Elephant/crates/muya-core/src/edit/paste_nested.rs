@@ -359,7 +359,7 @@ mod tests {
 
   #[test]
   fn pastes_inside_a_table_cell() {
-    let table = "| A | B |\n| --- | --- |\n| alpha | beta |";
+    let table = "| A     | B    |\n| ----- | ---- |\n| alpha | beta |";
     assert_nested(
       table,
       "alpha",

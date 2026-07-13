@@ -43,17 +43,19 @@ The parser builds structural list, item, row and cell nodes rather than flatteni
 - `InsertText`, `DeleteBackward` and `InsertParagraph` commands;
 - `ToggleStrong`, `ToggleEmphasis` and `ToggleStrike` commands;
 - full-mark unwrapping for a mark containing one selected text node;
-- plain paragraph splitting and adjacent paragraph joining;
+- plain and rich paragraph splitting from direct text children;
+- stable movement of following inline subtrees into the new paragraph;
+- plain and rich paragraph joining by moving all inline children into the previous paragraph;
 - `SetParagraph` and validated `SetHeading(1..=6)` transformations;
 - stable explicit node IDs for structural operations;
 - validation against offsets inside surrogate pairs;
-- invertible text replacement, insertion, subtree removal/restoration and block-kind operations;
+- invertible text replacement, insertion, subtree removal/restoration, subtree movement and block-kind operations;
 - atomic transactions applied on a cloned document before commit;
 - document revision increments;
 - bounded transaction-based undo and redo history;
-- logical view patches, including detached subtree insertion patches.
+- logical view patches for text, nodes, subtrees, subtree movement and block changes.
 
-Structural undo/redo restores exact node IDs and parent/child topology. The current cross-node boundary requires direct sibling endpoint text nodes. Endpoints nested inside different marks, partial mark unwrapping, rich-inline splitting, grapheme clusters, list/table commands, IME grouping and actual DOM patch application are not yet active.
+Structural undo/redo restores exact node IDs, parent/child topology and inline order. The current rich split/join boundary requires a direct paragraph text child. Cross-node replacement requires direct sibling endpoint texts. Endpoints nested inside different marks, partial mark unwrapping, splitting from inside nested marks, grapheme clusters, list/table commands, IME grouping and actual DOM patch application are not yet active.
 
 The executable slices have Rust unit and round-trip tests. Full JavaScript-vs-Rust characterization is still required before runtime activation or JavaScript deletion.
 

@@ -95,6 +95,8 @@ const busHandlers = Object.freeze({
   redo: () => dispatchRustBusCommand('redo'),
   format: (type) => dispatchRustBusCommand('format', type),
   paragraph: (type) => dispatchRustBusCommand('paragraph', type),
+  duplicate: () => dispatchRustBusCommand('duplicate'),
+  deleteParagraph: () => dispatchRustBusCommand('deleteParagraph'),
   insertParagraph: () => dispatchRustBusCommand('insertParagraph'),
   createParagraph: () => dispatchRustBusCommand('createParagraph')
 })

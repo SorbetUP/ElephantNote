@@ -18,3 +18,4 @@ pub use mark_compat::MarkCommand;
 pub use operation::{Operation, Utf16Range};
 pub use paragraph_boundary::ParagraphBoundaryCommand;
 pub use transaction::Transaction;
+pub(crate) use mark_fragments::build_partial_cross_wrapper_toggle;

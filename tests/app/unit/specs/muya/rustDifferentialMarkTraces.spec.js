@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
+import selection from '../../../../../Elephant/frontend/src/muya/lib/selection'
 import {
   bundled,
   initializeRustWasm,
@@ -54,6 +55,17 @@ const traces = [
     expected: '**alpha**\n',
     runJs: async (muya) => {
       setJsSelection(muya, 0, 3, 8)
+      const cursor = selection.getCursorRange()
+      const state = muya.contentState.selectionFormats(cursor)
+      console.log(
+        '[muya-nested-mark]',
+        JSON.stringify({
+          start: cursor.start,
+          end: cursor.end,
+          formats: state.formats.map(({ type, range }) => ({ type, range })),
+          neighbors: state.neighbors.map(({ type, range }) => ({ type, range }))
+        })
+      )
       muya.format('em')
     },
     runRust: (rust) => {

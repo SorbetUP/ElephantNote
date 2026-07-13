@@ -24,6 +24,7 @@ export const editorCommands = Object.freeze({
   snapshot: () => ({ type: 'snapshot' }),
   setSelection: (selection) => ({ type: 'set_selection', selection }),
   insertText: (text) => ({ type: 'insert_text', text }),
+  pasteMarkdown: (markdown) => ({ type: 'paste_markdown', markdown }),
   insertParagraph: () => ({ type: 'insert_paragraph' }),
   deleteBackward: () => ({ type: 'delete_backward' }),
   setParagraph: () => ({ type: 'set_paragraph' }),

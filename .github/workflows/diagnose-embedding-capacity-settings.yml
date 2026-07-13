@@ -1,0 +1,60 @@
+name: Diagnose Embedding Capacity Settings
+
+on:
+  pull_request:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/diagnose-embedding-capacity-settings.yml
+
+jobs:
+  diagnose:
+    if: github.head_ref == 'assistant/wiki-organization-continuation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+      - uses: ./.github/actions/setup
+      - name: Install Linux Tauri build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+      - name: Apply pending patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          workflow = Path('.github/workflows/add-embedding-capacity-settings.yml').read_text()
+          script = workflow.split("python3 - <<'PY'\n", 1)[1].split('\n          PY', 1)[0]
+          exec(compile(textwrap.dedent(script), 'embedding-capacity-patch', 'exec'))
+          PY
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+      - name: Capture validation logs
+        run: |
+          set +e
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml local_llama_runtime --lib > rust.log 2>&1
+          echo $? > rust.status
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run tests/app/unit/wikiDiscoveryQualityRegression.spec.js > vitest.log 2>&1
+          echo $? > vitest.status
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \
+            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
+            Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js \
+            Elephant/frontend/src/renderer/src/prefComponents/general/index.vue > eslint.log 2>&1
+          echo $? > eslint.status
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: embedding-capacity-diagnostics
+          path: |
+            rust.log
+            rust.status
+            vitest.log
+            vitest.status
+            eslint.log
+            eslint.status

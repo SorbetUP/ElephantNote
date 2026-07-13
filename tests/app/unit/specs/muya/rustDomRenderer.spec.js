@@ -30,6 +30,17 @@ const textNode = (id, parent, value) => ({
   source: null
 })
 
+const markFragmentNode = (id, parent, children, mark, group, edge) => ({
+  id,
+  parent,
+  children,
+  kind: {
+    layer: 'inline',
+    value: { type: 'mark_fragment', mark, group, edge }
+  },
+  source: null
+})
+
 const snapshot = () => ({
   markdown: 'alpha\n\nomega',
   document: {
@@ -142,6 +153,46 @@ describe('MuyaRustDomRenderer', () => {
     expect(renderer.element(7).tagName).toBe('STRONG')
     expect(renderer.element(8).textContent).toBe('bold')
     expect(renderer.element(5)).toBeNull()
+    expect(renderer.validateDom()).toBe(true)
+  })
+
+  it('renders linked mark fragments as semantic elements', () => {
+    const renderer = new MuyaRustDomRenderer(container)
+    renderer.applySnapshot({
+      ...snapshot(),
+      markdown: '**al~~pha** beta *gam~~ma*',
+      document: {
+        root: 1,
+        nodes: [
+          documentNode([2]),
+          paragraphNode(2, [3, 5, 7]),
+          markFragmentNode(3, 2, [4], 'strike', 42, 'start'),
+          textNode(4, 3, 'pha'),
+          markFragmentNode(5, 2, [6], 'strike', 42, 'middle'),
+          textNode(6, 5, ' beta '),
+          markFragmentNode(7, 2, [8], 'strike', 42, 'end'),
+          textNode(8, 7, 'gam')
+        ]
+      },
+      selection: {
+        anchor: { node: 4, offset_utf16: 0 },
+        focus: { node: 8, offset_utf16: 3 }
+      }
+    })
+
+    const fragments = [renderer.element(3), renderer.element(5), renderer.element(7)]
+    expect(fragments.map((element) => element.tagName)).toEqual(['DEL', 'DEL', 'DEL'])
+    expect(fragments.map((element) => element.dataset.muyaRustMarkGroup)).toEqual([
+      '42',
+      '42',
+      '42'
+    ])
+    expect(fragments.map((element) => element.dataset.muyaRustMarkEdge)).toEqual([
+      'start',
+      'middle',
+      'end'
+    ])
+    expect(fragments.map((element) => element.textContent)).toEqual(['pha', ' beta ', 'gam'])
     expect(renderer.validateDom()).toBe(true)
   })
 

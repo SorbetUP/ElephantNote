@@ -19,14 +19,16 @@ describe('Sync package-owned service boundary', () => {
     expect(manifest.native.mobile.ios.supported).toBe(false)
   })
 
-  it('owns and publishes the live Iroh endpoint from its native crate', () => {
+  it('owns and publishes a stable live Iroh endpoint from its native crate', () => {
     const native = read('addons/official/sync/native/src/main.rs')
-    expect(native).toContain('Endpoint::bind(presets::N0)')
-    expect(native).toContain('MdnsAddressLookup::builder()')
-    expect(native).toContain('.build(endpoint.id())')
-    expect(native).toContain('.address_lookup()')
-    expect(native).toContain('let endpoint_id = self.ensure_endpoint().await?.id().to_string()')
+    expect(native).toContain('Endpoint::builder(presets::Minimal)')
+    expect(native).toContain('.secret_key(secret_key)')
+    expect(native).toContain('.address_lookup(MdnsAddressLookup::builder().service_name(MDNS_SERVICE))')
+    expect(native).toContain('load_or_create_secret_key')
+    expect(native).toContain('wait_for_endpoint_addr')
+    expect(native).toContain('let endpoint_id = endpoint.id().to_string()')
     expect(native).toContain('"endpointId": endpoint_id')
+    expect(native).toContain('"stableIdentity": true')
     expect(native).toContain('"owner": "elephant.sync"')
     expect(native).toContain('elephant-addon-service-v1')
     expect(native).not.toContain('tauri::command')
@@ -44,13 +46,13 @@ describe('Sync package-owned service boundary', () => {
     expect(source).toContain("this.callNativeService('sync.apply-local'")
   })
 
-  it('owns scan, planning and local operations without claiming network transfer completion', () => {
+  it('owns identity, scan, planning and local operations without claiming network transfer completion', () => {
     const manifest = JSON.parse(read('addons/official/sync/manifest.json'))
     const native = read('addons/official/sync/native/src/main.rs')
     const base = read('addons/official/sync/main.js')
 
     expect(manifest.description).toMatch(/manifest scanning and deterministic sync planning/i)
-    expect(native).toContain('"ownedCapabilities": ["endpoint", "manifest", "plan", "local-operations"]')
+    expect(native).toContain('"ownedCapabilities": ["endpoint", "identity", "manifest", "plan", "local-operations"]')
     expect(native).not.toContain('sync.run')
     expect(base).toContain("this.invoke('iroh_sync_run'")
   })

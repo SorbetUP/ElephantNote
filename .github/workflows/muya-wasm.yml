@@ -7,11 +7,21 @@ on:
     paths:
       - 'Elephant/crates/muya-core/**'
       - 'Elephant/crates/muya-wasm/**'
+      - 'Elephant/frontend/src/muya/lib/rust/**'
+      - 'Elephant/frontend/src/muya/lib/core/setup.js'
+      - 'Elephant/frontend/src/muya/lib/config/options.js'
+      - 'tests/app/unit/specs/muya/rustBridge.spec.js'
+      - 'tests/app/unit/specs/muya/rustLogicalDocument.spec.js'
       - '.github/workflows/muya-wasm.yml'
   pull_request:
     paths:
       - 'Elephant/crates/muya-core/**'
       - 'Elephant/crates/muya-wasm/**'
+      - 'Elephant/frontend/src/muya/lib/rust/**'
+      - 'Elephant/frontend/src/muya/lib/core/setup.js'
+      - 'Elephant/frontend/src/muya/lib/config/options.js'
+      - 'tests/app/unit/specs/muya/rustBridge.spec.js'
+      - 'tests/app/unit/specs/muya/rustLogicalDocument.spec.js'
       - '.github/workflows/muya-wasm.yml'
   workflow_dispatch:
 
@@ -45,3 +55,25 @@ jobs:
 
       - name: Check WebAssembly target
         run: cargo check --manifest-path Elephant/crates/muya-wasm/Cargo.toml --target wasm32-unknown-unknown
+
+  browser-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+
+      - name: Lint Rust bridge modules
+        run: >-
+          pnpm exec eslint
+          Elephant/frontend/src/muya/lib/rust
+          Elephant/frontend/src/muya/lib/core/setup.js
+          Elephant/frontend/src/muya/lib/config/options.js
+          tests/app/unit/specs/muya/rustBridge.spec.js
+          tests/app/unit/specs/muya/rustLogicalDocument.spec.js
+
+      - name: Test Rust browser bridge
+        run: >-
+          pnpm exec vitest run
+          tests/app/unit/specs/muya/rustBridge.spec.js
+          tests/app/unit/specs/muya/rustLogicalDocument.spec.js

@@ -17,6 +17,10 @@
     :to-editor-markdown="toEditorMarkdown"
     :from-editor-markdown="fromEditorMarkdown"
   />
+  <RuntimeTableDialog
+    v-model="tableDialogVisible"
+    @confirm="handleCreateTable"
+  />
 </template>
 
 <script setup>
@@ -32,6 +36,7 @@ import {
   readMuyaRuntimeMode
 } from '@/muya'
 import Editor from './editor.vue'
+import RuntimeTableDialog from './runtimeTableDialog.vue'
 import { rustBusCommand } from './runtimeEditorCommands'
 import { applyRustEditorMarkdown } from './runtimeEditorState'
 
@@ -59,6 +64,7 @@ const editorStore = useEditorStore()
 const { currentFile } = storeToRefs(editorStore)
 const runtimeMode = ref(readMuyaRuntimeMode(window))
 const rustRuntime = ref(null)
+const tableDialogVisible = ref(false)
 let runtimeModeTimer = null
 let pendingRuntimeFrame = null
 
@@ -90,15 +96,28 @@ const dispatchRustBusCommand = (event, payload) => {
   })
 }
 
+const handleParagraphCommand = (type) => {
+  if (type === 'table' && rustRuntimeActive.value && !props.sourceCode) {
+    tableDialogVisible.value = true
+    return
+  }
+  dispatchRustBusCommand('paragraph', type)
+}
+
+const handleCreateTable = (table) => {
+  dispatchRustBusCommand('createTable', table)
+}
+
 const busHandlers = Object.freeze({
   undo: () => dispatchRustBusCommand('undo'),
   redo: () => dispatchRustBusCommand('redo'),
   format: (type) => dispatchRustBusCommand('format', type),
-  paragraph: (type) => dispatchRustBusCommand('paragraph', type),
+  paragraph: handleParagraphCommand,
   duplicate: () => dispatchRustBusCommand('duplicate'),
   deleteParagraph: () => dispatchRustBusCommand('deleteParagraph'),
   insertParagraph: () => dispatchRustBusCommand('insertParagraph'),
-  createParagraph: () => dispatchRustBusCommand('createParagraph')
+  createParagraph: () => dispatchRustBusCommand('createParagraph'),
+  'insert-horizontal-rule': () => dispatchRustBusCommand('insert-horizontal-rule')
 })
 
 const handleRustMarkdownChange = (editorMarkdown) => {
@@ -126,6 +145,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('elephantnote:muya-runtime-mode-changed', scheduleRuntimeModeSync)
   for (const [event, handler] of Object.entries(busHandlers)) bus.off(event, handler)
   rustRuntime.value = null
+  tableDialogVisible.value = false
   if (runtimeModeTimer) {
     window.clearInterval(runtimeModeTimer)
     runtimeModeTimer = null

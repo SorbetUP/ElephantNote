@@ -82,7 +82,20 @@ jobs:
           retention-days: 7
 
       - name: Test core and protocol on host
-        run: cargo test --manifest-path Elephant/crates/muya-core/Cargo.toml
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --manifest-path Elephant/crates/muya-core/Cargo.toml \
+            2>&1 | tee muya-core-tests.txt
+
+      - name: Upload core test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-core-tests
+          path: muya-core-tests.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Check adapter formatting
         run: cargo fmt --manifest-path Elephant/crates/muya-wasm/Cargo.toml -- --check

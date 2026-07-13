@@ -20,6 +20,12 @@ struct CrossEndpoint {
 
 impl MarkCommand {
   pub fn build(self, document: &Document, selection: Selection) -> Result<Transaction, EditError> {
+    let fragment_kind = self.fragment_kind();
+    if let Some(group) =
+      super::mark_fragment_toggle::selected_group(document, selection, fragment_kind)?
+    {
+      return super::mark_fragment_toggle::build_unwrap_group(document, selection, group);
+    }
     if let Some(wrapper) = selected_mark_ancestor(document, selection, self)? {
       if is_muya_nested_emphasis_noop(document, wrapper, self)? {
         return Ok(noop(selection));
@@ -30,7 +36,7 @@ impl MarkCommand {
       return super::mark_fragments::build_partial_cross_wrapper_toggle(
         document,
         selection,
-        self.fragment_kind(),
+        fragment_kind,
       );
     }
     self.generic().build(document, selection)
@@ -338,5 +344,30 @@ mod tests {
       .apply(&mut document)
       .unwrap();
     assert_eq!(to_markdown(&document), "**al~~pha** beta *gam~~ma*");
+  }
+
+  #[test]
+  fn toggles_a_complete_linked_group_off() {
+    let mut document = parse_markdown("**alpha** beta *gamma*");
+    let selection = Selection {
+      anchor: SelectionPoint {
+        node: text_with_value(&document, "alpha").id,
+        offset_utf16: 2,
+      },
+      focus: SelectionPoint {
+        node: text_with_value(&document, "gamma").id,
+        offset_utf16: 3,
+      },
+    };
+    let apply = MarkCommand::ToggleStrike.build(&document, selection).unwrap();
+    let linked_selection = apply.selection_after;
+    apply.apply(&mut document).unwrap();
+
+    MarkCommand::ToggleStrike
+      .build(&document, linked_selection)
+      .unwrap()
+      .apply(&mut document)
+      .unwrap();
+    assert_eq!(to_markdown(&document), "**alpha** beta *gamma*");
   }
 }

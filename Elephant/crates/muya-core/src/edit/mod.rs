@@ -16,6 +16,7 @@ mod paragraph_engine;
 mod paste;
 mod paste_command;
 mod paste_nested;
+mod paste_nested_structured;
 mod transaction;
 
 pub use command::Command;

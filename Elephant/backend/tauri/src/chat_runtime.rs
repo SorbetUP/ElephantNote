@@ -76,6 +76,7 @@ fn selected_chat_model(payload: &Value) -> String {
     .unwrap_or_default()
 }
 
+#[cfg(not(mobile))]
 fn knowledge_hits(app: &AppHandle, query: &str, limit: usize) -> Vec<KnowledgeSearchHit> {
     let Ok(vault) = crate::vault::config::get_active_vault(app) else {
         return Vec::new();
@@ -190,7 +191,10 @@ pub async fn tauri_knowledge_chat(app: AppHandle, payload: Value) -> R<Value> {
     #[cfg(mobile)]
     {
         let _ = app;
-        return Err("Bundled local GGUF chat is unavailable on mobile in this build.".into());
+        return Err(
+            "Bundled local GGUF chat is desktop-only and unavailable on mobile in this build."
+                .into(),
+        );
     }
 
     #[cfg(not(mobile))]

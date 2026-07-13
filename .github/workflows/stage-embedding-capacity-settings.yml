@@ -1,0 +1,51 @@
+name: Stage Embedding Capacity Settings
+
+on:
+  pull_request:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/stage-embedding-capacity-settings.yml
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    if: github.head_ref == 'assistant/wiki-organization-continuation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+          fetch-depth: 0
+      - name: Apply validated embedding capacity patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path('.github/workflows/add-embedding-capacity-settings.yml').read_text()
+          script = workflow.split("python3 - <<'PY'\n", 1)[1].split('\n          PY', 1)[0]
+          exec(compile(textwrap.dedent(script), 'embedding-capacity-patch', 'exec'))
+
+          test_path = Path('tests/app/unit/wikiDiscoveryQualityRegression.spec.js')
+          test = test_path.read_text().replace(
+              "expect(aiSettings).toContain('embeddingPhysicalBatchSize: 1024')",
+              "expect(aiSettings).toContain('embeddingPhysicalBatchSize')\n      expect(aiSettings).toContain('1024')",
+          )
+          test_path.write_text(test)
+          PY
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+      - name: Commit validated settings
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Elephant/backend/tauri/src/local_llama_runtime.rs \
+            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
+            Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js \
+            Elephant/frontend/src/renderer/src/prefComponents/general/index.vue \
+            tests/app/unit/wikiDiscoveryQualityRegression.spec.js
+          git commit --no-verify -m "fix: configure local embedding runtime capacity"
+          git push origin HEAD:assistant/wiki-organization-continuation

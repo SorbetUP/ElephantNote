@@ -17,10 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check out official addon catalogue
+      - name: Check out physical addon catalogue
         uses: actions/checkout@v4
         with:
-          ref: addon-catalog
+          ref: feature/physical-addon-catalog
           path: addon-catalog-source
 
       - uses: ./.github/actions/setup
@@ -70,36 +70,49 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          mkdir -p build/addons
           node build/scripts/package-addon.mjs \
             examples/addons/trusted-workspace-lab \
             build/addons/trusted-workspace-lab.enaddon \
             2>&1 | tee trusted-addon-package.txt
           unzip -t build/addons/trusted-workspace-lab.enaddon
 
-      - name: Package physical AI parent addon
+      - name: Package every local physical JavaScript addon
         shell: bash
         run: |
           set -o pipefail
-          node build/scripts/package-addon.mjs \
-            addons/official/ai \
-            build/addons/elephant.ai.enaddon \
-            2>&1 | tee physical-ai-package.txt
-          unzip -t build/addons/elephant.ai.enaddon
-
-      - name: Package every official catalogue addon
-        shell: bash
-        run: |
-          set -o pipefail
-          mkdir -p build/addons
-          : > addon-package.txt
-          for source in addon-catalog-source/addons/*
+          : > physical-addon-packages.txt
+          for source in addons/official/*
           do
+            [ -d "$source" ] || continue
             slug="$(basename "$source")"
+            if [ "$slug" = "ai-ocr" ]; then
+              continue
+            fi
             node build/scripts/package-addon.mjs \
               "$source" \
               "build/addons/$slug.enaddon" \
-              2>&1 | tee -a addon-package.txt
+              2>&1 | tee -a physical-addon-packages.txt
             unzip -t "build/addons/$slug.enaddon"
+          done
+
+      - name: Package every catalogue addon
+        shell: bash
+        run: |
+          set -o pipefail
+          : > addon-package.txt
+          for source in addon-catalog-source/addons/*
+          do
+            [ -d "$source" ] || continue
+            slug="$(basename "$source")"
+            if [ "$slug" = "ai-ocr" ]; then
+              continue
+            fi
+            node build/scripts/package-addon.mjs \
+              "$source" \
+              "build/addons/catalog-$slug.enaddon" \
+              2>&1 | tee -a addon-package.txt
+            unzip -t "build/addons/catalog-$slug.enaddon"
           done
 
       - name: Build Tauri web bundle and verify physical absence
@@ -107,14 +120,27 @@ jobs:
         run: |
           set -o pipefail
           pnpm tauri:web:build 2>&1 | tee addon-build.txt
-          if grep -R -n -F 'elephant-ai-settings' build/out/renderer; then
-            echo 'Physical AI parent code leaked into the core renderer bundle.' >&2
-            exit 1
-          fi
-          if grep -R -n -F 'elephant-ocr-addon-settings' build/out/renderer; then
-            echo 'Physical OCR addon code leaked into the core renderer bundle.' >&2
-            exit 1
-          fi
+          markers=(
+            elephant-ai-settings
+            elephant-ocr-addon-settings
+            ElephantChatAddon
+            ElephantSearchAddon
+            ElephantWikiAddon
+            ElephantGraphAddon
+            ElephantOpenModelsAddon
+            ElephantCodexAddon
+            ElephantSyncAddon
+            ElephantCalendarAddon
+            ElephantSitesAddon
+            ElephantCodeExecutionAddon
+          )
+          for marker in "${markers[@]}"
+          do
+            if grep -R -n -F "$marker" build/out/renderer; then
+              echo "Physical addon implementation leaked into the core renderer bundle: $marker" >&2
+              exit 1
+            fi
+          done
 
       - name: Upload functional validation and installable packages
         if: always()
@@ -126,7 +152,7 @@ jobs:
             addon-functional-tests.txt
             addon-tests.txt
             trusted-addon-package.txt
-            physical-ai-package.txt
+            physical-addon-packages.txt
             addon-package.txt
             addon-build.txt
             build/addons/*.enaddon

@@ -10,25 +10,32 @@ end = text.find(end_marker, start)
 if end < 0:
     raise SystemExit('related-link patch block end not found')
 end += len(end_marker)
-replacement = """text = replace_once(
-    text,
-    '''    let has_legacy_related = markdown.lines().any(|line| {
-        let trimmed = line.trim();
-        trimmed.starts_with("- [[") && trimmed.ends_with("]]" )
-    });'''.replace('ends_with("]]" )', 'ends_with("]]"))'),
-    '''    let mut in_related_section = false;
-    let has_legacy_related = markdown.lines().any(|line| {
-        let trimmed = line.trim();
-        if let Some(heading) = trimmed.strip_prefix("## ") {
-            in_related_section = heading.trim().eq_ignore_ascii_case("related wikis");
-            return false;
-        }
-        in_related_section
-            && ((trimmed.starts_with("- [[") && trimmed.ends_with("]]"))
-                || (trimmed.starts_with("- [") && trimmed.contains("](./")))
-    });''',
-    'detect standard dead related links',
+old_source = (
+    '    let has_legacy_related = markdown.lines().any(|line| {\n'
+    '        let trimmed = line.trim();\n'
+    '        trimmed.starts_with("- [[") && trimmed.ends_with("]]" )\n'
+    '    });'
+).replace('ends_with("]]" )', 'ends_with("]]")')
+new_source = (
+    '    let mut in_related_section = false;\n'
+    '    let has_legacy_related = markdown.lines().any(|line| {\n'
+    '        let trimmed = line.trim();\n'
+    '        if let Some(heading) = trimmed.strip_prefix("## ") {\n'
+    '            in_related_section = heading.trim().eq_ignore_ascii_case("related wikis");\n'
+    '            return false;\n'
+    '        }\n'
+    '        in_related_section\n'
+    '            && ((trimmed.starts_with("- [[") && trimmed.ends_with("]]"))\n'
+    '                || (trimmed.starts_with("- [") && trimmed.contains("](./")))\n'
+    '    });'
 )
-"""
+replacement = (
+    'text = replace_once(\n'
+    '    text,\n'
+    f'    {old_source!r},\n'
+    f'    {new_source!r},\n'
+    "    'detect standard dead related links',\n"
+    ')\n'
+)
 text = text[:start] + replacement + text[end:]
 path.write_text(text)

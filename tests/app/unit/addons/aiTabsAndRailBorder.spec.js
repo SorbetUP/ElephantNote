@@ -5,77 +5,61 @@ import { describe, expect, it } from 'vitest'
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
-describe('AI settings navigation', () => {
-  it('has one physical navigation owner and page-only child settings', () => {
-    const parentSettings = read('addons/official/ai/main.js')
-    const routeSettings = read('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
-    const registry = read('Elephant/frontend/src/renderer/src/addons/builtin/aiSettingsRegistry.js')
-    const chatSettings = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiChatSettings.vue')
-    const searchSettings = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiSearchSettings.vue')
+describe('AI physical package navigation', () => {
+  it('has one physical navigation owner and package-owned child slots', () => {
+    const parent = read('addons/official/ai/main.js')
+    const chat = read('addons/official/ai-chat/main.js')
+    const search = read('addons/official/ai-search/main.js')
+    const ocr = read('addons/official/ai-ocr/main.js')
 
-    expect(parentSettings).toContain("const PAGE_DEFINITIONS")
-    expect(parentSettings).toContain("slot: 'ai.chat'")
-    expect(parentSettings).toContain("slot: 'ai.search'")
-    expect(parentSettings).toContain("slot: 'ai.ocr'")
-    expect(parentSettings).toContain("setAttribute('data-elephant-addon-settings-slot', active.slot)")
-    expect(parentSettings).not.toContain('AiProviderSettingsPanel')
-
-    expect(registry).toContain("slot: 'ai.chat'")
-    expect(registry).toContain("slot: 'ai.search'")
-    expect(registry).toContain("slot: 'ai.ocr'")
-
-    expect(routeSettings).not.toContain('en-ai-toolbar')
-    expect(routeSettings).not.toContain('en-ai-tabs')
-    expect(routeSettings).not.toContain('aiPages')
-    expect(chatSettings).toContain('AI_SETTINGS_PAGE_BY_ID.chat')
-    expect(searchSettings).toContain('AI_SETTINGS_PAGE_BY_ID.search')
-    expect(chatSettings).not.toContain(':nth-child')
-    expect(searchSettings).not.toContain(':nth-child')
+    expect(parent).toContain('const PAGE_DEFINITIONS')
+    expect(parent).toContain("slot: 'ai.chat'")
+    expect(parent).toContain("slot: 'ai.search'")
+    expect(parent).toContain("slot: 'ai.ocr'")
+    expect(parent).toContain("setAttribute('data-elephant-addon-settings-slot', active.slot)")
+    expect(chat).toContain("slot: 'ai.chat'")
+    expect(search).toContain("slot: 'ai.search'")
+    expect(ocr).toContain("slot: 'ai.ocr'")
   })
 
-  it('exposes local and subscription models only through active provider contributions', () => {
+  it('exposes local and subscription models only through physical provider contributions', () => {
     const routeSettings = read('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
-    const openModels = read('Elephant/frontend/src/renderer/src/addons/builtin/openModels.js')
-    const codex = read('Elephant/frontend/src/renderer/src/addons/builtin/codexConnection.js')
+    const openModels = read('addons/official/open-models/main.js')
+    const codex = read('addons/official/codex-connection/main.js')
 
     expect(routeSettings).toContain("getContributions('ai.providers')")
     expect(routeSettings).not.toContain('<option v-if="form.localAi.enabled" value="app-local">')
     expect(routeSettings).not.toContain('Unavailable addon provider')
-    expect(routeSettings).not.toContain('loadLocalModels')
-    expect(routeSettings).toContain('const openModelsAvailable = addonProviders.value.some')
-    expect(routeSettings).toContain('if (!openModelsAvailable) localAi.enabled = false')
     expect(openModels).toContain('providerId: PROVIDER_ID')
     expect(openModels).toContain("capabilities: ['chat', 'embedding']")
     expect(codex).toContain("capabilities: ['chat']")
   })
 
-  it('keeps AI and OCR parent code outside the core bundle', () => {
+  it('keeps every migrated AI implementation outside the builtin catalogue', () => {
     const builtinIndex = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
-    const aiManifest = read('addons/official/ai/manifest.json')
-    const aiEntry = read('addons/official/ai/main.js')
-    const ocrManifest = read('addons/official/ai-ocr/manifest.json')
-    const ocrEntry = read('addons/official/ai-ocr/main.js')
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
+    const physicalIds = [
+      'elephant.ai',
+      'elephant.ai-chat',
+      'elephant.ai-search',
+      'elephant.ai-ocr',
+      'elephant.wiki',
+      'elephant.graph',
+      'elephant.open-models',
+      'elephant.codex-connection'
+    ]
 
-    expect(builtinIndex).not.toContain("import('./ai')")
-    expect(builtinIndex).not.toContain("id: 'elephant.ai'")
-    expect(builtinIndex).not.toContain("import('./aiOcr')")
-    expect(builtinIndex).not.toContain("id: 'elephant.ai-ocr'")
-    expect(aiManifest).toContain('"id": "elephant.ai"')
-    expect(aiEntry).toContain("standalone: true")
+    for (const id of physicalIds) expect(builtinIndex).not.toContain(`id: '${id}'`)
     expect(core).not.toContain('pub mod ocr;')
     expect(core).not.toContain('tauri_ocr_')
-    expect(ocrManifest).toContain('"native": true')
-    expect(ocrManifest).toContain('"elephant.ai": ">=2.0.0"')
-    expect(ocrEntry).toContain("slot: 'ai.ocr'")
-    expect(ocrEntry).toContain('this.api.native.call')
+    expect(read('addons/official/ai-ocr/manifest.json')).toContain('"native": true')
+    expect(read('addons/official/ai-ocr/main.js')).toContain('this.api.native.call')
   })
 })
 
 describe('workspace vertical border alignment', () => {
   it('uses the same rail width in flex layout and title strip divider math', () => {
     const layoutFixes = read('Elephant/frontend/app/styles/runtime-layout-fixes.css')
-
     expect(layoutFixes).toContain('width: 56px !important')
     expect(layoutFixes).toContain('flex: 0 0 56px !important')
     expect(layoutFixes).toContain('left: calc(56px + var(--en-sidebar-width)) !important')

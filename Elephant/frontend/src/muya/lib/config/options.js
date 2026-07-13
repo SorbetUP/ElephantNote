@@ -32,5 +32,6 @@ export const MUYA_DEFAULT_OPTION = Object.freeze({
   superSubScript: false,
   footnote: false,
   isGitlabCompatibilityEnabled: false,
-  disableHtml: true
+  disableHtml: true,
+  experimentalRustEditor: null
 })

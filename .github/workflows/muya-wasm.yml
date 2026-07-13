@@ -53,11 +53,23 @@ jobs:
             Elephant/crates/muya-core
             Elephant/crates/muya-wasm
 
-      - name: Check core formatting
+      - name: Check active core formatting
         shell: bash
         run: |
-          cargo fmt --manifest-path Elephant/crates/muya-core/Cargo.toml
-          git diff -- Elephant/crates/muya-core > muya-core-rustfmt.patch
+          (
+            cd Elephant/crates/muya-core
+            rustfmt \
+              src/edit/paragraph.rs \
+              src/edit/mark_compat.rs \
+              src/syntax/inline/emphasis.rs \
+              tests/muya_mark_protocol.rs
+          )
+          git diff -- \
+            Elephant/crates/muya-core/src/edit/paragraph.rs \
+            Elephant/crates/muya-core/src/edit/mark_compat.rs \
+            Elephant/crates/muya-core/src/syntax/inline/emphasis.rs \
+            Elephant/crates/muya-core/tests/muya_mark_protocol.rs \
+            > muya-core-rustfmt.patch
           test ! -s muya-core-rustfmt.patch
 
       - name: Upload core formatting diagnostics

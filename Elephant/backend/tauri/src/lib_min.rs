@@ -13,10 +13,6 @@ pub mod note_domain;
 pub mod folder_domain;
 pub mod media_domain;
 pub mod drawing_domain;
-pub mod model_domain;
-pub mod model_library;
-#[cfg(not(mobile))]
-pub mod local_llama_runtime;
 pub mod chat_runtime;
 pub mod search_logic;
 pub mod addons;
@@ -259,26 +255,12 @@ pub fn run() {
       tauri_extra_commands::tauri_drawings_create,
       tauri_extra_commands::tauri_drawings_read,
       tauri_extra_commands::tauri_drawings_write,
-      tauri_extra_commands::tauri_models_get_selection,
-      tauri_extra_commands::tauri_models_set_selection,
       tauri_extra_commands::tauri_search_inspect,
       tauri_extra_commands::tauri_ai_config_get,
       tauri_extra_commands::tauri_ai_config_set,
       tauri_extra_commands::tauri_ai_config_test,
       tauri_extra_commands::tauri_features_get,
       tauri_extra_commands::tauri_features_set,
-      model_library::tauri_models_list,
-      model_library::tauri_models_list_local,
-      model_library::tauri_models_search_hugging_face,
-      model_library::tauri_models_info,
-      model_library::tauri_models_download,
-      model_library::tauri_models_cancel_download,
-      model_library::tauri_models_download_status,
-      model_library::tauri_models_activate,
-      model_library::tauri_models_deactivate,
-      model_library::tauri_models_delete,
-      model_library::tauri_models_active,
-      model_library::tauri_models_refresh_index,
       chat_runtime::tauri_rag_chat,
       tauri_extra_commands::tauri_sync_plan
     ])

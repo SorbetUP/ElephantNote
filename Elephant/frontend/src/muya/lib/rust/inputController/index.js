@@ -1,5 +1,5 @@
 import { editorCommands } from '../bridge'
-import { markdownFromClipboard } from './clipboard'
+import { markdownFromClipboard, TEXT_TRANSFER_TYPES } from './clipboard'
 import { commandForBeforeInput, commandForTableKey } from './commands'
 import { readDomSelection } from './selection'
 
@@ -14,6 +14,27 @@ const orderedSameNodeSelection = (selection) => {
     anchor: { node: selection.anchor.node, offset_utf16: start },
     focus: { node: selection.anchor.node, offset_utf16: end }
   }
+}
+
+const transferTypes = (transfer) => Array.from(transfer?.types || [])
+const transferHasFiles = (transfer) =>
+  Boolean(transfer?.files?.length) || transferTypes(transfer).includes('Files')
+const transferHasText = (transfer) => {
+  const types = transferTypes(transfer)
+  return TEXT_TRANSFER_TYPES.some((type) => types.includes(type))
+}
+
+const caretRangeFromPoint = (ownerDocument, x, y) => {
+  if (typeof ownerDocument.caretRangeFromPoint === 'function') {
+    return ownerDocument.caretRangeFromPoint(x, y)
+  }
+  if (typeof ownerDocument.caretPositionFromPoint !== 'function') return null
+  const position = ownerDocument.caretPositionFromPoint(x, y)
+  if (!position?.offsetNode) return null
+  const range = ownerDocument.createRange()
+  range.setStart(position.offsetNode, position.offset)
+  range.collapse(true)
+  return range
 }
 
 export class MuyaRustInputController {
@@ -35,6 +56,8 @@ export class MuyaRustInputController {
     this._tail = Promise.resolve()
     this._beforeInput = (event) => this.handleBeforeInput(event)
     this._paste = (event) => this.handlePaste(event)
+    this._dragOver = (event) => this.handleDragOver(event)
+    this._drop = (event) => this.handleDrop(event)
     this._compositionStart = () => this.handleCompositionStart()
     this._compositionEnd = (event) => this.handleCompositionEnd(event)
     this._keyDown = (event) => this.handleKeyDown(event)
@@ -45,6 +68,8 @@ export class MuyaRustInputController {
     this.attached = true
     this.container.addEventListener('beforeinput', this._beforeInput)
     this.container.addEventListener('paste', this._paste)
+    this.container.addEventListener('dragover', this._dragOver)
+    this.container.addEventListener('drop', this._drop)
     this.container.addEventListener('compositionstart', this._compositionStart)
     this.container.addEventListener('compositionend', this._compositionEnd)
     this.container.addEventListener('keydown', this._keyDown)
@@ -56,6 +81,8 @@ export class MuyaRustInputController {
     this.attached = false
     this.container.removeEventListener('beforeinput', this._beforeInput)
     this.container.removeEventListener('paste', this._paste)
+    this.container.removeEventListener('dragover', this._dragOver)
+    this.container.removeEventListener('drop', this._drop)
     this.container.removeEventListener('compositionstart', this._compositionStart)
     this.container.removeEventListener('compositionend', this._compositionEnd)
     this.container.removeEventListener('keydown', this._keyDown)
@@ -96,6 +123,44 @@ export class MuyaRustInputController {
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
     })
+  }
+
+  handleDragOver(event) {
+    const transfer = event.dataTransfer
+    if (!transfer || transferHasFiles(transfer) || !transferHasText(transfer)) return
+    event.preventDefault()
+    event.stopPropagation?.()
+    try {
+      transfer.dropEffect = 'copy'
+    } catch {
+      // Some browser DataTransfer implementations expose a read-only dropEffect.
+    }
+  }
+
+  handleDrop(event) {
+    const transfer = event.dataTransfer
+    if (!transfer || transferHasFiles(transfer) || !transferHasText(transfer)) return
+    this.placeDropCaret(event)
+    const selection = this.readSelection()
+    if (!selection) return
+    const markdown = markdownFromClipboard(event, this.container.ownerDocument)
+    if (markdown === null) return
+    event.preventDefault()
+    event.stopPropagation?.()
+    this.schedule(async () => {
+      await this.bridge.setSelection(selection)
+      await this.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
+    })
+  }
+
+  placeDropCaret(event) {
+    const ownerDocument = this.container.ownerDocument
+    const range = caretRangeFromPoint(ownerDocument, event.clientX || 0, event.clientY || 0)
+    if (!range || !this.container.contains(range.startContainer)) return
+    const selection = ownerDocument.defaultView?.getSelection?.()
+    if (!selection) return
+    selection.removeAllRanges()
+    selection.addRange(range)
   }
 
   handleCompositionStart() {

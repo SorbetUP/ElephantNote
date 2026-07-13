@@ -199,6 +199,10 @@ fn build_join_previous_paragraph(
   caret: SelectionPoint,
   selection: Selection,
 ) -> Result<Transaction, EditError> {
+  if let Some(transaction) = super::list::build_list_backspace(document, caret, selection)? {
+    return Ok(transaction);
+  }
+
   let (current_block, parent, _, text_index) =
     direct_paragraph_for_text(document, caret.node)?;
   if text_index != 0 {

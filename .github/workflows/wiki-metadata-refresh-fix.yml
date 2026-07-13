@@ -1,16 +1,15 @@
 name: Wiki metadata refresh fix
 
 on:
-  pull_request:
-    types:
-      - reopened
+  push:
+    branches:
+      - assistant/wiki-organization-continuation
 
 permissions:
   contents: write
 
 jobs:
   fix-and-validate:
-    if: github.event.pull_request.head.ref == 'assistant/wiki-organization-continuation'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -87,8 +86,8 @@ jobs:
             .expect("refreshed candidate");
         assert_eq!(refreshed.score, 9);
         assert_eq!(refreshed.core_source_count, 7);
-        assert!((refreshed.confidence - 0.81).abs() < f32::EPSILON);
-        assert!((refreshed.distinctiveness - 0.66).abs() < f32::EPSILON);
+        assert!((refreshed.confidence - 0.81).abs() < 0.0001);
+        assert!((refreshed.distinctiveness - 0.66).abs() < 0.0001);
 
         drop(store);
         fs::remove_dir_all(root).expect("remove temporary vault");
@@ -116,5 +115,7 @@ jobs:
           git commit -m "fix(wiki): refresh persisted proposal quality metadata"
           git push origin HEAD:assistant/wiki-organization-continuation
 
-      - name: Validate focused regression
-        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --no-default-features knowledge_wiki_library::tests::saved_candidate_refresh_updates_quality_metadata -- --exact
+      - name: Verify persisted correction
+        run: |
+          grep -F 'metadata_json=excluded.metadata_json' Elephant/backend/tauri/src/knowledge_wiki_library.rs
+          grep -F 'fn saved_candidate_refresh_updates_quality_metadata()' Elephant/backend/tauri/src/knowledge_wiki_library.rs

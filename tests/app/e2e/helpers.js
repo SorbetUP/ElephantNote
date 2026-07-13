@@ -127,6 +127,23 @@ const createSeededVaultFixture = async () => {
   return { root, userDataPath, configRoot, vaultRoot }
 }
 
+const attachPageDiagnostics = (page) => {
+  if (page.__elephantDiagnosticsAttached) return
+  page.__elephantDiagnosticsAttached = true
+  page.on('console', (message) => {
+    console.log(`[e2e-renderer:${message.type()}] ${message.text()}`)
+  })
+  page.on('pageerror', (error) => {
+    console.error(`[e2e-renderer:pageerror] ${error?.stack || error?.message || String(error)}`)
+  })
+  page.on('requestfailed', (request) => {
+    console.error(`[e2e-renderer:requestfailed] ${request.method()} ${request.url()} ${request.failure()?.errorText || ''}`)
+  })
+  page.on('crash', () => {
+    console.error('[e2e-renderer:crash] renderer process crashed')
+  })
+}
+
 const launchElectron = async (userArgs, options = {}) => {
   userArgs = userArgs || []
   const executablePath = getElectronPath()
@@ -140,15 +157,30 @@ const launchElectron = async (userArgs, options = {}) => {
     cwd: projectRoot,
     env: {
       ...process.env,
+      ELECTRON_ENABLE_LOGGING: '1',
       PERF_TESTING: 'true',
       ELEPHANT_DISABLE_KEYCHAIN_PROMPT: 'true',
       ...(options.env || {})
     },
     timeout: 30000
   })
+  const electronProcess = app.process()
+  electronProcess.stdout?.on('data', (chunk) => process.stdout.write(`[e2e-electron:stdout] ${chunk}`))
+  electronProcess.stderr?.on('data', (chunk) => process.stderr.write(`[e2e-electron:stderr] ${chunk}`))
+  app.on('window', attachPageDiagnostics)
   const page = await app.firstWindow()
+  attachPageDiagnostics(page)
   await page.waitForLoadState('domcontentloaded')
-  await new Promise((resolve) => setTimeout(resolve, 500))
+  await page.waitForTimeout(750)
+  const bootstrap = await page.evaluate(() => ({
+    title: document.title,
+    bodyLength: document.body?.innerText?.length || 0,
+    hasTauri: Boolean(window.__TAURI__?.core?.invoke),
+    hasInternals: Boolean(window.__TAURI_INTERNALS__?.invoke),
+    hasElephantApi: Boolean(window.elephantnote?.api),
+    html: document.body?.innerHTML?.slice(0, 500) || ''
+  })).catch((error) => ({ evaluationError: error?.message || String(error) }))
+  console.log(`[e2e-bootstrap] ${JSON.stringify(bootstrap)}`)
   return { app, page, userDataPath }
 }
 

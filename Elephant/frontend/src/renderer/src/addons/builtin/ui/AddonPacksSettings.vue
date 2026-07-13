@@ -53,7 +53,6 @@ const PROTECTED_PACK_PATHS = new Set([BASE_PACK_PATH, DEVELOP_PARITY_PACK_PATH])
 const PACK_SEARCH_EVENT = 'elephantnote:addon-packs-search'
 const PACK_REFRESH_EVENT = 'elephantnote:addon-packs-refresh'
 const PACK_IMPORT_EVENT = 'elephantnote:addon-packs-import'
-const NON_REMOVABLE_ADDON_IDS = new Set(['elephant.addon-packs', 'elephant.excalidraw'])
 const addonsStore = useAddonsStore()
 const packs = ref([])
 const query = ref('')
@@ -121,7 +120,7 @@ const readPack = async (path) => {
     addonCount: parsed.addons.length,
     addons: parsed.addons.map((entry) => ({
       id: String(entry?.id || ''),
-      source: String(entry?.source || 'builtin'),
+      source: String(entry?.source || 'installed'),
       enabled: entry?.enabled === true
     })).filter((entry) => entry.id),
     createdAt: String(parsed.createdAt || ''),
@@ -149,8 +148,7 @@ const discoverPackPaths = async () => {
   return paths
 }
 
-const removablePackEntries = (pack) => (pack?.addons || []).filter((entry) =>
-  !NON_REMOVABLE_ADDON_IDS.has(entry.id) && entry.source !== 'installed')
+const removablePackEntries = (pack) => (pack?.addons || []).filter((entry) => entry.source !== 'installed')
 
 const isPackInstalled = (pack) => {
   const removable = removablePackEntries(pack)
@@ -288,11 +286,12 @@ onBeforeUnmount(() => {
 .en-addon-pack-copy > div { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .en-addon-pack-copy strong { font-size: 12.5px; }
 .en-addon-pack-copy small, .en-addon-pack-copy p { color: var(--en-muted, #667085); font-size: 10px; }
-.en-addon-pack-copy p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.en-addon-pack-actions { display: flex; align-items: center; gap: 6px; }
-.en-addon-pack-empty { padding: 24px; color: var(--en-muted, #667085); font-size: 11.5px; text-align: center; }
-@media (max-width: 720px) {
+.en-addon-pack-copy p { margin: 0; line-height: 1.4; }
+.en-addon-pack-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.en-addon-pack-empty { padding: 28px 16px; text-align: center; color: var(--en-muted, #667085); font-size: 12px; }
+@media (max-width: 760px) {
   .en-addon-pack-row { grid-template-columns: 36px minmax(0, 1fr); }
-  .en-addon-pack-actions { grid-column: 2; flex-wrap: wrap; }
+  .en-addon-pack-actions { grid-column: 1 / -1; justify-content: stretch; }
+  .en-addon-pack-actions button { flex: 1; }
 }
 </style>

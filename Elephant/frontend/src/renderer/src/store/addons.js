@@ -3,7 +3,6 @@ import { markRaw } from 'vue'
 import { isTrustedAddonManifest } from '@/addons/manifest'
 
 const COMMUNITY_ADDONS_PREF_KEY = 'addons.communityEnabled'
-
 const ADDON_STORE_EVENTS = [
   'registered',
   'unregistered',
@@ -30,6 +29,9 @@ const persistCommunityAddonsEnabled = (enabled) => invokeTauri('tauri_prefs_set'
   key: COMMUNITY_ADDONS_PREF_KEY,
   value: enabled === true
 })
+const isOfficialManifest = (manifest = {}) => manifest.official === true || manifest.source === 'official'
+const isOfficialCatalogEntry = (entry = {}) => entry.official === true || entry.source === 'official'
+const isCommunityExternal = (addon = {}) => addon?.manifest?.source === 'external' && !isOfficialManifest(addon.manifest)
 
 const parentDirectory = (relativePath = '') => {
   const parts = String(relativePath || '').split('/').filter(Boolean)
@@ -84,6 +86,8 @@ export const useAddonsStore = defineStore('addons', {
   getters: {
     enabledAddons: (state) => state.items.filter((item) => item.enabled),
     externalAddons: (state) => state.items.filter((item) => item.manifest.source === 'external'),
+    communityExternalAddons: (state) => state.items.filter(isCommunityExternal),
+    officialAddons: (state) => state.items.filter((item) => isOfficialManifest(item.manifest)),
     trustedAddons: (state) => state.items.filter((item) => isTrustedAddonManifest(item.manifest)),
     failedAddons: (state) => state.items.filter((item) => item.status === 'error'),
     contributionCount: (state) => Object.values(state.contributions).reduce(
@@ -185,6 +189,7 @@ export const useAddonsStore = defineStore('addons', {
     async revokeTrustedAddon(id) {
       if (!this.manager?.external) throw new Error('External addon runtime is not available')
       const addon = this.manager.get(id)
+      if (isOfficialManifest(addon?.manifest)) throw new Error('Verified official package trust cannot be revoked independently from its package')
       if (addon?.enabled) await this.disableAddon(id)
       const approval = await this.manager.external.revokeTrusted(id)
       this.trustedApprovals = { ...this.trustedApprovals, [id]: approval }
@@ -197,7 +202,7 @@ export const useAddonsStore = defineStore('addons', {
       this.trustedSafeMode = nextEnabled
       if (nextEnabled) {
         const running = this.manager.list().filter(
-          (addon) => addon.enabled && addon.manifest.source === 'external' && isTrustedAddonManifest(addon.manifest)
+          (addon) => addon.enabled && isCommunityExternal(addon) && isTrustedAddonManifest(addon.manifest)
         )
         for (const addon of running) await this.disableAddon(addon.manifest.id)
       }
@@ -213,7 +218,7 @@ export const useAddonsStore = defineStore('addons', {
         this.communityAddonsEnabled = nextEnabled
         this.communityConsentLoaded = true
         if (!nextEnabled) {
-          const running = this.manager.list().filter((addon) => addon.enabled && addon.manifest.source === 'external')
+          const running = this.manager.list().filter((addon) => addon.enabled && isCommunityExternal(addon))
           for (const addon of running) await this.manager.disable(addon.manifest.id)
         }
         this.lastError = null
@@ -230,20 +235,23 @@ export const useAddonsStore = defineStore('addons', {
       if (!this.manager) throw new Error('Addon manager is not installed')
       const addon = this.manager.get(id)
       const external = addon?.manifest?.source === 'external'
+      const official = isOfficialManifest(addon?.manifest)
       const trusted = external && isTrustedAddonManifest(addon.manifest)
       this.operationInProgress = true
       try {
         if (external) {
-          if (!this.communityConsentLoaded) await this.loadCommunityAddonsConsent()
-          if (!this.communityAddonsEnabled) throw new Error('Community addons are disabled.')
-          if (trusted) {
-            if (!this.trustedStateLoaded) await this.loadTrustedState()
-            if (this.trustedSafeMode) throw new Error('Trusted addon safe mode is enabled.')
-            if (!this.trustedApprovals[id]?.approved) {
-              const error = new Error('Full app access approval is required.')
-              error.code = 'TRUST_REQUIRED'
-              error.addonId = id
-              throw error
+          if (!official) {
+            if (!this.communityConsentLoaded) await this.loadCommunityAddonsConsent()
+            if (!this.communityAddonsEnabled) throw new Error('Community addons are disabled.')
+            if (trusted) {
+              if (!this.trustedStateLoaded) await this.loadTrustedState()
+              if (this.trustedSafeMode) throw new Error('Trusted addon safe mode is enabled.')
+              if (!this.trustedApprovals[id]?.approved) {
+                const error = new Error('Full app access approval is required.')
+                error.code = 'TRUST_REQUIRED'
+                error.addonId = id
+                throw error
+              }
             }
           }
           await setExternalRegistryEnabled(id, true)
@@ -297,7 +305,11 @@ export const useAddonsStore = defineStore('addons', {
 
     async installCatalogAddon(id) {
       if (!this.manager?.external) throw new Error('External addon runtime is not available')
-      if (!this.communityAddonsEnabled) throw new Error('Community addons must be enabled before installing from the catalogue')
+      const entry = this.catalog.find((candidate) => candidate?.id === id)
+      const official = isOfficialCatalogEntry(entry)
+      if (!official && !this.communityAddonsEnabled) {
+        throw new Error('Community addons must be enabled before installing a third-party catalogue package')
+      }
       this.operationInProgress = true
       try {
         const record = await invokeTauri('tauri_addons_catalog_install', { addonId: id })

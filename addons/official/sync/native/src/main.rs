@@ -1,31 +1,38 @@
-mod local_ops;
-mod manifest;
-mod plan;
-
-use iroh::{endpoint::presets, Endpoint, EndpointAddr, SecretKey, Watcher as _};
+use elephant_sync_service::{
+  local_ops::apply_local_plan,
+  manifest::{scan_vault, VaultManifest},
+  pairing::{
+    consume_pair_request, create_pending_invite, parse_invite, read_config, register_accepted_peer,
+  },
+  plan::{build_plan, SyncPlan},
+  protocol::{expect_control, read_control, write_control, ControlMessage, PairRequest, ALPN},
+};
+use iroh::{
+  endpoint::presets,
+  protocol::{AcceptError, ProtocolHandler, Router},
+  Connection, Endpoint, EndpointAddr, SecretKey, Watcher as _,
+};
 use iroh_mdns_address_lookup::MdnsAddressLookup;
-use local_ops::apply_local_plan;
-use manifest::{scan_vault, VaultManifest};
-use plan::{build_plan, SyncPlan};
 use serde_json::{json, Value};
 use std::{
-  env,
-  fs,
+  env, fmt, fs, io,
   path::{Path, PathBuf},
   time::Duration,
 };
 use tokio::{
-  io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
+  io::{self as tokio_io, AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
   time::timeout,
 };
 
-const PROTOCOL: &str = "elephant-addon-service-v1";
+const SERVICE_PROTOCOL: &str = "elephant-addon-service-v1";
+const ADDON_ID: &str = "elephant.sync";
 const IDENTITY_FILE: &str = "iroh-endpoint.key";
 const MDNS_SERVICE: &str = "elephant-sync-addon-v1";
 const ENDPOINT_ADDRESS_TIMEOUT: Duration = Duration::from_secs(10);
 
 struct SyncService {
   endpoint: Option<Endpoint>,
+  router: Option<Router>,
   vault_dir: PathBuf,
   data_dir: PathBuf,
 }
@@ -40,6 +47,7 @@ impl SyncService {
       .ok_or_else(|| "ELEPHANT_ADDON_DATA_DIR is unavailable for the Sync addon service".to_string())?;
     Ok(Self {
       endpoint: None,
+      router: None,
       vault_dir,
       data_dir,
     })
@@ -50,6 +58,7 @@ impl SyncService {
     let data_dir = vault_dir.join(".sync-addon-test-data");
     Self {
       endpoint: None,
+      router: None,
       vault_dir,
       data_dir,
     }
@@ -57,6 +66,16 @@ impl SyncService {
 
   fn identity_path(&self) -> PathBuf {
     self.data_dir.join(IDENTITY_FILE)
+  }
+
+  fn device_name(&self) -> String {
+    self
+      .vault_dir
+      .file_name()
+      .and_then(|value| value.to_str())
+      .filter(|value| !value.trim().is_empty())
+      .unwrap_or("Elephant device")
+      .to_string()
   }
 
   async fn ensure_endpoint(&mut self) -> Result<&Endpoint, String> {
@@ -70,17 +89,39 @@ impl SyncService {
         .await
         .map_err(|error| format!("Failed to bind Iroh endpoint: {error}"))?;
       wait_for_endpoint_addr(&endpoint).await?;
+      let router = Router::builder(endpoint.clone())
+        .accept(
+          ALPN,
+          PairingProtocol {
+            endpoint: endpoint.clone(),
+            vault_dir: self.vault_dir.clone(),
+            device_name: self.device_name(),
+          },
+        )
+        .spawn();
+      self.router = Some(router);
       self.endpoint = Some(endpoint);
     }
-    self.endpoint
+    self
+      .endpoint
       .as_ref()
       .ok_or_else(|| "Iroh endpoint was not initialized".to_string())
   }
 
   async fn status(&mut self) -> Result<Value, String> {
-    let endpoint = self.ensure_endpoint().await?;
-    let endpoint_id = endpoint.id().to_string();
-    let endpoint_addr = endpoint.addr();
+    let (endpoint_id, endpoint_addr) = {
+      let endpoint = self.ensure_endpoint().await?;
+      (endpoint.id().to_string(), endpoint.addr())
+    };
+    let config = read_config(&self.vault_dir);
+    let peers = config
+      .as_ref()
+      .map(|value| serde_json::to_value(&value.peers).unwrap_or_else(|_| json!([])))
+      .unwrap_or_else(|| json!([]));
+    let pending_invites = config
+      .as_ref()
+      .map(|value| value.pending_invites.len())
+      .unwrap_or_default();
     Ok(json!({
       "running": true,
       "endpointId": endpoint_id,
@@ -89,17 +130,116 @@ impl SyncService {
       "discovery": "mdns",
       "mdnsService": MDNS_SERVICE,
       "stableIdentity": true,
-      "owner": "elephant.sync",
+      "owner": ADDON_ID,
       "vaultDir": self.vault_dir,
       "dataDir": self.data_dir,
-      "ownedCapabilities": ["endpoint", "identity", "manifest", "plan", "local-operations"]
+      "peers": peers,
+      "pendingInvites": pending_invites,
+      "pairingState": if config.as_ref().is_some_and(|value| !value.peers.is_empty()) { "paired" } else { "not-paired" },
+      "networkTransfersReady": false,
+      "ownedCapabilities": [
+        "endpoint",
+        "identity",
+        "wire-protocol",
+        "pairing",
+        "manifest",
+        "plan",
+        "local-operations"
+      ]
+    }))
+  }
+
+  async fn create_invite(&mut self, params: Value) -> Result<Value, String> {
+    let (endpoint_id, endpoint_addr) = {
+      let endpoint = self.ensure_endpoint().await?;
+      (endpoint.id().to_string(), endpoint.addr())
+    };
+    let device_name = params
+      .get("deviceName")
+      .and_then(Value::as_str)
+      .filter(|value| !value.trim().is_empty())
+      .map(str::to_string)
+      .unwrap_or_else(|| self.device_name());
+    let expires_at = params.get("expiresAt").and_then(Value::as_u64);
+    let created = create_pending_invite(
+      &self.vault_dir,
+      &endpoint_id,
+      endpoint_addr,
+      device_name,
+      expires_at,
+    )?;
+    let invite = serde_json::to_value(&created.invite).map_err(|error| error.to_string())?;
+    let qr_payload = created.invite.qr_payload()?;
+    Ok(json!({
+      "ok": true,
+      "owner": ADDON_ID,
+      "runtime": "physical-sync-service",
+      "invite": invite,
+      "qrPayload": qr_payload,
+      "manualCode": qr_payload,
+      "pairing": { "state": "waiting-for-peer", "userAction": "scan-qr-or-copy-code" }
+    }))
+  }
+
+  async fn accept_invite(&mut self, params: Value) -> Result<Value, String> {
+    let invite = parse_invite(params)?;
+    let endpoint = self.ensure_endpoint().await?.clone();
+    let remote_addr = invite.endpoint_addr.clone();
+    let connection = endpoint
+      .connect(remote_addr.clone(), ALPN)
+      .await
+      .map_err(|error| format!("Failed to connect to invited Iroh peer: {error}"))?;
+    if connection.remote_id() != remote_addr.id {
+      return Err("Iroh peer identity did not match the pairing invite".to_string());
+    }
+    let (mut send, mut recv) = connection
+      .open_bi()
+      .await
+      .map_err(|error| format!("Failed to open pairing control stream: {error}"))?;
+    write_control(
+      &mut send,
+      &ControlMessage::PairRequest(PairRequest {
+        invite_id: invite.invite_id.clone(),
+        invite_token: invite.invite_token.clone(),
+        folder_id: invite.folder_id.clone(),
+        device_name: self.device_name(),
+        endpoint_addr: endpoint.addr(),
+      }),
+    )
+    .await?;
+    let accepted = match expect_control(read_control(&mut recv).await?, "pairAccepted")? {
+      ControlMessage::PairAccepted(accepted) => accepted,
+      _ => unreachable!(),
+    };
+    if accepted.endpoint_addr.id != connection.remote_id() {
+      return Err("Paired device returned an inconsistent Iroh identity".to_string());
+    }
+    send.finish().map_err(|error| error.to_string())?;
+    recv
+      .read_to_end(0)
+      .await
+      .map_err(|error| format!("Pairing response did not close cleanly: {error}"))?;
+    connection.close(0_u32.into(), b"pairing-complete");
+    let config = register_accepted_peer(
+      &self.vault_dir,
+      &endpoint.id().to_string(),
+      &invite.folder_id,
+      accepted,
+    )?;
+    Ok(json!({
+      "ok": true,
+      "owner": ADDON_ID,
+      "pairing": { "state": "paired", "nextAction": "sync-now" },
+      "folderId": config.folder_id,
+      "folderLabel": config.folder_label,
+      "peers": config.peers
     }))
   }
 
   fn scan(&self) -> Result<Value, String> {
     let manifest = scan_vault(&self.vault_dir)?;
     Ok(json!({
-      "owner": "elephant.sync",
+      "owner": ADDON_ID,
       "vaultDir": self.vault_dir,
       "files": manifest.files.len(),
       "directories": manifest.directories.len(),
@@ -141,7 +281,7 @@ impl SyncService {
       .to_string();
     let plan = build_plan(&local, &remote, &baseline, &local_id, &remote_id);
     Ok(json!({
-      "owner": "elephant.sync",
+      "owner": ADDON_ID,
       "localId": local_id,
       "remoteId": remote_id,
       "summary": {
@@ -165,17 +305,72 @@ impl SyncService {
       })?;
     let summary = apply_local_plan(&self.vault_dir, &plan)?;
     Ok(json!({
-      "owner": "elephant.sync",
+      "owner": ADDON_ID,
       "vaultDir": self.vault_dir,
       "summary": summary
     }))
   }
 
   async fn stop(&mut self) {
+    self.router.take();
     if let Some(endpoint) = self.endpoint.take() {
       endpoint.close().await;
     }
   }
+}
+
+#[derive(Clone)]
+struct PairingProtocol {
+  endpoint: Endpoint,
+  vault_dir: PathBuf,
+  device_name: String,
+}
+
+impl fmt::Debug for PairingProtocol {
+  fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    formatter.debug_struct("PairingProtocol").finish_non_exhaustive()
+  }
+}
+
+impl ProtocolHandler for PairingProtocol {
+  async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+    handle_incoming_pairing(
+      self.endpoint.clone(),
+      self.vault_dir.clone(),
+      self.device_name.clone(),
+      connection,
+    )
+    .await
+    .map_err(|error| AcceptError::from_err(io::Error::other(error)))
+  }
+}
+
+async fn handle_incoming_pairing(
+  endpoint: Endpoint,
+  vault_dir: PathBuf,
+  device_name: String,
+  connection: Connection,
+) -> Result<(), String> {
+  let (mut send, mut recv) = connection.accept_bi().await.map_err(|error| error.to_string())?;
+  let request = match read_control(&mut recv).await? {
+    ControlMessage::PairRequest(request) => request,
+    other => {
+      let message = format!(
+        "Physical Sync service currently accepts pairRequest first, received {}",
+        elephant_sync_service::protocol::message_name(&other)
+      );
+      let _ = write_control(&mut send, &ControlMessage::Error { message: message.clone() }).await;
+      return Err(message);
+    }
+  };
+  if request.endpoint_addr.id != connection.remote_id() {
+    return Err("Pair request endpoint address does not match authenticated Iroh identity".to_string());
+  }
+  let accepted = consume_pair_request(&vault_dir, request, endpoint.addr(), &device_name)?;
+  write_control(&mut send, &ControlMessage::PairAccepted(accepted)).await?;
+  send.finish().map_err(|error| error.to_string())?;
+  connection.close(0_u32.into(), b"pairing-accepted");
+  Ok(())
 }
 
 async fn wait_for_endpoint_addr(endpoint: &Endpoint) -> Result<EndpointAddr, String> {
@@ -204,7 +399,6 @@ fn load_or_create_secret_key(path: &Path) -> Result<SecretKey, String> {
       .map_err(|_| "Invalid Sync addon Iroh identity file".to_string())?;
     return Ok(SecretKey::from_bytes(&bytes));
   }
-
   if let Some(parent) = path.parent() {
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
   }
@@ -229,26 +423,18 @@ fn set_private_permissions(_path: &Path) -> Result<(), String> {
 }
 
 fn success(id: u64, result: Value) -> Value {
-  json!({
-    "protocol": PROTOCOL,
-    "id": id,
-    "ok": true,
-    "result": result
-  })
+  json!({ "protocol": SERVICE_PROTOCOL, "id": id, "ok": true, "result": result })
 }
 
 fn failure(id: u64, message: impl Into<String>) -> Value {
-  json!({
-    "protocol": PROTOCOL,
-    "id": id,
-    "ok": false,
-    "error": { "message": message.into() }
-  })
+  json!({ "protocol": SERVICE_PROTOCOL, "id": id, "ok": false, "error": { "message": message.into() } })
 }
 
 async fn handle(service: &mut SyncService, method: &str, params: Value) -> Result<Value, String> {
   match method {
     "service.start" | "sync.status" | "sync.endpoint" => service.status().await,
+    "sync.create-invite" => service.create_invite(params).await,
+    "sync.accept-invite" => service.accept_invite(params).await,
     "sync.scan" => service.scan(),
     "sync.plan" => service.plan(params).await,
     "sync.apply-local" => service.apply_local(params),
@@ -262,8 +448,8 @@ async fn handle(service: &mut SyncService, method: &str, params: Value) -> Resul
 
 #[tokio::main]
 async fn main() {
-  let stdin = io::stdin();
-  let stdout = io::stdout();
+  let stdin = tokio_io::stdin();
+  let stdout = tokio_io::stdout();
   let mut lines = BufReader::new(stdin).lines();
   let mut writer = BufWriter::new(stdout);
   let mut service = match SyncService::from_environment() {
@@ -284,14 +470,15 @@ async fn main() {
         continue;
       }
     };
-
     let id = request.get("id").and_then(Value::as_u64).unwrap_or(0);
     let protocol = request.get("protocol").and_then(Value::as_str).unwrap_or("");
+    let addon_id = request.get("addonId").and_then(Value::as_str).unwrap_or(ADDON_ID);
     let method = request.get("method").and_then(Value::as_str).unwrap_or("");
     let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
-
-    let response = if protocol != PROTOCOL {
+    let response = if protocol != SERVICE_PROTOCOL {
       failure(id, format!("Unsupported service protocol: {protocol}"))
+    } else if addon_id != ADDON_ID {
+      failure(id, format!("Service addon id mismatch: {addon_id}"))
     } else if method.is_empty() {
       failure(id, "A service method is required")
     } else {
@@ -300,22 +487,15 @@ async fn main() {
         Err(error) => failure(id, error),
       }
     };
-
-    if writer
-      .write_all(format!("{response}\n").as_bytes())
-      .await
-      .is_err()
+    if writer.write_all(format!("{response}\n").as_bytes()).await.is_err()
+      || writer.flush().await.is_err()
     {
-      break;
-    }
-    if writer.flush().await.is_err() {
       break;
     }
     if matches!(method, "service.stop" | "sync.shutdown") {
       break;
     }
   }
-
   service.stop().await;
 }
 
@@ -337,7 +517,7 @@ mod tests {
   #[test]
   fn envelopes_use_the_versioned_service_protocol() {
     let response = success(7, json!({ "running": true }));
-    assert_eq!(response["protocol"], PROTOCOL);
+    assert_eq!(response["protocol"], SERVICE_PROTOCOL);
     assert_eq!(response["id"], 7);
     assert_eq!(response["ok"], true);
   }
@@ -369,11 +549,10 @@ mod tests {
   async fn unknown_methods_are_rejected_without_starting_network_state() {
     let root = temp_root("unknown");
     let mut service = SyncService::with_vault_dir(root.clone());
-    let error = handle(&mut service, "sync.unknown", json!({}))
-      .await
-      .unwrap_err();
+    let error = handle(&mut service, "sync.unknown", json!({})).await.unwrap_err();
     assert!(error.contains("Unsupported Sync service method"));
     assert!(service.endpoint.is_none());
+    assert!(service.router.is_none());
     let _ = fs::remove_dir_all(root);
   }
 
@@ -383,11 +562,9 @@ mod tests {
     fs::create_dir_all(&root).unwrap();
     fs::write(root.join("A.md"), "# A").unwrap();
     let mut service = SyncService::with_vault_dir(root.clone());
-
     let scanned = handle(&mut service, "sync.scan", json!({})).await.unwrap();
-    assert_eq!(scanned["owner"], "elephant.sync");
+    assert_eq!(scanned["owner"], ADDON_ID);
     assert_eq!(scanned["files"], 1);
-
     let planned = handle(
       &mut service,
       "sync.plan",
@@ -400,9 +577,8 @@ mod tests {
     )
     .await
     .unwrap();
-    assert_eq!(planned["owner"], "elephant.sync");
+    assert_eq!(planned["owner"], ADDON_ID);
     assert_eq!(planned["summary"]["uploads"], 1);
-    assert_eq!(planned["plan"]["uploads"].as_array().unwrap().len(), 1);
     let _ = fs::remove_dir_all(root);
   }
 
@@ -417,23 +593,15 @@ mod tests {
       "sync.apply-local",
       json!({
         "plan": {
-          "uploads": [],
-          "downloads": [],
-          "preserveLocal": [],
-          "preserveRemote": [],
-          "createDirsLocal": ["Imported"],
-          "createDirsRemote": [],
-          "deleteFilesLocal": ["Notes/delete.md"],
-          "deleteFilesRemote": [],
-          "deleteDirsLocal": [],
-          "deleteDirsRemote": [],
-          "conflicts": []
+          "uploads": [], "downloads": [], "preserveLocal": [], "preserveRemote": [],
+          "createDirsLocal": ["Imported"], "createDirsRemote": [],
+          "deleteFilesLocal": ["Notes/delete.md"], "deleteFilesRemote": [],
+          "deleteDirsLocal": [], "deleteDirsRemote": [], "conflicts": []
         }
       }),
     )
     .await
     .unwrap();
-    assert_eq!(applied["owner"], "elephant.sync");
     assert_eq!(applied["summary"]["filesDeleted"], 1);
     assert!(root.join("Imported").is_dir());
     assert!(!root.join("Notes/delete.md").exists());

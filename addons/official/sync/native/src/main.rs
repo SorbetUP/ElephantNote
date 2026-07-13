@@ -1,10 +1,12 @@
+mod local_ops;
 mod manifest;
 mod plan;
 
 use iroh::{endpoint::presets, Endpoint};
 use iroh_mdns_address_lookup::MdnsAddressLookup;
+use local_ops::apply_local_plan;
 use manifest::{scan_vault, VaultManifest};
-use plan::build_plan;
+use plan::{build_plan, SyncPlan};
 use serde_json::{json, Value};
 use std::{env, path::PathBuf};
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
@@ -55,15 +57,15 @@ impl SyncService {
   }
 
   async fn status(&mut self) -> Result<Value, String> {
-    let endpoint = self.ensure_endpoint().await?;
+    let endpoint_id = self.ensure_endpoint().await?.id().to_string();
     Ok(json!({
       "running": true,
-      "endpointId": endpoint.id().to_string(),
+      "endpointId": endpoint_id,
       "transport": "iroh",
       "discovery": "mdns",
       "owner": "elephant.sync",
       "vaultDir": self.vault_dir,
-      "ownedCapabilities": ["endpoint", "manifest", "plan"]
+      "ownedCapabilities": ["endpoint", "manifest", "plan", "local-operations"]
     }))
   }
 
@@ -125,6 +127,23 @@ impl SyncService {
     }))
   }
 
+  fn apply_local(&self, params: Value) -> Result<Value, String> {
+    let plan = params
+      .get("plan")
+      .cloned()
+      .ok_or_else(|| "plan is required for package-owned local Sync operations".to_string())
+      .and_then(|value| {
+        serde_json::from_value::<SyncPlan>(value)
+          .map_err(|error| format!("Invalid local Sync plan: {error}"))
+      })?;
+    let summary = apply_local_plan(&self.vault_dir, &plan)?;
+    Ok(json!({
+      "owner": "elephant.sync",
+      "vaultDir": self.vault_dir,
+      "summary": summary
+    }))
+  }
+
   async fn stop(&mut self) {
     if let Some(endpoint) = self.endpoint.take() {
       endpoint.close().await;
@@ -155,6 +174,7 @@ async fn handle(service: &mut SyncService, method: &str, params: Value) -> Resul
     "service.start" | "sync.status" | "sync.endpoint" => service.status().await,
     "sync.scan" => service.scan(),
     "sync.plan" => service.plan(params).await,
+    "sync.apply-local" => service.apply_local(params),
     "service.stop" | "sync.shutdown" => {
       service.stop().await;
       Ok(json!({ "running": false, "stopped": true }))
@@ -284,6 +304,40 @@ mod tests {
     assert_eq!(planned["owner"], "elephant.sync");
     assert_eq!(planned["summary"]["uploads"], 1);
     assert_eq!(planned["plan"]["uploads"].as_array().unwrap().len(), 1);
+    let _ = fs::remove_dir_all(root);
+  }
+
+  #[tokio::test]
+  async fn local_plan_operations_run_inside_the_package_service() {
+    let root = temp_root("apply");
+    fs::create_dir_all(root.join("Notes")).unwrap();
+    fs::write(root.join("Notes/delete.md"), "delete").unwrap();
+    let mut service = SyncService::with_vault_dir(root.clone());
+    let applied = handle(
+      &mut service,
+      "sync.apply-local",
+      json!({
+        "plan": {
+          "uploads": [],
+          "downloads": [],
+          "preserveLocal": [],
+          "preserveRemote": [],
+          "createDirsLocal": ["Imported"],
+          "createDirsRemote": [],
+          "deleteFilesLocal": ["Notes/delete.md"],
+          "deleteFilesRemote": [],
+          "deleteDirsLocal": [],
+          "deleteDirsRemote": [],
+          "conflicts": []
+        }
+      }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(applied["owner"], "elephant.sync");
+    assert_eq!(applied["summary"]["filesDeleted"], 1);
+    assert!(root.join("Imported").is_dir());
+    assert!(!root.join("Notes/delete.md").exists());
     let _ = fs::remove_dir_all(root);
   }
 }

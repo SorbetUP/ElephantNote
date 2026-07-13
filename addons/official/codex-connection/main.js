@@ -14,10 +14,8 @@ export default class ElephantCodexAddon {
     this.window = api.experimental.window
   }
 
-  invoke(operation, payload = {}) {
-    const invoke = this.window?.__TAURI__?.core?.invoke
-    if (typeof invoke !== 'function') throw new Error(`Tauri command API is unavailable for Codex ${operation}`)
-    return invoke('tauri_rag_chat', { payload: { codexOperation: operation, ...payload } })
+  service(method, params = {}, options = {}) {
+    return this.api.native.service.call(method, params, options)
   }
 
   async call(action, payload = {}) {
@@ -38,7 +36,7 @@ export default class ElephantCodexAddon {
       'You are answering inside Elephant. Use only the supplied conversation and note context. Do not inspect the filesystem or execute commands.',
       transcript
     ].filter(Boolean).join('\n\n')
-    const result = await this.invoke('chat', { model, prompt })
+    const result = await this.service('codex.chat', { model, prompt }, { timeoutMs: 120000 })
     return {
       answer: String(result?.answer || '').trim(),
       provider: PROVIDER_ID,
@@ -56,23 +54,35 @@ export default class ElephantCodexAddon {
     const refresh = async () => {
       root.replaceChildren(node(documentRef, 'p', 'elephant-package-muted', 'Checking ChatGPT subscription…'))
       try {
-        const [status, usage, models] = await Promise.all([
-          this.invoke('status').catch((error) => ({ ok: false, error: error.message || String(error) })),
-          this.invoke('usage').catch(() => null),
-          this.invoke('models').catch(() => null)
-        ])
+        const status = await this.service('codex.status').catch((error) => ({ connected: false, error: error.message || String(error) }))
+        const connected = status?.connected === true
+        const [usage, models] = connected
+          ? await Promise.all([
+              this.service('codex.usage').catch(() => null),
+              this.service('codex.models').catch(() => null)
+            ])
+          : [null, null]
         if (disposed) return
         root.replaceChildren()
         const header = node(documentRef, 'div', 'elephant-codex-header')
         const copy = node(documentRef, 'div')
-        const connected = status?.connected === true || status?.ok === true || status?.authenticated === true
         copy.append(node(documentRef, 'h4', '', 'ChatGPT subscription'), node(documentRef, 'p', '', connected ? 'Connected' : 'Disconnected'))
         const actions = node(documentRef, 'div', 'elephant-codex-actions')
         const primary = node(documentRef, 'button', '', connected ? 'Disconnect' : 'Connect')
         primary.onclick = async () => {
           primary.disabled = true
-          try { await this.invoke(connected ? 'logout' : 'login'); await refresh() }
-          finally { primary.disabled = false }
+          try {
+            const result = await this.service(connected ? 'codex.logout' : 'codex.login')
+            const loginUrl = result?.authUrl || result?.url || result?.loginUrl
+            if (loginUrl) {
+              const opener = this.window?.__TAURI__?.opener
+              if (typeof opener?.openUrl === 'function') await opener.openUrl(loginUrl)
+              else this.window.open(loginUrl, '_blank', 'noopener,noreferrer')
+            }
+            await refresh()
+          } finally {
+            primary.disabled = false
+          }
         }
         const reload = node(documentRef, 'button', '', 'Refresh')
         reload.onclick = () => void refresh()
@@ -81,7 +91,7 @@ export default class ElephantCodexAddon {
         root.append(header)
 
         const details = node(documentRef, 'div', 'elephant-codex-details')
-        const account = status?.account || status?.user || status?.email || ''
+        const account = status?.account || ''
         if (account) details.append(node(documentRef, 'p', '', `Account: ${typeof account === 'string' ? account : account.email || account.name || 'Connected'}`))
         const modelList = Array.isArray(models?.data) ? models.data : Array.isArray(models) ? models : []
         details.append(node(documentRef, 'p', '', `Models: ${modelList.length}`))
@@ -91,6 +101,7 @@ export default class ElephantCodexAddon {
           if (hourly) details.append(node(documentRef, 'p', '', `Hourly: ${hourly.remaining ?? hourly.percentRemaining ?? hourly.used ?? 'available'}`))
           if (weekly) details.append(node(documentRef, 'p', '', `Weekly: ${weekly.remaining ?? weekly.percentRemaining ?? weekly.used ?? 'available'}`))
         }
+        if (status?.runtimePath) details.append(node(documentRef, 'p', '', `Runtime: ${status.runtimePath}`))
         if (status?.error) details.append(node(documentRef, 'p', 'elephant-package-error', String(status.error)))
         root.append(details)
       } catch (error) {
@@ -113,7 +124,8 @@ export default class ElephantCodexAddon {
     await this.call('ai.config.set', { ...config, provider: 'disabled', transport: 'disabled', endpoint: '', model: '', routes }).catch(() => {})
   }
 
-  onload(api) {
+  async onload(api) {
+    await api.native.service.start()
     api.ui.registerStyle(`
       .elephant-codex-settings { display:grid; gap:14px; padding:14px; border:1px solid var(--en-border); border-radius:14px; background:var(--en-surface); }
       .elephant-codex-header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -129,13 +141,13 @@ export default class ElephantCodexAddon {
       id: `${ADDON_ID}.provider`,
       providerId: PROVIDER_ID,
       title: 'Codex subscription',
-      description: 'ChatGPT subscription through the package-owned Codex runtime.',
-      transport: 'codex',
-      endpoint: 'codex://app-server',
+      description: 'ChatGPT subscription through the package-owned Codex service.',
+      transport: 'addon-service',
+      endpoint: 'addon-service://elephant.codex-connection',
       settingsSection: 'ai',
       capabilities: ['chat'],
       getModels: async () => {
-        const result = await this.invoke('models')
+        const result = await this.service('codex.models')
         return Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : []
       },
       chat: (request) => this.chat(request)
@@ -153,7 +165,8 @@ export default class ElephantCodexAddon {
     })
   }
 
-  onunload() {
-    return this.disableRoutes()
+  async onunload() {
+    await this.disableRoutes()
+    await this.api.native.service.stop().catch(() => {})
   }
 }

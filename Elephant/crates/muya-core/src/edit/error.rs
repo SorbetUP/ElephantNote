@@ -15,6 +15,7 @@ pub enum EditError {
   InvalidChildIndex { parent: NodeId, index: usize },
   InvalidUtf16Boundary { node: NodeId, offset: u32 },
   RangeOutOfBounds { node: NodeId, start: u32, end: u32 },
+  RevisionMismatch { expected: u64, actual: u64 },
 }
 
 impl fmt::Display for EditError {
@@ -40,6 +41,9 @@ impl fmt::Display for EditError {
       }
       Self::RangeOutOfBounds { node, start, end } => {
         write!(formatter, "range {start}..{end} is outside node {node:?}")
+      }
+      Self::RevisionMismatch { expected, actual } => {
+        write!(formatter, "document revision mismatch: expected {expected}, actual {actual}")
       }
     }
   }

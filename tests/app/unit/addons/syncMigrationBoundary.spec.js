@@ -21,14 +21,21 @@ describe('Sync physical migration boundary', () => {
     expect(native).toContain('sync.endpoint')
   })
 
-  it('does not pretend that file transfer has already moved out of core', () => {
+  it('moves manifests, planning and local application while keeping live transfer explicit in core', () => {
     const manifest = JSON.parse(read('addons/official/sync/manifest.json'))
     const entry = read('addons/official/sync/main.service.js')
+    const native = read('addons/official/sync/native/src/main.rs')
     const legacyEntry = read('addons/official/sync/main.js')
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
 
-    expect(manifest.description).toContain('legacy file transfer operations are migrated')
+    expect(manifest.description).toContain('vault manifest scanning and deterministic sync planning')
     expect(entry).toContain("from './main.js'")
+    expect(entry).toContain("this.callNativeService('sync.scan'")
+    expect(entry).toContain("this.callNativeService('sync.plan'")
+    expect(entry).toContain("this.callNativeService('sync.apply-local'")
+    expect(native).toContain('mod manifest;')
+    expect(native).toContain('mod plan;')
+    expect(native).toContain('mod local_ops;')
     expect(entry).not.toContain("callNativeService('sync.run'")
     expect(legacyEntry).toContain("this.invoke('iroh_sync_run'")
     expect(core).toContain('sync_commands::iroh_sync_run')

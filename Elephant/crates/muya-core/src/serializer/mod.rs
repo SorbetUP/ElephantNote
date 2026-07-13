@@ -94,7 +94,6 @@ fn serialize_table(document: &Document, table: &Node) -> String {
     return String::new();
   };
 
-  let header_cells = table_cells(document, header);
   let alignments = document
     .children(header.id)
     .map(|cell| match &cell.kind {
@@ -102,22 +101,22 @@ fn serialize_table(document: &Document, table: &Node) -> String {
       _ => Alignment::Default,
     })
     .collect::<Vec<_>>();
+  let table_data = rows
+    .iter()
+    .map(|row| table_cells(document, row))
+    .collect::<Vec<_>>();
+  let mut column_widths = vec![5; alignments.len()];
 
-  let mut lines = vec![format_table_row(&header_cells)];
-  lines.push(format_table_row(
-    &alignments
-      .iter()
-      .map(|alignment| match alignment {
-        Alignment::Default => "---".to_string(),
-        Alignment::Left => ":---".to_string(),
-        Alignment::Center => ":---:".to_string(),
-        Alignment::Right => "---:".to_string(),
-      })
-      .collect::<Vec<_>>(),
-  ));
+  for row in &table_data {
+    for (column, cell) in row.iter().take(column_widths.len()).enumerate() {
+      column_widths[column] = column_widths[column].max(utf16_len(cell) + 2);
+    }
+  }
 
-  for row in rows.into_iter().skip(1) {
-    lines.push(format_table_row(&table_cells(document, row)));
+  let mut lines = vec![format_padded_table_row(&table_data[0], &column_widths)];
+  lines.push(format_table_separator(&alignments, &column_widths));
+  for row in table_data.into_iter().skip(1) {
+    lines.push(format_padded_table_row(&row, &column_widths));
   }
   lines.join("\n")
 }
@@ -125,7 +124,11 @@ fn serialize_table(document: &Document, table: &Node) -> String {
 fn table_cells(document: &Document, row: &Node) -> Vec<String> {
   document
     .children(row.id)
-    .map(|cell| escape_unescaped_pipes(&serialize_inlines(document, cell)))
+    .map(|cell| {
+      escape_unescaped_pipes(&serialize_inlines(document, cell))
+        .trim()
+        .to_string()
+    })
     .collect()
 }
 
@@ -145,8 +148,40 @@ fn escape_unescaped_pipes(value: &str) -> String {
   result
 }
 
-fn format_table_row(cells: &[String]) -> String {
-  format!("| {} |", cells.join(" | "))
+fn utf16_len(value: &str) -> usize {
+  value.encode_utf16().count()
+}
+
+fn format_padded_table_row(cells: &[String], column_widths: &[usize]) -> String {
+  let cells = cells
+    .iter()
+    .take(column_widths.len())
+    .zip(column_widths)
+    .map(|(cell, width)| {
+      let padding = width.saturating_sub(utf16_len(cell) + 1);
+      format!(" {cell}{}", " ".repeat(padding))
+    })
+    .collect::<Vec<_>>()
+    .join("|");
+  format!("|{cells}|")
+}
+
+fn format_table_separator(alignments: &[Alignment], column_widths: &[usize]) -> String {
+  let cells = alignments
+    .iter()
+    .zip(column_widths)
+    .map(|(alignment, width)| {
+      let dashes = "-".repeat(width.saturating_sub(2));
+      match alignment {
+        Alignment::Default => format!(" {dashes} "),
+        Alignment::Left => format!(":{dashes} "),
+        Alignment::Center => format!(":{dashes}:"),
+        Alignment::Right => format!(" {dashes}:"),
+      }
+    })
+    .collect::<Vec<_>>()
+    .join("|");
+  format!("|{cells}|")
 }
 
 fn serialize_inlines(document: &Document, node: &Node) -> String {
@@ -243,7 +278,16 @@ mod tests {
     );
     assert_eq!(
       to_markdown(&document),
-      "# Title\n\n3. three\n4. four\n\n- [x] done\n- [ ] todo\n\n| Name | Score |\n| :--- | ---: |\n| Ada | 10 |"
+      "# Title\n\n3. three\n4. four\n\n- [x] done\n- [ ] todo\n\n| Name | Score |\n|:---- | -----:|\n| Ada  | 10    |"
+    );
+  }
+
+  #[test]
+  fn uses_utf16_widths_when_padding_table_cells() {
+    let document = parse_markdown("| A | B |\n| --- | --- |\n| 😀 | x |");
+    assert_eq!(
+      to_markdown(&document),
+      "| A   | B   |\n| --- | --- |\n| 😀  | x   |"
     );
   }
 

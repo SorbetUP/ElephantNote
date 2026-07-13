@@ -9,11 +9,13 @@ on:
       - 'Elephant/crates/muya-wasm/**'
       - 'Elephant/frontend/src/muya/lib/rust/**'
       - 'Elephant/frontend/src/muya/lib/core/setup.js'
+      - 'Elephant/frontend/src/muya/lib/core/lifecycle.js'
       - 'Elephant/frontend/src/muya/lib/config/options.js'
       - 'tests/app/unit/specs/muya/rustBridge.spec.js'
       - 'tests/app/unit/specs/muya/rustLogicalDocument.spec.js'
       - 'tests/app/unit/specs/muya/rustDomRenderer.spec.js'
       - 'tests/app/unit/specs/muya/rustInputController.spec.js'
+      - 'tests/app/unit/specs/muya/rustRuntime.spec.js'
       - '.github/workflows/muya-wasm.yml'
   pull_request:
     paths:
@@ -21,11 +23,13 @@ on:
       - 'Elephant/crates/muya-wasm/**'
       - 'Elephant/frontend/src/muya/lib/rust/**'
       - 'Elephant/frontend/src/muya/lib/core/setup.js'
+      - 'Elephant/frontend/src/muya/lib/core/lifecycle.js'
       - 'Elephant/frontend/src/muya/lib/config/options.js'
       - 'tests/app/unit/specs/muya/rustBridge.spec.js'
       - 'tests/app/unit/specs/muya/rustLogicalDocument.spec.js'
       - 'tests/app/unit/specs/muya/rustDomRenderer.spec.js'
       - 'tests/app/unit/specs/muya/rustInputController.spec.js'
+      - 'tests/app/unit/specs/muya/rustRuntime.spec.js'
       - '.github/workflows/muya-wasm.yml'
   workflow_dispatch:
 
@@ -74,11 +78,13 @@ jobs:
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \
             Elephant/frontend/src/muya/lib/rust \
             Elephant/frontend/src/muya/lib/core/setup.js \
+            Elephant/frontend/src/muya/lib/core/lifecycle.js \
             Elephant/frontend/src/muya/lib/config/options.js \
             tests/app/unit/specs/muya/rustBridge.spec.js \
             tests/app/unit/specs/muya/rustLogicalDocument.spec.js \
             tests/app/unit/specs/muya/rustDomRenderer.spec.js \
             tests/app/unit/specs/muya/rustInputController.spec.js \
+            tests/app/unit/specs/muya/rustRuntime.spec.js \
             2>&1 | tee muya-rust-eslint.txt
 
       - name: Test Rust browser bridge
@@ -91,6 +97,7 @@ jobs:
             tests/app/unit/specs/muya/rustLogicalDocument.spec.js \
             tests/app/unit/specs/muya/rustDomRenderer.spec.js \
             tests/app/unit/specs/muya/rustInputController.spec.js \
+            tests/app/unit/specs/muya/rustRuntime.spec.js \
             2>&1 | tee muya-rust-vitest.txt
 
       - name: Upload browser bridge diagnostics

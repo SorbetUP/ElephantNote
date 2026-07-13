@@ -98,4 +98,5 @@ jobs:
             Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js \
             tests/app/unit/addons/addonNativeServiceContracts.spec.js
           git commit -m "feat(addons): expose persistent native service API"
+          git pull --rebase origin feature/physical-addon-packages
           git push origin HEAD:feature/physical-addon-packages

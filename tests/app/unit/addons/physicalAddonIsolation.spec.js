@@ -18,7 +18,9 @@ const PHYSICAL_PACKAGES = Object.freeze([
   ['sync', 'elephant.sync'],
   ['calendar', 'elephant.calendar'],
   ['sites', 'elephant.sites'],
-  ['code-execution', 'elephant.code-execution']
+  ['code-execution', 'elephant.code-execution'],
+  ['google-keep-import', 'elephant.google-keep-import'],
+  ['recently-edited', 'elephant.recently-edited']
 ])
 
 const REMOVED_BUILTIN_IMPLEMENTATIONS = Object.freeze([
@@ -34,22 +36,36 @@ const REMOVED_BUILTIN_IMPLEMENTATIONS = Object.freeze([
   'calendar.js',
   'sites.js',
   'codeExecution.js',
+  'googleKeepImport.js',
+  'recentlyEdited.js',
   'aiProviderRouteOwnership.js'
 ])
 
 describe('physical addon isolation', () => {
-  it('keeps migrated renderer implementations out of the builtin addon directory', () => {
+  it('keeps optional renderer implementations out of the builtin addon directory', () => {
     const builtinIndex = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
     for (const file of REMOVED_BUILTIN_IMPLEMENTATIONS) {
       expect(exists(`Elephant/frontend/src/renderer/src/addons/builtin/${file}`)).toBe(false)
     }
-    for (const [, addonId] of PHYSICAL_PACKAGES) {
-      expect(builtinIndex).not.toContain(`id: '${addonId}'`)
-    }
-    expect(builtinIndex).toContain("load: () => import('./excalidraw')")
+    for (const [, addonId] of PHYSICAL_PACKAGES) expect(builtinIndex).not.toContain(addonId)
+    expect(builtinIndex).toContain('builtinAddons = Object.freeze([])')
   })
 
-  it('keeps every migrated implementation inside a separately packageable addon', () => {
+  it('keeps Addon Packs and Excalidraw in the core feature bootstrap, not the addon catalogue', () => {
+    const main = read('Elephant/frontend/src/renderer/src/main.js')
+    const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js')
+    const excalidraw = read('Elephant/frontend/src/renderer/src/addons/builtin/excalidraw.js')
+
+    expect(main).toContain('activateCoreFeature')
+    expect(main).toContain('addonPacksCoreFeature')
+    expect(main).toContain('excalidrawCoreFeature')
+    expect(packs).toContain("id: CORE_FEATURE_ID")
+    expect(packs).not.toContain('manifest:')
+    expect(excalidraw).toContain("id: CORE_FEATURE_ID")
+    expect(excalidraw).not.toContain('manifest:')
+  })
+
+  it('keeps every optional implementation inside a separately packageable addon', () => {
     for (const [slug, addonId] of PHYSICAL_PACKAGES) {
       const manifestPath = `addons/official/${slug}/manifest.json`
       const entryPath = `addons/official/${slug}/main.js`
@@ -96,8 +112,8 @@ describe('physical addon isolation', () => {
     expect(host).not.toContain('OCR')
     expect(host).toContain('Addon native permission was not granted')
     expect(host).toContain('Addon sidecar escapes its package directory')
-    expect(trustedRuntime).toContain("native: Object.freeze({")
-    expect(trustedRuntime).toContain("storage: Object.freeze({")
+    expect(trustedRuntime).toContain('native: Object.freeze({')
+    expect(trustedRuntime).toContain('storage: Object.freeze({')
   })
 
   it('enforces parent requirements and official provenance at native and renderer boundaries', () => {

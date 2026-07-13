@@ -6,7 +6,6 @@ old = """text = text.replace(
     '            &source_by_id,\\n        )?;',
     '            &source_by_id,\\n            &mut web_citations,\\n        )?;',
 )
-# There are two render_claims calls; require both changed.
 if text.count('&mut web_citations') < 2:
     raise SystemExit('render_claims calls were not both updated')
 """

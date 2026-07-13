@@ -1,6 +1,6 @@
 {
   "nativeManifest": "native/Cargo.toml",
-  "binaryName": "elephant-code-execution",
+  "binaryName": "elephant-sites",
   "runner": "process",
   "supportedPlatforms": [
     "macos-aarch64",

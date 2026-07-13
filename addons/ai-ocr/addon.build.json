@@ -1,6 +1,6 @@
 {
   "nativeManifest": "native/Cargo.toml",
-  "binaryName": "elephant-code-execution",
+  "binaryName": "elephant-ai-ocr",
   "runner": "process",
   "supportedPlatforms": [
     "macos-aarch64",

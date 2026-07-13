@@ -6,7 +6,7 @@ use crate::model::{
 use crate::selection::{Selection, SelectionPoint};
 
 use super::operation::utf16_to_byte;
-use super::{EditError, Operation, Transaction, Utf16Range};
+use super::{Command, EditError, Operation, Transaction, Utf16Range};
 
 pub(crate) fn build_paste_markdown(
   document: &Document,
@@ -28,11 +28,10 @@ pub(crate) fn build_paste_markdown(
   if blocks.is_empty() {
     return Ok(noop(selection));
   }
-  if blocks
-    .iter()
-    .any(|block| !matches!(block.kind, NodeKind::Block(BlockKind::Paragraph)))
+  if blocks.len() == 1
+    && matches!(blocks[0].kind, NodeKind::Block(BlockKind::Heading { .. }))
   {
-    return Err(EditError::UnsupportedStructure(text));
+    return Command::InsertText(markdown.to_string()).build(document, selection);
   }
 
   let (block, root, block_index, text_index) = direct_root_paragraph(document, text)?;
@@ -47,25 +46,32 @@ pub(crate) fn build_paste_markdown(
   let mut next_id = document.next_available_id().0;
   let mut groups = BTreeMap::new();
   let mut id_map = BTreeMap::new();
-  let first = blocks[0];
-  let first_children = first.children.clone();
-  for (offset, child) in first_children.iter().copied().enumerate() {
-    let subtree = clone_subtree(
-      &fragment,
-      child,
-      &mut next_id,
-      &mut groups,
-      &mut id_map,
-    )?;
-    operations.push(Operation::InsertSubtree {
-      parent: block,
-      index: text_index + 1 + offset,
-      subtree,
-    });
+  let merge_first = matches!(blocks[0].kind, NodeKind::Block(BlockKind::Paragraph));
+  let first_children = if merge_first {
+    blocks[0].children.clone()
+  } else {
+    Vec::new()
+  };
+
+  if merge_first {
+    for (offset, child) in first_children.iter().copied().enumerate() {
+      let subtree = clone_subtree(
+        &fragment,
+        child,
+        &mut next_id,
+        &mut groups,
+        &mut id_map,
+      )?;
+      operations.push(Operation::InsertSubtree {
+        parent: block,
+        index: text_index + 1 + offset,
+        subtree,
+      });
+    }
   }
 
-  let mut inserted_blocks = Vec::new();
-  for (offset, pasted_block) in blocks.iter().copied().skip(1).enumerate() {
+  let inserted_start = usize::from(merge_first);
+  for (offset, pasted_block) in blocks.iter().copied().skip(inserted_start).enumerate() {
     let subtree = clone_subtree(
       &fragment,
       pasted_block.id,
@@ -73,7 +79,6 @@ pub(crate) fn build_paste_markdown(
       &mut groups,
       &mut id_map,
     )?;
-    inserted_blocks.push(subtree.root);
     operations.push(Operation::InsertSubtree {
       parent: root,
       index: block_index + 1 + offset,
@@ -81,37 +86,56 @@ pub(crate) fn build_paste_markdown(
     });
   }
 
-  let last_source_text = last_text_descendant(&fragment, blocks.last().unwrap().id)
-    .ok_or(EditError::UnsupportedStructure(text))?;
-  let pasted_caret_node = *id_map
-    .get(&last_source_text)
-    .ok_or(EditError::UnsupportedStructure(last_source_text))?;
-  let pasted_caret_offset = text_value(&fragment, last_source_text)?
-    .encode_utf16()
-    .count() as u32;
+  let last_block = blocks.last().unwrap().id;
+  let last_text = last_text_descendant(&fragment, last_block);
+  let tail_target = if merge_first && blocks.len() == 1 {
+    (block, text_index + 1 + first_children.len())
+  } else {
+    let source_container = last_inline_container(&fragment, last_block)
+      .ok_or(EditError::UnsupportedStructure(last_block))?;
+    let target = *id_map
+      .get(&source_container)
+      .ok_or(EditError::UnsupportedStructure(source_container))?;
+    let index = fragment
+      .node(source_container)
+      .ok_or(EditError::NodeNotFound(source_container))?
+      .children
+      .len();
+    (target, index)
+  };
 
-  if !suffix.is_empty() {
-    let suffix_id = NodeId(next_id);
-    let suffix_node = Node::new(
-      suffix_id,
-      NodeKind::Inline(InlineKind::Text { value: suffix }),
-      None,
-    );
-    if let Some(last_block) = inserted_blocks.last().copied() {
-      let source_last = blocks.last().unwrap();
+  let (pasted_caret_node, pasted_caret_offset) = if let Some(source_text) = last_text {
+    let target = *id_map
+      .get(&source_text)
+      .ok_or(EditError::UnsupportedStructure(source_text))?;
+    let offset = text_value(&fragment, source_text)?.encode_utf16().count() as u32;
+    if !suffix.is_empty() {
+      let suffix_id = NodeId(next_id);
+      next_id = next_id.saturating_add(1);
       operations.push(Operation::InsertNode {
-        parent: last_block,
-        index: source_last.children.len(),
-        node: suffix_node,
-      });
-    } else {
-      operations.push(Operation::InsertNode {
-        parent: block,
-        index: text_index + 1 + first_children.len(),
-        node: suffix_node,
+        parent: tail_target.0,
+        index: tail_target.1,
+        node: Node::new(
+          suffix_id,
+          NodeKind::Inline(InlineKind::Text { value: suffix }),
+          None,
+        ),
       });
     }
-  }
+    (target, offset)
+  } else {
+    let tail_id = NodeId(next_id);
+    operations.push(Operation::InsertNode {
+      parent: tail_target.0,
+      index: tail_target.1,
+      node: Node::new(
+        tail_id,
+        NodeKind::Inline(InlineKind::Text { value: suffix }),
+        None,
+      ),
+    });
+    (tail_id, 0)
+  };
 
   Ok(Transaction {
     operations,
@@ -235,6 +259,26 @@ fn last_text_descendant(document: &Document, root: NodeId) -> Option<NodeId> {
     .find_map(|child| last_text_descendant(document, *child))
 }
 
+fn last_inline_container(document: &Document, root: NodeId) -> Option<NodeId> {
+  let node = document.node(root)?;
+  for child in node.children.iter().rev() {
+    if let Some(container) = last_inline_container(document, *child) {
+      return Some(container);
+    }
+  }
+  matches!(
+    node.kind,
+    NodeKind::Block(
+      BlockKind::Paragraph
+        | BlockKind::Heading { .. }
+        | BlockKind::BlockQuote
+        | BlockKind::TableCell { .. }
+        | BlockKind::CodeBlock { .. }
+    )
+  )
+  .then_some(root)
+}
+
 fn text_value(document: &Document, node: NodeId) -> Result<&str, EditError> {
   let node = document.node(node).ok_or(EditError::NodeNotFound(node))?;
   match &node.kind {
@@ -279,6 +323,13 @@ mod tests {
     (document, inverse)
   }
 
+  fn assert_paste(initial: &str, pasted: &str, expected: &str) {
+    let (mut document, inverse) = apply(initial, 2, 2, pasted);
+    assert_eq!(to_markdown(&document), expected);
+    inverse.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), initial);
+  }
+
   #[test]
   fn pastes_plain_text_at_a_collapsed_caret() {
     let (document, _) = apply("alpha", 2, 2, "XYZ");
@@ -293,15 +344,53 @@ mod tests {
 
   #[test]
   fn merges_multiline_paragraphs_with_prefix_and_suffix() {
-    let (document, _) = apply("alpha", 2, 2, "one\n\ntwo");
-    assert_eq!(to_markdown(&document), "alone\n\ntwopha");
+    assert_paste("alpha", "one\n\ntwo", "alone\n\ntwopha");
   }
 
   #[test]
   fn preserves_inline_markdown_and_undoes_exactly() {
-    let (mut document, inverse) = apply("alpha", 2, 2, "**bold** and *soft*");
-    assert_eq!(to_markdown(&document), "al**bold** and *soft*pha");
-    inverse.apply(&mut document).unwrap();
-    assert_eq!(to_markdown(&document), "alpha");
+    assert_paste(
+      "alpha",
+      "**bold** and *soft*",
+      "al**bold** and *soft*pha",
+    );
+  }
+
+  #[test]
+  fn keeps_a_pasted_heading_literal_inside_the_current_paragraph() {
+    assert_paste("alpha", "# Title", "al# Titlepha");
+  }
+
+  #[test]
+  fn inserts_a_blockquote_after_the_prefix_and_merges_the_suffix() {
+    assert_paste("alpha", "> quote", "al\n\n> quotepha");
+  }
+
+  #[test]
+  fn inserts_a_list_after_the_prefix_and_merges_the_suffix_into_the_last_item() {
+    assert_paste("alpha", "- one\n- two", "al\n\n- one\n- twopha");
+  }
+
+  #[test]
+  fn inserts_a_code_block_and_merges_the_suffix_into_code() {
+    assert_paste(
+      "alpha",
+      "```js\nconsole.log(1)\n```",
+      "al\n\n```js\nconsole.log(1)pha\n```",
+    );
+  }
+
+  #[test]
+  fn inserts_a_table_and_merges_the_suffix_into_the_last_cell() {
+    assert_paste(
+      "alpha",
+      "| A | B |\n| --- | --- |\n| one | two |",
+      "al\n\n| A   | B      |\n| --- | ------ |\n| one | twopha |",
+    );
+  }
+
+  #[test]
+  fn inserts_an_inline_image_and_keeps_the_caret_before_the_suffix() {
+    assert_paste("alpha", "![alt](image.png)", "al![alt](image.png)pha");
   }
 }

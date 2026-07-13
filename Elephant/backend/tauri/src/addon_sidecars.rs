@@ -110,14 +110,33 @@ fn platform_key() -> String {
     "macos" => "macos",
     "windows" => "windows",
     "linux" => "linux",
+    "android" => "android",
+    "ios" => "ios",
     other => other,
   };
   let arch = match std::env::consts::ARCH {
     "aarch64" => "aarch64",
     "x86_64" => "x86_64",
+    "arm" => "armv7",
+    "x86" => "i686",
     other => other,
   };
   format!("{os}-{arch}")
+}
+
+fn process_sidecars_supported_on(os: &str) -> bool {
+  !matches!(os, "android" | "ios")
+}
+
+fn ensure_process_sidecar_supported() -> R<()> {
+  if process_sidecars_supported_on(std::env::consts::OS) {
+    Ok(())
+  } else {
+    Err(format!(
+      "Process addon sidecars are not supported on {}. This addon requires a package-owned Android or iOS host adapter.",
+      std::env::consts::OS
+    ))
+  }
 }
 
 fn ensure_installed_and_enabled(registry: &Value, addon_id: &str) -> R<()> {
@@ -144,6 +163,7 @@ fn resolve_sidecar(app: &AppHandle, addon_id: &str) -> R<(PathBuf, String, Strin
   if !native_allowed {
     return Err(format!("Addon native permission was not granted: {addon_id}"));
   }
+  ensure_process_sidecar_supported()?;
 
   let platform = platform_key();
   let sidecars = manifest
@@ -299,6 +319,15 @@ mod tests {
   fn rejects_sidecar_path_traversal() {
     assert!(safe_relative_path("../outside").is_err());
     assert!(safe_relative_path("native/linux-x86_64/sidecar").is_ok());
+  }
+
+  #[test]
+  fn process_sidecars_are_explicitly_desktop_only() {
+    assert!(process_sidecars_supported_on("linux"));
+    assert!(process_sidecars_supported_on("macos"));
+    assert!(process_sidecars_supported_on("windows"));
+    assert!(!process_sidecars_supported_on("android"));
+    assert!(!process_sidecars_supported_on("ios"));
   }
 
   #[test]

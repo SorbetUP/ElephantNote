@@ -25,7 +25,10 @@ jobs:
       - name: Apply Tauri test cleanup
         run: |
           set -o pipefail
-          python3 scripts/cleanup_obsolete_tauri_tests.py 2>&1 | tee test-cleanup.log
+          {
+            python3 scripts/cleanup_obsolete_tauri_tests.py
+            python3 scripts/fix_tauri_test_expectation.py
+          } 2>&1 | tee test-cleanup.log
 
       - name: Run complete unit suite
         run: |
@@ -46,7 +49,7 @@ jobs:
         run: |
           set -o pipefail
           {
-            rm -f scripts/cleanup_obsolete_tauri_tests.py test-cleanup.log vitest-output.txt
+            rm -f scripts/cleanup_obsolete_tauri_tests.py scripts/fix_tauri_test_expectation.py test-cleanup.log vitest-output.txt
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add -A

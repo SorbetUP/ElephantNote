@@ -67,15 +67,18 @@ describe('physical addon isolation', () => {
 
   it('keeps every optional implementation inside a separately packageable addon', () => {
     for (const [slug, addonId] of PHYSICAL_PACKAGES) {
-      const manifestPath = `addons/official/${slug}/manifest.json`
-      const entryPath = `addons/official/${slug}/main.js`
+      const packageRoot = `addons/official/${slug}`
+      const manifestPath = `${packageRoot}/manifest.json`
       expect(exists(manifestPath)).toBe(true)
-      expect(exists(entryPath)).toBe(true)
       const manifest = JSON.parse(read(manifestPath))
-      const entry = read(entryPath)
+      const runtimeEntry = String(manifest.runtime?.entry || '')
+      const entryPath = `${packageRoot}/${runtimeEntry}`
       expect(manifest.id).toBe(addonId)
-      expect(manifest.runtime).toEqual(expect.objectContaining({ type: 'javascript-worker', entry: 'main.js' }))
+      expect(manifest.runtime).toEqual(expect.objectContaining({ type: 'javascript-worker' }))
+      expect(runtimeEntry).toMatch(/^[a-zA-Z0-9._-]+\.js$/)
+      expect(exists(entryPath)).toBe(true)
       expect(manifest.contributes?.runtimeMode).toBe('trusted')
+      const entry = read(entryPath)
       expect(entry).toMatch(/export\s+default\s+class/)
       expect(entry).toContain('onload(')
     }
@@ -153,6 +156,8 @@ describe('physical addon isolation', () => {
     expect(buildScript).toContain('build/out/addons/releases')
     expect(packager).toContain('blake3::hash')
     expect(validator).toContain('must be explicitly marked official')
-    expect(validator).toContain('trusted catalogue entry must be a self-contained package entry')
+    expect(validator).toContain('trusted module escapes its package directory')
+    expect(validator).toContain('trusted module imports an external dependency')
+    expect(validator).toContain('trusted modules cannot use dynamic import')
   })
 })

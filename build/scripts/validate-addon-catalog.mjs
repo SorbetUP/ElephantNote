@@ -47,7 +47,7 @@ const validateTrustedEntry = (entry, manifest, source) => {
   if (manifest.permissions?.native === true && !manifest.native?.protocol) {
     fail(`${entry.id} requests native access without declaring a native protocol`)
   }
-  console.log(`[addon-catalog] ok id=${entry.id} version=${entry.version} runtime=trusted`)
+  console.log(`[addon-catalog] ok id=${entry.id} version=${entry.version} runtime=trusted official=${entry.official === true}`)
 }
 
 const validateIsolatedEntry = async (entry, manifest, source) => {
@@ -124,6 +124,7 @@ const slugs = new Set()
 let commandCount = 0
 let viewCount = 0
 let trustedCount = 0
+let officialCount = 0
 
 for (const entry of catalog.addons) {
   for (const field of ['id', 'slug', 'name', 'version', 'manifestPath', 'entryPath']) {
@@ -134,6 +135,11 @@ for (const entry of catalog.addons) {
   if (slugs.has(entry.slug)) fail(`duplicate addon slug ${entry.slug}`)
   ids.add(entry.id)
   slugs.add(entry.slug)
+
+  const firstPartyId = entry.id.startsWith('elephant.')
+  if (firstPartyId && entry.official !== true) fail(`${entry.id} must be explicitly marked official`)
+  if (!firstPartyId && entry.official === true) fail(`${entry.id} cannot use the official first-party marker`)
+  if (entry.official === true) officialCount += 1
 
   const prefix = `addons/${entry.slug}/`
   const manifestPath = safePath(entry.manifestPath, `${entry.id}.manifestPath`)
@@ -164,4 +170,4 @@ for (const entry of catalog.addons) {
   }
 }
 
-console.log(`[addon-catalog] valid addons=${catalog.addons.length} trusted=${trustedCount} commands=${commandCount} views=${viewCount}`)
+console.log(`[addon-catalog] valid addons=${catalog.addons.length} official=${officialCount} trusted=${trustedCount} commands=${commandCount} views=${viewCount}`)

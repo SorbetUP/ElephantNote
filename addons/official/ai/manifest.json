@@ -1,0 +1,23 @@
+{
+  "id": "elephant.ai",
+  "name": "AI",
+  "version": "2.1.0",
+  "description": "Configures API providers and hosts settings contributed by separately installed AI modules.",
+  "author": "Elephant",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": {
+    "type": "javascript-worker",
+    "entry": "main.js"
+  },
+  "permissions": {
+    "storage": true,
+    "commands": false
+  },
+  "contributes": {
+    "runtimeMode": "trusted"
+  },
+  "activationEvents": [
+    "onStartup"
+  ]
+}

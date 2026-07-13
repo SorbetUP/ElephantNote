@@ -31,7 +31,9 @@ describe('physical addon isolation', () => {
     expect(manifest.requires).toEqual({ 'elephant.ai': '>=2.0.0' })
     expect(Object.keys(manifest.native.sidecars)).toContain('macos-aarch64')
     expect(entry).toContain("slot: 'ai.ocr'")
-    expect(entry).toContain('tauri_addons_sidecar_call')
+    expect(entry).toContain('this.api.native.call')
+    expect(entry).toContain('this.api.storage.get')
+    expect(entry).not.toContain('api.experimental')
     expect(sidecar).toContain('elephant-addon-sidecar-v1')
     expect(sidecar).toContain('"ocr.image"')
   })
@@ -39,6 +41,7 @@ describe('physical addon isolation', () => {
   it('uses only the generic native host from the application binary', () => {
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
     const host = read('Elephant/backend/tauri/src/addon_sidecars.rs')
+    const trustedRuntime = read('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')
 
     expect(core).toContain('addon_sidecars::tauri_addons_sidecar_status')
     expect(core).toContain('addon_sidecars::tauri_addons_sidecar_call')
@@ -46,6 +49,20 @@ describe('physical addon isolation', () => {
     expect(host).not.toContain('OCR')
     expect(host).toContain('Addon native permission was not granted')
     expect(host).toContain('Addon sidecar escapes its package directory')
+    expect(trustedRuntime).toContain("native: Object.freeze({")
+    expect(trustedRuntime).toContain("storage: Object.freeze({")
+  })
+
+  it('enforces parent addon requirements at the native manager boundary', () => {
+    const core = read('Elephant/backend/tauri/src/lib_min.rs')
+    const dependencies = read('Elephant/backend/tauri/src/addon_dependencies.rs')
+
+    expect(core).toContain('addon_dependencies::tauri_addons_set_enabled_guarded')
+    expect(core).toContain('addon_dependencies::tauri_addons_uninstall_guarded')
+    expect(dependencies).toContain('validate_requirements')
+    expect(dependencies).toContain('VersionReq::parse')
+    expect(dependencies).toContain('Cannot disable')
+    expect(dependencies).toContain('Cannot uninstall')
   })
 
   it('supports catalog downloads of complete hashed enaddon archives', () => {

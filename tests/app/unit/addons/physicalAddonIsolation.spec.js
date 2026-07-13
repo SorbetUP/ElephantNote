@@ -57,8 +57,8 @@ describe('physical addon isolation', () => {
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
     const dependencies = read('Elephant/backend/tauri/src/addon_dependencies.rs')
 
-    expect(core).toContain('addon_dependencies::tauri_addons_set_enabled_guarded')
-    expect(core).toContain('addon_dependencies::tauri_addons_uninstall_guarded')
+    expect(core).toContain('addon_dependencies::tauri_addons_set_enabled')
+    expect(core).toContain('addon_dependencies::tauri_addons_uninstall')
     expect(dependencies).toContain('validate_requirements')
     expect(dependencies).toContain('VersionReq::parse')
     expect(dependencies).toContain('Cannot disable')

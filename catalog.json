@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-13T13:40:01Z",
+  "updatedAt": "2026-07-13T13:50:34Z",
   "addons": [
     {
       "id": "elephant.ai",
@@ -114,12 +114,12 @@
       "id": "elephant.sync",
       "slug": "sync",
       "name": "Sync",
-      "version": "1.1.0",
-      "description": "Adds encrypted Iroh pairing, synchronization and conflict recovery as a separately installed package.",
+      "version": "1.2.0",
+      "description": "Owns a persistent Iroh endpoint while legacy transfer operations are migrated into the package.",
       "author": "Elephant",
       "official": true,
       "manifestPath": "addons/sync/manifest.json",
-      "entryPath": "addons/sync/main.js"
+      "entryPath": "addons/sync/main.service.js"
     },
     {
       "id": "elephant.calendar",

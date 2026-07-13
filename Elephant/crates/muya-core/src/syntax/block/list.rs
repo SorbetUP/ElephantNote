@@ -6,26 +6,23 @@ pub struct ListMarker<'a> {
   pub start: Option<u64>,
   pub checked: Option<bool>,
   pub content: &'a str,
+  pub indent: usize,
 }
 
 pub fn parse(line: &str) -> Option<ListMarker<'_>> {
-  let trimmed = line.trim_start();
+  let trimmed = line.trim_start_matches(' ');
   let indent = line.len().saturating_sub(trimmed.len());
-  if indent > 3 {
-    return None;
-  }
-
-  parse_unordered(trimmed).or_else(|| parse_ordered(trimmed))
+  parse_unordered(trimmed, indent).or_else(|| parse_ordered(trimmed, indent))
 }
 
-fn parse_unordered(line: &str) -> Option<ListMarker<'_>> {
+fn parse_unordered(line: &str, indent: usize) -> Option<ListMarker<'_>> {
   let marker = line.chars().next()?;
   if !matches!(marker, '-' | '*' | '+') {
     return None;
   }
 
   let rest = line.get(marker.len_utf8()..)?.strip_prefix(' ')?;
-  if let Some(task) = parse_task(rest) {
+  if let Some(task) = parse_task(rest, indent) {
     return Some(task);
   }
 
@@ -34,16 +31,18 @@ fn parse_unordered(line: &str) -> Option<ListMarker<'_>> {
     start: None,
     checked: None,
     content: rest,
+    indent,
   })
 }
 
-fn parse_task(rest: &str) -> Option<ListMarker<'_>> {
+fn parse_task(rest: &str, indent: usize) -> Option<ListMarker<'_>> {
   if let Some(content) = rest.strip_prefix("[ ] ") {
     return Some(ListMarker {
       kind: ListKind::Task,
       start: None,
       checked: Some(false),
       content,
+      indent,
     });
   }
 
@@ -55,10 +54,11 @@ fn parse_task(rest: &str) -> Option<ListMarker<'_>> {
       start: None,
       checked: Some(true),
       content,
+      indent,
     })
 }
 
-fn parse_ordered(line: &str) -> Option<ListMarker<'_>> {
+fn parse_ordered(line: &str, indent: usize) -> Option<ListMarker<'_>> {
   let digits = line.chars().take_while(|character| character.is_ascii_digit()).count();
   if digits == 0 || digits > 9 {
     return None;
@@ -75,6 +75,7 @@ fn parse_ordered(line: &str) -> Option<ListMarker<'_>> {
     start: Some(start),
     checked: None,
     content: rest,
+    indent,
   })
 }
 
@@ -91,6 +92,7 @@ mod tests {
         start: None,
         checked: None,
         content: "item",
+        indent: 0,
       })
     );
     assert_eq!(
@@ -100,6 +102,7 @@ mod tests {
         start: Some(3),
         checked: None,
         content: "item",
+        indent: 0,
       })
     );
     assert_eq!(
@@ -109,13 +112,27 @@ mod tests {
         start: None,
         checked: Some(true),
         content: "done",
+        indent: 0,
       })
     );
   }
 
   #[test]
-  fn rejects_deeply_indented_or_incomplete_markers() {
-    assert_eq!(parse("    - nested"), None);
+  fn preserves_nested_indentation() {
+    assert_eq!(
+      parse("    - nested"),
+      Some(ListMarker {
+        kind: ListKind::Unordered,
+        start: None,
+        checked: None,
+        content: "nested",
+        indent: 4,
+      })
+    );
+  }
+
+  #[test]
+  fn rejects_incomplete_markers() {
     assert_eq!(parse("1.item"), None);
     assert_eq!(parse("-item"), None);
   }

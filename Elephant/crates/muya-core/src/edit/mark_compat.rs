@@ -1,17 +1,34 @@
 use crate::model::{Document, InlineKind, NodeId, NodeKind};
 use crate::selection::Selection;
 
-use super::{EditError, MarkCommand, Operation, Transaction};
+use super::{EditError, Operation, Transaction};
 
-pub(crate) fn build_muya_mark_toggle(
-  document: &Document,
-  selection: Selection,
-  command: MarkCommand,
-) -> Result<Transaction, EditError> {
-  if let Some(wrapper) = selected_mark_ancestor(document, selection, command)? {
-    return build_unwrap_ancestor(document, selection, wrapper);
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MarkCommand {
+  ToggleStrong,
+  ToggleEmphasis,
+  ToggleStrike,
+}
+
+impl MarkCommand {
+  pub fn build(
+    self,
+    document: &Document,
+    selection: Selection,
+  ) -> Result<Transaction, EditError> {
+    if let Some(wrapper) = selected_mark_ancestor(document, selection, self)? {
+      return build_unwrap_ancestor(document, selection, wrapper);
+    }
+    self.generic().build(document, selection)
   }
-  command.build(document, selection)
+
+  fn generic(self) -> super::mark::MarkCommand {
+    match self {
+      Self::ToggleStrong => super::mark::MarkCommand::ToggleStrong,
+      Self::ToggleEmphasis => super::mark::MarkCommand::ToggleEmphasis,
+      Self::ToggleStrike => super::mark::MarkCommand::ToggleStrike,
+    }
+  }
 }
 
 fn selected_mark_ancestor(
@@ -120,12 +137,9 @@ mod tests {
   #[test]
   fn unwraps_the_whole_strong_ancestor_for_a_partial_selection() {
     let mut document = parse_markdown("**alpha**");
-    let transaction = build_muya_mark_toggle(
-      &document,
-      selection(&document, 1, 4),
-      MarkCommand::ToggleStrong,
-    )
-    .unwrap();
+    let transaction = MarkCommand::ToggleStrong
+      .build(&document, selection(&document, 1, 4))
+      .unwrap();
     let inverse = transaction.apply(&mut document).unwrap();
 
     assert_eq!(to_markdown(&document), "alpha");
@@ -136,12 +150,9 @@ mod tests {
   #[test]
   fn unwraps_a_nested_emphasis_ancestor_without_removing_strong() {
     let mut document = parse_markdown("***alpha***");
-    let transaction = build_muya_mark_toggle(
-      &document,
-      selection(&document, 0, 5),
-      MarkCommand::ToggleEmphasis,
-    )
-    .unwrap();
+    let transaction = MarkCommand::ToggleEmphasis
+      .build(&document, selection(&document, 0, 5))
+      .unwrap();
     let inverse = transaction.apply(&mut document).unwrap();
 
     assert_eq!(to_markdown(&document), "**alpha**");
@@ -152,14 +163,11 @@ mod tests {
   #[test]
   fn falls_back_to_the_generic_builder_for_plain_text() {
     let mut document = parse_markdown("alpha");
-    build_muya_mark_toggle(
-      &document,
-      selection(&document, 1, 4),
-      MarkCommand::ToggleEmphasis,
-    )
-    .unwrap()
-    .apply(&mut document)
-    .unwrap();
+    MarkCommand::ToggleEmphasis
+      .build(&document, selection(&document, 1, 4))
+      .unwrap()
+      .apply(&mut document)
+      .unwrap();
 
     assert_eq!(to_markdown(&document), "a*lph*a");
   }

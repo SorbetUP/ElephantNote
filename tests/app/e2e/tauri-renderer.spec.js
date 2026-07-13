@@ -56,7 +56,7 @@ const installTauriMock = async (page) => {
   })
 }
 
-const mountedApp = (page) => page.locator('#app[data-v-app]')
+const onboardingHeading = (page) => page.getByRole('heading', { name: 'Choose your first vault' })
 
 test.describe('Tauri renderer smoke', () => {
   test.beforeEach(async ({ page }) => {
@@ -72,8 +72,9 @@ test.describe('Tauri renderer smoke', () => {
     })
 
     await page.goto('/')
-    await expect(mountedApp(page)).toBeVisible()
-    await expect(mountedApp(page)).not.toBeEmpty()
+    await expect(onboardingHeading(page)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Choose vault' })).toBeVisible()
+    await expect(page.locator('#app[data-v-app]')).not.toBeEmpty()
     await expect(page.locator('body')).toBeVisible()
     await expect(page).toHaveTitle(/Elephant/i)
 
@@ -89,7 +90,8 @@ test.describe('Tauri renderer smoke', () => {
   test('keeps the renderer usable at a mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 412, height: 915 })
     await page.goto('/')
-    await expect(mountedApp(page)).toBeVisible()
+    await expect(onboardingHeading(page)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Choose vault' })).toBeVisible()
 
     const bodyBox = await page.locator('body').boundingBox()
     expect(bodyBox?.width).toBeGreaterThanOrEqual(400)

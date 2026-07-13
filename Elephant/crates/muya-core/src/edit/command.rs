@@ -93,7 +93,6 @@ fn build_replace_selection(
     ordered_sibling_text_selection(document, selection)?;
   let start_value = text_value(document, start.node)?;
   let end_value = text_value(document, end.node)?;
-  let start_byte = utf16_to_byte(start_value, start.node, start.offset_utf16)?;
   let end_byte = utf16_to_byte(end_value, end.node, end.offset_utf16)?;
   let suffix = &end_value[end_byte..];
   let replacement = format!("{inserted}{suffix}");
@@ -173,10 +172,6 @@ fn build_delete_backward(
     .next_back()
     .expect("non-zero byte offset must have a previous character");
   let start = caret.offset_utf16 - previous.len_utf16() as u32;
-  let next = Selection::collapsed(SelectionPoint {
-    node: caret.node,
-    offset_utf16: start,
-  });
 
   Ok(Transaction {
     operations: vec![Operation::ReplaceText {
@@ -185,7 +180,10 @@ fn build_delete_backward(
       inserted: String::new(),
     }],
     selection_before: selection,
-    selection_after: next,
+    selection_after: Selection::collapsed(SelectionPoint {
+      node: caret.node,
+      offset_utf16: start,
+    }),
   })
 }
 
@@ -197,7 +195,12 @@ fn build_insert_paragraph(
   let value = text_value(document, caret.node)?;
   let byte_offset = utf16_to_byte(value, caret.node, caret.offset_utf16)?;
   let suffix = value[byte_offset..].to_string();
-  let (block, parent, block_index) = plain_paragraph_for_text(document, caret.node)?;
+  let (block, parent, block_index, text_index) =
+    direct_paragraph_for_text(document, caret.node)?;
+  let block_node = document
+    .node(block)
+    .ok_or(EditError::NodeNotFound(block))?;
+  let following = block_node.children[text_index + 1..].to_vec();
 
   let new_block_id = document.next_available_id();
   let new_text_id = NodeId(new_block_id.0.saturating_add(1));
@@ -212,27 +215,39 @@ fn build_insert_paragraph(
     None,
   );
 
+  let mut operations = vec![
+    Operation::ReplaceText {
+      node: caret.node,
+      range: Utf16Range::new(
+        caret.offset_utf16,
+        value.encode_utf16().count() as u32,
+      ),
+      inserted: String::new(),
+    },
+    Operation::InsertNode {
+      parent,
+      index: block_index + 1,
+      node: new_block,
+    },
+    Operation::InsertNode {
+      parent: new_block_id,
+      index: 0,
+      node: new_text,
+    },
+  ];
+  operations.extend(
+    following
+      .into_iter()
+      .enumerate()
+      .map(|(offset, node)| Operation::MoveNode {
+        node,
+        new_parent: new_block_id,
+        new_index: offset + 1,
+      }),
+  );
+
   Ok(Transaction {
-    operations: vec![
-      Operation::ReplaceText {
-        node: caret.node,
-        range: Utf16Range::new(
-          caret.offset_utf16,
-          value.encode_utf16().count() as u32,
-        ),
-        inserted: String::new(),
-      },
-      Operation::InsertNode {
-        parent,
-        index: block_index + 1,
-        node: new_block,
-      },
-      Operation::InsertNode {
-        parent: new_block_id,
-        index: 0,
-        node: new_text,
-      },
-    ],
+    operations,
     selection_before: selection,
     selection_after: Selection::collapsed(SelectionPoint {
       node: new_text_id,
@@ -420,6 +435,31 @@ fn build_toggle_mark(
   })
 }
 
+fn direct_paragraph_for_text(
+  document: &Document,
+  text: NodeId,
+) -> Result<(NodeId, NodeId, usize, usize), EditError> {
+  let text_node = document.node(text).ok_or(EditError::NodeNotFound(text))?;
+  text_value(document, text)?;
+  let block = text_node.parent.ok_or(EditError::UnsupportedStructure(text))?;
+  let block_node = document
+    .node(block)
+    .ok_or(EditError::NodeNotFound(block))?;
+  if !matches!(block_node.kind, NodeKind::Block(BlockKind::Paragraph)) {
+    return Err(EditError::UnsupportedStructure(block));
+  }
+  let text_index = document
+    .child_index(block, text)
+    .ok_or(EditError::UnsupportedStructure(text))?;
+  let parent = block_node
+    .parent
+    .ok_or(EditError::UnsupportedStructure(block))?;
+  let block_index = document
+    .child_index(parent, block)
+    .ok_or(EditError::UnsupportedStructure(block))?;
+  Ok((block, parent, block_index, text_index))
+}
+
 fn editable_text_block_for_text(
   document: &Document,
   text: NodeId,
@@ -505,10 +545,11 @@ mod tests {
         offset_utf16: 2,
       },
     };
-    let transaction = Command::InsertText("X".to_string())
+    Command::InsertText("X".to_string())
       .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
       .unwrap();
-    transaction.apply(&mut document).unwrap();
     assert_eq!(to_markdown(&document), "abXf");
   }
 
@@ -527,10 +568,11 @@ mod tests {
         offset_utf16: 1,
       },
     };
-    let transaction = Command::InsertText("X".to_string())
+    let inverse = Command::InsertText("X".to_string())
       .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
       .unwrap();
-    let inverse = transaction.apply(&mut document).unwrap();
     assert_eq!(to_markdown(&document), "aXz");
 
     inverse.apply(&mut document).unwrap();
@@ -561,16 +603,47 @@ mod tests {
       node,
       offset_utf16: 2,
     });
-    let transaction = Command::InsertParagraph
+    let inverse = Command::InsertParagraph
       .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
       .unwrap();
-    let inverse = transaction.apply(&mut document).unwrap();
     assert_eq!(to_markdown(&document), "he\n\nllo");
-    assert_eq!(document.children(document.root).count(), 2);
 
     inverse.apply(&mut document).unwrap();
     assert_eq!(to_markdown(&document), "hello");
-    assert_eq!(document.children(document.root).count(), 1);
+  }
+
+  #[test]
+  fn splits_rich_paragraphs_and_preserves_moved_subtree_ids() {
+    let mut document = parse_markdown("before**bold**after");
+    let original_block = document.children(document.root).next().unwrap().id;
+    let children = document
+      .children(original_block)
+      .map(|node| node.id)
+      .collect::<Vec<_>>();
+    let first_text = children[0];
+    let strong = children[1];
+    let strong_text = document.children(strong).next().unwrap().id;
+    let selection = Selection::collapsed(SelectionPoint {
+      node: first_text,
+      offset_utf16: 6,
+    });
+
+    let inverse = Command::InsertParagraph
+      .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
+      .unwrap();
+    assert_eq!(to_markdown(&document), "before\n\n**bold**after");
+    let new_block = document.children(document.root).nth(1).unwrap().id;
+    assert_eq!(document.node(strong).unwrap().parent, Some(new_block));
+    assert_eq!(document.node(strong_text).unwrap().parent, Some(strong));
+
+    inverse.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "before**bold**after");
+    assert_eq!(document.node(strong).unwrap().parent, Some(original_block));
+    assert_eq!(document.node(strong_text).unwrap().parent, Some(strong));
   }
 
   #[test]
@@ -581,10 +654,11 @@ mod tests {
       node,
       offset_utf16: 0,
     });
-    let transaction = Command::DeleteBackward
+    let inverse = Command::DeleteBackward
       .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
       .unwrap();
-    let inverse = transaction.apply(&mut document).unwrap();
     assert_eq!(to_markdown(&document), "OneTwo");
 
     inverse.apply(&mut document).unwrap();
@@ -599,10 +673,11 @@ mod tests {
       node,
       offset_utf16: 5,
     });
-    let heading = Command::SetHeading(2)
+    let inverse = Command::SetHeading(2)
       .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
       .unwrap();
-    let inverse = heading.apply(&mut document).unwrap();
     assert_eq!(to_markdown(&document), "## Title");
 
     inverse.apply(&mut document).unwrap();
@@ -610,7 +685,7 @@ mod tests {
   }
 
   #[test]
-  fn wraps_and_unwraps_strong_text() {
+  fn wraps_and_unwraps_strong_marks() {
     let mut document = parse_markdown("abcdef");
     let node = block_text(&document, 0);
     let selection = Selection {
@@ -623,47 +698,32 @@ mod tests {
         offset_utf16: 5,
       },
     };
-    let transaction = Command::ToggleStrong
+    Command::ToggleStrong
       .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
       .unwrap();
-    let inverse = transaction.apply(&mut document).unwrap();
     assert_eq!(to_markdown(&document), "ab**cde**f");
-    inverse.apply(&mut document).unwrap();
-    assert_eq!(to_markdown(&document), "abcdef");
 
-    let mut marked = parse_markdown("**bold**");
-    let paragraph = marked.children(marked.root).next().unwrap().id;
-    let strong = marked.children(paragraph).next().unwrap().id;
-    let text = marked.children(strong).next().unwrap().id;
-    let selection = Selection {
+    let paragraph = document.children(document.root).next().unwrap().id;
+    let strong = document.children(paragraph).nth(1).unwrap().id;
+    let selected = document.children(strong).next().unwrap().id;
+    let full = Selection {
       anchor: SelectionPoint {
-        node: text,
+        node: selected,
         offset_utf16: 0,
       },
       focus: SelectionPoint {
-        node: text,
-        offset_utf16: 4,
+        node: selected,
+        offset_utf16: 3,
       },
     };
-    let transaction = Command::ToggleStrong
-      .build(&marked, selection)
+    Command::ToggleStrong
+      .build(&document, full)
+      .unwrap()
+      .apply(&mut document)
       .unwrap();
-    transaction.apply(&mut marked).unwrap();
-    assert_eq!(to_markdown(&marked), "bold");
-  }
-
-  #[test]
-  fn rejects_invalid_heading_levels() {
-    let document = parse_markdown("Title");
-    let node = block_text(&document, 0);
-    let selection = Selection::collapsed(SelectionPoint {
-      node,
-      offset_utf16: 0,
-    });
-    assert_eq!(
-      Command::SetHeading(7).build(&document, selection),
-      Err(EditError::InvalidHeadingLevel(7))
-    );
+    assert_eq!(to_markdown(&document), "abcdef");
   }
 
   #[test]

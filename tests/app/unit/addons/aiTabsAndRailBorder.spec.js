@@ -6,13 +6,12 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 describe('AI settings navigation', () => {
-  it('has one registry-driven navigation owner and page-only child settings', () => {
+  it('has one registry-driven navigation owner and page-only builtin child settings', () => {
     const parentSettings = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiProvidersSettings.vue')
     const routeSettings = read('Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue')
     const registry = read('Elephant/frontend/src/renderer/src/addons/builtin/aiSettingsRegistry.js')
     const chatSettings = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiChatSettings.vue')
     const searchSettings = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiSearchSettings.vue')
-    const ocrSettings = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiOcrSettings.vue')
 
     expect(parentSettings).toContain('class="en-ai-module-tabs"')
     expect(parentSettings.match(/class="en-ai-module-tabs"/g)).toHaveLength(1)
@@ -31,10 +30,8 @@ describe('AI settings navigation', () => {
     expect(routeSettings).not.toContain('aiPages')
     expect(chatSettings).toContain('AI_SETTINGS_PAGE_BY_ID.chat')
     expect(searchSettings).toContain('AI_SETTINGS_PAGE_BY_ID.search')
-    expect(ocrSettings).toContain('AI_SETTINGS_PAGE_BY_ID.ocr')
     expect(chatSettings).not.toContain(':nth-child')
     expect(searchSettings).not.toContain(':nth-child')
-    expect(ocrSettings).not.toContain(':nth-child')
   })
 
   it('exposes local and subscription models only through active provider contributions', () => {
@@ -53,13 +50,22 @@ describe('AI settings navigation', () => {
     expect(codex).toContain("capabilities: ['chat']")
   })
 
-  it('keeps OCR settings owned only by the active OCR contribution', () => {
+  it('keeps OCR code outside the core bundle and lets the installed package own its slot', () => {
     const registry = read('Elephant/frontend/src/renderer/src/addons/builtin/aiSettingsRegistry.js')
-    const ocrAddon = read('Elephant/frontend/src/renderer/src/addons/builtin/aiOcr.js')
+    const builtinIndex = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
+    const ocrManifest = read('addons/official/ai-ocr/manifest.json')
+    const ocrEntry = read('addons/official/ai-ocr/main.js')
+    const core = read('Elephant/backend/tauri/src/lib_min.rs')
 
     expect(registry).toContain("slot: 'ai.ocr'")
-    expect(ocrAddon).toContain('slot: SETTINGS_PAGE.slot')
-    expect(ocrAddon).toContain('render: mountSettingsComponent(ctx, AiOcrSettings)')
+    expect(builtinIndex).not.toContain("import('./aiOcr')")
+    expect(builtinIndex).not.toContain("id: 'elephant.ai-ocr'")
+    expect(core).not.toContain('pub mod ocr;')
+    expect(core).not.toContain('tauri_ocr_')
+    expect(ocrManifest).toContain('"native": true')
+    expect(ocrManifest).toContain('"elephant.ai": ">=2.0.0"')
+    expect(ocrEntry).toContain("slot: 'ai.ocr'")
+    expect(ocrEntry).toContain("tauri_addons_sidecar_call")
   })
 })
 

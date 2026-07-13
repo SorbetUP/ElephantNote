@@ -65,7 +65,7 @@ describe('AI settings navigation', () => {
     expect(ocrManifest).toContain('"native": true')
     expect(ocrManifest).toContain('"elephant.ai": ">=2.0.0"')
     expect(ocrEntry).toContain("slot: 'ai.ocr'")
-    expect(ocrEntry).toContain("tauri_addons_sidecar_call")
+    expect(ocrEntry).toContain('this.api.native.call')
   })
 })
 

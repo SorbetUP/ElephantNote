@@ -39,16 +39,24 @@ const isTrustedManifest = (manifest = {}) => {
 const validateNativeContract = (entry, manifest) => {
   if (manifest.permissions?.native !== true) return
   if (!manifest.native?.protocol) fail(`${entry.id} requests native access without declaring a native protocol`)
-  if (manifest.native?.runner !== 'process') fail(`${entry.id} native package must declare its runner explicitly`)
+
+  const runner = manifest.native?.runner
+  if (!['process', 'service'].includes(runner)) {
+    fail(`${entry.id} native package must declare process or service runner explicitly`)
+  }
+  const expectedProtocol = runner === 'service' ? 'elephant-addon-service-v1' : 'elephant-addon-sidecar-v1'
+  if (manifest.native.protocol !== expectedProtocol) {
+    fail(`${entry.id} ${runner} runner must use ${expectedProtocol}`)
+  }
 
   const sidecars = manifest.native?.sidecars
   if (!sidecars || typeof sidecars !== 'object' || Array.isArray(sidecars) || Object.keys(sidecars).length === 0) {
-    fail(`${entry.id} process package must declare desktop sidecars`)
+    fail(`${entry.id} ${runner} package must declare desktop sidecars`)
   }
   for (const [platform, relativePath] of Object.entries(sidecars)) {
-    if (/^(android|ios)-/.test(platform)) fail(`${entry.id} cannot advertise a process sidecar on ${platform}`)
+    if (/^(android|ios)-/.test(platform)) fail(`${entry.id} cannot advertise a ${runner} sidecar on ${platform}`)
     if (!/^(macos|linux|windows)-(aarch64|x86_64)$/.test(platform)) {
-      fail(`${entry.id} uses unsupported process-sidecar platform key ${platform}`)
+      fail(`${entry.id} uses unsupported ${runner}-sidecar platform key ${platform}`)
     }
     safePath(relativePath, `${entry.id}.native.sidecars.${platform}`)
   }
@@ -56,21 +64,62 @@ const validateNativeContract = (entry, manifest) => {
   for (const mobilePlatform of ['android', 'ios']) {
     const support = manifest.native?.mobile?.[mobilePlatform]
     if (support?.supported !== false || typeof support?.reason !== 'string' || !support.reason.trim()) {
-      fail(`${entry.id} must declare an explicit ${mobilePlatform} process-sidecar incompatibility reason`)
+      fail(`${entry.id} must declare an explicit ${mobilePlatform} ${runner}-sidecar incompatibility reason`)
     }
   }
 }
 
-const validateTrustedEntry = (entry, manifest, source) => {
+const staticImportSpecifiers = (source) => {
+  const matches = []
+  const pattern = /(?:^|[;\n])\s*import\s+(?:[^'";]+?\s+from\s+)?['"]([^'"]+)['"]/gm
+  for (const match of source.matchAll(pattern)) matches.push(match[1])
+  return matches
+}
+
+const validateTrustedModuleGraph = async (entry, rootEntryPath) => {
+  const packagePrefix = `${path.posix.dirname(entry.manifestPath)}/`
+  const visited = new Set()
+
+  const visit = async (modulePath) => {
+    const normalized = path.posix.normalize(modulePath.replaceAll('\\', '/'))
+    if (!normalized.startsWith(packagePrefix) || normalized.includes('/../')) {
+      fail(`${entry.id} trusted module escapes its package directory: ${modulePath}`)
+    }
+    if (visited.has(normalized)) return
+    visited.add(normalized)
+
+    let source
+    try {
+      source = await fs.readFile(path.join(catalogueRoot, normalized), 'utf8')
+    } catch (error) {
+      fail(`${entry.id} trusted module is missing: ${normalized} (${error.message})`)
+    }
+    if (/\bimport\s*\(/.test(source)) {
+      fail(`${entry.id} trusted modules cannot use dynamic import: ${normalized}`)
+    }
+
+    for (const specifier of staticImportSpecifiers(source)) {
+      if (!specifier.startsWith('.')) {
+        fail(`${entry.id} trusted module imports an external dependency: ${specifier}`)
+      }
+      let resolved = path.posix.normalize(path.posix.join(path.posix.dirname(normalized), specifier))
+      if (!path.posix.extname(resolved)) resolved += '.js'
+      await visit(resolved)
+    }
+  }
+
+  await visit(rootEntryPath)
+  return visited.size
+}
+
+const validateTrustedEntry = async (entry, manifest, source) => {
   if (!/export\s+default\s+class\s+[A-Za-z_$][\w$]*/.test(source)) {
     fail(`${entry.id} trusted entry must export one default addon class`)
   }
   if (!/\bonload\s*\(/.test(source)) fail(`${entry.id} trusted entry must implement onload(api)`)
-  if (/\bfrom\s+['"]|\bimport\s*\(/.test(source)) {
-    fail(`${entry.id} trusted catalogue entry must be a self-contained package entry`)
-  }
+  const moduleCount = await validateTrustedModuleGraph(entry, entry.entryPath)
   validateNativeContract(entry, manifest)
-  console.log(`[addon-catalog] ok id=${entry.id} version=${entry.version} runtime=trusted official=${entry.official === true}`)
+  console.log(`[addon-catalog] ok id=${entry.id} version=${entry.version} runtime=trusted modules=${moduleCount} official=${entry.official === true}`)
 }
 
 const validateIsolatedEntry = async (entry, manifest, source) => {
@@ -168,6 +217,7 @@ for (const entry of catalog.addons) {
   const prefix = `${packageRoot}/${entry.slug}/`
   const manifestPath = safePath(entry.manifestPath, `${entry.id}.manifestPath`)
   const entryPath = safePath(entry.entryPath, `${entry.id}.entryPath`)
+  entry.manifestPath = manifestPath
   entry.entryPath = entryPath
   if (!manifestPath.startsWith(prefix) || !entryPath.startsWith(prefix)) {
     fail(`${entry.id} files must stay under ${prefix}`)
@@ -185,7 +235,7 @@ for (const entry of catalog.addons) {
 
   const source = await fs.readFile(path.join(catalogueRoot, entryPath), 'utf8')
   if (isTrustedManifest(manifest)) {
-    validateTrustedEntry(entry, manifest, source)
+    await validateTrustedEntry(entry, manifest, source)
     trustedCount += 1
   } else {
     validateNativeContract(entry, manifest)

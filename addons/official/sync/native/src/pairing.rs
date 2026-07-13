@@ -1,16 +1,15 @@
-use iroh::{EndpointAddr, SecretKey};
+use iroh::EndpointAddr;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{
   fs,
   path::{Path, PathBuf},
   time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::protocol::{PairAccepted, PairRequest, PROTOCOL_NAME};
+use crate::invite::{verify_pending_invite, PairingInvite, PendingInvite, BACKEND_IROH};
+use crate::protocol::{PairAccepted, PairRequest};
 
-const BACKEND_IROH: &str = "iroh";
-pub const INVITE_LIFETIME_SECONDS: u64 = 10 * 60;
 const SYNC_DIR: &str = ".elephantnote/sync";
 const SYNC_CONFIG_FILE: &str = "sync-config.json";
 
@@ -24,14 +23,6 @@ pub struct PeerConfig {
   pub verified: bool,
   pub paired_at: String,
   pub last_seen_at: String,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(default, rename_all = "camelCase")]
-pub struct PendingInvite {
-  pub id: String,
-  pub token_hash: String,
-  pub expires_at: u64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -51,9 +42,7 @@ pub struct SyncConfig {
 #[derive(Clone, Debug)]
 pub struct CreatedInvite {
   pub config: SyncConfig,
-  pub invite_id: String,
-  pub invite_token: String,
-  pub expires_at: u64,
+  pub invite: PairingInvite,
 }
 
 pub fn epoch_seconds() -> u64 {
@@ -65,18 +54,6 @@ pub fn epoch_seconds() -> u64 {
 
 pub fn now() -> String {
   epoch_seconds().to_string()
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-  bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-pub fn token_hash(token: &str) -> String {
-  blake3::hash(token.as_bytes()).to_hex().to_string()
-}
-
-fn random_token() -> String {
-  hex_encode(&SecretKey::generate().to_bytes())
 }
 
 fn sync_dir(vault_root: &Path) -> PathBuf {
@@ -159,79 +136,33 @@ pub fn ensure_config(vault_root: &Path, endpoint_id: &str) -> Result<SyncConfig,
 pub fn create_pending_invite(
   vault_root: &Path,
   endpoint_id: &str,
+  endpoint_addr: EndpointAddr,
+  device_name: String,
   expires_at: Option<u64>,
 ) -> Result<CreatedInvite, String> {
-  let current_time = epoch_seconds();
-  let expires_at = expires_at.unwrap_or_else(|| current_time.saturating_add(INVITE_LIFETIME_SECONDS));
-  if expires_at <= current_time {
-    return Err("Pairing invite expiration must be in the future".to_string());
-  }
-
   let mut config = ensure_config(vault_root, endpoint_id)?;
-  let token = random_token();
-  let invite_id = format!(
-    "invite-{}",
-    hex_encode(&SecretKey::generate().to_bytes()[..8])
-  );
-  config.pending_invites.push(PendingInvite {
-    id: invite_id.clone(),
-    token_hash: token_hash(&token),
+  let created = PairingInvite::create(
+    epoch_seconds(),
     expires_at,
-  });
-  config.pending_invites.retain(|invite| invite.expires_at > current_time);
+    config.folder_id.clone(),
+    config.folder_label.clone(),
+    device_name,
+    endpoint_addr,
+  )?;
+  config.pending_invites.push(created.pending);
+  config.pending_invites.retain(|invite| invite.expires_at > epoch_seconds());
   config.updated_at = now();
   write_config(vault_root, &config)?;
   Ok(CreatedInvite {
     config,
-    invite_id,
-    invite_token: token,
-    expires_at,
+    invite: created.invite,
   })
 }
 
-pub fn invite_value(
-  created: &CreatedInvite,
-  endpoint_addr: EndpointAddr,
-  device_name: &str,
-) -> Value {
-  json!({
-    "protocol": PROTOCOL_NAME,
-    "version": 1,
-    "backend": BACKEND_IROH,
-    "transport": "iroh-quic-mdns",
-    "inviteId": created.invite_id,
-    "inviteToken": created.invite_token,
-    "expiresAt": created.expires_at,
-    "folderId": created.config.folder_id,
-    "folderLabel": created.config.folder_label,
-    "deviceName": device_name,
-    "endpointAddr": endpoint_addr,
-    "security": {
-      "transport": "iroh-quic",
-      "authenticatedEncryption": true,
-      "identity": "iroh-endpoint-id",
-      "cloudRequired": false,
-      "storesPlaintextCredentials": false,
-      "storesPairingMaterial": false,
-      "preservesConflicts": true,
-      "requiresExternalBinary": false
-    }
-  })
-}
-
-pub fn parse_invite(payload: Value) -> Result<Value, String> {
-  if let Some(raw) = payload
-    .get("qrPayload")
-    .or_else(|| payload.get("manualCode"))
-    .and_then(Value::as_str)
-  {
-    return serde_json::from_str(raw)
-      .map_err(|error| format!("Invalid Elephant Sync invite: {error}"));
-  }
-  if let Some(invite) = payload.get("invite") {
-    return Ok(invite.clone());
-  }
-  Ok(payload)
+pub fn parse_invite(payload: Value) -> Result<PairingInvite, String> {
+  let invite = PairingInvite::parse(payload)?;
+  invite.validate(epoch_seconds())?;
+  Ok(invite)
 }
 
 fn peer_from_pair(endpoint_addr: EndpointAddr, name: String, folder_id: String) -> PeerConfig {
@@ -263,19 +194,34 @@ pub fn consume_pair_request(
   if config.folder_id != request.folder_id {
     return Err("Pairing invite belongs to another vault".to_string());
   }
-  let valid = config.pending_invites.iter().any(|invite| {
-    invite.id == request.invite_id
-      && invite.expires_at > epoch_seconds()
-      && invite.token_hash == token_hash(&request.invite_token)
-  });
-  if !valid {
-    return Err("Pairing invite is invalid, expired or already used".to_string());
-  }
+  let pending = config
+    .pending_invites
+    .iter()
+    .find(|invite| invite.id == request.invite_id)
+    .cloned()
+    .ok_or_else(|| "Pairing invite is invalid, expired or already used".to_string())?;
+  let invite = PairingInvite {
+    protocol: crate::protocol::PROTOCOL_NAME.to_string(),
+    version: 1,
+    backend: BACKEND_IROH.to_string(),
+    transport: crate::invite::TRANSPORT_IROH_MDNS.to_string(),
+    invite_id: request.invite_id.clone(),
+    invite_token: request.invite_token.clone(),
+    expires_at: pending.expires_at,
+    folder_id: request.folder_id.clone(),
+    folder_label: config.folder_label.clone(),
+    device_name: request.device_name.clone(),
+    endpoint_addr: request.endpoint_addr.clone(),
+    security: Value::Null,
+  };
+  verify_pending_invite(&pending, &invite, epoch_seconds())?;
 
   let folder_id = config.folder_id.clone();
-  config.pending_invites.retain(|invite| invite.id != request.invite_id);
-  let peer = peer_from_pair(request.endpoint_addr, request.device_name, folder_id.clone());
-  upsert_peer(&mut config.peers, peer);
+  config.pending_invites.retain(|candidate| candidate.id != request.invite_id);
+  upsert_peer(
+    &mut config.peers,
+    peer_from_pair(request.endpoint_addr, request.device_name, folder_id.clone()),
+  );
   config.updated_at = now();
   write_config(vault_root, &config)?;
   Ok(PairAccepted {
@@ -289,22 +235,23 @@ pub fn consume_pair_request(
 pub fn register_accepted_peer(
   vault_root: &Path,
   local_endpoint_id: &str,
-  folder_id: &str,
-  folder_label: &str,
+  expected_folder_id: &str,
   accepted: PairAccepted,
 ) -> Result<SyncConfig, String> {
   let mut config = ensure_config(vault_root, local_endpoint_id)?;
-  if accepted.folder_id != folder_id {
+  if accepted.folder_id != expected_folder_id {
     return Err("Paired device returned a different vault id".to_string());
   }
-  config.folder_id = folder_id.to_string();
-  config.folder_label = folder_label.to_string();
-  let peer = peer_from_pair(
-    accepted.endpoint_addr,
-    accepted.device_name,
-    folder_id.to_string(),
+  config.folder_id = accepted.folder_id.clone();
+  config.folder_label = accepted.folder_label.clone();
+  upsert_peer(
+    &mut config.peers,
+    peer_from_pair(
+      accepted.endpoint_addr,
+      accepted.device_name,
+      expected_folder_id.to_string(),
+    ),
   );
-  upsert_peer(&mut config.peers, peer);
   config.updated_at = now();
   write_config(vault_root, &config)?;
   Ok(config)
@@ -313,7 +260,7 @@ pub fn register_accepted_peer(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::path::PathBuf;
+  use iroh::SecretKey;
 
   fn temp_root(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -332,15 +279,22 @@ mod tests {
     fs::create_dir_all(&root).unwrap();
     let local = SecretKey::generate();
     let remote = SecretKey::generate();
-    let created = create_pending_invite(&root, &local.public().to_string(), None).unwrap();
+    let created = create_pending_invite(
+      &root,
+      &local.public().to_string(),
+      EndpointAddr::from(local.public()),
+      "Local".to_string(),
+      None,
+    )
+    .unwrap();
     let persisted = read_config(&root).unwrap();
     assert_eq!(persisted.pending_invites.len(), 1);
-    assert_ne!(persisted.pending_invites[0].token_hash, created.invite_token);
+    assert_ne!(persisted.pending_invites[0].token_hash, created.invite.invite_token);
 
     let request = PairRequest {
-      invite_id: created.invite_id.clone(),
-      invite_token: created.invite_token.clone(),
-      folder_id: created.config.folder_id.clone(),
+      invite_id: created.invite.invite_id.clone(),
+      invite_token: created.invite.invite_token.clone(),
+      folder_id: created.invite.folder_id.clone(),
       device_name: "Remote".to_string(),
       endpoint_addr: EndpointAddr::from(remote.public()),
     };
@@ -351,8 +305,7 @@ mod tests {
       "Local",
     )
     .unwrap();
-    assert_eq!(accepted.folder_id, created.config.folder_id);
-    assert_eq!(accepted.device_name, "Local");
+    assert_eq!(accepted.folder_id, created.invite.folder_id);
     assert!(consume_pair_request(
       &root,
       request,
@@ -361,22 +314,6 @@ mod tests {
     )
     .is_err());
     assert!(read_config(&root).unwrap().pending_invites.is_empty());
-    let _ = fs::remove_dir_all(root);
-  }
-
-  #[test]
-  fn expired_invite_is_rejected_before_it_is_persisted() {
-    let root = temp_root("expired");
-    fs::create_dir_all(&root).unwrap();
-    let endpoint = SecretKey::generate();
-    let error = create_pending_invite(
-      &root,
-      &endpoint.public().to_string(),
-      Some(epoch_seconds()),
-    )
-    .unwrap_err();
-    assert!(error.contains("future"));
-    assert!(read_config(&root).is_none());
     let _ = fs::remove_dir_all(root);
   }
 
@@ -397,13 +334,29 @@ mod tests {
       &root,
       &local.public().to_string(),
       &config.folder_id,
-      &config.folder_label,
       accepted,
     )
     .unwrap();
     assert_eq!(updated.peers.len(), 1);
     assert_eq!(updated.peers[0].endpoint_id, remote.public().to_string());
     assert!(updated.peers[0].verified);
+    let _ = fs::remove_dir_all(root);
+  }
+
+  #[test]
+  fn expired_invites_are_rejected_before_persistence() {
+    let root = temp_root("expired");
+    fs::create_dir_all(&root).unwrap();
+    let endpoint = SecretKey::generate();
+    let result = create_pending_invite(
+      &root,
+      &endpoint.public().to_string(),
+      EndpointAddr::from(endpoint.public()),
+      "Local".to_string(),
+      Some(epoch_seconds()),
+    );
+    assert!(result.is_err());
+    assert!(read_config(&root).is_none());
     let _ = fs::remove_dir_all(root);
   }
 }

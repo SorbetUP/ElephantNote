@@ -31,6 +31,7 @@ pub enum ProtocolCommand {
   ToggleBlockQuote,
   ToggleCodeBlock,
   SetListKind { kind: ListKind },
+  InsertHorizontalRule,
   IndentListItem,
   OutdentListItem,
   SetTaskChecked {

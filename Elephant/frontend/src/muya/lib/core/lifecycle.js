@@ -52,6 +52,9 @@ export default (Muya) => {
     },
 
     destroy() {
+      this.rustEditorRuntime?.destroy()
+      this.rustEditorRuntime = null
+      this.rustEditorBridge = null
       this.contentState.clear()
       this.quickInsert?.destroy()
       this.codePicker?.destroy()

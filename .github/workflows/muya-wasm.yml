@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          pnpm exec eslint \
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \
             Elephant/frontend/src/muya/lib/rust \
             Elephant/frontend/src/muya/lib/core/setup.js \
             Elephant/frontend/src/muya/lib/config/options.js \
@@ -83,7 +83,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          pnpm exec vitest run \
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
             tests/app/unit/specs/muya/rustBridge.spec.js \
             tests/app/unit/specs/muya/rustLogicalDocument.spec.js \
             tests/app/unit/specs/muya/rustDomRenderer.spec.js \

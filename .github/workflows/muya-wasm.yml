@@ -12,6 +12,7 @@ on:
       - 'Elephant/frontend/src/muya/lib/config/options.js'
       - 'tests/app/unit/specs/muya/rustBridge.spec.js'
       - 'tests/app/unit/specs/muya/rustLogicalDocument.spec.js'
+      - 'tests/app/unit/specs/muya/rustDomRenderer.spec.js'
       - '.github/workflows/muya-wasm.yml'
   pull_request:
     paths:
@@ -22,6 +23,7 @@ on:
       - 'Elephant/frontend/src/muya/lib/config/options.js'
       - 'tests/app/unit/specs/muya/rustBridge.spec.js'
       - 'tests/app/unit/specs/muya/rustLogicalDocument.spec.js'
+      - 'tests/app/unit/specs/muya/rustDomRenderer.spec.js'
       - '.github/workflows/muya-wasm.yml'
   workflow_dispatch:
 
@@ -71,9 +73,11 @@ jobs:
           Elephant/frontend/src/muya/lib/config/options.js
           tests/app/unit/specs/muya/rustBridge.spec.js
           tests/app/unit/specs/muya/rustLogicalDocument.spec.js
+          tests/app/unit/specs/muya/rustDomRenderer.spec.js
 
       - name: Test Rust browser bridge
         run: >-
           pnpm exec vitest run
           tests/app/unit/specs/muya/rustBridge.spec.js
           tests/app/unit/specs/muya/rustLogicalDocument.spec.js
+          tests/app/unit/specs/muya/rustDomRenderer.spec.js

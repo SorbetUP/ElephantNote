@@ -1,0 +1,151 @@
+name: Publish native addon packages
+
+on:
+  push:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/publish-native-addon-packages.yml
+      - build/scripts/build-physical-addon.mjs
+      - build/tools/enaddon-packager/**
+      - addons/official/ai-ocr/**
+      - addons/official/code-execution/**
+      - addons/official/sites/**
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-native-packages:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-latest
+          - platform: windows-x86_64
+            runner: windows-latest
+          - platform: macos-x86_64
+            runner: macos-15-intel
+          - platform: macos-aarch64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/physical-addon-packages
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build and package native addons
+        shell: bash
+        env:
+          ELEPHANT_ADDON_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euxo pipefail
+          for source in \
+            addons/official/ai-ocr \
+            addons/official/code-execution \
+            addons/official/sites
+          do
+            node build/scripts/build-physical-addon.mjs "$source"
+          done
+
+      - name: Upload platform packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-addon-packages-${{ matrix.platform }}
+          path: build/out/addons/releases/**
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-catalog:
+    needs: build-native-packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all platform packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-addon-packages-*
+          path: packages
+          merge-multiple: true
+
+      - name: Checkout physical addon catalog
+        uses: actions/checkout@v4
+        with:
+          ref: feature/physical-addon-catalog
+          path: catalog
+          fetch-depth: 0
+
+      - name: Copy archives and update platform hashes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import json
+          import shutil
+
+          package_root = Path('packages')
+          catalog_root = Path('catalog')
+          catalog_path = catalog_root / 'catalog.json'
+          catalog = json.loads(catalog_path.read_text())
+          entries = {entry['id']: entry for entry in catalog.get('addons', [])}
+          metadata_files = sorted(package_root.rglob('*.enaddon.json'))
+          if not metadata_files:
+              raise SystemExit('No native addon package metadata was downloaded')
+
+          published = set()
+          for metadata_path in metadata_files:
+              metadata = json.loads(metadata_path.read_text())
+              addon_id = metadata['id']
+              platform = metadata['platform']
+              archive_name = metadata['file']
+              archive_path = metadata_path.with_name(archive_name)
+              if not archive_path.is_file():
+                  raise SystemExit(f'Missing archive for {metadata_path}: {archive_path}')
+              entry = entries.get(addon_id)
+              if entry is None:
+                  raise SystemExit(f'Native package {addon_id} is absent from catalog.json')
+              relative_path = metadata['catalogPath']
+              destination = catalog_root / relative_path
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(archive_path, destination)
+              shutil.copy2(metadata_path, destination.with_suffix(destination.suffix + '.json'))
+              entry['requiresPlatformPackage'] = True
+              entry.setdefault('packages', {})[platform] = {
+                  'path': relative_path,
+                  'hash': metadata['blake3']
+              }
+              entry.pop('packagePath', None)
+              entry.pop('packageHash', None)
+              published.add((addon_id, platform))
+
+          required_ids = {'elephant.ai-ocr', 'elephant.code-execution', 'elephant.sites'}
+          required_platforms = {'linux-x86_64', 'windows-x86_64', 'macos-x86_64', 'macos-aarch64'}
+          expected = {(addon_id, platform) for addon_id in required_ids for platform in required_platforms}
+          missing = sorted(expected - published)
+          if missing:
+              raise SystemExit(f'Missing published native addon variants: {missing}')
+
+          catalog['updatedAt'] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+          catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + '\n')
+          PY
+
+      - name: Commit published packages
+        working-directory: catalog
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add addons catalog.json
+          if git diff --cached --quiet; then
+            echo 'Native package catalogue already current.'
+            exit 0
+          fi
+          git commit -m "feat(catalog): publish hashed desktop addon packages"
+          git push origin HEAD:feature/physical-addon-catalog

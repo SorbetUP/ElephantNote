@@ -1,7 +1,87 @@
 use crate::model::{Document, InlineKind, NodeId, NodeKind, SourceRange};
+use crate::selection::{Selection, SelectionPoint};
 use crate::syntax::inline::{code_span, emphasis, escape, line_break, link, text};
 
+use super::crossing_marks;
+
 pub fn append_inlines(
+  document: &mut Document,
+  parent: NodeId,
+  source: &str,
+  base_utf16: u32,
+) {
+  if try_append_crossing_mark(document, parent, source, base_utf16) {
+    return;
+  }
+  append_inlines_standard(document, parent, source, base_utf16);
+}
+
+fn try_append_crossing_mark(
+  document: &mut Document,
+  parent: NodeId,
+  source: &str,
+  base_utf16: u32,
+) -> bool {
+  let Some(crossing) = crossing_marks::detect(source) else {
+    return false;
+  };
+
+  let mut candidate = document.clone();
+  append_inlines_standard(&mut candidate, parent, &crossing.base, base_utf16);
+  let Some(anchor) = source_point(
+    &candidate,
+    parent,
+    base_utf16.saturating_add(crossing.start_utf16),
+  ) else {
+    return false;
+  };
+  let Some(focus) = source_point(
+    &candidate,
+    parent,
+    base_utf16.saturating_add(crossing.end_utf16),
+  ) else {
+    return false;
+  };
+  let selection = Selection { anchor, focus };
+  let Ok(transaction) = crate::edit::build_partial_cross_wrapper_toggle(
+    &candidate,
+    selection,
+    crossing.mark,
+  ) else {
+    return false;
+  };
+
+  let revision = candidate.revision;
+  if transaction.apply(&mut candidate).is_err() {
+    return false;
+  }
+  candidate.revision = revision;
+  *document = candidate;
+  true
+}
+
+fn source_point(document: &Document, root: NodeId, target: u32) -> Option<SelectionPoint> {
+  let mut stack = vec![root];
+  while let Some(current) = stack.pop() {
+    let node = document.node(current)?;
+    if let NodeKind::Inline(InlineKind::Text { value }) = &node.kind {
+      let range = node.source?;
+      if range.start <= target && target <= range.end {
+        let offset = target.saturating_sub(range.start);
+        if offset <= value.encode_utf16().count() as u32 {
+          return Some(SelectionPoint {
+            node: current,
+            offset_utf16: offset,
+          });
+        }
+      }
+    }
+    stack.extend(node.children.iter().rev().copied());
+  }
+  None
+}
+
+fn append_inlines_standard(
   document: &mut Document,
   parent: NodeId,
   source: &str,
@@ -238,7 +318,8 @@ fn utf16_len(value: &str) -> u32 {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::model::BlockKind;
+  use crate::model::{BlockKind, MarkFragmentEdge};
+  use crate::serializer::to_markdown;
 
   #[test]
   fn builds_nested_inline_nodes() {
@@ -312,5 +393,51 @@ mod tests {
       NodeKind::Inline(InlineKind::Text { value }) if value.is_empty()
     ));
     assert_eq!(text.source, Some(SourceRange::new(4, 4)));
+  }
+
+  #[test]
+  fn reconstructs_crossing_strike_fragments_after_reparse() {
+    let mut document = Document::new();
+    let paragraph = document.allocate(NodeKind::Block(BlockKind::Paragraph), None);
+    document.append_child(document.root, paragraph);
+    let markdown = "**al~~pha** beta *gam~~ma*";
+    append_inlines(&mut document, paragraph, markdown, 0);
+
+    assert_eq!(to_markdown(&document), markdown);
+    let edges = document
+      .nodes
+      .values()
+      .filter_map(|node| match &node.kind {
+        NodeKind::Inline(InlineKind::MarkFragment { edge, .. }) => Some(*edge),
+        _ => None,
+      })
+      .collect::<Vec<_>>();
+    assert_eq!(
+      edges,
+      vec![
+        MarkFragmentEdge::Start,
+        MarkFragmentEdge::Middle,
+        MarkFragmentEdge::End
+      ]
+    );
+  }
+
+  #[test]
+  fn reconstructs_crossing_emphasis_fragments_after_reparse() {
+    let mut document = Document::new();
+    let paragraph = document.allocate(NodeKind::Block(BlockKind::Paragraph), None);
+    document.append_child(document.root, paragraph);
+    let markdown = "al*pha **be*ta** gamma";
+    append_inlines(&mut document, paragraph, markdown, 0);
+
+    assert_eq!(to_markdown(&document), markdown);
+    assert_eq!(
+      document
+        .nodes
+        .values()
+        .filter(|node| matches!(node.kind, NodeKind::Inline(InlineKind::MarkFragment { .. })))
+        .count(),
+      2
+    );
   }
 }

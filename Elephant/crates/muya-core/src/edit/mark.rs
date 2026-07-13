@@ -138,9 +138,6 @@ fn build_cross_wrapper_toggle(
   } else {
     (focus, anchor)
   };
-  let start_length = text_value(document, start.point.node)?
-    .encode_utf16()
-    .count() as u32;
   let end_length = text_value(document, end.point.node)?
     .encode_utf16()
     .count() as u32;
@@ -191,7 +188,6 @@ fn build_cross_wrapper_toggle(
       }),
   );
 
-  let _ = start_length;
   Ok(Transaction {
     operations,
     selection_before: selection,
@@ -210,7 +206,7 @@ fn endpoint(document: &Document, point: SelectionPoint) -> Result<CrossEndpoint,
     let parent_node = document
       .node(parent)
       .ok_or(EditError::NodeNotFound(parent))?;
-    match parent_node.kind {
+    match &parent_node.kind {
       NodeKind::Block(_) => {
         let top_index = document
           .child_index(parent, current)
@@ -560,8 +556,8 @@ mod tests {
       .apply(&mut document)
       .unwrap();
     assert_eq!(to_markdown(&document), "~~**bold** and *soft*~~");
-    assert_eq!(document.node(children[0]).unwrap().parent.is_some(), true);
-    assert_eq!(document.node(children[2]).unwrap().parent.is_some(), true);
+    assert!(document.node(children[0]).unwrap().parent.is_some());
+    assert!(document.node(children[2]).unwrap().parent.is_some());
 
     inverse.apply(&mut document).unwrap();
     assert_eq!(to_markdown(&document), "**bold** and *soft*");

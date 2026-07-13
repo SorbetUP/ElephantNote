@@ -1,0 +1,48 @@
+export const EDITOR_PROTOCOL_VERSION = 1
+
+export const createEditorRequest = (expectedRevision, command) => ({
+  protocol_version: EDITOR_PROTOCOL_VERSION,
+  expected_revision: expectedRevision,
+  command
+})
+
+export const parseEditorResponse = (rawResponse) => {
+  const response = typeof rawResponse === 'string' ? JSON.parse(rawResponse) : rawResponse
+  if (!response || typeof response !== 'object') {
+    throw new TypeError('Muya Rust returned an invalid response.')
+  }
+  if (!['snapshot', 'update', 'error'].includes(response.type)) {
+    throw new TypeError(`Muya Rust returned an unknown response type: ${String(response.type)}`)
+  }
+  if (!response.payload || typeof response.payload !== 'object') {
+    throw new TypeError(`Muya Rust response ${response.type} has no payload.`)
+  }
+  return response
+}
+
+export const editorCommands = Object.freeze({
+  snapshot: () => ({ type: 'snapshot' }),
+  setSelection: (selection) => ({ type: 'set_selection', selection }),
+  insertText: (text) => ({ type: 'insert_text', text }),
+  insertParagraph: () => ({ type: 'insert_paragraph' }),
+  deleteBackward: () => ({ type: 'delete_backward' }),
+  setParagraph: () => ({ type: 'set_paragraph' }),
+  setHeading: (level) => ({ type: 'set_heading', level }),
+  toggleStrong: () => ({ type: 'toggle_strong' }),
+  toggleEmphasis: () => ({ type: 'toggle_emphasis' }),
+  toggleStrike: () => ({ type: 'toggle_strike' }),
+  indentListItem: () => ({ type: 'indent_list_item' }),
+  outdentListItem: () => ({ type: 'outdent_list_item' }),
+  insertTableRowAfter: () => ({ type: 'insert_table_row_after' }),
+  deleteTableRow: () => ({ type: 'delete_table_row' }),
+  insertTableColumnAfter: () => ({ type: 'insert_table_column_after' }),
+  deleteTableColumn: () => ({ type: 'delete_table_column' }),
+  nextTableCell: () => ({ type: 'next_table_cell' }),
+  previousTableCell: () => ({ type: 'previous_table_cell' }),
+  beginComposition: () => ({ type: 'begin_composition' }),
+  updateComposition: (text) => ({ type: 'update_composition', text }),
+  commitComposition: () => ({ type: 'commit_composition' }),
+  cancelComposition: () => ({ type: 'cancel_composition' }),
+  undo: () => ({ type: 'undo' }),
+  redo: () => ({ type: 'redo' })
+})

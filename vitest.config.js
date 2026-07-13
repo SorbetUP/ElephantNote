@@ -1,3 +1,4 @@
+import { existsSync } from 'fs'
 import { defineConfig } from 'vitest/config'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -11,6 +12,14 @@ const disabledMuyaWasm = resolve(
   __dirname,
   'Elephant/frontend/src/muya/lib/rust/disabledWasm.js'
 )
+const generatedMuyaWasm = resolve(
+  __dirname,
+  'Elephant/frontend/src/muya/lib/rust/generated/muya_wasm.js'
+)
+const useGeneratedMuyaWasm = process.env.ELEPHANT_EXPERIMENTAL_RUST_EDITOR === '1'
+if (useGeneratedMuyaWasm && !existsSync(generatedMuyaWasm)) {
+  throw new Error('Generated Muya WASM is required for the experimental differential tests.')
+}
 const npmPackageAliases = Object.fromEntries(
   Object.keys({
     ...(packageJson.dependencies || {}),
@@ -46,7 +55,7 @@ export default defineConfig({
   resolve: {
     alias: {
       ...npmPackageAliases,
-      'muya-rust-wasm-bundle': disabledMuyaWasm,
+      'muya-rust-wasm-bundle': useGeneratedMuyaWasm ? generatedMuyaWasm : disabledMuyaWasm,
       'electron-log/renderer': resolve(__dirname, 'tests/app/unit/stubs/electronLog.js'),
       'electron-log': resolve(__dirname, 'tests/app/unit/stubs/electronLog.js'),
       'elephant-front': resolve(__dirname, 'Elephant/frontend/app'),

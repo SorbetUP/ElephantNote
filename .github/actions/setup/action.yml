@@ -22,24 +22,10 @@ runs:
     - name: Install Dependencies
       shell: bash
       run: |
-        set +e
-        pnpm install --frozen-lockfile --ignore-scripts 2>&1 | tee pnpm-install-frozen.log
-        frozen_status=${PIPESTATUS[0]}
-        if [ "$frozen_status" -eq 0 ]; then
-          cp pnpm-install-frozen.log pnpm-install.log
-          exit 0
-        fi
-
-        echo 'Frozen pnpm install failed; retrying without frozen lockfile so CI can reach tests.' >&2
-        pnpm install --no-frozen-lockfile --ignore-scripts 2>&1 | tee pnpm-install-unfrozen.log
-        unfrozen_status=${PIPESTATUS[0]}
-        {
-          echo '=== frozen install ==='
-          cat pnpm-install-frozen.log
-          echo
-          echo '=== unfrozen install ==='
-          cat pnpm-install-unfrozen.log
-        } > pnpm-install.log
-        exit "$unfrozen_status"
+        set -o pipefail
+        pnpm install --frozen-lockfile --ignore-scripts || {
+          echo 'Frozen pnpm install failed; retrying without frozen lockfile so CI can reach tests.' >&2
+          pnpm install --no-frozen-lockfile --ignore-scripts
+        }
       env:
         GITHUB_TOKEN: ${{ github.token }}

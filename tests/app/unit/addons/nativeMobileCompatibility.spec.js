@@ -3,7 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
-const nativeSlugs = ['ai-ocr', 'code-execution', 'sites']
+const processNativeSlugs = ['ai-ocr', 'code-execution']
 
 const manifestFor = (slug) => JSON.parse(
   fs.readFileSync(path.join(root, 'addons/official', slug, 'manifest.json'), 'utf8')
@@ -11,7 +11,7 @@ const manifestFor = (slug) => JSON.parse(
 
 describe('native addon mobile compatibility', () => {
   it('never advertises downloaded process sidecars as Android or iOS executables', () => {
-    for (const slug of nativeSlugs) {
+    for (const slug of processNativeSlugs) {
       const manifest = manifestFor(slug)
       expect(manifest.native.runner).toBe('process')
       expect(Object.keys(manifest.native.sidecars).some((key) => /^(android|ios)-/.test(key))).toBe(false)
@@ -22,11 +22,16 @@ describe('native addon mobile compatibility', () => {
     }
   })
 
-  it('keeps renderer-only addons platform-neutral', () => {
-    for (const slug of fs.readdirSync(path.join(root, 'addons/official'))) {
-      const manifest = manifestFor(slug)
-      if (manifest.permissions?.native === true) continue
-      expect(manifest.native).toBeUndefined()
-    }
+  it('keeps Sites renderer-owned and installable on desktop, Android and iOS', () => {
+    const manifest = manifestFor('sites')
+    const source = fs.readFileSync(path.join(root, 'addons/official/sites/main.js'), 'utf8')
+    expect(manifest.version).toBe('1.3.0')
+    expect(manifest.permissions.native).toBeUndefined()
+    expect(manifest.native).toBeUndefined()
+    expect(source).toContain('tauri_addons_assets_allow_directory')
+    expect(source).toContain('convertFileSrc')
+    expect(source).not.toContain('api.native.call')
+    expect(fs.existsSync(path.join(root, 'addons/official/sites/addon.build.json'))).toBe(false)
+    expect(fs.existsSync(path.join(root, 'addons/official/sites/native'))).toBe(false)
   })
 })

@@ -21,7 +21,9 @@ impl MuyaEditor {
     }
 
     pub fn snapshot_json(&self) -> Result<String, JsValue> {
-        let response = EditorResponse::Snapshot(ProtocolSnapshot::from_session(&self.session));
+        let response = muya_compatible_response(EditorResponse::Snapshot(
+            ProtocolSnapshot::from_session(&self.session),
+        ));
         serde_json::to_string(&response).map_err(|error| JsValue::from_str(&error.to_string()))
     }
 
@@ -33,9 +35,22 @@ impl MuyaEditor {
 fn handle_json_inner(session: &mut EditorSession, request_json: &str) -> Result<String, String> {
     let request: EditorRequest = serde_json::from_str(request_json)
         .map_err(|error| format!("invalid editor request JSON: {error}"))?;
-    let response = session.handle_request(request);
+    let response = muya_compatible_response(session.handle_request(request));
     serde_json::to_string(&response)
         .map_err(|error| format!("failed to serialize editor response: {error}"))
+}
+
+fn muya_compatible_response(mut response: EditorResponse) -> EditorResponse {
+    if let EditorResponse::Snapshot(snapshot) = &mut response {
+        ensure_muya_terminal_newline(&mut snapshot.markdown);
+    }
+    response
+}
+
+fn ensure_muya_terminal_newline(markdown: &mut String) {
+    if !markdown.ends_with('\n') {
+        markdown.push('\n');
+    }
 }
 
 #[cfg(test)]
@@ -66,11 +81,14 @@ mod tests {
     }
 
     #[test]
-    fn snapshots_include_the_logical_document_tree() {
+    fn snapshots_include_the_logical_document_tree_and_muya_newline() {
         let session = EditorSession::from_markdown("**bold**");
-        let response = EditorResponse::Snapshot(ProtocolSnapshot::from_session(&session));
+        let response = muya_compatible_response(EditorResponse::Snapshot(
+            ProtocolSnapshot::from_session(&session),
+        ));
         let json = serde_json::to_value(response).unwrap();
         assert_eq!(json["type"], "snapshot");
+        assert_eq!(json["payload"]["markdown"], "**bold**\n");
         assert!(
             json["payload"]["document"]["nodes"]
                 .as_array()
@@ -78,6 +96,29 @@ mod tests {
                 .len()
                 >= 4
         );
+    }
+
+    #[test]
+    fn empty_snapshots_match_muyas_single_terminal_newline() {
+        let session = EditorSession::from_markdown("");
+        let response = muya_compatible_response(EditorResponse::Snapshot(
+            ProtocolSnapshot::from_session(&session),
+        ));
+        let EditorResponse::Snapshot(snapshot) = response else {
+            panic!("expected snapshot");
+        };
+        assert_eq!(snapshot.markdown, "\n");
+    }
+
+    #[test]
+    fn snapshot_requests_use_the_same_muya_compatibility_boundary() {
+        let mut session = EditorSession::from_markdown("abc");
+        let json = handle_json_inner(&mut session, &request(0, ProtocolCommand::Snapshot)).unwrap();
+        let response: EditorResponse = serde_json::from_str(&json).unwrap();
+        let EditorResponse::Snapshot(snapshot) = response else {
+            panic!("expected snapshot");
+        };
+        assert_eq!(snapshot.markdown, "abc\n");
     }
 
     #[test]

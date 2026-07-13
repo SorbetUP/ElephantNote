@@ -1,0 +1,15 @@
+{
+  "id": "elephant.ai-search",
+  "parentAddonId": "elephant.ai",
+  "name": "Semantic Search",
+  "version": "1.1.0",
+  "description": "Adds embedding configuration, semantic indexing and retrieval settings as a physical package.",
+  "author": "Elephant",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": { "type": "javascript-worker", "entry": "main.js" },
+  "permissions": { "storage": true, "commands": true },
+  "requires": { "elephant.ai": ">=2.1.0" },
+  "contributes": { "runtimeMode": "trusted" },
+  "activationEvents": ["onStartup"]
+}

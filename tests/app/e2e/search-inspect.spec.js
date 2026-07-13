@@ -24,7 +24,7 @@ test.describe('ElephantNote search settings inspection', () => {
     await fs.remove(vaultRoot)
   })
 
-  test('inspects vault markdown files through the renderer API before semantic rebuild', async() => {
+  test('inspects vault markdown without creating a core semantic index', async() => {
     const result = await page.evaluate(async(root) => {
       const unwrap = (response) => {
         if (response?.ok === false) {
@@ -37,7 +37,10 @@ test.describe('ElephantNote search settings inspection', () => {
       return unwrap(await window.elephantnote.api.call('search.inspect'))
     }, vaultRoot)
 
-    expect(result.indexPath).toBe(path.join(vaultRoot, '.elephantnote/search/vectra'))
+    expect(result.indexPath).toBe('')
+    expect(result.provider).toBe('tauri-rust')
+    expect(result.engine).toBe('portable-markdown-index')
+    expect(result.embedding).toMatchObject({ status: 'not-configured' })
     expect(result.documents).toHaveLength(1)
     expect(result.documents[0]).toMatchObject({
       title: 'Visible note',

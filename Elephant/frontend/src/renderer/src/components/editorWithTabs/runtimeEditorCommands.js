@@ -52,6 +52,8 @@ export const rustBusCommand = (event, payload) => {
       return editorCommands.insertParagraph()
     case 'insert-horizontal-rule':
       return editorCommands.insertHorizontalRule()
+    case 'createTable':
+      return editorCommands.createTable(payload?.rows, payload?.columns)
     default:
       return null
   }

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-13T23:48:23Z",
+  "updatedAt": "2026-07-13T23:53:56Z",
   "addons": [
     {
       "id": "elephant.ai",
@@ -62,7 +62,7 @@
         },
         "windows-x86_64": {
           "path": "addons/ai-ocr/releases/elephant.ai-ocr-1.0.0-windows-x86_64.enaddon",
-          "hash": "9d8eb85f2bd50816daaa750e3e1ca2c75fa9d9491d9685331616b56f3f7dc569"
+          "hash": "7a6ee7d467e2e8dd6d8e79221d4f988e158aac8961293d2a1fdc8b5b377eebc5"
         }
       }
     },
@@ -136,7 +136,7 @@
         },
         "windows-x86_64": {
           "path": "addons/sync/releases/elephant.sync-1.2.0-windows-x86_64.enaddon",
-          "hash": "ce6cf79960ee117e709658a522dbe8a7f8b232749e84df38ba804cde00f29b52"
+          "hash": "efc9eb53dd2b498d3e34188a22bd626662f0120dee619414678f271f4b11f2fc"
         }
       }
     },
@@ -188,7 +188,7 @@
         },
         "windows-x86_64": {
           "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-windows-x86_64.enaddon",
-          "hash": "3b2ccb1440e21fc6ddd3602c219729906e6566536f529681390ec2eb8db05861"
+          "hash": "56e48c97d06f9a0cc72bb334e529d384c484657546909b19f6a41793e2f5b23d"
         },
         "android-aarch64": {
           "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-android-aarch64.enaddon",

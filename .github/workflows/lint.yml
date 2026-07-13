@@ -21,11 +21,12 @@ jobs:
           ref: assistant/wiki-organization-continuation
           fetch-depth: 0
       - uses: ./.github/actions/setup
-      - name: Apply semantic pipeline patch
+      - name: Apply semantic pipeline and search patches
         run: |
           set -o pipefail
           python3 scripts/fix_wiki_patch_script.py
           python3 scripts/apply_wiki_pipeline_v3.py 2>&1 | tee wiki-pipeline-patch.log
+          python3 scripts/apply_search_wiki_fix.py 2>&1 | tee -a wiki-pipeline-patch.log
       - name: Upload patch diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -40,6 +41,8 @@ jobs:
           cargo test --manifest-path Elephant/backend/tauri/Cargo.toml web_citation_labels_are_human_readable --lib
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \
             Elephant/frontend/app/components/views/AtomicGraphView.vue \
+            Elephant/frontend/app/search/SearchModal.vue \
+            Elephant/frontend/src/renderer/src/platform/tauriSearchConceptFallback.js \
             tests/app/unit/wikiDiscoveryQualityRegression.spec.js \
             tests/app/unit/graphWikiScaleRegression.spec.js
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
@@ -47,7 +50,7 @@ jobs:
             tests/app/unit/graphWikiScaleRegression.spec.js
       - name: Restore workflow and commit functional changes
         run: |
-          rm scripts/apply_wiki_pipeline_v3.py scripts/fix_wiki_patch_script.py
+          rm scripts/apply_wiki_pipeline_v3.py scripts/fix_wiki_patch_script.py scripts/apply_search_wiki_fix.py
           rm -f wiki-pipeline-patch.log
           cat > .github/workflows/lint.yml <<'YAML'
           name: Lint

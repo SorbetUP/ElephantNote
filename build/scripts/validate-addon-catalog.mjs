@@ -31,46 +31,28 @@ const readJson = async (relativePath) => {
   }
 }
 
-const catalog = await readJson('catalog.json')
-if (catalog.version !== 1) fail(`unsupported catalogue version ${catalog.version}`)
-if (catalog.branch !== 'addon-catalog') fail('branch marker must be addon-catalog')
-if (!Array.isArray(catalog.addons) || catalog.addons.length === 0) fail('catalogue must contain at least one addon')
+const isTrustedManifest = (manifest = {}) => {
+  const mode = String(manifest.runtime?.mode || manifest.contributes?.runtimeMode || manifest.contributes?.security?.access || '').toLowerCase()
+  return ['trusted', 'full', 'full-app', 'full-app-access'].includes(mode)
+}
 
-const ids = new Set()
-const slugs = new Set()
-let commandCount = 0
-let viewCount = 0
-
-for (const entry of catalog.addons) {
-  for (const field of ['id', 'slug', 'name', 'version', 'manifestPath', 'entryPath']) {
-    if (typeof entry[field] !== 'string' || !entry[field].trim()) fail(`${entry.id || entry.slug || 'entry'} is missing ${field}`)
+const validateTrustedEntry = (entry, manifest, source) => {
+  if (!/export\s+default\s+class\s+[A-Za-z_$][\w$]*/.test(source)) {
+    fail(`${entry.id} trusted entry must export one default addon class`)
   }
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.slug)) fail(`invalid slug ${entry.slug}`)
-  if (ids.has(entry.id)) fail(`duplicate addon id ${entry.id}`)
-  if (slugs.has(entry.slug)) fail(`duplicate addon slug ${entry.slug}`)
-  ids.add(entry.id)
-  slugs.add(entry.slug)
-
-  const prefix = `addons/${entry.slug}/`
-  const manifestPath = safePath(entry.manifestPath, `${entry.id}.manifestPath`)
-  const entryPath = safePath(entry.entryPath, `${entry.id}.entryPath`)
-  if (!manifestPath.startsWith(prefix) || !entryPath.startsWith(prefix)) {
-    fail(`${entry.id} files must stay under ${prefix}`)
+  if (!/\bonload\s*\(/.test(source)) fail(`${entry.id} trusted entry must implement onload(api)`)
+  if (/\bfrom\s+['"]|\bimport\s*\(/.test(source)) {
+    fail(`${entry.id} trusted catalogue entry must be a self-contained package entry`)
   }
-
-  const manifest = await readJson(manifestPath)
-  if (manifest.id !== entry.id || manifest.name !== entry.name || manifest.version !== entry.version) {
-    fail(`${entry.id} catalogue metadata does not match its manifest`)
+  if (manifest.permissions?.native === true && !manifest.native?.protocol) {
+    fail(`${entry.id} requests native access without declaring a native protocol`)
   }
-  if (manifest.apiVersion !== 1) fail(`${entry.id} must use apiVersion 1`)
-  if (manifest.runtime?.type !== 'javascript-worker') fail(`${entry.id} must use javascript-worker`)
-  if (manifest.runtime?.entry !== path.posix.basename(entryPath)) {
-    fail(`${entry.id} runtime.entry must match entryPath`)
-  }
+  console.log(`[addon-catalog] ok id=${entry.id} version=${entry.version} runtime=trusted`)
+}
 
-  const source = await fs.readFile(path.join(catalogueRoot, entryPath), 'utf8')
+const validateIsolatedEntry = async (entry, manifest, source) => {
   const sandbox = { self: {}, Intl, Date, Math }
-  vm.runInNewContext(source, sandbox, { filename: entryPath, timeout: 1_000 })
+  vm.runInNewContext(source, sandbox, { filename: entry.entryPath, timeout: 1_000 })
   const definition = sandbox.self.elephantAddon
   if (!definition || typeof definition.activate !== 'function') {
     fail(`${entry.id} must assign self.elephantAddon.activate`)
@@ -128,9 +110,58 @@ for (const entry of catalog.addons) {
     fail(`${entry.id} registered views do not match manifest contributions`)
   }
 
-  commandCount += registeredCommands.length
-  viewCount += registeredViews.length
-  console.log(`[addon-catalog] ok id=${entry.id} version=${entry.version} commands=${registeredCommands.length} views=${registeredViews.length}`)
+  console.log(`[addon-catalog] ok id=${entry.id} version=${entry.version} runtime=isolated commands=${registeredCommands.length} views=${registeredViews.length}`)
+  return { commands: registeredCommands.length, views: registeredViews.length }
 }
 
-console.log(`[addon-catalog] valid addons=${catalog.addons.length} commands=${commandCount} views=${viewCount}`)
+const catalog = await readJson('catalog.json')
+if (catalog.version !== 1) fail(`unsupported catalogue version ${catalog.version}`)
+if (catalog.branch !== 'addon-catalog') fail('branch marker must be addon-catalog')
+if (!Array.isArray(catalog.addons) || catalog.addons.length === 0) fail('catalogue must contain at least one addon')
+
+const ids = new Set()
+const slugs = new Set()
+let commandCount = 0
+let viewCount = 0
+let trustedCount = 0
+
+for (const entry of catalog.addons) {
+  for (const field of ['id', 'slug', 'name', 'version', 'manifestPath', 'entryPath']) {
+    if (typeof entry[field] !== 'string' || !entry[field].trim()) fail(`${entry.id || entry.slug || 'entry'} is missing ${field}`)
+  }
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.slug)) fail(`invalid slug ${entry.slug}`)
+  if (ids.has(entry.id)) fail(`duplicate addon id ${entry.id}`)
+  if (slugs.has(entry.slug)) fail(`duplicate addon slug ${entry.slug}`)
+  ids.add(entry.id)
+  slugs.add(entry.slug)
+
+  const prefix = `addons/${entry.slug}/`
+  const manifestPath = safePath(entry.manifestPath, `${entry.id}.manifestPath`)
+  const entryPath = safePath(entry.entryPath, `${entry.id}.entryPath`)
+  entry.entryPath = entryPath
+  if (!manifestPath.startsWith(prefix) || !entryPath.startsWith(prefix)) {
+    fail(`${entry.id} files must stay under ${prefix}`)
+  }
+
+  const manifest = await readJson(manifestPath)
+  if (manifest.id !== entry.id || manifest.name !== entry.name || manifest.version !== entry.version) {
+    fail(`${entry.id} catalogue metadata does not match its manifest`)
+  }
+  if (manifest.apiVersion !== 1) fail(`${entry.id} must use apiVersion 1`)
+  if (manifest.runtime?.type !== 'javascript-worker') fail(`${entry.id} must use javascript-worker`)
+  if (manifest.runtime?.entry !== path.posix.basename(entryPath)) {
+    fail(`${entry.id} runtime.entry must match entryPath`)
+  }
+
+  const source = await fs.readFile(path.join(catalogueRoot, entryPath), 'utf8')
+  if (isTrustedManifest(manifest)) {
+    validateTrustedEntry(entry, manifest, source)
+    trustedCount += 1
+  } else {
+    const counts = await validateIsolatedEntry(entry, manifest, source)
+    commandCount += counts.commands
+    viewCount += counts.views
+  }
+}
+
+console.log(`[addon-catalog] valid addons=${catalog.addons.length} trusted=${trustedCount} commands=${commandCount} views=${viewCount}`)

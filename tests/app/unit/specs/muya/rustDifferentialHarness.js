@@ -28,15 +28,30 @@ const editableBlocks = (muya) => {
   return output
 }
 
-export const setJsSelection = (muya, textIndex, start, end = start) => {
-  const block = editableBlocks(muya)[textIndex]
-  if (!block) throw new Error(`Muya JS text block ${textIndex} was not found.`)
+const applyJsSelection = (muya, block, start, end) => {
   muya.contentState.cursor = {
     start: { key: block.key, offset: start },
     end: { key: block.key, offset: end },
     isEdit: true
   }
   muya.contentState.setCursor()
+}
+
+export const setJsSelection = (muya, textIndex, start, end = start) => {
+  const block = editableBlocks(muya)[textIndex]
+  if (!block) throw new Error(`Muya JS text block ${textIndex} was not found.`)
+  applyJsSelection(muya, block, start, end)
+}
+
+export const setJsSelectionByText = (muya, value, start, end = start, occurrence = 0) => {
+  const matches = editableBlocks(muya).filter((block) => block.text === value)
+  const block = matches[occurrence]
+  if (!block) {
+    throw new Error(
+      `Muya JS text block ${JSON.stringify(value)} occurrence ${occurrence} was not found.`
+    )
+  }
+  applyJsSelection(muya, block, start, end)
 }
 
 export const createJsEditor = async (markdown) => {
@@ -104,9 +119,16 @@ export class RustTraceEditor {
     this.setSelectionOnNode(node, start, end)
   }
 
-  setSelectionByText(value, start, end = start) {
-    const node = this.textNodes().find((candidate) => candidate.kind?.value?.value === value)
-    if (!node) throw new Error(`Muya Rust text node with value ${JSON.stringify(value)} was not found.`)
+  setSelectionByText(value, start, end = start, occurrence = 0) {
+    const matches = this
+      .textNodes()
+      .filter((candidate) => candidate.kind?.value?.value === value)
+    const node = matches[occurrence]
+    if (!node) {
+      throw new Error(
+        `Muya Rust text node ${JSON.stringify(value)} occurrence ${occurrence} was not found.`
+      )
+    }
     this.setSelectionOnNode(node, start, end)
   }
 

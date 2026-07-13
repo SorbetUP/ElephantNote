@@ -46,6 +46,11 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
     return await this.callNativeService('sync.plan', params, { timeoutMs: 120_000 })
   }
 
+  async applyNativeLocalPlan(plan) {
+    if (!plan || typeof plan !== 'object') throw new TypeError('A Sync plan is required')
+    return await this.callNativeService('sync.apply-local', { plan }, { timeoutMs: 120_000 })
+  }
+
   async onload(api) {
     await super.onload(api)
     const started = await this.startNativeService()
@@ -56,8 +61,9 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
       endpoint: () => this.callNativeService('sync.endpoint'),
       scan: () => this.scanNativeVault(),
       plan: (params = {}) => this.buildNativePlan(params),
+      applyLocal: (plan) => this.applyNativeLocalPlan(plan),
       stop: () => this.stopNativeService(),
-      capabilities: Object.freeze(['endpoint', 'manifest', 'plan'])
+      capabilities: Object.freeze(['endpoint', 'manifest', 'plan', 'local-operations'])
     }))
     api.app.emit('elephantnote:sync-native-service-ready', { started, status })
   }

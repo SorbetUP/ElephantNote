@@ -28,6 +28,7 @@ pub mod addon_assets;
 pub mod addon_note_access;
 pub mod addon_http_access;
 pub mod addon_sidecars;
+pub mod addon_services;
 pub mod which;
 
 mod tauri_extra_commands;
@@ -45,12 +46,13 @@ pub mod recents;
 pub mod keybindings;
 pub mod fts;
 pub mod embeddings;
+#[cfg(not(mobile))]
 pub mod sync;
 pub mod rag_prompt;
 pub mod atomic_features;
 pub mod ollama;
 
-#[cfg(test)]
+#[cfg(all(test, not(mobile)))]
 mod sync_contract_tests;
 
 #[cfg(test)]
@@ -130,11 +132,11 @@ pub fn run() {
       let handle = app.handle().clone();
       app.manage(state::AppState::new(&handle));
       app.manage(watcher::WatcherState::new());
-      // Iroh is intentionally only state-managed here. Its endpoint is created
-      // lazily by Sync addon commands and closed again when that addon stops.
+      #[cfg(not(mobile))]
       app.manage(sync::IrohSyncState::new());
       app.manage(addons::AddonState::new());
       app.manage(addon_sidecars::AddonSidecarState::new());
+      app.manage(addon_services::AddonServiceState::new());
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -149,6 +151,10 @@ pub fn run() {
       addon_http_access::tauri_addons_http_request,
       addon_sidecars::tauri_addons_sidecar_status,
       addon_sidecars::tauri_addons_sidecar_call,
+      addon_services::tauri_addons_service_status,
+      addon_services::tauri_addons_service_start,
+      addon_services::tauri_addons_service_call,
+      addon_services::tauri_addons_service_stop,
       addon_dependencies::tauri_addons_uninstall_checked,
       addon_dependencies::tauri_addons_set_enabled_checked,
       addons::tauri_addons_read_entry,

@@ -74,8 +74,7 @@ fn default_folder_label(vault_root: &Path) -> String {
 }
 
 fn default_folder_id(vault_root: &Path) -> String {
-  let source = vault_root.to_string_lossy();
-  let digest = blake3::hash(source.as_bytes()).to_hex().to_string();
+  let digest = blake3::hash(vault_root.to_string_lossy().as_bytes()).to_hex().to_string();
   format!("vault-{}", &digest[..16])
 }
 
@@ -140,9 +139,13 @@ pub fn create_pending_invite(
   device_name: String,
   expires_at: Option<u64>,
 ) -> Result<CreatedInvite, String> {
+  let current_time = epoch_seconds();
+  if expires_at.is_some_and(|value| value <= current_time) {
+    return Err("Pairing invite expiration must be in the future".to_string());
+  }
   let mut config = ensure_config(vault_root, endpoint_id)?;
   let created = PairingInvite::create(
-    epoch_seconds(),
+    current_time,
     expires_at,
     config.folder_id.clone(),
     config.folder_label.clone(),
@@ -150,7 +153,7 @@ pub fn create_pending_invite(
     endpoint_addr,
   )?;
   config.pending_invites.push(created.pending);
-  config.pending_invites.retain(|invite| invite.expires_at > epoch_seconds());
+  config.pending_invites.retain(|invite| invite.expires_at > current_time);
   config.updated_at = now();
   write_config(vault_root, &config)?;
   Ok(CreatedInvite {
@@ -347,7 +350,7 @@ mod tests {
   fn expired_invites_are_rejected_before_persistence() {
     let root = temp_root("expired");
     fs::create_dir_all(&root).unwrap();
-    let endpoint = SecretKey::generate();
+    let endpoint = iroh::SecretKey::generate();
     let result = create_pending_invite(
       &root,
       &endpoint.public().to_string(),

@@ -48,6 +48,8 @@ pub struct CatalogAddon {
   #[serde(default)]
   pub official: bool,
   #[serde(default)]
+  pub requires_platform_package: bool,
+  #[serde(default)]
   pub manifest_path: String,
   #[serde(default)]
   pub entry_path: String,
@@ -80,6 +82,7 @@ fn bundled_trusted_lab_item() -> CatalogAddon {
     description: "Full app access reference addon that visibly modifies Settings, workspace UI and application behavior.".to_string(),
     author: "ElephantNote".to_string(),
     official: false,
+    requires_platform_package: false,
     manifest_path: "bundled/trusted-workspace-lab/manifest.json".to_string(),
     entry_path: "bundled/trusted-workspace-lab/main.js".to_string(),
     package_path: String::new(),
@@ -138,6 +141,10 @@ fn platform_key() -> String {
   format!("{os}-{arch}")
 }
 
+fn available_for_platform(item: &CatalogAddon, platform: &str) -> bool {
+  !item.requires_platform_package || item.packages.contains_key(platform)
+}
+
 fn validate_catalog_item(item: &CatalogAddon) -> R<()> {
   if item.id.trim().is_empty() || item.slug.trim().is_empty() || item.name.trim().is_empty() || item.version.trim().is_empty() {
     return Err("Catalogue addons require id, slug, name and version".to_string());
@@ -153,6 +160,9 @@ fn validate_catalog_item(item: &CatalogAddon) -> R<()> {
   }
 
   let expected_prefix = format!("addons/{}/", item.slug);
+  if item.requires_platform_package && item.packages.is_empty() {
+    return Err(format!("Catalogue addon {} requires at least one platform package", item.id));
+  }
   if !item.packages.is_empty() {
     if !item.package_path.trim().is_empty() || !item.package_hash.trim().is_empty() {
       return Err(format!("Catalogue addon {} cannot mix packages with legacy packagePath/packageHash", item.id));
@@ -367,7 +377,9 @@ fn persist_official_source(app: &AppHandle, addon_id: &str) -> R<()> {
 
 #[tauri::command]
 pub fn tauri_addons_catalog_list() -> R<Vec<CatalogAddon>> {
+  let platform = platform_key();
   let mut addons = fetch_catalog()?.addons;
+  addons.retain(|item| available_for_platform(item, &platform));
   if !addons.iter().any(|item| item.id == BUNDLED_TRUSTED_LAB_ID) {
     addons.push(bundled_trusted_lab_item());
   }
@@ -386,8 +398,8 @@ pub fn tauri_addons_catalog_install(
     fetch_catalog()?
       .addons
       .into_iter()
-      .find(|item| item.id == addon_id)
-      .ok_or_else(|| format!("Addon is not listed in the official catalogue: {addon_id}"))?
+      .find(|item| item.id == addon_id && available_for_platform(item, &platform_key()))
+      .ok_or_else(|| format!("Addon is not available for this platform: {addon_id}"))?
   };
   let package_path = create_temporary_package(&item)?;
   let package_string = package_path.to_string_lossy().to_string();
@@ -414,6 +426,7 @@ mod tests {
       description: String::new(),
       author: String::new(),
       official: false,
+      requires_platform_package: false,
       manifest_path: "addons/test/manifest.json".to_string(),
       entry_path: "addons/test/main.js".to_string(),
       package_path: String::new(),
@@ -460,6 +473,7 @@ mod tests {
       description: String::new(),
       author: String::new(),
       official: true,
+      requires_platform_package: false,
       manifest_path: String::new(),
       entry_path: String::new(),
       package_path: "addons/native/native-1.0.0-linux-x86_64.enaddon".to_string(),
@@ -471,8 +485,9 @@ mod tests {
   }
 
   #[test]
-  fn accepts_platform_specific_packages_and_rejects_missing_mobile_builds() {
+  fn selects_only_published_platform_variants() {
     let mut item = source_item();
+    item.requires_platform_package = true;
     item.packages.insert(
       "linux-x86_64".to_string(),
       CatalogPackage {
@@ -483,7 +498,8 @@ mod tests {
     item.manifest_path.clear();
     item.entry_path.clear();
     assert!(validate_catalog_item(&item).is_ok());
-    assert!(item.packages.get("android-aarch64").is_none());
+    assert!(available_for_platform(&item, "linux-x86_64"));
+    assert!(!available_for_platform(&item, "android-aarch64"));
   }
 
   #[test]

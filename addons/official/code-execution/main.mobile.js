@@ -69,7 +69,7 @@ export default class ElephantMobileCodeExecutionAddon {
   stopBlock(block, output) {
     const session = this.running.get(block)
     if (!session) return false
-    session.cleanup()
+    session.cancel()
     output.hidden = false
     output.textContent = 'Execution stopped.'
     output.dataset.exitCode = 'stopped'
@@ -80,6 +80,10 @@ export default class ElephantMobileCodeExecutionAddon {
     const limit = this.config.outputLineLimit
     const workerSource = `
 ${formatWorkerValueSource}
+const __nativePost = self.postMessage.bind(self);
+for (const __name of ['fetch', 'WebSocket', 'EventSource', 'XMLHttpRequest', 'importScripts', 'Worker', 'SharedWorker']) {
+  try { Object.defineProperty(self, __name, { value: undefined, writable: false, configurable: false }); } catch (_) {}
+}
 const __lines = [];
 const __limit = ${limit};
 const __write = (...values) => {
@@ -93,9 +97,9 @@ self.onmessage = async () => {
 ${code}
     })();
     if (__result !== undefined) __write(__result);
-    self.postMessage({ ok: true, stdout: __lines.join('\\n'), stderr: '', code: 0 });
+    __nativePost({ ok: true, stdout: __lines.join('\\n'), stderr: '', code: 0 });
   } catch (error) {
-    self.postMessage({
+    __nativePost({
       ok: false,
       stdout: __lines.join('\\n'),
       stderr: error && (error.stack || error.message) ? (error.stack || error.message) : String(error),
@@ -110,28 +114,23 @@ ${code}
 
     return new Promise((resolve, reject) => {
       let settled = false
-      const cleanup = () => {
+      let timer = 0
+      const finish = (handler, value) => {
         if (settled) return
         settled = true
         this.window.clearTimeout(timer)
         this.running.delete(block)
         worker.terminate()
         URL.revokeObjectURL(url)
+        handler(value)
       }
-      const timer = this.window.setTimeout(() => {
-        cleanup()
-        reject(new Error(`JavaScript execution timed out after ${Math.round(this.config.timeoutMs / 1000)} seconds.`))
+      const cancel = () => finish(reject, new Error('Execution stopped.'))
+      timer = this.window.setTimeout(() => {
+        finish(reject, new Error(`JavaScript execution timed out after ${Math.round(this.config.timeoutMs / 1000)} seconds.`))
       }, this.config.timeoutMs)
-      this.running.set(block, { cleanup })
-      worker.onmessage = (event) => {
-        const result = event?.data || {}
-        cleanup()
-        resolve(result)
-      }
-      worker.onerror = (event) => {
-        cleanup()
-        reject(new Error(event?.message || 'JavaScript worker failed.'))
-      }
+      this.running.set(block, { cancel })
+      worker.onmessage = (event) => finish(resolve, event?.data || {})
+      worker.onerror = (event) => finish(reject, new Error(event?.message || 'JavaScript worker failed.'))
       worker.postMessage({ run: true })
     })
   }
@@ -154,7 +153,7 @@ ${code}
     if (!code) return
     button.textContent = 'Stop'
     output.hidden = false
-    output.textContent = 'Running JavaScript in an isolated Worker…'
+    output.textContent = 'Running JavaScript in a separate Worker…'
     try {
       const result = await this.executeJavaScript(block, code)
       const stdout = String(result?.stdout || '')
@@ -168,8 +167,9 @@ ${code}
         }, 2500)
       }
     } catch (error) {
-      output.textContent = error instanceof Error ? error.message : String(error)
-      output.dataset.exitCode = 'error'
+      const message = error instanceof Error ? error.message : String(error)
+      output.textContent = message
+      output.dataset.exitCode = message === 'Execution stopped.' ? 'stopped' : 'error'
     } finally {
       button.textContent = 'Run'
     }
@@ -237,7 +237,7 @@ ${code}
   async renderSettings(container) {
     const documentRef = container.ownerDocument
     const root = node(documentRef, 'section', 'elephant-mobile-code-settings')
-    const notice = node(documentRef, 'p', '', 'Android and iOS execute JavaScript in an isolated Web Worker. Python, shells and custom local interpreters remain desktop-only.')
+    const notice = node(documentRef, 'p', '', 'Android and iOS execute JavaScript in a separate Web Worker. Python, shells and custom local interpreters remain desktop-only.')
     const retain = node(documentRef, 'input')
     retain.type = 'checkbox'
     retain.checked = this.config.retainOutput
@@ -268,7 +268,7 @@ ${code}
       section: 'editor',
       chrome: false,
       title: 'Code execution',
-      description: 'Run JavaScript safely on Android and iOS without a downloaded executable.',
+      description: 'Run JavaScript on Android and iOS without a downloaded executable.',
       order: 55,
       render: (container) => this.renderSettings(container)
     })
@@ -277,7 +277,7 @@ ${code}
   }
 
   onunload() {
-    for (const session of this.running.values()) session.cleanup()
+    for (const session of this.running.values()) session.cancel()
     this.running.clear()
     this.observer?.disconnect()
     this.observer = null

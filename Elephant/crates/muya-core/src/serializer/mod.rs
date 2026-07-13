@@ -48,24 +48,44 @@ fn serialize_list(
   document
     .children(list.id)
     .enumerate()
-    .map(|(index, item)| {
-      let content = serialize_inlines(document, item);
-      match kind {
-        ListKind::Unordered => format!("- {content}"),
-        ListKind::Ordered => format!("{}. {content}", start.unwrap_or(1) + index as u64),
-        ListKind::Task => {
-          let checked = match &item.kind {
-            NodeKind::Block(BlockKind::ListItem {
-              checked: Some(true),
-            }) => "x",
-            _ => " ",
-          };
-          format!("- [{checked}] {content}")
-        }
-      }
-    })
+    .map(|(index, item)| serialize_list_item(document, item, kind, start, index))
     .collect::<Vec<_>>()
     .join("\n")
+}
+
+fn serialize_list_item(
+  document: &Document,
+  item: &Node,
+  kind: ListKind,
+  start: Option<u64>,
+  index: usize,
+) -> String {
+  let children = document.children(item.id).collect::<Vec<_>>();
+  let content = children
+    .first()
+    .filter(|child| matches!(child.kind, NodeKind::Block(BlockKind::Paragraph)))
+    .map(|paragraph| serialize_inlines(document, paragraph))
+    .unwrap_or_default();
+  let marker = match kind {
+    ListKind::Unordered => "-".to_string(),
+    ListKind::Ordered => format!("{}.", start.unwrap_or(1) + index as u64),
+    ListKind::Task => {
+      let checked = match &item.kind {
+        NodeKind::Block(BlockKind::ListItem {
+          checked: Some(true),
+        }) => "x",
+        _ => " ",
+      };
+      format!("- [{checked}]")
+    }
+  };
+
+  let mut lines = vec![format!("{marker} {content}")];
+  for child in children.into_iter().skip(1) {
+    let nested = serialize_block(document, child);
+    lines.extend(nested.lines().map(|line| format!("  {line}")));
+  }
+  lines.join("\n")
 }
 
 fn serialize_table(document: &Document, table: &Node) -> String {
@@ -225,6 +245,13 @@ mod tests {
       to_markdown(&document),
       "# Title\n\n3. three\n4. four\n\n- [x] done\n- [ ] todo\n\n| Name | Score |\n| :--- | ---: |\n| Ada | 10 |"
     );
+  }
+
+  #[test]
+  fn round_trips_nested_lists() {
+    let markdown = "- parent\n  - child\n    3. grandchild\n- sibling";
+    let document = parse_markdown(markdown);
+    assert_eq!(to_markdown(&document), markdown);
   }
 
   #[test]

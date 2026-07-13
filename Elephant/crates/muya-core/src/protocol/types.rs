@@ -32,6 +32,7 @@ pub enum ProtocolCommand {
   ToggleCodeBlock,
   SetListKind { kind: ListKind },
   InsertHorizontalRule,
+  CreateTable { rows: u16, columns: u16 },
   IndentListItem,
   OutdentListItem,
   SetTaskChecked {

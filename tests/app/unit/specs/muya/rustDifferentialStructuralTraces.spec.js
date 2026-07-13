@@ -28,7 +28,7 @@ const traces = [
     initial: 'before**bold**after',
     expected: 'before\n\n**bold**after\n',
     runJs: async (muya) => {
-      setJsSelection(muya, 0, 8)
+      setJsSelection(muya, 0, 6)
       muya.contentState.enterHandler(fakeKeyEvent())
     },
     runRust: (rust) => {

@@ -13,21 +13,11 @@ const describeBundled = bundled ? describe : describe.skip
 
 const deleteForward = async (muya) => {
   const event = fakeKeyEvent({ key: 'Delete', code: 'Delete', keyCode: 46, which: 46 })
-  if (typeof muya.contentState.deleteHandler === 'function') {
-    await muya.contentState.deleteHandler(event, 'forward')
-    return
+  const handler = muya.contentState.deleteHandler
+  if (typeof handler !== 'function') {
+    throw new Error('Muya deleteHandler is unavailable.')
   }
-  const target = document.activeElement || document.querySelector('[contenteditable="true"]')
-  target?.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key: 'Delete',
-      code: 'Delete',
-      keyCode: 46,
-      which: 46,
-      bubbles: true,
-      cancelable: true
-    })
-  )
+  await handler.call(muya.contentState, event)
 }
 
 const cases = [
@@ -47,6 +37,12 @@ describeBundled('Muya delete-forward characterization', () => {
     jsEditor?.destroy?.()
     jsEditor = null
     document.body.innerHTML = ''
+  })
+
+  it('exposes the delete handler contract', async () => {
+    jsEditor = await createJsEditor('alpha')
+    console.log('[muya-delete-handler-source]', String(jsEditor.contentState.deleteHandler))
+    expect(typeof jsEditor.contentState.deleteHandler).toBe('function')
   })
 
   for (const testCase of cases) {

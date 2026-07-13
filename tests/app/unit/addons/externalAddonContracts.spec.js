@@ -27,6 +27,23 @@ const createManifest = (overrides = {}) => ({
   ...overrides
 })
 
+const physicalAiParent = {
+  manifest: {
+    id: 'elephant.ai',
+    name: 'AI',
+    version: '2.1.0',
+    source: 'external'
+  },
+  activate(context) {
+    context.addSettingsSection({
+      id: 'elephant.ai.settings',
+      section: 'ai',
+      standalone: true,
+      title: 'AI'
+    })
+  }
+}
+
 const flush = async () => {
   await Promise.resolve()
   await Promise.resolve()
@@ -92,6 +109,18 @@ describe('external addon manifest contracts', () => {
     expect(manifest.icon).toBe('sparkles')
     expect(manifest.removable).toBe(false)
   })
+
+  it('preserves physical package dependencies and native permission declarations', () => {
+    const manifest = normalizeAddonManifest(createManifest({
+      parentAddonId: 'elephant.ai',
+      requires: { 'elephant.ai': '>=2.0.0' },
+      permissions: { native: true }
+    }))
+
+    expect(manifest.parentAddonId).toBe('elephant.ai')
+    expect(manifest.requires).toEqual({ 'elephant.ai': '>=2.0.0' })
+    expect(manifest.permissions.native).toBe(true)
+  })
 })
 
 describe('built-in addon catalogue', () => {
@@ -102,7 +131,6 @@ describe('built-in addon catalogue', () => {
       'elephant.codex-connection',
       'elephant.calendar',
       'elephant.sites',
-      'elephant.ai',
       'elephant.ai-chat',
       'elephant.ai-search',
       'elephant.wiki',
@@ -118,12 +146,14 @@ describe('built-in addon catalogue', () => {
     expect(builtinAddons.find((addon) => addon.manifest.id === 'elephant.addon-packs')?.manifest.removable).toBe(false)
     expect(new Set(builtinAddons.map((addon) => addon.manifest.icon)).size).toBe(builtinAddons.length)
     expect(builtinAddons.map((addon) => addon.manifest.id)).not.toEqual(expect.arrayContaining([
+      'elephant.ai',
       'elephant.ai-ocr',
       'elephant.daily-notes',
       'elephant.quick-capture',
       'elephant.vault-overview',
       'elephant.addon-inspector'
     ]))
+    expect(read('addons/official/ai/manifest.json')).toContain('"id": "elephant.ai"')
   })
 
   it('enables only the addon pack manager by default', async () => {
@@ -156,22 +186,21 @@ describe('built-in addon catalogue', () => {
     expect(source).not.toContain('manager.enableDefaultAddons()')
   })
 
-  it('keeps providers, chat, graph and sync inert until each addon is enabled', async () => {
+  it('keeps physical AI, chat, graph and sync inert until each addon is enabled', async () => {
     const manager = new ElephantAddonManager({
       logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
     })
-    const providers = builtinAddons.find((addon) => addon.manifest.id === 'elephant.ai')
     const chat = builtinAddons.find((addon) => addon.manifest.id === 'elephant.ai-chat')
     const graph = builtinAddons.find((addon) => addon.manifest.id === 'elephant.graph')
     const sync = builtinAddons.find((addon) => addon.manifest.id === 'elephant.sync')
-    for (const addon of [providers, chat, graph, sync]) manager.register(addon)
+    for (const addon of [physicalAiParent, chat, graph, sync]) manager.register(addon)
 
     expect(manager.getContributions('settings.sections')).toEqual([])
     expect(manager.getContributions('views')).toEqual([])
     expect(manager.getContributions('layout.zones')).toEqual([])
     expect(manager.getActions()).toEqual([])
 
-    await manager.enable(providers.manifest.id)
+    await manager.enable(physicalAiParent.manifest.id)
     expect(manager.getContributions('settings.sections').some((entry) => entry.addonId === 'elephant.ai')).toBe(true)
     expect(manager.getContributions('views')).toEqual([])
     expect(manager.getActions()).toEqual([])
@@ -185,7 +214,7 @@ describe('built-in addon catalogue', () => {
 
     await manager.disable(graph.manifest.id)
     await manager.disable(chat.manifest.id)
-    await manager.disable(providers.manifest.id)
+    await manager.disable(physicalAiParent.manifest.id)
     expect(manager.getContributions('settings.sections')).toEqual([])
     expect(manager.getContributions('views')).toEqual([])
     expect(manager.getContributions('layout.zones')).toEqual([])

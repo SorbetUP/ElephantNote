@@ -133,18 +133,60 @@ fn build_outdent(
   let owner_index = document
     .child_index(outer_list, owner_item)
     .ok_or(EditError::UnsupportedStructure(owner_item))?;
-  let nested_count = document
+  let nested = document
     .node(context.list)
-    .ok_or(EditError::NodeNotFound(context.list))?
+    .ok_or(EditError::NodeNotFound(context.list))?;
+  let trailing_items = nested
     .children
-    .len();
+    .iter()
+    .skip(context.item_index + 1)
+    .copied()
+    .collect::<Vec<_>>();
 
-  let mut operations = vec![Operation::MoveNode {
+  let mut operations = Vec::new();
+  if !trailing_items.is_empty() {
+    let continuation_list = document.next_available_id();
+    let continuation_start = match context.kind {
+      ListKind::Ordered => context
+        .start
+        .map(|start| start + context.item_index as u64 + 1),
+      ListKind::Unordered | ListKind::Task => None,
+    };
+    let item_child_count = document
+      .node(context.item)
+      .ok_or(EditError::NodeNotFound(context.item))?
+      .children
+      .len();
+    operations.push(Operation::InsertNode {
+      parent: context.item,
+      index: item_child_count,
+      node: Node::new(
+        continuation_list,
+        NodeKind::Block(BlockKind::List {
+          kind: context.kind,
+          start: continuation_start,
+        }),
+        None,
+      ),
+    });
+    operations.extend(
+      trailing_items
+        .into_iter()
+        .enumerate()
+        .map(|(index, item)| Operation::MoveNode {
+          node: item,
+          new_parent: continuation_list,
+          new_index: index,
+        }),
+    );
+  }
+
+  operations.push(Operation::MoveNode {
     node: context.item,
     new_parent: outer_list,
     new_index: owner_index + 1,
-  }];
-  if nested_count == 1 {
+  });
+  if context.item_index == 0 {
     operations.push(Operation::RemoveNode { node: context.list });
   }
 
@@ -306,5 +348,40 @@ mod tests {
       .unwrap();
     assert_eq!(to_markdown(&document), "- parent\n  - first\n- second");
     assert!(document.node(nested).is_some());
+  }
+
+  #[test]
+  fn outdents_a_middle_item_and_adopts_following_siblings_with_exact_undo() {
+    let initial = "- parent\n  - first\n  - middle\n  - last";
+    let mut document = parse_markdown(initial);
+    let list = document.children(document.root).next().unwrap().id;
+    let parent = document.children(list).next().unwrap().id;
+    let nested = document.children(parent).nth(1).unwrap().id;
+    let middle = document.children(nested).nth(1).unwrap().id;
+    let last = document.children(nested).nth(2).unwrap().id;
+    let paragraph = document.children(middle).next().unwrap().id;
+    let text = document.children(paragraph).next().unwrap().id;
+    let selection = Selection::collapsed(SelectionPoint {
+      node: text,
+      offset_utf16: 0,
+    });
+
+    let inverse = ListCommand::OutdentItem
+      .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
+      .unwrap();
+    assert_eq!(
+      to_markdown(&document),
+      "- parent\n  - first\n- middle\n  - last"
+    );
+    let continuation = document.children(middle).nth(1).unwrap().id;
+    assert_eq!(document.node(last).unwrap().parent, Some(continuation));
+    assert_eq!(document.node(middle).unwrap().parent, Some(list));
+
+    inverse.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), initial);
+    assert_eq!(document.node(middle).unwrap().parent, Some(nested));
+    assert_eq!(document.node(last).unwrap().parent, Some(nested));
   }
 }

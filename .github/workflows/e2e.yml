@@ -30,9 +30,12 @@ jobs:
       - name: Install Electron test binary
         shell: bash
         run: |
-          set -euxo pipefail
-          pnpm rebuild electron
-          test -s node_modules/electron/path.txt
+          set -o pipefail
+          electron_package="$(node -p "require.resolve('electron/package.json')")"
+          electron_root="$(dirname "$electron_package")"
+          echo "Electron package: $electron_root" | tee electron-install.txt
+          node "$electron_root/install.js" 2>&1 | tee -a electron-install.txt
+          test -s "$electron_root/path.txt"
 
       - name: Run postinstall
         run: node build/scripts/postinstall.js
@@ -62,6 +65,7 @@ jobs:
         with:
           name: e2e-diagnostics
           path: |
+            electron-install.txt
             e2e-build.txt
             e2e-tests.txt
             test-results/**

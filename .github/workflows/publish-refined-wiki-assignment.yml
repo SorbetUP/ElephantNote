@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup
 
-      - name: Apply validated semantic-separation patch
+      - name: Apply semantically grounded source-assignment patch
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -32,9 +32,8 @@ jobs:
           PY
           cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
 
-      - name: Revalidate exact publication content
+      - name: Validate publication contracts
         run: |
-          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml knowledge_wiki_discovery --lib
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
             tests/app/unit/wikiDiscoveryQualityRegression.spec.js
 

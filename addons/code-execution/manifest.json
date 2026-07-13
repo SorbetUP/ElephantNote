@@ -1,7 +1,7 @@
 {
   "id": "elephant.code-execution",
   "name": "Code execution",
-  "version": "2.2.0",
+  "version": "2.1.0",
   "description": "Runs fenced code blocks with selectable package-owned interpreter sidecars.",
   "author": "Elephant",
   "apiVersion": 1,

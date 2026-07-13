@@ -25,6 +25,9 @@ pub enum ProtocolCommand {
   ToggleStrong,
   ToggleEmphasis,
   ToggleStrike,
+  DuplicateBlock,
+  DeleteBlock,
+  InsertParagraphAfterBlock,
   IndentListItem,
   OutdentListItem,
   SetTaskChecked {

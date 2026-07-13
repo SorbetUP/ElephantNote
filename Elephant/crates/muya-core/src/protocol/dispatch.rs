@@ -3,7 +3,8 @@ use crate::edit::{
   PasteCommand,
 };
 use crate::features::{
-  BlockCommand, ListCommand, TableCommand, TableNavigationCommand, TaskCommand,
+  BlockCommand, BlockTypeCommand, ListCommand, TableCommand, TableNavigationCommand,
+  TaskCommand,
 };
 use crate::session::{EditorSession, SessionCommand};
 
@@ -83,6 +84,15 @@ fn to_session_command(command: ProtocolCommand) -> SessionCommand {
     ProtocolCommand::DeleteBlock => SessionCommand::Block(BlockCommand::Delete),
     ProtocolCommand::InsertParagraphAfterBlock => {
       SessionCommand::Block(BlockCommand::InsertParagraphAfter)
+    }
+    ProtocolCommand::ToggleBlockQuote => {
+      SessionCommand::BlockType(BlockTypeCommand::ToggleBlockQuote)
+    }
+    ProtocolCommand::ToggleCodeBlock => {
+      SessionCommand::BlockType(BlockTypeCommand::ToggleCodeBlock)
+    }
+    ProtocolCommand::SetListKind { kind } => {
+      SessionCommand::BlockType(BlockTypeCommand::SetListKind(kind))
     }
     ProtocolCommand::IndentListItem => {
       SessionCommand::List(ListCommand::IndentItem)

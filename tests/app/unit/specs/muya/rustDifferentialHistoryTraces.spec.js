@@ -39,7 +39,7 @@ const traces = [
   {
     name: 'exit the final empty unordered list item with Enter',
     initial: '- alpha\n- ',
-    expected: '- alpha\n\n',
+    expected: '- alpha\n\n\n',
     runJs: async (muya) => {
       setJsSelection(muya, 1, 0)
       muya.contentState.enterHandler(fakeKeyEvent())

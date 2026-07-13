@@ -1,0 +1,58 @@
+name: Capture Wiki Topic Model V2 Build
+
+on:
+  pull_request:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/capture-wiki-topic-model-v2-build.yml
+
+jobs:
+  capture:
+    if: github.head_ref == 'assistant/wiki-organization-continuation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - name: Install Linux Tauri build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+      - name: Apply topic-model patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          workflow = Path('.github/workflows/refine-wiki-topic-model-v2.yml').read_text()
+          script = workflow.split("python3 - <<'PY'\n", 1)[1].split('\n          PY', 1)[0]
+          exec(compile(textwrap.dedent(script), 'refine-wiki-topic-model-v2', 'exec'))
+          PY
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+      - name: Capture build logs
+        run: |
+          set +e
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml knowledge_wiki_discovery --lib > rust.log 2>&1
+          echo $? > rust.status
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run tests/app/unit/wikiDiscoveryQualityRegression.spec.js > vitest.log 2>&1
+          echo $? > vitest.status
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint Elephant/frontend/app/components/views/WikiView.vue > eslint.log 2>&1
+          echo $? > eslint.status
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wiki-topic-model-v2-build
+          path: |
+            rust.log
+            rust.status
+            vitest.log
+            vitest.status
+            eslint.log
+            eslint.status

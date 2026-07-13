@@ -18,8 +18,12 @@
     "views": true,
     "native": true,
     "notes": {
-      "read": ["*"],
-      "write": ["*"]
+      "read": [
+        "*"
+      ],
+      "write": [
+        "*"
+      ]
     },
     "network": {
       "hosts": []
@@ -27,6 +31,7 @@
   },
   "native": {
     "protocol": "elephant-addon-sidecar-v1",
+    "runner": "process",
     "timeoutMs": 15000,
     "maxOutputBytes": 1048576,
     "platforms": {
@@ -35,6 +40,24 @@
       "linux-x64": "native/linux-x64/elephant-sites",
       "linux-arm64": "native/linux-arm64/elephant-sites",
       "windows-x64": "native/windows-x64/elephant-sites.exe"
+    },
+    "sidecars": {
+      "macos-aarch64": "native/macos-aarch64/elephant-sites",
+      "macos-x86_64": "native/macos-x86_64/elephant-sites",
+      "linux-x86_64": "native/linux-x86_64/elephant-sites",
+      "linux-aarch64": "native/linux-aarch64/elephant-sites",
+      "windows-x86_64": "native/windows-x86_64/elephant-sites.exe",
+      "windows-aarch64": "native/windows-aarch64/elephant-sites.exe"
+    },
+    "mobile": {
+      "android": {
+        "supported": false,
+        "reason": "Process sidecars cannot run on Android; a package-owned Android host adapter is required."
+      },
+      "ios": {
+        "supported": false,
+        "reason": "Downloaded process sidecars cannot run on iOS; a package-owned iOS host adapter is required."
+      }
     }
   },
   "contributes": {
@@ -44,5 +67,7 @@
     "views": true,
     "native": true
   },
-  "activationEvents": ["onStartup"]
+  "activationEvents": [
+    "onStartup"
+  ]
 }

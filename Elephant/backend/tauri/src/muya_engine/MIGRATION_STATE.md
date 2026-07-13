@@ -43,10 +43,14 @@ The parser builds structural list, item, nested-list, row and cell nodes rather 
 - removal and exact restoration of fully covered nested inline subtrees;
 - `InsertText`, `DeleteBackward` and `InsertParagraph` commands;
 - `GraphemeCommand::DeleteBackward` for extended Unicode graphemes, with structural Backspace delegation at offset zero;
-- `ToggleStrong`, `ToggleEmphasis` and `ToggleStrike` commands;
-- full-mark unwrapping for a mark containing one selected text node;
+- `MarkCommand::ToggleStrong`, `ToggleEmphasis` and `ToggleStrike`;
+- complete and partial unwrapping of matching marks for prefix, suffix and middle selections;
+- mark application across fully selected top-level inline subtrees even when endpoints live in different wrappers;
+- exact movement and undo restoration of nested mark/link subtrees;
 - plain and rich paragraph splitting;
 - splitting from inside nested marks and links by cloning the right-side wrapper chain;
+- `ParagraphBoundaryCommand::InsertParagraph` at marked-text start/end without empty wrappers;
+- boundary splitting for ordinary paragraphs and list items;
 - stable movement of following inline subtrees at every nesting level;
 - plain and rich paragraph joining;
 - list-item splitting for unordered, ordered and task lists;
@@ -69,15 +73,31 @@ The parser builds structural list, item, nested-list, row and cell nodes rather 
 - validation against offsets inside surrogate pairs;
 - invertible text replacement, insertion, subtree removal/restoration, subtree movement and block-kind operations;
 - atomic transactions applied on a cloned document before commit;
-- document revision increments;
+- document revision increments for document mutations;
 - bounded transaction-based undo and redo history;
+- IME/composition grouping with one-step undo or atomic cancellation;
 - logical view patches for text, nodes, subtrees, subtree movement and block changes.
 
-Structural undo/redo restores exact node IDs, parent/child topology, inline order, list nesting and table topology. Mark-boundary splitting remains blocked until empty-wrapper normalization exists. Cross-node replacement still requires direct sibling endpoint texts. Endpoints nested inside different marks, partial mark unwrapping, IME grouping and actual DOM patch application are not yet active.
+Structural undo/redo restores exact node IDs, parent/child topology, inline order, list nesting and table topology. Cross-node replacement still requires direct sibling endpoint texts. Cross-wrapper mark application currently requires fully selected boundary top-level subtrees; arbitrary partial boundary text across unrelated wrappers is not implemented yet.
+
+## Session and adapter contract
+
+`EditorSession` is now the intended runtime boundary. It owns document, selection and history, and provides:
+
+- expected-revision checks that reject stale command ordering;
+- validated UTF-16 browser selection updates;
+- semantic dispatch for text, marks, graphemes, paragraphs, lists and tables;
+- selection-only updates that do not increment revision or pollute history;
+- forward patches for mutations and inverse patches for undo, redo and cancelled composition;
+- explicit full snapshots for recovery rather than per-keystroke Markdown serialization.
+
+Editor protocol version `1` provides serializable requests, snapshots, updates, patches and stable error codes. High-level Backspace, formatting and Enter requests route to the modern grapheme, mark and boundary engines.
+
+The protocol has Rust tests but no active WebView/WASM binding yet. The frontend still uses Muya JavaScript and no per-keystroke Tauri IPC has been added.
 
 The executable slices have Rust unit and round-trip tests. Full JavaScript-vs-Rust characterization is still required before runtime activation or JavaScript deletion.
 
-The Tauri CI now verifies that `Cargo.lock` remains current after compilation and tests. `unicode-segmentation` is locked for grapheme-aware editing.
+The Tauri CI verifies that `Cargo.lock` remains current after compilation and tests. `unicode-segmentation` is locked for grapheme-aware editing.
 
 ## Ported atomic parity modules
 

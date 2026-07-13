@@ -1,0 +1,41 @@
+name: Stage Wiki Topic Model V2
+
+on:
+  pull_request:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/stage-wiki-topic-model-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    if: github.head_ref == 'assistant/wiki-organization-continuation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+          fetch-depth: 0
+      - name: Apply and format topic-model patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          workflow = Path('.github/workflows/refine-wiki-topic-model-v2.yml').read_text()
+          script = workflow.split("python3 - <<'PY'\n", 1)[1].split('\n          PY', 1)[0]
+          exec(compile(textwrap.dedent(script), 'refine-wiki-topic-model-v2', 'exec'))
+          PY
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+      - name: Commit staged topic model
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Elephant/backend/tauri/src/knowledge_wiki_discovery.rs \
+            Elephant/backend/tauri/src/knowledge_wiki_discovery/topic_graph.rs \
+            tests/app/unit/wikiDiscoveryQualityRegression.spec.js
+          git commit --no-verify -m "refactor: stage semantic Wiki topic communities"
+          git push origin HEAD:assistant/wiki-organization-continuation

@@ -359,7 +359,9 @@ mod tests {
         offset_utf16: 3,
       },
     };
-    let apply = MarkCommand::ToggleStrike.build(&document, selection).unwrap();
+    let apply = MarkCommand::ToggleStrike
+      .build(&document, selection)
+      .unwrap();
     let linked_selection = apply.selection_after;
     apply.apply(&mut document).unwrap();
 

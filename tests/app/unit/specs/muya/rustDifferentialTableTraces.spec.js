@@ -119,10 +119,10 @@ const traces = [
     }
   },
   {
-    name: 'create a new row when tabbing from the final table cell',
+    name: 'keep the final table cell selected on Tab',
     initial: '| A | B |\n| --- | --- |\n| one | two |',
-    expected: '| A   | B   |\n| --- | --- |\n| one | two |\n|     |     |\n',
-    selectedText: '',
+    expected: '| A   | B   |\n| --- | --- |\n| one | two |\n',
+    selectedText: 'two',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'two', 3)
       muya.contentState.tabHandler(fakeKeyEvent())

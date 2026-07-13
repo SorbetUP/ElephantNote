@@ -2,6 +2,7 @@ mod command;
 mod error;
 mod list;
 mod operation;
+#[path = "paragraph_engine.rs"]
 mod paragraph;
 mod transaction;
 

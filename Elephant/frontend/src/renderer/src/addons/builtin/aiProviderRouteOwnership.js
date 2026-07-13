@@ -33,8 +33,8 @@ export const disableProviderRoutes = async (providerId, options = {}) => {
     changed = true
   }
 
-  const chatWasOwned = routeUsesProvider(config?.routes?.chat, providerId)
-    || config?.provider === providerId
+  const chatWasOwned = routeUsesProvider(config?.routes?.chat, providerId) ||
+    config?.provider === providerId
   if (chatWasOwned) changed = true
 
   const localAi = { ...(config?.localAi || {}) }

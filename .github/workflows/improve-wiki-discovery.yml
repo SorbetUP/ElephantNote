@@ -1,0 +1,508 @@
+name: Improve Wiki Discovery
+
+on:
+  pull_request:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/improve-wiki-discovery.yml
+
+permissions:
+  contents: write
+
+jobs:
+  improve:
+    if: github.head_ref == 'assistant/wiki-organization-continuation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Replace micro-cluster suggestions with macro-topic discovery
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('Elephant/backend/tauri/src/knowledge_wiki_discovery.rs')
+          source = path.read_text()
+
+          old_struct = '''struct DiscoveryLabel {
+              cluster_id: usize,
+              #[serde(default = "default_true")]
+              include: bool,
+          '''
+          new_struct = '''struct DiscoveryLabel {
+              #[serde(default)]
+              cluster_id: Option<usize>,
+              #[serde(default)]
+              cluster_ids: Vec<usize>,
+              #[serde(default = "default_true")]
+              include: bool,
+          '''
+          if old_struct in source:
+              source = source.replace(old_struct, new_struct, 1)
+          elif 'cluster_ids: Vec<usize>' not in source:
+              raise SystemExit('DiscoveryLabel pattern not found')
+
+          helper_marker = '''#[cfg(not(mobile))]
+          fn json_object_from_text'''
+          if 'fn minimum_topic_sources' not in source:
+              helpers = r'''#[cfg(not(mobile))]
+          fn minimum_topic_sources(document_count: usize) -> usize {
+              (document_count / 100).clamp(8, 24)
+          }
+
+          #[cfg(not(mobile))]
+          fn centroid_for_members(
+              members: &[usize],
+              documents: &[DocumentVector],
+          ) -> Option<Vec<f32>> {
+              let first = *members.first()?;
+              let dimensions = documents.get(first)?.vector.len();
+              let mut centroid = vec![0.0; dimensions];
+              for index in members {
+                  let document = documents.get(*index)?;
+                  if document.vector.len() != dimensions {
+                      return None;
+                  }
+                  for (target, value) in centroid.iter_mut().zip(&document.vector) {
+                      *target += *value;
+                  }
+              }
+              normalize_vector(centroid).ok()
+          }
+
+          #[cfg(not(mobile))]
+          fn expanded_members(
+              profile: &[f32],
+              core_members: &[usize],
+              documents: &[DocumentVector],
+              route_threshold: f32,
+          ) -> (Vec<usize>, f32) {
+              let mut ranked = documents
+                  .iter()
+                  .enumerate()
+                  .map(|(index, document)| (index, cosine(profile, &document.vector)))
+                  .collect::<Vec<_>>();
+              ranked.sort_by(|left, right| right.1.total_cmp(&left.1));
+
+              let mut core_scores = core_members
+                  .iter()
+                  .filter_map(|index| documents.get(*index))
+                  .map(|document| cosine(profile, &document.vector))
+                  .collect::<Vec<_>>();
+              core_scores.sort_by(|left, right| left.total_cmp(right));
+              let core_quartile = core_scores
+                  .get(core_scores.len().saturating_sub(1) / 4)
+                  .copied()
+                  .unwrap_or(route_threshold);
+              let semantic_floor = (route_threshold - 0.18).clamp(0.48, 0.72);
+              let adaptive_floor = (core_quartile - 0.10).clamp(semantic_floor, 0.74);
+              let target = core_members
+                  .len()
+                  .saturating_mul(3)
+                  .clamp(minimum_topic_sources(documents.len()), 400);
+
+              let mut selected = core_members.iter().copied().collect::<HashSet<_>>();
+              for (index, score) in ranked {
+                  if selected.len() >= 400 {
+                      break;
+                  }
+                  if score >= adaptive_floor || selected.len() < target {
+                      selected.insert(index);
+                  } else if selected.len() >= target {
+                      break;
+                  }
+              }
+              let mut selected = selected.into_iter().collect::<Vec<_>>();
+              selected.sort_by(|left, right| {
+                  cosine(profile, &documents[*right].vector)
+                      .total_cmp(&cosine(profile, &documents[*left].vector))
+              });
+              selected.truncate(400);
+              (selected, adaptive_floor)
+          }
+
+          #[cfg(not(mobile))]
+          fn candidate_overlap(left: &[String], right: &[String]) -> f32 {
+              if left.is_empty() || right.is_empty() {
+                  return 0.0;
+              }
+              let right = right.iter().collect::<HashSet<_>>();
+              let shared = left.iter().filter(|value| right.contains(value)).count();
+              shared as f32 / left.len().min(right.len()) as f32
+          }
+
+          #[cfg(not(mobile))]
+          fn topic_matches_existing(topic: &str, existing_topics: &HashSet<String>) -> bool {
+              let topic = topic.trim().to_lowercase();
+              existing_topics.iter().any(|existing| {
+                  let comparable = topic.chars().count().min(existing.chars().count()) >= 5;
+                  topic == *existing
+                      || (comparable && (topic.contains(existing) || existing.contains(&topic)))
+              })
+          }
+
+          '''
+              if helper_marker not in source:
+                  raise SystemExit('json_object_from_text marker not found')
+              source = source.replace(helper_marker, helpers + helper_marker, 1)
+
+          start_marker = '    let cluster_payload = clusters\n'
+          end_marker = '    eprintln!(\n        "[knowledge] wiki:semantic-discovery'
+          start = source.find(start_marker)
+          end = source.find(end_marker, start)
+          if start < 0 or end < 0:
+              if 'macro-candidate topic=' not in source:
+                  raise SystemExit('semantic discovery replacement boundaries not found')
+          else:
+              block = r'''    let minimum_sources = minimum_topic_sources(documents.len());
+              let cluster_payload = clusters
+                  .iter()
+                  .take(limit.saturating_mul(6).clamp(18, 72))
+                  .enumerate()
+                  .map(|(cluster_id, cluster)| {
+                      let mut representative_members = cluster.members.clone();
+                      representative_members.sort_by(|left, right| {
+                          cosine(&cluster.centroid, &documents[*right].vector)
+                              .total_cmp(&cosine(&cluster.centroid, &documents[*left].vector))
+                      });
+                      let notes = representative_members
+                          .iter()
+                          .take(10)
+                          .map(|index| {
+                              let document = &documents[*index];
+                              json!({
+                                  "path": document.path,
+                                  "title": document.title,
+                                  "excerpt": document.excerpt.chars().take(320).collect::<String>()
+                              })
+                          })
+                          .collect::<Vec<_>>();
+                      json!({
+                          "cluster_id": cluster_id,
+                          "size": cluster.members.len(),
+                          "coherence": cluster.coherence,
+                          "notes": notes
+                      })
+                  })
+                  .collect::<Vec<_>>();
+              let prompt = format!(
+                  "You are designing a durable knowledge map for a personal note vault. The embedding groups below are MICRO-CLUSTERS, not final Wiki proposals. Merge related micro-clusters into a small set of broad, specific MACRO-TOPICS. Return at most {} candidates. Each included candidate must combine enough evidence to represent a durable subject: at least {} core notes after merging, preferably 25 or more. Reject timestamp dumps, duplicated social posts, generic UI words and vague labels such as Site, Discover, Comment, Account, Code, Programming or Animation unless the notes clearly describe one specific stable subject. A cluster id may belong to at most one candidate. Keep genuinely different subjects separate. Return exactly one JSON object with this shape and no prose:\n{{\"candidates\":[{{\"cluster_ids\":[0,3,7],\"include\":true,\"title\":\"Readable specific title\",\"topic\":\"normalized specific topic\",\"reason\":\"Why the merged evidence deserves a Wiki\",\"preview\":\"What the Wiki would cover\",\"suggested_sections\":[\"Section\"]}}]}}\n\nEmbedding micro-clusters:\n{}",
+                  limit.clamp(1, 24),
+                  minimum_sources,
+                  serde_json::to_string_pretty(&cluster_payload).map_err(|error| error.to_string())?
+              );
+              let result = codex_app_server::chat_with_effort(app, model, &prompt, Some(effort)).await?;
+              let envelope: DiscoveryEnvelope = serde_json::from_str(json_object_from_text(&result.answer)?)
+                  .map_err(|error| format!("Invalid semantic Wiki discovery JSON: {error}"))?;
+
+              let existing_topics = KnowledgeStore::open(&root)?
+                  .list_wiki_drafts(None, 1_000)?
+                  .into_iter()
+                  .map(|draft| draft.topic.trim().to_lowercase())
+                  .collect::<HashSet<_>>();
+              let mut candidates = Vec::new();
+              for label in envelope.candidates.into_iter().filter(|candidate| candidate.include) {
+                  let topic = label.topic.trim().to_lowercase();
+                  if topic.is_empty()
+                      || label.title.trim().is_empty()
+                      || topic_matches_existing(&topic, &existing_topics)
+                  {
+                      continue;
+                  }
+                  let mut cluster_ids = label.cluster_ids.clone();
+                  if let Some(cluster_id) = label.cluster_id {
+                      cluster_ids.push(cluster_id);
+                  }
+                  cluster_ids.sort_unstable();
+                  cluster_ids.dedup();
+                  cluster_ids.retain(|cluster_id| *cluster_id < clusters.len());
+                  if cluster_ids.is_empty() {
+                      continue;
+                  }
+
+                  let mut core_set = HashSet::new();
+                  for cluster_id in &cluster_ids {
+                      core_set.extend(clusters[*cluster_id].members.iter().copied());
+                  }
+                  let mut core_members = core_set.into_iter().collect::<Vec<_>>();
+                  if core_members.len() < minimum_sources {
+                      eprintln!(
+                          "[knowledge] wiki:macro-candidate rejected title={} clusters={:?} core_sources={} minimum_sources={}",
+                          label.title.trim(),
+                          cluster_ids,
+                          core_members.len(),
+                          minimum_sources
+                      );
+                      continue;
+                  }
+                  core_members.sort_unstable();
+                  let Some(profile) = centroid_for_members(&core_members, &documents) else {
+                      continue;
+                  };
+                  let (members, expansion_floor) =
+                      expanded_members(&profile, &core_members, &documents, route.threshold);
+                  if members.len() < minimum_sources {
+                      continue;
+                  }
+                  let source_paths = members
+                      .iter()
+                      .map(|index| documents[*index].path.clone())
+                      .collect::<Vec<_>>();
+                  let source_titles = members
+                      .iter()
+                      .map(|index| documents[*index].title.clone())
+                      .collect::<Vec<_>>();
+                  let coherence = members
+                      .iter()
+                      .map(|index| cosine(&profile, &documents[*index].vector))
+                      .sum::<f32>()
+                      / members.len() as f32;
+                  eprintln!(
+                      "[knowledge] wiki:macro-candidate topic={} clusters={:?} core_sources={} expanded_sources={} floor={:.4} coherence={:.4}",
+                      topic,
+                      cluster_ids,
+                      core_members.len(),
+                      members.len(),
+                      expansion_floor,
+                      coherence
+                  );
+                  candidates.push(SemanticWikiCandidate {
+                      topic,
+                      title: label.title.trim().to_string(),
+                      reason: label.reason.trim().to_string(),
+                      preview: label.preview.trim().to_string(),
+                      suggested_sections: label
+                          .suggested_sections
+                          .iter()
+                          .map(|value| value.trim().to_string())
+                          .filter(|value| !value.is_empty())
+                          .take(12)
+                          .collect(),
+                      source_paths,
+                      source_titles,
+                      score: members
+                          .len()
+                          .saturating_mul(1_000)
+                          .saturating_add((coherence.max(0.0) * 1_000.0) as usize),
+                      coherence,
+                  });
+              }
+              candidates.sort_by(|left, right| right.score.cmp(&left.score));
+              let mut deduplicated: Vec<SemanticWikiCandidate> = Vec::new();
+              for candidate in candidates {
+                  let duplicate = deduplicated.iter().any(|existing| {
+                      candidate.topic == existing.topic
+                          || candidate_overlap(&candidate.source_paths, &existing.source_paths) >= 0.72
+                  });
+                  if !duplicate {
+                      deduplicated.push(candidate);
+                  }
+              }
+              deduplicated.truncate(limit.clamp(1, 24));
+              let candidates = deduplicated;
+              {
+                  let connection = open_connection(&root)?;
+                  connection
+                      .execute("DELETE FROM wiki_saved_candidates WHERE origin='semantic'", [])
+                      .map_err(|error| error.to_string())?;
+                  persist_candidates(&connection, &candidates)?;
+              }
+          '''
+              source = source[:start] + block + source[end:]
+
+          test_marker = '''    #[test]
+              fn embedding_url_does_not_duplicate_v1()'''
+          if 'macro_topic_expansion_grows_a_small_core' not in source:
+              tests = r'''    #[test]
+              fn topic_source_floor_scales_with_the_vault() {
+                  assert_eq!(minimum_topic_sources(200), 8);
+                  assert_eq!(minimum_topic_sources(1_393), 13);
+                  assert_eq!(minimum_topic_sources(10_000), 24);
+              }
+
+              #[test]
+              fn macro_topic_expansion_grows_a_small_core() {
+                  let documents = vec![
+                      DocumentVector {
+                          path: "a".into(),
+                          title: "A".into(),
+                          excerpt: String::new(),
+                          vector: normalize_vector(vec![1.0, 0.0]).unwrap(),
+                      },
+                      DocumentVector {
+                          path: "b".into(),
+                          title: "B".into(),
+                          excerpt: String::new(),
+                          vector: normalize_vector(vec![0.99, 0.03]).unwrap(),
+                      },
+                      DocumentVector {
+                          path: "c".into(),
+                          title: "C".into(),
+                          excerpt: String::new(),
+                          vector: normalize_vector(vec![0.96, 0.08]).unwrap(),
+                      },
+                      DocumentVector {
+                          path: "d".into(),
+                          title: "D".into(),
+                          excerpt: String::new(),
+                          vector: normalize_vector(vec![0.92, 0.15]).unwrap(),
+                      },
+                  ];
+                  let profile = centroid_for_members(&[0, 1], &documents).unwrap();
+                  let (expanded, floor) = expanded_members(&profile, &[0, 1], &documents, 0.72);
+                  assert_eq!(expanded.len(), 4);
+                  assert!((0.48..=0.74).contains(&floor));
+              }
+
+              #[test]
+              fn candidate_overlap_detects_near_duplicate_topics() {
+                  let left = vec!["a".into(), "b".into(), "c".into()];
+                  let right = vec!["a".into(), "b".into(), "c".into(), "d".into()];
+                  assert_eq!(candidate_overlap(&left, &right), 1.0);
+              }
+
+          '''
+              if test_marker not in source:
+                  raise SystemExit('Rust test insertion marker not found')
+              source = source.replace(test_marker, tests + test_marker, 1)
+
+          path.write_text(source)
+          PY
+
+      - name: Replace unavailable native confirmation with inline confirmation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('Elephant/frontend/app/components/views/WikiView.vue')
+          source = path.read_text()
+
+          source = source.replace(
+              "const openMenuId = ref('')\nconst busyIds = ref(new Set())",
+              "const openMenuId = ref('')\nconst deleteConfirmId = ref('')\nconst busyIds = ref(new Set())",
+              1
+          )
+          source = source.replace(
+              '<Trash2 class="en-popover-icon" /> Supprimer',
+              '<Trash2 class="en-popover-icon" /> {{ deleteConfirmId === entry.id ? \'Confirmer la suppression\' : \'Supprimer\' }}',
+              1
+          )
+
+          start = source.find('const deleteWiki = async(entry) => {')
+          end = source.find('\nconst toggleMenu = (id) => {', start)
+          if start < 0 or end < 0:
+              if 'deleteConfirmId.value !== entry.id' not in source:
+                  raise SystemExit('deleteWiki boundaries not found')
+          else:
+              replacement = '''const deleteWiki = async(entry) => {
+            if (!entry.draftId || isBusy(entry.id)) return
+            if (deleteConfirmId.value !== entry.id) {
+              deleteConfirmId.value = entry.id
+              openMenuId.value = entry.id
+              return
+            }
+            deleteConfirmId.value = ''
+            openMenuId.value = ''
+            setBusy(entry.id, true)
+            setEntryError(entry.id)
+            try {
+              await runtime.value.libraryDelete(entry.draftId, true)
+              entries.value = entries.value.filter((item) => item.id !== entry.id)
+              await refreshKnowledgeViews('wiki-deleted')
+            } catch (error) {
+              setEntryError(entry.id, normalizeError(error))
+            } finally {
+              setBusy(entry.id, false)
+            }
+          }
+          '''
+              source = source[:start] + replacement + source[end:]
+
+          source = source.replace(
+              '''const toggleMenu = (id) => {
+            openMenuId.value = openMenuId.value === id ? '' : id
+          }''',
+              '''const toggleMenu = (id) => {
+            deleteConfirmId.value = ''
+            openMenuId.value = openMenuId.value === id ? '' : id
+          }''',
+              1
+          )
+          source = source.replace(
+              '''  if (event?.target?.closest?.('.en-card-popover, .en-card-menu')) return
+            openMenuId.value = ''
+          }''',
+              '''  if (event?.target?.closest?.('.en-card-popover, .en-card-menu')) return
+            deleteConfirmId.value = ''
+            openMenuId.value = ''
+          }''',
+              1
+          )
+          if 'globalThis.confirm' in source:
+              raise SystemExit('native confirm call still present')
+          path.write_text(source)
+          PY
+
+      - name: Add regression contracts
+        run: |
+          cat > tests/app/unit/wikiDiscoveryQualityRegression.spec.js <<'EOF'
+          import fs from 'node:fs'
+          import { describe, expect, it } from 'vitest'
+
+          const discovery = fs.readFileSync('Elephant/backend/tauri/src/knowledge_wiki_discovery.rs', 'utf8')
+          const wikiView = fs.readFileSync('Elephant/frontend/app/components/views/WikiView.vue', 'utf8')
+
+          describe('Wiki macro-topic discovery contracts', () => {
+            it('merges micro-clusters and expands sources globally', () => {
+              expect(discovery).toContain('cluster_ids: Vec<usize>')
+              expect(discovery).toContain('fn minimum_topic_sources')
+              expect(discovery).toContain('fn expanded_members')
+              expect(discovery).toContain('wiki:macro-candidate')
+              expect(discovery).toContain("DELETE FROM wiki_saved_candidates WHERE origin='semantic'")
+            })
+
+            it('ranks durable coverage ahead of tiny high-coherence clusters', () => {
+              expect(discovery).toContain('.saturating_mul(1_000)')
+              expect(discovery).toContain('candidate_overlap')
+              expect(discovery).toContain('at least {} core notes after merging')
+            })
+
+            it('uses an inline two-step delete confirmation', () => {
+              expect(wikiView).toContain("const deleteConfirmId = ref('')")
+              expect(wikiView).toContain('Confirmer la suppression')
+              expect(wikiView).not.toContain('globalThis.confirm')
+            })
+          })
+          EOF
+
+      - name: Format and validate
+        run: |
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml knowledge_wiki_discovery --lib
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \
+            Elephant/frontend/app/components/views/WikiView.vue \
+            tests/app/unit/wikiDiscoveryQualityRegression.spec.js
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/wikiDiscoveryQualityRegression.spec.js \
+            tests/app/unit/graphWikiScaleRegression.spec.js
+          pnpm tauri:web:build
+
+      - name: Commit correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Elephant/backend/tauri/src/knowledge_wiki_discovery.rs \
+            Elephant/frontend/app/components/views/WikiView.vue \
+            tests/app/unit/wikiDiscoveryQualityRegression.spec.js
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit --no-verify -m "fix: propose broad semantic wiki topics"
+          git push origin HEAD:assistant/wiki-organization-continuation

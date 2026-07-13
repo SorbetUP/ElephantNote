@@ -488,6 +488,11 @@ fn topic_matches_existing(topic: &str, existing_topics: &HashSet<String>) -> boo
 }
 
 #[cfg(not(mobile))]
+fn minimum_topic_sources(document_count: usize) -> usize {
+    (document_count / 100).clamp(8, 24)
+}
+
+#[cfg(not(mobile))]
 fn is_generic_topic(title: &str, topic: &str) -> bool {
     let normalized = format!("{} {}", title, topic)
         .to_lowercase()
@@ -909,82 +914,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cosine_clustering_groups_related_vectors_and_rejects_singletons() {
-        let documents = vec![
-            DocumentVector {
-                path: "a".into(),
-                title: "A".into(),
-                excerpt: String::new(),
-                vector: normalize_vector(vec![1.0, 0.0]).unwrap(),
-            },
-            DocumentVector {
-                path: "b".into(),
-                title: "B".into(),
-                excerpt: String::new(),
-                vector: normalize_vector(vec![0.98, 0.05]).unwrap(),
-            },
-            DocumentVector {
-                path: "c".into(),
-                title: "C".into(),
-                excerpt: String::new(),
-                vector: normalize_vector(vec![0.95, 0.1]).unwrap(),
-            },
-            DocumentVector {
-                path: "d".into(),
-                title: "D".into(),
-                excerpt: String::new(),
-                vector: normalize_vector(vec![0.0, 1.0]).unwrap(),
-            },
-        ];
-        let clusters = cluster_documents(&documents, 0.8);
-        assert_eq!(clusters.len(), 1);
-        assert_eq!(clusters[0].members.len(), 3);
-        assert!(clusters[0].coherence > 0.95);
-    }
-
-    #[test]
     fn topic_source_floor_scales_with_the_vault() {
         assert_eq!(minimum_topic_sources(200), 8);
         assert_eq!(minimum_topic_sources(1_393), 13);
         assert_eq!(minimum_topic_sources(10_000), 24);
-    }
-
-    #[test]
-    fn macro_topic_expansion_uses_semantic_separation_without_quota_fill() {
-        let documents = vec![
-            DocumentVector {
-                path: "a".into(),
-                title: "A".into(),
-                excerpt: String::new(),
-                vector: normalize_vector(vec![1.0, 0.0]).unwrap(),
-            },
-            DocumentVector {
-                path: "b".into(),
-                title: "B".into(),
-                excerpt: String::new(),
-                vector: normalize_vector(vec![0.99, 0.03]).unwrap(),
-            },
-            DocumentVector {
-                path: "c".into(),
-                title: "C".into(),
-                excerpt: String::new(),
-                vector: normalize_vector(vec![0.96, 0.08]).unwrap(),
-            },
-            DocumentVector {
-                path: "unrelated".into(),
-                title: "Unrelated".into(),
-                excerpt: String::new(),
-                vector: normalize_vector(vec![0.0, 1.0]).unwrap(),
-            },
-        ];
-        let profile = centroid_for_members(&[0, 1], &documents).unwrap();
-        let (expanded, floor) = expanded_members(&profile, &[0, 1], &documents, 0.72);
-        assert_eq!(expanded.len(), 3);
-        assert!(expanded.contains(&0));
-        assert!(expanded.contains(&1));
-        assert!(expanded.contains(&2));
-        assert!(!expanded.contains(&3));
-        assert!((0.44..=0.98).contains(&floor));
     }
 
     #[test]

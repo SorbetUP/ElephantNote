@@ -15,13 +15,15 @@ describe('AI provider execution ownership', () => {
     expect(chat).not.toContain("this.call('rag.chat'")
   })
 
-  it('exposes executable chat functions from Open Models and Codex packages', () => {
+  it('exposes service-backed chat functions from Open Models and Codex packages', () => {
     const openModels = read('addons/official/open-models/main.js')
     const codex = read('addons/official/codex-connection/main.js')
 
-    expect(openModels).toContain('async chat({ messages = [], model = \'\', route = {}, config = {} } = {})')
+    expect(openModels).toContain("chat({ messages = [], model = '', route = {}, config = {} } = {})")
+    expect(openModels).toContain("return this.service('models.chat'")
     expect(openModels).toContain('chat: (request) => this.chat(request)')
-    expect(codex).toContain('async chat({ messages = [], model = \'\', route = {} } = {})')
+    expect(codex).toContain("async chat({ messages = [], model = '', route = {} } = {})")
+    expect(codex).toContain("this.service('codex.chat'")
     expect(codex).toContain('chat: (request) => this.chat(request)')
   })
 

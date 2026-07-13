@@ -152,7 +152,14 @@ const applyBlockAttributes = (element, kind) => {
   }
   if (kind.type === 'list' && kind.kind === 'task') element.setAttribute('data-task-list', '')
   if (kind.type === 'list_item' && kind.checked !== null && kind.checked !== undefined) {
-    element.setAttribute('data-checked', String(Boolean(kind.checked)))
+    const checked = Boolean(kind.checked)
+    element.setAttribute('data-checked', String(checked))
+    const checkbox = element.ownerDocument.createElement('input')
+    checkbox.type = 'checkbox'
+    checkbox.checked = checked
+    checkbox.tabIndex = -1
+    checkbox.setAttribute('data-muya-rust-task-checkbox', '')
+    element.appendChild(checkbox)
   }
   if (kind.type === 'table_cell') {
     element.setAttribute('data-alignment', kind.alignment || 'default')

@@ -56,7 +56,7 @@ for (const file of [
   'package.json',
   '.github/workflows/ci.yml',
   '.github/workflows/tauri-ci.yml',
-  '.github/workflows/addon-platform.yml',
+  '.github/workflows/addon-platform-validation.yml',
   'build/scripts/verify-security-guardrails.mjs',
   'Elephant/frontend/src/renderer/src/main.js',
   'Elephant/frontend/src/renderer/src/addons/builtin/index.js',
@@ -93,7 +93,7 @@ has(
   'cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features',
   'blocking Tauri library tests'
 )
-has('.github/workflows/addon-platform.yml', 'Package every integrated physical addon', 'physical addon packaging gate')
+has('.github/workflows/addon-platform-validation.yml', 'Package every integrated physical addon', 'physical addon packaging gate')
 has('package.json', '"security:guard": "node build/scripts/verify-security-guardrails.mjs"', 'security guard command')
 
 ordered(
@@ -167,7 +167,8 @@ has('addons/official/graph/main.js', 'api.workspace.registerView', 'package-owne
 has('addons/official/open-models/manifest.json', '"runner": "service"', 'Open Models native service')
 has('addons/official/codex-connection/manifest.json', '"runner": "service"', 'Codex native service')
 has('addons/official/sync/manifest.json', '"protocol": "elephant-addon-service-v1"', 'Sync native service protocol')
-has('addons/official/sync/main.service.js', 'this.api.native.service', 'Sync package service bridge')
+has('addons/official/sync/main.service.js', 'this.api.native?.service', 'Sync package service bridge')
+has('addons/official/sync/native/src/main.rs', '"sync.apply-local" => service.apply_local(params)', 'package-owned local Sync operations')
 
 has('Elephant/backend/tauri/src/tauri_extra_commands.rs', '"engine": "portable-markdown-index"', 'core lexical inspection engine')
 has('Elephant/backend/tauri/src/tauri_extra_commands.rs', '"status": "not-configured"', 'explicit absence of core embeddings')

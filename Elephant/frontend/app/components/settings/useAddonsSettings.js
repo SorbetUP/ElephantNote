@@ -47,6 +47,9 @@ export const useAddonsSettings = () => {
     void items.value.length
     return addonsStore.manager?.listBuiltinCatalog?.() || []
   })
+  const builtinCatalogIds = computed(() => new Set(
+    builtInCatalog.value.map((entry) => entry?.manifest?.id).filter(Boolean)
+  ))
   const normalizedQuery = computed(() => query.value.toLocaleLowerCase())
   const matchesQuery = (addon) => {
     if (!normalizedQuery.value) return true
@@ -196,12 +199,13 @@ export const useAddonsSettings = () => {
   }
 
   const installAvailableAddon = async (addon) => {
-    if (addon?.installSource === 'builtin') return installBuiltinAddon(addon)
+    const isActuallyBundled = addon?.id && builtinCatalogIds.value.has(addon.id)
+    if (addon?.installSource === 'builtin' && isActuallyBundled) return installBuiltinAddon(addon)
     if (!communityAddonsEnabled.value) {
       showMessage('Turn on community addons before installing this package.', true)
       return
     }
-    return installCatalogAddon(addon)
+    return installCatalogAddon({ ...addon, installSource: 'catalog' })
   }
 
   const toggleAddon = async (addon) => {

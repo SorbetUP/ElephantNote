@@ -25,14 +25,38 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build
-          {
-            echo '# Muya references outside the Muya library'
-            grep -RIn --exclude-dir=node_modules --exclude-dir=muya \
-              --include='*.js' --include='*.mjs' --include='*.vue' --include='*.ts' --include='*.tsx' \
-              -E '(^|[^[:alnum:]_])Muya([^[:alnum:]_]|$)|from[[:space:]]+["'"'][^"'"']*muya|require\(["'"'][^"'"']*muya' \
-              Elephant/frontend Elephant/shared tests || true
-          } > build/muya-host-boundary.txt
-          test -s build/muya-host-boundary.txt
+          node <<'NODE' > build/muya-host-boundary.txt
+          const { readdirSync, readFileSync, statSync } = require('node:fs')
+          const { join, relative, sep } = require('node:path')
+
+          const roots = ['Elephant/frontend', 'Elephant/shared', 'tests']
+          const extensions = new Set(['.js', '.mjs', '.vue', '.ts', '.tsx'])
+          const matches = []
+
+          const walk = (path) => {
+            const stat = statSync(path)
+            if (stat.isDirectory()) {
+              const normalized = path.split(sep).join('/')
+              if (normalized.includes('/node_modules/') || normalized.includes('/frontend/src/muya')) {
+                return
+              }
+              for (const entry of readdirSync(path)) walk(join(path, entry))
+              return
+            }
+            const extension = path.slice(path.lastIndexOf('.'))
+            if (!extensions.has(extension)) return
+            const lines = readFileSync(path, 'utf8').split(/\r?\n/)
+            lines.forEach((line, index) => {
+              if (/\bMuya\b|\bmuya\b/.test(line)) {
+                matches.push(`${relative('.', path)}:${index + 1}:${line}`)
+              }
+            })
+          }
+
+          for (const root of roots) walk(root)
+          console.log('# Muya references outside the Muya library')
+          console.log(matches.join('\n'))
+          NODE
           cat build/muya-host-boundary.txt
 
       - name: Upload host boundary report

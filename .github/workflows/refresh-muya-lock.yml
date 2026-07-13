@@ -27,7 +27,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Resolve Cargo dependencies
-        run: cargo metadata --format-version 1 --manifest-path Elephant/backend/tauri/Cargo.toml --no-deps >/dev/null
+        run: cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
 
       - name: Commit resolved lockfile
         shell: bash

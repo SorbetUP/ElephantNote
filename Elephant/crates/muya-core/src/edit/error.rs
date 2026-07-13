@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::model::NodeId;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EditError {
   NodeNotFound(NodeId),
   NodeAlreadyExists(NodeId),

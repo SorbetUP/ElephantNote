@@ -12,6 +12,7 @@ const traces = [
   {
     name: 'insert a body row after the current table row',
     initial: '| A | B |\n| :--- | ---: |\n| one | two |',
+    expected: '| A   | B   |\n|:--- | ---:|\n| one | two |\n|     |     |\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'one', 0)
       muya.contentState.editTable({
@@ -28,6 +29,7 @@ const traces = [
   {
     name: 'delete the current body row while preserving the next row',
     initial: '| A | B |\n| --- | --- |\n| one | two |\n| three | four |',
+    expected: '| A     | B    |\n| ----- | ---- |\n| three | four |\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'one', 0)
       muya.contentState.editTable({
@@ -44,6 +46,7 @@ const traces = [
   {
     name: 'insert a column after the current table column',
     initial: '| A | B |\n| :--- | ---: |\n| one | two |',
+    expected: '| A   |     | B   |\n|:--- | --- | ---:|\n| one |     | two |\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'one', 0)
       muya.contentState.editTable({
@@ -60,6 +63,7 @@ const traces = [
   {
     name: 'delete the current table column across every row',
     initial: '| A | B | C |\n| --- | :---: | ---: |\n| one | two | three |',
+    expected: '| A   | C     |\n| --- | -----:|\n| one | three |\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'two', 0)
       muya.contentState.editTable({
@@ -91,6 +95,7 @@ describeBundled('Muya table differential traces', () => {
       const result = await runDifferentialTrace(trace)
       jsEditor = result.jsEditor
       expect(result.jsMarkdown).toBe(result.rustMarkdown)
+      expect(result.rustMarkdown).toBe(trace.expected)
     })
   }
 })

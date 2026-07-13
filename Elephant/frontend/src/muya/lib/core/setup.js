@@ -46,11 +46,15 @@ const initializeExperimentalRustEditor = (muya) => {
 
   const reportError = (error) => {
     config.onError?.(error)
-    muya.eventCenter.dispatch('rustEditorError', { error })
+    if (!muya._rustEditorDisposed) muya.eventCenter.dispatch('rustEditorError', { error })
   }
 
   muya.rustEditorReady = initializeExperimentalRustRuntime(muya, config, reportError)
     .then((runtime) => {
+      if (muya._rustEditorDisposed) {
+        runtime.destroy()
+        return null
+      }
       muya.rustEditorRuntime = runtime
       muya.rustEditorBridge = runtime.bridge
       muya.eventCenter.dispatch('rustEditorReady', {
@@ -72,6 +76,7 @@ export const initializeMuya = (muya, MuyaClass, container, options) => {
   const { markdown } = muya.options
   muya.markdown = markdown
   muya._markdownBlockCache = new Map()
+  muya._rustEditorDisposed = false
   muya.container = getContainer(container, muya.options)
   muya.eventCenter = new EventCenter()
   muya.tooltip = new ToolTip(muya)

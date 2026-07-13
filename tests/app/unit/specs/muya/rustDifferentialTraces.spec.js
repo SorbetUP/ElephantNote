@@ -115,7 +115,7 @@ const traces = [
   {
     name: 'toggle strong inside one paragraph',
     initial: 'alpha',
-    expected: 'a**lph**a',
+    expected: 'a**lph**a\n',
     runJs: async (muya) => {
       setJsSelection(muya, 0, 1, 4)
       muya.format('strong')
@@ -128,7 +128,7 @@ const traces = [
   {
     name: 'convert a paragraph to heading level two',
     initial: 'alpha',
-    expected: '## alpha',
+    expected: '## alpha\n',
     runJs: async (muya) => {
       setJsSelection(muya, 0, 2)
       muya.updateParagraph('heading 2')
@@ -141,7 +141,7 @@ const traces = [
   {
     name: 'split a plain paragraph at the caret',
     initial: 'alpha',
-    expected: 'al\n\npha',
+    expected: 'al\n\npha\n',
     runJs: async (muya) => {
       setJsSelection(muya, 0, 2)
       muya.contentState.enterHandler(fakeKeyEvent())
@@ -154,7 +154,7 @@ const traces = [
   {
     name: 'split an unordered list item at the caret',
     initial: '- alpha',
-    expected: '- al\n- pha',
+    expected: '- al\n- pha\n',
     runJs: async (muya) => {
       setJsSelection(muya, 0, 2)
       muya.contentState.enterHandler(fakeKeyEvent())
@@ -173,7 +173,7 @@ describeBundled('Muya JavaScript and Rust differential traces', () => {
     const wasm = readFileSync(
       resolve('Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm')
     )
-    await initWasm(wasm)
+    await initWasm({ module_or_path: wasm })
   })
 
   afterEach(() => {

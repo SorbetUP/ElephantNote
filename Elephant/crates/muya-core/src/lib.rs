@@ -1,12 +1,13 @@
 //! DOM-independent core for the Muya replacement.
 //!
 //! The crate owns the document model, Markdown syntax registry, parsing,
-//! serialization, semantic transactions, history, logical selections and view
-//! patches. Structural transactions preserve stable IDs while inserting,
-//! removing, restoring and moving inline subtrees. Browser and Tauri
+//! serialization, semantic transactions, feature editing, history, logical
+//! selections and view patches. Structural transactions preserve stable IDs
+//! while inserting, removing, restoring and moving subtrees. Browser and Tauri
 //! integrations remain adapters around this crate.
 
 pub mod edit;
+pub mod features;
 pub mod history;
 pub mod model;
 pub mod parser;
@@ -16,6 +17,7 @@ pub mod syntax;
 pub mod view;
 
 pub use edit::{Command, EditError, Operation, Transaction, Utf16Range};
+pub use features::table::TableCommand;
 pub use history::History;
 pub use model::{DetachedSubtree, Document, Node, NodeId, NodeKind, SourceRange};
 pub use parser::parse_markdown;

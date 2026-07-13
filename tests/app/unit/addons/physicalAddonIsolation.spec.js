@@ -41,6 +41,16 @@ const REMOVED_BUILTIN_IMPLEMENTATIONS = Object.freeze([
   'aiProviderRouteOwnership.js'
 ])
 
+const REMOVED_CORE_OPTIONAL_DEPENDENCIES = Object.freeze([
+  '@huggingface/transformers',
+  '@sigma/edge-curve',
+  '@wllama/wllama',
+  'graphology',
+  'node-llama-cpp',
+  'sigma',
+  'vectra'
+])
+
 describe('physical addon isolation', () => {
   it('keeps optional renderer implementations out of the builtin addon directory', () => {
     const builtinIndex = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
@@ -102,6 +112,34 @@ describe('physical addon isolation', () => {
     expect(ocrEntry).not.toContain('api.experimental')
     expect(sidecar).toContain('elephant-addon-sidecar-v1')
     expect(sidecar).toContain('"ocr.image"')
+  })
+
+  it('routes chat through installed provider contributions instead of a global RAG client', () => {
+    const chat = read('addons/official/ai-chat/main.js')
+
+    expect(chat).toContain("getContributions?.('ai.providers')")
+    expect(chat).toContain("this.api.resources.get(SEARCH_RESOURCE)")
+    expect(chat).toContain("typeof option.provider.chat !== 'function'")
+    expect(chat).not.toContain("this.call('rag.chat'")
+    expect(chat).not.toContain('Provider id')
+  })
+
+  it('removes package-specific AI and graph libraries from the core package importer', () => {
+    const packageJson = JSON.parse(read('package.json'))
+    for (const dependency of REMOVED_CORE_OPTIONAL_DEPENDENCIES) {
+      expect(packageJson.dependencies).not.toHaveProperty(dependency)
+    }
+  })
+
+  it('removes generic core implementations now owned by AI packages', () => {
+    const core = read('Elephant/backend/tauri/src/lib_min.rs')
+
+    expect(exists('Elephant/backend/tauri/src/rag_prompt.rs')).toBe(false)
+    expect(exists('Elephant/backend/tauri/src/ollama.rs')).toBe(false)
+    expect(core).not.toContain('pub mod rag_prompt;')
+    expect(core).not.toContain('pub mod ollama;')
+    expect(core).not.toContain('tauri_rag_build_prompt')
+    expect(core).not.toContain('tauri_ollama_')
   })
 
   it('uses only the generic native host for package-owned sidecars', () => {

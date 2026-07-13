@@ -124,6 +124,38 @@ const traces = [
       rust.request({ type: 'redo' })
       return [repeated, undone, rust.markdown()]
     }
+  },
+  {
+    name: 'undo and redo strike overlapping linked emphasis',
+    initial: 'alpha **beta** gamma',
+    expected: 'al*p~~ha **be*t~~a** gamma\n',
+    checkpoints: [
+      'al*p~~ha **be*t~~a** gamma\n',
+      'al*pha **be*ta** gamma\n',
+      'al*p~~ha **be*t~~a** gamma\n'
+    ],
+    runJs: async (muya) => {
+      setJsSelection(muya, 0, 2, 10)
+      muya.format('em')
+      setJsSelection(muya, 0, 4, 13)
+      muya.format('del')
+      const overlapped = muya.getMarkdown()
+      muya.undo()
+      const undone = muya.getMarkdown()
+      muya.redo()
+      return [overlapped, undone, muya.getMarkdown()]
+    },
+    runRust: (rust) => {
+      rust.setSelectionBetweenText('alpha ', 2, 'beta', 2)
+      rust.request({ type: 'toggle_emphasis' })
+      rust.setSelectionBetweenText('pha ', 1, 'ta', 1)
+      rust.request({ type: 'toggle_strike' })
+      const overlapped = rust.markdown()
+      rust.request({ type: 'undo' })
+      const undone = rust.markdown()
+      rust.request({ type: 'redo' })
+      return [overlapped, undone, rust.markdown()]
+    }
   }
 ]
 

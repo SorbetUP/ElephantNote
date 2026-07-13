@@ -5,7 +5,8 @@ import {
   fakeKeyEvent,
   initializeRustWasm,
   runDifferentialTrace,
-  setJsSelection
+  setJsSelection,
+  setJsSelectionByText
 } from './rustDifferentialHarness'
 
 const describeBundled = bundled ? describe : describe.skip
@@ -84,6 +85,70 @@ const traces = [
       const undone = rust.markdown()
       rust.request({ type: 'redo' })
       return [formatted, undone, rust.markdown()]
+    }
+  },
+  {
+    name: 'undo and redo an inserted table row',
+    initial: '| A | B |\n| :--- | ---: |\n| one | two |',
+    expected: '| A   | B   |\n|:--- | ---:|\n| one | two |\n|     |     |\n',
+    checkpoints: [
+      '| A   | B   |\n|:--- | ---:|\n| one | two |\n|     |     |\n',
+      '| A   | B   |\n|:--- | ---:|\n| one | two |\n',
+      '| A   | B   |\n|:--- | ---:|\n| one | two |\n|     |     |\n'
+    ],
+    runJs: async (muya) => {
+      setJsSelectionByText(muya, 'one', 0)
+      muya.contentState.editTable({
+        location: 'next',
+        action: 'insert',
+        target: 'row'
+      })
+      const edited = muya.getMarkdown()
+      muya.undo()
+      const undone = muya.getMarkdown()
+      muya.redo()
+      return [edited, undone, muya.getMarkdown()]
+    },
+    runRust: (rust) => {
+      rust.setSelectionByText('one', 0)
+      rust.request({ type: 'insert_table_row_after' })
+      const edited = rust.markdown()
+      rust.request({ type: 'undo' })
+      const undone = rust.markdown()
+      rust.request({ type: 'redo' })
+      return [edited, undone, rust.markdown()]
+    }
+  },
+  {
+    name: 'undo and redo an inserted table column',
+    initial: '| A | B |\n| :--- | ---: |\n| one | two |',
+    expected: '| A   |     | B   |\n|:--- | --- | ---:|\n| one |     | two |\n',
+    checkpoints: [
+      '| A   |     | B   |\n|:--- | --- | ---:|\n| one |     | two |\n',
+      '| A   | B   |\n|:--- | ---:|\n| one | two |\n',
+      '| A   |     | B   |\n|:--- | --- | ---:|\n| one |     | two |\n'
+    ],
+    runJs: async (muya) => {
+      setJsSelectionByText(muya, 'one', 0)
+      muya.contentState.editTable({
+        location: 'next',
+        action: 'insert',
+        target: 'column'
+      })
+      const edited = muya.getMarkdown()
+      muya.undo()
+      const undone = muya.getMarkdown()
+      muya.redo()
+      return [edited, undone, muya.getMarkdown()]
+    },
+    runRust: (rust) => {
+      rust.setSelectionByText('one', 0)
+      rust.request({ type: 'insert_table_column_after' })
+      const edited = rust.markdown()
+      rust.request({ type: 'undo' })
+      const undone = rust.markdown()
+      rust.request({ type: 'redo' })
+      return [edited, undone, rust.markdown()]
     }
   }
 ]

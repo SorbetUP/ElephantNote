@@ -251,7 +251,7 @@ mod tests {
           CrossingMark {
             mark: InlineMarkKind::Strike,
             start_utf16: 3,
-            end_utf16: 9,
+            end_utf16: 11,
           },
         ],
       })

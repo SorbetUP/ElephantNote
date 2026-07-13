@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "branch": "feature/physical-addon-catalog",
+  "version": 1,
+  "branch": "addon-catalog",
   "updatedAt": "2026-07-13T01:35:00Z",
   "addons": [
     {

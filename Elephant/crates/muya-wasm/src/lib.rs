@@ -1,6 +1,4 @@
-use muya_core::{
-  EditorRequest, EditorResponse, EditorSession, ProtocolSnapshot,
-};
+use muya_core::{EditorRequest, EditorResponse, EditorSession, ProtocolSnapshot};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -23,9 +21,7 @@ impl MuyaEditor {
   }
 
   pub fn snapshot_json(&self) -> Result<String, JsValue> {
-    let response = EditorResponse::Snapshot(ProtocolSnapshot::from(
-      self.session.snapshot(),
-    ));
+    let response = EditorResponse::Snapshot(ProtocolSnapshot::from(self.session.snapshot()));
     serde_json::to_string(&response)
       .map_err(|error| JsValue::from_str(&error.to_string()))
   }
@@ -49,9 +45,7 @@ fn handle_json_inner(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use muya_core::{
-    ProtocolCommand, ProtocolErrorCode, EDITOR_PROTOCOL_VERSION,
-  };
+  use muya_core::{ProtocolCommand, ProtocolErrorCode, EDITOR_PROTOCOL_VERSION};
 
   fn request(revision: u64, command: ProtocolCommand) -> String {
     serde_json::to_string(&EditorRequest {
@@ -83,11 +77,7 @@ mod tests {
   #[test]
   fn preserves_semantic_protocol_errors_as_json_responses() {
     let mut session = EditorSession::from_markdown("abc");
-    let json = handle_json_inner(
-      &mut session,
-      &request(4, ProtocolCommand::Undo),
-    )
-    .unwrap();
+    let json = handle_json_inner(&mut session, &request(4, ProtocolCommand::Undo)).unwrap();
     let response: EditorResponse = serde_json::from_str(&json).unwrap();
     assert!(matches!(
       response,

@@ -17,7 +17,9 @@ const orderedSameNodeSelection = (selection) => {
 
 export class MuyaRustInputController {
   constructor(container, bridge, renderer, options = {}) {
-    if (!container?.addEventListener) throw new TypeError('Rust input controller requires a DOM container.')
+    if (!container?.addEventListener) {
+      throw new TypeError('Rust input controller requires a DOM container.')
+    }
     if (!bridge?.dispatch || !bridge?.setSelection) {
       throw new TypeError('Rust input controller requires a MuyaRustBridge.')
     }
@@ -98,6 +100,7 @@ export class MuyaRustInputController {
       this.schedule(() => this.bridge.dispatch(editorCommands.cancelComposition()))
       return
     }
+    if (event.key !== 'Tab') return
 
     const selection = this.readSelection()
     if (!selection) return

@@ -47,9 +47,7 @@ pub mod keybindings;
 pub mod fts;
 #[cfg(not(mobile))]
 pub mod sync;
-pub mod rag_prompt;
 pub mod atomic_features;
-pub mod ollama;
 
 #[cfg(all(test, not(mobile)))]
 mod sync_contract_tests;
@@ -201,15 +199,10 @@ pub fn run() {
       state::tauri_recents_clear,
       state::tauri_keybindings_get,
       state::tauri_keybindings_save,
-      rag_prompt::tauri_rag_build_prompt,
       state::tauri_atomic_features_list,
       state::tauri_atomic_features_get,
       state::tauri_atomic_features_toggle,
       state::tauri_atomic_features_set,
-      ollama::tauri_ollama_status,
-      ollama::tauri_ollama_list,
-      ollama::tauri_ollama_generate,
-      ollama::tauri_ollama_embed,
       vault::commands::tauri_vaults_get,
       vault::commands::tauri_vaults_select_path,
       vault::commands::tauri_vaults_set_active,

@@ -1,3 +1,4 @@
+use crate::knowledge_chat_actions::hybrid_note_search;
 use crate::knowledge_wikis::{
     tauri_knowledge_wiki_accept, tauri_knowledge_wiki_candidates, tauri_knowledge_wiki_generate,
     WikiCandidate,
@@ -617,15 +618,14 @@ pub fn tauri_knowledge_wiki_library_add_candidate(
     clear_candidate_decision(&store, &topic)?;
     let mut paths = source_paths.unwrap_or_default();
     if paths.is_empty() {
-        paths = store
-            .search(&topic, 32)?
+        paths = hybrid_note_search(&store, &topic, 400)?
             .into_iter()
             .map(|hit| hit.relative_path)
             .collect::<Vec<_>>();
     }
-    paths.sort();
-    paths.dedup();
-    paths.truncate(24);
+    let mut seen_paths = HashSet::new();
+    paths.retain(|path| seen_paths.insert(path.clone()));
+    paths.truncate(400);
     let source_titles = paths
         .iter()
         .map(|path| {
@@ -778,9 +778,9 @@ pub async fn tauri_knowledge_wiki_library_add_or_update(
         Some(existing.title.clone()),
         Some(combined_paths),
         sanitize_generation_payload(payload),
-        Some(16),
         Some(80),
-        Some(12),
+        Some(220),
+        Some(22),
     )
     .await?;
 
@@ -830,9 +830,9 @@ pub async fn tauri_knowledge_wiki_library_generate(
         title,
         Some(source_paths),
         sanitize_generation_payload(payload),
-        Some(12),
-        Some(64),
-        Some(10),
+        Some(80),
+        Some(220),
+        Some(22),
     )
     .await?;
     let accepted = tauri_knowledge_wiki_accept(app, generated.draft.id)?;

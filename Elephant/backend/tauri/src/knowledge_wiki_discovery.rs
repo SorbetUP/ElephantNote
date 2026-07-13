@@ -483,7 +483,7 @@ fn cluster_documents(documents: &[DocumentVector], threshold: f32) -> Vec<Cluste
         let best = clusters
             .iter()
             .enumerate()
-            .filter(|(_, cluster)| cluster.members.len() < 80)
+            .filter(|(_, cluster)| cluster.members.len() < 400)
             .map(|(cluster_index, cluster)| {
                 (cluster_index, cosine(&cluster.centroid, &document.vector))
             })
@@ -659,12 +659,12 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
         });
         let source_paths = members
             .iter()
-            .take(24)
+            .take(400)
             .map(|index| documents[*index].path.clone())
             .collect::<Vec<_>>();
         let source_titles = members
             .iter()
-            .take(24)
+            .take(400)
             .map(|index| documents[*index].title.clone())
             .collect::<Vec<_>>();
         candidates.push(SemanticWikiCandidate {

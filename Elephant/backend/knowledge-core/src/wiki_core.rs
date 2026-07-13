@@ -264,9 +264,9 @@ pub fn build_wiki_synthesis_request(
     StructuredModelRequest {
         task: StructuredTask::WriteWikiSection,
         system_prompt: format!(
-            "You synthesize a cited local wiki from supplied note chunks. Return exactly one JSON object and no prose or Markdown fences. The object must use this exact shape:
+            "You write a long-form, rigorous encyclopedia article from the supplied personal notes and, when the web-search tool is available, current reliable web research. Return exactly one JSON object and no prose or Markdown fences. The object must use this exact shape:
 {schema}
-Every summary and section claim must be an object with text and citation_chunk_ids; summary is always an array, never a string. Every factual claim must cite one or more supplied chunk IDs. Never cite a chunk that was not supplied. Do not place citation markers inside text. Do not repeat the same idea across sections. Return no more than {max_sections} sections. related_wikis contains only short concept names suitable for wikilinks, never file paths."
+Treat the result as a Wikipedia-quality page, not a short summary. Build a substantial introduction and as many useful sections as the evidence supports, up to {max_sections}. Prefer 12–24 sections for broad topics and 3–8 developed paragraph-length claims per section. Cover definitions, context, history, core concepts, mechanisms, variants, applications, comparisons, limitations, controversies, practical implications, terminology and chronology when relevant. Avoid filler, repetition and invented precision. Every summary and section claim must be an object with text and citation_chunk_ids; summary is always an array, never a string. Claims grounded in the vault cite one or more supplied chunk IDs. Claims grounded in web research cite one or more exact absolute HTTPS URLs returned by web search in citation_chunk_ids. Never invent a chunk ID or URL. Do not place citation markers inside text. related_wikis contains only short concept names suitable for wikilinks, never file paths."
         ),
         user_prompt: format!(
             "Topic: {}\nRequested title: {}\n\nSources:\n{}",
@@ -275,7 +275,7 @@ Every summary and section claim must be an object with text and citation_chunk_i
             source_text
         ),
         json_schema_name: "elephantnote_wiki_synthesis_v1".into(),
-        max_output_tokens: 6_144,
+        max_output_tokens: 24_576,
     }
 }
 
@@ -340,6 +340,13 @@ impl WikiSynthesis {
     }
 }
 
+fn is_web_citation(value: &str) -> bool {
+    value.starts_with("https://")
+        && !value
+            .chars()
+            .any(|character| character.is_whitespace() || character.is_control())
+}
+
 fn validate_claims(
     section: &str,
     claims: &[WikiClaim],
@@ -361,9 +368,9 @@ fn validate_claims(
             ));
         }
         for chunk_id in &claim.citation_chunk_ids {
-            if !allowed_chunks.contains(chunk_id.as_str()) {
+            if !allowed_chunks.contains(chunk_id.as_str()) && !is_web_citation(chunk_id) {
                 errors.push(format!(
-                    "Claim {index} in `{section}` cites an unknown chunk: {chunk_id}."
+                    "Claim {index} in `{section}` cites an unknown chunk or invalid web URL: {chunk_id}."
                 ));
             }
         }
@@ -605,6 +612,10 @@ fn render_claims(
     for claim in claims {
         let mut references = Vec::new();
         for chunk_id in &claim.citation_chunk_ids {
+            if is_web_citation(chunk_id) {
+                references.push(format!("[Source web]({chunk_id})"));
+                continue;
+            }
             let source = source_by_id
                 .get(chunk_id.as_str())
                 .ok_or_else(|| format!("Unknown source chunk while rendering: {chunk_id}"))?;

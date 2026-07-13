@@ -96,10 +96,15 @@ const applyWikiKnowledgeLayout = ({ nodes = [], edges = [], width = 1800, height
     const angleOffset = ((stableLayoutHash(wiki.id) % 360) / 180) * Math.PI
 
     sourceIds.forEach((id, index) => {
-      const angle = angleOffset + (Math.PI * 2 * index) / Math.max(1, sourceIds.length)
+      const ringCapacity = 36
+      const ring = Math.floor(index / ringCapacity)
+      const ringStart = ring * ringCapacity
+      const membersInRing = Math.min(ringCapacity, sourceIds.length - ringStart)
+      const angle = angleOffset + (Math.PI * 2 * (index - ringStart)) / Math.max(1, membersInRing)
+      const radius = targetRadius + ring * 42
       local.set(id, {
-        x: center.x + Math.cos(angle) * targetRadius,
-        y: center.y + Math.sin(angle) * targetRadius
+        x: center.x + Math.cos(angle) * radius,
+        y: center.y + Math.sin(angle) * radius
       })
     })
 
@@ -107,7 +112,8 @@ const applyWikiKnowledgeLayout = ({ nodes = [], edges = [], width = 1800, height
       edge.type === 'wiki-semantic' && sourceSet.has(edge.source) && sourceSet.has(edge.target)
     )
 
-    for (let iteration = 0; iteration < 80; iteration += 1) {
+    const refinementIterations = sourceIds.length <= 96 ? 36 : 0
+    for (let iteration = 0; iteration < refinementIterations; iteration += 1) {
       const forces = new Map(sourceIds.map((id) => [id, { x: 0, y: 0 }]))
 
       for (const id of sourceIds) {

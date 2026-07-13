@@ -728,6 +728,16 @@ fn thread_start_params(model: &str, cwd: &str) -> Value {
       "sandbox": READ_ONLY_SANDBOX,
       "serviceName": "elephantnote",
       "ephemeral": true,
+      "config": {
+        "web_search": "live",
+        "tools": {
+          "web_search": {
+            "context_size": "high",
+            "allowed_domains": null,
+            "location": null
+          }
+        }
+      },
       "environments": [],
       "selectedCapabilityRoots": []
     })
@@ -754,7 +764,7 @@ fn turn_start_params(
       "approvalPolicy": "never",
       "sandboxPolicy": {
         "type": TURN_READ_ONLY_SANDBOX,
-        "networkAccess": false
+        "networkAccess": true
       }
     });
     if let Some(effort) = normalize_reasoning_effort(reasoning_effort) {
@@ -1370,7 +1380,18 @@ mod tests {
     }
 
     #[test]
-    fn turn_payload_disables_network_access() {
+    fn codex_chat_enables_live_web_search_without_filesystem_writes() {
+        let thread = thread_start_params("gpt-test", "/tmp/chat");
+        assert_eq!(
+            thread.pointer("/config/web_search").and_then(Value::as_str),
+            Some("live")
+        );
+        assert_eq!(
+            thread
+                .pointer("/config/tools/web_search/context_size")
+                .and_then(Value::as_str),
+            Some("high")
+        );
         let params = turn_start_params("thread", "gpt-test", "/tmp/chat", "hello", None);
         assert_eq!(
             params
@@ -1382,7 +1403,7 @@ mod tests {
             params
                 .pointer("/sandboxPolicy/networkAccess")
                 .and_then(Value::as_bool),
-            Some(false)
+            Some(true)
         );
     }
 

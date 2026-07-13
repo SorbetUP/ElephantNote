@@ -1,3 +1,4 @@
+use crate::knowledge_chat_actions::hybrid_note_search;
 use elephantnote_knowledge_core::{
     build_wiki_synthesis_request, collect_wiki_sources, parse_and_render_wiki,
     wiki_draft_from_rendered, DocumentSnapshot, KnowledgeStore, StructuredModelRequest, WikiDraft,
@@ -11,9 +12,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::AppHandle;
 
-const DEFAULT_MAX_DOCUMENTS: usize = 12;
-const DEFAULT_MAX_CHUNKS: usize = 64;
-const DEFAULT_MAX_SECTIONS: usize = 10;
+const DEFAULT_MAX_DOCUMENTS: usize = 64;
+const DEFAULT_MAX_CHUNKS: usize = 192;
+const DEFAULT_MAX_SECTIONS: usize = 20;
 
 static ACTIVE_WIKI_GENERATIONS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
@@ -96,16 +97,16 @@ pub async fn tauri_knowledge_wiki_generate(
         &store,
         &topic,
         source_paths.unwrap_or_default(),
-        max_documents.unwrap_or(DEFAULT_MAX_DOCUMENTS).clamp(1, 50),
+        max_documents.unwrap_or(DEFAULT_MAX_DOCUMENTS).clamp(1, 240),
     )?;
     let sources = select_source_chunks(
         collect_wiki_sources(&documents),
-        max_chunks.unwrap_or(DEFAULT_MAX_CHUNKS).clamp(1, 256),
+        max_chunks.unwrap_or(DEFAULT_MAX_CHUNKS).clamp(1, 800),
     );
     if sources.is_empty() {
         return Err("No indexed source chunks are available for this wiki.".into());
     }
-    let max_sections = max_sections.unwrap_or(DEFAULT_MAX_SECTIONS).clamp(1, 30);
+    let max_sections = max_sections.unwrap_or(DEFAULT_MAX_SECTIONS).clamp(1, 36);
     let request = build_wiki_synthesis_request(&topic, title.as_deref(), &sources, max_sections);
     let payload = with_saved_ai_config(&app, payload);
     let route = selected_wiki_route(&payload)?;
@@ -429,9 +430,10 @@ fn discover_wiki_candidates(
             {
                 return None;
             }
+            let source_count = group.paths.len();
             let mut source_paths = group.paths.into_iter().collect::<Vec<_>>();
             source_paths.sort();
-            source_paths.truncate(DEFAULT_MAX_DOCUMENTS);
+            source_paths.truncate(400);
             let source_titles = source_paths
                 .iter()
                 .filter_map(|path| document_titles.get(path))
@@ -465,27 +467,23 @@ fn discover_wiki_candidates(
             let reason = if group.hashtag_hits >= group.folder_hits
                 && group.hashtag_hits >= group.title_hits
             {
-                format!("{} notes partagent le thème #{}", source_paths.len(), topic)
+                format!("{} notes partagent le thème #{}", source_count, topic)
             } else if group.folder_hits >= group.title_hits {
                 format!(
                     "{} notes forment un groupe de dossier cohérent",
-                    source_paths.len()
+                    source_count
                 )
             } else if phrase_topic {
                 format!(
                     "{} notes partagent le concept spécifique « {} »",
-                    source_paths.len(),
-                    topic
+                    source_count, topic
                 )
             } else {
-                format!(
-                    "{} notes répètent ce concept dans leur titre",
-                    source_paths.len()
-                )
+                format!("{} notes répètent ce concept dans leur titre", source_count)
             };
             let preview = format!(
                 "Synthèse de {} notes autour de {}. Axes probables : {}.",
-                source_paths.len(),
+                source_count,
                 title_for_topic(&topic),
                 suggested_sections.join(", ")
             );
@@ -613,7 +611,8 @@ fn select_documents(
     }
 
     if paths.is_empty() {
-        for hit in store.search(topic, max_documents.saturating_mul(4).clamp(1, 200))? {
+        for hit in hybrid_note_search(store, topic, max_documents.saturating_mul(6).clamp(24, 500))?
+        {
             if seen.insert(hit.relative_path.clone()) {
                 paths.push(hit.relative_path);
                 if paths.len() >= max_documents {
@@ -639,10 +638,22 @@ fn select_documents(
     Ok(documents)
 }
 
+fn compact_wiki_source_text(value: &str, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value.to_string();
+    }
+    let mut output = value.chars().take(max_chars).collect::<String>();
+    output.push('…');
+    output
+}
+
 fn select_source_chunks(
     mut sources: Vec<WikiSourceChunk>,
     max_chunks: usize,
 ) -> Vec<WikiSourceChunk> {
+    for source in &mut sources {
+        source.text = compact_wiki_source_text(&source.text, 1_400);
+    }
     sources.sort_by(|left, right| {
         left.document_path
             .cmp(&right.document_path)

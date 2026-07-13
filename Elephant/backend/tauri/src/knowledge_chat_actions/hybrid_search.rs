@@ -22,8 +22,8 @@ pub(crate) fn exact_note_search(
     if needle.is_empty() {
         return Ok(Vec::new());
     }
-    let limit = limit.clamp(1, 100);
-    let candidate_limit = (limit * 12).clamp(48, 1_200) as i64;
+    let limit = limit.clamp(1, 500);
+    let candidate_limit = (limit * 12).clamp(48, 6_000) as i64;
     let conn = Connection::open(store.database_path()).map_err(|error| error.to_string())?;
     let mut statement = conn
         .prepare(
@@ -73,8 +73,8 @@ pub(crate) fn hybrid_note_search(
     query: &str,
     limit: usize,
 ) -> Result<Vec<KnowledgeSearchHit>, String> {
-    let limit = limit.clamp(1, 100);
-    let candidate_limit = (limit * 5).clamp(20, 300);
+    let limit = limit.clamp(1, 500);
+    let candidate_limit = (limit * 6).clamp(24, 2_400);
     let terms = meaningful_search_terms(query);
     let mut ranked = HashMap::<String, RankedHit>::new();
 
@@ -88,7 +88,7 @@ pub(crate) fn hybrid_note_search(
     for (index, term) in terms.iter().take(10).enumerate() {
         merge_ranked_hits(
             &mut ranked,
-            store.search(term, candidate_limit.min(80))?,
+            store.search(term, candidate_limit.min(500))?,
             0.72 / (1.0 + index as f64 * 0.04),
             "term",
         );

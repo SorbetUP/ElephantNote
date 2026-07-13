@@ -56,21 +56,11 @@
         <button
           type="button"
           class="en-graph-zoom-button"
-          title="Recentrer"
+          title="Ajuster le graphe à la fenêtre"
           @click="resetView"
         >
           <Crosshair class="en-gz-svg" />
         </button>
-        <input
-          type="range"
-          class="en-graph-zoom-slider"
-          min="0.1"
-          max="4"
-          step="0.01"
-          :value="zoomValue"
-          @input="onZoomSlider"
-        >
-        <span class="en-graph-zoom-pct">{{ Math.round(zoomValue * 100) }}%</span>
       </div>
     </div>
 
@@ -481,16 +471,31 @@ import {
   buildGraphFromVaultEntries,
   selectSemanticGraphSource
 } from './semanticGraphViewHelpers'
-import { nodeColor } from '../../graph/graphThemes'
 
 const store = useVaultStore()
 const searchStore = useSearchStore()
 const canvasStore = useCanvasStore()
 
 const NODE_PALETTE = [
-  '#7c3aed', '#3b82f6', '#22d3ee', '#4ade80',
-  '#eab308', '#ec4899', '#ef4444', '#a78bfa'
+  '#7c3aed', '#2563eb', '#0891b2', '#16a34a',
+  '#ca8a04', '#db2777', '#dc2626', '#9333ea',
+  '#0d9488', '#ea580c', '#4f46e5', '#65a30d'
 ]
+
+function stableColorIndex (value) {
+  let hash = 2166136261
+  for (const character of String(value || 'note')) {
+    hash ^= character.charCodeAt(0)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0) % NODE_PALETTE.length
+}
+
+function rgbaFromHex (hex, alpha) {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return `rgba(217,133,69,${alpha})`
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`
+}
 
 const containerRef = ref(null)
 const graphData = ref(null)
@@ -520,7 +525,6 @@ const timelapsePlaying = ref(false)
 const timelapseProgress = ref(0)
 const timelapseSpeed = ref(1)
 const animating = ref(false)
-const zoomValue = ref(1)
 const cardCollapsed = ref(false)
 const cardPos = reactive({ x: null, y: null })
 const cardDragging = ref(false)
@@ -715,19 +719,34 @@ function dimHex (hexColor, target, amount) {
 function buildGraph (data) {
   const graph = new Graph()
   const t = theme.value
-  const { nodes, edges, edgeCounts, maxEdges } = data
+  const { nodes, edges, edgeCounts } = data
+  const wikiIds = nodes
+    .filter((node) => (node.kind || node.type) === 'wiki')
+    .map((node) => node.id)
+    .sort((left, right) => String(left).localeCompare(String(right)))
+  const wikiColorById = new Map(wikiIds.map((id, index) => [id, NODE_PALETTE[index % NODE_PALETTE.length]]))
+  const territoryByNode = new Map(wikiIds.map((id) => [id, wikiColorById.get(id)]))
+  const wikiIdSet = new Set(wikiIds)
+  for (const edge of edges) {
+    if (edge.type !== 'wiki-source') continue
+    const wikiId = wikiIdSet.has(edge.source) ? edge.source : wikiIdSet.has(edge.target) ? edge.target : ''
+    if (!wikiId) continue
+    const noteId = wikiId === edge.source ? edge.target : edge.source
+    if (!territoryByNode.has(noteId)) territoryByNode.set(noteId, wikiColorById.get(wikiId))
+  }
 
   for (const node of nodes) {
     const id = node.id
     const connectivity = (edgeCounts.get(id) || 0) / maxEdges
-    const clusterIdx = node.clusterIndex || 0
     const isWiki = node.kind === 'wiki'
     const baseSize = isWiki ? 5.5 : 2.5 + connectivity * 4 + (node.kind === 'folder' ? 2 : 0)
+    const territoryColor = territoryByNode.get(id)
+    const fallbackColor = NODE_PALETTE[stableColorIndex(node.clusterId || node.relativePath || node.path || node.title || id)]
     graph.addNode(id, {
       x: node.x,
       y: node.y,
       size: baseSize,
-      color: isWiki ? '#d98545' : nodeColor(t, Math.min(1, 0.3 + connectivity), clusterIdx),
+      color: territoryColor || fallbackColor,
       label: truncLabel(node.title, 28),
       fullLabel: node.title,
       connectivity,
@@ -735,6 +754,7 @@ function buildGraph (data) {
       tagIds: node.tags || [],
       data: node,
       isWiki,
+      territoryColor: territoryColor || fallbackColor,
       classified: classifiedNodeIds.value.has(id)
     })
   }
@@ -816,20 +836,21 @@ function drawTerritories (sigma, graph, container) {
     center.x /= points.length
     center.y /= points.length
     const radius = Math.max(64, ...points.map((point) => Math.hypot(point.x - center.x, point.y - center.y))) + 34
+    const territoryColor = wikiAttrs.territoryColor || wikiAttrs.color || '#d98545'
     const gradient = ctx.createRadialGradient(center.x, center.y, radius * 0.12, center.x, center.y, radius)
-    gradient.addColorStop(0, 'rgba(217,133,69,0.13)')
-    gradient.addColorStop(0.72, 'rgba(217,133,69,0.07)')
-    gradient.addColorStop(1, 'rgba(217,133,69,0.015)')
+    gradient.addColorStop(0, rgbaFromHex(territoryColor, 0.16))
+    gradient.addColorStop(0.72, rgbaFromHex(territoryColor, 0.075))
+    gradient.addColorStop(1, rgbaFromHex(territoryColor, 0.012))
     ctx.fillStyle = gradient
     ctx.beginPath()
     ctx.arc(center.x, center.y, radius, 0, Math.PI * 2)
     ctx.fill()
-    ctx.strokeStyle = 'rgba(217,133,69,0.42)'
+    ctx.strokeStyle = rgbaFromHex(territoryColor, 0.48)
     ctx.lineWidth = 1.5
     ctx.setLineDash([7, 7])
     ctx.stroke()
     ctx.setLineDash([])
-    ctx.fillStyle = 'rgba(235,176,122,0.9)'
+    ctx.fillStyle = rgbaFromHex(territoryColor, 0.94)
     ctx.font = '600 12px system-ui, -apple-system, sans-serif'
     ctx.textAlign = 'center'
     ctx.fillText(wikiAttrs.fullLabel || wikiAttrs.label || 'Wiki', center.x, center.y - radius + 20)
@@ -1133,10 +1154,6 @@ function mountSigma () {
   })
   renderer.setCustomBBox({ x: [xMin, xMax], y: [yMin, yMax] })
 
-  renderer.getCamera().on('updated', () => {
-    const state = renderer.getCamera().getState()
-    zoomValue.value = 1 / state.ratio
-  })
 
   hoverRaf = null
   const tickHover = () => {
@@ -1177,9 +1194,9 @@ function mountSigma () {
     deselectNode()
   })
 
+  // The initial deterministic layout is already complete. Never launch the quadratic
+  // force simulation automatically: a 1,000+ note vault must become interactive immediately.
   renderer.refresh()
-  const hasEmbeddingEdges = graph.edges().some((edge) => graph.getEdgeAttribute(edge, 'edgeType') === 'wiki-semantic')
-  if (hasEmbeddingEdges) setTimeout(() => runForceSimulation(1200), 0)
 }
 
 function destroySigma () {
@@ -1209,25 +1226,7 @@ function selectNode (data, nodeId) {
   selectedNode.value = data
   cardCollapsed.value = false
   if (cardPos.x === null) positionCardNearNode(nodeId)
-  if (renderer && graphInstance && graphInstance.hasNode(nodeId)) {
-    const gx = graphInstance.getNodeAttribute(nodeId, 'x')
-    const gy = graphInstance.getNodeAttribute(nodeId, 'y')
-    let xMin = Infinity; let xMax = -Infinity; let yMin = Infinity; let yMax = -Infinity
-    graphInstance.forEachNode((id, attrs) => {
-      if (attrs.x < xMin) xMin = attrs.x
-      if (attrs.x > xMax) xMax = attrs.x
-      if (attrs.y < yMin) yMin = attrs.y
-      if (attrs.y > yMax) yMax = attrs.y
-    })
-    const bboxW = xMax - xMin || 1
-    const bboxH = yMax - yMin || 1
-    const camX = (gx - xMin) / bboxW
-    const camY = (gy - yMin) / bboxH
-    renderer.getCamera().animate(
-      { x: camX, y: camY, ratio: 0.4 },
-      { duration: 520, easing: (k) => 1 - Math.pow(1 - k, 3) }
-    )
-  }
+  // Selecting a note must not rewrite the camera ratio or make the entire graph jump.
   if (renderer) renderer.refresh()
 }
 
@@ -1295,13 +1294,6 @@ function resetView () {
   renderer.getCamera().animatedReset({ duration: 500 })
 }
 
-function onZoomSlider (event) {
-  const val = Number(event.target.value)
-  zoomValue.value = val
-  if (renderer) {
-    renderer.getCamera().animate({ ratio: 1 / val }, { duration: 120 })
-  }
-}
 
 function toggleSection (section) {
   section.open = !section.open
@@ -1339,6 +1331,8 @@ function runForceSimulation (duration = 1500) {
   animating.value = true
   const start = performance.now()
   const nodes = graphInstance.nodes()
+    .filter((id) => graphInstance.getNodeAttribute(id, 'classified') === true || graphInstance.degree(id) > 0)
+    .slice(0, 280)
   if (nodes.length === 0) {
     animating.value = false
     return

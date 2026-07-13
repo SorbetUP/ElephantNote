@@ -11,6 +11,7 @@ pub mod features;
 pub mod history;
 pub mod model;
 pub mod parser;
+pub mod protocol;
 pub mod selection;
 pub mod serializer;
 pub mod session;
@@ -25,6 +26,10 @@ pub use features::{ListCommand, TableCommand, TableNavigationCommand};
 pub use history::{History, HistoryStep};
 pub use model::{DetachedSubtree, Document, Node, NodeId, NodeKind, SourceRange};
 pub use parser::parse_markdown;
+pub use protocol::{
+  EditorRequest, EditorResponse, ProtocolCommand, ProtocolError,
+  ProtocolErrorCode, ProtocolSnapshot, ProtocolUpdate, EDITOR_PROTOCOL_VERSION,
+};
 pub use selection::{Selection, SelectionPoint};
 pub use serializer::to_markdown;
 pub use session::{EditorSession, SessionCommand, SessionSnapshot, SessionUpdate};

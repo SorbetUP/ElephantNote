@@ -21,6 +21,9 @@ import { restorePortableWindowState, savePortableWindowState } from './platform/
 import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
 import { installAddonSystem } from './addons'
+import { activateCoreFeature } from './addons/coreFeatures'
+import { addonPacksCoreFeature } from './addons/builtin/addonProfiles'
+import { excalidrawCoreFeature } from './addons/builtin/excalidraw'
 import { installAddonPermissionConsentGuard } from './addons/permissionConsentGuard'
 import { appDataDir } from '@tauri-apps/api/path'
 
@@ -39,12 +42,8 @@ import './assets/styles/index.css'
 import './assets/styles/printService.css'
 import 'elephant-front/styles/runtime-layout-fixes.css'
 
-const CORE_EXCALIDRAW_ADDON_ID = 'elephant.excalidraw'
-
 const clearBootstrapFileUtilsFallbackForTauri = () => {
-  if (window.__TAURI__ && window.fileUtils?.__elephantnoteBootstrapFallback) {
-    delete window.fileUtils
-  }
+  if (window.__TAURI__ && window.fileUtils?.__elephantnoteBootstrapFallback) delete window.fileUtils
 }
 
 installRendererDiagnostics()
@@ -73,22 +72,16 @@ const bootstrapTauriRuntime = async() => {
     pushDiagnosticLog('info', 'bootstrapTauriRuntime:appDataDir', { userDataPath })
   } catch (error) {
     pushDiagnosticLog('warn', 'bootstrapTauriRuntime:appDataDir fallback', error)
-    window.__MARKTEXT_USER_DATA_PATH__ =
-      window.__MARKTEXT_USER_DATA_PATH__ ||
-      window.path.resolve('/tmp', 'elephantnote')
+    window.__MARKTEXT_USER_DATA_PATH__ = window.__MARKTEXT_USER_DATA_PATH__ || window.path.resolve('/tmp', 'elephantnote')
     window.__MARKTEXT_WINDOW_ID__ = 1
     window.__MARKTEXT_WINDOW_TYPE__ = 'editor'
   }
 
   bootstrapRenderer()
   pushDiagnosticLog('info', 'bootstrapRenderer:done', { env: globalThis.marktext?.env })
-  restorePortableWindowState().catch((error) => {
-    pushDiagnosticLog('warn', 'window-state restore failed', error)
-  })
+  restorePortableWindowState().catch((error) => pushDiagnosticLog('warn', 'window-state restore failed', error))
   window.addEventListener('beforeunload', () => {
-    void savePortableWindowState().catch((error) => {
-      pushDiagnosticLog('warn', 'window-state save failed', error)
-    })
+    void savePortableWindowState().catch((error) => pushDiagnosticLog('warn', 'window-state save failed', error))
   })
 }
 
@@ -102,19 +95,18 @@ const bootstrapForRuntime = async(runtime) => {
   return globalThis.marktext?.env?.type || window.__MARKTEXT_WINDOW_TYPE__ || 'editor'
 }
 
-const ensureCoreExcalidraw = async(addonManager) => {
-  try {
-    const addon = await addonManager.installBuiltin(CORE_EXCALIDRAW_ADDON_ID)
-    if (!addon.enabled) await addonManager.enable(CORE_EXCALIDRAW_ADDON_ID)
-    pushDiagnosticLog('info', '[excalidraw] core editor integration ready', {
-      id: CORE_EXCALIDRAW_ADDON_ID
-    })
-  } catch (error) {
-    pushDiagnosticLog('error', '[excalidraw] core editor integration failed', {
-      id: CORE_EXCALIDRAW_ADDON_ID,
-      error: error?.message || String(error)
-    })
-    throw error
+const installCoreFeatures = async(addonManager) => {
+  for (const feature of [addonPacksCoreFeature, excalidrawCoreFeature]) {
+    try {
+      await activateCoreFeature(addonManager, feature)
+      pushDiagnosticLog('info', '[core-feature] ready', { id: feature.id })
+    } catch (error) {
+      pushDiagnosticLog('error', '[core-feature] failed', {
+        id: feature.id,
+        error: error?.message || String(error)
+      })
+      throw error
+    }
   }
 }
 
@@ -144,9 +136,8 @@ const mountRendererApp = async(runtime, windowType) => {
     }
   })
   installAddonPermissionConsentGuard(addonManager)
-  await ensureCoreExcalidraw(addonManager)
+  await installCoreFeatures(addonManager)
   app.mount('#app')
-
   installStoreDiagnostics()
 }
 
@@ -159,11 +150,7 @@ const startRendererApp = async() => {
 
 void startRendererApp().catch((error) => {
   pushDiagnosticLog('error', 'renderer startup failed', error)
-  setTimeout(() => {
-    throw error
-  }, 0)
+  setTimeout(() => { throw error }, 0)
 })
 
-if (import.meta.hot) {
-  import.meta.hot.accept()
-}
+if (import.meta.hot) import.meta.hot.accept()

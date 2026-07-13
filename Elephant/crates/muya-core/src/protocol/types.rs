@@ -27,6 +27,11 @@ pub enum ProtocolCommand {
   ToggleStrike,
   IndentListItem,
   OutdentListItem,
+  SetTaskChecked {
+    item: NodeId,
+    checked: bool,
+    auto_check: bool,
+  },
   InsertTableRowAfter,
   DeleteTableRow,
   InsertTableColumnAfter,

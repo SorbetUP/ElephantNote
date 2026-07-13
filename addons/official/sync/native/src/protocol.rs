@@ -76,6 +76,33 @@ pub enum ControlMessage {
   Error { message: String },
 }
 
+pub fn message_name(message: &ControlMessage) -> &'static str {
+  match message {
+    ControlMessage::PairRequest(_) => "pairRequest",
+    ControlMessage::PairAccepted(_) => "pairAccepted",
+    ControlMessage::SyncOpen(_) => "syncOpen",
+    ControlMessage::SyncHello(_) => "syncHello",
+    ControlMessage::SyncPlan(_) => "syncPlan",
+    ControlMessage::ReadyForUploads { .. } => "readyForUploads",
+    ControlMessage::UploadsApplied { .. } => "uploadsApplied",
+    ControlMessage::TransfersComplete { .. } => "transfersComplete",
+    ControlMessage::SyncFinish { .. } => "syncFinish",
+    ControlMessage::SyncComplete { .. } => "syncComplete",
+    ControlMessage::Error { .. } => "error",
+  }
+}
+
+pub fn expect_control(message: ControlMessage, expected: &str) -> Result<ControlMessage, String> {
+  if let ControlMessage::Error { message } = message {
+    return Err(message);
+  }
+  let actual = message_name(&message);
+  if actual != expected {
+    return Err(format!("unexpected sync message: expected {expected}, received {actual}"));
+  }
+  Ok(message)
+}
+
 pub async fn write_control(send: &mut SendStream, message: &ControlMessage) -> Result<(), String> {
   let bytes = serde_json::to_vec(message).map_err(|error| error.to_string())?;
   if bytes.len() > MAX_CONTROL_FRAME {
@@ -125,4 +152,23 @@ pub async fn read_file_header(recv: &mut RecvStream) -> Result<FileHeader, Strin
     .await
     .map_err(|error| format!("invalid file header: {error}"))?;
   serde_json::from_slice(&bytes).map_err(|error| format!("invalid file header: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn control_message_names_are_stable() {
+    let message = ControlMessage::ReadyForUploads { count: 3 };
+    assert_eq!(message_name(&message), "readyForUploads");
+    assert!(expect_control(message, "readyForUploads").is_ok());
+  }
+
+  #[test]
+  fn unexpected_control_messages_are_rejected() {
+    let message = ControlMessage::UploadsApplied { count: 1 };
+    let error = expect_control(message, "readyForUploads").unwrap_err();
+    assert!(error.contains("expected readyForUploads"));
+  }
 }

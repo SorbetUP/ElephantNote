@@ -116,8 +116,9 @@ const validateIsolatedEntry = async (entry, manifest, source) => {
 
 const catalog = await readJson('catalog.json')
 if (catalog.version !== 1) fail(`unsupported catalogue version ${catalog.version}`)
-if (catalog.branch !== 'addon-catalog') fail('branch marker must be addon-catalog')
+if (!['addon-catalog', 'integrated'].includes(catalog.branch)) fail('branch marker must be addon-catalog or integrated')
 if (!Array.isArray(catalog.addons) || catalog.addons.length === 0) fail('catalogue must contain at least one addon')
+const packageRoot = safePath(catalog.packageRoot || 'addons', 'packageRoot')
 
 const ids = new Set()
 const slugs = new Set()
@@ -141,7 +142,7 @@ for (const entry of catalog.addons) {
   if (!firstPartyId && entry.official === true) fail(`${entry.id} cannot use the official first-party marker`)
   if (entry.official === true) officialCount += 1
 
-  const prefix = `addons/${entry.slug}/`
+  const prefix = `${packageRoot}/${entry.slug}/`
   const manifestPath = safePath(entry.manifestPath, `${entry.id}.manifestPath`)
   const entryPath = safePath(entry.entryPath, `${entry.id}.entryPath`)
   entry.entryPath = entryPath

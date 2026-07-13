@@ -11,8 +11,10 @@
 5. `edit`: semantic commands, atomic operations and transactions.
 6. `features`: isolated structural editing for complex constructs such as lists and tables.
 7. `selection`: logical selection independent from DOM ranges.
-8. `history`: invertible transactions and typing groups.
+8. `history`: invertible transactions, undo/redo and composition groups.
 9. `view`: logical patches consumed by the browser adapter.
+10. `session`: revisioned document, selection, history and command dispatch.
+11. `protocol`: versioned serializable requests, responses, patches and errors.
 
 ## Current executable parser slice
 
@@ -54,10 +56,14 @@ The model-level editing layer currently contains:
 - safe removal of fully covered inline subtrees between those endpoints;
 - `InsertText`, `DeleteBackward` and `InsertParagraph` commands;
 - `GraphemeCommand::DeleteBackward`, which removes one extended Unicode grapheme and delegates structural Backspace at offset zero;
-- `ToggleStrong`, `ToggleEmphasis` and `ToggleStrike` commands for same-text-node selections;
-- complete unwrapping when an entire single-text mark is selected;
+- `MarkCommand::ToggleStrong`, `ToggleEmphasis` and `ToggleStrike`;
+- complete and partial mark unwrapping for prefix, suffix and middle selections;
+- mark application across fully selected top-level inline subtrees whose endpoints live in different nested wrappers;
+- stable movement and exact undo restoration of nested marks, links and text nodes;
 - plain and rich paragraph splitting;
 - paragraph splitting from inside nested inline wrappers by cloning only the right-side wrapper chain;
+- `ParagraphBoundaryCommand::InsertParagraph` at the start or end of a marked text node without creating empty wrappers;
+- boundary-aware splitting for both document paragraphs and list items;
 - movement of following inline subtrees at every nesting level without changing existing IDs;
 - plain and rich paragraph joining;
 - list-item splitting for unordered, ordered and task lists;
@@ -83,13 +89,42 @@ The model-level editing layer currently contains:
 - detachable subtree snapshots with stable IDs and parent/child topology;
 - invertible subtree removal, restoration and movement;
 - transactions applied to a cloned document before commit, preventing partially applied failures;
-- revision increments on successful transactions;
+- revision increments on successful document mutations;
 - bounded transaction-based undo and redo history;
+- IME/composition groups that commit as one undo entry or cancel atomically;
 - ordered logical view patches, including subtree restoration and movement patches.
 
-Structural undo and redo restore the same node IDs, topology, inline order, list nesting and table structure. Nested splits currently reject caret positions exactly at the start or end of a marked text node until empty-wrapper normalization is introduced. Cross-node replacement requires both endpoint text nodes to be direct siblings in the same container. Selection endpoints inside different nested marks, partial mark unwrapping, IME grouping and DOM patch application remain future slices.
+Structural undo and redo restore the same node IDs, topology, inline order, list nesting and table structure. Cross-node text replacement still requires direct sibling endpoint texts. Cross-wrapper mark application currently requires both boundary top-level subtrees to be fully selected; arbitrary partial boundary text across unrelated wrapper chains remains a later slice.
 
 The parser, serializer and editing slices have Rust unit tests. They have not yet passed full differential characterization against the original Muya JavaScript behavior, so they are not eligible runtime replacements yet.
+
+## Revisioned editor session
+
+`EditorSession` owns one `Document`, logical `Selection` and `History` instance. Its public dispatcher:
+
+- rejects commands whose `expected_revision` does not match the document revision;
+- validates browser-provided UTF-16 selection boundaries;
+- routes core, mark, grapheme, list, table and paragraph-boundary commands;
+- keeps selection-only navigation out of document history and does not increment revision for it;
+- returns forward patches for edits and inverse patches for undo, redo and cancelled composition;
+- exposes explicit snapshots only when the adapter needs full Markdown recovery;
+- creates an addressable empty paragraph when imported Markdown has no editable text node.
+
+The session is the intended runtime boundary. Per-keystroke Tauri IPC remains forbidden; the session is designed to live in-process with the WebView through a future WASM adapter.
+
+## Versioned adapter protocol
+
+Protocol version `1` provides serializable:
+
+- `EditorRequest` with protocol version, expected revision and typed command;
+- `EditorResponse` variants for snapshot, update and error;
+- stable command tags such as `insert_text`, `delete_backward`, `toggle_strong`, `next_table_cell` and composition lifecycle events;
+- stable `ViewPatch` tags such as `replace_text`, `insert_node`, `move_node` and `remove_node`;
+- structured error codes including `revision_mismatch` and `invalid_utf16_boundary`.
+
+The protocol routes high-level behavior to the modern engines: Backspace uses grapheme deletion, formatting uses `MarkCommand`, and Enter falls back to `ParagraphBoundaryCommand` when a normal split reaches a mark boundary.
+
+This protocol is not yet wired to JavaScript or compiled as WASM. It is a tested contract for that adapter, not a runtime cutover.
 
 ## Markdown construction catalogue
 
@@ -129,9 +164,9 @@ A feature's syntax recognizer must not own editing, rendering or DOM behavior. C
 
 The browser adapter remains responsible for:
 
-- keyboard, beforeinput and composition events;
-- mapping physical Tab/Shift+Tab and Backspace events to semantic Rust commands;
-- DOM creation and logical patch application;
+- keyboard, `beforeinput` and composition events;
+- mapping physical Tab/Shift+Tab and Backspace events to protocol commands;
+- DOM creation and ordered logical patch application;
 - browser `Selection` and `Range` conversion;
 - geometry, scrolling and floating widgets;
 - asynchronous image, KaTeX and Mermaid integration.
@@ -149,6 +184,7 @@ A JavaScript capability is removed only when its complete Rust slice is active:
 5. selection transformation;
 6. undo/redo behavior;
 7. view patches;
-8. differential characterization against original Muya.
+8. differential characterization against original Muya;
+9. activation through the browser adapter.
 
 File-by-file translations remain useful for inventory and parity, but runtime cutover is performed capability by capability.

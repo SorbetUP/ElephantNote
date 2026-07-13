@@ -38,6 +38,14 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
     }
   }
 
+  async scanNativeVault() {
+    return await this.callNativeService('sync.scan', {}, { timeoutMs: 120_000 })
+  }
+
+  async buildNativePlan(params = {}) {
+    return await this.callNativeService('sync.plan', params, { timeoutMs: 120_000 })
+  }
+
   async onload(api) {
     await super.onload(api)
     const started = await this.startNativeService()
@@ -46,7 +54,10 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
       start: () => this.startNativeService(),
       status: () => this.nativeStatus(),
       endpoint: () => this.callNativeService('sync.endpoint'),
-      stop: () => this.stopNativeService()
+      scan: () => this.scanNativeVault(),
+      plan: (params = {}) => this.buildNativePlan(params),
+      stop: () => this.stopNativeService(),
+      capabilities: Object.freeze(['endpoint', 'manifest', 'plan'])
     }))
     api.app.emit('elephantnote:sync-native-service-ready', { started, status })
   }

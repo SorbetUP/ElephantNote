@@ -1,6 +1,9 @@
 use serde::Serialize;
-use std::fs;
-use std::path::Path;
+use std::{
+  fs,
+  io::ErrorKind,
+  path::{Path, PathBuf},
+};
 
 use crate::manifest::safe_join;
 use crate::plan::{PreserveSpec, SyncPlan};
@@ -14,21 +17,81 @@ pub struct LocalApplySummary {
   pub directories_deleted: usize,
 }
 
+fn ensure_no_symlink_components(root: &Path, path: &Path, include_leaf: bool) -> Result<(), String> {
+  let relative = path
+    .strip_prefix(root)
+    .map_err(|_| "local Sync operation escaped the vault root".to_string())?;
+  let mut current = PathBuf::from(root);
+  let components = relative.components().collect::<Vec<_>>();
+  let limit = if include_leaf {
+    components.len()
+  } else {
+    components.len().saturating_sub(1)
+  };
+
+  for component in components.into_iter().take(limit) {
+    current.push(component.as_os_str());
+    match fs::symlink_metadata(&current) {
+      Ok(metadata) if metadata.file_type().is_symlink() => {
+        return Err(format!(
+          "local Sync operation crosses a symbolic link: {}",
+          current.display()
+        ));
+      }
+      Ok(metadata) if !metadata.is_dir() && current != path => {
+        return Err(format!(
+          "local Sync operation parent is not a directory: {}",
+          current.display()
+        ));
+      }
+      Ok(_) => {}
+      Err(error) if error.kind() == ErrorKind::NotFound => break,
+      Err(error) => return Err(error.to_string()),
+    }
+  }
+  Ok(())
+}
+
 fn preserve_paths(root: &Path, items: &[PreserveSpec]) -> Result<usize, String> {
   let mut preserved = 0;
   for item in items {
     let source = safe_join(root, &item.source_path)?;
-    if !source.exists() {
-      continue;
+    ensure_no_symlink_components(root, &source, true)?;
+    let source_metadata = match fs::symlink_metadata(&source) {
+      Ok(metadata) => metadata,
+      Err(error) if error.kind() == ErrorKind::NotFound => continue,
+      Err(error) => return Err(error.to_string()),
+    };
+    if source_metadata.file_type().is_symlink() {
+      return Err(format!(
+        "local Sync preserve source is a symbolic link: {}",
+        item.source_path
+      ));
     }
+
     let target = safe_join(root, &item.target_path)?;
+    ensure_no_symlink_components(root, &target, false)?;
+    if let Ok(metadata) = fs::symlink_metadata(&target) {
+      if metadata.file_type().is_symlink() {
+        return Err(format!(
+          "local Sync preserve target is a symbolic link: {}",
+          item.target_path
+        ));
+      }
+    }
     if let Some(parent) = target.parent() {
       fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+      ensure_no_symlink_components(root, &target, false)?;
     }
-    if source.is_dir() {
+    if source_metadata.is_dir() {
       fs::create_dir_all(&target).map_err(|error| error.to_string())?;
-    } else {
+    } else if source_metadata.is_file() {
       fs::copy(&source, &target).map_err(|error| error.to_string())?;
+    } else {
+      return Err(format!(
+        "local Sync preserve source is not a regular file or directory: {}",
+        item.source_path
+      ));
     }
     preserved += 1;
   }
@@ -39,9 +102,22 @@ fn create_directories(root: &Path, directories: &[String]) -> Result<usize, Stri
   let mut created = 0;
   for relative in directories {
     let path = safe_join(root, relative)?;
-    if !path.exists() {
-      fs::create_dir_all(path).map_err(|error| error.to_string())?;
-      created += 1;
+    ensure_no_symlink_components(root, &path, true)?;
+    match fs::symlink_metadata(&path) {
+      Ok(metadata) if metadata.file_type().is_symlink() => {
+        return Err(format!("local Sync directory is a symbolic link: {relative}"));
+      }
+      Ok(metadata) if !metadata.is_dir() => {
+        return Err(format!("local Sync directory path is occupied by a file: {relative}"));
+      }
+      Ok(_) => {}
+      Err(error) if error.kind() == ErrorKind::NotFound => {
+        ensure_no_symlink_components(root, &path, false)?;
+        fs::create_dir_all(&path).map_err(|error| error.to_string())?;
+        ensure_no_symlink_components(root, &path, true)?;
+        created += 1;
+      }
+      Err(error) => return Err(error.to_string()),
     }
   }
   Ok(created)
@@ -51,9 +127,18 @@ fn delete_files(root: &Path, paths: &[String]) -> Result<usize, String> {
   let mut deleted = 0;
   for relative in paths {
     let path = safe_join(root, relative)?;
-    if path.is_file() {
-      fs::remove_file(path).map_err(|error| error.to_string())?;
-      deleted += 1;
+    ensure_no_symlink_components(root, &path, true)?;
+    match fs::symlink_metadata(&path) {
+      Ok(metadata) if metadata.file_type().is_symlink() => {
+        return Err(format!("local Sync refuses to delete a symbolic link: {relative}"));
+      }
+      Ok(metadata) if metadata.is_file() => {
+        fs::remove_file(path).map_err(|error| error.to_string())?;
+        deleted += 1;
+      }
+      Ok(_) => {}
+      Err(error) if error.kind() == ErrorKind::NotFound => {}
+      Err(error) => return Err(error.to_string()),
     }
   }
   Ok(deleted)
@@ -65,9 +150,20 @@ fn delete_empty_directories(root: &Path, paths: &[String]) -> Result<usize, Stri
   let mut deleted = 0;
   for relative in paths {
     let path = safe_join(root, &relative)?;
-    if path.is_dir() && path.read_dir().map_err(|error| error.to_string())?.next().is_none() {
-      fs::remove_dir(path).map_err(|error| error.to_string())?;
-      deleted += 1;
+    ensure_no_symlink_components(root, &path, true)?;
+    match fs::symlink_metadata(&path) {
+      Ok(metadata) if metadata.file_type().is_symlink() => {
+        return Err(format!("local Sync refuses to delete a symbolic link: {relative}"));
+      }
+      Ok(metadata) if metadata.is_dir() => {
+        if path.read_dir().map_err(|error| error.to_string())?.next().is_none() {
+          fs::remove_dir(path).map_err(|error| error.to_string())?;
+          deleted += 1;
+        }
+      }
+      Ok(_) => {}
+      Err(error) if error.kind() == ErrorKind::NotFound => {}
+      Err(error) => return Err(error.to_string()),
     }
   }
   Ok(deleted)
@@ -86,7 +182,6 @@ pub fn apply_local_plan(root: &Path, plan: &SyncPlan) -> Result<LocalApplySummar
 mod tests {
   use super::*;
   use crate::plan::PreserveSpec;
-  use std::path::PathBuf;
 
   fn temp_root(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -139,5 +234,28 @@ mod tests {
     };
     assert!(apply_local_plan(&root, &plan).is_err());
     let _ = fs::remove_dir_all(root);
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn refuses_operations_through_a_symlinked_parent() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_root("symlink");
+    let outside = temp_root("outside");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join("secret.md"), "outside").unwrap();
+    symlink(&outside, root.join("Notes")).unwrap();
+
+    let plan = SyncPlan {
+      delete_files_local: vec!["Notes/secret.md".to_string()],
+      ..SyncPlan::default()
+    };
+    assert!(apply_local_plan(&root, &plan).is_err());
+    assert!(outside.join("secret.md").is_file());
+
+    let _ = fs::remove_dir_all(root);
+    let _ = fs::remove_dir_all(outside);
   }
 }

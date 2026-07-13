@@ -68,6 +68,24 @@ jobs:
           done
           find build/out/addons/releases -name '*.enaddon' -print -exec unzip -t {} \; 2>/dev/null || true
 
+      - name: Package Android and iOS Code execution variants
+        shell: bash
+        run: |
+          set -o pipefail
+          node --check addons/official/code-execution/main.mobile.js
+          : > mobile-addon-packages.txt
+          for platform in android-aarch64 android-x86_64 ios-aarch64 ios-x86_64
+          do
+            node build/scripts/build-mobile-addon-package.mjs \
+              addons/official/code-execution \
+              "$platform" \
+              2>&1 | tee -a mobile-addon-packages.txt
+          done
+          find build/out/addons/releases/elephant.code-execution -name '*-android-*.enaddon' -o -name '*-ios-*.enaddon' | sort | while read -r archive
+          do
+            unzip -t "$archive"
+          done
+
       - uses: ./.github/actions/setup
 
       - name: Run focused addon and settings tests
@@ -126,9 +144,11 @@ jobs:
             addon-tests.txt
             trusted-addon-package.txt
             physical-addon-packages.txt
+            mobile-addon-packages.txt
             addon-build.txt
             build/addons/*.enaddon
             build/out/addons/releases/**/*.enaddon
+            build/out/addons/releases/**/*.json
           if-no-files-found: ignore
 
   validate-addon-rust:
@@ -161,6 +181,7 @@ jobs:
             addon_registry_view::tests \
             addon_sidecars::tests \
             addon_runtime_access::tests \
+            addon_assets::tests \
             addon_note_access::tests \
             addon_http_access::tests
           do

@@ -33,7 +33,7 @@ pub struct PairingInvite {
   pub security: Value,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct NewInvite {
   pub invite: PairingInvite,
   pub pending: PendingInvite,

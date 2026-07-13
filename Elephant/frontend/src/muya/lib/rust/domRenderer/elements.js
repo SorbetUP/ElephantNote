@@ -54,6 +54,8 @@ const createInlineElement = (ownerDocument, value) => {
       return ownerDocument.createElement('strong')
     case 'strike':
       return ownerDocument.createElement('del')
+    case 'mark_fragment':
+      return createMarkFragmentElement(ownerDocument, value.mark)
     case 'code_span':
       return ownerDocument.createElement('code')
     case 'link':
@@ -73,6 +75,19 @@ const createInlineElement = (ownerDocument, value) => {
   }
 }
 
+const createMarkFragmentElement = (ownerDocument, mark) => {
+  switch (mark) {
+    case 'emphasis':
+      return ownerDocument.createElement('em')
+    case 'strong':
+      return ownerDocument.createElement('strong')
+    case 'strike':
+      return ownerDocument.createElement('del')
+    default:
+      return ownerDocument.createElement('span')
+  }
+}
+
 const applyIntrinsicContent = (element, node) => {
   const kind = node.kind.value || {}
   applyInlineContent(element, kind)
@@ -87,6 +102,11 @@ const applyInlineContent = (element, kind) => {
       break
     case 'escaped':
       element.textContent = kind.value || ''
+      break
+    case 'mark_fragment':
+      element.setAttribute('data-muya-rust-mark', kind.mark || '')
+      element.setAttribute('data-muya-rust-mark-group', String(kind.group ?? ''))
+      element.setAttribute('data-muya-rust-mark-edge', kind.edge || '')
       break
     case 'code_span':
       element.textContent = kind.code || ''

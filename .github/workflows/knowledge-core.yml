@@ -2,122 +2,270 @@ name: Knowledge Core
 
 on:
   pull_request:
+    paths:
+      - 'Elephant/backend/knowledge-core/**'
+      - 'Elephant/backend/tauri/Cargo.toml'
+      - 'Elephant/backend/tauri/src/chat_runtime.rs'
+      - 'Elephant/backend/tauri/src/knowledge*.rs'
+      - 'Elephant/backend/tauri/src/lib_min.rs'
+      - 'Elephant/frontend/app/services/elephantnoteClient/domainClients.js'
+      - 'Elephant/frontend/app/stores/searchStore.js'
+      - 'Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js'
+      - 'Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
+      - 'Elephant/frontend/src/renderer/src/platform/runtimeLogShim.js'
+      - 'Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js'
+      - 'Elephant/frontend/src/renderer/src/platform/tauriSearchRuntimeGuards.js'
+      - 'Elephant/frontend/app/components/views/GraphView.vue'
+      - 'Elephant/frontend/app/components/views/graphNavigationHelpers.js'
+      - 'Elephant/frontend/app/components/views/semanticGraphViewHelpers.js'
+      - 'tests/app/unit/platform/installKnowledgeRuntimeBridge.spec.js'
+      - 'tests/app/unit/platform/knowledgeRuntimeClient.spec.js'
+      - 'tests/app/unit/platform/runtimeLogShim.spec.js'
+      - 'tests/app/unit/views/graphNavigationHelpers.spec.js'
+      - '.github/workflows/knowledge-core.yml'
+  push:
+    branches:
+      - develop
+      - main
+      - feature/rust-knowledge-core
+    paths:
+      - 'Elephant/backend/knowledge-core/**'
+      - 'Elephant/backend/tauri/Cargo.toml'
+      - 'Elephant/backend/tauri/src/chat_runtime.rs'
+      - 'Elephant/backend/tauri/src/knowledge*.rs'
+      - 'Elephant/backend/tauri/src/lib_min.rs'
+      - 'Elephant/frontend/app/services/elephantnoteClient/domainClients.js'
+      - 'Elephant/frontend/app/stores/searchStore.js'
+      - 'Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js'
+      - 'Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js'
+      - 'Elephant/frontend/src/renderer/src/platform/runtimeLogShim.js'
+      - 'Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js'
+      - 'Elephant/frontend/src/renderer/src/platform/tauriSearchRuntimeGuards.js'
+      - 'Elephant/frontend/app/components/views/GraphView.vue'
+      - 'Elephant/frontend/app/components/views/graphNavigationHelpers.js'
+      - 'Elephant/frontend/app/components/views/semanticGraphViewHelpers.js'
+      - 'tests/app/unit/platform/installKnowledgeRuntimeBridge.spec.js'
+      - 'tests/app/unit/platform/knowledgeRuntimeClient.spec.js'
+      - 'tests/app/unit/platform/runtimeLogShim.spec.js'
+      - 'tests/app/unit/views/graphNavigationHelpers.spec.js'
+      - '.github/workflows/knowledge-core.yml'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: knowledge-core-metadata-${{ github.event.pull_request.number || github.ref }}
+  group: knowledge-core-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  apply-wiki-metadata-fix:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.ref == 'assistant/wiki-organization-continuation'
-    runs-on: ubuntu-24.04
+  rust-core:
+    name: Rust core tests and coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: assistant/wiki-organization-continuation
-          fetch-depth: 0
-
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt,llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Apply persisted metadata refresh fix and regression test
+      - name: Check formatting
+        run: cargo fmt --manifest-path Elephant/backend/knowledge-core/Cargo.toml -- --check
+
+      - name: Require a real Rust test suite
+        shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('Elephant/backend/tauri/src/knowledge_wiki_library.rs')
-          source = path.read_text()
-          old_upsert = '''               source_titles_json=excluded.source_titles_json,
-               score=excluded.score,
-               origin=excluded.origin,
-'''
-          new_upsert = '''               source_titles_json=excluded.source_titles_json,
-               score=excluded.score,
-               metadata_json=excluded.metadata_json,
-               origin=excluded.origin,
-'''
-          if old_upsert in source:
-              source = source.replace(old_upsert, new_upsert, 1)
-          elif new_upsert not in source:
-              raise SystemExit('saved-candidate UPSERT block not found')
-
-          marker = '''    #[test]
-    fn candidate_rejection_is_persisted_and_can_be_cleared() {
-'''
-          test = '''    #[test]
-    fn saved_candidate_refresh_updates_quality_metadata() {
-        let root = temporary_vault("metadata-refresh");
-        fs::create_dir_all(&root).expect("create temporary vault");
-        let store = KnowledgeStore::open(&root).expect("open knowledge store");
-        let mut item = WikiLibraryItem {
-            id: candidate_id("Rust"),
-            kind: "suggestion".into(),
-            status: "semantic".into(),
-            title: "Rust".into(),
-            topic: "Rust".into(),
-            excerpt: "Rust notes".into(),
-            reason: "Initial community".into(),
-            preview: "Rust notes".into(),
-            suggested_sections: vec!["Ownership".into()],
-            source_titles: vec!["Rust guide".into()],
-            path: None,
-            source_paths: vec!["Notes/Rust.md".into()],
-            score: 3,
-            core_source_count: 2,
-            confidence: 0.42,
-            distinctiveness: 0.31,
-            model_id: String::new(),
-            markdown: String::new(),
-            draft_id: None,
-            citations_count: 0,
-            updated_at: 1,
-        };
-        persist_saved_candidate(&store, &item, "semantic").expect("persist candidate");
-
-        item.score = 9;
-        item.core_source_count = 7;
-        item.confidence = 0.81;
-        item.distinctiveness = 0.66;
-        persist_saved_candidate(&store, &item, "semantic").expect("refresh candidate");
-
-        let refreshed = saved_candidate_items(&store)
-            .expect("read candidates")
-            .into_iter()
-            .find(|candidate| candidate.topic == "Rust")
-            .expect("refreshed candidate");
-        assert_eq!(refreshed.score, 9);
-        assert_eq!(refreshed.core_source_count, 7);
-        assert!((refreshed.confidence - 0.81).abs() < 0.0001);
-        assert!((refreshed.distinctiveness - 0.66).abs() < 0.0001);
-
-        drop(store);
-        fs::remove_dir_all(root).expect("remove temporary vault");
-    }
-
-'''
-          if 'fn saved_candidate_refresh_updates_quality_metadata()' not in source:
-              if marker not in source:
-                  raise SystemExit('candidate test insertion point not found')
-              source = source.replace(marker, test + marker, 1)
-          path.write_text(source)
-          PY
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-
-      - name: Commit source correction
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add Elephant/backend/tauri/src/knowledge_wiki_library.rs
-          if git diff --cached --quiet; then
-            exit 0
+          set -o pipefail
+          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --list 2>&1 | tee knowledge-core-test-list.log
+          test_count="$(grep -Ec ': test$' knowledge-core-test-list.log || true)"
+          echo "Knowledge core tests discovered: ${test_count}"
+          if [ "${test_count}" -lt 34 ]; then
+            echo "Expected at least 34 knowledge-core tests, found ${test_count}." >&2
+            exit 1
           fi
-          git commit -m "fix(wiki): refresh persisted proposal quality metadata"
-          git push origin HEAD:assistant/wiki-organization-continuation
 
-      - name: Verify correction is present
+      - name: Compile all Rust targets
+        shell: bash
         run: |
-          grep -F 'metadata_json=excluded.metadata_json' Elephant/backend/tauri/src/knowledge_wiki_library.rs
-          grep -F 'fn saved_candidate_refresh_updates_quality_metadata()' Elephant/backend/tauri/src/knowledge_wiki_library.rs
+          set -o pipefail
+          cargo check --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets --message-format short 2>&1 | tee knowledge-core-check.log
+
+      - name: Run all Rust tests with logs visible
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml --all-targets -- --nocapture 2>&1 | tee knowledge-core-test.log
+
+      - name: Enforce Rust line coverage
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo llvm-cov \
+            --manifest-path Elephant/backend/knowledge-core/Cargo.toml \
+            --all-targets \
+            --fail-under-lines 65 \
+            --summary-only 2>&1 | tee knowledge-core-coverage.log
+
+      - name: Verify rebuild logs are really emitted
+        shell: bash
+        run: |
+          set -o pipefail
+          RUST_TEST_THREADS=1 cargo test \
+            --manifest-path Elephant/backend/knowledge-core/Cargo.toml \
+            pipeline::tests::rebuild_is_incremental_and_ignores_hidden_files \
+            -- --exact --nocapture 2>&1 | tee knowledge-runtime-log-smoke.log
+          grep -F '[Knowledge][Rebuild] start' knowledge-runtime-log-smoke.log
+          grep -F '[Knowledge][Rebuild] file:indexed' knowledge-runtime-log-smoke.log
+          grep -F '[Knowledge][Rebuild] file:unchanged' knowledge-runtime-log-smoke.log
+          grep -F '[Knowledge][Rebuild] complete' knowledge-runtime-log-smoke.log
+
+      - name: Verify Wiki territory projection logs are really emitted
+        shell: bash
+        run: |
+          set -o pipefail
+          RUST_TEST_THREADS=1 cargo test \
+            --manifest-path Elephant/backend/knowledge-core/Cargo.toml \
+            graph::tests::graph_projection_includes_wiki_node_source_edge_and_territory \
+            -- --exact --nocapture 2>&1 | tee knowledge-wiki-graph-log-smoke.log
+          grep -F '[Knowledge][Graph] projection:start' knowledge-wiki-graph-log-smoke.log
+          grep -F '[Knowledge][Graph] data:loaded' knowledge-wiki-graph-log-smoke.log
+          grep -F '[Knowledge][Graph][Wiki] territory:projected' knowledge-wiki-graph-log-smoke.log
+          grep -F '[Knowledge][Graph][Wiki] projection:complete' knowledge-wiki-graph-log-smoke.log
+          grep -F '[Knowledge][Graph] projection:complete' knowledge-wiki-graph-log-smoke.log
+
+      - name: Upload Rust diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: knowledge-core-diagnostics
+          path: |
+            knowledge-core-check.log
+            knowledge-core-test-list.log
+            knowledge-core-test.log
+            knowledge-core-coverage.log
+            knowledge-runtime-log-smoke.log
+            knowledge-wiki-graph-log-smoke.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  tauri-contracts:
+    name: Tauri knowledge integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Require Tauri knowledge contract tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test \
+            --manifest-path Elephant/backend/tauri/Cargo.toml \
+            --no-default-features \
+            knowledge \
+            -- --list 2>&1 | tee tauri-knowledge-test-list.log
+          test_count="$(grep -Ec ': test$' tauri-knowledge-test-list.log || true)"
+          echo "Tauri knowledge tests discovered: ${test_count}"
+          if [ "${test_count}" -lt 10 ]; then
+            echo "Expected at least 10 Tauri knowledge tests, found ${test_count}." >&2
+            exit 1
+          fi
+
+      - name: Run Tauri knowledge integration tests and verify terminal output
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test \
+            --manifest-path Elephant/backend/tauri/Cargo.toml \
+            --no-default-features \
+            knowledge \
+            -- --nocapture 2>&1 | tee tauri-knowledge-test.log
+          grep -F '[KnowledgeRuntime] contract:terminal' tauri-knowledge-test.log
+          grep -F '[Knowledge][Rebuild] start' tauri-knowledge-test.log
+          grep -F '[Knowledge][Rebuild] complete' tauri-knowledge-test.log
+
+      - name: Upload Tauri diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-knowledge-diagnostics
+          path: |
+            tauri-knowledge-test-list.log
+            tauri-knowledge-test.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  renderer-interactions:
+    name: Renderer logging and graph interaction tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint runtime and graph files
+        env:
+          NODE_PATH: Elephant/node_modules
+        run: |
+          Elephant/node_modules/.bin/eslint \
+            Elephant/frontend/app/services/elephantnoteClient/domainClients.js \
+            Elephant/frontend/app/stores/searchStore.js \
+            Elephant/frontend/src/renderer/src/platform/installKnowledgeRuntimeBridge.js \
+            Elephant/frontend/src/renderer/src/platform/knowledgeRuntimeClient.js \
+            Elephant/frontend/src/renderer/src/platform/runtimeLogShim.js \
+            Elephant/frontend/src/renderer/src/platform/tauriSearchRuntimeGuards.js \
+            Elephant/frontend/app/components/views/GraphView.vue \
+            Elephant/frontend/app/components/views/graphNavigationHelpers.js \
+            tests/app/unit/platform/installKnowledgeRuntimeBridge.spec.js \
+            tests/app/unit/platform/knowledgeRuntimeClient.spec.js \
+            tests/app/unit/platform/runtimeLogShim.spec.js \
+            tests/app/unit/views/graphNavigationHelpers.spec.js
+
+      - name: Run runtime and graph interaction tests
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/platform/installKnowledgeRuntimeBridge.spec.js \
+            tests/app/unit/platform/knowledgeRuntimeClient.spec.js \
+            tests/app/unit/platform/runtimeLogShim.spec.js \
+            tests/app/unit/views/graphNavigationHelpers.spec.js \
+            --reporter=verbose 2>&1 | tee knowledge-renderer-test.log
+          grep -F 'knowledge search bridge initialization' knowledge-renderer-test.log
+          grep -F 'accepts the searchStore object payload through elephantnoteClient and the real api.call dispatcher' knowledge-renderer-test.log
+          grep -F 'Graph terminal logging' knowledge-renderer-test.log
+          grep -F 'graph semantic navigation' knowledge-renderer-test.log
+          grep -F 'Wiki territory layout' knowledge-renderer-test.log
+          grep -F 'graph camera calculations' knowledge-renderer-test.log
+
+      - name: Build renderer
+        run: pnpm tauri:web:build
+
+      - name: Upload renderer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: knowledge-renderer-diagnostics
+          path: knowledge-renderer-test.log
+          if-no-files-found: warn
+          retention-days: 7

@@ -1,13 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import {
   bundled,
-  createJsEditor,
-  setJsSelection,
-  settle
+  initializeRustWasm,
+  runDifferentialTrace,
+  setJsSelection
 } from './rustDifferentialHarness'
-
-const describeBundled = bundled ? describe : describe.skip
 
 const clipboardEvent = (text, html = '') => ({
   preventDefault: () => {},
@@ -21,60 +19,78 @@ const clipboardEvent = (text, html = '') => ({
   }
 })
 
-const cases = [
+const describeBundled = bundled ? describe : describe.skip
+const traces = [
   {
     name: 'paste plain text at a collapsed caret',
     initial: 'alpha',
+    expected: 'alXYZpha\n',
     selection: [2, 2],
     text: 'XYZ',
-    html: ''
+    html: '',
+    markdown: 'XYZ'
   },
   {
     name: 'replace a selected range with plain text',
     initial: 'alpha',
+    expected: 'aXa\n',
     selection: [1, 4],
     text: 'X',
-    html: ''
+    html: '',
+    markdown: 'X'
   },
   {
     name: 'paste multiline Markdown between existing text',
     initial: 'alpha',
+    expected: 'alone\n\ntwopha\n',
     selection: [2, 2],
     text: 'one\n\ntwo',
-    html: ''
+    html: '',
+    markdown: 'one\n\ntwo'
   },
   {
     name: 'paste semantic HTML into a paragraph',
     initial: 'alpha',
+    expected: 'al**bold** and *soft*pha\n',
     selection: [2, 2],
     text: 'bold and soft',
-    html: '<p><strong>bold</strong> and <em>soft</em></p>'
+    html: '<p><strong>bold</strong> and <em>soft</em></p>',
+    markdown: '**bold** and *soft*'
   }
 ]
 
-describeBundled('Muya paste diagnostics', () => {
-  let editor = null
+describeBundled('Muya paste differential traces', () => {
+  let jsEditor = null
+
+  beforeAll(initializeRustWasm)
 
   afterEach(() => {
-    editor?.destroy?.()
-    editor = null
+    jsEditor?.destroy?.()
+    jsEditor = null
     document.body.innerHTML = ''
   })
 
-  for (const testCase of cases) {
-    it(testCase.name, async () => {
-      editor = await createJsEditor(testCase.initial)
-      setJsSelection(editor, 0, testCase.selection[0], testCase.selection[1])
-      await editor.contentState.pasteHandler(
-        clipboardEvent(testCase.text, testCase.html),
-        'normal',
-        testCase.text,
-        testCase.html || undefined
-      )
-      await settle()
-      const markdown = editor.getMarkdown()
-      console.log('[muya-paste]', JSON.stringify({ ...testCase, markdown }))
-      expect(markdown.length).toBeGreaterThan(0)
+  for (const trace of traces) {
+    it(trace.name, async () => {
+      const result = await runDifferentialTrace({
+        initial: trace.initial,
+        runJs: async (muya) => {
+          setJsSelection(muya, 0, trace.selection[0], trace.selection[1])
+          await muya.contentState.pasteHandler(
+            clipboardEvent(trace.text, trace.html),
+            'normal',
+            trace.text,
+            trace.html || undefined
+          )
+        },
+        runRust: (rust) => {
+          rust.setSelection(0, trace.selection[0], trace.selection[1])
+          rust.request({ type: 'paste_markdown', markdown: trace.markdown })
+        }
+      })
+      jsEditor = result.jsEditor
+      expect(result.jsMarkdown).toBe(result.rustMarkdown)
+      expect(result.rustMarkdown).toBe(trace.expected)
     })
   }
 })

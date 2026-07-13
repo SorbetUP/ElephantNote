@@ -11,6 +11,7 @@ on:
       - build/tools/enaddon-packager/**
       - addons/official/ai-ocr/**
       - addons/official/code-execution/**
+      - addons/official/sync/**
   workflow_dispatch:
 
 permissions:
@@ -49,7 +50,8 @@ jobs:
           set -euxo pipefail
           for source in \
             addons/official/ai-ocr \
-            addons/official/code-execution
+            addons/official/code-execution \
+            addons/official/sync
           do
             node build/scripts/build-physical-addon.mjs "$source"
           done
@@ -159,6 +161,7 @@ jobs:
           mobile_platforms = {'android-aarch64', 'android-x86_64', 'ios-aarch64', 'ios-x86_64'}
           expected = (
               {('elephant.ai-ocr', platform) for platform in desktop_platforms}
+              | {('elephant.sync', platform) for platform in desktop_platforms}
               | {('elephant.code-execution', platform) for platform in desktop_platforms | mobile_platforms}
           )
           missing = sorted(expected - published)
@@ -181,4 +184,5 @@ jobs:
             exit 0
           fi
           git commit -m "feat(catalog): publish hashed desktop and mobile addon packages"
+          git pull --rebase origin feature/physical-addon-catalog
           git push origin HEAD:feature/physical-addon-catalog

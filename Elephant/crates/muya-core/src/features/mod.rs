@@ -5,6 +5,7 @@ mod block_type_list;
 pub mod horizontal_rule;
 pub mod list;
 pub mod table;
+pub mod table_create;
 pub mod table_navigation;
 pub mod task;
 
@@ -13,6 +14,7 @@ pub use block_type::BlockTypeCommand;
 pub use horizontal_rule::InsertHorizontalRule;
 pub use list::ListCommand;
 pub use table::TableCommand;
+pub use table_create::CreateTable;
 pub use table_navigation::TableNavigationCommand;
 pub use task::TaskCommand;
 
@@ -22,5 +24,7 @@ mod block_tests;
 mod block_type_tests;
 #[cfg(test)]
 mod horizontal_rule_tests;
+#[cfg(test)]
+mod table_create_tests;
 #[cfg(test)]
 mod task_tests;

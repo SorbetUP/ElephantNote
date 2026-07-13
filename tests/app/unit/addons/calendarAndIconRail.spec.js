@@ -99,11 +99,11 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(navigation).toContain(':is="entry.contribution.component"')
   })
 
-  it('keeps AI capabilities independently removable but groups them under the AI parent', () => {
+  it('keeps AI capabilities independently removable but groups them under the physical AI parent', () => {
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
     const router = read('Elephant/frontend/app/components/views/AddonWorkspaceRouter.vue')
-    const providers = read('Elephant/frontend/src/renderer/src/addons/builtin/ai.js')
-    const providersUi = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiProvidersSettings.vue')
+    const providers = read('addons/official/ai/main.js')
+    const providersManifest = read('addons/official/ai/manifest.json')
     const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
     const panel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
     const chat = read('Elephant/frontend/src/renderer/src/addons/builtin/aiChat.js')
@@ -121,12 +121,13 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(router).not.toContain('AtomicGraphView')
     expect(router).not.toContain('ModelsView')
 
-    expect(providers).toContain("name: 'AI'")
-    expect(providers).not.toContain("name: 'AI Providers'")
+    expect(providersManifest).toContain('"name": "AI"')
+    expect(providers).toContain("standalone: true")
     expect(providers).not.toContain('ChatSidebar')
     expect(providers).not.toContain('WikiView')
     expect(providers).not.toContain('AtomicGraphView')
     expect(providers).not.toContain('ModelsView')
+    expect(builtins).not.toContain("load: () => import('./ai')")
     expect(builtins.match(/parentAddonId: 'elephant\.ai'/g)).toHaveLength(4)
     expect(ocrManifest).toContain('"elephant.ai": ">=2.0.0"')
     expect(panel).toContain('const GROUPED_ADDON_IDS = new Set(AI_SUBMODULE_IDS)')
@@ -139,7 +140,7 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(search).toContain("section: 'ai'")
     expect(search).toContain('slot: SETTINGS_PAGE.slot')
     expect(ocr).toContain("slot: 'ai.ocr'")
-    expect(providersUi).toContain(':data-elephant-addon-settings-slot="activePage.slot"')
+    expect(providers).toContain("setAttribute('data-elephant-addon-settings-slot', active.slot)")
     expect(wiki).toContain('component: WikiView')
     expect(graph).toContain('component: AtomicGraphView')
     expect(graph).toContain('installGraphRuntimeFixes(globalThis)')
@@ -161,12 +162,12 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(sites).toContain('component: SitePreviewPanel')
   })
 
-  it('lazy-loads bundled addons and excludes physical OCR code', () => {
+  it('lazy-loads bundled addons and excludes physical AI and OCR code', () => {
     const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
     const runtime = read('Elephant/frontend/src/renderer/src/addons/index.js')
 
     expect(builtins).toContain('const createLazyBuiltinAddon')
-    expect(builtins).toContain("load: () => import('./ai')")
+    expect(builtins).not.toContain("load: () => import('./ai')")
     expect(builtins).toContain("load: () => import('./aiChat')")
     expect(builtins).toContain("load: () => import('./aiSearch')")
     expect(builtins).not.toContain("load: () => import('./aiOcr')")

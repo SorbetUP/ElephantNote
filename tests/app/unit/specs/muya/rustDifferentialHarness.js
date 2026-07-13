@@ -6,6 +6,7 @@ import Muya from '../../../../../Elephant/frontend/src/muya/lib'
 import initWasm, { MuyaEditor } from 'muya-rust-wasm-bundle'
 
 export const bundled = process.env.ELEPHANT_EXPERIMENTAL_RUST_EDITOR === '1'
+let wasmInitialization = null
 
 export const settle = async () => {
   await new Promise((resolvePromise) => setTimeout(resolvePromise, 0))
@@ -110,11 +111,14 @@ export const fakeKeyEvent = (overrides = {}) => ({
   ...overrides
 })
 
-export const initializeRustWasm = async () => {
-  const wasm = readFileSync(
-    resolve('Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm')
-  )
-  await initWasm({ module_or_path: wasm })
+export const initializeRustWasm = () => {
+  if (!wasmInitialization) {
+    const wasm = readFileSync(
+      resolve('Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm')
+    )
+    wasmInitialization = initWasm({ module_or_path: wasm })
+  }
+  return wasmInitialization
 }
 
 export const runDifferentialTrace = async (trace) => {

@@ -35,6 +35,9 @@ export const editorCommands = Object.freeze({
   duplicateBlock: () => ({ type: 'duplicate_block' }),
   deleteBlock: () => ({ type: 'delete_block' }),
   insertParagraphAfterBlock: () => ({ type: 'insert_paragraph_after_block' }),
+  toggleBlockQuote: () => ({ type: 'toggle_block_quote' }),
+  toggleCodeBlock: () => ({ type: 'toggle_code_block' }),
+  setListKind: (kind) => ({ type: 'set_list_kind', kind }),
   indentListItem: () => ({ type: 'indent_list_item' }),
   outdentListItem: () => ({ type: 'outdent_list_item' }),
   setTaskChecked: (item, checked, autoCheck = false) => ({

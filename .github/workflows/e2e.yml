@@ -27,6 +27,13 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      - name: Install Electron test binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          node node_modules/electron/install.js
+          test -s node_modules/electron/path.txt
+
       - name: Run postinstall
         run: node build/scripts/postinstall.js
         env:

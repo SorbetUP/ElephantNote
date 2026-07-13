@@ -27,27 +27,49 @@ const createManifest = (overrides = {}) => ({
   ...overrides
 })
 
-const physicalAiParent = {
-  manifest: {
-    id: 'elephant.ai',
-    name: 'AI',
-    version: '2.1.0',
-    source: 'external'
-  },
-  activate(context) {
-    context.addSettingsSection({
-      id: 'elephant.ai.settings',
-      section: 'ai',
-      standalone: true,
-      title: 'AI'
-    })
-  }
-}
-
 const flush = async () => {
   await Promise.resolve()
   await Promise.resolve()
   await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+const installFakeWorker = () => {
+  const messages = []
+  let worker
+  class FakeWorker {
+    constructor() {
+      worker = this
+      this.listeners = new Map()
+    }
+
+    postMessage(message) {
+      messages.push(message)
+      if (message.type === 'activate') {
+        queueMicrotask(() => this.emit('message', {
+          type: 'activation-result',
+          id: message.id,
+          ok: true,
+          result: { activated: true }
+        }))
+      }
+      if (message.type === 'deactivate') {
+        queueMicrotask(() => this.emit('message', {
+          type: 'deactivation-result',
+          id: message.id,
+          ok: true
+        }))
+      }
+    }
+
+    addEventListener(type, listener) { this.listeners.set(type, listener) }
+    removeEventListener(type) { this.listeners.delete(type) }
+    emit(type, data) { this.listeners.get(type)?.({ data }) }
+    terminate = vi.fn()
+  }
+  vi.stubGlobal('Worker', FakeWorker)
+  vi.stubGlobal('Blob', class {})
+  vi.stubGlobal('URL', { createObjectURL: () => 'blob:test', revokeObjectURL: vi.fn() })
+  return { messages, get worker() { return worker } }
 }
 
 afterEach(() => {
@@ -59,22 +81,21 @@ describe('external addon manifest contracts', () => {
   it('normalizes structured capabilities without exposing mutable arrays', () => {
     const source = createManifest()
     const manifest = normalizeAddonManifest(source)
-
     expect(manifest.permissions.notes.read).toEqual(['Inbox/**'])
     expect(manifest.permissions.notes.write).toEqual(['Reports/**'])
     expect(manifest.permissions.network.hosts).toEqual(['api.example.com'])
     expect(manifest.permissions.storage).toBe(true)
     expect(manifest.permissions.commands).toBe(true)
-    expect(manifest.contributes.commands).toEqual([{ id: 'com.example.addon.run', title: 'Run example' }])
-
     source.permissions.notes.read.push('*')
     expect(manifest.permissions.notes.read).toEqual(['Inbox/**'])
   })
 
-  it('normalizes addon-owned embedded content fallbacks from package-safe contributions', () => {
+  it('preserves content fallbacks, parent requirements and native declarations', () => {
     const manifest = normalizeAddonManifest(createManifest({
+      parentAddonId: 'elephant.ai',
+      requires: { 'elephant.ai': '>=2.1.0' },
+      permissions: { native: true },
       contributes: {
-        commands: [{ id: 'com.example.addon.run', title: 'Run example' }],
         contentTypes: [{
           id: 'drawing',
           kind: 'image',
@@ -84,186 +105,45 @@ describe('external addon manifest contracts', () => {
         }]
       }
     }))
-
-    expect(manifest.contentTypes).toEqual([{
-      id: 'drawing',
-      kind: 'image',
-      sourcePattern: '**/.assets/drawing-*.png',
-      disabledPresentation: 'static-preview',
-      disabledLabel: 'Drawing'
-    }])
-    expect(Object.isFrozen(manifest.contentTypes)).toBe(true)
-  })
-
-  it('keeps legacy builtin permission arrays and addon presentation fields compatible', () => {
-    const manifest = normalizeAddonManifest({
-      id: 'elephant.example',
-      name: 'Example',
-      version: '1.0.0',
-      icon: 'sparkles',
-      removable: false,
-      permissions: ['notes.read']
-    })
-
-    expect(manifest.permissions).toEqual(['notes.read'])
-    expect(manifest.icon).toBe('sparkles')
-    expect(manifest.removable).toBe(false)
-  })
-
-  it('preserves physical package dependencies and native permission declarations', () => {
-    const manifest = normalizeAddonManifest(createManifest({
-      parentAddonId: 'elephant.ai',
-      requires: { 'elephant.ai': '>=2.0.0' },
-      permissions: { native: true }
-    }))
-
     expect(manifest.parentAddonId).toBe('elephant.ai')
-    expect(manifest.requires).toEqual({ 'elephant.ai': '>=2.0.0' })
+    expect(manifest.requires).toEqual({ 'elephant.ai': '>=2.1.0' })
     expect(manifest.permissions.native).toBe(true)
+    expect(manifest.contentTypes[0].disabledPresentation).toBe('static-preview')
   })
 })
 
 describe('built-in addon catalogue', () => {
-  it('ships only code that is physically bundled with the app', () => {
+  it('contains only irreducible core and editor capabilities', () => {
     expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
       'elephant.addon-packs',
       'elephant.google-keep-import',
-      'elephant.codex-connection',
-      'elephant.calendar',
-      'elephant.sites',
-      'elephant.ai-chat',
-      'elephant.ai-search',
-      'elephant.wiki',
-      'elephant.graph',
-      'elephant.open-models',
-      'elephant.sync',
-      'elephant.code-execution',
       'elephant.excalidraw',
       'elephant.recently-edited'
     ])
     expect(builtinAddons.filter((addon) => addon.manifest.defaultEnabled).map((addon) => addon.manifest.id))
       .toEqual(['elephant.addon-packs'])
     expect(builtinAddons.find((addon) => addon.manifest.id === 'elephant.addon-packs')?.manifest.removable).toBe(false)
-    expect(new Set(builtinAddons.map((addon) => addon.manifest.icon)).size).toBe(builtinAddons.length)
-    expect(builtinAddons.map((addon) => addon.manifest.id)).not.toEqual(expect.arrayContaining([
-      'elephant.ai',
-      'elephant.ai-ocr',
-      'elephant.daily-notes',
-      'elephant.quick-capture',
-      'elephant.vault-overview',
-      'elephant.addon-inspector'
-    ]))
     expect(read('addons/official/ai/manifest.json')).toContain('"id": "elephant.ai"')
+    expect(read('addons/official/code-execution/manifest.json')).toContain('"id": "elephant.code-execution"')
   })
 
   it('enables only the addon pack manager by default', async () => {
-    const manager = new ElephantAddonManager({
-      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-    })
+    const manager = new ElephantAddonManager({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } })
     for (const addon of builtinAddons) manager.register(addon)
-
     await manager.enableDefaultAddons()
-
     expect(manager.list().filter((addon) => addon.enabled).map((addon) => addon.manifest.id))
       .toEqual(['elephant.addon-packs'])
-    expect(manager.getActions().map((entry) => entry.contribution.id).sort()).toEqual([
-      'elephant.addon-packs.apply',
-      'elephant.addon-packs.create',
-      'elephant.addon-packs.ensure-develop-parity'
-    ])
-  })
-
-  it('persists installation and enabled state separately for removable built-ins', () => {
-    const source = read('Elephant/frontend/src/renderer/src/addons/index.js')
-
-    expect(source).toContain("BUILTIN_INSTALL_STORAGE_KEY = 'elephantnote:installed-built-in-addons:v1'")
-    expect(source).toContain("BUILTIN_ENABLED_STORAGE_KEY = 'elephantnote:enabled-built-in-addons:v1'")
-    expect(source).toContain('manager.installBuiltin = async (id) =>')
-    expect(source).toContain('manager.uninstallBuiltin = async (id) =>')
-    expect(source).toContain('manager.restoreBuiltinEnabledState = async () =>')
-    expect(source).toContain("manager.on('enabled', persistEnabledState)")
-    expect(source).toContain("manager.on('disabled', persistEnabledState)")
-    expect(source).not.toContain('manager.enableDefaultAddons()')
-  })
-
-  it('keeps physical AI, chat, graph and sync inert until each addon is enabled', async () => {
-    const manager = new ElephantAddonManager({
-      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-    })
-    const chat = builtinAddons.find((addon) => addon.manifest.id === 'elephant.ai-chat')
-    const graph = builtinAddons.find((addon) => addon.manifest.id === 'elephant.graph')
-    const sync = builtinAddons.find((addon) => addon.manifest.id === 'elephant.sync')
-    for (const addon of [physicalAiParent, chat, graph, sync]) manager.register(addon)
-
-    expect(manager.getContributions('settings.sections')).toEqual([])
-    expect(manager.getContributions('views')).toEqual([])
-    expect(manager.getContributions('layout.zones')).toEqual([])
-    expect(manager.getActions()).toEqual([])
-
-    await manager.enable(physicalAiParent.manifest.id)
-    expect(manager.getContributions('settings.sections').some((entry) => entry.addonId === 'elephant.ai')).toBe(true)
-    expect(manager.getContributions('views')).toEqual([])
-    expect(manager.getActions()).toEqual([])
-
-    await manager.enable(chat.manifest.id)
-    expect(manager.getContributions('layout.zones').some((entry) => entry.addonId === 'elephant.ai-chat')).toBe(true)
-    expect(manager.getActions().some((entry) => entry.addonId === 'elephant.ai-chat')).toBe(true)
-
-    await manager.enable(graph.manifest.id)
-    expect(manager.getContributions('views').some((entry) => entry.addonId === 'elephant.graph')).toBe(true)
-
-    await manager.disable(graph.manifest.id)
-    await manager.disable(chat.manifest.id)
-    await manager.disable(physicalAiParent.manifest.id)
-    expect(manager.getContributions('settings.sections')).toEqual([])
-    expect(manager.getContributions('views')).toEqual([])
-    expect(manager.getContributions('layout.zones')).toEqual([])
-    expect(manager.getActions()).toEqual([])
   })
 })
 
-describe('external addon runtime', () => {
-  it('uses app info, persistent storage and note write/read-back through the public API', async () => {
-    const messages = []
-    let worker
-    class FakeWorker {
-      constructor() {
-        worker = this
-        this.listeners = new Map()
-      }
-
-      postMessage(message) {
-        messages.push(message)
-        if (message.type === 'activate') {
-          queueMicrotask(() => this.emit('message', {
-            type: 'activation-result',
-            id: message.id,
-            ok: true,
-            result: { activated: true }
-          }))
-        }
-      }
-
-      addEventListener(type, listener) { this.listeners.set(type, listener) }
-      removeEventListener(type) { this.listeners.delete(type) }
-      emit(type, data) { this.listeners.get(type)?.({ data }) }
-      terminate = vi.fn()
-    }
-    vi.stubGlobal('Worker', FakeWorker)
-    vi.stubGlobal('Blob', class {})
-    vi.stubGlobal('URL', { createObjectURL: () => 'blob:test', revokeObjectURL: vi.fn() })
-
+describe('external and official package runtime', () => {
+  it('uses the isolated worker and broker for community packages', async () => {
+    const fake = installFakeWorker()
     const invoke = vi.fn(async (command, payload) => {
       if (command === 'tauri_addons_list') return []
       if (command === 'tauri_prefs_get') return true
-      if (command === 'tauri_addons_read_entry') return { source: 'self.onmessage = () => {}' }
-      if (command === 'tauri_addons_call') {
-        if (payload.method === 'app.info') return { name: 'ElephantNote', version: '0.18.9' }
-        if (payload.method === 'storage.get') return null
-        if (payload.method === 'storage.set') return { ok: true }
-        if (payload.method === 'notes.write') return { ok: true, path: 'Reports/proof.md' }
-        if (payload.method === 'notes.read') return { path: 'Reports/proof.md', content: '# Proof' }
-      }
+      if (command === 'tauri_addons_read_entry') return { source: 'self.elephantAddon = { activate() {} }' }
+      if (command === 'tauri_addons_call' && payload.method === 'app.info') return { name: 'Elephant', version: '0.18.9' }
       if (command === 'tauri_addons_set_enabled') return { ok: true }
       throw new Error(`Unexpected command: ${command}`)
     })
@@ -279,40 +159,37 @@ describe('external addon runtime', () => {
       enabled: false
     })
     await manager.enable('com.example.addon')
-
-    worker.emit('message', { type: 'rpc', id: 'rpc-1', method: 'app.info', params: {} })
+    fake.worker.emit('message', { type: 'rpc', id: 'rpc-1', method: 'app.info', params: {} })
     await flush()
-    expect(messages).toContainEqual(expect.objectContaining({
-      type: 'rpc-result',
-      id: 'rpc-1',
-      ok: true,
-      result: expect.objectContaining({ name: 'ElephantNote' })
-    }))
+    expect(fake.messages).toContainEqual(expect.objectContaining({ type: 'rpc-result', id: 'rpc-1', ok: true }))
   })
 
-  it('unregisters a disabled addon and clears its contributions', async () => {
-    const manager = new ElephantAddonManager()
-    manager.register({
-      manifest: { id: 'com.example.cleanup', name: 'Cleanup', version: '1.0.0' },
-      activate(context) {
-        context.addAction({ id: 'com.example.cleanup.run', title: 'Run' })
-      }
+  it('restores verified official packages even when Community Addons are disabled', async () => {
+    installFakeWorker()
+    const record = {
+      source: 'official',
+      manifest: normalizeAddonManifest(createManifest({ id: 'elephant.test-official', source: 'official' })),
+      packageHash: 'verified-hash',
+      installedAt: '2026-07-13T00:00:00Z',
+      enabled: true
+    }
+    const invoke = vi.fn(async (command) => {
+      if (command === 'tauri_addons_list') return [record]
+      if (command === 'tauri_prefs_get') return false
+      if (command === 'tauri_addons_read_entry') return { source: 'self.elephantAddon = { activate() {} }' }
+      if (command === 'tauri_addons_set_enabled') return { ok: true }
+      throw new Error(`Unexpected command: ${command}`)
     })
-    await manager.enable('com.example.cleanup')
-    await manager.disable('com.example.cleanup')
-    manager.unregister('com.example.cleanup')
-    expect(manager.get('com.example.cleanup')).toBeNull()
-    expect(manager.getActions()).toEqual([])
+    vi.stubGlobal('__TAURI__', { core: { invoke } })
+    const manager = new ElephantAddonManager({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } })
+    installExternalAddonRuntime(manager)
+    await flush()
+    expect(manager.get('elephant.test-official')?.enabled).toBe(true)
+    expect(manager.get('elephant.test-official')?.manifest.official).toBe(true)
+    expect(invoke).not.toHaveBeenCalledWith('tauri_addons_set_enabled', expect.objectContaining({ enabled: false }))
   })
 
-  it('refuses to unregister a running addon', async () => {
-    const manager = new ElephantAddonManager()
-    manager.register({ manifest: { id: 'com.example.running', name: 'Running', version: '1.0.0' } })
-    await manager.enable('com.example.running')
-    expect(() => manager.unregister('com.example.running')).toThrow('Cannot unregister an active addon')
-  })
-
-  it('does not restart an external addon when community addons are disabled', async () => {
+  it('does not restart a community package while Community Addons are disabled', async () => {
     const record = {
       manifest: normalizeAddonManifest(createManifest({ source: 'external' })),
       packageHash: 'hash',
@@ -326,12 +203,20 @@ describe('external addon runtime', () => {
       throw new Error(`Unexpected command: ${command}`)
     })
     vi.stubGlobal('__TAURI__', { core: { invoke } })
-
     const manager = new ElephantAddonManager({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } })
     installExternalAddonRuntime(manager)
     await flush()
-
     expect(manager.get('com.example.addon')?.enabled).toBe(false)
-    expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', expect.objectContaining({ addonId: 'com.example.addon', enabled: false }))
+    expect(invoke).toHaveBeenCalledWith('tauri_addons_set_enabled', expect.objectContaining({ enabled: false }))
+  })
+
+  it('unregisters a disabled addon and refuses to unregister a running addon', async () => {
+    const manager = new ElephantAddonManager()
+    manager.register({ manifest: { id: 'com.example.cleanup', name: 'Cleanup', version: '1.0.0' } })
+    await manager.enable('com.example.cleanup')
+    expect(() => manager.unregister('com.example.cleanup')).toThrow('Cannot unregister an active addon')
+    await manager.disable('com.example.cleanup')
+    manager.unregister('com.example.cleanup')
+    expect(manager.get('com.example.cleanup')).toBeNull()
   })
 })

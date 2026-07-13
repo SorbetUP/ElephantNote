@@ -10,6 +10,40 @@ import {
 
 const describeBundled = bundled ? describe : describe.skip
 
+const editableBlocks = (muya) => {
+  const output = []
+  const visit = (block) => {
+    if (
+      block?.functionType === 'paragraphContent' ||
+      block?.functionType === 'cellContent'
+    ) {
+      output.push(block)
+    }
+    for (const child of block?.children || []) visit(child)
+  }
+  for (const block of muya.contentState.getBlocks()) visit(block)
+  return output
+}
+
+const setJsCrossBlockSelection = (
+  muya,
+  anchorValue,
+  anchorOffset,
+  focusValue,
+  focusOffset
+) => {
+  const blocks = editableBlocks(muya)
+  const anchor = blocks.find((block) => block.text === anchorValue)
+  const focus = blocks.find((block) => block.text === focusValue)
+  if (!anchor || !focus) throw new Error('Muya JS cross-block image selection was not found.')
+  muya.contentState.cursor = {
+    start: { key: anchor.key, offset: anchorOffset },
+    end: { key: focus.key, offset: focusOffset },
+    isEdit: true
+  }
+  muya.contentState.setCursor()
+}
+
 const cases = [
   {
     name: 'infer alt text and encode a local path at a collapsed caret',
@@ -26,6 +60,14 @@ const cases = [
     selectJs: (muya) => setJsSelectionByText(muya, 'alpha', 1, 4),
     selectRust: (rust) => rust.setSelectionByText('alpha', 1, 4),
     image: { source: 'https://example.com/a.png', alt: '', title: null }
+  },
+  {
+    name: 'insert at the focus of a cross-block selection',
+    initial: 'alpha\n\nbeta',
+    expected: 'alpha\n\nbe![picture](/tmp/picture.png)ta\n',
+    selectJs: (muya) => setJsCrossBlockSelection(muya, 'alpha', 1, 'beta', 2),
+    selectRust: (rust) => rust.setSelectionBetweenText('alpha', 1, 'beta', 2),
+    image: { source: '/tmp/picture.png', alt: '', title: null }
   },
   {
     name: 'preserve explicit alt text and title',

@@ -2,6 +2,13 @@ import ElephantSyncAddonBase from './main.js'
 
 const ADDON_ID = 'elephant.sync'
 const SERVICE_RESOURCE = 'sync.native-service'
+const NATIVE_COMMANDS = new Set([
+  'iroh_sync_status',
+  'iroh_sync_create_invite',
+  'iroh_sync_accept_invite',
+  'iroh_sync_run',
+  'iroh_sync_shutdown'
+])
 
 export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
   async serviceInvoke(command, payload = {}) {
@@ -32,9 +39,10 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
   async nativeStatus() {
     try {
       const service = await this.callNativeService('sync.status')
-      return { available: true, ...service }
+      const state = service?.pairingState === 'paired' ? 'idle' : service?.pairingState || 'idle'
+      return { available: true, state, ...service }
     } catch (error) {
-      return { available: false, error: error?.message || String(error) }
+      return { available: false, state: 'error', error: error?.message || String(error) }
     }
   }
 
@@ -44,8 +52,14 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
 
   acceptNativeInvite(invite) {
     if (!invite) throw new TypeError('A Sync invite is required')
-    const params = typeof invite === 'string' ? { manualCode: invite } : invite
+    let params = invite
+    if (typeof invite === 'string') params = { manualCode: invite }
+    else if (typeof invite?.invite === 'string') params = { manualCode: invite.invite }
     return this.callNativeService('sync.accept-invite', params, { timeoutMs: 60_000 })
+  }
+
+  runNativeSync() {
+    return this.callNativeService('sync.run', {}, { timeoutMs: 30 * 60_000 })
   }
 
   scanNativeVault() {
@@ -61,9 +75,22 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
     return this.callNativeService('sync.apply-local', { plan }, { timeoutMs: 120_000 })
   }
 
+  async invoke(command, payload = {}) {
+    if (!NATIVE_COMMANDS.has(command)) return await super.invoke(command, payload)
+    if (command === 'iroh_sync_status') return await this.nativeStatus()
+    if (command === 'iroh_sync_create_invite') {
+      const result = await this.createNativeInvite(payload)
+      return { ...result, rawInvite: result?.invite, invite: result?.qrPayload || result?.manualCode || result?.invite }
+    }
+    if (command === 'iroh_sync_accept_invite') return await this.acceptNativeInvite(payload)
+    if (command === 'iroh_sync_run') return await this.runNativeSync()
+    if (command === 'iroh_sync_shutdown') return await this.stopNativeService()
+    return await super.invoke(command, payload)
+  }
+
   async onload(api) {
-    await super.onload(api)
     const started = await this.startNativeService()
+    await super.onload(api)
     const status = await this.nativeStatus()
     api.resources.provide(SERVICE_RESOURCE, Object.freeze({
       start: () => this.startNativeService(),
@@ -71,6 +98,7 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
       endpoint: () => this.callNativeService('sync.endpoint'),
       createInvite: (params = {}) => this.createNativeInvite(params),
       acceptInvite: (invite) => this.acceptNativeInvite(invite),
+      run: () => this.runNativeSync(),
       scan: () => this.scanNativeVault(),
       plan: (params = {}) => this.buildNativePlan(params),
       applyLocal: (plan) => this.applyNativeLocalPlan(plan),
@@ -82,7 +110,9 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
         'pairing',
         'manifest',
         'plan',
-        'local-operations'
+        'local-operations',
+        'file-streams',
+        'sync-sessions'
       ])
     }))
     api.app.emit('elephantnote:sync-native-service-ready', { started, status })

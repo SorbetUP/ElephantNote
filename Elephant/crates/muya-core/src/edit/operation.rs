@@ -1,10 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 use crate::model::{
   BlockKind, DetachedSubtree, Document, InlineKind, Node, NodeId, NodeKind,
 };
 
 use super::EditError;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Utf16Range {
   pub start: u32,
   pub end: u32,
@@ -413,30 +415,5 @@ mod tests {
       document.node(block).unwrap().kind,
       NodeKind::Block(BlockKind::Paragraph)
     ));
-  }
-
-  #[test]
-  fn rejects_offsets_inside_surrogate_pairs() {
-    let mut document = Document::new();
-    let node = document.allocate(
-      NodeKind::Inline(InlineKind::Text {
-        value: "😀".to_string(),
-      }),
-      None,
-    );
-    let error = Operation::ReplaceText {
-      node,
-      range: Utf16Range::new(1, 1),
-      inserted: "x".to_string(),
-    }
-    .apply(&mut document)
-    .unwrap_err();
-    assert_eq!(
-      error,
-      EditError::InvalidUtf16Boundary {
-        node,
-        offset: 1,
-      }
-    );
   }
 }

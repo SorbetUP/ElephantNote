@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
   collections::BTreeSet,
   fs,
   io::{Read, Write},
-  path::{Component, Path},
+  path::{Component, Path, PathBuf},
   time::Duration,
 };
 use tauri::{AppHandle, State};
@@ -11,6 +12,8 @@ use url::Url;
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
 use crate::addons::{self, AddonManifest, AddonState, InstalledAddon};
+use crate::vault::config as vault_config;
+use crate::vault_layout;
 
 type R<T> = Result<T, String>;
 
@@ -35,6 +38,8 @@ pub struct CatalogAddon {
   pub description: String,
   #[serde(default)]
   pub author: String,
+  #[serde(default)]
+  pub official: bool,
   #[serde(default)]
   pub manifest_path: String,
   #[serde(default)]
@@ -65,6 +70,7 @@ fn bundled_trusted_lab_item() -> CatalogAddon {
     version: "1.0.0".to_string(),
     description: "Full app access reference addon that visibly modifies Settings, workspace UI and application behavior.".to_string(),
     author: "ElephantNote".to_string(),
+    official: false,
     manifest_path: "bundled/trusted-workspace-lab/manifest.json".to_string(),
     entry_path: "bundled/trusted-workspace-lab/main.js".to_string(),
     package_path: String::new(),
@@ -100,6 +106,9 @@ fn validate_catalog_item(item: &CatalogAddon) -> R<()> {
   }
   if !item.slug.chars().all(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-') {
     return Err(format!("Invalid addon catalogue slug: {}", item.slug));
+  }
+  if item.official && !item.id.starts_with("elephant.") {
+    return Err(format!("Only first-party elephant.* packages may be marked official: {}", item.id));
   }
   if item.id == BUNDLED_TRUSTED_LAB_ID {
     return Ok(());
@@ -189,7 +198,7 @@ fn fetch_catalog() -> R<AddonCatalog> {
   Ok(catalog)
 }
 
-fn temporary_package_path(item: &CatalogAddon) -> std::path::PathBuf {
+fn temporary_package_path(item: &CatalogAddon) -> PathBuf {
   std::env::temp_dir().join(format!(
     "elephantnote-catalog-{}-{}.enaddon",
     item.slug,
@@ -197,7 +206,7 @@ fn temporary_package_path(item: &CatalogAddon) -> std::path::PathBuf {
   ))
 }
 
-fn write_temporary_package(item: &CatalogAddon, manifest_bytes: &[u8], entry_bytes: &[u8]) -> R<std::path::PathBuf> {
+fn write_temporary_package(item: &CatalogAddon, manifest_bytes: &[u8], entry_bytes: &[u8]) -> R<PathBuf> {
   let manifest: AddonManifest = serde_json::from_slice(manifest_bytes)
     .map_err(|error| format!("Invalid manifest for {}: {error}", item.id))?;
   if manifest.id != item.id || manifest.version != item.version || manifest.name != item.name {
@@ -221,7 +230,7 @@ fn write_temporary_package(item: &CatalogAddon, manifest_bytes: &[u8], entry_byt
   Ok(temp_path)
 }
 
-fn download_prebuilt_package(item: &CatalogAddon) -> R<std::path::PathBuf> {
+fn download_prebuilt_package(item: &CatalogAddon) -> R<PathBuf> {
   let bytes = fetch_bytes(&item.package_path, MAX_PACKAGE_BYTES)?;
   let actual_hash = blake3::hash(&bytes).to_hex().to_string();
   if actual_hash != item.package_hash.trim().to_ascii_lowercase() {
@@ -232,7 +241,7 @@ fn download_prebuilt_package(item: &CatalogAddon) -> R<std::path::PathBuf> {
   Ok(temp_path)
 }
 
-fn create_temporary_package(item: &CatalogAddon) -> R<std::path::PathBuf> {
+fn create_temporary_package(item: &CatalogAddon) -> R<PathBuf> {
   if item.id == BUNDLED_TRUSTED_LAB_ID {
     return write_temporary_package(
       item,
@@ -246,6 +255,28 @@ fn create_temporary_package(item: &CatalogAddon) -> R<std::path::PathBuf> {
   let manifest_bytes = fetch_bytes(&item.manifest_path, MAX_MANIFEST_BYTES)?;
   let entry_bytes = fetch_bytes(&item.entry_path, MAX_ENTRY_BYTES)?;
   write_temporary_package(item, &manifest_bytes, &entry_bytes)
+}
+
+fn registry_path(app: &AppHandle) -> R<PathBuf> {
+  let vault = vault_config::get_active_vault(app)?;
+  Ok(vault_layout::addons_dir(&vault.path).join("registry.json"))
+}
+
+fn persist_official_source(app: &AppHandle, addon_id: &str) -> R<()> {
+  let path = registry_path(app)?;
+  let raw = fs::read_to_string(&path).map_err(|error| format!("Failed to read addon registry: {error}"))?;
+  let mut registry: Value = serde_json::from_str(&raw).map_err(|error| format!("Invalid addon registry: {error}"))?;
+  let record = registry
+    .get_mut("addons")
+    .and_then(Value::as_object_mut)
+    .and_then(|addons| addons.get_mut(addon_id))
+    .and_then(Value::as_object_mut)
+    .ok_or_else(|| format!("Installed addon is absent from the registry: {addon_id}"))?;
+  record.insert("source".to_string(), Value::String("official".to_string()));
+  let encoded = serde_json::to_vec_pretty(&registry).map_err(|error| error.to_string())?;
+  let temp = path.with_extension(format!("json.{}.tmp", chrono::Utc::now().timestamp_millis()));
+  fs::write(&temp, encoded).map_err(|error| format!("Failed to stage addon registry provenance: {error}"))?;
+  fs::rename(&temp, &path).map_err(|error| format!("Failed to persist addon registry provenance: {error}"))
 }
 
 #[tauri::command]
@@ -274,14 +305,36 @@ pub fn tauri_addons_catalog_install(
   };
   let package_path = create_temporary_package(&item)?;
   let package_string = package_path.to_string_lossy().to_string();
-  let result = addons::tauri_addons_install(app, state, package_string);
+  let result = addons::tauri_addons_install(app.clone(), state, package_string);
   let _ = fs::remove_file(package_path);
-  result
+  let mut record = result?;
+  if item.official {
+    persist_official_source(&app, &record.manifest.id)?;
+    record.source = "official".to_string();
+  }
+  Ok(record)
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  fn source_item() -> CatalogAddon {
+    CatalogAddon {
+      id: "com.example.test".to_string(),
+      slug: "test".to_string(),
+      name: "Test".to_string(),
+      version: "1.0.0".to_string(),
+      description: String::new(),
+      author: String::new(),
+      official: false,
+      manifest_path: "addons/test/manifest.json".to_string(),
+      entry_path: "addons/test/main.js".to_string(),
+      package_path: String::new(),
+      package_hash: String::new(),
+      readme_path: "addons/test/README.md".to_string(),
+    }
+  }
 
   #[test]
   fn rejects_catalog_path_traversal() {
@@ -291,31 +344,19 @@ mod tests {
 
   #[test]
   fn requires_source_files_to_stay_inside_the_addon_slug() {
-    let item = CatalogAddon {
-      id: "com.example.test".to_string(),
-      slug: "test".to_string(),
-      name: "Test".to_string(),
-      version: "1.0.0".to_string(),
-      description: String::new(),
-      author: String::new(),
-      manifest_path: "addons/test/manifest.json".to_string(),
-      entry_path: "addons/test/main.js".to_string(),
-      package_path: String::new(),
-      package_hash: String::new(),
-      readme_path: "addons/test/README.md".to_string(),
-    };
-    assert!(validate_catalog_item(&item).is_ok());
+    assert!(validate_catalog_item(&source_item()).is_ok());
   }
 
   #[test]
   fn accepts_hashed_prebuilt_packages() {
     let item = CatalogAddon {
-      id: "com.example.native".to_string(),
+      id: "elephant.native".to_string(),
       slug: "native".to_string(),
       name: "Native".to_string(),
       version: "1.0.0".to_string(),
       description: String::new(),
       author: String::new(),
+      official: true,
       manifest_path: String::new(),
       entry_path: String::new(),
       package_path: "addons/native/native-1.0.0-linux-x86_64.enaddon".to_string(),
@@ -326,8 +367,16 @@ mod tests {
   }
 
   #[test]
+  fn rejects_non_elephant_official_marker() {
+    let mut item = source_item();
+    item.official = true;
+    assert!(validate_catalog_item(&item).is_err());
+  }
+
+  #[test]
   fn bundles_the_full_access_lab_without_network_paths() {
     let item = bundled_trusted_lab_item();
+    assert!(!item.official);
     assert_eq!(item.id, BUNDLED_TRUSTED_LAB_ID);
     assert!(validate_catalog_item(&item).is_ok());
     let manifest: AddonManifest = serde_json::from_str(BUNDLED_TRUSTED_LAB_MANIFEST).unwrap();

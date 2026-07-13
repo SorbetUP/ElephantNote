@@ -1,5 +1,6 @@
 mod command;
 mod error;
+mod list;
 mod operation;
 mod paragraph;
 mod transaction;

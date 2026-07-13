@@ -2,21 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { ELEPHANTNOTE_API_ACTIONS as API } from 'common/elephantnote/apiActions'
 import { createDomainClients } from '../../../../Elephant/frontend/app/services/elephantnoteClient/domainClients.js'
 
-let vaultCounter = 0
-
 const createCall = ({ chatResults = [] } = {}) => {
-  const vaultPath = `/tmp/elephantnote-test-vault-${++vaultCounter}`
   let chatIndex = 0
   const call = vi.fn(async (action) => {
-    if (action === API.VAULTS_GET) {
-      return { activeVault: { path: vaultPath } }
-    }
-    if (action === API.SEARCH_INIT_VAULT) {
-      return { ok: true }
-    }
-    if (action === API.SEARCH_REBUILD) {
-      return { ok: true }
-    }
+    if (action === API.SEARCH_REBUILD) return { ok: true }
     if (action === API.RAG_CHAT) {
       const next = chatResults[chatIndex] || { answer: 'empty', citations: [] }
       chatIndex += 1
@@ -24,19 +13,14 @@ const createCall = ({ chatResults = [] } = {}) => {
     }
     return { ok: true }
   })
-  return { call, vaultPath }
+  return { call }
 }
 
 const countAction = (call, action) => call.mock.calls.filter(([name]) => name === action).length
-
-const createClients = (call) =>
-  createDomainClients(call, () => ({
-    describeApi: vi.fn(),
-    callApi: vi.fn()
-  }))
+const createClients = (call) => createDomainClients(call, () => ({ describeApi: vi.fn(), callApi: vi.fn() }))
 
 describe('domain clients chat search behavior', () => {
-  it('initializes chat search once for the same vault', async () => {
+  it('delegates indexing and retrieval to the Rust RAG command', async () => {
     const { call } = createCall({
       chatResults: [
         { answer: 'first answer', citations: [{ path: 'A.md' }] },
@@ -48,30 +32,21 @@ describe('domain clients chat search behavior', () => {
     await clients.rag.chat('first')
     await clients.rag.chat('second')
 
-    expect(countAction(call, API.SEARCH_INIT_VAULT)).toBe(1)
+    expect(countAction(call, API.RAG_CHAT)).toBe(2)
+    expect(countAction(call, API.SEARCH_INIT_VAULT)).toBe(0)
   })
 
   it('does not rebuild chat search when the model already produced an answer', async () => {
-    const { call } = createCall({
-      chatResults: [
-        { answer: 'first answer', citations: [] },
-        { answer: 'second answer', citations: [] }
-      ]
-    })
+    const { call } = createCall({ chatResults: [{ answer: 'first answer', citations: [] }, { answer: 'second answer', citations: [] }] })
     const clients = createClients(call)
-
     await clients.rag.chat('first')
     await clients.rag.chat('second')
-
     expect(countAction(call, API.SEARCH_REBUILD)).toBe(0)
   })
 
   it('forwards conversation history to rag chat requests', async () => {
-    const { call } = createCall({
-      chatResults: [{ answer: 'context aware answer', citations: [] }]
-    })
+    const { call } = createCall({ chatResults: [{ answer: 'context aware answer', citations: [] }] })
     const clients = createClients(call)
-
     await clients.rag.chat({
       message: 'What about the follow-up?',
       limit: 6,
@@ -81,14 +56,8 @@ describe('domain clients chat search behavior', () => {
         { role: 'user', content: 'What about the follow-up?' }
       ]
     })
-
-    expect(call).toHaveBeenCalledWith(
-      API.RAG_CHAT,
-      expect.objectContaining({
-        message: 'What about the follow-up?',
-        limit: 6,
-        messages: expect.any(Array)
-      })
-    )
+    expect(call).toHaveBeenCalledWith(API.RAG_CHAT, expect.objectContaining({
+      message: 'What about the follow-up?', limit: 6, messages: expect.any(Array)
+    }))
   })
 })

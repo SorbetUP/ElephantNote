@@ -6,7 +6,8 @@ const source = readFileSync('Elephant/frontend/app/components/editor/NoteEditorH
 describe('NoteEditorHost Excalidraw image link formatting', () => {
   it('inserts Excalidraw previews through the markdown image source formatter', () => {
     expect(source).toContain('toMarkdownImageSource')
-    expect(source).toContain('const assetMarkdownSource = (targetPath) => toMarkdownImageSource(targetPath, store.activeVault?.path || currentNoteDirectory.value)')
+    expect(source).toContain('const assetMarkdownSource = (targetPath) =>')
+    expect(source).toContain('toMarkdownImageSource(targetPath, store.activeVault?.path || currentNoteDirectory.value)')
     expect(source).toContain('const source = assetMarkdownSource(targetPath)')
     expect(source).toContain('const imageMarkdown = `![${resolvedName}](${source})`')
     expect(source).toContain("filter(Boolean).join('\\n\\n')")
@@ -18,7 +19,7 @@ describe('NoteEditorHost Excalidraw image link formatting', () => {
   })
 
   it('opens existing image-backed drawings from their Excalidraw sidecar', () => {
-    expect(source).toContain('const openExcalidrawFromImage = async(src) => {')
+    expect(source).toContain('const openExcalidrawFromImage = async (src) => {')
     expect(source).toContain('const imagePath = resolveLocalImageSource(src, baseDir)')
     expect(source).toContain('const scenePath = getExcalidrawScenePath(previewPath)')
     expect(source).toContain("await readLocalBlob(scenePath, 'application/vnd.excalidraw+json')")

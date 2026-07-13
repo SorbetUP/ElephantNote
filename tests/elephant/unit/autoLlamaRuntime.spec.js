@@ -12,7 +12,7 @@ afterEach(() => {
 })
 
 describe('AutoLlamaRuntime', () => {
-  it('chooses the node runtime outside the browser', async() => {
+  it('uses the portable WASM runtime when the legacy Node runtime is disabled', async() => {
     const nodeRuntime = {
       status: async() => ({
         available: true,
@@ -38,16 +38,16 @@ describe('AutoLlamaRuntime', () => {
 
     expect(status).toMatchObject({
       runtime: 'auto',
-      engine: 'node-llama-cpp',
+      engine: 'wasm',
       selectedBackend: 'cpu'
     })
     await expect(session.chat({ prompt: 'hello' })).resolves.toMatchObject({
       backend: 'cpu',
-      text: 'node chat ok'
+      text: 'wasm chat ok'
     })
     await expect(session.embed({ text: 'abc' })).resolves.toMatchObject({
       backend: 'cpu',
-      vector: [1, 2, 3]
+      vector: [7, 8, 9]
     })
   })
 

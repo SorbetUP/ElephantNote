@@ -18,6 +18,14 @@ enum MarkKind {
   Strike,
 }
 
+#[derive(Clone, Copy)]
+struct CrossEndpoint {
+  point: SelectionPoint,
+  block: NodeId,
+  top_level: NodeId,
+  top_index: usize,
+}
+
 impl MarkCommand {
   pub fn build(
     self,
@@ -57,9 +65,20 @@ fn build_toggle_mark(
   selection: Selection,
   mark: MarkKind,
 ) -> Result<Transaction, EditError> {
-  let (text, start, end) = selection
-    .ordered_same_node()
-    .ok_or(EditError::CrossNodeSelection)?;
+  if let Some((text, start, end)) = selection.ordered_same_node() {
+    return build_same_text_toggle(document, selection, text, start, end, mark);
+  }
+  build_cross_wrapper_toggle(document, selection, mark)
+}
+
+fn build_same_text_toggle(
+  document: &Document,
+  selection: Selection,
+  text: NodeId,
+  start: u32,
+  end: u32,
+  mark: MarkKind,
+) -> Result<Transaction, EditError> {
   if start == end {
     return Ok(Transaction {
       operations: Vec::new(),
@@ -101,6 +120,112 @@ fn build_toggle_mark(
     end_byte,
     mark,
   )
+}
+
+fn build_cross_wrapper_toggle(
+  document: &Document,
+  selection: Selection,
+  mark: MarkKind,
+) -> Result<Transaction, EditError> {
+  let anchor = endpoint(document, selection.anchor)?;
+  let focus = endpoint(document, selection.focus)?;
+  if anchor.block != focus.block || anchor.top_index == focus.top_index {
+    return Err(EditError::CrossNodeSelection);
+  }
+
+  let (start, end) = if anchor.top_index < focus.top_index {
+    (anchor, focus)
+  } else {
+    (focus, anchor)
+  };
+  let start_length = text_value(document, start.point.node)?
+    .encode_utf16()
+    .count() as u32;
+  let end_length = text_value(document, end.point.node)?
+    .encode_utf16()
+    .count() as u32;
+  if start.point.offset_utf16 != 0 || end.point.offset_utf16 != end_length {
+    return Err(EditError::UnsupportedStructure(start.point.node));
+  }
+  if first_text_descendant(document, start.top_level)? != start.point.node
+    || last_text_descendant(document, end.top_level)? != end.point.node
+  {
+    return Err(EditError::UnsupportedStructure(start.block));
+  }
+  utf16_to_byte(
+    text_value(document, start.point.node)?,
+    start.point.node,
+    start.point.offset_utf16,
+  )?;
+  utf16_to_byte(
+    text_value(document, end.point.node)?,
+    end.point.node,
+    end.point.offset_utf16,
+  )?;
+  let block_node = document
+    .node(start.block)
+    .ok_or(EditError::NodeNotFound(start.block))?;
+  let selected = block_node.children[start.top_index..=end.top_index].to_vec();
+  if selected.iter().any(|node| {
+    document
+      .node(*node)
+      .is_some_and(|candidate| mark.matches(&candidate.kind))
+  }) {
+    return Err(EditError::UnsupportedStructure(start.block));
+  }
+
+  let wrapper = document.next_available_id();
+  let mut operations = vec![Operation::InsertNode {
+    parent: start.block,
+    index: start.top_index,
+    node: Node::new(wrapper, NodeKind::Inline(mark.inline()), None),
+  }];
+  operations.extend(
+    selected
+      .into_iter()
+      .enumerate()
+      .map(|(index, node)| Operation::MoveNode {
+        node,
+        new_parent: wrapper,
+        new_index: index,
+      }),
+  );
+
+  let _ = start_length;
+  Ok(Transaction {
+    operations,
+    selection_before: selection,
+    selection_after: selection,
+  })
+}
+
+fn endpoint(document: &Document, point: SelectionPoint) -> Result<CrossEndpoint, EditError> {
+  text_value(document, point.node)?;
+  let mut current = point.node;
+  loop {
+    let node = document
+      .node(current)
+      .ok_or(EditError::NodeNotFound(current))?;
+    let parent = node.parent.ok_or(EditError::UnsupportedStructure(current))?;
+    let parent_node = document
+      .node(parent)
+      .ok_or(EditError::NodeNotFound(parent))?;
+    match parent_node.kind {
+      NodeKind::Block(_) => {
+        let top_index = document
+          .child_index(parent, current)
+          .ok_or(EditError::UnsupportedStructure(current))?;
+        return Ok(CrossEndpoint {
+          point,
+          block: parent,
+          top_level: current,
+          top_index,
+        });
+      }
+      NodeKind::Inline(_) => current = parent,
+      NodeKind::Document => return Err(EditError::UnsupportedStructure(parent)),
+    }
+  }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -251,11 +376,7 @@ fn build_unwrap_mark(
         Operation::InsertNode {
           parent: grandparent,
           index: wrapper_index + 2,
-          node: Node::new(
-            suffix_wrapper_id,
-            wrapper_node.kind.clone(),
-            None,
-          ),
+          node: Node::new(suffix_wrapper_id, wrapper_node.kind.clone(), None),
         },
         Operation::InsertNode {
           parent: suffix_wrapper_id,
@@ -271,6 +392,34 @@ fn build_unwrap_mark(
     selection_before: selection,
     selection_after: selected_selection(selected_id, end - start),
   })
+}
+
+fn first_text_descendant(document: &Document, root: NodeId) -> Result<NodeId, EditError> {
+  let mut stack = vec![root];
+  while let Some(current) = stack.pop() {
+    let node = document
+      .node(current)
+      .ok_or(EditError::NodeNotFound(current))?;
+    if matches!(node.kind, NodeKind::Inline(InlineKind::Text { .. })) {
+      return Ok(current);
+    }
+    stack.extend(node.children.iter().rev().copied());
+  }
+  Err(EditError::UnsupportedStructure(root))
+}
+
+fn last_text_descendant(document: &Document, root: NodeId) -> Result<NodeId, EditError> {
+  let mut stack = vec![root];
+  while let Some(current) = stack.pop() {
+    let node = document
+      .node(current)
+      .ok_or(EditError::NodeNotFound(current))?;
+    if matches!(node.kind, NodeKind::Inline(InlineKind::Text { .. })) {
+      return Ok(current);
+    }
+    stack.extend(node.children.iter().copied());
+  }
+  Err(EditError::UnsupportedStructure(root))
 }
 
 fn selected_selection(node: NodeId, length: u32) -> Selection {
@@ -312,22 +461,14 @@ mod tests {
   use super::*;
   use crate::{parse_markdown, to_markdown};
 
-  fn first_text_descendant(document: &Document, root: NodeId) -> NodeId {
-    let mut stack = vec![root];
-    while let Some(current) = stack.pop() {
-      let node = document.node(current).unwrap();
-      if matches!(node.kind, NodeKind::Inline(InlineKind::Text { .. })) {
-        return current;
-      }
-      stack.extend(node.children.iter().rev().copied());
-    }
-    panic!("text descendant not found");
+  fn first_text(document: &Document, root: NodeId) -> NodeId {
+    first_text_descendant(document, root).unwrap()
   }
 
   fn marked_text(document: &Document) -> NodeId {
     let block = document.children(document.root).next().unwrap().id;
     let wrapper = document.children(block).next().unwrap().id;
-    first_text_descendant(document, wrapper)
+    first_text(document, wrapper)
   }
 
   fn selection(node: NodeId, start: u32, end: u32) -> Selection {
@@ -386,12 +527,71 @@ mod tests {
   fn wraps_a_plain_text_selection() {
     let mut document = parse_markdown("abcdef");
     let block = document.children(document.root).next().unwrap().id;
-    let text = first_text_descendant(&document, block);
+    let text = first_text(&document, block);
     MarkCommand::ToggleEmphasis
       .build(&document, selection(text, 1, 4))
       .unwrap()
       .apply(&mut document)
       .unwrap();
     assert_eq!(to_markdown(&document), "a*bcd*ef");
+  }
+
+  #[test]
+  fn wraps_complete_subtrees_across_different_inline_marks() {
+    let mut document = parse_markdown("**bold** and *soft*");
+    let block = document.children(document.root).next().unwrap().id;
+    let children = document.children(block).map(|node| node.id).collect::<Vec<_>>();
+    let strong_text = first_text(&document, children[0]);
+    let emphasis_text = first_text(&document, children[2]);
+    let selection = Selection {
+      anchor: SelectionPoint {
+        node: strong_text,
+        offset_utf16: 0,
+      },
+      focus: SelectionPoint {
+        node: emphasis_text,
+        offset_utf16: 4,
+      },
+    };
+
+    let inverse = MarkCommand::ToggleStrike
+      .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
+      .unwrap();
+    assert_eq!(to_markdown(&document), "~~**bold** and *soft*~~");
+    assert_eq!(document.node(children[0]).unwrap().parent.is_some(), true);
+    assert_eq!(document.node(children[2]).unwrap().parent.is_some(), true);
+
+    inverse.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "**bold** and *soft*");
+    assert_eq!(document.node(children[0]).unwrap().parent, Some(block));
+    assert_eq!(document.node(children[2]).unwrap().parent, Some(block));
+  }
+
+  #[test]
+  fn accepts_a_reversed_cross_wrapper_selection() {
+    let mut document = parse_markdown("**bold** and *soft*");
+    let block = document.children(document.root).next().unwrap().id;
+    let children = document.children(block).map(|node| node.id).collect::<Vec<_>>();
+    let strong_text = first_text(&document, children[0]);
+    let emphasis_text = first_text(&document, children[2]);
+    let selection = Selection {
+      anchor: SelectionPoint {
+        node: emphasis_text,
+        offset_utf16: 4,
+      },
+      focus: SelectionPoint {
+        node: strong_text,
+        offset_utf16: 0,
+      },
+    };
+
+    MarkCommand::ToggleStrike
+      .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
+      .unwrap();
+    assert_eq!(to_markdown(&document), "~~**bold** and *soft*~~");
   }
 }

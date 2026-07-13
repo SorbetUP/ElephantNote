@@ -135,10 +135,6 @@ fn build_insert_column_after(
   selection: Selection,
   context: TableContext,
 ) -> Result<Transaction, EditError> {
-  let alignment = table_alignments(document, context.table, context.column_count)?
-    .get(context.column_index)
-    .copied()
-    .ok_or(EditError::UnsupportedStructure(context.cell))?;
   let insert_index = context.column_index + 1;
   let rows = document
     .node(context.table)
@@ -162,7 +158,7 @@ fn build_insert_column_after(
         node: Node::new(
           cell,
           NodeKind::Block(BlockKind::TableCell {
-            alignment,
+            alignment: Alignment::Default,
             header: row_index == 0,
           }),
           None,
@@ -388,7 +384,7 @@ mod tests {
     assert_eq!(document.children(table).count(), 3);
     assert_eq!(
       to_markdown(&document),
-      "| A | B |\n| :--- | ---: |\n| one | two |\n|  |  |"
+      "| A   | B   |\n|:--- | ---:|\n| one | two |\n|     |     |"
     );
 
     inverse.apply(&mut document).unwrap();
@@ -413,13 +409,17 @@ mod tests {
       .unwrap();
     assert!(document.node(row).is_none());
     assert_eq!(document.children(table).count(), 2);
+    assert_eq!(
+      to_markdown(&document),
+      "| A     | B    |\n| ----- | ---- |\n| three | four |"
+    );
 
     inverse.apply(&mut document).unwrap();
     assert_eq!(document.children(table).nth(1).unwrap().id, row);
   }
 
   #[test]
-  fn inserts_a_column_across_all_rows() {
+  fn inserts_a_column_across_all_rows_with_default_alignment() {
     let mut document = parse_markdown("| A | B |\n| :--- | ---: |\n| one | two |");
     let table = document.children(document.root).next().unwrap().id;
     let text = cell_text(&document, table, 1, 0);
@@ -436,9 +436,18 @@ mod tests {
     for row in document.children(table) {
       assert_eq!(document.children(row.id).count(), 3);
     }
+    let header = document.children(table).next().unwrap().id;
+    let inserted_header = document.children(header).nth(1).unwrap();
+    assert!(matches!(
+      inserted_header.kind,
+      NodeKind::Block(BlockKind::TableCell {
+        alignment: Alignment::Default,
+        header: true
+      })
+    ));
     assert_eq!(
       to_markdown(&document),
-      "| A |  | B |\n| :--- | :--- | ---: |\n| one |  | two |"
+      "| A   |     | B   |\n|:--- | --- | ---:|\n| one |     | two |"
     );
 
     inverse.apply(&mut document).unwrap();
@@ -469,7 +478,7 @@ mod tests {
     assert!(document.node(removed_header).is_none());
     assert_eq!(
       to_markdown(&document),
-      "| A | C |\n| --- | --- |\n| one | three |"
+      "| A   | C     |\n| --- | ----- |\n| one | three |"
     );
 
     inverse.apply(&mut document).unwrap();

@@ -16,7 +16,6 @@
       <library-grid />
     </section>
     <dashboard-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'dashboard'" />
-    <sigma-canvas v-else-if="!hasOpenNote && store.activeWorkspaceView === 'canvas'" />
     <template v-if="!hasOpenNote && !activeAddonViewId && store.activeWorkspaceView === 'notes'">
       <template v-for="entry in workspacePanels" :key="entry.contribution.id">
         <component
@@ -40,7 +39,6 @@ import LibraryToolbar from '../library/LibraryToolbar.vue'
 import LibraryGrid from '../library/LibraryGrid.vue'
 import NoteEditorHost from '../editor/NoteEditorHost.vue'
 import DashboardView from '../views/DashboardView.vue'
-import SigmaCanvas from '../views/SigmaCanvas.vue'
 import AddonWorkspaceRouter from '../views/AddonWorkspaceRouter.vue'
 
 const props = defineProps({

@@ -1,8 +1,9 @@
+use serde_json::Value;
 use std::{
   env,
   fs,
   io::{Read, Write},
-  path::{Path, PathBuf},
+  path::{Component, Path, PathBuf},
 };
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
@@ -34,12 +35,53 @@ fn collect_files(root: &Path, current: &Path, output: &mut Vec<PathBuf>) -> R<()
   Ok(())
 }
 
+fn safe_runtime_entry(value: &str) -> R<PathBuf> {
+  let path = Path::new(value);
+  if value.trim().is_empty() || path.is_absolute() {
+    return Err("Addon manifest runtime.entry must be a safe relative path".to_string());
+  }
+  let mut normalized = PathBuf::new();
+  for component in path.components() {
+    match component {
+      Component::Normal(part) => normalized.push(part),
+      Component::CurDir => {}
+      Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+        return Err("Addon manifest runtime.entry must stay inside the package".to_string());
+      }
+    }
+  }
+  if normalized.as_os_str().is_empty() {
+    return Err("Addon manifest runtime.entry must not be empty".to_string());
+  }
+  Ok(normalized)
+}
+
+fn declared_runtime_entry(source: &Path) -> R<PathBuf> {
+  let manifest_path = source.join("manifest.json");
+  if !manifest_path.is_file() {
+    return Err("Addon staging directory must contain manifest.json".to_string());
+  }
+  let manifest_bytes = fs::read(&manifest_path)
+    .map_err(|error| format!("Failed to read {}: {error}", manifest_path.display()))?;
+  let manifest: Value = serde_json::from_slice(&manifest_bytes)
+    .map_err(|error| format!("Invalid addon manifest: {error}"))?;
+  let entry = manifest
+    .pointer("/runtime/entry")
+    .and_then(Value::as_str)
+    .ok_or_else(|| "Addon manifest must declare runtime.entry".to_string())?;
+  safe_runtime_entry(entry)
+}
+
 fn package(source: &Path, output: &Path) -> R<(u64, String)> {
   if !source.is_dir() {
     return Err(format!("Addon staging directory does not exist: {}", source.display()));
   }
-  if !source.join("manifest.json").is_file() || !source.join("main.js").is_file() {
-    return Err("Addon staging directory must contain manifest.json and main.js".to_string());
+  let runtime_entry = declared_runtime_entry(source)?;
+  if !source.join(&runtime_entry).is_file() {
+    return Err(format!(
+      "Addon staging directory does not contain manifest runtime entry {}",
+      runtime_entry.display()
+    ));
   }
   if let Some(parent) = output.parent() {
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -101,5 +143,23 @@ fn main() {
       eprintln!("{error}");
       std::process::exit(1);
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn accepts_non_default_runtime_entries() {
+    assert_eq!(safe_runtime_entry("main.mobile.js").unwrap(), PathBuf::from("main.mobile.js"));
+    assert_eq!(safe_runtime_entry("runtime/main.js").unwrap(), PathBuf::from("runtime/main.js"));
+  }
+
+  #[test]
+  fn rejects_runtime_entry_traversal() {
+    assert!(safe_runtime_entry("../main.js").is_err());
+    assert!(safe_runtime_entry("/main.js").is_err());
+    assert!(safe_runtime_entry("").is_err());
   }
 }

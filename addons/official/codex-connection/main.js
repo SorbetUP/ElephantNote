@@ -28,6 +28,25 @@ export default class ElephantCodexAddon {
     return response?.data ?? response
   }
 
+  async chat({ messages = [], model = '', route = {} } = {}) {
+    const transcript = (Array.isArray(messages) ? messages : [])
+      .filter((message) => message && typeof message === 'object' && String(message.content || '').trim())
+      .map((message) => `${String(message.role || 'user').toUpperCase()}:\n${String(message.content || '').trim()}`)
+      .join('\n\n')
+    const prompt = [
+      route.systemPrompt ? `System instructions:\n${route.systemPrompt}` : '',
+      'You are answering inside Elephant. Use only the supplied conversation and note context. Do not inspect the filesystem or execute commands.',
+      transcript
+    ].filter(Boolean).join('\n\n')
+    const result = await this.invoke('chat', { model, prompt })
+    return {
+      answer: String(result?.answer || '').trim(),
+      provider: PROVIDER_ID,
+      model: String(result?.model || model || '').trim(),
+      threadId: result?.threadId || result?.thread_id || ''
+    }
+  }
+
   render(container) {
     const documentRef = container.ownerDocument
     const root = node(documentRef, 'section', 'elephant-codex-settings')
@@ -110,7 +129,7 @@ export default class ElephantCodexAddon {
       id: `${ADDON_ID}.provider`,
       providerId: PROVIDER_ID,
       title: 'Codex subscription',
-      description: 'ChatGPT subscription through the bundled Codex app server.',
+      description: 'ChatGPT subscription through the package-owned Codex runtime.',
       transport: 'codex',
       endpoint: 'codex://app-server',
       settingsSection: 'ai',
@@ -118,7 +137,8 @@ export default class ElephantCodexAddon {
       getModels: async () => {
         const result = await this.invoke('models')
         return Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : []
-      }
+      },
+      chat: (request) => this.chat(request)
     })
 
     api.settings.registerSection({

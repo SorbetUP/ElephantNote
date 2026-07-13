@@ -4,14 +4,12 @@ import {
   bundled,
   initializeRustWasm,
   runDifferentialTrace,
-  setJsSelection,
   setJsSelectionByText
 } from './rustDifferentialHarness'
 
 const describeBundled = bundled ? describe : describe.skip
 
 const selectText = (muya, target) => setJsSelectionByText(muya, target, 1)
-const selectHeading = (muya) => setJsSelection(muya, 0, 1)
 
 const traces = [
   {
@@ -28,7 +26,7 @@ const traces = [
     initial: '# alpha\n\nbeta',
     target: 'alpha',
     expected: '# alpha\n\n# alpha\n\nbeta\n',
-    selectJs: selectHeading,
+    selectJs: selectText,
     runJs: (muya) => muya.duplicate(),
     command: { type: 'duplicate_block' }
   },

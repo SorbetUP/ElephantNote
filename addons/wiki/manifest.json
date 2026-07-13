@@ -1,0 +1,15 @@
+{
+  "id": "elephant.wiki",
+  "parentAddonId": "elephant.ai",
+  "name": "Wiki",
+  "version": "1.1.0",
+  "description": "Adds AI-organized Wiki pages and cluster navigation as a separately installed package.",
+  "author": "Elephant",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": { "type": "javascript-worker", "entry": "main.js" },
+  "permissions": { "notes": { "read": ["**/*.md"], "write": ["Wiki/**/*.md"] }, "commands": true, "views": true },
+  "requires": { "elephant.ai": ">=2.1.0" },
+  "contributes": { "runtimeMode": "trusted" },
+  "activationEvents": ["onStartup"]
+}

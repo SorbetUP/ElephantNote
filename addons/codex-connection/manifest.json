@@ -1,0 +1,14 @@
+{
+  "id": "elephant.codex-connection",
+  "name": "Codex Connection",
+  "version": "1.1.0",
+  "description": "Connects a ChatGPT subscription and exposes Codex as an AI provider through a separately installed package.",
+  "author": "Elephant",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": { "type": "javascript-worker", "entry": "main.js" },
+  "permissions": { "storage": true, "commands": true },
+  "requires": { "elephant.ai": ">=2.1.0" },
+  "contributes": { "runtimeMode": "trusted" },
+  "activationEvents": ["onStartup"]
+}

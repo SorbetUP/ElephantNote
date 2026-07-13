@@ -26,17 +26,25 @@ jobs:
           from pathlib import Path
           path = Path('Elephant/frontend/app/components/views/AtomicGraphView.vue')
           source = path.read_text()
-          old = '  const t = theme.value\n'
+          old = '''function buildGraph (data) {
+  const graph = new Graph()
+  const t = theme.value
+  const { nodes, edges, edgeCounts, maxEdges = 1 } = data
+'''
+          new = '''function buildGraph (data) {
+  const graph = new Graph()
+  const { nodes, edges, edgeCounts, maxEdges = 1 } = data
+'''
           if source.count(old) != 1:
-              raise SystemExit(f'expected one obsolete theme alias, found {source.count(old)}')
-          path.write_text(source.replace(old, '', 1))
+              raise SystemExit(f'expected one buildGraph theme alias, found {source.count(old)}')
+          path.write_text(source.replace(old, new, 1))
           PY
 
       - name: Verify graph source contracts
         run: |
           grep -q 'maxEdges = 1' Elephant/frontend/app/components/views/AtomicGraphView.vue
           grep -q 'clusterIndex: node.clusterIndex || 0' Elephant/frontend/app/components/views/AtomicGraphView.vue
-          ! grep -q 'const t = theme.value' Elephant/frontend/app/components/views/AtomicGraphView.vue
+          ! grep -A3 'function buildGraph' Elephant/frontend/app/components/views/AtomicGraphView.vue | grep -q 'const t = theme.value'
 
       - name: Commit cleanup
         run: |

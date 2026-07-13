@@ -21,7 +21,7 @@ impl MuyaEditor {
     }
 
     pub fn snapshot_json(&self) -> Result<String, JsValue> {
-        let response = EditorResponse::Snapshot(ProtocolSnapshot::from(self.session.snapshot()));
+        let response = EditorResponse::Snapshot(ProtocolSnapshot::from_session(&self.session));
         serde_json::to_string(&response).map_err(|error| JsValue::from_str(&error.to_string()))
     }
 
@@ -63,6 +63,15 @@ mod tests {
         let response: EditorResponse = serde_json::from_str(&json).unwrap();
         assert!(matches!(response, EditorResponse::Update(_)));
         assert_eq!(session.snapshot().markdown, "xabc");
+    }
+
+    #[test]
+    fn snapshots_include_the_logical_document_tree() {
+        let session = EditorSession::from_markdown("**bold**");
+        let response = EditorResponse::Snapshot(ProtocolSnapshot::from_session(&session));
+        let json = serde_json::to_value(response).unwrap();
+        assert_eq!(json["type"], "snapshot");
+        assert!(json["payload"]["document"]["nodes"].as_array().unwrap().len() >= 4);
     }
 
     #[test]

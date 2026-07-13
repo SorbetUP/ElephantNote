@@ -95,7 +95,7 @@ describe('external addon manifest contracts', () => {
 })
 
 describe('built-in addon catalogue', () => {
-  it('ships only useful first-party features with distinct logos', () => {
+  it('ships only code that is physically bundled with the app', () => {
     expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
       'elephant.addon-packs',
       'elephant.google-keep-import',
@@ -105,7 +105,6 @@ describe('built-in addon catalogue', () => {
       'elephant.ai',
       'elephant.ai-chat',
       'elephant.ai-search',
-      'elephant.ai-ocr',
       'elephant.wiki',
       'elephant.graph',
       'elephant.open-models',
@@ -119,6 +118,7 @@ describe('built-in addon catalogue', () => {
     expect(builtinAddons.find((addon) => addon.manifest.id === 'elephant.addon-packs')?.manifest.removable).toBe(false)
     expect(new Set(builtinAddons.map((addon) => addon.manifest.icon)).size).toBe(builtinAddons.length)
     expect(builtinAddons.map((addon) => addon.manifest.id)).not.toEqual(expect.arrayContaining([
+      'elephant.ai-ocr',
       'elephant.daily-notes',
       'elephant.quick-capture',
       'elephant.vault-overview',

@@ -39,22 +39,32 @@ jobs:
           if-no-files-found: warn
       - name: Format and validate focused code
         run: |
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml local_refinement_drops_remote_assignment_tail --lib
-          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml web_citation_labels_are_human_readable --lib
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \
-            Elephant/frontend/app/components/views/AtomicGraphView.vue \
-            Elephant/frontend/app/search/SearchModal.vue \
-            Elephant/frontend/src/renderer/src/platform/tauriSearchConceptFallback.js \
-            tests/app/unit/wikiDiscoveryQualityRegression.spec.js \
-            tests/app/unit/graphWikiScaleRegression.spec.js
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/wikiDiscoveryQualityRegression.spec.js \
-            tests/app/unit/graphWikiScaleRegression.spec.js
+          set -o pipefail
+          {
+            cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+            cargo test --manifest-path Elephant/backend/tauri/Cargo.toml local_refinement_drops_remote_assignment_tail --lib
+            cargo test --manifest-path Elephant/backend/tauri/Cargo.toml web_citation_labels_are_human_readable --lib
+            NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \
+              Elephant/frontend/app/components/views/AtomicGraphView.vue \
+              Elephant/frontend/app/search/SearchModal.vue \
+              Elephant/frontend/src/renderer/src/platform/tauriSearchConceptFallback.js \
+              tests/app/unit/wikiDiscoveryQualityRegression.spec.js \
+              tests/app/unit/graphWikiScaleRegression.spec.js
+            NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+              tests/app/unit/wikiDiscoveryQualityRegression.spec.js \
+              tests/app/unit/graphWikiScaleRegression.spec.js
+          } 2>&1 | tee wiki-pipeline-validation.log
+      - name: Upload validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wiki-pipeline-validation-log
+          path: wiki-pipeline-validation.log
+          if-no-files-found: warn
       - name: Restore workflow and commit functional changes
         run: |
           rm scripts/apply_wiki_pipeline_v3.py scripts/fix_wiki_patch_script.py scripts/fix_wiki_patch_script_v2.py scripts/apply_search_wiki_fix.py
-          rm -f wiki-pipeline-patch.log
+          rm -f wiki-pipeline-patch.log wiki-pipeline-validation.log
           cat > .github/workflows/lint.yml <<'YAML'
           name: Lint
 

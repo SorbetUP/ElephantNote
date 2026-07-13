@@ -200,7 +200,18 @@ jobs:
       - name: Run real JavaScript versus Rust editing traces
         shell: bash
         run: |
+          set -o pipefail
           ELEPHANT_EXPERIMENTAL_RUST_EDITOR=1 \
           NODE_PATH=Elephant/node_modules \
           Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/specs/muya/rustDifferentialTraces.spec.js
+            tests/app/unit/specs/muya/rustDifferentialTraces.spec.js \
+            2>&1 | tee muya-rust-differential.txt
+
+      - name: Upload differential trace diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-rust-differential
+          path: muya-rust-differential.txt
+          if-no-files-found: ignore
+          retention-days: 7

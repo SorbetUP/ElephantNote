@@ -70,6 +70,9 @@ impl EditorSession {
       SessionCommand::BlockType(command) => {
         self.apply_transaction(command.build(&self.document, self.selection)?, false)
       }
+      SessionCommand::HorizontalRule(command) => {
+        self.apply_transaction(command.build(&self.document, self.selection)?, false)
+      }
       SessionCommand::List(command) => {
         self.apply_transaction(command.build(&self.document, self.selection)?, false)
       }

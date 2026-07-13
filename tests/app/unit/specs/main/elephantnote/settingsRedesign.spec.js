@@ -42,7 +42,7 @@ describe('Elephant settings redesign', () => {
     const search = read('addons/official/ai-search/main.js')
     const ocr = read('addons/official/ai-ocr/main.js')
     const code = read('addons/official/code-execution/main.js')
-    const sync = read('addons/official/sync/main.service.js')
+    const sync = read('addons/official/sync/main.js')
     const sites = read('addons/official/sites/main.js')
 
     expect(source).toContain('addonStandaloneSections')
@@ -139,7 +139,7 @@ describe('Elephant settings redesign', () => {
     const navigation = read('Elephant/frontend/app/components/navigation/NavigationBar.vue')
     const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
     const physicalEntries = [
-      ['addons/official/sync/main.service.js', "registerContribution('top-bar.items'"],
+      ['addons/official/sync/main.js', "registerContribution('top-bar.items'"],
       ['addons/official/sites/main.js', "zone: 'workspace.notes'"],
       ['addons/official/codex-connection/main.js', "registerContribution('ai.providers'"],
       ['addons/official/ai-chat/main.js', "zone: 'shell.right'"],

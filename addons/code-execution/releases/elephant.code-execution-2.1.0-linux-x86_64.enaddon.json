@@ -1,10 +1,12 @@
 {
-  "blake3": "80633b763584adc9eb8eb4b7780212ade34590f2655d203b74734a2ad256aa67",
-  "bytes": 298565,
+  "blake3": "18e6f3f591622de2ddda0ac6d624e0ac92520085cbe0e7343c8d10881e9204df",
+  "bytes": 298570,
   "path": "/home/runner/work/ElephantNote/ElephantNote/build/out/addons/releases/elephant.code-execution/elephant.code-execution-2.1.0-linux-x86_64.enaddon",
   "id": "elephant.code-execution",
   "version": "2.1.0",
   "platform": "linux-x86_64",
+  "runner": "process",
+  "modules": 1,
   "file": "elephant.code-execution-2.1.0-linux-x86_64.enaddon",
   "catalogPath": "addons/code-execution/releases/elephant.code-execution-2.1.0-linux-x86_64.enaddon"
 }

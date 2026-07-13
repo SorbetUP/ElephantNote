@@ -30,7 +30,7 @@ fn physical_manifest(app: &AppHandle, addon_id: &str) -> R<Map<String, Value>> {
 }
 
 #[tauri::command]
-pub fn tauri_addons_list(
+pub fn tauri_addons_list_full(
   app: AppHandle,
   state: State<'_, AddonState>,
 ) -> R<Vec<Value>> {

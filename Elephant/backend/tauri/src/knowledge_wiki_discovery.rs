@@ -362,16 +362,115 @@ async fn embed_batch(
 }
 
 #[cfg(not(mobile))]
+fn trim_view(value: &str, limit: usize) -> String {
+    value.chars().take(limit).collect::<String>()
+}
+
+#[cfg(not(mobile))]
+fn document_text_views(title: &str, chunks: &[String]) -> (String, Vec<String>) {
+    let clean_chunks = chunks
+        .iter()
+        .map(|chunk| chunk.trim())
+        .filter(|chunk| !chunk.is_empty())
+        .collect::<Vec<_>>();
+    if clean_chunks.is_empty() {
+        let title = title.trim();
+        return (
+            title.to_string(),
+            (!title.is_empty())
+                .then(|| vec![format!("Title: {title}")])
+                .unwrap_or_default(),
+        );
+    }
+
+    let last = clean_chunks.len().saturating_sub(1);
+    let middle = clean_chunks.len() / 2;
+    let mut groups = vec![
+        vec![0, 1.min(last)],
+        vec![middle.saturating_sub(1), middle, (middle + 1).min(last)],
+        vec![last.saturating_sub(1), last],
+    ];
+    for group in &mut groups {
+        group.sort_unstable();
+        group.dedup();
+    }
+    groups.dedup();
+
+    let mut views = groups
+        .iter()
+        .map(|indices| {
+            let body = indices
+                .iter()
+                .filter_map(|index| clean_chunks.get(*index))
+                .map(|chunk| trim_view(chunk, 1_500))
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            trim_view(&format!("Title: {}\n\n{}", title.trim(), body), 2_200)
+        })
+        .filter(|view| !view.trim().is_empty())
+        .collect::<Vec<_>>();
+    views.dedup();
+
+    let mut excerpt_indices = vec![
+        0,
+        1.min(last),
+        clean_chunks.len() / 3,
+        middle,
+        clean_chunks.len().saturating_mul(2) / 3,
+        last.saturating_sub(1),
+        last,
+    ];
+    excerpt_indices.sort_unstable();
+    excerpt_indices.dedup();
+    let excerpt = excerpt_indices
+        .iter()
+        .filter_map(|index| clean_chunks.get(*index))
+        .map(|chunk| trim_view(chunk, 700))
+        .collect::<Vec<_>>()
+        .join("\n…\n");
+    (trim_view(&excerpt, 3_500), views)
+}
+
+#[cfg(not(mobile))]
+fn average_vectors(vectors: &[Vec<f32>]) -> Result<Vec<f32>, String> {
+    let dimensions = vectors
+        .first()
+        .map(Vec::len)
+        .ok_or_else(|| "Cannot average an empty embedding set.".to_string())?;
+    if dimensions == 0 || vectors.iter().any(|vector| vector.len() != dimensions) {
+        return Err("Document embedding views have incompatible dimensions.".into());
+    }
+    let mut average = vec![0.0; dimensions];
+    for vector in vectors {
+        for (target, value) in average.iter_mut().zip(vector) {
+            *target += *value;
+        }
+    }
+    normalize_vector(average)
+}
+
+#[cfg(not(mobile))]
 fn load_documents(
     connection: &Connection,
-) -> Result<Vec<(String, String, String, String)>, String> {
+) -> Result<Vec<(String, String, String, String, Vec<String>)>, String> {
+    let mut chunks_by_path = HashMap::<String, Vec<String>>::new();
+    {
+        let mut chunks_statement = connection
+            .prepare("SELECT document_path, text FROM chunks ORDER BY document_path, ordinal")
+            .map_err(|error| error.to_string())?;
+        let rows = chunks_statement
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|error| error.to_string())?;
+        for row in rows {
+            let (path, text) = row.map_err(|error| error.to_string())?;
+            chunks_by_path.entry(path).or_default().push(text);
+        }
+    }
+
     let mut statement = connection
-        .prepare(
-            "SELECT d.relative_path, d.title, d.content_hash,
-                    COALESCE((SELECT group_concat(text, '\n') FROM
-                      (SELECT text FROM chunks WHERE document_path=d.relative_path ORDER BY ordinal LIMIT 4)), '')
-             FROM documents d ORDER BY d.relative_path",
-        )
+        .prepare("SELECT relative_path, title, content_hash FROM documents ORDER BY relative_path")
         .map_err(|error| error.to_string())?;
     let rows = statement
         .query_map([], |row| {
@@ -379,12 +478,17 @@ fn load_documents(
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
             ))
         })
         .map_err(|error| error.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())
+    let mut documents = Vec::new();
+    for row in rows {
+        let (path, title, content_hash) = row.map_err(|error| error.to_string())?;
+        let chunks = chunks_by_path.remove(&path).unwrap_or_default();
+        let (excerpt, views) = document_text_views(&title, &chunks);
+        documents.push((path, title, content_hash, excerpt, views));
+    }
+    Ok(documents)
 }
 
 #[cfg(not(mobile))]
@@ -393,14 +497,16 @@ async fn document_vectors(
     root: &Path,
     route: &EmbeddingRoute,
 ) -> Result<Vec<DocumentVector>, String> {
-    let model_key = format!("{}|{}|{}", route.source, route.endpoint, route.model);
+    let model_key = format!(
+        "wiki-multiview-v2|{}|{}|{}",
+        route.source, route.endpoint, route.model
+    );
     let (mut output, missing) = {
         let connection = open_connection(root)?;
         let documents = load_documents(&connection)?;
         let mut output = Vec::<Option<DocumentVector>>::with_capacity(documents.len());
-        let mut missing = Vec::<(usize, String, String, String, String)>::new();
-        for (path, title, content_hash, body) in documents {
-            let excerpt = body.chars().take(3_000).collect::<String>();
+        let mut missing = Vec::<(usize, String, String, String, String, Vec<String>)>::new();
+        for (path, title, content_hash, excerpt, views) in documents {
             if title.trim().is_empty() && excerpt.trim().is_empty() {
                 continue;
             }
@@ -427,38 +533,46 @@ async fn document_vectors(
                 }
             }
             output.push(None);
-            missing.push((index, path, title, content_hash, excerpt));
+            missing.push((index, path, title, content_hash, excerpt, views));
         }
         (output, missing)
     };
 
-    for batch in missing.chunks(32) {
+    for batch in missing.chunks(16) {
         let inputs = batch
             .iter()
-            .map(|(_, _, title, _, excerpt)| format!("Title: {title}\n\n{excerpt}"))
+            .flat_map(|(_, _, _, _, _, views)| views.iter().cloned())
             .collect::<Vec<_>>();
         let vectors = embed_batch(app, route, &inputs).await?;
-        {
-            let connection = open_connection(root)?;
-            for ((index, path, title, content_hash, excerpt), vector) in batch.iter().zip(vectors) {
-                connection
-                    .execute(
-                        "INSERT INTO wiki_embedding_cache(document_path, model_key, content_hash, vector_json, updated_at)
-                         VALUES (?1, ?2, ?3, ?4, unixepoch())
-                         ON CONFLICT(document_path, model_key) DO UPDATE SET
-                           content_hash=excluded.content_hash,
-                           vector_json=excluded.vector_json,
-                           updated_at=unixepoch()",
-                        params![path, model_key, content_hash, serde_json::to_string(&vector).map_err(|error| error.to_string())?],
-                    )
-                    .map_err(|error| error.to_string())?;
-                output[*index] = Some(DocumentVector {
-                    path: path.clone(),
-                    title: title.clone(),
-                    excerpt: excerpt.clone(),
-                    vector,
-                });
+        let mut vector_offset = 0usize;
+        let connection = open_connection(root)?;
+        for (index, path, title, content_hash, excerpt, views) in batch {
+            let view_count = views.len();
+            if view_count == 0 || vector_offset + view_count > vectors.len() {
+                return Err(format!("Missing embedding views for document {path}."));
             }
+            let vector = average_vectors(&vectors[vector_offset..vector_offset + view_count])?;
+            vector_offset += view_count;
+            connection
+                .execute(
+                    "INSERT INTO wiki_embedding_cache(document_path, model_key, content_hash, vector_json, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, unixepoch())
+                     ON CONFLICT(document_path, model_key) DO UPDATE SET
+                       content_hash=excluded.content_hash,
+                       vector_json=excluded.vector_json,
+                       updated_at=unixepoch()",
+                    params![path, model_key, content_hash, serde_json::to_string(&vector).map_err(|error| error.to_string())?],
+                )
+                .map_err(|error| error.to_string())?;
+            output[*index] = Some(DocumentVector {
+                path: path.clone(),
+                title: title.clone(),
+                excerpt: excerpt.clone(),
+                vector,
+            });
+        }
+        if vector_offset != vectors.len() {
+            return Err("Embedding provider returned unassigned document views.".into());
         }
     }
     Ok(output.into_iter().flatten().collect())
@@ -912,6 +1026,35 @@ pub async fn tauri_knowledge_wiki_semantic_discover(
 #[cfg(all(test, not(mobile)))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn document_views_cover_opening_middle_and_end() {
+        let chunks = (0..9)
+            .map(|index| format!("chunk-{index}"))
+            .collect::<Vec<_>>();
+        let (excerpt, views) = document_text_views("Long note", &chunks);
+        assert_eq!(views.len(), 3);
+        assert!(views[0].contains("chunk-0"));
+        assert!(views[1].contains("chunk-4"));
+        assert!(views[2].contains("chunk-8"));
+        assert!(excerpt.contains("chunk-0"));
+        assert!(excerpt.contains("chunk-8"));
+    }
+
+    #[test]
+    fn averaged_views_are_normalized() {
+        let averaged = average_vectors(&[
+            normalize_vector(vec![1.0, 0.0]).unwrap(),
+            normalize_vector(vec![0.0, 1.0]).unwrap(),
+        ])
+        .unwrap();
+        let norm = averaged
+            .iter()
+            .map(|value| value * value)
+            .sum::<f32>()
+            .sqrt();
+        assert!((norm - 1.0).abs() < 1e-5);
+    }
 
     #[test]
     fn topic_source_floor_scales_with_the_vault() {

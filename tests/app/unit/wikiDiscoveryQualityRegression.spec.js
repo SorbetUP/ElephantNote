@@ -7,6 +7,14 @@ const wikiView = fs.readFileSync('Elephant/frontend/app/components/views/WikiVie
 const library = fs.readFileSync('Elephant/backend/tauri/src/knowledge_wiki_library.rs', 'utf8')
 
 describe('Wiki macro-topic discovery contracts', () => {
+  it('uses multi-view embeddings instead of only the first chunks', () => {
+    expect(discovery).toContain('document_text_views')
+    expect(discovery).toContain('average_vectors')
+    expect(discovery).toContain('wiki-multiview-v2')
+    expect(discovery).toContain('chunks ORDER BY document_path, ordinal')
+    expect(discovery).not.toContain('ORDER BY ordinal LIMIT 4')
+  })
+
   it('builds deterministic graph communities and assigns notes competitively', () => {
     expect(discovery).toContain('build_topic_communities')
     expect(discovery).toContain('build_assignment_profile')

@@ -112,16 +112,21 @@ mod tests {
   use crate::selection::SelectionPoint;
   use crate::{parse_markdown, to_markdown};
 
-  fn first_text(document: &Document) -> &Node {
+  fn text_with_value<'a>(document: &'a Document, expected: &str) -> &'a Node {
     document
       .nodes
       .values()
-      .find(|node| matches!(node.kind, NodeKind::Inline(InlineKind::Text { .. })))
+      .find(|node| {
+        matches!(
+          &node.kind,
+          NodeKind::Inline(InlineKind::Text { value }) if value == expected
+        )
+      })
       .unwrap()
   }
 
   fn selection(document: &Document, start: u32, end: u32) -> Selection {
-    let text = first_text(document).id;
+    let text = text_with_value(document, "alpha").id;
     Selection {
       anchor: SelectionPoint {
         node: text,

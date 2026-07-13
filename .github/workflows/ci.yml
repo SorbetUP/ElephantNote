@@ -77,7 +77,12 @@ jobs:
           pnpm lint 2>&1 | tee eslint-output.txt
 
       - name: ElephantNote contract tests
-        run: pnpm exec vitest run tests/app/unit/specs/main/elephantnote
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/specs/main/elephantnote \
+            2>&1 | tee contract-tests-output.txt
 
       - name: Unit suite
         run: pnpm test:unit
@@ -114,6 +119,7 @@ jobs:
             critical-flow-output.txt
             tauri-platform-output.txt
             eslint-output.txt
+            contract-tests-output.txt
             build-output.txt
           if-no-files-found: ignore
           retention-days: 14

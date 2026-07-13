@@ -32,6 +32,9 @@ export const editorCommands = Object.freeze({
   toggleStrong: () => ({ type: 'toggle_strong' }),
   toggleEmphasis: () => ({ type: 'toggle_emphasis' }),
   toggleStrike: () => ({ type: 'toggle_strike' }),
+  duplicateBlock: () => ({ type: 'duplicate_block' }),
+  deleteBlock: () => ({ type: 'delete_block' }),
+  insertParagraphAfterBlock: () => ({ type: 'insert_paragraph_after_block' }),
   indentListItem: () => ({ type: 'indent_list_item' }),
   outdentListItem: () => ({ type: 'outdent_list_item' }),
   setTaskChecked: (item, checked, autoCheck = false) => ({

@@ -22,7 +22,10 @@ jobs:
 
       - name: Apply physical addon boundary migration
         if: github.head_ref == 'feature/physical-addon-packages'
-        run: python3 build/scripts/apply-physical-boundary-fixes.py
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 build/scripts/apply-physical-boundary-fixes.py 2>&1 | tee physical-migration-output.txt
 
       - uses: ./.github/actions/setup
 
@@ -57,10 +60,12 @@ jobs:
           git pull --rebase origin feature/physical-addon-packages
           git push origin HEAD:feature/physical-addon-packages
 
-      - name: Upload ESLint output
+      - name: Upload lint and migration output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: eslint-output
-          path: eslint-output.txt
+          name: lint-and-migration-output
+          path: |
+            eslint-output.txt
+            physical-migration-output.txt
           if-no-files-found: ignore

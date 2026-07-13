@@ -90,6 +90,16 @@ export class RustTraceEditor {
   setSelection(textIndex, start, end = start) {
     const node = this.textNodes()[textIndex]
     if (!node) throw new Error(`Muya Rust text node ${textIndex} was not found.`)
+    this.setSelectionOnNode(node, start, end)
+  }
+
+  setSelectionByText(value, start, end = start) {
+    const node = this.textNodes().find((candidate) => candidate.kind?.value?.value === value)
+    if (!node) throw new Error(`Muya Rust text node with value ${JSON.stringify(value)} was not found.`)
+    this.setSelectionOnNode(node, start, end)
+  }
+
+  setSelectionOnNode(node, start, end) {
     this.request({
       type: 'set_selection',
       selection: {

@@ -4,3 +4,4 @@ pub mod manifest;
 pub mod pairing;
 pub mod plan;
 pub mod protocol;
+pub mod transfer;

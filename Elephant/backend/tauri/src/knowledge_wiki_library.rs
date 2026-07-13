@@ -1,8 +1,5 @@
 use crate::knowledge_chat_actions::hybrid_note_search;
-use crate::knowledge_wikis::{
-    tauri_knowledge_wiki_accept, tauri_knowledge_wiki_candidates, tauri_knowledge_wiki_generate,
-    WikiCandidate,
-};
+use crate::knowledge_wikis::{tauri_knowledge_wiki_accept, tauri_knowledge_wiki_generate};
 use elephantnote_knowledge_core::{KnowledgeStore, WikiCitation, WikiDraft, WikiDraftStatus};
 use rusqlite::{params, Connection};
 use serde::Serialize;
@@ -166,29 +163,6 @@ fn plain_excerpt(markdown: &str) -> String {
         output.push(' ');
     }
     output.trim().to_string()
-}
-
-fn candidate_item(candidate: WikiCandidate) -> WikiLibraryItem {
-    WikiLibraryItem {
-        id: candidate_id(&candidate.topic),
-        kind: "suggestion".into(),
-        status: "suggested".into(),
-        title: candidate.title,
-        topic: candidate.topic,
-        excerpt: candidate.preview.clone(),
-        reason: candidate.reason,
-        preview: candidate.preview,
-        suggested_sections: candidate.suggested_sections,
-        source_titles: candidate.source_titles,
-        path: None,
-        source_paths: candidate.source_paths,
-        score: candidate.score,
-        model_id: String::new(),
-        markdown: String::new(),
-        draft_id: None,
-        citations_count: 0,
-        updated_at: 0,
-    }
 }
 
 fn saved_candidate_items(store: &KnowledgeStore) -> Result<Vec<WikiLibraryItem>, String> {
@@ -568,17 +542,6 @@ pub fn tauri_knowledge_wiki_library_list(
         .into_iter()
         .filter(|candidate| !rejected.contains(&normalize_topic(&candidate.topic)))
         .collect::<Vec<_>>();
-    let mut seen_topics = suggestions
-        .iter()
-        .map(|candidate| normalize_topic(&candidate.topic))
-        .collect::<HashSet<_>>();
-    suggestions.extend(
-        tauri_knowledge_wiki_candidates(app, Some(limit))?
-            .into_iter()
-            .filter(|candidate| !rejected.contains(&normalize_topic(&candidate.topic)))
-            .filter(|candidate| seen_topics.insert(normalize_topic(&candidate.topic)))
-            .map(candidate_item),
-    );
     suggestions.sort_by(|left, right| {
         right
             .score

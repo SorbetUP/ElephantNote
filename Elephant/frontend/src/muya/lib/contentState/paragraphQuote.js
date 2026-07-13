@@ -27,6 +27,14 @@ const wrapMultipleBlocks = (contentState, parent, startIndex, endIndex) => {
   })
 }
 
+const recordQuoteMutation = (contentState, start, end) => {
+  contentState.cursor = {
+    start: { key: start.key, offset: start.offset },
+    end: { key: end.key, offset: end.offset },
+    isEdit: true
+  }
+}
+
 const paragraphQuote = ContentState => {
   ContentState.prototype.handleQuoteMenu = function(insertMode) {
     const { start, end, affiliation } = this.selectionChange(this.cursor)
@@ -42,6 +50,7 @@ const paragraphQuote = ContentState => {
       const { parent, startIndex, endIndex } = this.getCommonParent()
       wrapMultipleBlocks(this, parent, startIndex, endIndex)
     }
+    recordQuoteMutation(this, start, end)
   }
 }
 

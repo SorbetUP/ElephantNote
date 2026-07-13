@@ -4,8 +4,9 @@ use crate::edit::{
   Command, EditError, GraphemeCommand, MarkCommand, ParagraphBoundaryCommand,
 };
 use crate::features::{ListCommand, TableCommand, TableNavigationCommand};
+use crate::model::{Document, Node, NodeId};
 use crate::selection::Selection;
-use crate::session::{EditorSession, SessionCommand, SessionSnapshot, SessionUpdate};
+use crate::session::{EditorSession, SessionCommand, SessionUpdate};
 use crate::view::ViewPatch;
 
 pub const EDITOR_PROTOCOL_VERSION: u16 = 1;
@@ -55,13 +56,46 @@ pub enum EditorResponse {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ProtocolDocument {
+  pub root: NodeId,
+  pub nodes: Vec<Node>,
+}
+
+impl ProtocolDocument {
+  pub fn from_document(document: &Document) -> Self {
+    let mut nodes = Vec::with_capacity(document.nodes.len());
+    append_preorder(document, document.root, &mut nodes);
+    Self {
+      root: document.root,
+      nodes,
+    }
+  }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ProtocolSnapshot {
   pub markdown: String,
+  pub document: ProtocolDocument,
   pub revision: u64,
   pub selection: Selection,
   pub can_undo: bool,
   pub can_redo: bool,
   pub composition_active: bool,
+}
+
+impl ProtocolSnapshot {
+  pub fn from_session(session: &EditorSession) -> Self {
+    let snapshot = session.snapshot();
+    Self {
+      markdown: snapshot.markdown,
+      document: ProtocolDocument::from_document(session.document()),
+      revision: snapshot.revision,
+      selection: snapshot.selection,
+      can_undo: snapshot.can_undo,
+      can_redo: snapshot.can_redo,
+      composition_active: snapshot.composition_active,
+    }
+  }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -112,7 +146,9 @@ impl EditorSession {
 
     let revision = request.expected_revision;
     match request.command {
-      ProtocolCommand::Snapshot => EditorResponse::Snapshot(self.snapshot().into()),
+      ProtocolCommand::Snapshot => {
+        EditorResponse::Snapshot(ProtocolSnapshot::from_session(self))
+      }
       ProtocolCommand::SetSelection { selection } => {
         response(self.set_selection(revision, selection))
       }
@@ -133,6 +169,16 @@ impl EditorSession {
       }
       command => response(self.dispatch(revision, to_session_command(command))),
     }
+  }
+}
+
+fn append_preorder(document: &Document, node_id: NodeId, output: &mut Vec<Node>) {
+  let Some(node) = document.node(node_id) else {
+    return;
+  };
+  output.push(node.clone());
+  for child in &node.children {
+    append_preorder(document, *child, output);
   }
 }
 
@@ -204,19 +250,6 @@ fn response(result: Result<SessionUpdate, EditError>) -> EditorResponse {
   }
 }
 
-impl From<SessionSnapshot> for ProtocolSnapshot {
-  fn from(snapshot: SessionSnapshot) -> Self {
-    Self {
-      markdown: snapshot.markdown,
-      revision: snapshot.revision,
-      selection: snapshot.selection,
-      can_undo: snapshot.can_undo,
-      can_redo: snapshot.can_redo,
-      composition_active: snapshot.composition_active,
-    }
-  }
-}
-
 impl From<SessionUpdate> for ProtocolUpdate {
   fn from(update: SessionUpdate) -> Self {
     Self {
@@ -258,7 +291,7 @@ impl From<EditError> for ProtocolError {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::model::{InlineKind, NodeId, NodeKind};
+  use crate::model::{InlineKind, NodeKind};
   use crate::selection::SelectionPoint;
 
   fn request(revision: u64, command: ProtocolCommand) -> EditorRequest {
@@ -291,6 +324,27 @@ mod tests {
     assert_eq!(value["protocol_version"], 1);
     assert_eq!(value["expected_revision"], 7);
     assert_eq!(value["command"]["type"], "insert_text");
+  }
+
+  #[test]
+  fn snapshots_include_a_preorder_logical_tree() {
+    let session = EditorSession::from_markdown("**bold** and *soft*");
+    let snapshot = ProtocolSnapshot::from_session(&session);
+    assert_eq!(snapshot.document.nodes.first().unwrap().id, snapshot.document.root);
+    assert_eq!(snapshot.document.nodes.len(), session.document().nodes.len());
+
+    let positions = snapshot
+      .document
+      .nodes
+      .iter()
+      .enumerate()
+      .map(|(index, node)| (node.id, index))
+      .collect::<std::collections::BTreeMap<_, _>>();
+    for node in &snapshot.document.nodes {
+      for child in &node.children {
+        assert!(positions[&node.id] < positions[child]);
+      }
+    }
   }
 
   #[test]

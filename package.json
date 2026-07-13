@@ -47,14 +47,15 @@
     "addon:build": "node build/scripts/build-physical-addon.mjs",
     "addon:build:ocr": "node build/scripts/build-physical-addon.mjs addons/official/ai-ocr",
     "addon:build:open-models": "node build/scripts/build-physical-addon.mjs addons/official/open-models",
+    "addon:build:codex": "node build/scripts/build-physical-addon.mjs addons/official/codex-connection",
     "tauri:web:dev": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vite --config vite.tauri.config.mjs --host 127.0.0.1 --port 1420 --strictPort",
     "tauri:web:build": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vite build --config vite.tauri.config.mjs && node build/scripts/report-renderer-bundle.mjs",
     "tauri:check": "cargo check --manifest-path Elephant/backend/tauri/Cargo.toml",
     "tauri:platform:check": "node build/scripts/verify-tauri-platforms.mjs",
     "tauri:dev": "./build/scripts/build_dev.sh",
-    "tauri:build": "pnpm tauri:codex:install && cd Elephant/backend/tauri && cargo tauri build",
+    "tauri:build": "cd Elephant/backend/tauri && cargo tauri build",
     "tauri:mac:smoke": "node build/scripts/tauri-macos-window-smoke.mjs",
-    "tauri:linux:build": "pnpm tauri:codex:install && cd Elephant/backend/tauri && cargo tauri build --config tauri.linux.conf.json",
+    "tauri:linux:build": "cd Elephant/backend/tauri && cargo tauri build --config tauri.linux.conf.json",
     "tauri:android:init": "cd Elephant/backend/tauri && cargo tauri android init --config tauri.android.conf.json",
     "tauri:android:dev": "cd Elephant/backend/tauri && cargo tauri android dev --config tauri.android.conf.json",
     "tauri:android:build": "./build/scripts/build_dev_apk.sh",
@@ -71,8 +72,7 @@
     "test:e2e": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/playwright test --config tests/app/e2e/playwright.config.js",
     "prod:check": "pnpm lint && pnpm security:guard && pnpm test:unit && pnpm test:e2e && pnpm validate-licenses && pnpm run build:unpack",
     "gen-third-party": "node build/scripts/generateThirdPartyLicense.js",
-    "validate-licenses": "node build/scripts/validateLicenses.js",
-    "tauri:codex:install": "node build/scripts/ensure-tauri-codex-runtime.mjs"
+    "validate-licenses": "node build/scripts/validateLicenses.js"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

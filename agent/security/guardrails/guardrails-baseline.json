@@ -1,5 +1,5 @@
 {
-  "description": "Temporary security debt accepted so the guardrail can block new regressions while existing Tauri filesystem permissions are narrowed incrementally.",
+  "description": "Temporary security debt accepted so the guardrail can block new regressions while existing Tauri filesystem permissions are narrowed incrementally. The native addon publisher is an explicit release workflow with a reviewed branch-write requirement.",
   "acceptedFindings": [
     {
       "id": "TAURI_FS_DEFAULT_PERMISSION",
@@ -48,6 +48,12 @@
       "file": "Elephant/backend/tauri/tauri.conf.json",
       "value": "withGlobalTauri: true",
       "reason": "Legacy renderer bridge still expects the global Tauri API. Migrate callers to explicit @tauri-apps/api imports before disabling it."
+    },
+    {
+      "id": "GITHUB_ACTIONS_WRITE_PERMISSION",
+      "file": ".github/workflows/publish-native-addon-packages.yml",
+      "value": "contents: write",
+      "reason": "Dedicated release workflow: it publishes signed and hashed platform-specific .enaddon archives to feature/physical-addon-catalog. It has no pull_request trigger and needs branch write access only for the final catalogue publication job."
     }
   ]
 }

@@ -24,6 +24,9 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      - name: Install Chromium
+        run: Elephant/node_modules/.bin/playwright install chromium
+
       - name: Run postinstall
         run: node build/scripts/postinstall.js
         env:
@@ -31,13 +34,10 @@ jobs:
           npm_config_user_agent: 'pnpm'
           USE_ELECTRON_CLANG: '0'
 
-      - name: Build app diagnostic
-        id: build-app
-        continue-on-error: true
+      - name: Build Tauri renderer
         run: pnpm build
 
-      - name: Run E2E Tests
-        if: steps.build-app.outcome == 'success'
+      - name: Run Tauri renderer E2E tests
         run: |
           set -o pipefail
           xvfb-run --auto-servernum pnpm test:e2e 2>&1 | tee e2e-output.txt
@@ -52,7 +52,3 @@ jobs:
             playwright-report
             test-results
           if-no-files-found: ignore
-
-      - name: Skip E2E after build diagnostic failure
-        if: steps.build-app.outcome != 'success'
-        run: echo "Skipping E2E because the web build is currently diagnostic during the Tauri migration."

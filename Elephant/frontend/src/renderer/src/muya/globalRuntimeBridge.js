@@ -1,13 +1,20 @@
 import { createMuyaFullEditorRuntime } from './fullEditorRuntime.js'
 import { isMuyaRuntimeActive, isMuyaRuntimeEnabled, readMuyaRuntimeMode } from './runtimeFlags.js'
 
+const dispatchModeChanged = (target) => {
+  if (typeof target.dispatchEvent !== 'function' || typeof target.Event !== 'function') return
+  target.dispatchEvent(new target.Event('elephantnote:muya-runtime-mode-changed'))
+}
+
 export const createGlobalMuyaRuntimeBridge = (target = globalThis) => ({
   mode: () => readMuyaRuntimeMode(target),
   enabled: () => isMuyaRuntimeEnabled(readMuyaRuntimeMode(target)),
   active: () => isMuyaRuntimeActive(readMuyaRuntimeMode(target)),
   setMode: (mode) => {
     target.__ELEPHANT_MUYA_RUNTIME_MODE__ = mode
-    return readMuyaRuntimeMode(target)
+    const resolved = readMuyaRuntimeMode(target)
+    dispatchModeChanged(target)
+    return resolved
   },
   createEditor: createMuyaFullEditorRuntime
 })

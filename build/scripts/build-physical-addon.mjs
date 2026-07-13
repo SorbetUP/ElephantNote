@@ -24,6 +24,15 @@ const run = (command, args, options = {}) => {
   return options.capture ? String(result.stdout || '').trim() : ''
 }
 
+const PROCESS_SIDECAR_PLATFORMS = new Set([
+  'macos-aarch64',
+  'macos-x86_64',
+  'linux-aarch64',
+  'linux-x86_64',
+  'windows-aarch64',
+  'windows-x86_64'
+])
+
 const platformKey = () => {
   const os = process.platform === 'darwin'
     ? 'macos'
@@ -49,7 +58,14 @@ if (!existsSync(buildConfigPath)) fail(`missing ${buildConfigPath}`)
 
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 const buildConfig = JSON.parse(readFileSync(buildConfigPath, 'utf8'))
-const platform = platformKey()
+const platform = String(process.env.ELEPHANT_ADDON_PLATFORM || platformKey()).trim()
+if (buildConfig.runner !== 'process') fail('addon.build.json runner must be process')
+if (!PROCESS_SIDECAR_PLATFORMS.has(platform)) {
+  fail(`process sidecars cannot be packaged for ${platform}; Android and iOS require package-owned mobile host adapters`)
+}
+if (!Array.isArray(buildConfig.supportedPlatforms) || !buildConfig.supportedPlatforms.includes(platform)) {
+  fail(`addon.build.json does not support platform ${platform}`)
+}
 const sidecarRelativePath = manifest?.native?.sidecars?.[platform]
 if (!sidecarRelativePath) fail(`manifest has no native sidecar path for ${platform}`)
 
@@ -63,6 +79,7 @@ const targetDir = resolve(repoRoot, 'build/out/addon-target', safeId)
 const stagingDir = resolve(repoRoot, 'build/out/addons/staging', safeId)
 const releaseDir = resolve(repoRoot, 'build/out/addons/releases', safeId)
 const targetTriple = String(process.env.CARGO_BUILD_TARGET || '').trim()
+const cargoCommand = String(process.env.CARGO_COMMAND || 'cargo').trim()
 
 rmSync(stagingDir, { recursive: true, force: true })
 mkdirSync(stagingDir, { recursive: true })
@@ -70,9 +87,9 @@ mkdirSync(releaseDir, { recursive: true })
 
 const cargoArgs = ['build', '--release', '--manifest-path', nativeManifest]
 if (targetTriple) cargoArgs.push('--target', targetTriple)
-run('cargo', cargoArgs, { env: { CARGO_TARGET_DIR: targetDir } })
+run(cargoCommand, cargoArgs, { env: { CARGO_TARGET_DIR: targetDir } })
 
-const binaryFileName = process.platform === 'win32' ? `${binaryName}.exe` : binaryName
+const binaryFileName = platform.startsWith('windows-') ? `${binaryName}.exe` : binaryName
 const binaryPath = targetTriple
   ? join(targetDir, targetTriple, 'release', binaryFileName)
   : join(targetDir, 'release', binaryFileName)

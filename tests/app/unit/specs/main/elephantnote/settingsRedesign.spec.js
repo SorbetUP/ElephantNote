@@ -42,7 +42,7 @@ describe('Elephant settings redesign', () => {
     const search = read('addons/official/ai-search/main.js')
     const ocr = read('addons/official/ai-ocr/main.js')
     const code = read('addons/official/code-execution/main.js')
-    const sync = read('addons/official/sync/main.js')
+    const sync = read('addons/official/sync/main.service.js')
     const sites = read('addons/official/sites/main.js')
 
     expect(source).toContain('addonStandaloneSections')
@@ -79,17 +79,22 @@ describe('Elephant settings redesign', () => {
     expect(row).toContain('locked: { type: Boolean, default: false }')
   })
 
-  it('uses one installed/available browser and groups physical AI modules', () => {
+  it('uses a tiles-first catalogue and groups physical AI modules in detail mode', () => {
     const panel = addonsPanel()
     const logic = addonLogic()
     const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AddonPacksSettings.vue')
     const packRuntime = read('Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js')
 
-    expect(panel).toContain('class="en-addon-browser"')
-    expect(panel).toContain('Installed only')
+    expect(panel).toContain('v-else class="en-addon-catalogue"')
+    expect(panel).toContain('class="en-addon-overview-card"')
+    expect(panel).toContain('v-if="selectedEntry" class="en-addon-browser en-addon-browser-detail-mode"')
+    expect(panel).toContain('class="en-addons-search"')
+    expect(panel).toContain('class="en-installed-only-control"')
     expect(panel).toContain('const AI_SUBMODULE_IDS')
     expect(panel).toContain('v-if="selectedEntry.id === AI_PARENT_ID"')
     expect(panel).toContain('class="en-ai-module-list"')
+    expect(panel).not.toContain('<h2>All addons</h2>')
+    expect(panel).not.toContain('Browse the complete catalogue. Open an addon to manage it.')
     expect(logic).toContain('installCatalogAddon')
     expect(logic).toContain('installExternalAddon(selected)')
     expect(packRuntime).toContain("source: 'official'")
@@ -134,11 +139,11 @@ describe('Elephant settings redesign', () => {
     const navigation = read('Elephant/frontend/app/components/navigation/NavigationBar.vue')
     const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
     const physicalEntries = [
-      ['addons/official/sync/main.js', "registerContribution('top-bar.items'"],
+      ['addons/official/sync/main.service.js', "registerContribution('top-bar.items'"],
       ['addons/official/sites/main.js', "zone: 'workspace.notes'"],
       ['addons/official/codex-connection/main.js', "registerContribution('ai.providers'"],
       ['addons/official/ai-chat/main.js', "zone: 'shell.right'"],
-      ['addons/official/wiki/main.js', 'api.workspace.registerView'],
+      ['addons/official/wiki/main.v2.js', 'api.workspace.registerView'],
       ['addons/official/graph/main.js', 'api.workspace.registerView'],
       ['addons/official/open-models/main.js', "registerContribution('ai.providers'"],
       ['addons/official/code-execution/main.js', 'class ElephantCodeExecutionAddon'],
@@ -148,5 +153,6 @@ describe('Elephant settings redesign', () => {
     for (const [file, marker] of physicalEntries) expect(read(file)).toContain(marker)
     expect(navigation).toContain(':is="entry.contribution.component"')
     expect(main).toContain("entry?.contribution?.zone === 'workspace.notes'")
+    expect(main).not.toContain('SigmaCanvas')
   })
 })

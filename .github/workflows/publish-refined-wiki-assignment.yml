@@ -1,0 +1,49 @@
+name: Publish Refined Wiki Assignment
+
+on:
+  pull_request:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/publish-refined-wiki-assignment.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.head_ref == 'assistant/wiki-organization-continuation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+
+      - name: Apply validated semantic-separation patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          workflow = Path('.github/workflows/refine-wiki-source-assignment.yml').read_text()
+          script = workflow.split("python3 - <<'PY'\n", 1)[1].split('\n          PY', 1)[0]
+          exec(compile(textwrap.dedent(script), 'refine-wiki-source-assignment', 'exec'))
+          PY
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+
+      - name: Revalidate exact publication content
+        run: |
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml knowledge_wiki_discovery --lib
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/wikiDiscoveryQualityRegression.spec.js
+
+      - name: Commit semantic source assignment
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Elephant/backend/tauri/src/knowledge_wiki_discovery.rs \
+            tests/app/unit/wikiDiscoveryQualityRegression.spec.js
+          git commit --no-verify -m "fix: keep Wiki source counts semantically grounded"
+          git push origin HEAD:assistant/wiki-organization-continuation

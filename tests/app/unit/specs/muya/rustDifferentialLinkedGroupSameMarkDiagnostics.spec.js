@@ -42,7 +42,7 @@ const traces = [
     name: 'toggle emphasis across part of linked emphasis',
     initial: 'alpha **beta** gamma',
     expected: 'alp*ha **bet*a** gamma\n',
-    edges: ['start', 'end'],
+    edges: ['start', 'middle', 'end'],
     runJs: async (muya) => {
       setJsSelection(muya, 0, 2, 10)
       muya.format('em')

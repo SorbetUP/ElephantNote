@@ -1,4 +1,4 @@
-name: Publish native addon packages
+name: Publish desktop and mobile addon packages
 
 on:
   push:

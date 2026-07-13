@@ -318,10 +318,8 @@ mod tests {
 
   fn marked_text(document: &Document) -> NodeId {
     let block = document.children(document.root).next().unwrap().id;
-    document
-      .children(block)
-      .find_map(|node| first_text_descendant(document, node.id).ok())
-      .unwrap()
+    let wrapper = document.children(block).nth(1).unwrap().id;
+    first_text_descendant(document, wrapper).unwrap()
   }
 
   #[test]

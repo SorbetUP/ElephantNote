@@ -9,8 +9,15 @@
         v-if="init"
         :class="{ 'muya-runtime-underlay': muyaRuntimeActive }"
       />
+      <RustMuyaRuntimeEditor
+        v-if="init && muyaRustRuntime"
+        v-model="muyaRuntimeMarkdown"
+        :mode="muyaRuntimeMode"
+        class="muya-runtime-production-editor"
+        @change="handleMuyaRuntimeChange"
+      />
       <MuyaRuntimeEditor
-        v-if="init && muyaRuntimeEnabled"
+        v-else-if="init && muyaRuntimeEnabled"
         v-show="muyaRuntimeActive"
         v-model="muyaRuntimeMarkdown"
         :mode="muyaRuntimeMode"
@@ -50,7 +57,14 @@ import { useProjectStore } from '@/store/project'
 import { useAutoUpdatesStore } from '@/store/autoUpdates'
 import { useNotificationStore } from '@/store/notification'
 import { debouncedSendBufferedState } from '@/store/bufferedState'
-import { MuyaRuntimeEditor, isMuyaRuntimeActive, isMuyaRuntimeEnabled, readMuyaRuntimeMode } from '@/muya'
+import {
+  MuyaRuntimeEditor,
+  RustMuyaRuntimeEditor,
+  isMuyaRuntimeActive,
+  isMuyaRuntimeEnabled,
+  isMuyaRustRuntime,
+  readMuyaRuntimeMode
+} from '@/muya'
 import AppShell from 'elephant-front/components/shell/AppShell.vue'
 
 const isTauriRuntime = Boolean(window.__TAURI__ || window.__MARKTEXT_RUNTIME__)
@@ -91,6 +105,7 @@ const scheduleMuyaRuntimeModeSync = () => {
 
 const muyaRuntimeEnabled = computed(() => isMuyaRuntimeEnabled(muyaRuntimeMode.value))
 const muyaRuntimeActive = computed(() => isMuyaRuntimeActive(muyaRuntimeMode.value))
+const muyaRustRuntime = computed(() => isMuyaRustRuntime(muyaRuntimeMode.value))
 
 const muyaRuntimeMarkdown = computed({
   get: () => editorStore.currentFile?.markdown || '',

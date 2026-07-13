@@ -8,6 +8,7 @@ import {
 } from './composition'
 import { commandForBeforeInput, commandForTableKey } from './commands'
 import { handleDeleteForward } from './deleteForward'
+import { DELETE_UNIT_INPUTS, handleDeleteUnit } from './deleteUnits'
 import { handleTextDragOver, handleTextDrop } from './drop'
 import { readDomSelection } from './selection'
 
@@ -81,6 +82,10 @@ export class MuyaRustInputController {
     if (!selection) return
     if (event.inputType === 'deleteContentForward') {
       handleDeleteForward(this, event, selection)
+      return
+    }
+    if (DELETE_UNIT_INPUTS.has(event.inputType)) {
+      handleDeleteUnit(this, event, selection)
       return
     }
 

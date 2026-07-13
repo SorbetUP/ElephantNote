@@ -1,0 +1,63 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+const root = process.cwd()
+const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const exists = (relativePath) => fs.existsSync(path.join(root, relativePath))
+
+describe('physical addon isolation', () => {
+  it('keeps OCR code and native commands out of Elephant core', () => {
+    const core = read('Elephant/backend/tauri/src/lib_min.rs')
+    const builtinIndex = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
+
+    expect(core).not.toContain('pub mod ocr;')
+    expect(core).not.toContain('tauri_ocr_status')
+    expect(core).not.toContain('tauri_ocr_image')
+    expect(builtinIndex).not.toContain("import('./aiOcr')")
+    expect(builtinIndex).not.toContain("id: 'elephant.ai-ocr'")
+    expect(exists('Elephant/backend/tauri/src/ocr.rs')).toBe(false)
+    expect(exists('Elephant/frontend/src/renderer/src/addons/builtin/aiOcr.js')).toBe(false)
+    expect(exists('Elephant/frontend/src/renderer/src/addons/builtin/ui/AiOcrSettings.vue')).toBe(false)
+  })
+
+  it('keeps OCR implementation inside a separately packageable addon', () => {
+    const manifest = JSON.parse(read('addons/official/ai-ocr/manifest.json'))
+    const entry = read('addons/official/ai-ocr/main.js')
+    const sidecar = read('addons/official/ai-ocr/native/src/main.rs')
+
+    expect(manifest.id).toBe('elephant.ai-ocr')
+    expect(manifest.permissions.native).toBe(true)
+    expect(manifest.requires).toEqual({ 'elephant.ai': '>=2.0.0' })
+    expect(Object.keys(manifest.native.sidecars)).toContain('macos-aarch64')
+    expect(entry).toContain("slot: 'ai.ocr'")
+    expect(entry).toContain('tauri_addons_sidecar_call')
+    expect(sidecar).toContain('elephant-addon-sidecar-v1')
+    expect(sidecar).toContain('"ocr.image"')
+  })
+
+  it('uses only the generic native host from the application binary', () => {
+    const core = read('Elephant/backend/tauri/src/lib_min.rs')
+    const host = read('Elephant/backend/tauri/src/addon_sidecars.rs')
+
+    expect(core).toContain('addon_sidecars::tauri_addons_sidecar_status')
+    expect(core).toContain('addon_sidecars::tauri_addons_sidecar_call')
+    expect(host).not.toContain('tesseract')
+    expect(host).not.toContain('OCR')
+    expect(host).toContain('Addon native permission was not granted')
+    expect(host).toContain('Addon sidecar escapes its package directory')
+  })
+
+  it('supports catalog downloads of complete hashed enaddon archives', () => {
+    const catalog = read('Elephant/backend/tauri/src/addon_catalog.rs')
+    const buildScript = read('build/scripts/build-physical-addon.mjs')
+    const packager = read('build/tools/enaddon-packager/src/main.rs')
+
+    expect(catalog).toContain('package_path')
+    expect(catalog).toContain('package_hash')
+    expect(catalog).toContain('download_prebuilt_package')
+    expect(catalog).toContain('blake3::hash')
+    expect(buildScript).toContain('build/out/addons/releases')
+    expect(packager).toContain('blake3::hash')
+  })
+})

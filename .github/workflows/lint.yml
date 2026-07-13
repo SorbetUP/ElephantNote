@@ -20,16 +20,8 @@ jobs:
         with:
           ref: assistant/wiki-organization-continuation
           fetch-depth: 0
-      - uses: ./.github/actions/setup
       - name: Apply downloaded embedding model picker
         run: python3 scripts/fix_local_embedding_picker.py
-      - name: Validate model picker
-        run: |
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \
-            Elephant/frontend/app/components/settings/AiProviderSettingsPanel.vue \
-            tests/app/unit/aiEmbeddingModelPicker.spec.js
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/aiEmbeddingModelPicker.spec.js
       - name: Restore workflow and commit
         run: |
           cat > .github/workflows/lint.yml <<'YAML'

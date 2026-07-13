@@ -1,17 +1,38 @@
-use iroh::{Endpoint, endpoint::presets};
+mod manifest;
+mod plan;
+
+use iroh::{endpoint::presets, Endpoint};
 use iroh_mdns_address_lookup::MdnsAddressLookup;
+use manifest::{scan_vault, VaultManifest};
+use plan::build_plan;
 use serde_json::{json, Value};
+use std::{env, path::PathBuf};
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 
 const PROTOCOL: &str = "elephant-addon-service-v1";
 
 struct SyncService {
   endpoint: Option<Endpoint>,
+  vault_dir: PathBuf,
 }
 
 impl SyncService {
-  fn new() -> Self {
-    Self { endpoint: None }
+  fn from_environment() -> Result<Self, String> {
+    let vault_dir = env::var_os("ELEPHANT_VAULT_DIR")
+      .map(PathBuf::from)
+      .ok_or_else(|| "ELEPHANT_VAULT_DIR is unavailable for the Sync addon service".to_string())?;
+    Ok(Self {
+      endpoint: None,
+      vault_dir,
+    })
+  }
+
+  #[cfg(test)]
+  fn with_vault_dir(vault_dir: PathBuf) -> Self {
+    Self {
+      endpoint: None,
+      vault_dir,
+    }
   }
 
   async fn ensure_endpoint(&mut self) -> Result<&Endpoint, String> {
@@ -40,7 +61,67 @@ impl SyncService {
       "endpointId": endpoint.id().to_string(),
       "transport": "iroh",
       "discovery": "mdns",
-      "owner": "elephant.sync"
+      "owner": "elephant.sync",
+      "vaultDir": self.vault_dir,
+      "ownedCapabilities": ["endpoint", "manifest", "plan"]
+    }))
+  }
+
+  fn scan(&self) -> Result<Value, String> {
+    let manifest = scan_vault(&self.vault_dir)?;
+    Ok(json!({
+      "owner": "elephant.sync",
+      "vaultDir": self.vault_dir,
+      "files": manifest.files.len(),
+      "directories": manifest.directories.len(),
+      "manifest": manifest
+    }))
+  }
+
+  async fn plan(&mut self, params: Value) -> Result<Value, String> {
+    let local = match params.get("localManifest").cloned() {
+      Some(value) if !value.is_null() => serde_json::from_value::<VaultManifest>(value)
+        .map_err(|error| format!("Invalid local Sync manifest: {error}"))?,
+      _ => scan_vault(&self.vault_dir)?,
+    };
+    let remote = params
+      .get("remoteManifest")
+      .cloned()
+      .ok_or_else(|| "remoteManifest is required for package-owned Sync planning".to_string())
+      .and_then(|value| {
+        serde_json::from_value::<VaultManifest>(value)
+          .map_err(|error| format!("Invalid remote Sync manifest: {error}"))
+      })?;
+    let baseline = params
+      .get("baseline")
+      .cloned()
+      .filter(|value| !value.is_null())
+      .map(serde_json::from_value::<VaultManifest>)
+      .transpose()
+      .map_err(|error| format!("Invalid Sync baseline: {error}"))?
+      .unwrap_or_default();
+    let local_id = match params.get("localId").and_then(Value::as_str).filter(|value| !value.is_empty()) {
+      Some(value) => value.to_string(),
+      None => self.ensure_endpoint().await?.id().to_string(),
+    };
+    let remote_id = params
+      .get("remoteId")
+      .and_then(Value::as_str)
+      .filter(|value| !value.is_empty())
+      .unwrap_or("remote")
+      .to_string();
+    let plan = build_plan(&local, &remote, &baseline, &local_id, &remote_id);
+    Ok(json!({
+      "owner": "elephant.sync",
+      "localId": local_id,
+      "remoteId": remote_id,
+      "summary": {
+        "uploads": plan.uploads.len(),
+        "downloads": plan.downloads.len(),
+        "deletes": plan.delete_files_local.len() + plan.delete_files_remote.len(),
+        "conflicts": plan.conflicts.len()
+      },
+      "plan": plan
     }))
   }
 
@@ -69,9 +150,11 @@ fn failure(id: u64, message: impl Into<String>) -> Value {
   })
 }
 
-async fn handle(service: &mut SyncService, method: &str, _params: Value) -> Result<Value, String> {
+async fn handle(service: &mut SyncService, method: &str, params: Value) -> Result<Value, String> {
   match method {
     "service.start" | "sync.status" | "sync.endpoint" => service.status().await,
+    "sync.scan" => service.scan(),
+    "sync.plan" => service.plan(params).await,
     "service.stop" | "sync.shutdown" => {
       service.stop().await;
       Ok(json!({ "running": false, "stopped": true }))
@@ -86,7 +169,13 @@ async fn main() {
   let stdout = io::stdout();
   let mut lines = BufReader::new(stdin).lines();
   let mut writer = BufWriter::new(stdout);
-  let mut service = SyncService::new();
+  let mut service = match SyncService::from_environment() {
+    Ok(service) => service,
+    Err(error) => {
+      eprintln!("[SyncAddon] service:start error={error}");
+      return;
+    }
+  };
 
   while let Ok(Some(line)) = lines.next_line().await {
     let request: Value = match serde_json::from_str(&line) {
@@ -136,6 +225,18 @@ async fn main() {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::fs;
+
+  fn temp_root(name: &str) -> PathBuf {
+    std::env::temp_dir().join(format!(
+      "elephant-sync-service-{name}-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+    ))
+  }
 
   #[test]
   fn envelopes_use_the_versioned_service_protocol() {
@@ -147,11 +248,42 @@ mod tests {
 
   #[tokio::test]
   async fn unknown_methods_are_rejected_without_starting_network_state() {
-    let mut service = SyncService::new();
+    let root = temp_root("unknown");
+    let mut service = SyncService::with_vault_dir(root.clone());
     let error = handle(&mut service, "sync.unknown", json!({}))
       .await
       .unwrap_err();
     assert!(error.contains("Unsupported Sync service method"));
     assert!(service.endpoint.is_none());
+    let _ = fs::remove_dir_all(root);
+  }
+
+  #[tokio::test]
+  async fn scan_and_plan_are_owned_by_the_package_service() {
+    let root = temp_root("plan");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("A.md"), "# A").unwrap();
+    let mut service = SyncService::with_vault_dir(root.clone());
+
+    let scanned = handle(&mut service, "sync.scan", json!({})).await.unwrap();
+    assert_eq!(scanned["owner"], "elephant.sync");
+    assert_eq!(scanned["files"], 1);
+
+    let planned = handle(
+      &mut service,
+      "sync.plan",
+      json!({
+        "remoteManifest": { "files": {}, "directories": [] },
+        "baseline": { "files": {}, "directories": [] },
+        "localId": "local",
+        "remoteId": "remote"
+      }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(planned["owner"], "elephant.sync");
+    assert_eq!(planned["summary"]["uploads"], 1);
+    assert_eq!(planned["plan"]["uploads"].as_array().unwrap().len(), 1);
+    let _ = fs::remove_dir_all(root);
   }
 }

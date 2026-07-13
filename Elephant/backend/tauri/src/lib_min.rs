@@ -45,7 +45,6 @@ pub mod keybindings;
 pub mod fts;
 pub mod embeddings;
 pub mod sync;
-pub mod wiki;
 pub mod rag_prompt;
 pub mod atomic_features;
 pub mod ollama;
@@ -197,7 +196,6 @@ pub fn run() {
       embeddings::tauri_embeddings_search,
       embeddings::tauri_embeddings_count,
       embeddings::tauri_embeddings_clear_vault,
-      wiki::tauri_wiki_proposals,
       rag_prompt::tauri_rag_build_prompt,
       state::tauri_atomic_features_list,
       state::tauri_atomic_features_get,
@@ -221,9 +219,7 @@ pub fn run() {
       vault::commands::tauri_entries_rename,
       vault::commands::tauri_entries_move,
       vault::commands::tauri_entries_delete,
-      vault::commands::tauri_calendar_list,
       vault::commands::tauri_sources_list,
-      vault::commands::tauri_wiki_list,
       vault::commands::tauri_search_query,
       vault::commands::tauri_search_status,
       markdown::commands::tauri_markdown_parse,

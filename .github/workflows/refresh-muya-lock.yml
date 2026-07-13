@@ -7,12 +7,16 @@ on:
     paths:
       - Elephant/crates/muya-core/Cargo.toml
       - .github/workflows/refresh-muya-lock.yml
+  pull_request:
+    types: [synchronize]
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   refresh-lock:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

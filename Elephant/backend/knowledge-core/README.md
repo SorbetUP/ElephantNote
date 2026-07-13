@@ -35,6 +35,7 @@
 - browser tests run the real Tauri web renderer with a controlled native-command mock;
 - Rust tests verify that code matrices do not create wikilinks and that incremental rebuilds remove stale derived relations;
 - Wiki routing tests verify that `app-local` GGUF selections reach the bundled llama runtime;
+- focused ElephantNote contract tests use the installed `Elephant/node_modules/.bin/vitest` runtime rather than relying on an unavailable root-level binary;
 - the critical-flow guard follows the current Iroh runtime, including two real endpoints, three-way planning, deletion propagation, conflict preservation, external-binary independence, and structured synchronization logs.
 
 ## Planned modules

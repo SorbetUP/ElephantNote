@@ -1,0 +1,190 @@
+name: Apply trusted addon module graph
+
+on:
+  push:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/apply-trusted-module-graph.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/physical-addon-packages
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Wire confined package module loading
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          addons = Path('Elephant/backend/tauri/src/addons.rs')
+          text = addons.read_text()
+          marker = '''#[tauri::command]
+pub fn tauri_addons_call('''
+          command = r'''#[tauri::command]
+pub fn tauri_addons_read_module(
+  app: AppHandle,
+  state: State<'_, AddonState>,
+  addon_id: String,
+  path: String,
+) -> R<Value> {
+  let _guard = state.lock.lock().map_err(|_| "Addon registry lock is poisoned".to_string())?;
+  let registry = read_registry(&app)?;
+  let record = require_installed(&registry, &addon_id)?;
+  let relative = safe_relative_path(&path)?;
+  if relative.extension().and_then(|value| value.to_str()) != Some("js") {
+    return Err("Addon modules must use the .js extension".to_string());
+  }
+  let package = package_dir(&app, &addon_id)?;
+  let canonical_package = fs::canonicalize(&package)
+    .map_err(|error| format!("Addon package directory is unavailable: {error}"))?;
+  let module = fs::canonicalize(package.join(&relative))
+    .map_err(|error| format!("Addon module is unavailable: {path}: {error}"))?;
+  if !module.starts_with(&canonical_package) {
+    return Err(format!("Addon module escapes its package directory: {path}"));
+  }
+  let metadata = fs::metadata(&module).map_err(|error| error.to_string())?;
+  if !metadata.is_file() || metadata.len() > MAX_ENTRY_BYTES {
+    return Err("Addon module is not readable or exceeds 5 MiB".to_string());
+  }
+  let source = fs::read_to_string(module).map_err(|error| error.to_string())?;
+  Ok(json!({
+    "path": relative.to_string_lossy().replace('\\', "/"),
+    "source": source,
+    "packageHash": record.package_hash
+  }))
+}
+
+'''
+          if 'pub fn tauri_addons_read_module(' not in text:
+              if marker not in text:
+                  raise SystemExit('addon command insertion anchor was not found')
+              text = text.replace(marker, command + marker)
+          addons.write_text(text)
+
+          lib = Path('Elephant/backend/tauri/src/lib_min.rs')
+          text = lib.read_text()
+          anchor = '      addons::tauri_addons_read_entry,\n'
+          if 'addons::tauri_addons_read_module' not in text:
+              if anchor not in text:
+                  raise SystemExit('addon entry command anchor was not found')
+              text = text.replace(anchor, anchor + '      addons::tauri_addons_read_module,\n')
+          lib.write_text(text)
+
+          runtime = Path('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')
+          text = runtime.read_text()
+          import_anchor = "import { beginTrustedActivation, clearTrustedActivationMarker } from './trustedAddonBootGuard'\n"
+          loader_import = "import { loadTrustedAddonModuleGraph, revokeTrustedAddonModuleGraph } from './trustedAddonModuleLoader'\n"
+          if loader_import not in text:
+              if import_anchor not in text:
+                  raise SystemExit('trusted runtime import anchor was not found')
+              text = text.replace(import_anchor, import_anchor + loader_import)
+
+          constructor = '''    this.moduleUrl = ''
+    this.disposables = []'''
+          if 'this.moduleUrls = []' not in text:
+              if constructor not in text:
+                  raise SystemExit('trusted runtime constructor anchor was not found')
+              text = text.replace(constructor, '''    this.moduleUrl = ''
+    this.moduleUrls = []
+    this.disposables = []''')
+
+          old_start = '''    const entry = await invoke('tauri_addons_read_entry', { addonId: this.record.manifest.id }, this.target)
+    const source = safeString(entry?.source)
+    if (!source) throw new Error(`Trusted addon ${this.record.manifest.id} has an empty entry file`)
+
+    const blob = new Blob([
+      source,
+      `\n//# sourceURL=elephant-addon://${this.record.manifest.id}/${this.record.manifest.runtime?.entry || 'main.js'}`
+    ], { type: 'text/javascript' })
+    this.moduleUrl = URL.createObjectURL(blob)
+    this.module = await import(/* @vite-ignore */ this.moduleUrl)'''
+          new_start = '''    const addonId = this.record.manifest.id
+    const graph = await loadTrustedAddonModuleGraph({
+      addonId,
+      entryPath: this.record.manifest.runtime?.entry || 'main.js',
+      readModule: (path) => invoke('tauri_addons_read_module', { addonId, path }, this.target)
+    })
+    this.moduleUrl = graph.entryUrl
+    this.moduleUrls = graph.urls
+    this.module = await import(/* @vite-ignore */ this.moduleUrl)'''
+          if old_start in text:
+              text = text.replace(old_start, new_start)
+          elif "tauri_addons_read_module" not in text:
+              raise SystemExit('trusted runtime start block was not found')
+
+          old_stop = '''      if (this.moduleUrl) URL.revokeObjectURL(this.moduleUrl)
+      this.moduleUrl = ''
+      this.module = null'''
+          new_stop = '''      revokeTrustedAddonModuleGraph(this.moduleUrls)
+      this.moduleUrls = []
+      this.moduleUrl = ''
+      this.module = null'''
+          if old_stop in text:
+              text = text.replace(old_stop, new_stop)
+          elif 'revokeTrustedAddonModuleGraph(this.moduleUrls)' not in text:
+              raise SystemExit('trusted runtime cleanup block was not found')
+          runtime.write_text(text)
+
+          test = Path('tests/app/unit/addons/trustedAddonModuleGraph.spec.js')
+          test.write_text('''import fs from 'node:fs'\nimport path from 'node:path'\nimport { describe, expect, it } from 'vitest'\nimport { trustedAddonModulePathForTest } from '../../../../Elephant/frontend/src/renderer/src/addons/trustedAddonModuleLoader'\n\nconst root = process.cwd()\nconst read = (file) => fs.readFileSync(path.join(root, file), 'utf8')\n\ndescribe('trusted addon module graphs', () => {\n  it('normalizes confined relative JavaScript module paths', () => {\n    expect(trustedAddonModulePathForTest('runtime/provider')).toBe('runtime/provider.js')\n    expect(trustedAddonModulePathForTest('./main.js')).toBe('main.js')\n    expect(() => trustedAddonModulePathForTest('../main.js')).toThrow(/escapes/)\n    expect(() => trustedAddonModulePathForTest('manifest.json')).toThrow(/JavaScript/)\n  })\n\n  it('reads installed modules through a package-contained Rust command', () => {\n    const rust = read('Elephant/backend/tauri/src/addons.rs')\n    const lib = read('Elephant/backend/tauri/src/lib_min.rs')\n    expect(rust).toContain('pub fn tauri_addons_read_module')\n    expect(rust).toContain('Addon module escapes its package directory')\n    expect(rust).toContain('require_installed(&registry, &addon_id)')\n    expect(lib).toContain('addons::tauri_addons_read_module')\n  })\n\n  it('loads and revokes the complete trusted package graph', () => {\n    const runtime = read('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')\n    const loader = read('Elephant/frontend/src/renderer/src/addons/trustedAddonModuleLoader.js')\n    expect(runtime).toContain('loadTrustedAddonModuleGraph')\n    expect(runtime).toContain('tauri_addons_read_module')\n    expect(runtime).toContain('revokeTrustedAddonModuleGraph(this.moduleUrls)')\n    expect(loader).toContain('Trusted addon modules cannot import external dependency')\n    expect(loader).toContain('Cyclic trusted addon module graph is not supported')\n    expect(runtime).not.toContain("const entry = await invoke('tauri_addons_read_entry'")\n  })\n})\n''')
+
+          validation = Path('.github/workflows/addon-platform-validation.yml')
+          text = validation.read_text()
+          anchor = '            tests/app/unit/addons/trustedOfficialActivation.spec.js \\\n'
+          if 'trustedAddonModuleGraph.spec.js' not in text and anchor in text:
+              text = text.replace(anchor, anchor + '            tests/app/unit/addons/trustedAddonModuleGraph.spec.js \\\n')
+          validation.write_text(text)
+          PY
+
+      - uses: ./.github/actions/setup
+
+      - name: Validate loader contracts
+        run: |
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/trustedAddonModuleGraph.spec.js \
+            tests/app/unit/addons/trustedOfficialActivation.spec.js \
+            tests/app/unit/addons/wikiPackageOwnership.spec.js \
+            tests/app/unit/addons/syncServiceOwnership.spec.js
+
+      - name: Install Linux Tauri dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Compile reduced Rust core
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --lib
+
+      - name: Commit validated module graph runtime
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-trusted-module-graph.yml
+          if [ -f .github/workflows/add-trusted-addon-module-loader.yml ]; then
+            git rm .github/workflows/add-trusted-addon-module-loader.yml
+          fi
+          git add \
+            .github/workflows/addon-platform-validation.yml \
+            Elephant/backend/tauri/src/addons.rs \
+            Elephant/backend/tauri/src/lib_min.rs \
+            Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js \
+            Elephant/frontend/src/renderer/src/addons/trustedAddonModuleLoader.js \
+            tests/app/unit/addons/trustedAddonModuleGraph.spec.js
+          git commit -m "feat(addons): load confined trusted module graphs"
+          git pull --rebase origin feature/physical-addon-packages
+          git push origin HEAD:feature/physical-addon-packages

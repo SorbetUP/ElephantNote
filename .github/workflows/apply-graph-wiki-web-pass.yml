@@ -1,0 +1,57 @@
+name: Apply Graph Wiki Web Pass
+
+on:
+  pull_request:
+    branches:
+      - assistant/wiki-links-graph-integration
+    paths:
+      - .github/workflows/apply-graph-wiki-web-pass.yml
+      - .github/scripts/apply_graph_wiki_web_pass.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'assistant/wiki-organization-continuation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Apply scale and research fixes
+        run: python3 .github/scripts/apply_graph_wiki_web_pass.py
+
+      - name: Format Rust
+        run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+
+      - name: Validate Rust
+        run: |
+          cargo test --manifest-path Elephant/backend/knowledge-core/Cargo.toml
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib local_llama_runtime::tests --no-default-features
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib chat_runtime::codex_app_server::tests --no-default-features
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+
+      - name: Validate renderer regressions
+        run: |
+          pnpm vitest run tests/app/unit/graphWikiScaleRegression.spec.js tests/app/unit/chatAgentSurface.spec.js
+          pnpm eslint Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js
+          pnpm tauri:web:build
+
+      - name: Commit validated implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-graph-wiki-web-pass.yml
+          git rm .github/scripts/apply_graph_wiki_web_pass.py
+          git add Elephant tests
+          git commit -m "feat: scale graph territories and write research-grade Wikis"
+          git push origin HEAD:assistant/wiki-organization-continuation

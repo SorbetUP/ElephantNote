@@ -1,0 +1,12 @@
+{
+  "blake3": "941ce8ea4bc8d4826e013b599dfbfda9817fa4237a1354f43cc78058766e7299",
+  "bytes": 5764264,
+  "path": "D:\\a\\ElephantNote\\ElephantNote\\build\\out\\addons\\releases\\elephant.sync\\elephant.sync-1.2.0-windows-x86_64.enaddon",
+  "id": "elephant.sync",
+  "version": "1.2.0",
+  "platform": "windows-x86_64",
+  "runner": "service",
+  "modules": 2,
+  "file": "elephant.sync-1.2.0-windows-x86_64.enaddon",
+  "catalogPath": "addons/sync/releases/elephant.sync-1.2.0-windows-x86_64.enaddon"
+}

@@ -1,0 +1,12 @@
+{
+  "blake3": "58a0ebe163792a8d32e838de6c1af5da6aabb9046edb1f8fa64cdcd0df4380e0",
+  "bytes": 6518590,
+  "path": "/Users/runner/work/ElephantNote/ElephantNote/build/out/addons/releases/elephant.sync/elephant.sync-1.2.0-macos-aarch64.enaddon",
+  "id": "elephant.sync",
+  "version": "1.2.0",
+  "platform": "macos-aarch64",
+  "runner": "service",
+  "modules": 2,
+  "file": "elephant.sync-1.2.0-macos-aarch64.enaddon",
+  "catalogPath": "addons/sync/releases/elephant.sync-1.2.0-macos-aarch64.enaddon"
+}

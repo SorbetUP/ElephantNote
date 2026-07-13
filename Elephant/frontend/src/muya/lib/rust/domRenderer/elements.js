@@ -116,6 +116,7 @@ const applyInlineContent = (element, kind) => {
       element.setAttribute('alt', kind.alt || '')
       element.setAttribute('data-source', kind.source || '')
       if (source) element.setAttribute('src', source)
+      if (kind.title) element.setAttribute('title', kind.title)
       break
     }
     case 'link':

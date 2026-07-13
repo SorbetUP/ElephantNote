@@ -15,6 +15,7 @@ mod paragraph_boundary;
 mod paragraph_engine;
 mod paste;
 mod paste_command;
+mod paste_nested;
 mod transaction;
 
 pub use command::Command;

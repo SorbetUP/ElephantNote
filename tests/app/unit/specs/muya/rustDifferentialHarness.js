@@ -13,20 +13,31 @@ export const settle = async () => {
   await new Promise((resolvePromise) => setTimeout(resolvePromise, 20))
 }
 
-const editableBlocks = (muya) => {
+const collectBlocks = (muya, predicate) => {
   const output = []
   const visit = (block) => {
-    if (
-      block?.functionType === 'paragraphContent' ||
-      block?.functionType === 'cellContent'
-    ) {
-      output.push(block)
-    }
+    if (predicate(block)) output.push(block)
     for (const child of block?.children || []) visit(child)
   }
   for (const block of muya.contentState.getBlocks()) visit(block)
   return output
 }
+
+const editableBlocks = (muya) =>
+  collectBlocks(
+    muya,
+    (block) =>
+      block?.functionType === 'paragraphContent' ||
+      block?.functionType === 'cellContent'
+  )
+
+const allEditableTextBlocks = (muya) =>
+  collectBlocks(
+    muya,
+    (block) =>
+      typeof block?.text === 'string' &&
+      /^(paragraphContent|cellContent|atxLine)$/.test(block.functionType || '')
+  )
 
 const applyJsSelection = (muya, block, start, end) => {
   muya.contentState.cursor = {
@@ -49,6 +60,23 @@ export const setJsSelectionByText = (muya, value, start, end = start, occurrence
   if (!block) {
     throw new Error(
       `Muya JS text block ${JSON.stringify(value)} occurrence ${occurrence} was not found.`
+    )
+  }
+  applyJsSelection(muya, block, start, end)
+}
+
+export const setJsSelectionByAnyText = (
+  muya,
+  value,
+  start,
+  end = start,
+  occurrence = 0
+) => {
+  const matches = allEditableTextBlocks(muya).filter((block) => block.text === value)
+  const block = matches[occurrence]
+  if (!block) {
+    throw new Error(
+      `Muya JS editable text ${JSON.stringify(value)} occurrence ${occurrence} was not found.`
     )
   }
   applyJsSelection(muya, block, start, end)

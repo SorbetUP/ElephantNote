@@ -4,10 +4,21 @@ use crate::selection::{Selection, SelectionPoint};
 use super::operation::utf16_to_byte;
 use super::{EditError, Operation, Transaction, Utf16Range};
 
+enum SplitDestination {
+  Document {
+    parent: NodeId,
+    paragraph_index: usize,
+  },
+  List {
+    list: NodeId,
+    item_index: usize,
+    new_checked: Option<bool>,
+  },
+}
+
 struct SplitPath {
   paragraph: NodeId,
-  document_parent: NodeId,
-  paragraph_index: usize,
+  destination: SplitDestination,
   wrappers_top_down: Vec<NodeId>,
 }
 
@@ -28,40 +39,73 @@ pub(crate) fn build_insert_paragraph(
     return Err(EditError::UnsupportedStructure(caret.node));
   }
 
-  let new_block_id = document.next_available_id();
-  let mut next_id = new_block_id.0.saturating_add(1);
+  let mut next_id = document.next_available_id().0;
+  let new_item_id = match path.destination {
+    SplitDestination::List { .. } => Some(take_id(&mut next_id)),
+    SplitDestination::Document { .. } => None,
+  };
+  let new_paragraph_id = take_id(&mut next_id);
   let cloned_wrapper_ids = path
     .wrappers_top_down
     .iter()
-    .map(|_| {
-      let id = NodeId(next_id);
-      next_id = next_id.saturating_add(1);
-      id
-    })
+    .map(|_| take_id(&mut next_id))
     .collect::<Vec<_>>();
-  let new_text_id = NodeId(next_id);
+  let new_text_id = take_id(&mut next_id);
 
-  let mut operations = vec![
-    Operation::ReplaceText {
-      node: caret.node,
-      range: Utf16Range::new(
-        caret.offset_utf16,
-        value.encode_utf16().count() as u32,
-      ),
-      inserted: String::new(),
-    },
-    Operation::InsertNode {
-      parent: path.document_parent,
-      index: path.paragraph_index + 1,
+  let mut operations = vec![Operation::ReplaceText {
+    node: caret.node,
+    range: Utf16Range::new(
+      caret.offset_utf16,
+      value.encode_utf16().count() as u32,
+    ),
+    inserted: String::new(),
+  }];
+
+  match path.destination {
+    SplitDestination::Document {
+      parent,
+      paragraph_index,
+    } => operations.push(Operation::InsertNode {
+      parent,
+      index: paragraph_index + 1,
       node: Node::new(
-        new_block_id,
+        new_paragraph_id,
         NodeKind::Block(BlockKind::Paragraph),
         None,
       ),
-    },
-  ];
+    }),
+    SplitDestination::List {
+      list,
+      item_index,
+      new_checked,
+    } => {
+      let new_item_id = new_item_id.expect("list split must allocate an item ID");
+      operations.extend([
+        Operation::InsertNode {
+          parent: list,
+          index: item_index + 1,
+          node: Node::new(
+            new_item_id,
+            NodeKind::Block(BlockKind::ListItem {
+              checked: new_checked,
+            }),
+            None,
+          ),
+        },
+        Operation::InsertNode {
+          parent: new_item_id,
+          index: 0,
+          node: Node::new(
+            new_paragraph_id,
+            NodeKind::Block(BlockKind::Paragraph),
+            None,
+          ),
+        },
+      ]);
+    }
+  }
 
-  let mut destination_parent = new_block_id;
+  let mut destination_parent = new_paragraph_id;
   for (original, cloned) in path
     .wrappers_top_down
     .iter()
@@ -88,16 +132,12 @@ pub(crate) fn build_insert_paragraph(
     ),
   });
 
-  let mut original_child = caret.node;
-  let mut cloned_parent = cloned_wrapper_ids.last().copied();
-  for original_parent in path.wrappers_top_down.iter().rev() {
-    let following = following_siblings(document, *original_parent, original_child)?;
-    let target = cloned_parent.ok_or(EditError::UnsupportedStructure(*original_parent))?;
-    let base = document
-      .node(target)
-      .map(|node| node.children.len())
-      .unwrap_or(0)
-      + 1;
+  let wrappers = &path.wrappers_top_down;
+  for depth in (0..wrappers.len()).rev() {
+    let original_parent = wrappers[depth];
+    let original_child = wrappers.get(depth + 1).copied().unwrap_or(caret.node);
+    let target = cloned_wrapper_ids[depth];
+    let following = following_siblings(document, original_parent, original_child)?;
     operations.extend(
       following
         .into_iter()
@@ -105,31 +145,21 @@ pub(crate) fn build_insert_paragraph(
         .map(|(offset, node)| Operation::MoveNode {
           node,
           new_parent: target,
-          new_index: base + offset,
+          new_index: 1 + offset,
         }),
     );
-
-    original_child = *original_parent;
-    let position = path
-      .wrappers_top_down
-      .iter()
-      .position(|candidate| candidate == original_parent)
-      .expect("wrapper must belong to the split path");
-    cloned_parent = position
-      .checked_sub(1)
-      .and_then(|index| cloned_wrapper_ids.get(index).copied());
   }
 
-  let paragraph_following = following_siblings(document, path.paragraph, original_child)?;
-  let paragraph_base = if cloned_wrapper_ids.is_empty() { 1 } else { 1 };
+  let paragraph_child = wrappers.first().copied().unwrap_or(caret.node);
+  let paragraph_following = following_siblings(document, path.paragraph, paragraph_child)?;
   operations.extend(
     paragraph_following
       .into_iter()
       .enumerate()
       .map(|(offset, node)| Operation::MoveNode {
         node,
-        new_parent: new_block_id,
-        new_index: paragraph_base + offset,
+        new_parent: new_paragraph_id,
+        new_index: 1 + offset,
       }),
   );
 
@@ -141,6 +171,12 @@ pub(crate) fn build_insert_paragraph(
       offset_utf16: 0,
     }),
   })
+}
+
+fn take_id(next_id: &mut u64) -> NodeId {
+  let id = NodeId(*next_id);
+  *next_id = next_id.saturating_add(1);
+  id
 }
 
 fn split_path(document: &Document, text: NodeId) -> Result<SplitPath, EditError> {
@@ -174,18 +210,48 @@ fn split_path(document: &Document, text: NodeId) -> Result<SplitPath, EditError>
   let paragraph_node = document
     .node(paragraph)
     .ok_or(EditError::NodeNotFound(paragraph))?;
-  let document_parent = paragraph_node
+  let paragraph_parent = paragraph_node
     .parent
     .ok_or(EditError::UnsupportedStructure(paragraph))?;
-  let paragraph_index = document
-    .child_index(document_parent, paragraph)
-    .ok_or(EditError::UnsupportedStructure(paragraph))?;
-  wrappers_bottom_up.reverse();
+  let parent_node = document
+    .node(paragraph_parent)
+    .ok_or(EditError::NodeNotFound(paragraph_parent))?;
 
+  let destination = if paragraph_parent == document.root {
+    SplitDestination::Document {
+      parent: paragraph_parent,
+      paragraph_index: document
+        .child_index(paragraph_parent, paragraph)
+        .ok_or(EditError::UnsupportedStructure(paragraph))?,
+    }
+  } else if let NodeKind::Block(BlockKind::ListItem { checked }) = &parent_node.kind {
+    if parent_node.children.as_slice() != [paragraph] {
+      return Err(EditError::UnsupportedStructure(paragraph_parent));
+    }
+    let list = parent_node
+      .parent
+      .ok_or(EditError::UnsupportedStructure(paragraph_parent))?;
+    if !matches!(
+      document.node(list).map(|node| &node.kind),
+      Some(NodeKind::Block(BlockKind::List { .. }))
+    ) {
+      return Err(EditError::UnsupportedStructure(list));
+    }
+    SplitDestination::List {
+      list,
+      item_index: document
+        .child_index(list, paragraph_parent)
+        .ok_or(EditError::UnsupportedStructure(paragraph_parent))?,
+      new_checked: checked.map(|_| false),
+    }
+  } else {
+    return Err(EditError::UnsupportedStructure(paragraph_parent));
+  };
+
+  wrappers_bottom_up.reverse();
   Ok(SplitPath {
     paragraph,
-    document_parent,
-    paragraph_index,
+    destination,
     wrappers_top_down: wrappers_bottom_up,
   })
 }
@@ -271,6 +337,81 @@ mod tests {
     inverse.apply(&mut document).unwrap();
     assert_eq!(document.node(link).unwrap().parent, Some(strong));
     assert_eq!(document.node(tail).unwrap().parent, Some(paragraph));
+  }
+
+  #[test]
+  fn splits_plain_list_items() {
+    let mut document = parse_markdown("- beforeafter");
+    let list = document.children(document.root).next().unwrap().id;
+    let item = document.children(list).next().unwrap().id;
+    let paragraph = document.children(item).next().unwrap().id;
+    let text = document.children(paragraph).next().unwrap().id;
+    let selection = Selection::collapsed(SelectionPoint {
+      node: text,
+      offset_utf16: 6,
+    });
+
+    let inverse = build_insert_paragraph(&document, selection)
+      .unwrap()
+      .apply(&mut document)
+      .unwrap();
+    assert_eq!(to_markdown(&document), "- before\n- after");
+    assert_eq!(document.children(list).count(), 2);
+
+    inverse.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "- beforeafter");
+    assert_eq!(document.children(list).count(), 1);
+  }
+
+  #[test]
+  fn creates_unchecked_items_when_splitting_tasks() {
+    let mut document = parse_markdown("- [x] beforeafter");
+    let list = document.children(document.root).next().unwrap().id;
+    let item = document.children(list).next().unwrap().id;
+    let paragraph = document.children(item).next().unwrap().id;
+    let text = document.children(paragraph).next().unwrap().id;
+    let selection = Selection::collapsed(SelectionPoint {
+      node: text,
+      offset_utf16: 6,
+    });
+
+    build_insert_paragraph(&document, selection)
+      .unwrap()
+      .apply(&mut document)
+      .unwrap();
+    assert_eq!(to_markdown(&document), "- [x] before\n- [ ] after");
+    let second = document.children(list).nth(1).unwrap();
+    assert!(matches!(
+      second.kind,
+      NodeKind::Block(BlockKind::ListItem {
+        checked: Some(false)
+      })
+    ));
+  }
+
+  #[test]
+  fn splits_nested_marks_into_new_list_items() {
+    let mut document = parse_markdown("- **beforeafter**");
+    let list = document.children(document.root).next().unwrap().id;
+    let item = document.children(list).next().unwrap().id;
+    let paragraph = document.children(item).next().unwrap().id;
+    let strong = document.children(paragraph).next().unwrap().id;
+    let text = document.children(strong).next().unwrap().id;
+    let selection = Selection::collapsed(SelectionPoint {
+      node: text,
+      offset_utf16: 6,
+    });
+
+    let inverse = build_insert_paragraph(&document, selection)
+      .unwrap()
+      .apply(&mut document)
+      .unwrap();
+    assert_eq!(to_markdown(&document), "- **before**\n- **after**");
+    assert_eq!(document.children(list).count(), 2);
+
+    inverse.apply(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "- **beforeafter**");
+    assert_eq!(document.node(strong).unwrap().parent, Some(paragraph));
   }
 
   #[test]

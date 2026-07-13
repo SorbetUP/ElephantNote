@@ -6,37 +6,56 @@ import { addonPacksAddon, builtinAddons } from '@/addons/builtin'
 
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
-const OPTIONAL_EDITOR_ADDONS = ['elephant.code-execution']
 const CORE_EDITOR_ADDONS = ['elephant.excalidraw']
+const PHYSICAL_ADDONS = [
+  'ai',
+  'ai-chat',
+  'ai-search',
+  'ai-ocr',
+  'wiki',
+  'graph',
+  'open-models',
+  'codex-connection',
+  'sync',
+  'calendar',
+  'sites',
+  'code-execution'
+]
+
+const PHYSICAL_IDS = [
+  'elephant.ai',
+  'elephant.ai-chat',
+  'elephant.ai-search',
+  'elephant.ai-ocr',
+  'elephant.wiki',
+  'elephant.graph',
+  'elephant.open-models',
+  'elephant.codex-connection',
+  'elephant.sync',
+  'elephant.calendar',
+  'elephant.sites',
+  'elephant.code-execution'
+]
 
 describe('builtin addons', () => {
-  it('exports only code that is physically bundled with the app', () => {
+  it('exports only code that remains physically bundled with the app', () => {
     expect(builtinAddons.map((addon) => addon.manifest.id)).toEqual([
       'elephant.addon-packs',
       'elephant.google-keep-import',
-      'elephant.codex-connection',
-      'elephant.calendar',
-      'elephant.sites',
-      'elephant.ai-chat',
-      'elephant.ai-search',
-      'elephant.wiki',
-      'elephant.graph',
-      'elephant.open-models',
-      'elephant.sync',
-      'elephant.code-execution',
       'elephant.excalidraw',
       'elephant.recently-edited'
     ])
     expect(builtinAddons).toContain(addonPacksAddon)
-    expect(builtinAddons.map((addon) => addon.manifest.id)).not.toContain('elephant.ai')
-    expect(builtinAddons.map((addon) => addon.manifest.id)).not.toContain('elephant.ai-ocr')
-    expect(builtinAddons.map((addon) => addon.manifest.id)).not.toContain('elephant.addon-inspector')
-    expect(read('addons/official/ai/manifest.json')).toContain('"id": "elephant.ai"')
+    expect(builtinAddons.map((addon) => addon.manifest.id))
+      .not.toEqual(expect.arrayContaining(PHYSICAL_IDS))
+    for (const slug of PHYSICAL_ADDONS) {
+      expect(read(`addons/official/${slug}/manifest.json`)).toContain('"runtime"')
+      expect(read(`addons/official/${slug}/main.js`).length).toBeGreaterThan(20)
+    }
   })
 
   it('registers the required Addon Packs actions and settings contribution', async () => {
     const manager = new ElephantAddonManager()
-
     manager.register(addonPacksAddon)
     await manager.enable('elephant.addon-packs')
 
@@ -55,20 +74,16 @@ describe('builtin addons', () => {
     const optional = builtinAddons.filter((addon) => (
       addon.manifest.id !== 'elephant.addon-packs' && !CORE_EDITOR_ADDONS.includes(addon.manifest.id)
     ))
-
     expect(optional.every((addon) => addon.manifest.defaultEnabled === false)).toBe(true)
     expect(optional.every((addon) => addon.manifest.removable === true)).toBe(true)
     expect(addonPacksAddon.manifest.removable).toBe(false)
   })
 
-  it('keeps code execution optional but makes Excalidraw a required vanilla editor capability', () => {
-    for (const addonId of OPTIONAL_EDITOR_ADDONS) {
-      const addon = builtinAddons.find((entry) => entry.manifest.id === addonId)
-      expect(addon).toBeDefined()
-      expect(addon.manifest.defaultEnabled).toBe(false)
-      expect(addon.manifest.removable).toBe(true)
-      expect(typeof addon.activate).toBe('function')
-    }
+  it('keeps code execution physical but makes Excalidraw a required vanilla editor capability', () => {
+    const codeExecutionManifest = read('addons/official/code-execution/manifest.json')
+    const codeExecutionEntry = read('addons/official/code-execution/main.js')
+    expect(codeExecutionManifest).toContain('"id": "elephant.code-execution"')
+    expect(codeExecutionEntry).toContain('class ElephantCodeExecutionAddon')
 
     const excalidraw = builtinAddons.find((entry) => entry.manifest.id === 'elephant.excalidraw')
     const addonSystem = read('Elephant/frontend/src/renderer/src/addons/index.js')

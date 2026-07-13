@@ -11,7 +11,7 @@ on:
     types: [synchronize]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   refresh-lock:
@@ -27,7 +27,19 @@ jobs:
       - name: Resolve Cargo dependencies
         run: cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
 
+      - name: Commit to temporary branch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c automation/muya-lock-refresh
+          git add Elephant/backend/tauri/Cargo.lock
+          git commit -m "Update Cargo lock for Muya grapheme support"
+          git push --force origin HEAD:automation/muya-lock-refresh
+
       - name: Upload resolved lockfile
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: muya-cargo-lock

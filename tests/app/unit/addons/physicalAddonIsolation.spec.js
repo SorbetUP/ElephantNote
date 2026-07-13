@@ -59,9 +59,9 @@ describe('physical addon isolation', () => {
     expect(main).toContain('activateCoreFeature')
     expect(main).toContain('addonPacksCoreFeature')
     expect(main).toContain('excalidrawCoreFeature')
-    expect(packs).toContain("id: CORE_FEATURE_ID")
+    expect(packs).toContain('id: CORE_FEATURE_ID')
     expect(packs).not.toContain('manifest:')
-    expect(excalidraw).toContain("id: CORE_FEATURE_ID")
+    expect(excalidraw).toContain('id: CORE_FEATURE_ID')
     expect(excalidraw).not.toContain('manifest:')
   })
 

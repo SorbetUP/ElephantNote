@@ -127,6 +127,14 @@ export default [
     }
   },
 
+  // 3b.1. The graph renderer keeps `t` as its local theme snapshot alias.
+  {
+    files: ['Elephant/frontend/app/components/views/AtomicGraphView.vue'],
+    rules: {
+      'no-unused-vars': ['error', { varsIgnorePattern: '^t$' }]
+    }
+  },
+
   // 3c. Test file globals
   {
     files: ['tests/**/*.js'],

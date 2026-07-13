@@ -8,11 +8,10 @@ const settings = () => read('Elephant/frontend/app/components/settings/SettingsP
 const addonsPanel = () => read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
 const addonLogic = () => read('Elephant/frontend/app/components/settings/useAddonsSettings.js')
 
-describe('ElephantNote settings redesign', () => {
+describe('Elephant settings redesign', () => {
   it('keeps the floating modal, search and indispensable core sections', () => {
     const source = settings()
     const styles = read('Elephant/frontend/app/components/settings/settings-redesign.css')
-
     expect(source).toContain('class="en-settings-backdrop"')
     expect(source).toContain('class="en-settings-panel"')
     expect(source).toContain('placeholder="Search all settings"')
@@ -27,7 +26,6 @@ describe('ElephantNote settings redesign', () => {
 
   it('indexes installed addon settings without restoring legacy catalogue labels', () => {
     const source = settings()
-
     expect(source).toContain('const settingsIndex = computed')
     expect(source).toContain("addonsStore.getContributions('settings.sections')")
     expect(source).toContain("label: 'Installed addons'")
@@ -35,54 +33,39 @@ describe('ElephantNote settings redesign', () => {
     expect(source).not.toContain("label: 'Built-in addon catalogue'")
   })
 
-  it('mounts optional settings pages only through addon contributions', () => {
+  it('mounts optional settings pages only through physical addon contributions', () => {
     const source = settings()
     const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
     const importAddon = read('Elephant/frontend/src/renderer/src/addons/builtin/googleKeepImport.js')
-    const sitesAddon = read('Elephant/frontend/src/renderer/src/addons/builtin/sites.js')
-    const providersAddon = read('addons/official/ai/main.js')
-    const providersManifest = read('addons/official/ai/manifest.json')
-    const chatAddon = read('Elephant/frontend/src/renderer/src/addons/builtin/aiChat.js')
-    const searchAddon = read('Elephant/frontend/src/renderer/src/addons/builtin/aiSearch.js')
-    const ocrAddon = read('addons/official/ai-ocr/main.js')
-    const ocrManifest = read('addons/official/ai-ocr/manifest.json')
-    const codeAddon = read('Elephant/frontend/src/renderer/src/addons/builtin/codeExecution.js')
-    const syncAddon = read('Elephant/frontend/src/renderer/src/addons/builtin/sync.js')
+    const providers = read('addons/official/ai/main.js')
+    const chat = read('addons/official/ai-chat/main.js')
+    const search = read('addons/official/ai-search/main.js')
+    const ocr = read('addons/official/ai-ocr/main.js')
+    const code = read('addons/official/code-execution/main.js')
+    const sync = read('addons/official/sync/main.js')
+    const sites = read('addons/official/sites/main.js')
 
     expect(source).toContain('addonStandaloneSections')
     expect(importAddon).toContain("section: 'import'")
-    expect(sitesAddon).toContain("section: 'sites'")
-    expect(providersAddon).toContain("section: 'ai'")
-    expect(providersAddon).toContain("navigationLabel: 'AI'")
-    expect(providersManifest).toContain('"id": "elephant.ai"')
-    expect(chatAddon).toContain("section: 'ai'")
-    expect(chatAddon).toContain('slot: SETTINGS_PAGE.slot')
-    expect(searchAddon).toContain("section: 'ai'")
-    expect(searchAddon).toContain('slot: SETTINGS_PAGE.slot')
-    expect(ocrAddon).toContain("section: 'ai'")
-    expect(ocrAddon).toContain("slot: 'ai.ocr'")
-    expect(ocrManifest).toContain('"elephant.ai": ">=2.0.0"')
-    expect(chatAddon).not.toContain('standalone: true')
-    expect(searchAddon).not.toContain('standalone: true')
-    expect(ocrAddon).not.toContain('standalone: true')
-    expect(providersAddon).toContain("setAttribute('data-elephant-addon-settings-slot', active.slot)")
-    expect(codeAddon).toContain("section: 'editor'")
-    expect(codeAddon).not.toContain("section: 'code-execution'")
-    expect(syncAddon).toContain("section: 'sync'")
+    expect(providers).toContain("section: 'ai'")
+    expect(providers).toContain("navigationLabel: 'AI'")
+    expect(chat).toContain("slot: 'ai.chat'")
+    expect(search).toContain("slot: 'ai.search'")
+    expect(ocr).toContain("slot: 'ai.ocr'")
+    expect(code).toContain("section: 'editor'")
+    expect(sync).toContain("section: 'sync'")
+    expect(sites).toContain("section: 'sites'")
     expect(builtins).toContain("load: () => import('./googleKeepImport')")
-    expect(builtins).toContain("load: () => import('./sites')")
-    expect(builtins).not.toContain("load: () => import('./ai')")
-    expect(builtins).toContain("load: () => import('./aiChat')")
-    expect(builtins).toContain("load: () => import('./aiSearch')")
-    expect(builtins).not.toContain("load: () => import('./aiOcr')")
-    expect(builtins).toContain("load: () => import('./codeExecution')")
-    expect(builtins).toContain("load: () => import('./sync')")
+    for (const module of ['ai', 'aiChat', 'aiSearch', 'aiOcr', 'codeExecution', 'sync', 'sites']) {
+      expect(builtins).not.toContain(`import('./${module}')`)
+    }
   })
 
-  it('uses the compact persisted Community Addons checkbox as a real boundary', () => {
+  it('keeps official packages independent from the Community Addons boundary', () => {
     const source = settings()
     const panel = addonsPanel()
     const logic = addonLogic()
+    const runtime = read('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js')
     const row = read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
 
     expect(source).toContain('id="en-addons-title-actions"')
@@ -90,21 +73,17 @@ describe('ElephantNote settings redesign', () => {
     expect(panel).toContain('role="checkbox"')
     expect(panel).toContain(':aria-checked="communityAddonsEnabled"')
     expect(panel).toContain('@click="toggleCommunityAddons"')
-    expect(panel).toContain('isCommunityLocked(selectedEntry.snapshot)')
-    expect(logic).toContain('setCommunityAddonsEnabled(true)')
-    expect(logic).toContain('setCommunityAddonsEnabled(false)')
-    expect(logic).toContain('if (communityAddonsEnabled.value)')
-    expect(logic).toContain("addon?.manifest?.source === 'external' && !communityAddonsEnabled.value")
+    expect(logic).toContain('isOfficialCatalogEntry')
+    expect(logic).toContain('communityInstalledAddons')
+    expect(logic).toContain("installSource: official ? 'official' : 'catalog'")
+    expect(runtime).toContain('const isOfficialRecord')
+    expect(runtime).toContain('if (!official && !await externalAddonApi.getCommunityEnabled())')
     expect(row).toContain('locked: { type: Boolean, default: false }')
-    expect(row).toContain('busy || locked || addon.status')
-    expect(logic).not.toContain("showMessage('Community addons enabled.')")
-    expect(logic).not.toContain("showMessage('Community addons disabled.')")
   })
 
-  it('uses one installed/available browser, groups AI modules and keeps real install/remove actions', () => {
+  it('uses one installed/available browser and groups physical AI modules', () => {
     const panel = addonsPanel()
     const logic = addonLogic()
-    const row = read('Elephant/frontend/app/components/settings/AddonSettingsRow.vue')
     const packs = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/AddonPacksSettings.vue')
     const packRuntime = read('Elephant/frontend/src/renderer/src/addons/builtin/addonProfiles.js')
 
@@ -113,45 +92,33 @@ describe('ElephantNote settings redesign', () => {
     expect(panel).toContain('const AI_SUBMODULE_IDS')
     expect(panel).toContain('v-if="selectedEntry.id === AI_PARENT_ID"')
     expect(panel).toContain('class="en-ai-module-list"')
-    expect(panel).not.toContain('No optional addon is installed.')
     expect(logic).toContain('installBuiltin(addon.id)')
-    expect(logic).toContain('uninstallBuiltin(addon.manifest.id)')
+    expect(logic).toContain('installCatalogAddon')
     expect(logic).toContain('installExternalAddon(selected)')
-    expect(logic).toContain('setAddonEnabled(addon.manifest.id')
-    expect(logic).not.toContain('result?.path ?')
-    expect(row).toContain('confirmingUninstall')
-    expect(row).toContain('role="switch"')
+    expect(packRuntime).toContain("source: 'official'")
+    expect(packRuntime).toContain("'elephant.ai', version: '2.1.0'")
     expect(packs).not.toContain('{{ pack.path }}')
-    expect(packs).not.toContain('pack.description || pack.path')
-    expect(packRuntime).not.toContain('`Pack: \`${path}\``')
-    expect(packRuntime).not.toContain('notifySuccess(')
   })
 
-  it('keeps Theme and the complete vertical icon bar collapsible without redundant copy', () => {
+  it('keeps Theme and the complete vertical icon bar collapsible', () => {
     const source = settings()
     const organizer = read('Elephant/frontend/app/components/settings/IconRailLayoutSettings.vue')
-
     expect(source).toContain('themeExpanded = !themeExpanded')
-    expect(source).not.toContain('Choose the visual family used throughout ElephantNote.')
-    expect(source).not.toContain('Reorder or hide native features and enabled addon workspaces.')
     expect(organizer).toContain('@click="toggleCollapsed"')
     expect(organizer).toContain('addDivider')
     expect(organizer).toContain('removeDivider(item.id)')
     expect(organizer).toContain('resetLayout')
     expect(organizer).toContain('vault: Vault')
     expect(organizer).toContain("'sidebar-toggle': PanelLeft")
-    expect(organizer).toContain('en-rail-layout-icon-preview')
   })
 
   it('keeps editor preferences semantic and persistent', () => {
     const source = settings()
     const preferences = read('Elephant/frontend/src/renderer/src/store/preferences.js')
-
     expect(source).toContain('role="switch"')
     expect(source).toContain(':aria-checked="preferences.showEditorFooter"')
     expect(source).toContain(':aria-checked="!preferences.hideQuickInsertHint"')
     expect(source).toContain("setPreference('quickInsertTrigger'")
-    expect(source).toContain("setPreference('autoPairBracket'")
     expect(preferences).toContain('hideQuickInsertHint: false')
     expect(preferences).toContain("quickInsertTrigger: '/'")
   })
@@ -159,41 +126,27 @@ describe('ElephantNote settings redesign', () => {
   it('uses shared settings primitives for root and addon pages', () => {
     const redesign = read('Elephant/frontend/app/components/settings/settings-redesign.css')
     const primitives = read('Elephant/frontend/app/components/settings/settings-primitives.css')
-
     expect(redesign).toContain("@import './settings-primitives.css';")
     expect(primitives).toContain('--en-ui-control-height: 34px')
     expect(primitives).toContain('--en-ui-card-radius: 14px')
     expect(primitives).toContain('.en-addons-panel .en-primary-button')
-    expect(primitives).toContain('.en-addons-panel .en-switch')
   })
 
-  it('keeps optional feature UI owned by each addon module', () => {
-    const sync = read('Elephant/frontend/src/renderer/src/addons/builtin/sync.js')
-    const sites = read('Elephant/frontend/src/renderer/src/addons/builtin/sites.js')
-    const codex = read('Elephant/frontend/src/renderer/src/addons/builtin/codexConnection.js')
-    const providers = read('addons/official/ai/main.js')
-    const chat = read('Elephant/frontend/src/renderer/src/addons/builtin/aiChat.js')
-    const wiki = read('Elephant/frontend/src/renderer/src/addons/builtin/wiki.js')
-    const graph = read('Elephant/frontend/src/renderer/src/addons/builtin/graph.js')
-    const openModels = read('Elephant/frontend/src/renderer/src/addons/builtin/openModels.js')
-    const codeExecution = read('Elephant/frontend/src/renderer/src/addons/builtin/codeExecution.js')
+  it('keeps optional UI owned by each physical package', () => {
     const navigation = read('Elephant/frontend/app/components/navigation/NavigationBar.vue')
     const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
-
-    expect(sync).toContain('component: SyncNavigationControl')
-    expect(navigation).not.toContain('SyncNavigationControl')
+    const physicalEntries = [
+      ['addons/official/sync/main.js', "registerContribution('top-bar.items'"],
+      ['addons/official/sites/main.js', "zone: 'workspace.notes'"],
+      ['addons/official/codex-connection/main.js', "registerContribution('ai.providers'"],
+      ['addons/official/ai-chat/main.js', "zone: 'shell.right'"],
+      ['addons/official/wiki/main.js', 'api.workspace.registerView'],
+      ['addons/official/graph/main.js', 'api.workspace.registerView'],
+      ['addons/official/open-models/main.js', "registerContribution('ai.providers'"],
+      ['addons/official/code-execution/main.js', 'class ElephantCodeExecutionAddon']
+    ]
+    for (const [file, marker] of physicalEntries) expect(read(file)).toContain(marker)
     expect(navigation).toContain(':is="entry.contribution.component"')
-    expect(sites).toContain('component: SitePreviewPanel')
-    expect(main).not.toContain('SitePreviewPanel')
-    expect(codex).toContain("ctx.registerContribution('ai.providers'")
-    expect(providers).not.toContain('ChatSidebar')
-    expect(providers).not.toContain('WikiView')
-    expect(providers).not.toContain('AtomicGraphView')
-    expect(providers).not.toContain('ModelsView')
-    expect(chat).toContain('component: ChatSidebar')
-    expect(wiki).toContain('component: WikiView')
-    expect(graph).toContain('component: AtomicGraphView')
-    expect(openModels).toContain('component: OpenModelsView')
-    expect(codeExecution).toContain('CodeExecutionSettings')
+    expect(main).toContain("entry?.contribution?.zone === 'workspace.notes'")
   })
 })

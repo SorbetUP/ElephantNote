@@ -141,21 +141,40 @@ fn safe_relative_path(value: &str) -> R<PathBuf> {
   Ok(normalized)
 }
 
+fn read_manifest(package_dir: &Path, addon_id: &str) -> R<Value> {
+  let path = package_dir.join("manifest.json");
+  let raw = fs::read_to_string(&path)
+    .map_err(|error| format!("Failed to read installed addon manifest for {addon_id}: {error}"))?;
+  let manifest: Value = serde_json::from_str(&raw)
+    .map_err(|error| format!("Invalid installed addon manifest for {addon_id}: {error}"))?;
+  if manifest.get("id").and_then(Value::as_str) != Some(addon_id) {
+    return Err(format!("Installed addon manifest id mismatch: {addon_id}"));
+  }
+  Ok(manifest)
+}
+
 fn resolve_service(app: &AppHandle, addon_id: &str) -> R<ResolvedService> {
   ensure_services_supported()?;
-  let record = addon_runtime_access::read_enabled_addon(app, addon_id)?;
-  let native_allowed = record
-    .manifest
+  addon_runtime_access::read_enabled_addon(app, addon_id)?;
+
+  let vault = vault_config::get_active_vault(app)?;
+  let vault_dir = fs::canonicalize(&vault.path)
+    .map_err(|error| format!("Active vault is unavailable: {error}"))?;
+  let addons_root = vault_layout::addons_dir(&vault.path);
+  let package_dir = addons_root.join("packages").join(addon_id);
+  let data_dir = addons_root.join("data").join(addon_id);
+  fs::create_dir_all(&data_dir).map_err(|error| error.to_string())?;
+
+  let manifest = read_manifest(&package_dir, addon_id)?;
+  if manifest
     .get("permissions")
-    .and_then(|permissions| permissions.get("native"))
+    .and_then(|value| value.get("native"))
     .and_then(Value::as_bool)
-    == Some(true);
-  if !native_allowed {
+    != Some(true)
+  {
     return Err(format!("Addon native permission was not granted: {addon_id}"));
   }
-
-  let native = record
-    .manifest
+  let native = manifest
     .get("native")
     .and_then(Value::as_object)
     .ok_or_else(|| format!("Addon does not declare a native runtime: {addon_id}"))?;
@@ -167,24 +186,13 @@ fn resolve_service(app: &AppHandle, addon_id: &str) -> R<ResolvedService> {
   }
 
   let platform = platform_key();
-  let sidecars = native
+  let relative = native
     .get("sidecars")
     .and_then(Value::as_object)
-    .ok_or_else(|| format!("Addon does not declare native service executables: {addon_id}"))?;
-  let relative = sidecars
-    .get(&platform)
-    .or_else(|| sidecars.get(std::env::consts::OS))
+    .and_then(|sidecars| sidecars.get(&platform).or_else(|| sidecars.get(std::env::consts::OS)))
     .and_then(Value::as_str)
     .ok_or_else(|| format!("Addon has no service executable for platform {platform}: {addon_id}"))?;
   let relative_path = safe_relative_path(relative)?;
-
-  let vault = vault_config::get_active_vault(app)?;
-  let vault_dir = fs::canonicalize(&vault.path)
-    .map_err(|error| format!("Active vault is unavailable: {error}"))?;
-  let addons_root = vault_layout::addons_dir(&vault.path);
-  let package_dir = addons_root.join("packages").join(addon_id);
-  let data_dir = addons_root.join("data").join(addon_id);
-  fs::create_dir_all(&data_dir).map_err(|error| error.to_string())?;
 
   let canonical_package = fs::canonicalize(&package_dir)
     .map_err(|error| format!("Addon package directory is unavailable for {addon_id}: {error}"))?;
@@ -206,7 +214,7 @@ fn resolve_service(app: &AppHandle, addon_id: &str) -> R<ResolvedService> {
     if mode & 0o100 == 0 {
       permissions.set_mode(mode | 0o700);
       fs::set_permissions(&executable, permissions)
-        .map_err(|error| format!("Failed to mark addon service executable executable: {error}"))?;
+        .map_err(|error| format!("Failed to mark addon service executable: {error}"))?;
     }
   }
 
@@ -228,18 +236,18 @@ async fn send_request(
   params: Value,
   timeout_ms: u64,
 ) -> R<Value> {
-  let request = json!({
+  let mut request = serde_json::to_vec(&json!({
     "protocol": SERVICE_PROTOCOL,
     "id": request_id,
     "addonId": addon_id,
     "method": method,
     "params": params
-  });
-  let mut bytes = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
-  bytes.push(b'\n');
+  }))
+  .map_err(|error| error.to_string())?;
+  request.push(b'\n');
   process
     .stdin
-    .write_all(&bytes)
+    .write_all(&request)
     .await
     .map_err(|error| format!("Failed to write addon service request: {error}"))?;
   process
@@ -248,16 +256,14 @@ async fn send_request(
     .await
     .map_err(|error| format!("Failed to flush addon service request: {error}"))?;
 
+  let wait_ms = timeout_ms.clamp(1, MAX_TIMEOUT_MS);
   let mut line = String::new();
-  timeout(
-    Duration::from_millis(timeout_ms.clamp(1, MAX_TIMEOUT_MS)),
-    process.stdout.read_line(&mut line),
-  )
-  .await
-  .map_err(|_| format!("Addon service timed out after {timeout_ms} ms"))?
-  .map_err(|error| format!("Failed to read addon service response: {error}"))?;
-  if line.is_empty() {
-    return Err("Addon service closed its output before responding".to_string());
+  let bytes = timeout(Duration::from_millis(wait_ms), process.stdout.read_line(&mut line))
+    .await
+    .map_err(|_| format!("Addon service timed out after {wait_ms} ms"))?
+    .map_err(|error| format!("Failed to read addon service response: {error}"))?;
+  if bytes == 0 {
+    return Err("Addon service closed before responding".to_string());
   }
   if line.len() > MAX_RESPONSE_BYTES {
     return Err("Addon service response exceeded the 16 MiB limit".to_string());
@@ -274,12 +280,12 @@ async fn send_request(
   if response.get("ok").and_then(Value::as_bool) == Some(true) {
     return Ok(response.get("result").cloned().unwrap_or(Value::Null));
   }
-  let message = response
+  Err(response
     .get("error")
     .and_then(|value| value.get("message").or(Some(value)))
     .and_then(Value::as_str)
-    .unwrap_or("Addon service returned an unknown error");
-  Err(message.to_string())
+    .unwrap_or("Addon service returned an unknown error")
+    .to_string())
 }
 
 async fn spawn_service(app: &AppHandle, addon_id: &str, request_id: u64) -> R<ServiceProcess> {
@@ -294,7 +300,7 @@ async fn spawn_service(app: &AppHandle, addon_id: &str, request_id: u64) -> R<Se
     .env("ELEPHANT_ADDON_SERVICE_PROTOCOL", SERVICE_PROTOCOL)
     .stdin(Stdio::piped())
     .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
+    .stderr(Stdio::null())
     .kill_on_drop(true);
 
   let mut child = command
@@ -302,13 +308,6 @@ async fn spawn_service(app: &AppHandle, addon_id: &str, request_id: u64) -> R<Se
     .map_err(|error| format!("Failed to start addon service: {error}"))?;
   let stdin = child.stdin.take().ok_or_else(|| "Addon service stdin is unavailable".to_string())?;
   let stdout = child.stdout.take().ok_or_else(|| "Addon service stdout is unavailable".to_string())?;
-  if let Some(mut stderr) = child.stderr.take() {
-    tokio::spawn(async move {
-      let mut sink = tokio::io::sink();
-      let _ = tokio::io::copy(&mut stderr, &mut sink).await;
-    });
-  }
-
   let mut process = ServiceProcess {
     child,
     stdin: BufWriter::new(stdin),
@@ -348,7 +347,6 @@ pub async fn tauri_addons_service_status(
     }
     services.remove(&addon_id);
   }
-
   match resolve_service(&app, &addon_id) {
     Ok(resolved) => AddonServiceStatus {
       running: false,
@@ -380,19 +378,18 @@ pub async fn tauri_addons_service_start(
     if process.is_running() {
       return Ok(json!({
         "running": true,
-        "platform": process.platform,
-        "relativePath": process.relative_path,
+        "platform": process.platform.clone(),
+        "relativePath": process.relative_path.clone(),
         "protocol": SERVICE_PROTOCOL
       }));
     }
     services.remove(&addon_id);
   }
-
   let process = spawn_service(&app, &addon_id, state.next_request_id()).await?;
   let result = json!({
     "running": true,
-    "platform": process.platform,
-    "relativePath": process.relative_path,
+    "platform": process.platform.clone(),
+    "relativePath": process.relative_path.clone(),
     "protocol": SERVICE_PROTOCOL
   });
   services.insert(addon_id, process);
@@ -423,20 +420,25 @@ pub async fn tauri_addons_service_call(
     let process = spawn_service(&app, &addon_id, state.next_request_id()).await?;
     services.insert(addon_id.clone(), process);
   }
-
-  let process = services
+  let result = {
+    let process = services
+      .get_mut(&addon_id)
+      .ok_or_else(|| "Addon service failed to start".to_string())?;
+    send_request(
+      process,
+      &addon_id,
+      state.next_request_id(),
+      method,
+      params.unwrap_or_else(|| json!({})),
+      timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS),
+    )
+    .await
+  };
+  let stopped = services
     .get_mut(&addon_id)
-    .ok_or_else(|| "Addon service failed to start".to_string())?;
-  let result = send_request(
-    process,
-    &addon_id,
-    state.next_request_id(),
-    method,
-    params.unwrap_or_else(|| json!({})),
-    timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS),
-  )
-  .await;
-  if !process.is_running() {
+    .map(|process| !process.is_running())
+    .unwrap_or(true);
+  if stopped {
     services.remove(&addon_id);
   }
   result
@@ -447,14 +449,9 @@ pub async fn tauri_addons_service_stop(
   state: State<'_, AddonServiceState>,
   addon_id: String,
 ) -> R<Value> {
-  let mut process = {
-    let mut services = state.services.lock().await;
-    services.remove(&addon_id)
-  };
-  let Some(mut process) = process.take() else {
+  let Some(mut process) = state.services.lock().await.remove(&addon_id) else {
     return Ok(json!({ "running": false, "stopped": false }));
   };
-
   let _ = send_request(
     &mut process,
     &addon_id,
@@ -464,8 +461,10 @@ pub async fn tauri_addons_service_stop(
     STOP_TIMEOUT_MS,
   )
   .await;
-  let wait = timeout(Duration::from_millis(STOP_TIMEOUT_MS), process.child.wait()).await;
-  if !matches!(wait, Ok(Ok(_))) {
+  if !matches!(
+    timeout(Duration::from_millis(STOP_TIMEOUT_MS), process.child.wait()).await,
+    Ok(Ok(_))
+  ) {
     let _ = process.child.kill().await;
     let _ = process.child.wait().await;
   }

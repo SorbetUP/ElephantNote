@@ -1,8 +1,11 @@
+const TEXT_NODE = 3
+const ELEMENT_NODE = 1
+
 const escapeLinkDestination = (value) => String(value || '').replace(/[()\\]/g, '\\$&')
 
 const inlineMarkdown = (node) => {
-  if (node.nodeType === node.TEXT_NODE) return node.data || ''
-  if (node.nodeType !== node.ELEMENT_NODE) return ''
+  if (node.nodeType === TEXT_NODE) return node.data || ''
+  if (node.nodeType !== ELEMENT_NODE) return ''
 
   const tag = node.tagName.toLowerCase()
   const content = Array.from(node.childNodes).map(inlineMarkdown).join('')

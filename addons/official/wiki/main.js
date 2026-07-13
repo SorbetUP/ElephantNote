@@ -1,5 +1,8 @@
 const ADDON_ID = 'elephant.wiki'
 const VIEW_ID = `${ADDON_ID}.workspace`
+const RECORDS_KEY = 'records'
+const MAX_SOURCE_READS = 300
+const MAX_CITATIONS = 24
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -8,18 +11,217 @@ const node = (documentRef, tag, className = '', text = '') => {
   return element
 }
 
+const slugify = (value = '') => {
+  const slug = String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug || 'topic'
+}
+
+const titleFromPath = (path = '') => {
+  const name = String(path || '').split('/').pop() || 'Untitled'
+  return name.replace(/\.md$/i, '').replace(/[-_]+/g, ' ').trim() || 'Untitled'
+}
+
+const extractTitle = (content, path) => {
+  const heading = String(content || '').match(/^#\s+(.+)$/m)?.[1]?.trim()
+  return heading || titleFromPath(path)
+}
+
+const extractTags = (content = '') => {
+  const tags = new Set()
+  const frontmatter = String(content).match(/^---\s*\n([\s\S]*?)\n---/)
+  if (frontmatter) {
+    const inline = frontmatter[1].match(/^tags\s*:\s*\[([^\]]*)\]/mi)?.[1]
+    if (inline) inline.split(',').map((tag) => tag.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean).forEach((tag) => tags.add(tag.toLowerCase()))
+    const block = frontmatter[1].match(/^tags\s*:\s*\n((?:\s*-\s*.+\n?)*)/mi)?.[1] || ''
+    for (const match of block.matchAll(/^\s*-\s*(.+)$/gm)) tags.add(match[1].trim().replace(/^['"]|['"]$/g, '').toLowerCase())
+  }
+  for (const match of String(content).matchAll(/(^|\s)#([\p{L}\p{N}_-]{2,})/gu)) tags.add(match[2].toLowerCase())
+  return [...tags].filter(Boolean)
+}
+
+const extractLinks = (content = '') => [...String(content).matchAll(/\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/g)]
+  .map((match) => match[1].trim().toLowerCase())
+  .filter(Boolean)
+
+const excerpt = (content = '') => String(content)
+  .replace(/^---[\s\S]*?---\s*/m, '')
+  .replace(/^#{1,6}\s+/gm, '')
+  .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, '$1')
+  .replace(/[`*_>~-]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .slice(0, 360)
+
+const folderTopic = (path = '') => {
+  const parts = String(path || '').split('/').filter(Boolean)
+  return parts.length > 1 ? parts[parts.length - 2] : ''
+}
+
+const normalizeRecords = (records) => (Array.isArray(records) ? records : [])
+  .filter((record) => record && typeof record === 'object' && record.id)
+  .map((record) => ({
+    ...record,
+    id: String(record.id),
+    title: String(record.title || record.topic || record.id),
+    topic: String(record.topic || record.title || record.id),
+    status: String(record.status || 'proposed'),
+    sources: Array.isArray(record.sources) ? record.sources : [],
+    sourceCount: Number(record.sourceCount || record.sources?.length || 0)
+  }))
+
+const proposalMarkdown = (record) => {
+  const sources = record.sources || []
+  const sourceList = sources.map((source, index) => `[^source-${index + 1}]: ${source.path}${source.excerpt ? ` — ${source.excerpt}` : ''}`).join('\n')
+  const links = sources.map((source) => `- [[${source.path.replace(/\.md$/i, '')}]]`).join('\n')
+  return `# ${record.title}\n\n${record.summary || `Knowledge page synthesized from ${sources.length} notes.`}\n\n## Related notes\n\n${links || '- No related note'}\n\n## Sources\n\n${sourceList || 'No source'}\n`
+}
+
 export default class ElephantWikiAddon {
   constructor(api) {
     this.api = api
     this.window = api.experimental.window
   }
 
-  async call(action, payload = {}) {
-    const client = this.window?.elephantnote?.api
-    if (typeof client?.call !== 'function') throw new Error(`Elephant API is unavailable for ${action}`)
-    const response = await client.call(action, payload)
-    if (response?.ok === false) throw new Error(response.error?.message || `${action} failed`)
-    return response?.data ?? response
+  invoke(command, payload = {}) {
+    const invoke = this.window?.__TAURI__?.core?.invoke
+    if (typeof invoke !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
+    return invoke(command, payload)
+  }
+
+  broker(method, params = {}) {
+    return this.invoke('tauri_addons_call', { addonId: ADDON_ID, method, params })
+  }
+
+  listNoteEntries() {
+    return this.invoke('tauri_addons_notes_list', { addonId: ADDON_ID, prefix: '.' })
+  }
+
+  async readNote(path) {
+    const result = await this.broker('notes.read', { path })
+    return String(result?.content || '')
+  }
+
+  writeNote(path, content) {
+    return this.broker('notes.write', { path, content })
+  }
+
+  async loadRecords() {
+    return normalizeRecords(await this.api.storage.get(RECORDS_KEY))
+  }
+
+  async saveRecords(records) {
+    const normalized = normalizeRecords(records)
+    await this.api.storage.set(RECORDS_KEY, normalized)
+    return normalized
+  }
+
+  async scanNotes() {
+    const entries = await this.listNoteEntries()
+    const candidates = (Array.isArray(entries) ? entries : [])
+      .filter((entry) => entry?.path && !String(entry.path).startsWith('Wiki/'))
+      .slice(0, MAX_SOURCE_READS)
+    const notes = []
+    for (const entry of candidates) {
+      try {
+        const content = await this.readNote(entry.path)
+        notes.push({
+          path: String(entry.path),
+          title: extractTitle(content, entry.path),
+          excerpt: excerpt(content),
+          tags: extractTags(content),
+          links: extractLinks(content),
+          folder: folderTopic(entry.path),
+          modifiedAt: entry.modifiedAt || null
+        })
+      } catch (error) {
+        console.warn('[wiki-addon] note skipped', { path: entry.path, error: error?.message || String(error) })
+      }
+    }
+    return notes
+  }
+
+  buildProposals(notes) {
+    const clusters = new Map()
+    const add = (topic, note, weight) => {
+      const normalized = String(topic || '').trim()
+      if (!normalized || normalized.length < 2) return
+      const key = normalized.toLowerCase()
+      const cluster = clusters.get(key) || { topic: normalized, notes: new Map(), score: 0 }
+      const previous = cluster.notes.get(note.path)
+      cluster.notes.set(note.path, previous || note)
+      cluster.score += weight
+      clusters.set(key, cluster)
+    }
+
+    for (const note of notes) {
+      for (const tag of note.tags) add(tag, note, 5)
+      if (note.folder) add(note.folder, note, 2)
+      for (const link of note.links) add(link, note, 1)
+      const titleWords = note.title.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) || []
+      for (const word of titleWords.filter((word) => !['this', 'that', 'with', 'from', 'dans', 'pour', 'avec', 'sans', 'note'].includes(word)).slice(0, 5)) add(word, note, 1)
+    }
+
+    const now = new Date().toISOString()
+    return [...clusters.values()]
+      .map((cluster) => ({ ...cluster, notes: [...cluster.notes.values()] }))
+      .filter((cluster) => cluster.notes.length >= 2)
+      .sort((left, right) => right.notes.length - left.notes.length || right.score - left.score || left.topic.localeCompare(right.topic))
+      .slice(0, 80)
+      .map((cluster) => {
+        const sources = cluster.notes
+          .sort((left, right) => Number(right.modifiedAt || 0) - Number(left.modifiedAt || 0))
+          .slice(0, MAX_CITATIONS)
+          .map((note) => ({ path: note.path, title: note.title, excerpt: note.excerpt, tags: note.tags }))
+        const topic = cluster.topic.replace(/[-_]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+        return {
+          id: `wiki-${slugify(cluster.topic)}`,
+          topic,
+          title: topic,
+          summary: `This proposal connects ${cluster.notes.length} notes around ${topic}, using ${sources.length} directly cited sources.`,
+          sources,
+          sourceCount: cluster.notes.length,
+          status: 'proposed',
+          createdAt: now,
+          updatedAt: now
+        }
+      })
+  }
+
+  async generateProposals() {
+    const [existing, notes] = await Promise.all([this.loadRecords(), this.scanNotes()])
+    const preserved = existing.filter((record) => record.status !== 'proposed')
+    const proposals = this.buildProposals(notes)
+    const merged = [...preserved, ...proposals.filter((proposal) => !preserved.some((record) => record.id === proposal.id))]
+    await this.saveRecords(merged)
+    return { generated: proposals.length, records: merged }
+  }
+
+  async acceptRecord(id) {
+    const records = await this.loadRecords()
+    const record = records.find((candidate) => candidate.id === id)
+    if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
+    const relativePath = `Wiki/${slugify(record.title)}.md`
+    await this.writeNote(relativePath, proposalMarkdown(record))
+    record.status = 'accepted'
+    record.path = relativePath
+    record.updatedAt = new Date().toISOString()
+    await this.saveRecords(records)
+    return record
+  }
+
+  async dismissRecord(id) {
+    const records = await this.loadRecords()
+    const record = records.find((candidate) => candidate.id === id)
+    if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
+    record.status = 'dismissed'
+    record.updatedAt = new Date().toISOString()
+    await this.saveRecords(records)
+    return record
   }
 
   render(container) {
@@ -31,16 +233,15 @@ export default class ElephantWikiAddon {
     const refresh = async () => {
       root.replaceChildren(node(documentRef, 'p', 'elephant-package-muted', 'Loading Wiki…'))
       try {
-        const result = await this.call('wiki.list')
+        const records = await this.loadRecords()
         if (disposed) return
-        const records = Array.isArray(result?.records) ? result.records : Array.isArray(result) ? result : []
         root.replaceChildren()
         const header = node(documentRef, 'header', 'elephant-package-header')
         const heading = node(documentRef, 'div')
         heading.append(node(documentRef, 'h2', '', 'Wiki'), node(documentRef, 'p', '', `${records.length} pages and proposals`))
         const actions = node(documentRef, 'div', 'elephant-package-actions')
         const propose = node(documentRef, 'button', '', 'Generate proposals')
-        propose.onclick = async () => { await this.call('wiki.propose'); await refresh() }
+        propose.onclick = async () => { propose.disabled = true; try { await this.generateProposals(); await refresh() } finally { propose.disabled = false } }
         const reload = node(documentRef, 'button', '', 'Refresh')
         reload.onclick = () => void refresh()
         actions.append(propose, reload)
@@ -51,18 +252,16 @@ export default class ElephantWikiAddon {
         if (!records.length) list.append(node(documentRef, 'p', 'elephant-package-muted', 'No Wiki page or proposal yet.'))
         for (const record of records) {
           const article = node(documentRef, 'article', 'elephant-wiki-record')
-          const title = String(record.title || record.name || record.id || 'Untitled Wiki page')
-          article.append(node(documentRef, 'h3', '', title))
-          const summary = String(record.summary || record.description || record.excerpt || '')
-          if (summary) article.append(node(documentRef, 'p', '', summary))
-          const meta = [record.status, `${record.sources?.length || record.sourceCount || 0} sources`].filter(Boolean).join(' · ')
-          article.append(node(documentRef, 'small', '', meta))
-          if (record.status === 'proposed' || record.proposed === true) {
+          article.dataset.status = record.status
+          article.append(node(documentRef, 'h3', '', record.title))
+          if (record.summary) article.append(node(documentRef, 'p', '', record.summary))
+          article.append(node(documentRef, 'small', '', `${record.status} · ${record.sourceCount || record.sources.length} sources`))
+          if (record.status === 'proposed') {
             const buttons = node(documentRef, 'div', 'elephant-package-actions')
             const accept = node(documentRef, 'button', '', 'Approve')
-            accept.onclick = async () => { await this.call('wiki.accept', { id: String(record.id) }); await refresh() }
+            accept.onclick = async () => { await this.acceptRecord(record.id); await refresh() }
             const dismiss = node(documentRef, 'button', '', 'Refuse')
-            dismiss.onclick = async () => { await this.call('wiki.dismiss', { id: String(record.id) }); await refresh() }
+            dismiss.onclick = async () => { await this.dismissRecord(record.id); await refresh() }
             buttons.append(accept, dismiss)
             article.append(buttons)
           }
@@ -86,8 +285,9 @@ export default class ElephantWikiAddon {
       .elephant-package-header p,.elephant-package-muted { color:var(--en-muted); }
       .elephant-package-actions { display:flex; gap:8px; flex-wrap:wrap; }
       .elephant-package-actions button { min-height:34px; padding:0 12px; border:1px solid var(--en-border); border-radius:9px; background:var(--en-surface); color:var(--en-text); cursor:pointer; }
-      .elephant-wiki-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; }
+      .elephant-wiki-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
       .elephant-wiki-record { display:grid; gap:8px; padding:14px; border:1px solid var(--en-border); border-radius:13px; background:var(--en-surface); }
+      .elephant-wiki-record[data-status=accepted] { border-color:color-mix(in srgb,var(--en-success,#12b76a) 50%,var(--en-border)); }
       .elephant-wiki-record h3,.elephant-wiki-record p { margin:0; }
       .elephant-wiki-record p,.elephant-wiki-record small { color:var(--en-muted); }
       .elephant-package-error { color:var(--en-danger,#b42318); }
@@ -97,11 +297,16 @@ export default class ElephantWikiAddon {
     api.workspace.registerView({
       id: VIEW_ID,
       title: 'Wiki',
-      description: 'Browse AI-organized knowledge pages and proposals.',
+      description: 'Browse package-owned Wiki pages and proposals.',
       icon: 'book-open-text',
-      kind: 'ai-wiki-v2',
+      kind: 'ai-wiki-v3',
       component: bridge.createDomComponent({ name: 'ElephantPhysicalWiki', mount: (container) => this.render(container) }),
       order: 30
+    })
+    api.commands.register({
+      id: `${ADDON_ID}.generate-proposals`,
+      title: 'Generate Wiki proposals',
+      run: () => this.generateProposals()
     })
   }
 }

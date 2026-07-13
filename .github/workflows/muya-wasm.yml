@@ -25,6 +25,7 @@ on:
       - 'tests/app/unit/specs/muya/rustRuntime.spec.js'
       - 'tests/app/unit/specs/muya/rustWasmFactory.spec.js'
       - 'tests/app/unit/specs/muya/rustVueRuntime.spec.js'
+      - 'tests/app/unit/specs/muya/rustDifferentialTraces.spec.js'
       - '.github/workflows/muya-wasm.yml'
   pull_request:
     paths:
@@ -48,6 +49,7 @@ on:
       - 'tests/app/unit/specs/muya/rustRuntime.spec.js'
       - 'tests/app/unit/specs/muya/rustWasmFactory.spec.js'
       - 'tests/app/unit/specs/muya/rustVueRuntime.spec.js'
+      - 'tests/app/unit/specs/muya/rustDifferentialTraces.spec.js'
       - '.github/workflows/muya-wasm.yml'
   workflow_dispatch:
 
@@ -110,6 +112,7 @@ jobs:
             tests/app/unit/specs/muya/rustRuntime.spec.js \
             tests/app/unit/specs/muya/rustWasmFactory.spec.js \
             tests/app/unit/specs/muya/rustVueRuntime.spec.js \
+            tests/app/unit/specs/muya/rustDifferentialTraces.spec.js \
             2>&1 | tee muya-rust-eslint.txt
 
       - name: Test Rust browser bridge
@@ -193,3 +196,11 @@ jobs:
           test -f Elephant/frontend/src/muya/lib/rust/generated/muya_wasm.js
           test -f Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm
           find build/out/renderer -name '*.wasm' -print -quit | grep .
+
+      - name: Run real JavaScript versus Rust editing traces
+        shell: bash
+        run: |
+          ELEPHANT_EXPERIMENTAL_RUST_EDITOR=1 \
+          NODE_PATH=Elephant/node_modules \
+          Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/specs/muya/rustDifferentialTraces.spec.js

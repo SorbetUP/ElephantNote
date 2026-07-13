@@ -125,12 +125,12 @@ export const runDifferentialTrace = async (trace) => {
   const jsEditor = await createJsEditor(trace.initial)
   const rustEditor = new RustTraceEditor(trace.initial)
   try {
-    await trace.runJs(jsEditor)
-    trace.runRust(rustEditor)
+    const jsResult = await trace.runJs(jsEditor)
+    const rustResult = await trace.runRust(rustEditor)
     await settle()
     const jsMarkdown = jsEditor.getMarkdown()
     const rustMarkdown = rustEditor.markdown()
-    return { jsEditor, rustEditor, jsMarkdown, rustMarkdown }
+    return { jsEditor, rustEditor, jsMarkdown, rustMarkdown, jsResult, rustResult }
   } catch (error) {
     jsEditor.destroy?.()
     throw error

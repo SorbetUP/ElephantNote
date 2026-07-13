@@ -107,8 +107,8 @@ fn dependents(app: &AppHandle, registry: &Value, addon_id: &str, enabled_only: b
   Ok(result)
 }
 
-#[tauri::command(rename = "tauri_addons_set_enabled")]
-pub fn tauri_addons_set_enabled_guarded(
+#[tauri::command]
+pub fn tauri_addons_set_enabled(
   app: AppHandle,
   state: State<'_, AddonState>,
   addon_id: String,
@@ -129,8 +129,8 @@ pub fn tauri_addons_set_enabled_guarded(
   addons::tauri_addons_set_enabled(app, state, addon_id, enabled)
 }
 
-#[tauri::command(rename = "tauri_addons_uninstall")]
-pub fn tauri_addons_uninstall_guarded(
+#[tauri::command]
+pub fn tauri_addons_uninstall(
   app: AppHandle,
   state: State<'_, AddonState>,
   addon_id: String,

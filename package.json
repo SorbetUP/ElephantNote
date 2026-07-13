@@ -23,7 +23,7 @@
     {
       "name": "Tkaixiang",
       "email": "tkaixiang@gmail.com",
-      "url": "https://github.com/Tkaixiang"
+      "url": "https://github.com/tkaixiang"
     }
   ],
   "homepage": "https://github.com/marktext/marktext",
@@ -46,6 +46,9 @@
     "tauri:llama:install": "node build/scripts/ensure-tauri-llama-server.mjs",
     "tauri:web:dev": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vite --config vite.tauri.config.mjs --host 127.0.0.1 --port 1420 --strictPort",
     "tauri:web:build": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vite build --config vite.tauri.config.mjs",
+    "muya:wasm:build": "node build/scripts/build-muya-wasm.mjs",
+    "tauri:web:dev:rust-editor": "pnpm muya:wasm:build && ELEPHANT_EXPERIMENTAL_RUST_EDITOR=1 pnpm tauri:web:dev",
+    "tauri:web:build:rust-editor": "pnpm muya:wasm:build && ELEPHANT_EXPERIMENTAL_RUST_EDITOR=1 pnpm tauri:web:build",
     "tauri:check": "cargo check --manifest-path Elephant/backend/tauri/Cargo.toml",
     "tauri:platform:check": "node build/scripts/verify-tauri-platforms.mjs",
     "tauri:dev": "./build/scripts/build_dev.sh",
@@ -109,7 +112,7 @@
     "flowchart.js": "^1.18.0",
     "font-list": "^2.0.2",
     "fs-extra": "^11.3.5",
-    "fuzzaldrin": "^2.1.0",
+    "fuzzaldrin": "^0.14.0",
     "github-markdown-css": "^5.9.0",
     "graphology": "^0.26.0",
     "html-tags": "^5.1.0",
@@ -143,7 +146,7 @@
     "@vitejs/plugin-vue": "^6.0.7",
     "@vitest/coverage-v8": "^4.1.6",
     "eslint": "^9.39.4",
-    "eslint-plugin-html": "^8.1.4",
+    "eslint-plugin-html": "^8.0.0",
     "eslint-plugin-i18n-json": "^4.0.1",
     "eslint-plugin-jsonc": "^3.1.2",
     "eslint-plugin-vue": "^10.9.1",

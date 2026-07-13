@@ -139,17 +139,16 @@ fn is_partial_cross_wrapper_selection(
   )
 }
 
-fn cross_endpoint(
-  document: &Document,
-  point: SelectionPoint,
-) -> Result<CrossEndpoint, EditError> {
+fn cross_endpoint(document: &Document, point: SelectionPoint) -> Result<CrossEndpoint, EditError> {
   text_value(document, point.node)?;
   let mut current = point.node;
   loop {
     let node = document
       .node(current)
       .ok_or(EditError::NodeNotFound(current))?;
-    let parent = node.parent.ok_or(EditError::UnsupportedStructure(current))?;
+    let parent = node
+      .parent
+      .ok_or(EditError::UnsupportedStructure(current))?;
     let parent_node = document
       .node(parent)
       .ok_or(EditError::NodeNotFound(parent))?;

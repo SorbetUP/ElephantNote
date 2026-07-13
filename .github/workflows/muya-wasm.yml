@@ -1,0 +1,47 @@
+name: Muya WASM Adapter
+
+on:
+  push:
+    branches:
+      - 'refactor/muya-rust-file-by-file'
+    paths:
+      - 'Elephant/crates/muya-core/**'
+      - 'Elephant/crates/muya-wasm/**'
+      - '.github/workflows/muya-wasm.yml'
+  pull_request:
+    paths:
+      - 'Elephant/crates/muya-core/**'
+      - 'Elephant/crates/muya-wasm/**'
+      - '.github/workflows/muya-wasm.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adapter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.91.0'
+          targets: wasm32-unknown-unknown
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            Elephant/crates/muya-core
+            Elephant/crates/muya-wasm
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path Elephant/crates/muya-wasm/Cargo.toml -- --check
+
+      - name: Test adapter protocol on host
+        run: cargo test --manifest-path Elephant/crates/muya-wasm/Cargo.toml
+
+      - name: Check WebAssembly target
+        run: cargo check --manifest-path Elephant/crates/muya-wasm/Cargo.toml --target wasm32-unknown-unknown

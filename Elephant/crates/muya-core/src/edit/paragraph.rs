@@ -68,12 +68,12 @@ fn preserve_inserted_task_state(transaction: &mut Transaction, checked: bool) {
     let Operation::InsertNode { node, .. } = operation else {
       continue;
     };
-    let NodeKind::Block(BlockKind::ListItem {
-      checked: inserted @ Some(_),
-    }) = &mut node.kind
-    else {
+    let NodeKind::Block(BlockKind::ListItem { checked: inserted }) = &mut node.kind else {
       continue;
     };
+    if inserted.is_none() {
+      continue;
+    }
     *inserted = Some(checked);
     break;
   }

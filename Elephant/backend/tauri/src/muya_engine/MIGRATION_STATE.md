@@ -30,7 +30,7 @@ Inline parsing and serialization currently cover:
 - soft and hard breaks;
 - text fallback.
 
-The parser builds structural list, item, row and cell nodes rather than flattening those constructions into strings. Inline nodes are recursive in normal text containers, while fenced code is kept literal.
+The parser builds structural list, item, row and cell nodes rather than flattening those constructions into strings. Inline nodes are recursive in normal text containers, while fenced code is kept literal. Empty editable containers now receive an explicit addressable text node.
 
 ## Executable editing foundation
 
@@ -43,15 +43,21 @@ The parser builds structural list, item, row and cell nodes rather than flatteni
 - `InsertText`, `DeleteBackward` and `InsertParagraph` commands;
 - `ToggleStrong`, `ToggleEmphasis` and `ToggleStrike` commands;
 - full-mark unwrapping for a mark containing one selected text node;
-- plain and rich paragraph splitting from direct text children;
+- plain and rich paragraph splitting;
 - splitting from inside nested marks and links by cloning the right-side wrapper chain;
 - stable movement of following inline subtrees at every nesting level;
-- plain and rich paragraph joining by moving all inline children into the previous paragraph;
+- plain and rich paragraph joining;
 - list-item splitting for unordered, ordered and task lists;
 - automatic unchecked state for newly split task items;
+- Enter lifting empty items out of their list;
+- middle empty items splitting a list into left and right containers;
+- ordered continuation numbers preserved on the right-side list;
 - Backspace merging into the previous list item;
 - Backspace lifting the first item paragraph out of its list;
 - removal and exact undo restoration of emptied list containers;
+- `TableCommand::InsertRowAfter` and `TableCommand::DeleteRow`;
+- `TableCommand::InsertColumnAfter` and `TableCommand::DeleteColumn`;
+- table alignment/header metadata preserved across structural edits;
 - `SetParagraph` and validated `SetHeading(1..=6)` transformations;
 - stable explicit node IDs for structural operations;
 - validation against offsets inside surrogate pairs;
@@ -61,7 +67,7 @@ The parser builds structural list, item, row and cell nodes rather than flatteni
 - bounded transaction-based undo and redo history;
 - logical view patches for text, nodes, subtrees, subtree movement and block changes.
 
-Structural undo/redo restores exact node IDs, parent/child topology and inline order. Mark-boundary splitting remains blocked until empty-wrapper normalization exists. Cross-node replacement still requires direct sibling endpoint texts. Endpoints nested inside different marks, partial mark unwrapping, grapheme-cluster deletion, empty-list-item Enter behavior, nested-list/table commands, IME grouping and actual DOM patch application are not yet active.
+Structural undo/redo restores exact node IDs, parent/child topology, inline order and table topology. Mark-boundary splitting remains blocked until empty-wrapper normalization exists. Cross-node replacement still requires direct sibling endpoint texts. Endpoints nested inside different marks, partial mark unwrapping, grapheme-cluster deletion, nested-list indentation, table keyboard navigation, IME grouping and actual DOM patch application are not yet active.
 
 The executable slices have Rust unit and round-trip tests. Full JavaScript-vs-Rust characterization is still required before runtime activation or JavaScript deletion.
 

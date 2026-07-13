@@ -32,12 +32,7 @@ const editableBlocks = (muya) =>
   )
 
 const allEditableTextBlocks = (muya) =>
-  collectBlocks(
-    muya,
-    (block) =>
-      typeof block?.text === 'string' &&
-      /^(paragraphContent|cellContent|atxLine)$/.test(block.functionType || '')
-  )
+  collectBlocks(muya, (block) => typeof block?.text === 'string')
 
 const applyJsSelection = (muya, block, start, end) => {
   muya.contentState.cursor = {

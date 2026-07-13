@@ -22,12 +22,15 @@ describe('Sync physical migration boundary', () => {
     expect(native).toContain('sync.endpoint')
   })
 
-  it('moves identity, manifests, planning and local application while keeping live transfer explicit in core', () => {
+  it('moves identity, wire schema, manifests, planning and local application while keeping the active router and transfers explicit in core', () => {
     const manifest = JSON.parse(read('addons/official/sync/manifest.json'))
     const entry = read('addons/official/sync/main.service.js')
     const native = read('addons/official/sync/native/src/main.rs')
+    const nativeLibrary = read('addons/official/sync/native/src/lib.rs')
+    const protocol = read('addons/official/sync/native/src/protocol.rs')
     const legacyEntry = read('addons/official/sync/main.js')
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
+    const coreRuntime = read('Elephant/backend/tauri/src/sync/mod.rs')
 
     expect(manifest.description).toContain('vault manifest scanning and deterministic sync planning')
     expect(entry).toContain("from './main.js'")
@@ -38,9 +41,16 @@ describe('Sync physical migration boundary', () => {
     expect(native).toContain('mod manifest;')
     expect(native).toContain('mod plan;')
     expect(native).toContain('mod local_ops;')
+    expect(nativeLibrary).toContain('pub mod protocol;')
+    expect(protocol).toContain('pub const ALPN: &[u8] = b"elephantnote/vault-sync/1"')
+    expect(protocol).toContain('pub enum ControlMessage')
+    expect(protocol).toContain('PairRequest(PairRequest)')
+    expect(protocol).toContain('SyncOpen(SyncOpen)')
     expect(entry).not.toContain("callNativeService('sync.run'")
     expect(legacyEntry).toContain("this.invoke('iroh_sync_run'")
     expect(core).toContain('sync_commands::iroh_sync_run')
+    expect(coreRuntime).toContain('.accept(protocol::ALPN, VaultSyncProtocol { app })')
+    expect(coreRuntime).toContain('struct VaultSyncProtocol')
   })
 
   it('keeps mobile unsupported until a real package-owned host exists', () => {

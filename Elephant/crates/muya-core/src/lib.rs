@@ -27,8 +27,9 @@ pub use history::{History, HistoryStep};
 pub use model::{DetachedSubtree, Document, Node, NodeId, NodeKind, SourceRange};
 pub use parser::parse_markdown;
 pub use protocol::{
-  EditorRequest, EditorResponse, ProtocolCommand, ProtocolError,
-  ProtocolErrorCode, ProtocolSnapshot, ProtocolUpdate, EDITOR_PROTOCOL_VERSION,
+  EditorRequest, EditorResponse, ProtocolCommand, ProtocolDocument,
+  ProtocolError, ProtocolErrorCode, ProtocolSnapshot, ProtocolUpdate,
+  EDITOR_PROTOCOL_VERSION,
 };
 pub use selection::{Selection, SelectionPoint};
 pub use serializer::to_markdown;

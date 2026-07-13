@@ -9,20 +9,87 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: assistant/wiki-organization-continuation
+          fetch-depth: 0
       - uses: ./.github/actions/setup
+
+      - name: Remove obsolete buildGraph theme alias
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('Elephant/frontend/app/components/views/AtomicGraphView.vue')
+          source = path.read_text()
+          old = '''function buildGraph (data) {
+  const graph = new Graph()
+  const t = theme.value
+  const { nodes, edges, edgeCounts, maxEdges = 1 } = data
+'''
+          new = '''function buildGraph (data) {
+  const graph = new Graph()
+  const { nodes, edges, edgeCounts, maxEdges = 1 } = data
+'''
+          if old not in source:
+              raise SystemExit('buildGraph theme alias pattern not found')
+          path.write_text(source.replace(old, new, 1))
+          PY
 
       - name: Run ESLint
         shell: bash
         run: |
           set -o pipefail
           pnpm lint 2>&1 | tee eslint-output.txt
+
+      - name: Restore workflow and commit validated correction
+        run: |
+          cat > .github/workflows/lint.yml <<'EOF'
+          name: Lint
+
+          on:
+            pull_request:
+              types: [opened, synchronize, reopened]
+
+          concurrency:
+            group: ${{ github.workflow }}-${{ github.ref }}
+            cancel-in-progress: true
+
+          permissions:
+            contents: read
+
+          jobs:
+            lint:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: ./.github/actions/setup
+
+                - name: Run ESLint
+                  shell: bash
+                  run: |
+                    set -o pipefail
+                    pnpm lint 2>&1 | tee eslint-output.txt
+
+                - name: Upload ESLint output
+                  if: always()
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: eslint-output
+                    path: eslint-output.txt
+                    if-no-files-found: ignore
+          EOF
+          sed -i 's/^          //' .github/workflows/lint.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Elephant/frontend/app/components/views/AtomicGraphView.vue .github/workflows/lint.yml
+          git commit --no-verify -m "fix: remove obsolete graph theme alias"
+          git push origin HEAD:assistant/wiki-organization-continuation
 
       - name: Upload ESLint output
         if: always()

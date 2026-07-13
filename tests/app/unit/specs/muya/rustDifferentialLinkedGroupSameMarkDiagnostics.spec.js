@@ -1,58 +1,101 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import {
   bundled,
-  createJsEditor,
-  setJsSelection,
-  settle
+  initializeRustWasm,
+  runDifferentialTrace,
+  setJsSelection
 } from './rustDifferentialHarness'
 
+const fragmentEdges = (rust, mark) => rust
+  .snapshot()
+  .document.nodes
+  .filter(
+    (node) =>
+      node.kind?.value?.type === 'mark_fragment' &&
+      node.kind.value.mark === mark
+  )
+  .map((node) => node.kind.value.edge)
+
 const describeBundled = bundled ? describe : describe.skip
-const cases = [
+const traces = [
   {
     name: 'toggle emphasis inside the start fragment of linked emphasis',
     initial: 'alpha **beta** gamma',
-    first: { start: 2, end: 10, format: 'em' },
-    second: { start: 4, end: 6, format: 'em' }
+    expected: 'alpha **beta** gamma\n',
+    edges: [],
+    runJs: async (muya) => {
+      setJsSelection(muya, 0, 2, 10)
+      muya.format('em')
+      setJsSelection(muya, 0, 4, 6)
+      muya.format('em')
+    },
+    runRust: (rust) => {
+      rust.setSelectionBetweenText('alpha ', 2, 'beta', 2)
+      rust.request({ type: 'toggle_emphasis' })
+      rust.setSelectionByText('pha ', 1, 3)
+      rust.request({ type: 'toggle_emphasis' })
+      return fragmentEdges(rust, 'emphasis')
+    }
   },
   {
     name: 'toggle emphasis across part of linked emphasis',
     initial: 'alpha **beta** gamma',
-    first: { start: 2, end: 10, format: 'em' },
-    second: { start: 4, end: 13, format: 'em' }
+    expected: 'alp*ha **bet*a** gamma\n',
+    edges: ['start', 'end'],
+    runJs: async (muya) => {
+      setJsSelection(muya, 0, 2, 10)
+      muya.format('em')
+      setJsSelection(muya, 0, 4, 13)
+      muya.format('em')
+    },
+    runRust: (rust) => {
+      rust.setSelectionBetweenText('alpha ', 2, 'beta', 2)
+      rust.request({ type: 'toggle_emphasis' })
+      rust.setSelectionBetweenText('pha ', 1, 'ta', 1)
+      rust.request({ type: 'toggle_emphasis' })
+      return fragmentEdges(rust, 'emphasis')
+    }
   },
   {
     name: 'toggle strike inside the start fragment of linked strike',
     initial: '**alpha** beta *gamma*',
-    first: { start: 4, end: 19, format: 'del' },
-    second: { start: 7, end: 9, format: 'del' }
+    expected: '**al~~pha** beta *gam~~ma*\n',
+    edges: ['start', 'middle', 'end'],
+    runJs: async (muya) => {
+      setJsSelection(muya, 0, 4, 19)
+      muya.format('del')
+      setJsSelection(muya, 0, 7, 9)
+      muya.format('del')
+    },
+    runRust: (rust) => {
+      rust.setSelectionBetweenText('alpha', 2, 'gamma', 3)
+      rust.request({ type: 'toggle_strike' })
+      rust.setSelectionByText('pha', 1, 3)
+      rust.request({ type: 'toggle_strike' })
+      return fragmentEdges(rust, 'strike')
+    }
   }
 ]
 
-describeBundled('Muya same-mark linked-group diagnostics', () => {
-  let editor = null
+describeBundled('Muya same-mark linked-group differential traces', () => {
+  let jsEditor = null
+
+  beforeAll(initializeRustWasm)
 
   afterEach(() => {
-    editor?.destroy?.()
-    editor = null
+    jsEditor?.destroy?.()
+    jsEditor = null
     document.body.innerHTML = ''
   })
 
-  for (const testCase of cases) {
-    it(testCase.name, async () => {
-      editor = await createJsEditor(testCase.initial)
-      setJsSelection(editor, 0, testCase.first.start, testCase.first.end)
-      editor.format(testCase.first.format)
-      await settle()
-      const linked = editor.getMarkdown()
-
-      setJsSelection(editor, 0, testCase.second.start, testCase.second.end)
-      editor.format(testCase.second.format)
-      await settle()
-      const markdown = editor.getMarkdown()
-
-      console.log('[muya-linked-group-same-mark]', JSON.stringify({ ...testCase, linked, markdown }))
-      expect(markdown.length).toBeGreaterThan(0)
+  for (const trace of traces) {
+    it(trace.name, async () => {
+      const result = await runDifferentialTrace(trace)
+      jsEditor = result.jsEditor
+      expect(result.jsMarkdown).toBe(result.rustMarkdown)
+      expect(result.rustMarkdown).toBe(trace.expected)
+      expect(result.rustResult).toEqual(trace.edges)
     })
   }
 })

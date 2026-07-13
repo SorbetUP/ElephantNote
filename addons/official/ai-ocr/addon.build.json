@@ -1,0 +1,4 @@
+{
+  "nativeManifest": "native/Cargo.toml",
+  "binaryName": "elephant-ai-ocr"
+}

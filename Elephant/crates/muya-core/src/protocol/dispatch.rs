@@ -3,8 +3,8 @@ use crate::edit::{
   PasteCommand,
 };
 use crate::features::{
-  BlockCommand, BlockTypeCommand, InsertHorizontalRule, ListCommand, TableCommand,
-  TableNavigationCommand, TaskCommand,
+  BlockCommand, BlockTypeCommand, CreateTable, InsertHorizontalRule, ListCommand,
+  TableCommand, TableNavigationCommand, TaskCommand,
 };
 use crate::session::{EditorSession, SessionCommand};
 
@@ -96,6 +96,9 @@ fn to_session_command(command: ProtocolCommand) -> SessionCommand {
     }
     ProtocolCommand::InsertHorizontalRule => {
       SessionCommand::HorizontalRule(InsertHorizontalRule)
+    }
+    ProtocolCommand::CreateTable { rows, columns } => {
+      SessionCommand::CreateTable(CreateTable { rows, columns })
     }
     ProtocolCommand::IndentListItem => {
       SessionCommand::List(ListCommand::IndentItem)

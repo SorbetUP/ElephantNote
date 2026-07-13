@@ -729,14 +729,7 @@ fn thread_start_params(model: &str, cwd: &str) -> Value {
       "serviceName": "elephantnote",
       "ephemeral": true,
       "config": {
-        "web_search": "live",
-        "tools": {
-          "web_search": {
-            "context_size": "high",
-            "allowed_domains": null,
-            "location": null
-          }
-        }
+        "web_search": "live"
       },
       "environments": [],
       "selectedCapabilityRoots": []
@@ -1386,12 +1379,7 @@ mod tests {
             thread.pointer("/config/web_search").and_then(Value::as_str),
             Some("live")
         );
-        assert_eq!(
-            thread
-                .pointer("/config/tools/web_search/context_size")
-                .and_then(Value::as_str),
-            Some("high")
-        );
+        assert!(thread.pointer("/config/tools").is_none());
         let params = turn_start_params("thread", "gpt-test", "/tmp/chat", "hello", None);
         assert_eq!(
             params

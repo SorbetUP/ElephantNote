@@ -355,9 +355,6 @@
               type="text"
               placeholder="Embedding model id"
             >
-            <small v-if="form.routes.embedding.source === 'app-local'">
-              {{ localEmbeddingModelHint }}
-            </small>
           </label>
           <label><span>Search result limit</span><input
             v-model.number="form.routes.embedding.searchTopK"
@@ -631,11 +628,6 @@ const localEmbeddingModelPlaceholder = computed(() => {
   return localEmbeddingModels.value.length
     ? 'Select a downloaded embedding model'
     : 'No downloaded embedding model'
-})
-const localEmbeddingModelHint = computed(() => {
-  const count = localEmbeddingModels.value.length
-  if (!count) return 'Download an embedding model from Models, then refresh this list.'
-  return `${count} downloaded embedding model${count === 1 ? '' : 's'} available.`
 })
 const normalizeReasoningEntry = (entry) => {
   const value = typeof entry === 'string'

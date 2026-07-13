@@ -11,6 +11,7 @@ describe('local embedding model picker', () => {
     expect(source).toContain('elephantnoteClient.models.getSelection?.()')
     expect(source).toContain('getModelCapabilities')
     expect(source).toContain('Select a downloaded embedding model')
+    expect(source).not.toContain('localEmbeddingModelHint')
   })
 
   test('keeps manual model ids for external providers', () => {

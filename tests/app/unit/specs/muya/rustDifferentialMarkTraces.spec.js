@@ -57,14 +57,14 @@ const traces = [
       muya.format('em')
     },
     runRust: (rust) => {
-      rust.setSelection(0, 0, 5)
+      rust.setSelectionByText('alpha', 0, 5)
       rust.request({ type: 'toggle_emphasis' })
     }
   },
   {
-    name: 'unwrap only the middle of a strong mark',
+    name: 'remove the whole strong mark from a partial inner selection',
     initial: '**alpha**',
-    expected: '**a**lph**a**\n',
+    expected: 'alpha\n',
     runJs: async (muya) => {
       setJsSelection(muya, 0, 3, 6)
       muya.format('strong')

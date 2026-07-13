@@ -34,6 +34,12 @@ export const editorCommands = Object.freeze({
   toggleStrike: () => ({ type: 'toggle_strike' }),
   indentListItem: () => ({ type: 'indent_list_item' }),
   outdentListItem: () => ({ type: 'outdent_list_item' }),
+  setTaskChecked: (item, checked, autoCheck = false) => ({
+    type: 'set_task_checked',
+    item,
+    checked,
+    auto_check: autoCheck
+  }),
   insertTableRowAfter: () => ({ type: 'insert_table_row_after' }),
   deleteTableRow: () => ({ type: 'delete_table_row' }),
   insertTableColumnAfter: () => ({ type: 'insert_table_column_after' }),

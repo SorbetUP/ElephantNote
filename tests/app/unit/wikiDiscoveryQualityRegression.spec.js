@@ -7,10 +7,12 @@ const wikiView = fs.readFileSync('Elephant/frontend/app/components/views/WikiVie
 const library = fs.readFileSync('Elephant/backend/tauri/src/knowledge_wiki_library.rs', 'utf8')
 
 describe('Wiki macro-topic discovery contracts', () => {
-  it('uses multi-view embeddings instead of only the first chunks', () => {
+  it('uses canonical multi-view embeddings instead of only the first chunks', () => {
     expect(discovery).toContain('document_text_views')
     expect(discovery).toContain('average_vectors')
-    expect(discovery).toContain('wiki-multiview-v2')
+    expect(discovery).toContain('wiki-multiview-v3')
+    expect(discovery).toContain('EmbeddingStore')
+    expect(discovery).toContain('tauri_knowledge_wiki_embedding_map')
     expect(discovery).toContain('chunks ORDER BY document_path, ordinal')
     expect(discovery).not.toContain('ORDER BY ordinal LIMIT 4')
   })
@@ -19,10 +21,12 @@ describe('Wiki macro-topic discovery contracts', () => {
     expect(discovery).toContain('build_topic_communities')
     expect(discovery).toContain('build_assignment_profile')
     expect(discovery).toContain('assign_competitively')
+    expect(discovery).toContain('refine_assignment_locally')
     expect(discovery).toContain('semantic-discovery-v2')
     expect(topicGraph).toContain('mutual')
     expect(topicGraph).toContain('label_propagation')
     expect(topicGraph).toContain('background_p95')
+    expect(topicGraph).toContain('local_threshold')
     expect(topicGraph).not.toContain('selected.len() < target')
     expect(discovery).toContain("DELETE FROM wiki_saved_candidates WHERE origin='semantic'")
   })

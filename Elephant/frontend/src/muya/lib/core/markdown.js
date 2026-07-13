@@ -53,8 +53,8 @@ export default (Muya) => {
 
     getMarkdownBlockSignature(block) {
       const walk = (item) => {
-        if (!item) return ''
-        const props = [
+        if (!item) return null
+        return [
           item.key,
           item.type,
           item.functionType || '',
@@ -65,12 +65,11 @@ export default (Muya) => {
           item.listItemType || '',
           item.bulletMarkerOrDelimiter || '',
           item.isLooseListItem ? '1' : '0',
-          item.start ?? ''
+          item.start ?? '',
+          (item.children || []).map(walk)
         ]
-        if (item.children?.length) props.push(item.children.map(walk).join('|'))
-        return props.join('\u001f')
       }
-      return walk(block)
+      return JSON.stringify(walk(block))
     },
 
     setMarkdown(markdown, cursor, isRenderCursor = true, muyaIndexCursor, blocks) {

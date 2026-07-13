@@ -27,6 +27,7 @@ pub mod addon_runtime_access;
 pub mod addon_note_access;
 pub mod addon_http_access;
 pub mod addon_sidecars;
+pub mod which;
 
 mod tauri_extra_commands;
 mod debug_commands;
@@ -139,7 +140,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       healthcheck,
       tauri_platform_info,
-      addon_registry_view::tauri_addons_list,
+      addon_registry_view::tauri_addons_list_full,
       addons::tauri_addons_install,
       addon_catalog::tauri_addons_catalog_list,
       addon_catalog::tauri_addons_catalog_install,
@@ -147,8 +148,8 @@ pub fn run() {
       addon_http_access::tauri_addons_http_request,
       addon_sidecars::tauri_addons_sidecar_status,
       addon_sidecars::tauri_addons_sidecar_call,
-      addon_dependencies::tauri_addons_uninstall,
-      addon_dependencies::tauri_addons_set_enabled,
+      addon_dependencies::tauri_addons_uninstall_checked,
+      addon_dependencies::tauri_addons_set_enabled_checked,
       addons::tauri_addons_read_entry,
       addons::tauri_addons_call,
       sync_commands::iroh_sync_create_invite,

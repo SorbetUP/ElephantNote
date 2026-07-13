@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-13T01:35:00Z",
+  "updatedAt": "2026-07-13T02:10:00Z",
   "addons": [
     {
       "id": "elephant.ai",
@@ -10,6 +10,7 @@
       "version": "2.1.0",
       "description": "Owns AI provider configuration and the slots used by optional AI capability packages.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/ai/manifest.json",
       "entryPath": "addons/ai/main.js"
     },
@@ -20,6 +21,7 @@
       "version": "1.1.0",
       "description": "Adds the AI chat sidebar and chat route settings.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/ai-chat/manifest.json",
       "entryPath": "addons/ai-chat/main.js"
     },
@@ -30,16 +32,18 @@
       "version": "1.1.0",
       "description": "Adds semantic indexing and retrieval settings.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/ai-search/manifest.json",
       "entryPath": "addons/ai-search/main.js"
     },
     {
       "id": "elephant.ai-ocr",
       "slug": "ai-ocr",
-      "name": "AI OCR",
+      "name": "OCR",
       "version": "1.0.0",
       "description": "Adds OCR with a package-owned native sidecar.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/ai-ocr/manifest.json",
       "entryPath": "addons/ai-ocr/main.js"
     },
@@ -50,6 +54,7 @@
       "version": "1.1.0",
       "description": "Adds AI-organized Wiki pages and proposal management.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/wiki/manifest.json",
       "entryPath": "addons/wiki/main.js"
     },
@@ -60,6 +65,7 @@
       "version": "1.1.0",
       "description": "Adds note, Wiki and semantic relationship graph views.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/graph/manifest.json",
       "entryPath": "addons/graph/main.js"
     },
@@ -70,6 +76,7 @@
       "version": "1.2.0",
       "description": "Browses, downloads and activates local GGUF models.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/open-models/manifest.json",
       "entryPath": "addons/open-models/main.js"
     },
@@ -80,6 +87,7 @@
       "version": "1.1.0",
       "description": "Connects a ChatGPT subscription and exposes Codex as an AI provider.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/codex-connection/manifest.json",
       "entryPath": "addons/codex-connection/main.js"
     },
@@ -90,6 +98,7 @@
       "version": "1.1.0",
       "description": "Adds encrypted Iroh pairing, synchronization and conflict recovery.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/sync/manifest.json",
       "entryPath": "addons/sync/main.js"
     },
@@ -100,6 +109,7 @@
       "version": "1.2.0",
       "description": "Adds the Elephant calendar workspace and Google Calendar actions.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/calendar/manifest.json",
       "entryPath": "addons/calendar/main.js"
     },
@@ -110,6 +120,7 @@
       "version": "1.1.0",
       "description": "Builds, previews and stops static sites.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/sites/manifest.json",
       "entryPath": "addons/sites/main.js"
     },
@@ -120,6 +131,7 @@
       "version": "2.1.0",
       "description": "Runs fenced code blocks with selectable local interpreters.",
       "author": "Elephant",
+      "official": true,
       "manifestPath": "addons/code-execution/manifest.json",
       "entryPath": "addons/code-execution/main.js"
     },

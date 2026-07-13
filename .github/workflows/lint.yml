@@ -9,29 +9,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply-ai-settings-codex-fix:
-    if: github.head_ref == 'assistant/wiki-organization-continuation'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: assistant/wiki-organization-continuation
-          fetch-depth: 0
-      - name: Patch sources
-        run: python3 scripts/apply_ai_settings_codex_fix.py
-      - name: Commit source fix
-        run: |
-          rm -f .github/workflows/fix-codex-web-search-config.yml
-          git rm scripts/apply_ai_settings_codex_fix.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit --no-verify -m "fix: remove embedding count hint and restore Codex chat"
-          git push origin HEAD:assistant/wiki-organization-continuation
-
   lint:
     runs-on: ubuntu-latest
     steps:

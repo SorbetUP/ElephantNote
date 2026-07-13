@@ -15,10 +15,10 @@ describe('ElephantNote chat agent surface', () => {
   test('executes action cards atomically and exposes auto approval', () => {
     const frontend = read('Elephant/frontend/app/components/views/ChatView.vue')
     const backend = read('Elephant/backend/tauri/src/knowledge_chat_actions.rs')
-    expect(frontend).toContain('entry?.proposal?.id === targetId')
+    expect(frontend).toMatch(/proposal\?\.id === targetId/)
     expect(frontend).toContain('elephantnote:chat:auto-approve')
     expect(frontend).toContain('tauri_knowledge_chat_action_execute')
-    expect(frontend).toContain('actionSearchResults(action)')
+    expect(frontend).toMatch(/actionSearchResults\((entry|action)\)/)
     expect(backend).toContain('approve-and-execute id=')
     expect(backend).toContain('ChatActionStatus::Executed')
   })

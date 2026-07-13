@@ -17,7 +17,6 @@ describe('builtin addons', () => {
       'elephant.codex-connection',
       'elephant.calendar',
       'elephant.sites',
-      'elephant.ai',
       'elephant.ai-chat',
       'elephant.ai-search',
       'elephant.wiki',
@@ -29,8 +28,10 @@ describe('builtin addons', () => {
       'elephant.recently-edited'
     ])
     expect(builtinAddons).toContain(addonPacksAddon)
+    expect(builtinAddons.map((addon) => addon.manifest.id)).not.toContain('elephant.ai')
     expect(builtinAddons.map((addon) => addon.manifest.id)).not.toContain('elephant.ai-ocr')
     expect(builtinAddons.map((addon) => addon.manifest.id)).not.toContain('elephant.addon-inspector')
+    expect(read('addons/official/ai/manifest.json')).toContain('"id": "elephant.ai"')
   })
 
   it('registers the required Addon Packs actions and settings contribution', async () => {

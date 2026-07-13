@@ -49,8 +49,23 @@ jobs:
             Elephant/crates/muya-core
             Elephant/crates/muya-wasm
 
-      - name: Check formatting
-        run: cargo fmt --manifest-path Elephant/crates/muya-wasm/Cargo.toml -- --check
+      - name: Generate formatting candidate
+        run: |
+          cargo fmt --manifest-path Elephant/crates/muya-wasm/Cargo.toml
+          mkdir -p build/muya-rustfmt
+          cp Elephant/crates/muya-core/src/protocol/mod.rs build/muya-rustfmt/protocol.rs
+          cp Elephant/crates/muya-wasm/src/lib.rs build/muya-rustfmt/wasm-lib.rs
+
+      - name: Upload formatting candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-rustfmt-candidate
+          path: build/muya-rustfmt
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Verify formatting is committed
+        run: git diff --exit-code -- Elephant/crates/muya-core Elephant/crates/muya-wasm
 
       - name: Test adapter protocol on host
         run: cargo test --manifest-path Elephant/crates/muya-wasm/Cargo.toml

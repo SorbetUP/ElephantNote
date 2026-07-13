@@ -4,6 +4,7 @@ mod grapheme;
 mod list;
 mod mark;
 mod mark_compat;
+mod mark_fragments;
 mod operation;
 mod paragraph;
 mod paragraph_boundary;

@@ -1,12 +1,26 @@
 'use strict'
 
 const { spawnSync } = require('child_process')
+const fs = require('fs')
 const path = require('path')
 
 const rootDir = path.resolve(__dirname, '../..')
+const executable = path.join(
+  rootDir,
+  'Elephant',
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'license-checker.cmd' : 'license-checker'
+)
+
+if (!fs.existsSync(executable)) {
+  console.error(`[ERROR] Installed license-checker binary is missing: ${executable}`)
+  process.exit(1)
+}
+
 const result = spawnSync(
-  'pnpm',
-  ['exec', 'license-checker', '--production', '--json', '--start', rootDir],
+  executable,
+  ['--production', '--json', '--start', rootDir],
   {
     cwd: rootDir,
     encoding: 'utf8',

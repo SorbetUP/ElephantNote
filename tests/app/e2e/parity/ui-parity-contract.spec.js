@@ -9,9 +9,7 @@ const getVisibleCardTexts = async(page) => {
   const texts = []
   for (let index = 0; index < count; index += 1) {
     const card = cards.nth(index)
-    if (await card.isVisible().catch(() => false)) {
-      texts.push(await card.innerText())
-    }
+    if (await card.isVisible().catch(() => false)) texts.push(await card.innerText())
   }
   return texts
 }
@@ -35,7 +33,8 @@ test.describe('Native app UI parity contract baseline', () => {
     try {
       const bodyText = await getBodyText(page)
       expect(bodyText).not.toMatch(/select.*vault|choose.*vault|premi[eè]re.*vault|s[eé]lection/i)
-      expect(bodyText).toContain('E2E Vault')
+      expect(bodyText).toContain('All notes')
+      expect(bodyText).toContain('Alpha note')
     } finally {
       await app.close()
     }

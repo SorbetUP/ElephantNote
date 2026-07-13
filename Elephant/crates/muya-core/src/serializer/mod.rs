@@ -1,4 +1,7 @@
-use crate::model::{Alignment, BlockKind, Document, InlineKind, ListKind, Node, NodeKind};
+use crate::model::{
+  Alignment, BlockKind, Document, InlineKind, InlineMarkKind, ListKind, MarkFragmentEdge,
+  Node, NodeKind,
+};
 
 pub fn to_markdown(document: &Document) -> String {
   let mut blocks = Vec::new();
@@ -206,6 +209,9 @@ fn serialize_inline(document: &Document, node: &Node) -> String {
     NodeKind::Inline(InlineKind::Strike) => {
       format!("~~{}~~", serialize_inlines(document, node))
     }
+    NodeKind::Inline(InlineKind::MarkFragment { mark, edge, .. }) => {
+      serialize_mark_fragment(document, node, *mark, *edge)
+    }
     NodeKind::Inline(InlineKind::CodeSpan { code }) => {
       let delimiter = if code.contains('`') { "``" } else { "`" };
       format!("{delimiter}{code}{delimiter}")
@@ -239,6 +245,25 @@ fn serialize_inline(document: &Document, node: &Node) -> String {
     NodeKind::Inline(InlineKind::SoftBreak) => "\n".to_string(),
     NodeKind::Inline(InlineKind::HardBreak) => "  \n".to_string(),
     _ => serialize_inlines(document, node),
+  }
+}
+
+fn serialize_mark_fragment(
+  document: &Document,
+  node: &Node,
+  mark: InlineMarkKind,
+  edge: MarkFragmentEdge,
+) -> String {
+  let delimiter = match mark {
+    InlineMarkKind::Emphasis => "*",
+    InlineMarkKind::Strong => "**",
+    InlineMarkKind::Strike => "~~",
+  };
+  let content = serialize_inlines(document, node);
+  match edge {
+    MarkFragmentEdge::Start => format!("{delimiter}{content}"),
+    MarkFragmentEdge::Middle => content,
+    MarkFragmentEdge::End => format!("{content}{delimiter}"),
   }
 }
 

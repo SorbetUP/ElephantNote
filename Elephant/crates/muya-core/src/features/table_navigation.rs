@@ -295,7 +295,7 @@ mod tests {
     assert_eq!(document.children(table).count(), 3);
     assert_eq!(
       to_markdown(&document),
-      "| A | B |\n| --- | --- |\n| one | two |\n|  |  |"
+      "| A   | B   |\n| --- | --- |\n| one | two |\n|     |     |"
     );
     let new_first_text = text_at(&document, table, 2, 0);
     assert_eq!(inverse.selection_before.focus.node, new_first_text);

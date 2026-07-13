@@ -4,6 +4,7 @@ use serde_json::Value;
 use std::{
   fs,
   path::{Path, PathBuf},
+  sync::{Mutex, MutexGuard},
   time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -12,6 +13,13 @@ use crate::protocol::{PairAccepted, PairRequest};
 
 const SYNC_DIR: &str = ".elephantnote/sync";
 const SYNC_CONFIG_FILE: &str = "sync-config.json";
+static PAIRING_STATE_LOCK: Mutex<()> = Mutex::new(());
+
+fn lock_pairing_state() -> Result<MutexGuard<'static, ()>, String> {
+  PAIRING_STATE_LOCK
+    .lock()
+    .map_err(|_| "Sync pairing state lock was poisoned".to_string())
+}
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
@@ -102,7 +110,7 @@ pub fn write_config(vault_root: &Path, config: &SyncConfig) -> Result<(), String
   write_json(&config_path(vault_root), config)
 }
 
-pub fn ensure_config(vault_root: &Path, endpoint_id: &str) -> Result<SyncConfig, String> {
+fn ensure_config_unlocked(vault_root: &Path, endpoint_id: &str) -> Result<SyncConfig, String> {
   fs::create_dir_all(sync_dir(vault_root)).map_err(|error| error.to_string())?;
   let mut config = read_config(vault_root).unwrap_or_else(|| SyncConfig {
     version: 4,
@@ -132,6 +140,11 @@ pub fn ensure_config(vault_root: &Path, endpoint_id: &str) -> Result<SyncConfig,
   Ok(config)
 }
 
+pub fn ensure_config(vault_root: &Path, endpoint_id: &str) -> Result<SyncConfig, String> {
+  let _guard = lock_pairing_state()?;
+  ensure_config_unlocked(vault_root, endpoint_id)
+}
+
 pub fn create_pending_invite(
   vault_root: &Path,
   endpoint_id: &str,
@@ -143,7 +156,8 @@ pub fn create_pending_invite(
   if expires_at.is_some_and(|value| value <= current_time) {
     return Err("Pairing invite expiration must be in the future".to_string());
   }
-  let mut config = ensure_config(vault_root, endpoint_id)?;
+  let _guard = lock_pairing_state()?;
+  let mut config = ensure_config_unlocked(vault_root, endpoint_id)?;
   let created = PairingInvite::create(
     current_time,
     expires_at,
@@ -192,6 +206,7 @@ pub fn consume_pair_request(
   local_endpoint_addr: EndpointAddr,
   local_device_name: &str,
 ) -> Result<PairAccepted, String> {
+  let _guard = lock_pairing_state()?;
   let mut config = read_config(vault_root)
     .ok_or_else(|| "Sync is not initialized for this vault".to_string())?;
   if config.folder_id != request.folder_id {
@@ -241,7 +256,8 @@ pub fn register_accepted_peer(
   expected_folder_id: &str,
   accepted: PairAccepted,
 ) -> Result<SyncConfig, String> {
-  let mut config = ensure_config(vault_root, local_endpoint_id)?;
+  let _guard = lock_pairing_state()?;
+  let mut config = ensure_config_unlocked(vault_root, local_endpoint_id)?;
   if accepted.folder_id != expected_folder_id {
     return Err("Paired device returned a different vault id".to_string());
   }
@@ -264,6 +280,7 @@ pub fn register_accepted_peer(
 mod tests {
   use super::*;
   use iroh::SecretKey;
+  use std::sync::{Arc, Barrier};
 
   fn temp_root(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -316,6 +333,49 @@ mod tests {
       "Local",
     )
     .is_err());
+    assert!(read_config(&root).unwrap().pending_invites.is_empty());
+    let _ = fs::remove_dir_all(root);
+  }
+
+  #[test]
+  fn concurrent_consumers_cannot_reuse_one_invitation() {
+    let root = temp_root("concurrent-one-time");
+    fs::create_dir_all(&root).unwrap();
+    let local = SecretKey::generate();
+    let remote = SecretKey::generate();
+    let created = create_pending_invite(
+      &root,
+      &local.public().to_string(),
+      EndpointAddr::from(local.public()),
+      "Local".to_string(),
+      None,
+    )
+    .unwrap();
+    let request = PairRequest {
+      invite_id: created.invite.invite_id,
+      invite_token: created.invite.invite_token,
+      folder_id: created.invite.folder_id,
+      device_name: "Remote".to_string(),
+      endpoint_addr: EndpointAddr::from(remote.public()),
+    };
+    let barrier = Arc::new(Barrier::new(3));
+    let mut handles = Vec::new();
+    for _ in 0..2 {
+      let root = root.clone();
+      let request = request.clone();
+      let local_addr = EndpointAddr::from(local.public());
+      let barrier = barrier.clone();
+      handles.push(std::thread::spawn(move || {
+        barrier.wait();
+        consume_pair_request(&root, request, local_addr, "Local")
+      }));
+    }
+    barrier.wait();
+    let successes = handles
+      .into_iter()
+      .filter(|handle| handle.join().unwrap().is_ok())
+      .count();
+    assert_eq!(successes, 1);
     assert!(read_config(&root).unwrap().pending_invites.is_empty());
     let _ = fs::remove_dir_all(root);
   }

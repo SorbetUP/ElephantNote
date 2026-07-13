@@ -7,6 +7,12 @@ import {
   setJsSelection
 } from './rustDifferentialHarness'
 
+const fragmentEdges = (rust) => rust
+  .snapshot()
+  .document.nodes
+  .filter((node) => node.kind?.value?.type === 'mark_fragment')
+  .map((node) => node.kind.value.edge)
+
 const describeBundled = bundled ? describe : describe.skip
 const traces = [
   {
@@ -21,11 +27,7 @@ const traces = [
     runRust: (rust) => {
       rust.setSelectionBetweenText('alpha', 2, 'gamma', 3)
       rust.request({ type: 'toggle_strike' })
-      return rust
-        .snapshot()
-        .document.nodes
-        .filter((node) => node.kind?.value?.type === 'mark_fragment')
-        .map((node) => node.kind.value.edge)
+      return fragmentEdges(rust)
     }
   },
   {
@@ -40,12 +42,24 @@ const traces = [
     runRust: (rust) => {
       rust.setSelectionBetweenText('alpha ', 2, 'beta', 2)
       rust.request({ type: 'toggle_emphasis' })
-      return rust
-        .snapshot()
-        .document.nodes
-        .filter((node) => node.kind?.value?.type === 'mark_fragment')
-        .map((node) => node.kind.value.edge)
+      return fragmentEdges(rust)
     }
+  },
+  {
+    name: 'reopen a strike crossing strong and emphasis wrappers',
+    initial: '**al~~pha** beta *gam~~ma*',
+    expected: '**al~~pha** beta *gam~~ma*\n',
+    edges: ['start', 'middle', 'end'],
+    runJs: async () => {},
+    runRust: (rust) => fragmentEdges(rust)
+  },
+  {
+    name: 'reopen emphasis crossing plain text and strong',
+    initial: 'al*pha **be*ta** gamma',
+    expected: 'al*pha **be*ta** gamma\n',
+    edges: ['start', 'end'],
+    runJs: async () => {},
+    runRust: (rust) => fragmentEdges(rust)
   }
 ]
 

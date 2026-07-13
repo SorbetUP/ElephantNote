@@ -12,6 +12,7 @@ import { handleDeleteForward } from './deleteForward'
 import { DELETE_UNIT_INPUTS, handleDeleteUnit } from './deleteUnits'
 import { handleTextDragOver, handleTextDrop } from './drop'
 import { readDomSelection } from './selection'
+import { handleTaskClick } from './task'
 
 const noop = () => {}
 
@@ -29,10 +30,12 @@ export class MuyaRustInputController {
     this.bridge = bridge
     this.renderer = renderer
     this.onError = options.onError || noop
+    this.autoCheck = Boolean(options.autoCheck)
     this.composition = null
     this.attached = false
     this._tail = Promise.resolve()
     this._beforeInput = (event) => this.handleBeforeInput(event)
+    this._click = (event) => this.handleClick(event)
     this._copy = (event) => this.handleCopy(event)
     this._cut = (event) => this.handleCut(event)
     this._paste = (event) => this.handlePaste(event)
@@ -47,6 +50,7 @@ export class MuyaRustInputController {
     if (this.attached) return this
     this.attached = true
     this.container.addEventListener('beforeinput', this._beforeInput)
+    this.container.addEventListener('click', this._click)
     this.container.addEventListener('copy', this._copy)
     this.container.addEventListener('cut', this._cut)
     this.container.addEventListener('paste', this._paste)
@@ -62,6 +66,7 @@ export class MuyaRustInputController {
     if (!this.attached) return this
     this.attached = false
     this.container.removeEventListener('beforeinput', this._beforeInput)
+    this.container.removeEventListener('click', this._click)
     this.container.removeEventListener('copy', this._copy)
     this.container.removeEventListener('cut', this._cut)
     this.container.removeEventListener('paste', this._paste)
@@ -103,6 +108,10 @@ export class MuyaRustInputController {
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(command)
     })
+  }
+
+  handleClick(event) {
+    return handleTaskClick(this, event)
   }
 
   handleCopy(event) {

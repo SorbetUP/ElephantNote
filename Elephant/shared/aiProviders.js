@@ -183,8 +183,8 @@ export const normalizeAiConfig = (config = {}) => {
     : normalizeAiEndpointForTransport(routeRuntime?.endpoint || restConfig.endpoint || preset.endpoint, transport)
   const model = localTransportBlocked ? '' : String(routeRuntime?.model || restConfig.model || preset.model || '')
   const apiKey = String(routeRuntime?.apiKey || restConfig.apiKey || '')
-  const provider = routeRuntime?.provider
-    || (localPresetBlocked || localTransportBlocked || restConfig.provider === 'disabled' ? 'disabled' : restConfig.provider)
+  const provider = routeRuntime?.provider ||
+    (localPresetBlocked || localTransportBlocked || restConfig.provider === 'disabled' ? 'disabled' : restConfig.provider)
 
   return {
     ...restConfig,

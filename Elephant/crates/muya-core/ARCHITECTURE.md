@@ -96,7 +96,7 @@ The model-level editing layer currently contains:
 
 Structural undo and redo restore the same node IDs, topology, inline order, list nesting and table structure. Cross-node text replacement still requires direct sibling endpoint texts. Cross-wrapper mark application currently requires both boundary top-level subtrees to be fully selected; arbitrary partial boundary text across unrelated wrapper chains remains a later slice.
 
-The parser, serializer and editing slices have Rust unit tests. They have not yet passed full differential characterization against the original Muya JavaScript behavior, so they are not eligible runtime replacements yet.
+The parser, serializer and editing slices have Rust unit tests. Full original-Muya-vs-Rust differential characterization is still required before any capability can replace its JavaScript oracle.
 
 ## Revisioned editor session
 
@@ -107,10 +107,10 @@ The parser, serializer and editing slices have Rust unit tests. They have not ye
 - routes core, mark, grapheme, list, table and paragraph-boundary commands;
 - keeps selection-only navigation out of document history and does not increment revision for it;
 - returns forward patches for edits and inverse patches for undo, redo and cancelled composition;
-- exposes explicit snapshots only when the adapter needs full Markdown recovery;
+- exposes explicit snapshots for initialization and desynchronization recovery;
 - creates an addressable empty paragraph when imported Markdown has no editable text node.
 
-The session is the intended runtime boundary. Per-keystroke Tauri IPC remains forbidden; the session is designed to live in-process with the WebView through a future WASM adapter.
+The session is the runtime boundary used by `muya-wasm`. Per-keystroke Tauri IPC remains forbidden: commands execute synchronously in-process with the WebView.
 
 ## Versioned adapter protocol
 
@@ -118,13 +118,30 @@ Protocol version `1` provides serializable:
 
 - `EditorRequest` with protocol version, expected revision and typed command;
 - `EditorResponse` variants for snapshot, update and error;
+- snapshots containing Markdown plus a preorder logical document tree with stable node IDs;
 - stable command tags such as `insert_text`, `delete_backward`, `toggle_strong`, `next_table_cell` and composition lifecycle events;
 - stable `ViewPatch` tags such as `replace_text`, `insert_node`, `move_node` and `remove_node`;
 - structured error codes including `revision_mismatch` and `invalid_utf16_boundary`.
 
 The protocol routes high-level behavior to the modern engines: Backspace uses grapheme deletion, formatting uses `MarkCommand`, and Enter falls back to `ParagraphBoundaryCommand` when a normal split reaches a mark boundary.
 
-This protocol is not yet wired to JavaScript or compiled as WASM. It is a tested contract for that adapter, not a runtime cutover.
+## Experimental WASM and browser adapter
+
+`Elephant/crates/muya-wasm` exposes `MuyaEditor`, `handle_json`, `snapshot_json` and the current revision through `wasm-bindgen`. CI verifies host tests, formatting and compilation for `wasm32-unknown-unknown`.
+
+The opt-in browser layer under `frontend/src/muya/lib/rust` currently provides:
+
+- a serialized command queue with revision tracking and structured protocol errors;
+- full-snapshot recovery after patch desynchronization;
+- a transactional logical JavaScript mirror used to validate every patch batch;
+- an incremental DOM renderer with stable `data-muya-rust-id` elements;
+- text, node, subtree, movement, removal and block-kind patch application;
+- DOM-to-logical and logical-to-DOM UTF-16 selection conversion;
+- `beforeinput`, paragraph, Backspace, formatting, undo/redo and table-Tab command mapping;
+- IME composition replacement using a tracked logical range rather than repeated blind insertion;
+- an isolated runtime that can render into an explicitly supplied container and detach all input listeners on destruction.
+
+This runtime is disabled by default through `experimentalRustEditor: null`. It never claims the existing Muya DOM implicitly, and JavaScript Muya remains the visible production editor. The injected factory and explicit `domContainer` are currently required for opt-in execution.
 
 ## Markdown construction catalogue
 
@@ -162,7 +179,7 @@ A feature's syntax recognizer must not own editing, rendering or DOM behavior. C
 
 ## Adapter boundary
 
-The browser adapter remains responsible for:
+The browser adapter owns:
 
 - keyboard, `beforeinput` and composition events;
 - mapping physical Tab/Shift+Tab and Backspace events to protocol commands;
@@ -171,7 +188,7 @@ The browser adapter remains responsible for:
 - geometry, scrolling and floating widgets;
 - asynchronous image, KaTeX and Mermaid integration.
 
-Tauri remains responsible for native files, operating-system integration and services. Neither adapter may become the canonical document model.
+The first four responsibilities now have an experimental implementation. Geometry, scrolling, widgets and asynchronous rich renderers still remain on the JavaScript side. Tauri remains responsible for native files, operating-system integration and services. Neither adapter may become the canonical document model.
 
 ## Migration invariant
 

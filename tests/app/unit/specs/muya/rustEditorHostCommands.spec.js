@@ -28,16 +28,20 @@ describe('Rust editor host commands', () => {
     expect(rustParagraphCommand(paragraph)).toEqual(expected)
   })
 
-  it('maps global history and paragraph creation commands', () => {
+  it('maps global history and paragraph menu commands', () => {
     expect(rustBusCommand('undo')).toEqual({ type: 'undo' })
     expect(rustBusCommand('redo')).toEqual({ type: 'redo' })
     expect(rustBusCommand('insertParagraph')).toEqual({ type: 'insert_paragraph' })
-    expect(rustBusCommand('createParagraph')).toEqual({ type: 'insert_paragraph' })
+    expect(rustBusCommand('createParagraph')).toEqual({
+      type: 'insert_paragraph_after_block'
+    })
+    expect(rustBusCommand('duplicate')).toEqual({ type: 'duplicate_block' })
+    expect(rustBusCommand('deleteParagraph')).toEqual({ type: 'delete_block' })
   })
 
   it('does not invent Rust commands for unsupported menu actions', () => {
     expect(rustFormatCommand('code')).toBeNull()
     expect(rustParagraphCommand('table')).toBeNull()
-    expect(rustBusCommand('deleteParagraph')).toBeNull()
+    expect(rustBusCommand('insertImage')).toBeNull()
   })
 })

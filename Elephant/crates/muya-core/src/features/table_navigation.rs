@@ -1,6 +1,8 @@
-use crate::edit::{EditError, Transaction};
+use crate::edit::{EditError, Operation, Transaction, Utf16Range};
 use crate::model::{BlockKind, Document, InlineKind, NodeId, NodeKind};
 use crate::selection::{Selection, SelectionPoint};
+
+const TAB_SIZE: u32 = 4;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TableNavigationCommand {
@@ -56,10 +58,38 @@ fn build_next_cell(
     );
   }
 
+  build_terminal_tab(document, selection)
+}
+
+fn build_terminal_tab(
+  document: &Document,
+  selection: Selection,
+) -> Result<Transaction, EditError> {
+  let caret = selection.caret().ok_or(EditError::NonCollapsedSelection)?;
+  let node = document
+    .node(caret.node)
+    .ok_or(EditError::NodeNotFound(caret.node))?;
+  let NodeKind::Inline(InlineKind::Text { value }) = &node.kind else {
+    return Err(EditError::NotTextNode(caret.node));
+  };
+  let length = value.encode_utf16().count() as u32;
+  if caret.offset_utf16 > length {
+    return Err(EditError::RangeOutOfBounds(caret.node));
+  }
+  let offset = caret.offset_utf16 + TAB_SIZE;
+  let selection_after = Selection::collapsed(SelectionPoint {
+    node: caret.node,
+    offset_utf16: offset,
+  });
+
   Ok(Transaction {
-    operations: Vec::new(),
+    operations: vec![Operation::ReplaceText {
+      node: caret.node,
+      range: Utf16Range::new(caret.offset_utf16, caret.offset_utf16),
+      inserted: " ".repeat(TAB_SIZE as usize),
+    }],
     selection_before: selection,
-    selection_after: selection,
+    selection_after,
   })
 }
 
@@ -225,6 +255,13 @@ mod tests {
     cell_text(document, table, row, column).unwrap()
   }
 
+  fn text_value(document: &Document, text: NodeId) -> &str {
+    match &document.node(text).unwrap().kind {
+      NodeKind::Inline(InlineKind::Text { value }) => value,
+      _ => panic!("expected text node"),
+    }
+  }
+
   #[test]
   fn moves_to_the_next_cell_and_wraps_to_the_next_row() {
     let document = parse_markdown("| A | B |\n| --- | --- |\n| one | two |");
@@ -280,8 +317,8 @@ mod tests {
   }
 
   #[test]
-  fn keeps_the_selection_at_the_final_cell() {
-    let document = parse_markdown("| A | B |\n| --- | --- |\n| one | two |");
+  fn inserts_tab_spaces_at_the_final_cell_and_undoes() {
+    let mut document = parse_markdown("| A | B |\n| --- | --- |\n| one | two |");
     let table = document.children(document.root).next().unwrap().id;
     let source = text_at(&document, table, 1, 1);
     let selection = Selection::collapsed(SelectionPoint {
@@ -289,15 +326,20 @@ mod tests {
       offset_utf16: 3,
     });
 
-    let transaction = TableNavigationCommand::NextCell
+    let inverse = TableNavigationCommand::NextCell
       .build(&document, selection)
+      .unwrap()
+      .apply(&mut document)
       .unwrap();
-    assert!(transaction.operations.is_empty());
-    assert_eq!(transaction.selection_after, selection);
+    assert_eq!(text_value(&document, source), "two    ");
+    assert_eq!(inverse.selection_before.focus.offset_utf16, 7);
     assert_eq!(document.children(table).count(), 2);
     assert_eq!(
       to_markdown(&document),
       "| A   | B   |\n| --- | --- |\n| one | two |"
     );
+
+    inverse.apply(&mut document).unwrap();
+    assert_eq!(text_value(&document, source), "two");
   }
 }

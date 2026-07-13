@@ -28,6 +28,14 @@ describe('Elephant Rust editor command routing', () => {
     })
   })
 
+  it('preserves the selected table dimensions', () => {
+    expect(rustBusCommand('createTable', { rows: 4, columns: 3 })).toEqual({
+      type: 'create_table',
+      rows: 4,
+      columns: 3
+    })
+  })
+
   it('does not invent a fallback for unsupported menu entries', () => {
     expect(rustParagraphCommand('table')).toBeNull()
     expect(rustBusCommand('unknown')).toBeNull()

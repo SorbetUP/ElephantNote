@@ -105,7 +105,7 @@ export const aiAddon = createLazyBuiltinAddon({
     id: 'elephant.ai',
     name: 'AI',
     version: '2.0.0',
-    description: 'Configures AI providers and owns the optional Chat, Search, OCR, Wiki and Graph modules.',
+    description: 'Configures AI providers and owns optional Chat, Search, OCR, Wiki and Graph modules.',
     author: 'ElephantNote',
     icon: 'sparkles',
     defaultEnabled: false,
@@ -147,24 +147,6 @@ export const aiSearchAddon = createLazyBuiltinAddon({
     defaultEnabled: false,
     removable: true,
     permissions: ['search.manage'],
-    contributes: { settings: true }
-  }
-})
-
-export const aiOcrAddon = createLazyBuiltinAddon({
-  exportName: 'aiOcrAddon',
-  load: () => import('./aiOcr'),
-  manifest: {
-    id: 'elephant.ai-ocr',
-    parentAddonId: 'elephant.ai',
-    name: 'OCR',
-    version: '1.0.0',
-    description: 'Adds OCR provider and document-recognition settings.',
-    author: 'ElephantNote',
-    icon: 'scan-text',
-    defaultEnabled: false,
-    removable: true,
-    permissions: ['ocr.run'],
     contributes: { settings: true }
   }
 })
@@ -313,7 +295,6 @@ export const builtinAddons = [
   aiAddon,
   aiChatAddon,
   aiSearchAddon,
-  aiOcrAddon,
   wikiAddon,
   graphAddon,
   openModelsAddon,

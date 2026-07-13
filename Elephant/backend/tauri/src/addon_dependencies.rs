@@ -67,7 +67,7 @@ fn record_version(record: &Value) -> R<Version> {
   Version::parse(value).map_err(|error| format!("Invalid installed addon version {value}: {error}"))
 }
 
-fn validate_requirements(app: &AppHandle, registry: &Value, addon_id: &str) -> R<()> {
+pub(crate) fn validate_requirements(app: &AppHandle, registry: &Value, addon_id: &str) -> R<()> {
   let manifest = package_manifest(app, addon_id)?;
   let installed = records(registry)?;
   for (required_id, requirement) in requirements(&manifest) {
@@ -89,7 +89,7 @@ fn validate_requirements(app: &AppHandle, registry: &Value, addon_id: &str) -> R
   Ok(())
 }
 
-fn dependents(app: &AppHandle, registry: &Value, addon_id: &str, enabled_only: bool) -> R<Vec<String>> {
+pub(crate) fn dependents(app: &AppHandle, registry: &Value, addon_id: &str, enabled_only: bool) -> R<Vec<String>> {
   let mut result = Vec::new();
   for (candidate_id, record) in records(registry)? {
     if candidate_id == addon_id {
@@ -108,7 +108,7 @@ fn dependents(app: &AppHandle, registry: &Value, addon_id: &str, enabled_only: b
 }
 
 #[tauri::command]
-pub fn tauri_addons_set_enabled(
+pub fn tauri_addons_set_enabled_checked(
   app: AppHandle,
   state: State<'_, AddonState>,
   addon_id: String,
@@ -130,7 +130,7 @@ pub fn tauri_addons_set_enabled(
 }
 
 #[tauri::command]
-pub fn tauri_addons_uninstall(
+pub fn tauri_addons_uninstall_checked(
   app: AppHandle,
   state: State<'_, AddonState>,
   addon_id: String,

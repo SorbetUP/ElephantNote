@@ -12,6 +12,8 @@ describe('large-vault graph and Wiki scale regressions', () => {
     expect(source).not.toContain('ratio: 0.4')
     expect(source).not.toContain('class="en-graph-zoom-slider"')
     expect(source).toContain('Selecting a note must not rewrite the camera ratio')
+    expect(source).toContain('tauri_knowledge_wiki_embedding_map')
+    expect(source).toContain('wiki-candidate')
   })
 
   test('assigns deterministic territory colors instead of one global orange', () => {

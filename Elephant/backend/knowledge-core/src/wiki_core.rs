@@ -2,7 +2,7 @@ use crate::extraction::{StructuredModelRequest, StructuredTask};
 use crate::model::{DocumentSnapshot, KnowledgeChunk};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -266,7 +266,7 @@ pub fn build_wiki_synthesis_request(
         system_prompt: format!(
             "You write a long-form, rigorous encyclopedia article from the supplied personal notes and, when the web-search tool is available, current reliable web research. Return exactly one JSON object and no prose or Markdown fences. The object must use this exact shape:
 {schema}
-Treat the result as a Wikipedia-quality page, not a short summary. Build a substantial introduction and as many useful sections as the evidence supports, up to {max_sections}. Prefer 12–24 sections for broad topics and 3–8 developed paragraph-length claims per section. Cover definitions, context, history, core concepts, mechanisms, variants, applications, comparisons, limitations, controversies, practical implications, terminology and chronology when relevant. Avoid filler, repetition and invented precision. Every summary and section claim must be an object with text and citation_chunk_ids; summary is always an array, never a string. Claims grounded in the vault cite one or more supplied chunk IDs. Claims grounded in web research cite one or more exact absolute HTTPS URLs returned by web search in citation_chunk_ids. Never invent a chunk ID or URL. Do not place citation markers inside text. related_wikis contains only short concept names suitable for wikilinks, never file paths."
+Write an evidence-driven reference page for this specific vault, not a generic encyclopedia dump. The supplied notes are the primary evidence: identify their recurring ideas, concrete examples, decisions, disagreements and gaps, and exclude notes that only match by a weak keyword or incidental phrase. Use web research only to verify definitions, dates and important external context. Build a concise but substantial introduction and only the sections that materially improve understanding, up to {max_sections}; for broad topics prefer 8–14 sections with 2–5 dense paragraph-length claims each. Do not mechanically enumerate every possible application, risk or historical milestone. Avoid filler, repetition, marketing language, unsupported generalities and invented precision. Every summary and section claim must be an object with text and citation_chunk_ids; summary is always an array, never a string. Claims grounded in the vault cite one or more supplied chunk IDs. Claims grounded in web research cite one or more exact absolute HTTPS URLs returned by web search in citation_chunk_ids. Never invent a chunk ID or URL. Do not place citation markers inside text. related_wikis contains only short concept names; the renderer will keep them non-clickable until a matching Wiki actually exists."
         ),
         user_prompt: format!(
             "Topic: {}\nRequested title: {}\n\nSources:\n{}",
@@ -455,6 +455,7 @@ pub fn render_wiki(
         .map(|source| (source.chunk_id.as_str(), source))
         .collect::<HashMap<_, _>>();
     let mut citation_numbers = BTreeMap::<String, usize>::new();
+    let mut web_citations = BTreeSet::<String>::new();
     let mut markdown = String::new();
     markdown.push_str("---\n");
     markdown.push_str("generated: true\n");
@@ -468,6 +469,7 @@ pub fn render_wiki(
         &synthesis.summary,
         &mut citation_numbers,
         &source_by_id,
+            &mut web_citations,
     )?;
     for section in &synthesis.sections {
         markdown.push_str(&format!("\n## {}\n\n", section.heading.trim()));
@@ -476,6 +478,7 @@ pub fn render_wiki(
             &section.claims,
             &mut citation_numbers,
             &source_by_id,
+            &mut web_citations,
         )?;
     }
 
@@ -487,12 +490,8 @@ pub fn render_wiki(
 ",
         );
         for related in &synthesis.related_wikis {
-            markdown.push_str(&format!(
-                "- [{}](./{}.md)
-",
-                related.trim(),
-                slugify(related)
-            ));
+            markdown.push_str(&format!("- {}
+", related.trim()));
         }
     }
 
@@ -527,6 +526,14 @@ pub fn render_wiki(
                 start_offset: source.start_offset,
                 end_offset: source.end_offset,
             });
+        }
+    }
+
+
+    if !web_citations.is_empty() {
+        markdown.push_str("\n## Web sources\n\n");
+        for url in &web_citations {
+            markdown.push_str(&format!("- [{}]({})\n", web_citation_label(url), url));
         }
     }
 
@@ -603,17 +610,71 @@ fn citation_label(source: &WikiSourceChunk) -> String {
     value.chars().take(72).collect()
 }
 
+
+fn humanize_url_segment(value: &str) -> String {
+    value
+        .trim_matches('/')
+        .split(|character: char| matches!(character, '-' | '_' | '+'))
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let decoded = part.replace("%20", " ");
+            let mut characters = decoded.chars();
+            characters
+                .next()
+                .map(|first| first.to_uppercase().collect::<String>() + characters.as_str())
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn web_citation_label(url: &str) -> String {
+    let without_scheme = url.strip_prefix("https://").unwrap_or(url);
+    let mut parts = without_scheme.splitn(2, '/');
+    let host = parts.next().unwrap_or("").trim_start_matches("www.");
+    let path = parts.next().unwrap_or("");
+    let provider = if host.contains("wikipedia.org") {
+        "Wikipedia".to_string()
+    } else if host.contains("nist.gov") {
+        "NIST".to_string()
+    } else if host.contains("stanford.edu") {
+        "Stanford".to_string()
+    } else if host.contains("ibm.com") {
+        "IBM".to_string()
+    } else if host.contains("arxiv.org") {
+        "arXiv".to_string()
+    } else {
+        host.split('.').next().map(humanize_url_segment).unwrap_or_else(|| "Web".into())
+    };
+    let last = path
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or("");
+    let title = humanize_url_segment(last);
+    if title.is_empty() || title.chars().all(|character| character.is_ascii_digit()) {
+        provider
+    } else {
+        format!("{provider} — {title}")
+    }
+}
+
 fn render_claims(
     markdown: &mut String,
     claims: &[WikiClaim],
     citation_numbers: &mut BTreeMap<String, usize>,
     source_by_id: &HashMap<&str, &WikiSourceChunk>,
+    web_citations: &mut BTreeSet<String>,
 ) -> Result<(), String> {
     for claim in claims {
         let mut references = Vec::new();
         for chunk_id in &claim.citation_chunk_ids {
             if is_web_citation(chunk_id) {
-                references.push(format!("[Source web]({chunk_id})"));
+                web_citations.insert(chunk_id.clone());
+                references.push(format!("[{}]({chunk_id})", web_citation_label(chunk_id)));
                 continue;
             }
             let source = source_by_id
@@ -737,6 +798,16 @@ mod tests {
             ),
         ];
         collect_wiki_sources(&documents)
+    }
+
+    #[test]
+    fn web_citation_labels_are_human_readable() {
+        assert_eq!(
+            web_citation_label("https://en.wikipedia.org/wiki/Machine_learning"),
+            "Wikipedia — Machine Learning"
+        );
+        assert!(web_citation_label("https://airc.nist.gov/airmf-resources/airmf/0-ai-rmf-1-0/")
+            .starts_with("NIST"));
     }
 
     #[test]

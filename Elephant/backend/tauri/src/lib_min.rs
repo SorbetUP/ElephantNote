@@ -151,6 +151,7 @@ pub fn run() {
             knowledge_wikis::tauri_knowledge_wikis_list,
             knowledge_wikis::tauri_knowledge_wiki_accept,
             knowledge_wikis::tauri_knowledge_wiki_reject,
+            knowledge_wiki_discovery::tauri_knowledge_wiki_embedding_map,
             knowledge_wiki_discovery::tauri_knowledge_wiki_semantic_discover,
             knowledge_wiki_library::tauri_knowledge_wiki_library_list,
             knowledge_wiki_library::tauri_knowledge_wiki_library_add_candidate,

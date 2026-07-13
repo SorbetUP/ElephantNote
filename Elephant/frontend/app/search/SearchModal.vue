@@ -112,7 +112,7 @@
                   </div>
                 </div>
                 <div class="en-search-concept-score">
-                  {{ Math.round((concept.score || 0) * 100) }}%
+                  {{ formatConceptScore(concept.score) }}%
                 </div>
               </button>
             </section>
@@ -192,15 +192,30 @@ const openResult = (result) => {
 }
 
 const openConceptEvidence = (concept) => {
-  const firstEvidence = concept?.evidenceChunks?.find((chunk) => chunk.relativePath || chunk.documentPath)
+  const wikiPath = concept?.wikiPath || (concept?.kind === 'wiki' ? concept?.path : '')
+  if (wikiPath) {
+    store.openResult({ relativePath: wikiPath, title: concept.title })
+    return
+  }
+  const firstEvidence = concept?.evidenceChunks?.find((chunk) => chunk.relativePath || chunk.documentPath || chunk.path)
   if (!firstEvidence) return
   store.openResult({
-    relativePath: firstEvidence.relativePath || firstEvidence.documentPath,
+    relativePath: firstEvidence.relativePath || firstEvidence.documentPath || firstEvidence.path,
     title: concept.title
   })
 }
 
+const formatConceptScore = (score) => {
+  const value = Number(score || 0)
+  const normalized = value <= 1 ? value : value <= 100 ? value / 100 : 1
+  return Math.round(Math.max(0, Math.min(1, normalized)) * 100)
+}
+
 const formatConceptMeta = (concept) => {
+  if (concept?.kind === 'wiki') {
+    const sourceCount = Number(concept?.sourceCount || 0)
+    return `${sourceCount} source${sourceCount === 1 ? '' : 's'} · Wiki`
+  }
   const evidenceCount = concept?.evidenceChunks?.length || 0
   if (evidenceCount <= 0) return 'Concept candidate'
   const first = concept.evidenceChunks[0]

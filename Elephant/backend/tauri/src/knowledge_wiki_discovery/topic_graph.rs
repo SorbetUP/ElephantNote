@@ -444,6 +444,88 @@ pub(super) fn assign_competitively(
         .collect()
 }
 
+pub(super) fn refine_assignment_locally(
+    profile: &AssignmentProfile,
+    members: &[usize],
+    vectors: &[Vec<f32>],
+    max_members: usize,
+) -> Vec<usize> {
+    if members.is_empty() {
+        return profile.core_members.clone();
+    }
+    let core_set = profile.core_members.iter().copied().collect::<HashSet<_>>();
+    let local_vectors = members
+        .iter()
+        .filter_map(|index| vectors.get(*index).cloned())
+        .collect::<Vec<_>>();
+    let local_threshold = (profile.floor + 0.055).clamp(0.54, 0.88);
+    let communities = build_topic_communities(&local_vectors, local_threshold);
+    let selected_local = communities
+        .iter()
+        .max_by(|left, right| {
+            let left_core = left
+                .members
+                .iter()
+                .filter(|local| {
+                    members
+                        .get(**local)
+                        .is_some_and(|value| core_set.contains(value))
+                })
+                .count();
+            let right_core = right
+                .members
+                .iter()
+                .filter(|local| {
+                    members
+                        .get(**local)
+                        .is_some_and(|value| core_set.contains(value))
+                })
+                .count();
+            left_core
+                .cmp(&right_core)
+                .then_with(|| left.coherence.total_cmp(&right.coherence))
+                .then_with(|| left.members.len().cmp(&right.members.len()))
+        })
+        .map(|community| {
+            community
+                .members
+                .iter()
+                .filter_map(|local| members.get(*local).copied())
+                .collect::<HashSet<_>>()
+        })
+        .unwrap_or_default();
+
+    let mut ranked = members
+        .iter()
+        .copied()
+        .filter(|index| {
+            core_set.contains(index)
+                || selected_local.contains(index)
+                || cosine(&profile.vector, &vectors[*index]) >= profile.floor + 0.065
+        })
+        .map(|index| (index, cosine(&profile.vector, &vectors[index])))
+        .collect::<Vec<_>>();
+    ranked.sort_by(|left, right| {
+        let left_core = core_set.contains(&left.0);
+        let right_core = core_set.contains(&right.0);
+        right_core
+            .cmp(&left_core)
+            .then_with(|| right.1.total_cmp(&left.1))
+            .then_with(|| left.0.cmp(&right.0))
+    });
+    ranked.dedup_by_key(|entry| entry.0);
+    ranked.truncate(max_members.max(profile.core_members.len()));
+    let mut refined = ranked.into_iter().map(|entry| entry.0).collect::<Vec<_>>();
+    for core in &profile.core_members {
+        if !refined.contains(core) {
+            refined.push(*core);
+        }
+    }
+    refined.sort_unstable();
+    refined.dedup();
+    refined
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -483,6 +565,23 @@ mod tests {
             build_assignment_profile(&[0, 1], &normalized(&[1.0, 0.0]), &vectors, 0.72).unwrap();
         let assignments = assign_competitively(&[profile], &vectors);
         assert_eq!(assignments[0], vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn local_refinement_drops_remote_assignment_tail() {
+        let vectors = vec![
+            normalized(&[1.0, 0.0, 0.0]),
+            normalized(&[0.99, 0.03, 0.0]),
+            normalized(&[0.97, 0.08, 0.0]),
+            normalized(&[0.75, 0.66, 0.0]),
+            normalized(&[0.0, 1.0, 0.0]),
+        ];
+        let profile = build_assignment_profile(&[0, 1, 2], &vectors[0], &vectors, 0.60).unwrap();
+        let refined = refine_assignment_locally(&profile, &[0, 1, 2, 3, 4], &vectors, 4);
+        assert!(refined.contains(&0));
+        assert!(refined.contains(&1));
+        assert!(refined.contains(&2));
+        assert!(!refined.contains(&4));
     }
 
     #[test]

@@ -428,12 +428,20 @@
             >#{{ tag }}</span>
           </div>
 
+          <div v-if="selectedNode.kind === 'wiki-candidate'" class="en-card-candidate-actions">
+            <button type="button" class="en-card-open" @click="approveLiveWikiZone">
+              Proposer ce Wiki
+              <ArrowRight class="en-card-open-icn" />
+            </button>
+            <button type="button" class="en-card-reject" @click="rejectLiveWikiZone">Ignorer</button>
+          </div>
           <button
+            v-else
             type="button"
             class="en-card-open"
             @click="openSelectedNode"
           >
-            Ouvrir la note
+            {{ selectedNode.kind === 'wiki' ? 'Ouvrir le Wiki' : 'Ouvrir la note' }}
             <ArrowRight class="en-card-open-icn" />
           </button>
         </template>
@@ -500,6 +508,13 @@ function rgbaFromHex (hex, alpha) {
 const containerRef = ref(null)
 const graphData = ref(null)
 const indexBuilding = ref(false)
+const embeddingProgress = ref(null)
+const embeddedVisiblePaths = ref(new Set())
+const liveWikiZones = ref([])
+const pendingEmbeddedPaths = []
+let embeddingRevealRaf = null
+let embeddingUnlisten = null
+let mapBuildStartedForVault = ''
 
 let renderer = null
 let graphInstance = null
@@ -570,12 +585,44 @@ const fallbackGraph = computed(() => {
 })
 
 const rawGraph = computed(() => {
-  if (indexReady.value) {
-    return selectSemanticGraphSource({
-      inspectionGraph: searchStore.indexInspection?.graph
+  const base = indexReady.value
+    ? selectSemanticGraphSource({ inspectionGraph: searchStore.indexInspection?.graph })
+    : (fallbackGraph.value || { nodes: [], edges: [], clusters: [] })
+  if (!liveWikiZones.value.length) return base
+  const nodes = [...(base.nodes || [])]
+  const edges = [...(base.edges || [])]
+  const nodeIdByPath = new Map(nodes.map((node) => [node.relativePath || node.path || node.id, node.id]))
+  for (const zone of liveWikiZones.value) {
+    const id = `wiki-candidate:${zone.id || zone.topic || zone.title}`
+    nodes.push({
+      id,
+      path: '',
+      relativePath: '',
+      title: zone.title || 'Wiki possible',
+      kind: 'wiki-candidate',
+      type: 'wiki-candidate',
+      summary: zone.preview || 'Zone sémantique provisoire',
+      sourceCount: Number(zone.sourceCount || zone.sourcePaths?.length || 0),
+      chunkCount: 0,
+      sourcePaths: zone.sourcePaths || [],
+      topic: zone.topic || zone.title || '',
+      provisional: true
     })
+    for (const sourcePath of zone.sourcePaths || []) {
+      const target = nodeIdByPath.get(sourcePath)
+      if (!target) continue
+      edges.push({
+        id: `${id}:${target}`,
+        source: id,
+        target,
+        type: 'wiki-source',
+        relationType: 'provisional_wiki_source',
+        weight: 1,
+        provisional: true
+      })
+    }
   }
-  return fallbackGraph.value || { nodes: [], edges: [], clusters: [] }
+  return { ...base, nodes, edges }
 })
 
 const semanticModel = computed(() => {
@@ -646,7 +693,13 @@ const displayData = computed(() => ({
 }))
 
 const statusMessage = computed(() => {
+  if (indexBuilding.value && embeddingProgress.value) {
+    const processed = Number(embeddingProgress.value.processed || 0)
+    const total = Number(embeddingProgress.value.total || 0)
+    return total > 0 ? `Embedding et construction du graphe… ${processed}/${total}` : 'Préparation de l’index sémantique…'
+  }
   if (indexBuilding.value) return 'Construction de l\'index sémantique…'
+
   if (searchStore.status.status === 'indexing') return searchStore.status.message || 'Indexation…'
   if (displayData.value.nodes.length === 0) {
     if (store.rootEntries?.length > 0) return 'Aucune note à afficher. Ajustez les filtres.'
@@ -738,7 +791,7 @@ function buildGraph (data) {
   for (const node of nodes) {
     const id = node.id
     const connectivity = (edgeCounts.get(id) || 0) / maxEdges
-    const isWiki = node.kind === 'wiki'
+    const isWiki = node.kind === 'wiki' || node.kind === 'wiki-candidate'
     const baseSize = isWiki ? 5.5 : 2.5 + connectivity * 4 + (node.kind === 'folder' ? 2 : 0)
     const territoryColor = territoryByNode.get(id)
     const fallbackColor = NODE_PALETTE[stableColorIndex(node.clusterId || node.relativePath || node.path || node.title || id)]
@@ -995,7 +1048,11 @@ function updateGraphVisibility (progress = null) {
   graphInstance.forEachNode((id) => {
     const hiddenByQuery = !queryVisibleIds.has(id)
     const hiddenByTimelapse = timelapseVisibleIds ? !timelapseVisibleIds.has(id) : false
-    graphInstance.setNodeAttribute(id, 'hidden', hiddenByQuery || hiddenByTimelapse)
+    const data = graphInstance.getNodeAttribute(id, 'data') || {}
+    const path = data.relativePath || data.path || id
+    const isCandidate = data.kind === 'wiki-candidate' || data.kind === 'wiki'
+    const hiddenByEmbedding = indexBuilding.value && embeddedVisiblePaths.value.size > 0 && !isCandidate && !embeddedVisiblePaths.value.has(path)
+    graphInstance.setNodeAttribute(id, 'hidden', hiddenByQuery || hiddenByTimelapse || hiddenByEmbedding)
   })
   graphInstance.forEachEdge((edge, _attrs, source, target) => {
     const hiddenByQuery = !queryVisibleIds.has(source) || !queryVisibleIds.has(target)
@@ -1481,6 +1538,117 @@ function cycleTimelapseSpeed () {
   }
 }
 
+
+function scheduleEmbeddedReveal () {
+  if (embeddingRevealRaf !== null) return
+  const reveal = () => {
+    const next = new Set(embeddedVisiblePaths.value)
+    for (let index = 0; index < 8 && pendingEmbeddedPaths.length; index++) {
+      next.add(pendingEmbeddedPaths.shift())
+    }
+    embeddedVisiblePaths.value = next
+    refreshGraphVisibility()
+    if (pendingEmbeddedPaths.length) embeddingRevealRaf = requestAnimationFrame(reveal)
+    else embeddingRevealRaf = null
+  }
+  embeddingRevealRaf = requestAnimationFrame(reveal)
+}
+
+function handleEmbeddingProgress (event) {
+  const payload = event?.payload || event || {}
+  embeddingProgress.value = payload
+  if (payload.phase === 'start') {
+    indexBuilding.value = true
+    embeddedVisiblePaths.value = new Set()
+    liveWikiZones.value = []
+    pendingEmbeddedPaths.splice(0)
+    if (!graphData.value?.nodes?.length) {
+      loadGraphData()
+      scheduleGraphMount()
+    }
+    return
+  }
+  if (payload.phase === 'note' && payload.path) {
+    pendingEmbeddedPaths.push(payload.path)
+    scheduleEmbeddedReveal()
+    return
+  }
+  if ((payload.phase === 'zones' || payload.phase === 'complete') && Array.isArray(payload.zones)) {
+    liveWikiZones.value = payload.zones
+    loadGraphData()
+    scheduleGraphMount()
+  }
+  if (payload.phase === 'complete') {
+    indexBuilding.value = false
+  }
+}
+
+async function installEmbeddingProgressListener () {
+  try {
+    const { listen } = await import('@tauri-apps/api/event')
+    embeddingUnlisten = await listen('elephantnote:knowledge:embedding-progress', handleEmbeddingProgress)
+  } catch (error) {
+    console.warn('AtomicGraphView: embedding progress listener unavailable', error)
+  }
+}
+
+async function buildSemanticMap () {
+  const vaultPath = store.activeVault?.path || ''
+  if (!vaultPath || mapBuildStartedForVault === vaultPath) return
+  mapBuildStartedForVault = vaultPath
+  indexBuilding.value = true
+  try {
+    const invoke = globalThis.window?.__TAURI__?.core?.invoke
+    if (typeof invoke !== 'function') return
+    const result = await invoke('tauri_knowledge_wiki_embedding_map')
+    if (Array.isArray(result?.zones)) liveWikiZones.value = result.zones
+    await searchStore.inspect()
+  } catch (error) {
+    console.error('AtomicGraphView: semantic map build failed', error)
+  } finally {
+    indexBuilding.value = false
+    loadGraphData()
+    scheduleGraphMount()
+  }
+}
+
+async function approveLiveWikiZone () {
+  const zone = selectedNode.value
+  if (!zone || zone.kind !== 'wiki-candidate') return
+  try {
+    const invoke = globalThis.window?.__TAURI__?.core?.invoke
+    if (typeof invoke !== 'function') return
+    await invoke('tauri_knowledge_wiki_library_add_candidate', {
+      topic: zone.topic || zone.title,
+      title: zone.title,
+      sourcePaths: zone.sourcePaths || []
+    })
+    liveWikiZones.value = liveWikiZones.value.filter((item) => `wiki-candidate:${item.id || item.topic || item.title}` !== selectedNodeRef)
+    deselectNode()
+    window.dispatchEvent(new CustomEvent('elephantnote:knowledge-changed', { detail: { reason: 'live-wiki-approved' } }))
+    loadGraphData()
+    scheduleGraphMount()
+  } catch (error) {
+    console.error('AtomicGraphView: approve live Wiki zone failed', error)
+  }
+}
+
+async function rejectLiveWikiZone () {
+  const zone = selectedNode.value
+  if (!zone || zone.kind !== 'wiki-candidate') return
+  try {
+    const invoke = globalThis.window?.__TAURI__?.core?.invoke
+    if (typeof invoke !== 'function') return
+    await invoke('tauri_knowledge_wiki_library_reject', { topic: zone.topic || zone.title })
+    liveWikiZones.value = liveWikiZones.value.filter((item) => `wiki-candidate:${item.id || item.topic || item.title}` !== selectedNodeRef)
+    deselectNode()
+    loadGraphData()
+    scheduleGraphMount()
+  } catch (error) {
+    console.error('AtomicGraphView: reject live Wiki zone failed', error)
+  }
+}
+
 function openSelectedNode () {
   if (!selectedNode.value) return
   const notePath = selectedNode.value.relativePath || selectedNode.value.path || selectedNode.value.id
@@ -1579,18 +1747,39 @@ watch(theme, () => {
 
 onMounted(() => {
   canvasStore.loadPositions(store.activeVaultId || 'default')
+  void installEmbeddingProgressListener()
   ensureGraphData()
+  void buildSemanticMap()
 })
 
 onBeforeUnmount(() => {
   if (simRaf) cancelAnimationFrame(simRaf)
   if (timelapseRaf) cancelAnimationFrame(timelapseRaf)
   if (graphMountRaf) cancelAnimationFrame(graphMountRaf)
+  if (embeddingRevealRaf) cancelAnimationFrame(embeddingRevealRaf)
+  if (typeof embeddingUnlisten === 'function') embeddingUnlisten()
   destroySigma()
 })
 </script>
 
 <style scoped>
+.en-card-candidate-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.en-card-candidate-actions .en-card-open {
+  flex: 1;
+}
+
+.en-card-reject {
+  border: 1px solid var(--en-border);
+  border-radius: 9px;
+  padding: 0 14px;
+  color: var(--en-muted);
+  background: var(--en-soft);
+}
+
 .en-graph-premium {
   position: relative;
   min-height: 0;

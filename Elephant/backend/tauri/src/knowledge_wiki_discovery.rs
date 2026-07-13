@@ -1,18 +1,21 @@
 #[cfg(not(mobile))]
 use crate::chat_runtime::codex_app_server;
-use elephantnote_knowledge_core::KnowledgeStore;
+use elephantnote_knowledge_core::{EmbeddingInput, EmbeddingStore, KnowledgeStore};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 #[cfg(not(mobile))]
 mod topic_graph;
 #[cfg(not(mobile))]
-use topic_graph::{assign_competitively, build_assignment_profile, build_topic_communities};
+use topic_graph::{
+    assign_competitively, build_assignment_profile, build_topic_communities,
+    refine_assignment_locally,
+};
 
 const DISCOVERY_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS wiki_saved_candidates (
@@ -71,6 +74,7 @@ struct EmbeddingRoute {
 struct DocumentVector {
     path: String,
     title: String,
+    content_hash: String,
     excerpt: String,
     vector: Vec<f32>,
 }
@@ -108,6 +112,79 @@ struct PendingTopic {
     preview: String,
     suggested_sections: Vec<String>,
     core_members: Vec<usize>,
+}
+
+#[cfg(not(mobile))]
+fn emit_embedding_progress(app: &AppHandle, payload: Value) {
+    let _ = app.emit("elephantnote:knowledge:embedding-progress", payload);
+}
+
+#[cfg(not(mobile))]
+fn provisional_zone_payload(
+    documents: &[DocumentVector],
+    route_threshold: f32,
+    limit: usize,
+) -> Vec<Value> {
+    if documents.len() < 6 {
+        return Vec::new();
+    }
+    let vectors = documents
+        .iter()
+        .map(|document| document.vector.clone())
+        .collect::<Vec<_>>();
+    build_topic_communities(&vectors, route_threshold)
+        .into_iter()
+        .filter(|community| community.members.len() >= 4)
+        .take(limit.clamp(1, 12))
+        .enumerate()
+        .filter_map(|(index, community)| {
+            let representative = community
+                .representatives
+                .first()
+                .copied()
+                .or_else(|| community.members.first().copied())?;
+            let document = documents.get(representative)?;
+            let source_paths = community
+                .members
+                .iter()
+                .filter_map(|member| documents.get(*member).map(|value| value.path.clone()))
+                .collect::<Vec<_>>();
+            Some(json!({
+                "id": format!("live-zone-{index}"),
+                "title": document.title,
+                "topic": document.title.trim().to_lowercase(),
+                "preview": format!(
+                    "Zone sémantique provisoire de {} notes. Le titre sera précisé après validation.",
+                    source_paths.len()
+                ),
+                "sourcePaths": source_paths,
+                "sourceCount": community.members.len(),
+                "coherence": community.coherence,
+                "distinctiveness": community.distinctiveness,
+            }))
+        })
+        .collect()
+}
+
+#[cfg(not(mobile))]
+fn emit_live_zones(
+    app: &AppHandle,
+    output: &[Option<DocumentVector>],
+    route_threshold: f32,
+    processed: usize,
+    total: usize,
+) {
+    let completed = output.iter().flatten().cloned().collect::<Vec<_>>();
+    let zones = provisional_zone_payload(&completed, route_threshold, 8);
+    emit_embedding_progress(
+        app,
+        json!({
+            "phase": "zones",
+            "processed": processed,
+            "total": total,
+            "zones": zones,
+        }),
+    );
 }
 
 #[cfg(not(mobile))]
@@ -506,7 +583,7 @@ async fn document_vectors(
     route: &EmbeddingRoute,
 ) -> Result<Vec<DocumentVector>, String> {
     let model_key = format!(
-        "wiki-multiview-v2|{}|{}|{}",
+        "wiki-multiview-v3|{}|{}|{}",
         route.source, route.endpoint, route.model
     );
     let (mut output, missing) = {
@@ -533,6 +610,7 @@ async fn document_vectors(
                         output.push(Some(DocumentVector {
                             path,
                             title,
+                            content_hash,
                             excerpt,
                             vector,
                         }));
@@ -546,6 +624,62 @@ async fn document_vectors(
         (output, missing)
     };
 
+    let total = output.len();
+    emit_embedding_progress(
+        app,
+        json!({
+            "phase": "start",
+            "processed": 0,
+            "total": total,
+            "model": route.model,
+        }),
+    );
+
+    let store = KnowledgeStore::open(root)?;
+    let canonical_embeddings = EmbeddingStore::open(store.database_path())?;
+    let cached_rows = output
+        .iter()
+        .flatten()
+        .map(|document| {
+            (
+                EmbeddingInput {
+                    relative_path: document.path.clone(),
+                    title: document.title.clone(),
+                    content_hash: document.content_hash.clone(),
+                    text: format!(
+                        "{}
+
+{}",
+                        document.title, document.excerpt
+                    ),
+                },
+                document.vector.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    for batch in cached_rows.chunks(128) {
+        canonical_embeddings.save_batch(&route.model, route.threshold, batch)?;
+    }
+
+    let mut processed = 0usize;
+    for document in output.iter().flatten() {
+        processed += 1;
+        emit_embedding_progress(
+            app,
+            json!({
+                "phase": "note",
+                "processed": processed,
+                "total": total,
+                "path": document.path,
+                "title": document.title,
+                "cached": true,
+            }),
+        );
+        if processed == total || processed % 192 == 0 {
+            emit_live_zones(app, &output, route.threshold, processed, total);
+        }
+    }
+
     for batch in missing.chunks(16) {
         let inputs = batch
             .iter()
@@ -554,6 +688,7 @@ async fn document_vectors(
         let vectors = embed_batch(app, route, &inputs).await?;
         let mut vector_offset = 0usize;
         let connection = open_connection(root)?;
+        let mut canonical_rows = Vec::with_capacity(batch.len());
         for (index, path, title, content_hash, excerpt, views) in batch {
             let view_count = views.len();
             if view_count == 0 || vector_offset + view_count > vectors.len() {
@@ -572,18 +707,66 @@ async fn document_vectors(
                     params![path, model_key, content_hash, serde_json::to_string(&vector).map_err(|error| error.to_string())?],
                 )
                 .map_err(|error| error.to_string())?;
-            output[*index] = Some(DocumentVector {
+            let document = DocumentVector {
                 path: path.clone(),
                 title: title.clone(),
+                content_hash: content_hash.clone(),
                 excerpt: excerpt.clone(),
+                vector: vector.clone(),
+            };
+            canonical_rows.push((
+                EmbeddingInput {
+                    relative_path: path.clone(),
+                    title: title.clone(),
+                    content_hash: content_hash.clone(),
+                    text: format!(
+                        "{}
+
+{}",
+                        title, excerpt
+                    ),
+                },
                 vector,
-            });
+            ));
+            output[*index] = Some(document);
         }
         if vector_offset != vectors.len() {
             return Err("Embedding provider returned unassigned document views.".into());
         }
+        canonical_embeddings.save_batch(&route.model, route.threshold, &canonical_rows)?;
+        for (index, path, title, _, _, _) in batch {
+            processed += 1;
+            emit_embedding_progress(
+                app,
+                json!({
+                    "phase": "note",
+                    "processed": processed,
+                    "total": total,
+                    "path": path,
+                    "title": title,
+                    "cached": false,
+                }),
+            );
+            let _ = index;
+        }
+        if processed == total || processed % 192 < batch.len() {
+            emit_live_zones(app, &output, route.threshold, processed, total);
+        }
     }
-    Ok(output.into_iter().flatten().collect())
+
+    let documents = output.into_iter().flatten().collect::<Vec<_>>();
+    let zones = provisional_zone_payload(&documents, route.threshold, 8);
+    emit_embedding_progress(
+        app,
+        json!({
+            "phase": "complete",
+            "processed": documents.len(),
+            "total": total,
+            "zones": zones,
+            "model": route.model,
+        }),
+    );
+    Ok(documents)
 }
 
 #[cfg(not(mobile))]
@@ -923,7 +1106,16 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
         profiles.push(profile);
     }
 
-    let assignments = assign_competitively(&profiles, &vectors);
+    let raw_assignments = assign_competitively(&profiles, &vectors);
+    let assignments = raw_assignments
+        .iter()
+        .enumerate()
+        .map(|(index, members)| {
+            let core_count = profiles[index].core_members.len();
+            let max_members = core_count.saturating_mul(3).clamp(minimum_sources, 180);
+            refine_assignment_locally(&profiles[index], members, &vectors, max_members)
+        })
+        .collect::<Vec<_>>();
     let mut candidates = Vec::new();
     for ((topic, profile), members) in qualified
         .into_iter()
@@ -1016,6 +1208,28 @@ async fn discover(app: &AppHandle, limit: usize) -> Result<Vec<SemanticWikiCandi
         model
     );
     Ok(candidates)
+}
+
+#[tauri::command]
+pub async fn tauri_knowledge_wiki_embedding_map(app: AppHandle) -> Result<Value, String> {
+    #[cfg(mobile)]
+    {
+        let _ = app;
+        Err("Semantic Wiki mapping is unavailable on mobile in this build.".into())
+    }
+    #[cfg(not(mobile))]
+    {
+        let root = active_vault_root(&app)?;
+        let config = crate::tauri_extra_commands::load_ai_config(&app)?;
+        let route = embedding_route(&config)?;
+        let documents = document_vectors(&app, &root, &route).await?;
+        let zones = provisional_zone_payload(&documents, route.threshold, 12);
+        Ok(json!({
+            "documents": documents.len(),
+            "model": route.model,
+            "zones": zones,
+        }))
+    }
 }
 
 #[tauri::command]

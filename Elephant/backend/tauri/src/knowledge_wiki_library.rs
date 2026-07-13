@@ -392,27 +392,38 @@ fn migrate_related_wikilinks(markdown: &str) -> String {
                 in_related_section = heading.trim().eq_ignore_ascii_case("related wikis");
                 return line.to_string();
             }
-            if !in_related_section || !trimmed.starts_with("- [[") || !trimmed.ends_with("]]") {
+            if !in_related_section {
                 return line.to_string();
             }
-            let raw = &trimmed[4..trimmed.len() - 2];
-            let mut parts = raw.splitn(2, '|');
-            let target = parts
-                .next()
-                .unwrap_or("")
-                .split('#')
-                .next()
-                .unwrap_or("")
-                .trim();
-            let label = parts.next().unwrap_or(target).trim();
-            if target.is_empty() {
+            let label = if trimmed.starts_with("- [[") && trimmed.ends_with("]]") {
+                let raw = &trimmed[4..trimmed.len() - 2];
+                let mut parts = raw.splitn(2, '|');
+                let target = parts
+                    .next()
+                    .unwrap_or("")
+                    .split('#')
+                    .next()
+                    .unwrap_or("")
+                    .trim();
+                parts.next().unwrap_or(target).trim().to_string()
+            } else if let Some(rest) = trimmed.strip_prefix("- [") {
+                rest.find("](")
+                    .map(|end| rest[..end].trim().to_string())
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+            if label.is_empty() {
                 return line.to_string();
             }
             let indentation = &line[..line.len() - line.trim_start().len()];
-            format!("{indentation}- [{label}](./{}.md)", wiki_slug(target))
+            format!("{indentation}- {label}")
         })
         .collect::<Vec<_>>()
-        .join("\n")
+        .join(
+            "
+",
+        )
 }
 
 fn migrate_legacy_generated_markdown(draft: &WikiDraft, markdown: &str) -> Option<String> {
@@ -420,9 +431,16 @@ fn migrate_legacy_generated_markdown(draft: &WikiDraft, markdown: &str) -> Optio
         .citations
         .iter()
         .any(|citation| markdown.contains(&format!("[^{}]", citation.key)));
+    let mut in_related_section = false;
     let has_legacy_related = markdown.lines().any(|line| {
         let trimmed = line.trim();
-        trimmed.starts_with("- [[") && trimmed.ends_with("]]")
+        if let Some(heading) = trimmed.strip_prefix("## ") {
+            in_related_section = heading.trim().eq_ignore_ascii_case("related wikis");
+            return false;
+        }
+        in_related_section
+            && ((trimmed.starts_with("- [[") && trimmed.ends_with("]]"))
+                || (trimmed.starts_with("- [") && trimmed.contains("](./")))
     });
     let has_numeric_citation = draft.citations.iter().enumerate().any(|(index, citation)| {
         let number = citation_number(citation, index + 1);

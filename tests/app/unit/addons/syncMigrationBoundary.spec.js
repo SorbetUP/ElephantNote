@@ -6,7 +6,7 @@ const root = process.cwd()
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
 
 describe('Sync physical migration boundary', () => {
-  it('owns the persistent Iroh endpoint in a package service', () => {
+  it('owns the persistent Iroh endpoint and stable identity in a package service', () => {
     const manifest = JSON.parse(read('addons/official/sync/manifest.json'))
     const build = JSON.parse(read('addons/official/sync/addon.build.json'))
     const native = read('addons/official/sync/native/src/main.rs')
@@ -14,14 +14,15 @@ describe('Sync physical migration boundary', () => {
     expect(manifest.native.runner).toBe('service')
     expect(manifest.native.protocol).toBe('elephant-addon-service-v1')
     expect(build.runner).toBe('service')
-    expect(native).toContain('Endpoint::bind(presets::N0)')
-    expect(native).toContain('.build(endpoint.id())')
-    expect(native).toContain('.address_lookup()')
-    expect(native).toContain('MdnsAddressLookup')
+    expect(native).toContain('Endpoint::builder(presets::Minimal)')
+    expect(native).toContain('.secret_key(secret_key)')
+    expect(native).toContain('.address_lookup(MdnsAddressLookup::builder().service_name(MDNS_SERVICE))')
+    expect(native).toContain('load_or_create_secret_key')
+    expect(native).toContain('wait_for_endpoint_addr')
     expect(native).toContain('sync.endpoint')
   })
 
-  it('moves manifests, planning and local application while keeping live transfer explicit in core', () => {
+  it('moves identity, manifests, planning and local application while keeping live transfer explicit in core', () => {
     const manifest = JSON.parse(read('addons/official/sync/manifest.json'))
     const entry = read('addons/official/sync/main.service.js')
     const native = read('addons/official/sync/native/src/main.rs')
@@ -33,6 +34,7 @@ describe('Sync physical migration boundary', () => {
     expect(entry).toContain("this.callNativeService('sync.scan'")
     expect(entry).toContain("this.callNativeService('sync.plan'")
     expect(entry).toContain("this.callNativeService('sync.apply-local'")
+    expect(native).toContain('const IDENTITY_FILE: &str = "iroh-endpoint.key"')
     expect(native).toContain('mod manifest;')
     expect(native).toContain('mod plan;')
     expect(native).toContain('mod local_ops;')

@@ -19,7 +19,7 @@ describe('Sync package-owned service boundary', () => {
     expect(manifest.native.mobile.ios.supported).toBe(false)
   })
 
-  it('owns a stable endpoint and package pairing router', () => {
+  it('owns one stable endpoint and the complete package Sync router', () => {
     const native = read('addons/official/sync/native/src/main.rs')
     expect(native).toContain('Endpoint::builder(presets::Minimal)')
     expect(native).toContain('.secret_key(secret_key)')
@@ -27,14 +27,17 @@ describe('Sync package-owned service boundary', () => {
     expect(native).toContain('load_or_create_secret_key')
     expect(native).toContain('wait_for_endpoint_addr')
     expect(native).toContain('Router::builder(endpoint.clone())')
-    expect(native).toContain('PairingProtocol')
-    expect(native).toContain('handle_incoming_pairing')
+    expect(native).toContain('SyncProtocol')
+    expect(native).toContain('handle_incoming_connection')
+    expect(native).toContain('ControlMessage::PairRequest(request)')
+    expect(native).toContain('ControlMessage::SyncOpen(open)')
+    expect(native).toContain('serve_sync_session(')
     expect(native).toContain('"stableIdentity": true')
     expect(native).toContain('"owner": ADDON_ID')
     expect(native).not.toContain('tauri::command')
   })
 
-  it('connects package pairing and planning to the generic service host', () => {
+  it('connects pairing, planning and active synchronization to the generic service host', () => {
     const source = read('addons/official/sync/main.service.js')
     expect(source).toContain('tauri_addons_service_start')
     expect(source).toContain('tauri_addons_service_call')
@@ -43,21 +46,28 @@ describe('Sync package-owned service boundary', () => {
     expect(source).toContain("this.callNativeService('sync.status')")
     expect(source).toContain("this.callNativeService('sync.create-invite'")
     expect(source).toContain("this.callNativeService('sync.accept-invite'")
+    expect(source).toContain("this.callNativeService('sync.run'")
     expect(source).toContain("this.callNativeService('sync.scan'")
     expect(source).toContain("this.callNativeService('sync.plan'")
     expect(source).toContain("this.callNativeService('sync.apply-local'")
   })
 
-  it('owns pairing, scan, planning and local operations without claiming network transfer completion', () => {
+  it('routes legacy UI calls into the physical service and claims real transfer completion', () => {
     const manifest = JSON.parse(read('addons/official/sync/manifest.json'))
     const native = read('addons/official/sync/native/src/main.rs')
+    const serviceEntry = read('addons/official/sync/main.service.js')
     const base = read('addons/official/sync/main.js')
 
     expect(manifest.description).toMatch(/manifest scanning and deterministic sync planning/i)
     expect(native).toContain('"wire-protocol"')
     expect(native).toContain('"pairing"')
-    expect(native).toContain('"networkTransfersReady": false')
-    expect(native).not.toContain('"sync.run" =>')
+    expect(native).toContain('"file-streams"')
+    expect(native).toContain('"sync-sessions"')
+    expect(native).toContain('"networkTransfersReady": true')
+    expect(native).toContain('"sync.run" => service.run_sync().await')
+    expect(serviceEntry).toContain("if (command === 'iroh_sync_run') return await this.runNativeSync()")
+    expect(serviceEntry).toContain("if (command === 'iroh_sync_create_invite')")
+    expect(serviceEntry).toContain("if (command === 'iroh_sync_accept_invite')")
     expect(base).toContain("this.invoke('iroh_sync_run'")
   })
 })

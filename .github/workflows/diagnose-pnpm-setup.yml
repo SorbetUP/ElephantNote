@@ -1,0 +1,51 @@
+name: Diagnose pnpm setup
+
+on:
+  push:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/diagnose-pnpm-setup.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Diagnose package manager and install
+        shell: bash
+        run: |
+          set +e
+          {
+            echo '=== versions ==='
+            node --version
+            npm --version
+            echo '=== registry version ==='
+            npm view pnpm@10.33.4 version
+            echo '=== global install ==='
+            npm install -g pnpm@10.33.4
+            echo '=== pnpm version ==='
+            pnpm --version
+            echo '=== dependency install ==='
+            pnpm install --no-frozen-lockfile --ignore-scripts
+            status=$?
+            echo "INSTALL_EXIT=$status"
+            exit "$status"
+          } 2>&1 | tee pnpm-diagnostic.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pnpm-setup-diagnostic
+          path: pnpm-diagnostic.log
+          if-no-files-found: error

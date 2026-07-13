@@ -17,8 +17,8 @@ pub mod syntax;
 pub mod view;
 
 pub use edit::{
-  Command, EditError, GraphemeCommand, MarkCommand, Operation, Transaction,
-  Utf16Range,
+  Command, EditError, GraphemeCommand, MarkCommand, Operation,
+  ParagraphBoundaryCommand, Transaction, Utf16Range,
 };
 pub use features::{ListCommand, TableCommand, TableNavigationCommand};
 pub use history::History;

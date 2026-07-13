@@ -719,7 +719,7 @@ function dimHex (hexColor, target, amount) {
 function buildGraph (data) {
   const graph = new Graph()
   const t = theme.value
-  const { nodes, edges, edgeCounts } = data
+  const { nodes, edges, edgeCounts, maxEdges = 1 } = data
   const wikiIds = nodes
     .filter((node) => (node.kind || node.type) === 'wiki')
     .map((node) => node.id)
@@ -750,7 +750,7 @@ function buildGraph (data) {
       label: truncLabel(node.title, 28),
       fullLabel: node.title,
       connectivity,
-      clusterIndex: clusterIdx,
+      clusterIndex: node.clusterIndex || 0,
       tagIds: node.tags || [],
       data: node,
       isWiki,

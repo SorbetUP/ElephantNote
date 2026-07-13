@@ -24,6 +24,7 @@ pub mod addon_catalog;
 pub mod addon_dependencies;
 pub mod addon_registry_view;
 pub mod addon_runtime_access;
+pub mod addon_assets;
 pub mod addon_note_access;
 pub mod addon_http_access;
 pub mod addon_sidecars;
@@ -70,7 +71,8 @@ fn tauri_platform_info() -> serde_json::Value {
     "desktop": !cfg!(mobile),
     "linux": cfg!(target_os = "linux"),
     "macos": cfg!(target_os = "macos"),
-    "android": cfg!(target_os = "android")
+    "android": cfg!(target_os = "android"),
+    "ios": cfg!(target_os = "ios")
   })
 }
 
@@ -142,6 +144,7 @@ pub fn run() {
       addons::tauri_addons_install,
       addon_catalog::tauri_addons_catalog_list,
       addon_catalog::tauri_addons_catalog_install,
+      addon_assets::tauri_addons_assets_allow_directory,
       addon_note_access::tauri_addons_notes_list,
       addon_http_access::tauri_addons_http_request,
       addon_sidecars::tauri_addons_sidecar_status,

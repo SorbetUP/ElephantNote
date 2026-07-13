@@ -1,6 +1,4 @@
 const ADDON_ID = 'elephant.ai-ocr'
-const SIDECAR_STATUS = 'tauri_addons_sidecar_status'
-const SIDECAR_CALL = 'tauri_addons_sidecar_call'
 
 const element = (documentRef, tag, className = '', text = '') => {
   const node = documentRef.createElement(tag)
@@ -12,45 +10,23 @@ const element = (documentRef, tag, className = '', text = '') => {
 export default class ElephantOcrAddon {
   constructor(api) {
     this.api = api
-    this.invoke = api.experimental?.tauri?.core?.invoke
-    this.document = api.experimental?.document
-  }
-
-  requireInvoke() {
-    if (typeof this.invoke !== 'function') {
-      throw new Error('The Elephant native addon bridge is unavailable')
-    }
-    return this.invoke
   }
 
   sidecarStatus() {
-    return this.requireInvoke()(SIDECAR_STATUS, { addonId: ADDON_ID })
+    return this.api.native.status()
   }
 
   sidecarCall(method, params = {}, timeoutMs = 30_000) {
-    return this.requireInvoke()(SIDECAR_CALL, {
-      addonId: ADDON_ID,
-      method,
-      params,
-      timeoutMs
-    })
-  }
-
-  broker(method, params = {}) {
-    return this.requireInvoke()('tauri_addons_call', {
-      addonId: ADDON_ID,
-      method,
-      params
-    })
+    return this.api.native.call(method, params, { timeoutMs })
   }
 
   async getSetting(key, fallback) {
-    const value = await this.broker('storage.get', { key })
+    const value = await this.api.storage.get(key)
     return value == null ? fallback : value
   }
 
   setSetting(key, value) {
-    return this.broker('storage.set', { key, value })
+    return this.api.storage.set(key, value)
   }
 
   async recognize(path, options = {}) {
@@ -90,7 +66,7 @@ export default class ElephantOcrAddon {
   }
 
   renderSettings(container) {
-    const documentRef = this.document || container?.ownerDocument
+    const documentRef = container?.ownerDocument
     if (!documentRef || !container) return () => {}
     container.replaceChildren()
 

@@ -17,11 +17,14 @@ describe('Elephant Rust editor command routing', () => {
     expect(rustBusCommand('paragraph', type)).toEqual(command)
   })
 
-  it('keeps paragraph and heading commands on the same Rust protocol', () => {
+  it('keeps paragraph, heading and horizontal rule commands on Rust', () => {
     expect(rustParagraphCommand('paragraph')).toEqual({ type: 'set_paragraph' })
     expect(rustParagraphCommand('heading 4')).toEqual({
       type: 'set_heading',
       level: 4
+    })
+    expect(rustBusCommand('insert-horizontal-rule')).toEqual({
+      type: 'insert_horizontal_rule'
     })
   })
 

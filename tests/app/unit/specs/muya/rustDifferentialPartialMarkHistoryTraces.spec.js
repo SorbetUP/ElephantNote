@@ -66,12 +66,12 @@ const traces = [
     }
   },
   {
-    name: 'undo and redo removing a linked emphasis group',
+    name: 'invalidate history when removing a linked emphasis group',
     initial: 'alpha **beta** gamma',
     expected: 'alpha **beta** gamma\n',
     checkpoints: [
       'alpha **beta** gamma\n',
-      'al*pha **be*ta** gamma\n',
+      'alpha **beta** gamma\n',
       'alpha **beta** gamma\n'
     ],
     runJs: async (muya) => {
@@ -80,9 +80,9 @@ const traces = [
       muya.format('em')
       const removed = muya.getMarkdown()
       muya.undo()
-      const restored = muya.getMarkdown()
+      const afterUndo = muya.getMarkdown()
       muya.redo()
-      return [removed, restored, muya.getMarkdown()]
+      return [removed, afterUndo, muya.getMarkdown()]
     },
     runRust: (rust) => {
       rust.setSelectionBetweenText('alpha ', 2, 'beta', 2)
@@ -90,9 +90,9 @@ const traces = [
       rust.request({ type: 'toggle_emphasis' })
       const removed = rust.markdown()
       rust.request({ type: 'undo' })
-      const restored = rust.markdown()
+      const afterUndo = rust.markdown()
       rust.request({ type: 'redo' })
-      return [removed, restored, rust.markdown()]
+      return [removed, afterUndo, rust.markdown()]
     }
   },
   {

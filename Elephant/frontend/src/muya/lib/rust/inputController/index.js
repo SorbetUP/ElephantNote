@@ -1,4 +1,5 @@
 import { editorCommands } from '../bridge'
+import { markdownFromClipboard } from './clipboard'
 import { commandForBeforeInput, commandForTableKey } from './commands'
 import { readDomSelection } from './selection'
 
@@ -33,6 +34,7 @@ export class MuyaRustInputController {
     this.attached = false
     this._tail = Promise.resolve()
     this._beforeInput = (event) => this.handleBeforeInput(event)
+    this._paste = (event) => this.handlePaste(event)
     this._compositionStart = () => this.handleCompositionStart()
     this._compositionEnd = (event) => this.handleCompositionEnd(event)
     this._keyDown = (event) => this.handleKeyDown(event)
@@ -42,6 +44,7 @@ export class MuyaRustInputController {
     if (this.attached) return this
     this.attached = true
     this.container.addEventListener('beforeinput', this._beforeInput)
+    this.container.addEventListener('paste', this._paste)
     this.container.addEventListener('compositionstart', this._compositionStart)
     this.container.addEventListener('compositionend', this._compositionEnd)
     this.container.addEventListener('keydown', this._keyDown)
@@ -52,6 +55,7 @@ export class MuyaRustInputController {
     if (!this.attached) return this
     this.attached = false
     this.container.removeEventListener('beforeinput', this._beforeInput)
+    this.container.removeEventListener('paste', this._paste)
     this.container.removeEventListener('compositionstart', this._compositionStart)
     this.container.removeEventListener('compositionend', this._compositionEnd)
     this.container.removeEventListener('keydown', this._keyDown)
@@ -78,6 +82,19 @@ export class MuyaRustInputController {
     this.schedule(async () => {
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(command)
+    })
+  }
+
+  handlePaste(event) {
+    const selection = this.readSelection()
+    if (!selection) return
+    const markdown = markdownFromClipboard(event, this.container.ownerDocument)
+    if (markdown === null) return
+    event.preventDefault()
+    event.stopPropagation?.()
+    this.schedule(async () => {
+      await this.bridge.setSelection(selection)
+      await this.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
     })
   }
 

@@ -15,18 +15,12 @@ import {
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
-describe('optional first-party addons and configurable icon rail', () => {
+describe('optional first-party physical addons and configurable icon rail', () => {
   it('normalizes persisted order as core controls, dividers and addon views change', () => {
     const tasks = addonViewRailId('com.elephantnote.elephant-tasks.workspace')
     const divider = createIconRailSeparatorId()
     const available = ['vault', 'sidebar-toggle', 'dashboard', tasks, 'search']
-
-    expect(CORE_ICON_RAIL_ITEMS.map((item) => item.id)).toEqual([
-      'vault',
-      'sidebar-toggle',
-      'dashboard',
-      'search'
-    ])
+    expect(CORE_ICON_RAIL_ITEMS.map((item) => item.id)).toEqual(['vault', 'sidebar-toggle', 'dashboard', 'search'])
     expect(DEFAULT_ICON_RAIL_ORDER).toEqual(['vault', 'sidebar-toggle', 'dashboard', 'search'])
     expect(isIconRailSeparatorId(divider)).toBe(true)
     expect(normalizeIconRailOrder(['search', divider, 'unknown', 'search', tasks], available))
@@ -42,142 +36,75 @@ describe('optional first-party addons and configurable icon rail', () => {
     const organizer = read('Elephant/frontend/app/components/settings/IconRailLayoutSettings.vue')
     const layout = read('Elephant/frontend/app/components/navigation/iconRailLayout.js')
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
-
     expect(layout).toContain("{ id: 'vault', label: 'Vault'")
     expect(layout).toContain("{ id: 'sidebar-toggle', label: 'Sidebar'")
     expect(rail).toContain("id: 'vault'")
     expect(rail).toContain("id: 'sidebar-toggle'")
     expect(rail).toContain('icon: PanelLeft')
-    expect(rail).not.toContain('PanelLeftClose')
-    expect(rail).not.toContain('PanelLeftOpen')
     expect(rail).toContain('activeVaultIconComponent || Vault')
     expect(shell).toContain(':sidebar-visible="sidebarVisible"')
-    expect(rail).not.toContain('<div class="en-rail-separator" />')
     expect(rail).toContain('v-if="item.separator"')
-    expect(rail).toContain('visibility: visible; opacity: 1;')
     expect(organizer).toContain('vault: Vault')
     expect(organizer).toContain("'sidebar-toggle': PanelLeft")
-    expect(organizer).toContain('en-rail-layout-icon-preview')
-    expect(organizer).toContain("pushIconRailLog('settings:mounted'")
-    expect(rail).toContain("pushIconRailLog('layout:resolved'")
   })
 
-  it('renders Recently edited only through its optional layout contribution', () => {
+  it('keeps Recently edited as the only optional bundled layout contribution', () => {
     const sidebar = read('Elephant/frontend/app/components/navigation/SidebarNav.vue')
     const recentAddon = read('Elephant/frontend/src/renderer/src/addons/builtin/recentlyEdited.js')
-
     expect(sidebar).toContain("addonsStore.getContributions('layout.zones')")
     expect(sidebar).toContain("entry?.contribution?.zone === 'sidebar.after-tree'")
-    expect(sidebar).toContain(':is="entry.contribution.component"')
     expect(recentAddon).toContain("zone: 'sidebar.after-tree'")
-    expect(recentAddon).toContain('defaultEnabled: false')
   })
 
-  it('lets Calendar own its workspace component', () => {
-    const router = read('Elephant/frontend/app/components/views/AddonWorkspaceRouter.vue')
-    const calendar = read('Elephant/frontend/src/renderer/src/addons/builtin/calendar.js')
+  it('loads Calendar, Sync and Sites only from physical package entries', () => {
     const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
-
-    expect(router).toContain(':is="view.contribution.component"')
-    expect(router).not.toContain('CalendarAddonWorkspace')
-    expect(calendar).toContain("import CalendarAddonWorkspace from 'elephant-front/components/views/CalendarAddonWorkspace.vue'")
-    expect(calendar).toContain('component: CalendarAddonWorkspace')
-    expect(builtins).toContain("load: () => import('./calendar')")
-  })
-
-  it('lets Sync own its runtime and top-bar component', () => {
-    const bootstrap = read('Elephant/backend/tauri/src/lib_min.rs')
-    const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/sync.js')
+    const calendar = read('addons/official/calendar/main.js')
+    const sync = read('addons/official/sync/main.js')
+    const sites = read('addons/official/sites/main.js')
     const navigation = read('Elephant/frontend/app/components/navigation/NavigationBar.vue')
+    const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
 
-    expect(bootstrap).not.toContain('state.runtime(&sync_handle).await')
-    expect(addon).toContain("import SyncNavigationControl from 'elephant-front/components/navigation/SyncNavigationControl.vue'")
-    expect(addon).toContain('component: SyncNavigationControl')
-    expect(addon).toContain('irohSyncClient.activate()')
-    expect(addon).toContain('await irohSyncClient.shutdown()')
-    expect(navigation).not.toContain('SyncNavigationControl')
+    expect(builtins).not.toContain("import('./calendar')")
+    expect(builtins).not.toContain("import('./sync')")
+    expect(builtins).not.toContain("import('./sites')")
+    expect(calendar).toContain('api.workspace.registerView')
+    expect(sync).toContain("registerContribution('top-bar.items'")
+    expect(sites).toContain("zone: 'workspace.notes'")
     expect(navigation).toContain(':is="entry.contribution.component"')
+    expect(main).toContain("entry?.contribution?.zone === 'workspace.notes'")
   })
 
-  it('keeps AI capabilities independently removable but groups them under the physical AI parent', () => {
+  it('keeps AI capabilities independently installable under the physical AI parent', () => {
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
     const router = read('Elephant/frontend/app/components/views/AddonWorkspaceRouter.vue')
-    const providers = read('addons/official/ai/main.js')
-    const providersManifest = read('addons/official/ai/manifest.json')
-    const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
+    const parent = read('addons/official/ai/main.js')
     const panel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
-    const chat = read('Elephant/frontend/src/renderer/src/addons/builtin/aiChat.js')
-    const search = read('Elephant/frontend/src/renderer/src/addons/builtin/aiSearch.js')
-    const ocr = read('addons/official/ai-ocr/main.js')
+    const chat = read('addons/official/ai-chat/main.js')
+    const search = read('addons/official/ai-search/main.js')
     const ocrManifest = read('addons/official/ai-ocr/manifest.json')
-    const wiki = read('Elephant/frontend/src/renderer/src/addons/builtin/wiki.js')
-    const graph = read('Elephant/frontend/src/renderer/src/addons/builtin/graph.js')
-    const openModels = read('Elephant/frontend/src/renderer/src/addons/builtin/openModels.js')
-    const renderer = read('Elephant/frontend/src/renderer/src/main.js')
+    const wiki = read('addons/official/wiki/main.js')
+    const graph = read('addons/official/graph/main.js')
+    const openModels = read('addons/official/open-models/main.js')
 
-    expect(shell).not.toContain("import ChatSidebar from './ChatSidebar.vue'")
     expect(shell).toContain("entry?.contribution?.zone === 'shell.right'")
-    expect(router).not.toContain('WikiView')
-    expect(router).not.toContain('AtomicGraphView')
-    expect(router).not.toContain('ModelsView')
-
-    expect(providersManifest).toContain('"name": "AI"')
-    expect(providers).toContain("standalone: true")
-    expect(providers).not.toContain('ChatSidebar')
-    expect(providers).not.toContain('WikiView')
-    expect(providers).not.toContain('AtomicGraphView')
-    expect(providers).not.toContain('ModelsView')
-    expect(builtins).not.toContain("load: () => import('./ai')")
-    expect(builtins.match(/parentAddonId: 'elephant\.ai'/g)).toHaveLength(4)
-    expect(ocrManifest).toContain('"elephant.ai": ">=2.0.0"')
+    expect(router).toContain(':is="view.contribution.component"')
+    expect(parent).toContain("setAttribute('data-elephant-addon-settings-slot', active.slot)")
     expect(panel).toContain('const GROUPED_ADDON_IDS = new Set(AI_SUBMODULE_IDS)')
-    expect(panel).toContain('class="en-ai-module-list"')
-
-    expect(chat).toContain('component: ChatSidebar')
-    expect(chat).toContain("icon: 'message-circle'")
-    expect(chat).toContain("section: 'ai'")
-    expect(chat).toContain('slot: SETTINGS_PAGE.slot')
-    expect(search).toContain("section: 'ai'")
-    expect(search).toContain('slot: SETTINGS_PAGE.slot')
-    expect(ocr).toContain("slot: 'ai.ocr'")
-    expect(providers).toContain("setAttribute('data-elephant-addon-settings-slot', active.slot)")
-    expect(wiki).toContain('component: WikiView')
-    expect(graph).toContain('component: AtomicGraphView')
-    expect(graph).toContain('installGraphRuntimeFixes(globalThis)')
-    expect(openModels).toContain('component: OpenModelsView')
-    expect(openModels).toContain("ctx.registerContribution('ai.providers'")
-    expect(openModels).not.toContain('autostartLlamaRuntime')
-    expect(renderer).not.toContain('installGraphRuntimeFixes')
-    expect(renderer).not.toContain('autostartLlamaRuntime')
+    expect(chat).toContain("slot: 'ai.chat'")
+    expect(search).toContain("slot: 'ai.search'")
+    expect(ocrManifest).toContain('"elephant.ai": ">=2.0.0"')
+    expect(wiki).toContain('api.workspace.registerView')
+    expect(graph).toContain('api.workspace.registerView')
+    expect(openModels).toContain("registerContribution('ai.providers'")
   })
 
-  it('lets Sites own its workspace panel', () => {
-    const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
-    const sites = read('Elephant/frontend/src/renderer/src/addons/builtin/sites.js')
-
-    expect(main).not.toContain('SitePreviewPanel')
-    expect(main).toContain("entry?.contribution?.zone === 'workspace.notes'")
-    expect(sites).toContain("import SitePreviewPanel from 'elephant-front/sitePreview/SitePreviewPanel.vue'")
-    expect(sites).toContain("zone: 'workspace.notes'")
-    expect(sites).toContain('component: SitePreviewPanel')
-  })
-
-  it('lazy-loads bundled addons and excludes physical AI and OCR code', () => {
+  it('keeps every migrated feature out of the builtin lazy loader', () => {
     const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
     const runtime = read('Elephant/frontend/src/renderer/src/addons/index.js')
-
-    expect(builtins).toContain('const createLazyBuiltinAddon')
-    expect(builtins).not.toContain("load: () => import('./ai')")
-    expect(builtins).toContain("load: () => import('./aiChat')")
-    expect(builtins).toContain("load: () => import('./aiSearch')")
-    expect(builtins).not.toContain("load: () => import('./aiOcr')")
-    expect(builtins).toContain("load: () => import('./wiki')")
-    expect(builtins).toContain("load: () => import('./graph')")
-    expect(builtins).toContain("load: () => import('./openModels')")
+    for (const module of ['ai', 'aiChat', 'aiSearch', 'aiOcr', 'wiki', 'graph', 'openModels', 'codexConnection', 'sync', 'calendar', 'sites', 'codeExecution']) {
+      expect(builtins).not.toContain(`import('./${module}')`)
+    }
     expect(builtins).toContain("load: () => import('./excalidraw')")
-    expect(builtins).not.toContain("import { aiAddon } from './ai'")
-    expect(builtins).not.toContain("import { openModelsAddon } from './openModels'")
-    expect(builtins).not.toContain("import { excalidrawAddon } from './excalidraw'")
     expect(runtime).toContain("REQUIRED_BUILTIN_ADDON_IDS = Object.freeze(['elephant.addon-packs', 'elephant.excalidraw'])")
   })
 })

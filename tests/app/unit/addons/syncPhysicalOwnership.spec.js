@@ -6,8 +6,9 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 describe('physical Sync package ownership', () => {
-  it('owns identity, manifest scanning, deterministic planning and local operations inside the native package', () => {
+  it('owns identity, wire schema, manifest scanning, deterministic planning and local operations inside the native package', () => {
     const service = read('addons/official/sync/native/src/main.rs')
+    const protocol = read('addons/official/sync/native/src/protocol.rs')
     const manifest = read('addons/official/sync/native/src/manifest.rs')
     const plan = read('addons/official/sync/native/src/plan.rs')
     const localOps = read('addons/official/sync/native/src/local_ops.rs')
@@ -20,6 +21,13 @@ describe('physical Sync package ownership', () => {
     expect(service).toContain('"sync.plan" => service.plan(params).await')
     expect(service).toContain('"sync.apply-local" => service.apply_local(params)')
     expect(service).toContain('"ownedCapabilities": ["endpoint", "identity", "manifest", "plan", "local-operations"]')
+    expect(protocol).toContain('pub const ALPN: &[u8] = b"elephantnote/vault-sync/1"')
+    expect(protocol).toContain('pub const PROTOCOL_NAME: &str = "elephantnote-iroh-sync-v1"')
+    expect(protocol).toContain('pub enum ControlMessage')
+    expect(protocol).toContain('PairRequest(PairRequest)')
+    expect(protocol).toContain('SyncComplete')
+    expect(protocol).toContain('pub async fn write_control')
+    expect(protocol).toContain('pub async fn read_control')
     expect(manifest).toContain('pub fn scan_vault')
     expect(manifest).toContain('path_is_or_is_below(&normalized, ".elephantnote/addons")')
     expect(plan).toContain('pub fn build_plan')

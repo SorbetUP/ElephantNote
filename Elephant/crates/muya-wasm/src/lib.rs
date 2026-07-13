@@ -71,7 +71,13 @@ mod tests {
         let response = EditorResponse::Snapshot(ProtocolSnapshot::from_session(&session));
         let json = serde_json::to_value(response).unwrap();
         assert_eq!(json["type"], "snapshot");
-        assert!(json["payload"]["document"]["nodes"].as_array().unwrap().len() >= 4);
+        assert!(
+            json["payload"]["document"]["nodes"]
+                .as_array()
+                .unwrap()
+                .len()
+                >= 4
+        );
     }
 
     #[test]

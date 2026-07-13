@@ -3,7 +3,7 @@ use crate::edit::{
   PasteCommand,
 };
 use crate::features::{
-  ListCommand, TableCommand, TableNavigationCommand, TaskCommand,
+  BlockCommand, ListCommand, TableCommand, TableNavigationCommand, TaskCommand,
 };
 use crate::session::{EditorSession, SessionCommand};
 
@@ -76,6 +76,13 @@ fn to_session_command(command: ProtocolCommand) -> SessionCommand {
     }
     ProtocolCommand::ToggleStrike => {
       SessionCommand::Mark(MarkCommand::ToggleStrike)
+    }
+    ProtocolCommand::DuplicateBlock => {
+      SessionCommand::Block(BlockCommand::Duplicate)
+    }
+    ProtocolCommand::DeleteBlock => SessionCommand::Block(BlockCommand::Delete),
+    ProtocolCommand::InsertParagraphAfterBlock => {
+      SessionCommand::Block(BlockCommand::InsertParagraphAfter)
     }
     ProtocolCommand::IndentListItem => {
       SessionCommand::List(ListCommand::IndentItem)

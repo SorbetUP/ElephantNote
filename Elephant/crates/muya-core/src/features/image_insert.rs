@@ -15,8 +15,14 @@ impl InsertImage {
     document: &Document,
     selection: Selection,
   ) -> Result<Transaction, EditError> {
-    let Some((text, start, end)) = selection.ordered_same_node() else {
-      return Err(EditError::CrossNodeSelection);
+    let (text, start, end, use_selected_text) = match selection.ordered_same_node() {
+      Some((text, start, end)) => (text, start, end, true),
+      None => (
+        selection.focus.node,
+        selection.focus.offset_utf16,
+        selection.focus.offset_utf16,
+        false,
+      ),
     };
     if forbidden_context(document, text) {
       return Ok(noop(selection));
@@ -24,15 +30,11 @@ impl InsertImage {
     let value = text_value(document, text)?;
     let start_byte = utf16_to_byte(value, text, start)?;
     let end_byte = utf16_to_byte(value, text, end)?;
-    let selected = &value[start_byte..end_byte];
-    let alt = if selected.is_empty() {
-      if self.alt.is_empty() {
-        infer_alt(&self.source)
-      } else {
-        self.alt
-      }
-    } else {
-      selected.to_string()
+    let selected = use_selected_text.then_some(&value[start_byte..end_byte]);
+    let alt = match selected.filter(|value| !value.is_empty()) {
+      Some(value) => value.to_string(),
+      None if self.alt.is_empty() => infer_alt(&self.source),
+      None => self.alt,
     };
     let source = normalize_source(&self.source);
     let parent = document

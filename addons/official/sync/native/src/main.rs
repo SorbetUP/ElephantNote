@@ -6,6 +6,7 @@ use elephant_sync_service::{
   },
   plan::{build_plan, SyncPlan},
   protocol::{expect_control, read_control, write_control, ControlMessage, PairRequest, ALPN},
+  session::{run_all_sessions, serve_sync_session},
 };
 use iroh::{
   endpoint::presets,
@@ -92,7 +93,7 @@ impl SyncService {
       let router = Router::builder(endpoint.clone())
         .accept(
           ALPN,
-          PairingProtocol {
+          SyncProtocol {
             endpoint: endpoint.clone(),
             vault_dir: self.vault_dir.clone(),
             device_name: self.device_name(),
@@ -136,7 +137,7 @@ impl SyncService {
       "peers": peers,
       "pendingInvites": pending_invites,
       "pairingState": if config.as_ref().is_some_and(|value| !value.peers.is_empty()) { "paired" } else { "not-paired" },
-      "networkTransfersReady": false,
+      "networkTransfersReady": true,
       "ownedCapabilities": [
         "endpoint",
         "identity",
@@ -144,7 +145,9 @@ impl SyncService {
         "pairing",
         "manifest",
         "plan",
-        "local-operations"
+        "local-operations",
+        "file-streams",
+        "sync-sessions"
       ]
     }))
   }
@@ -311,6 +314,27 @@ impl SyncService {
     }))
   }
 
+  async fn run_sync(&mut self) -> Result<Value, String> {
+    let endpoint = self.ensure_endpoint().await?.clone();
+    let sessions = run_all_sessions(&endpoint, &self.vault_dir).await?;
+    let transferred_files = sessions.iter().map(|session| session.transferred_files).sum::<u64>();
+    let transferred_bytes = sessions.iter().map(|session| session.transferred_bytes).sum::<u64>();
+    let conflicts = sessions
+      .iter()
+      .flat_map(|session| session.conflicts.iter().cloned())
+      .collect::<Vec<_>>();
+    Ok(json!({
+      "ok": true,
+      "owner": ADDON_ID,
+      "state": "success",
+      "runtime": "physical-sync-service",
+      "sessions": sessions,
+      "transferredFiles": transferred_files,
+      "transferredBytes": transferred_bytes,
+      "conflicts": conflicts
+    }))
+  }
+
   async fn stop(&mut self) {
     self.router.take();
     if let Some(endpoint) = self.endpoint.take() {
@@ -320,21 +344,21 @@ impl SyncService {
 }
 
 #[derive(Clone)]
-struct PairingProtocol {
+struct SyncProtocol {
   endpoint: Endpoint,
   vault_dir: PathBuf,
   device_name: String,
 }
 
-impl fmt::Debug for PairingProtocol {
+impl fmt::Debug for SyncProtocol {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-    formatter.debug_struct("PairingProtocol").finish_non_exhaustive()
+    formatter.debug_struct("SyncProtocol").finish_non_exhaustive()
   }
 }
 
-impl ProtocolHandler for PairingProtocol {
+impl ProtocolHandler for SyncProtocol {
   async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
-    handle_incoming_pairing(
+    handle_incoming_connection(
       self.endpoint.clone(),
       self.vault_dir.clone(),
       self.device_name.clone(),
@@ -345,32 +369,47 @@ impl ProtocolHandler for PairingProtocol {
   }
 }
 
-async fn handle_incoming_pairing(
+async fn handle_incoming_connection(
   endpoint: Endpoint,
   vault_dir: PathBuf,
   device_name: String,
   connection: Connection,
 ) -> Result<(), String> {
+  let peer_id = connection.remote_id().to_string();
   let (mut send, mut recv) = connection.accept_bi().await.map_err(|error| error.to_string())?;
-  let request = match read_control(&mut recv).await? {
-    ControlMessage::PairRequest(request) => request,
+  match read_control(&mut recv).await? {
+    ControlMessage::PairRequest(request) => {
+      if request.endpoint_addr.id != connection.remote_id() {
+        return Err("Pair request endpoint address does not match authenticated Iroh identity".to_string());
+      }
+      let accepted = consume_pair_request(&vault_dir, request, endpoint.addr(), &device_name)?;
+      write_control(&mut send, &ControlMessage::PairAccepted(accepted)).await?;
+      send.finish().map_err(|error| error.to_string())?;
+      connection.close(0_u32.into(), b"pairing-accepted");
+      Ok(())
+    }
+    ControlMessage::SyncOpen(open) => {
+      serve_sync_session(
+        &vault_dir,
+        &endpoint.id().to_string(),
+        peer_id,
+        open,
+        connection,
+        send,
+        recv,
+      )
+      .await?;
+      Ok(())
+    }
     other => {
       let message = format!(
-        "Physical Sync service currently accepts pairRequest first, received {}",
+        "first physical Sync message must be pairRequest or syncOpen, received {}",
         elephant_sync_service::protocol::message_name(&other)
       );
       let _ = write_control(&mut send, &ControlMessage::Error { message: message.clone() }).await;
-      return Err(message);
+      Err(message)
     }
-  };
-  if request.endpoint_addr.id != connection.remote_id() {
-    return Err("Pair request endpoint address does not match authenticated Iroh identity".to_string());
   }
-  let accepted = consume_pair_request(&vault_dir, request, endpoint.addr(), &device_name)?;
-  write_control(&mut send, &ControlMessage::PairAccepted(accepted)).await?;
-  send.finish().map_err(|error| error.to_string())?;
-  connection.close(0_u32.into(), b"pairing-accepted");
-  Ok(())
 }
 
 async fn wait_for_endpoint_addr(endpoint: &Endpoint) -> Result<EndpointAddr, String> {
@@ -438,6 +477,7 @@ async fn handle(service: &mut SyncService, method: &str, params: Value) -> Resul
     "sync.scan" => service.scan(),
     "sync.plan" => service.plan(params).await,
     "sync.apply-local" => service.apply_local(params),
+    "sync.run" => service.run_sync().await,
     "service.stop" | "sync.shutdown" => {
       service.stop().await;
       Ok(json!({ "running": false, "stopped": true }))

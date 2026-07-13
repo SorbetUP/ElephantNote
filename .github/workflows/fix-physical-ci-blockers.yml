@@ -1,0 +1,148 @@
+name: Fix physical addon CI blockers
+
+on:
+  push:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/fix-physical-ci-blockers.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/physical-addon-packages
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply focused fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          preload = Path('tests/app/e2e/tauri-preload.js')
+          text = preload.read_text()
+          unused = '''const writeJson = (filename, value) => {
+  fs.mkdirSync(path.dirname(filename), { recursive: true })
+  fs.writeFileSync(filename, `${JSON.stringify(value, null, 2)}\\n`, 'utf8')
+  return value
+}
+
+'''
+          text = text.replace(unused, '')
+          preload.write_text(text)
+
+          runtime = Path('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')
+          text = runtime.read_text()
+          old = '''    native: Object.freeze({
+      status: () => invoke('tauri_addons_sidecar_status', { addonId: manifest.id }, target),
+      call(method, params = {}, options = {}) {
+        const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
+        return invoke('tauri_addons_sidecar_call', {
+          addonId: manifest.id,
+          method: safeString(method),
+          params,
+          timeoutMs
+        }, target)
+      }
+    }),'''
+          new = '''    native: Object.freeze({
+      status: () => invoke('tauri_addons_sidecar_status', { addonId: manifest.id }, target),
+      call(method, params = {}, options = {}) {
+        const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
+        return invoke('tauri_addons_sidecar_call', {
+          addonId: manifest.id,
+          method: safeString(method),
+          params,
+          timeoutMs
+        }, target)
+      },
+      service: Object.freeze({
+        status: () => invoke('tauri_addons_service_status', { addonId: manifest.id }, target),
+        start: () => invoke('tauri_addons_service_start', { addonId: manifest.id }, target),
+        call(method, params = {}, options = {}) {
+          const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
+          return invoke('tauri_addons_service_call', {
+            addonId: manifest.id,
+            method: safeString(method),
+            params,
+            timeoutMs
+          }, target)
+        },
+        stop: () => invoke('tauri_addons_service_stop', { addonId: manifest.id }, target)
+      })
+    }),'''
+          if 'tauri_addons_service_status' not in text:
+              if old not in text:
+                  raise SystemExit('trusted native API block no longer matches expected source')
+              text = text.replace(old, new)
+          runtime.write_text(text)
+
+          lib = Path('Elephant/backend/tauri/src/lib_min.rs')
+          lines = lib.read_text().splitlines()
+          forbidden = (
+              'pub mod embeddings;',
+              'embeddings::tauri_embeddings_',
+              'tauri_extra_commands::tauri_search_rebuild',
+          )
+          lines = [line for line in lines if not any(token in line for token in forbidden)]
+          lib.write_text('\n'.join(lines) + '\n')
+
+          embeddings = Path('Elephant/backend/tauri/src/embeddings.rs')
+          if embeddings.exists():
+              embeddings.unlink()
+          PY
+
+      - uses: ./.github/actions/setup
+
+      - name: Validate targeted contracts
+        shell: bash
+        run: |
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/addonNativeServiceContracts.spec.js \
+            tests/app/unit/addons/semanticBackendAbsence.spec.js \
+            tests/app/unit/addons/syncMigrationBoundary.spec.js
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint \
+            tests/app/e2e/tauri-preload.js \
+            Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js
+
+      - name: Install Linux Tauri dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Compile reduced Rust core
+        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --lib
+
+      - name: Commit validated fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-physical-ci-blockers.yml
+          if [ -f .github/workflows/expose-addon-service-api.yml ]; then
+            git rm .github/workflows/expose-addon-service-api.yml
+          fi
+          git add \
+            tests/app/e2e/tauri-preload.js \
+            Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js \
+            Elephant/backend/tauri/src/lib_min.rs
+          if [ -e Elephant/backend/tauri/src/embeddings.rs ]; then
+            git add Elephant/backend/tauri/src/embeddings.rs
+          else
+            git add -u Elephant/backend/tauri/src/embeddings.rs
+          fi
+          git commit -m "fix(addons): enforce physical semantic and service boundaries"
+          git pull --rebase origin feature/physical-addon-packages
+          git push origin HEAD:feature/physical-addon-packages

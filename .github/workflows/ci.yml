@@ -104,7 +104,10 @@ jobs:
         run: pnpm tauri:web:build
 
       - name: Validate licenses
-        run: pnpm run validate-licenses
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm run validate-licenses 2>&1 | tee license-output.txt
 
       - name: Upload build/coverage and generated docs
         if: always()
@@ -121,6 +124,7 @@ jobs:
             eslint-output.txt
             contract-tests-output.txt
             build-output.txt
+            license-output.txt
           if-no-files-found: ignore
           retention-days: 14
 
@@ -240,4 +244,17 @@ jobs:
         run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
 
       - name: Cargo tests
-        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features \
+            2>&1 | tee tauri-cargo-tests-output.txt
+
+      - name: Upload Tauri Rust diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-rust-diagnostics
+          path: tauri-cargo-tests-output.txt
+          if-no-files-found: ignore
+          retention-days: 14

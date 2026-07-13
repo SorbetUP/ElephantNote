@@ -2,15 +2,15 @@
   "id": "elephant.wiki",
   "parentAddonId": "elephant.ai",
   "name": "Wiki",
-  "version": "1.2.0",
-  "description": "Adds package-owned Wiki proposals, pages and source navigation.",
+  "version": "1.3.0",
+  "description": "Owns Wiki proposals and pages, and composes with the optional Search provider.",
   "author": "Elephant",
   "icon": "book-open-text",
   "apiVersion": 1,
   "minAppVersion": "0.18.9",
   "runtime": {
     "type": "javascript-worker",
-    "entry": "main.js",
+    "entry": "main.v2.js",
     "mode": "trusted"
   },
   "permissions": {

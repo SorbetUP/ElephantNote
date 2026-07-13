@@ -7,6 +7,8 @@ pub struct History {
   undo: Vec<Transaction>,
   redo: Vec<Transaction>,
   max_entries: usize,
+  group_active: bool,
+  group_inverse: Option<Transaction>,
 }
 
 impl Default for History {
@@ -21,7 +23,64 @@ impl History {
       undo: Vec::new(),
       redo: Vec::new(),
       max_entries: max_entries.max(1),
+      group_active: false,
+      group_inverse: None,
     }
+  }
+
+  pub fn begin_group(&mut self) {
+    if !self.group_active {
+      self.group_active = true;
+      self.group_inverse = None;
+    }
+  }
+
+  pub fn is_group_active(&self) -> bool {
+    self.group_active
+  }
+
+  pub fn apply_grouped(
+    &mut self,
+    document: &mut Document,
+    transaction: &Transaction,
+  ) -> Result<Selection, EditError> {
+    if !self.group_active {
+      self.begin_group();
+    }
+    let inverse = transaction.apply(document)?;
+    self.group_inverse = Some(match self.group_inverse.take() {
+      Some(previous) => merge_inverse_transactions(inverse, previous),
+      None => inverse,
+    });
+    self.redo.clear();
+    Ok(transaction.selection_after)
+  }
+
+  pub fn commit_group(&mut self) {
+    if !self.group_active {
+      return;
+    }
+    self.group_active = false;
+    if let Some(inverse) = self.group_inverse.take() {
+      self.undo.push(inverse);
+      self.trim_undo();
+    }
+  }
+
+  pub fn cancel_group(
+    &mut self,
+    document: &mut Document,
+  ) -> Result<Option<Selection>, EditError> {
+    if !self.group_active {
+      return Ok(None);
+    }
+    self.group_active = false;
+    let Some(inverse) = self.group_inverse.take() else {
+      return Ok(None);
+    };
+    let selection = inverse.selection_after;
+    inverse.apply(document)?;
+    Ok(Some(selection))
   }
 
   pub fn apply(
@@ -29,6 +88,7 @@ impl History {
     document: &mut Document,
     transaction: &Transaction,
   ) -> Result<Selection, EditError> {
+    self.commit_group();
     let inverse = transaction.apply(document)?;
     self.undo.push(inverse);
     self.redo.clear();
@@ -37,6 +97,7 @@ impl History {
   }
 
   pub fn undo(&mut self, document: &mut Document) -> Result<Option<Selection>, EditError> {
+    self.commit_group();
     let Some(transaction) = self.undo.pop() else {
       return Ok(None);
     };
@@ -47,6 +108,7 @@ impl History {
   }
 
   pub fn redo(&mut self, document: &mut Document) -> Result<Option<Selection>, EditError> {
+    self.commit_group();
     let Some(transaction) = self.redo.pop() else {
       return Ok(None);
     };
@@ -58,7 +120,7 @@ impl History {
   }
 
   pub fn can_undo(&self) -> bool {
-    !self.undo.is_empty()
+    self.group_inverse.is_some() || !self.undo.is_empty()
   }
 
   pub fn can_redo(&self) -> bool {
@@ -73,6 +135,16 @@ impl History {
   }
 }
 
+fn merge_inverse_transactions(latest: Transaction, previous: Transaction) -> Transaction {
+  let mut operations = latest.operations;
+  operations.extend(previous.operations);
+  Transaction {
+    operations,
+    selection_before: latest.selection_before,
+    selection_after: previous.selection_after,
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -81,15 +153,20 @@ mod tests {
   use crate::selection::{Selection, SelectionPoint};
   use crate::{parse_markdown, to_markdown};
 
-  #[test]
-  fn applies_undoes_and_redoes_transactions() {
-    let mut document = parse_markdown("abc");
+  fn initial_document() -> (Document, crate::model::NodeId, Selection) {
+    let document = parse_markdown("x");
     let paragraph = document.children(document.root).next().unwrap();
     let node = document.children(paragraph.id).next().unwrap().id;
     let selection = Selection::collapsed(SelectionPoint {
       node,
       offset_utf16: 1,
     });
+    (document, node, selection)
+  }
+
+  #[test]
+  fn applies_undoes_and_redoes_transactions() {
+    let (mut document, node, selection) = initial_document();
     let transaction = Command::InsertText("X".to_string())
       .build(&document, selection)
       .unwrap();
@@ -97,14 +174,81 @@ mod tests {
 
     history.apply(&mut document, &transaction).unwrap();
     assert!(history.can_undo());
-    assert_text(&document, node, "aXbc");
+    assert_text(&document, node, "xX");
 
     history.undo(&mut document).unwrap();
     assert!(history.can_redo());
-    assert_text(&document, node, "abc");
+    assert_text(&document, node, "x");
 
     history.redo(&mut document).unwrap();
-    assert_text(&document, node, "aXbc");
+    assert_text(&document, node, "xX");
+  }
+
+  #[test]
+  fn groups_composition_updates_into_one_undo_entry() {
+    let (mut document, node, mut selection) = initial_document();
+    let mut history = History::default();
+    history.begin_group();
+
+    for inserted in ["に", "ほ", "ん"] {
+      let transaction = Command::InsertText(inserted.to_string())
+        .build(&document, selection)
+        .unwrap();
+      selection = history
+        .apply_grouped(&mut document, &transaction)
+        .unwrap();
+    }
+    history.commit_group();
+    assert_eq!(to_markdown(&document), "xにほん");
+
+    let restored = history.undo(&mut document).unwrap().unwrap();
+    assert_eq!(to_markdown(&document), "x");
+    assert_eq!(restored, Selection::collapsed(SelectionPoint {
+      node,
+      offset_utf16: 1,
+    }));
+    assert!(!history.can_undo());
+  }
+
+  #[test]
+  fn cancels_an_active_composition_without_creating_history() {
+    let (mut document, _, selection) = initial_document();
+    let mut history = History::default();
+    history.begin_group();
+    let transaction = Command::InsertText("未確定".to_string())
+      .build(&document, selection)
+      .unwrap();
+    history
+      .apply_grouped(&mut document, &transaction)
+      .unwrap();
+    assert_eq!(to_markdown(&document), "x未確定");
+
+    let restored = history.cancel_group(&mut document).unwrap().unwrap();
+    assert_eq!(to_markdown(&document), "x");
+    assert_eq!(restored, selection);
+    assert!(!history.can_undo());
+    assert!(!history.is_group_active());
+  }
+
+  #[test]
+  fn commits_a_group_before_a_normal_edit() {
+    let (mut document, _, selection) = initial_document();
+    let mut history = History::default();
+    history.begin_group();
+    let first = Command::InsertText("a".to_string())
+      .build(&document, selection)
+      .unwrap();
+    let after_first = history.apply_grouped(&mut document, &first).unwrap();
+    let second = Command::InsertText("b".to_string())
+      .build(&document, after_first)
+      .unwrap();
+    history.apply(&mut document, &second).unwrap();
+    assert_eq!(to_markdown(&document), "xab");
+
+    history.undo(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "xa");
+    history.undo(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "x");
   }
 
   #[test]

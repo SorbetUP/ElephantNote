@@ -2,7 +2,9 @@
 //!
 //! The crate owns the document model, Markdown syntax registry, parsing,
 //! serialization, semantic transactions, history, logical selections and view
-//! patches. Browser and Tauri integrations remain adapters around this crate.
+//! patches. Structural transactions preserve stable IDs while inserting,
+//! removing, restoring and moving inline subtrees. Browser and Tauri
+//! integrations remain adapters around this crate.
 
 pub mod edit;
 pub mod history;

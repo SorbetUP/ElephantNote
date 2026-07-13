@@ -1,0 +1,57 @@
+name: Align Search catalog metadata
+
+on:
+  push:
+    branches:
+      - feature/physical-addon-catalog
+    paths:
+      - .github/workflows/align-search-catalog.yml
+
+permissions:
+  contents: write
+
+jobs:
+  align:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/physical-addon-catalog
+          fetch-depth: 0
+
+      - name: Align Search metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import json
+
+          path = Path('catalog.json')
+          catalog = json.loads(path.read_text())
+          matches = [entry for entry in catalog.get('addons', []) if entry.get('id') == 'elephant.ai-search']
+          if len(matches) != 1:
+              raise SystemExit(f'Expected exactly one Search entry, found {len(matches)}')
+          entry = matches[0]
+          entry['version'] = '1.2.0'
+          entry['description'] = 'Owns note indexing and retrieval inside the physical addon package.'
+          manifest = json.loads(Path(entry['manifestPath']).read_text())
+          if manifest.get('version') != entry['version']:
+              raise SystemExit('Search manifest and catalog version do not match')
+          catalog['updatedAt'] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+          path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + '\n')
+          PY
+
+      - name: Validate catalog JSON
+        run: |
+          node -e "const c=require('./catalog.json'); const e=c.addons.find(x=>x.id==='elephant.ai-search'); if(e.version!=='1.2.0') process.exit(1)"
+
+      - name: Commit aligned catalog and remove workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/align-search-catalog.yml
+          git add catalog.json
+          git commit -m "chore(catalog): align package-owned Search 1.2.0"
+          git push origin HEAD:feature/physical-addon-catalog

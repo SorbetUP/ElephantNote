@@ -3,11 +3,15 @@ import { editorCommands } from '../bridge'
 export const commandForBeforeInput = (event) => {
   switch (event.inputType) {
     case 'insertText':
+    case 'insertReplacementText':
       return typeof event.data === 'string' ? editorCommands.insertText(event.data) : null
     case 'insertParagraph':
     case 'insertLineBreak':
       return editorCommands.insertParagraph()
     case 'deleteContentBackward':
+    case 'deleteContent':
+    case 'deleteByCut':
+    case 'deleteByDrag':
       return editorCommands.deleteBackward()
     case 'historyUndo':
       return editorCommands.undo()

@@ -28,17 +28,51 @@ const describeJsCursor = (muya, label) => {
     })
     block = block.parent ? contentState.getBlock(block.parent) : null
   }
-  console.log(
-    '[muya-list-path]',
-    JSON.stringify({
-      label,
-      cursor: contentState.cursor,
-      domCursor: selection.getCursorRange(),
-      indentable: contentState.isIndentableListItem(),
-      unindentable: contentState.isUnindentableListItem(selectedBlock),
-      path
-    })
-  )
+  return {
+    label,
+    cursor: contentState.cursor,
+    domCursor: selection.getCursorRange(),
+    indentable: contentState.isIndentableListItem(),
+    unindentable: contentState.isUnindentableListItem(selectedBlock),
+    atFormatEnd: contentState.checkCursorAtEndFormat(
+      selectedBlock.text,
+      contentState.cursor.start.offset
+    ),
+    path
+  }
+}
+
+const runDiagnosedTab = (muya, label, event) => {
+  const { contentState } = muya
+  const calls = []
+  const originals = {
+    indentListItem: contentState.indentListItem,
+    unindentListItem: contentState.unindentListItem,
+    insertTab: contentState.insertTab
+  }
+
+  for (const method of Object.keys(originals)) {
+    contentState[method] = function(...args) {
+      calls.push({ method, phase: 'before', markdown: muya.getMarkdown() })
+      const result = originals[method].apply(this, args)
+      calls.push({ method, phase: 'after', markdown: muya.getMarkdown() })
+      return result
+    }
+  }
+
+  const before = describeJsCursor(muya, label)
+  const result = contentState.tabHandler(event)
+  const after = {
+    markdown: muya.getMarkdown(),
+    cursor: contentState.cursor,
+    domCursor: selection.getCursorRange(),
+    returnType: result?.constructor?.name ?? typeof result,
+    calls
+  }
+  console.log('[muya-list-handler]', JSON.stringify({ before, after }))
+
+  Object.assign(contentState, originals)
+  return result
 }
 
 const describeBundled = bundled ? describe : describe.skip
@@ -62,8 +96,7 @@ const traces = [
     expected: '- parent\n  - first\n  - second\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'second', 0)
-      describeJsCursor(muya, 'indent-second')
-      muya.contentState.tabHandler(fakeKeyEvent())
+      runDiagnosedTab(muya, 'indent-second', fakeKeyEvent())
     },
     runRust: (rust) => {
       rust.setSelectionByText('second', 0)
@@ -89,8 +122,7 @@ const traces = [
     expected: '- parent\n  - first\n- second\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'second', 0)
-      describeJsCursor(muya, 'outdent-second')
-      muya.contentState.tabHandler(fakeKeyEvent({ shiftKey: true }))
+      runDiagnosedTab(muya, 'outdent-second', fakeKeyEvent({ shiftKey: true }))
     },
     runRust: (rust) => {
       rust.setSelectionByText('second', 0)

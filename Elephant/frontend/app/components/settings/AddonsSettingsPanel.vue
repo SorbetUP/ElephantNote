@@ -28,18 +28,42 @@
         </button>
       </div>
 
-      <label v-if="activePage === 'packs'" class="en-addons-search">
+      <label class="en-addons-search">
         <Search aria-hidden="true" />
-        <input v-model.trim="packQuery" type="search" placeholder="Search addon packs" aria-label="Search addon packs">
+        <input
+          v-if="activePage === 'addons'"
+          v-model.trim="query"
+          type="search"
+          placeholder="Search addons"
+          aria-label="Search addons"
+        >
+        <input
+          v-else
+          v-model.trim="packQuery"
+          type="search"
+          placeholder="Search addon packs"
+          aria-label="Search addon packs"
+        >
       </label>
-      <span v-else class="en-addons-toolbar-spacer" />
+
+      <label v-if="activePage === 'addons'" class="en-installed-only-control">
+        <button
+          class="en-addon-installed-filter"
+          type="button"
+          role="switch"
+          :aria-checked="installedOnly"
+          :class="{ active: installedOnly }"
+          @click="installedOnly = !installedOnly"
+        ><span /></button>
+        <span>Installed only</span>
+      </label>
 
       <button
         class="en-addons-toolbar-icon"
         type="button"
         aria-label="Refresh"
         title="Refresh"
-        :disabled="operationInProgress || (activePage === 'addons' && (!communityAddonsEnabled || catalogLoading))"
+        :disabled="operationInProgress || (activePage === 'addons' && catalogLoading)"
         @click="refreshActivePage"
       >
         <RefreshCw aria-hidden="true" />
@@ -60,25 +84,12 @@
       <p v-if="message" class="en-addons-feedback" :class="{ error: messageIsError }">{{ message }}</p>
       <p v-if="lastError" class="en-addons-feedback error">{{ lastError }}</p>
 
-      <section class="en-addon-browser">
+      <section v-if="selectedEntry" class="en-addon-browser en-addon-browser-detail-mode">
         <aside class="en-addon-browser-sidebar">
-          <label class="en-addon-browser-search">
-            <Search aria-hidden="true" />
-            <input v-model.trim="query" type="search" placeholder="Search addons" aria-label="Search addons">
-          </label>
-
-          <div class="en-addon-browser-filter">
-            <button
-              class="en-addon-installed-filter"
-              type="button"
-              role="switch"
-              :aria-checked="installedOnly"
-              :class="{ active: installedOnly }"
-              @click="installedOnly = !installedOnly"
-            ><span /></button>
-            <span>Installed only</span>
-            <small>{{ browserEntries.length }}</small>
-          </div>
+          <button class="en-addon-list-back" type="button" @click="selectedAddonId = ''">
+            <ArrowLeft aria-hidden="true" />
+            <span>Back to catalogue</span>
+          </button>
 
           <div class="en-addon-browser-list" role="listbox" aria-label="Addon catalogue">
             <button
@@ -94,8 +105,7 @@
               <span class="en-addon-browser-item-icon"><AddonIcon :name="entry.manifest.icon" /></span>
               <span class="en-addon-browser-item-copy">
                 <strong>{{ entry.manifest.name }}</strong>
-                <small>{{ entry.installed ? (entry.snapshot.enabled ? 'Enabled' : 'Installed') : (entry.manifest.author || 'ElephantNote') }}</small>
-                <span>{{ entry.manifest.description || 'No description.' }}</span>
+                <small>{{ entryStatusLabel(entry) }}</small>
               </span>
             </button>
 
@@ -105,9 +115,7 @@
           </div>
         </aside>
 
-        <main v-if="selectedEntry" class="en-addon-browser-detail">
-          <button class="en-addon-detail-back" type="button" @click="selectedAddonId = ''"><ArrowLeft aria-hidden="true" /> All addons</button>
-
+        <main class="en-addon-browser-detail">
           <header class="en-addon-detail-header">
             <span class="en-addon-detail-logo"><AddonIcon :name="selectedEntry.manifest.icon" /></span>
             <div class="en-addon-detail-heading">
@@ -139,7 +147,7 @@
 
           <section v-if="selectedEntry.id === AI_PARENT_ID" class="en-addon-detail-section">
             <header>
-              <div><h3>AI modules</h3><p>Install only the AI capabilities you want. They remain separate runtimes but are managed from this AI addon.</p></div>
+              <div><h3>AI modules</h3><p>Install only the AI capabilities you want. Each module stays physically separate.</p></div>
               <span>{{ installedAiModuleCount }}/{{ aiModules.length }}</span>
             </header>
             <div class="en-ai-module-list">
@@ -188,27 +196,38 @@
             </div>
           </section>
         </main>
+      </section>
 
-        <main v-else class="en-addon-browser-overview">
-          <header class="en-addon-overview-header">
-            <div><h2>All addons</h2><p>Browse the complete catalogue. Open an addon to manage it.</p></div>
-            <span>{{ browserEntries.length }}</span>
-          </header>
-          <div class="en-addon-overview-grid">
-            <button v-for="entry in browserEntries" :key="`overview-${entry.id}`" class="en-addon-overview-card" type="button" @click="openAddon(entry)">
-              <span class="en-addon-overview-icon"><AddonIcon :name="entry.manifest.icon" /></span>
-              <span class="en-addon-overview-copy">
+      <section v-else class="en-addon-catalogue">
+        <div v-if="communityAddonsEnabled && catalogLoading" class="en-addons-empty">Loading the addon catalogue…</div>
+        <div v-else-if="communityAddonsEnabled && catalogError" class="en-addons-empty error"><strong>Catalogue unavailable</strong><span>{{ catalogError }}</span></div>
+        <div v-else-if="browserEntries.length" class="en-addon-overview-grid">
+          <button
+            v-for="entry in browserEntries"
+            :key="`tile-${entry.id}`"
+            class="en-addon-overview-card"
+            :class="{ installed: entry.installed, enabled: entry.snapshot?.enabled }"
+            type="button"
+            @click="openAddon(entry)"
+          >
+            <span class="en-addon-overview-icon"><AddonIcon :name="entry.manifest.icon" /></span>
+            <span class="en-addon-overview-copy">
+              <span class="en-addon-overview-title-row">
                 <strong>{{ entry.manifest.name }}</strong>
-                <small>By {{ entry.manifest.author || 'ElephantNote' }}</small>
-                <span>{{ entry.manifest.description || 'No description.' }}</span>
+                <span class="en-addon-overview-status" :class="{ active: entry.snapshot?.enabled, update: entry.available?.updateAvailable }">
+                  {{ entryStatusLabel(entry) }}
+                </span>
               </span>
-              <span class="en-addon-overview-status" :class="{ active: entry.snapshot?.enabled }">
-                {{ entry.installed ? (entry.snapshot.enabled ? 'Enabled' : 'Installed') : 'Available' }}
+              <small>By {{ entry.manifest.author || 'ElephantNote' }}</small>
+              <span>{{ entry.manifest.description || 'No description.' }}</span>
+              <span class="en-addon-overview-footer">
+                <span>v{{ entry.manifest.version }}</span>
+                <ChevronRight aria-hidden="true" />
               </span>
-            </button>
-          </div>
-          <div v-if="!browserEntries.length" class="en-addons-empty">{{ query ? 'No addon matches this search.' : 'No addon is available.' }}</div>
-        </main>
+            </span>
+          </button>
+        </div>
+        <div v-else class="en-addons-empty">{{ query ? 'No addon matches this search.' : 'No addon is available.' }}</div>
       </section>
     </template>
 
@@ -221,7 +240,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { open } from '@tauri-apps/plugin-dialog'
-import { ArrowLeft, Check, Layers3, Package, Plus, RefreshCw, Search } from '@lucide/vue'
+import { ArrowLeft, Check, ChevronRight, Layers3, Package, Plus, RefreshCw, Search } from '@lucide/vue'
 import { useAddonsStore } from '@/store/addons'
 import AddonIcon from './AddonIcon.vue'
 import { useAddonsSettings } from './useAddonsSettings'
@@ -280,23 +299,31 @@ const visibleAvailableAddons = computed(() => availableAddons.value
   .filter((addon) => !GROUPED_ADDON_IDS.has(addon?.id)))
 
 const browserEntries = computed(() => {
-  const entries = [
-    ...visibleInstalledAddons.value.map((snapshot) => ({
+  const entriesById = new Map()
+  for (const snapshot of visibleInstalledAddons.value) {
+    entriesById.set(snapshot.manifest.id, {
       id: snapshot.manifest.id,
       manifest: snapshot.manifest,
       snapshot,
       installed: true,
       available: null
-    })),
-    ...visibleAvailableAddons.value.map((available) => ({
+    })
+  }
+  for (const available of visibleAvailableAddons.value) {
+    const existing = entriesById.get(available.id)
+    if (existing) {
+      existing.available = available
+      continue
+    }
+    entriesById.set(available.id, {
       id: available.id,
       manifest: available,
       snapshot: null,
       installed: false,
       available
-    }))
-  ]
-  return entries
+    })
+  }
+  return [...entriesById.values()]
     .filter((entry) => !installedOnly.value || entry.installed)
     .sort((left, right) => Number(right.installed) - Number(left.installed) || left.manifest.name.localeCompare(right.manifest.name))
 })
@@ -310,7 +337,12 @@ const selectedPermissions = computed(() => {
   const labels = []
   for (const [scope, value] of Object.entries(permissions)) {
     if (Array.isArray(value)) labels.push(...value.map((item) => `${scope}: ${item}`))
-    else if (value) labels.push(scope)
+    else if (value && typeof value === 'object') {
+      for (const [action, enabled] of Object.entries(value)) {
+        if (Array.isArray(enabled)) labels.push(...enabled.map((item) => `${scope}.${action}: ${item}`))
+        else if (enabled) labels.push(`${scope}.${action}`)
+      }
+    } else if (value) labels.push(scope)
   }
   return labels
 })
@@ -322,6 +354,12 @@ const aiModules = computed(() => AI_SUBMODULE_IDS.map((id) => {
   return manifest ? { id, manifest, snapshot, available, installed: Boolean(snapshot) } : null
 }).filter(Boolean))
 const installedAiModuleCount = computed(() => aiModules.value.filter((module) => module.installed).length)
+
+const entryStatusLabel = (entry) => {
+  if (entry?.available?.updateAvailable) return 'Update available'
+  if (!entry?.installed) return 'Available'
+  return entry.snapshot?.enabled ? 'Enabled' : 'Installed'
+}
 
 watch(browserEntries, (entries) => {
   if (selectedAddonId.value && !entries.some((entry) => entry.id === selectedAddonId.value)) selectedAddonId.value = ''
@@ -398,11 +436,11 @@ const installAiModule = async (module) => {
   let parent = installedById.value.get(AI_PARENT_ID)
   if (!parent) {
     const parentManifest = availableById.value.get(AI_PARENT_ID) || builtinCatalogById.value.get(AI_PARENT_ID)
-    if (parentManifest) await installAvailableAddon({ ...parentManifest, installSource: 'builtin' })
+    if (parentManifest) await installAvailableAddon(parentManifest)
     parent = addonsStore.manager?.get?.(AI_PARENT_ID)
   }
   if (parent && !parent.enabled) await toggleAddon(parent)
-  const available = module.available || { ...module.manifest, installSource: 'builtin' }
+  const available = module.available || module.manifest
   await installAvailableAddon(available)
   const installed = addonsStore.manager?.get?.(module.id)
   if (installed && !installed.enabled) await toggleAddon(installed)

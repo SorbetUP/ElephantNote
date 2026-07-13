@@ -21,8 +21,10 @@ describe('Sync package-owned service boundary', () => {
 
   it('owns and publishes the live Iroh endpoint from its native crate', () => {
     const native = read('addons/official/sync/native/src/main.rs')
-    expect(native).toContain('Endpoint::builder()')
+    expect(native).toContain('Endpoint::bind(presets::N0)')
     expect(native).toContain('MdnsAddressLookup::builder()')
+    expect(native).toContain('.build(endpoint.id())')
+    expect(native).toContain('.address_lookup()')
     expect(native).toContain('"endpointId": endpoint.id().to_string()')
     expect(native).toContain('"owner": "elephant.sync"')
     expect(native).toContain('elephant-addon-service-v1')
@@ -34,7 +36,7 @@ describe('Sync package-owned service boundary', () => {
     expect(source).toContain("tauri_addons_service_start")
     expect(source).toContain("tauri_addons_service_call")
     expect(source).toContain("tauri_addons_service_stop")
-    expect(source).toContain("api.resources.provide(SERVICE_RESOURCE")
+    expect(source).toContain('api.resources.provide(SERVICE_RESOURCE')
     expect(source).toContain("this.callNativeService('sync.status')")
   })
 

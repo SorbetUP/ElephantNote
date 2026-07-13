@@ -137,7 +137,6 @@
   },
   "devDependencies": {
     "@babel/eslint-parser": "^7.28.6",
-    "@playwright/test": "^1.60.0",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vitest/coverage-v8": "^4.1.6",
     "eslint": "^9.39.4",

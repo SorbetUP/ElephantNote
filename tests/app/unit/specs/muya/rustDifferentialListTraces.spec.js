@@ -5,7 +5,7 @@ import {
   fakeKeyEvent,
   initializeRustWasm,
   runDifferentialTrace,
-  setJsSelection
+  setJsSelectionByText
 } from './rustDifferentialHarness'
 
 const describeBundled = bundled ? describe : describe.skip
@@ -15,11 +15,11 @@ const traces = [
     initial: '- parent\n- child',
     expected: '- parent\n  - child\n',
     runJs: async (muya) => {
-      setJsSelection(muya, 1, 0)
+      setJsSelectionByText(muya, 'child', 0)
       muya.contentState.tabHandler(fakeKeyEvent())
     },
     runRust: (rust) => {
-      rust.setSelection(1, 0)
+      rust.setSelectionByText('child', 0)
       rust.request({ type: 'indent_list_item' })
     }
   },
@@ -28,11 +28,11 @@ const traces = [
     initial: '- parent\n  - first\n- second',
     expected: '- parent\n  - first\n  - second\n',
     runJs: async (muya) => {
-      setJsSelection(muya, 2, 0)
+      setJsSelectionByText(muya, 'second', 0)
       muya.contentState.tabHandler(fakeKeyEvent())
     },
     runRust: (rust) => {
-      rust.setSelection(2, 0)
+      rust.setSelectionByText('second', 0)
       rust.request({ type: 'indent_list_item' })
     }
   },
@@ -41,11 +41,11 @@ const traces = [
     initial: '- parent\n  - child\n- sibling',
     expected: '- parent\n- child\n- sibling\n',
     runJs: async (muya) => {
-      setJsSelection(muya, 1, 0)
+      setJsSelectionByText(muya, 'child', 0)
       muya.contentState.tabHandler(fakeKeyEvent({ shiftKey: true }))
     },
     runRust: (rust) => {
-      rust.setSelection(1, 0)
+      rust.setSelectionByText('child', 0)
       rust.request({ type: 'outdent_list_item' })
     }
   },
@@ -54,11 +54,11 @@ const traces = [
     initial: '- parent\n  - first\n  - second',
     expected: '- parent\n  - first\n- second\n',
     runJs: async (muya) => {
-      setJsSelection(muya, 2, 0)
+      setJsSelectionByText(muya, 'second', 0)
       muya.contentState.tabHandler(fakeKeyEvent({ shiftKey: true }))
     },
     runRust: (rust) => {
-      rust.setSelection(2, 0)
+      rust.setSelectionByText('second', 0)
       rust.request({ type: 'outdent_list_item' })
     }
   }

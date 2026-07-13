@@ -94,6 +94,21 @@ const traces = [
       rust.request({ type: 'toggle_emphasis' })
       return fragmentEdges(rust)
     }
+  },
+  {
+    name: 'strike across text nodes inside one strong subtree',
+    initial: '**alpha *beta* gamma**',
+    expected: '**al~~pha *beta* gam~~ma**\n',
+    edges: ['start', 'middle', 'end'],
+    runJs: async (muya) => {
+      setJsSelection(muya, 0, 4, 18)
+      muya.format('del')
+    },
+    runRust: (rust) => {
+      rust.setSelectionBetweenText('alpha ', 2, ' gamma', 4)
+      rust.request({ type: 'toggle_strike' })
+      return fragmentEdges(rust)
+    }
   }
 ]
 

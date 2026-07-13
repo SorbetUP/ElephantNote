@@ -76,6 +76,9 @@ impl EditorSession {
       SessionCommand::CreateTable(command) => {
         self.apply_transaction(command.build(&self.document, self.selection)?, false)
       }
+      SessionCommand::InsertImage(command) => {
+        self.apply_transaction(command.build(&self.document, self.selection)?, false)
+      }
       SessionCommand::List(command) => {
         self.apply_transaction(command.build(&self.document, self.selection)?, false)
       }

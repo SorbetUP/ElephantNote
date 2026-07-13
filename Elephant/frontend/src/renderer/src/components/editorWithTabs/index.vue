@@ -8,6 +8,7 @@
       <RustMuyaRuntimeEditor
         v-if="rustRuntimeActive && !sourceCode"
         :model-value="toEditorMarkdown(markdown)"
+        :factory="rustRuntimeFactory"
         mode="rust"
         class="rust-editor-runtime"
         @update:model-value="handleRustMarkdownChange"
@@ -87,6 +88,10 @@ const props = defineProps({
   fromEditorMarkdown: {
     type: Function,
     default: (markdown) => markdown
+  },
+  rustRuntimeFactory: {
+    type: Function,
+    default: null
   }
 })
 

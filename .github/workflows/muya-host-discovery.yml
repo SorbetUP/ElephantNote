@@ -6,6 +6,9 @@ on:
       - 'refactor/muya-rust-file-by-file'
     paths:
       - '.github/workflows/muya-host-discovery.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/muya-host-discovery.yml'
   workflow_dispatch:
 
 permissions:

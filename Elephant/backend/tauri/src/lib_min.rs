@@ -22,6 +22,7 @@ pub mod code_execution;
 pub mod search_logic;
 pub mod addons;
 pub mod addon_catalog;
+pub mod addon_dependencies;
 pub mod addon_runtime_access;
 pub mod addon_note_access;
 pub mod addon_http_access;
@@ -146,8 +147,8 @@ pub fn run() {
       addon_http_access::tauri_addons_http_request,
       addon_sidecars::tauri_addons_sidecar_status,
       addon_sidecars::tauri_addons_sidecar_call,
-      addons::tauri_addons_uninstall,
-      addons::tauri_addons_set_enabled,
+      addon_dependencies::tauri_addons_uninstall_guarded,
+      addon_dependencies::tauri_addons_set_enabled_guarded,
       addons::tauri_addons_read_entry,
       addons::tauri_addons_call,
       sync_commands::iroh_sync_create_invite,
@@ -321,7 +322,7 @@ mod tests {
   fn platform_info_contains_target_flags() {
     let info = tauri_platform_info();
     assert!(info.get("os").and_then(|value| value.as_str()).is_some());
-    assert!(info.get("arch").and_then(|value| value.as_str()).is_some());
+    assert!(info.get("arch").and_then(|value| value.as_bool()).is_none());
     assert_eq!(
       info.get("desktop").and_then(|value| value.as_bool()),
       Some(!cfg!(mobile))

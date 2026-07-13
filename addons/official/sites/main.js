@@ -7,20 +7,63 @@ const node = (documentRef, tag, className = '', text = '') => {
   return element
 }
 
+const normalizeRelativePath = (value = '') => {
+  const normalized = String(value || '').trim().replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+  const parts = normalized.split('/').filter(Boolean)
+  if (parts.some((part) => part === '..' || part === '.')) throw new Error('Site folder must stay inside the active vault')
+  return parts.join('/')
+}
+
 export default class ElephantSitesAddon {
   constructor(api) {
     this.api = api
     this.window = api.experimental.window
-    this.siteId = ''
-    this.status = null
+    this.preview = null
   }
 
-  async call(action, payload = {}) {
-    const client = this.window?.elephantnote?.api
-    if (typeof client?.call !== 'function') throw new Error(`Elephant API is unavailable for ${action}`)
-    const response = await client.call(action, payload)
-    if (response?.ok === false) throw new Error(response.error?.message || `${action} failed`)
-    return response?.data ?? response
+  invoke(command, payload = {}) {
+    const invoke = this.window?.__TAURI__?.core?.invoke
+    if (typeof invoke !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
+    return invoke(command, payload)
+  }
+
+  async resolveRoot(relativePath = '') {
+    const state = await this.invoke('tauri_vaults_get')
+    const base = String(state?.activeVault?.path || '').replace(/[\\/]+$/, '')
+    if (!base) throw new Error('No active vault is available')
+    const relative = normalizeRelativePath(relativePath)
+    return relative ? `${base}/${relative}` : base
+  }
+
+  async openPreview(relativePath, method = 'preview.open') {
+    await this.stopPreview().catch(() => {})
+    const root = await this.resolveRoot(relativePath)
+    this.preview = await this.api.native.call(method, { root })
+    return this.preview
+  }
+
+  async refreshStatus() {
+    if (!this.preview?.port) return { status: 'idle', running: false }
+    const status = await this.api.native.call('preview.status', { port: this.preview.port })
+    this.preview = { ...this.preview, ...status }
+    return this.preview
+  }
+
+  async stopPreview() {
+    if (!this.preview?.pid) {
+      this.preview = null
+      return { stopped: true }
+    }
+    const preview = this.preview
+    this.preview = null
+    return this.api.native.call('preview.stop', { pid: preview.pid }).catch(() => ({ stopped: false }))
+  }
+
+  async openExternal(url) {
+    if (!url) return
+    const opener = this.window?.__TAURI__?.opener
+    if (typeof opener?.openUrl === 'function') return opener.openUrl(url)
+    this.window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   render(container, compact = false) {
@@ -28,50 +71,41 @@ export default class ElephantSitesAddon {
     const root = node(documentRef, 'section', compact ? 'elephant-sites-panel compact' : 'elephant-sites-panel')
     container.replaceChildren(root)
     const folder = node(documentRef, 'input')
-    folder.placeholder = 'Folder to publish'
+    folder.placeholder = 'Static site folder inside the active vault'
     const status = node(documentRef, 'p', 'elephant-sites-status', 'Idle')
     const actions = node(documentRef, 'div', 'elephant-sites-actions')
     const preview = node(documentRef, 'button', '', 'Preview')
-    const build = node(documentRef, 'button', '', 'Build')
+    const build = node(documentRef, 'button', '', 'Build & preview')
     const stop = node(documentRef, 'button', '', 'Stop')
     const open = node(documentRef, 'button', '', 'Open')
 
-    const updateStatus = async () => {
-      if (!this.siteId) { status.textContent = 'Idle'; return }
-      this.status = await this.call('sites.status', { siteId: this.siteId }).catch((error) => ({ error: error.message || String(error) }))
-      status.textContent = this.status?.error || this.status?.status || this.status?.state || 'Ready'
-      open.disabled = !this.status?.url
+    const renderStatus = async () => {
+      const current = await this.refreshStatus().catch((error) => ({ status: 'error', error: error.message || String(error) }))
+      status.textContent = current?.error || current?.status || (current?.running ? 'Running' : 'Idle')
+      open.disabled = !current?.url || current?.running === false
+      stop.disabled = !current?.pid || current?.running === false
     }
 
-    preview.onclick = async () => {
-      preview.disabled = true
+    const run = async (button, method) => {
+      button.disabled = true
+      status.textContent = method === 'site.build' ? 'Building…' : 'Starting preview…'
       try {
-        const result = await this.call('sites.previewFolder', { relativePath: folder.value.trim() })
-        this.siteId = String(result?.siteId || result?.id || this.siteId)
-        this.status = result
-        await updateStatus()
-      } finally { preview.disabled = false }
+        await this.openPreview(folder.value, method)
+        await renderStatus()
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : String(error)
+      } finally {
+        button.disabled = false
+      }
     }
-    build.onclick = async () => {
-      build.disabled = true
-      try {
-        const result = await this.call('sites.buildFolder', { relativePath: folder.value.trim() })
-        this.siteId = String(result?.siteId || result?.id || this.siteId)
-        this.status = result
-        await updateStatus()
-      } finally { build.disabled = false }
-    }
-    stop.onclick = async () => {
-      if (this.siteId) await this.call('sites.stop', { siteId: this.siteId }).catch(() => {})
-      this.siteId = ''; this.status = null; await updateStatus()
-    }
-    open.onclick = async () => {
-      const url = this.status?.url
-      if (url) await this.call('sites.openExternal', { url })
-    }
+
+    preview.onclick = () => run(preview, 'preview.open')
+    build.onclick = () => run(build, 'site.build')
+    stop.onclick = async () => { await this.stopPreview(); await renderStatus() }
+    open.onclick = () => this.openExternal(this.preview?.url)
     actions.append(preview, build, stop, open)
     root.append(node(documentRef, compact ? 'h4' : 'h3', '', 'Sites'), folder, actions, status)
-    void updateStatus()
+    void renderStatus()
     return () => root.remove()
   }
 
@@ -91,7 +125,7 @@ export default class ElephantSitesAddon {
     api.workspace.registerContribution('site.generators', {
       id: `${ADDON_ID}.generator`,
       title: 'Elephant Sites',
-      description: 'Static site generator and preview service.'
+      description: 'Package-owned static site preview server.'
     })
     api.layout.registerZone({
       id: `${ADDON_ID}.preview-panel`,
@@ -107,14 +141,13 @@ export default class ElephantSitesAddon {
       standalone: true,
       chrome: false,
       title: 'Sites',
-      description: 'Generate and preview a static site.',
+      description: 'Preview a static folder through the package-owned native server.',
       order: 50,
       render: (container) => this.render(container, false)
     })
   }
 
-  async onunload() {
-    if (this.siteId) await this.call('sites.stop', { siteId: this.siteId }).catch(() => {})
-    await this.call('features.set', { key: 'sitePreview', enabled: false }).catch(() => {})
+  onunload() {
+    return this.stopPreview()
   }
 }

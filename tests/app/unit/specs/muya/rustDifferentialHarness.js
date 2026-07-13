@@ -113,15 +113,9 @@ export class RustTraceEditor {
     )
   }
 
-  setSelection(textIndex, start, end = start) {
-    const node = this.textNodes()[textIndex]
-    if (!node) throw new Error(`Muya Rust text node ${textIndex} was not found.`)
-    this.setSelectionOnNode(node, start, end)
-  }
-
-  setSelectionByText(value, start, end = start, occurrence = 0) {
+  textNodeByValue(value, occurrence = 0, snapshot = this.snapshot()) {
     const matches = this
-      .textNodes()
+      .textNodes(snapshot)
       .filter((candidate) => candidate.kind?.value?.value === value)
     const node = matches[occurrence]
     if (!node) {
@@ -129,7 +123,37 @@ export class RustTraceEditor {
         `Muya Rust text node ${JSON.stringify(value)} occurrence ${occurrence} was not found.`
       )
     }
+    return node
+  }
+
+  setSelection(textIndex, start, end = start) {
+    const node = this.textNodes()[textIndex]
+    if (!node) throw new Error(`Muya Rust text node ${textIndex} was not found.`)
     this.setSelectionOnNode(node, start, end)
+  }
+
+  setSelectionByText(value, start, end = start, occurrence = 0) {
+    this.setSelectionOnNode(this.textNodeByValue(value, occurrence), start, end)
+  }
+
+  setSelectionBetweenText(
+    anchorValue,
+    anchorOffset,
+    focusValue,
+    focusOffset,
+    anchorOccurrence = 0,
+    focusOccurrence = 0
+  ) {
+    const snapshot = this.snapshot()
+    const anchor = this.textNodeByValue(anchorValue, anchorOccurrence, snapshot)
+    const focus = this.textNodeByValue(focusValue, focusOccurrence, snapshot)
+    this.request({
+      type: 'set_selection',
+      selection: {
+        anchor: { node: anchor.id, offset_utf16: anchorOffset },
+        focus: { node: focus.id, offset_utf16: focusOffset }
+      }
+    })
   }
 
   setSelectionByTextInMark(value, markType, start, end = start) {

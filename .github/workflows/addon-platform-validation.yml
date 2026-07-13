@@ -81,7 +81,9 @@ jobs:
               "$platform" \
               2>&1 | tee -a mobile-addon-packages.txt
           done
-          find build/out/addons/releases/elephant.code-execution -name '*-android-*.enaddon' -o -name '*-ios-*.enaddon' | sort | while read -r archive
+          find build/out/addons/releases/elephant.code-execution \
+            \( -name '*-android-*.enaddon' -o -name '*-ios-*.enaddon' \) \
+            -print | sort | while read -r archive
           do
             unzip -t "$archive"
           done
@@ -146,6 +148,9 @@ jobs:
             physical-addon-packages.txt
             mobile-addon-packages.txt
             addon-build.txt
+            pnpm-install.log
+            pnpm-install-frozen.log
+            pnpm-install-unfrozen.log
             build/addons/*.enaddon
             build/out/addons/releases/**/*.enaddon
             build/out/addons/releases/**/*.json

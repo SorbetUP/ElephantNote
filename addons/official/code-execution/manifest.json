@@ -17,6 +17,7 @@
   },
   "native": {
     "protocol": "elephant-addon-sidecar-v1",
+    "runner": "process",
     "sidecars": {
       "macos-aarch64": "native/macos-aarch64/elephant-code-execution",
       "macos-x86_64": "native/macos-x86_64/elephant-code-execution",
@@ -24,6 +25,16 @@
       "linux-aarch64": "native/linux-aarch64/elephant-code-execution",
       "windows-x86_64": "native/windows-x86_64/elephant-code-execution.exe",
       "windows-aarch64": "native/windows-aarch64/elephant-code-execution.exe"
+    },
+    "mobile": {
+      "android": {
+        "supported": false,
+        "reason": "Process sidecars cannot run on Android; a package-owned Android host adapter is required."
+      },
+      "ios": {
+        "supported": false,
+        "reason": "Downloaded process sidecars cannot run on iOS; a package-owned iOS host adapter is required."
+      }
     }
   },
   "contributes": {

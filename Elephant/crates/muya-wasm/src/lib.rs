@@ -42,15 +42,13 @@ fn handle_json_inner(session: &mut EditorSession, request_json: &str) -> Result<
 
 fn muya_compatible_response(mut response: EditorResponse) -> EditorResponse {
     if let EditorResponse::Snapshot(snapshot) = &mut response {
-        ensure_muya_terminal_newline(&mut snapshot.markdown);
+        append_muya_block_terminator(&mut snapshot.markdown);
     }
     response
 }
 
-fn ensure_muya_terminal_newline(markdown: &mut String) {
-    if !markdown.ends_with('\n') {
-        markdown.push('\n');
-    }
+fn append_muya_block_terminator(markdown: &mut String) {
+    markdown.push('\n');
 }
 
 #[cfg(test)]
@@ -108,6 +106,13 @@ mod tests {
             panic!("expected snapshot");
         };
         assert_eq!(snapshot.markdown, "\n");
+    }
+
+    #[test]
+    fn appends_a_block_terminator_after_existing_blank_structure() {
+        let mut markdown = "- alpha\n\n".to_string();
+        append_muya_block_terminator(&mut markdown);
+        assert_eq!(markdown, "- alpha\n\n\n");
     }
 
     #[test]

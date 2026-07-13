@@ -102,7 +102,8 @@ ordered(
     'node build/scripts/verify-critical-flows.mjs 2>&1 | tee critical-flow-output.txt',
     '- name: Security guardrails',
     'run: pnpm security:guard',
-    'pnpm exec vitest run tests/app/unit/specs/main/elephantnote'
+    'Elephant/node_modules/.bin/vitest run',
+    'tests/app/unit/specs/main/elephantnote'
   ],
   'main CI must run the guard, security gate and ElephantNote contract tests'
 )

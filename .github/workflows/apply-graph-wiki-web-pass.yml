@@ -52,6 +52,25 @@ jobs:
         if: steps.apply_patch.outcome == 'failure'
         run: exit 1
 
+      - name: Remove obsolete graph scale variables
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('Elephant/frontend/app/components/views/AtomicGraphView.vue')
+          source = path.read_text()
+          replacements = {
+            '  const { nodes, edges, edgeCounts, maxEdges } = data\n': '  const { nodes, edges, edgeCounts } = data\n',
+            '    const clusterIdx = node.clusterIndex || 0\n': '',
+            '    const connectivity = maxEdges ? Math.log1p(degree) / Math.log1p(maxEdges) : 0\n': '',
+            '    const t = nodes.length > 1 ? i / (nodes.length - 1) : 0\n': ''
+          }
+          for old, new in replacements.items():
+              if source.count(old) != 1:
+                  raise SystemExit(f'expected one renderer cleanup match, found {source.count(old)}: {old!r}')
+              source = source.replace(old, new, 1)
+          path.write_text(source)
+          PY
+
       - name: Format Rust
         run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
 
@@ -79,10 +98,26 @@ jobs:
         run: exit 1
 
       - name: Validate renderer regressions
+        id: validate_renderer
+        continue-on-error: true
         run: |
-          pnpm vitest run tests/app/unit/graphWikiScaleRegression.spec.js tests/app/unit/chatAgentSurface.spec.js
-          pnpm eslint Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js
-          pnpm tauri:web:build
+          set -o pipefail
+          {
+            pnpm vitest run tests/app/unit/graphWikiScaleRegression.spec.js tests/app/unit/chatAgentSurface.spec.js
+            pnpm eslint Elephant/frontend/app/components/views/AtomicGraphView.vue Elephant/frontend/app/components/views/semanticGraphViewHelpers.js
+            pnpm tauri:web:build
+          } 2>&1 | tee /tmp/graph-wiki-renderer.log
+
+      - name: Upload renderer diagnostics
+        if: steps.validate_renderer.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: graph-wiki-renderer-log
+          path: /tmp/graph-wiki-renderer.log
+
+      - name: Stop after renderer failure
+        if: steps.validate_renderer.outcome == 'failure'
+        run: exit 1
 
       - name: Commit validated implementation
         run: |

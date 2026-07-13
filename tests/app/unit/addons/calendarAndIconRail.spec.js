@@ -15,7 +15,7 @@ import {
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
-describe('optional first-party addons and configurable icon rail', () => {
+ describe('optional first-party addons and configurable icon rail', () => {
   it('normalizes persisted order as core controls, dividers and addon views change', () => {
     const tasks = addonViewRailId('com.elephantnote.elephant-tasks.workspace')
     const divider = createIconRailSeparatorId()
@@ -108,7 +108,8 @@ describe('optional first-party addons and configurable icon rail', () => {
     const panel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
     const chat = read('Elephant/frontend/src/renderer/src/addons/builtin/aiChat.js')
     const search = read('Elephant/frontend/src/renderer/src/addons/builtin/aiSearch.js')
-    const ocr = read('Elephant/frontend/src/renderer/src/addons/builtin/aiOcr.js')
+    const ocr = read('addons/official/ai-ocr/main.js')
+    const ocrManifest = read('addons/official/ai-ocr/manifest.json')
     const wiki = read('Elephant/frontend/src/renderer/src/addons/builtin/wiki.js')
     const graph = read('Elephant/frontend/src/renderer/src/addons/builtin/graph.js')
     const openModels = read('Elephant/frontend/src/renderer/src/addons/builtin/openModels.js')
@@ -126,21 +127,19 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(providers).not.toContain('WikiView')
     expect(providers).not.toContain('AtomicGraphView')
     expect(providers).not.toContain('ModelsView')
-    expect(builtins.match(/parentAddonId: 'elephant\.ai'/g)).toHaveLength(5)
+    expect(builtins.match(/parentAddonId: 'elephant\.ai'/g)).toHaveLength(4)
+    expect(ocrManifest).toContain('"elephant.ai": ">=2.0.0"')
     expect(panel).toContain('const GROUPED_ADDON_IDS = new Set(AI_SUBMODULE_IDS)')
     expect(panel).toContain('class="en-ai-module-list"')
 
     expect(chat).toContain('component: ChatSidebar')
     expect(chat).toContain("icon: 'message-circle'")
     expect(chat).toContain("section: 'ai'")
-    expect(chat).toContain("slot: 'ai.chat'")
+    expect(chat).toContain("slot: SETTINGS_PAGE.slot")
     expect(search).toContain("section: 'ai'")
-    expect(search).toContain("slot: 'ai.search'")
-    expect(ocr).toContain("section: 'ai'")
+    expect(search).toContain("slot: SETTINGS_PAGE.slot")
     expect(ocr).toContain("slot: 'ai.ocr'")
-    expect(providersUi).toContain('data-elephant-addon-settings-slot="ai.chat"')
-    expect(providersUi).toContain('data-elephant-addon-settings-slot="ai.search"')
-    expect(providersUi).toContain('data-elephant-addon-settings-slot="ai.ocr"')
+    expect(providersUi).toContain(':data-elephant-addon-settings-slot="activePage.slot"')
     expect(wiki).toContain('component: WikiView')
     expect(graph).toContain('component: AtomicGraphView')
     expect(graph).toContain('installGraphRuntimeFixes(globalThis)')
@@ -162,7 +161,7 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(sites).toContain('component: SitePreviewPanel')
   })
 
-  it('lazy-loads optional first-party addon logic and keeps Addon Packs plus core Excalidraw required', () => {
+  it('lazy-loads bundled addons and excludes physical OCR code', () => {
     const builtins = read('Elephant/frontend/src/renderer/src/addons/builtin/index.js')
     const runtime = read('Elephant/frontend/src/renderer/src/addons/index.js')
 
@@ -170,7 +169,7 @@ describe('optional first-party addons and configurable icon rail', () => {
     expect(builtins).toContain("load: () => import('./ai')")
     expect(builtins).toContain("load: () => import('./aiChat')")
     expect(builtins).toContain("load: () => import('./aiSearch')")
-    expect(builtins).toContain("load: () => import('./aiOcr')")
+    expect(builtins).not.toContain("load: () => import('./aiOcr')")
     expect(builtins).toContain("load: () => import('./wiki')")
     expect(builtins).toContain("load: () => import('./graph')")
     expect(builtins).toContain("load: () => import('./openModels')")

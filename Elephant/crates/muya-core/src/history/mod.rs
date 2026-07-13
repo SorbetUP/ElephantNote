@@ -1,3 +1,5 @@
+mod linked_coalescing;
+
 use crate::edit::{EditError, Operation, Transaction};
 use crate::model::{Document, InlineKind, InlineMarkKind, NodeKind};
 use crate::selection::Selection;
@@ -107,12 +109,21 @@ impl History {
   ) -> Result<Selection, EditError> {
     self.commit_group();
     let invalidate = invalidates_history(document, transaction);
+    let coalesce = linked_coalescing::should_coalesce(document, transaction, self.undo.last());
     let inverse = transaction.apply(document)?;
     if invalidate {
       self.undo.clear();
       self.redo.clear();
     } else {
-      self.undo.push(inverse);
+      if coalesce {
+        if let Some(previous) = self.undo.pop() {
+          self.undo.push(merge_inverse_transactions(inverse, previous));
+        } else {
+          self.undo.push(inverse);
+        }
+      } else {
+        self.undo.push(inverse);
+      }
       self.redo.clear();
       self.trim_undo();
     }
@@ -237,12 +248,12 @@ fn merge_inverse_transactions(latest: Transaction, previous: Transaction) -> Tra
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::edit::Command;
-  use crate::model::{InlineKind, NodeKind};
+  use crate::edit::{Command, MarkCommand};
+  use crate::model::{InlineKind, NodeId, NodeKind};
   use crate::selection::{Selection, SelectionPoint};
   use crate::{parse_markdown, to_markdown};
 
-  fn initial_document() -> (Document, crate::model::NodeId, Selection) {
+  fn initial_document() -> (Document, NodeId, Selection) {
     let document = parse_markdown("x");
     let paragraph = document.children(document.root).next().unwrap();
     let node = document.children(paragraph.id).next().unwrap().id;
@@ -361,7 +372,7 @@ mod tests {
     let paragraph = document.children(document.root).next().unwrap();
     let node = document.children(paragraph.id).next().unwrap().id;
     let new_block = document.next_available_id();
-    let new_text = crate::model::NodeId(new_block.0 + 1);
+    let new_text = NodeId(new_block.0 + 1);
     let selection = Selection::collapsed(SelectionPoint {
       node,
       offset_utf16: 2,
@@ -387,7 +398,66 @@ mod tests {
     assert!(document.node(new_text).is_some());
   }
 
-  fn assert_text(document: &Document, node: crate::model::NodeId, expected: &str) {
+  #[test]
+  fn coalesces_an_overlapping_linked_mark_with_the_group_it_extends() {
+    let mut document = parse_markdown("alpha **beta** gamma");
+    let mut history = History::default();
+    let emphasis_selection = between(&document, "alpha ", 2, "beta", 2);
+    let emphasis = MarkCommand::ToggleEmphasis
+      .build(&document, emphasis_selection)
+      .unwrap();
+    history.apply(&mut document, &emphasis).unwrap();
+    assert_eq!(to_markdown(&document), "al*pha **be*ta** gamma");
+
+    let strike_selection = between(&document, "pha ", 1, "ta", 1);
+    let strike = MarkCommand::ToggleStrike
+      .build(&document, strike_selection)
+      .unwrap();
+    history.apply(&mut document, &strike).unwrap();
+    assert_eq!(to_markdown(&document), "al*p~~ha **be*t~~a** gamma");
+
+    history.undo(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "alpha **beta** gamma");
+    assert!(!history.can_undo());
+
+    history.redo(&mut document).unwrap();
+    assert_eq!(to_markdown(&document), "al*p~~ha **be*t~~a** gamma");
+  }
+
+  fn between(
+    document: &Document,
+    start_value: &str,
+    start: u32,
+    end_value: &str,
+    end: u32,
+  ) -> Selection {
+    Selection {
+      anchor: SelectionPoint {
+        node: text_node(document, start_value),
+        offset_utf16: start,
+      },
+      focus: SelectionPoint {
+        node: text_node(document, end_value),
+        offset_utf16: end,
+      },
+    }
+  }
+
+  fn text_node(document: &Document, expected: &str) -> NodeId {
+    document
+      .nodes
+      .values()
+      .find(|node| {
+        matches!(
+          &node.kind,
+          NodeKind::Inline(InlineKind::Text { value }) if value == expected
+        )
+      })
+      .unwrap()
+      .id
+  }
+
+  fn assert_text(document: &Document, node: NodeId, expected: &str) {
     assert!(matches!(
       &document.node(node).unwrap().kind,
       NodeKind::Inline(InlineKind::Text { value }) if value == expected

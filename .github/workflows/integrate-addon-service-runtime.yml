@@ -1,0 +1,314 @@
+name: Integrate addon service runtime
+
+on:
+  push:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/integrate-addon-service-runtime.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/physical-addon-packages
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Wire persistent addon services
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          services = Path('Elephant/backend/tauri/src/addon_services.rs')
+          text = services.read_text()
+          start = text.index('fn resolve_service(app: &AppHandle, addon_id: &str) -> R<ResolvedService> {')
+          end = text.index('\nasync fn send_request(', start)
+          corrected = r'''fn resolve_service(app: &AppHandle, addon_id: &str) -> R<ResolvedService> {
+  ensure_services_supported()?;
+  let _record = addon_runtime_access::read_enabled_addon(app, addon_id)?;
+  let vault = vault_config::get_active_vault(app)?;
+  let vault_dir = fs::canonicalize(&vault.path)
+    .map_err(|error| format!("Active vault is unavailable: {error}"))?;
+  let addons_root = vault_layout::addons_dir(&vault.path);
+  let package_dir = addons_root.join("packages").join(addon_id);
+  let data_dir = addons_root.join("data").join(addon_id);
+  fs::create_dir_all(&data_dir).map_err(|error| error.to_string())?;
+
+  let manifest_path = package_dir.join("manifest.json");
+  let manifest_raw = fs::read_to_string(&manifest_path)
+    .map_err(|error| format!("Failed to read installed addon manifest for {addon_id}: {error}"))?;
+  let manifest: Value = serde_json::from_str(&manifest_raw)
+    .map_err(|error| format!("Invalid installed addon manifest for {addon_id}: {error}"))?;
+  if manifest.get("id").and_then(Value::as_str) != Some(addon_id) {
+    return Err(format!("Installed addon manifest id mismatch: {addon_id}"));
+  }
+  let native_allowed = manifest
+    .get("permissions")
+    .and_then(|permissions| permissions.get("native"))
+    .and_then(Value::as_bool)
+    == Some(true);
+  if !native_allowed {
+    return Err(format!("Addon native permission was not granted: {addon_id}"));
+  }
+
+  let native = manifest
+    .get("native")
+    .and_then(Value::as_object)
+    .ok_or_else(|| format!("Addon does not declare a native runtime: {addon_id}"))?;
+  let runner = native.get("runner").and_then(Value::as_str).unwrap_or("");
+  if runner != "service" {
+    return Err(format!(
+      "Addon native runner must be service for persistent calls: {addon_id} declares {runner:?}"
+    ));
+  }
+
+  let platform = platform_key();
+  let sidecars = native
+    .get("sidecars")
+    .and_then(Value::as_object)
+    .ok_or_else(|| format!("Addon does not declare native service executables: {addon_id}"))?;
+  let relative = sidecars
+    .get(&platform)
+    .or_else(|| sidecars.get(std::env::consts::OS))
+    .and_then(Value::as_str)
+    .ok_or_else(|| format!("Addon has no service executable for platform {platform}: {addon_id}"))?;
+  let relative_path = safe_relative_path(relative)?;
+
+  let canonical_package = fs::canonicalize(&package_dir)
+    .map_err(|error| format!("Addon package directory is unavailable for {addon_id}: {error}"))?;
+  let executable = fs::canonicalize(package_dir.join(&relative_path))
+    .map_err(|error| format!("Addon service executable is unavailable for {addon_id}: {error}"))?;
+  if !executable.starts_with(&canonical_package) {
+    return Err(format!("Addon service executable escapes its package directory: {addon_id}"));
+  }
+  let metadata = fs::metadata(&executable).map_err(|error| error.to_string())?;
+  if !metadata.is_file() {
+    return Err(format!("Addon service executable is not a regular file: {addon_id}"));
+  }
+
+  #[cfg(unix)]
+  {
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = metadata.permissions();
+    let mode = permissions.mode();
+    if mode & 0o100 == 0 {
+      permissions.set_mode(mode | 0o700);
+      fs::set_permissions(&executable, permissions)
+        .map_err(|error| format!("Failed to mark addon service executable executable: {error}"))?;
+    }
+  }
+
+  Ok(ResolvedService {
+    executable,
+    package_dir: canonical_package,
+    data_dir,
+    vault_dir,
+    relative_path: relative_path.to_string_lossy().replace('\\', "/"),
+    platform,
+  })
+}
+'''
+          text = text[:start] + corrected + text[end:]
+          text = text.replace('"platform": process.platform,\n        "relativePath": process.relative_path,', '"platform": process.platform.clone(),\n        "relativePath": process.relative_path.clone(),')
+          text = text.replace('"platform": process.platform,\n    "relativePath": process.relative_path,', '"platform": process.platform.clone(),\n    "relativePath": process.relative_path.clone(),')
+          services.write_text(text)
+
+          lib = Path('Elephant/backend/tauri/src/lib_min.rs')
+          text = lib.read_text()
+          if 'pub mod addon_services;' not in text:
+              text = text.replace('pub mod addon_sidecars;\n', 'pub mod addon_sidecars;\npub mod addon_services;\n')
+          if 'AddonServiceState::new' not in text:
+              text = text.replace(
+                  '      app.manage(addon_sidecars::AddonSidecarState::new());\n',
+                  '      app.manage(addon_sidecars::AddonSidecarState::new());\n      app.manage(addon_services::AddonServiceState::new());\n'
+              )
+          if 'tauri_addons_service_status' not in text:
+              text = text.replace(
+                  '      addon_sidecars::tauri_addons_sidecar_call,\n',
+                  '      addon_sidecars::tauri_addons_sidecar_call,\n      addon_services::tauri_addons_service_status,\n      addon_services::tauri_addons_service_start,\n      addon_services::tauri_addons_service_call,\n      addon_services::tauri_addons_service_stop,\n'
+              )
+          text = text.replace('pub mod sync;\n', '#[cfg(not(mobile))]\npub mod sync;\n')
+          text = text.replace('#[cfg(test)]\nmod sync_contract_tests;', '#[cfg(all(test, not(mobile)))]\nmod sync_contract_tests;')
+          text = text.replace(
+              '      app.manage(sync::IrohSyncState::new());\n',
+              '      #[cfg(not(mobile))]\n      app.manage(sync::IrohSyncState::new());\n'
+          )
+          lib.write_text(text)
+
+          runtime = Path('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')
+          text = runtime.read_text()
+          old = '''    native: Object.freeze({
+      status: () => invoke('tauri_addons_sidecar_status', { addonId: manifest.id }, target),
+      call(method, params = {}, options = {}) {
+        const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
+        return invoke('tauri_addons_sidecar_call', {
+          addonId: manifest.id,
+          method: safeString(method),
+          params,
+          timeoutMs
+        }, target)
+      }
+    }),'''
+          new = '''    native: Object.freeze({
+      status: () => invoke('tauri_addons_sidecar_status', { addonId: manifest.id }, target),
+      call(method, params = {}, options = {}) {
+        const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
+        return invoke('tauri_addons_sidecar_call', {
+          addonId: manifest.id,
+          method: safeString(method),
+          params,
+          timeoutMs
+        }, target)
+      },
+      service: Object.freeze({
+        status: () => invoke('tauri_addons_service_status', { addonId: manifest.id }, target),
+        start: () => invoke('tauri_addons_service_start', { addonId: manifest.id }, target),
+        call(method, params = {}, options = {}) {
+          const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
+          return invoke('tauri_addons_service_call', {
+            addonId: manifest.id,
+            method: safeString(method),
+            params,
+            timeoutMs
+          }, target)
+        },
+        stop: () => invoke('tauri_addons_service_stop', { addonId: manifest.id }, target)
+      })
+    }),'''
+          if old not in text and 'tauri_addons_service_status' not in text:
+              raise SystemExit('Trusted native API block no longer matches expected structure')
+          runtime.write_text(text.replace(old, new))
+
+          workflow = Path('.github/workflows/addon-platform-validation.yml')
+          text = workflow.read_text()
+          if 'addon_services::tests' not in text:
+              text = text.replace('            addon_sidecars::tests \\\n', '            addon_sidecars::tests \\\n            addon_services::tests \\\n')
+          if 'addonNativeServiceContracts.spec.js' not in text:
+              text = text.replace(
+                  '            tests/app/unit/addons/nativeMobileCompatibility.spec.js \\\n',
+                  '            tests/app/unit/addons/nativeMobileCompatibility.spec.js \\\n            tests/app/unit/addons/addonNativeServiceContracts.spec.js \\\n'
+              )
+          workflow.write_text(text)
+
+          mobile_test = Path('tests/app/unit/addons/nativeMobileCompatibility.spec.js')
+          text = mobile_test.read_text()
+          if 'does not resolve Iroh inside Android or iOS application builds' not in text:
+              addition = r'''
+
+  it('does not resolve Iroh inside Android or iOS application builds', () => {
+    const cargo = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/Cargo.toml'), 'utf8')
+    const lib = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/src/lib_min.rs'), 'utf8')
+    const vault = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/src/vault/mod.rs'), 'utf8')
+    const commands = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/src/sync_commands.rs'), 'utf8')
+    const sectionMarker = '[target.\'cfg(not(any(target_os = "android", target_os = "ios")))\'.dependencies]'
+    const [sharedSection, desktopSection = ''] = cargo.split(sectionMarker)
+    expect(sharedSection).not.toMatch(/^iroh\s*=/m)
+    expect(sharedSection).not.toMatch(/^iroh-mdns-address-lookup\s*=/m)
+    expect(desktopSection).toMatch(/^iroh\s*=/m)
+    expect(desktopSection).toMatch(/^iroh-mdns-address-lookup\s*=/m)
+    expect(lib).toContain('#[cfg(not(mobile))]\npub mod sync;')
+    expect(lib).toContain('#[cfg(not(mobile))]\n      app.manage(sync::IrohSyncState::new());')
+    expect(vault).toContain('#[cfg(not(mobile))]\npub mod sync;')
+    expect(commands).toContain('#[cfg(mobile)]\nmod mobile')
+    expect(commands).toContain('addon-required')
+  })
+'''
+              closing = text.rfind('\n})')
+              mobile_test.write_text(text[:closing] + addition + text[closing:])
+
+          contract = Path('tests/app/unit/addons/addonNativeServiceContracts.spec.js')
+          contract.write_text(r'''import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+const root = process.cwd()
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+
+describe('persistent native addon services', () => {
+  it('exposes a versioned start, call, status and stop API to trusted addons', () => {
+    const runtime = read('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')
+    expect(runtime).toContain("tauri_addons_service_status")
+    expect(runtime).toContain("tauri_addons_service_start")
+    expect(runtime).toContain("tauri_addons_service_call")
+    expect(runtime).toContain("tauri_addons_service_stop")
+    expect(runtime).toContain('service: Object.freeze')
+  })
+
+  it('keeps service execution generic and package-owned', () => {
+    const rust = read('Elephant/backend/tauri/src/addon_services.rs')
+    expect(rust).toContain('elephant-addon-service-v1')
+    expect(rust).toContain('runner != "service"')
+    expect(rust).toContain('ELEPHANT_ADDON_PACKAGE_DIR')
+    expect(rust).toContain('ELEPHANT_ADDON_DATA_DIR')
+    expect(rust).toContain('ELEPHANT_VAULT_DIR')
+    expect(rust).toContain('kill_on_drop(true)')
+    expect(rust).not.toContain('iroh::')
+  })
+
+  it('registers the service host in the Tauri shell', () => {
+    const lib = read('Elephant/backend/tauri/src/lib_min.rs')
+    expect(lib).toContain('pub mod addon_services;')
+    expect(lib).toContain('AddonServiceState::new()')
+    expect(lib).toContain('addon_services::tauri_addons_service_call')
+  })
+})
+''')
+          PY
+
+      - uses: ./.github/actions/setup
+
+      - name: Run service and mobile boundary tests
+        run: |
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/addonNativeServiceContracts.spec.js \
+            tests/app/unit/addons/nativeMobileCompatibility.spec.js \
+            tests/app/unit/addons/physicalAddonIsolation.spec.js
+
+      - name: Compile and test generic service host
+        shell: bash
+        run: |
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib addon_services::tests
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --lib
+
+      - name: Confirm mobile dependency trees exclude Iroh
+        shell: bash
+        run: |
+          set -euo pipefail
+          for target in aarch64-linux-android aarch64-apple-ios
+          do
+            cargo tree --manifest-path Elephant/backend/tauri/Cargo.toml --target "$target" -e normal > "cargo-tree-$target.txt"
+            if grep -E 'iroh(-mdns-address-lookup)? v' "cargo-tree-$target.txt"; then
+              echo "Iroh leaked into $target dependency tree" >&2
+              exit 1
+            fi
+          done
+
+      - name: Commit integrated runtime
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f \
+            .github/workflows/extract-iroh-mobile-boundary.yml \
+            .github/workflows/finalize-iroh-mobile-boundary.yml \
+            .github/workflows/integrate-addon-service-runtime.yml
+          git add \
+            .github/workflows/addon-platform-validation.yml \
+            Elephant/backend/tauri/src/addon_services.rs \
+            Elephant/backend/tauri/src/lib_min.rs \
+            Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js \
+            tests/app/unit/addons/addonNativeServiceContracts.spec.js \
+            tests/app/unit/addons/nativeMobileCompatibility.spec.js
+          git commit -m "feat(addons): add persistent package-owned service runtime"
+          git pull --rebase origin feature/physical-addon-packages
+          git push origin HEAD:feature/physical-addon-packages

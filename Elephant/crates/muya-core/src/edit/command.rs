@@ -261,8 +261,16 @@ fn build_join_previous_paragraph(
   caret: SelectionPoint,
   selection: Selection,
 ) -> Result<Transaction, EditError> {
-  let current_value = text_value(document, caret.node)?;
-  let (current_block, parent, _) = plain_paragraph_for_text(document, caret.node)?;
+  let (current_block, parent, _, text_index) =
+    direct_paragraph_for_text(document, caret.node)?;
+  if text_index != 0 {
+    return Ok(Transaction {
+      operations: Vec::new(),
+      selection_before: selection,
+      selection_after: selection,
+    });
+  }
+
   let Some(previous_block) = document.previous_sibling(current_block) else {
     return Ok(Transaction {
       operations: Vec::new(),
@@ -281,27 +289,29 @@ fn build_join_previous_paragraph(
     return Err(EditError::UnsupportedStructure(current_block));
   }
 
-  let previous_text = single_text_child(document, previous_block.id)?;
-  let previous_value = text_value(document, previous_text)?;
-  let previous_end = previous_value.encode_utf16().count() as u32;
+  let previous_count = previous_block.children.len();
+  let current_children = document
+    .node(current_block)
+    .ok_or(EditError::NodeNotFound(current_block))?
+    .children
+    .clone();
+  let mut operations = current_children
+    .into_iter()
+    .enumerate()
+    .map(|(offset, node)| Operation::MoveNode {
+      node,
+      new_parent: previous_block.id,
+      new_index: previous_count + offset,
+    })
+    .collect::<Vec<_>>();
+  operations.push(Operation::RemoveNode {
+    node: current_block,
+  });
 
   Ok(Transaction {
-    operations: vec![
-      Operation::ReplaceText {
-        node: previous_text,
-        range: Utf16Range::new(previous_end, previous_end),
-        inserted: current_value.to_string(),
-      },
-      Operation::RemoveNode { node: caret.node },
-      Operation::RemoveNode {
-        node: current_block,
-      },
-    ],
+    operations,
     selection_before: selection,
-    selection_after: Selection::collapsed(SelectionPoint {
-      node: previous_text,
-      offset_utf16: previous_end,
-    }),
+    selection_after: Selection::collapsed(caret),
   })
 }
 
@@ -480,37 +490,6 @@ fn editable_text_block_for_text(
   Ok(block)
 }
 
-fn plain_paragraph_for_text(
-  document: &Document,
-  text: NodeId,
-) -> Result<(NodeId, NodeId, usize), EditError> {
-  let block = editable_text_block_for_text(document, text)?;
-  let block_node = document
-    .node(block)
-    .ok_or(EditError::NodeNotFound(block))?;
-  if !matches!(block_node.kind, NodeKind::Block(BlockKind::Paragraph)) {
-    return Err(EditError::UnsupportedStructure(block));
-  }
-  let parent = block_node
-    .parent
-    .ok_or(EditError::UnsupportedStructure(block))?;
-  let index = document
-    .child_index(parent, block)
-    .ok_or(EditError::UnsupportedStructure(block))?;
-  Ok((block, parent, index))
-}
-
-fn single_text_child(document: &Document, block: NodeId) -> Result<NodeId, EditError> {
-  let block_node = document
-    .node(block)
-    .ok_or(EditError::NodeNotFound(block))?;
-  let [child] = block_node.children.as_slice() else {
-    return Err(EditError::UnsupportedStructure(block));
-  };
-  text_value(document, *child)?;
-  Ok(*child)
-}
-
 fn text_value(document: &Document, node_id: NodeId) -> Result<&str, EditError> {
   let node = document
     .node(node_id)
@@ -647,22 +626,34 @@ mod tests {
   }
 
   #[test]
-  fn joins_adjacent_plain_paragraphs_at_the_start() {
-    let mut document = parse_markdown("One\n\nTwo");
-    let node = block_text(&document, 1);
+  fn joins_rich_paragraphs_and_restores_them() {
+    let mut document = parse_markdown("left**bold**\n\nright*soft*");
+    let first_block = document.children(document.root).next().unwrap().id;
+    let second_block = document.children(document.root).nth(1).unwrap().id;
+    let second_children = document
+      .children(second_block)
+      .map(|node| node.id)
+      .collect::<Vec<_>>();
+    let right = second_children[0];
+    let emphasis = second_children[1];
     let selection = Selection::collapsed(SelectionPoint {
-      node,
+      node: right,
       offset_utf16: 0,
     });
+
     let inverse = Command::DeleteBackward
       .build(&document, selection)
       .unwrap()
       .apply(&mut document)
       .unwrap();
-    assert_eq!(to_markdown(&document), "OneTwo");
+    assert_eq!(to_markdown(&document), "left**bold**right*soft*");
+    assert_eq!(document.node(right).unwrap().parent, Some(first_block));
+    assert_eq!(document.node(emphasis).unwrap().parent, Some(first_block));
 
     inverse.apply(&mut document).unwrap();
-    assert_eq!(to_markdown(&document), "One\n\nTwo");
+    assert_eq!(to_markdown(&document), "left**bold**\n\nright*soft*");
+    assert_eq!(document.node(right).unwrap().parent, Some(second_block));
+    assert_eq!(document.node(emphasis).unwrap().parent, Some(second_block));
   }
 
   #[test]

@@ -1,53 +1,83 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import {
   bundled,
-  createJsEditor,
-  setJsSelection,
-  settle
+  initializeRustWasm,
+  runDifferentialTrace,
+  setJsSelection
 } from './rustDifferentialHarness'
 
-const describeBundled = bundled ? describe : describe.skip
+const fragmentEdges = (rust, mark) => rust
+  .snapshot()
+  .document.nodes
+  .filter(
+    (node) =>
+      node.kind?.value?.type === 'mark_fragment' &&
+      node.kind.value.mark === mark
+  )
+  .map((node) => node.kind.value.edge)
 
-const cases = [
+const describeBundled = bundled ? describe : describe.skip
+const traces = [
   {
     name: 'apply strike across part of an existing linked emphasis group',
     initial: 'alpha **beta** gamma',
-    first: { start: 2, end: 10, format: 'em' },
-    second: { start: 4, end: 13, format: 'del' }
+    expected: 'al*p~~ha **be*t~~a** gamma\n',
+    strikeEdges: ['start', 'middle', 'end'],
+    runJs: async (muya) => {
+      setJsSelection(muya, 0, 2, 10)
+      muya.format('em')
+      setJsSelection(muya, 0, 4, 13)
+      muya.format('del')
+    },
+    runRust: (rust) => {
+      rust.setSelectionBetweenText('alpha ', 2, 'beta', 2)
+      rust.request({ type: 'toggle_emphasis' })
+      rust.setSelectionBetweenText('pha ', 1, 'ta', 1)
+      rust.request({ type: 'toggle_strike' })
+      return fragmentEdges(rust, 'strike')
+    }
   },
   {
     name: 'apply strong inside the start fragment of linked emphasis',
     initial: 'alpha **beta** gamma',
-    first: { start: 2, end: 10, format: 'em' },
-    second: { start: 3, end: 6, format: 'strong' }
+    expected: 'al***pha** **be*ta** gamma\n',
+    emphasisEdges: ['start', 'end'],
+    runJs: async (muya) => {
+      setJsSelection(muya, 0, 2, 10)
+      muya.format('em')
+      setJsSelection(muya, 0, 3, 6)
+      muya.format('strong')
+    },
+    runRust: (rust) => {
+      rust.setSelectionBetweenText('alpha ', 2, 'beta', 2)
+      rust.request({ type: 'toggle_emphasis' })
+      rust.setSelectionByText('pha ', 0, 3)
+      rust.request({ type: 'toggle_strong' })
+      return fragmentEdges(rust, 'emphasis')
+    }
   }
 ]
 
-describeBundled('Muya linked-group edit diagnostics', () => {
-  let editor = null
+describeBundled('Muya linked-group edit differential traces', () => {
+  let jsEditor = null
+
+  beforeAll(initializeRustWasm)
 
   afterEach(() => {
-    editor?.destroy?.()
-    editor = null
+    jsEditor?.destroy?.()
+    jsEditor = null
     document.body.innerHTML = ''
   })
 
-  for (const testCase of cases) {
-    it(testCase.name, async () => {
-      editor = await createJsEditor(testCase.initial)
-      setJsSelection(editor, 0, testCase.first.start, testCase.first.end)
-      editor.format(testCase.first.format)
-      await settle()
-      const linked = editor.getMarkdown()
-
-      setJsSelection(editor, 0, testCase.second.start, testCase.second.end)
-      editor.format(testCase.second.format)
-      await settle()
-      const markdown = editor.getMarkdown()
-
-      console.log('[muya-linked-group-edit]', JSON.stringify({ ...testCase, linked, markdown }))
-      expect(markdown.length).toBeGreaterThan(0)
+  for (const trace of traces) {
+    it(trace.name, async () => {
+      const result = await runDifferentialTrace(trace)
+      jsEditor = result.jsEditor
+      expect(result.jsMarkdown).toBe(result.rustMarkdown)
+      expect(result.rustMarkdown).toBe(trace.expected)
+      if (trace.strikeEdges) expect(result.rustResult).toEqual(trace.strikeEdges)
+      if (trace.emphasisEdges) expect(result.rustResult).toEqual(trace.emphasisEdges)
     })
   }
 })

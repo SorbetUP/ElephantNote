@@ -3,7 +3,6 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use std::{
   env,
-  ffi::OsString,
   path::{Path, PathBuf},
   process::Stdio,
   time::Duration,
@@ -59,6 +58,7 @@ impl ModelService {
     json!({
       "running": true,
       "owner": ADDON_ID,
+      "dataDirectory": self.data_dir.to_string_lossy(),
       "modelsDirectory": self.models_dir.to_string_lossy(),
       "serverRunning": server_running,
       "serverBaseUrl": self.server_base_url,
@@ -158,7 +158,7 @@ impl ModelService {
       "repoId": model.get("repoId").cloned().unwrap_or(Value::Null),
       "fileName": model.get("fileName").cloned().unwrap_or(Value::Null),
       "path": model.get("path").cloned().unwrap_or(Value::Null),
-      "activatedAt": chrono_like_timestamp()
+      "activatedAt": timestamp()
     });
     Self::write_json(&self.active_path, &value).await?;
     Ok(value)
@@ -188,7 +188,11 @@ impl ModelService {
   }
 
   async fn hugging_face_model(&self, repo_id: &str) -> Result<Value, String> {
-    let url = format!("https://huggingface.co/api/models/{}", repo_id.trim());
+    let repo_id = repo_id.trim();
+    if repo_id.is_empty() {
+      return Err("A Hugging Face repository id is required".to_string());
+    }
+    let url = format!("https://huggingface.co/api/models/{repo_id}");
     let response = self.client.get(url).send().await.map_err(|error| error.to_string())?;
     let status = response.status();
     let value = response.json::<Value>().await.map_err(|error| error.to_string())?;
@@ -262,7 +266,7 @@ impl ModelService {
       "path": target,
       "size": written,
       "expectedSize": total,
-      "downloadedAt": chrono_like_timestamp()
+      "downloadedAt": timestamp()
     });
     Self::write_json(&Self::metadata_path(&target), &metadata).await?;
     Ok(metadata)
@@ -420,7 +424,7 @@ impl ModelService {
   }
 }
 
-fn chrono_like_timestamp() -> String {
+fn timestamp() -> String {
   std::time::SystemTime::now()
     .duration_since(std::time::UNIX_EPOCH)
     .map(|duration| duration.as_secs().to_string())
@@ -489,7 +493,7 @@ mod tests {
   use super::*;
 
   #[test]
-  fn model_names_are_confined_to_one file() {
+  fn model_names_are_confined_to_one_file() {
     let name = ModelService::safe_name("org/model ../ Q4_K_M.gguf");
     assert!(!name.contains('/'));
     assert!(!name.contains(".."));

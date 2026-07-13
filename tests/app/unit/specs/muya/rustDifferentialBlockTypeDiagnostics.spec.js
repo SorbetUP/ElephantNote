@@ -51,6 +51,27 @@ const cases = [
     action: (muya) => muya.updateParagraph('ol-order')
   },
   {
+    name: 'bullet list to paragraph',
+    initial: '- alpha',
+    target: 'alpha',
+    select: selectParagraph,
+    action: (muya) => muya.updateParagraph('ul-bullet')
+  },
+  {
+    name: 'task list to paragraph',
+    initial: '- [x] alpha',
+    target: 'alpha',
+    select: selectParagraph,
+    action: (muya) => muya.updateParagraph('ul-task')
+  },
+  {
+    name: 'ordered list to paragraph',
+    initial: '1. alpha',
+    target: 'alpha',
+    select: selectParagraph,
+    action: (muya) => muya.updateParagraph('ol-order')
+  },
+  {
     name: 'bullet list to task list',
     initial: '- alpha',
     target: 'alpha',

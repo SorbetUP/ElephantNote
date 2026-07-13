@@ -1,0 +1,339 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import shutil
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def replace_once(path: Path, old: str, new: str) -> None:
+    text = path.read_text()
+    if new in text:
+        return
+    if old not in text:
+        raise RuntimeError(f"missing migration marker in {path}: {old[:120]!r}")
+    path.write_text(text.replace(old, new, 1))
+
+
+def write_json(path: Path, value: object) -> None:
+    path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
+
+
+def migrate_addon_broker() -> None:
+    path = ROOT / "Elephant/backend/tauri/src/addons.rs"
+    replace_once(path, "use tauri::{AppHandle, State};", "use tauri::{AppHandle, Manager, State};")
+    replace_once(
+        path,
+        'fn broker_http(record: &InstalledAddon, method: &str, params: &Value) -> R<Value> {',
+        '''fn broker_assets(app: &AppHandle, record: &InstalledAddon, method: &str, params: &Value) -> R<Value> {
+  if method != "assets.allowDirectory" {
+    return Err(format!("Unsupported asset operation: {method}"));
+  }
+  let requested = params.get("path").and_then(Value::as_str).unwrap_or(".").trim();
+  let root = active_vault_root(app)?;
+  let (relative_path, candidate) = if requested.is_empty() || requested == "." {
+    if !record.manifest.permissions.notes.read.iter().any(|scope| scope.trim() == "*") {
+      return Err("Addon is not permitted to expose the vault root through the asset protocol".to_string());
+    }
+    (String::new(), root.clone())
+  } else {
+    let relative_path = normalize_note_path(requested)?;
+    require_note_scope(&record.manifest.permissions.notes.read, &relative_path, "read")?;
+    (relative_path.clone(), root.join(&relative_path))
+  };
+  let canonical = fs::canonicalize(candidate).map_err(|error| format!("Asset directory is unavailable: {error}"))?;
+  if !canonical.starts_with(&root) || !canonical.is_dir() {
+    return Err("Asset directory must stay inside the active vault".to_string());
+  }
+  app
+    .asset_protocol_scope()
+    .allow_directory(&canonical, true)
+    .map_err(|error| format!("Failed to authorize asset directory: {error}"))?;
+  Ok(json!({
+    "relativePath": relative_path,
+    "path": canonical.to_string_lossy()
+  }))
+}
+
+fn broker_http(record: &InstalledAddon, method: &str, params: &Value) -> R<Value> {''',
+    )
+    replace_once(
+        path,
+        '''  } else if method.starts_with("http.") {
+    broker_http(record, &method, &params)
+  } else if method == "app.info" {''',
+        '''  } else if method.starts_with("assets.") {
+    broker_assets(&app, record, &method, &params)
+  } else if method.starts_with("http.") {
+    broker_http(record, &method, &params)
+  } else if method == "app.info" {''',
+    )
+
+
+def migrate_trusted_api() -> None:
+    path = ROOT / "Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js"
+    replace_once(
+        path,
+        '''    native: Object.freeze({
+      status: () => invoke('tauri_addons_sidecar_status', { addonId: manifest.id }, target),''',
+        '''    assets: Object.freeze({
+      allowVaultDirectory(path = '.') {
+        return callBroker('assets.allowDirectory', { path: safeString(path, '.') })
+      },
+      toUrl(path, protocol = 'asset') {
+        const convertFileSrc = target?.__TAURI__?.core?.convertFileSrc
+        if (typeof convertFileSrc !== 'function') throw new Error('Tauri asset URL conversion is unavailable')
+        return convertFileSrc(safeString(path), safeString(protocol, 'asset'))
+      }
+    }),
+    native: Object.freeze({
+      status: () => invoke('tauri_addons_sidecar_status', { addonId: manifest.id }, target),''',
+    )
+
+
+def migrate_sites_package() -> None:
+    package = ROOT / "addons/official/sites"
+    (package / "main.js").write_text(r'''const ADDON_ID = 'elephant.sites'
+
+const node = (documentRef, tag, className = '', text = '') => {
+  const element = documentRef.createElement(tag)
+  if (className) element.className = className
+  if (text) element.textContent = text
+  return element
+}
+
+const normalizeRelativePath = (value = '') => {
+  const normalized = String(value || '').trim().replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+  const parts = normalized.split('/').filter(Boolean)
+  if (parts.some((part) => part === '..' || part === '.')) {
+    throw new Error('Site folder must stay inside the active vault')
+  }
+  return parts.join('/')
+}
+
+export default class ElephantSitesAddon {
+  constructor(api) {
+    this.api = api
+    this.window = api.experimental.window
+    this.preview = null
+    this.frames = new Set()
+  }
+
+  async openPreview(relativePath) {
+    await this.stopPreview().catch(() => {})
+    const relative = normalizeRelativePath(relativePath)
+    const allowed = await this.api.assets.allowVaultDirectory(relative || '.')
+    const base = String(allowed?.path || '').replace(/[\\/]+$/, '')
+    if (!base) throw new Error('The selected site directory is unavailable')
+    const separator = base.includes('\\') ? '\\' : '/'
+    const entry = `${base}${separator}index.html`
+    const url = this.api.assets.toUrl(entry)
+    this.preview = {
+      siteId: `asset:${relative || '.'}`,
+      url,
+      root: base,
+      running: true,
+      status: 'ready',
+      mode: 'asset'
+    }
+    for (const frame of this.frames) {
+      frame.src = url
+      frame.hidden = false
+    }
+    return this.preview
+  }
+
+  refreshStatus() {
+    return Promise.resolve(this.preview || { status: 'idle', running: false, mode: 'asset' })
+  }
+
+  async stopPreview() {
+    this.preview = null
+    for (const frame of this.frames) {
+      frame.src = 'about:blank'
+      frame.hidden = true
+    }
+    return { stopped: true }
+  }
+
+  async openExternal(url) {
+    if (!url) return
+    const opener = this.window?.__TAURI__?.opener
+    if (typeof opener?.openUrl === 'function') return opener.openUrl(url)
+    this.window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  render(container, compact = false) {
+    const documentRef = container.ownerDocument
+    const root = node(documentRef, 'section', compact ? 'elephant-sites-panel compact' : 'elephant-sites-panel')
+    container.replaceChildren(root)
+    const folder = node(documentRef, 'input')
+    folder.placeholder = 'Static site folder inside the active vault'
+    const status = node(documentRef, 'p', 'elephant-sites-status', 'Idle')
+    const actions = node(documentRef, 'div', 'elephant-sites-actions')
+    const preview = node(documentRef, 'button', '', 'Preview')
+    const stop = node(documentRef, 'button', '', 'Stop')
+    const open = node(documentRef, 'button', '', 'Open')
+    const frame = node(documentRef, 'iframe', 'elephant-sites-preview')
+    frame.title = 'Site preview'
+    frame.hidden = true
+    frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-popups allow-downloads')
+    this.frames.add(frame)
+
+    const renderStatus = async () => {
+      const current = await this.refreshStatus().catch((error) => ({ status: 'error', error: error.message || String(error) }))
+      status.textContent = current?.error || current?.status || (current?.running ? 'Ready' : 'Idle')
+      open.disabled = !current?.url || current?.running === false
+      stop.disabled = current?.running !== true
+    }
+
+    preview.onclick = async () => {
+      preview.disabled = true
+      status.textContent = 'Opening preview…'
+      try {
+        await this.openPreview(folder.value)
+        await renderStatus()
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : String(error)
+      } finally {
+        preview.disabled = false
+      }
+    }
+    stop.onclick = async () => { await this.stopPreview(); await renderStatus() }
+    open.onclick = () => this.openExternal(this.preview?.url)
+    actions.append(preview, stop, open)
+    root.append(node(documentRef, compact ? 'h4' : 'h3', '', 'Sites'), folder, actions, status, frame)
+    void renderStatus()
+    return () => {
+      this.frames.delete(frame)
+      root.remove()
+    }
+  }
+
+  onload(api) {
+    api.ui.registerStyle(`
+      .elephant-sites-panel { display:grid; gap:10px; padding:14px; border:1px solid var(--en-border); border-radius:14px; background:var(--en-surface); }
+      .elephant-sites-panel.compact { margin:12px; }
+      .elephant-sites-panel h3,.elephant-sites-panel h4,.elephant-sites-status { margin:0; }
+      .elephant-sites-panel input { min-height:34px; padding:0 10px; border:1px solid var(--en-border); border-radius:9px; background:var(--en-bg); color:var(--en-text); }
+      .elephant-sites-actions { display:flex; gap:8px; flex-wrap:wrap; }
+      .elephant-sites-actions button { min-height:34px; padding:0 12px; border:1px solid var(--en-border); border-radius:9px; background:var(--en-surface); color:var(--en-text); cursor:pointer; }
+      .elephant-sites-status { color:var(--en-muted); font-size:12px; }
+      .elephant-sites-preview { width:100%; min-height:360px; border:1px solid var(--en-border); border-radius:10px; background:white; }
+    `, 'sites-package')
+    const bridge = this.window?.__ELEPHANT_ADDON_VUE__
+    if (!bridge?.createDomComponent) throw new Error('Physical addon Vue bridge is unavailable')
+
+    api.workspace.registerContribution('site.generators', {
+      id: `${ADDON_ID}.generator`,
+      title: 'Elephant Sites',
+      description: 'Cross-platform static site preview from a scoped vault directory.'
+    })
+    api.layout.registerZone({
+      id: `${ADDON_ID}.preview-panel`,
+      zone: 'workspace.notes',
+      order: 80,
+      component: bridge.createDomComponent({
+        name: 'ElephantPhysicalSitesPanel',
+        mount: (container) => this.render(container, true)
+      })
+    })
+    api.settings.registerSection({
+      id: `${ADDON_ID}.settings`,
+      section: 'sites',
+      navigationLabel: 'Sites',
+      navigationIcon: 'globe',
+      standalone: true,
+      chrome: false,
+      title: 'Sites',
+      description: 'Preview a static folder directly in Elephant on desktop, Android and iOS.',
+      order: 50,
+      render: (container) => this.render(container, false)
+    })
+  }
+
+  onunload() {
+    return this.stopPreview()
+  }
+}
+''')
+    write_json(
+        package / "manifest.json",
+        {
+            "id": "elephant.sites",
+            "name": "Sites",
+            "version": "1.3.0",
+            "description": "Previews static sites directly from a scoped vault directory on desktop, Android and iOS.",
+            "author": "Elephant",
+            "icon": "globe",
+            "apiVersion": 1,
+            "minAppVersion": "0.18.9",
+            "runtime": {"type": "javascript-worker", "entry": "main.js", "mode": "trusted"},
+            "permissions": {
+                "storage": True,
+                "commands": True,
+                "views": True,
+                "notes": {"read": ["*"], "write": []},
+                "network": {"hosts": []},
+            },
+            "contributes": {
+                "runtimeMode": "trusted",
+                "settings": True,
+                "layout": True,
+                "views": True,
+            },
+            "activationEvents": ["onStartup"],
+        },
+    )
+    build_config = package / "addon.build.json"
+    if build_config.exists():
+        build_config.unlink()
+    native = package / "native"
+    if native.exists():
+        shutil.rmtree(native)
+
+
+def migrate_tauri_config() -> None:
+    path = ROOT / "Elephant/backend/tauri/tauri.conf.json"
+    config = json.loads(path.read_text())
+    security = config.setdefault("app", {}).setdefault("security", {})
+    security["assetProtocol"] = {"enable": True, "scope": []}
+    csp = security.setdefault("csp", {})
+    csp["frame-src"] = "'self' asset: http://asset.localhost blob: data:"
+    write_json(path, config)
+
+
+def migrate_mobile_test() -> None:
+    path = ROOT / "tests/app/unit/addons/nativeMobileCompatibility.spec.js"
+    path.write_text('''import fs from 'node:fs'\nimport path from 'node:path'\nimport { describe, expect, it } from 'vitest'\n\nconst root = process.cwd()\nconst processNativeSlugs = ['ai-ocr', 'code-execution']\n\nconst manifestFor = (slug) => JSON.parse(\n  fs.readFileSync(path.join(root, 'addons/official', slug, 'manifest.json'), 'utf8')\n)\n\ndescribe('native addon mobile compatibility', () => {\n  it('never advertises downloaded process sidecars as Android or iOS executables', () => {\n    for (const slug of processNativeSlugs) {\n      const manifest = manifestFor(slug)\n      expect(manifest.native.runner).toBe('process')\n      expect(Object.keys(manifest.native.sidecars).some((key) => /^(android|ios)-/.test(key))).toBe(false)\n      expect(manifest.native.mobile.android.supported).toBe(false)\n      expect(manifest.native.mobile.android.reason).toMatch(/host adapter/i)\n      expect(manifest.native.mobile.ios.supported).toBe(false)\n      expect(manifest.native.mobile.ios.reason).toMatch(/host adapter/i)\n    }\n  })\n\n  it('keeps Sites renderer-owned and installable on desktop, Android and iOS', () => {\n    const manifest = manifestFor('sites')\n    const source = fs.readFileSync(path.join(root, 'addons/official/sites/main.js'), 'utf8')\n    expect(manifest.version).toBe('1.3.0')\n    expect(manifest.permissions.native).toBeUndefined()\n    expect(manifest.native).toBeUndefined()\n    expect(source).toContain('api.assets.allowVaultDirectory')\n    expect(source).toContain('api.assets.toUrl')\n    expect(source).not.toContain('api.native.call')\n    expect(fs.existsSync(path.join(root, 'addons/official/sites/addon.build.json'))).toBe(false)\n    expect(fs.existsSync(path.join(root, 'addons/official/sites/native'))).toBe(false)\n  })\n})\n''')
+
+
+def migrate_publisher() -> None:
+    path = ROOT / ".github/workflows/publish-native-addon-packages.yml"
+    text = path.read_text()
+    text = text.replace("      - addons/official/sites/**\n", "")
+    text = text.replace(
+        "            addons/official/code-execution \\\n            addons/official/sites\n",
+        "            addons/official/code-execution\n",
+    )
+    text = text.replace(
+        "required_ids = {'elephant.ai-ocr', 'elephant.code-execution', 'elephant.sites'}",
+        "required_ids = {'elephant.ai-ocr', 'elephant.code-execution'}",
+    )
+    path.write_text(text)
+
+
+def main() -> None:
+    migrate_addon_broker()
+    migrate_trusted_api()
+    migrate_sites_package()
+    migrate_tauri_config()
+    migrate_mobile_test()
+    migrate_publisher()
+    print("Sites cross-platform migration applied")
+
+
+if __name__ == "__main__":
+    main()

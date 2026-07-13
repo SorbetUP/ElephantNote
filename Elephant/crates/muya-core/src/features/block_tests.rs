@@ -109,8 +109,8 @@ fn every_block_command_has_an_exact_inverse() {
 #[test]
 fn duplicated_linked_mark_groups_do_not_link_back_to_the_source() {
   let (document, _) = apply(
-    "***alpha***\n\nafter",
-    "alpha",
+    "al*pha **be*ta** gamma\n\nafter",
+    "al",
     BlockCommand::Duplicate,
   );
   let groups = document
@@ -121,5 +121,5 @@ fn duplicated_linked_mark_groups_do_not_link_back_to_the_source() {
       _ => None,
     })
     .collect::<std::collections::BTreeSet<_>>();
-  assert!(groups.len() >= 2);
+  assert_eq!(groups.len(), 2);
 }

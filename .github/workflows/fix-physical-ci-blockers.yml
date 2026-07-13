@@ -29,34 +29,24 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           preload = Path('tests/app/e2e/tauri-preload.js')
           text = preload.read_text()
-          unused = '''const writeJson = (filename, value) => {
-            fs.mkdirSync(path.dirname(filename), { recursive: true })
-            fs.writeFileSync(filename, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
-            return value
-          }
-
-          '''
-          text = text.replace(unused, '')
+          text, count = re.subn(
+              r"const writeJson = \(filename, value\) => \{.*?\n\}\n\n",
+              '',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1 and 'const writeJson =' in text:
+              raise SystemExit('unable to remove the unused E2E writeJson helper')
           preload.write_text(text)
 
           runtime = Path('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')
           text = runtime.read_text()
-          old = '''    native: Object.freeze({
-              status: () => invoke('tauri_addons_sidecar_status', { addonId: manifest.id }, target),
-              call(method, params = {}, options = {}) {
-                const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
-                return invoke('tauri_addons_sidecar_call', {
-                  addonId: manifest.id,
-                  method: safeString(method),
-                  params,
-                  timeoutMs
-                }, target)
-              }
-            }),'''
-          new = '''    native: Object.freeze({
+          native = '''    native: Object.freeze({
               status: () => invoke('tauri_addons_sidecar_status', { addonId: manifest.id }, target),
               call(method, params = {}, options = {}) {
                 const timeoutMs = Number.isFinite(options?.timeoutMs) ? Math.max(1, Math.trunc(options.timeoutMs)) : undefined
@@ -81,11 +71,18 @@ jobs:
                 },
                 stop: () => invoke('tauri_addons_service_stop', { addonId: manifest.id }, target)
               })
-            }),'''
+            }),
+            resources:'''
           if 'tauri_addons_service_status' not in text:
-              if old not in text:
+              text, count = re.subn(
+                  r"    native: Object\.freeze\(\{.*?\n    \}\),\n    resources:",
+                  native,
+                  text,
+                  count=1,
+                  flags=re.S,
+              )
+              if count != 1:
                   raise SystemExit('trusted native API block no longer matches expected source')
-              text = text.replace(old, new)
           runtime.write_text(text)
 
           lib = Path('Elephant/backend/tauri/src/lib_min.rs')

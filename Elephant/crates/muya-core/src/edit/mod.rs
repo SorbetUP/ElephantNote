@@ -7,6 +7,7 @@ mod mark_compat;
 mod mark_dispatch;
 mod mark_fragment_toggle;
 mod mark_fragments;
+mod mark_linked_same;
 mod mark_same_subtree;
 mod operation;
 mod paragraph;

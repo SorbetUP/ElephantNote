@@ -38,6 +38,7 @@ export const editorCommands = Object.freeze({
   toggleBlockQuote: () => ({ type: 'toggle_block_quote' }),
   toggleCodeBlock: () => ({ type: 'toggle_code_block' }),
   setListKind: (kind) => ({ type: 'set_list_kind', kind }),
+  insertHorizontalRule: () => ({ type: 'insert_horizontal_rule' }),
   indentListItem: () => ({ type: 'indent_list_item' }),
   outdentListItem: () => ({ type: 'outdent_list_item' }),
   setTaskChecked: (item, checked, autoCheck = false) => ({

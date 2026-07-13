@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-13T11:47:22Z",
+  "updatedAt": "2026-07-13T11:59:14Z",
   "addons": [
     {
       "id": "elephant.ai",
@@ -136,38 +136,19 @@
       "id": "elephant.sites",
       "slug": "sites",
       "name": "Sites",
-      "version": "1.2.0",
-      "description": "Builds, previews and stops static sites through a package-owned native server.",
+      "version": "1.3.0",
+      "description": "Previews static sites directly from a scoped vault directory on desktop, Android and iOS.",
       "author": "Elephant",
       "official": true,
       "manifestPath": "addons/sites/manifest.json",
-      "entryPath": "addons/sites/main.js",
-      "requiresPlatformPackage": true,
-      "packages": {
-        "linux-x86_64": {
-          "path": "addons/sites/releases/elephant.sites-1.2.0-linux-x86_64.enaddon",
-          "hash": "ab91e9713e63d2c7bb8864b0061390f9f24aff534cfdd7c6cc740aa258f688e1"
-        },
-        "macos-aarch64": {
-          "path": "addons/sites/releases/elephant.sites-1.2.0-macos-aarch64.enaddon",
-          "hash": "0361a73f291f8cb3fe34ad59cadf60812c508947a650c52918bd3165bf9cd325"
-        },
-        "macos-x86_64": {
-          "path": "addons/sites/releases/elephant.sites-1.2.0-macos-x86_64.enaddon",
-          "hash": "e3fc172dde6ca7376c4b202add569034e923a4f7ee1a9893a4747c16c936e524"
-        },
-        "windows-x86_64": {
-          "path": "addons/sites/releases/elephant.sites-1.2.0-windows-x86_64.enaddon",
-          "hash": "5be9fa293462aa6f29dccd5a74a321af67ba85f369510048772578686405120e"
-        }
-      }
+      "entryPath": "addons/sites/main.js"
     },
     {
       "id": "elephant.code-execution",
       "slug": "code-execution",
       "name": "Code execution",
       "version": "2.1.0",
-      "description": "Runs fenced code blocks with selectable package-owned interpreter sidecars.",
+      "description": "Runs local interpreters on desktop and an isolated JavaScript Web Worker on Android and iOS.",
       "author": "Elephant",
       "official": true,
       "manifestPath": "addons/code-execution/manifest.json",

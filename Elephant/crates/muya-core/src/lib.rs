@@ -16,7 +16,9 @@ pub mod serializer;
 pub mod syntax;
 pub mod view;
 
-pub use edit::{Command, EditError, Operation, Transaction, Utf16Range};
+pub use edit::{
+  Command, EditError, GraphemeCommand, Operation, Transaction, Utf16Range,
+};
 pub use features::{ListCommand, TableCommand, TableNavigationCommand};
 pub use history::History;
 pub use model::{DetachedSubtree, Document, Node, NodeId, NodeKind, SourceRange};

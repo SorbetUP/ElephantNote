@@ -3,7 +3,7 @@ const os = require('os')
 const path = require('path')
 const { _electron } = require('playwright')
 
-const projectRoot = path.resolve(__dirname, '../..')
+const projectRoot = path.resolve(__dirname, '../../..')
 
 const getDateAsFilename = () => {
   const date = new Date()
@@ -18,10 +18,10 @@ const getTempPath = () => {
 
 const getElectronPath = () => {
   if (process.platform === 'win32') {
-    return path.resolve(path.join('Elephant', 'node_modules', '.bin', 'electron.cmd'))
+    return path.join(projectRoot, 'Elephant', 'node_modules', '.bin', 'electron.cmd')
   }
   const pathTxt = path.join(projectRoot, 'Elephant/node_modules/electron/path.txt')
-  const relPath = require('fs').readFileSync(pathTxt, 'utf-8').trim()
+  const relPath = fs.readFileSync(pathTxt, 'utf-8').trim()
   return path.join(projectRoot, 'Elephant/node_modules/electron/dist', relPath)
 }
 

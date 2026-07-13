@@ -33,6 +33,11 @@ pub enum ProtocolCommand {
   SetListKind { kind: ListKind },
   InsertHorizontalRule,
   CreateTable { rows: u16, columns: u16 },
+  InsertImage {
+    source: String,
+    alt: String,
+    title: Option<String>,
+  },
   IndentListItem,
   OutdentListItem,
   SetTaskChecked {

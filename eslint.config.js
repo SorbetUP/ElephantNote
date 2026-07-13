@@ -22,6 +22,7 @@ const compatibilityStyleRules = Object.freeze({
   '@stylistic/indent': 'off',
   '@stylistic/key-spacing': 'off',
   '@stylistic/keyword-spacing': 'off',
+  '@stylistic/lines-between-class-members': 'off',
   '@stylistic/multiline-ternary': 'off',
   '@stylistic/no-multiple-empty-lines': 'off',
   '@stylistic/object-curly-spacing': 'off',
@@ -37,13 +38,13 @@ const compatibilityStyleRules = Object.freeze({
   'no-undef': 'off',
   'no-unneeded-ternary': 'off',
   'no-useless-constructor': 'off',
+  'no-useless-escape': 'off',
   'no-void': 'off',
   'one-var': 'off',
   'promise/param-names': 'off'
 })
 
 export default [
-  // 0. Global ignores (must be first)
   {
     ignores: [
       '**/node_modules/**',
@@ -67,15 +68,10 @@ export default [
     ]
   },
 
-  // 1. ESLint core recommended rules
-
   js.recommended,
-  // 1. Use neostandard instead
   ...neostandard(),
-
   ...pluginVue.configs['flat/recommended'],
 
-  // 3. Custom overrides for JS files
   {
     files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
     plugins: {
@@ -114,7 +110,6 @@ export default [
     ]
   },
 
-  // 3b. Vue files: add browser globals and relax conventions
   {
     files: ['**/*.vue'],
     languageOptions: {
@@ -127,7 +122,6 @@ export default [
     }
   },
 
-  // 3c. Test file globals
   {
     files: ['tests/**/*.js'],
     languageOptions: {
@@ -139,7 +133,6 @@ export default [
     }
   },
 
-  // 3d. Relax behavioral rules for muya editor engine
   {
     files: ['Elephant/frontend/src/muya/lib/**/*.js'],
     rules: {
@@ -152,10 +145,8 @@ export default [
     }
   },
 
-  // 4. JSON files basic validation
   ...pluginJsonc.configs['flat/recommended-with-json'],
 
-  // 5. i18n JSON files validation
   {
     files: ['Elephant/frontend/src/shared/i18n/locales/*.json'],
     plugins: {

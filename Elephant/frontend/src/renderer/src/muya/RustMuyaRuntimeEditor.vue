@@ -26,7 +26,8 @@ import { initializeExperimentalRustRuntime } from 'muya/lib/rust/runtime'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
-  mode: { type: String, default: 'rust' }
+  mode: { type: String, default: 'rust' },
+  factory: { type: Function, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'ready', 'change', 'error'])
@@ -93,7 +94,8 @@ const mountRuntime = async (markdown) => {
     const nextRuntime = await initializeExperimentalRustRuntime(
       { markdown: runtimeMarkdown },
       {
-        useBundledWasm: true,
+        factory: props.factory || undefined,
+        useBundledWasm: !props.factory,
         domContainer: rootRef.value,
         captureInput: true,
         applyPatches: scheduleMarkdownSync

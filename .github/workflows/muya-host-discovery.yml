@@ -1,0 +1,41 @@
+name: Muya Host Discovery
+
+on:
+  push:
+    branches:
+      - 'refactor/muya-rust-file-by-file'
+    paths:
+      - '.github/workflows/muya-host-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate Muya host references
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          {
+            echo '# Muya references outside the Muya library'
+            grep -RIn --exclude-dir=node_modules --exclude-dir=muya \
+              --include='*.js' --include='*.mjs' --include='*.vue' --include='*.ts' --include='*.tsx' \
+              -E '(^|[^[:alnum:]_])Muya([^[:alnum:]_]|$)|from[[:space:]]+["'"'][^"'"']*muya|require\(["'"'][^"'"']*muya' \
+              Elephant/frontend Elephant/shared tests || true
+          } > build/muya-host-boundary.txt
+          test -s build/muya-host-boundary.txt
+          cat build/muya-host-boundary.txt
+
+      - name: Upload host boundary report
+        uses: actions/upload-artifact@v4
+        with:
+          name: muya-host-boundary
+          path: build/muya-host-boundary.txt
+          if-no-files-found: error
+          retention-days: 1

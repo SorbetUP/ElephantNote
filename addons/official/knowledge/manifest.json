@@ -1,0 +1,47 @@
+{
+  "id": "elephant.knowledge",
+  "name": "Knowledge",
+  "version": "1.0.0",
+  "description": "Owns incremental vault indexing, semantic relations, graph projection and generated Wiki drafts.",
+  "author": "Elephant",
+  "icon": "brain",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": {
+    "type": "javascript-worker",
+    "entry": "main.js",
+    "mode": "trusted"
+  },
+  "permissions": {
+    "storage": true,
+    "commands": true,
+    "views": true,
+    "native": true
+  },
+  "native": {
+    "runner": "service",
+    "protocol": "elephant-addon-service-v1",
+    "sidecars": {
+      "macos-aarch64": "native/macos-aarch64/elephant-knowledge-service",
+      "macos-x86_64": "native/macos-x86_64/elephant-knowledge-service",
+      "linux-x86_64": "native/linux-x86_64/elephant-knowledge-service",
+      "windows-x86_64": "native/windows-x86_64/elephant-knowledge-service.exe"
+    },
+    "mobile": {
+      "android": {
+        "supported": false,
+        "reason": "Android uses the renderer-owned Search, Wiki and Graph fallbacks until a package-owned SQLite host is available."
+      },
+      "ios": {
+        "supported": false,
+        "reason": "iOS uses the renderer-owned Search, Wiki and Graph fallbacks until a package-owned SQLite host is available."
+      }
+    }
+  },
+  "contributes": {
+    "runtimeMode": "trusted",
+    "settings": true,
+    "native": true
+  },
+  "activationEvents": ["onStartup"]
+}

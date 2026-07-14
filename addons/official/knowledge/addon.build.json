@@ -1,0 +1,11 @@
+{
+  "runner": "service",
+  "nativeManifest": "native/Cargo.toml",
+  "binaryName": "elephant-knowledge-service",
+  "supportedPlatforms": [
+    "macos-aarch64",
+    "macos-x86_64",
+    "linux-x86_64",
+    "windows-x86_64"
+  ]
+}

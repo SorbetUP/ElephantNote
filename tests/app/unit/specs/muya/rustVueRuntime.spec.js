@@ -84,6 +84,13 @@ const browserEvent = (type, values = {}) => {
   return event
 }
 
+const fileTransfer = (files) => ({
+  types: ['Files'],
+  files,
+  dropEffect: 'none',
+  getData: () => ''
+})
+
 const settle = async () => {
   await nextTick()
   await new Promise((resolve) => setTimeout(resolve, 0))
@@ -150,6 +157,36 @@ describe('Rust Muya Vue runtime', () => {
 
     expect(editor.textContent).toBe('alpha!')
     expect(markdown.value).toBe('alpha!')
+    app.unmount()
+  })
+
+  it('forwards file drops through the mounted Vue runtime', async () => {
+    const runtimeRef = ref(null)
+    const onFileDrop = vi.fn(async () => {})
+    const app = createApp({
+      setup: () => () =>
+        h(RustMuyaRuntimeEditor, {
+          modelValue: 'alpha',
+          factory: async () => fakeEngine(),
+          onFileDrop,
+          onReady: (runtime) => {
+            runtimeRef.value = runtime
+          }
+        })
+    })
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    app.mount(host)
+    await settle()
+
+    const editor = document.querySelector('[data-testid="muya-rust-runtime-editor"]')
+    const files = [{ name: 'image.png', type: 'image/png' }]
+    const drop = browserEvent('drop', { dataTransfer: fileTransfer(files) })
+    editor.dispatchEvent(drop)
+    await runtimeRef.value.inputController.idle()
+
+    expect(drop.defaultPrevented).toBe(true)
+    expect(onFileDrop).toHaveBeenCalledWith(files)
     app.unmount()
   })
 })

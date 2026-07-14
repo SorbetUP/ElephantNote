@@ -88,7 +88,13 @@ jobs:
             --reporter=verbose 2>&1 | tee build/coverage/elephantnote-contract-tests.log
 
       - name: Unit suite
-        run: pnpm test:unit
+        shell: bash
+        run: |
+          mkdir -p build/coverage
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit \
+            --reporter=verbose 2>&1 | tee build/coverage/unit-suite.log
 
       - name: Run postinstall before reference build
         run: node build/scripts/postinstall.js

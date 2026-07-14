@@ -30,7 +30,7 @@ describe('Search physical package ownership', () => {
     expect(source).not.toContain('elephantnote.api')
   })
 
-  it('keeps the parallel inspection index physically absent from the core shell', () => {
+  it('keeps the parallel inspection index and optional fallbacks physically absent from the core shell', () => {
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
     const extras = read('Elephant/backend/tauri/src/tauri_extra_commands.rs')
     const compatibility = read('Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js')
@@ -43,8 +43,13 @@ describe('Search physical package ownership', () => {
     expect(extras).not.toContain('fn scan_markdown_notes')
     expect(extras).not.toContain('fn extract_wikilinks')
     expect(extras).not.toContain('SEARCH_INDEX_FILE')
-    expect(compatibility).toContain("'search.inspect': () => getBridge()?.search?.inspect?.()")
-    expect(compatibility).toContain("'search.rebuild': () => getBridge()?.search?.rebuild?.()")
+    expect(compatibility).toContain("'search.query'")
+    expect(compatibility).toContain("'search.status'")
+    expect(compatibility).not.toContain("'search.inspect'")
+    expect(compatibility).not.toContain("'search.rebuild'")
+    expect(compatibility).not.toContain("'search.clear'")
+    expect(compatibility).not.toContain("'search.enable'")
+    expect(compatibility).not.toContain("'search.disable'")
   })
 
   it('keeps generic note access bounded and permission checked', () => {

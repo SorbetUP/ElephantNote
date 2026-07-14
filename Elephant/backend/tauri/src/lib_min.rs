@@ -201,8 +201,7 @@ pub fn run() {
       tauri_extra_commands::tauri_ai_config_set,
       tauri_extra_commands::tauri_ai_config_test,
       tauri_extra_commands::tauri_features_get,
-      tauri_extra_commands::tauri_features_set,
-      tauri_extra_commands::tauri_sync_plan
+      tauri_extra_commands::tauri_features_set
     ])
     .run(tauri::generate_context!())
     .expect("failed to run Tauri application");

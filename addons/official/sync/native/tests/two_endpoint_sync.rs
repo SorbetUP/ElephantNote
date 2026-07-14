@@ -62,6 +62,7 @@ async fn handle_connection(
       send
         .finish()
         .map_err(|error| format!("failed to finish pairing response stream: {error}"))?;
+      connection.closed().await;
       Ok(())
     }
     ControlMessage::SyncOpen(open) => {

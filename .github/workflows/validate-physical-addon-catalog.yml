@@ -1,0 +1,170 @@
+name: Validate physical addon catalog
+
+on:
+  push:
+    branches:
+      - feature/physical-addon-catalog
+    paths:
+      - .github/workflows/validate-physical-addon-catalog.yml
+      - catalog.json
+      - addons/**
+  pull_request:
+    paths:
+      - .github/workflows/validate-physical-addon-catalog.yml
+      - catalog.json
+      - addons/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-physical-addon-catalog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install BLAKE3 verifier
+        run: python -m pip install --disable-pip-version-check --no-cache-dir blake3==1.0.8
+
+      - name: Validate sources, platform matrix and archives
+        shell: bash
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          from pathlib import Path, PurePosixPath
+          import json
+          import zipfile
+          from blake3 import blake3
+
+          root = Path('.')
+          catalog_path = root / 'catalog.json'
+          catalog = json.loads(catalog_path.read_text())
+          if catalog.get('version') != 1:
+              raise SystemExit('catalog.json must use version 1')
+          datetime.fromisoformat(catalog['updatedAt'].replace('Z', '+00:00'))
+
+          expected_versions = {
+              'elephant.ai': '2.1.0',
+              'elephant.ai-chat': '1.1.0',
+              'elephant.ai-search': '1.2.0',
+              'elephant.ai-ocr': '1.0.0',
+              'elephant.wiki': '1.3.0',
+              'elephant.graph': '1.2.0',
+              'elephant.open-models': '2.0.0',
+              'elephant.codex-connection': '2.0.0',
+              'elephant.sync': '1.2.0',
+              'elephant.calendar': '1.3.0',
+              'elephant.sites': '1.3.0',
+              'elephant.code-execution': '2.1.0',
+              'elephant.google-keep-import': '1.2.0',
+              'elephant.recently-edited': '1.1.0'
+          }
+          desktop = {'linux-x86_64', 'windows-x86_64', 'macos-x86_64', 'macos-aarch64'}
+          mobile = {'android-aarch64', 'android-x86_64', 'ios-aarch64', 'ios-x86_64'}
+          native_ids = {
+              'elephant.ai-ocr',
+              'elephant.code-execution',
+              'elephant.open-models',
+              'elephant.codex-connection',
+              'elephant.sync'
+          }
+
+          entries = {
+              entry['id']: entry
+              for entry in catalog.get('addons', [])
+              if entry.get('official') and str(entry.get('id', '')).startswith('elephant.')
+          }
+          if set(entries) != set(expected_versions):
+              missing = sorted(set(expected_versions) - set(entries))
+              extra = sorted(set(entries) - set(expected_versions))
+              raise SystemExit(f'Official addon set mismatch: missing={missing}, extra={extra}')
+
+          source_ids = set()
+          for addon_dir in sorted(path for path in (root / 'addons').iterdir() if path.is_dir()):
+              manifest_path = addon_dir / 'manifest.json'
+              if not manifest_path.is_file():
+                  continue
+              manifest = json.loads(manifest_path.read_text())
+              addon_id = manifest['id']
+              if addon_id not in expected_versions:
+                  continue
+              source_ids.add(addon_id)
+              entry = entries[addon_id]
+              if manifest['version'] != expected_versions[addon_id]:
+                  raise SystemExit(f'{addon_id} source version is {manifest["version"]}, expected {expected_versions[addon_id]}')
+              if entry['version'] != manifest['version']:
+                  raise SystemExit(f'{addon_id} catalog/source version mismatch')
+              if entry['manifestPath'] != f'addons/{addon_dir.name}/manifest.json':
+                  raise SystemExit(f'{addon_id} manifestPath is not canonical')
+              expected_entry = f"addons/{addon_dir.name}/{manifest['runtime']['entry']}"
+              if entry['entryPath'] != expected_entry or not (root / expected_entry).is_file():
+                  raise SystemExit(f'{addon_id} entry module is missing or inconsistent')
+
+              packages = entry.get('packages', {})
+              expected_platforms = desktop | (mobile if addon_id == 'elephant.code-execution' else set()) if addon_id in native_ids else set()
+              if set(packages) != expected_platforms:
+                  raise SystemExit(f'{addon_id} platform mismatch: expected={sorted(expected_platforms)}, actual={sorted(packages)}')
+              if bool(entry.get('requiresPlatformPackage')) != (addon_id in native_ids):
+                  raise SystemExit(f'{addon_id} requiresPlatformPackage is inconsistent')
+
+              for platform, package in sorted(packages.items()):
+                  archive_path = root / package['path']
+                  metadata_path = archive_path.with_suffix(archive_path.suffix + '.json')
+                  if not archive_path.is_file() or not metadata_path.is_file():
+                      raise SystemExit(f'{addon_id}/{platform} archive or metadata is missing')
+                  digest = blake3(archive_path.read_bytes()).hexdigest()
+                  if digest != package['hash']:
+                      raise SystemExit(f'{addon_id}/{platform} catalog BLAKE3 mismatch')
+                  metadata = json.loads(metadata_path.read_text())
+                  for key, expected in {
+                      'id': addon_id,
+                      'version': manifest['version'],
+                      'platform': platform,
+                      'file': archive_path.name,
+                      'blake3': digest
+                  }.items():
+                      if metadata.get(key) != expected:
+                          raise SystemExit(f'{addon_id}/{platform} metadata field {key} is inconsistent')
+                  if metadata.get('bytes') != archive_path.stat().st_size:
+                      raise SystemExit(f'{addon_id}/{platform} metadata size is inconsistent')
+
+                  with zipfile.ZipFile(archive_path) as archive:
+                      corrupt = archive.testzip()
+                      if corrupt:
+                          raise SystemExit(f'{addon_id}/{platform} corrupt ZIP member: {corrupt}')
+                      names = set(archive.namelist())
+                      if 'manifest.json' not in names:
+                          raise SystemExit(f'{addon_id}/{platform} has no manifest.json')
+                      inner = json.loads(archive.read('manifest.json'))
+                      if inner['id'] != addon_id or inner['version'] != manifest['version']:
+                          raise SystemExit(f'{addon_id}/{platform} inner manifest mismatch')
+                      entry_name = str(PurePosixPath(inner['runtime']['entry']))
+                      if entry_name not in names:
+                          raise SystemExit(f'{addon_id}/{platform} runtime entry is missing from archive')
+                      if platform in mobile:
+                          if addon_id != 'elephant.code-execution':
+                              raise SystemExit(f'{addon_id} must not publish a mobile package')
+                          if inner['runtime']['entry'] != 'main.mobile.js' or 'native' in inner:
+                              raise SystemExit(f'{addon_id}/{platform} mobile manifest is not renderer-only')
+                          if any(name.startswith('native/') for name in names):
+                              raise SystemExit(f'{addon_id}/{platform} contains a native process')
+                      else:
+                          sidecar = inner.get('native', {}).get('sidecars', {}).get(platform)
+                          if not sidecar or sidecar not in names:
+                              raise SystemExit(f'{addon_id}/{platform} native executable is missing')
+
+          if source_ids != set(expected_versions):
+              raise SystemExit(f'Package source set mismatch: {sorted(set(expected_versions) - source_ids)}')
+
+          print(f'Validated {len(entries)} official addons and {sum(len(entry.get("packages", {})) for entry in entries.values())} platform archives.')
+          PY

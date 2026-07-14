@@ -142,6 +142,12 @@ export class RustTraceEditor {
     )
   }
 
+  codeSpanNodes(snapshot = this.snapshot()) {
+    return snapshot.document.nodes.filter(
+      (node) => node.kind?.layer === 'inline' && node.kind?.value?.type === 'code_span'
+    )
+  }
+
   textNodeByValue(value, occurrence = 0, snapshot = this.snapshot()) {
     const matches = this
       .textNodes(snapshot)
@@ -155,6 +161,19 @@ export class RustTraceEditor {
     return node
   }
 
+  codeSpanByValue(value, occurrence = 0, snapshot = this.snapshot()) {
+    const matches = this
+      .codeSpanNodes(snapshot)
+      .filter((candidate) => candidate.kind?.value?.code === value)
+    const node = matches[occurrence]
+    if (!node) {
+      throw new Error(
+        `Muya Rust code span ${JSON.stringify(value)} occurrence ${occurrence} was not found.`
+      )
+    }
+    return node
+  }
+
   setSelection(textIndex, start, end = start) {
     const node = this.textNodes()[textIndex]
     if (!node) throw new Error(`Muya Rust text node ${textIndex} was not found.`)
@@ -163,6 +182,10 @@ export class RustTraceEditor {
 
   setSelectionByText(value, start, end = start, occurrence = 0) {
     this.setSelectionOnNode(this.textNodeByValue(value, occurrence), start, end)
+  }
+
+  setSelectionByCode(value, start, end = start, occurrence = 0) {
+    this.setSelectionOnNode(this.codeSpanByValue(value, occurrence), start, end)
   }
 
   setSelectionBetweenText(

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "build": {
-    "beforeDevCommand": "pnpm tauri:web:dev",
-    "beforeBuildCommand": "pnpm tauri:web:build",
+    "beforeDevCommand": "pnpm --dir .. tauri:web:dev",
+    "beforeBuildCommand": "pnpm --dir .. tauri:web:build",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../../../build/out/renderer"
   },

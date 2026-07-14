@@ -1,7 +1,9 @@
 import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const discovery = fs.readFileSync('Elephant/backend/tauri/src/knowledge_wiki_discovery.rs', 'utf8')
+const discoveryFacade = fs.readFileSync('Elephant/backend/tauri/src/knowledge_wiki_discovery.rs', 'utf8')
+const discoveryEngine = fs.readFileSync('Elephant/backend/tauri/src/knowledge_wiki_discovery/engine.rs', 'utf8')
+const discovery = `${discoveryFacade}\n${discoveryEngine}`
 const topicGraph = fs.readFileSync('Elephant/backend/tauri/src/knowledge_wiki_discovery/topic_graph.rs', 'utf8')
 const wikiView = fs.readFileSync('Elephant/frontend/app/components/views/WikiView.vue', 'utf8')
 const library = fs.readFileSync('Elephant/backend/tauri/src/knowledge_wiki_library.rs', 'utf8')
@@ -45,7 +47,8 @@ describe('Wiki macro-topic discovery contracts', () => {
 
   it('shows evidence instead of an opaque source total', () => {
     expect(discovery).toContain('core_source_count')
-    expect(discovery).toContain('metadata_json')
+    expect(discoveryFacade).toContain('persist_candidate_metadata')
+    expect(discoveryFacade).toContain('metadata_json')
     expect(library).toContain('core_source_count')
     expect(wikiView).toContain('note{{ entry.coreSourceCount === 1')
     expect(wikiView).toContain('Sujet solide')

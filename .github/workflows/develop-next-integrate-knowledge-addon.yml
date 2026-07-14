@@ -1,0 +1,566 @@
+name: Integrate AI knowledge as physical addon
+
+on:
+  pull_request:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/develop-next-integrate-knowledge-addon.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: develop-next-knowledge-addon
+  cancel-in-progress: true
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop_next
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Import knowledge-core history into a package-owned service
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin assistant/wiki-organization-continuation
+          SOURCE=origin/assistant/wiki-organization-continuation
+          git merge -s ours --no-commit --no-ff "$SOURCE"
+
+          rm -rf /tmp/elephant-knowledge-import
+          mkdir -p /tmp/elephant-knowledge-import
+          git archive "$SOURCE" Elephant/backend/knowledge-core | tar -x -C /tmp/elephant-knowledge-import
+
+          mkdir -p addons/official/knowledge/native
+          rm -rf addons/official/knowledge/native/knowledge-core
+          mv /tmp/elephant-knowledge-import/Elephant/backend/knowledge-core \
+            addons/official/knowledge/native/knowledge-core
+
+          cat > addons/official/knowledge/manifest.json <<'JSON'
+          {
+            "id": "elephant.knowledge",
+            "name": "Knowledge",
+            "version": "1.0.0",
+            "description": "Owns incremental vault indexing, semantic relations, graph projection and generated Wiki drafts.",
+            "author": "Elephant",
+            "icon": "brain",
+            "apiVersion": 1,
+            "minAppVersion": "0.18.9",
+            "runtime": {
+              "type": "javascript-worker",
+              "entry": "main.js",
+              "mode": "trusted"
+            },
+            "permissions": {
+              "storage": true,
+              "commands": true,
+              "views": true,
+              "native": true
+            },
+            "native": {
+              "runner": "service",
+              "protocol": "elephant-addon-service-v1",
+              "sidecars": {
+                "macos-aarch64": "native/macos-aarch64/elephant-knowledge-service",
+                "macos-x86_64": "native/macos-x86_64/elephant-knowledge-service",
+                "linux-x86_64": "native/linux-x86_64/elephant-knowledge-service",
+                "windows-x86_64": "native/windows-x86_64/elephant-knowledge-service.exe"
+              },
+              "mobile": {
+                "android": {
+                  "supported": false,
+                  "reason": "Android uses the renderer-owned Search, Wiki and Graph fallbacks until a package-owned SQLite host is available."
+                },
+                "ios": {
+                  "supported": false,
+                  "reason": "iOS uses the renderer-owned Search, Wiki and Graph fallbacks until a package-owned SQLite host is available."
+                }
+              }
+            },
+            "contributes": {
+              "runtimeMode": "trusted",
+              "settings": true,
+              "native": true
+            },
+            "activationEvents": ["onStartup"]
+          }
+          JSON
+
+          cat > addons/official/knowledge/addon.build.json <<'JSON'
+          {
+            "runner": "service",
+            "nativeManifest": "native/Cargo.toml",
+            "binaryName": "elephant-knowledge-service",
+            "supportedPlatforms": [
+              "macos-aarch64",
+              "macos-x86_64",
+              "linux-x86_64",
+              "windows-x86_64"
+            ]
+          }
+          JSON
+
+          cat > addons/official/knowledge/main.js <<'JS'
+          const ADDON_ID = 'elephant.knowledge'
+          const RESOURCE_ID = 'knowledge.provider'
+
+          const clone = (value) => JSON.parse(JSON.stringify(value ?? null))
+
+          export default class ElephantKnowledgeAddon {
+            constructor(api) {
+              this.api = api
+              this.disposeProvider = null
+            }
+
+            call(method, params = {}, options = {}) {
+              return this.api.native.service.call(method, params, options)
+            }
+
+            provider() {
+              return Object.freeze({
+                apiVersion: 1,
+                owner: ADDON_ID,
+                status: () => this.call('knowledge.status'),
+                rebuild: () => this.call('knowledge.rebuild', {}, { timeoutMs: 30 * 60 * 1000 }),
+                search: (query, options = {}) => this.call('knowledge.search', {
+                  query: String(query || ''),
+                  limit: Math.max(1, Number(options.limit || 20))
+                }),
+                inspect: (relativePath) => this.call('knowledge.inspect', { relativePath: String(relativePath || '') }),
+                graph: (options = {}) => this.call('knowledge.graph', {
+                  includeSuggestions: options.includeSuggestions === true
+                }),
+                wikiSources: (topic, options = {}) => this.call('knowledge.wiki.sources', {
+                  topic: String(topic || ''),
+                  limit: Math.max(1, Number(options.limit || 24))
+                }),
+                wikiRequest: (topic, options = {}) => this.call('knowledge.wiki.request', {
+                  topic: String(topic || ''),
+                  requestedTitle: String(options.requestedTitle || ''),
+                  limit: Math.max(1, Number(options.limit || 24)),
+                  maxSections: Math.max(1, Number(options.maxSections || 12))
+                }),
+                renderWiki: (payload = {}) => this.call('knowledge.wiki.render', clone(payload), {
+                  timeoutMs: 120000
+                }),
+                listWikis: (options = {}) => this.call('knowledge.wiki.list', {
+                  status: options.status || null,
+                  limit: Math.max(1, Number(options.limit || 100))
+                }),
+                getWiki: (draftId) => this.call('knowledge.wiki.get', { draftId: String(draftId || '') }),
+                saveWiki: (draft) => this.call('knowledge.wiki.save', { draft: clone(draft) }),
+                acceptWiki: (draftId) => this.call('knowledge.wiki.accept', { draftId: String(draftId || '') }),
+                rejectWiki: (draftId) => this.call('knowledge.wiki.reject', { draftId: String(draftId || '') })
+              })
+            }
+
+            async renderSettings(container) {
+              const documentRef = container.ownerDocument
+              const root = documentRef.createElement('section')
+              root.className = 'elephant-knowledge-settings'
+              const status = documentRef.createElement('p')
+              status.textContent = 'Loading knowledge index status…'
+              const rebuild = documentRef.createElement('button')
+              rebuild.type = 'button'
+              rebuild.textContent = 'Rebuild knowledge index'
+              const refresh = async () => {
+                const value = await this.call('knowledge.status')
+                status.textContent = `${value.documents || 0} notes · ${value.chunks || 0} chunks · ${value.explicit_links || value.explicitLinks || 0} links`
+              }
+              rebuild.onclick = async () => {
+                rebuild.disabled = true
+                status.textContent = 'Rebuilding the package-owned knowledge index…'
+                try {
+                  const report = await this.call('knowledge.rebuild', {}, { timeoutMs: 30 * 60 * 1000 })
+                  status.textContent = `Indexed ${report.indexed || 0}; unchanged ${report.unchanged || 0}; removed ${report.removed || 0}.`
+                } catch (error) {
+                  status.textContent = error instanceof Error ? error.message : String(error)
+                } finally {
+                  rebuild.disabled = false
+                }
+              }
+              root.append(status, rebuild)
+              container.replaceChildren(root)
+              await refresh().catch((error) => { status.textContent = error instanceof Error ? error.message : String(error) })
+              return () => root.remove()
+            }
+
+            async onload(api) {
+              await api.native.service.start()
+              this.disposeProvider = api.resources.provide(RESOURCE_ID, this.provider())
+              api.settings.registerSection({
+                id: `${ADDON_ID}.settings`,
+                section: 'ai',
+                chrome: false,
+                title: 'Knowledge index',
+                description: 'Incremental package-owned index, graph, relations and generated Wiki drafts.',
+                order: 18,
+                render: (container) => this.renderSettings(container)
+              })
+              api.commands.register({
+                id: `${ADDON_ID}.rebuild`,
+                title: 'Rebuild knowledge index',
+                run: () => this.call('knowledge.rebuild', {}, { timeoutMs: 30 * 60 * 1000 })
+              })
+            }
+
+            async onunload() {
+              this.disposeProvider?.()
+              this.disposeProvider = null
+              await this.api.native.service.stop().catch(() => {})
+            }
+          }
+          JS
+
+          cat > addons/official/knowledge/native/Cargo.toml <<'TOML'
+          [package]
+          name = "elephant-knowledge-service"
+          version = "1.0.0"
+          edition = "2021"
+          license = "MIT"
+
+          [[bin]]
+          name = "elephant-knowledge-service"
+          path = "src/main.rs"
+
+          [dependencies]
+          elephantnote-knowledge-core = { path = "knowledge-core" }
+          serde = { version = "1", features = ["derive"] }
+          serde_json = "1"
+          tokio = { version = "1", features = ["io-util", "macros", "rt-multi-thread"] }
+          TOML
+
+          mkdir -p addons/official/knowledge/native/src
+          cat > addons/official/knowledge/native/src/main.rs <<'RS'
+          use elephantnote_knowledge_core::{
+              build_wiki_synthesis_request, collect_wiki_sources, parse_and_render_wiki,
+              rebuild_vault, wiki_draft_from_rendered, KnowledgeStore, WikiDraft, WikiDraftStatus,
+              WikiSourceChunk,
+          };
+          use serde_json::{json, Value};
+          use std::{collections::BTreeSet, env, path::{Path, PathBuf}, time::{SystemTime, UNIX_EPOCH}};
+          use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
+
+          const PROTOCOL: &str = "elephant-addon-service-v1";
+
+          struct KnowledgeService {
+              vault: PathBuf,
+          }
+
+          impl KnowledgeService {
+              fn from_environment() -> Result<Self, String> {
+                  let raw = env::var("ELEPHANT_VAULT_DIR")
+                      .map_err(|_| "ELEPHANT_VAULT_DIR is required for the Knowledge service".to_string())?;
+                  let vault = PathBuf::from(raw);
+                  let canonical = std::fs::canonicalize(&vault).map_err(|error| error.to_string())?;
+                  if !canonical.is_dir() {
+                      return Err("The Knowledge service vault is not a directory".into());
+                  }
+                  Ok(Self { vault: canonical })
+              }
+
+              fn store(&self) -> Result<KnowledgeStore, String> {
+                  let store = KnowledgeStore::open(&self.vault)?;
+                  store.initialize_relations()?;
+                  store.initialize_taxonomy()?;
+                  store.initialize_wikis()?;
+                  Ok(store)
+              }
+          }
+
+          fn success(id: u64, result: Value) -> Value {
+              json!({ "protocol": PROTOCOL, "id": id, "ok": true, "result": result })
+          }
+
+          fn failure(id: u64, message: impl Into<String>) -> Value {
+              json!({ "protocol": PROTOCOL, "id": id, "ok": false, "error": { "message": message.into() } })
+          }
+
+          fn required_string(params: &Value, key: &str) -> Result<String, String> {
+              let value = params.get(key).and_then(Value::as_str).unwrap_or("").trim();
+              if value.is_empty() { Err(format!("{key} is required")) } else { Ok(value.to_string()) }
+          }
+
+          fn wiki_status(value: Option<&str>) -> Option<WikiDraftStatus> {
+              match value.unwrap_or("") {
+                  "proposed" => Some(WikiDraftStatus::Proposed),
+                  "accepted" => Some(WikiDraftStatus::Accepted),
+                  "rejected" => Some(WikiDraftStatus::Rejected),
+                  "outdated" => Some(WikiDraftStatus::Outdated),
+                  _ => None,
+              }
+          }
+
+          fn now() -> i64 {
+              SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64
+          }
+
+          fn sources_for_topic(
+              store: &KnowledgeStore,
+              topic: &str,
+              limit: usize,
+          ) -> Result<Vec<WikiSourceChunk>, String> {
+              let hits = store.search(topic, limit.clamp(1, 100))?;
+              let mut paths = BTreeSet::new();
+              for hit in hits { paths.insert(hit.relative_path); }
+              let mut documents = Vec::new();
+              for path in paths {
+                  if let Some(document) = store.inspect_document(&path)? { documents.push(document); }
+              }
+              Ok(collect_wiki_sources(&documents))
+          }
+
+          fn handle(service: &KnowledgeService, method: &str, params: Value) -> Result<Value, String> {
+              match method {
+                  "service.start" | "knowledge.status" => {
+                      serde_json::to_value(service.store()?.status()?).map_err(|error| error.to_string())
+                  }
+                  "service.stop" => Ok(json!({ "stopped": true })),
+                  "knowledge.rebuild" => {
+                      serde_json::to_value(rebuild_vault(&service.vault)?).map_err(|error| error.to_string())
+                  }
+                  "knowledge.search" => {
+                      let query = required_string(&params, "query")?;
+                      let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(20) as usize;
+                      serde_json::to_value(service.store()?.search(&query, limit)?).map_err(|error| error.to_string())
+                  }
+                  "knowledge.inspect" => {
+                      let path = required_string(&params, "relativePath")?;
+                      serde_json::to_value(service.store()?.inspect_document(&path)?).map_err(|error| error.to_string())
+                  }
+                  "knowledge.graph" => {
+                      let include = params.get("includeSuggestions").and_then(Value::as_bool).unwrap_or(false);
+                      serde_json::to_value(service.store()?.graph_projection(include)?).map_err(|error| error.to_string())
+                  }
+                  "knowledge.wiki.sources" => {
+                      let topic = required_string(&params, "topic")?;
+                      let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(24) as usize;
+                      serde_json::to_value(sources_for_topic(&service.store()?, &topic, limit)?).map_err(|error| error.to_string())
+                  }
+                  "knowledge.wiki.request" => {
+                      let topic = required_string(&params, "topic")?;
+                      let requested_title = params.get("requestedTitle").and_then(Value::as_str).filter(|value| !value.trim().is_empty());
+                      let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(24) as usize;
+                      let max_sections = params.get("maxSections").and_then(Value::as_u64).unwrap_or(12) as usize;
+                      let sources = sources_for_topic(&service.store()?, &topic, limit)?;
+                      Ok(json!({
+                          "request": build_wiki_synthesis_request(&topic, requested_title, &sources, max_sections),
+                          "sources": sources
+                      }))
+                  }
+                  "knowledge.wiki.render" => {
+                      let topic = required_string(&params, "topic")?;
+                      let response_json = required_string(&params, "responseJson")?;
+                      let model_id = required_string(&params, "modelId")?;
+                      let max_sections = params.get("maxSections").and_then(Value::as_u64).unwrap_or(12) as usize;
+                      let sources: Vec<WikiSourceChunk> = serde_json::from_value(params.get("sources").cloned().unwrap_or(Value::Array(vec![])))
+                          .map_err(|error| error.to_string())?;
+                      let rendered = parse_and_render_wiki(&response_json, &topic, &sources, max_sections)?;
+                      let draft = wiki_draft_from_rendered(&topic, rendered, &model_id, now());
+                      let store = service.store()?;
+                      store.save_wiki_draft(&draft)?;
+                      serde_json::to_value(draft).map_err(|error| error.to_string())
+                  }
+                  "knowledge.wiki.list" => {
+                      let status = wiki_status(params.get("status").and_then(Value::as_str));
+                      let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100) as usize;
+                      serde_json::to_value(service.store()?.list_wiki_drafts(status, limit)?).map_err(|error| error.to_string())
+                  }
+                  "knowledge.wiki.get" => {
+                      let id = required_string(&params, "draftId")?;
+                      serde_json::to_value(service.store()?.wiki_draft(&id)?).map_err(|error| error.to_string())
+                  }
+                  "knowledge.wiki.save" => {
+                      let draft: WikiDraft = serde_json::from_value(params.get("draft").cloned().unwrap_or(Value::Null))
+                          .map_err(|error| error.to_string())?;
+                      let store = service.store()?;
+                      store.save_wiki_draft(&draft)?;
+                      serde_json::to_value(draft).map_err(|error| error.to_string())
+                  }
+                  "knowledge.wiki.accept" => {
+                      let id = required_string(&params, "draftId")?;
+                      let (draft, path) = service.store()?.accept_wiki_draft(&service.vault, &id)?;
+                      Ok(json!({ "draft": draft, "path": relative_to(&service.vault, &path) }))
+                  }
+                  "knowledge.wiki.reject" => {
+                      let id = required_string(&params, "draftId")?;
+                      serde_json::to_value(service.store()?.set_wiki_draft_status(&id, WikiDraftStatus::Rejected)?)
+                          .map_err(|error| error.to_string())
+                  }
+                  _ => Err(format!("Unsupported Knowledge service method: {method}")),
+              }
+          }
+
+          fn relative_to(root: &Path, path: &Path) -> String {
+              path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/")
+          }
+
+          #[tokio::main]
+          async fn main() {
+              let service = match KnowledgeService::from_environment() {
+                  Ok(service) => service,
+                  Err(error) => {
+                      eprintln!("[knowledge-service] {error}");
+                      std::process::exit(1);
+                  }
+              };
+              let mut lines = BufReader::new(io::stdin()).lines();
+              let mut writer = BufWriter::new(io::stdout());
+              while let Ok(Some(line)) = lines.next_line().await {
+                  let request: Value = match serde_json::from_str(&line) {
+                      Ok(value) => value,
+                      Err(error) => {
+                          let response = failure(0, format!("Invalid service request JSON: {error}"));
+                          let _ = writer.write_all(format!("{response}\n").as_bytes()).await;
+                          let _ = writer.flush().await;
+                          continue;
+                      }
+                  };
+                  let id = request.get("id").and_then(Value::as_u64).unwrap_or(0);
+                  let protocol = request.get("protocol").and_then(Value::as_str).unwrap_or("");
+                  let method = request.get("method").and_then(Value::as_str).unwrap_or("");
+                  let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
+                  let response = if protocol != PROTOCOL {
+                      failure(id, format!("Unsupported service protocol: {protocol}"))
+                  } else {
+                      match handle(&service, method, params) {
+                          Ok(result) => success(id, result),
+                          Err(error) => failure(id, error),
+                      }
+                  };
+                  if writer.write_all(format!("{response}\n").as_bytes()).await.is_err() { break; }
+                  if writer.flush().await.is_err() { break; }
+                  if method == "service.stop" { break; }
+              }
+          }
+
+          #[cfg(test)]
+          mod tests {
+              use super::*;
+
+              fn temp_vault() -> PathBuf {
+                  env::temp_dir().join(format!("elephant-knowledge-addon-{}-{}", std::process::id(), now()))
+              }
+
+              #[test]
+              fn rebuild_search_graph_and_wiki_storage_share_one_package_database() {
+                  let vault = temp_vault();
+                  std::fs::create_dir_all(&vault).unwrap();
+                  std::fs::write(vault.join("A.md"), "# Alpha\nAlpha links to [[Beta]].").unwrap();
+                  std::fs::write(vault.join("Beta.md"), "# Beta\nBeta is related to Alpha.").unwrap();
+                  let service = KnowledgeService { vault: std::fs::canonicalize(&vault).unwrap() };
+                  let report = handle(&service, "knowledge.rebuild", json!({})).unwrap();
+                  assert_eq!(report["scanned"], 2);
+                  let hits = handle(&service, "knowledge.search", json!({ "query": "Alpha", "limit": 10 })).unwrap();
+                  assert!(hits.as_array().is_some_and(|values| !values.is_empty()));
+                  let graph = handle(&service, "knowledge.graph", json!({})).unwrap();
+                  assert_eq!(graph["nodes"].as_array().map(Vec::len), Some(2));
+                  std::fs::remove_dir_all(vault).ok();
+              }
+          }
+          RS
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          path = Path('addons/catalog.json')
+          catalog = json.loads(path.read_text())
+          entry = {
+              'id': 'elephant.knowledge',
+              'slug': 'knowledge',
+              'name': 'Knowledge',
+              'version': '1.0.0',
+              'description': 'Owns incremental indexing, relations, graph projection and generated Wiki drafts.',
+              'author': 'Elephant',
+              'official': True,
+              'manifestPath': 'official/knowledge/manifest.json',
+              'entryPath': 'official/knowledge/main.js'
+          }
+          addons = [item for item in catalog.get('addons', []) if item.get('id') != entry['id']]
+          insert_at = next((index for index, item in enumerate(addons) if item.get('id') == 'elephant.open-models'), len(addons))
+          addons.insert(insert_at, entry)
+          catalog['addons'] = addons
+          path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + '\n')
+          PY
+
+          mkdir -p tests/app/unit/addons
+          cat > tests/app/unit/addons/knowledgePhysicalAddon.spec.js <<'JS'
+          import fs from 'node:fs'
+          import path from 'node:path'
+          import { describe, expect, it } from 'vitest'
+
+          const root = process.cwd()
+          const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+
+          describe('physical Knowledge addon', () => {
+            it('owns the imported knowledge engine and publishes a versioned resource', () => {
+              const manifest = JSON.parse(read('addons/official/knowledge/manifest.json'))
+              const entry = read('addons/official/knowledge/main.js')
+              const service = read('addons/official/knowledge/native/src/main.rs')
+              expect(manifest.native.runner).toBe('service')
+              expect(entry).toContain("api.resources.provide(RESOURCE_ID")
+              expect(entry).toContain("apiVersion: 1")
+              expect(entry).toContain("owner: ADDON_ID")
+              expect(service).toContain('rebuild_vault')
+              expect(service).toContain('graph_projection')
+              expect(service).toContain('knowledge.wiki.render')
+            })
+
+            it('does not restore the historical knowledge backend to Tauri core', () => {
+              const tauri = fs.readdirSync(path.join(root, 'Elephant/backend/tauri/src'))
+              expect(tauri).not.toContain('knowledge.rs')
+              expect(tauri).not.toContain('knowledge_wikis.rs')
+              expect(tauri).not.toContain('knowledge_graph.rs')
+            })
+          })
+          JS
+
+      - name: Validate the imported knowledge engine and physical service
+        shell: bash
+        env:
+          ELEPHANT_ADDON_PLATFORM: linux-x86_64
+        run: |
+          set -euxo pipefail
+          cargo fmt --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml --check
+          cargo test --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml
+          cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml --check
+          cargo test --manifest-path addons/official/knowledge/native/Cargo.toml
+          node build/scripts/build-physical-addon.mjs addons/official/knowledge
+
+      - uses: ./.github/actions/setup
+
+      - name: Validate addon ownership and application build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/knowledgePhysicalAddon.spec.js \
+            tests/app/unit/addons/physicalAddonCatalog.spec.js \
+            tests/app/unit/addons/physicalAbsence.spec.js
+          pnpm tauri:web:build
+
+      - name: Commit directed AI integration and remove helper workflow
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git rm .github/workflows/develop-next-integrate-knowledge-addon.yml
+          git add -A
+          git commit -m "feat(ai): integrate knowledge core as physical addon"
+          git fetch origin develop_next
+          git merge --no-edit origin/develop_next
+          git push origin HEAD:develop_next

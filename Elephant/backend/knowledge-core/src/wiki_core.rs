@@ -297,7 +297,6 @@ impl WikiSynthesis {
                 self.sections.len()
             ));
         }
-
         let allowed_chunks = sources
             .iter()
             .map(|source| source.chunk_id.as_str())
@@ -857,9 +856,8 @@ mod tests {
         let rendered = render_wiki(&synthesis, "Iroh", &sources).unwrap();
         assert!(rendered.markdown.contains("generated: true"));
         assert!(rendered.markdown.contains("[Iroh](../../Notes/Iroh.md"));
-        assert!(rendered
-            .markdown
-            .contains("[Peer-to-peer networking](./peer-to-peer-networking.md)"));
+        assert!(rendered.markdown.contains("- Peer-to-peer networking"));
+        assert!(!rendered.markdown.contains("./peer-to-peer-networking.md"));
         assert_eq!(rendered.citations.len(), 2);
     }
 

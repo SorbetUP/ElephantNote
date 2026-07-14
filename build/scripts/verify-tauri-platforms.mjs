@@ -132,16 +132,16 @@ assert(
 
 assert(chatRuntime.includes('#[cfg(mobile)]'), 'Chat runtime must have a mobile guard')
 assert(
-  chatRuntime.includes('desktop-only'),
-  'Mobile chat guard must explain that bundled llama.cpp is desktop-only'
+  chatRuntime.includes('Desktop AI runtimes are unavailable on mobile in this build.'),
+  'Mobile chat guard must explicitly reject desktop AI runtimes'
 )
 assert(
   chatRuntime.includes('#[cfg(not(mobile))]\nuse crate::local_llama_runtime;'),
   'Chat runtime must import bundled llama runtime only on desktop'
 )
 assert(
-  chatRuntime.includes('#[cfg(not(mobile))]\nfn with_system_prompt'),
-  'Desktop prompt assembly must not be required by mobile chat'
+  chatRuntime.includes('#[cfg(not(mobile))]\nfn grounded_messages('),
+  'Grounded desktop prompt assembly must not be required by mobile chat'
 )
 assert(
   libMin.includes('#[cfg(not(mobile))]\npub mod local_llama_runtime;'),

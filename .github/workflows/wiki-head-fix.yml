@@ -51,3 +51,5 @@ jobs:
           fi
           git commit -m "test(wiki): align related Wiki rendering contract"
           git push origin HEAD:assistant/wiki-organization-continuation
+
+# Second push activates the workflow after registration on the default branch.

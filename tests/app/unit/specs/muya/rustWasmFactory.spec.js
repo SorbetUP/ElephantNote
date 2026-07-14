@@ -1,10 +1,19 @@
+import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { createBundledMuyaRustEngine } from '../../../../../Elephant/frontend/src/muya/lib/rust/wasmFactory'
 
+const wasmPath = fileURLToPath(new URL(
+  '../../../../../Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm',
+  import.meta.url
+))
+
 describe('createBundledMuyaRustEngine', () => {
   it('creates the production Rust editor from the generated WASM bundle', async () => {
-    const engine = await createBundledMuyaRustEngine('alpha')
+    const bytes = await readFile(wasmPath)
+    const wasm = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    const engine = await createBundledMuyaRustEngine('alpha', wasm)
     expect(engine).toBeTruthy()
     expect(typeof engine.handle_json).toBe('function')
     expect(typeof engine.snapshot_json).toBe('function')

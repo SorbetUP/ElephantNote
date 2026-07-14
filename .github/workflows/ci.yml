@@ -51,7 +51,7 @@ jobs:
       - name: Verify generated parity backlog size
         shell: bash
         run: |
-          lines=$(cat agent/docs/project/parity/generated/*.md agent/docs/project/parity/index.md | wc -l | tr -d ' ')
+          lines=$(cat docs/parity/generated/*.md docs/parity/index.md | wc -l | tr -d ' ')
           echo "Generated parity documentation lines: $lines"
           test "$lines" -ge 10000
 
@@ -102,8 +102,8 @@ jobs:
           name: quality-artifacts
           path: |
             build/coverage/
-            agent/docs/project/parity/generated/
-            agent/docs/project/parity/index.md
+            docs/parity/generated/
+            docs/parity/index.md
             security-guardrails-report.json
             eslint-output.txt
             build-output.txt
@@ -223,7 +223,24 @@ jobs:
         run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
 
       - name: Cargo check
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features 2>&1 | tee tauri-cargo-check.log
 
       - name: Cargo tests
-        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features 2>&1 | tee tauri-cargo-test.log
+
+      - name: Upload Tauri Rust diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-ci-diagnostics
+          path: |
+            tauri-cargo-check.log
+            tauri-cargo-test.log
+          if-no-files-found: warn
+          retention-days: 7

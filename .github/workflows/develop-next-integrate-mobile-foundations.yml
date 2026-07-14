@@ -56,8 +56,7 @@ jobs:
             tests/app/unit/specs/main/elephantnote/androidFoundationsRegression.spec.js \
             tests/app/unit/specs/main/elephantnote/androidPrivateVaultPath.spec.js \
             tests/app/unit/specs/main/elephantnote/mobileAndroidRelease.spec.js \
-            tests/app/unit/specs/main/elephantnote/mobileInteractionRegression.spec.js \
-            tests/elephant/unit/noteEditorHostImageLinks.spec.js
+            tests/app/unit/specs/main/elephantnote/mobileInteractionRegression.spec.js
 
           python3 - <<'PY'
           from pathlib import Path

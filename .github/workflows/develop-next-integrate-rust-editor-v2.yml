@@ -70,11 +70,16 @@ jobs:
               raise SystemExit('parse_markdown setup changed unexpectedly')
           text = text.replace(setup, replacement, 1)
 
-          old_setext = '''    if let Some(level) = lines
-              .get(index + 1)
-              .and_then(|underline| heading::parse_setext_underline(&underline.text))
-            {
-              let underline = &lines[index + 1];
+          setext_start = text.index('    if let Some(level) = lines\n', text.index('  while index < lines.len()'))
+          setext_end = text.index('\n\n    if table::looks_like_row', setext_start)
+          new_setext = '''    if let Some(level) = lines
+            .get(index + 1)
+            .and_then(|underline| heading::parse_setext_underline(&underline.text))
+          {
+            let underline = &lines[index + 1];
+            let reserved_front_matter_delimiter = rejected_front_matter
+              .is_some_and(|style| front_matter::is_closing(&underline.text, style));
+            if !reserved_front_matter_delimiter {
               append_text_block(
                 &mut document,
                 BlockKind::Heading { level },
@@ -84,29 +89,8 @@ jobs:
               index += 2;
               continue;
             }
-          '''
-          new_setext = '''    if let Some(level) = lines
-              .get(index + 1)
-              .and_then(|underline| heading::parse_setext_underline(&underline.text))
-            {
-              let underline = &lines[index + 1];
-              let reserved_front_matter_delimiter = rejected_front_matter
-                .is_some_and(|style| front_matter::is_closing(&underline.text, style));
-              if !reserved_front_matter_delimiter {
-                append_text_block(
-                  &mut document,
-                  BlockKind::Heading { level },
-                  line.text.trim(),
-                  SourceRange::new(line.start, underline.end),
-                );
-                index += 2;
-                continue;
-              }
-            }
-          '''
-          if old_setext not in text:
-              raise SystemExit('Setext parser block changed unexpectedly')
-          text = text.replace(old_setext, new_setext, 1)
+          }'''
+          text = text[:setext_start] + new_setext + text[setext_end:]
 
           helper_anchor = 'fn try_parse_front_matter(document: &mut Document, lines: &[SourceLine]) -> Option<usize> {'
           helper = '''fn rejected_front_matter_style(lines: &[SourceLine]) -> Option<FrontMatterStyle> {

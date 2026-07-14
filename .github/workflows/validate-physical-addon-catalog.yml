@@ -39,6 +39,7 @@ jobs:
       - name: Validate sources, platform matrix and archives
         shell: bash
         run: |
+          set -euo pipefail
           python - <<'PY'
           from datetime import datetime
           from pathlib import Path, PurePosixPath
@@ -166,5 +167,6 @@ jobs:
           if source_ids != set(expected_versions):
               raise SystemExit(f'Package source set mismatch: {sorted(set(expected_versions) - source_ids)}')
 
-          print(f'Validated {len(entries)} official addons and {sum(len(entry.get("packages", {})) for entry in entries.values())} platform archives.')
+          archive_count = sum(len(entry.get('packages', {})) for entry in entries.values())
+          print(f'Validated catalog commit with {len(entries)} official addons and {archive_count} platform archives.')
           PY

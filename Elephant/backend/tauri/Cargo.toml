@@ -37,6 +37,7 @@ serde_json = "1"
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-elephant-android-vault = { path = "../tauri-plugin-elephant-android-vault" }
 tauri-plugin-fs = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"

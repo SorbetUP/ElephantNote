@@ -1,4 +1,8 @@
 import './platform/bootstrapGlobals'
+import './mobile-native-ux.css'
+import './platform/mobileVaultBridge'
+import './platform/mobileEditorRuntime'
+import './platform/mobileInteractionRuntime'
 import { createApp } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import bootstrapRenderer from './bootstrap'

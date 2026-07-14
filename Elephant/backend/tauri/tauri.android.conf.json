@@ -1,19 +1,14 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Elephant",
   "build": {
-    "beforeDevCommand": {
-      "script": "pnpm tauri:web:dev",
-      "cwd": "../../..",
-      "wait": false
-    },
-    "beforeBuildCommand": {
-      "script": "pnpm tauri:web:build",
-      "cwd": "../../.."
-    },
+    "beforeDevCommand": "cd ../.. && pnpm tauri:web:dev",
+    "beforeBuildCommand": "cd ../.. && pnpm tauri:web:build",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../../../build/out/renderer"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "label": "main",
@@ -22,12 +17,25 @@
         "height": 844,
         "resizable": true
       }
-    ]
+    ],
+    "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/**",
+          "$APPLOCALDATA/**",
+          "/data/user/0/com.elephantnote.app/**",
+          "/data/data/com.elephantnote.app/**"
+        ]
+      }
+    }
   },
   "bundle": {
     "active": true,
     "targets": "all",
     "resources": [],
-    "icon": ["../../assets/static/icon.png"]
+    "icon": [
+      "../../assets/static/icon.png"
+    ]
   }
 }

@@ -1,0 +1,138 @@
+name: Validate physical addon packs
+
+on:
+  push:
+    branches:
+      - feature/physical-addon-packs
+    paths:
+      - .github/workflows/validate-physical-addon-packs.yml
+      - packs/**
+  pull_request:
+    paths:
+      - .github/workflows/validate-physical-addon-packs.yml
+      - packs/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-physical-addon-packs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout protected packs
+        uses: actions/checkout@v4
+        with:
+          path: packs-repository
+
+      - name: Checkout physical addon catalog
+        uses: actions/checkout@v4
+        with:
+          ref: feature/physical-addon-catalog
+          path: catalog-repository
+
+      - name: Validate pack semantics and catalogue versions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          packs_root = Path('packs-repository/packs')
+          catalog_root = Path('catalog-repository')
+          catalog = json.loads((catalog_root / 'catalog.json').read_text())
+          official = {
+              entry['id']: entry['version']
+              for entry in catalog.get('addons', [])
+              if entry.get('official') and str(entry.get('id', '')).startswith('elephant.')
+          }
+
+          expected_versions = {
+              'elephant.ai': '2.1.0',
+              'elephant.ai-chat': '1.1.0',
+              'elephant.ai-search': '1.2.0',
+              'elephant.ai-ocr': '1.0.0',
+              'elephant.wiki': '1.3.0',
+              'elephant.graph': '1.2.0',
+              'elephant.open-models': '2.0.0',
+              'elephant.codex-connection': '2.0.0',
+              'elephant.sync': '1.2.0',
+              'elephant.calendar': '1.3.0',
+              'elephant.sites': '1.3.0',
+              'elephant.code-execution': '2.1.0',
+              'elephant.google-keep-import': '1.2.0',
+              'elephant.recently-edited': '1.1.0'
+          }
+          if official != expected_versions:
+              missing = sorted(set(expected_versions) - set(official))
+              extra = sorted(set(official) - set(expected_versions))
+              mismatched = sorted(
+                  addon_id for addon_id in set(official) & set(expected_versions)
+                  if official[addon_id] != expected_versions[addon_id]
+              )
+              raise SystemExit(
+                  f'Catalogue is not aligned to the protected pack contract: '
+                  f'missing={missing}, extra={extra}, mismatched={mismatched}'
+              )
+
+          def load_pack(name):
+              path = packs_root / name
+              if not path.is_file():
+                  raise SystemExit(f'Missing protected pack: {path}')
+              pack = json.loads(path.read_text())
+              if pack.get('format') != 'elephantnote-addon-pack' or pack.get('version') != 1:
+                  raise SystemExit(f'{name} uses an unsupported pack format')
+              if pack.get('protected') is not True:
+                  raise SystemExit(f'{name} must remain protected')
+              entries = pack.get('addons')
+              if not isinstance(entries, list) or not entries:
+                  raise SystemExit(f'{name} has no addons')
+              ids = [entry.get('id') for entry in entries]
+              if len(ids) != len(set(ids)):
+                  raise SystemExit(f'{name} contains duplicate addon IDs')
+              forbidden = {'elephant.excalidraw', 'elephant.addon-packs', 'excalidraw', 'addon-packs'}
+              if forbidden & set(ids):
+                  raise SystemExit(f'{name} serializes a core feature as an addon')
+              for entry in entries:
+                  addon_id = entry.get('id')
+                  if entry.get('source') != 'official' or entry.get('enabled') is not True:
+                      raise SystemExit(f'{name}/{addon_id} must be an enabled official addon')
+                  if addon_id not in official:
+                      raise SystemExit(f'{name}/{addon_id} is absent from the official catalogue')
+                  if entry.get('version') != official[addon_id]:
+                      raise SystemExit(
+                          f'{name}/{addon_id} version mismatch: '
+                          f'pack={entry.get("version")}, catalog={official[addon_id]}'
+                      )
+              return pack, set(ids)
+
+          develop, develop_ids = load_pack('develop-parity.enaddonpack')
+          base, base_ids = load_pack('base.enaddonpack')
+
+          expected_develop = set(expected_versions)
+          expected_base = expected_develop - {'elephant.calendar'}
+          if develop_ids != expected_develop:
+              raise SystemExit(
+                  f'Develop parity addon set mismatch: '
+                  f'missing={sorted(expected_develop - develop_ids)}, '
+                  f'extra={sorted(develop_ids - expected_develop)}'
+              )
+          if base_ids != expected_base:
+              raise SystemExit(
+                  f'Base addon set mismatch: '
+                  f'missing={sorted(expected_base - base_ids)}, '
+                  f'extra={sorted(base_ids - expected_base)}'
+              )
+          if develop_ids - base_ids != {'elephant.calendar'}:
+              raise SystemExit('Elephant Base must differ from Develop parity only by Calendar')
+
+          print(
+              f'Validated {len(develop_ids)} Develop parity addons and '
+              f'{len(base_ids)} Base addons against the official catalogue.'
+          )
+          PY

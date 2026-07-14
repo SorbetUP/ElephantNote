@@ -197,9 +197,6 @@ pub fn run() {
       tauri_extra_commands::tauri_drawings_read,
       tauri_extra_commands::tauri_drawings_write,
       tauri_extra_commands::tauri_search_inspect,
-      tauri_extra_commands::tauri_ai_config_get,
-      tauri_extra_commands::tauri_ai_config_set,
-      tauri_extra_commands::tauri_ai_config_test,
       tauri_extra_commands::tauri_features_get,
       tauri_extra_commands::tauri_features_set
     ])

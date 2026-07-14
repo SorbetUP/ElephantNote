@@ -12,11 +12,11 @@ describe('Muya Vue runtime integration', () => {
     delete globalThis.__ELEPHANT_MUYA_RUNTIME_MODE__
   })
 
-  it('reads runtime flags safely', () => {
-    expect(readMuyaRuntimeMode({})).toBe('disabled')
+  it('reads the immutable Rust runtime flags safely', () => {
+    expect(readMuyaRuntimeMode({})).toBe('rust')
     expect(isMuyaRuntimeEnabled('shadow')).toBe(true)
     expect(isMuyaRuntimeActive('active')).toBe(true)
-    expect(isMuyaRuntimeActive('shadow')).toBe(false)
+    expect(isMuyaRuntimeActive('shadow')).toBe(true)
   })
 
   it('mounts the Vue wrapper and emits ready', async() => {

@@ -97,6 +97,8 @@ fn extracted_ai_process_runtimes_are_absent_from_core() {
 fn extracted_sync_runtime_is_physically_absent_from_core() {
   let root = repo_root();
   let lib_min = read_text("Elephant/backend/tauri/src/lib_min.rs");
+  let extra_commands = read_text("Elephant/backend/tauri/src/tauri_extra_commands.rs");
+  let compatibility = read_text("Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js");
   let vault_mod = read_text("Elephant/backend/tauri/src/vault/mod.rs");
   let cargo = read_text("Elephant/backend/tauri/Cargo.toml");
   let removed = [
@@ -114,6 +116,11 @@ fn extracted_sync_runtime_is_physically_absent_from_core() {
   assert!(!lib_min.contains("pub mod sync;"));
   assert!(!lib_min.contains("IrohSyncState"));
   assert!(!lib_min.contains("sync_commands::iroh_sync_"));
+  assert!(!lib_min.contains("tauri_extra_commands::tauri_sync_plan"));
+  assert!(!extra_commands.contains("pub fn tauri_sync_plan"));
+  assert!(!extra_commands.contains("crate::vault::sync"));
+  assert!(!compatibility.contains("invoke('tauri_sync_plan'"));
+  assert!(compatibility.contains("getBridge()?.sync?.plan?."));
   assert!(!vault_mod.contains("pub mod sync;"));
   assert!(!cargo.contains("iroh ="));
   assert!(!cargo.contains("iroh-mdns-address-lookup"));

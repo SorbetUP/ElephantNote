@@ -103,6 +103,7 @@ jobs:
             tests/app/unit/addons/physicalAddonIsolation.spec.js \
             tests/app/unit/addons/nativeMobileCompatibility.spec.js \
             tests/app/unit/addons/searchPackageOwnership.spec.js \
+            tests/app/unit/addons/googleKeepPackageOwnership.spec.js \
             tests/app/unit/addons/trustedOfficialActivation.spec.js \
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
             2>&1 | tee addon-tests.txt

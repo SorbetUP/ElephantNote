@@ -9,13 +9,15 @@ on:
       - build/scripts/build-physical-addon.mjs
       - build/scripts/build-mobile-addon-package.mjs
       - build/tools/enaddon-packager/**
-      - addons/official/ai-ocr/**
-      - addons/official/code-execution/**
-      - addons/official/sync/**
+      - addons/official/**
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: publish-official-addon-catalog
+  cancel-in-progress: true
 
 jobs:
   build-native-packages:
@@ -51,6 +53,8 @@ jobs:
           for source in \
             addons/official/ai-ocr \
             addons/official/code-execution \
+            addons/official/open-models \
+            addons/official/codex-connection \
             addons/official/sync
           do
             node build/scripts/build-physical-addon.mjs "$source"
@@ -106,6 +110,12 @@ jobs:
           path: packages
           merge-multiple: true
 
+      - name: Checkout validated application sources
+        uses: actions/checkout@v4
+        with:
+          ref: feature/physical-addon-packages
+          path: source
+
       - name: Checkout physical addon catalog
         uses: actions/checkout@v4
         with:
@@ -113,7 +123,7 @@ jobs:
           path: catalog
           fetch-depth: 0
 
-      - name: Copy archives and update platform hashes
+      - name: Synchronize sources, archives and platform hashes
         shell: bash
         run: |
           python3 - <<'PY'
@@ -123,10 +133,65 @@ jobs:
           import shutil
 
           package_root = Path('packages')
+          source_root = Path('source/addons/official')
           catalog_root = Path('catalog')
+          catalog_addons = catalog_root / 'addons'
           catalog_path = catalog_root / 'catalog.json'
           catalog = json.loads(catalog_path.read_text())
           entries = {entry['id']: entry for entry in catalog.get('addons', [])}
+
+          def ignore_source(directory, names):
+              ignored = set()
+              if Path(directory).name == 'native' and 'target' in names:
+                  ignored.add('target')
+              ignored.update(name for name in names if name in {'.DS_Store', 'releases'})
+              return ignored
+
+          source_ids = set()
+          for source_dir in sorted(path for path in source_root.iterdir() if path.is_dir()):
+              manifest_path = source_dir / 'manifest.json'
+              if not manifest_path.is_file():
+                  continue
+              manifest = json.loads(manifest_path.read_text())
+              addon_id = manifest['id']
+              source_ids.add(addon_id)
+              destination = catalog_addons / source_dir.name
+              if destination.exists():
+                  shutil.rmtree(destination)
+              shutil.copytree(source_dir, destination, ignore=ignore_source)
+
+              entry = entries.get(addon_id)
+              if entry is None:
+                  entry = {'id': addon_id, 'slug': source_dir.name}
+                  catalog.setdefault('addons', []).append(entry)
+                  entries[addon_id] = entry
+              entry.update({
+                  'slug': source_dir.name,
+                  'name': manifest.get('name', entry.get('name', source_dir.name)),
+                  'version': manifest['version'],
+                  'description': manifest.get('description', ''),
+                  'author': manifest.get('author', 'Elephant'),
+                  'official': True,
+                  'manifestPath': f'addons/{source_dir.name}/manifest.json',
+                  'entryPath': f"addons/{source_dir.name}/{manifest['runtime']['entry']}"
+              })
+              if (source_dir / 'addon.build.json').is_file():
+                  entry['requiresPlatformPackage'] = True
+                  entry['packages'] = {}
+              else:
+                  entry.pop('requiresPlatformPackage', None)
+                  entry.pop('packages', None)
+                  entry.pop('packagePath', None)
+                  entry.pop('packageHash', None)
+
+          official_entries = [
+              entry for entry in catalog.get('addons', [])
+              if entry.get('official') and str(entry.get('id', '')).startswith('elephant.')
+          ]
+          stale = sorted(entry['id'] for entry in official_entries if entry['id'] not in source_ids)
+          if stale:
+              raise SystemExit(f'Official catalog entries have no package source: {stale}')
+
           metadata_files = sorted(package_root.rglob('*.enaddon.json'))
           if not metadata_files:
               raise SystemExit('No addon package metadata was downloaded')
@@ -159,17 +224,54 @@ jobs:
 
           desktop_platforms = {'linux-x86_64', 'windows-x86_64', 'macos-x86_64', 'macos-aarch64'}
           mobile_platforms = {'android-aarch64', 'android-x86_64', 'ios-aarch64', 'ios-x86_64'}
+          desktop_native_ids = {
+              'elephant.ai-ocr',
+              'elephant.code-execution',
+              'elephant.open-models',
+              'elephant.codex-connection',
+              'elephant.sync'
+          }
           expected = (
-              {('elephant.ai-ocr', platform) for platform in desktop_platforms}
-              | {('elephant.sync', platform) for platform in desktop_platforms}
-              | {('elephant.code-execution', platform) for platform in desktop_platforms | mobile_platforms}
+              {(addon_id, platform) for addon_id in desktop_native_ids for platform in desktop_platforms}
+              | {('elephant.code-execution', platform) for platform in mobile_platforms}
           )
           missing = sorted(expected - published)
+          unexpected = sorted(published - expected)
           if missing:
               raise SystemExit(f'Missing published addon variants: {missing}')
+          if unexpected:
+              raise SystemExit(f'Unexpected published addon variants: {unexpected}')
+
+          for addon_id in desktop_native_ids:
+              entry = entries[addon_id]
+              actual = set(entry.get('packages', {}))
+              expected_platforms = desktop_platforms | (mobile_platforms if addon_id == 'elephant.code-execution' else set())
+              if actual != expected_platforms:
+                  raise SystemExit(f'{addon_id} platform mismatch: expected {sorted(expected_platforms)}, got {sorted(actual)}')
 
           catalog['updatedAt'] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+          catalog['addons'] = sorted(catalog.get('addons', []), key=lambda entry: (not entry.get('official', False), entry.get('name', '').casefold(), entry['id']))
           catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + '\n')
+          PY
+
+      - name: Verify synchronized catalogue source versions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          root = Path('catalog')
+          catalog = json.loads((root / 'catalog.json').read_text())
+          for entry in catalog['addons']:
+              if not entry.get('official') or not str(entry.get('id', '')).startswith('elephant.'):
+                  continue
+              manifest = json.loads((root / entry['manifestPath']).read_text())
+              if manifest['id'] != entry['id'] or manifest['version'] != entry['version']:
+                  raise SystemExit(f"Catalog/source mismatch for {entry['id']}")
+              entry_path = root / entry['entryPath']
+              if not entry_path.is_file():
+                  raise SystemExit(f"Missing entry module for {entry['id']}: {entry_path}")
           PY
 
       - name: Commit published packages
@@ -183,6 +285,6 @@ jobs:
             echo 'Addon package catalogue already current.'
             exit 0
           fi
-          git commit -m "feat(catalog): publish hashed desktop and mobile addon packages"
+          git commit -m "feat(catalog): synchronize validated addon sources and packages"
           git pull --rebase origin feature/physical-addon-catalog
           git push origin HEAD:feature/physical-addon-catalog

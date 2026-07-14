@@ -22,6 +22,10 @@ const lacks = (relativePath, needle, description = needle) => {
   if (read(relativePath).includes(needle)) failures.push(`${relativePath}: unexpected ${description}`)
 }
 
+const missing = (relativePath, description = relativePath) => {
+  if (fs.existsSync(target(relativePath))) failures.push(`${relativePath}: unexpected ${description}`)
+}
+
 const ordered = (relativePath, needles, description) => {
   const content = read(relativePath)
   let cursor = -1
@@ -65,12 +69,18 @@ for (const file of [
   'Elephant/frontend/app/components/shell/MainContent.vue',
   'Elephant/frontend/app/components/editor/NoteEditorHost.vue',
   'Elephant/frontend/app/components/editor/ExcalidrawDialog.vue',
+  'Elephant/backend/tauri/Cargo.toml',
   'Elephant/backend/tauri/src/lib_min.rs',
+  'Elephant/backend/tauri/src/core_commands.rs',
   'Elephant/backend/tauri/src/addon_services.rs',
   'Elephant/backend/tauri/src/addon_runtime_access.rs',
-  'Elephant/backend/tauri/src/tauri_extra_commands.rs',
   'tests/app/e2e/search-inspect.spec.js'
 ]) read(file)
+
+missing('Elephant/backend/tauri/src/tauri_extra_commands.rs', 'legacy optional command module')
+missing('Elephant/backend/tauri/src/sync_commands.rs', 'legacy core Sync commands')
+missing('Elephant/backend/tauri/src/sync', 'legacy core Iroh runtime directory')
+missing('Elephant/backend/tauri/src/vault/sync_iroh', 'legacy core Sync backend directory')
 
 ordered(
   '.github/workflows/ci.yml',
@@ -142,14 +152,36 @@ for (const command of [
   'tauri_addons_service_stop'
 ]) has('Elephant/backend/tauri/src/lib_min.rs', command, `registered ${command} command`)
 
+has('Elephant/backend/tauri/src/lib_min.rs', '#[path = "core_commands.rs"]', 'minimal core command module')
 for (const leakedCoreMarker of [
   'pub mod ocr;',
   'pub mod model_domain;',
+  'pub mod sync;',
   'tauri_ocr_',
   'tauri_embedding_',
-  'tauri_models_download',
-  'tauri_codex_chat'
+  'tauri_models_',
+  'tauri_codex_',
+  'tauri_ai_config_',
+  'tauri_search_inspect',
+  'iroh_sync_'
 ]) lacks('Elephant/backend/tauri/src/lib_min.rs', leakedCoreMarker, `optional runtime leakage ${leakedCoreMarker}`)
+
+for (const leakedDependency of [
+  'iroh =',
+  'iroh-mdns-address-lookup',
+  'reqwest =',
+  'tokenizers =',
+  'fastembed ='
+]) lacks('Elephant/backend/tauri/Cargo.toml', leakedDependency, `optional dependency ${leakedDependency}`)
+
+for (const leakedCoreImplementation of [
+  'tauri_ai_config_get',
+  'tauri_models_get_selection',
+  'tauri_search_inspect',
+  'portable-markdown-index',
+  'codex --version',
+  'tauri-rust://'
+]) lacks('Elephant/backend/tauri/src/core_commands.rs', leakedCoreImplementation, `optional implementation ${leakedCoreImplementation}`)
 
 for (const [directory, addonId, entry] of physicalPackages) {
   const base = `addons/official/${directory}`
@@ -160,6 +192,15 @@ for (const [directory, addonId, entry] of physicalPackages) {
   read(main)
 }
 
+has('addons/official/ai/main.js', "const CONFIG_KEY = 'provider-config'", 'package-owned AI configuration')
+has('addons/official/ai/main.js', 'this.api.storage.get(CONFIG_KEY)', 'AI configuration storage read')
+has('addons/official/ai/main.js', 'this.api.storage.set(CONFIG_KEY, payload)', 'AI configuration storage write')
+has('addons/official/ai/main.js', "api.resources.provide('ai.config'", 'AI configuration resource')
+lacks('addons/official/ai/main.js', 'tauri_ai_config_', 'core AI configuration bridge')
+lacks('addons/official/ai/main.js', 'ollama:', 'implicit local model provider')
+lacks('addons/official/ai/main.js', 'lmstudio:', 'implicit local model provider')
+lacks('addons/official/ai/main.js', 'llamacpp:', 'implicit local model provider')
+
 has('addons/official/ai-search/main.js', "const PROVIDER_RESOURCE = 'search.provider'", 'package-owned search provider')
 has('addons/official/ai-search/main.js', "engine: 'package-owned-bm25'", 'package-owned lexical index')
 has('addons/official/wiki/main.v2.js', 'wiki.provider', 'package-owned Wiki provider')
@@ -167,13 +208,12 @@ has('addons/official/graph/main.js', 'api.workspace.registerView', 'package-owne
 has('addons/official/open-models/manifest.json', '"runner": "service"', 'Open Models native service')
 has('addons/official/codex-connection/manifest.json', '"runner": "service"', 'Codex native service')
 has('addons/official/sync/manifest.json', '"protocol": "elephant-addon-service-v1"', 'Sync native service protocol')
-has('addons/official/sync/main.service.js', 'this.api.native?.service', 'Sync package service bridge')
-has('addons/official/sync/native/src/main.rs', '"sync.apply-local" => service.apply_local(params)', 'package-owned local Sync operations')
+has('addons/official/sync/main.service.js', "this.callNativeService('sync.run'", 'active package Sync path')
+has('addons/official/sync/native/src/main.rs', '"sync.run" => service.run_sync().await', 'package-owned Sync sessions')
+has('addons/official/sync/native/tests/two_endpoint_sync.rs', 'physical_package_pairs_and_synchronizes_two_real_iroh_endpoints', 'real package Iroh validation')
 
-has('Elephant/backend/tauri/src/tauri_extra_commands.rs', '"engine": "portable-markdown-index"', 'core lexical inspection engine')
-has('Elephant/backend/tauri/src/tauri_extra_commands.rs', '"status": "not-configured"', 'explicit absence of core embeddings')
-lacks('Elephant/backend/tauri/src/tauri_extra_commands.rs', 'vectra', 'legacy core vector index')
-has('tests/app/e2e/search-inspect.spec.js', "expect(result.indexPath).toBe('')", 'no core semantic index E2E contract')
+has('tests/app/e2e/search-inspect.spec.js', 'does not expose semantic inspection without the Search addon', 'Search physical absence E2E contract')
+has('tests/app/e2e/search-inspect.spec.js', 'expect(result.ok).toBe(false)', 'unavailable core Search command')
 
 ordered(
   'Elephant/frontend/app/components/editor/NoteEditorHost.vue',

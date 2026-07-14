@@ -193,6 +193,7 @@ const repairImage = (img) => {
 }
 
 const repairAllImages = () => {
+  if (typeof document === 'undefined' || !document?.querySelectorAll) return 0
   const images = document.querySelectorAll('img')
   let repaired = 0
   for (const img of images) {

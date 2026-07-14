@@ -65,16 +65,18 @@ describe('optional first-party physical addons and configurable icon rail', () =
     const sync = read('addons/official/sync/main.js')
     const sites = read('addons/official/sites/main.js')
     const navigation = read('Elephant/frontend/app/components/navigation/NavigationBar.vue')
-    const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
+    const router = read('Elephant/frontend/app/components/views/AddonWorkspaceRouter.vue')
 
     expect(builtins).not.toContain("import('./calendar')")
     expect(builtins).not.toContain("import('./sync')")
     expect(builtins).not.toContain("import('./sites')")
     expect(calendar).toContain('api.workspace.registerView')
+    expect(calendar).toContain("const PROVIDER_RESOURCE = 'calendar.provider'")
     expect(sync).toContain("registerContribution('top-bar.items'")
-    expect(sites).toContain("zone: 'workspace.notes'")
+    expect(sites).toContain('api.workspace.registerView')
+    expect(sites).toContain("const PROVIDER_RESOURCE = 'sites.provider'")
     expect(navigation).toContain(':is="entry.contribution.component"')
-    expect(main).toContain("entry?.contribution?.zone === 'workspace.notes'")
+    expect(router).toContain(':is="view.contribution.component"')
   })
 
   it('keeps AI capabilities independently installable under the physical AI parent', () => {

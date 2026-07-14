@@ -82,8 +82,23 @@ fn android_scripts_always_use_the_android_config() {
 #[test]
 fn extracted_ai_process_runtimes_are_absent_from_core() {
   let lib_min = read_text("Elephant/backend/tauri/src/lib_min.rs");
+  let extra_commands = read_text("Elephant/backend/tauri/src/tauri_extra_commands.rs");
+  let compatibility = read_text("Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js");
   assert!(!lib_min.contains("pub mod local_llama_runtime;"), "Open Models runtime must be owned by its physical addon package");
   assert!(!lib_min.contains("pub mod chat_runtime;"), "legacy core chat runtime must stay removed");
+  assert!(!lib_min.contains("tauri_extra_commands::tauri_ai_config_get"));
+  assert!(!lib_min.contains("tauri_extra_commands::tauri_ai_config_set"));
+  assert!(!lib_min.contains("tauri_extra_commands::tauri_ai_config_test"));
+  assert!(!extra_commands.contains("pub fn tauri_ai_config_get"));
+  assert!(!extra_commands.contains("pub fn tauri_ai_config_set"));
+  assert!(!extra_commands.contains("pub fn tauri_ai_config_test"));
+  assert!(!extra_commands.contains("pub fn tauri_models_get_selection"));
+  assert!(!extra_commands.contains("pub fn tauri_models_set_selection"));
+  assert!(!extra_commands.contains("test_codex_cli"));
+  assert!(!extra_commands.contains("test_tcp_endpoint"));
+  assert!(!extra_commands.contains("PROVIDER_CONFIG_CATEGORY"));
+  assert!(compatibility.contains("getBridge()?.ai?.getConfig?.()"));
+  assert!(compatibility.contains("getBridge()?.models?.getSelection?.()"));
 
   let desktop_config = read_text("Elephant/backend/tauri/tauri.conf.json");
   let dev_script = read_text("build/scripts/build_dev.sh");

@@ -1,6 +1,11 @@
 name: Repair develop_next Rust integration workflow
 
 on:
+  push:
+    branches:
+      - develop_next
+    paths:
+      - .github/workflows/develop-next-fix-rust-integration.yml
   pull_request:
     branches:
       - feature/physical-addon-packages

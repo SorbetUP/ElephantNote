@@ -3,15 +3,15 @@ vitest=0 eslint=0 cargo_check=0 cargo_test=0 build=0
 
 [1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90m/home/runner/work/ElephantNote/ElephantNote[39m
 
- [32m✓[39m tests/app/unit/wikiGraphSurface.spec.js [2m([22m[2m3 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m tests/app/unit/wikiGraphSurface.spec.js [2m([22m[2m3 tests[22m[2m)[22m[32m 16[2mms[22m[39m
 
 [2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
 [2m      Tests [22m [1m[32m3 passed[39m[22m[90m (3)[39m
-[2m   Start at [22m 19:55:24
-[2m   Duration [22m 741ms[2m (transform 54ms, setup 25ms, import 47ms, tests 15ms, environment 537ms)[22m
+[2m   Start at [22m 00:32:04
+[2m   Duration [22m 936ms[2m (transform 51ms, setup 26ms, import 47ms, tests 16ms, environment 712ms)[22m
 
 === eslint ===
-(node:4529) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/runner/work/ElephantNote/ElephantNote/eslint.config.js?mtime=1783886034275 is not specified and it doesn't parse as CommonJS.
+(node:4687) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/runner/work/ElephantNote/ElephantNote/eslint.config.js?mtime=1783989075958 is not specified and it doesn't parse as CommonJS.
 Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
 To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNote/ElephantNote/package.json.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -23,16 +23,16 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
 [1m[92m   Compiling[0m vergen-gitcl v9.1.0
 [1m[92m   Compiling[0m quick-xml v0.39.4
 [1m[92m   Compiling[0m curve25519-dalek-derive v0.1.1
-[1m[92m   Compiling[0m endi v1.1.1
-[1m[92m    Checking[0m async-task v4.7.1
 [1m[92m    Checking[0m signature v3.0.0
 [1m[92m   Compiling[0m wayland-client v0.31.14
-[1m[92m    Checking[0m mime v0.3.17
+[1m[92m   Compiling[0m endi v1.1.1
 [1m[92m    Checking[0m downcast-rs v1.2.1
+[1m[92m    Checking[0m mime v0.3.17
+[1m[92m    Checking[0m async-task v4.7.1
 [1m[92m   Compiling[0m wayland-scanner v0.31.10
 [1m[92m   Compiling[0m data-encoding-macro-internal v0.1.18
-[1m[92m    Checking[0m ed25519 v3.0.0
 [1m[92m   Compiling[0m zvariant v5.13.0
+[1m[92m    Checking[0m ed25519 v3.0.0
 [1m[92m    Checking[0m ghash v0.5.1
 [1m[92m    Checking[0m tower v0.5.3
 [1m[92m    Checking[0m sha2 v0.11.0
@@ -45,17 +45,17 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
 [1m[92m    Checking[0m netlink-sys v0.8.8
 [1m[92m   Compiling[0m blake3 v1.8.5
 [1m[92m   Compiling[0m ahash v0.8.12
+[1m[92m    Checking[0m openssl-probe v0.2.1
 [1m[92m    Checking[0m foldhash v0.1.5
 [1m[92m   Compiling[0m netdev v0.45.0
-[1m[92m    Checking[0m openssl-probe v0.2.1
 [1m[92m    Checking[0m tagptr v0.2.0
 [1m[92m    Checking[0m moka v0.12.15
-[1m[92m    Checking[0m rustls-native-certs v0.8.4
 [1m[92m    Checking[0m hashbrown v0.15.5
-[1m[92m   Compiling[0m zbus_names v4.3.3
+[1m[92m    Checking[0m rustls-native-certs v0.8.4
 [1m[92m    Checking[0m hyper-rustls v0.27.9
 [1m[92m    Checking[0m aes-gcm v0.10.3
 [1m[92m    Checking[0m ed25519-dalek v3.0.0-rc.0
+[1m[92m   Compiling[0m zbus_names v4.3.3
 [1m[92m    Checking[0m tower-http v0.6.11
 [1m[92m    Checking[0m async-signal v0.2.14
 [1m[92m    Checking[0m data-encoding-macro v0.1.20
@@ -65,35 +65,35 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
 [1m[92m   Compiling[0m num_enum_derive v0.7.6
 [1m[92m   Compiling[0m tauri-plugin-fs v2.5.1
 [1m[92m    Checking[0m piper v0.2.5
-[1m[92m   Compiling[0m noq v1.0.1
 [1m[92m   Compiling[0m netwatch v0.19.1
+[1m[92m   Compiling[0m noq v1.0.1
 [1m[92m   Compiling[0m iroh-dns v1.0.2
 [1m[92m    Checking[0m rand_pcg v0.10.2
+[1m[92m   Compiling[0m enum-assoc v1.3.0
 [1m[92m   Compiling[0m strum_macros v0.28.0
 [1m[92m   Compiling[0m iroh-metrics-derive v1.0.1
-[1m[92m   Compiling[0m enum-assoc v1.3.0
-[1m[92m    Checking[0m arrayvec v0.7.8
-[1m[92m    Checking[0m fixedbitset v0.5.7
-[1m[92m    Checking[0m arrayref v0.3.9
-[1m[92m    Checking[0m lru-slab v0.1.2
-[1m[92m    Checking[0m resolv-conf v0.7.6
-[1m[92m    Checking[0m identity-hash v0.1.0
-[1m[92m    Checking[0m xml-rs v0.8.28
-[1m[92m   Compiling[0m vcpkg v0.2.15
-[1m[92m    Checking[0m mac-addr v0.3.0
-[1m[92m    Checking[0m constant_time_eq v0.4.2
 [1m[92m    Checking[0m sorted-index-buffer v0.2.1
-[1m[92m    Checking[0m noq-proto v1.0.1
-[1m[92m   Compiling[0m libsqlite3-sys v0.30.1
-[1m[92m    Checking[0m strum v0.28.0
-[1m[92m    Checking[0m xmltree v0.10.3
-[1m[92m    Checking[0m hickory-resolver v0.26.1
+[1m[92m    Checking[0m identity-hash v0.1.0
+[1m[92m    Checking[0m arrayref v0.3.9
+[1m[92m    Checking[0m xml-rs v0.8.28
+[1m[92m    Checking[0m mac-addr v0.3.0
+[1m[92m    Checking[0m resolv-conf v0.7.6
+[1m[92m    Checking[0m constant_time_eq v0.4.2
+[1m[92m    Checking[0m lru-slab v0.1.2
+[1m[92m   Compiling[0m vcpkg v0.2.15
+[1m[92m    Checking[0m fixedbitset v0.5.7
+[1m[92m    Checking[0m arrayvec v0.7.8
 [1m[92m    Checking[0m petgraph v0.8.3
+[1m[92m   Compiling[0m libsqlite3-sys v0.30.1
+[1m[92m    Checking[0m xmltree v0.10.3
+[1m[92m    Checking[0m noq-proto v1.0.1
+[1m[92m    Checking[0m strum v0.28.0
+[1m[92m    Checking[0m hickory-resolver v0.26.1
 [1m[92m    Checking[0m iroh-metrics v1.0.1
 [1m[92m    Checking[0m num_enum v0.7.6
 [1m[92m    Checking[0m blocking v1.6.2
-[1m[92m    Checking[0m wayland-protocols v0.32.13
 [1m[92m    Checking[0m async-process v2.5.0
+[1m[92m    Checking[0m wayland-protocols v0.32.13
 [1m[92m   Compiling[0m iroh-relay v1.0.2
 [1m[92m    Checking[0m iroh-base v1.0.2
 [1m[92m   Compiling[0m zbus_macros v5.17.0
@@ -107,16 +107,16 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
 [1m[92m    Checking[0m attohttpc v0.30.1
 [1m[92m    Checking[0m cobs v0.3.0
 [1m[92m   Compiling[0m acto v0.8.2
-[1m[92m   Compiling[0m postcard-derive v0.2.2
 [1m[92m   Compiling[0m async-recursion v1.1.1
+[1m[92m   Compiling[0m postcard-derive v0.2.2
 [1m[92m    Checking[0m simple-dns v0.11.3
 [1m[92m    Checking[0m ordered-stream v0.2.0
 [1m[92m    Checking[0m nom v8.0.0
-[1m[92m    Checking[0m hex v0.4.3
 [1m[92m    Checking[0m pxfm v0.1.30
+[1m[92m    Checking[0m hex v0.4.3
+[1m[92m   Compiling[0m inotify-sys v0.1.8
 [1m[92m    Checking[0m simdutf8 v0.1.5
 [1m[92m    Checking[0m sha1_smol v1.0.1
-[1m[92m   Compiling[0m inotify-sys v0.1.8
 [1m[92m    Checking[0m tokio-websockets v0.13.3
 [1m[92m    Checking[0m zbus v5.17.0
 [1m[92m    Checking[0m wayland-protocols-wlr v0.3.12
@@ -130,48 +130,48 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
 [1m[92m    Checking[0m ppv-lite86 v0.2.21
 [1m[92m    Checking[0m rand_core v0.9.5
 [1m[92m    Checking[0m gethostname v1.1.0
-[1m[92m   Compiling[0m tauri-plugin-clipboard-manager v2.3.2
 [1m[92m   Compiling[0m tauri-plugin-notification v2.3.3
-[1m[92m   Compiling[0m tauri-plugin-window-state v2.4.1
 [1m[92m   Compiling[0m tauri-plugin-dialog v2.7.1
 [1m[92m   Compiling[0m tauri-plugin-opener v2.5.4
+[1m[92m   Compiling[0m tauri-plugin-clipboard-manager v2.3.2
+[1m[92m   Compiling[0m tauri-plugin-window-state v2.4.1
 [1m[92m   Compiling[0m iroh v1.0.2
 [1m[92m    Checking[0m lru v0.18.0
 [1m[92m    Checking[0m is-docker v0.2.0
 [1m[92m    Checking[0m csv-core v0.1.13
 [1m[92m    Checking[0m serde_bytes v0.11.19
-[1m[92m    Checking[0m os_pipe v1.2.3
 [1m[92m    Checking[0m seize v0.5.1
-[1m[92m    Checking[0m cmov v0.5.4
-[1m[92m    Checking[0m iana-time-zone v0.1.65
+[1m[92m    Checking[0m os_pipe v1.2.3
 [1m[92m   Compiling[0m rustix v0.38.44
 [1m[92m   Compiling[0m rfd v0.16.0
+[1m[92m    Checking[0m cmov v0.5.4
+[1m[92m    Checking[0m smol_str v0.1.24
+[1m[92m    Checking[0m unicode-width v0.2.2
 [1m[92m   Compiling[0m pulldown-cmark v0.13.4
 [1m[92m    Checking[0m x11rb-protocol v0.13.2
-[1m[92m    Checking[0m smol_str v0.1.24
+[1m[92m    Checking[0m iana-time-zone v0.1.65
 [1m[92m    Checking[0m bytemuck v1.25.0
 [1m[92m    Checking[0m byteorder-lite v0.1.0
-[1m[92m    Checking[0m unicode-width v0.2.2
+[1m[92m    Checking[0m chrono v0.4.45
 [1m[92m    Checking[0m image v0.25.10
 [1m[92m    Checking[0m getopts v0.2.24
 [1m[92m    Checking[0m ctutils v0.4.2
 [1m[92m    Checking[0m papaya v0.2.4
-[1m[92m    Checking[0m chrono v0.4.45
-[1m[92m    Checking[0m csv v1.4.0
-[1m[92m    Checking[0m x11rb v0.13.2
 [1m[92m    Checking[0m wl-clipboard-rs v0.9.3
+[1m[92m    Checking[0m csv v1.4.0
 [1m[92m    Checking[0m is-wsl v0.4.0
+[1m[92m    Checking[0m x11rb v0.13.2
 [1m[92m    Checking[0m rand_chacha v0.9.0
 [1m[92m    Checking[0m hashlink v0.9.1
 [1m[92m    Checking[0m portmapper v0.19.1
 [1m[92m    Checking[0m backon v1.6.0
-[1m[92m    Checking[0m linux-raw-sys v0.4.15
 [1m[92m    Checking[0m pulldown-cmark-escape v0.11.0
-[1m[92m    Checking[0m fallible-streaming-iterator v0.1.9
-[1m[92m    Checking[0m fallible-iterator v0.3.0
 [1m[92m    Checking[0m unicase v2.9.0
-[1m[92m    Checking[0m inotify v0.9.6
+[1m[92m    Checking[0m fallible-iterator v0.3.0
+[1m[92m    Checking[0m fallible-streaming-iterator v0.1.9
+[1m[92m    Checking[0m linux-raw-sys v0.4.15
 [1m[92m    Checking[0m arboard v3.6.1
+[1m[92m    Checking[0m inotify v0.9.6
 [1m[92m    Checking[0m rand v0.9.4
 [1m[92m    Checking[0m open v5.3.6
 [1m[92m    Checking[0m swarm-discovery v0.6.3
@@ -179,19 +179,19 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
 [1m[92m    Checking[0m serde_urlencoded v0.7.1
 [1m[92m   Compiling[0m elephantnote-tauri v0.18.9 (/home/runner/work/ElephantNote/ElephantNote/Elephant/backend/tauri)
 [1m[92m    Checking[0m mio v0.8.11
-[1m[92m    Checking[0m thread_local v1.1.9
-[1m[92m    Checking[0m encoding_rs v0.8.35
 [1m[92m    Checking[0m filetime v0.2.29
+[1m[92m    Checking[0m encoding_rs v0.8.35
+[1m[92m    Checking[0m thread_local v1.1.9
+[1m[92m    Checking[0m home v0.5.12
 [1m[92m    Checking[0m chunked_transfer v1.5.0
 [1m[92m    Checking[0m ascii v1.1.0
-[1m[92m    Checking[0m home v0.5.12
-[1m[92m    Checking[0m which v6.0.3
 [1m[92m    Checking[0m tiny_http v0.12.0
-[1m[92m    Checking[0m notify v6.1.1
-[1m[92m    Checking[0m chardetng v0.1.17
-[1m[92m    Checking[0m fuzzy-matcher v0.3.7
-[1m[92m    Checking[0m reqwest v0.12.28
 [1m[92m    Checking[0m rusqlite v0.32.1
+[1m[92m    Checking[0m which v6.0.3
+[1m[92m    Checking[0m fuzzy-matcher v0.3.7
+[1m[92m    Checking[0m chardetng v0.1.17
+[1m[92m    Checking[0m notify v6.1.1
+[1m[92m    Checking[0m reqwest v0.12.28
 [1m[92m    Checking[0m elephantnote-knowledge-core v0.1.0 (/home/runner/work/ElephantNote/ElephantNote/Elephant/backend/knowledge-core)
 [1m[92m    Checking[0m keyring v3.6.3
 [1m[92m    Checking[0m iroh-mdns-address-lookup v0.4.0
@@ -255,7 +255,7 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
    [1m[94m= [0m[1mnote[0m: `EmbeddingRoute` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
 
 [1m[33mwarning[0m: `elephantnote-tauri` (lib) generated 8 warnings (run `cargo fix --lib -p elephantnote-tauri` to apply 6 suggestions)
-[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 1m 36s
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 1m 56s
 === cargo test ===
 [1m[92m   Compiling[0m netlink-packet-route v0.31.0
 [1m[92m   Compiling[0m async-lock v3.4.2
@@ -266,26 +266,26 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
 [1m[92m   Compiling[0m strum_macros v0.28.0
 [1m[92m   Compiling[0m enum-assoc v1.3.0
 [1m[92m   Compiling[0m rand_pcg v0.10.2
-[1m[92m   Compiling[0m constant_time_eq v0.4.2
-[1m[92m   Compiling[0m sorted-index-buffer v0.2.1
-[1m[92m   Compiling[0m mac-addr v0.3.0
-[1m[92m   Compiling[0m xml-rs v0.8.28
-[1m[92m   Compiling[0m fixedbitset v0.5.7
 [1m[92m   Compiling[0m arrayref v0.3.9
-[1m[92m   Compiling[0m resolv-conf v0.7.6
+[1m[92m   Compiling[0m constant_time_eq v0.4.2
 [1m[92m   Compiling[0m arrayvec v0.7.8
-[1m[92m   Compiling[0m lru-slab v0.1.2
+[1m[92m   Compiling[0m fixedbitset v0.5.7
 [1m[92m   Compiling[0m identity-hash v0.1.0
-[1m[92m   Compiling[0m strum v0.28.0
+[1m[92m   Compiling[0m xml-rs v0.8.28
+[1m[92m   Compiling[0m mac-addr v0.3.0
+[1m[92m   Compiling[0m sorted-index-buffer v0.2.1
+[1m[92m   Compiling[0m resolv-conf v0.7.6
+[1m[92m   Compiling[0m lru-slab v0.1.2
 [1m[92m   Compiling[0m noq-proto v1.0.1
-[1m[92m   Compiling[0m blake3 v1.8.5
-[1m[92m   Compiling[0m hickory-resolver v0.26.1
+[1m[92m   Compiling[0m strum v0.28.0
 [1m[92m   Compiling[0m xmltree v0.10.3
+[1m[92m   Compiling[0m hickory-resolver v0.26.1
 [1m[92m   Compiling[0m petgraph v0.8.3
 [1m[92m   Compiling[0m netdev v0.45.0
+[1m[92m   Compiling[0m blake3 v1.8.5
 [1m[92m   Compiling[0m iroh-metrics v1.0.1
-[1m[92m   Compiling[0m blocking v1.6.2
 [1m[92m   Compiling[0m num_enum v0.7.6
+[1m[92m   Compiling[0m blocking v1.6.2
 [1m[92m   Compiling[0m async-process v2.5.0
 [1m[92m   Compiling[0m wayland-protocols v0.32.13
 [1m[92m   Compiling[0m iroh-base v1.0.2
@@ -301,23 +301,23 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
 [1m[92m   Compiling[0m tokio-stream v0.1.18
 [1m[92m   Compiling[0m attohttpc v0.30.1
 [1m[92m   Compiling[0m cobs v0.3.0
-[1m[92m   Compiling[0m async-recursion v1.1.1
 [1m[92m   Compiling[0m postcard-derive v0.2.2
+[1m[92m   Compiling[0m async-recursion v1.1.1
 [1m[92m   Compiling[0m simple-dns v0.11.3
-[1m[92m   Compiling[0m nom v8.0.0
 [1m[92m   Compiling[0m ordered-stream v0.2.0
+[1m[92m   Compiling[0m nom v8.0.0
+[1m[92m   Compiling[0m hex v0.4.3
 [1m[92m   Compiling[0m simdutf8 v0.1.5
 [1m[92m   Compiling[0m sha1_smol v1.0.1
-[1m[92m   Compiling[0m hex v0.4.3
 [1m[92m   Compiling[0m pxfm v0.1.30
-[1m[92m   Compiling[0m zbus v5.17.0
 [1m[92m   Compiling[0m tokio-websockets v0.13.3
-[1m[92m   Compiling[0m tree_magic_mini v3.2.2
+[1m[92m   Compiling[0m zbus v5.17.0
 [1m[92m   Compiling[0m iroh-dns v1.0.2
-[1m[92m   Compiling[0m postcard v1.1.3
+[1m[92m   Compiling[0m tree_magic_mini v3.2.2
 [1m[92m   Compiling[0m moxcms v0.8.1
-[1m[92m   Compiling[0m igd-next v0.17.1
+[1m[92m   Compiling[0m postcard v1.1.3
 [1m[92m   Compiling[0m wayland-protocols-wlr v0.3.12
+[1m[92m   Compiling[0m igd-next v0.17.1
 [1m[92m   Compiling[0m noq v1.0.1
 [1m[92m   Compiling[0m netwatch v0.19.1
 [1m[92m   Compiling[0m reqwest v0.13.4
@@ -325,35 +325,35 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
 [1m[92m   Compiling[0m ppv-lite86 v0.2.21
 [1m[92m   Compiling[0m rand_core v0.9.5
 [1m[92m   Compiling[0m png v0.18.1
-[1m[92m   Compiling[0m tauri-plugin-dialog v2.7.1
-[1m[92m   Compiling[0m tauri-plugin-clipboard-manager v2.3.2
 [1m[92m   Compiling[0m tauri-plugin-notification v2.3.3
-[1m[92m   Compiling[0m tauri-plugin-opener v2.5.4
 [1m[92m   Compiling[0m tauri-plugin-window-state v2.4.1
+[1m[92m   Compiling[0m tauri-plugin-dialog v2.7.1
+[1m[92m   Compiling[0m tauri-plugin-opener v2.5.4
+[1m[92m   Compiling[0m tauri-plugin-clipboard-manager v2.3.2
 [1m[92m   Compiling[0m gethostname v1.1.0
 [1m[92m   Compiling[0m lru v0.18.0
 [1m[92m   Compiling[0m is-docker v0.2.0
 [1m[92m   Compiling[0m serde_bytes v0.11.19
 [1m[92m   Compiling[0m csv-core v0.1.13
-[1m[92m   Compiling[0m seize v0.5.1
 [1m[92m   Compiling[0m os_pipe v1.2.3
-[1m[92m   Compiling[0m smol_str v0.1.24
+[1m[92m   Compiling[0m seize v0.5.1
 [1m[92m   Compiling[0m bytemuck v1.25.0
-[1m[92m   Compiling[0m unicode-width v0.2.2
-[1m[92m   Compiling[0m iana-time-zone v0.1.65
-[1m[92m   Compiling[0m byteorder-lite v0.1.0
+[1m[92m   Compiling[0m smol_str v0.1.24
 [1m[92m   Compiling[0m cmov v0.5.4
+[1m[92m   Compiling[0m byteorder-lite v0.1.0
+[1m[92m   Compiling[0m iana-time-zone v0.1.65
 [1m[92m   Compiling[0m x11rb-protocol v0.13.2
-[1m[92m   Compiling[0m ctutils v0.4.2
+[1m[92m   Compiling[0m unicode-width v0.2.2
 [1m[92m   Compiling[0m image v0.25.10
+[1m[92m   Compiling[0m ctutils v0.4.2
 [1m[92m   Compiling[0m getopts v0.2.24
 [1m[92m   Compiling[0m chrono v0.4.45
-[1m[92m   Compiling[0m rfd v0.16.0
 [1m[92m   Compiling[0m acto v0.8.2
 [1m[92m   Compiling[0m papaya v0.2.4
+[1m[92m   Compiling[0m rfd v0.16.0
+[1m[92m   Compiling[0m csv v1.4.0
 [1m[92m   Compiling[0m x11rb v0.13.2
 [1m[92m   Compiling[0m wl-clipboard-rs v0.9.3
-[1m[92m   Compiling[0m csv v1.4.0
 [1m[92m   Compiling[0m is-wsl v0.4.0
 [1m[92m   Compiling[0m rand_chacha v0.9.0
 [1m[92m   Compiling[0m hashlink v0.9.1
@@ -361,33 +361,33 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
 [1m[92m   Compiling[0m portmapper v0.19.1
 [1m[92m   Compiling[0m inotify-sys v0.1.8
 [1m[92m   Compiling[0m backon v1.6.0
-[1m[92m   Compiling[0m fallible-streaming-iterator v0.1.9
 [1m[92m   Compiling[0m fallible-iterator v0.3.0
-[1m[92m   Compiling[0m unicase v2.9.0
+[1m[92m   Compiling[0m fallible-streaming-iterator v0.1.9
 [1m[92m   Compiling[0m linux-raw-sys v0.4.15
+[1m[92m   Compiling[0m unicase v2.9.0
 [1m[92m   Compiling[0m pulldown-cmark-escape v0.11.0
-[1m[92m   Compiling[0m pulldown-cmark v0.13.4
 [1m[92m   Compiling[0m rusqlite v0.32.1
+[1m[92m   Compiling[0m pulldown-cmark v0.13.4
 [1m[92m   Compiling[0m rustix v0.38.44
 [1m[92m   Compiling[0m inotify v0.9.6
 [1m[92m   Compiling[0m rand v0.9.4
 [1m[92m   Compiling[0m open v5.3.6
 [1m[92m   Compiling[0m arboard v3.6.1
 [1m[92m   Compiling[0m swarm-discovery v0.6.3
-[1m[92m   Compiling[0m iroh v1.0.2
 [1m[92m   Compiling[0m notify-rust v4.18.0
+[1m[92m   Compiling[0m iroh v1.0.2
 [1m[92m   Compiling[0m serde_urlencoded v0.7.1
 [1m[92m   Compiling[0m elephantnote-tauri v0.18.9 (/home/runner/work/ElephantNote/ElephantNote/Elephant/backend/tauri)
 [1m[92m   Compiling[0m mio v0.8.11
 [1m[92m   Compiling[0m filetime v0.2.29
-[1m[92m   Compiling[0m thread_local v1.1.9
 [1m[92m   Compiling[0m encoding_rs v0.8.35
+[1m[92m   Compiling[0m thread_local v1.1.9
 [1m[92m   Compiling[0m chunked_transfer v1.5.0
-[1m[92m   Compiling[0m home v0.5.12
 [1m[92m   Compiling[0m ascii v1.1.0
+[1m[92m   Compiling[0m home v0.5.12
+[1m[92m   Compiling[0m which v6.0.3
 [1m[92m   Compiling[0m tiny_http v0.12.0
 [1m[92m   Compiling[0m chardetng v0.1.17
-[1m[92m   Compiling[0m which v6.0.3
 [1m[92m   Compiling[0m fuzzy-matcher v0.3.7
 [1m[92m   Compiling[0m notify v6.1.1
 [1m[92m   Compiling[0m reqwest v0.12.28
@@ -473,17 +473,17 @@ To eliminate this warning, add "type": "module" to /home/runner/work/ElephantNot
 
 [1m[33mwarning[0m: `elephantnote-tauri` (lib test) generated 11 warnings (8 duplicates) (run `cargo fix --lib -p elephantnote-tauri --tests` to apply 2 suggestions)
 [1m[33mwarning[0m: `elephantnote-tauri` (lib) generated 8 warnings (run `cargo fix --lib -p elephantnote-tauri` to apply 6 suggestions)
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 2m 33s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 3m 01s
 [1m[92m     Running[0m unittests src/lib_min.rs (Elephant/backend/tauri/target/debug/deps/elephantnote_tauri-42be42643efc2713)
 
 running 5 tests
 test knowledge_wiki_library::tests::candidate_ids_are_stable_and_normalized ... ok
-test knowledge_wiki_library::tests::generation_payload_drops_stale_local_model_selection ... ok
 test knowledge_wiki_library::tests::excerpt_removes_markdown_noise ... ok
+test knowledge_wiki_library::tests::generation_payload_drops_stale_local_model_selection ... ok
 test knowledge_wiki_library::tests::legacy_generated_markdown_is_upgraded_to_navigable_links ... ok
 test knowledge_wiki_library::tests::candidate_rejection_is_persisted_and_can_be_cleared ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1146 filtered out; finished in 7.78s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1146 filtered out; finished in 3.05s
 
 [1m[92m     Running[0m unittests src/main.rs (Elephant/backend/tauri/target/debug/deps/Elephant-387c38eac8aa0def)
 
@@ -697,4 +697,4 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; fini
 - Using dynamic import() to code-split the application
 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
-[32m✓ built in 34.14s[39m
+[32m✓ built in 37.53s[39m

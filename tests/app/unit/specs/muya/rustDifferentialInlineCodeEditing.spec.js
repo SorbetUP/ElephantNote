@@ -2,7 +2,6 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import {
   bundled,
-  fakeKeyEvent,
   initializeRustWasm,
   runDifferentialTrace,
   setJsSelectionByText,
@@ -10,6 +9,15 @@ import {
 } from './rustDifferentialHarness'
 
 const describeBundled = bundled ? describe : describe.skip
+
+const dispatchBrowserInput = async (target, inputType, data = null) => {
+  if (!target) throw new Error('Muya JS input target is unavailable.')
+  const event = new Event('input', { bubbles: true })
+  Object.defineProperty(event, 'inputType', { configurable: true, value: inputType })
+  Object.defineProperty(event, 'data', { configurable: true, value: data })
+  target.dispatchEvent(event)
+  await settle()
+}
 
 const insertThroughBrowserDom = async (text) => {
   const browserSelection = document.defaultView?.getSelection?.()
@@ -24,14 +32,32 @@ const insertThroughBrowserDom = async (text) => {
   range.collapse(true)
   browserSelection.removeAllRanges()
   browserSelection.addRange(range)
+  await dispatchBrowserInput(inserted.parentElement, 'insertText', text)
+}
 
-  const target = inserted.parentElement
-  if (!target) throw new Error('Muya JS input target is unavailable.')
-  const event = new Event('input', { bubbles: true })
-  Object.defineProperty(event, 'inputType', { configurable: true, value: 'insertText' })
-  Object.defineProperty(event, 'data', { configurable: true, value: text })
-  target.dispatchEvent(event)
-  await settle()
+const deleteBackwardThroughBrowserDom = async () => {
+  const browserSelection = document.defaultView?.getSelection?.()
+  if (!browserSelection || browserSelection.rangeCount === 0) {
+    throw new Error('Muya JS browser selection is unavailable.')
+  }
+  const range = browserSelection.getRangeAt(0)
+  if (!range.collapsed || range.startContainer.nodeType !== 3) {
+    throw new Error('Muya JS deletion requires a collapsed text selection.')
+  }
+  const text = range.startContainer
+  const prefix = text.data.slice(0, range.startOffset)
+  const segments = [
+    ...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(prefix)
+  ]
+  const previous = segments.at(-1)
+  if (!previous) throw new Error('Muya JS deletion has no preceding grapheme.')
+
+  range.setStart(text, previous.index)
+  range.deleteContents()
+  range.collapse(true)
+  browserSelection.removeAllRanges()
+  browserSelection.addRange(range)
+  await dispatchBrowserInput(text.parentElement, 'deleteContentBackward')
 }
 
 const traces = [
@@ -67,7 +93,7 @@ const traces = [
     expected: '`alha`\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, '`alpha`', 4)
-      muya.contentState.backspaceHandler(fakeKeyEvent())
+      await deleteBackwardThroughBrowserDom()
     },
     runRust: (rust) => {
       rust.setSelectionByCode('alpha', 3)
@@ -80,7 +106,7 @@ const traces = [
     expected: '`AB`\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, '`A🇫🇷B`', 6)
-      muya.contentState.backspaceHandler(fakeKeyEvent())
+      await deleteBackwardThroughBrowserDom()
     },
     runRust: (rust) => {
       rust.setSelectionByCode('A🇫🇷B', 5)

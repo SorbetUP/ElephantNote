@@ -19,6 +19,19 @@ fn read_text(path: &str) -> String {
   fs::read_to_string(repo_root().join(path)).expect("platform contract file must be readable")
 }
 
+fn assert_workspace_frontend_hook(config: &Value, pointer: &str) {
+  assert_eq!(
+    config.pointer(&format!("{pointer}/script")).and_then(Value::as_str),
+    Some("pnpm tauri:web:build"),
+    "Tauri builds must use the shared frontend build"
+  );
+  assert_eq!(
+    config.pointer(&format!("{pointer}/cwd")).and_then(Value::as_str),
+    Some("../../.."),
+    "Tauri frontend hooks must execute from the repository workspace root"
+  );
+}
+
 #[test]
 fn desktop_tauri_config_excludes_optional_addon_runtimes() {
   let config = read_json("Elephant/backend/tauri/tauri.conf.json");
@@ -27,11 +40,7 @@ fn desktop_tauri_config_excludes_optional_addon_runtimes() {
     .and_then(Value::as_array)
     .expect("desktop resources must be an array");
   assert!(resources.is_empty(), "core desktop bundle must not include optional addon runtime binaries");
-  assert_eq!(
-    config.pointer("/build/beforeBuildCommand").and_then(Value::as_str),
-    Some("pnpm tauri:web:build"),
-    "core desktop builds must not run Open Models or Codex installers"
-  );
+  assert_workspace_frontend_hook(&config, "/build/beforeBuildCommand");
 
   let icons = config.pointer("/bundle/icon").and_then(Value::as_array).expect("desktop icons must be an array");
   assert!(icons.iter().any(|item| item.as_str() == Some("../../assets/static/icon.png")), "desktop Tauri config must include a PNG icon for Linux");
@@ -54,7 +63,7 @@ fn linux_override_does_not_reuse_macos_window_chrome() {
 #[test]
 fn android_override_is_mobile_only_and_never_bundles_process_services() {
   let config = read_json("Elephant/backend/tauri/tauri.android.conf.json");
-  assert_eq!(config.pointer("/build/beforeBuildCommand").and_then(Value::as_str), Some("pnpm tauri:web:build"));
+  assert_workspace_frontend_hook(&config, "/build/beforeBuildCommand");
 
   let resources = config.pointer("/bundle/resources").and_then(Value::as_array).expect("Android resources must be explicit");
   assert!(resources.is_empty(), "Android must not include desktop addon process resources");

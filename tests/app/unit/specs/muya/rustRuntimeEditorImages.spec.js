@@ -5,12 +5,14 @@ import { createRuntimeImageHandlers } from '../../../../../Elephant/frontend/src
 describe('Elephant Rust runtime image integration', () => {
   let dispatch
   let storeImage
+  let validateImageUrl
   let editorStore
   let handlers
 
   beforeEach(() => {
     dispatch = vi.fn(async () => true)
     storeImage = vi.fn(async () => 'https://cdn.example/image.png')
+    validateImageUrl = vi.fn(async () => true)
     editorStore = { SHOW_IMAGE_DELETION_URL: vi.fn() }
     Object.defineProperty(window, 'DIRNAME', {
       configurable: true,
@@ -31,7 +33,8 @@ describe('Elephant Rust runtime image integration', () => {
       sourceCode: { value: false },
       editorStore,
       dispatch,
-      storeImage
+      storeImage,
+      validateImageUrl
     })
   })
 
@@ -67,5 +70,26 @@ describe('Elephant Rust runtime image integration', () => {
     expect(editorStore.SHOW_IMAGE_DELETION_URL).toHaveBeenCalledWith(
       'https://delete.example/token'
     )
+  })
+
+  it('inserts a validated image URI without storing a local file', async () => {
+    const source = 'https://example.com/diagram.png'
+
+    await expect(handlers.uriDropped(source)).resolves.toBe(true)
+
+    expect(validateImageUrl).toHaveBeenCalledWith(source)
+    expect(storeImage).not.toHaveBeenCalled()
+    expect(dispatch).toHaveBeenCalledWith('insert-image', {
+      source,
+      alt: ''
+    })
+  })
+
+  it('rejects a URI that is not an image', async () => {
+    validateImageUrl.mockResolvedValue(false)
+
+    await expect(handlers.uriDropped('https://example.com/page')).resolves.toBe(false)
+
+    expect(dispatch).not.toHaveBeenCalled()
   })
 })

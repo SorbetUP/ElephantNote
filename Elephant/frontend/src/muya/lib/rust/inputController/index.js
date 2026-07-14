@@ -10,7 +10,7 @@ import { commandForBeforeInput, commandForTableKey } from './commands'
 import { handleCopy, handleCut } from './copyCut'
 import { handleDeleteForward } from './deleteForward'
 import { DELETE_UNIT_INPUTS, handleDeleteUnit } from './deleteUnits'
-import { handleTextDragOver, handleTextDrop } from './drop'
+import { handleDragOver, handleDrop } from './drop'
 import { readDomSelection } from './selection'
 import { handleTaskClick } from './task'
 
@@ -30,6 +30,7 @@ export class MuyaRustInputController {
     this.bridge = bridge
     this.renderer = renderer
     this.onError = options.onError || noop
+    this.onFileDrop = typeof options.onFileDrop === 'function' ? options.onFileDrop : null
     this.autoCheck = Boolean(options.autoCheck)
     this.composition = null
     this.attached = false
@@ -136,11 +137,11 @@ export class MuyaRustInputController {
   }
 
   handleDragOver(event) {
-    return handleTextDragOver(this, event)
+    return handleDragOver(this, event)
   }
 
   handleDrop(event) {
-    return handleTextDrop(this, event)
+    return handleDrop(this, event)
   }
 
   handleCompositionStart() {

@@ -3,7 +3,26 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
-const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+const absolute = (file) => path.join(root, file)
+const read = (file) => fs.readFileSync(absolute(file), 'utf8')
+
+const REMOVED_CORE_SYNC_PATHS = [
+  'Elephant/backend/tauri/src/sync_commands.rs',
+  'Elephant/backend/tauri/src/sync_contract_tests.rs',
+  'Elephant/backend/tauri/src/sync/mod.rs',
+  'Elephant/backend/tauri/src/sync/logging.rs',
+  'Elephant/backend/tauri/src/sync/manifest.rs',
+  'Elephant/backend/tauri/src/sync/plan.rs',
+  'Elephant/backend/tauri/src/sync/protocol.rs',
+  'Elephant/backend/tauri/src/sync/transfer.rs',
+  'Elephant/backend/tauri/src/vault/sync.rs',
+  'Elephant/backend/tauri/src/vault/sync_iroh/conflict_archive.rs',
+  'Elephant/backend/tauri/src/vault/sync_iroh/conflict_actions.rs',
+  'Elephant/backend/tauri/src/vault/sync_iroh/base.rs',
+  'Elephant/backend/tauri/src/vault/sync_iroh/network.rs',
+  'Elephant/backend/tauri/src/vault/sync_iroh/commands.rs',
+  'Elephant/backend/tauri/src/vault/sync_iroh/e2e_tests.rs'
+]
 
 describe('Sync physical migration boundary', () => {
   it('owns the persistent Iroh endpoint and stable identity in a package service', () => {
@@ -22,7 +41,7 @@ describe('Sync physical migration boundary', () => {
     expect(native).toContain('sync.endpoint')
   })
 
-  it('runs active pairing and synchronization through the package while keeping legacy core code only as removable compatibility residue', () => {
+  it('runs pairing and synchronization entirely through the physical package', () => {
     const manifest = JSON.parse(read('addons/official/sync/manifest.json'))
     const entry = read('addons/official/sync/main.service.js')
     const native = read('addons/official/sync/native/src/main.rs')
@@ -32,10 +51,6 @@ describe('Sync physical migration boundary', () => {
     const protocol = read('addons/official/sync/native/src/protocol.rs')
     const session = read('addons/official/sync/native/src/session.rs')
     const transfer = read('addons/official/sync/native/src/transfer.rs')
-    const legacyEntry = read('addons/official/sync/main.js')
-    const core = read('Elephant/backend/tauri/src/lib_min.rs')
-    const coreRuntime = read('Elephant/backend/tauri/src/sync/mod.rs')
-    const coreNetwork = read('Elephant/backend/tauri/src/vault/sync_iroh/network.rs')
 
     expect(manifest.description).toContain('vault manifest scanning and deterministic sync planning')
     expect(entry).toContain("from './main.js'")
@@ -73,14 +88,21 @@ describe('Sync physical migration boundary', () => {
     expect(session).toContain('pub async fn serve_sync_session')
     expect(transfer).toContain('pub async fn send_file')
     expect(transfer).toContain('pub async fn receive_file')
+  })
 
-    // These files still exist temporarily, but the package entry intercepts every active UI command.
-    expect(legacyEntry).toContain("this.invoke('iroh_sync_run'")
-    expect(core).toContain('sync_commands::iroh_sync_run')
-    expect(coreRuntime).toContain('.accept(protocol::ALPN, VaultSyncProtocol { app })')
-    expect(coreRuntime).toContain('struct VaultSyncProtocol')
-    expect(coreNetwork).toContain('pub async fn sync_create_invite')
-    expect(coreNetwork).toContain('pub async fn sync_accept_invite')
+  it('keeps all Iroh runtime and compatibility commands physically absent from the core', () => {
+    const core = read('Elephant/backend/tauri/src/lib_min.rs')
+    const vaultModule = read('Elephant/backend/tauri/src/vault/mod.rs')
+    const cargo = read('Elephant/backend/tauri/Cargo.toml')
+
+    for (const file of REMOVED_CORE_SYNC_PATHS) expect(fs.existsSync(absolute(file))).toBe(false)
+    expect(core).not.toContain('mod sync_commands;')
+    expect(core).not.toContain('pub mod sync;')
+    expect(core).not.toContain('IrohSyncState')
+    expect(core).not.toContain('sync_commands::iroh_sync_')
+    expect(vaultModule).not.toContain('pub mod sync;')
+    expect(cargo).not.toContain('iroh =')
+    expect(cargo).not.toContain('iroh-mdns-address-lookup')
   })
 
   it('keeps mobile unsupported until a real package-owned host exists', () => {

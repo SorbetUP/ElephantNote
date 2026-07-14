@@ -16,12 +16,12 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Print patch application failure
+      - name: Print failed renderer contract assertions
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
-          gh run view 29347315252 --log-failed \
-            | grep -E -C 8 'unexpectedly|Traceback|SystemExit|Process completed|Preserve rejected' \
-            | tail -n 250
+          gh run view 29347565073 --log-failed \
+            | grep -E -C 10 'FAIL|AssertionError|expected|Received|Test Files|Tests|rustProduction|rustBridge|rustRuntime|rustVue|NoFallback' \
+            | tail -n 500

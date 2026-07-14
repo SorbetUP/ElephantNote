@@ -1,0 +1,372 @@
+name: Wire AI addons to Knowledge provider
+
+on:
+  pull_request:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/develop-next-wire-knowledge-consumers.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: develop-next-wire-knowledge-consumers
+  cancel-in-progress: true
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop_next
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: ./.github/actions/setup
+
+      - name: Connect Search, Chat, Graph and Wiki to knowledge.provider
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          search = Path('addons/official/ai-search/main.js')
+          text = search.read_text()
+          if "const KNOWLEDGE_RESOURCE = 'knowledge.provider'" not in text:
+              text = text.replace("const PROVIDER_RESOURCE = 'search.provider'\n", "const PROVIDER_RESOURCE = 'search.provider'\nconst KNOWLEDGE_RESOURCE = 'knowledge.provider'\n", 1)
+          if '  knowledgeProvider() {' not in text:
+              marker = '  invoke(command, payload = {}) {'
+              insert = """  knowledgeProvider() {
+            return this.api.resources.get(KNOWLEDGE_RESOURCE)
+          }
+
+          """
+              text = text.replace(marker, insert + marker, 1)
+          perform = text.index('  async performRebuild() {')
+          entries = text.index('    const entries = await this.listNotes()', perform)
+          if 'Knowledge provider rebuild failed' not in text[perform:entries]:
+              prefix = """  async performRebuild() {
+            const knowledge = this.knowledgeProvider()
+            if (knowledge && typeof knowledge.rebuild === 'function') {
+              try {
+                const report = await knowledge.rebuild()
+                this.api.app.emit('elephantnote:search-index-updated', { engine: 'knowledge-provider', ...report })
+                return { engine: 'knowledge-provider', ...report }
+              } catch (error) {
+                console.warn('[ai-search] Knowledge provider rebuild failed; using local fallback', error)
+              }
+            }
+
+          """
+              text = text[:perform] + prefix + text[entries:]
+          start = text.index('  async query(input, options = {}) {')
+          end = text.index('\n  status() {', start)
+          replacement = """  async query(input, options = {}) {
+            if (!this.config.enabled) return []
+            const limit = Math.min(100, Math.max(1, Number(options.limit) || this.config.limit))
+            const knowledge = this.knowledgeProvider()
+            if (knowledge && typeof knowledge.search === 'function') {
+              try {
+                const hits = await knowledge.search(input, { limit })
+                return (Array.isArray(hits) ? hits : []).map((hit) => ({
+                  ...hit,
+                  id: hit.id || hit.chunk_id || hit.relative_path,
+                  path: hit.path || hit.relative_path,
+                  relativePath: hit.relativePath || hit.relative_path,
+                  title: hit.title || hit.heading || hit.relative_path,
+                  excerpt: hit.excerpt || '',
+                  score: Number(hit.score) || 0,
+                  engine: 'knowledge-provider'
+                }))
+              } catch (error) {
+                console.warn('[ai-search] Knowledge provider search failed; using local fallback', error)
+              }
+            }
+
+            const queryTokens = [...new Set(tokenize(input))]
+            if (!queryTokens.length) return []
+            if (!this.index.documents.length && this.config.autoRebuild) await this.rebuild()
+            return this.index.documents
+              .map((document) => ({ ...document, score: this.scoreDocument(document, queryTokens) }))
+              .filter((document) => document.score > 0)
+              .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
+              .slice(0, limit)
+              .map(({ frequencies, length, ...result }) => result)
+          }
+          """
+          text = text[:start] + replacement + text[end:]
+          search.write_text(text)
+
+          chat = Path('addons/official/ai-chat/main.js')
+          text = chat.read_text()
+          if "const KNOWLEDGE_RESOURCE = 'knowledge.provider'" not in text:
+              text = text.replace("const SEARCH_RESOURCE = 'search.provider'\n", "const SEARCH_RESOURCE = 'search.provider'\nconst KNOWLEDGE_RESOURCE = 'knowledge.provider'\n", 1)
+          start = text.index('  async retrieveContext(message, limit = 8) {')
+          end = text.index('\n  async sendExternal(', start)
+          replacement = """  async retrieveContext(message, limit = 8) {
+            const knowledge = this.api.resources.get(KNOWLEDGE_RESOURCE)
+            if (knowledge && typeof knowledge.search === 'function') {
+              try {
+                const results = await knowledge.search(message, { limit })
+                return (Array.isArray(results) ? results : []).map((item) => ({
+                  ...item,
+                  id: item.id || item.chunk_id || item.relative_path,
+                  path: item.path || item.relative_path,
+                  relativePath: item.relativePath || item.relative_path
+                }))
+              } catch (error) {
+                console.warn('[ai-chat] Knowledge context unavailable; trying Search fallback', error)
+              }
+            }
+            const search = this.api.resources.get(SEARCH_RESOURCE)
+            if (!search || typeof search.query !== 'function') return []
+            try {
+              const results = await search.query(message, { limit })
+              return Array.isArray(results) ? results : []
+            } catch (error) {
+              console.warn('[ai-chat] search context unavailable', error)
+              return []
+            }
+          }
+          """
+          text = text[:start] + replacement + text[end:]
+          chat.write_text(text)
+
+          graph = Path('addons/official/graph/main.js')
+          text = graph.read_text()
+          if "const KNOWLEDGE_RESOURCE = 'knowledge.provider'" not in text:
+              text = text.replace("const MAX_NOTES = 800\n", "const MAX_NOTES = 800\nconst KNOWLEDGE_RESOURCE = 'knowledge.provider'\n", 1)
+          if '  knowledgeProvider() {' not in text:
+              marker = '  invoke(command, payload = {}) {'
+              insert = """  knowledgeProvider() {
+            return this.api.resources.get(KNOWLEDGE_RESOURCE)
+          }
+
+          """
+              text = text.replace(marker, insert + marker, 1)
+          start = text.index('  async buildGraph() {')
+          notes = text.index('    const notes = await this.readNotes()', start)
+          if 'Knowledge projection failed' not in text[start:notes]:
+              prefix = """  async buildGraph() {
+            const knowledge = this.knowledgeProvider()
+            if (knowledge && typeof knowledge.graph === 'function') {
+              try {
+                const projection = await knowledge.graph({ includeSuggestions: true })
+                const edges = (Array.isArray(projection?.edges) ? projection.edges : []).map((edge) => ({
+                  ...edge,
+                  kind: edge.kind || edge.type || edge.relationType || 'relation',
+                  weight: Number(edge.weight) || 1
+                }))
+                const degree = new Map()
+                for (const edge of edges) {
+                  degree.set(String(edge.source), (degree.get(String(edge.source)) || 0) + 1)
+                  degree.set(String(edge.target), (degree.get(String(edge.target)) || 0) + 1)
+                }
+                const nodes = (Array.isArray(projection?.nodes) ? projection.nodes : []).map((item) => ({
+                  ...item,
+                  label: item.label || item.title || item.id,
+                  relativePath: item.relativePath || item.relative_path || item.path,
+                  path: item.path || item.relativePath || item.relative_path,
+                  kind: item.kind || item.type || 'note',
+                  degree: degree.get(String(item.id)) || 0
+                }))
+                this.cachedGraph = {
+                  ...projection,
+                  nodes,
+                  edges,
+                  generatedAt: new Date().toISOString(),
+                  engine: 'knowledge-provider'
+                }
+                return this.cachedGraph
+              } catch (error) {
+                console.warn('[graph-addon] Knowledge projection failed; using local fallback', error)
+              }
+            }
+
+          """
+              text = text[:start] + prefix + text[notes:]
+          graph.write_text(text)
+
+          wiki = Path('addons/official/wiki/main.js')
+          text = wiki.read_text()
+          if "const KNOWLEDGE_RESOURCE = 'knowledge.provider'" not in text:
+              text = text.replace("const MAX_CITATIONS = 24\n", "const MAX_CITATIONS = 24\nconst KNOWLEDGE_RESOURCE = 'knowledge.provider'\n", 1)
+          if 'const knowledgeRecord = (draft)' not in text:
+              marker = 'const proposalMarkdown = (record) => {'
+              helper = """const knowledgeRecord = (draft) => ({
+            ...draft,
+            id: String(draft?.id || ''),
+            title: String(draft?.title || draft?.topic || draft?.id || 'Untitled'),
+            topic: String(draft?.topic || draft?.title || draft?.id || 'Untitled'),
+            status: String(draft?.status || 'proposed') === 'rejected' ? 'dismissed' : String(draft?.status || 'proposed'),
+            summary: String(draft?.topic || ''),
+            path: draft?.slug ? `.elephantnote/wiki/${draft.slug}.md` : '',
+            sources: (Array.isArray(draft?.citations) ? draft.citations : []).map((citation) => ({
+              path: citation.document_path,
+              title: citation.document_title,
+              heading: citation.heading,
+              chunkId: citation.chunk_id
+            })),
+            sourceCount: Array.isArray(draft?.source_paths) ? draft.source_paths.length : 0,
+            providerOwned: true
+          })
+
+          """
+              text = text.replace(marker, helper + marker, 1)
+          if '  knowledgeProvider() {' not in text:
+              marker = '  invoke(command, payload = {}) {'
+              insert = """  knowledgeProvider() {
+            return this.api.resources.get(KNOWLEDGE_RESOURCE)
+          }
+
+          """
+              text = text.replace(marker, insert + marker, 1)
+          start = text.index('  async loadRecords() {')
+          end = text.index('\n  async saveRecords(', start)
+          replacement = """  async loadRecords() {
+            const local = normalizeRecords(await this.api.storage.get(RECORDS_KEY))
+            const knowledge = this.knowledgeProvider()
+            if (!knowledge || typeof knowledge.listWikis !== 'function') return local
+            try {
+              const remote = (Array.isArray(await knowledge.listWikis({ limit: 500 })) ? await knowledge.listWikis({ limit: 500 }) : [])
+                .map(knowledgeRecord)
+                .filter((record) => record.id)
+              const ids = new Set(remote.map((record) => record.id))
+              return [...remote, ...local.filter((record) => !ids.has(record.id))]
+            } catch (error) {
+              console.warn('[wiki-addon] Knowledge drafts unavailable; using local records', error)
+              return local
+            }
+          }
+          """
+          text = text[:start] + replacement + text[end:]
+          start = text.index('  async acceptRecord(id) {')
+          end = text.index('\n  async dismissRecord(id) {', start)
+          replacement = """  async acceptRecord(id) {
+            const knowledge = this.knowledgeProvider()
+            if (knowledge && typeof knowledge.acceptWiki === 'function') {
+              try {
+                const accepted = await knowledge.acceptWiki(id)
+                if (accepted?.draft) return knowledgeRecord(accepted.draft)
+              } catch (error) {
+                console.warn('[wiki-addon] Knowledge accept failed; trying local proposal', error)
+              }
+            }
+            const records = await this.loadRecords()
+            const record = records.find((candidate) => candidate.id === id)
+            if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
+            const relativePath = `Wiki/${slugify(record.title)}.md`
+            await this.writeNote(relativePath, proposalMarkdown(record))
+            record.status = 'accepted'
+            record.path = relativePath
+            record.updatedAt = new Date().toISOString()
+            await this.saveRecords(records.filter((candidate) => !candidate.providerOwned))
+            return record
+          }
+          """
+          text = text[:start] + replacement + text[end:]
+          start = text.index('  async dismissRecord(id) {')
+          end = text.index('\n  render(container) {', start)
+          replacement = """  async dismissRecord(id) {
+            const knowledge = this.knowledgeProvider()
+            if (knowledge && typeof knowledge.rejectWiki === 'function') {
+              try {
+                const rejected = await knowledge.rejectWiki(id)
+                if (rejected) return knowledgeRecord(rejected)
+              } catch (error) {
+                console.warn('[wiki-addon] Knowledge reject failed; trying local proposal', error)
+              }
+            }
+            const records = await this.loadRecords()
+            const record = records.find((candidate) => candidate.id === id)
+            if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
+            record.status = 'dismissed'
+            record.updatedAt = new Date().toISOString()
+            await this.saveRecords(records.filter((candidate) => !candidate.providerOwned))
+            return record
+          }
+          """
+          text = text[:start] + replacement + text[end:]
+          wiki.write_text(text)
+
+          test = Path('tests/app/unit/addons/knowledgeConsumerIntegration.spec.js')
+          test.write_text("""import fs from 'node:fs'
+          import path from 'node:path'
+          import { describe, expect, it } from 'vitest'
+
+          const root = process.cwd()
+          const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+
+          describe('Knowledge provider consumers', () => {
+            it('delegates Search and Chat retrieval while retaining local fallbacks', () => {
+              const search = read('addons/official/ai-search/main.js')
+              const chat = read('addons/official/ai-chat/main.js')
+              expect(search).toContain("const KNOWLEDGE_RESOURCE = 'knowledge.provider'")
+              expect(search).toContain('Knowledge provider search failed; using local fallback')
+              expect(search).toContain('this.index.documents')
+              expect(chat).toContain("const KNOWLEDGE_RESOURCE = 'knowledge.provider'")
+              expect(chat).toContain('Knowledge context unavailable; trying Search fallback')
+              expect(chat).toContain("this.api.resources.get(SEARCH_RESOURCE)")
+            })
+
+            it('uses the package graph projection and merges provider Wiki drafts', () => {
+              const graph = read('addons/official/graph/main.js')
+              const wiki = read('addons/official/wiki/main.js')
+              expect(graph).toContain("const KNOWLEDGE_RESOURCE = 'knowledge.provider'")
+              expect(graph).toContain("engine: 'knowledge-provider'")
+              expect(graph).toContain('using local fallback')
+              expect(wiki).toContain('knowledge.listWikis')
+              expect(wiki).toContain('knowledge.acceptWiki')
+              expect(wiki).toContain('knowledge.rejectWiki')
+              expect(wiki).toContain('using local records')
+            })
+          })
+          """)
+          PY
+
+      - name: Validate Knowledge consumer contracts
+        shell: bash
+        run: |
+          set -euxo pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/knowledgeConsumerIntegration.spec.js \
+            tests/app/unit/addons/searchPackageOwnership.spec.js \
+            tests/app/unit/addons/wikiPackageOwnership.spec.js \
+            tests/app/unit/addons/aiAddonOwnershipRegression.spec.js
+
+      - name: Install exact wasm-bindgen CLI
+        shell: bash
+        run: |
+          VERSION=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
+            | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
+          if ! wasm-bindgen --version 2>/dev/null | grep -q "${VERSION}$"; then
+            cargo install wasm-bindgen-cli --version "$VERSION" --locked
+          fi
+
+      - name: Build application with optional Knowledge delegation
+        run: pnpm tauri:web:build
+
+      - name: Commit consumer integration
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            addons/official/ai-search/main.js \
+            addons/official/ai-chat/main.js \
+            addons/official/graph/main.js \
+            addons/official/wiki/main.js \
+            tests/app/unit/addons/knowledgeConsumerIntegration.spec.js
+          git commit -m "feat(ai): delegate addon knowledge workflows to package provider"
+          git fetch origin develop_next
+          git merge --no-edit origin/develop_next
+          git push origin HEAD:develop_next

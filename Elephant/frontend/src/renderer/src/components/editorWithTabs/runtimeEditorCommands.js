@@ -1,4 +1,4 @@
-import { editorCommands } from 'muya/lib/rust/protocol'
+import { editorCommands } from '../../editor-rust/protocol'
 
 const normalize = (value) => String(value || '').trim().toLowerCase()
 

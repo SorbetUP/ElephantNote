@@ -21,8 +21,8 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { parseEditorResponse } from 'muya/lib/rust/protocol'
-import { initializeExperimentalRustRuntime } from 'muya/lib/rust/runtime'
+import { parseEditorResponse } from '../editor-rust/protocol'
+import { initializeExperimentalRustRuntime } from '../editor-rust/runtime'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },

@@ -1,6 +1,7 @@
 const ADDON_ID = 'elephant.calendar'
 const VIEW_ID = `${ADDON_ID}.workspace`
 const PROVIDER_RESOURCE = 'calendar.provider'
+const EVENTS_KEY_PREFIX = 'events'
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -9,63 +10,152 @@ const node = (documentRef, tag, className = '', text = '') => {
   return element
 }
 
-const asArray = (value) => Array.isArray(value) ? value : []
-const asObject = (value) => value && typeof value === 'object' ? value : {}
+const decodeIcsText = (value = '') => String(value || '')
+  .replace(/\\n/gi, '\n')
+  .replace(/\\,/g, ',')
+  .replace(/\\;/g, ';')
+  .replace(/\\\\/g, '\\')
+  .trim()
+
+const normalizeIcsDate = (value = '') => {
+  const input = String(value || '').trim()
+  if (!input) return ''
+  if (/^\d{8}$/.test(input)) {
+    return `${input.slice(0, 4)}-${input.slice(4, 6)}-${input.slice(6, 8)}`
+  }
+  const match = input.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/)
+  if (!match) return input
+  const [, year, month, day, hour, minute, second, zulu] = match
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}${zulu ? 'Z' : ''}`
+}
+
+const deterministicEventId = (event = {}) => [
+  event.title || 'Untitled event',
+  event.startsAt || '',
+  event.endsAt || '',
+  event.location || ''
+].join('|')
+
+export const parseIcs = (source = '') => {
+  const unfolded = String(source || '').replace(/\r?\n[ \t]/g, '')
+  const lines = unfolded.split(/\r?\n/)
+  const events = []
+  let current = null
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd()
+    if (line === 'BEGIN:VEVENT') {
+      current = {}
+      continue
+    }
+    if (line === 'END:VEVENT') {
+      if (current) {
+        const event = {
+          title: decodeIcsText(current.SUMMARY || 'Untitled event'),
+          startsAt: normalizeIcsDate(current.DTSTART || ''),
+          endsAt: normalizeIcsDate(current.DTEND || current.DTSTART || ''),
+          source: 'ics',
+          location: decodeIcsText(current.LOCATION || ''),
+          description: decodeIcsText(current.DESCRIPTION || '')
+        }
+        event.id = String(current.UID || deterministicEventId(event)).trim()
+        events.push(event)
+      }
+      current = null
+      continue
+    }
+    if (!current || !line.includes(':')) continue
+    const separator = line.indexOf(':')
+    const key = line.slice(0, separator).split(';')[0].toUpperCase()
+    current[key] = line.slice(separator + 1)
+  }
+
+  return events
+}
+
+export const normalizeEvents = (value) => (Array.isArray(value) ? value : [])
+  .map((event) => {
+    const normalized = {
+      title: String(event?.title || 'Untitled event'),
+      startsAt: String(event?.startsAt || event?.start || ''),
+      endsAt: String(event?.endsAt || event?.end || event?.startsAt || event?.start || ''),
+      source: String(event?.source || 'local'),
+      location: String(event?.location || ''),
+      description: String(event?.description || '')
+    }
+    return {
+      ...normalized,
+      id: String(event?.id || deterministicEventId(normalized))
+    }
+  })
+  .sort((left, right) => left.startsAt.localeCompare(right.startsAt) || left.title.localeCompare(right.title))
+
+export const mergeEvents = (current, incoming) => {
+  const byId = new Map(normalizeEvents(current).map((event) => [event.id, event]))
+  for (const event of normalizeEvents(incoming)) byId.set(event.id, event)
+  return normalizeEvents([...byId.values()])
+}
 
 export default class ElephantCalendarAddon {
   constructor(api) {
     this.api = api
     this.window = api.experimental.window
-    this.state = { events: [], google: { configured: false, calendars: [] } }
   }
 
-  invoke(command, payload = {}) {
-    const invoke = this.window?.__TAURI__?.core?.invoke
-    if (typeof invoke !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
-    return invoke(command, payload)
+  async activeVaultId() {
+    const getVaults = this.window?.elephantnote?.getVaults
+    if (typeof getVaults !== 'function') return 'unscoped'
+    const state = await getVaults().catch(() => null)
+    return String(state?.activeVault?.id || state?.activeVaultId || 'unscoped')
   }
 
-  async loadState() {
-    const [events, google] = await Promise.all([
-      this.invoke('tauri_calendar_list').catch(() => []),
-      this.invoke('tauri_calendar_google_config_get').catch(() => ({ configured: false, calendars: [] }))
-    ])
-    this.state = {
-      events: asArray(events),
-      google: asObject(google)
+  async storageKey() {
+    return `${EVENTS_KEY_PREFIX}:${await this.activeVaultId()}`
+  }
+
+  async loadEvents() {
+    return normalizeEvents(await this.api.storage.get(await this.storageKey()))
+  }
+
+  async saveEvents(events) {
+    const normalized = normalizeEvents(events)
+    await this.api.storage.set(await this.storageKey(), normalized)
+    this.api.app.emit('elephantnote:calendar-events-changed', { events: normalized })
+    return normalized
+  }
+
+  async importIcsText(source, sourceLabel = 'ics') {
+    const parsed = parseIcs(source).map((event) => ({ ...event, source: sourceLabel }))
+    if (!parsed.length) throw new Error('No VEVENT entry was found in the selected calendar file')
+    const merged = mergeEvents(await this.loadEvents(), parsed)
+    await this.saveEvents(merged)
+    return { imported: parsed.length, total: merged.length, events: merged }
+  }
+
+  async importFiles(files) {
+    const selected = Array.from(files || []).filter((file) => /\.(ics|ical)$/i.test(String(file?.name || '')))
+    if (!selected.length) throw new Error('Select one or more .ics calendar files')
+    let imported = 0
+    let events = await this.loadEvents()
+    const failures = []
+    for (const file of selected) {
+      try {
+        const parsed = parseIcs(await file.text()).map((event) => ({ ...event, source: file.name || 'ics' }))
+        if (!parsed.length) throw new Error('No VEVENT entry found')
+        imported += parsed.length
+        events = mergeEvents(events, parsed)
+      } catch (error) {
+        failures.push({ file: file.name || 'unknown.ics', error: error instanceof Error ? error.message : String(error) })
+      }
     }
-    return this.state
+    await this.saveEvents(events)
+    return { selected: selected.length, imported, total: events.length, failures, events }
   }
 
-  getGoogleConfig() {
-    return this.invoke('tauri_calendar_google_config_get')
-  }
-
-  setGoogleConfig(config = {}) {
-    return this.invoke('tauri_calendar_google_config_set', { config: asObject(config) })
-  }
-
-  importGoogleFromPath(path) {
-    if (!String(path || '').trim()) throw new TypeError('An ICS file path is required')
-    return this.invoke('tauri_calendar_import_google_from_path', { path: String(path) })
-  }
-
-  syncGoogle() {
-    return this.invoke('tauri_calendar_google_sync')
-  }
-
-  async importGoogleFile() {
-    const open = this.window?.__TAURI__?.dialog?.open
-    if (typeof open !== 'function') throw new Error('Tauri dialog API is unavailable')
-    const selected = await open({
-      multiple: false,
-      directory: false,
-      filters: [{ name: 'Calendar', extensions: ['ics'] }]
-    })
-    if (!selected) return null
-    const path = typeof selected === 'string' ? selected : selected.path
-    if (!path) return null
-    return this.importGoogleFromPath(path)
+  async clearEvents() {
+    await this.api.storage.remove(await this.storageKey())
+    this.api.app.emit('elephantnote:calendar-events-changed', { events: [] })
+    return []
   }
 
   render(container) {
@@ -75,105 +165,114 @@ export default class ElephantCalendarAddon {
     let disposed = false
 
     const refresh = async () => {
-      root.replaceChildren(node(documentRef, 'p', 'elephant-calendar-muted', 'Loading calendar…'))
+      root.replaceChildren(node(documentRef, 'p', 'elephant-package-muted', 'Loading calendar…'))
       try {
-        const state = await this.loadState()
+        const events = await this.loadEvents()
         if (disposed) return
         root.replaceChildren()
-
-        const header = node(documentRef, 'header', 'elephant-calendar-header')
+        const header = node(documentRef, 'header', 'elephant-package-header')
         const copy = node(documentRef, 'div')
-        copy.append(node(documentRef, 'h2', '', 'Calendar'), node(documentRef, 'p', '', `${state.events.length} events`))
-        const actions = node(documentRef, 'div', 'elephant-calendar-actions')
+        copy.append(node(documentRef, 'h2', '', 'Calendar'), node(documentRef, 'p', '', `${events.length} events in the active vault`))
+        header.append(copy)
+        root.append(header)
+
+        const picker = node(documentRef, 'input', 'elephant-calendar-picker')
+        picker.type = 'file'
+        picker.accept = '.ics,.ical,text/calendar'
+        picker.multiple = true
+        const actions = node(documentRef, 'div', 'elephant-package-actions')
         const importButton = node(documentRef, 'button', '', 'Import ICS')
+        importButton.disabled = true
+        const clearButton = node(documentRef, 'button', '', 'Clear events')
+        const feedback = node(documentRef, 'pre', 'elephant-calendar-feedback')
+        picker.onchange = () => {
+          importButton.disabled = !picker.files?.length
+          feedback.textContent = picker.files?.length ? `${picker.files.length} file(s) selected.` : ''
+        }
         importButton.onclick = async () => {
           importButton.disabled = true
           try {
-            await this.importGoogleFile()
+            const result = await this.importFiles(picker.files)
+            feedback.textContent = [`Imported ${result.imported} event(s).`, ...result.failures.map((failure) => `${failure.file}: ${failure.error}`)].join('\n')
             await refresh()
           } finally {
-            importButton.disabled = false
+            importButton.disabled = !picker.files?.length
           }
         }
-        const syncButton = node(documentRef, 'button', '', 'Sync Google')
-        syncButton.disabled = state.google?.configured !== true
-        syncButton.onclick = async () => {
-          syncButton.disabled = true
-          try {
-            await this.syncGoogle()
-            await refresh()
-          } finally {
-            syncButton.disabled = false
-          }
+        clearButton.onclick = async () => {
+          await this.clearEvents()
+          await refresh()
         }
-        const reload = node(documentRef, 'button', '', 'Refresh')
-        reload.onclick = () => void refresh()
-        actions.append(importButton, syncButton, reload)
-        header.append(copy, actions)
-        root.append(header)
+        actions.append(picker, importButton, clearButton)
+        root.append(actions, feedback)
 
-        const googleCard = node(documentRef, 'article', 'elephant-calendar-card')
-        googleCard.append(node(documentRef, 'strong', '', 'Google Calendar'))
-        googleCard.append(node(documentRef, 'small', '', state.google?.configured ? 'Configured' : 'Not configured'))
-        if (state.google?.account) googleCard.append(node(documentRef, 'small', '', String(state.google.account)))
-        root.append(googleCard)
-
-        const events = node(documentRef, 'div', 'elephant-calendar-events')
-        if (!state.events.length) events.append(node(documentRef, 'p', 'elephant-calendar-muted', 'No events imported.'))
-        for (const event of state.events) {
+        const list = node(documentRef, 'div', 'elephant-calendar-list')
+        if (!events.length) list.append(node(documentRef, 'p', 'elephant-package-muted', 'No calendar event imported.'))
+        for (const event of events) {
           const article = node(documentRef, 'article', 'elephant-calendar-event')
-          const title = event.title || event.summary || 'Untitled event'
-          article.append(node(documentRef, 'strong', '', title))
-          article.append(node(documentRef, 'small', '', [event.start || event.startAt, event.end || event.endAt, event.location].filter(Boolean).join(' · ')))
-          if (event.description) article.append(node(documentRef, 'p', '', String(event.description)))
-          events.append(article)
+          article.append(
+            node(documentRef, 'strong', '', event.title),
+            node(documentRef, 'span', '', [event.startsAt, event.endsAt].filter(Boolean).join(' → ')),
+            node(documentRef, 'small', '', [event.source, event.location].filter(Boolean).join(' · '))
+          )
+          if (event.description) article.append(node(documentRef, 'p', '', event.description))
+          list.append(article)
         }
-        root.append(events)
+        root.append(list)
       } catch (error) {
-        if (!disposed) root.replaceChildren(node(documentRef, 'p', 'elephant-calendar-error', error instanceof Error ? error.message : String(error)))
+        if (!disposed) root.replaceChildren(node(documentRef, 'p', 'elephant-package-error', error instanceof Error ? error.message : String(error)))
       }
     }
 
     void refresh()
-    return () => { disposed = true; root.remove() }
+    return () => {
+      disposed = true
+      root.remove()
+    }
   }
 
-  async onload(api) {
+  onload(api) {
     api.ui.registerStyle(`
-      .elephant-calendar-package { height:100%; overflow:auto; box-sizing:border-box; display:grid; align-content:start; gap:14px; padding:18px; }
-      .elephant-calendar-header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-      .elephant-calendar-header h2,.elephant-calendar-header p { margin:0; }
-      .elephant-calendar-header p,.elephant-calendar-muted { color:var(--en-muted); }
-      .elephant-calendar-actions { display:flex; flex-wrap:wrap; gap:8px; }
-      .elephant-calendar-actions button { min-height:34px; padding:0 12px; border:1px solid var(--en-border); border-radius:9px; background:var(--en-surface); color:var(--en-text); cursor:pointer; }
-      .elephant-calendar-card,.elephant-calendar-event { display:grid; gap:7px; padding:14px; border:1px solid var(--en-border); border-radius:13px; background:var(--en-surface); }
-      .elephant-calendar-card small,.elephant-calendar-event small { color:var(--en-muted); }
-      .elephant-calendar-events { display:grid; gap:10px; }
-      .elephant-calendar-event p { margin:0; }
-      .elephant-calendar-error { color:var(--en-danger,#b42318); }
+      .elephant-calendar-package { display:grid; align-content:start; gap:14px; padding:18px; height:100%; overflow:auto; box-sizing:border-box; }
+      .elephant-package-header h2,.elephant-package-header p { margin:0; }
+      .elephant-package-header p,.elephant-package-muted { color:var(--en-muted); }
+      .elephant-package-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+      .elephant-calendar-picker { flex:1; min-width:260px; padding:10px; border:1px dashed var(--en-border); border-radius:10px; background:var(--en-surface); color:var(--en-text); }
+      .elephant-package-actions button { min-height:34px; padding:0 12px; border:1px solid var(--en-border); border-radius:9px; background:var(--en-surface); color:var(--en-text); cursor:pointer; }
+      .elephant-calendar-feedback { min-height:18px; margin:0; white-space:pre-wrap; color:var(--en-muted); }
+      .elephant-calendar-list { display:grid; gap:10px; }
+      .elephant-calendar-event { display:grid; gap:5px; padding:14px; border:1px solid var(--en-border); border-radius:12px; background:var(--en-surface); }
+      .elephant-calendar-event span,.elephant-calendar-event small,.elephant-calendar-event p { color:var(--en-muted); margin:0; }
+      .elephant-package-error { color:var(--en-danger,#b42318); }
     `, 'calendar-package')
+
     const bridge = this.window?.__ELEPHANT_ADDON_VUE__
     if (!bridge?.createDomComponent) throw new Error('Physical addon Vue bridge is unavailable')
 
     api.resources.provide(PROVIDER_RESOURCE, Object.freeze({
       apiVersion: 1,
       owner: ADDON_ID,
-      list: () => this.loadState().then((state) => state.events),
-      status: () => this.loadState(),
-      googleConfigGet: () => this.getGoogleConfig(),
-      googleConfigSet: (config = {}) => this.setGoogleConfig(config),
-      importGoogleFromPath: (path) => this.importGoogleFromPath(path),
-      syncGoogle: () => this.syncGoogle()
+      list: () => this.loadEvents(),
+      status: async() => ({ vaultId: await this.activeVaultId(), events: (await this.loadEvents()).length }),
+      importIcs: (source, sourceLabel = 'ics') => this.importIcsText(source, sourceLabel),
+      importFiles: (files) => this.importFiles(files),
+      clear: () => this.clearEvents()
     }))
 
     api.workspace.registerView({
       id: VIEW_ID,
       title: 'Calendar',
-      description: 'Review imported events and synchronize Google Calendar.',
+      description: 'Import and review package-owned ICS events for the active vault.',
       icon: 'calendar-days',
       kind: 'calendar-v3',
-      component: bridge.createDomComponent({ name: 'ElephantPhysicalCalendar', mount: (container) => this.render(container) }),
-      order: 60
+      component: bridge.createDomComponent({ name: 'ElephantPhysicalCalendar', mount: (element) => this.render(element) }),
+      order: 40
+    })
+
+    api.commands.register({
+      id: `${ADDON_ID}.open`,
+      title: 'Open Calendar',
+      run: () => api.workspace.openView(VIEW_ID)
     })
   }
 }

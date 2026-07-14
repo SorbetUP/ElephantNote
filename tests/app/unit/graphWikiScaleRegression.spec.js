@@ -5,6 +5,11 @@ import { describe, expect, test } from 'vitest'
 const ROOT = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8')
 
+const readDiscovery = () => [
+  read('Elephant/backend/tauri/src/knowledge_wiki_discovery.rs'),
+  read('Elephant/backend/tauri/src/knowledge_wiki_discovery/engine.rs')
+].join('\n')
+
 describe('large-vault graph and Wiki scale regressions', () => {
   test('does not auto-run the quadratic graph simulation or alter zoom on selection', () => {
     const source = read('Elephant/frontend/app/components/views/AtomicGraphView.vue')
@@ -24,7 +29,7 @@ describe('large-vault graph and Wiki scale regressions', () => {
   })
 
   test('refines broad semantic source sets and requests evidence-driven output', () => {
-    const discovery = read('Elephant/backend/tauri/src/knowledge_wiki_discovery.rs')
+    const discovery = readDiscovery()
     const wikiCore = read('Elephant/backend/knowledge-core/src/wiki_core.rs')
     expect(discovery).toContain('refine_assignment_locally')
     expect(discovery).toContain('clamp(minimum_sources, 180)')

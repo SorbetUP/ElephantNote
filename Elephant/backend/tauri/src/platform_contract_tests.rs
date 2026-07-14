@@ -109,6 +109,23 @@ fn extracted_ai_process_runtimes_are_absent_from_core() {
 }
 
 #[test]
+fn extracted_search_inspection_index_is_absent_from_core() {
+  let lib_min = read_text("Elephant/backend/tauri/src/lib_min.rs");
+  let extra_commands = read_text("Elephant/backend/tauri/src/tauri_extra_commands.rs");
+  let compatibility = read_text("Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js");
+  assert!(!lib_min.contains("tauri_extra_commands::tauri_search_inspect"));
+  assert!(!lib_min.contains("tauri_extra_commands::tauri_search_rebuild"));
+  assert!(!extra_commands.contains("pub fn tauri_search_inspect"));
+  assert!(!extra_commands.contains("pub fn tauri_search_rebuild"));
+  assert!(!extra_commands.contains("fn build_search_index"));
+  assert!(!extra_commands.contains("fn scan_markdown_notes"));
+  assert!(!extra_commands.contains("fn extract_wikilinks"));
+  assert!(!extra_commands.contains("SEARCH_INDEX_FILE"));
+  assert!(compatibility.contains("getBridge()?.search?.inspect?.()"));
+  assert!(compatibility.contains("getBridge()?.search?.rebuild?.()"));
+}
+
+#[test]
 fn extracted_sync_runtime_is_physically_absent_from_core() {
   let root = repo_root();
   let lib_min = read_text("Elephant/backend/tauri/src/lib_min.rs");

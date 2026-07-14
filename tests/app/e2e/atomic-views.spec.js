@@ -24,7 +24,8 @@ test.describe('Core workspace visual smoke', () => {
     await expect(page.locator('.elephant-chat-package')).toHaveCount(0)
     await expect(page.locator('.elephant-graph-package')).toHaveCount(0)
 
-    const screenshot = await page.screenshot()
-    expect(screenshot.length).toBeGreaterThan(10000)
+    const bodyText = (await page.locator('body').innerText()).trim()
+    expect(bodyText.length).toBeGreaterThan(20)
+    expect(bodyText).toMatch(/Choose your first vault|All notes|Stockage privé/i)
   })
 })

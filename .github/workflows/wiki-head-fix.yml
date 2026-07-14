@@ -1,15 +1,16 @@
 name: Wiki head fix
 
 on:
-  push:
-    branches:
-      - assistant/wiki-links-graph-integration
+  pull_request:
+    types:
+      - reopened
 
 permissions:
   contents: write
 
 jobs:
   patch-head:
+    if: github.event.pull_request.head.ref == 'assistant/wiki-organization-continuation'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

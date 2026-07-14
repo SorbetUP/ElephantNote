@@ -16,29 +16,20 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Mobile foundation failure
+      - name: Knowledge addon exact failure tail
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: |
-          gh run view 29352409899 --log-failed \
-            | grep -E -C 20 'ERR_PNPM|ERROR|Error:|error:|failed|Failure|Process completed|Cannot|not found|ENOENT|lockfile|workspace' \
-            | tail -n 500
+        run: gh run view 29352409342 --log-failed | tail -n 150
 
-      - name: Knowledge addon v2 failure
+      - name: Main test exact failure tail
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: |
-          gh run view 29352409342 --log-failed \
-            | grep -E -C 20 'FAIL|Error:|error:|failed|Process completed|addon-catalog|Cannot|not found|expected|received' \
-            | tail -n 500
+        run: gh run view 29352409914 --log-failed | tail -n 150
 
-      - name: Main test failure
+      - name: Addon platform exact failure tail
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: |
-          gh run view 29352409914 --log-failed \
-            | grep -E -C 15 'FAIL|Error:|error:|failed|Process completed|expected|received|Cannot|not found' \
-            | tail -n 350
+        run: gh run view 29352409836 --log-failed | tail -n 150

@@ -26,10 +26,12 @@ export const utf16Boundary = (value, offset) => {
 }
 
 export const textValue = (node) => {
-  if (node?.kind?.layer !== 'inline' || node.kind?.value?.type !== 'text') {
-    throw new TypeError(`Node ${String(node?.id)} is not an editable text node.`)
+  if (node?.kind?.layer !== 'inline') {
+    throw new TypeError(`Node ${String(node?.id)} is not editable inline content.`)
   }
-  return node.kind.value.value
+  if (node.kind?.value?.type === 'text') return node.kind.value.value
+  if (node.kind?.value?.type === 'code_span') return node.kind.value.code
+  throw new TypeError(`Node ${String(node?.id)} is not editable inline content.`)
 }
 
 export const requiredNode = (document, id) => {

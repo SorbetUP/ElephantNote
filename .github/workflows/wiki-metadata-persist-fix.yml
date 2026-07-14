@@ -144,3 +144,5 @@ jobs:
           fi
           git commit -m "fix(wiki): persist semantic proposal quality metadata"
           git push origin HEAD:assistant/wiki-organization-continuation
+
+# Activated after registration on the default branch.

@@ -1,4 +1,5 @@
 const ADDON_ID = 'elephant.sites'
+const PROVIDER_RESOURCE = 'sites.provider'
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -7,172 +8,137 @@ const node = (documentRef, tag, className = '', text = '') => {
   return element
 }
 
-const normalizeRelativePath = (value = '') => {
-  const normalized = String(value || '').trim().replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
-  const parts = normalized.split('/').filter(Boolean)
-  if (parts.some((part) => part === '..' || part === '.')) {
-    throw new Error('Site folder must stay inside the active vault')
-  }
-  return parts.join('/')
-}
+const normalizeSite = (value) => value && typeof value === 'object' ? value : null
 
 export default class ElephantSitesAddon {
   constructor(api) {
     this.api = api
     this.window = api.experimental.window
-    this.preview = null
-    this.frames = new Set()
+    this.site = null
+    this.status = null
   }
 
-  async allowDirectory(relativePath) {
+  invoke(command, payload = {}) {
     const invoke = this.window?.__TAURI__?.core?.invoke
-    if (typeof invoke !== 'function') throw new Error('Tauri asset host is unavailable')
-    return invoke('tauri_addons_assets_allow_directory', {
-      addonId: ADDON_ID,
-      relativePath: relativePath || '.'
-    })
+    if (typeof invoke !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
+    return invoke(command, payload)
   }
 
-  toAssetUrl(path) {
-    const convertFileSrc = this.window?.__TAURI__?.core?.convertFileSrc
-    if (typeof convertFileSrc !== 'function') throw new Error('Tauri asset URL conversion is unavailable')
-    return convertFileSrc(path, 'asset')
+  async openPreview(params = {}) {
+    this.site = normalizeSite(await this.invoke('tauri_site_preview_folder', params))
+    await this.refreshStatus()
+    return this.site
   }
 
-  async openPreview(relativePath) {
-    await this.stopPreview().catch(() => {})
-    const relative = normalizeRelativePath(relativePath)
-    const allowed = await this.allowDirectory(relative || '.')
-    const base = String(allowed?.path || '').replace(/[\\/]+$/, '')
-    if (!base) throw new Error('The selected site directory is unavailable')
-    const separator = base.includes('\\') ? '\\' : '/'
-    const entry = `${base}${separator}index.html`
-    const url = this.toAssetUrl(entry)
-    this.preview = {
-      siteId: `asset:${relative || '.'}`,
-      url,
-      root: base,
-      running: true,
-      status: 'ready',
-      mode: 'asset'
+  async refreshStatus(siteId = this.site?.siteId) {
+    if (!siteId) {
+      this.status = null
+      return null
     }
-    for (const frame of this.frames) {
-      frame.src = url
-      frame.hidden = false
+    this.status = await this.invoke('tauri_site_preview_status', { siteId })
+    return this.status
+  }
+
+  async stopPreview(siteId = this.site?.siteId) {
+    if (!siteId) return { stopped: false }
+    const result = await this.invoke('tauri_site_preview_stop', { siteId })
+    if (siteId === this.site?.siteId) {
+      this.site = null
+      this.status = null
     }
-    return this.preview
+    return result
   }
 
-  refreshStatus() {
-    return Promise.resolve(this.preview || { status: 'idle', running: false, mode: 'asset' })
+  openExternal(url = this.site?.url) {
+    if (!url) return null
+    return this.invoke('tauri_site_preview_open_external', { url })
   }
 
-  async stopPreview() {
-    this.preview = null
-    for (const frame of this.frames) {
-      frame.src = 'about:blank'
-      frame.hidden = true
-    }
-    return { stopped: true }
-  }
-
-  async openExternal(url) {
-    if (!url) return
-    const opener = this.window?.__TAURI__?.opener
-    if (typeof opener?.openUrl === 'function') return opener.openUrl(url)
-    this.window.open(url, '_blank', 'noopener,noreferrer')
-  }
-
-  render(container, compact = false) {
+  render(container) {
     const documentRef = container.ownerDocument
-    const root = node(documentRef, 'section', compact ? 'elephant-sites-panel compact' : 'elephant-sites-panel')
+    const root = node(documentRef, 'section', 'elephant-sites-package')
     container.replaceChildren(root)
-    const folder = node(documentRef, 'input')
-    folder.placeholder = 'Static site folder inside the active vault'
-    const status = node(documentRef, 'p', 'elephant-sites-status', 'Idle')
-    const actions = node(documentRef, 'div', 'elephant-sites-actions')
-    const preview = node(documentRef, 'button', '', 'Preview')
-    const stop = node(documentRef, 'button', '', 'Stop')
-    const open = node(documentRef, 'button', '', 'Open')
-    const frame = node(documentRef, 'iframe', 'elephant-sites-preview')
-    frame.title = 'Site preview'
-    frame.hidden = true
-    frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-popups allow-downloads')
-    this.frames.add(frame)
+    let disposed = false
 
-    const renderStatus = async () => {
-      const current = await this.refreshStatus().catch((error) => ({ status: 'error', error: error.message || String(error) }))
-      status.textContent = current?.error || current?.status || (current?.running ? 'Ready' : 'Idle')
-      open.disabled = !current?.url || current?.running === false
-      stop.disabled = current?.running !== true
-    }
-
-    preview.onclick = async () => {
-      preview.disabled = true
-      status.textContent = 'Opening preview…'
-      try {
-        await this.openPreview(folder.value)
-        await renderStatus()
-      } catch (error) {
-        status.textContent = error instanceof Error ? error.message : String(error)
-      } finally {
-        preview.disabled = false
+    const renderState = () => {
+      if (disposed) return
+      root.replaceChildren()
+      const header = node(documentRef, 'header', 'elephant-sites-header')
+      const copy = node(documentRef, 'div')
+      copy.append(node(documentRef, 'h2', '', 'Sites'), node(documentRef, 'p', '', 'Preview a static folder through the package-owned Sites service.'))
+      const actions = node(documentRef, 'div', 'elephant-sites-actions')
+      const preview = node(documentRef, 'button', '', this.site ? 'Choose another folder' : 'Preview folder')
+      preview.onclick = async () => {
+        preview.disabled = true
+        try { await this.openPreview(); renderState() } finally { preview.disabled = false }
       }
+      const refresh = node(documentRef, 'button', '', 'Refresh')
+      refresh.disabled = !this.site
+      refresh.onclick = async () => { await this.refreshStatus(); renderState() }
+      actions.append(preview, refresh)
+      header.append(copy, actions)
+      root.append(header)
+
+      if (!this.site) {
+        root.append(node(documentRef, 'p', 'elephant-sites-empty', 'No site preview is running.'))
+        return
+      }
+      const card = node(documentRef, 'article', 'elephant-sites-card')
+      card.append(node(documentRef, 'strong', '', this.site.name || this.site.siteId || 'Site preview'))
+      card.append(node(documentRef, 'small', '', this.site.sourcePath || this.site.path || ''))
+      card.append(node(documentRef, 'code', '', this.site.url || ''))
+      const controls = node(documentRef, 'div', 'elephant-sites-actions')
+      const open = node(documentRef, 'button', '', 'Open')
+      open.onclick = () => this.openExternal()
+      const stop = node(documentRef, 'button', '', 'Stop')
+      stop.onclick = async () => { await this.stopPreview(); renderState() }
+      controls.append(open, stop)
+      card.append(controls)
+      if (this.status) card.append(node(documentRef, 'pre', 'elephant-sites-status', JSON.stringify(this.status, null, 2)))
+      root.append(card)
     }
-    stop.onclick = async () => { await this.stopPreview(); await renderStatus() }
-    open.onclick = () => this.openExternal(this.preview?.url)
-    actions.append(preview, stop, open)
-    root.append(node(documentRef, compact ? 'h4' : 'h3', '', 'Sites'), folder, actions, status, frame)
-    void renderStatus()
-    return () => {
-      this.frames.delete(frame)
-      root.remove()
-    }
+
+    renderState()
+    return () => { disposed = true; root.remove() }
   }
 
-  onload(api) {
+  async onload(api) {
     api.ui.registerStyle(`
-      .elephant-sites-panel { display:grid; gap:10px; padding:14px; border:1px solid var(--en-border); border-radius:14px; background:var(--en-surface); }
-      .elephant-sites-panel.compact { margin:12px; }
-      .elephant-sites-panel h3,.elephant-sites-panel h4,.elephant-sites-status { margin:0; }
-      .elephant-sites-panel input { min-height:34px; padding:0 10px; border:1px solid var(--en-border); border-radius:9px; background:var(--en-bg); color:var(--en-text); }
-      .elephant-sites-actions { display:flex; gap:8px; flex-wrap:wrap; }
+      .elephant-sites-package { height:100%; overflow:auto; box-sizing:border-box; display:grid; align-content:start; gap:14px; padding:18px; }
+      .elephant-sites-header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+      .elephant-sites-header h2,.elephant-sites-header p { margin:0; }
+      .elephant-sites-header p,.elephant-sites-empty { color:var(--en-muted); }
+      .elephant-sites-actions { display:flex; flex-wrap:wrap; gap:8px; }
       .elephant-sites-actions button { min-height:34px; padding:0 12px; border:1px solid var(--en-border); border-radius:9px; background:var(--en-surface); color:var(--en-text); cursor:pointer; }
-      .elephant-sites-status { color:var(--en-muted); font-size:12px; }
-      .elephant-sites-preview { width:100%; min-height:360px; border:1px solid var(--en-border); border-radius:10px; background:white; }
+      .elephant-sites-card { display:grid; gap:9px; padding:14px; border:1px solid var(--en-border); border-radius:13px; background:var(--en-surface); }
+      .elephant-sites-card small { color:var(--en-muted); }
+      .elephant-sites-card code { overflow:auto; padding:8px; border-radius:8px; background:var(--en-soft); }
+      .elephant-sites-status { max-height:220px; overflow:auto; margin:0; padding:10px; background:var(--en-soft); color:var(--en-muted); }
     `, 'sites-package')
     const bridge = this.window?.__ELEPHANT_ADDON_VUE__
     if (!bridge?.createDomComponent) throw new Error('Physical addon Vue bridge is unavailable')
 
-    api.workspace.registerContribution('site.generators', {
-      id: `${ADDON_ID}.generator`,
-      title: 'Elephant Sites',
-      description: 'Cross-platform static site preview from a scoped vault directory.'
-    })
-    api.layout.registerZone({
-      id: `${ADDON_ID}.preview-panel`,
-      zone: 'workspace.notes',
-      order: 80,
-      component: bridge.createDomComponent({
-        name: 'ElephantPhysicalSitesPanel',
-        mount: (container) => this.render(container, true)
-      })
-    })
-    api.settings.registerSection({
-      id: `${ADDON_ID}.settings`,
-      section: 'sites',
-      navigationLabel: 'Sites',
-      navigationIcon: 'globe',
-      standalone: true,
-      chrome: false,
+    api.resources.provide(PROVIDER_RESOURCE, Object.freeze({
+      apiVersion: 1,
+      owner: ADDON_ID,
+      previewFolder: (params = {}) => this.openPreview(params),
+      status: (siteId) => this.refreshStatus(siteId),
+      stop: (siteId) => this.stopPreview(siteId),
+      openExternal: (url) => this.openExternal(url)
+    }))
+
+    api.workspace.registerView({
+      id: `${ADDON_ID}.workspace`,
       title: 'Sites',
-      description: 'Preview a static folder directly in Elephant on desktop, Android and iOS.',
-      order: 50,
-      render: (container) => this.render(container, false)
+      description: 'Preview and open static folders.',
+      icon: 'globe',
+      kind: 'sites-v2',
+      component: bridge.createDomComponent({ name: 'ElephantPhysicalSites', mount: (container) => this.render(container) }),
+      order: 55
     })
   }
 
   onunload() {
-    return this.stopPreview()
+    return this.stopPreview().catch(() => {})
   }
 }

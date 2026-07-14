@@ -23,6 +23,7 @@ pub mod addon_http_access;
 pub mod addon_sidecars;
 pub mod addon_services;
 
+#[path = "core_commands.rs"]
 mod tauri_extra_commands;
 mod debug_commands;
 
@@ -196,7 +197,6 @@ pub fn run() {
       tauri_extra_commands::tauri_drawings_create,
       tauri_extra_commands::tauri_drawings_read,
       tauri_extra_commands::tauri_drawings_write,
-      tauri_extra_commands::tauri_search_inspect,
       tauri_extra_commands::tauri_features_get,
       tauri_extra_commands::tauri_features_set
     ])

@@ -25,45 +25,20 @@ jobs:
     timeout-minutes: 20
     env:
       CARGO_TERM_COLOR: always
-      DEBIAN_FRONTEND: noninteractive
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Tauri Linux dependencies
-        shell: bash
-        run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential \
-            curl \
-            file \
-            libayatana-appindicator3-dev \
-            libgtk-3-dev \
-            librsvg2-dev \
-            libssl-dev \
-            libwebkit2gtk-4.1-dev \
-            patchelf \
-            wget
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
 
-      - name: Cache cargo
-        uses: actions/cache@v4
+      - name: Cache package build artifacts
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            Elephant/backend/tauri/target
-          key: ${{ runner.os }}-cargo-iroh-smoke-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-iroh-smoke-
-            ${{ runner.os }}-cargo-
+          workspaces: addons/official/sync/native -> target
 
-      - name: Run two-endpoint Iroh vault synchronization
+      - name: Run package-owned two-endpoint Iroh synchronization
         id: iroh-smoke
         shell: bash
         run: |
@@ -71,10 +46,9 @@ jobs:
           log_file="iroh-smoke-output.txt"
           set +e
           cargo test \
-            --manifest-path Elephant/backend/tauri/Cargo.toml \
-            --lib \
-            --no-default-features \
-            two_real_iroh_endpoints_exchange_modify_and_delete_vault_content \
+            --manifest-path addons/official/sync/native/Cargo.toml \
+            --test two_endpoint_sync \
+            physical_package_pairs_and_synchronizes_two_real_iroh_endpoints \
             -- --nocapture 2>&1 | tee "$log_file"
           test_status=${PIPESTATUS[0]}
           set -e
@@ -83,25 +57,20 @@ jobs:
           fi
           grep -Eq 'test result: ok\. 1 passed; 0 failed' "$log_file"
 
-      - name: Verify structured terminal synchronization logs
+      - name: Verify structured package synchronization diagnostics
         shell: bash
         run: |
           set -euxo pipefail
           log_file="iroh-smoke-output.txt"
-          grep -F '[Sync] run:start' "$log_file"
-          grep -F '[Sync] operation:start' "$log_file"
-          grep -F '[Sync] operation:complete' "$log_file"
+          grep -F '[Sync] run:start owner=elephant.sync transport=iroh' "$log_file"
+          grep -F '[Sync] endpoints:ready' "$log_file"
+          grep -F '[Sync] pairing:start' "$log_file"
+          grep -F '[Sync] pairing:complete' "$log_file"
+          grep -F '[Sync] session:start direction=bidirectional' "$log_file"
+          grep -F '[Sync] transfer:complete files=2' "$log_file"
+          grep -F '[Sync] verify:manifest equal=true' "$log_file"
+          grep -F '[Sync] baseline:saved peers=2' "$log_file"
           grep -F '[Sync] run:complete' "$log_file"
-          grep -F '[Sync] session:start' "$log_file"
-          grep -F '[Sync] manifest' "$log_file"
-          grep -F '[Sync] baseline' "$log_file"
-          grep -F '[Sync] plan' "$log_file"
-          grep -E '\[Sync\] (upload|receive-upload|send-download|download):start' "$log_file"
-          grep -F '[Sync] verify:hash' "$log_file"
-          grep -F '[Sync] conflict:preserved' "$log_file"
-          grep -F '[Sync] verify:manifest' "$log_file"
-          grep -F '[Sync] baseline:saved' "$log_file"
-          grep -F '[Sync] complete' "$log_file"
 
       - name: Upload Iroh smoke diagnostics
         if: always()

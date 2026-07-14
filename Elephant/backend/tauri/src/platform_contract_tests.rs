@@ -168,7 +168,7 @@ fn bundled_llama_runtime_is_desktop_only() {
         "chat runtime must import local_llama_runtime only on desktop"
     );
     assert!(
-        chat_runtime.contains("#[cfg(not(mobile))]\nfn with_system_prompt"),
-        "desktop-only prompt assembly must not be required by the mobile chat path"
+        chat_runtime.contains("#[cfg(not(mobile))]\nfn grounded_messages("),
+        "grounded desktop prompt assembly must not be required by the mobile chat path"
     );
 }

@@ -3,7 +3,8 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
-const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const absolute = (relativePath) => path.join(root, relativePath)
+const read = (relativePath) => fs.readFileSync(absolute(relativePath), 'utf8')
 
 describe('AI provider execution ownership', () => {
   it('keeps the chat addon as an orchestrator over installed provider contributions', () => {
@@ -39,20 +40,21 @@ describe('AI provider execution ownership', () => {
 
   it('keeps provider configuration and runtime tests physically absent from the core Tauri shell', () => {
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
-    const extras = read('Elephant/backend/tauri/src/tauri_extra_commands.rs')
+    const coreCommands = read('Elephant/backend/tauri/src/core_commands.rs')
     const compatibility = read('Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js')
 
-    expect(core).not.toContain('tauri_extra_commands::tauri_ai_config_get')
-    expect(core).not.toContain('tauri_extra_commands::tauri_ai_config_set')
-    expect(core).not.toContain('tauri_extra_commands::tauri_ai_config_test')
-    expect(extras).not.toContain('pub fn tauri_ai_config_get')
-    expect(extras).not.toContain('pub fn tauri_ai_config_set')
-    expect(extras).not.toContain('pub fn tauri_ai_config_test')
-    expect(extras).not.toContain('pub fn tauri_models_get_selection')
-    expect(extras).not.toContain('pub fn tauri_models_set_selection')
-    expect(extras).not.toContain('test_codex_cli')
-    expect(extras).not.toContain('test_tcp_endpoint')
-    expect(extras).not.toContain('PROVIDER_CONFIG_CATEGORY')
+    expect(fs.existsSync(absolute('Elephant/backend/tauri/src/tauri_extra_commands.rs'))).toBe(false)
+    expect(core).not.toContain('tauri_ai_config_get')
+    expect(core).not.toContain('tauri_ai_config_set')
+    expect(core).not.toContain('tauri_ai_config_test')
+    expect(coreCommands).not.toContain('pub fn tauri_ai_config_get')
+    expect(coreCommands).not.toContain('pub fn tauri_ai_config_set')
+    expect(coreCommands).not.toContain('pub fn tauri_ai_config_test')
+    expect(coreCommands).not.toContain('pub fn tauri_models_get_selection')
+    expect(coreCommands).not.toContain('pub fn tauri_models_set_selection')
+    expect(coreCommands).not.toContain('test_codex_cli')
+    expect(coreCommands).not.toContain('test_tcp_endpoint')
+    expect(coreCommands).not.toContain('PROVIDER_CONFIG_CATEGORY')
     expect(compatibility).not.toContain("'ai.config.get'")
     expect(compatibility).not.toContain("'ai.config.set'")
     expect(compatibility).not.toContain("'ai.config.test'")

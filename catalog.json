@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-14T11:13:51Z",
+  "updatedAt": "2026-07-14T11:16:52Z",
   "addons": [
     {
       "id": "elephant.ai",
@@ -62,7 +62,7 @@
         },
         "windows-x86_64": {
           "path": "addons/ai-ocr/releases/elephant.ai-ocr-1.0.0-windows-x86_64.enaddon",
-          "hash": "5ab93cde0081c03441842ee259fa261ffd856a420d14426446085b5063d6cf00"
+          "hash": "2ebb73496c2220ec155dcc6e04af083cc0ea7c84b6c6c91816a8ccb8b979c7d7"
         }
       }
     },
@@ -124,19 +124,19 @@
       "packages": {
         "linux-x86_64": {
           "path": "addons/sync/releases/elephant.sync-1.2.0-linux-x86_64.enaddon",
-          "hash": "aa2f2b3bf1bf699ecdc89c7ed87c0ccbf64d894321d8e8d96fcc9860b092e19e"
+          "hash": "1c112f00e1f88a8f3539376dc39df1eb5031d25a63d13fd0c00b60e33b04aa87"
         },
         "macos-aarch64": {
           "path": "addons/sync/releases/elephant.sync-1.2.0-macos-aarch64.enaddon",
-          "hash": "8f9602dcbdaed594b3ec0499108addede508fd6f779c9d52e8414e0f5843bb28"
+          "hash": "236301dec2fba79db71a1cabd7f297089f715c56fb3a03db443b2d0fa2fe31a5"
         },
         "macos-x86_64": {
           "path": "addons/sync/releases/elephant.sync-1.2.0-macos-x86_64.enaddon",
-          "hash": "abf57a34d16e0f10ad9b15db40efe60d6497a8287543d509f39c8fe740c882d5"
+          "hash": "559c3ff82ebf2d3fc534a611c4127e4b7345640479c4741da88560cbf0f8695c"
         },
         "windows-x86_64": {
           "path": "addons/sync/releases/elephant.sync-1.2.0-windows-x86_64.enaddon",
-          "hash": "9fc3d221caaabe037d3ae1ffafec2bf9d0f0e12c9e827aee9a62360da0ba08b8"
+          "hash": "8ae4e0ef3b0fef86925c47b4a01b05e5f469111b1d47caf7dcb117146a0aa6e3"
         }
       }
     },
@@ -188,7 +188,7 @@
         },
         "windows-x86_64": {
           "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-windows-x86_64.enaddon",
-          "hash": "837d3ea8349914fa9b135b3d79ada1a3b9441e0e7b7f0ac3c7f32db0359d7c15"
+          "hash": "63f72710a2a0380b104cf00742bf06542ceaed19b37ab6798156f616a00df6b4"
         },
         "android-aarch64": {
           "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-android-aarch64.enaddon",

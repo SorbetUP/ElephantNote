@@ -87,17 +87,51 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      - name: Validate Android native and addon boundaries
+      - name: Test Android vault plugin
         shell: bash
         run: |
-          set -euxo pipefail
-          cargo test --manifest-path Elephant/backend/tauri-plugin-elephant-android-vault/Cargo.toml
-          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets
+          set -o pipefail
+          cargo test --manifest-path Elephant/backend/tauri-plugin-elephant-android-vault/Cargo.toml \
+            2>&1 | tee mobile-plugin-tests.txt
+
+      - name: Check integrated Tauri targets
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets \
+            2>&1 | tee mobile-tauri-check.txt
+
+      - name: Validate mobile addon boundary
+        shell: bash
+        run: |
+          set -o pipefail
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
             tests/app/unit/specs/main/elephantnote/developNextMobileBoundary.spec.js \
+            2>&1 | tee mobile-boundary-tests.txt
+
+      - name: Validate mobile experience
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
             tests/app/unit/specs/main/elephantnote/developNextMobileExperience.spec.js \
+            2>&1 | tee mobile-experience-tests.txt
+
+      - name: Validate mobile domain clients
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
             tests/app/unit/elephantnote/domainClients.spec.js \
-            tests/elephant/unit/noteEditorHostImageLinks.spec.js
+            2>&1 | tee mobile-domain-tests.txt
+
+      - name: Validate mobile editor image links
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/elephant/unit/noteEditorHostImageLinks.spec.js \
+            2>&1 | tee mobile-image-tests.txt
 
       - name: Install exact wasm-bindgen CLI
         shell: bash
@@ -117,8 +151,26 @@ jobs:
           set -euxo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            echo 'Mobile foundations are already integrated.'
+            exit 0
+          fi
           git commit -m "feat(mobile): integrate Android vault and native UX foundations"
           git reset --hard HEAD
           git fetch origin develop_next
           git merge --no-edit origin/develop_next
           git push origin HEAD:develop_next
+
+      - name: Upload mobile foundation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: develop-next-mobile-foundations
+          path: |
+            mobile-plugin-tests.txt
+            mobile-tauri-check.txt
+            mobile-boundary-tests.txt
+            mobile-experience-tests.txt
+            mobile-domain-tests.txt
+            mobile-image-tests.txt
+          if-no-files-found: ignore

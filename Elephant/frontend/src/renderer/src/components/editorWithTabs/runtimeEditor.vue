@@ -5,6 +5,7 @@
     :factory="rustRuntimeFactory"
     :on-file-drop="imageHandlers.dropped"
     :on-uri-drop="imageHandlers.uriDropped"
+    :on-image-click="imageToolbar.open"
     mode="rust"
     class="rust-editor-runtime"
     @ready="handleRustRuntimeReady"
@@ -23,6 +24,13 @@
     v-model="tableDialogVisible"
     @confirm="handleCreateTable"
   />
+  <RuntimeImageToolbar
+    :image="imageToolbar.state.active"
+    @apply="imageToolbar.apply"
+    @choose-file="imageToolbar.chooseFile"
+    @delete="imageToolbar.remove"
+    @close="imageToolbar.close"
+  />
 </template>
 
 <script setup>
@@ -40,9 +48,11 @@ import {
   readMuyaRuntimeMode
 } from '@/muya'
 import Editor from './editor.vue'
+import RuntimeImageToolbar from './runtimeImageToolbar.vue'
 import RuntimeTableDialog from './runtimeTableDialog.vue'
 import { rustBusCommand } from './runtimeEditorCommands'
 import { createRuntimeImageHandlers } from './runtimeEditorImages'
+import { useRuntimeImageToolbar } from './runtimeImageToolbarState'
 import { applyRustEditorMarkdown } from './runtimeEditorState'
 
 const props = defineProps({
@@ -51,18 +61,9 @@ const props = defineProps({
   sourceCode: { type: Boolean, required: true },
   textDirection: { type: String, required: true },
   platform: { type: String, required: true },
-  toEditorMarkdown: {
-    type: Function,
-    default: (markdown) => markdown
-  },
-  fromEditorMarkdown: {
-    type: Function,
-    default: (markdown) => markdown
-  },
-  rustRuntimeFactory: {
-    type: Function,
-    default: null
-  }
+  toEditorMarkdown: { type: Function, default: (markdown) => markdown },
+  fromEditorMarkdown: { type: Function, default: (markdown) => markdown },
+  rustRuntimeFactory: { type: Function, default: null }
 })
 
 const editorStore = useEditorStore()
@@ -91,10 +92,7 @@ const scheduleRuntimeModeSync = () => {
 }
 
 const rustRuntimeActive = computed(() => isMuyaRustRuntime(runtimeMode.value))
-
-const handleRustRuntimeReady = (runtime) => {
-  rustRuntime.value = runtime
-}
+const handleRustRuntimeReady = (runtime) => { rustRuntime.value = runtime }
 
 const dispatchRustBusCommand = (event, payload) => {
   if (!rustRuntimeActive.value || props.sourceCode || !rustRuntime.value) {
@@ -103,9 +101,7 @@ const dispatchRustBusCommand = (event, payload) => {
   const command = rustBusCommand(event, payload)
   if (!command) return Promise.resolve(false)
   const result = rustRuntime.value.bridge.dispatch(command)
-  result.catch((error) => {
-    console.error(`[Muya Rust] Failed to handle ${event}.`, error)
-  })
+  result.catch((error) => console.error(`[Muya Rust] Failed to handle ${event}.`, error))
   return result
 }
 
@@ -117,6 +113,7 @@ const imageHandlers = createRuntimeImageHandlers({
   editorStore,
   dispatch: dispatchRustBusCommand
 })
+const imageToolbar = useRuntimeImageToolbar(imageHandlers)
 
 const handleParagraphCommand = (type) => {
   if (type === 'table' && rustRuntimeActive.value && !props.sourceCode) {
@@ -127,7 +124,6 @@ const handleParagraphCommand = (type) => {
 }
 
 const handleCreateTable = (table) => dispatchRustBusCommand('createTable', table)
-
 const busHandlers = Object.freeze({
   undo: () => dispatchRustBusCommand('undo'),
   redo: () => dispatchRustBusCommand('redo'),
@@ -168,6 +164,7 @@ onBeforeUnmount(() => {
   for (const [event, handler] of Object.entries(busHandlers)) bus.off(event, handler)
   rustRuntime.value = null
   tableDialogVisible.value = false
+  imageToolbar.close()
   if (runtimeModeTimer) window.clearInterval(runtimeModeTimer)
   if (pendingRuntimeFrame) window.cancelAnimationFrame(pendingRuntimeFrame)
 })

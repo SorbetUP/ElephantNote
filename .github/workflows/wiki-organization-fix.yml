@@ -1,16 +1,16 @@
 name: Wiki organization fix
 
 on:
-  pull_request:
-    types:
-      - reopened
+  push:
+    branches:
+      - assistant/wiki-organization-continuation
 
 permissions:
   contents: write
 
 jobs:
   fix-and-validate:
-    if: github.event.pull_request.head.ref == 'assistant/wiki-organization-continuation'
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

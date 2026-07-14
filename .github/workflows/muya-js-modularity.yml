@@ -79,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -F "engine: 'rust'" Elephant/frontend/src/renderer/src/muya/editorRuntimeResource.js
-          grep -F "api.resources.provide(EDITOR_RESOURCE_ID" Elephant/frontend/src/renderer/src/muya/index.js
+          grep -F "host.provide('editor.runtime', editorRuntimeBinding.resource)" Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeEditor.vue
           grep -F "muya-rust-wasm-bundle" Elephant/frontend/src/renderer/src/editor-rust/wasmFactory.js
           grep -F "import { RustMuyaRuntimeEditor } from '@/muya'" Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeEditor.vue
           ! grep -RIn "host?.get('muya')" Elephant/frontend/src/renderer/src/addons addons/official

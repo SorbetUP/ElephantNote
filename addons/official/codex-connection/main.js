@@ -1,5 +1,6 @@
 const ADDON_ID = 'elephant.codex-connection'
 const PROVIDER_ID = 'codex'
+const AI_CONFIG_RESOURCE = 'ai.config'
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -18,12 +19,8 @@ export default class ElephantCodexAddon {
     return this.api.native.service.call(method, params, options)
   }
 
-  async call(action, payload = {}) {
-    const client = this.window?.elephantnote?.api
-    if (typeof client?.call !== 'function') throw new Error(`Elephant API is unavailable for ${action}`)
-    const response = await client.call(action, payload)
-    if (response?.ok === false) throw new Error(response.error?.message || `${action} failed`)
-    return response?.data ?? response
+  aiConfig() {
+    return this.api.resources.get(AI_CONFIG_RESOURCE)
   }
 
   async chat({ messages = [], model = '', route = {} } = {}) {
@@ -114,14 +111,15 @@ export default class ElephantCodexAddon {
   }
 
   async disableRoutes() {
-    const config = await this.call('ai.config.get').catch(() => null)
-    if (!config) return
+    const resource = this.aiConfig()
+    const config = await resource?.get?.().catch(() => null)
+    if (!config || !resource?.set) return
     const routes = { ...(config.routes || {}) }
     const chat = routes.chat || {}
     const owned = chat.source === PROVIDER_ID || chat.provider === PROVIDER_ID || config.provider === PROVIDER_ID
     if (!owned) return
     routes.chat = { ...chat, source: 'disabled', provider: 'disabled', transport: 'disabled', endpoint: '', model: '' }
-    await this.call('ai.config.set', { ...config, provider: 'disabled', transport: 'disabled', endpoint: '', model: '', routes }).catch(() => {})
+    await resource.set({ ...config, provider: 'disabled', transport: 'disabled', endpoint: '', model: '', routes }).catch(() => {})
   }
 
   async onload(api) {

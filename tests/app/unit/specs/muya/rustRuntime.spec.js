@@ -79,6 +79,13 @@ const browserEvent = (type, values = {}) => {
   return event
 }
 
+const fileTransfer = (files) => ({
+  types: ['Files'],
+  files,
+  dropEffect: 'none',
+  getData: () => ''
+})
+
 describe('initializeExperimentalRustRuntime', () => {
   let container
 
@@ -112,6 +119,31 @@ describe('initializeExperimentalRustRuntime', () => {
       'set_selection',
       'insert_text'
     ])
+  })
+
+  it('forwards image files after synchronizing the Rust selection', async () => {
+    const engine = fakeEngine()
+    const onFileDrop = vi.fn(async () => {})
+    const runtime = await initializeExperimentalRustRuntime(
+      { markdown: 'alpha' },
+      {
+        factory: async () => engine,
+        domContainer: container,
+        captureInput: true,
+        onFileDrop
+      },
+      vi.fn()
+    )
+    const files = [{ name: 'image.png', type: 'image/png' }]
+    const dataTransfer = fileTransfer(files)
+    const drop = browserEvent('drop', { dataTransfer })
+
+    container.dispatchEvent(drop)
+    await runtime.inputController.idle()
+
+    expect(drop.defaultPrevented).toBe(true)
+    expect(engine.requests[0].command.type).toBe('set_selection')
+    expect(onFileDrop).toHaveBeenCalledWith(files)
   })
 
   it('detaches input handling when the runtime is destroyed', async () => {

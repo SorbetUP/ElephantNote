@@ -214,9 +214,25 @@ fn write_markdown_atomic(target: &Path, markdown: &str, overwrite: bool) -> R<bo
   file.sync_all().map_err(|error| error.to_string())?;
   drop(file);
 
+  if !overwrite {
+    match fs::hard_link(&temporary, target) {
+      Ok(()) => {
+        fs::remove_file(&temporary).map_err(|error| error.to_string())?;
+        return Ok(true);
+      }
+      Err(error) => {
+        let _ = fs::remove_file(&temporary);
+        if matches!(error.kind(), ErrorKind::AlreadyExists | ErrorKind::PermissionDenied) {
+          return Err("Addon note already exists and overwrite was not requested".to_string());
+        }
+        return Err(error.to_string());
+      }
+    }
+  }
+
   match fs::rename(&temporary, target) {
     Ok(()) => Ok(created),
-    Err(error) if !created && overwrite && matches!(error.kind(), ErrorKind::AlreadyExists | ErrorKind::PermissionDenied) => {
+    Err(error) if matches!(error.kind(), ErrorKind::AlreadyExists | ErrorKind::PermissionDenied) => {
       fs::remove_file(target).map_err(|remove_error| remove_error.to_string())?;
       fs::rename(&temporary, target).map_err(|rename_error| rename_error.to_string())?;
       Ok(false)

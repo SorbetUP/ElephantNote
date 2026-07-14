@@ -74,6 +74,7 @@ for (const file of [
   'Elephant/backend/tauri/src/core_commands.rs',
   'Elephant/backend/tauri/src/addon_services.rs',
   'Elephant/backend/tauri/src/addon_runtime_access.rs',
+  'Elephant/backend/tauri/src/addon_http_access.rs',
   'tests/app/e2e/search-inspect.spec.js'
 ]) read(file)
 
@@ -169,10 +170,14 @@ for (const leakedCoreMarker of [
 for (const leakedDependency of [
   'iroh =',
   'iroh-mdns-address-lookup',
-  'reqwest =',
   'tokenizers =',
   'fastembed ='
 ]) lacks('Elephant/backend/tauri/Cargo.toml', leakedDependency, `optional dependency ${leakedDependency}`)
+
+has('Elephant/backend/tauri/Cargo.toml', 'reqwest =', 'generic permission-scoped addon HTTP client')
+has('Elephant/backend/tauri/src/addon_http_access.rs', 'read_enabled_addon', 'enabled-package HTTP permission check')
+has('Elephant/backend/tauri/src/addon_http_access.rs', 'Network access to a local or private address', 'addon HTTP anti-SSRF guard')
+has('Elephant/backend/tauri/src/addon_http_access.rs', 'External addon HTTPS requests are restricted to port 443', 'addon HTTPS port restriction')
 
 for (const leakedCoreImplementation of [
   'tauri_ai_config_get',

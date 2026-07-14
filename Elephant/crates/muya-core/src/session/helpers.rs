@@ -65,8 +65,10 @@ fn validate_point(
   let node = document
     .node(point.node)
     .ok_or(EditError::NodeNotFound(point.node))?;
-  let NodeKind::Inline(InlineKind::Text { value }) = &node.kind else {
-    return Err(EditError::NotTextNode(point.node));
+  let value = match &node.kind {
+    NodeKind::Inline(InlineKind::Text { value }) => value,
+    NodeKind::Inline(InlineKind::CodeSpan { code }) => code,
+    _ => return Err(EditError::NotTextNode(point.node)),
   };
   let length = value.encode_utf16().count() as u32;
   if point.offset_utf16 > length {

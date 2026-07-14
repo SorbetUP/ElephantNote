@@ -1,15 +1,16 @@
 name: Wiki head fix
 
 on:
-  push:
-    branches:
-      - main
+  pull_request:
+    types:
+      - reopened
 
 permissions:
   contents: write
 
 jobs:
   patch-head:
+    if: github.event.pull_request.head.ref == 'assistant/wiki-organization-continuation'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -51,5 +52,3 @@ jobs:
           fi
           git commit -m "test(wiki): align related Wiki rendering contract"
           git push origin HEAD:assistant/wiki-organization-continuation
-
-# Second push activates the workflow after registration on the default branch.

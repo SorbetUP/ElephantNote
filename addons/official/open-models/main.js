@@ -151,15 +151,15 @@ export default class ElephantOpenModelsAddon {
     api.resources.provide(MODELS_RESOURCE, Object.freeze({
       apiVersion: 1,
       owner: ADDON_ID,
+      status: () => this.service('models.status'),
       list: () => this.modelList(),
+      search: (params = {}) => this.service('models.search', params),
+      info: (params = {}) => this.service('models.info', params),
       active: () => this.service('models.active'),
       download: (params = {}) => this.service('models.download', params, { timeoutMs: 120000 }),
-      downloadStatus: (params = {}) => this.service('models.download-status', params),
-      cancelDownload: (params = {}) => this.service('models.cancel-download', params),
       activate: (params = {}) => this.service('models.activate', params),
-      deactivate: (params = {}) => this.service('models.deactivate', params),
+      deactivate: () => this.service('models.deactivate'),
       remove: (params = {}) => this.service('models.delete', params),
-      refreshIndex: () => this.service('models.refresh-index'),
       chat: (request = {}) => this.chat(request)
     }))
 

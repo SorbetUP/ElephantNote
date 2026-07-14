@@ -49,7 +49,7 @@ describe('versioned physical package resources', () => {
     const codex = read('addons/official/codex-connection/main.js')
     const ai = read('addons/official/ai/main.js')
 
-    expect(ai).toContain("const CONFIG_RESOURCE = 'ai.config'")
+    expect(ai).toContain("api.resources.provide('ai.config'")
     expect(openModels).toContain("const AI_CONFIG_RESOURCE = 'ai.config'")
     expect(codex).toContain("const AI_CONFIG_RESOURCE = 'ai.config'")
     expect(openModels).not.toContain("elephantnote.api.call('ai.config")

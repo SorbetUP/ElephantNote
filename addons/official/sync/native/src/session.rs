@@ -395,6 +395,10 @@ pub async fn serve_sync_session(
   if !acknowledged || !final_manifest.content_equals(&ack_manifest) {
     return Err("peer did not acknowledge the verified final manifest".to_string());
   }
+  recv
+    .read_to_end(0)
+    .await
+    .map_err(|error| format!("sync acknowledgement stream did not close cleanly: {error}"))?;
 
   if let Some(peer) = config.peers.iter_mut().find(|peer| peer.endpoint_id == peer_id) {
     peer.last_seen_at = now();
@@ -403,7 +407,7 @@ pub async fn serve_sync_session(
   config.updated_at = now();
   write_config(vault_root, &config)?;
   send.finish().map_err(|error| error.to_string())?;
-  connection.close(0_u32.into(), b"sync-complete");
+  connection.closed().await;
   Ok(result)
 }
 
@@ -429,10 +433,10 @@ mod tests {
       delete_dirs_remote: vec!["empty".to_string()],
       ..SyncPlan::default()
     };
-    let mapped = remote_operations_as_local(&plan);
-    assert_eq!(mapped.preserve_local, plan.preserve_remote);
-    assert_eq!(mapped.create_dirs_local, plan.create_dirs_remote);
-    assert_eq!(mapped.delete_files_local, plan.delete_files_remote);
-    assert_eq!(mapped.delete_dirs_local, plan.delete_dirs_remote);
+    let local = remote_operations_as_local(&plan);
+    assert_eq!(local.preserve_local, plan.preserve_remote);
+    assert_eq!(local.create_dirs_local, plan.create_dirs_remote);
+    assert_eq!(local.delete_files_local, plan.delete_files_remote);
+    assert_eq!(local.delete_dirs_local, plan.delete_dirs_remote);
   }
 }

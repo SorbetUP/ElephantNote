@@ -92,6 +92,8 @@ describe('Sync physical migration boundary', () => {
 
   it('keeps all Iroh runtime and compatibility commands physically absent from the core', () => {
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
+    const extraCommands = read('Elephant/backend/tauri/src/tauri_extra_commands.rs')
+    const compatibility = read('Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js')
     const vaultModule = read('Elephant/backend/tauri/src/vault/mod.rs')
     const cargo = read('Elephant/backend/tauri/Cargo.toml')
 
@@ -100,6 +102,11 @@ describe('Sync physical migration boundary', () => {
     expect(core).not.toContain('pub mod sync;')
     expect(core).not.toContain('IrohSyncState')
     expect(core).not.toContain('sync_commands::iroh_sync_')
+    expect(core).not.toContain('tauri_extra_commands::tauri_sync_plan')
+    expect(extraCommands).not.toContain('pub fn tauri_sync_plan')
+    expect(extraCommands).not.toContain('crate::vault::sync')
+    expect(compatibility).not.toContain("invoke('tauri_sync_plan'")
+    expect(compatibility).toContain('getBridge()?.sync?.plan?.')
     expect(vaultModule).not.toContain('pub mod sync;')
     expect(cargo).not.toContain('iroh =')
     expect(cargo).not.toContain('iroh-mdns-address-lookup')

@@ -48,8 +48,8 @@
     "addon:build:ocr": "node build/scripts/build-physical-addon.mjs addons/official/ai-ocr",
     "addon:build:open-models": "node build/scripts/build-physical-addon.mjs addons/official/open-models",
     "addon:build:codex": "node build/scripts/build-physical-addon.mjs addons/official/codex-connection",
-    "tauri:web:dev": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vite --config vite.tauri.config.mjs --host 127.0.0.1 --port 1420 --strictPort",
-    "tauri:web:build": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vite build --config vite.tauri.config.mjs && node build/scripts/report-renderer-bundle.mjs",
+    "tauri:web:dev": "pnpm muya:wasm:build && NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vite --config vite.tauri.config.mjs --host 127.0.0.1 --port 1420 --strictPort",
+    "tauri:web:build": "pnpm muya:wasm:build && NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vite build --config vite.tauri.config.mjs && node build/scripts/report-renderer-bundle.mjs",
     "tauri:check": "cargo check --manifest-path Elephant/backend/tauri/Cargo.toml",
     "tauri:platform:check": "node build/scripts/verify-tauri-platforms.mjs",
     "tauri:dev": "./build/scripts/build_dev.sh",
@@ -72,7 +72,8 @@
     "test:e2e": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/playwright test --config tests/app/e2e/playwright.config.js",
     "prod:check": "pnpm lint && pnpm security:guard && pnpm test:unit && pnpm test:e2e && pnpm validate-licenses && pnpm run build:unpack",
     "gen-third-party": "node build/scripts/generateThirdPartyLicense.js",
-    "validate-licenses": "node build/scripts/validateLicenses.js"
+    "validate-licenses": "node build/scripts/validateLicenses.js",
+    "muya:wasm:build": "node build/scripts/build-muya-wasm.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

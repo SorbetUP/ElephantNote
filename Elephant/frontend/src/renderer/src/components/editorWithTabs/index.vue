@@ -5,13 +5,15 @@
   >
     <tabs v-show="showTabBar" />
     <div class="container">
-      <editor
+      <runtime-editor
         :markdown="markdown"
         :cursor="cursor"
+        :source-code="sourceCode"
         :text-direction="textDirection"
         :platform="platform"
         :to-editor-markdown="toEditorMarkdown"
         :from-editor-markdown="fromEditorMarkdown"
+        :rust-runtime-factory="rustRuntimeFactory"
       />
       <source-code
         v-if="sourceCode"
@@ -30,7 +32,7 @@
 import { useLayoutStore } from '@/store/layout'
 import { storeToRefs } from 'pinia'
 import Tabs from './tabs.vue'
-import Editor from './editor.vue'
+import RuntimeEditor from './runtimeEditor.vue'
 import SourceCode from './sourceCode.vue'
 import TabNotifications from './notifications.vue'
 
@@ -71,11 +73,14 @@ defineProps({
   fromEditorMarkdown: {
     type: Function,
     default: (markdown) => markdown
+  },
+  rustRuntimeFactory: {
+    type: Function,
+    default: null
   }
 })
 
 const layoutStore = useLayoutStore()
-
 const { showSideBar, sideBarWidth } = storeToRefs(layoutStore)
 </script>
 
@@ -91,6 +96,7 @@ const { showSideBar, sideBarWidth } = storeToRefs(layoutStore)
   background: var(--editorBgColor);
   & > .container {
     flex: 1;
+    min-height: 0;
     overflow: hidden;
   }
 }

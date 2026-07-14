@@ -29,17 +29,36 @@ export const createRuntimeImageHandlers = ({
     return IMAGE_EXT_REG.test(source) || checkImageContentType(source)
   })
 
-  const insert = (image) => {
-    const payload = typeof image === 'string' ? { src: image } : image || {}
+  const normalizeSource = (source) => {
     const baseDirectory = getImageBaseDirectory(
       currentFile.value?.pathname,
       window.DIRNAME
     )
-    const source = normalizeInsertedImageSource(
-      payload.src || payload.source || '',
-      baseDirectory
-    )
-    return dispatch('insert-image', { ...payload, source })
+    return normalizeInsertedImageSource(source || '', baseDirectory)
+  }
+
+  const insert = (image) => {
+    const payload = typeof image === 'string' ? { src: image } : image || {}
+    return dispatch('insert-image', {
+      ...payload,
+      source: normalizeSource(payload.src || payload.source)
+    })
+  }
+
+  const replace = (image) => dispatch('replace-image', {
+    ...image,
+    source: normalizeSource(image?.src || image?.source)
+  })
+
+  const remove = (image) => dispatch('delete-image', {
+    image: typeof image === 'object' ? image.image : image
+  })
+
+  const chooseReplacement = async (image) => {
+    const source = await editorStore.ASK_FOR_IMAGE_PATH()
+    if (!source) return false
+    await replace({ ...image, source })
+    return true
   }
 
   const uploaded = (url, deletionUrl) => {
@@ -64,5 +83,13 @@ export const createRuntimeImageHandlers = ({
     return true
   }
 
-  return { insert, uploaded, dropped, uriDropped }
+  return {
+    insert,
+    replace,
+    remove,
+    chooseReplacement,
+    uploaded,
+    dropped,
+    uriDropped
+  }
 }

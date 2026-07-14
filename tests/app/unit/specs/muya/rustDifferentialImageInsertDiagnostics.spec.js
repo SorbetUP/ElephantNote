@@ -85,7 +85,10 @@ const cases = [
     name: 'insert an image inside strong text',
     initial: '**alpha**',
     expected: '**al![picture](/tmp/picture.png)pha**\n',
-    selectJs: (muya) => setJsSelectionByText(muya, 'alpha', 2),
+    // Strong text is represented by Muya as an inline descendant rather than the
+    // paragraphContent block itself. Select the actual editable descendant so
+    // the JS oracle exercises the same caret that the Rust logical document does.
+    selectJs: (muya) => setJsSelectionByAnyText(muya, 'alpha', 2),
     selectRust: (rust) => rust.setSelectionByText('alpha', 2),
     image: { source: '/tmp/picture.png', alt: '', title: null }
   },

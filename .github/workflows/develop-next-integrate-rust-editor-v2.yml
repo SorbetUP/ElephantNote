@@ -121,6 +121,27 @@ jobs:
           path.write_text(text)
           PY
 
+      - name: Remove direct HTML mutation from clipboard conversion
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('Elephant/frontend/src/muya/lib/rust/inputController/clipboardBlocks.js')
+          text = path.read_text()
+          old = '''  const template = ownerDocument.createElement('template')
+            template.innerHTML = html
+            return renderBlocks(template.content)
+          '''
+          new = '''  const range = ownerDocument.createRange()
+            const fragment = range.createContextualFragment(html)
+            return renderBlocks(fragment)
+          '''
+          if old not in text:
+              raise SystemExit('clipboard HTML conversion block changed unexpectedly')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Install JavaScript dependencies
         uses: ./.github/actions/setup
 
@@ -150,6 +171,9 @@ jobs:
         shell: bash
         run: |
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            --config vite.tauri.config.mjs \
+            --root . \
+            --environment jsdom \
             tests/app/unit/specs/muya/rustProductionOwnership.spec.js \
             tests/app/unit/specs/muya/rustBridge.spec.js \
             tests/app/unit/specs/muya/rustRuntime.spec.js \

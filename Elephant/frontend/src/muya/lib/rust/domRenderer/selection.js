@@ -21,12 +21,14 @@ export const restoreDomSelection = (renderer, selection) => {
 const selectionPoint = (renderer, point) => {
   const node = renderer.logical.node(point?.node)
   const element = renderer.requiredElement(point?.node)
-  if (node?.kind?.value?.type !== 'text') {
-    throw new TypeError(`Muya Rust selection node ${String(point?.node)} is not text.`)
+  if (!['text', 'code_span'].includes(node?.kind?.value?.type)) {
+    throw new TypeError(
+      `Muya Rust selection node ${String(point?.node)} is not editable inline content.`
+    )
   }
   const text = element.firstChild
   if (!text || text.nodeType !== 3) {
-    throw new TypeError(`Muya Rust text DOM for node ${point.node} is missing.`)
+    throw new TypeError(`Muya Rust editable DOM for node ${point.node} is missing.`)
   }
   const offset = Number(point.offset_utf16)
   if (!Number.isSafeInteger(offset) || offset < 0 || offset > text.data.length) {

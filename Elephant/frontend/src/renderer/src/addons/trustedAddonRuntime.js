@@ -206,13 +206,13 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
       }
     }),
     editor: Object.freeze({
-      get active() {
-        return host?.get('editor') || host?.get('muya') || target?.marktext?.muya || null
-      },
-      watch(listener, options) {
-        if (!host) throw new Error('Addon host registry is unavailable')
-        return track(host.watch('editor', listener, options))
-      },
+  get active() {
+    return host?.get('editor.runtime') || host?.get('editor') || null
+  },
+  watch(listener, options) {
+    if (!host) throw new Error('Addon host registry is unavailable')
+    return track(host.watch('editor.runtime', listener, options))
+  },
       registerExtension: context.addEditorExtension,
       registerBlockType(definition) {
         return register('editor.block-types', definition)

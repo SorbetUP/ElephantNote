@@ -3,17 +3,18 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
-const processNativeSlugs = ['ai-ocr', 'code-execution']
+const processNativeSlugs = ['ai-ocr', 'code-execution', 'sync', 'open-models', 'codex-connection']
 
 const manifestFor = (slug) => JSON.parse(
   fs.readFileSync(path.join(root, 'addons/official', slug, 'manifest.json'), 'utf8')
 )
+const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 describe('native addon mobile compatibility', () => {
-  it('never advertises downloaded process sidecars as Android or iOS executables', () => {
+  it('never advertises downloaded process services as Android or iOS executables', () => {
     for (const slug of processNativeSlugs) {
       const manifest = manifestFor(slug)
-      expect(manifest.native.runner).toBe('process')
+      expect(manifest.native.runner).toBe('service')
       expect(Object.keys(manifest.native.sidecars).some((key) => /^(android|ios)-/.test(key))).toBe(false)
       expect(manifest.native.mobile.android.supported).toBe(false)
       expect(manifest.native.mobile.android.reason).toMatch(/host adapter/i)
@@ -24,33 +25,35 @@ describe('native addon mobile compatibility', () => {
 
   it('keeps Sites renderer-owned and installable on desktop, Android and iOS', () => {
     const manifest = manifestFor('sites')
-    const source = fs.readFileSync(path.join(root, 'addons/official/sites/main.js'), 'utf8')
+    const source = read('addons/official/sites/main.js')
     expect(manifest.version).toBe('1.3.0')
     expect(manifest.permissions.native).toBeUndefined()
     expect(manifest.native).toBeUndefined()
     expect(source).toContain('tauri_addons_assets_allow_directory')
     expect(source).toContain('convertFileSrc')
-    expect(source).not.toContain('api.native.call')
+    expect(source).toContain("runtime: 'tauri-asset-protocol'")
+    expect(source).not.toContain('tauri_site_preview_')
     expect(fs.existsSync(path.join(root, 'addons/official/sites/addon.build.json'))).toBe(false)
     expect(fs.existsSync(path.join(root, 'addons/official/sites/native'))).toBe(false)
   })
 
-  it('does not resolve Iroh inside Android or iOS application builds', () => {
-    const cargo = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/Cargo.toml'), 'utf8')
-    const lib = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/src/lib_min.rs'), 'utf8')
-    const vault = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/src/vault/mod.rs'), 'utf8')
-    const commands = fs.readFileSync(path.join(root, 'Elephant/backend/tauri/src/sync_commands.rs'), 'utf8')
-    const marker = '[target.\'cfg(not(any(target_os = "android", target_os = "ios")))\'.dependencies]'
-    const [shared, desktop = ''] = cargo.split(marker)
+  it('keeps Iroh physically outside Android and iOS application builds', () => {
+    const cargo = read('Elephant/backend/tauri/Cargo.toml')
+    const lib = read('Elephant/backend/tauri/src/lib_min.rs')
+    const vault = read('Elephant/backend/tauri/src/vault/mod.rs')
+    const syncManifest = manifestFor('sync')
+    const syncCargo = read('addons/official/sync/native/Cargo.toml')
 
-    expect(shared).not.toMatch(/^iroh\s*=/m)
-    expect(shared).not.toMatch(/^iroh-mdns-address-lookup\s*=/m)
-    expect(desktop).toMatch(/^iroh\s*=/m)
-    expect(desktop).toMatch(/^iroh-mdns-address-lookup\s*=/m)
-    expect(lib).toContain('#[cfg(not(mobile))]\npub mod sync;')
-    expect(lib).toContain('#[cfg(not(mobile))]\n      app.manage(sync::IrohSyncState::new());')
-    expect(vault).toContain('#[cfg(not(mobile))]\npub mod sync;')
-    expect(commands).toContain('#[cfg(mobile)]\nmod mobile')
-    expect(commands).toContain('addon-required')
+    expect(cargo).not.toMatch(/^iroh\s*=/m)
+    expect(cargo).not.toMatch(/^iroh-mdns-address-lookup\s*=/m)
+    expect(lib).not.toContain('pub mod sync;')
+    expect(lib).not.toContain('IrohSyncState')
+    expect(vault).not.toContain('pub mod sync;')
+    expect(fs.existsSync(path.join(root, 'Elephant/backend/tauri/src/sync_commands.rs'))).toBe(false)
+    expect(fs.existsSync(path.join(root, 'Elephant/backend/tauri/src/sync'))).toBe(false)
+    expect(syncCargo).toMatch(/^iroh\s*=\s*"1\.0\.2"/m)
+    expect(syncCargo).toMatch(/^iroh-mdns-address-lookup\s*=/m)
+    expect(syncManifest.native.mobile.android.supported).toBe(false)
+    expect(syncManifest.native.mobile.ios.supported).toBe(false)
   })
 })

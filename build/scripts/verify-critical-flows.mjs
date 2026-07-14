@@ -375,8 +375,8 @@ ordered(
 )
 lacks(
   'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
-  'SEARCH_REBUILD',
-  'implicit frontend chat search rebuild'
+  'CHAT_REBUILD_COOLDOWN_MS',
+  'legacy frontend chat rebuild cooldown'
 )
 lacks(
   'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',

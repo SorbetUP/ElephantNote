@@ -16,14 +16,22 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Knowledge repair failure
+      - name: Knowledge V2 compiler or test failure
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh run view 29350778827 --log-failed | tail -n 140
+        shell: bash
+        run: |
+          gh run view 29350915943 --log-failed \
+            | grep -E -C 12 'error\[|error:|mismatched types|cannot find|no method named|FAILED|panicked at|test result:|Process completed' \
+            | tail -n 500
 
-      - name: Trusted editor API failure
+      - name: Trusted editor failed-suite summary
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh run view 29350515884 --log-failed | tail -n 220
+        shell: bash
+        run: |
+          gh run view 29350515884 --log-failed \
+            | sed -n '/Failed Suites/,$p' \
+            | head -n 160

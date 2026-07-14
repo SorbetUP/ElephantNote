@@ -593,11 +593,6 @@ pub fn tauri_search_rebuild(app: AppHandle) -> R<Value> {
   }))
 }
 
-#[tauri::command]
-pub fn tauri_sync_plan(payload_by_operation: Option<Value>) -> R<Value> {
-  Ok(crate::vault::sync::create_sync_plan_value(payload_by_operation.unwrap_or_else(|| json!({}))))
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;

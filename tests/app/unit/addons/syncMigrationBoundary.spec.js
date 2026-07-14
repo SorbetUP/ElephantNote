@@ -52,7 +52,9 @@ describe('Sync physical migration boundary', () => {
     const session = read('addons/official/sync/native/src/session.rs')
     const transfer = read('addons/official/sync/native/src/transfer.rs')
 
-    expect(manifest.description).toContain('vault manifest scanning and deterministic sync planning')
+    expect(manifest.description).toMatch(/persistent Iroh pairing/i)
+    expect(manifest.description).toMatch(/bidirectional vault synchronization/i)
+    expect(manifest.description).toMatch(/baselines and conflict management/i)
     expect(entry).toContain("from './main.js'")
     expect(entry).toContain("this.callNativeService('sync.create-invite'")
     expect(entry).toContain("this.callNativeService('sync.accept-invite'")

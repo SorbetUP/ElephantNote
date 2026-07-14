@@ -6,7 +6,7 @@
     ["A😀 B", {"word": 2, "paragraph": 1, "character": 4, "all": 5}],
     ["a\n\nb\n\n", {"word": 2, "paragraph": 2, "character": 2, "all": 6}],
     ["中文 hello\nworld", {"word": 4, "paragraph": 1, "character": 12, "all": 14}],
-    ["﻿a b", {"word": 2, "paragraph": 1, "character": 2, "all": 4}]
+    ["\uFEFFa b", {"word": 2, "paragraph": 1, "character": 2, "all": 4}]
   ],
   "clone": [
     {

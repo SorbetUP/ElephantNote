@@ -16,20 +16,8 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Knowledge addon exact failure tail
+      - name: Mobile validation exact failure tail
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh run view 29352409342 --log-failed | tail -n 150
-
-      - name: Main test exact failure tail
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: gh run view 29352409914 --log-failed | tail -n 150
-
-      - name: Addon platform exact failure tail
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: gh run view 29352409836 --log-failed | tail -n 150
+        run: gh run view 29355557051 --log-failed | tail -n 180

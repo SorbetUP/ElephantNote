@@ -100,6 +100,7 @@ async fn pair(
   receiver_endpoint: &Endpoint,
   receiver_vault: &PathBuf,
 ) {
+  println!("[Sync] pairing:start");
   let invite = create_pending_invite(
     inviter_vault,
     &inviter_endpoint.id().to_string(),
@@ -140,6 +141,7 @@ async fn pair(
     accepted,
   )
   .unwrap();
+  println!("[Sync] pairing:complete");
 }
 
 fn temp_vault(name: &str) -> PathBuf {
@@ -155,6 +157,7 @@ fn temp_vault(name: &str) -> PathBuf {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn physical_package_pairs_and_synchronizes_two_real_iroh_endpoints() {
+  println!("[Sync] run:start owner=elephant.sync transport=iroh");
   let vault_a = temp_vault("a");
   let vault_b = temp_vault("b");
   fs::create_dir_all(&vault_a).unwrap();
@@ -164,6 +167,11 @@ async fn physical_package_pairs_and_synchronizes_two_real_iroh_endpoints() {
 
   let endpoint_a = Endpoint::builder(presets::Minimal).bind().await.unwrap();
   let endpoint_b = Endpoint::builder(presets::Minimal).bind().await.unwrap();
+  println!(
+    "[Sync] endpoints:ready first={} second={}",
+    endpoint_a.id(),
+    endpoint_b.id()
+  );
   let router_a = Router::builder(endpoint_a.clone())
     .accept(
       ALPN,
@@ -186,6 +194,7 @@ async fn physical_package_pairs_and_synchronizes_two_real_iroh_endpoints() {
     .spawn();
 
   pair(&endpoint_a, &vault_a, &endpoint_b, &vault_b).await;
+  println!("[Sync] session:start direction=bidirectional");
   let sessions = tokio::time::timeout(
     Duration::from_secs(60),
     run_all_sessions(&endpoint_b, &vault_b),
@@ -198,16 +207,24 @@ async fn physical_package_pairs_and_synchronizes_two_real_iroh_endpoints() {
   assert_eq!(sessions[0].transferred_files, 2);
   assert!(sessions[0].transferred_bytes >= 9);
   assert!(sessions[0].conflicts.is_empty());
+  println!(
+    "[Sync] transfer:complete files={} bytes={} conflicts={}",
+    sessions[0].transferred_files,
+    sessions[0].transferred_bytes,
+    sessions[0].conflicts.len()
+  );
   assert_eq!(fs::read_to_string(vault_a.join("From B.md")).unwrap(), "beta");
   assert_eq!(fs::read_to_string(vault_b.join("From A.md")).unwrap(), "alpha");
 
   let manifest_a = scan_vault(&vault_a).unwrap();
   let manifest_b = scan_vault(&vault_b).unwrap();
   assert!(manifest_a.content_equals(&manifest_b));
+  println!("[Sync] verify:manifest equal=true");
   assert!(read_baseline(&vault_a, &endpoint_b.id().to_string()).content_equals(&manifest_a));
   assert!(read_baseline(&vault_b, &endpoint_a.id().to_string()).content_equals(&manifest_b));
   assert!(vault_a.join(".elephantnote/sync/sync-manifest.json").is_file());
   assert!(vault_b.join(".elephantnote/sync/sync-manifest.json").is_file());
+  println!("[Sync] baseline:saved peers=2");
 
   drop(router_a);
   drop(router_b);
@@ -215,4 +232,5 @@ async fn physical_package_pairs_and_synchronizes_two_real_iroh_endpoints() {
   endpoint_b.close().await;
   let _ = fs::remove_dir_all(vault_a);
   let _ = fs::remove_dir_all(vault_b);
+  println!("[Sync] run:complete");
 }

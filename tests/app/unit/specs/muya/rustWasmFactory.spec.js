@@ -1,14 +1,14 @@
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { createBundledMuyaRustEngine } from '../../../../../Elephant/frontend/src/muya/lib/rust/wasmFactory'
 
-const wasmPath = fileURLToPath(new URL(
-  '../../../../../Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm',
-  import.meta.url
-))
+const wasmPath = resolve(
+  process.cwd(),
+  'Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm'
+)
 const generatedWasmTest = existsSync(wasmPath) ? it : it.skip
 
 describe('createBundledMuyaRustEngine', () => {

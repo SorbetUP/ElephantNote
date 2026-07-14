@@ -90,7 +90,7 @@ describe('Sync physical migration boundary', () => {
     expect(transfer).toContain('pub async fn receive_file')
   })
 
-  it('keeps all Iroh runtime and compatibility commands physically absent from the core', () => {
+  it('keeps all Iroh runtime and local compatibility calls physically absent from the core', () => {
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
     const extraCommands = read('Elephant/backend/tauri/src/tauri_extra_commands.rs')
     const compatibility = read('Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js')
@@ -105,8 +105,10 @@ describe('Sync physical migration boundary', () => {
     expect(core).not.toContain('tauri_extra_commands::tauri_sync_plan')
     expect(extraCommands).not.toContain('pub fn tauri_sync_plan')
     expect(extraCommands).not.toContain('crate::vault::sync')
-    expect(compatibility).not.toContain("invoke('tauri_sync_plan'")
-    expect(compatibility).toContain('getBridge()?.sync?.plan?.')
+    expect(compatibility).not.toContain("'sync.status'")
+    expect(compatibility).not.toContain("'sync.plan'")
+    expect(compatibility).not.toContain("'sync.enqueue'")
+    expect(compatibility).not.toContain("'sync.run'")
     expect(vaultModule).not.toContain('pub mod sync;')
     expect(cargo).not.toContain('iroh =')
     expect(cargo).not.toContain('iroh-mdns-address-lookup')

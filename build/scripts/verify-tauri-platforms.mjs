@@ -19,9 +19,16 @@ const buildDev = readText('build/scripts/build_dev.sh')
 const buildAndroid = readText('build/scripts/build_dev_apk.sh')
 const cargoToml = readText('Elephant/backend/tauri/Cargo.toml')
 const vaultConfig = readText('Elephant/backend/tauri/src/vault/config.rs')
-const tauriExtra = readText('Elephant/backend/tauri/src/tauri_extra_commands.rs')
+const coreCommands = readText('Elephant/backend/tauri/src/core_commands.rs')
 const libMin = readText('Elephant/backend/tauri/src/lib_min.rs')
 const addonServices = readText('Elephant/backend/tauri/src/addon_services.rs')
+
+const assertWorkspaceBuildHook = (config, label) => {
+  const command = config.build?.beforeBuildCommand
+  assert(command && typeof command === 'object', `${label} beforeBuildCommand must use the Tauri object form`)
+  assert(command?.script === 'pnpm tauri:web:build', `${label} must only build the core renderer`)
+  assert(command?.cwd === '../../..', `${label} frontend build must run from the repository workspace root`)
+}
 
 for (const script of [
   'tauri:check',
@@ -51,10 +58,7 @@ assert(
   baseConfig.bundle?.icon?.includes('../../assets/static/icon.png'),
   'Base Tauri bundle must include a PNG icon for Linux'
 )
-assert(
-  baseConfig.build?.beforeBuildCommand === 'pnpm tauri:web:build',
-  'Core Tauri builds must not install optional addon runtimes'
-)
+assertWorkspaceBuildHook(baseConfig, 'Core Tauri build')
 assert(
   Array.isArray(baseConfig.bundle?.resources) && baseConfig.bundle.resources.length === 0,
   'Core desktop bundle resources must exclude optional addon binaries'
@@ -74,10 +78,7 @@ assert(
   'Linux override must not reuse macOS titleBarStyle'
 )
 
-assert(
-  androidConfig.build?.beforeBuildCommand === 'pnpm tauri:web:build',
-  'Android build must only build the core renderer'
-)
+assertWorkspaceBuildHook(androidConfig, 'Android build')
 assert(
   Array.isArray(androidConfig.bundle?.resources) && androidConfig.bundle.resources.length === 0,
   'Android bundle must not include desktop process resources'
@@ -166,27 +167,29 @@ assert(
   'Extracted local model and chat runtimes must remain absent from core'
 )
 assert(
-  !baseConfig.build.beforeBuildCommand.includes('llama') && !baseConfig.build.beforeBuildCommand.includes('codex'),
+  !baseConfig.build.beforeBuildCommand.script.includes('llama')
+    && !baseConfig.build.beforeBuildCommand.script.includes('codex'),
   'Tauri build command must not reference extracted Open Models or Codex installers'
 )
 
-// The historical network transfer path is still being migrated, so Iroh may
-// remain in core only behind a desktop target boundary. This assertion should
-// be removed together with the core Sync implementation.
 assert(
-  cargoToml.includes("[target.'cfg(not(any(target_os = \"android\", target_os = \"ios\")))'.dependencies]"),
-  'Desktop-only core dependencies must be target-scoped away from Android/iOS'
+  !cargoToml.match(/^iroh\s*=/m) && !cargoToml.includes('iroh-mdns-address-lookup'),
+  'Iroh must remain physically absent from the desktop and mobile core Cargo graph'
 )
 assert(
-  cargoToml.includes('iroh = "1.0.2"') && cargoToml.includes('iroh-mdns-address-lookup = "0.4.0"'),
-  'The remaining core Sync bridge must keep Iroh explicitly desktop-targeted during migration'
+  cargoToml.includes("[target.'cfg(not(any(target_os = \"android\", target_os = \"ios\")))'.dependencies]"),
+  'Remaining desktop-only generic dependencies must stay target-scoped away from Android/iOS'
 )
 
 assert(vaultConfig.includes('MOBILE_DEFAULT_VAULT_ID'), 'Vault config must define a mobile fallback vault')
 assert(vaultConfig.includes('app_data_dir'), 'Mobile fallback vault must use the app data directory')
 assert(
-  tauriExtra.includes('vault_config::get_active_vault'),
-  'Extra commands must use the shared vault config path resolver'
+  coreCommands.includes('vault_config::get_active_vault'),
+  'Core commands must use the shared vault config path resolver'
+)
+assert(
+  !existsSync(absolute('Elephant/backend/tauri/src/tauri_extra_commands.rs')),
+  'Legacy optional command module must stay physically absent'
 )
 assert(libMin.includes('mod platform_contract_tests;'), 'Rust platform contract tests must be registered')
 assert(

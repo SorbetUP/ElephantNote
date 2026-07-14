@@ -9,428 +9,138 @@ import {
 import { API_PAYLOAD_SCHEMAS, listApiContracts } from 'common/elephantnote/apiContracts'
 import { describe, expect, it, vi } from 'vitest'
 
-describe('ElephantNote API contract', () => {
-  it('describes versioned actions', async () => {
+const OPTIONAL_ACTION_KEYS = [
+  'AI_CONFIG_SET',
+  'MODEL_SELECTION_SET',
+  'OCR_EXTRACT',
+  'CALENDAR_IMPORT_GOOGLE_FROM_PATH',
+  'WIKI_ACCEPT',
+  'PLUGINS_RUN',
+  'PROGRAMS_RUN',
+  'TASKS_RUN',
+  'RAG_CHAT',
+  'SYNC_PLAN'
+]
+
+describe('ElephantNote minimal core API contract', () => {
+  it('describes only versioned core actions', () => {
     const api = createElephantNoteApi({
       handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.NOTES_CREATE]: async () => ({ ok: true })
+        [ELEPHANTNOTE_API_ACTIONS.NOTES_CREATE]: async() => ({ ok: true })
       }
     })
 
-    expect(api.version).to.equal(ELEPHANTNOTE_API_VERSION)
-    expect(api.describe()).to.deep.equal({
+    expect(api.version).toBe(ELEPHANTNOTE_API_VERSION)
+    expect(api.describe()).toEqual({
       version: ELEPHANTNOTE_API_VERSION,
       actions: [ELEPHANTNOTE_API_ACTIONS.API_DESCRIBE, ELEPHANTNOTE_API_ACTIONS.NOTES_CREATE].sort()
     })
   })
 
-  it('keeps shared domain contracts, action constants and payload schemas in sync', () => {
+  it('keeps domains, constants and schemas synchronized', () => {
     const contracts = listApiContracts()
     const actionNames = new Set(Object.values(ELEPHANTNOTE_API_ACTIONS))
 
-    expect(ELEPHANTNOTE_API_DOMAINS).to.have.keys([
+    expect(Object.keys(ELEPHANTNOTE_API_DOMAINS)).toEqual([
       'system',
       'vaults',
       'documents',
-      'imports',
-      'knowledge',
-      'publishing',
-      'automation',
-      'aiRuntime',
-      'plugins',
-      'sync'
+      'search',
+      'coreFeatures'
     ])
-    expect(contracts.length).to.equal(actionNames.size)
-    expect(Object.keys(API_PAYLOAD_SCHEMAS).sort()).to.deep.equal([...actionNames].sort())
+    expect(contracts).toHaveLength(actionNames.size)
+    expect(Object.keys(API_PAYLOAD_SCHEMAS).sort()).toEqual([...actionNames].sort())
   })
 
-  it('calls registered handlers with payload and context', async () => {
+  it('calls registered handlers with validated payload and context', async() => {
+    const handler = vi.fn(async(payload, context) => ({ payload, actor: context.actor }))
     const api = createElephantNoteApi({
-      handlers: {
-        'notes.echo': async (payload, context) => ({
-          payload,
-          actor: context.actor
-        })
-      }
+      handlers: { [ELEPHANTNOTE_API_ACTIONS.NOTES_WRITE]: handler }
     })
 
-    await expect(api.call('notes.echo', { title: 'A' }, { actor: 'test' })).resolves.to.deep.equal({
-      payload: { title: 'A' },
+    await expect(api.call(
+      ELEPHANTNOTE_API_ACTIONS.NOTES_WRITE,
+      { relativePath: 'Inbox/Note.md', markdown: '# Note' },
+      { actor: 'test' }
+    )).resolves.toEqual({
+      payload: { relativePath: 'Inbox/Note.md', markdown: '# Note' },
       actor: 'test'
     })
+    expect(handler).toHaveBeenCalledOnce()
   })
 
-  it('returns response envelopes for agents and tests', async () => {
-    const api = createElephantNoteApi({
-      handlers: {
-        'notes.ok': async () => 42
-      }
-    })
+  it('returns stable success and error envelopes', async() => {
+    const api = createElephantNoteApi({ handlers: { 'notes.ok': async() => 42 } })
 
-    await expect(api.callEnvelope('notes.ok')).resolves.to.include({
+    await expect(api.callEnvelope('notes.ok')).resolves.toMatchObject({
       ok: true,
       version: ELEPHANTNOTE_API_VERSION,
       action: 'notes.ok',
       data: 42
     })
-
-    const failed = await api.callEnvelope('missing.action')
-    expect(failed.ok).to.equal(false)
-    expect(failed.error.code).to.equal('ELEPHANTNOTE_UNKNOWN_API_ACTION')
+    await expect(api.callEnvelope('missing.action')).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'ELEPHANTNOTE_UNKNOWN_API_ACTION' }
+    })
   })
 
-  it('rejects invalid payloads before executing handlers', async () => {
-    const handler = vi.fn(async () => ({ deleted: true }))
+  it('rejects invalid document and search payloads before handlers run', async() => {
+    const noteHandler = vi.fn(async(payload) => payload)
+    const searchHandler = vi.fn(async(payload) => payload)
     const api = createElephantNoteApi({
       handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.ENTRIES_DELETE]: handler
+        [ELEPHANTNOTE_API_ACTIONS.NOTES_CREATE]: noteHandler,
+        [ELEPHANTNOTE_API_ACTIONS.SEARCH_QUERY]: searchHandler
       }
     })
 
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.ENTRIES_DELETE, {})
-
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
-    expect(handler).not.toHaveBeenCalled()
+    await expect(api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.NOTES_CREATE, {
+      filename: '../escape.md'
+    })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'ELEPHANTNOTE_INVALID_API_PAYLOAD' }
+    })
+    await expect(api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.SEARCH_QUERY, {
+      query: '',
+      mode: 'semantic'
+    })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'ELEPHANTNOTE_INVALID_API_PAYLOAD' }
+    })
+    expect(noteHandler).not.toHaveBeenCalled()
+    expect(searchHandler).not.toHaveBeenCalled()
   })
 
-  it('validates Atomic model selection payloads', async () => {
-    const handler = vi.fn(async (payload) => payload)
+  it('accepts the generic core search and feature payloads', async() => {
     const api = createElephantNoteApi({
       handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.MODEL_SELECTION_SET]: handler
+        [ELEPHANTNOTE_API_ACTIONS.SEARCH_QUERY]: async(payload) => payload,
+        [ELEPHANTNOTE_API_ACTIONS.FEATURES_SET]: async(payload) => payload
       }
     })
 
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.MODEL_SELECTION_SET, {
-        embedding: 'smollm2-node-llama-cpp',
-        chat: 'smollm2-node-llama-cpp-chat',
-        ocr: 'local-tesseract-ocr',
-        naming: 'local-naming',
-        summary: 'local-summary',
-        agent: 'codex-compatible',
-        'speech-to-text': 'whisper-large-v3-turbo'
-      })
-    ).resolves.toMatchObject({
-      embedding: 'smollm2-node-llama-cpp',
-      chat: 'smollm2-node-llama-cpp-chat',
-      ocr: 'local-tesseract-ocr',
-      naming: 'local-naming',
-      summary: 'local-summary',
-      agent: 'codex-compatible',
-      'speech-to-text': 'whisper-large-v3-turbo'
-    })
-
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.MODEL_SELECTION_SET, {
-      embedding: 42
-    })
-
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
-  })
-
-  it('validates OCR extraction payloads', async () => {
-    const handler = vi.fn(async (payload) => payload)
-    const api = createElephantNoteApi({
-      handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.OCR_EXTRACT]: handler
-      }
-    })
-
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.OCR_EXTRACT, {
-        imagePath: '/tmp/screenshot.png',
-        language: 'eng',
-        pageSegmentationMode: '6'
-      })
-    ).resolves.to.deep.equal({
-      imagePath: '/tmp/screenshot.png',
-      language: 'eng',
-      pageSegmentationMode: '6'
-    })
-
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.OCR_EXTRACT, {
-      language: 'eng'
-    })
-
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
-  })
-
-  it('rejects the removed global AI enabled setting from provider config payloads', async () => {
-    const api = createElephantNoteApi({
-      handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_SET]: async (payload) => payload,
-        [ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_TEST]: async (payload) => payload
-      }
-    })
-
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_SET, {
-        preset: 'nodeLlamaCpp',
-        transport: 'node-llama-cpp',
-        endpoint: 'node-llama-cpp://local',
-        model: 'smollm2-node-llama-cpp-chat'
-      })
-    ).resolves.toMatchObject({
-      preset: 'nodeLlamaCpp',
-      transport: 'node-llama-cpp'
-    })
-
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.AI_CONFIG_SET, {
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.SEARCH_QUERY, {
+      query: 'elephant',
+      mode: 'text',
+      limit: 20
+    })).resolves.toEqual({ query: 'elephant', mode: 'text', limit: 20 })
+    await expect(api.call(ELEPHANTNOTE_API_ACTIONS.FEATURES_SET, {
+      key: 'editor.footer',
       enabled: false
-    })
-
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
+    })).resolves.toEqual({ key: 'editor.footer', enabled: false })
   })
 
-  it('validates Google Calendar import payloads', async () => {
-    const handler = vi.fn(async (payload) => payload)
-    const api = createElephantNoteApi({
-      handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE_FROM_PATH]: handler
-      }
+  it('does not advertise optional package actions globally', async() => {
+    for (const key of OPTIONAL_ACTION_KEYS) expect(ELEPHANTNOTE_API_ACTIONS[key]).toBeUndefined()
+
+    const api = createElephantNoteApi({ handlers: {} })
+    await expect(api.callEnvelope('sync.plan', {})).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'ELEPHANTNOTE_UNKNOWN_API_ACTION' }
     })
-
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE_FROM_PATH, {
-        sourcePath: '/tmp/calendar.ics'
-      })
-    ).resolves.to.deep.equal({
-      sourcePath: '/tmp/calendar.ics'
+    await expect(api.callEnvelope('ai.config.set', {})).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'ELEPHANTNOTE_UNKNOWN_API_ACTION' }
     })
-
-    const response = await api.callEnvelope(
-      ELEPHANTNOTE_API_ACTIONS.CALENDAR_IMPORT_GOOGLE_FROM_PATH,
-      {}
-    )
-
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
-  })
-
-  it('validates Google Calendar OAuth config payloads', async () => {
-    const handler = vi.fn(async (payload) => payload)
-    const api = createElephantNoteApi({
-      handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.CALENDAR_GOOGLE_CONFIG_SET]: handler
-      }
-    })
-
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.CALENDAR_GOOGLE_CONFIG_SET, {
-        enabled: true,
-        clientId: 'client',
-        refreshToken: 'refresh',
-        calendarId: 'primary'
-      })
-    ).resolves.toMatchObject({
-      enabled: true,
-      calendarId: 'primary'
-    })
-
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.CALENDAR_GOOGLE_CONFIG_SET, {
-      enabled: 'yes'
-    })
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
-  })
-
-  it('validates source ingestion payloads', async () => {
-    const handler = vi.fn(async (payload) => payload)
-    const api = createElephantNoteApi({
-      handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.SOURCES_INGEST_URL]: handler
-      }
-    })
-
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.SOURCES_INGEST_URL, {
-        url: 'https://example.com',
-        destinationRelativePath: 'Sources'
-      })
-    ).resolves.to.deep.equal({
-      url: 'https://example.com',
-      destinationRelativePath: 'Sources'
-    })
-
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.SOURCES_INGEST_URL, {})
-
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
-  })
-
-  it('validates wiki proposal workflow payloads', async () => {
-    const handler = vi.fn(async (payload) => payload)
-    const api = createElephantNoteApi({
-      handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.WIKI_ACCEPT]: handler
-      }
-    })
-
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.WIKI_ACCEPT, {
-        id: 'wiki-work'
-      })
-    ).resolves.to.deep.equal({
-      id: 'wiki-work'
-    })
-
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.WIKI_ACCEPT, {})
-
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
-  })
-
-  it('validates wiki context payloads', async () => {
-    const handler = vi.fn(async (payload) => payload)
-    const api = createElephantNoteApi({
-      handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.WIKI_CONTEXT]: handler
-      }
-    })
-
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.WIKI_CONTEXT, {
-        path: 'Project/Plan.md',
-        limit: 4
-      })
-    ).resolves.to.deep.equal({
-      path: 'Project/Plan.md',
-      limit: 4
-    })
-
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.WIKI_CONTEXT, {
-      path: ''
-    })
-
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
-  })
-
-  it('validates plugin state payloads', async () => {
-    const handler = vi.fn(async (payload) => payload)
-    const api = createElephantNoteApi({
-      handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.PLUGINS_SET]: handler
-      }
-    })
-
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.PLUGINS_SET, {
-        id: 'google-calendar',
-        enabled: true,
-        config: { calendarId: 'primary' }
-      })
-    ).resolves.to.deep.equal({
-      id: 'google-calendar',
-      enabled: true,
-      config: { calendarId: 'primary' }
-    })
-
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.PLUGINS_SET, {
-      enabled: true
-    })
-
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
-  })
-
-  it('validates plugin runtime and program run payloads', async () => {
-    const api = createElephantNoteApi({
-      handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.PLUGINS_RUN]: async (payload) => payload,
-        [ELEPHANTNOTE_API_ACTIONS.PROGRAMS_RUN]: async (payload) => payload
-      }
-    })
-
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.PLUGINS_RUN, {
-        id: 'mcp-memory',
-        input: { name: 'rag.chat' }
-      })
-    ).resolves.toMatchObject({ id: 'mcp-memory' })
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.PROGRAMS_RUN, {
-        id: 'python',
-        command: 'pytest',
-        cwd: '/tmp'
-      })
-    ).resolves.toMatchObject({ id: 'python', command: 'pytest' })
-
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.PROGRAMS_RUN, {
-      id: 'python'
-    })
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
-  })
-
-  it('validates task run payloads', async () => {
-    const handler = vi.fn(async (payload) => payload)
-    const api = createElephantNoteApi({
-      handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.TASKS_RUN]: handler
-      }
-    })
-
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.TASKS_RUN, {
-        id: 'daily-briefing'
-      })
-    ).resolves.to.deep.equal({
-      id: 'daily-briefing'
-    })
-
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.TASKS_RUN, {})
-
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
-  })
-
-  it('validates RAG, MCP and model runtime payloads', async () => {
-    const api = createElephantNoteApi({
-      handlers: {
-        [ELEPHANTNOTE_API_ACTIONS.RAG_CHAT]: async (payload) => payload,
-        [ELEPHANTNOTE_API_ACTIONS.MCP_TOOLS_CALL]: async (payload) => payload,
-        [ELEPHANTNOTE_API_ACTIONS.MODELS_DOWNLOAD]: async (payload) => payload
-      }
-    })
-
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.RAG_CHAT, {
-        message: 'What changed?',
-        limit: 4,
-        messages: [
-          { role: 'user', content: 'Earlier question' },
-          { role: 'assistant', content: 'Earlier answer' },
-          { role: 'user', content: 'What changed?' }
-        ]
-      })
-    ).resolves.toMatchObject({
-      message: 'What changed?',
-      limit: 4,
-      messages: [
-        { role: 'user', content: 'Earlier question' },
-        { role: 'assistant', content: 'Earlier answer' },
-        { role: 'user', content: 'What changed?' }
-      ]
-    })
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.MCP_TOOLS_CALL, {
-        name: 'rag.chat',
-        arguments: { message: 'Hello' }
-      })
-    ).resolves.toMatchObject({ name: 'rag.chat' })
-    await expect(
-      api.call(ELEPHANTNOTE_API_ACTIONS.MODELS_DOWNLOAD, {
-        id: 'llama-3.2'
-      })
-    ).resolves.toEqual({ id: 'llama-3.2' })
-
-    const response = await api.callEnvelope(ELEPHANTNOTE_API_ACTIONS.RAG_CHAT, {})
-    expect(response.ok).to.equal(false)
-    expect(response.error.code).to.equal('ELEPHANTNOTE_INVALID_API_PAYLOAD')
   })
 })

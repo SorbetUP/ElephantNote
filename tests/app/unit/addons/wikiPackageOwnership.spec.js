@@ -37,16 +37,18 @@ describe('Wiki physical package ownership', () => {
     }
   })
 
-  it('keeps the legacy Wiki backend physically absent from the core', () => {
+  it('keeps the legacy Wiki backend and local fallback physically absent from the core', () => {
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
     const compatibility = read('Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js')
 
     expect(fs.existsSync(absolute('Elephant/backend/tauri/src/wiki.rs'))).toBe(false)
     expect(core).not.toContain('pub mod wiki;')
     expect(core).not.toContain('tauri_wiki_')
-    expect(compatibility).toContain("'wiki.list': () => getBridge()?.wiki?.list?.()")
-    expect(compatibility).toContain("'wiki.propose': () => getBridge()?.wiki?.propose?.()")
-    expect(compatibility).toContain("'wiki.accept': (payload) => getBridge()?.wiki?.accept?.(payload)")
-    expect(compatibility).toContain("'wiki.dismiss': (payload) => getBridge()?.wiki?.dismiss?.(payload)")
+    expect(compatibility).not.toContain("'wiki.list'")
+    expect(compatibility).not.toContain("'wiki.propose'")
+    expect(compatibility).not.toContain("'wiki.accept'")
+    expect(compatibility).not.toContain("'wiki.dismiss'")
+    expect(compatibility).not.toContain("'wiki.sourceInfo'")
+    expect(compatibility).not.toContain("'wiki.context'")
   })
 })

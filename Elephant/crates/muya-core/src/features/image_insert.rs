@@ -129,7 +129,7 @@ fn infer_alt(source: &str) -> String {
   stem.to_string()
 }
 
-fn normalize_source(source: &str) -> String {
+pub(super) fn normalize_source(source: &str) -> String {
   if source.starts_with("data:") {
     return source.to_string();
   }

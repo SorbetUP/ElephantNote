@@ -1,6 +1,5 @@
 import fs from 'fs'
-import Slugger from 'muya/lib/parser/marked/slugger'
-import { escapeHTML, unescapeHTML } from 'muya/lib/utils'
+import { HeadingSlugger as Slugger, escapeHTML, unescapeHTML } from './editorCoreUtils'
 import academicTheme from '@/assets/themes/export/academic.theme.css?inline'
 import liberTheme from '@/assets/themes/export/liber.theme.css?inline'
 import { cloneObj } from '../util'

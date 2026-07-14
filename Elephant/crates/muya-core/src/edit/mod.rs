@@ -28,5 +28,8 @@ pub use operation::{Operation, Utf16Range};
 pub use paragraph_boundary::ParagraphBoundaryCommand;
 pub use paste_command::PasteCommand;
 pub use transaction::Transaction;
-pub(crate) use code_span::{build_delete_backward as build_code_span_delete_backward, build_insert_text as build_code_span_insert_text};
+pub(crate) use code_span::{
+  build_delete_backward as build_code_span_delete_backward,
+  build_insert_text as build_code_span_insert_text,
+};
 pub(crate) use mark_fragments::build_partial_cross_wrapper_toggle;

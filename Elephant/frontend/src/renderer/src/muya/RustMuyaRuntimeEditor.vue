@@ -27,7 +27,8 @@ import { initializeExperimentalRustRuntime } from 'muya/lib/rust/runtime'
 const props = defineProps({
   modelValue: { type: String, default: '' },
   mode: { type: String, default: 'rust' },
-  factory: { type: Function, default: null }
+  factory: { type: Function, default: null },
+  onFileDrop: { type: Function, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'ready', 'change', 'error'])
@@ -98,7 +99,8 @@ const mountRuntime = async (markdown) => {
         useBundledWasm: !props.factory,
         domContainer: rootRef.value,
         captureInput: true,
-        applyPatches: scheduleMarkdownSync
+        applyPatches: scheduleMarkdownSync,
+        onFileDrop: props.onFileDrop
       },
       reportError
     )
@@ -122,6 +124,13 @@ watch(
   (next) => {
     const normalized = String(next || '')
     if (normalized !== runtimeMarkdown) void mountRuntime(normalized)
+  }
+)
+
+watch(
+  () => props.onFileDrop,
+  (callback) => {
+    if (runtime?.inputController) runtime.inputController.onFileDrop = callback || null
   }
 )
 

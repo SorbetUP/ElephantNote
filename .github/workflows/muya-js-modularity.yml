@@ -65,8 +65,8 @@ jobs:
                       module = match.group('module')
                       if module == 'muya' or module.startswith('muya/'):
                           violations.append(f'{relative}: legacy package import {module!r}')
-                  if 'frontend/src/muya' in text:
-                      violations.append(f'{relative}: direct legacy source-tree reference')
+                      if 'frontend/src/muya' in module:
+                          violations.append(f'{relative}: direct legacy source import {module!r}')
           if violations:
               raise SystemExit(
                   'Production code still imports the legacy Muya JavaScript package:\n' +

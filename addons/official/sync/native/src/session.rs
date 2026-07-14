@@ -1,4 +1,4 @@
-use iroh::{Connection, Endpoint, EndpointAddr, EndpointId};
+use iroh::{endpoint::Connection, Endpoint, EndpointAddr, EndpointId};
 use serde::Serialize;
 use serde_json::json;
 use std::{

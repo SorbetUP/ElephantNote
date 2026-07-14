@@ -1,0 +1,27 @@
+name: Diagnose Knowledge addon integration
+
+on:
+  pull_request:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/develop-next-diagnose-knowledge-addon.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print failed Knowledge validation section
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          gh run view 29350094557 --log-failed \
+            | grep -E -C 12 'error\[|error:|FAILED|panicked at|test result:|Process completed|mismatched types|cannot find|no method named' \
+            | tail -n 700

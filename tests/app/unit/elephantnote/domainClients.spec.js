@@ -44,6 +44,22 @@ describe('domain clients chat search behavior', () => {
     expect(countAction(call, API.SEARCH_REBUILD)).toBe(0)
   })
 
+  it('rebuilds once and retries when Rust RAG returns an empty answer', async () => {
+    const { call } = createCall({
+      chatResults: [
+        { answer: '', citations: [] },
+        { answer: 'answer after rebuild', citations: [{ path: 'Recovered.md' }] }
+      ]
+    })
+    const clients = createClients(call)
+
+    const result = await clients.rag.chat('recover the index')
+
+    expect(result.answer).toBe('answer after rebuild')
+    expect(countAction(call, API.SEARCH_REBUILD)).toBe(1)
+    expect(countAction(call, API.RAG_CHAT)).toBe(2)
+  })
+
   it('forwards conversation history to rag chat requests', async () => {
     const { call } = createCall({ chatResults: [{ answer: 'context aware answer', citations: [] }] })
     const clients = createClients(call)

@@ -1,12 +1,29 @@
-import { IMAGE_EXT_REG, URL_REG } from 'muya/lib/config'
-import { checkImageContentType } from 'muya/lib/utils'
-
 import {
   getImageBaseDirectory,
   normalizeInsertedImageSource
 } from '@/util/imageSource'
 
 import { createEditorImageAction } from './editorImageAction'
+
+const REMOTE_URL_REG = /^(?:https?:|data:|blob:)/i
+const IMAGE_EXT_REG = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico)(?:[?#].*)?$/i
+
+export const checkRuntimeImageContentType = async (source, fetchImpl = globalThis.fetch) => {
+  if (typeof fetchImpl !== 'function') return false
+  try {
+    const response = await fetchImpl(source, { method: 'HEAD' })
+    const contentType = response?.headers?.get?.('content-type') || ''
+    return /^image\//i.test(contentType)
+  } catch {
+    return false
+  }
+}
+
+export const isRuntimeImageUrl = async (source, fetchImpl = globalThis.fetch) => {
+  const value = String(source || '').trim()
+  if (!REMOTE_URL_REG.test(value)) return false
+  return IMAGE_EXT_REG.test(value) || checkRuntimeImageContentType(value, fetchImpl)
+}
 
 export const createRuntimeImageHandlers = ({
   currentFile,
@@ -24,10 +41,7 @@ export const createRuntimeImageHandlers = ({
     preferencesStore,
     isSourceCode: () => sourceCode.value
   })
-  const isImageUrl = validateImageUrl || (async (source) => {
-    if (!URL_REG.test(source)) return false
-    return IMAGE_EXT_REG.test(source) || checkImageContentType(source)
-  })
+  const isImageUrl = validateImageUrl || isRuntimeImageUrl
 
   const normalizeSource = (source) => {
     const baseDirectory = getImageBaseDirectory(

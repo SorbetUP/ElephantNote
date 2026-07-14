@@ -1,0 +1,85 @@
+name: Integrate AI knowledge as physical addon v2
+
+on:
+  pull_request:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/develop-next-integrate-knowledge-addon-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: develop-next-knowledge-addon-v2
+  cancel-in-progress: true
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop_next
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Reuse directed Knowledge import
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/develop-next-integrate-knowledge-addon.yml').read_text()
+          start = workflow.index('      - name: Import knowledge-core history into a package-owned service')
+          run = workflow.index('        run: |\n', start) + len('        run: |\n')
+          end = workflow.index('\n      - name: Validate the imported knowledge engine and physical service', run)
+          lines = workflow[run:end].splitlines()
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
+          Path('/tmp/import-knowledge-addon.sh').write_text(script)
+          PY
+          bash /tmp/import-knowledge-addon.sh
+
+      - name: Format and validate Knowledge Rust crates
+        shell: bash
+        env:
+          ELEPHANT_ADDON_PLATFORM: linux-x86_64
+        run: |
+          set -euxo pipefail
+          cargo fmt --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml --check
+          cargo test --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml
+          cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml
+          cargo test --manifest-path addons/official/knowledge/native/Cargo.toml
+          node build/scripts/build-physical-addon.mjs addons/official/knowledge
+
+      - uses: ./.github/actions/setup
+
+      - name: Validate physical ownership and application build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/knowledgePhysicalAddon.spec.js \
+            tests/app/unit/addons/physicalAddonCatalog.spec.js \
+            tests/app/unit/addons/physicalAbsence.spec.js
+          pnpm tauri:web:build
+
+      - name: Commit directed Knowledge integration
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add addons/official/knowledge addons/catalog.json tests/app/unit/addons/knowledgePhysicalAddon.spec.js
+          git commit -m "feat(ai): integrate knowledge core as physical addon"
+          git fetch origin develop_next
+          git merge --no-edit origin/develop_next
+          git push origin HEAD:develop_next

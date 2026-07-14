@@ -25,7 +25,6 @@ pub mod addon_services;
 
 mod tauri_extra_commands;
 mod debug_commands;
-mod sync_commands;
 
 pub mod infra;
 pub mod preferences;
@@ -37,12 +36,7 @@ pub mod watcher;
 pub mod recents;
 pub mod keybindings;
 pub mod fts;
-#[cfg(not(mobile))]
-pub mod sync;
 pub mod atomic_features;
-
-#[cfg(all(test, not(mobile)))]
-mod sync_contract_tests;
 
 #[cfg(test)]
 mod platform_contract_tests;
@@ -84,8 +78,6 @@ pub fn run() {
       let handle = app.handle().clone();
       app.manage(state::AppState::new(&handle));
       app.manage(watcher::WatcherState::new());
-      #[cfg(not(mobile))]
-      app.manage(sync::IrohSyncState::new());
       app.manage(addons::AddonState::new());
       app.manage(addon_sidecars::AddonSidecarState::new());
       app.manage(addon_services::AddonServiceState::new());
@@ -113,16 +105,6 @@ pub fn run() {
       addons::tauri_addons_read_entry,
       addons::tauri_addons_read_module,
       addons::tauri_addons_call,
-      sync_commands::iroh_sync_create_invite,
-      sync_commands::iroh_sync_accept_invite,
-      sync_commands::iroh_sync_status,
-      sync_commands::iroh_sync_shutdown,
-      sync_commands::iroh_sync_enqueue,
-      sync_commands::iroh_sync_run,
-      sync_commands::iroh_sync_conflict_settings_get,
-      sync_commands::iroh_sync_conflict_settings_set,
-      sync_commands::iroh_sync_conflict_restore,
-      sync_commands::iroh_sync_conflict_delete,
       debug_commands::tauri_debug_log,
       state::tauri_prefs_get,
       state::tauri_prefs_all,

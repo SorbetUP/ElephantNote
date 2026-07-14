@@ -18,16 +18,54 @@ const selectedHtml = (ownerDocument) => {
   return wrapper.innerHTML
 }
 
+const wrapInlineMarkdown = (value, type) => {
+  if (!value) return value
+  switch (type) {
+    case 'strong':
+      return `**${value}**`
+    case 'em':
+      return `*${value}*`
+    case 'del':
+      return `~~${value}~~`
+    case 'inline_code': {
+      const delimiter = value.includes('`') ? '``' : '`'
+      return `${delimiter}${value}${delimiter}`
+    }
+    default:
+      return value
+  }
+}
+
+const logicalSelectionMarkdown = (controller, selection) => {
+  const anchor = selection?.anchor
+  const focus = selection?.focus
+  if (!anchor || !focus || anchor.node !== focus.node) return ''
+  const logical = controller.renderer?.logical
+  const node = logical?.node?.(anchor.node)
+  if (!node || node.kind?.layer !== 'text') return ''
+  const start = Math.min(Number(anchor.offset) || 0, Number(focus.offset) || 0)
+  const end = Math.max(Number(anchor.offset) || 0, Number(focus.offset) || 0)
+  if (start === end) return ''
+  let markdown = String(node.value || '').slice(start, end)
+  let parent = logical.node(node.parent)
+  while (parent && parent.kind?.layer === 'inline') {
+    markdown = wrapInlineMarkdown(markdown, parent.kind?.value?.type)
+    parent = logical.node(parent.parent)
+  }
+  return markdown
+}
+
 export const clipboardSelection = (controller) => {
   const ownerDocument = controller.container.ownerDocument
-  const selection = ownerDocument.defaultView?.getSelection?.()
-  if (!selection || selection.isCollapsed) return null
-  const plain = selection.toString()
+  const domSelection = ownerDocument.defaultView?.getSelection?.()
+  if (!domSelection || domSelection.isCollapsed) return null
+  const selection = controller.readSelection()
+  const plain = domSelection.toString()
   const html = selectedHtml(ownerDocument)
   return {
     plain,
     html,
-    markdown: htmlToMarkdown(ownerDocument, html) || plain
+    markdown: logicalSelectionMarkdown(controller, selection) || htmlToMarkdown(ownerDocument, html) || plain
   }
 }
 

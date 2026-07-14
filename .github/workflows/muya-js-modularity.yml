@@ -1,21 +1,23 @@
-name: Muya JS Modularity
+name: Rust Editor Ownership
 
 on:
   push:
     branches:
-      - 'refactor/muya-js-modular-parity'
+      - develop_next
     paths:
       - 'Elephant/frontend/src/muya/**'
+      - 'Elephant/frontend/app/**'
+      - 'Elephant/frontend/src/renderer/src/**'
       - 'Elephant/crates/muya-core/**'
       - 'Elephant/crates/muya-wasm/**'
-      - 'build/scripts/check-muya-module-size.mjs'
       - '.github/workflows/muya-js-modularity.yml'
   pull_request:
     paths:
       - 'Elephant/frontend/src/muya/**'
+      - 'Elephant/frontend/app/**'
+      - 'Elephant/frontend/src/renderer/src/**'
       - 'Elephant/crates/muya-core/**'
       - 'Elephant/crates/muya-wasm/**'
-      - 'build/scripts/check-muya-module-size.mjs'
       - '.github/workflows/muya-js-modularity.yml'
   workflow_dispatch:
 
@@ -23,40 +25,36 @@ permissions:
   contents: read
 
 jobs:
-  modularity:
-    name: Enforce 200-line Muya modules
+  ownership:
+    name: Validate Rust editor ownership
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Capture branch tree
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Test the Rust editor core
+        run: cargo test --manifest-path Elephant/crates/muya-core/Cargo.toml
+
+      - name: Reject production imports of the legacy Muya JavaScript runtime
         shell: bash
         run: |
           set -euo pipefail
-          head_sha="${{ github.event.pull_request.head.sha }}"
-          if [ -z "$head_sha" ]; then head_sha="$GITHUB_SHA"; fi
-          git fetch origin "$head_sha" --depth=1
-          mkdir -p build
-          git rev-parse "$head_sha^{tree}" > build/muya-base-tree.txt
-      - name: Audit Muya module sizes
-        run: node build/scripts/check-muya-module-size.mjs
-      - name: Upload Muya module inventory
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: muya-module-size-${{ github.run_id }}
-          path: |
-            build/muya-module-size.json
-            build/muya-base-tree.txt
-          if-no-files-found: error
-          retention-days: 14
-      - name: Upload Muya source snapshot
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: muya-source-${{ github.run_id }}
-          path: |
-            Elephant/frontend/src/muya
-            Elephant/crates/muya-core
-            Elephant/crates/muya-wasm
-          if-no-files-found: error
-          retention-days: 2
+          violations=$(grep -RInE \
+            --include='*.js' --include='*.mjs' --include='*.ts' --include='*.vue' \
+            --exclude='*.spec.js' --exclude='*.test.js' \
+            "(from|import)[[:space:]]*['\"][^'\"]*(frontend/src/muya|/muya/(lib|modules|ui)|@/muya)" \
+            Elephant/frontend/app Elephant/frontend/src/renderer/src || true)
+          if [ -n "$violations" ]; then
+            echo 'Production code still imports the legacy Muya JavaScript runtime:' >&2
+            echo "$violations" >&2
+            exit 1
+          fi
+
+      - name: Verify the production editor resource is Rust-owned
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "engine: 'rust'" Elephant/frontend/src/renderer/src/muya/editorRuntimeResource.js
+          grep -F "api.resources.provide(EDITOR_RESOURCE_ID" Elephant/frontend/src/renderer/src/muya/index.js
+          ! grep -RIn "host?.get('muya')" Elephant/frontend/src/renderer/src/addons addons/official

@@ -36,27 +36,18 @@ jobs:
 
           path = Path('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')
           text = path.read_text()
-          old = """    editor: Object.freeze({
-              get active() {
-                return host?.get('editor') || host?.get('muya') || target?.marktext?.muya || null
-              },
-              watch(listener, options) {
-                if (!host) throw new Error('Addon host registry is unavailable')
-                return track(host.watch('editor', listener, options))
-              },
+          start = text.index('    editor: Object.freeze({')
+          register = text.index('      registerExtension: context.addEditorExtension,', start)
+          replacement = """    editor: Object.freeze({
+            get active() {
+              return host?.get('editor.runtime') || host?.get('editor') || null
+            },
+            watch(listener, options) {
+              if (!host) throw new Error('Addon host registry is unavailable')
+              return track(host.watch('editor.runtime', listener, options))
+            },
           """
-          new = """    editor: Object.freeze({
-              get active() {
-                return host?.get('editor.runtime') || host?.get('editor') || null
-              },
-              watch(listener, options) {
-                if (!host) throw new Error('Addon host registry is unavailable')
-                return track(host.watch('editor.runtime', listener, options))
-              },
-          """
-          if old not in text:
-              raise SystemExit('Trusted editor API block changed unexpectedly')
-          text = text.replace(old, new, 1)
+          text = text[:start] + replacement + text[register:]
           if "host?.get('muya')" in text or "marktext?.muya" in text:
               raise SystemExit('Trusted API still exposes the Muya production runtime')
           path.write_text(text)

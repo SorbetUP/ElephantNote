@@ -28,7 +28,8 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   mode: { type: String, default: 'rust' },
   factory: { type: Function, default: null },
-  onFileDrop: { type: Function, default: null }
+  onFileDrop: { type: Function, default: null },
+  onUriDrop: { type: Function, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'ready', 'change', 'error'])
@@ -100,7 +101,8 @@ const mountRuntime = async (markdown) => {
         domContainer: rootRef.value,
         captureInput: true,
         applyPatches: scheduleMarkdownSync,
-        onFileDrop: props.onFileDrop
+        onFileDrop: props.onFileDrop,
+        onUriDrop: props.onUriDrop
       },
       reportError
     )
@@ -131,6 +133,13 @@ watch(
   () => props.onFileDrop,
   (callback) => {
     if (runtime?.inputController) runtime.inputController.onFileDrop = callback || null
+  }
+)
+
+watch(
+  () => props.onUriDrop,
+  (callback) => {
+    if (runtime?.inputController) runtime.inputController.onUriDrop = callback || null
   }
 )
 

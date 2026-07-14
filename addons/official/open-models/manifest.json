@@ -24,9 +24,7 @@
     "sidecars": {
       "macos-aarch64": "native/macos-aarch64/elephant-open-models-service",
       "macos-x86_64": "native/macos-x86_64/elephant-open-models-service",
-      "linux-aarch64": "native/linux-aarch64/elephant-open-models-service",
       "linux-x86_64": "native/linux-x86_64/elephant-open-models-service",
-      "windows-aarch64": "native/windows-aarch64/elephant-open-models-service.exe",
       "windows-x86_64": "native/windows-x86_64/elephant-open-models-service.exe"
     },
     "mobile": {

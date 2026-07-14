@@ -54,7 +54,8 @@ export const initializeExperimentalRustRuntime = async (muya, config, reportErro
       domContainer.setAttribute('contenteditable', 'true')
     }
     inputController = createRustInputController(domContainer, bridge, adapter.renderer, {
-      onError: reportError
+      onError: reportError,
+      onFileDrop: config.onFileDrop
     })
   }
 

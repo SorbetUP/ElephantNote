@@ -31,7 +31,7 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - name: Update production-Rust contracts and logical copy serialization
+      - name: Update production-Rust test contracts
         shell: bash
         run: |
           set -euxo pipefail
@@ -40,16 +40,15 @@ jobs:
 
           parity = Path('tests/app/unit/interfaceParityGenerated.spec.js')
           text = parity.read_text()
-          text = text.replace(
-              "it('runtime mode contract keeps Tauri in shadow by default', () => {\n    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('shadow')\n    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'electron' })).toBe('shadow')\n  })",
-              "it('runtime mode contract keeps the Rust editor active by default', () => {\n    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('rust')\n    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'electron' })).toBe('rust')\n  })"
-          )
+          text = text.replace("runtime mode contract keeps Tauri in shadow by default", "runtime mode contract keeps the Rust editor active by default")
+          text = text.replace("readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('shadow')", "readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('rust')")
+          text = text.replace("readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'electron' })).toBe('shadow')", "readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'electron' })).toBe('rust')")
           parity.write_text(text)
 
           global_bridge = Path('tests/app/unit/muyaGlobalRuntimeBridge.spec.js')
           text = global_bridge.read_text()
-          text = text.replace("describe('global Muya runtime bridge'", "describe('global Rust editor compatibility bridge'")
-          text = text.replace("it('installs the Muya runtime bridge during bootstrap globals'", "it('installs the Rust runtime bridge during bootstrap globals'")
+          text = text.replace("global Muya runtime bridge", "global Rust editor compatibility bridge")
+          text = text.replace("installs the Muya runtime bridge during bootstrap globals", "installs the Rust runtime bridge during bootstrap globals")
           text = text.replace("expect(target.__ELEPHANT_MUYA_RUNTIME__.mode()).toBe('disabled')", "expect(target.__ELEPHANT_MUYA_RUNTIME__.mode()).toBe('rust')")
           global_bridge.write_text(text)
 
@@ -60,88 +59,6 @@ jobs:
               "await expect(elephantnoteClient.notes.create('Inbox')).resolves.toEqual({ note: { path: 'Note.md' }, entries: [] })"
           )
           client.write_text(text)
-
-          copy_cut = Path('Elephant/frontend/src/muya/lib/rust/inputController/copyCut.js')
-          text = copy_cut.read_text()
-          old = '''const clipboardSelection = (controller, selection) => {
-            const domSelection = controller.getSelection()
-            if (!domSelection?.rangeCount) return null
-            const range = domSelection.getRangeAt(0)
-            if (range.collapsed) return null
-            const fragment = range.cloneContents()
-            const ownerDocument = controller.renderer.root.ownerDocument
-            const container = ownerDocument.createElement('div')
-            container.appendChild(fragment)
-            const html = container.innerHTML
-            const plain = normalizedText(container.textContent)
-            return {
-              selection,
-              markdown: normalizedText(htmlToMarkdown(ownerDocument, html) || plain),
-              html,
-              plain
-            }
-          }
-          '''
-          new = '''const wrapLogicalInlineMarkdown = (value, type) => {
-            if (!value) return value
-            switch (type) {
-              case 'strong':
-                return `**${value}**`
-              case 'em':
-                return `*${value}*`
-              case 'del':
-                return `~~${value}~~`
-              case 'inline_code': {
-                const delimiter = value.includes('`') ? '``' : '`'
-                return `${delimiter}${value}${delimiter}`
-              }
-              default:
-                return value
-            }
-          }
-
-          const logicalMarkdownSelection = (controller, selection) => {
-            const anchor = selection?.anchor
-            const focus = selection?.focus
-            if (!anchor || !focus || anchor.node !== focus.node) return ''
-            const logical = controller.renderer?.logical
-            const node = logical?.node?.(anchor.node)
-            if (!node || node.kind?.layer !== 'text') return ''
-            const start = Math.min(Number(anchor.offset) || 0, Number(focus.offset) || 0)
-            const end = Math.max(Number(anchor.offset) || 0, Number(focus.offset) || 0)
-            if (start === end) return ''
-            let markdown = String(node.value || '').slice(start, end)
-            let parent = logical.node(node.parent)
-            while (parent && parent.kind?.layer === 'inline') {
-              markdown = wrapLogicalInlineMarkdown(markdown, parent.kind?.value?.type)
-              parent = logical.node(parent.parent)
-            }
-            return markdown
-          }
-
-          const clipboardSelection = (controller, selection) => {
-            const domSelection = controller.getSelection()
-            if (!domSelection?.rangeCount) return null
-            const range = domSelection.getRangeAt(0)
-            if (range.collapsed) return null
-            const fragment = range.cloneContents()
-            const ownerDocument = controller.renderer.root.ownerDocument
-            const container = ownerDocument.createElement('div')
-            container.appendChild(fragment)
-            const html = container.innerHTML
-            const plain = normalizedText(container.textContent)
-            const logicalMarkdown = logicalMarkdownSelection(controller, selection)
-            return {
-              selection,
-              markdown: normalizedText(logicalMarkdown || htmlToMarkdown(ownerDocument, html) || plain),
-              html,
-              plain
-            }
-          }
-          '''
-          if old not in text:
-              raise SystemExit('Copy/cut clipboard selection block changed unexpectedly')
-          copy_cut.write_text(text.replace(old, new, 1))
           PY
 
       - name: Install exact wasm-bindgen CLI
@@ -173,11 +90,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
-            Elephant/frontend/src/muya/lib/rust/inputController/copyCut.js \
             tests/app/unit/interfaceParityGenerated.spec.js \
             tests/app/unit/muyaGlobalRuntimeBridge.spec.js \
             tests/elephant/unit/elephantnoteClient.spec.js
-          git commit -m "fix(editor): align tests and copy serialization with Rust production runtime"
+          if git diff --cached --quiet; then
+            echo 'Rust editor unit contracts are already current.'
+            exit 0
+          fi
+          git commit -m "test(editor): align contracts with Rust production runtime"
           git fetch origin develop_next
           git merge --no-edit origin/develop_next
           git push origin HEAD:develop_next

@@ -18,6 +18,13 @@ const selectedHtml = (ownerDocument) => {
   return wrapper.innerHTML
 }
 
+const escapeHtml = (value) => String(value || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+
 const wrapInlineMarkdown = (value, type) => {
   if (!value) return value
   switch (type) {
@@ -36,24 +43,44 @@ const wrapInlineMarkdown = (value, type) => {
   }
 }
 
-const logicalSelectionMarkdown = (controller, selection) => {
+const wrapInlineHtml = (value, type) => {
+  if (!value) return value
+  switch (type) {
+    case 'strong':
+      return `<strong>${value}</strong>`
+    case 'em':
+      return `<em>${value}</em>`
+    case 'del':
+      return `<del>${value}</del>`
+    case 'inline_code':
+      return `<code>${value}</code>`
+    default:
+      return value
+  }
+}
+
+const logicalSelectionPayload = (controller, selection) => {
   const anchor = selection?.anchor
   const focus = selection?.focus
-  if (!anchor || !focus || anchor.node !== focus.node) return ''
+  if (!anchor || !focus || anchor.node !== focus.node) return null
   const logical = controller.renderer?.logical
   const node = logical?.node?.(anchor.node)
   const nodeKind = node?.kind?.value
-  if (!node || node.kind?.layer !== 'inline' || nodeKind?.type !== 'text') return ''
+  if (!node || node.kind?.layer !== 'inline' || nodeKind?.type !== 'text') return null
   const start = Math.min(Number(anchor.offset_utf16) || 0, Number(focus.offset_utf16) || 0)
   const end = Math.max(Number(anchor.offset_utf16) || 0, Number(focus.offset_utf16) || 0)
-  if (start === end) return ''
-  let markdown = String(nodeKind.value || '').slice(start, end)
+  if (start === end) return null
+  const plain = String(nodeKind.value || '').slice(start, end)
+  let markdown = plain
+  let html = escapeHtml(plain)
   let parent = logical.node(node.parent)
   while (parent && parent.kind?.layer === 'inline') {
-    markdown = wrapInlineMarkdown(markdown, parent.kind?.value?.type)
+    const type = parent.kind?.value?.type
+    markdown = wrapInlineMarkdown(markdown, type)
+    html = wrapInlineHtml(html, type)
     parent = logical.node(parent.parent)
   }
-  return markdown
+  return { plain, markdown, html }
 }
 
 export const clipboardSelection = (controller) => {
@@ -61,12 +88,14 @@ export const clipboardSelection = (controller) => {
   const domSelection = ownerDocument.defaultView?.getSelection?.()
   if (!domSelection || domSelection.isCollapsed) return null
   const selection = controller.readSelection()
-  const plain = domSelection.toString()
-  const html = selectedHtml(ownerDocument)
+  const logicalPayload = logicalSelectionPayload(controller, selection)
+  const plain = logicalPayload?.plain || domSelection.toString()
+  const domHtml = selectedHtml(ownerDocument)
+  const html = logicalPayload?.html || domHtml
   return {
     plain,
     html,
-    markdown: logicalSelectionMarkdown(controller, selection) || htmlToMarkdown(ownerDocument, html) || plain
+    markdown: logicalPayload?.markdown || htmlToMarkdown(ownerDocument, domHtml) || plain
   }
 }
 

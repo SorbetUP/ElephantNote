@@ -6,6 +6,9 @@ export const createNodeElement = (renderer, node) => {
   element.setAttribute(NODE_ATTRIBUTE, String(node.id))
   element.setAttribute('data-muya-rust-layer', node.kind.layer)
   if (node.kind.value?.type) element.setAttribute('data-muya-rust-kind', node.kind.value.type)
+  element.setAttribute('data-elephant-editor-node', String(node.id))
+  element.setAttribute('data-elephant-editor-layer', node.kind.layer)
+  if (node.kind.value?.type) element.setAttribute('data-elephant-editor-kind', node.kind.value.type)
   applyIntrinsicContent(element, node)
   renderer.elements.set(node.id, element)
   return element

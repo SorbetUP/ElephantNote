@@ -53,10 +53,15 @@ async fn handle_connection(
       if request.endpoint_addr.id != connection.remote_id() {
         return Err("pairing identity mismatch".to_string());
       }
+      recv
+        .read_to_end(0)
+        .await
+        .map_err(|error| format!("pairing request did not close cleanly: {error}"))?;
       let accepted = consume_pair_request(&vault, request, endpoint.addr(), &name)?;
       write_control(&mut send, &ControlMessage::PairAccepted(accepted)).await?;
-      send.finish().map_err(|error| error.to_string())?;
-      connection.close(0_u32.into(), b"pairing-accepted");
+      send
+        .finish()
+        .map_err(|error| format!("failed to finish pairing response stream: {error}"))?;
       Ok(())
     }
     ControlMessage::SyncOpen(open) => {
@@ -127,11 +132,11 @@ async fn pair(
   )
   .await
   .unwrap();
+  send.finish().unwrap();
   let accepted = match expect_control(read_control(&mut recv).await.unwrap(), "pairAccepted").unwrap() {
     ControlMessage::PairAccepted(accepted) => accepted,
     _ => unreachable!(),
   };
-  send.finish().unwrap();
   recv.read_to_end(0).await.unwrap();
   connection.close(0_u32.into(), b"pairing-complete");
   register_accepted_peer(

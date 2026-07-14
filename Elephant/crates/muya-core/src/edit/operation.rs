@@ -88,8 +88,10 @@ fn apply_replace_text(
     let node = document
       .node_mut(node_id)
       .ok_or(EditError::NodeNotFound(node_id))?;
-    let NodeKind::Inline(InlineKind::Text { value }) = &mut node.kind else {
-      return Err(EditError::NotTextNode(node_id));
+    let value = match &mut node.kind {
+      NodeKind::Inline(InlineKind::Text { value }) => value,
+      NodeKind::Inline(InlineKind::CodeSpan { code }) => code,
+      _ => return Err(EditError::NotTextNode(node_id)),
     };
 
     let utf16_length = value.encode_utf16().count() as u32;

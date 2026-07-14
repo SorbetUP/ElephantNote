@@ -1,4 +1,7 @@
-use crate::edit::{Command, EditError, Transaction};
+use crate::edit::{
+  build_code_span_delete_backward, build_code_span_insert_text, Command, EditError,
+  GraphemeCommand, Transaction,
+};
 use crate::history::HistoryStep;
 use crate::view::ViewPatch;
 
@@ -45,15 +48,41 @@ impl EditorSession {
         self.apply_history_step(step)
       }
       SessionCommand::UpdateComposition(inserted) => {
-        let transaction = Command::InsertText(inserted)
-          .build(&self.document, self.selection)?;
+        let transaction = match build_code_span_insert_text(
+          &self.document,
+          self.selection,
+          &inserted,
+        )? {
+          Some(transaction) => transaction,
+          None => Command::InsertText(inserted).build(&self.document, self.selection)?,
+        };
         self.apply_transaction(transaction, true)
       }
       SessionCommand::Core(command) => {
-        self.apply_transaction(command.build(&self.document, self.selection)?, false)
+        let transaction = match &command {
+          Command::InsertText(inserted) => match build_code_span_insert_text(
+            &self.document,
+            self.selection,
+            inserted,
+          )? {
+            Some(transaction) => transaction,
+            None => command.build(&self.document, self.selection)?,
+          },
+          _ => command.build(&self.document, self.selection)?,
+        };
+        self.apply_transaction(transaction, false)
       }
       SessionCommand::Grapheme(command) => {
-        self.apply_transaction(command.build(&self.document, self.selection)?, false)
+        let transaction = match command {
+          GraphemeCommand::DeleteBackward => match build_code_span_delete_backward(
+            &self.document,
+            self.selection,
+          )? {
+            Some(transaction) => transaction,
+            None => command.build(&self.document, self.selection)?,
+          },
+        };
+        self.apply_transaction(transaction, false)
       }
       SessionCommand::Mark(command) => {
         self.apply_transaction(command.build(&self.document, self.selection)?, false)

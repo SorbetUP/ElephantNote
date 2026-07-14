@@ -16,8 +16,12 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Print failed integration log
+      - name: Print failed Rust test assertions
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh run view 29346892454 --log-failed | tail -n 700
+        shell: bash
+        run: |
+          gh run view 29346892454 --log-failed \
+            | grep -E -C 6 'FAILED|failures:|panicked at|assertion `left == right` failed|test result:|left:|right:' \
+            | tail -n 500

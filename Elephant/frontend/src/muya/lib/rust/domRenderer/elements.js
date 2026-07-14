@@ -1,4 +1,4 @@
-import { NODE_ATTRIBUTE, safeUrl } from './helpers'
+import { NODE_ATTRIBUTE, safeImageUrl, safeUrl } from './helpers'
 
 export const createNodeElement = (renderer, node) => {
   if (!node) throw new Error('Cannot render an absent Muya Rust node.')
@@ -112,7 +112,7 @@ const applyInlineContent = (element, kind) => {
       element.textContent = kind.code || ''
       break
     case 'image': {
-      const source = safeUrl(kind.source)
+      const source = safeImageUrl(kind.source)
       element.setAttribute('alt', kind.alt || '')
       element.setAttribute('data-source', kind.source || '')
       if (source) element.setAttribute('src', source)

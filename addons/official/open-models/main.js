@@ -2,6 +2,7 @@ const ADDON_ID = 'elephant.open-models'
 const PROVIDER_ID = 'app-local'
 const VIEW_ID = `${ADDON_ID}.workspace`
 const AI_CONFIG_RESOURCE = 'ai.config'
+const MODELS_RESOURCE = 'models.provider'
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -146,6 +147,21 @@ export default class ElephantOpenModelsAddon {
     `, 'open-models-package')
     const bridge = this.window?.__ELEPHANT_ADDON_VUE__
     if (!bridge?.createDomComponent) throw new Error('Physical addon Vue bridge is unavailable')
+
+    api.resources.provide(MODELS_RESOURCE, Object.freeze({
+      apiVersion: 1,
+      owner: ADDON_ID,
+      list: () => this.modelList(),
+      active: () => this.service('models.active'),
+      download: (params = {}) => this.service('models.download', params, { timeoutMs: 120000 }),
+      downloadStatus: (params = {}) => this.service('models.download-status', params),
+      cancelDownload: (params = {}) => this.service('models.cancel-download', params),
+      activate: (params = {}) => this.service('models.activate', params),
+      deactivate: (params = {}) => this.service('models.deactivate', params),
+      remove: (params = {}) => this.service('models.delete', params),
+      refreshIndex: () => this.service('models.refresh-index'),
+      chat: (request = {}) => this.chat(request)
+    }))
 
     api.workspace.registerView({
       id: VIEW_ID,

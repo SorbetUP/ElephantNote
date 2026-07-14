@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -8,9 +9,10 @@ const wasmPath = fileURLToPath(new URL(
   '../../../../../Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm',
   import.meta.url
 ))
+const generatedWasmTest = existsSync(wasmPath) ? it : it.skip
 
 describe('createBundledMuyaRustEngine', () => {
-  it('creates the production Rust editor from the generated WASM bundle', async () => {
+  generatedWasmTest('creates the production Rust editor from the generated WASM bundle', async () => {
     const bytes = await readFile(wasmPath)
     const wasm = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
     const engine = await createBundledMuyaRustEngine('alpha', wasm)

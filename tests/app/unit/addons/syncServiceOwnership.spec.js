@@ -58,7 +58,9 @@ describe('Sync package-owned service boundary', () => {
     const serviceEntry = read('addons/official/sync/main.service.js')
     const base = read('addons/official/sync/main.js')
 
-    expect(manifest.description).toMatch(/manifest scanning and deterministic sync planning/i)
+    expect(manifest.description).toMatch(/persistent Iroh pairing/i)
+    expect(manifest.description).toMatch(/bidirectional vault synchronization/i)
+    expect(manifest.description).toMatch(/conflict management/i)
     expect(native).toContain('"wire-protocol"')
     expect(native).toContain('"pairing"')
     expect(native).toContain('"file-streams"')

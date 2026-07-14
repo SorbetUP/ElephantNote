@@ -153,3 +153,5 @@ jobs:
       - name: Skip E2E after build diagnostic failure
         if: steps.build-app.outcome != 'success'
         run: echo "Skipping E2E because the web build is currently diagnostic during the Tauri migration."
+
+# Active one-shot correction revision.

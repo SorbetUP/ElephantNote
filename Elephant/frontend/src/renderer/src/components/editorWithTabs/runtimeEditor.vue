@@ -4,6 +4,7 @@
     :model-value="toEditorMarkdown(markdown)"
     :factory="rustRuntimeFactory"
     :on-file-drop="imageHandlers.dropped"
+    :on-uri-drop="imageHandlers.uriDropped"
     mode="rust"
     class="rust-editor-runtime"
     @ready="handleRustRuntimeReady"

@@ -43,13 +43,15 @@ fn persist_candidate_metadata(
     Ok(())
 }
 
-#[tauri::command]
-pub async fn tauri_knowledge_wiki_embedding_map(app: AppHandle) -> Result<Value, String> {
+#[tauri::command(rename = "tauri_knowledge_wiki_embedding_map")]
+pub async fn tauri_knowledge_wiki_embedding_map_persisted(
+    app: AppHandle,
+) -> Result<Value, String> {
     engine::tauri_knowledge_wiki_embedding_map(app).await
 }
 
-#[tauri::command]
-pub async fn tauri_knowledge_wiki_semantic_discover(
+#[tauri::command(rename = "tauri_knowledge_wiki_semantic_discover")]
+pub async fn tauri_knowledge_wiki_semantic_discover_persisted(
     app: AppHandle,
     limit: Option<usize>,
 ) -> Result<Vec<SemanticWikiCandidate>, String> {

@@ -91,7 +91,7 @@ mod tests {
     document
       .nodes
       .values()
-      .find_map(|node| match node.kind {
+      .find_map(|node| match &node.kind {
         NodeKind::Inline(InlineKind::CodeSpan { .. }) => Some(node.id),
         _ => None,
       })

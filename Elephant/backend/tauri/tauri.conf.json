@@ -4,8 +4,8 @@
   "version": "0.18.9",
   "identifier": "com.elephantnote.app",
   "build": {
-    "beforeDevCommand": "pnpm tauri:web:dev",
-    "beforeBuildCommand": "pnpm tauri:llama:install && pnpm tauri:codex:install && pnpm tauri:web:build",
+    "beforeDevCommand": "pnpm --dir .. tauri:web:dev",
+    "beforeBuildCommand": "pnpm --dir .. tauri:llama:install && pnpm --dir .. tauri:codex:install && pnpm --dir .. tauri:web:build",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../../../build/out/renderer"
   },

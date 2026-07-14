@@ -3,7 +3,8 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
-const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+const absolute = (file) => path.join(root, file)
+const read = (file) => fs.readFileSync(absolute(file), 'utf8')
 
 describe('Search physical package ownership', () => {
   it('indexes notes through permission-scoped addon commands', () => {
@@ -32,17 +33,18 @@ describe('Search physical package ownership', () => {
 
   it('keeps the parallel inspection index and optional fallbacks physically absent from the core shell', () => {
     const core = read('Elephant/backend/tauri/src/lib_min.rs')
-    const extras = read('Elephant/backend/tauri/src/tauri_extra_commands.rs')
+    const coreCommands = read('Elephant/backend/tauri/src/core_commands.rs')
     const compatibility = read('Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js')
 
-    expect(core).not.toContain('tauri_extra_commands::tauri_search_inspect')
-    expect(core).not.toContain('tauri_extra_commands::tauri_search_rebuild')
-    expect(extras).not.toContain('pub fn tauri_search_inspect')
-    expect(extras).not.toContain('pub fn tauri_search_rebuild')
-    expect(extras).not.toContain('fn build_search_index')
-    expect(extras).not.toContain('fn scan_markdown_notes')
-    expect(extras).not.toContain('fn extract_wikilinks')
-    expect(extras).not.toContain('SEARCH_INDEX_FILE')
+    expect(fs.existsSync(absolute('Elephant/backend/tauri/src/tauri_extra_commands.rs'))).toBe(false)
+    expect(core).not.toContain('tauri_search_inspect')
+    expect(core).not.toContain('tauri_search_rebuild')
+    expect(coreCommands).not.toContain('pub fn tauri_search_inspect')
+    expect(coreCommands).not.toContain('pub fn tauri_search_rebuild')
+    expect(coreCommands).not.toContain('fn build_search_index')
+    expect(coreCommands).not.toContain('fn scan_markdown_notes')
+    expect(coreCommands).not.toContain('fn extract_wikilinks')
+    expect(coreCommands).not.toContain('SEARCH_INDEX_FILE')
     expect(compatibility).toContain("'search.query'")
     expect(compatibility).toContain("'search.status'")
     expect(compatibility).not.toContain("'search.inspect'")

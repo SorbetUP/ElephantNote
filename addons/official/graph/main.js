@@ -1,6 +1,7 @@
 const ADDON_ID = 'elephant.graph'
 const VIEW_ID = `${ADDON_ID}.workspace`
 const MAX_NOTES = 800
+const KNOWLEDGE_RESOURCE = 'knowledge.provider'
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -42,6 +43,10 @@ export default class ElephantGraphAddon {
     this.cachedGraph = null
   }
 
+  knowledgeProvider() {
+  return this.api.resources.get(KNOWLEDGE_RESOURCE)
+}
+
   invoke(command, payload = {}) {
     const invoke = this.window?.__TAURI__?.core?.invoke
     if (typeof invoke !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
@@ -75,6 +80,41 @@ export default class ElephantGraphAddon {
   }
 
   async buildGraph() {
+  const knowledge = this.knowledgeProvider()
+  if (knowledge && typeof knowledge.graph === 'function') {
+    try {
+      const projection = await knowledge.graph({ includeSuggestions: true })
+      const edges = (Array.isArray(projection?.edges) ? projection.edges : []).map((edge) => ({
+        ...edge,
+        kind: edge.kind || edge.type || edge.relationType || 'relation',
+        weight: Number(edge.weight) || 1
+      }))
+      const degree = new Map()
+      for (const edge of edges) {
+        degree.set(String(edge.source), (degree.get(String(edge.source)) || 0) + 1)
+        degree.set(String(edge.target), (degree.get(String(edge.target)) || 0) + 1)
+      }
+      const nodes = (Array.isArray(projection?.nodes) ? projection.nodes : []).map((item) => ({
+        ...item,
+        label: item.label || item.title || item.id,
+        relativePath: item.relativePath || item.relative_path || item.path,
+        path: item.path || item.relativePath || item.relative_path,
+        kind: item.kind || item.type || 'note',
+        degree: degree.get(String(item.id)) || 0
+      }))
+      this.cachedGraph = {
+        ...projection,
+        nodes,
+        edges,
+        generatedAt: new Date().toISOString(),
+        engine: 'knowledge-provider'
+      }
+      return this.cachedGraph
+    } catch (error) {
+      console.warn('[graph-addon] Knowledge projection failed; using local fallback', error)
+    }
+  }
+
     const notes = await this.readNotes()
     const byId = new Map()
     const aliases = new Map()

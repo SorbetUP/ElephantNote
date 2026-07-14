@@ -1,6 +1,7 @@
 const ADDON_ID = 'elephant.ai-chat'
 const ACTION_ID = `${ADDON_ID}.toggle`
 const SEARCH_RESOURCE = 'search.provider'
+const KNOWLEDGE_RESOURCE = 'knowledge.provider'
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -74,16 +75,30 @@ export default class ElephantChatAddon {
   }
 
   async retrieveContext(message, limit = 8) {
-    const search = this.api.resources.get(SEARCH_RESOURCE)
-    if (!search || typeof search.query !== 'function') return []
+  const knowledge = this.api.resources.get(KNOWLEDGE_RESOURCE)
+  if (knowledge && typeof knowledge.search === 'function') {
     try {
-      const results = await search.query(message, { limit })
-      return Array.isArray(results) ? results : []
+      const results = await knowledge.search(message, { limit })
+      return (Array.isArray(results) ? results : []).map((item) => ({
+        ...item,
+        id: item.id || item.chunk_id || item.relative_path,
+        path: item.path || item.relative_path,
+        relativePath: item.relativePath || item.relative_path
+      }))
     } catch (error) {
-      console.warn('[ai-chat] search context unavailable', error)
-      return []
+      console.warn('[ai-chat] Knowledge context unavailable; trying Search fallback', error)
     }
   }
+  const search = this.api.resources.get(SEARCH_RESOURCE)
+  if (!search || typeof search.query !== 'function') return []
+  try {
+    const results = await search.query(message, { limit })
+    return Array.isArray(results) ? results : []
+  } catch (error) {
+    console.warn('[ai-chat] search context unavailable', error)
+    return []
+  }
+}
 
   async sendExternal(provider, route, messages, signal) {
     const endpoint = endpointFor(provider)

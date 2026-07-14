@@ -3,6 +3,7 @@ const VIEW_ID = `${ADDON_ID}.workspace`
 const RECORDS_KEY = 'records'
 const MAX_SOURCE_READS = 300
 const MAX_CITATIONS = 24
+const KNOWLEDGE_RESOURCE = 'knowledge.provider'
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -74,6 +75,24 @@ const normalizeRecords = (records) => (Array.isArray(records) ? records : [])
     sourceCount: Number(record.sourceCount || record.sources?.length || 0)
   }))
 
+const knowledgeRecord = (draft) => ({
+  ...draft,
+  id: String(draft?.id || ''),
+  title: String(draft?.title || draft?.topic || draft?.id || 'Untitled'),
+  topic: String(draft?.topic || draft?.title || draft?.id || 'Untitled'),
+  status: String(draft?.status || 'proposed') === 'rejected' ? 'dismissed' : String(draft?.status || 'proposed'),
+  summary: String(draft?.topic || ''),
+  path: draft?.slug ? `.elephantnote/wiki/${draft.slug}.md` : '',
+  sources: (Array.isArray(draft?.citations) ? draft.citations : []).map((citation) => ({
+    path: citation.document_path,
+    title: citation.document_title,
+    heading: citation.heading,
+    chunkId: citation.chunk_id
+  })),
+  sourceCount: Array.isArray(draft?.source_paths) ? draft.source_paths.length : 0,
+  providerOwned: true
+})
+
 const proposalMarkdown = (record) => {
   const sources = record.sources || []
   const sourceList = sources.map((source, index) => `[^source-${index + 1}]: ${source.path}${source.excerpt ? ` — ${source.excerpt}` : ''}`).join('\n')
@@ -86,6 +105,10 @@ export default class ElephantWikiAddon {
     this.api = api
     this.window = api.experimental.window
   }
+
+  knowledgeProvider() {
+  return this.api.resources.get(KNOWLEDGE_RESOURCE)
+}
 
   invoke(command, payload = {}) {
     const invoke = this.window?.__TAURI__?.core?.invoke
@@ -111,8 +134,21 @@ export default class ElephantWikiAddon {
   }
 
   async loadRecords() {
-    return normalizeRecords(await this.api.storage.get(RECORDS_KEY))
+  const local = normalizeRecords(await this.api.storage.get(RECORDS_KEY))
+  const knowledge = this.knowledgeProvider()
+  if (!knowledge || typeof knowledge.listWikis !== 'function') return local
+  try {
+    const drafts = await knowledge.listWikis({ limit: 500 })
+    const remote = (Array.isArray(drafts) ? drafts : [])
+      .map(knowledgeRecord)
+      .filter((record) => record.id)
+    const ids = new Set(remote.map((record) => record.id))
+    return [...remote, ...local.filter((record) => !ids.has(record.id))]
+  } catch (error) {
+    console.warn('[wiki-addon] Knowledge drafts unavailable; using local records', error)
+    return local
   }
+}
 
   async saveRecords(records) {
     const normalized = normalizeRecords(records)
@@ -202,27 +238,45 @@ export default class ElephantWikiAddon {
   }
 
   async acceptRecord(id) {
-    const records = await this.loadRecords()
-    const record = records.find((candidate) => candidate.id === id)
-    if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
-    const relativePath = `Wiki/${slugify(record.title)}.md`
-    await this.writeNote(relativePath, proposalMarkdown(record))
-    record.status = 'accepted'
-    record.path = relativePath
-    record.updatedAt = new Date().toISOString()
-    await this.saveRecords(records)
-    return record
+  const knowledge = this.knowledgeProvider()
+  if (knowledge && typeof knowledge.acceptWiki === 'function') {
+    try {
+      const accepted = await knowledge.acceptWiki(id)
+      if (accepted?.draft) return knowledgeRecord(accepted.draft)
+    } catch (error) {
+      console.warn('[wiki-addon] Knowledge accept failed; trying local proposal', error)
+    }
   }
+  const records = await this.loadRecords()
+  const record = records.find((candidate) => candidate.id === id)
+  if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
+  const relativePath = `Wiki/${slugify(record.title)}.md`
+  await this.writeNote(relativePath, proposalMarkdown(record))
+  record.status = 'accepted'
+  record.path = relativePath
+  record.updatedAt = new Date().toISOString()
+  await this.saveRecords(records.filter((candidate) => !candidate.providerOwned))
+  return record
+}
 
   async dismissRecord(id) {
-    const records = await this.loadRecords()
-    const record = records.find((candidate) => candidate.id === id)
-    if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
-    record.status = 'dismissed'
-    record.updatedAt = new Date().toISOString()
-    await this.saveRecords(records)
-    return record
+  const knowledge = this.knowledgeProvider()
+  if (knowledge && typeof knowledge.rejectWiki === 'function') {
+    try {
+      const rejected = await knowledge.rejectWiki(id)
+      if (rejected) return knowledgeRecord(rejected)
+    } catch (error) {
+      console.warn('[wiki-addon] Knowledge reject failed; trying local proposal', error)
+    }
   }
+  const records = await this.loadRecords()
+  const record = records.find((candidate) => candidate.id === id)
+  if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
+  record.status = 'dismissed'
+  record.updatedAt = new Date().toISOString()
+  await this.saveRecords(records.filter((candidate) => !candidate.providerOwned))
+  return record
+}
 
   render(container) {
     const documentRef = container.ownerDocument

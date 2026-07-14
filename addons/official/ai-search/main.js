@@ -2,6 +2,7 @@ const ADDON_ID = 'elephant.ai-search'
 const CONFIG_KEY = 'search-config-v2'
 const INDEX_KEY = 'search-index-v2'
 const PROVIDER_RESOURCE = 'search.provider'
+const KNOWLEDGE_RESOURCE = 'knowledge.provider'
 const INDEX_VERSION = 2
 
 const DEFAULT_CONFIG = Object.freeze({
@@ -93,6 +94,10 @@ export default class ElephantSearchAddon {
     this.disposed = false
   }
 
+  knowledgeProvider() {
+  return this.api.resources.get(KNOWLEDGE_RESOURCE)
+}
+
   invoke(command, payload = {}) {
     const invoke = this.window?.__TAURI__?.core?.invoke
     if (typeof invoke !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
@@ -133,6 +138,17 @@ export default class ElephantSearchAddon {
   }
 
   async performRebuild() {
+  const knowledge = this.knowledgeProvider()
+  if (knowledge && typeof knowledge.rebuild === 'function') {
+    try {
+      const report = await knowledge.rebuild()
+      this.api.app.emit('elephantnote:search-index-updated', { engine: 'knowledge-provider', ...report })
+      return { engine: 'knowledge-provider', ...report }
+    } catch (error) {
+      console.warn('[ai-search] Knowledge provider rebuild failed; using local fallback', error)
+    }
+  }
+
     const entries = await this.listNotes()
     const documents = []
     const documentFrequency = Object.create(null)
@@ -190,18 +206,37 @@ export default class ElephantSearchAddon {
   }
 
   async query(input, options = {}) {
-    if (!this.config.enabled) return []
-    const queryTokens = [...new Set(tokenize(input))]
-    if (!queryTokens.length) return []
-    if (!this.index.documents.length && this.config.autoRebuild) await this.rebuild()
-    const limit = Math.min(100, Math.max(1, Number(options.limit) || this.config.limit))
-    return this.index.documents
-      .map((document) => ({ ...document, score: this.scoreDocument(document, queryTokens) }))
-      .filter((document) => document.score > 0)
-      .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
-      .slice(0, limit)
-      .map(({ frequencies, length, ...result }) => result)
+  if (!this.config.enabled) return []
+  const limit = Math.min(100, Math.max(1, Number(options.limit) || this.config.limit))
+  const knowledge = this.knowledgeProvider()
+  if (knowledge && typeof knowledge.search === 'function') {
+    try {
+      const hits = await knowledge.search(input, { limit })
+      return (Array.isArray(hits) ? hits : []).map((hit) => ({
+        ...hit,
+        id: hit.id || hit.chunk_id || hit.relative_path,
+        path: hit.path || hit.relative_path,
+        relativePath: hit.relativePath || hit.relative_path,
+        title: hit.title || hit.heading || hit.relative_path,
+        excerpt: hit.excerpt || '',
+        score: Number(hit.score) || 0,
+        engine: 'knowledge-provider'
+      }))
+    } catch (error) {
+      console.warn('[ai-search] Knowledge provider search failed; using local fallback', error)
+    }
   }
+
+  const queryTokens = [...new Set(tokenize(input))]
+  if (!queryTokens.length) return []
+  if (!this.index.documents.length && this.config.autoRebuild) await this.rebuild()
+  return this.index.documents
+    .map((document) => ({ ...document, score: this.scoreDocument(document, queryTokens) }))
+    .filter((document) => document.score > 0)
+    .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
+    .slice(0, limit)
+    .map(({ frequencies, length, ...result }) => result)
+}
 
   status() {
     return {

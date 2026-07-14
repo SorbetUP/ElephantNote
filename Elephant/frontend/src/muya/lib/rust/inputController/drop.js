@@ -6,6 +6,8 @@ const transferTypes = (transfer) => Array.from(transfer?.types || [])
 const transferHasFiles = (transfer) =>
   Boolean(transfer?.files?.length) || transferTypes(transfer).includes('Files')
 
+const transferHasUri = (transfer) => transferTypes(transfer).includes('text/uri-list')
+
 const transferHasText = (transfer) => {
   const types = transferTypes(transfer)
   return TEXT_TRANSFER_TYPES.some((type) => types.includes(type))
@@ -44,11 +46,21 @@ const claimDrop = (event) => {
   }
 }
 
+const droppedUri = (transfer) => String(transfer.getData?.('text/uri-list') || '')
+  .split(/\r?\n/)
+  .map((line) => line.trim())
+  .find((line) => line && !line.startsWith('#')) || ''
+
 export const handleDragOver = (controller, event) => {
   const transfer = event.dataTransfer
   if (!transfer) return false
   if (transferHasFiles(transfer)) {
     if (!controller.onFileDrop) return false
+    claimDrop(event)
+    return true
+  }
+  if (transferHasUri(transfer)) {
+    if (!controller.onUriDrop) return false
     claimDrop(event)
     return true
   }
@@ -61,6 +73,7 @@ export const handleDrop = (controller, event) => {
   const transfer = event.dataTransfer
   if (!transfer) return false
   if (transferHasFiles(transfer)) return handleFileDrop(controller, event)
+  if (transferHasUri(transfer)) return handleUriDrop(controller, event)
   if (!transferHasText(transfer)) return false
 
   placeDropCaret(controller, event)
@@ -80,13 +93,24 @@ const handleFileDrop = (controller, event) => {
   if (!controller.onFileDrop) return false
   const files = Array.from(event.dataTransfer?.files || [])
   if (!files.length) return false
+  return delegateDrop(controller, event, () => controller.onFileDrop(files))
+}
+
+const handleUriDrop = (controller, event) => {
+  if (!controller.onUriDrop) return false
+  const uri = droppedUri(event.dataTransfer)
+  if (!uri) return false
+  return delegateDrop(controller, event, () => controller.onUriDrop(uri))
+}
+
+const delegateDrop = (controller, event, callback) => {
   placeDropCaret(controller, event)
   const selection = controller.readSelection()
   if (!selection) return false
   claimDrop(event)
   controller.schedule(async () => {
     await controller.bridge.setSelection(selection)
-    await controller.onFileDrop(files)
+    await callback()
   })
   return true
 }

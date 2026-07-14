@@ -21,6 +21,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh run view 29355557051 --log-failed \
-            | grep -E -C 12 'error\[E[0-9]+\]|error:|FAILED|panicked at|test result:|AssertionError|expected|received|Process completed' \
-            | tail -n 240
+          gh run view 29356999068 --log-failed \
+            | grep -E -C 14 'error\[E[0-9]+\]|error:|FAILED|panicked at|test result:|AssertionError|expected|received|Process completed' \
+            | tail -n 360
+
+      - name: Unit test exact errors
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh run view 29356997153 --log-failed \
+            | grep -E -C 12 'FAIL|Error:|AssertionError|expected|received|Cannot find|not found|Process completed' \
+            | tail -n 360

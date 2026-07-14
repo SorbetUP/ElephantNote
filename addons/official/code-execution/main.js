@@ -72,6 +72,9 @@ export default class ElephantCodeExecutionAddon {
     this.api = api
     this.window = api.experimental.window
     this.observer = null
+    this.disposeEditorWatch = null
+    this.disposeRuntimeWatch = null
+    this.activeRuntime = null
     this.config = defaultConfig()
   }
 
@@ -95,10 +98,11 @@ export default class ElephantCodeExecutionAddon {
   }
 
   getCode(block) {
-    const code = block.querySelector?.('code')
-    return String(code?.textContent ?? block.textContent ?? '')
-      .replace(/^(Run|Running…|Copy)\s*/i, '')
-      .trimEnd()
+    const clone = block.cloneNode?.(true)
+    clone?.querySelectorAll?.('.elephant-physical-code-toolbar, .elephant-physical-code-output')
+      .forEach((element) => element.remove())
+    const code = clone?.querySelector?.('code')
+    return String(code?.textContent ?? clone?.textContent ?? block.textContent ?? '').trimEnd()
   }
 
   resolveInterpreter(language) {
@@ -161,8 +165,7 @@ export default class ElephantCodeExecutionAddon {
   decorateBlock(block) {
     if (!(block instanceof this.window.HTMLElement)) return
     if (block.querySelector(`:scope > .elephant-physical-code-toolbar`)) return
-    const code = block.querySelector('code')
-    if (!code && !block.matches('[data-function-type="fencecode"], .ag-code-block, pre')) return
+    if (block.getAttribute('data-elephant-editor-kind') !== 'code_block') return
 
     const documentRef = block.ownerDocument
     block.classList.add('elephant-physical-code-block')
@@ -192,29 +195,33 @@ export default class ElephantCodeExecutionAddon {
     block.append(output)
   }
 
-  scan(root = this.window.document) {
-    const selectors = [
-      'pre[data-language]',
-      'pre[data-lang]',
-      '[data-function-type="fencecode"]',
-      '.ag-code-block',
-      '.muya-code-block'
-    ].join(',')
-    for (const block of root.querySelectorAll?.(selectors) || []) this.decorateBlock(block)
+  scan(runtime = this.activeRuntime) {
+    const blocks = runtime?.queryBlocks?.({ kind: 'code_block' }) || []
+    for (const descriptor of blocks) this.decorateBlock(descriptor.element || descriptor)
+  }
+
+  attachEditorRuntime(runtime) {
+    this.observer?.disconnect()
+    this.disposeRuntimeWatch?.()
+    this.observer = null
+    this.disposeRuntimeWatch = null
+    this.activeRuntime = runtime?.engine === 'rust' ? runtime : null
+    if (!this.activeRuntime) return
+
+    this.scan(this.activeRuntime)
+    this.disposeRuntimeWatch = this.activeRuntime.watch?.(() => this.scan(this.activeRuntime), {
+      immediate: false
+    }) || null
+
+    const root = this.activeRuntime.root
+    if (root && this.window.MutationObserver) {
+      this.observer = new this.window.MutationObserver(() => this.scan(this.activeRuntime))
+      this.observer.observe(root, { childList: true, subtree: true })
+    }
   }
 
   installEditorRuntime() {
-    this.scan()
-    this.observer = new this.window.MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const added of mutation.addedNodes || []) {
-          if (added?.nodeType !== 1) continue
-          if (added.matches?.('pre,[data-function-type="fencecode"],.ag-code-block,.muya-code-block')) this.decorateBlock(added)
-          this.scan(added)
-        }
-      }
-    })
-    this.observer.observe(this.window.document.body, { childList: true, subtree: true })
+    this.disposeEditorWatch = this.api.editor.watch(({ value }) => this.attachEditorRuntime(value))
   }
 
   async renderSettings(container) {
@@ -361,6 +368,11 @@ export default class ElephantCodeExecutionAddon {
   }
 
   onunload() {
+    this.disposeEditorWatch?.()
+    this.disposeRuntimeWatch?.()
+    this.disposeEditorWatch = null
+    this.disposeRuntimeWatch = null
+    this.activeRuntime = null
     this.observer?.disconnect()
     this.observer = null
     delete this.window.__ELEPHANT_CODE_EXECUTION_ENABLED__

@@ -13,7 +13,8 @@ runs:
       shell: bash
       run: |
         set -euxo pipefail
-        npm install -g pnpm@10.33.4
+        corepack enable
+        corepack prepare pnpm@10.33.4 --activate
         node --version
         npm --version
         pnpm --version

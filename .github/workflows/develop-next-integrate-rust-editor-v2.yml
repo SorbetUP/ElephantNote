@@ -191,5 +191,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "feat(editor): integrate Rust editor into develop_next"
-          git pull --rebase origin develop_next
+          git fetch origin develop_next
+          git merge --no-edit origin/develop_next
           git push origin HEAD:develop_next

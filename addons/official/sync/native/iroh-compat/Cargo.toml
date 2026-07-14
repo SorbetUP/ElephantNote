@@ -1,9 +1,0 @@
-[package]
-name = "elephant-iroh-compat"
-version = "1.0.2"
-edition = "2021"
-license = "MIT"
-publish = false
-
-[dependencies]
-iroh-upstream = { package = "iroh", version = "1.0.2" }

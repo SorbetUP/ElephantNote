@@ -1,6 +1,7 @@
 const ADDON_ID = 'elephant.open-models'
 const PROVIDER_ID = 'app-local'
 const VIEW_ID = `${ADDON_ID}.workspace`
+const AI_CONFIG_RESOURCE = 'ai.config'
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -15,12 +16,12 @@ export default class ElephantOpenModelsAddon {
     this.window = api.experimental.window
   }
 
-  async call(action, payload = {}) {
-    const client = this.window?.elephantnote?.api
-    if (typeof client?.call !== 'function') throw new Error(`Elephant API is unavailable for ${action}`)
-    const response = await client.call(action, payload)
-    if (response?.ok === false) throw new Error(response.error?.message || `${action} failed`)
-    return response?.data ?? response
+  aiConfig() {
+    const resource = this.api.resources.get(AI_CONFIG_RESOURCE)
+    if (!resource?.get || !resource?.set) {
+      throw new Error('The AI addon must be installed and enabled before Open Models can configure routes.')
+    }
+    return resource
   }
 
   service(method, params = {}, options = {}) {
@@ -112,10 +113,11 @@ export default class ElephantOpenModelsAddon {
   }
 
   async enableLocalRuntime() {
-    const config = await this.call('ai.config.get').catch(() => ({}))
+    const configResource = this.aiConfig()
+    const config = await configResource.get()
     const localAi = { ...(config.localAi || {}) }
     if (localAi.enabled && localAi.showModelLibraryInSidebar && localAi.allowHuggingFaceDownloads) return
-    await this.call('ai.config.set', {
+    await configResource.set({
       ...config,
       localAi: {
         ...localAi,
@@ -171,8 +173,9 @@ export default class ElephantOpenModelsAddon {
   }
 
   async onunload() {
-    const config = await this.call('ai.config.get').catch(() => null)
-    if (config) {
+    const configResource = this.api.resources.get(AI_CONFIG_RESOURCE)
+    const config = await configResource?.get?.().catch(() => null)
+    if (config && configResource?.set) {
       const routes = { ...(config.routes || {}) }
       for (const name of ['chat', 'embedding']) {
         const route = routes[name] || {}
@@ -180,7 +183,7 @@ export default class ElephantOpenModelsAddon {
           routes[name] = { ...route, source: 'disabled', provider: 'disabled', transport: 'disabled', endpoint: '', model: '' }
         }
       }
-      await this.call('ai.config.set', { ...config, localAi: { ...(config.localAi || {}), enabled: false }, routes }).catch(() => {})
+      await configResource.set({ ...config, localAi: { ...(config.localAi || {}), enabled: false }, routes }).catch(() => {})
     }
     await this.api.native.service.stop().catch(() => {})
   }

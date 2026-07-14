@@ -23,7 +23,7 @@ jobs:
   quality:
     name: Quality gate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -43,7 +43,20 @@ jobs:
             rpm \
             xz-utils
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
       - uses: ./.github/actions/setup
+
+      - name: Install exact wasm-bindgen CLI
+        shell: bash
+        run: |
+          VERSION=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
+            | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
+          if ! wasm-bindgen --version 2>/dev/null | grep -q "${VERSION}$"; then
+            cargo install wasm-bindgen-cli --version "$VERSION" --locked
+          fi
 
       - name: Generate parity backlog docs
         run: pnpm docs:parity
@@ -119,7 +132,7 @@ jobs:
   tauri-macos-packaged-smoke:
     name: Tauri macOS packaged window smoke
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       CARGO_TERM_COLOR: always
       TAURI_MACOS_SMOKE_TIMEOUT_MS: 120000
@@ -131,7 +144,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin
+          targets: aarch64-apple-darwin,wasm32-unknown-unknown
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -140,8 +153,10 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/bin/cargo-tauri
+            ~/.cargo/bin/wasm-bindgen
+            ~/.cargo/bin/wasm-bindgen-test-runner
             Elephant/backend/tauri/target
-          key: ${{ runner.os }}-cargo-tauri-macos-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-tauri-macos-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml', 'Elephant/crates/muya-wasm/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-tauri-macos-
 
@@ -150,6 +165,15 @@ jobs:
         run: |
           if ! cargo tauri --version >/dev/null 2>&1; then
             cargo install tauri-cli --version '^2.10.0' --locked
+          fi
+
+      - name: Install exact wasm-bindgen CLI
+        shell: bash
+        run: |
+          VERSION=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
+            | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
+          if ! wasm-bindgen --version 2>/dev/null | grep -q "${VERSION}$"; then
+            cargo install wasm-bindgen-cli --version "$VERSION" --locked
           fi
 
       - name: Cargo check macOS Apple Silicon target

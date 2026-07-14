@@ -32,38 +32,8 @@ const normalizeRagChatPayload = (payload, limit = 6) => {
   }
 }
 
-const CHAT_REBUILD_COOLDOWN_MS = 30_000
-const chatSearchStateByCall = new WeakMap()
-
-const searchVaultInitializedForChat = (call) => {
-  let state = chatSearchStateByCall.get(call)
-  if (!state) {
-    state = { initialized: false, lastRebuildAt: 0 }
-    chatSearchStateByCall.set(call, state)
-  }
-  return state
-}
-
-const shouldRebuildChatSearch = (call, result, now = Date.now()) => {
-  const state = searchVaultInitializedForChat(call)
-  if (String(result?.answer || '').trim()) {
-    state.initialized = true
-    return false
-  }
-  return !state.initialized || now - state.lastRebuildAt >= CHAT_REBUILD_COOLDOWN_MS
-}
-
-const callRagChat = async(call, payload, limit = 6) => {
-  const normalizedPayload = normalizeRagChatPayload(payload, limit)
-  const result = await call(API.RAG_CHAT, normalizedPayload)
-  if (!shouldRebuildChatSearch(call, result)) return result
-
-  await call(API.SEARCH_REBUILD)
-  const state = searchVaultInitializedForChat(call)
-  state.initialized = true
-  state.lastRebuildAt = Date.now()
-  return call(API.RAG_CHAT, normalizedPayload)
-}
+const callRagChat = (call, payload, limit = 6) =>
+  call(API.RAG_CHAT, normalizeRagChatPayload(payload, limit))
 
 const directoryListPayload = (payload = '') =>
   typeof payload === 'string' ? { relativePath: payload } : toPlainObject(payload)

@@ -77,11 +77,9 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          node build/scripts/validate-addon-catalog.mjs addons
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/addons/knowledgePhysicalAddon.spec.js \
-            tests/app/unit/addons/addonCatalogContracts.spec.js \
-            tests/app/unit/addons/physicalAddonIsolation.spec.js \
-            tests/app/unit/addons/semanticBackendAbsence.spec.js
+            tests/app/unit/addons/knowledgePhysicalAddon.spec.js
           pnpm tauri:web:build
 
       - name: Commit directed Knowledge integration

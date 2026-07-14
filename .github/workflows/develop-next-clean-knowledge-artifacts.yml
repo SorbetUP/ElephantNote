@@ -1,4 +1,4 @@
-name: Clean Knowledge build artifacts
+name: Finalize develop_next migration workflows
 
 on:
   pull_request:
@@ -12,11 +12,11 @@ permissions:
   contents: write
 
 concurrency:
-  group: develop-next-clean-knowledge-artifacts
+  group: develop-next-finalize-migration-workflows
   cancel-in-progress: true
 
 jobs:
-  clean:
+  finalize:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,30 +24,28 @@ jobs:
           ref: develop_next
           fetch-depth: 0
 
-      - name: Remove Cargo outputs from the repository
+      - name: Remove consumed migration and diagnostic helpers
         shell: bash
         run: |
           set -euxo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm -r --ignore-unmatch addons/official/knowledge/native/target
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('.gitignore')
-          text = path.read_text() if path.exists() else ''
-          rules = [
-              'addons/official/*/native/target/',
-              'addons/official/*/native/*/target/'
-          ]
-          lines = text.splitlines()
-          for rule in rules:
-              if rule not in lines:
-                  lines.append(rule)
-          path.write_text('\n'.join(lines).rstrip() + '\n')
-          PY
-          git add .gitignore
-          test -z "$(git ls-files 'addons/official/knowledge/native/target/**')"
-          git commit -m "chore(ai): remove Knowledge Cargo build artifacts"
+          git rm --ignore-unmatch \
+            .github/workflows/develop-next-clean-knowledge-artifacts.yml \
+            .github/workflows/develop-next-diagnose-current-integrations.yml \
+            .github/workflows/develop-next-diagnose-knowledge-addon.yml \
+            .github/workflows/develop-next-diagnose-latest.yml \
+            .github/workflows/develop-next-fix-final-unit-contracts.yml \
+            .github/workflows/develop-next-integrate-knowledge-addon-v2.yml \
+            .github/workflows/develop-next-integrate-knowledge-addon.yml \
+            .github/workflows/develop-next-integrate-mobile-ui-v2.yml \
+            .github/workflows/develop-next-integrate-mobile-ui.yml \
+            .github/workflows/develop-next-neutralize-rust-editor-bridge.yml \
+            .github/workflows/develop-next-patch-trusted-editor-api-v2.yml \
+            .github/workflows/develop-next-patch-trusted-editor-api.yml \
+            .github/workflows/develop-next-repair-knowledge-format.yml \
+            .github/workflows/develop-next-wire-knowledge-consumers.yml
+          git commit -m "ci: remove consumed develop_next migration helpers"
           git fetch origin develop_next
           git merge --no-edit origin/develop_next
           git push origin HEAD:develop_next

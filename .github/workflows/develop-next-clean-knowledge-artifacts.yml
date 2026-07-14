@@ -1,0 +1,53 @@
+name: Clean Knowledge build artifacts
+
+on:
+  pull_request:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/develop-next-clean-knowledge-artifacts.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: develop-next-clean-knowledge-artifacts
+  cancel-in-progress: true
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop_next
+          fetch-depth: 0
+
+      - name: Remove Cargo outputs from the repository
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -r --ignore-unmatch addons/official/knowledge/native/target
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.gitignore')
+          text = path.read_text() if path.exists() else ''
+          rules = [
+              'addons/official/*/native/target/',
+              'addons/official/*/native/*/target/'
+          ]
+          lines = text.splitlines()
+          for rule in rules:
+              if rule not in lines:
+                  lines.append(rule)
+          path.write_text('\n'.join(lines).rstrip() + '\n')
+          PY
+          git add .gitignore
+          test -z "$(git ls-files 'addons/official/knowledge/native/target/**')"
+          git commit -m "chore(ai): remove Knowledge Cargo build artifacts"
+          git fetch origin develop_next
+          git merge --no-edit origin/develop_next
+          git push origin HEAD:develop_next

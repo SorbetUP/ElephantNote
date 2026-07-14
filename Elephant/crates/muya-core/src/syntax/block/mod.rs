@@ -1,5 +1,6 @@
 pub mod blockquote;
 pub mod fenced_code;
+pub mod front_matter;
 pub mod heading;
 pub mod list;
 pub mod paragraph;

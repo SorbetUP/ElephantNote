@@ -111,7 +111,11 @@ fn try_parse_front_matter(document: &mut Document, lines: &[SourceLine]) -> Opti
     .enumerate()
     .skip(1)
     .find_map(|(index, line)| front_matter::is_closing(&line.text, style).then_some(index))?;
-  if closing_index == 1 {
+  if closing_index == 1
+    || lines
+      .get(closing_index + 1)
+      .is_some_and(|line| !line.text.is_empty())
+  {
     return None;
   }
 
@@ -445,9 +449,15 @@ mod tests {
   }
 
   #[test]
-  fn leaves_an_unclosed_front_matter_delimiter_as_markdown() {
-    let document = parse_markdown("---\ntitle: Alpha");
-    assert_eq!(to_markdown(&document), "---\n\ntitle: Alpha");
+  fn leaves_invalid_front_matter_delimiters_as_markdown() {
+    let unclosed = parse_markdown("---\ntitle: Alpha");
+    assert_eq!(to_markdown(&unclosed), "---\n\ntitle: Alpha");
+
+    let no_blank_line = parse_markdown("---\ntitle: Alpha\n---\nbody");
+    assert_eq!(
+      to_markdown(&no_blank_line),
+      "---\n\ntitle: Alpha\n\n---\n\nbody"
+    );
   }
 
   #[test]

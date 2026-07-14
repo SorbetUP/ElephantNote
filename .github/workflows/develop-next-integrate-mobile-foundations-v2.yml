@@ -145,17 +145,16 @@ jobs:
       - name: Build mobile-compatible Rust editor application
         run: pnpm tauri:web:build
 
-      - name: Commit directed mobile foundations
+      - name: Commit directed mobile foundations and retire migration helpers
         shell: bash
         run: |
           set -euxo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --cached --quiet; then
-            echo 'Mobile foundations are already integrated.'
-            exit 0
-          fi
-          git commit -m "feat(mobile): integrate Android vault and native UX foundations"
+          git rm --ignore-unmatch \
+            .github/workflows/develop-next-integrate-mobile-foundations.yml \
+            .github/workflows/develop-next-integrate-mobile-foundations-v2.yml
+          git commit -m "feat(mobile): integrate Android vault and retire migration helpers"
           git reset --hard HEAD
           git fetch origin develop_next
           git merge --no-edit origin/develop_next

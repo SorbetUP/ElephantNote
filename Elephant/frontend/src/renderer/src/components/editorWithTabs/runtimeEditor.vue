@@ -3,6 +3,7 @@
     v-if="rustRuntimeActive && !sourceCode"
     :model-value="toEditorMarkdown(markdown)"
     :factory="rustRuntimeFactory"
+    :on-file-drop="imageHandlers.dropped"
     mode="rust"
     class="rust-editor-runtime"
     @ready="handleRustRuntimeReady"
@@ -29,11 +30,9 @@ import { storeToRefs } from 'pinia'
 
 import bus from '@/bus'
 import { useEditorStore } from '@/store/editor'
+import { usePreferencesStore } from '@/store/preferences'
+import { useProjectStore } from '@/store/project'
 import { debouncedSendBufferedState } from '@/store/bufferedState'
-import {
-  getImageBaseDirectory,
-  normalizeInsertedImageSource
-} from '@/util/imageSource'
 import {
   RustMuyaRuntimeEditor,
   isMuyaRustRuntime,
@@ -42,6 +41,7 @@ import {
 import Editor from './editor.vue'
 import RuntimeTableDialog from './runtimeTableDialog.vue'
 import { rustBusCommand } from './runtimeEditorCommands'
+import { createRuntimeImageHandlers } from './runtimeEditorImages'
 import { applyRustEditorMarkdown } from './runtimeEditorState'
 
 const props = defineProps({
@@ -65,7 +65,11 @@ const props = defineProps({
 })
 
 const editorStore = useEditorStore()
+const preferencesStore = usePreferencesStore()
+const projectStore = useProjectStore()
 const { currentFile } = storeToRefs(editorStore)
+const { projectTree } = storeToRefs(projectStore)
+const sourceCode = computed(() => props.sourceCode)
 const runtimeMode = ref(readMuyaRuntimeMode(window))
 const rustRuntime = ref(null)
 const tableDialogVisible = ref(false)
@@ -92,37 +96,36 @@ const handleRustRuntimeReady = (runtime) => {
 }
 
 const dispatchRustBusCommand = (event, payload) => {
-  if (!rustRuntimeActive.value || props.sourceCode || !rustRuntime.value) return
+  if (!rustRuntimeActive.value || props.sourceCode || !rustRuntime.value) {
+    return Promise.resolve(false)
+  }
   const command = rustBusCommand(event, payload)
-  if (!command) return
-  rustRuntime.value.bridge.dispatch(command).catch((error) => {
+  if (!command) return Promise.resolve(false)
+  const result = rustRuntime.value.bridge.dispatch(command)
+  result.catch((error) => {
     console.error(`[Muya Rust] Failed to handle ${event}.`, error)
   })
+  return result
 }
+
+const imageHandlers = createRuntimeImageHandlers({
+  currentFile,
+  projectTree,
+  preferencesStore,
+  sourceCode,
+  editorStore,
+  dispatch: dispatchRustBusCommand
+})
 
 const handleParagraphCommand = (type) => {
   if (type === 'table' && rustRuntimeActive.value && !props.sourceCode) {
     tableDialogVisible.value = true
     return
   }
-  dispatchRustBusCommand('paragraph', type)
+  return dispatchRustBusCommand('paragraph', type)
 }
 
-const handleCreateTable = (table) => {
-  dispatchRustBusCommand('createTable', table)
-}
-
-const handleInsertImage = (image) => {
-  const payload = typeof image === 'string' ? { src: image } : image || {}
-  const baseDirectory = getImageBaseDirectory(currentFile.value?.pathname, window.DIRNAME)
-  const source = normalizeInsertedImageSource(payload.src || payload.source || '', baseDirectory)
-  dispatchRustBusCommand('insert-image', { ...payload, source })
-}
-
-const handleUploadedImage = (url, deletionUrl) => {
-  handleInsertImage(url)
-  editorStore.SHOW_IMAGE_DELETION_URL(deletionUrl)
-}
+const handleCreateTable = (table) => dispatchRustBusCommand('createTable', table)
 
 const busHandlers = Object.freeze({
   undo: () => dispatchRustBusCommand('undo'),
@@ -134,8 +137,8 @@ const busHandlers = Object.freeze({
   insertParagraph: () => dispatchRustBusCommand('insertParagraph'),
   createParagraph: () => dispatchRustBusCommand('createParagraph'),
   'insert-horizontal-rule': () => dispatchRustBusCommand('insert-horizontal-rule'),
-  'insert-image': handleInsertImage,
-  'image-uploaded': handleUploadedImage
+  'insert-image': imageHandlers.insert,
+  'image-uploaded': imageHandlers.uploaded
 })
 
 const handleRustMarkdownChange = (editorMarkdown) => {
@@ -164,14 +167,8 @@ onBeforeUnmount(() => {
   for (const [event, handler] of Object.entries(busHandlers)) bus.off(event, handler)
   rustRuntime.value = null
   tableDialogVisible.value = false
-  if (runtimeModeTimer) {
-    window.clearInterval(runtimeModeTimer)
-    runtimeModeTimer = null
-  }
-  if (pendingRuntimeFrame) {
-    window.cancelAnimationFrame(pendingRuntimeFrame)
-    pendingRuntimeFrame = null
-  }
+  if (runtimeModeTimer) window.clearInterval(runtimeModeTimer)
+  if (pendingRuntimeFrame) window.cancelAnimationFrame(pendingRuntimeFrame)
 })
 </script>
 

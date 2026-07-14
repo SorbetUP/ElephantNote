@@ -63,6 +63,14 @@ jobs:
           from pathlib import Path
           import json
 
+          desktop = Path('Elephant/backend/tauri-plugin-elephant-android-vault/src/desktop.rs')
+          text = desktop.read_text()
+          marker = 'pub struct ElephantAndroidVault<R: Runtime>(pub(crate) std::marker::PhantomData<R>);'
+          replacement = 'pub struct ElephantAndroidVault<R: Runtime>(pub(crate) std::marker::PhantomData<fn() -> R>);'
+          if marker not in text:
+              raise SystemExit('Android Vault desktop marker changed unexpectedly')
+          desktop.write_text(text.replace(marker, replacement, 1))
+
           cargo = Path('Elephant/backend/tauri/Cargo.toml')
           text = cargo.read_text()
           dependency = 'tauri-plugin-elephant-android-vault = { path = "../tauri-plugin-elephant-android-vault" }'

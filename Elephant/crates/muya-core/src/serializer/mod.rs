@@ -34,6 +34,13 @@ fn serialize_block(document: &Document, node: &Node) -> String {
         serialize_inlines(document, node)
       )
     }
+    NodeKind::Block(BlockKind::FrontMatter { style }) => {
+      let (opening, closing) = style.delimiters();
+      format!(
+        "{opening}\n{}\n{closing}",
+        serialize_inlines(document, node)
+      )
+    }
     NodeKind::Block(BlockKind::List { kind, start }) => {
       serialize_list(document, node, *kind, *start)
     }

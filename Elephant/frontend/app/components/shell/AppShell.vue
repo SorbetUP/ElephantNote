@@ -1,6 +1,7 @@
 <template>
   <empty-vault-picker
     v-if="!store.hasVault"
+    @create-local="createLocalVault"
     @choose="store.chooseVault"
   />
   <div
@@ -9,14 +10,57 @@
     :class="[
       `en-theme-${themeMode}`,
       `en-theme-${themeClassId}`,
-      { 'en-pinned-card-halo': preferences.pinnedCardHalo }
+      {
+      'en-pinned-card-halo': preferences.pinnedCardHalo,
+      'en-mobile-shell': isMobileShell,
+      'en-mobile-drawer-open': isMobileShell && drawerProgress > 0,
+      'en-mobile-drawer-dragging': isMobileShell && drawerDragging,
+      'en-mobile-drawer-settling': isMobileShell && drawerSettling
+    }
     ]"
     :style="shellStyle"
+    @pointerdown="handleDrawerPointerDown"
+    @pointermove="handleDrawerPointerMove"
+    @pointerup="handleDrawerPointerEnd"
+    @pointercancel="handleDrawerPointerCancel"
   >
     <div class="en-shell-main">
-      <top-vault-bar :sidebar-visible="sidebarVisible" />
+      <top-vault-bar
+      v-if="!isMobileShell"
+      :sidebar-visible="sidebarVisible"
+    />
+    <header
+      v-else
+      class="en-mobile-topbar"
+    >
+      <button
+        class="en-mobile-icon-button"
+        type="button"
+        aria-label="Open navigation"
+        @click="openMobileSidebar"
+      >
+        <Menu class="en-mobile-icon" />
+      </button>
+      <button
+        class="en-mobile-search"
+        type="button"
+        @click="openSearch"
+      >
+        <Search class="en-mobile-icon" />
+        <span>Search notes</span>
+      </button>
+      <button
+        class="en-mobile-icon-button"
+        type="button"
+        aria-label="Settings"
+        @click="openSettings"
+      >
+        <Settings class="en-mobile-icon" />
+      </button>
+    </header>
       <div class="en-layout">
         <icon-rail
+          v-if="!isMobileShell"
           :active-addon-view-id="activeAddonViewId"
           :sidebar-visible="sidebarVisible"
           @open-settings="openSettings"
@@ -25,19 +69,30 @@
           @open-addon-view="openAddonView"
           @close-addon-view="closeAddonView"
         />
+        <button
+          v-if="isMobileShell"
+          class="en-mobile-scrim"
+          :class="{ visible: drawerProgress > 0 }"
+          type="button"
+          aria-label="Close navigation"
+          :aria-hidden="drawerProgress <= 0"
+          :tabindex="drawerProgress > 0 ? 0 : -1"
+          @click="closeMobileSidebar"
+        />
         <div
           class="en-body"
           :class="{ 'en-sidebar-hidden': !sidebarVisible }"
         >
           <sidebar-nav
-            v-if="sidebarVisible"
+            v-if="sidebarVisible || isMobileShell"
             :active-addon-view-id="activeAddonViewId"
             @search="openSearch"
             @open-addon-view="openAddonView"
             @close-addon-view="closeAddonView"
+            @click="handleMobileSidebarClick"
           />
           <div
-            v-if="sidebarVisible"
+            v-if="sidebarVisible && !isMobileShell"
             class="en-sidebar-resizer"
             role="separator"
             aria-orientation="vertical"
@@ -51,6 +106,15 @@
           />
         </div>
       </div>
+      <button
+        v-if="isMobileShell && !store.openedNotePath"
+        class="en-mobile-fab"
+        type="button"
+        aria-label="New note"
+        @click="store.createNote?.()"
+      >
+        <Plus class="en-mobile-fab-icon" />
+      </button>
     </div>
     <template v-for="entry in shellRightZones" :key="entry.contribution.id">
       <component
@@ -74,6 +138,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { Menu, Plus, Search, Settings } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { usePreferencesStore } from '@/store/preferences'
@@ -81,6 +146,7 @@ import { useAddonsStore } from '@/store/addons'
 import { useEditorStore } from '@/store/editor'
 import { useSearchStore } from '../../stores/searchStore'
 import { useCanvasStore } from '../../stores/canvasStore'
+import { elephantnoteClient } from '../../services/elephantnoteClient'
 import {
   ELEPHANTNOTE_THEME_STORAGE_KEY,
   getThemeMode,
@@ -111,7 +177,13 @@ const activeAddonViewId = ref('')
 const theme = ref(normalizeThemeId(window.localStorage.getItem(ELEPHANTNOTE_THEME_STORAGE_KEY)))
 const sidebarWidth = ref(232)
 const sidebarVisible = ref(true)
-let sidebarResizeFrame = null
+    const drawerProgress = ref(1)
+    const drawerDragging = ref(false)
+    const drawerSettling = ref(false)
+    const isMobileShell = ref(false)
+    let drawerGesture = null
+    let drawerSettleTimer = null
+    let sidebarResizeFrame = null
 let pendingSidebarWidth = null
 
 const activeThemeTokens = computed(() => getThemeTokens(theme.value))
@@ -126,7 +198,8 @@ const shellRightZones = computed(() => addonsStore.getContributions('layout.zone
 const shellStyle = computed(() => ({
   ...activeThemeTokens.value,
   '--en-sidebar-width': `${sidebarWidth.value}px`,
-  '--en-sidebar-runtime-width': `${sidebarWidth.value}px`
+  '--en-sidebar-runtime-width': `${sidebarWidth.value}px`,
+  '--en-mobile-drawer-progress': String(drawerProgress.value)
 }))
 
 const isLayoutZoneVisible = (entry) => {
@@ -182,6 +255,142 @@ const closeAddonView = () => {
 
 const toggleSidebar = () => {
   sidebarVisible.value = !sidebarVisible.value
+}
+
+const clampDrawerProgress = (value) => Math.min(1, Math.max(0, Number(value) || 0))
+const drawerWidth = () => Math.max(
+  1,
+  document.querySelector('.en-mobile-shell .en-sidebar')?.getBoundingClientRect?.().width ||
+    Math.min(window.innerWidth * 0.86, 340)
+)
+
+const settleDrawer = (open) => {
+  window.clearTimeout(drawerSettleTimer)
+  drawerDragging.value = false
+  drawerSettling.value = true
+  drawerProgress.value = open ? 1 : 0
+  sidebarVisible.value = open
+  drawerSettleTimer = window.setTimeout(() => {
+    drawerSettling.value = false
+  }, 280)
+}
+
+const openMobileSidebar = () => {
+  if (isMobileShell.value) settleDrawer(true)
+}
+
+const closeMobileSidebar = () => {
+  if (isMobileShell.value) settleDrawer(false)
+}
+
+const handleDrawerPointerDown = (event) => {
+  if (!isMobileShell.value || event.isPrimary === false || event.button > 0 || drawerGesture) return
+  const open = drawerProgress.value > 0
+  const insideDrawer = !!event.target?.closest?.('.en-sidebar')
+  const onScrim = !!event.target?.closest?.('.en-mobile-scrim.visible')
+  if (!open && event.clientX > 30) return
+  if (open && !insideDrawer && !onScrim) return
+  window.clearTimeout(drawerSettleTimer)
+  drawerSettling.value = false
+  drawerDragging.value = true
+  drawerGesture = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    lastX: event.clientX,
+    lastAt: performance.now(),
+    velocityX: 0,
+    initialProgress: drawerProgress.value,
+    axis: null
+  }
+  event.currentTarget?.setPointerCapture?.(event.pointerId)
+}
+
+const handleDrawerPointerMove = (event) => {
+  const gesture = drawerGesture
+  if (!gesture || event.pointerId !== gesture.pointerId) return
+  const dx = event.clientX - gesture.startX
+  const dy = event.clientY - gesture.startY
+  if (!gesture.axis) {
+    if (Math.abs(dx) < 7 && Math.abs(dy) < 7) return
+    if (Math.abs(dy) > Math.abs(dx) * 1.15) {
+      drawerGesture = null
+      drawerDragging.value = false
+      drawerProgress.value = gesture.initialProgress
+      return
+    }
+    gesture.axis = 'x'
+  }
+  event.preventDefault()
+  const now = performance.now()
+  const elapsed = Math.max(1, now - gesture.lastAt)
+  const instantaneous = (event.clientX - gesture.lastX) / elapsed
+  gesture.velocityX = gesture.velocityX * 0.65 + instantaneous * 0.35
+  gesture.lastX = event.clientX
+  gesture.lastAt = now
+  drawerProgress.value = clampDrawerProgress(gesture.initialProgress + dx / drawerWidth())
+}
+
+const handleDrawerPointerEnd = (event) => {
+  const gesture = drawerGesture
+  if (!gesture || event.pointerId !== gesture.pointerId) return
+  drawerGesture = null
+  if (gesture.axis !== 'x') {
+    drawerDragging.value = false
+    drawerProgress.value = gesture.initialProgress
+    return
+  }
+  const projected = drawerProgress.value + (gesture.velocityX * 180) / drawerWidth()
+  settleDrawer(projected >= 0.5)
+}
+
+const handleDrawerPointerCancel = (event) => {
+  const gesture = drawerGesture
+  if (!gesture || event.pointerId !== gesture.pointerId) return
+  drawerGesture = null
+  drawerDragging.value = false
+  drawerProgress.value = gesture.initialProgress
+}
+
+const handleMobileSidebarClick = (event) => {
+  if (!isMobileShell.value) return
+  if (event.target?.closest?.('.en-sidebar-tree-toggle, .en-recent-heading, .en-recent-more, [aria-expanded]')) return
+  if (event.target?.closest?.('button, a, [role="button"]')) {
+    window.requestAnimationFrame(closeMobileSidebar)
+  }
+}
+
+const updateMobileShell = () => {
+  const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches
+  const narrowViewport = window.matchMedia?.('(max-width: 760px)').matches
+  const wasMobile = isMobileShell.value
+  isMobileShell.value = !!(coarsePointer || narrowViewport)
+  if (isMobileShell.value && !wasMobile) {
+    sidebarVisible.value = false
+    drawerProgress.value = 0
+  } else if (!isMobileShell.value && !sidebarVisible.value) {
+    sidebarVisible.value = true
+    drawerProgress.value = 1
+  }
+}
+
+const createLocalVault = async () => {
+  const payload = await elephantnoteClient.vaults.createLocal()
+  if (payload?.canceled) return false
+  store.applyPayload(payload)
+  return true
+}
+
+const refreshVisibleVaultFiles = async () => {
+  if (!store.activeVault?.path) return
+  try {
+    const currentPath = store.currentPath || ''
+    const entries = await elephantnoteClient.directory.list(currentPath)
+    store.entries = Array.isArray(entries) ? entries : []
+    store.rootEntries = currentPath ? await elephantnoteClient.directory.list('') : store.entries
+  } catch (error) {
+    console.warn('Unable to refresh the vault after synchronization:', error)
+  }
 }
 
 const setTheme = (value) => {
@@ -300,7 +509,11 @@ const handleTabSaved = (_event, tabId) => {
 }
 
 onMounted(() => {
-  window.addEventListener('keydown', handleShortcut)
+      updateMobileShell()
+      window.addEventListener('resize', updateMobileShell)
+      window.screen?.orientation?.addEventListener?.('change', updateMobileShell)
+      window.addEventListener('elephantnote:vault-files-changed', refreshVisibleVaultFiles)
+      window.addEventListener('keydown', handleShortcut)
   window.addEventListener('elephantnote:open-settings', handleOpenSettingsEvent)
   window.addEventListener('elephantnote:open-addon-view', handleOpenAddonViewEvent)
   window.tauri.ipcRenderer.on('mt::tab-saved', handleTabSaved)
@@ -318,7 +531,11 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleShortcut)
+      window.clearTimeout(drawerSettleTimer)
+      window.removeEventListener('resize', updateMobileShell)
+      window.screen?.orientation?.removeEventListener?.('change', updateMobileShell)
+      window.removeEventListener('elephantnote:vault-files-changed', refreshVisibleVaultFiles)
+      window.removeEventListener('keydown', handleShortcut)
   window.removeEventListener('elephantnote:open-settings', handleOpenSettingsEvent)
   window.removeEventListener('elephantnote:open-addon-view', handleOpenAddonViewEvent)
   document.documentElement.classList.remove('en-resizing-sidebar')
@@ -346,6 +563,7 @@ onBeforeUnmount(() => {
   --en-muted: #98a3b6;
   --en-primary: #5ea1ff;
   height: 100vh;
+  height: 100dvh;
   color: var(--en-text);
   background: var(--en-bg);
   overflow: hidden;
@@ -425,5 +643,10 @@ onBeforeUnmount(() => {
 :global(.en-settings-close .en-icon) {
   width: 17px !important;
   height: 17px !important;
+}
+
+.en-mobile-drawer-settling :deep(.en-sidebar),
+.en-mobile-drawer-settling .en-mobile-scrim {
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 </style>

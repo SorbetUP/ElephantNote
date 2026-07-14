@@ -50,11 +50,17 @@ const transfer = (values, { files = [] } = {}) => ({
   getData: (type) => values[type] || ''
 })
 
-describe('Muya Rust text drop controller', () => {
+describe('Muya Rust drop controller', () => {
   let container
   let renderer
   let bridge
   let controller
+
+  const attach = (options = {}) => {
+    controller?.detach()
+    controller = new MuyaRustInputController(container, bridge, renderer, options).attach()
+    return controller
+  }
 
   beforeEach(() => {
     container = document.createElement('section')
@@ -66,7 +72,7 @@ describe('Muya Rust text drop controller', () => {
       setSelection: vi.fn(async () => {}),
       dispatch: vi.fn(async () => {})
     }
-    controller = new MuyaRustInputController(container, bridge, renderer).attach()
+    attach()
   })
 
   it('accepts text dragover and routes the drop through one paste command', async () => {
@@ -104,7 +110,7 @@ describe('Muya Rust text drop controller', () => {
     })
   })
 
-  it('does not intercept file or image drops owned by Elephant', async () => {
+  it('does not intercept file drops without an Elephant storage callback', async () => {
     const dataTransfer = transfer(
       { 'text/plain': 'ignored' },
       { files: [{ name: 'image.png', type: 'image/png' }] }
@@ -118,6 +124,33 @@ describe('Muya Rust text drop controller', () => {
 
     expect(dragover.defaultPrevented).toBe(false)
     expect(drop.defaultPrevented).toBe(false)
+    expect(bridge.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('sets the Rust selection before delegating image files to Elephant', async () => {
+    const order = []
+    bridge.setSelection.mockImplementation(async () => order.push('selection'))
+    const onFileDrop = vi.fn(async () => order.push('storage'))
+    attach({ onFileDrop })
+
+    const files = [
+      { name: 'image.png', type: 'image/png' },
+      { name: 'notes.txt', type: 'text/plain' }
+    ]
+    const dataTransfer = transfer({}, { files })
+    const dragover = browserEvent('dragover', { dataTransfer })
+    const drop = browserEvent('drop', { dataTransfer })
+
+    container.dispatchEvent(dragover)
+    container.dispatchEvent(drop)
+    await controller.idle()
+
+    expect(dragover.defaultPrevented).toBe(true)
+    expect(drop.defaultPrevented).toBe(true)
+    expect(dataTransfer.dropEffect).toBe('copy')
+    expect(bridge.setSelection).toHaveBeenCalledWith(snapshot().selection)
+    expect(onFileDrop).toHaveBeenCalledWith(files)
+    expect(order).toEqual(['selection', 'storage'])
     expect(bridge.dispatch).not.toHaveBeenCalled()
   })
 })

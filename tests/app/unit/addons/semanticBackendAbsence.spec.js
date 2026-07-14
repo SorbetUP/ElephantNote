@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { ELEPHANTNOTE_API_ACTIONS } from '../../../../Elephant/shared/apiContracts.js'
+import { COMPATIBILITY_CALLS } from '../../../../Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js'
 
 const root = process.cwd()
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
@@ -26,14 +28,15 @@ describe('legacy semantic backend physical absence', () => {
 
   it('keeps only native filename and text search as a core capability', () => {
     const lib = read('Elephant/backend/tauri/src/lib_min.rs')
-    const contracts = read('Elephant/shared/apiContracts.js')
-    const compatibility = read('Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js')
     expect(lib).toContain('vault::commands::tauri_search_query')
     expect(lib).toContain('vault::commands::tauri_search_status')
-    expect(contracts).toContain("action('SEARCH_QUERY', 'search.query'")
-    expect(contracts).toContain("action('SEARCH_STATUS', 'search.status')")
-    expect(contracts).not.toContain('search.inspect')
-    expect(compatibility).not.toContain('search.inspect')
+    expect(ELEPHANTNOTE_API_ACTIONS.SEARCH_QUERY).toBe('search.query')
+    expect(ELEPHANTNOTE_API_ACTIONS.SEARCH_STATUS).toBe('search.status')
+    expect(ELEPHANTNOTE_API_ACTIONS.SEARCH_INSPECT).toBeUndefined()
+    expect(ELEPHANTNOTE_API_ACTIONS.SEARCH_REBUILD).toBeUndefined()
+    expect(COMPATIBILITY_CALLS['search.query']).toBeTypeOf('function')
+    expect(COMPATIBILITY_CALLS['search.status']).toBeTypeOf('function')
+    expect(COMPATIBILITY_CALLS['search.inspect']).toBeUndefined()
   })
 
   it('keeps semantic indexing and inspection owned by the Search package', () => {

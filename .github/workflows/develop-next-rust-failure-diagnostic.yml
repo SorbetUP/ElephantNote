@@ -16,9 +16,12 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Print exact renderer failure tail
+      - name: Print renderer failed-suite section
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         shell: bash
-        run: gh run view 29347565073 --log-failed | tail -n 120
+        run: |
+          gh run view 29347565073 --log-failed \
+            | sed -n '/Failed Suites/,$p' \
+            | head -n 180

@@ -167,8 +167,8 @@ assert(
   'Extracted local model and chat runtimes must remain absent from core'
 )
 assert(
-  !baseConfig.build.beforeBuildCommand.script.includes('llama')
-    && !baseConfig.build.beforeBuildCommand.script.includes('codex'),
+  !baseConfig.build.beforeBuildCommand.script.includes('llama') &&
+    !baseConfig.build.beforeBuildCommand.script.includes('codex'),
   'Tauri build command must not reference extracted Open Models or Codex installers'
 )
 

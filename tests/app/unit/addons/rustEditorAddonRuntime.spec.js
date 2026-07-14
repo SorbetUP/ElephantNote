@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
-import { createRustEditorRuntimeBinding } from '../../../Elephant/frontend/src/renderer/src/muya/editorRuntimeResource'
+import { createRustEditorRuntimeBinding } from '../../../../Elephant/frontend/src/renderer/src/muya/editorRuntimeResource'
 
 const root = process.cwd()
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')

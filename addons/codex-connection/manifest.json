@@ -1,14 +1,45 @@
 {
   "id": "elephant.codex-connection",
   "name": "Codex Connection",
-  "version": "1.1.0",
-  "description": "Connects a ChatGPT subscription and exposes Codex as an AI provider through a separately installed package.",
+  "version": "2.0.0",
+  "description": "Owns ChatGPT subscription authentication, models, usage and chat through a package service.",
   "author": "Elephant",
+  "icon": "openai",
   "apiVersion": 1,
   "minAppVersion": "0.18.9",
-  "runtime": { "type": "javascript-worker", "entry": "main.js" },
-  "permissions": { "storage": true, "commands": true },
-  "requires": { "elephant.ai": ">=2.1.0" },
-  "contributes": { "runtimeMode": "trusted" },
+  "runtime": {
+    "type": "javascript-worker",
+    "entry": "main.js",
+    "mode": "trusted"
+  },
+  "permissions": {
+    "storage": true,
+    "commands": true,
+    "views": true,
+    "native": true
+  },
+  "requires": {
+    "elephant.ai": ">=2.1.0"
+  },
+  "native": {
+    "runner": "service",
+    "protocol": "elephant-addon-service-v1",
+    "sidecars": {
+      "macos-aarch64": "native/macos-aarch64/elephant-codex-service",
+      "macos-x86_64": "native/macos-x86_64/elephant-codex-service",
+      "linux-x86_64": "native/linux-x86_64/elephant-codex-service",
+      "windows-x86_64": "native/windows-x86_64/elephant-codex-service.exe"
+    },
+    "mobile": {
+      "android": { "supported": false, "reason": "Android requires a package-owned mobile Codex adapter." },
+      "ios": { "supported": false, "reason": "iOS requires a package-owned mobile Codex adapter." }
+    }
+  },
+  "contributes": {
+    "runtimeMode": "trusted",
+    "settings": true,
+    "aiProvider": true,
+    "native": true
+  },
   "activationEvents": ["onStartup"]
 }

@@ -2,7 +2,7 @@
   "id": "elephant.sync",
   "name": "Sync",
   "version": "1.2.0",
-  "description": "Owns a persistent Iroh endpoint while legacy file transfer operations are migrated into the package.",
+  "description": "Owns persistent Iroh pairing, bidirectional vault synchronization, baselines and conflict management.",
   "author": "Elephant",
   "apiVersion": 1,
   "minAppVersion": "0.18.9",
@@ -23,9 +23,7 @@
     "sidecars": {
       "macos-aarch64": "native/macos-aarch64/elephant-sync-service",
       "macos-x86_64": "native/macos-x86_64/elephant-sync-service",
-      "linux-aarch64": "native/linux-aarch64/elephant-sync-service",
       "linux-x86_64": "native/linux-x86_64/elephant-sync-service",
-      "windows-aarch64": "native/windows-aarch64/elephant-sync-service.exe",
       "windows-x86_64": "native/windows-x86_64/elephant-sync-service.exe"
     },
     "mobile": {

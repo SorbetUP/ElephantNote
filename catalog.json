@@ -1,7 +1,7 @@
 {
   "version": 1,
   "branch": "addon-catalog",
-  "updatedAt": "2026-07-14T11:48:31Z",
+  "updatedAt": "2026-07-14T13:30:16Z",
   "addons": [
     {
       "id": "elephant.ai",
@@ -15,6 +15,17 @@
       "entryPath": "addons/ai/main.js"
     },
     {
+      "id": "elephant.calendar",
+      "slug": "calendar",
+      "name": "Calendar",
+      "version": "1.3.0",
+      "description": "Imports and displays package-owned ICS events for the active vault.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "addons/calendar/manifest.json",
+      "entryPath": "addons/calendar/main.js"
+    },
+    {
       "id": "elephant.ai-chat",
       "slug": "ai-chat",
       "name": "Chat",
@@ -26,15 +37,102 @@
       "entryPath": "addons/ai-chat/main.js"
     },
     {
-      "id": "elephant.ai-search",
-      "slug": "ai-search",
-      "name": "Semantic Search",
-      "version": "1.2.0",
-      "description": "Owns note indexing and retrieval inside the physical addon package.",
+      "id": "elephant.code-execution",
+      "slug": "code-execution",
+      "name": "Code execution",
+      "version": "2.1.0",
+      "description": "Runs fenced code blocks with selectable package-owned interpreter sidecars.",
       "author": "Elephant",
       "official": true,
-      "manifestPath": "addons/ai-search/manifest.json",
-      "entryPath": "addons/ai-search/main.js"
+      "manifestPath": "addons/code-execution/manifest.json",
+      "entryPath": "addons/code-execution/main.js",
+      "requiresPlatformPackage": true,
+      "packages": {
+        "android-aarch64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-android-aarch64.enaddon",
+          "hash": "35e77831561ae4e99004cf5b85aa51447c997f504fb84adc5980900d6f29cac4"
+        },
+        "android-x86_64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-android-x86_64.enaddon",
+          "hash": "c3962dc6b0cd88e3d372db7950ac1e2bc28b544754ef6ad87a32a161e68d8efd"
+        },
+        "ios-aarch64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-ios-aarch64.enaddon",
+          "hash": "4b62813148b79f073e47d427c3d6b7bf9f3b8b63be7890c714135806ff3ef226"
+        },
+        "ios-x86_64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-ios-x86_64.enaddon",
+          "hash": "f8b2826d8619d2244d37bb66c2077c49ed4afbaaca1fc57b3f9f3692803d1504"
+        },
+        "linux-x86_64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-linux-x86_64.enaddon",
+          "hash": "aa6842920e9016d5fbffb1503854e4fa3e136a29feb53bf1a14bfbe718627dfb"
+        },
+        "macos-aarch64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-macos-aarch64.enaddon",
+          "hash": "a7c7e9d5400720796014bf8a7e5816e3bafaaff929a77fc1b3acffbe140d1157"
+        },
+        "macos-x86_64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-macos-x86_64.enaddon",
+          "hash": "307cffc282ec02c4e601d8af633d8a4a40820e0a8016e6fa0d154545753527cf"
+        },
+        "windows-x86_64": {
+          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-windows-x86_64.enaddon",
+          "hash": "a5bb7011001a4bae77d7d2207bf5d04e737bd6def717386eb262030b44c6e331"
+        }
+      }
+    },
+    {
+      "id": "elephant.codex-connection",
+      "slug": "codex-connection",
+      "name": "Codex Connection",
+      "version": "2.0.0",
+      "description": "Owns ChatGPT subscription authentication, models, usage and chat through a package service.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "addons/codex-connection/manifest.json",
+      "entryPath": "addons/codex-connection/main.js",
+      "requiresPlatformPackage": true,
+      "packages": {
+        "linux-x86_64": {
+          "path": "addons/codex-connection/releases/elephant.codex-connection-2.0.0-linux-x86_64.enaddon",
+          "hash": "630859037fbfa2ccbfb4efa9bf76a0e6ac41a773e62418b4324e6779d9db5af9"
+        },
+        "macos-aarch64": {
+          "path": "addons/codex-connection/releases/elephant.codex-connection-2.0.0-macos-aarch64.enaddon",
+          "hash": "f1d575b5defdde5b2bd13f60690c22a92940db825dc303203ddeb63cd8c81a58"
+        },
+        "macos-x86_64": {
+          "path": "addons/codex-connection/releases/elephant.codex-connection-2.0.0-macos-x86_64.enaddon",
+          "hash": "5ef224b41e8a8b7f81ccd709a45412b0ab525668ec44ddf9e787bbea2f29361f"
+        },
+        "windows-x86_64": {
+          "path": "addons/codex-connection/releases/elephant.codex-connection-2.0.0-windows-x86_64.enaddon",
+          "hash": "bfbe136d28be882ef0a25c3572f2ebc8070b928e5369dd22ee79bcf6ea3c59b6"
+        }
+      }
+    },
+    {
+      "id": "elephant.google-keep-import",
+      "slug": "google-keep-import",
+      "name": "Google Keep Import",
+      "version": "1.2.0",
+      "description": "Imports Google Keep Takeout JSON files into scoped local Markdown notes.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "addons/google-keep-import/manifest.json",
+      "entryPath": "addons/google-keep-import/main.js"
+    },
+    {
+      "id": "elephant.graph",
+      "slug": "graph",
+      "name": "Graph",
+      "version": "1.2.0",
+      "description": "Builds note and Wiki relationship graphs directly inside the physical package.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "addons/graph/manifest.json",
+      "entryPath": "addons/graph/main.js"
     },
     {
       "id": "elephant.ai-ocr",
@@ -62,7 +160,100 @@
         },
         "windows-x86_64": {
           "path": "addons/ai-ocr/releases/elephant.ai-ocr-1.0.0-windows-x86_64.enaddon",
-          "hash": "90fad9c576b595ddd5676ef9fe0608955843885b2a70de6e4ffcdd55266af02c"
+          "hash": "ba73de23d32dc906b1a30a62957b41d07a81d2fe7b3b59615ef1bd9999bc9412"
+        }
+      }
+    },
+    {
+      "id": "elephant.open-models",
+      "slug": "open-models",
+      "name": "Open Models",
+      "version": "2.0.0",
+      "description": "Owns GGUF downloads, activation and local llama.cpp chat through a package service.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "addons/open-models/manifest.json",
+      "entryPath": "addons/open-models/main.js",
+      "requiresPlatformPackage": true,
+      "packages": {
+        "linux-x86_64": {
+          "path": "addons/open-models/releases/elephant.open-models-2.0.0-linux-x86_64.enaddon",
+          "hash": "1083b34ae2464121b37ae52723664b11c98b9ad9b85eb0c9583d9a419d4c8a30"
+        },
+        "macos-aarch64": {
+          "path": "addons/open-models/releases/elephant.open-models-2.0.0-macos-aarch64.enaddon",
+          "hash": "9310045d2c779a2fc0f20a65f297cf7ee275a6dcce6e70e783371f075c045d12"
+        },
+        "macos-x86_64": {
+          "path": "addons/open-models/releases/elephant.open-models-2.0.0-macos-x86_64.enaddon",
+          "hash": "ec3e211b105fcb77c08f983ba6e06c260f3390d696f2fc5f1d39df1094be3e77"
+        },
+        "windows-x86_64": {
+          "path": "addons/open-models/releases/elephant.open-models-2.0.0-windows-x86_64.enaddon",
+          "hash": "f43fe91c1e379c3e8e207b2a9c6bc0d463cd6e73d5a43e16af84337d5064b362"
+        }
+      }
+    },
+    {
+      "id": "elephant.recently-edited",
+      "slug": "recently-edited",
+      "name": "Recently edited",
+      "version": "1.1.0",
+      "description": "Adds the recently edited notes section to the sidebar as a separately installed package.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "addons/recently-edited/manifest.json",
+      "entryPath": "addons/recently-edited/main.js"
+    },
+    {
+      "id": "elephant.ai-search",
+      "slug": "ai-search",
+      "name": "Semantic Search",
+      "version": "1.2.0",
+      "description": "Owns note indexing and retrieval inside a separately installed package.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "addons/ai-search/manifest.json",
+      "entryPath": "addons/ai-search/main.js"
+    },
+    {
+      "id": "elephant.sites",
+      "slug": "sites",
+      "name": "Sites",
+      "version": "1.3.0",
+      "description": "Previews static sites directly from a scoped vault directory on desktop, Android and iOS.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "addons/sites/manifest.json",
+      "entryPath": "addons/sites/main.js"
+    },
+    {
+      "id": "elephant.sync",
+      "slug": "sync",
+      "name": "Sync",
+      "version": "1.2.0",
+      "description": "Owns persistent Iroh pairing, bidirectional vault synchronization, baselines and conflict management.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "addons/sync/manifest.json",
+      "entryPath": "addons/sync/main.service.js",
+      "requiresPlatformPackage": true,
+      "packages": {
+        "linux-x86_64": {
+          "path": "addons/sync/releases/elephant.sync-1.2.0-linux-x86_64.enaddon",
+          "hash": "6a9996f9542616d18835d807a03577a976ffbb2c9b321ad24fe8ce37cbe9eaad"
+        },
+        "macos-aarch64": {
+          "path": "addons/sync/releases/elephant.sync-1.2.0-macos-aarch64.enaddon",
+          "hash": "ada18591bb94f4a7218c098dee79673d652c77031562bd9f2c856b051c3ccda3"
+        },
+        "macos-x86_64": {
+          "path": "addons/sync/releases/elephant.sync-1.2.0-macos-x86_64.enaddon",
+          "hash": "bd3d5d28f561d3fa88042025729067d6f5ba044663dc490b7359b1d469118bc3"
+        },
+        "windows-x86_64": {
+          "path": "addons/sync/releases/elephant.sync-1.2.0-windows-x86_64.enaddon",
+          "hash": "318d9ba10d85d9496fadcf539bed4fb6391da9cc1d53f20cc12c5dc2560aa8f6"
         }
       }
     },
@@ -78,157 +269,26 @@
       "entryPath": "addons/wiki/main.v2.js"
     },
     {
-      "id": "elephant.graph",
-      "slug": "graph",
-      "name": "Graph",
-      "version": "1.2.0",
-      "description": "Builds note and Wiki relationship graphs directly inside the physical package.",
-      "author": "Elephant",
-      "official": true,
-      "manifestPath": "addons/graph/manifest.json",
-      "entryPath": "addons/graph/main.js"
-    },
-    {
-      "id": "elephant.open-models",
-      "slug": "open-models",
-      "name": "Open Models",
-      "version": "1.2.0",
-      "description": "Browses, downloads, activates and removes local GGUF models as a separately installed package.",
-      "author": "Elephant",
-      "official": true,
-      "manifestPath": "addons/open-models/manifest.json",
-      "entryPath": "addons/open-models/main.js"
-    },
-    {
-      "id": "elephant.codex-connection",
-      "slug": "codex-connection",
-      "name": "Codex Connection",
+      "id": "com.elephantnote.examples.platform-proof",
+      "slug": "platform-proof",
+      "name": "Addon Platform Proof",
       "version": "1.1.0",
-      "description": "Connects a ChatGPT subscription and exposes Codex as an AI provider through a separately installed package.",
-      "author": "Elephant",
-      "official": true,
-      "manifestPath": "addons/codex-connection/manifest.json",
-      "entryPath": "addons/codex-connection/main.js"
+      "description": "Verifies the isolated Worker, app broker, private storage and scoped note list/read/write APIs.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/platform-proof/manifest.json",
+      "entryPath": "addons/platform-proof/main.js",
+      "readmePath": "addons/platform-proof/README.md"
     },
     {
-      "id": "elephant.sync",
-      "slug": "sync",
-      "name": "Sync",
-      "version": "1.2.0",
-      "description": "Owns a persistent Iroh endpoint while legacy transfer operations are migrated into the package.",
-      "author": "Elephant",
-      "official": true,
-      "manifestPath": "addons/sync/manifest.json",
-      "entryPath": "addons/sync/main.service.js",
-      "requiresPlatformPackage": true,
-      "packages": {
-        "linux-x86_64": {
-          "path": "addons/sync/releases/elephant.sync-1.2.0-linux-x86_64.enaddon",
-          "hash": "62a5d234c0f92f8a38b349c21a82b1ae62cde31646f32e9a6fc8939cabc6b6d4"
-        },
-        "macos-aarch64": {
-          "path": "addons/sync/releases/elephant.sync-1.2.0-macos-aarch64.enaddon",
-          "hash": "0e8624a7815b391c0f5e06a8bb78c2fb8b4adf47240da89350db534db9f8213b"
-        },
-        "macos-x86_64": {
-          "path": "addons/sync/releases/elephant.sync-1.2.0-macos-x86_64.enaddon",
-          "hash": "fd1139b98eccc37184788b625c208f1ab881cc65bb5eb3aba75b1a80e591b294"
-        },
-        "windows-x86_64": {
-          "path": "addons/sync/releases/elephant.sync-1.2.0-windows-x86_64.enaddon",
-          "hash": "aa8afe78e5a9d441b63b3fd0f3dd8b4775b576bdb59ba9d34a288d69e7ce350e"
-        }
-      }
-    },
-    {
-      "id": "elephant.calendar",
-      "slug": "calendar",
-      "name": "Calendar",
-      "version": "1.3.0",
-      "description": "Adds a package-owned calendar workspace, ICS import and Google Calendar synchronization.",
-      "author": "Elephant",
-      "official": true,
-      "manifestPath": "addons/calendar/manifest.json",
-      "entryPath": "addons/calendar/main.js"
-    },
-    {
-      "id": "elephant.sites",
-      "slug": "sites",
-      "name": "Sites",
-      "version": "1.3.0",
-      "description": "Previews static sites directly from a scoped vault directory on desktop, Android and iOS.",
-      "author": "Elephant",
-      "official": true,
-      "manifestPath": "addons/sites/manifest.json",
-      "entryPath": "addons/sites/main.js"
-    },
-    {
-      "id": "elephant.code-execution",
-      "slug": "code-execution",
-      "name": "Code execution",
-      "version": "2.1.0",
-      "description": "Runs local interpreters on desktop and an isolated JavaScript Web Worker on Android and iOS.",
-      "author": "Elephant",
-      "official": true,
-      "manifestPath": "addons/code-execution/manifest.json",
-      "entryPath": "addons/code-execution/main.js",
-      "requiresPlatformPackage": true,
-      "packages": {
-        "linux-x86_64": {
-          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-linux-x86_64.enaddon",
-          "hash": "18e6f3f591622de2ddda0ac6d624e0ac92520085cbe0e7343c8d10881e9204df"
-        },
-        "macos-aarch64": {
-          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-macos-aarch64.enaddon",
-          "hash": "da33a47b41cbcbf4e2749cc3493ee3b5abc90ee89876ba33d7a6c24fbd542a1a"
-        },
-        "macos-x86_64": {
-          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-macos-x86_64.enaddon",
-          "hash": "6b9bb563eafb8758b88070b4a53fd080b809456957054e1a8b3f290f591504b9"
-        },
-        "windows-x86_64": {
-          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-windows-x86_64.enaddon",
-          "hash": "c2d637bec7932eb79709289dcf476e9c95caeff7c8b2f8eeec839d764af6923e"
-        },
-        "android-aarch64": {
-          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-android-aarch64.enaddon",
-          "hash": "35e77831561ae4e99004cf5b85aa51447c997f504fb84adc5980900d6f29cac4"
-        },
-        "android-x86_64": {
-          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-android-x86_64.enaddon",
-          "hash": "c3962dc6b0cd88e3d372db7950ac1e2bc28b544754ef6ad87a32a161e68d8efd"
-        },
-        "ios-aarch64": {
-          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-ios-aarch64.enaddon",
-          "hash": "4b62813148b79f073e47d427c3d6b7bf9f3b8b63be7890c714135806ff3ef226"
-        },
-        "ios-x86_64": {
-          "path": "addons/code-execution/releases/elephant.code-execution-2.1.0-ios-x86_64.enaddon",
-          "hash": "f8b2826d8619d2244d37bb66c2077c49ed4afbaaca1fc57b3f9f3692803d1504"
-        }
-      }
-    },
-    {
-      "id": "elephant.google-keep-import",
-      "slug": "google-keep-import",
-      "name": "Google Keep Import",
-      "version": "1.1.0",
-      "description": "Imports Google Keep archives, web pages and RSS feeds as a separately installed package.",
-      "author": "Elephant",
-      "official": true,
-      "manifestPath": "addons/google-keep-import/manifest.json",
-      "entryPath": "addons/google-keep-import/main.js"
-    },
-    {
-      "id": "elephant.recently-edited",
-      "slug": "recently-edited",
-      "name": "Recently edited",
-      "version": "1.1.0",
-      "description": "Adds the recently edited notes section to the sidebar as a separately installed package.",
-      "author": "Elephant",
-      "official": true,
-      "manifestPath": "addons/recently-edited/manifest.json",
-      "entryPath": "addons/recently-edited/main.js"
+      "id": "com.elephantnote.broken-links-auditor",
+      "slug": "broken-links-auditor",
+      "name": "Broken Links Auditor",
+      "version": "1.0.0",
+      "description": "Finds unresolved and ambiguous wikilinks across the vault and writes a repair report.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/broken-links-auditor/manifest.json",
+      "entryPath": "addons/broken-links-auditor/main.js",
+      "readmePath": "addons/broken-links-auditor/README.md"
     },
     {
       "id": "com.elephantnote.elephant-tasks",
@@ -242,6 +302,83 @@
       "readmePath": "addons/elephant-tasks/README.md"
     },
     {
+      "id": "com.elephantnote.examples.finance-notes",
+      "slug": "finance-notes",
+      "name": "Finance Notes",
+      "version": "0.2.0",
+      "description": "Builds a sourced multi-asset market dashboard with per-symbol notes and cached fallback data.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/finance-notes/manifest.json",
+      "entryPath": "addons/finance-notes/main.js",
+      "readmePath": "addons/finance-notes/README.md"
+    },
+    {
+      "id": "com.elephantnote.github-release-watcher",
+      "slug": "github-release-watcher",
+      "name": "GitHub Release Watcher",
+      "version": "1.0.0",
+      "description": "Tracks releases for configured GitHub repositories and writes a Markdown dashboard.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/github-release-watcher/manifest.json",
+      "entryPath": "addons/github-release-watcher/main.js",
+      "readmePath": "addons/github-release-watcher/README.md"
+    },
+    {
+      "id": "com.elephantnote.inbox-digest",
+      "slug": "inbox-digest",
+      "name": "Inbox Digest",
+      "version": "1.0.0",
+      "description": "Builds a review report from Markdown notes under Inbox/ without modifying the source notes.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/inbox-digest/manifest.json",
+      "entryPath": "addons/inbox-digest/main.js",
+      "readmePath": "addons/inbox-digest/README.md"
+    },
+    {
+      "id": "com.elephantnote.markdown-linter",
+      "slug": "markdown-linter",
+      "name": "Markdown Linter",
+      "version": "1.0.0",
+      "description": "Audits Markdown style issues and can explicitly apply a conservative set of safe formatting fixes.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/markdown-linter/manifest.json",
+      "entryPath": "addons/markdown-linter/main.js",
+      "readmePath": "addons/markdown-linter/README.md"
+    },
+    {
+      "id": "com.elephantnote.notion-markdown-importer",
+      "slug": "notion-markdown-importer",
+      "name": "Notion Markdown Importer",
+      "version": "1.0.0",
+      "description": "Imports a Notion Markdown export from Imports/Notion, cleans UUID names and rewrites internal links.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/notion-markdown-importer/manifest.json",
+      "entryPath": "addons/notion-markdown-importer/main.js",
+      "readmePath": "addons/notion-markdown-importer/README.md"
+    },
+    {
+      "id": "com.elephantnote.tag-index",
+      "slug": "tag-index",
+      "name": "Tag Index",
+      "version": "1.0.0",
+      "description": "Indexes frontmatter and inline tags, detects case collisions and writes a navigable tag report.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/tag-index/manifest.json",
+      "entryPath": "addons/tag-index/main.js",
+      "readmePath": "addons/tag-index/README.md"
+    },
+    {
+      "id": "com.elephantnote.task-dashboard",
+      "slug": "task-dashboard",
+      "name": "Task Dashboard",
+      "version": "1.0.0",
+      "description": "Aggregates open and completed Markdown tasks from the vault into a generated dashboard.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/task-dashboard/manifest.json",
+      "entryPath": "addons/task-dashboard/main.js",
+      "readmePath": "addons/task-dashboard/README.md"
+    },
+    {
       "id": "com.elephantnote.template-studio",
       "slug": "template-studio",
       "name": "Template Studio",
@@ -251,6 +388,17 @@
       "manifestPath": "addons/template-studio/manifest.json",
       "entryPath": "addons/template-studio/main.js",
       "readmePath": "addons/template-studio/README.md"
+    },
+    {
+      "id": "com.elephantnote.vault-changelog",
+      "slug": "vault-changelog",
+      "name": "Vault Changelog",
+      "version": "1.0.0",
+      "description": "Tracks created, modified and deleted Markdown notes between manual snapshots.",
+      "author": "ElephantNote",
+      "manifestPath": "addons/vault-changelog/manifest.json",
+      "entryPath": "addons/vault-changelog/main.js",
+      "readmePath": "addons/vault-changelog/README.md"
     },
     {
       "id": "com.elephantnote.weekly-review",
@@ -273,116 +421,6 @@
       "manifestPath": "addons/writing-statistics/manifest.json",
       "entryPath": "addons/writing-statistics/main.js",
       "readmePath": "addons/writing-statistics/README.md"
-    },
-    {
-      "id": "com.elephantnote.vault-changelog",
-      "slug": "vault-changelog",
-      "name": "Vault Changelog",
-      "version": "1.0.0",
-      "description": "Tracks created, modified and deleted Markdown notes between manual snapshots.",
-      "author": "ElephantNote",
-      "manifestPath": "addons/vault-changelog/manifest.json",
-      "entryPath": "addons/vault-changelog/main.js",
-      "readmePath": "addons/vault-changelog/README.md"
-    },
-    {
-      "id": "com.elephantnote.tag-index",
-      "slug": "tag-index",
-      "name": "Tag Index",
-      "version": "1.0.0",
-      "description": "Indexes frontmatter and inline tags, detects case collisions and writes a navigable tag report.",
-      "author": "ElephantNote",
-      "manifestPath": "addons/tag-index/manifest.json",
-      "entryPath": "addons/tag-index/main.js",
-      "readmePath": "addons/tag-index/README.md"
-    },
-    {
-      "id": "com.elephantnote.markdown-linter",
-      "slug": "markdown-linter",
-      "name": "Markdown Linter",
-      "version": "1.0.0",
-      "description": "Audits Markdown style issues and can explicitly apply a conservative set of safe formatting fixes.",
-      "author": "ElephantNote",
-      "manifestPath": "addons/markdown-linter/manifest.json",
-      "entryPath": "addons/markdown-linter/main.js",
-      "readmePath": "addons/markdown-linter/README.md"
-    },
-    {
-      "id": "com.elephantnote.task-dashboard",
-      "slug": "task-dashboard",
-      "name": "Task Dashboard",
-      "version": "1.0.0",
-      "description": "Aggregates open and completed Markdown tasks from the vault into a generated dashboard.",
-      "author": "ElephantNote",
-      "manifestPath": "addons/task-dashboard/manifest.json",
-      "entryPath": "addons/task-dashboard/main.js",
-      "readmePath": "addons/task-dashboard/README.md"
-    },
-    {
-      "id": "com.elephantnote.broken-links-auditor",
-      "slug": "broken-links-auditor",
-      "name": "Broken Links Auditor",
-      "version": "1.0.0",
-      "description": "Finds unresolved and ambiguous wikilinks across the vault and writes a repair report.",
-      "author": "ElephantNote",
-      "manifestPath": "addons/broken-links-auditor/manifest.json",
-      "entryPath": "addons/broken-links-auditor/main.js",
-      "readmePath": "addons/broken-links-auditor/README.md"
-    },
-    {
-      "id": "com.elephantnote.github-release-watcher",
-      "slug": "github-release-watcher",
-      "name": "GitHub Release Watcher",
-      "version": "1.0.0",
-      "description": "Tracks releases for configured GitHub repositories and writes a Markdown dashboard.",
-      "author": "ElephantNote",
-      "manifestPath": "addons/github-release-watcher/manifest.json",
-      "entryPath": "addons/github-release-watcher/main.js",
-      "readmePath": "addons/github-release-watcher/README.md"
-    },
-    {
-      "id": "com.elephantnote.notion-markdown-importer",
-      "slug": "notion-markdown-importer",
-      "name": "Notion Markdown Importer",
-      "version": "1.0.0",
-      "description": "Imports a Notion Markdown export from Imports/Notion, cleans UUID names and rewrites internal links.",
-      "author": "ElephantNote",
-      "manifestPath": "addons/notion-markdown-importer/manifest.json",
-      "entryPath": "addons/notion-markdown-importer/main.js",
-      "readmePath": "addons/notion-markdown-importer/README.md"
-    },
-    {
-      "id": "com.elephantnote.inbox-digest",
-      "slug": "inbox-digest",
-      "name": "Inbox Digest",
-      "version": "1.0.0",
-      "description": "Builds a review report from Markdown notes under Inbox/ without modifying the source notes.",
-      "author": "ElephantNote",
-      "manifestPath": "addons/inbox-digest/manifest.json",
-      "entryPath": "addons/inbox-digest/main.js",
-      "readmePath": "addons/inbox-digest/README.md"
-    },
-    {
-      "id": "com.elephantnote.examples.finance-notes",
-      "slug": "finance-notes",
-      "name": "Finance Notes",
-      "version": "0.2.0",
-      "description": "Builds a sourced multi-asset market dashboard with per-symbol notes and cached fallback data.",
-      "author": "ElephantNote",
-      "manifestPath": "addons/finance-notes/manifest.json",
-      "entryPath": "addons/finance-notes/main.js",
-      "readmePath": "addons/finance-notes/README.md"
-    },
-    {
-      "id": "com.elephantnote.examples.platform-proof",
-      "slug": "platform-proof",
-      "name": "Addon Platform Proof",
-      "version": "1.1.0",
-      "description": "Verifies the isolated Worker, app broker, private storage and scoped note list/read/write APIs.",
-      "author": "ElephantNote",
-      "manifestPath": "addons/platform-proof/manifest.json",
-      "entryPath": "addons/platform-proof/main.js",
-      "readmePath": "addons/platform-proof/README.md"
     }
   ]
 }

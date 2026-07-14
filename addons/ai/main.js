@@ -1,4 +1,5 @@
 const ADDON_ID = 'elephant.ai'
+const CONFIG_KEY = 'provider-config'
 const PAGE_DEFINITIONS = Object.freeze([
   { id: 'providers', label: 'Providers', slot: '' },
   { id: 'chat', label: 'Chat', slot: 'ai.chat' },
@@ -9,10 +10,12 @@ const PAGE_DEFINITIONS = Object.freeze([
 const PROVIDER_DEFAULTS = Object.freeze({
   'openai-compatible': { label: 'OpenAI-compatible API', endpoint: 'https://api.openai.com/v1' },
   openrouter: { label: 'OpenRouter', endpoint: 'https://openrouter.ai/api/v1' },
-  mistral: { label: 'Mistral', endpoint: 'https://api.mistral.ai/v1' },
-  ollama: { label: 'Ollama', endpoint: 'http://127.0.0.1:11434' },
-  lmstudio: { label: 'LM Studio', endpoint: 'http://127.0.0.1:1234/v1' },
-  llamacpp: { label: 'llama.cpp server', endpoint: 'http://127.0.0.1:8080' }
+  mistral: { label: 'Mistral', endpoint: 'https://api.mistral.ai/v1' }
+})
+
+const EMPTY_CONFIG = Object.freeze({
+  providers: { list: [] },
+  routes: {}
 })
 
 const node = (documentRef, tag, className = '', text = '') => {
@@ -27,18 +30,12 @@ const clone = (value) => JSON.parse(JSON.stringify(value ?? {}))
 export default class ElephantAiAddon {
   constructor(api) {
     this.api = api
-    this.invoke = api.experimental?.tauri?.core?.invoke
     this.activePage = 'providers'
-    this.config = {}
+    this.config = clone(EMPTY_CONFIG)
     this.providers = []
     this.renderRoot = null
     this.saveTimer = 0
     this.stopManagerWatch = null
-  }
-
-  requireInvoke() {
-    if (typeof this.invoke !== 'function') throw new Error('Elephant AI configuration bridge is unavailable')
-    return this.invoke
   }
 
   getContributions() {
@@ -54,9 +51,17 @@ export default class ElephantAiAddon {
   }
 
   async loadConfig() {
-    const config = await this.requireInvoke()('tauri_ai_config_get')
-    this.config = config && typeof config === 'object' ? config : {}
-    this.providers = Array.isArray(this.config?.providers?.list)
+    const stored = await this.api.storage.get(CONFIG_KEY)
+    const config = stored && typeof stored === 'object' ? stored : clone(EMPTY_CONFIG)
+    this.config = {
+      ...clone(EMPTY_CONFIG),
+      ...clone(config),
+      providers: {
+        ...clone(EMPTY_CONFIG.providers),
+        ...clone(config?.providers || {})
+      }
+    }
+    this.providers = Array.isArray(this.config.providers.list)
       ? clone(this.config.providers.list)
       : []
   }
@@ -75,9 +80,11 @@ export default class ElephantAiAddon {
         list: clone(this.providers)
       }
     }
-    const saved = await this.requireInvoke()('tauri_ai_config_set', { config: payload })
-    this.config = saved && typeof saved === 'object' ? saved : payload
+    await this.api.storage.set(CONFIG_KEY, payload)
+    this.config = payload
     globalThis.dispatchEvent?.(new CustomEvent('elephantnote:ai-config-changed', { detail: this.config }))
+    this.api.app.emit?.('ai:config-changed', clone(this.config))
+    return this.config
   }
 
   createProvider(type = 'openai-compatible') {
@@ -94,6 +101,24 @@ export default class ElephantAiAddon {
   }
 
   async onload(api) {
+    api.resources.provide('ai.config', Object.freeze({
+      get: async() => {
+        await this.loadConfig()
+        return clone(this.config)
+      },
+      set: async(config) => {
+        this.config = config && typeof config === 'object' ? clone(config) : clone(EMPTY_CONFIG)
+        this.providers = Array.isArray(this.config?.providers?.list)
+          ? clone(this.config.providers.list)
+          : []
+        return await this.saveConfig()
+      },
+      listProviders: async() => {
+        await this.loadConfig()
+        return clone(this.providers.filter((provider) => provider?.enabled !== false))
+      }
+    }))
+
     api.ui.registerStyle(`
       .elephant-ai-settings { display: grid; gap: 14px; }
       .elephant-ai-tabs { display: flex; gap: 4px; padding: 5px; overflow-x: auto; border: 1px solid var(--en-border); border-radius: 11px; background: var(--en-soft); }
@@ -124,7 +149,7 @@ export default class ElephantAiAddon {
       standalone: true,
       chrome: false,
       title: 'AI',
-      description: 'Configure providers and separately installed AI modules.',
+      description: 'Configure API providers and separately installed AI modules.',
       order: 60,
       render: (container) => this.renderSettings(container)
     })
@@ -186,7 +211,7 @@ export default class ElephantAiAddon {
     const heading = node(documentRef, 'div')
     heading.append(
       node(documentRef, 'h4', '', 'External API providers'),
-      node(documentRef, 'p', '', 'Only configured providers are exposed to installed AI modules.')
+      node(documentRef, 'p', '', 'Only configured API providers are exposed to installed AI modules.')
     )
     const addButton = node(documentRef, 'button', '', 'Add provider')
     addButton.type = 'button'

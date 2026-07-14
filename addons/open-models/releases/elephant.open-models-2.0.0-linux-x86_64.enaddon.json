@@ -1,0 +1,12 @@
+{
+  "blake3": "1083b34ae2464121b37ae52723664b11c98b9ad9b85eb0c9583d9a419d4c8a30",
+  "bytes": 2227395,
+  "path": "/home/runner/work/ElephantNote/ElephantNote/build/out/addons/releases/elephant.open-models/elephant.open-models-2.0.0-linux-x86_64.enaddon",
+  "id": "elephant.open-models",
+  "version": "2.0.0",
+  "platform": "linux-x86_64",
+  "runner": "service",
+  "modules": 1,
+  "file": "elephant.open-models-2.0.0-linux-x86_64.enaddon",
+  "catalogPath": "addons/open-models/releases/elephant.open-models-2.0.0-linux-x86_64.enaddon"
+}

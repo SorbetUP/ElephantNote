@@ -1,0 +1,12 @@
+{
+  "blake3": "f43fe91c1e379c3e8e207b2a9c6bc0d463cd6e73d5a43e16af84337d5064b362",
+  "bytes": 1832167,
+  "path": "D:\\a\\ElephantNote\\ElephantNote\\build\\out\\addons\\releases\\elephant.open-models\\elephant.open-models-2.0.0-windows-x86_64.enaddon",
+  "id": "elephant.open-models",
+  "version": "2.0.0",
+  "platform": "windows-x86_64",
+  "runner": "service",
+  "modules": 1,
+  "file": "elephant.open-models-2.0.0-windows-x86_64.enaddon",
+  "catalogPath": "addons/open-models/releases/elephant.open-models-2.0.0-windows-x86_64.enaddon"
+}

@@ -1,6 +1,8 @@
 const ADDON_ID = 'elephant.open-models'
 const PROVIDER_ID = 'app-local'
 const VIEW_ID = `${ADDON_ID}.workspace`
+const AI_CONFIG_RESOURCE = 'ai.config'
+const MODELS_RESOURCE = 'models.provider'
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -15,17 +17,25 @@ export default class ElephantOpenModelsAddon {
     this.window = api.experimental.window
   }
 
-  async call(action, payload = {}) {
-    const client = this.window?.elephantnote?.api
-    if (typeof client?.call !== 'function') throw new Error(`Elephant API is unavailable for ${action}`)
-    const response = await client.call(action, payload)
-    if (response?.ok === false) throw new Error(response.error?.message || `${action} failed`)
-    return response?.data ?? response
+  aiConfig() {
+    const resource = this.api.resources.get(AI_CONFIG_RESOURCE)
+    if (!resource?.get || !resource?.set) {
+      throw new Error('The AI addon must be installed and enabled before Open Models can configure routes.')
+    }
+    return resource
+  }
+
+  service(method, params = {}, options = {}) {
+    return this.api.native.service.call(method, params, options)
   }
 
   async modelList() {
-    const result = await this.call('models.list')
+    const result = await this.service('models.list')
     return Array.isArray(result?.models) ? result.models : Array.isArray(result) ? result : []
+  }
+
+  chat({ messages = [], model = '', route = {}, config = {} } = {}) {
+    return this.service('models.chat', { messages, model, route, config }, { timeoutMs: 120000 })
   }
 
   render(container) {
@@ -37,7 +47,10 @@ export default class ElephantOpenModelsAddon {
     const refresh = async () => {
       root.replaceChildren(node(documentRef, 'p', 'elephant-package-muted', 'Loading models…'))
       try {
-        const [models, active] = await Promise.all([this.modelList(), this.call('models.active').catch(() => null)])
+        const [models, active] = await Promise.all([
+          this.modelList(),
+          this.service('models.active').catch(() => null)
+        ])
         if (disposed) return
         root.replaceChildren()
         const header = node(documentRef, 'header', 'elephant-package-header')
@@ -45,15 +58,21 @@ export default class ElephantOpenModelsAddon {
         copy.append(node(documentRef, 'h2', '', 'Open Models'), node(documentRef, 'p', '', `${models.length} local models`))
         const actions = node(documentRef, 'div', 'elephant-package-actions')
         const input = node(documentRef, 'input')
-        input.placeholder = 'Hugging Face model or GGUF id'
+        input.placeholder = 'Hugging Face repository or direct GGUF URL'
         const download = node(documentRef, 'button', '', 'Download')
         download.onclick = async () => {
           const id = input.value.trim()
           if (!id) return
           download.disabled = true
           download.textContent = 'Downloading…'
-          try { await this.call('models.download', { id }); input.value = ''; await refresh() }
-          finally { download.disabled = false; download.textContent = 'Download' }
+          try {
+            await this.service('models.download', { id }, { timeoutMs: 120000 })
+            input.value = ''
+            await refresh()
+          } finally {
+            download.disabled = false
+            download.textContent = 'Download'
+          }
         }
         const reload = node(documentRef, 'button', '', 'Refresh')
         reload.onclick = () => void refresh()
@@ -67,16 +86,19 @@ export default class ElephantOpenModelsAddon {
           const id = String(model.id || model.modelId || model.repoId || model.path || '')
           const article = node(documentRef, 'article', 'elephant-model-card')
           article.append(node(documentRef, 'strong', '', model.name || model.label || id || 'Unnamed model'))
-          article.append(node(documentRef, 'small', '', [model.quantization, model.sizeLabel || model.size, model.status].filter(Boolean).join(' · ')))
+          article.append(node(documentRef, 'small', '', [model.fileName, model.size ? `${Math.round(Number(model.size) / 1024 / 1024)} MB` : '', model.status].filter(Boolean).join(' · ')))
           const buttons = node(documentRef, 'div', 'elephant-package-actions')
-          const isActive = String(active?.id || active?.modelId || '') === id || model.active === true
+          const isActive = String(active?.id || active?.repoId || active?.path || '') === id || model.active === true
           const activate = node(documentRef, 'button', '', isActive ? 'Deactivate' : 'Activate')
           activate.onclick = async () => {
-            await this.call(isActive ? 'models.deactivate' : 'models.activate', isActive ? { id } : { id })
+            await this.service(isActive ? 'models.deactivate' : 'models.activate', { id })
             await refresh()
           }
           const remove = node(documentRef, 'button', '', 'Remove')
-          remove.onclick = async () => { await this.call('models.delete', { id }); await refresh() }
+          remove.onclick = async () => {
+            await this.service('models.delete', { id })
+            await refresh()
+          }
           buttons.append(activate, remove)
           article.append(buttons)
           list.append(article)
@@ -92,10 +114,11 @@ export default class ElephantOpenModelsAddon {
   }
 
   async enableLocalRuntime() {
-    const config = await this.call('ai.config.get').catch(() => ({}))
+    const configResource = this.aiConfig()
+    const config = await configResource.get()
     const localAi = { ...(config.localAi || {}) }
-    if (localAi.enabled && localAi.showModelLibraryInSidebar && localAi.allowHuggingFaceDownloads && localAi.allowLocalRuntimeAutostart) return
-    await this.call('ai.config.set', {
+    if (localAi.enabled && localAi.showModelLibraryInSidebar && localAi.allowHuggingFaceDownloads) return
+    await configResource.set({
       ...config,
       localAi: {
         ...localAi,
@@ -108,6 +131,7 @@ export default class ElephantOpenModelsAddon {
   }
 
   async onload(api) {
+    await api.native.service.start()
     api.ui.registerStyle(`
       .elephant-models-package { height:100%; overflow:auto; box-sizing:border-box; display:grid; align-content:start; gap:14px; padding:18px; }
       .elephant-package-header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -124,12 +148,27 @@ export default class ElephantOpenModelsAddon {
     const bridge = this.window?.__ELEPHANT_ADDON_VUE__
     if (!bridge?.createDomComponent) throw new Error('Physical addon Vue bridge is unavailable')
 
+    api.resources.provide(MODELS_RESOURCE, Object.freeze({
+      apiVersion: 1,
+      owner: ADDON_ID,
+      status: () => this.service('models.status'),
+      list: () => this.modelList(),
+      search: (params = {}) => this.service('models.search', params),
+      info: (params = {}) => this.service('models.info', params),
+      active: () => this.service('models.active'),
+      download: (params = {}) => this.service('models.download', params, { timeoutMs: 120000 }),
+      activate: (params = {}) => this.service('models.activate', params),
+      deactivate: () => this.service('models.deactivate'),
+      remove: (params = {}) => this.service('models.delete', params),
+      chat: (request = {}) => this.chat(request)
+    }))
+
     api.workspace.registerView({
       id: VIEW_ID,
       title: 'Models',
-      description: 'Browse, download and manage open local AI models.',
+      description: 'Browse, download and manage package-owned local GGUF models.',
       icon: 'database',
-      kind: 'open-models-v2',
+      kind: 'open-models-v3',
       component: bridge.createDomComponent({ name: 'ElephantPhysicalModels', mount: (container) => this.render(container) }),
       order: 45
     })
@@ -138,26 +177,30 @@ export default class ElephantOpenModelsAddon {
       id: `${ADDON_ID}.provider`,
       providerId: PROVIDER_ID,
       title: 'Open Models',
-      description: 'Run a downloaded GGUF model with the local llama.cpp runtime.',
-      transport: 'tauri-rust',
-      endpoint: 'local://llama.cpp',
-      capabilities: ['chat', 'embedding'],
-      getModels: () => this.modelList()
+      description: 'Run a downloaded GGUF model with the package-owned llama.cpp service.',
+      transport: 'addon-service',
+      endpoint: 'addon-service://elephant.open-models',
+      capabilities: ['chat'],
+      getModels: () => this.modelList(),
+      chat: (request) => this.chat(request)
     })
 
     await this.enableLocalRuntime()
   }
 
   async onunload() {
-    const config = await this.call('ai.config.get').catch(() => null)
-    if (!config) return
-    const routes = { ...(config.routes || {}) }
-    for (const name of ['chat', 'embedding']) {
-      const route = routes[name] || {}
-      if (route.source === PROVIDER_ID || route.provider === PROVIDER_ID) {
-        routes[name] = { ...route, source: 'disabled', provider: 'disabled', transport: 'disabled', endpoint: '', model: '' }
+    const configResource = this.api.resources.get(AI_CONFIG_RESOURCE)
+    const config = await configResource?.get?.().catch(() => null)
+    if (config && configResource?.set) {
+      const routes = { ...(config.routes || {}) }
+      for (const name of ['chat', 'embedding']) {
+        const route = routes[name] || {}
+        if (route.source === PROVIDER_ID || route.provider === PROVIDER_ID) {
+          routes[name] = { ...route, source: 'disabled', provider: 'disabled', transport: 'disabled', endpoint: '', model: '' }
+        }
       }
+      await configResource.set({ ...config, localAi: { ...(config.localAi || {}), enabled: false }, routes }).catch(() => {})
     }
-    await this.call('ai.config.set', { ...config, localAi: { ...(config.localAi || {}), enabled: false }, routes }).catch(() => {})
+    await this.api.native.service.stop().catch(() => {})
   }
 }

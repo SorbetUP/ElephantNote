@@ -20,4 +20,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh run view 29346178193 --log-failed | tail -n 500
+        run: gh run view 29346892454 --log-failed | tail -n 700

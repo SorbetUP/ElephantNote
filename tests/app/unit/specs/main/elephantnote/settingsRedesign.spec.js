@@ -54,7 +54,8 @@ describe('Elephant settings redesign', () => {
     expect(ocr).toContain("slot: 'ai.ocr'")
     expect(code).toContain("section: 'editor'")
     expect(sync).toContain("section: 'sync'")
-    expect(sites).toContain("section: 'sites'")
+    expect(sites).toContain("const PROVIDER_RESOURCE = 'sites.provider'")
+    expect(sites).toContain('api.workspace.registerView')
     expect(builtins).toContain('builtinAddons = Object.freeze([])')
     expect(builtins).not.toContain('import(')
   })
@@ -140,7 +141,7 @@ describe('Elephant settings redesign', () => {
     const main = read('Elephant/frontend/app/components/shell/MainContent.vue')
     const physicalEntries = [
       ['addons/official/sync/main.js', "registerContribution('top-bar.items'"],
-      ['addons/official/sites/main.js', "zone: 'workspace.notes'"],
+      ['addons/official/sites/main.js', 'api.workspace.registerView'],
       ['addons/official/codex-connection/main.js', "registerContribution('ai.providers'"],
       ['addons/official/ai-chat/main.js', "zone: 'shell.right'"],
       ['addons/official/wiki/main.js', 'api.workspace.registerView'],

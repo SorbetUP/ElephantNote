@@ -2,7 +2,7 @@ const fs = require('fs-extra')
 const { expect, test } = require('playwright/test')
 const { launchElectronWithSeededVault } = require('./helpers')
 
-test.describe('ElephantNote search settings inspection', () => {
+test.describe('Elephant optional Search boundary', () => {
   let app = null
   let page = null
   let fixture = null
@@ -19,21 +19,20 @@ test.describe('ElephantNote search settings inspection', () => {
     await fs.remove(fixture?.root)
   })
 
-  test('inspects active-vault markdown without creating a core semantic index', async() => {
+  test('does not expose semantic inspection without the Search addon', async() => {
     const result = await page.evaluate(async() => {
-      const response = await window.elephantnote.api.call('search.inspect')
-      if (response?.ok === false) {
-        throw new Error(response.error?.message || 'ElephantNote API request failed.')
+      try {
+        const response = await window.elephantnote.api.call('search.inspect')
+        return {
+          ok: response?.ok !== false,
+          error: response?.error?.message || ''
+        }
+      } catch (error) {
+        return { ok: false, error: error?.message || String(error) }
       }
-      return response?.data ?? response
     })
 
-    expect(result.indexPath).toBe('')
-    expect(result.documents.map((document) => document.title)).toEqual(
-      expect.arrayContaining(['Alpha note', 'Beta project'])
-    )
-    expect(result.documents.map((document) => document.relativePath || document.path)).toEqual(
-      expect.arrayContaining(['Alpha.md', 'Projects/Beta.md'])
-    )
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/unknown|unsupported|unavailable|not implemented/i)
   })
 })

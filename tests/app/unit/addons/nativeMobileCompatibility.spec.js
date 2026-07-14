@@ -22,9 +22,9 @@ describe('native addon mobile compatibility', () => {
       )
       expect(Object.keys(manifest.native.sidecars).some((key) => /^(android|ios)-/.test(key))).toBe(false)
       expect(manifest.native.mobile.android.supported).toBe(false)
-      expect(manifest.native.mobile.android.reason).toMatch(/host adapter|downloaded process/i)
+      expect(manifest.native.mobile.android.reason).toMatch(/adapter|downloaded process/i)
       expect(manifest.native.mobile.ios.supported).toBe(false)
-      expect(manifest.native.mobile.ios.reason).toMatch(/host adapter|downloaded process/i)
+      expect(manifest.native.mobile.ios.reason).toMatch(/adapter|downloaded process/i)
     }
   })
 

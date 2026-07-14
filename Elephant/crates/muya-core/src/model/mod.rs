@@ -5,7 +5,7 @@ mod node;
 mod node_id;
 mod source_range;
 
-pub use block::{Alignment, BlockKind, ListKind};
+pub use block::{Alignment, BlockKind, FrontMatterStyle, ListKind};
 pub use document::{DetachedSubtree, Document};
 pub use inline::{InlineKind, InlineMarkKind, MarkFragmentEdge};
 pub use node::{Node, NodeKind};

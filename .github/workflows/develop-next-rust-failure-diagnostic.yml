@@ -16,12 +16,12 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Print failed renderer contract assertions
+      - name: Print failed renderer modules and ownership assertion
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           gh run view 29347565073 --log-failed \
-            | grep -E -C 10 'FAIL|AssertionError|expected|Received|Test Files|Tests|rustProduction|rustBridge|rustRuntime|rustVue|NoFallback' \
-            | tail -n 500
+            | grep -E -C 12 'clipboardBlocks|Cannot find|Failed to resolve|Error:|SyntaxError|ReferenceError|expected.*not|Test Files|FAIL ' \
+            | tail -n 450

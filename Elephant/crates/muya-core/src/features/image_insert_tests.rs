@@ -129,3 +129,33 @@ fn keeps_the_selection_on_an_editable_text_node_after_insertion() {
   ));
   assert_eq!(to_markdown(&document), "alpha![picture](/tmp/picture.png)");
 }
+
+#[test]
+fn inserts_image_markdown_literally_inside_inline_code() {
+  let mut document = crate::parse_markdown("`alpha`");
+  let code = document
+    .nodes
+    .values()
+    .find_map(|node| match &node.kind {
+      NodeKind::Inline(InlineKind::CodeSpan { code }) if code == "alpha" => Some(node.id),
+      _ => None,
+    })
+    .unwrap();
+  let before = Selection::collapsed(SelectionPoint {
+    node: code,
+    offset_utf16: 2,
+  });
+  let transaction = command("/tmp/picture.png", "", None)
+    .build(&document, before)
+    .unwrap();
+  assert_eq!(transaction.selection_after.anchor.node, code);
+  assert_eq!(transaction.selection_after.anchor.offset_utf16, 4);
+  assert_eq!(transaction.selection_after.focus.offset_utf16, 11);
+  let inverse = transaction.apply(&mut document).unwrap();
+  assert_eq!(
+    to_markdown(&document),
+    "`al![picture](/tmp/picture.png)pha`"
+  );
+  inverse.apply(&mut document).unwrap();
+  assert_eq!(to_markdown(&document), "`alpha`");
+}

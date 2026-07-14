@@ -13,7 +13,10 @@ describe('Elephant Rust runtime image integration', () => {
     dispatch = vi.fn(async () => true)
     storeImage = vi.fn(async () => 'https://cdn.example/image.png')
     validateImageUrl = vi.fn(async () => true)
-    editorStore = { SHOW_IMAGE_DELETION_URL: vi.fn() }
+    editorStore = {
+      ASK_FOR_IMAGE_PATH: vi.fn(async () => '/vault/assets/replacement.png'),
+      SHOW_IMAGE_DELETION_URL: vi.fn()
+    }
     Object.defineProperty(window, 'DIRNAME', {
       configurable: true,
       value: '/vault'
@@ -70,6 +73,45 @@ describe('Elephant Rust runtime image integration', () => {
     expect(editorStore.SHOW_IMAGE_DELETION_URL).toHaveBeenCalledWith(
       'https://delete.example/token'
     )
+  })
+
+  it('normalizes replacement payloads and preserves semantic metadata', async () => {
+    await handlers.replace({
+      image: 42,
+      source: '/vault/assets/image.png',
+      alt: 'diagram',
+      title: 'Architecture'
+    })
+
+    expect(dispatch).toHaveBeenCalledWith('replace-image', {
+      image: 42,
+      source: 'assets/image.png',
+      alt: 'diagram',
+      title: 'Architecture'
+    })
+  })
+
+  it('chooses a replacement file and keeps the existing alt and title', async () => {
+    await expect(handlers.chooseReplacement({
+      image: 42,
+      source: 'old.png',
+      alt: 'diagram',
+      title: 'Architecture'
+    })).resolves.toBe(true)
+
+    expect(editorStore.ASK_FOR_IMAGE_PATH).toHaveBeenCalledTimes(1)
+    expect(dispatch).toHaveBeenCalledWith('replace-image', {
+      image: 42,
+      source: 'assets/replacement.png',
+      alt: 'diagram',
+      title: 'Architecture'
+    })
+  })
+
+  it('deletes the selected image by stable node id', async () => {
+    await handlers.remove({ image: 42 })
+
+    expect(dispatch).toHaveBeenCalledWith('delete-image', { image: 42 })
   })
 
   it('inserts a validated image URI without storing a local file', async () => {

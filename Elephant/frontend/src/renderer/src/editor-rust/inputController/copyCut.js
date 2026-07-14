@@ -42,11 +42,12 @@ const logicalSelectionMarkdown = (controller, selection) => {
   if (!anchor || !focus || anchor.node !== focus.node) return ''
   const logical = controller.renderer?.logical
   const node = logical?.node?.(anchor.node)
-  if (!node || node.kind?.layer !== 'text') return ''
-  const start = Math.min(Number(anchor.offset) || 0, Number(focus.offset) || 0)
-  const end = Math.max(Number(anchor.offset) || 0, Number(focus.offset) || 0)
+  const nodeKind = node?.kind?.value
+  if (!node || node.kind?.layer !== 'inline' || nodeKind?.type !== 'text') return ''
+  const start = Math.min(Number(anchor.offset_utf16) || 0, Number(focus.offset_utf16) || 0)
+  const end = Math.max(Number(anchor.offset_utf16) || 0, Number(focus.offset_utf16) || 0)
   if (start === end) return ''
-  let markdown = String(node.value || '').slice(start, end)
+  let markdown = String(nodeKind.value || '').slice(start, end)
   let parent = logical.node(node.parent)
   while (parent && parent.kind?.layer === 'inline') {
     markdown = wrapInlineMarkdown(markdown, parent.kind?.value?.type)

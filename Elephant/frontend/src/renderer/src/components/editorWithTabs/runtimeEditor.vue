@@ -34,6 +34,7 @@ import { usePreferencesStore } from '@/store/preferences'
 import { useProjectStore } from '@/store/project'
 import { debouncedSendBufferedState } from '@/store/bufferedState'
 import { RustMuyaRuntimeEditor } from '@/muya'
+import { createRustEditorRuntimeBinding } from '@/muya/editorRuntimeResource'
 import RuntimeImageToolbar from './runtimeImageToolbar.vue'
 import RuntimeTableDialog from './runtimeTableDialog.vue'
 import { rustBusCommand } from './runtimeEditorCommands'
@@ -60,8 +61,34 @@ const { projectTree } = storeToRefs(projectStore)
 const sourceCode = computed(() => props.sourceCode)
 const rustRuntime = ref(null)
 const tableDialogVisible = ref(false)
+let editorRuntimeBinding = null
+let disposeEditorRuntimeResource = null
 
-const handleRustRuntimeReady = (runtime) => { rustRuntime.value = runtime }
+const unpublishEditorRuntime = () => {
+  disposeEditorRuntimeResource?.()
+  disposeEditorRuntimeResource = null
+  editorRuntimeBinding?.dispose()
+  editorRuntimeBinding = null
+}
+
+const publishEditorRuntime = () => {
+  if (!editorRuntimeBinding || disposeEditorRuntimeResource) return
+  const host = globalThis.__ELEPHANT_ADDON_HOST__
+  if (typeof host?.provide === 'function') {
+    disposeEditorRuntimeResource = host.provide('editor.runtime', editorRuntimeBinding.resource)
+  }
+}
+
+const handleRustRuntimeReady = (runtime) => {
+  unpublishEditorRuntime()
+  rustRuntime.value = runtime
+  editorRuntimeBinding = createRustEditorRuntimeBinding({
+    runtime,
+    getMarkdown: () => currentFile.value?.markdown ?? props.markdown
+  })
+  publishEditorRuntime()
+  editorRuntimeBinding.notify({ reason: 'ready' })
+}
 
 const dispatchRustBusCommand = (event, payload) => {
   if (props.sourceCode || !rustRuntime.value) return Promise.resolve(false)
@@ -113,14 +140,23 @@ const handleRustMarkdownChange = (editorMarkdown) => {
     fromEditorMarkdown: props.fromEditorMarkdown,
     persist: debouncedSendBufferedState
   })
+  editorRuntimeBinding?.notify({
+    reason: 'document-change',
+    markdown: props.fromEditorMarkdown(String(editorMarkdown || '')),
+    editorMarkdown: String(editorMarkdown || '')
+  })
 }
 
 onMounted(() => {
   for (const [event, handler] of Object.entries(busHandlers)) bus.on(event, handler)
+  globalThis.addEventListener?.('elephantnote:addons-ready', publishEditorRuntime)
+  publishEditorRuntime()
 })
 
 onBeforeUnmount(() => {
   for (const [event, handler] of Object.entries(busHandlers)) bus.off(event, handler)
+  globalThis.removeEventListener?.('elephantnote:addons-ready', publishEditorRuntime)
+  unpublishEditorRuntime()
   rustRuntime.value = null
   tableDialogVisible.value = false
   imageToolbar.close()

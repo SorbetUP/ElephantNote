@@ -11,15 +11,20 @@ const manifestFor = (slug) => JSON.parse(
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 describe('native addon mobile compatibility', () => {
-  it('never advertises downloaded process services as Android or iOS executables', () => {
+  it('never advertises downloaded process runners as Android or iOS executables', () => {
     for (const slug of processNativeSlugs) {
       const manifest = manifestFor(slug)
-      expect(manifest.native.runner).toBe('service')
+      expect(['process', 'service']).toContain(manifest.native.runner)
+      expect(manifest.native.protocol).toBe(
+        manifest.native.runner === 'service'
+          ? 'elephant-addon-service-v1'
+          : 'elephant-addon-sidecar-v1'
+      )
       expect(Object.keys(manifest.native.sidecars).some((key) => /^(android|ios)-/.test(key))).toBe(false)
       expect(manifest.native.mobile.android.supported).toBe(false)
-      expect(manifest.native.mobile.android.reason).toMatch(/host adapter/i)
+      expect(manifest.native.mobile.android.reason).toMatch(/host adapter|downloaded process/i)
       expect(manifest.native.mobile.ios.supported).toBe(false)
-      expect(manifest.native.mobile.ios.reason).toMatch(/host adapter/i)
+      expect(manifest.native.mobile.ios.reason).toMatch(/host adapter|downloaded process/i)
     }
   })
 
@@ -53,6 +58,7 @@ describe('native addon mobile compatibility', () => {
     expect(fs.existsSync(path.join(root, 'Elephant/backend/tauri/src/sync'))).toBe(false)
     expect(syncCargo).toMatch(/^iroh\s*=\s*"1\.0\.2"/m)
     expect(syncCargo).toMatch(/^iroh-mdns-address-lookup\s*=/m)
+    expect(syncManifest.native.runner).toBe('service')
     expect(syncManifest.native.mobile.android.supported).toBe(false)
     expect(syncManifest.native.mobile.ios.supported).toBe(false)
   })

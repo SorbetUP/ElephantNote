@@ -21,9 +21,12 @@ describe('external addon runtime security contracts', () => {
     expect(notes).toContain('file_type.is_symlink()')
     expect(notes).toContain('scope_matches(scope, relative_path)')
     expect(notes).toContain('Addon is not permitted to read')
-    expect(notes).toContain('Addons cannot read notes from hidden directories')
+    expect(notes).toContain('Addons cannot access notes in hidden directories')
+    expect(notes).toContain('record.manifest.permissions.notes.write')
+    expect(notes).toContain('write_markdown_atomic')
     expect(lib).toContain('addon_note_access::tauri_addons_notes_list')
     expect(lib).toContain('addon_note_access::tauri_addons_notes_read')
+    expect(lib).toContain('addon_note_access::tauri_addons_notes_write')
   })
 
   it('routes Worker network requests through the hardened broker', () => {

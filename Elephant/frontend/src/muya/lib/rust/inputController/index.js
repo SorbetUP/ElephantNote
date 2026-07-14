@@ -11,6 +11,7 @@ import { handleCopy, handleCut } from './copyCut'
 import { handleDeleteForward } from './deleteForward'
 import { DELETE_UNIT_INPUTS, handleDeleteUnit } from './deleteUnits'
 import { handleDragOver, handleDrop } from './drop'
+import { handleImageClick } from './image'
 import { readDomSelection } from './selection'
 import { handleTaskClick } from './task'
 
@@ -32,6 +33,7 @@ export class MuyaRustInputController {
     this.onError = options.onError || noop
     this.onFileDrop = typeof options.onFileDrop === 'function' ? options.onFileDrop : null
     this.onUriDrop = typeof options.onUriDrop === 'function' ? options.onUriDrop : null
+    this.onImageClick = typeof options.onImageClick === 'function' ? options.onImageClick : null
     this.autoCheck = Boolean(options.autoCheck)
     this.composition = null
     this.attached = false
@@ -113,7 +115,7 @@ export class MuyaRustInputController {
   }
 
   handleClick(event) {
-    return handleTaskClick(this, event)
+    return handleTaskClick(this, event) || handleImageClick(this, event)
   }
 
   handleCopy(event) {

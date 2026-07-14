@@ -13,38 +13,26 @@ permissions:
   contents: read
 
 jobs:
-  mobile:
+  mobile-shell:
     runs-on: ubuntu-latest
     steps:
-      - name: Mobile validation exact errors
+      - name: Mobile shell exact failure
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh run view 29357852010 --log-failed \
-            | grep -E -C 18 'error\[E[0-9]+\]|error:|FAILED|panicked at|test result:|AssertionError|expected|received|Process completed' \
+          gh run view 29359041311 --log-failed \
+            | grep -E -C 18 'FAIL|Error:|AssertionError|expected|received|Cannot find|not found|Process completed|build failed' \
             | tail -n 300
 
-  unit:
+  neutral-bridge:
     runs-on: ubuntu-latest
     steps:
-      - name: Unit test exact errors
+      - name: Neutral bridge exact failure
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh run view 29356997153 --log-failed \
-            | grep -E -C 14 'FAIL|Error:|AssertionError|expected|received|Cannot find|not found|Process completed' \
+          gh run view 29359040755 --log-failed \
+            | grep -E -C 18 'FAIL|Error:|AssertionError|expected|received|Cannot find|not found|Process completed|build failed' \
             | tail -n 300
-
-  editor:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Rust editor ownership exact violations
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          gh run view 29357852090 --log-failed \
-            | grep -E -C 8 'Production code still imports|muya/|frontend/src/muya|Process completed' \
-            | tail -n 180

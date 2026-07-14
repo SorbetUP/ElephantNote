@@ -1,4 +1,5 @@
 use elephant_sync_service::{
+  conflicts::{conflict_delete, conflict_restore, conflict_settings_set, conflict_status},
   local_ops::apply_local_plan,
   manifest::{scan_vault, VaultManifest},
   pairing::{
@@ -147,7 +148,8 @@ impl SyncService {
         "plan",
         "local-operations",
         "file-streams",
-        "sync-sessions"
+        "sync-sessions",
+        "conflict-archive"
       ]
     }))
   }
@@ -314,6 +316,41 @@ impl SyncService {
     }))
   }
 
+  fn conflict_status(&self, perform_cleanup: bool) -> Result<Value, String> {
+    conflict_status(&self.vault_dir, perform_cleanup)
+  }
+
+  fn set_conflict_retention(&self, params: &Value) -> Result<Value, String> {
+    let retention_days = params
+      .get("retentionDays")
+      .or_else(|| params.get("conflictRetentionDays"))
+      .and_then(Value::as_u64)
+      .ok_or_else(|| "retentionDays is required".to_string())?;
+    let retention_days = u32::try_from(retention_days)
+      .map_err(|_| "retentionDays is outside the supported range".to_string())?;
+    conflict_settings_set(&self.vault_dir, retention_days)
+  }
+
+  fn restore_conflict(&self, params: &Value) -> Result<Value, String> {
+    let relative_path = params
+      .get("relativePath")
+      .or_else(|| params.get("path"))
+      .and_then(Value::as_str)
+      .filter(|value| !value.trim().is_empty())
+      .ok_or_else(|| "relativePath is required".to_string())?;
+    conflict_restore(&self.vault_dir, relative_path)
+  }
+
+  fn delete_conflict(&self, params: &Value) -> Result<Value, String> {
+    let relative_path = params
+      .get("relativePath")
+      .or_else(|| params.get("path"))
+      .and_then(Value::as_str)
+      .filter(|value| !value.trim().is_empty())
+      .ok_or_else(|| "relativePath is required".to_string())?;
+    conflict_delete(&self.vault_dir, relative_path)
+  }
+
   async fn run_sync(&mut self) -> Result<Value, String> {
     let endpoint = self.ensure_endpoint().await?.clone();
     let sessions = run_all_sessions(&endpoint, &self.vault_dir).await?;
@@ -477,6 +514,11 @@ async fn handle(service: &mut SyncService, method: &str, params: Value) -> Resul
     "sync.scan" => service.scan(),
     "sync.plan" => service.plan(params).await,
     "sync.apply-local" => service.apply_local(params),
+    "sync.conflicts.peek" => service.conflict_status(false),
+    "sync.conflicts.get" => service.conflict_status(true),
+    "sync.conflicts.set" => service.set_conflict_retention(&params),
+    "sync.conflicts.restore" => service.restore_conflict(&params),
+    "sync.conflicts.delete" => service.delete_conflict(&params),
     "sync.run" => service.run_sync().await,
     "service.stop" | "sync.shutdown" => {
       service.stop().await;
@@ -645,6 +687,34 @@ mod tests {
     assert_eq!(applied["summary"]["filesDeleted"], 1);
     assert!(root.join("Imported").is_dir());
     assert!(!root.join("Notes/delete.md").exists());
+    let _ = fs::remove_dir_all(root);
+  }
+
+  #[tokio::test]
+  async fn conflict_archive_commands_are_package_owned() {
+    let root = temp_root("conflicts");
+    fs::create_dir_all(root.join(".conflit/Notes")).unwrap();
+    fs::write(root.join(".conflit/Notes/A.device-conflict-1.md"), "older").unwrap();
+    let mut service = SyncService::with_vault_dir(root.clone());
+    let status = handle(&mut service, "sync.conflicts.get", json!({})).await.unwrap();
+    assert_eq!(status["retentionDays"], 3);
+    assert_eq!(status["storedFiles"], 1);
+    let updated = handle(
+      &mut service,
+      "sync.conflicts.set",
+      json!({ "retentionDays": 12 }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated["retentionDays"], 12);
+    let deleted = handle(
+      &mut service,
+      "sync.conflicts.delete",
+      json!({ "relativePath": ".conflit/Notes/A.device-conflict-1.md" }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(deleted["storedFiles"], 0);
     let _ = fs::remove_dir_all(root);
   }
 }

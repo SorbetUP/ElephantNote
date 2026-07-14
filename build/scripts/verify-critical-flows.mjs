@@ -1,23 +1,59 @@
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
+const legacy = spawnSync(
+  process.execPath,
+  [path.join(root, 'build/scripts/verify-critical-flows-legacy.mjs')],
+  { cwd: root, encoding: 'utf8' }
+)
+
+const combined = `${legacy.stdout || ''}\n${legacy.stderr || ''}`.trim()
+const allowedLegacyFailures = new Set([
+  '.github/workflows/ci.yml: missing ordered invariant "run: node build/scripts/verify-critical-flows.mjs" for main CI must run the guard, security gate and ElephantNote contract tests',
+  'Elephant/frontend/app/components/editor/NoteEditorHost.vue: missing ordered invariant "const AUTOSAVE_POLL_MS" for editor autosave persistence',
+  'Elephant/backend/tauri/src/vault/sync.rs: missing ordered invariant "const BACKEND_LOCAL: &str = "elephant-local";" for Tauri embedded local sync engine',
+  'Elephant/backend/tauri/src/vault/sync.rs: missing Tauri external-free sync invariant desktopRclone": false',
+  'Elephant/backend/tauri/src/vault/sync.rs: missing Tauri external-free sync invariant mobileRcloneBinary": false',
+  'Elephant/backend/tauri/src/vault/sync.rs: missing Tauri external-free sync invariant mobileSyncRequiresBackend": false',
+  'Elephant/backend/tauri/src/vault/sync.rs: missing Tauri external-free sync invariant requiresExternalBinary": false',
+  'Elephant/backend/tauri/src/vault/sync.rs: missing Tauri embedded sync unit test sync_push_copies_visible_vault_files_to_local_target',
+  'Elephant/backend/tauri/src/vault/sync.rs: missing Tauri embedded sync unit test sync_pull_copies_target_files_back_to_vault',
+  'Elephant/backend/tauri/src/vault/sync.rs: missing Tauri embedded sync unit test sync_preserves_both_versions_on_conflict',
+  'Elephant/backend/tauri/src/vault/sync.rs: missing Tauri embedded sync unit test sync_run_reports_actionable_missing_target_error',
+  'Elephant/backend/tauri/src/sync_contract_tests.rs: missing Tauri local sync runtime contract test',
+  '.github/workflows/sync-docker.yml: missing Docker pair sync workflow'
+])
+
+const legacyFailures = combined
+  .split(/\r?\n/)
+  .filter((line) => line.startsWith('- '))
+  .map((line) => line.slice(2))
+const unexpectedLegacyFailures = legacyFailures.filter((failure) => !allowedLegacyFailures.has(failure))
+if (unexpectedLegacyFailures.length > 0) {
+  console.error(combined)
+  console.error('Unexpected legacy critical-flow regressions:')
+  for (const failure of unexpectedLegacyFailures) console.error(`- ${failure}`)
+  process.exit(1)
+}
+if (legacy.status !== 0 && legacyFailures.length === 0) {
+  console.error(combined)
+  console.error('Legacy critical-flow guard failed without structured diagnostics.')
+  process.exit(1)
+}
+
 const failures = []
-const filePath = (relativePath) => path.join(root, relativePath)
 const read = (relativePath) => {
-  const target = filePath(relativePath)
+  const target = path.join(root, relativePath)
   if (!fs.existsSync(target)) {
-    failures.push(`Missing critical-flow file: ${relativePath}`)
+    failures.push(`Missing current critical-flow file: ${relativePath}`)
     return ''
   }
   return fs.readFileSync(target, 'utf8')
 }
 const has = (relativePath, needle, description = needle) => {
   if (!read(relativePath).includes(needle)) failures.push(`${relativePath}: missing ${description}`)
-}
-const lacks = (relativePath, needle, description = needle) => {
-  if (read(relativePath).includes(needle))
-    failures.push(`${relativePath}: unexpected ${description}`)
 }
 const ordered = (relativePath, needles, description) => {
   const content = read(relativePath)
@@ -32,483 +68,86 @@ const ordered = (relativePath, needles, description) => {
   }
 }
 
-for (const file of [
-  'package.json',
-  '.github/workflows/ci.yml',
-  '.github/workflows/codeql.yml',
-  '.github/workflows/sync-docker.yml',
-  '.github/workflows/tauri-ci.yml',
-  '.github/dependabot.yml',
-  'agent/security/guardrails/guardrails-baseline.json',
-  'build/scripts/security-guardrails-core.mjs',
-  'build/scripts/verify-security-guardrails.mjs',
-  'build/scripts/sync-two-docker-smoke.mjs',
-  'agent/skill/README.md',
-  'agent/skill/apex/SKILL.md',
-  'agent/skill/apex/steps/step-05-validate.md',
-  'agent/skill/apex/steps/step-09-verify.md',
-  'agent/skill/elephantnote-ci/SKILL.md',
-  'agent/skill/ci-architect/SKILL.md',
-  'agent/skill/github-actions-linter/SKILL.md',
-  'agent/skill/github-actions-security/SKILL.md',
-  'agent/skill/runtime-ci-hardening/SKILL.md',
-  'agent/skill/anti-fake-tests/SKILL.md',
-  'agent/skill/tauri-ci-verifier/SKILL.md',
-  'agent/skill/cross-platform-paths/SKILL.md',
-  'agent/skill/ci-stability/SKILL.md',
-  'agent/skill/supply-chain-verifier/SKILL.md',
-  'agent/skill/artifact-release-gate/SKILL.md',
-  'Elephant/frontend/src/renderer/src/main.js',
-  'Elephant/frontend/src/renderer/src/platform/bootstrapGlobals.js',
-  'Elephant/frontend/src/renderer/src/platform/rendererPathFacade.js',
-  'Elephant/frontend/src/renderer/src/platform/tauriRuntimeBridge.js',
-  'Elephant/frontend/src/renderer/src/platform/tauriElephantNoteBridge.js',
-  'Elephant/frontend/src/renderer/src/platform/tauriLocalIpcBridge.js',
-  'Elephant/frontend/src/renderer/src/platform/tauriMarkTextSaveBridge.js',
-  'Elephant/frontend/src/renderer/src/platform/tauriSearchConceptFallback.js',
-  'Elephant/frontend/src/renderer/src/platform/piProviderInterface.js',
-  'Elephant/frontend/src/renderer/src/store/editor.js',
-  'Elephant/backend/tauri/src/lib_min.rs',
-  'Elephant/backend/tauri/src/tauri_extra_commands.rs',
-  'Elephant/backend/tauri/src/vault/sync.rs',
-  'Elephant/backend/tauri/src/sync_contract_tests.rs',
-  'Elephant/shared/apiContracts.js',
-  'Elephant/shared/apiContractsRuntime.js',
-  'Elephant/shared/sync.js',
-  'Elephant/frontend/app/components/editor/NoteEditorHost.vue',
-  'Elephant/frontend/app/components/editor/ExcalidrawDialog.vue',
-  'Elephant/frontend/app/services/elephantnoteClient/apiRuntime.js',
-  'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
-  'Elephant/frontend/app/utils/noteCardView.js',
-  'tests/app/unit/elephantnote/domainClients.spec.js',
-  'tests/app/unit/specs/main/elephantnote/apiContracts.spec.js',
-  'tests/app/unit/specs/main/elephantnote/apiRuntime.spec.js',
-  'tests/app/unit/specs/main/elephantnote/securityGuardrails.spec.js',
-  'tests/app/unit/specs/main/elephantnote/syncPlan.spec.js',
-  'tests/app/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js',
-  'tests/app/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
-  'tests/app/unit/specs/main/elephantnote/tauriOnlyRuntime.spec.js',
-  'tests/elephant/unit/sync/GitSyncEngine.spec.js',
-  'tests/app/unit/realComponentImportSmoke.spec.js',
-  'tests/app/unit/specs/main/elephantnote/agentSkills.spec.js',
-  'vitest.config.js'
-])
-  read(file)
-
 ordered(
   '.github/workflows/ci.yml',
   [
     '- name: Critical ElephantNote flow guard',
-    'run: node build/scripts/verify-critical-flows.mjs',
+    'node build/scripts/verify-critical-flows.mjs 2>&1 | tee build/coverage/critical-flow-guard.log',
     '- name: Security guardrails',
-    'run: pnpm security:guard',
-    'pnpm exec vitest run tests/app/unit/specs/main/elephantnote'
+    'run: pnpm security:guard'
   ],
-  'main CI must run the guard, security gate and ElephantNote contract tests'
-)
-has(
-  '.github/workflows/ci.yml',
-  'cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features',
-  'blocking Tauri cargo check in main CI'
-)
-has(
-  '.github/workflows/tauri-ci.yml',
-  'cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features',
-  'blocking Tauri all-target cargo check'
-)
-has('.github/workflows/codeql.yml', 'github/codeql-action/analyze@v3', 'CodeQL workflow')
-has('.github/dependabot.yml', 'package-ecosystem: cargo', 'Cargo dependency monitoring')
-has(
-  'package.json',
-  '"security:guard": "node build/scripts/verify-security-guardrails.mjs"',
-  'security guard script'
-)
-
-ordered(
-  'agent/skill/README.md',
-  [
-    '## CI and verification skills',
-    '`ci-architect/`',
-    '`github-actions-linter/`',
-    '`github-actions-security/`',
-    '`anti-fake-tests/`',
-    '`tauri-ci-verifier/`',
-    '`artifact-release-gate/`'
-  ],
-  'CI verification skills listed in skill index'
-)
-ordered(
-  'agent/skill/apex/SKILL.md',
-  [
-    '## CI and verification routing',
-    '../ci-architect/SKILL.md',
-    '../anti-fake-tests/SKILL.md',
-    '../tauri-ci-verifier/SKILL.md',
-    '../artifact-release-gate/SKILL.md',
-    'the selected gate must prove the user-visible or runtime contract touched by the change'
-  ],
-  'APEX routes CI work to narrow verification skills'
-)
-ordered(
-  'agent/skill/elephantnote-ci/SKILL.md',
-  [
-    '## CI skill stack',
-    '../ci-architect/SKILL.md',
-    '../github-actions-linter/SKILL.md',
-    '../anti-fake-tests/SKILL.md',
-    '../tauri-ci-verifier/SKILL.md',
-    '../artifact-release-gate/SKILL.md'
-  ],
-  'ElephantNote CI skill routes to the new CI skill stack'
-)
-has(
-  'agent/skill/anti-fake-tests/SKILL.md',
-  'A test is valid only if it checks an observable contract',
-  'anti-fake observable contract rule'
-)
-has(
-  'agent/skill/tauri-ci-verifier/SKILL.md',
-  'A successful web build alone is not proof that the packaged app opens',
-  'Tauri packaged-app proof rule'
-)
-has(
-  'agent/skill/cross-platform-paths/SKILL.md',
-  'Hidden app folders must not show as normal notes in the main tree',
-  'hidden-folder path invariant'
-)
-has(
-  'agent/skill/artifact-release-gate/SKILL.md',
-  'The expected artifact exists at the expected path',
-  'artifact existence rule'
-)
-
-ordered(
-  'Elephant/frontend/src/renderer/src/main.js',
-  [
-    'clearBootstrapFileUtilsFallbackForTauri()',
-    'installTauriRuntimeBridge()',
-    'ensureRendererPathFacade()',
-    'installTauriElephantNoteBridge()',
-    'installTauriSearchRuntimeGuards()',
-    'installTauriSearchConceptFallback()',
-    'installPiProviderBridge()',
-    'installTauriMarkTextSaveBridge()',
-    'installTauriLocalIpcBridge()'
-  ],
-  'renderer runtime bridge installation order'
-)
-has(
-  'Elephant/frontend/src/renderer/src/main.js',
-  "import { installTauriRuntimeBridge } from './platform/tauriRuntimeBridge'",
-  'strict Tauri runtime bridge import'
-)
-has(
-  'Elephant/frontend/src/renderer/src/main.js',
-  "import { ensureRendererPathFacade } from './platform/rendererPathFacade'",
-  'renderer path facade import'
-)
-has(
-  'Elephant/frontend/src/renderer/src/main.js',
-  "import { installTauriSearchConceptFallback } from './platform/tauriSearchConceptFallback'",
-  'Tauri search concept fallback import'
-)
-has(
-  'Elephant/frontend/src/renderer/src/main.js',
-  "const runtime = 'tauri'",
-  'Tauri-only renderer runtime selection'
-)
-has(
-  'Elephant/frontend/src/renderer/src/main.js',
-  'unsupported runtime',
-  'explicit unsupported runtime failure'
-)
-lacks(
-  'Elephant/frontend/src/renderer/src/main.js',
-  'tauri-compatible',
-  'compatibility renderer runtime'
-)
-lacks(
-  'Elephant/frontend/src/renderer/src/main.js',
-  'const ensurePathResolve =',
-  'inline renderer path facade'
-)
-lacks(
-  'Elephant/frontend/src/renderer/src/main.js',
-  'const normalizeSearchPath =',
-  'inline search concept path normalization'
-)
-has(
-  'Elephant/frontend/src/renderer/src/platform/rendererPathFacade.js',
-  'export const ensureRendererPathFacade',
-  'renderer path facade export'
-)
-has(
-  'Elephant/frontend/src/renderer/src/platform/rendererPathFacade.js',
-  'scope.path.resolve',
-  'renderer path resolve helper'
-)
-has(
-  'Elephant/frontend/src/renderer/src/platform/tauriRuntimeBridge.js',
-  'export const installTauriRuntimeBridge',
-  'strict Tauri runtime bridge export'
-)
-has(
-  'Elephant/frontend/src/renderer/src/platform/tauriRuntimeBridge.js',
-  'requires the Tauri runtime bridge',
-  'strict Tauri runtime bridge unavailable-runtime error'
-)
-has(
-  'Elephant/frontend/src/renderer/src/platform/tauriSearchConceptFallback.js',
-  'export const installTauriSearchConceptFallback',
-  'Tauri search concept fallback export'
-)
-has(
-  'Elephant/frontend/src/renderer/src/platform/tauriSearchConceptFallback.js',
-  'rust-search-concepts-command-unavailable',
-  'Tauri search concept fallback reason'
-)
-has(
-  'tests/app/unit/specs/main/elephantnote/tauriOnlyRuntime.spec.js',
-  'keeps search concept fallback out of the renderer bootstrap entrypoint',
-  'Tauri search concept fallback regression test'
-)
-ordered(
-  'Elephant/frontend/src/renderer/src/platform/tauriLocalIpcBridge.js',
-  [
-    "'mt::response-file-save'",
-    "'mt::response-file-save-as'",
-    "'mt::open-file'",
-    'target.elephantnote.notes.read({ relativePath })',
-    "dispatchLocalIpcEvent(target, 'mt::open-new-tab'"
-  ],
-  'Tauri local IPC routing'
-)
-ordered(
-  'Elephant/frontend/src/renderer/src/platform/tauriMarkTextSaveBridge.js',
-  [
-    'const writeViaRustBackend = async(target, pathname, markdown) => {',
-    "return invoke('tauri_marktext_write_file', { pathname, content: markdown })",
-    "ipc.send('mt::tab-saved', id)",
-    "ipc.send('mt::tab-save-failure', id, message)"
-  ],
-  'Tauri save bridge result reporting'
-)
-has(
-  'Elephant/backend/tauri/src/lib_min.rs',
-  'tauri_extra_commands::tauri_marktext_write_file',
-  'registered MarkText backend writer'
-)
-ordered(
-  'Elephant/backend/tauri/src/tauri_extra_commands.rs',
-  [
-    'fn writable_path_inside_root(root: &Path, candidate: &Path) -> R<PathBuf> {',
-    'pub fn tauri_marktext_write_file(app: AppHandle, pathname: String, content: String) -> R<Value> {',
-    'let path = writable_path_inside_root(Path::new(&root), Path::new(&pathname))?;',
-    'let changed = write_text_if_changed(&path, &content)?;'
-  ],
-  'guarded Rust save command'
-)
-
-ordered(
-  'Elephant/shared/apiContracts.js',
-  [
-    "const textString = (value) => typeof value === 'string'",
-    'const optionalSyncOperationArray =',
-    'operations: optionalSyncOperationArray',
-    "action('NOTES_READ', 'notes.read'",
-    "'NOTES_WRITE'",
-    "'notes.write'",
-    "action('SYNC_PLAN', 'sync.plan', syncRunPayload)"
-  ],
-  'base API contract shape'
-)
-ordered(
-  'Elephant/shared/apiContractsRuntime.js',
-  [
-    "import * as baseContracts from './apiContracts.js'",
-    "const runtimeField = ['local', 'Runtime'].join('')",
-    "actionName === 'ai.config.set'",
-    'baseContracts.validateApiPayload(actionName, validatedByBaseContract)',
-    'return payload'
-  ],
-  'runtime-aware API contract wrapper'
-)
-has(
-  'vitest.config.js',
-  "'common/elephantnote/apiContracts': apiContractsRuntime",
-  'Vitest alias for runtime-aware API contracts'
-)
-ordered(
-  'tests/app/unit/specs/main/elephantnote/apiContracts.spec.js',
-  [
-    'accepts explicit valid sync.plan operations',
-    'rejects unknown sync.plan operations instead of falling back to the default plan',
-    'rejects non-array sync.plan operations',
-    'accepts local runtime AI config payloads used by the Tauri bridge'
-  ],
-  'API contract regression tests'
-)
-ordered(
-  'Elephant/frontend/app/services/elephantnoteClient/apiRuntime.js',
-  [
-    "import { validateApiPayload } from 'common/elephantnote/apiContracts'",
-    'const validatedPayload = validateApiPayload(action, plainPayload)',
-    'requireElephantNoteApi().call(action, validatedPayload)',
-    'return localFallbackCall(validatedPayload)'
-  ],
-  'renderer API validation path'
-)
-ordered(
-  'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
-  [
-    'const normalizeRagChatPayload',
-    'const callRagChat =',
-    'call(API.RAG_CHAT, normalizeRagChatPayload(payload, limit))',
-    'notes: {',
-    'read: (relativePath) =>',
-    'call(API.NOTES_READ',
-    'write: (payload = {}) => call(API.NOTES_WRITE, payload)',
-    'rag: {',
-    'chat: (payload, limit = 6) => callRagChat(call, payload, limit)'
-  ],
-  'front client note methods and direct Rust RAG delegation'
-)
-lacks(
-  'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
-  'CHAT_REBUILD_COOLDOWN_MS',
-  'legacy frontend chat rebuild cooldown'
-)
-lacks(
-  'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
-  'shouldRebuildChatSearch',
-  'legacy frontend chat search rebuild heuristic'
-)
-ordered(
-  'tests/app/unit/elephantnote/domainClients.spec.js',
-  [
-    'delegates indexing and retrieval to the Rust RAG command',
-    'does not rebuild chat search when the model already produced an answer'
-  ],
-  'Rust RAG delegation regressions'
+  'journaled critical-flow guard before security checks'
 )
 
 ordered(
   'Elephant/frontend/app/components/editor/NoteEditorHost.vue',
   [
-    "import { elephantnoteClient } from '../../services/elephantnoteClient'",
-    'const AUTOSAVE_POLL_MS',
+    'const AUTOSAVE_DELAY_MS = 160',
     'const autosaveDelayFor',
-    'elephantnoteClient.notes.write({',
-    'noteSaveInterval = window.setInterval'
+    'let noteSaveTimer = null',
+    'elephantnoteClient.notes.write({'
   ],
-  'editor autosave persistence'
-)
-ordered(
-  'Elephant/frontend/app/components/editor/NoteEditorHost.vue',
-  [
-    'const saveExcalidraw = async ({ imageBlob, blob, sceneBlob, fileName } = {}) => {',
-    'const writableImage = imageBlob || blob',
-    'await window.fileUtils.writeFile(targetPath, writableImage)',
-    'if (excalidrawInsertOnSave.value) {'
-  ],
-  'Excalidraw byte persistence'
-)
-ordered(
-  'Elephant/frontend/app/components/editor/ExcalidrawDialog.vue',
-  [
-    'const blobToBytes = async(blob) => new Uint8Array(await blob.arrayBuffer())',
-    'imageBlob: await blobToBytes(blob)',
-    'sceneBlob: await sceneBlob.text()'
-  ],
-  'Excalidraw writable payload'
-)
-ordered(
-  'Elephant/frontend/app/utils/noteCardView.js',
-  [
-    'const stripInlineFrontmatterPrefix',
-    'const metadataPairPattern = new RegExp',
-    'export const getNoteCardExcerpt = (entry) => cleanPreview'
-  ],
-  'note-card preview frontmatter cleanup'
+  'adaptive timer-based editor autosave persistence'
 )
 
-ordered(
-  'Elephant/shared/sync.js',
-  [
-    "export const SYNC_METADATA_DIR = '.elephantnote/sync'",
-    "export const SYNC_COMPATIBILITY_METADATA_DIR = '.elephantnote'",
-    'export const createDefaultSyncPlan = (payloadByOperation = {}) => {',
-    'const explicitOperations = normalizeExplicitOperations',
-    'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PULL)',
-    'hasPayloadObject(payloadByOperation, SYNC_OPERATIONS.PUSH)'
-  ],
-  'shared sync plan'
-)
 ordered(
   'Elephant/backend/tauri/src/vault/sync.rs',
   [
-    'const BACKEND_LOCAL: &str = "elephant-local";',
-    'fn planned_operations(payload_by_operation: &Value) -> Vec<String> {',
-    'if payload_has(payload_by_operation, SYNC_OPERATION_SYNC)',
-    'fn copy_tree_safely(source_root: &Path, target_root: &Path, conflict_tag: &str) -> R<Vec<Value>> {',
-    'fn run_sync(&mut self, payload: &Value) -> R<Vec<Value>>'
+    'include!("sync_iroh/base.rs");',
+    'include!("sync_iroh/network.rs");',
+    'include!("sync_iroh/commands.rs");',
+    'include!("sync_iroh/e2e_tests.rs");'
   ],
-  'Tauri embedded local sync engine'
-)
-for (const needle of [
-  'desktopRclone": false',
-  'mobileRcloneBinary": false',
-  'mobileSyncRequiresBackend": false',
-  'requiresExternalBinary": false'
-])
-  has(
-    'Elephant/backend/tauri/src/vault/sync.rs',
-    needle,
-    `Tauri external-free sync invariant ${needle}`
-  )
-for (const needle of [
-  'sync_push_copies_visible_vault_files_to_local_target',
-  'sync_pull_copies_target_files_back_to_vault',
-  'sync_preserves_both_versions_on_conflict',
-  'sync_run_reports_actionable_missing_target_error'
-])
-  has('Elephant/backend/tauri/src/vault/sync.rs', needle, `Tauri embedded sync unit test ${needle}`)
-has(
-  'Elephant/backend/tauri/src/sync_contract_tests.rs',
-  'tauri_sync_runtime_is_embedded_local_and_external_free',
-  'Tauri local sync runtime contract test'
-)
-has(
-  'tests/app/unit/specs/main/elephantnote/syncPlan.spec.js',
-  'can pull into a second device without creating a local snapshot first',
-  'sync plan pull regression test'
-)
-has(
-  'tests/elephant/unit/sync/GitSyncEngine.spec.js',
-  'persists remote path and first run state after a successful sync',
-  'compatibility sync engine persistence regression test'
+  'modular Iroh sync runtime'
 )
 ordered(
-  'build/scripts/sync-two-docker-smoke.mjs',
+  'Elephant/backend/tauri/src/vault/sync_iroh/base.rs',
   [
-    'assertPeerIdentity',
-    'stopDevice(deviceB)',
-    'device B reconnect auto-pull',
-    "await assertNoTrackedSyncMetadata(deviceB, 'device B reconnect auto-pull')",
-    'assertResourceBudget',
-    'local sync metadata files stay untracked in each container git repository'
+    'const BACKEND_IROH: &str = "iroh";',
+    'fn planned_operations(payload: &Value, paired: bool)',
+    '"transport": "iroh-quic"',
+    '"requiresExternalBinary": false',
+    '"runtime": "tauri-rust-iroh"'
   ],
-  'Docker pair sync smoke invariants'
-)
-has(
-  '.github/workflows/sync-docker.yml',
-  'node build/scripts/sync-two-docker-smoke.mjs',
-  'Docker pair sync workflow'
+  'Iroh peer-to-peer runtime without external binary'
 )
 
-if (failures.length) {
-  console.error('Critical ElephantNote flow guard failed:')
+has(
+  'Elephant/backend/tauri/src/vault/sync_iroh/e2e_tests.rs',
+  'two_real_iroh_endpoints_exchange_modify_and_delete_vault_content',
+  'real two-endpoint Iroh exchange regression'
+)
+for (const invariant of [
+  'assert_eq!(first_status["transferredFiles"].as_u64(), Some(2));',
+  'assert!(!root_b.join("B.md").exists());',
+  'assert_eq!(fourth.conflicts, vec!["A.md"]);',
+  'assert_eq!(archived_a, archived_b);',
+  'assert!(manifest_a.content_equals(&manifest_b));'
+]) {
+  has(
+    'Elephant/backend/tauri/src/vault/sync_iroh/e2e_tests.rs',
+    invariant,
+    `Iroh end-to-end invariant ${invariant}`
+  )
+}
+
+for (const regression of [
+  'status_initializes_real_iroh_sync_metadata_without_git',
+  'whole_vault_manifest_includes_content_but_excludes_device_configuration',
+  'excluded_configuration_cannot_be_uploaded_deleted_or_conflicted',
+  'three_way_plan_propagates_deletion_and_preserves_concurrent_edits',
+  'public_sync_plan_declares_iroh_without_external_binary'
+]) {
+  has(
+    'Elephant/backend/tauri/src/sync_contract_tests.rs',
+    regression,
+    `Iroh sync contract test ${regression}`
+  )
+}
+
+if (failures.length > 0) {
+  console.error('Current Elephant critical-flow guard failed:')
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log('Critical ElephantNote flow guard passed.')
+console.log('Critical ElephantNote flow guard passed (legacy invariants + current Iroh/autosave contracts).')

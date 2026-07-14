@@ -1,4 +1,4 @@
-use iroh::Connection;
+use iroh::endpoint::Connection;
 use std::{
   fs,
   io::ErrorKind,

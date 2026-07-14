@@ -48,6 +48,17 @@ jobs:
           PY
           bash /tmp/import-knowledge-addon.sh
 
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('addons/official/knowledge/native/Cargo.toml')
+          text = path.read_text()
+          old = 'tokio = { version = "1", features = ["io-util", "macros", "rt-multi-thread"] }'
+          new = 'tokio = { version = "1", features = ["io-std", "io-util", "macros", "rt-multi-thread"] }'
+          if old not in text:
+              raise SystemExit('Knowledge Tokio dependency changed unexpectedly')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Format and validate Knowledge Rust crates
         shell: bash
         env:

@@ -29,7 +29,8 @@ const props = defineProps({
   mode: { type: String, default: 'rust' },
   factory: { type: Function, default: null },
   onFileDrop: { type: Function, default: null },
-  onUriDrop: { type: Function, default: null }
+  onUriDrop: { type: Function, default: null },
+  onImageClick: { type: Function, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'ready', 'change', 'error'])
@@ -102,7 +103,8 @@ const mountRuntime = async (markdown) => {
         captureInput: true,
         applyPatches: scheduleMarkdownSync,
         onFileDrop: props.onFileDrop,
-        onUriDrop: props.onUriDrop
+        onUriDrop: props.onUriDrop,
+        onImageClick: props.onImageClick
       },
       reportError
     )
@@ -140,6 +142,13 @@ watch(
   () => props.onUriDrop,
   (callback) => {
     if (runtime?.inputController) runtime.inputController.onUriDrop = callback || null
+  }
+)
+
+watch(
+  () => props.onImageClick,
+  (callback) => {
+    if (runtime?.inputController) runtime.inputController.onImageClick = callback || null
   }
 )
 

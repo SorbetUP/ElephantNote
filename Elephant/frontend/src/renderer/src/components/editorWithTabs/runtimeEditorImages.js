@@ -11,9 +11,10 @@ export const createRuntimeImageHandlers = ({
   preferencesStore,
   sourceCode,
   editorStore,
-  dispatch
+  dispatch,
+  storeImage = null
 }) => {
-  const imageAction = createEditorImageAction({
+  const imageAction = storeImage || createEditorImageAction({
     getCurrentFile: () => currentFile.value || {},
     getProjectTree: () => projectTree.value,
     preferencesStore,

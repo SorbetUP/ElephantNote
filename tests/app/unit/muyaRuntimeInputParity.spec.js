@@ -4,8 +4,8 @@ import { JSDOM } from 'jsdom'
 import { createMuyaFullEditorRuntime, domToMarkdown, readMuyaRuntimeMode } from '../../../Elephant/frontend/src/renderer/src/muya/index.js'
 
 describe('Muya runtime input parity', () => {
-  it('uses shadow mode by default in Tauri while the runtime is stabilizing', () => {
-    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('shadow')
+  it('uses the Rust editor by default in Tauri', () => {
+    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('rust')
   })
 
   it('renders empty documents as writable content', () => {

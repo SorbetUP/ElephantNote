@@ -57,7 +57,7 @@ describe('physical Sync package ownership', () => {
     expect(invite).toContain('pub fn verify_pending_invite')
     expect(pairing).toContain('pub struct SyncConfig')
     expect(pairing).toContain('static PAIRING_STATE_LOCK: Mutex<()>')
-    expect(pairing).toContain('fn lock_pairing_state()')
+    expect(pairing).toContain('PAIRING_STATE_LOCK.lock()')
     expect(pairing).toContain('pub fn create_pending_invite')
     expect(pairing).toContain('pub fn consume_pair_request')
     expect(pairing).toContain('pub fn register_accepted_peer')
@@ -96,25 +96,34 @@ describe('physical Sync package ownership', () => {
     const bridge = read('addons/official/sync/main.service.js')
     const manifest = read('addons/official/sync/manifest.json')
 
-    expect(bridge).toContain("'iroh_sync_status'")
-    expect(bridge).toContain("'iroh_sync_create_invite'")
-    expect(bridge).toContain("'iroh_sync_accept_invite'")
-    expect(bridge).toContain("'iroh_sync_run'")
-    expect(bridge).toContain("'iroh_sync_shutdown'")
-    expect(bridge).toContain("'iroh_sync_conflict_settings_get'")
-    expect(bridge).toContain("'iroh_sync_conflict_settings_set'")
-    expect(bridge).toContain("'iroh_sync_conflict_restore'")
-    expect(bridge).toContain("'iroh_sync_conflict_delete'")
-    expect(bridge).toContain("this.callNativeService('sync.create-invite'")
-    expect(bridge).toContain("this.callNativeService('sync.accept-invite'")
-    expect(bridge).toContain("this.callNativeService('sync.run'")
-    expect(bridge).toContain("this.callNativeService('sync.scan'")
-    expect(bridge).toContain("this.callNativeService('sync.plan'")
-    expect(bridge).toContain("this.callNativeService('sync.apply-local'")
-    expect(bridge).toContain("this.callNativeService('sync.conflicts.get'")
-    expect(bridge).toContain("this.callNativeService('sync.conflicts.set'")
-    expect(bridge).toContain("this.callNativeService('sync.conflicts.restore'")
-    expect(bridge).toContain("this.callNativeService('sync.conflicts.delete'")
+    for (const command of [
+      'iroh_sync_status',
+      'iroh_sync_create_invite',
+      'iroh_sync_accept_invite',
+      'iroh_sync_run',
+      'iroh_sync_shutdown',
+      'iroh_sync_conflict_settings_get',
+      'iroh_sync_conflict_settings_set',
+      'iroh_sync_conflict_restore',
+      'iroh_sync_conflict_delete'
+    ]) expect(bridge).toContain(`'${command}'`)
+
+    for (const method of [
+      'sync.create-invite',
+      'sync.accept-invite',
+      'sync.run',
+      'sync.scan',
+      'sync.plan',
+      'sync.apply-local',
+      'sync.conflicts.get',
+      'sync.conflicts.peek',
+      'sync.conflicts.set',
+      'sync.conflicts.restore',
+      'sync.conflicts.delete'
+    ]) expect(bridge).toContain(`'${method}'`)
+
+    expect(bridge).toContain("const SERVICE_RESOURCE = 'sync.native-service'")
+    expect(bridge).toContain('api.resources.provide(SERVICE_RESOURCE')
     expect(bridge).toContain("'file-streams'")
     expect(bridge).toContain("'sync-sessions'")
     expect(bridge).toContain("'conflict-archive'")

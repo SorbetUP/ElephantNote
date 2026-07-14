@@ -1,5 +1,4 @@
 const getBridge = () => globalThis.window?.elephantnote
-const getTauriInvoke = () => globalThis.window?.__TAURI__?.core?.invoke
 const normalizePayload = (payload = {}) => (payload && typeof payload === 'object' ? payload : {})
 const directoryListPayload = (payload = '') => {
   if (typeof payload === 'string') return payload
@@ -14,14 +13,8 @@ const directoryListPayload = (payload = '') => {
   return normalizedPayload
 }
 
-const callTauriSyncPlan = (payload = {}) => {
-  const normalizedPayload = normalizePayload(payload)
-  const invoke = getTauriInvoke()
-  if (typeof invoke === 'function') {
-    return invoke('tauri_sync_plan', { payloadByOperation: normalizedPayload })
-  }
-  return getBridge()?.sync?.plan?.(normalizedPayload)
-}
+const callSyncPlan = (payload = {}) =>
+  getBridge()?.sync?.plan?.(normalizePayload(payload))
 
 export const COMPATIBILITY_CALLS = {
   'vaults.get': () => getBridge()?.getVaults?.(),
@@ -108,7 +101,7 @@ export const COMPATIBILITY_CALLS = {
   'models.refreshIndex': () => getBridge()?.models?.refreshIndex?.(),
   'ocr.extract': (payload) => getBridge()?.ocr?.extract?.(payload),
   'sync.status': () => getBridge()?.sync?.status?.(),
-  'sync.plan': (payload) => callTauriSyncPlan(payload),
+  'sync.plan': (payload) => callSyncPlan(payload),
   'sync.enqueue': ({ operation, payload }) => getBridge()?.sync?.enqueue?.(operation, payload),
   'sync.run': (payload) => getBridge()?.sync?.run?.(payload)
 }

@@ -16,6 +16,10 @@ describe('Search physical package ownership', () => {
     expect(source).toContain("tauri_addons_notes_read")
     expect(source).toContain("api.resources.provide(PROVIDER_RESOURCE")
     expect(source).toContain("engine: 'package-owned-bm25'")
+    expect(source).toContain('query: (text, options) => this.query(text, options)')
+    expect(source).toContain('rebuild: () => this.rebuild()')
+    expect(source).toContain('clear: () => this.clear()')
+    expect(source).toContain('status: () => this.status()')
   })
 
   it('does not call the legacy global Search actions', () => {
@@ -24,6 +28,23 @@ describe('Search physical package ownership', () => {
       expect(source).not.toContain(action)
     }
     expect(source).not.toContain('elephantnote.api')
+  })
+
+  it('keeps the parallel inspection index physically absent from the core shell', () => {
+    const core = read('Elephant/backend/tauri/src/lib_min.rs')
+    const extras = read('Elephant/backend/tauri/src/tauri_extra_commands.rs')
+    const compatibility = read('Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js')
+
+    expect(core).not.toContain('tauri_extra_commands::tauri_search_inspect')
+    expect(core).not.toContain('tauri_extra_commands::tauri_search_rebuild')
+    expect(extras).not.toContain('pub fn tauri_search_inspect')
+    expect(extras).not.toContain('pub fn tauri_search_rebuild')
+    expect(extras).not.toContain('fn build_search_index')
+    expect(extras).not.toContain('fn scan_markdown_notes')
+    expect(extras).not.toContain('fn extract_wikilinks')
+    expect(extras).not.toContain('SEARCH_INDEX_FILE')
+    expect(compatibility).toContain("'search.inspect': () => getBridge()?.search?.inspect?.()")
+    expect(compatibility).toContain("'search.rebuild': () => getBridge()?.search?.rebuild?.()")
   })
 
   it('keeps generic note access bounded and permission checked', () => {

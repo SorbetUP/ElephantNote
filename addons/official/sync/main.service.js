@@ -7,7 +7,11 @@ const NATIVE_COMMANDS = new Set([
   'iroh_sync_create_invite',
   'iroh_sync_accept_invite',
   'iroh_sync_run',
-  'iroh_sync_shutdown'
+  'iroh_sync_shutdown',
+  'iroh_sync_conflict_settings_get',
+  'iroh_sync_conflict_settings_set',
+  'iroh_sync_conflict_restore',
+  'iroh_sync_conflict_delete'
 ])
 
 export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
@@ -75,6 +79,22 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
     return this.callNativeService('sync.apply-local', { plan }, { timeoutMs: 120_000 })
   }
 
+  nativeConflictStatus(cleanup = true) {
+    return this.callNativeService(cleanup ? 'sync.conflicts.get' : 'sync.conflicts.peek')
+  }
+
+  setNativeConflictRetention(retentionDays) {
+    return this.callNativeService('sync.conflicts.set', { retentionDays })
+  }
+
+  restoreNativeConflict(relativePath) {
+    return this.callNativeService('sync.conflicts.restore', { relativePath })
+  }
+
+  deleteNativeConflict(relativePath) {
+    return this.callNativeService('sync.conflicts.delete', { relativePath })
+  }
+
   async invoke(command, payload = {}) {
     if (!NATIVE_COMMANDS.has(command)) return await super.invoke(command, payload)
     if (command === 'iroh_sync_status') return await this.nativeStatus()
@@ -85,6 +105,16 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
     if (command === 'iroh_sync_accept_invite') return await this.acceptNativeInvite(payload)
     if (command === 'iroh_sync_run') return await this.runNativeSync()
     if (command === 'iroh_sync_shutdown') return await this.stopNativeService()
+    if (command === 'iroh_sync_conflict_settings_get') return await this.nativeConflictStatus(true)
+    if (command === 'iroh_sync_conflict_settings_set') {
+      return await this.setNativeConflictRetention(payload.conflictRetentionDays ?? payload.retentionDays)
+    }
+    if (command === 'iroh_sync_conflict_restore') {
+      return await this.restoreNativeConflict(payload.relativePath ?? payload.path)
+    }
+    if (command === 'iroh_sync_conflict_delete') {
+      return await this.deleteNativeConflict(payload.relativePath ?? payload.path)
+    }
     return await super.invoke(command, payload)
   }
 
@@ -102,6 +132,12 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
       scan: () => this.scanNativeVault(),
       plan: (params = {}) => this.buildNativePlan(params),
       applyLocal: (plan) => this.applyNativeLocalPlan(plan),
+      conflicts: Object.freeze({
+        status: (cleanup = true) => this.nativeConflictStatus(cleanup),
+        setRetention: (retentionDays) => this.setNativeConflictRetention(retentionDays),
+        restore: (relativePath) => this.restoreNativeConflict(relativePath),
+        delete: (relativePath) => this.deleteNativeConflict(relativePath)
+      }),
       stop: () => this.stopNativeService(),
       capabilities: Object.freeze([
         'endpoint',
@@ -112,7 +148,8 @@ export default class ElephantSyncServiceAddon extends ElephantSyncAddonBase {
         'plan',
         'local-operations',
         'file-streams',
-        'sync-sessions'
+        'sync-sessions',
+        'conflict-archive'
       ])
     }))
     api.app.emit('elephantnote:sync-native-service-ready', { started, status })

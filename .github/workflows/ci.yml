@@ -56,7 +56,11 @@ jobs:
           test "$lines" -ge 10000
 
       - name: Critical ElephantNote flow guard
-        run: node build/scripts/verify-critical-flows.mjs
+        shell: bash
+        run: |
+          mkdir -p build/coverage
+          set -o pipefail
+          node build/scripts/verify-critical-flows.mjs 2>&1 | tee build/coverage/critical-flow-guard.log
 
       - name: Security guardrails
         run: pnpm security:guard

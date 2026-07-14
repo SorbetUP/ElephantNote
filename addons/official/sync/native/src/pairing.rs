@@ -1,11 +1,13 @@
 use crate::{
-  invite::{create_pending_invite, purge_expired_invites, validate_pair_request},
-  protocol::{EndpointAddr, PairAccepted, PairRequest},
+  invite::{token_hash, NewInvite, PairingInvite, PendingInvite},
+  protocol::{PairAccepted, PairRequest},
 };
+use iroh::{EndpointAddr, SecretKey};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
   fs,
-  io::Write,
+  io::{ErrorKind, Write},
   path::{Path, PathBuf},
   sync::Mutex,
   time::{SystemTime, UNIX_EPOCH},
@@ -13,7 +15,6 @@ use std::{
 
 const SYNC_DIR: &str = ".elephantnote/sync";
 const CONFIG_FILE: &str = "config.json";
-const PEERS_FILE: &str = "peers.json";
 
 static PAIRING_STATE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -27,26 +28,38 @@ pub struct SyncConfig {
   #[serde(default)]
   pub endpoint_id: String,
   #[serde(default)]
-  pub pending_invites: Vec<crate::invite::PendingInvite>,
+  pub pending_invites: Vec<PendingInvite>,
+  #[serde(default)]
+  pub peers: Vec<PeerConfig>,
+  #[serde(default)]
+  pub first_run_done: bool,
+  #[serde(default)]
+  pub updated_at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PeerConfig {
   pub endpoint_id: String,
-  pub endpoint_addr: EndpointAddr,
-  pub device_name: String,
+  #[serde(default)]
+  pub endpoint_addr: Option<EndpointAddr>,
+  #[serde(default, alias = "deviceName")]
+  pub name: String,
+  #[serde(default)]
+  pub folder_id: String,
   #[serde(default)]
   pub verified: bool,
   #[serde(default)]
-  pub paired_at: String,
+  pub paired_at: u64,
+  #[serde(default)]
+  pub last_seen_at: u64,
 }
 
-fn timestamp() -> String {
+pub fn now() -> u64 {
   SystemTime::now()
     .duration_since(UNIX_EPOCH)
-    .map(|duration| duration.as_secs().to_string())
-    .unwrap_or_else(|_| "0".to_string())
+    .map(|duration| duration.as_secs())
+    .unwrap_or_default()
 }
 
 fn sync_dir(root: &Path) -> PathBuf {
@@ -57,32 +70,53 @@ fn config_path(root: &Path) -> PathBuf {
   sync_dir(root).join(CONFIG_FILE)
 }
 
-fn peers_path(root: &Path) -> PathBuf {
-  sync_dir(root).join(PEERS_FILE)
+fn load_config(root: &Path) -> Result<Option<SyncConfig>, String> {
+  match fs::read_to_string(config_path(root)) {
+    Ok(raw) => serde_json::from_str(&raw)
+      .map(Some)
+      .map_err(|error| format!("Invalid Sync configuration: {error}")),
+    Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+    Err(error) => Err(error.to_string()),
+  }
+}
+
+pub fn read_config(root: &Path) -> Option<SyncConfig> {
+  load_config(root).ok().flatten()
 }
 
 fn write_json_atomic(path: &Path, value: &impl Serialize) -> Result<(), String> {
-  let parent = path.parent().ok_or_else(|| "Sync configuration path has no parent".to_string())?;
+  let parent = path
+    .parent()
+    .ok_or_else(|| "Sync configuration path has no parent".to_string())?;
   fs::create_dir_all(parent).map_err(|error| error.to_string())?;
   let bytes = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
-  let temporary = path.with_extension(format!("json.{}.tmp", std::process::id()));
+  let temporary = path.with_file_name(format!(
+    ".{}.{}-{}.tmp",
+    path.file_name().and_then(|value| value.to_str()).unwrap_or(CONFIG_FILE),
+    std::process::id(),
+    SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .map(|duration| duration.as_nanos())
+      .unwrap_or_default()
+  ));
   let mut file = fs::OpenOptions::new()
     .write(true)
-    .create(true)
-    .truncate(true)
+    .create_new(true)
     .open(&temporary)
     .map_err(|error| error.to_string())?;
   file.write_all(&bytes).map_err(|error| error.to_string())?;
   file.sync_all().map_err(|error| error.to_string())?;
   drop(file);
-  fs::rename(&temporary, path).map_err(|error| error.to_string())
-}
 
-pub fn read_config(root: &Path) -> Result<SyncConfig, String> {
-  match fs::read_to_string(config_path(root)) {
-    Ok(raw) => serde_json::from_str(&raw).map_err(|error| error.to_string()),
-    Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(SyncConfig::default()),
-    Err(error) => Err(error.to_string()),
+  if path.exists() {
+    fs::remove_file(path).map_err(|error| error.to_string())?;
+  }
+  match fs::rename(&temporary, path) {
+    Ok(()) => Ok(()),
+    Err(error) => {
+      let _ = fs::remove_file(&temporary);
+      Err(error.to_string())
+    }
   }
 }
 
@@ -90,69 +124,85 @@ pub fn write_config(root: &Path, config: &SyncConfig) -> Result<(), String> {
   write_json_atomic(&config_path(root), config)
 }
 
-pub fn read_peers(root: &Path) -> Result<Vec<PeerConfig>, String> {
-  match fs::read_to_string(peers_path(root)) {
-    Ok(raw) => serde_json::from_str(&raw).map_err(|error| error.to_string()),
-    Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-    Err(error) => Err(error.to_string()),
-  }
+fn new_folder_id() -> String {
+  format!("folder-{}", SecretKey::generate().public())
 }
 
-pub fn write_peers(root: &Path, peers: &[PeerConfig]) -> Result<(), String> {
-  write_json_atomic(&peers_path(root), &peers)
+fn default_folder_label(root: &Path) -> String {
+  root
+    .file_name()
+    .and_then(|value| value.to_str())
+    .filter(|value| !value.trim().is_empty())
+    .unwrap_or("Elephant vault")
+    .to_string()
 }
 
-pub fn ensure_config(root: &Path, endpoint_id: &str) -> Result<SyncConfig, String> {
-  let _guard = PAIRING_STATE_LOCK.lock().map_err(|_| "Sync pairing state lock is poisoned".to_string())?;
-  let mut config = read_config(root)?;
-  purge_expired_invites(&mut config.pending_invites);
+fn initialized_config(root: &Path, endpoint_id: &str) -> Result<SyncConfig, String> {
+  let mut config = load_config(root)?.unwrap_or_default();
   if config.folder_id.trim().is_empty() {
-    config.folder_id = uuid::Uuid::new_v4().to_string();
+    config.folder_id = new_folder_id();
   }
   if config.folder_label.trim().is_empty() {
-    config.folder_label = root
-      .file_name()
-      .and_then(|value| value.to_str())
-      .filter(|value| !value.trim().is_empty())
-      .unwrap_or("Elephant vault")
-      .to_string();
+    config.folder_label = default_folder_label(root);
   }
   config.endpoint_id = endpoint_id.to_string();
-  write_config(root, &config)?;
+  config.updated_at = now();
+  purge_expired_invites(&mut config.pending_invites);
   Ok(config)
 }
 
-pub fn create_invite(
+fn purge_expired_invites(invites: &mut Vec<PendingInvite>) {
+  let current = now();
+  invites.retain(|invite| invite.expires_at > current);
+}
+
+pub fn create_pending_invite(
   root: &Path,
   endpoint_id: &str,
   endpoint_addr: EndpointAddr,
   device_name: String,
-  expires_in_seconds: Option<u64>,
-) -> Result<crate::invite::CreatedInvite, String> {
-  let _guard = PAIRING_STATE_LOCK.lock().map_err(|_| "Sync pairing state lock is poisoned".to_string())?;
-  let mut config = read_config(root)?;
-  purge_expired_invites(&mut config.pending_invites);
-  if config.folder_id.trim().is_empty() {
-    config.folder_id = uuid::Uuid::new_v4().to_string();
-  }
-  if config.folder_label.trim().is_empty() {
-    config.folder_label = root
-      .file_name()
-      .and_then(|value| value.to_str())
-      .filter(|value| !value.trim().is_empty())
-      .unwrap_or("Elephant vault")
-      .to_string();
-  }
-  config.endpoint_id = endpoint_id.to_string();
-  let created = create_pending_invite(
-    &config.folder_id,
-    endpoint_addr,
+  expires_at: Option<u64>,
+) -> Result<NewInvite, String> {
+  let _guard = PAIRING_STATE_LOCK
+    .lock()
+    .map_err(|_| "Sync pairing state lock is poisoned".to_string())?;
+  let mut config = initialized_config(root, endpoint_id)?;
+  let created = PairingInvite::create(
+    now(),
+    expires_at,
+    config.folder_id.clone(),
+    config.folder_label.clone(),
     device_name,
-    expires_in_seconds,
-  );
+    endpoint_addr,
+  )?;
   config.pending_invites.push(created.pending.clone());
+  config.updated_at = now();
   write_config(root, &config)?;
   Ok(created)
+}
+
+pub fn parse_invite(payload: Value) -> Result<PairingInvite, String> {
+  let invite = PairingInvite::parse(payload)?;
+  invite.validate(now())?;
+  Ok(invite)
+}
+
+fn validate_pair_request(config: &SyncConfig, request: &PairRequest) -> Result<(), String> {
+  if request.folder_id != config.folder_id {
+    return Err("Pairing request belongs to another Sync folder".to_string());
+  }
+  let pending = config
+    .pending_invites
+    .iter()
+    .find(|invite| invite.id == request.invite_id)
+    .ok_or_else(|| "Pairing invite is invalid, expired or already used".to_string())?;
+  if pending.expires_at <= now() || pending.token_hash != token_hash(&request.invite_token) {
+    return Err("Pairing invite is invalid, expired or already used".to_string());
+  }
+  if request.device_name.trim().is_empty() {
+    return Err("Pairing request has no device name".to_string());
+  }
+  Ok(())
 }
 
 pub fn consume_pair_request(
@@ -161,25 +211,31 @@ pub fn consume_pair_request(
   local_endpoint_addr: EndpointAddr,
   local_device_name: &str,
 ) -> Result<PairAccepted, String> {
-  let _guard = PAIRING_STATE_LOCK.lock().map_err(|_| "Sync pairing state lock is poisoned".to_string())?;
-  let mut config = read_config(root)?;
+  let _guard = PAIRING_STATE_LOCK
+    .lock()
+    .map_err(|_| "Sync pairing state lock is poisoned".to_string())?;
+  let mut config = load_config(root)?
+    .ok_or_else(|| "Sync is not initialized for this vault".to_string())?;
   purge_expired_invites(&mut config.pending_invites);
-  validate_pair_request(&config.pending_invites, &request)?;
-  config.pending_invites.retain(|invite| invite.invite_id != request.invite_id);
-  write_config(root, &config)?;
+  validate_pair_request(&config, &request)?;
+  config
+    .pending_invites
+    .retain(|invite| invite.id != request.invite_id);
 
-  let mut peers = read_peers(root)?;
-  let endpoint_id = request.endpoint_addr.id.clone();
-  peers.retain(|peer| peer.endpoint_id != endpoint_id);
-  peers.push(PeerConfig {
-    endpoint_id,
-    endpoint_addr: request.endpoint_addr.clone(),
-    device_name: request.device_name,
+  let remote_id = request.endpoint_addr.id.to_string();
+  config.peers.retain(|peer| peer.endpoint_id != remote_id);
+  config.peers.push(PeerConfig {
+    endpoint_id: remote_id,
+    endpoint_addr: Some(request.endpoint_addr),
+    name: request.device_name,
+    folder_id: config.folder_id.clone(),
     verified: true,
-    paired_at: timestamp(),
+    paired_at: now(),
+    last_seen_at: now(),
   });
-  peers.sort_by(|left, right| left.endpoint_id.cmp(&right.endpoint_id));
-  write_peers(root, &peers)?;
+  config.peers.sort_by(|left, right| left.endpoint_id.cmp(&right.endpoint_id));
+  config.updated_at = now();
+  write_config(root, &config)?;
 
   Ok(PairAccepted {
     folder_id: config.folder_id,
@@ -195,11 +251,14 @@ pub fn register_accepted_peer(
   expected_folder_id: &str,
   accepted: PairAccepted,
 ) -> Result<SyncConfig, String> {
-  let _guard = PAIRING_STATE_LOCK.lock().map_err(|_| "Sync pairing state lock is poisoned".to_string())?;
-  let mut config = read_config(root)?;
+  let _guard = PAIRING_STATE_LOCK
+    .lock()
+    .map_err(|_| "Sync pairing state lock is poisoned".to_string())?;
   if accepted.folder_id != expected_folder_id {
     return Err("Pairing response folder id does not match the invitation".to_string());
   }
+
+  let mut config = load_config(root)?.unwrap_or_default();
   if config.folder_id.trim().is_empty() {
     config.folder_id = accepted.folder_id.clone();
   } else if config.folder_id != accepted.folder_id {
@@ -207,34 +266,72 @@ pub fn register_accepted_peer(
   }
   config.folder_label = accepted.folder_label.clone();
   config.endpoint_id = endpoint_id.to_string();
-  write_config(root, &config)?;
 
-  let mut peers = read_peers(root)?;
-  peers.retain(|peer| peer.endpoint_id != accepted.endpoint_addr.id);
-  peers.push(PeerConfig {
-    endpoint_id: accepted.endpoint_addr.id.clone(),
-    endpoint_addr: accepted.endpoint_addr,
-    device_name: accepted.device_name,
+  let remote_id = accepted.endpoint_addr.id.to_string();
+  config.peers.retain(|peer| peer.endpoint_id != remote_id);
+  config.peers.push(PeerConfig {
+    endpoint_id: remote_id,
+    endpoint_addr: Some(accepted.endpoint_addr),
+    name: accepted.device_name,
+    folder_id: config.folder_id.clone(),
     verified: true,
-    paired_at: timestamp(),
+    paired_at: now(),
+    last_seen_at: now(),
   });
-  peers.sort_by(|left, right| left.endpoint_id.cmp(&right.endpoint_id));
-  write_peers(root, &peers)?;
+  config.peers.sort_by(|left, right| left.endpoint_id.cmp(&right.endpoint_id));
+  config.updated_at = now();
+  write_config(root, &config)?;
   Ok(config)
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use iroh::SecretKey;
+  use crate::protocol::PairRequest;
   use std::sync::{Arc, Barrier};
 
   fn temp_root(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
       "elephant-sync-pairing-{label}-{}-{}",
       std::process::id(),
-      SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+      SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
     ))
+  }
+
+  fn request_from(invite: &PairingInvite, remote: &SecretKey) -> PairRequest {
+    PairRequest {
+      invite_id: invite.invite_id.clone(),
+      invite_token: invite.invite_token.clone(),
+      folder_id: invite.folder_id.clone(),
+      device_name: "Remote".to_string(),
+      endpoint_addr: EndpointAddr::from(remote.public()),
+    }
+  }
+
+  #[test]
+  fn invite_persists_only_the_token_hash() {
+    let root = temp_root("hash-only");
+    fs::create_dir_all(&root).unwrap();
+    let local = SecretKey::generate();
+    let created = create_pending_invite(
+      &root,
+      &local.public().to_string(),
+      EndpointAddr::from(local.public()),
+      "Local".to_string(),
+      None,
+    )
+    .unwrap();
+
+    let config = read_config(&root).unwrap();
+    assert_eq!(config.pending_invites.len(), 1);
+    assert_eq!(config.pending_invites[0].token_hash, token_hash(&created.invite.invite_token));
+    assert!(!fs::read_to_string(config_path(&root))
+      .unwrap()
+      .contains(&created.invite.invite_token));
+    let _ = fs::remove_dir_all(root);
   }
 
   #[test]
@@ -243,7 +340,7 @@ mod tests {
     fs::create_dir_all(&root).unwrap();
     let local = SecretKey::generate();
     let remote = SecretKey::generate();
-    let created = create_invite(
+    let created = create_pending_invite(
       &root,
       &local.public().to_string(),
       EndpointAddr::from(local.public()),
@@ -251,13 +348,7 @@ mod tests {
       None,
     )
     .unwrap();
-    let request = PairRequest {
-      invite_id: created.invite.invite_id.clone(),
-      invite_token: created.invite.invite_token.clone(),
-      folder_id: created.invite.folder_id.clone(),
-      device_name: "Remote".to_string(),
-      endpoint_addr: EndpointAddr::from(remote.public()),
-    };
+    let request = request_from(&created.invite, &remote);
     consume_pair_request(
       &root,
       request.clone(),
@@ -272,39 +363,9 @@ mod tests {
       "Local",
     )
     .is_err());
-    assert_eq!(read_peers(&root).unwrap().len(), 1);
-    let _ = fs::remove_dir_all(root);
-  }
-
-  #[test]
-  fn invalid_invite_does_not_consume_pending_record() {
-    let root = temp_root("invalid");
-    fs::create_dir_all(&root).unwrap();
-    let local = SecretKey::generate();
-    let remote = SecretKey::generate();
-    let created = create_invite(
-      &root,
-      &local.public().to_string(),
-      EndpointAddr::from(local.public()),
-      "Local".to_string(),
-      None,
-    )
-    .unwrap();
-    let request = PairRequest {
-      invite_id: created.invite.invite_id,
-      invite_token: "wrong-token".to_string(),
-      folder_id: created.invite.folder_id,
-      device_name: "Remote".to_string(),
-      endpoint_addr: EndpointAddr::from(remote.public()),
-    };
-    assert!(consume_pair_request(
-      &root,
-      request,
-      EndpointAddr::from(local.public()),
-      "Local",
-    )
-    .is_err());
-    assert_eq!(read_config(&root).unwrap().pending_invites.len(), 1);
+    let config = read_config(&root).unwrap();
+    assert_eq!(config.peers.len(), 1);
+    assert!(config.pending_invites.is_empty());
     let _ = fs::remove_dir_all(root);
   }
 
@@ -314,7 +375,7 @@ mod tests {
     fs::create_dir_all(&root).unwrap();
     let local = SecretKey::generate();
     let remote = SecretKey::generate();
-    let created = create_invite(
+    let created = create_pending_invite(
       &root,
       &local.public().to_string(),
       EndpointAddr::from(local.public()),
@@ -322,13 +383,7 @@ mod tests {
       None,
     )
     .unwrap();
-    let request = PairRequest {
-      invite_id: created.invite.invite_id,
-      invite_token: created.invite.invite_token,
-      folder_id: created.invite.folder_id,
-      device_name: "Remote".to_string(),
-      endpoint_addr: EndpointAddr::from(remote.public()),
-    };
+    let request = request_from(&created.invite, &remote);
     let barrier = Arc::new(Barrier::new(3));
     let mut handles = Vec::new();
     for _ in 0..2 {
@@ -358,22 +413,29 @@ mod tests {
     fs::create_dir_all(&root).unwrap();
     let local = SecretKey::generate();
     let remote = SecretKey::generate();
-    let config = ensure_config(&root, &local.public().to_string()).unwrap();
+    let created = create_pending_invite(
+      &root,
+      &remote.public().to_string(),
+      EndpointAddr::from(remote.public()),
+      "Remote".to_string(),
+      None,
+    )
+    .unwrap();
     let accepted = PairAccepted {
-      folder_id: config.folder_id.clone(),
-      folder_label: config.folder_label.clone(),
+      folder_id: created.invite.folder_id.clone(),
+      folder_label: created.invite.folder_label.clone(),
       device_name: "Remote".to_string(),
       endpoint_addr: EndpointAddr::from(remote.public()),
     };
     let updated = register_accepted_peer(
       &root,
       &local.public().to_string(),
-      &config.folder_id,
+      &created.invite.folder_id,
       accepted,
     )
     .unwrap();
-    assert_eq!(updated.folder_id, config.folder_id);
-    assert_eq!(read_peers(&root).unwrap().len(), 1);
+    assert_eq!(updated.peers.len(), 1);
+    assert_eq!(updated.peers[0].endpoint_id, remote.public().to_string());
     let _ = fs::remove_dir_all(root);
   }
 }

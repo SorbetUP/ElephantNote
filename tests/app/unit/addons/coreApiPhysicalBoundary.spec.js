@@ -1,6 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import {
+  ELEPHANTNOTE_API_ACTIONS,
+  ELEPHANTNOTE_API_DOMAINS,
+  listApiContracts
+} from '../../../../Elephant/shared/apiContracts.js'
+import { COMPATIBILITY_CALLS } from '../../../../Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js'
 
 const root = process.cwd()
 const absolute = (file) => path.join(root, file)
@@ -33,24 +39,35 @@ const OPTIONAL_ACTIONS = Object.freeze([
 ])
 
 describe('minimal core API physical boundary', () => {
-  it('does not advertise optional addon actions in the global API contract', () => {
-    const contracts = read('Elephant/shared/apiContracts.js')
-    expect(contracts).toContain("VAULTS_GET', 'vaults.get")
-    expect(contracts).toContain("SEARCH_QUERY', 'search.query")
-    expect(contracts).toContain("FEATURES_GET', 'features.get")
-    for (const action of OPTIONAL_ACTIONS) expect(contracts).not.toContain(action)
+  it('advertises exactly the generic core domains', () => {
+    expect(Object.keys(ELEPHANTNOTE_API_DOMAINS)).toEqual([
+      'system',
+      'vaults',
+      'documents',
+      'search',
+      'coreFeatures'
+    ])
+    const actions = listApiContracts().map(({ name }) => name)
+    expect(actions).toContain(ELEPHANTNOTE_API_ACTIONS.VAULTS_GET)
+    expect(actions).toContain(ELEPHANTNOTE_API_ACTIONS.SEARCH_QUERY)
+    expect(actions).toContain(ELEPHANTNOTE_API_ACTIONS.FEATURES_GET)
+    for (const action of OPTIONAL_ACTIONS) expect(actions).not.toContain(action)
   })
 
-  it('does not route optional addon actions through compatibility calls', () => {
-    const compatibility = read('Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js')
-    for (const action of OPTIONAL_ACTIONS) expect(compatibility).not.toContain(action)
-    expect(compatibility).toContain("'notes.read'")
-    expect(compatibility).toContain("'search.query'")
+  it('routes only generic core actions through compatibility calls', () => {
+    const actions = Object.keys(COMPATIBILITY_CALLS)
+    expect(actions).toContain('vaults.get')
+    expect(actions).toContain('directory.list')
+    expect(actions).toContain('search.query')
+    expect(actions).toContain('features.get')
+    for (const action of OPTIONAL_ACTIONS) expect(actions).not.toContain(action)
+    expect(actions).not.toContain('notes.read')
+    expect(actions).not.toContain('notes.write')
   })
 
   it('does not construct optional addon domain clients in the core renderer', () => {
     const domains = read('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
-    const optionalDomains = [
+    for (const domain of [
       'sources:',
       'wiki:',
       'models:',
@@ -62,8 +79,7 @@ describe('minimal core API physical boundary', () => {
       'programs:',
       'automation:',
       'plugins:'
-    ]
-    for (const domain of optionalDomains) expect(domains).not.toContain(domain)
+    ]) expect(domains).not.toContain(domain)
     expect(domains).toContain('vaults:')
     expect(domains).toContain('notes:')
     expect(domains).toContain('search:')

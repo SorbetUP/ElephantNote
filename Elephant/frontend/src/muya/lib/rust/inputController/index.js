@@ -31,6 +31,7 @@ export class MuyaRustInputController {
     this.renderer = renderer
     this.onError = options.onError || noop
     this.onFileDrop = typeof options.onFileDrop === 'function' ? options.onFileDrop : null
+    this.onUriDrop = typeof options.onUriDrop === 'function' ? options.onUriDrop : null
     this.autoCheck = Boolean(options.autoCheck)
     this.composition = null
     this.attached = false

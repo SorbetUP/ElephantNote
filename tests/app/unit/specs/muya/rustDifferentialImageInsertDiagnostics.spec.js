@@ -123,7 +123,7 @@ const cases = [
     name: 'match Muya image behavior inside inline code',
     initial: '`alpha`',
     selectJs: (muya) => setJsSelectionByText(muya, '`alpha`', 3),
-    selectRust: (rust) => rust.setSelectionByText('alpha', 2),
+    selectRust: (rust) => rust.setSelectionByCode('alpha', 2),
     image: { source: '/tmp/picture.png', alt: '', title: null }
   },
   {

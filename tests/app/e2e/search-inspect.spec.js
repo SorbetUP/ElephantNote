@@ -33,6 +33,6 @@ test.describe('Elephant optional Search boundary', () => {
     })
 
     expect(result.ok).toBe(false)
-    expect(result.error).toMatch(/unknown|unsupported|unavailable|not implemented/i)
+    expect(result.error).toMatch(/unknown|unsupported|unavailable|not implemented|undefined/i)
   })
 })

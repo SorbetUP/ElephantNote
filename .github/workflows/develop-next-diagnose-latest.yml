@@ -1,4 +1,4 @@
-name: Diagnose latest develop_next failures
+name: Diagnose final develop_next failures
 
 on:
   pull_request:
@@ -13,26 +13,41 @@ permissions:
   contents: read
 
 jobs:
-  mobile-shell:
+  diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Mobile shell exact failure
+      - name: Neutral bridge failure
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh run view 29359041311 --log-failed \
-            | grep -E -C 18 'FAIL|Error:|AssertionError|expected|received|Cannot find|not found|Process completed|build failed' \
+          gh run view 29359837657 --log-failed \
+            | grep -E -C 16 'Could not resolve|Cannot find|Error:|error:|failed|FAIL|Process completed' \
+            | tail -n 220
+
+      - name: Mobile foundations v2 failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh run view 29359837744 --log-failed \
+            | grep -E -C 16 'error\[E[0-9]+\]|error:|FAIL|AssertionError|expected|received|Cannot find|not found|Process completed' \
+            | tail -n 260
+
+      - name: Unit test failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh run view 29359837441 --log-failed \
+            | grep -E -C 14 'FAIL|AssertionError|expected|received|Cannot find|not found|Process completed' \
             | tail -n 300
 
-  neutral-bridge:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Neutral bridge exact failure
+      - name: E2E failure
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh run view 29359040755 --log-failed \
-            | grep -E -C 18 'FAIL|Error:|AssertionError|expected|received|Cannot find|not found|Process completed|build failed' \
-            | tail -n 300
+          gh run view 29359837312 --log-failed \
+            | grep -E -C 14 'FAIL|Error:|error:|Timeout|expected|received|Process completed' \
+            | tail -n 240

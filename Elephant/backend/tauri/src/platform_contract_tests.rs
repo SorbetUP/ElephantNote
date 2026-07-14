@@ -80,25 +80,42 @@ fn android_scripts_always_use_the_android_config() {
 }
 
 #[test]
-fn extracted_ai_process_runtimes_are_absent_from_core() {
+fn extracted_ai_process_and_configuration_runtimes_are_absent_from_core() {
+  let root = repo_root();
   let lib_min = read_text("Elephant/backend/tauri/src/lib_min.rs");
-  let extra_commands = read_text("Elephant/backend/tauri/src/tauri_extra_commands.rs");
+  let core_commands = read_text("Elephant/backend/tauri/src/core_commands.rs");
   let compatibility = read_text("Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js");
+  let api_contracts = read_text("Elephant/shared/apiContracts.js");
+  assert!(!root.join("Elephant/backend/tauri/src/tauri_extra_commands.rs").exists());
   assert!(!lib_min.contains("pub mod local_llama_runtime;"), "Open Models runtime must be owned by its physical addon package");
   assert!(!lib_min.contains("pub mod chat_runtime;"), "legacy core chat runtime must stay removed");
-  assert!(!lib_min.contains("tauri_extra_commands::tauri_ai_config_get"));
-  assert!(!lib_min.contains("tauri_extra_commands::tauri_ai_config_set"));
-  assert!(!lib_min.contains("tauri_extra_commands::tauri_ai_config_test"));
-  assert!(!extra_commands.contains("pub fn tauri_ai_config_get"));
-  assert!(!extra_commands.contains("pub fn tauri_ai_config_set"));
-  assert!(!extra_commands.contains("pub fn tauri_ai_config_test"));
-  assert!(!extra_commands.contains("pub fn tauri_models_get_selection"));
-  assert!(!extra_commands.contains("pub fn tauri_models_set_selection"));
-  assert!(!extra_commands.contains("test_codex_cli"));
-  assert!(!extra_commands.contains("test_tcp_endpoint"));
-  assert!(!extra_commands.contains("PROVIDER_CONFIG_CATEGORY"));
-  assert!(compatibility.contains("getBridge()?.ai?.getConfig?.()"));
-  assert!(compatibility.contains("getBridge()?.models?.getSelection?.()"));
+  assert!(!lib_min.contains("tauri_extra_commands::tauri_ai_config_"));
+  assert!(!lib_min.contains("tauri_extra_commands::tauri_models_"));
+  for marker in [
+    "tauri_ai_config_get",
+    "tauri_ai_config_set",
+    "tauri_ai_config_test",
+    "tauri_models_get_selection",
+    "tauri_models_set_selection",
+    "test_codex_cli",
+    "test_tcp_endpoint",
+    "PROVIDER_CONFIG_CATEGORY",
+  ] {
+    assert!(!core_commands.contains(marker), "optional core implementation leaked: {marker}");
+  }
+  for action in [
+    "ai.config.get",
+    "ai.config.set",
+    "ai.config.test",
+    "models.selection.get",
+    "models.selection.set",
+    "models.local.list",
+    "models.download",
+    "ocr.extract",
+  ] {
+    assert!(!compatibility.contains(action), "optional compatibility call leaked: {action}");
+    assert!(!api_contracts.contains(action), "optional core API contract leaked: {action}");
+  }
 
   let desktop_config = read_text("Elephant/backend/tauri/tauri.conf.json");
   let dev_script = read_text("build/scripts/build_dev.sh");
@@ -111,26 +128,44 @@ fn extracted_ai_process_runtimes_are_absent_from_core() {
 #[test]
 fn extracted_search_inspection_index_is_absent_from_core() {
   let lib_min = read_text("Elephant/backend/tauri/src/lib_min.rs");
-  let extra_commands = read_text("Elephant/backend/tauri/src/tauri_extra_commands.rs");
+  let core_commands = read_text("Elephant/backend/tauri/src/core_commands.rs");
   let compatibility = read_text("Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js");
+  let api_contracts = read_text("Elephant/shared/apiContracts.js");
   assert!(!lib_min.contains("tauri_extra_commands::tauri_search_inspect"));
   assert!(!lib_min.contains("tauri_extra_commands::tauri_search_rebuild"));
-  assert!(!extra_commands.contains("pub fn tauri_search_inspect"));
-  assert!(!extra_commands.contains("pub fn tauri_search_rebuild"));
-  assert!(!extra_commands.contains("fn build_search_index"));
-  assert!(!extra_commands.contains("fn scan_markdown_notes"));
-  assert!(!extra_commands.contains("fn extract_wikilinks"));
-  assert!(!extra_commands.contains("SEARCH_INDEX_FILE"));
-  assert!(compatibility.contains("getBridge()?.search?.inspect?.()"));
-  assert!(compatibility.contains("getBridge()?.search?.rebuild?.()"));
+  for marker in [
+    "tauri_search_inspect",
+    "tauri_search_rebuild",
+    "fn build_search_index",
+    "fn scan_markdown_notes",
+    "fn extract_wikilinks",
+    "SEARCH_INDEX_FILE",
+    "portable-markdown-index",
+  ] {
+    assert!(!core_commands.contains(marker), "optional Search implementation leaked: {marker}");
+  }
+  for action in [
+    "search.inspect",
+    "search.rebuild",
+    "search.concepts",
+    "search.initVault",
+    "search.clear",
+    "search.disable",
+    "search.enable",
+    "rag.chat",
+  ] {
+    assert!(!compatibility.contains(action), "optional Search compatibility call leaked: {action}");
+    assert!(!api_contracts.contains(action), "optional Search core API contract leaked: {action}");
+  }
 }
 
 #[test]
 fn extracted_sync_runtime_is_physically_absent_from_core() {
   let root = repo_root();
   let lib_min = read_text("Elephant/backend/tauri/src/lib_min.rs");
-  let extra_commands = read_text("Elephant/backend/tauri/src/tauri_extra_commands.rs");
+  let core_commands = read_text("Elephant/backend/tauri/src/core_commands.rs");
   let compatibility = read_text("Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js");
+  let api_contracts = read_text("Elephant/shared/apiContracts.js");
   let vault_mod = read_text("Elephant/backend/tauri/src/vault/mod.rs");
   let cargo = read_text("Elephant/backend/tauri/Cargo.toml");
   let removed = [
@@ -149,10 +184,12 @@ fn extracted_sync_runtime_is_physically_absent_from_core() {
   assert!(!lib_min.contains("IrohSyncState"));
   assert!(!lib_min.contains("sync_commands::iroh_sync_"));
   assert!(!lib_min.contains("tauri_extra_commands::tauri_sync_plan"));
-  assert!(!extra_commands.contains("pub fn tauri_sync_plan"));
-  assert!(!extra_commands.contains("crate::vault::sync"));
-  assert!(!compatibility.contains("invoke('tauri_sync_plan'"));
-  assert!(compatibility.contains("getBridge()?.sync?.plan?."));
+  assert!(!core_commands.contains("tauri_sync_plan"));
+  assert!(!core_commands.contains("crate::vault::sync"));
+  for action in ["sync.status", "sync.plan", "sync.enqueue", "sync.run"] {
+    assert!(!compatibility.contains(action), "optional Sync compatibility call leaked: {action}");
+    assert!(!api_contracts.contains(action), "optional Sync core API contract leaked: {action}");
+  }
   assert!(!vault_mod.contains("pub mod sync;"));
   assert!(!cargo.contains("iroh ="));
   assert!(!cargo.contains("iroh-mdns-address-lookup"));

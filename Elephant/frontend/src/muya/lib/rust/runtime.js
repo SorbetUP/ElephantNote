@@ -55,7 +55,8 @@ export const initializeExperimentalRustRuntime = async (muya, config, reportErro
     }
     inputController = createRustInputController(domContainer, bridge, adapter.renderer, {
       onError: reportError,
-      onFileDrop: config.onFileDrop
+      onFileDrop: config.onFileDrop,
+      onUriDrop: config.onUriDrop
     })
   }
 

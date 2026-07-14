@@ -1,4 +1,4 @@
-import runSanitize from 'muya/lib/utils/dompurify'
+import DOMPurify from 'dompurify'
 
 export const PREVIEW_DOMPURIFY_CONFIG = Object.freeze({
   FORBID_ATTR: ['style', 'contenteditable'],
@@ -28,5 +28,5 @@ export const EXPORT_DOMPURIFY_CONFIG = Object.freeze({
 })
 
 export const sanitize = (html, purifyOptions) => {
-  return runSanitize(html, purifyOptions)
+  return DOMPurify.sanitize(html, purifyOptions)
 }

@@ -1,6 +1,6 @@
 use elephantnote_knowledge_core::{KnowledgeSearchHit, KnowledgeStore};
 use rusqlite::{params, Connection, OptionalExtension};
-use std::collections::{HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 const RRF_K: f64 = 60.0;
 const MAX_SEMANTIC_SEEDS: usize = 6;
@@ -208,28 +208,119 @@ fn merge_semantic_documents(
     Ok(())
 }
 
+fn normalized_alias(value: &str) -> String {
+    let normalized = value.trim().replace('\\', "/");
+    let without_anchor = normalized.split('#').next().unwrap_or_default().trim();
+    let without_extension = without_anchor
+        .strip_suffix(".md")
+        .or_else(|| without_anchor.strip_suffix(".MD"))
+        .unwrap_or(without_anchor);
+    without_extension.trim_matches('/').to_lowercase()
+}
+
+fn alias_variants(path: &str, title: &str) -> Vec<String> {
+    let mut aliases = vec![normalized_alias(path), normalized_alias(title)];
+    if let Some(file_name) = path.rsplit('/').next() {
+        aliases.push(normalized_alias(file_name));
+    }
+    aliases.retain(|alias| !alias.is_empty());
+    aliases.sort();
+    aliases.dedup();
+    aliases
+}
+
+fn insert_document_alias(
+    aliases: &mut HashMap<String, Option<String>>,
+    alias: String,
+    path: &str,
+) {
+    match aliases.entry(alias) {
+        Entry::Vacant(entry) => {
+            entry.insert(Some(path.to_string()));
+        }
+        Entry::Occupied(mut entry) => {
+            if entry.get().as_deref() != Some(path) {
+                entry.insert(None);
+            }
+        }
+    }
+}
+
+fn document_alias_index(conn: &Connection) -> Result<HashMap<String, String>, String> {
+    let mut statement = conn
+        .prepare("SELECT relative_path, title FROM documents ORDER BY relative_path")
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|error| error.to_string())?;
+    let mut aliases = HashMap::<String, Option<String>>::new();
+    for row in rows {
+        let (path, title) = row.map_err(|error| error.to_string())?;
+        for alias in alias_variants(&path, &title) {
+            insert_document_alias(&mut aliases, alias, &path);
+        }
+    }
+    Ok(aliases
+        .into_iter()
+        .filter_map(|(alias, path)| path.map(|path| (alias, path)))
+        .collect())
+}
+
+fn collect_graph_neighbor_paths(
+    rows: impl IntoIterator<Item = (String, String, String, String)>,
+    seed_paths: &HashSet<String>,
+    seed_aliases: &HashSet<String>,
+    document_aliases: &HashMap<String, String>,
+    limit: usize,
+) -> Vec<String> {
+    let mut neighbors = HashSet::<String>::new();
+    for (source, path, title, target) in rows {
+        let source_matches = alias_variants(&path, &title)
+            .into_iter()
+            .chain(std::iter::once(normalized_alias(&source)))
+            .any(|alias| seed_aliases.contains(&alias));
+        let normalized_target = normalized_alias(&target);
+        let target_matches = seed_aliases.contains(&normalized_target);
+
+        if source_matches {
+            if let Some(target_path) = document_aliases.get(&normalized_target) {
+                if !seed_paths.contains(target_path) {
+                    neighbors.insert(target_path.clone());
+                }
+            }
+        }
+        if target_matches && !seed_paths.contains(&path) {
+            neighbors.insert(path);
+        }
+    }
+    let mut output = neighbors.into_iter().collect::<Vec<_>>();
+    output.sort();
+    output.truncate(limit);
+    output
+}
+
 fn merge_graph_neighbors(
     store: &KnowledgeStore,
     seed_paths: &[String],
     ranked: &mut HashMap<String, RankedHit>,
 ) -> Result<(), String> {
     let conn = Connection::open(store.database_path()).map_err(|error| error.to_string())?;
-    let mut aliases = HashSet::new();
+    let seed_path_set = seed_paths.iter().cloned().collect::<HashSet<_>>();
+    let mut seed_aliases = HashSet::new();
     for path in seed_paths {
-        aliases.insert(path.to_lowercase());
-        aliases.insert(path.trim_end_matches(".md").to_lowercase());
+        seed_aliases.insert(normalized_alias(path));
         if let Some(snapshot) = store.inspect_document(path)? {
-            aliases.insert(snapshot.title.to_lowercase());
-            for link in snapshot.explicit_links {
-                aliases.insert(link.target.to_lowercase());
-            }
+            seed_aliases.extend(alias_variants(&snapshot.relative_path, &snapshot.title));
         }
     }
+    let document_aliases = document_alias_index(&conn)?;
 
-    let mut neighbors = Vec::<String>::new();
     let mut statement = match conn.prepare(
         "SELECT DISTINCT w.document_path, d.relative_path, d.title, w.target
          FROM wikilinks w JOIN documents d ON d.relative_path=w.document_path
+         ORDER BY w.document_path, w.target
          LIMIT 5000",
     ) {
         Ok(statement) => statement,
@@ -244,22 +335,16 @@ fn merge_graph_neighbors(
                 row.get::<_, String>(3)?,
             ))
         })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
-    for row in rows {
-        let (source, path, title, target) = row.map_err(|error| error.to_string())?;
-        let source_matches = aliases.contains(&source.to_lowercase())
-            || aliases.contains(&path.to_lowercase())
-            || aliases.contains(&title.to_lowercase());
-        let target_matches = aliases.contains(&target.to_lowercase());
-        if source_matches || target_matches {
-            neighbors.push(path);
-        }
-        if neighbors.len() >= MAX_GRAPH_NEIGHBORS {
-            break;
-        }
-    }
-    neighbors.sort();
-    neighbors.dedup();
+    let neighbors = collect_graph_neighbor_paths(
+        rows,
+        &seed_path_set,
+        &seed_aliases,
+        &document_aliases,
+        MAX_GRAPH_NEIGHBORS,
+    );
 
     for (rank, path) in neighbors.into_iter().enumerate() {
         let Some(snapshot) = store.inspect_document(&path)? else {
@@ -490,5 +575,55 @@ mod tests {
             .sum::<f32>()
             .sqrt();
         assert!((norm - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn graph_expansion_resolves_outgoing_and_incoming_wikilinks() {
+        let seed_paths = HashSet::from(["Notes/Source.md".to_string()]);
+        let seed_aliases = HashSet::from([
+            "notes/source".to_string(),
+            "source".to_string(),
+        ]);
+        let document_aliases = HashMap::from([
+            ("source".to_string(), "Notes/Source.md".to_string()),
+            ("target".to_string(), "Notes/Target.md".to_string()),
+            ("incoming".to_string(), "Notes/Incoming.md".to_string()),
+        ]);
+        let rows = vec![
+            (
+                "Notes/Source.md".to_string(),
+                "Notes/Source.md".to_string(),
+                "Source".to_string(),
+                "Target".to_string(),
+            ),
+            (
+                "Notes/Incoming.md".to_string(),
+                "Notes/Incoming.md".to_string(),
+                "Incoming".to_string(),
+                "Source".to_string(),
+            ),
+        ];
+
+        let neighbors = collect_graph_neighbor_paths(
+            rows,
+            &seed_paths,
+            &seed_aliases,
+            &document_aliases,
+            MAX_GRAPH_NEIGHBORS,
+        );
+
+        assert_eq!(
+            neighbors,
+            vec!["Notes/Incoming.md".to_string(), "Notes/Target.md".to_string()]
+        );
+        assert!(!neighbors.contains(&"Notes/Source.md".to_string()));
+    }
+
+    #[test]
+    fn ambiguous_document_aliases_are_not_resolved() {
+        let mut aliases = HashMap::<String, Option<String>>::new();
+        insert_document_alias(&mut aliases, "shared".into(), "Notes/A.md");
+        insert_document_alias(&mut aliases, "shared".into(), "Notes/B.md");
+        assert_eq!(aliases.get("shared"), Some(&None));
     }
 }

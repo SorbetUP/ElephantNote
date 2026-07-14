@@ -83,7 +83,9 @@ jobs:
         run: |
           mkdir -p build/coverage
           set -o pipefail
-          pnpm exec vitest run tests/app/unit/specs/main/elephantnote --reporter=verbose 2>&1 | tee build/coverage/elephantnote-contract-tests.log
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/specs/main/elephantnote \
+            --reporter=verbose 2>&1 | tee build/coverage/elephantnote-contract-tests.log
 
       - name: Unit suite
         run: pnpm test:unit

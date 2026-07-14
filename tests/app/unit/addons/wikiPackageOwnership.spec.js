@@ -3,7 +3,8 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
-const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+const absolute = (file) => path.join(root, file)
+const read = (file) => fs.readFileSync(absolute(file), 'utf8')
 
 describe('Wiki physical package ownership', () => {
   it('reads notes through the permission-scoped addon command', () => {
@@ -34,5 +35,18 @@ describe('Wiki physical package ownership', () => {
       expect(base).not.toContain(action)
       expect(source).not.toContain(action)
     }
+  })
+
+  it('keeps the legacy Wiki backend physically absent from the core', () => {
+    const core = read('Elephant/backend/tauri/src/lib_min.rs')
+    const compatibility = read('Elephant/frontend/app/services/elephantnoteClient/compatibilityCalls.js')
+
+    expect(fs.existsSync(absolute('Elephant/backend/tauri/src/wiki.rs'))).toBe(false)
+    expect(core).not.toContain('pub mod wiki;')
+    expect(core).not.toContain('tauri_wiki_')
+    expect(compatibility).toContain("'wiki.list': () => getBridge()?.wiki?.list?.()")
+    expect(compatibility).toContain("'wiki.propose': () => getBridge()?.wiki?.propose?.()")
+    expect(compatibility).toContain("'wiki.accept': (payload) => getBridge()?.wiki?.accept?.(payload)")
+    expect(compatibility).toContain("'wiki.dismiss': (payload) => getBridge()?.wiki?.dismiss?.(payload)")
   })
 })

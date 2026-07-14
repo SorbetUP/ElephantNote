@@ -3,9 +3,8 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { tokenizer } from '../../../../../Elephant/frontend/src/muya/lib/parser'
 import {
   bundled,
-  createJsEditor,
   initializeRustWasm,
-  settle
+  runDifferentialTrace
 } from './rustDifferentialHarness'
 
 const describeBundled = bundled ? describe : describe.skip
@@ -37,12 +36,28 @@ const imageInfo = (muya) => {
   return { key: block.key, token }
 }
 
+const rustImageId = (rust) => {
+  const node = rust.snapshot().document.nodes.find(
+    (candidate) => candidate.kind?.layer === 'inline' && candidate.kind?.value?.type === 'image'
+  )
+  if (!node) throw new Error('Muya Rust image node was not found.')
+  return node.id
+}
+
 const cases = [
   {
     name: 'replace a Markdown image in surrounding text',
     initial: 'before ![old](old.png "Old") after',
-    run: (muya) => muya.contentState.replaceImage(imageInfo(muya), {
+    expected: 'before ![new alt](new%20image.png "New title") after\n',
+    runJs: (muya) => muya.contentState.replaceImage(imageInfo(muya), {
       src: 'new image.png',
+      alt: 'new alt',
+      title: 'New title'
+    }),
+    runRust: (rust) => rust.request({
+      type: 'replace_image',
+      image: rustImageId(rust),
+      source: 'new image.png',
       alt: 'new alt',
       title: 'New title'
     })
@@ -50,16 +65,26 @@ const cases = [
   {
     name: 'delete a Markdown image from surrounding text',
     initial: 'before ![old](old.png) after',
-    run: (muya) => muya.contentState.deleteImage(imageInfo(muya))
+    expected: 'before  after\n',
+    runJs: (muya) => muya.contentState.deleteImage(imageInfo(muya)),
+    runRust: (rust) => rust.request({
+      type: 'delete_image',
+      image: rustImageId(rust)
+    })
   },
   {
     name: 'delete the only image in a paragraph',
     initial: '![old](old.png)',
-    run: (muya) => muya.contentState.deleteImage(imageInfo(muya))
+    expected: '\n',
+    runJs: (muya) => muya.contentState.deleteImage(imageInfo(muya)),
+    runRust: (rust) => rust.request({
+      type: 'delete_image',
+      image: rustImageId(rust)
+    })
   }
 ]
 
-describeBundled('Muya image mutation characterization', () => {
+describeBundled('Muya image mutation differential traces', () => {
   let jsEditor = null
 
   beforeAll(initializeRustWasm)
@@ -72,46 +97,86 @@ describeBundled('Muya image mutation characterization', () => {
 
   for (const testCase of cases) {
     it(testCase.name, async () => {
-      jsEditor = await createJsEditor(testCase.initial)
-      await testCase.run(jsEditor)
-      await settle()
-      console.log(
-        '[muya-image-mutation]',
-        testCase.name,
-        JSON.stringify({
-          markdown: jsEditor.getMarkdown(),
-          cursor: jsEditor.contentState.cursor
-        })
-      )
-      expect(typeof jsEditor.getMarkdown()).toBe('string')
+      const result = await runDifferentialTrace({
+        initial: testCase.initial,
+        runJs: testCase.runJs,
+        runRust: testCase.runRust
+      })
+      jsEditor = result.jsEditor
+      expect(result.jsMarkdown).toBe(result.rustMarkdown)
+      expect(result.rustMarkdown).toBe(testCase.expected)
     })
   }
 
-  it('characterizes replace and delete history', async () => {
-    jsEditor = await createJsEditor('before ![old](old.png) after')
-    await jsEditor.contentState.replaceImage(imageInfo(jsEditor), {
-      src: 'new.png',
-      alt: 'new',
-      title: ''
+  it('undoes and redoes image replacement and deletion atomically', async () => {
+    const initial = 'before ![old](old.png) after\n'
+    const replaced = 'before ![new](new.png) after\n'
+    const deleted = 'before  after\n'
+    const result = await runDifferentialTrace({
+      initial: 'before ![old](old.png) after',
+      runJs: (muya) => {
+        muya.contentState.replaceImage(imageInfo(muya), {
+          src: 'new.png',
+          alt: 'new',
+          title: ''
+        })
+        const afterReplace = muya.getMarkdown()
+        muya.undo()
+        const replaceUndo = muya.getMarkdown()
+        muya.redo()
+        const replaceRedo = muya.getMarkdown()
+        muya.contentState.deleteImage(imageInfo(muya))
+        const afterDelete = muya.getMarkdown()
+        muya.undo()
+        const deleteUndo = muya.getMarkdown()
+        muya.redo()
+        return [
+          afterReplace,
+          replaceUndo,
+          replaceRedo,
+          afterDelete,
+          deleteUndo,
+          muya.getMarkdown()
+        ]
+      },
+      runRust: (rust) => {
+        const image = rustImageId(rust)
+        rust.request({
+          type: 'replace_image',
+          image,
+          source: 'new.png',
+          alt: 'new',
+          title: null
+        })
+        const afterReplace = rust.markdown()
+        rust.request({ type: 'undo' })
+        const replaceUndo = rust.markdown()
+        rust.request({ type: 'redo' })
+        const replaceRedo = rust.markdown()
+        rust.request({ type: 'delete_image', image })
+        const afterDelete = rust.markdown()
+        rust.request({ type: 'undo' })
+        const deleteUndo = rust.markdown()
+        rust.request({ type: 'redo' })
+        return [
+          afterReplace,
+          replaceUndo,
+          replaceRedo,
+          afterDelete,
+          deleteUndo,
+          rust.markdown()
+        ]
+      }
     })
-    const replaced = jsEditor.getMarkdown()
-    jsEditor.undo()
-    const replaceUndo = jsEditor.getMarkdown()
-    jsEditor.redo()
-    const replaceRedo = jsEditor.getMarkdown()
-    await jsEditor.contentState.deleteImage(imageInfo(jsEditor))
-    const deleted = jsEditor.getMarkdown()
-    jsEditor.undo()
-    const deleteUndo = jsEditor.getMarkdown()
-    jsEditor.redo()
-    console.log('[muya-image-mutation-history]', JSON.stringify({
+    jsEditor = result.jsEditor
+    expect(result.jsResult).toEqual(result.rustResult)
+    expect(result.rustResult).toEqual([
       replaced,
-      replaceUndo,
-      replaceRedo,
+      initial,
+      replaced,
       deleted,
-      deleteUndo,
-      deleteRedo: jsEditor.getMarkdown()
-    }))
-    expect(typeof deleted).toBe('string')
+      replaced,
+      deleted
+    ])
   })
 })

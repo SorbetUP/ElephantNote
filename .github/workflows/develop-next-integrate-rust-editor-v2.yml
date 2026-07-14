@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: develop-next-rust-editor-v2
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   integrate:
@@ -47,6 +47,95 @@ jobs:
           Path('/tmp/import-rust-editor.sh').write_text(script)
           PY
           bash /tmp/import-rust-editor.sh
+
+      - name: Preserve rejected front matter as literal Markdown blocks
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('Elephant/crates/muya-core/src/parser/mod.rs')
+          text = path.read_text()
+
+          setup = '''pub fn parse_markdown(markdown: &str) -> Document {
+            let lines = source_lines(markdown);
+            let mut document = Document::new();
+          '''
+          replacement = '''pub fn parse_markdown(markdown: &str) -> Document {
+            let lines = source_lines(markdown);
+            let rejected_front_matter = rejected_front_matter_style(&lines);
+            let mut document = Document::new();
+          '''
+          if setup not in text:
+              raise SystemExit('parse_markdown setup changed unexpectedly')
+          text = text.replace(setup, replacement, 1)
+
+          old_setext = '''    if let Some(level) = lines
+              .get(index + 1)
+              .and_then(|underline| heading::parse_setext_underline(&underline.text))
+            {
+              let underline = &lines[index + 1];
+              append_text_block(
+                &mut document,
+                BlockKind::Heading { level },
+                line.text.trim(),
+                SourceRange::new(line.start, underline.end),
+              );
+              index += 2;
+              continue;
+            }
+          '''
+          new_setext = '''    if let Some(level) = lines
+              .get(index + 1)
+              .and_then(|underline| heading::parse_setext_underline(&underline.text))
+            {
+              let underline = &lines[index + 1];
+              let reserved_front_matter_delimiter = rejected_front_matter
+                .is_some_and(|style| front_matter::is_closing(&underline.text, style));
+              if !reserved_front_matter_delimiter {
+                append_text_block(
+                  &mut document,
+                  BlockKind::Heading { level },
+                  line.text.trim(),
+                  SourceRange::new(line.start, underline.end),
+                );
+                index += 2;
+                continue;
+              }
+            }
+          '''
+          if old_setext not in text:
+              raise SystemExit('Setext parser block changed unexpectedly')
+          text = text.replace(old_setext, new_setext, 1)
+
+          helper_anchor = 'fn try_parse_front_matter(document: &mut Document, lines: &[SourceLine]) -> Option<usize> {'
+          helper = '''fn rejected_front_matter_style(lines: &[SourceLine]) -> Option<FrontMatterStyle> {
+            let style = front_matter::parse_opening(&lines.first()?.text)?;
+            let closing_index = lines
+              .iter()
+              .enumerate()
+              .skip(1)
+              .find_map(|(index, line)| front_matter::is_closing(&line.text, style).then_some(index));
+            match closing_index {
+              None => Some(style),
+              Some(index)
+                if index == 1
+                  || lines
+                    .get(index + 1)
+                    .is_some_and(|line| !line.text.is_empty()) =>
+              {
+                Some(style)
+              }
+              Some(_) => None,
+            }
+          }
+
+          '''
+          if helper_anchor not in text:
+              raise SystemExit('Front matter helper anchor changed unexpectedly')
+          text = text.replace(helper_anchor, helper + helper_anchor, 1)
+          path.write_text(text)
+          PY
 
       - name: Install JavaScript dependencies
         uses: ./.github/actions/setup

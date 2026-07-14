@@ -45,6 +45,15 @@ assert(
   baseConfig.bundle?.resources?.includes('bin'),
   'desktop Tauri config must keep bin resources for bundled llama-server'
 )
+assert(
+  baseConfig.build?.beforeDevCommand === 'pnpm --dir .. tauri:web:dev',
+  'desktop Tauri dev hook must execute the root package script from Elephant/'
+)
+assert(
+  baseConfig.build?.beforeBuildCommand ===
+    'pnpm --dir .. tauri:llama:install && pnpm --dir .. tauri:codex:install && pnpm --dir .. tauri:web:build',
+  'desktop Tauri build hook must execute all root package scripts from Elephant/'
+)
 
 assert(
   Array.isArray(linuxConfig.bundle?.targets),
@@ -61,8 +70,12 @@ assert(
 )
 
 assert(
-  androidConfig.build?.beforeBuildCommand === 'pnpm tauri:web:build',
-  'Android build must not run the desktop llama-server installer'
+  androidConfig.build?.beforeDevCommand === 'pnpm --dir .. tauri:web:dev',
+  'Android dev hook must execute the root renderer script from Elephant/'
+)
+assert(
+  androidConfig.build?.beforeBuildCommand === 'pnpm --dir .. tauri:web:build',
+  'Android build must run only the root renderer build and skip desktop runtime installers'
 )
 assert(
   Array.isArray(androidConfig.bundle?.resources),

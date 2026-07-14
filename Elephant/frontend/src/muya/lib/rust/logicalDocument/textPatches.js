@@ -15,7 +15,10 @@ export const replaceText = (document, patch) => {
   if (!utf16Boundary(value, start) || !utf16Boundary(value, end) || start > end) {
     throw new RangeError(`Invalid UTF-16 range ${String(start)}..${String(end)} for node ${node.id}.`)
   }
-  node.kind.value.value = value.slice(0, start) + String(patch.inserted) + value.slice(end)
+  const replacement = value.slice(0, start) + String(patch.inserted) + value.slice(end)
+  if (node.kind.value.type === 'text') node.kind.value.value = replacement
+  else if (node.kind.value.type === 'code_span') node.kind.value.code = replacement
+  else throw new TypeError(`Node ${node.id} is not editable inline content.`)
 }
 
 export const insertNode = (document, parentId, index, rawNode) => {

@@ -2,113 +2,29 @@ name: Test
 
 on:
   pull_request:
-    types: [synchronize]
+    types: [opened, synchronize, reopened]
 
-permissions:
-  contents: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  patch-wiki-metadata-refresh:
-    if: github.event.pull_request.head.ref == 'assistant/wiki-organization-continuation'
-    runs-on: ubuntu-24.04
+  test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Run Unit Tests
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm test 2>&1 | tee vitest-output.txt
+
+      - name: Upload Vitest output
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          ref: assistant/wiki-organization-continuation
-          fetch-depth: 0
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Persist refreshed semantic quality metadata
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('Elephant/backend/tauri/src/knowledge_wiki_library.rs')
-          source = path.read_text()
-          old_upsert = '''               source_titles_json=excluded.source_titles_json,
-               score=excluded.score,
-               origin=excluded.origin,
-'''
-          new_upsert = '''               source_titles_json=excluded.source_titles_json,
-               score=excluded.score,
-               metadata_json=excluded.metadata_json,
-               origin=excluded.origin,
-'''
-          if old_upsert in source:
-              source = source.replace(old_upsert, new_upsert, 1)
-          elif new_upsert not in source:
-              raise SystemExit('saved-candidate UPSERT block not found')
-
-          marker = '''    #[test]
-    fn candidate_rejection_is_persisted_and_can_be_cleared() {
-'''
-          regression = '''    #[test]
-    fn saved_candidate_refresh_updates_quality_metadata() {
-        let root = temporary_vault("metadata-refresh");
-        fs::create_dir_all(&root).expect("create temporary vault");
-        let store = KnowledgeStore::open(&root).expect("open knowledge store");
-        let mut item = WikiLibraryItem {
-            id: candidate_id("Rust"),
-            kind: "suggestion".into(),
-            status: "semantic".into(),
-            title: "Rust".into(),
-            topic: "Rust".into(),
-            excerpt: "Rust notes".into(),
-            reason: "Initial community".into(),
-            preview: "Rust notes".into(),
-            suggested_sections: vec!["Ownership".into()],
-            source_titles: vec!["Rust guide".into()],
-            path: None,
-            source_paths: vec!["Notes/Rust.md".into()],
-            score: 3,
-            core_source_count: 2,
-            confidence: 0.42,
-            distinctiveness: 0.31,
-            model_id: String::new(),
-            markdown: String::new(),
-            draft_id: None,
-            citations_count: 0,
-            updated_at: 1,
-        };
-        persist_saved_candidate(&store, &item, "semantic").expect("persist candidate");
-
-        item.score = 9;
-        item.core_source_count = 7;
-        item.confidence = 0.81;
-        item.distinctiveness = 0.66;
-        persist_saved_candidate(&store, &item, "semantic").expect("refresh candidate");
-
-        let refreshed = saved_candidate_items(&store)
-            .expect("read candidates")
-            .into_iter()
-            .find(|candidate| candidate.topic == "rust")
-            .expect("refreshed candidate");
-        assert_eq!(refreshed.score, 9);
-        assert_eq!(refreshed.core_source_count, 7);
-        assert!((refreshed.confidence - 0.81).abs() < 0.0001);
-        assert!((refreshed.distinctiveness - 0.66).abs() < 0.0001);
-
-        drop(store);
-        fs::remove_dir_all(root).expect("remove temporary vault");
-    }
-
-'''
-          if 'fn saved_candidate_refresh_updates_quality_metadata()' not in source:
-              if marker not in source:
-                  raise SystemExit('candidate test insertion point not found')
-              source = source.replace(marker, regression + marker, 1)
-          path.write_text(source)
-          PY
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
-
-      - name: Commit source correction
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add Elephant/backend/tauri/src/knowledge_wiki_library.rs
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "fix(wiki): refresh persisted proposal quality metadata"
-          git push origin HEAD:assistant/wiki-organization-continuation
+          name: vitest-output
+          path: vitest-output.txt
+          if-no-files-found: ignore

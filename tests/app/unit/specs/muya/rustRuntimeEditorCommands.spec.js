@@ -36,7 +36,7 @@ describe('Elephant Rust editor command routing', () => {
     })
   })
 
-  it('preserves image source, alt text and title', () => {
+  it('preserves image insertion, replacement and deletion payloads', () => {
     expect(
       rustBusCommand('insert-image', {
         source: 'assets/image.png',
@@ -54,6 +54,22 @@ describe('Elephant Rust editor command routing', () => {
       source: 'image.png',
       alt: '',
       title: null
+    })
+    expect(rustBusCommand('replace-image', {
+      image: 42,
+      source: 'new.png',
+      alt: 'new',
+      title: 'Replacement'
+    })).toEqual({
+      type: 'replace_image',
+      image: 42,
+      source: 'new.png',
+      alt: 'new',
+      title: 'Replacement'
+    })
+    expect(rustBusCommand('delete-image', { image: 42 })).toEqual({
+      type: 'delete_image',
+      image: 42
     })
   })
 

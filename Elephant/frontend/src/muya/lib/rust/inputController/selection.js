@@ -11,13 +11,15 @@ const pointFromDom = (renderer, node, offset) => {
 
   const id = Number(element.getAttribute(NODE_ATTRIBUTE))
   const logical = renderer.logical.node(id)
-  if (logical?.kind?.value?.type !== 'text') {
-    throw new TypeError(`Browser selection endpoint ${String(id)} is not a Rust text node.`)
+  if (!['text', 'code_span'].includes(logical?.kind?.value?.type)) {
+    throw new TypeError(
+      `Browser selection endpoint ${String(id)} is not editable Rust inline content.`
+    )
   }
 
   const text = element.firstChild
   if (!text || text.nodeType !== 3) {
-    throw new TypeError(`Muya Rust text DOM for node ${String(id)} is missing.`)
+    throw new TypeError(`Muya Rust editable DOM for node ${String(id)} is missing.`)
   }
 
   let utf16Offset

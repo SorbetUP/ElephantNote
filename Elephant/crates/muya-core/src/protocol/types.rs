@@ -38,6 +38,13 @@ pub enum ProtocolCommand {
     alt: String,
     title: Option<String>,
   },
+  ReplaceImage {
+    image: NodeId,
+    source: String,
+    alt: String,
+    title: Option<String>,
+  },
+  DeleteImage { image: NodeId },
   IndentListItem,
   OutdentListItem,
   SetTaskChecked {

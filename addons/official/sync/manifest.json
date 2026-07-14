@@ -23,9 +23,7 @@
     "sidecars": {
       "macos-aarch64": "native/macos-aarch64/elephant-sync-service",
       "macos-x86_64": "native/macos-x86_64/elephant-sync-service",
-      "linux-aarch64": "native/linux-aarch64/elephant-sync-service",
       "linux-x86_64": "native/linux-x86_64/elephant-sync-service",
-      "windows-aarch64": "native/windows-aarch64/elephant-sync-service.exe",
       "windows-x86_64": "native/windows-x86_64/elephant-sync-service.exe"
     },
     "mobile": {

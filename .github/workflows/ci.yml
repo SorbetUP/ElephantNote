@@ -177,13 +177,18 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          pnpm tauri:llama:install
-          pnpm tauri:web:build
-          cd Elephant/backend/tauri
-          cargo tauri build --bundles app
+          pnpm tauri:llama:install 2>&1 | tee macos-llama-install.log
+          pnpm tauri:web:build 2>&1 | tee macos-web-build.log
+          (
+            cd Elephant/backend/tauri
+            cargo tauri build --bundles app
+          ) 2>&1 | tee macos-tauri-build.log
 
       - name: Launch packaged app and verify visible window
-        run: pnpm tauri:mac:smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm tauri:mac:smoke 2>&1 | tee macos-window-smoke.log
 
       - name: Upload macOS bundle diagnostics on failure
         if: failure()
@@ -191,8 +196,12 @@ jobs:
         with:
           name: tauri-macos-packaged-smoke-diagnostics
           path: |
+            macos-llama-install.log
+            macos-web-build.log
+            macos-tauri-build.log
+            macos-window-smoke.log
             Elephant/backend/tauri/target/release/bundle/macos/
-          if-no-files-found: ignore
+          if-no-files-found: warn
           retention-days: 7
 
   tauri-rust:

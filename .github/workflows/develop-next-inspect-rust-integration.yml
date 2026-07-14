@@ -1,0 +1,29 @@
+name: Inspect develop_next Rust integration
+
+on:
+  pull_request:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/develop-next-inspect-rust-integration.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report latest directed integration run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh run list \
+            --workflow develop-next-integrate-rust-editor.yml \
+            --branch develop_next \
+            --event workflow_dispatch \
+            --limit 5 \
+            --json databaseId,status,conclusion,headSha,displayTitle,createdAt,updatedAt

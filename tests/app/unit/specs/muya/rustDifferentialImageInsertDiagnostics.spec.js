@@ -62,6 +62,13 @@ const cases = [
     image: { source: 'https://example.com/a.png', alt: '', title: null }
   },
   {
+    name: 'prefer selected text over an explicit alt value',
+    initial: 'alpha',
+    selectJs: (muya) => setJsSelectionByText(muya, 'alpha', 1, 4),
+    selectRust: (rust) => rust.setSelectionByText('alpha', 1, 4),
+    image: { source: '/tmp/picture.png', alt: 'explicit', title: null }
+  },
+  {
     name: 'insert at the focus of a cross-block selection',
     initial: 'alpha\n\nbeta',
     expected: 'alpha\n\nbe![picture](/tmp/picture.png)ta\n',
@@ -82,12 +89,47 @@ const cases = [
     }
   },
   {
+    name: 'normalize a local fragment without corrupting the path',
+    initial: 'alpha',
+    selectJs: (muya) => setJsSelectionByText(muya, 'alpha', 2),
+    selectRust: (rust) => rust.setSelectionByText('alpha', 2),
+    image: { source: '/tmp/a b.png#preview', alt: '', title: null }
+  },
+  {
+    name: 'preserve a data URI image source',
+    initial: 'alpha',
+    selectJs: (muya) => setJsSelectionByText(muya, 'alpha', 2),
+    selectRust: (rust) => rust.setSelectionByText('alpha', 2),
+    image: { source: 'data:image/png;base64,AA==', alt: 'pixel', title: null }
+  },
+  {
     name: 'insert an image inside strong text',
     initial: '**alpha**',
     expected: '**al![picture](/tmp/picture.png)pha**\n',
     // Strong text is represented by Muya as an inline descendant rather than the
     // paragraphContent block itself. Select the actual editable descendant so
     // the JS oracle exercises the same caret that the Rust logical document does.
+    selectJs: (muya) => setJsSelectionByAnyText(muya, 'alpha', 2),
+    selectRust: (rust) => rust.setSelectionByText('alpha', 2),
+    image: { source: '/tmp/picture.png', alt: '', title: null }
+  },
+  {
+    name: 'insert an image inside emphasis text',
+    initial: '*alpha*',
+    selectJs: (muya) => setJsSelectionByAnyText(muya, 'alpha', 2),
+    selectRust: (rust) => rust.setSelectionByText('alpha', 2),
+    image: { source: '/tmp/picture.png', alt: '', title: null }
+  },
+  {
+    name: 'match Muya image behavior inside inline code',
+    initial: '`alpha`',
+    selectJs: (muya) => setJsSelectionByAnyText(muya, 'alpha', 2),
+    selectRust: (rust) => rust.setSelectionByText('alpha', 2),
+    image: { source: '/tmp/picture.png', alt: '', title: null }
+  },
+  {
+    name: 'match Muya image behavior inside a link label',
+    initial: '[alpha](https://example.com)',
     selectJs: (muya) => setJsSelectionByAnyText(muya, 'alpha', 2),
     selectRust: (rust) => rust.setSelectionByText('alpha', 2),
     image: { source: '/tmp/picture.png', alt: '', title: null }
@@ -130,7 +172,9 @@ describeBundled('Muya image insertion differential traces', () => {
       })
       jsEditor = result.jsEditor
       expect(result.jsMarkdown).toBe(result.rustMarkdown)
-      expect(result.rustMarkdown).toBe(testCase.expected)
+      if (testCase.expected !== undefined) {
+        expect(result.rustMarkdown).toBe(testCase.expected)
+      }
     })
   }
 

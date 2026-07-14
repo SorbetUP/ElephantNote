@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - develop_next
+  pull_request:
+    paths:
+      - '.github/workflows/develop-next-legacy-import-diagnostic.yml'
+      - 'Elephant/frontend/app/**'
+      - 'Elephant/frontend/src/renderer/src/**'
+      - 'addons/official/**'
   workflow_dispatch:
 
 permissions:

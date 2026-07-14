@@ -1,8 +1,12 @@
 mod crossing_marks;
 pub mod inline;
 
-use crate::model::{Alignment, BlockKind, Document, ListKind, NodeId, NodeKind, SourceRange};
-use crate::syntax::block::{blockquote, fenced_code, heading, list, paragraph, table, thematic_break};
+use crate::model::{
+  Alignment, BlockKind, Document, FrontMatterStyle, ListKind, NodeId, NodeKind, SourceRange,
+};
+use crate::syntax::block::{
+  blockquote, fenced_code, front_matter, heading, list, paragraph, table, thematic_break,
+};
 
 #[derive(Clone, Debug)]
 struct SourceLine {
@@ -21,6 +25,13 @@ pub fn parse_markdown(markdown: &str) -> Document {
     if line.text.trim().is_empty() {
       index += 1;
       continue;
+    }
+
+    if index == 0 {
+      if let Some(next) = try_parse_front_matter(&mut document, &lines) {
+        index = next;
+        continue;
+      }
     }
 
     if let Some(opening) = fenced_code::parse_opening(&line.text) {
@@ -90,6 +101,32 @@ pub fn parse_markdown(markdown: &str) -> Document {
   }
 
   document
+}
+
+fn try_parse_front_matter(document: &mut Document, lines: &[SourceLine]) -> Option<usize> {
+  let opening = lines.first()?;
+  let style = front_matter::parse_opening(&opening.text)?;
+  let closing_index = lines
+    .iter()
+    .enumerate()
+    .skip(1)
+    .find_map(|(index, line)| front_matter::is_closing(&line.text, style).then_some(index))?;
+  if closing_index == 1 {
+    return None;
+  }
+
+  let body = lines[1..closing_index]
+    .iter()
+    .map(|line| line.text.as_str())
+    .collect::<Vec<_>>()
+    .join("\n");
+  append_literal_block(
+    document,
+    BlockKind::FrontMatter { style },
+    &body,
+    SourceRange::new(opening.start, lines[closing_index].end),
+  );
+  Some(closing_index + 1)
 }
 
 fn source_lines(markdown: &str) -> Vec<SourceLine> {
@@ -380,6 +417,38 @@ fn append_literal_block(
 mod tests {
   use super::*;
   use crate::serializer::to_markdown;
+
+  #[test]
+  fn parses_yaml_and_toml_front_matter_before_other_blocks() {
+    let yaml = parse_markdown("---\ntitle: Alpha\ntags:\n  - one\n---\n\nbody");
+    let first = yaml.children(yaml.root).next().unwrap();
+    assert!(matches!(
+      first.kind,
+      NodeKind::Block(BlockKind::FrontMatter {
+        style: FrontMatterStyle::Yaml
+      })
+    ));
+    assert_eq!(
+      to_markdown(&yaml),
+      "---\ntitle: Alpha\ntags:\n  - one\n---\n\nbody"
+    );
+
+    let toml = parse_markdown("+++\ntitle = \"Alpha\"\n+++\n\nbody");
+    let first = toml.children(toml.root).next().unwrap();
+    assert!(matches!(
+      first.kind,
+      NodeKind::Block(BlockKind::FrontMatter {
+        style: FrontMatterStyle::Toml
+      })
+    ));
+    assert_eq!(to_markdown(&toml), "+++\ntitle = \"Alpha\"\n+++\n\nbody");
+  }
+
+  #[test]
+  fn leaves_an_unclosed_front_matter_delimiter_as_markdown() {
+    let document = parse_markdown("---\ntitle: Alpha");
+    assert_eq!(to_markdown(&document), "---\n\ntitle: Alpha");
+  }
 
   #[test]
   fn parses_nested_lists_structurally() {

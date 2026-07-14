@@ -7,6 +7,10 @@ import packageJson from './package.json' with { type: 'json' }
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const apiContractsRuntime = resolve(__dirname, 'Elephant/shared/apiContractsRuntime.js')
+const muyaWasmGenerated = resolve(
+  __dirname,
+  'Elephant/frontend/src/muya/lib/rust/generated/muya_wasm.js'
+)
 const npmPackageAliases = Object.fromEntries(
   Object.keys({
     ...(packageJson.dependencies || {}),
@@ -42,6 +46,7 @@ export default defineConfig({
   resolve: {
     alias: {
       ...npmPackageAliases,
+      'muya-rust-wasm-bundle': muyaWasmGenerated,
       'electron-log/renderer': resolve(__dirname, 'tests/app/unit/stubs/electronLog.js'),
       'electron-log': resolve(__dirname, 'tests/app/unit/stubs/electronLog.js'),
       'elephant-front': resolve(__dirname, 'Elephant/frontend/app'),

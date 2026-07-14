@@ -85,7 +85,7 @@ describe('Elephant Rust runtime image integration', () => {
 
     expect(dispatch).toHaveBeenCalledWith('replace-image', {
       image: 42,
-      source: 'assets/image.png',
+      source: 'file:///vault/assets/image.png',
       alt: 'diagram',
       title: 'Architecture'
     })
@@ -102,7 +102,7 @@ describe('Elephant Rust runtime image integration', () => {
     expect(editorStore.ASK_FOR_IMAGE_PATH).toHaveBeenCalledTimes(1)
     expect(dispatch).toHaveBeenCalledWith('replace-image', {
       image: 42,
-      source: 'assets/replacement.png',
+      source: 'file:///vault/assets/replacement.png',
       alt: 'diagram',
       title: 'Architecture'
     })

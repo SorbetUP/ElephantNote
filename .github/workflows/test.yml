@@ -36,11 +36,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            --config vite.tauri.config.mjs \
-            --root . \
-            --environment jsdom \
-            2>&1 | tee vitest-output.txt
+          pnpm test 2>&1 | tee vitest-output.txt
 
       - name: Upload Vitest output
         if: always()

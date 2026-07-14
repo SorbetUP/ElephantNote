@@ -1,30 +1,44 @@
 import { describe, expect, it } from 'vitest'
-import { validateApiPayload } from 'common/elephantnote/apiContracts'
+import {
+  API_PAYLOAD_SCHEMAS,
+  ELEPHANTNOTE_API_ACTIONS,
+  validateApiPayload
+} from 'common/elephantnote/apiContracts'
 
-describe('ElephantNote API contracts', () => {
-  it('accepts explicit valid sync.plan operations', () => {
-    const payload = { operations: ['init', 'pull'], pull: { remoteName: 'origin' } }
-
-    expect(validateApiPayload('sync.plan', payload)).toBe(payload)
+describe('ElephantNote core API contracts', () => {
+  it('validates core note writes and text search', () => {
+    const note = { relativePath: 'Notes/A.md', markdown: '# A' }
+    const search = { query: 'alpha', mode: 'text', limit: 20 }
+    expect(validateApiPayload('notes.write', note)).toBe(note)
+    expect(validateApiPayload('search.query', search)).toBe(search)
   })
 
-  it('rejects unknown sync.plan operations instead of falling back to the default plan', () => {
-    expect(() => validateApiPayload('sync.plan', { operations: ['delete-all'] })).toThrow(/operations/)
+  it('rejects invalid core payload fields', () => {
+    expect(() => validateApiPayload('notes.write', { relativePath: '', markdown: '# A' })).toThrow(/relativePath/)
+    expect(() => validateApiPayload('search.query', { query: '', mode: 'semantic' })).toThrow(/query|mode/)
   })
 
-  it('rejects non-array sync.plan operations', () => {
-    expect(() => validateApiPayload('sync.plan', { operations: 'pull' })).toThrow(/operations/)
-  })
-
-  it('accepts local runtime AI config payloads used by the Tauri bridge', () => {
-    const payload = {
-      localRuntime: {
-        llamaServerMode: 'bundled',
-        llamaServerPath: '',
-        llamaBaseUrl: 'http://127.0.0.1:11434'
-      }
+  it('does not publish optional addon actions in the core registry', () => {
+    const optionalActions = [
+      'sync.plan',
+      'sync.run',
+      'ai.config.set',
+      'models.download',
+      'ocr.extract',
+      'search.inspect',
+      'wiki.propose',
+      'graph.rebuild'
+    ]
+    const registered = new Set(Object.values(ELEPHANTNOTE_API_ACTIONS))
+    for (const action of optionalActions) {
+      expect(registered.has(action)).toBe(false)
+      expect(API_PAYLOAD_SCHEMAS).not.toHaveProperty(action)
     }
+  })
 
-    expect(validateApiPayload('ai.config.set', payload)).toBe(payload)
+  it('leaves addon-specific validation to the installed package API', () => {
+    const payload = { operations: ['init', 'pull'] }
+    expect(validateApiPayload('sync.plan', payload)).toBe(payload)
+    expect(validateApiPayload('ai.config.set', { provider: 'openrouter' })).toEqual({ provider: 'openrouter' })
   })
 })

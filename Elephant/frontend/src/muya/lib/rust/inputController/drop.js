@@ -34,32 +34,59 @@ const placeDropCaret = (controller, event) => {
   selection.addRange(range)
 }
 
-export const handleTextDragOver = (controller, event) => {
-  const transfer = event.dataTransfer
-  if (!transfer || transferHasFiles(transfer) || !transferHasText(transfer)) return false
+const claimDrop = (event) => {
   event.preventDefault()
   event.stopPropagation?.()
   try {
-    transfer.dropEffect = 'copy'
+    event.dataTransfer.dropEffect = 'copy'
   } catch {
     // Some DataTransfer implementations expose a read-only dropEffect.
   }
+}
+
+export const handleDragOver = (controller, event) => {
+  const transfer = event.dataTransfer
+  if (!transfer) return false
+  if (transferHasFiles(transfer)) {
+    if (!controller.onFileDrop) return false
+    claimDrop(event)
+    return true
+  }
+  if (!transferHasText(transfer)) return false
+  claimDrop(event)
   return true
 }
 
-export const handleTextDrop = (controller, event) => {
+export const handleDrop = (controller, event) => {
   const transfer = event.dataTransfer
-  if (!transfer || transferHasFiles(transfer) || !transferHasText(transfer)) return false
+  if (!transfer) return false
+  if (transferHasFiles(transfer)) return handleFileDrop(controller, event)
+  if (!transferHasText(transfer)) return false
+
   placeDropCaret(controller, event)
   const selection = controller.readSelection()
   if (!selection) return false
   const markdown = markdownFromClipboard(event, controller.container.ownerDocument)
   if (markdown === null) return false
-  event.preventDefault()
-  event.stopPropagation?.()
+  claimDrop(event)
   controller.schedule(async () => {
     await controller.bridge.setSelection(selection)
     await controller.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
+  })
+  return true
+}
+
+const handleFileDrop = (controller, event) => {
+  if (!controller.onFileDrop) return false
+  const files = Array.from(event.dataTransfer?.files || [])
+  if (!files.length) return false
+  placeDropCaret(controller, event)
+  const selection = controller.readSelection()
+  if (!selection) return false
+  claimDrop(event)
+  controller.schedule(async () => {
+    await controller.bridge.setSelection(selection)
+    await controller.onFileDrop(files)
   })
   return true
 }

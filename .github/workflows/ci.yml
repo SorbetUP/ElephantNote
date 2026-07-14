@@ -79,7 +79,11 @@ jobs:
           pnpm lint 2>&1 | tee eslint-output.txt
 
       - name: ElephantNote contract tests
-        run: pnpm exec vitest run tests/app/unit/specs/main/elephantnote
+        shell: bash
+        run: |
+          mkdir -p build/coverage
+          set -o pipefail
+          pnpm exec vitest run tests/app/unit/specs/main/elephantnote --reporter=verbose 2>&1 | tee build/coverage/elephantnote-contract-tests.log
 
       - name: Unit suite
         run: pnpm test:unit

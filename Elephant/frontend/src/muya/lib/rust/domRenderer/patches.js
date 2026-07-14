@@ -27,9 +27,10 @@ export const applyDomPatch = (renderer, patch) => {
 const syncText = (renderer, id) => {
   const node = renderer.logical.node(id)
   const element = renderer.requiredElement(id)
-  const value = node?.kind?.value?.value
-  if (node?.kind?.value?.type !== 'text' || typeof value !== 'string') {
-    throw new TypeError(`Muya Rust node ${id} is not text.`)
+  const kind = node?.kind?.value || {}
+  const value = kind.type === 'text' ? kind.value : kind.type === 'code_span' ? kind.code : null
+  if (typeof value !== 'string') {
+    throw new TypeError(`Muya Rust node ${id} is not editable inline content.`)
   }
   const text = element.firstChild
   if (!text || text.nodeType !== 3) {

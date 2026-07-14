@@ -101,6 +101,7 @@ jobs:
             tests/app/unit/addons/builtinAddons.spec.js \
             tests/app/unit/addons/aiTabsAndRailBorder.spec.js \
             tests/app/unit/addons/physicalAddonIsolation.spec.js \
+            tests/app/unit/addons/coreBridgePhysicalAbsence.spec.js \
             tests/app/unit/addons/nativeMobileCompatibility.spec.js \
             tests/app/unit/addons/searchPackageOwnership.spec.js \
             tests/app/unit/addons/googleKeepPackageOwnership.spec.js \

@@ -1,0 +1,61 @@
+name: Develop Next Legacy Import Diagnostic
+
+on:
+  push:
+    branches:
+      - develop_next
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan production legacy editor imports
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          roots = [
+              Path('Elephant/frontend/app'),
+              Path('Elephant/frontend/src/renderer/src'),
+              Path('addons/official'),
+          ]
+          extensions = {'.js', '.mjs', '.ts', '.vue'}
+          module_pattern = re.compile(
+              r"(?:from\s+|import\s*\(|import\s+)[\"'](?P<module>[^\"']+)[\"']"
+          )
+          violations = []
+          for root in roots:
+              for path in root.rglob('*'):
+                  if path.suffix not in extensions:
+                      continue
+                  if path.name.endswith(('.spec.js', '.test.js')):
+                      continue
+                  relative = path.as_posix()
+                  text = path.read_text(errors='ignore')
+                  for match in module_pattern.finditer(text):
+                      module = match.group('module')
+                      if module == 'muya' or module.startswith('muya/'):
+                          violations.append(f'{relative}: legacy package import {module!r}')
+                      if 'frontend/src/muya' in module:
+                          violations.append(f'{relative}: direct legacy source import {module!r}')
+          Path('legacy-editor-imports.txt').write_text(
+              '\n'.join(sorted(set(violations))) + ('\n' if violations else '')
+          )
+          print(Path('legacy-editor-imports.txt').read_text() or 'No violations')
+          PY
+
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: develop-next-legacy-editor-imports
+          path: legacy-editor-imports.txt
+          if-no-files-found: error
+          retention-days: 1

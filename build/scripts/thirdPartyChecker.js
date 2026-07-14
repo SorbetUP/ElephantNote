@@ -1,5 +1,7 @@
 'use strict'
 
+const fs = require('fs')
+const path = require('path')
 const checker = require('license-checker')
 
 const normalizeLicenseValue = (licenses = '') => Array.isArray(licenses) ? licenses.join(' OR ') : String(licenses || '')
@@ -9,6 +11,13 @@ const isUsableLicenseMetadata = (licenses = '') => {
   if (!value) return false
   if (/^(UNKNOWN|UNLICENSED)$/i.test(value)) return false
   return true
+}
+
+const writeValidationLog = (rootDir, lines) => {
+  const targetDir = path.join(rootDir, 'build', 'coverage')
+  fs.mkdirSync(targetDir, { recursive: true })
+  fs.writeFileSync(path.join(targetDir, 'license-validation.log'), `${lines.join('\n')}\n`)
+  for (const line of lines) console.log(line)
 }
 
 const getLicenses = (rootDir, callback) => {
@@ -31,11 +40,11 @@ const getLicenses = (rootDir, callback) => {
 const validateLicenses = (rootDir) => {
   getLicenses(rootDir, (err, packages, checker) => {
     if (err) {
-      console.log(`[ERROR] ${err}`)
+      writeValidationLog(rootDir, [`[ERROR] ${err}`])
       process.exit(1)
     }
     if (!packages || Object.keys(packages).length === 0) {
-      console.log('[ERROR] No packages found — check your start path and filters.')
+      writeValidationLog(rootDir, ['[ERROR] No packages found — check your start path and filters.'])
       process.exit(1)
     }
 
@@ -44,14 +53,14 @@ const validateLicenses = (rootDir) => {
       .map(([name, metadata]) => ({ name, licenses: metadata.licenses }))
 
     if (disallowed.length) {
-      console.log('[ERROR] Dependencies without usable license metadata:')
-      for (const item of disallowed) {
-        console.log(`- ${item.name}: ${item.licenses}`)
-      }
+      writeValidationLog(rootDir, [
+        '[ERROR] Dependencies without usable license metadata:',
+        ...disallowed.map((item) => `- ${item.name}: ${item.licenses}`)
+      ])
       process.exit(1)
     }
 
-    console.log(checker.asSummary(packages))
+    writeValidationLog(rootDir, [checker.asSummary(packages)])
   })
 }
 

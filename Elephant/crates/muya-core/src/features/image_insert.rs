@@ -37,6 +37,32 @@ impl InsertImage {
       None => self.alt,
     };
     let source = normalize_source(&self.source);
+    let title = self.title.filter(|value| !value.is_empty());
+    if matches!(
+      document.node(text).map(|node| &node.kind),
+      Some(NodeKind::Inline(InlineKind::CodeSpan { .. }))
+    ) {
+      let inserted = image_markdown(&source, &alt, title.as_deref());
+      let alt_start = start + 2;
+      return Ok(Transaction {
+        operations: vec![Operation::ReplaceText {
+          node: text,
+          range: Utf16Range::new(start, end),
+          inserted,
+        }],
+        selection_before: selection,
+        selection_after: Selection {
+          anchor: SelectionPoint {
+            node: text,
+            offset_utf16: alt_start,
+          },
+          focus: SelectionPoint {
+            node: text,
+            offset_utf16: alt_start + alt.encode_utf16().count() as u32,
+          },
+        },
+      });
+    }
     let parent = document
       .node(text)
       .and_then(|node| node.parent)
@@ -63,7 +89,7 @@ impl InsertImage {
             image,
             NodeKind::Inline(InlineKind::Image {
               source,
-              title: self.title.filter(|value| !value.is_empty()),
+              title,
               alt,
             }),
             None,
@@ -91,8 +117,16 @@ impl InsertImage {
 fn text_value(document: &Document, node: NodeId) -> Result<&str, EditError> {
   match document.node(node).map(|node| &node.kind) {
     Some(NodeKind::Inline(InlineKind::Text { value })) => Ok(value),
+    Some(NodeKind::Inline(InlineKind::CodeSpan { code })) => Ok(code),
     Some(_) => Err(EditError::NotTextNode(node)),
     None => Err(EditError::NodeNotFound(node)),
+  }
+}
+
+fn image_markdown(source: &str, alt: &str, title: Option<&str>) -> String {
+  match title {
+    Some(title) => format!(r#"![{alt}]({source} "{title}")"#),
+    None => format!("![{alt}]({source})"),
   }
 }
 

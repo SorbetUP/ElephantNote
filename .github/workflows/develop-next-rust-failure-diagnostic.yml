@@ -16,12 +16,12 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Print failed Rust test assertions
+      - name: Print patch application failure
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
-          gh run view 29346892454 --log-failed \
-            | grep -E -C 6 'FAILED|failures:|panicked at|assertion `left == right` failed|test result:|left:|right:' \
-            | tail -n 500
+          gh run view 29347315252 --log-failed \
+            | grep -E -C 8 'unexpectedly|Traceback|SystemExit|Process completed|Preserve rejected' \
+            | tail -n 250

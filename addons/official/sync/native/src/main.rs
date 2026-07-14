@@ -443,6 +443,7 @@ async fn handle_incoming_connection(
       send
         .finish()
         .map_err(|error| format!("Failed to finish pairing response stream: {error}"))?;
+      connection.closed().await;
       Ok(())
     }
     ControlMessage::SyncOpen(open) => {

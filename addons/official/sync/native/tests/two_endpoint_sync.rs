@@ -7,9 +7,9 @@ use elephant_sync_service::{
   session::{read_baseline, run_all_sessions, serve_sync_session},
 };
 use iroh::{
-  endpoint::presets,
+  endpoint::{presets, Connection},
   protocol::{AcceptError, ProtocolHandler, Router},
-  Connection, Endpoint, EndpointAddr, Watcher as _,
+  Endpoint, EndpointAddr, Watcher as _,
 };
 use serde_json::to_value;
 use std::{fmt, fs, io, path::PathBuf, time::Duration};

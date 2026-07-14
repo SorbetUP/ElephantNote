@@ -6,16 +6,33 @@ pub(super) fn ensure_editable_text(document: &mut Document) -> NodeId {
   if let Some(text) = first_text_descendant(document, document.root) {
     return text;
   }
+  if let Some(parent) = first_inline_parent(document) {
+    let text = allocate_empty_text(document);
+    document.append_child(parent, text);
+    return text;
+  }
   let paragraph = document.allocate(NodeKind::Block(BlockKind::Paragraph), None);
-  let text = document.allocate(
+  let text = allocate_empty_text(document);
+  document.append_child(paragraph, text);
+  document.append_child(document.root, paragraph);
+  text
+}
+
+fn first_inline_parent(document: &Document) -> Option<NodeId> {
+  document.nodes.values().find_map(|node| {
+    matches!(node.kind, NodeKind::Inline(_))
+      .then_some(node.parent)
+      .flatten()
+  })
+}
+
+fn allocate_empty_text(document: &mut Document) -> NodeId {
+  document.allocate(
     NodeKind::Inline(InlineKind::Text {
       value: String::new(),
     }),
     None,
-  );
-  document.append_child(paragraph, text);
-  document.append_child(document.root, paragraph);
-  text
+  )
 }
 
 pub(super) fn first_text_descendant(

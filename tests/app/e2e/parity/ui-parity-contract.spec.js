@@ -76,7 +76,9 @@ test.describe('Native app UI parity contract baseline', () => {
   test('Electron baseline can open the seeded note content', async() => {
     const { app, page } = await launchElectronWithSeededVault()
     try {
-      await page.getByText('Alpha note').first().click()
+      const card = page.locator('.en-note-card').filter({ hasText: 'Alpha note' }).first()
+      await expect(card).toBeVisible()
+      await card.click()
       await expect(page.getByText('Visible alpha body line.').first()).toBeVisible({ timeout: 5000 })
     } finally {
       await app.close()

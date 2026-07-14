@@ -20,4 +20,5 @@ jobs:
       - name: Dispatch directed Rust editor integration
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: gh workflow run develop-next-integrate-rust-editor.yml --ref develop_next

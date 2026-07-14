@@ -92,3 +92,29 @@ fn extracted_ai_process_runtimes_are_absent_from_core() {
   assert!(!dev_script.contains("ensure-tauri-llama-server"), "core development startup must not install llama-server");
   assert!(!dev_script.contains("ensure-tauri-codex-runtime"), "core development startup must not install Codex");
 }
+
+#[test]
+fn extracted_sync_runtime_is_physically_absent_from_core() {
+  let root = repo_root();
+  let lib_min = read_text("Elephant/backend/tauri/src/lib_min.rs");
+  let vault_mod = read_text("Elephant/backend/tauri/src/vault/mod.rs");
+  let cargo = read_text("Elephant/backend/tauri/Cargo.toml");
+  let removed = [
+    "Elephant/backend/tauri/src/sync_commands.rs",
+    "Elephant/backend/tauri/src/sync_contract_tests.rs",
+    "Elephant/backend/tauri/src/sync/mod.rs",
+    "Elephant/backend/tauri/src/vault/sync.rs",
+    "Elephant/backend/tauri/src/vault/sync_iroh/network.rs",
+  ];
+
+  for path in removed {
+    assert!(!root.join(path).exists(), "legacy core Sync path must stay absent: {path}");
+  }
+  assert!(!lib_min.contains("mod sync_commands;"));
+  assert!(!lib_min.contains("pub mod sync;"));
+  assert!(!lib_min.contains("IrohSyncState"));
+  assert!(!lib_min.contains("sync_commands::iroh_sync_"));
+  assert!(!vault_mod.contains("pub mod sync;"));
+  assert!(!cargo.contains("iroh ="));
+  assert!(!cargo.contains("iroh-mdns-address-lookup"));
+}

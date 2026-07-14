@@ -236,7 +236,8 @@ jobs:
             const knowledge = this.knowledgeProvider()
             if (!knowledge || typeof knowledge.listWikis !== 'function') return local
             try {
-              const remote = (Array.isArray(await knowledge.listWikis({ limit: 500 })) ? await knowledge.listWikis({ limit: 500 }) : [])
+              const drafts = await knowledge.listWikis({ limit: 500 })
+              const remote = (Array.isArray(drafts) ? drafts : [])
                 .map(knowledgeRecord)
                 .filter((record) => record.id)
               const ids = new Set(remote.map((record) => record.id))

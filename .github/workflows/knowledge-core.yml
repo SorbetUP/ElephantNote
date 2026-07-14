@@ -52,3 +52,5 @@ jobs:
           fi
           git commit -m "test(wiki): align related Wiki rendering contract"
           git push origin HEAD:assistant/wiki-organization-continuation
+
+# Registered on the default branch so pull_request.reopened can execute it.

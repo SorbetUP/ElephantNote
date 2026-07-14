@@ -62,6 +62,15 @@ export const rustBusCommand = (event, payload) => {
         image.title || null
       )
     }
+    case 'replace-image':
+      return editorCommands.replaceImage(
+        payload?.image,
+        payload?.source || payload?.src || '',
+        payload?.alt || '',
+        payload?.title || null
+      )
+    case 'delete-image':
+      return editorCommands.deleteImage(payload?.image)
     default:
       return null
   }

@@ -212,6 +212,9 @@ impl SyncService {
       }),
     )
     .await?;
+    send
+      .finish()
+      .map_err(|error| format!("Failed to finish pairing request stream: {error}"))?;
     let accepted = match expect_control(read_control(&mut recv).await?, "pairAccepted")? {
       ControlMessage::PairAccepted(accepted) => accepted,
       _ => unreachable!(),
@@ -219,7 +222,6 @@ impl SyncService {
     if accepted.endpoint_addr.id != connection.remote_id() {
       return Err("Paired device returned an inconsistent Iroh identity".to_string());
     }
-    send.finish().map_err(|error| error.to_string())?;
     recv
       .read_to_end(0)
       .await
@@ -274,7 +276,11 @@ impl SyncService {
       .transpose()
       .map_err(|error| format!("Invalid Sync baseline: {error}"))?
       .unwrap_or_default();
-    let local_id = match params.get("localId").and_then(Value::as_str).filter(|value| !value.is_empty()) {
+    let local_id = match params
+      .get("localId")
+      .and_then(Value::as_str)
+      .filter(|value| !value.is_empty())
+    {
       Some(value) => value.to_string(),
       None => self.ensure_endpoint().await?.id().to_string(),
     };
@@ -354,8 +360,14 @@ impl SyncService {
   async fn run_sync(&mut self) -> Result<Value, String> {
     let endpoint = self.ensure_endpoint().await?.clone();
     let sessions = run_all_sessions(&endpoint, &self.vault_dir).await?;
-    let transferred_files = sessions.iter().map(|session| session.transferred_files).sum::<u64>();
-    let transferred_bytes = sessions.iter().map(|session| session.transferred_bytes).sum::<u64>();
+    let transferred_files = sessions
+      .iter()
+      .map(|session| session.transferred_files)
+      .sum::<u64>();
+    let transferred_bytes = sessions
+      .iter()
+      .map(|session| session.transferred_bytes)
+      .sum::<u64>();
     let conflicts = sessions
       .iter()
       .flat_map(|session| session.conflicts.iter().cloned())
@@ -413,16 +425,24 @@ async fn handle_incoming_connection(
   connection: Connection,
 ) -> Result<(), String> {
   let peer_id = connection.remote_id().to_string();
-  let (mut send, mut recv) = connection.accept_bi().await.map_err(|error| error.to_string())?;
+  let (mut send, mut recv) = connection
+    .accept_bi()
+    .await
+    .map_err(|error| error.to_string())?;
   match read_control(&mut recv).await? {
     ControlMessage::PairRequest(request) => {
       if request.endpoint_addr.id != connection.remote_id() {
         return Err("Pair request endpoint address does not match authenticated Iroh identity".to_string());
       }
+      recv
+        .read_to_end(0)
+        .await
+        .map_err(|error| format!("Pairing request did not close cleanly: {error}"))?;
       let accepted = consume_pair_request(&vault_dir, request, endpoint.addr(), &device_name)?;
       write_control(&mut send, &ControlMessage::PairAccepted(accepted)).await?;
-      send.finish().map_err(|error| error.to_string())?;
-      connection.close(0_u32.into(), b"pairing-accepted");
+      send
+        .finish()
+        .map_err(|error| format!("Failed to finish pairing response stream: {error}"))?;
       Ok(())
     }
     ControlMessage::SyncOpen(open) => {
@@ -443,7 +463,13 @@ async fn handle_incoming_connection(
         "first physical Sync message must be pairRequest or syncOpen, received {}",
         elephant_sync_service::protocol::message_name(&other)
       );
-      let _ = write_control(&mut send, &ControlMessage::Error { message: message.clone() }).await;
+      let _ = write_control(
+        &mut send,
+        &ControlMessage::Error {
+          message: message.clone(),
+        },
+      )
+      .await;
       Err(message)
     }
   }
@@ -631,7 +657,9 @@ mod tests {
   async fn unknown_methods_are_rejected_without_starting_network_state() {
     let root = temp_root("unknown");
     let mut service = SyncService::with_vault_dir(root.clone());
-    let error = handle(&mut service, "sync.unknown", json!({})).await.unwrap_err();
+    let error = handle(&mut service, "sync.unknown", json!({}))
+      .await
+      .unwrap_err();
     assert!(error.contains("Unsupported Sync service method"));
     assert!(service.endpoint.is_none());
     assert!(service.router.is_none());
@@ -696,7 +724,9 @@ mod tests {
     fs::create_dir_all(root.join(".conflit/Notes")).unwrap();
     fs::write(root.join(".conflit/Notes/A.device-conflict-1.md"), "older").unwrap();
     let mut service = SyncService::with_vault_dir(root.clone());
-    let status = handle(&mut service, "sync.conflicts.get", json!({})).await.unwrap();
+    let status = handle(&mut service, "sync.conflicts.get", json!({}))
+      .await
+      .unwrap();
     assert_eq!(status["retentionDays"], 3);
     assert_eq!(status["storedFiles"], 1);
     let updated = handle(

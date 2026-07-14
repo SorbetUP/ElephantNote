@@ -202,6 +202,17 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      - name: Install Tauri Linux system libraries
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
       - name: Validate Android Vault, mobile runtime and addon boundary
         shell: bash
         run: |

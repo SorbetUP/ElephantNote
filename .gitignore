@@ -46,3 +46,4 @@ Elephant/backend/tauri/bin/codex
 Elephant/backend/tauri/bin/codex.exe
 Elephant/backend/tauri/bin/codex-runtime.json
 Elephant/frontend/src/muya/lib/rust/generated/
+Elephant/crates/**/target/

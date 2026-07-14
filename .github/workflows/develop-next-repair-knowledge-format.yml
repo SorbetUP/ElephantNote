@@ -24,21 +24,12 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('.github/workflows/develop-next-integrate-knowledge-addon.yml')
-          text = path.read_text()
-          old = 'cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml --check'
-          new = 'cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml'
-          if old not in text:
-              raise SystemExit('Knowledge service formatting check was not found')
-          path.write_text(text.replace(old, new, 1))
-          PY
+          WORKFLOW=.github/workflows/develop-next-integrate-knowledge-addon.yml
+          grep -F 'cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml --check' "$WORKFLOW"
+          sed -i 's|cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml --check|cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml|' "$WORKFLOW"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/develop-next-repair-knowledge-format.yml
-          git rm --ignore-unmatch .github/workflows/develop-next-diagnose-knowledge-addon.yml
-          git add .github/workflows/develop-next-integrate-knowledge-addon.yml
+          git add "$WORKFLOW"
           git commit -m "ci(develop_next): format Knowledge service before tests"
           git push origin HEAD:develop_next

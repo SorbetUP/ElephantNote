@@ -16,22 +16,19 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Knowledge V2 compiler or test failure
+      - name: Exact Knowledge V2 compiler errors
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           gh run view 29350915943 --log-failed \
-            | grep -E -C 12 'error\[|error:|mismatched types|cannot find|no method named|FAILED|panicked at|test result:|Process completed' \
-            | tail -n 500
+            | grep -E 'error\[E[0-9]+\]|error: could not compile|cannot find|no method named|mismatched types|unresolved import|the trait bound' \
+            | tail -n 120
 
-      - name: Trusted editor failed-suite summary
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+      - name: Trusted editor missing test paths
         shell: bash
         run: |
-          gh run view 29350515884 --log-failed \
-            | sed -n '/Failed Suites/,$p' \
-            | head -n 160
+          test ! -e tests/app/unit/addons/editorFeatureAddons.spec.js
+          test ! -e tests/app/unit/specs/main/elephantnote/editorAndAddonRegression.spec.js
+          echo 'Trusted workflow references two absent legacy test files; V2 must use the existing Rust runtime contract test.'

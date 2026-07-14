@@ -153,4 +153,37 @@ describe('Muya Rust drop controller', () => {
     expect(order).toEqual(['selection', 'storage'])
     expect(bridge.dispatch).not.toHaveBeenCalled()
   })
+
+  it('does not intercept URI drops without an image URI callback', async () => {
+    const dataTransfer = transfer({ 'text/uri-list': 'https://example.com/image.png' })
+    const drop = browserEvent('drop', { dataTransfer })
+
+    container.dispatchEvent(drop)
+    await controller.idle()
+
+    expect(drop.defaultPrevented).toBe(false)
+    expect(bridge.setSelection).not.toHaveBeenCalled()
+  })
+
+  it('delegates the first useful URI after synchronizing selection', async () => {
+    const order = []
+    bridge.setSelection.mockImplementation(async () => order.push('selection'))
+    const onUriDrop = vi.fn(async () => order.push('uri'))
+    attach({ onUriDrop })
+    const dataTransfer = transfer({
+      'text/uri-list': '# browser metadata\n\nhttps://example.com/image.png\n'
+    })
+    const dragover = browserEvent('dragover', { dataTransfer })
+    const drop = browserEvent('drop', { dataTransfer })
+
+    container.dispatchEvent(dragover)
+    container.dispatchEvent(drop)
+    await controller.idle()
+
+    expect(dragover.defaultPrevented).toBe(true)
+    expect(drop.defaultPrevented).toBe(true)
+    expect(bridge.setSelection).toHaveBeenCalledWith(snapshot().selection)
+    expect(onUriDrop).toHaveBeenCalledWith('https://example.com/image.png')
+    expect(order).toEqual(['selection', 'uri'])
+  })
 })

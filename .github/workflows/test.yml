@@ -112,3 +112,5 @@ jobs:
           fi
           git commit -m "fix(wiki): refresh persisted proposal quality metadata"
           git push origin HEAD:assistant/wiki-organization-continuation
+
+# Active default-branch revision for the one-shot metadata correction.

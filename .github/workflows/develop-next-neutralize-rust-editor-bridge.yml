@@ -35,14 +35,20 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          rm -rf Elephant/frontend/src/renderer/src/editor-rust
-          cp -R Elephant/frontend/src/muya/lib/rust Elephant/frontend/src/renderer/src/editor-rust
+          if grep -RIl --include='*.js' --include='*.mjs' --include='*.ts' --include='*.vue' \
+            'muya/lib/rust' Elephant/frontend/app Elephant/frontend/src/renderer/src | grep -q .; then
+            rm -rf Elephant/frontend/src/renderer/src/editor-rust
+            cp -R Elephant/frontend/src/muya/lib/rust Elephant/frontend/src/renderer/src/editor-rust
+          fi
           python3 - <<'PY'
           from pathlib import Path
           import os
           import re
 
           root = Path('Elephant/frontend/src/renderer/src/editor-rust')
+          if not root.exists():
+              raise SystemExit('Neutral Rust editor adapter directory is missing')
+
           for path in root.rglob('*.js'):
               text = path.read_text()
               text = text.replace('MuyaRust', 'ElephantRust')
@@ -56,7 +62,6 @@ jobs:
               Path('Elephant/frontend/src/renderer/src')
           ]
           pattern = re.compile(r"(?P<prefix>from\s+['\"]|import\s+['\"])muya/lib/rust/(?P<module>[^'\"]+)(?P<quote>['\"])")
-          migrated = []
           for production_root in production_roots:
               for path in production_root.rglob('*'):
                   if path.suffix not in {'.js', '.mjs', '.ts', '.vue'} or root in path.parents:
@@ -67,14 +72,10 @@ jobs:
                       relative = os.path.relpath(target, path.parent).replace(os.sep, '/')
                       if not relative.startswith('.'):
                           relative = './' + relative
-                      migrated.append((str(path), match.group('module'), relative))
                       return f"{match.group('prefix')}{relative}{match.group('quote')}"
                   next_text = pattern.sub(replace, text)
                   if next_text != text:
                       path.write_text(next_text)
-
-          if not migrated:
-              raise SystemExit('No production Muya Rust adapter imports were found to migrate')
 
           remaining = []
           for production_root in production_roots:
@@ -142,6 +143,10 @@ jobs:
             Elephant/frontend/app \
             Elephant/frontend/src/renderer/src \
             tests/app/unit/specs/muya/rustEditorNeutralNamespace.spec.js
+          if git diff --cached --quiet; then
+            echo 'Neutral Rust editor bridge is already integrated.'
+            exit 0
+          fi
           git commit -m "refactor(editor): move Rust bridge out of Muya namespace"
           git fetch origin develop_next
           git merge --no-edit origin/develop_next

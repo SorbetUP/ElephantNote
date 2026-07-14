@@ -28,8 +28,8 @@ jobs:
           from pathlib import Path
           path = Path('.github/workflows/develop-next-integrate-knowledge-addon.yml')
           text = path.read_text()
-          old = '          cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml --check\n'
-          new = '          cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml\n'
+          old = 'cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml --check'
+          new = 'cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml'
           if old not in text:
               raise SystemExit('Knowledge service formatting check was not found')
           path.write_text(text.replace(old, new, 1))

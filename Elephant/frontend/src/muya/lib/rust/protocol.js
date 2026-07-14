@@ -46,6 +46,14 @@ export const editorCommands = Object.freeze({
     alt,
     title
   }),
+  replaceImage: (image, source, alt = '', title = null) => ({
+    type: 'replace_image',
+    image,
+    source,
+    alt,
+    title
+  }),
+  deleteImage: (image) => ({ type: 'delete_image', image }),
   indentListItem: () => ({ type: 'indent_list_item' }),
   outdentListItem: () => ({ type: 'outdent_list_item' }),
   setTaskChecked: (item, checked, autoCheck = false) => ({

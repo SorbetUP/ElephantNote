@@ -16,7 +16,6 @@ const META_DIR: &str = vault_layout::HIDDEN_ROOT;
 const FEATURES_FILE: &str = "tauri-features.json";
 const FEATURES_CONFIG_CATEGORY: &str = "features";
 const FEATURES_CONFIG_FILE: &str = "flags.json";
-const SEARCH_INDEX_FILE: &str = "search-index.json";
 
 fn now() -> String {
   SystemTime::now()
@@ -162,118 +161,6 @@ fn scan_files(root: &Path, current: &Path, out: &mut Vec<Value>, extension: Opti
     }
   }
   Ok(())
-}
-
-fn markdown_title(markdown: &str, fallback: &str) -> String {
-  markdown
-    .lines()
-    .find_map(|line| line.trim().strip_prefix("# ").map(|value| value.trim().to_string()))
-    .filter(|title| !title.is_empty())
-    .unwrap_or_else(|| fallback.trim_end_matches(".md").to_string())
-}
-
-fn markdown_excerpt(markdown: &str) -> String {
-  markdown
-    .lines()
-    .map(|line| line.trim().trim_start_matches('#').trim())
-    .filter(|line| !line.is_empty() && *line != "---")
-    .take(3)
-    .collect::<Vec<_>>()
-    .join(" ")
-}
-
-fn scan_markdown_notes(root: &Path, current: &Path, out: &mut Vec<(String, PathBuf, String)>) -> R<()> {
-  for item in fs::read_dir(current).map_err(|e| e.to_string())? {
-    let item = item.map_err(|e| e.to_string())?;
-    let name = item.file_name().to_string_lossy().to_string();
-    if ignored_name(&name) {
-      continue;
-    }
-    let path = item.path();
-    let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
-    if metadata.file_type().is_symlink() {
-      continue;
-    }
-    if metadata.is_dir() {
-      scan_markdown_notes(root, &path, out)?;
-    } else if metadata.is_file() && name.to_ascii_lowercase().ends_with(".md") {
-      let relative = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().replace('\\', "/");
-      let content = fs::read_to_string(&path).unwrap_or_default();
-      out.push((relative, path, content));
-    }
-  }
-  Ok(())
-}
-
-fn extract_wikilinks(markdown: &str) -> Vec<String> {
-  let mut links = Vec::new();
-  let mut rest = markdown;
-  while let Some(start) = rest.find("[[") {
-    let after = &rest[start + 2..];
-    let Some(end) = after.find("]]" ) else { break; };
-    let target = after[..end].split('|').next().unwrap_or("").trim();
-    if !target.is_empty() {
-      links.push(target.to_string());
-    }
-    rest = &after[end + 2..];
-  }
-  links
-}
-
-fn build_search_index(root: &Path) -> R<Value> {
-  let mut notes = Vec::new();
-  scan_markdown_notes(root, root, &mut notes)?;
-  notes.sort_by(|a, b| a.0.cmp(&b.0));
-
-  let documents = notes.iter().map(|(relative_path, full_path, markdown)| {
-    let file_name = full_path.file_name().and_then(|name| name.to_str()).unwrap_or(relative_path);
-    json!({
-      "id": relative_path,
-      "path": relative_path,
-      "relativePath": relative_path,
-      "fullPath": full_path.to_string_lossy(),
-      "title": markdown_title(markdown, file_name),
-      "excerpt": markdown_excerpt(markdown),
-      "kind": "note"
-    })
-  }).collect::<Vec<Value>>();
-
-  let mut edges = Vec::new();
-  for (source_path, _full_path, markdown) in &notes {
-    for target in extract_wikilinks(markdown) {
-      let normalized_target = normalize_relative_path(&target);
-      let matching = documents.iter().find(|document| {
-        let title = document.get("title").and_then(Value::as_str).unwrap_or("");
-        let path = document.get("relativePath").and_then(Value::as_str).unwrap_or("");
-        title.eq_ignore_ascii_case(&target) || path.eq_ignore_ascii_case(&normalized_target) || path.trim_end_matches(".md").eq_ignore_ascii_case(&normalized_target)
-      });
-      if let Some(document) = matching {
-        if let Some(target_path) = document.get("relativePath").and_then(Value::as_str) {
-          edges.push(json!({ "source": source_path, "target": target_path, "kind": "wikilink" }));
-        }
-      }
-    }
-  }
-
-  let nodes = documents.iter().map(|document| json!({
-    "id": document.get("relativePath").cloned().unwrap_or(json!("")),
-    "label": document.get("title").cloned().unwrap_or(json!("Untitled")),
-    "title": document.get("title").cloned().unwrap_or(json!("Untitled")),
-    "path": document.get("relativePath").cloned().unwrap_or(json!("")),
-    "relativePath": document.get("relativePath").cloned().unwrap_or(json!("")),
-    "kind": "note",
-    "type": "note"
-  })).collect::<Vec<Value>>();
-
-  Ok(json!({
-    "provider": "tauri-rust",
-    "engine": "portable-markdown-index",
-    "embedding": { "status": "not-configured", "reason": "No embedding provider is configured in this Tauri runtime; this index is lexical and link-based, not a fake vector index." },
-    "documents": documents,
-    "notesIndexed": documents.len(),
-    "lastIndexedAt": now(),
-    "graph": { "nodes": nodes, "edges": edges, "clusters": [] }
-  }))
 }
 
 #[tauri::command]
@@ -430,39 +317,6 @@ pub fn tauri_features_set(app: AppHandle, key: String, enabled: bool) -> R<Value
   Ok(config)
 }
 
-#[tauri::command]
-pub fn tauri_search_inspect(app: AppHandle) -> R<Value> {
-  let root = active_vault_root(&app)?;
-  build_search_index(Path::new(&root))
-}
-
-#[tauri::command]
-pub fn tauri_search_rebuild(app: AppHandle) -> R<Value> {
-  let root = active_vault_root(&app)?;
-  let index = build_search_index(Path::new(&root))?;
-  write_json(vault_layout::index_file(&root, SEARCH_INDEX_FILE), &index)?;
-
-  let fts_index = crate::fts::FtsIndex::open(Path::new(&root)).map_err(|e| e.to_string())?;
-  let vault_id = crate::vault::config::get_active_vault(&app).ok().map(|v| v.id).unwrap_or_else(|| "active".into());
-  let _ = fts_index.clear_vault(&vault_id);
-  let notes = crate::fts::scan_markdown_files(Path::new(&root));
-  let mut fts_count = 0;
-  for (relative, full_path, content) in &notes {
-    let title = full_path.file_stem().and_then(|n| n.to_str()).unwrap_or(relative);
-    if fts_index.upsert_note(&vault_id, relative, &full_path.to_string_lossy(), title, content, 0).is_ok() {
-      fts_count += 1;
-    }
-  }
-
-  Ok(json!({
-    "ok": true,
-    "provider": "tauri-rust",
-    "documents": index.get("notesIndexed").cloned().unwrap_or(json!(0)),
-    "ftsDocuments": fts_count,
-    "indexPath": vault_layout::index_file(&root, SEARCH_INDEX_FILE).to_string_lossy()
-  }))
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -554,22 +408,5 @@ mod tests {
 
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&outside);
-  }
-
-  #[test]
-  fn search_index_builds_documents_and_wikilink_edges() {
-    let root = temp_test_root("search-index");
-    fs::create_dir_all(&root).unwrap();
-    fs::write(root.join("A.md"), "# A\n\nSee [[B]]").unwrap();
-    fs::write(root.join("B.md"), "# B\n\nTarget").unwrap();
-    fs::create_dir_all(root.join(".assets")).unwrap();
-    fs::write(root.join(".assets").join("hidden.md"), "# Hidden").unwrap();
-
-    let index = build_search_index(&root).unwrap();
-
-    assert_eq!(index["notesIndexed"], json!(2));
-    assert_eq!(index["graph"]["edges"].as_array().unwrap().len(), 1);
-
-    let _ = fs::remove_dir_all(&root);
   }
 }

@@ -1,0 +1,450 @@
+name: Integrate addon-aware mobile shell
+
+on:
+  pull_request:
+    branches:
+      - feature/physical-addon-packages
+    paths:
+      - .github/workflows/develop-next-integrate-mobile-ui.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: develop-next-mobile-ui
+  cancel-in-progress: true
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop_next
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Add touch-first shell without replacing addon zones
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          shell = Path('Elephant/frontend/app/components/shell/AppShell.vue')
+          text = shell.read_text()
+
+          text = text.replace(
+              '    @choose="store.chooseVault"\n',
+              '    @create-local="createLocalVault"\n    @choose="store.chooseVault"\n',
+              1
+          )
+          text = text.replace(
+              "      { 'en-pinned-card-halo': preferences.pinnedCardHalo }\n",
+              """      {
+                'en-pinned-card-halo': preferences.pinnedCardHalo,
+                'en-mobile-shell': isMobileShell,
+                'en-mobile-drawer-open': isMobileShell && drawerProgress > 0,
+                'en-mobile-drawer-dragging': isMobileShell && drawerDragging,
+                'en-mobile-drawer-settling': isMobileShell && drawerSettling
+              }
+          """,
+              1
+          )
+          text = text.replace(
+              '    :style="shellStyle"\n  >',
+              '''    :style="shellStyle"
+              @pointerdown="handleDrawerPointerDown"
+              @pointermove="handleDrawerPointerMove"
+              @pointerup="handleDrawerPointerEnd"
+              @pointercancel="handleDrawerPointerCancel"
+            >''',
+              1
+          )
+          text = text.replace(
+              '      <top-vault-bar :sidebar-visible="sidebarVisible" />',
+              '''      <top-vault-bar
+                v-if="!isMobileShell"
+                :sidebar-visible="sidebarVisible"
+              />
+              <header
+                v-else
+                class="en-mobile-topbar"
+              >
+                <button
+                  class="en-mobile-icon-button"
+                  type="button"
+                  aria-label="Open navigation"
+                  @click="openMobileSidebar"
+                >
+                  <Menu class="en-mobile-icon" />
+                </button>
+                <button
+                  class="en-mobile-search"
+                  type="button"
+                  @click="openSearch"
+                >
+                  <Search class="en-mobile-icon" />
+                  <span>Search notes</span>
+                </button>
+                <button
+                  class="en-mobile-icon-button"
+                  type="button"
+                  aria-label="Settings"
+                  @click="openSettings"
+                >
+                  <Settings class="en-mobile-icon" />
+                </button>
+              </header>''',
+              1
+          )
+          text = text.replace(
+              '        <icon-rail\n',
+              '        <icon-rail\n          v-if="!isMobileShell"\n',
+              1
+          )
+          body_anchor = '''        <div
+                    class="en-body"'''
+          scrim = '''        <button
+                    v-if="isMobileShell"
+                    class="en-mobile-scrim"
+                    :class="{ visible: drawerProgress > 0 }"
+                    type="button"
+                    aria-label="Close navigation"
+                    :aria-hidden="drawerProgress <= 0"
+                    :tabindex="drawerProgress > 0 ? 0 : -1"
+                    @click="closeMobileSidebar"
+                  />
+                  <div
+                    class="en-body"'''
+          if body_anchor not in text:
+              raise SystemExit('AppShell body anchor changed unexpectedly')
+          text = text.replace(body_anchor, scrim, 1)
+          text = text.replace('            v-if="sidebarVisible"\n            :active-addon-view-id', '            v-if="sidebarVisible || isMobileShell"\n            :active-addon-view-id', 1)
+          text = text.replace('            @close-addon-view="closeAddonView"\n          />', '            @close-addon-view="closeAddonView"\n            @click="handleMobileSidebarClick"\n          />', 1)
+          text = text.replace('            v-if="sidebarVisible"\n            class="en-sidebar-resizer"', '            v-if="sidebarVisible && !isMobileShell"\n            class="en-sidebar-resizer"', 1)
+          layout_end = '''      </div>
+              </div>
+              <template v-for="entry in shellRightZones"'''
+          fab = '''      </div>
+                <button
+                  v-if="isMobileShell && !store.openedNotePath"
+                  class="en-mobile-fab"
+                  type="button"
+                  aria-label="New note"
+                  @click="store.createNote?.()"
+                >
+                  <Plus class="en-mobile-fab-icon" />
+                </button>
+              </div>
+              <template v-for="entry in shellRightZones"'''
+          if layout_end not in text:
+              raise SystemExit('AppShell layout closing anchor changed unexpectedly')
+          text = text.replace(layout_end, fab, 1)
+
+          text = text.replace(
+              "import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'\n",
+              "import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'\nimport { Menu, Plus, Search, Settings } from '@lucide/vue'\n",
+              1
+          )
+          text = text.replace(
+              "import { useCanvasStore } from '../../stores/canvasStore'\n",
+              "import { useCanvasStore } from '../../stores/canvasStore'\nimport { elephantnoteClient } from '../../services/elephantnoteClient'\n",
+              1
+          )
+          text = text.replace(
+              'const sidebarVisible = ref(true)\n',
+              '''const sidebarVisible = ref(true)
+              const drawerProgress = ref(1)
+              const drawerDragging = ref(false)
+              const drawerSettling = ref(false)
+              const isMobileShell = ref(false)
+              let drawerGesture = null
+              let drawerSettleTimer = null
+              ''',
+              1
+          )
+          text = text.replace(
+              "  '--en-sidebar-runtime-width': `${sidebarWidth.value}px`\n",
+              "  '--en-sidebar-runtime-width': `${sidebarWidth.value}px`,\n  '--en-mobile-drawer-progress': String(drawerProgress.value)\n",
+              1
+          )
+
+          function_anchor = '''const setTheme = (value) => {'''
+          functions = r'''const clampDrawerProgress = (value) => Math.min(1, Math.max(0, Number(value) || 0))
+          const drawerWidth = () => Math.max(
+            1,
+            document.querySelector('.en-mobile-shell .en-sidebar')?.getBoundingClientRect?.().width ||
+              Math.min(window.innerWidth * 0.86, 340)
+          )
+
+          const settleDrawer = (open) => {
+            window.clearTimeout(drawerSettleTimer)
+            drawerDragging.value = false
+            drawerSettling.value = true
+            drawerProgress.value = open ? 1 : 0
+            sidebarVisible.value = open
+            drawerSettleTimer = window.setTimeout(() => {
+              drawerSettling.value = false
+            }, 280)
+          }
+
+          const openMobileSidebar = () => {
+            if (isMobileShell.value) settleDrawer(true)
+          }
+
+          const closeMobileSidebar = () => {
+            if (isMobileShell.value) settleDrawer(false)
+          }
+
+          const handleDrawerPointerDown = (event) => {
+            if (!isMobileShell.value || event.isPrimary === false || event.button > 0 || drawerGesture) return
+            const open = drawerProgress.value > 0
+            const insideDrawer = !!event.target?.closest?.('.en-sidebar')
+            const onScrim = !!event.target?.closest?.('.en-mobile-scrim.visible')
+            if (!open && event.clientX > 30) return
+            if (open && !insideDrawer && !onScrim) return
+            window.clearTimeout(drawerSettleTimer)
+            drawerSettling.value = false
+            drawerDragging.value = true
+            drawerGesture = {
+              pointerId: event.pointerId,
+              startX: event.clientX,
+              startY: event.clientY,
+              lastX: event.clientX,
+              lastAt: performance.now(),
+              velocityX: 0,
+              initialProgress: drawerProgress.value,
+              axis: null
+            }
+            event.currentTarget?.setPointerCapture?.(event.pointerId)
+          }
+
+          const handleDrawerPointerMove = (event) => {
+            const gesture = drawerGesture
+            if (!gesture || event.pointerId !== gesture.pointerId) return
+            const dx = event.clientX - gesture.startX
+            const dy = event.clientY - gesture.startY
+            if (!gesture.axis) {
+              if (Math.abs(dx) < 7 && Math.abs(dy) < 7) return
+              if (Math.abs(dy) > Math.abs(dx) * 1.15) {
+                drawerGesture = null
+                drawerDragging.value = false
+                drawerProgress.value = gesture.initialProgress
+                return
+              }
+              gesture.axis = 'x'
+            }
+            event.preventDefault()
+            const now = performance.now()
+            const elapsed = Math.max(1, now - gesture.lastAt)
+            const instantaneous = (event.clientX - gesture.lastX) / elapsed
+            gesture.velocityX = gesture.velocityX * 0.65 + instantaneous * 0.35
+            gesture.lastX = event.clientX
+            gesture.lastAt = now
+            drawerProgress.value = clampDrawerProgress(gesture.initialProgress + dx / drawerWidth())
+          }
+
+          const handleDrawerPointerEnd = (event) => {
+            const gesture = drawerGesture
+            if (!gesture || event.pointerId !== gesture.pointerId) return
+            drawerGesture = null
+            if (gesture.axis !== 'x') {
+              drawerDragging.value = false
+              drawerProgress.value = gesture.initialProgress
+              return
+            }
+            const projected = drawerProgress.value + (gesture.velocityX * 180) / drawerWidth()
+            settleDrawer(projected >= 0.5)
+          }
+
+          const handleDrawerPointerCancel = (event) => {
+            const gesture = drawerGesture
+            if (!gesture || event.pointerId !== gesture.pointerId) return
+            drawerGesture = null
+            drawerDragging.value = false
+            drawerProgress.value = gesture.initialProgress
+          }
+
+          const handleMobileSidebarClick = (event) => {
+            if (!isMobileShell.value) return
+            if (event.target?.closest?.('.en-sidebar-tree-toggle, .en-recent-heading, .en-recent-more, [aria-expanded]')) return
+            if (event.target?.closest?.('button, a, [role="button"]')) {
+              window.requestAnimationFrame(closeMobileSidebar)
+            }
+          }
+
+          const updateMobileShell = () => {
+            const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches
+            const narrowViewport = window.matchMedia?.('(max-width: 760px)').matches
+            const wasMobile = isMobileShell.value
+            isMobileShell.value = !!(coarsePointer || narrowViewport)
+            if (isMobileShell.value && !wasMobile) {
+              sidebarVisible.value = false
+              drawerProgress.value = 0
+            } else if (!isMobileShell.value && !sidebarVisible.value) {
+              sidebarVisible.value = true
+              drawerProgress.value = 1
+            }
+          }
+
+          const createLocalVault = async () => {
+            const payload = await elephantnoteClient.vaults.createLocal()
+            if (payload?.canceled) return false
+            store.applyPayload(payload)
+            return true
+          }
+
+          const refreshVisibleVaultFiles = async () => {
+            if (!store.activeVault?.path) return
+            try {
+              const currentPath = store.currentPath || ''
+              const entries = await elephantnoteClient.directory.list(currentPath)
+              store.entries = Array.isArray(entries) ? entries : []
+              store.rootEntries = currentPath ? await elephantnoteClient.directory.list('') : store.entries
+            } catch (error) {
+              console.warn('Unable to refresh the vault after synchronization:', error)
+            }
+          }
+
+          '''
+          if function_anchor not in text:
+              raise SystemExit('AppShell function anchor changed unexpectedly')
+          text = text.replace(function_anchor, functions + function_anchor, 1)
+
+          text = text.replace(
+              'onMounted(() => {\n  window.addEventListener',
+              """onMounted(() => {
+                updateMobileShell()
+                window.addEventListener('resize', updateMobileShell)
+                window.screen?.orientation?.addEventListener?.('change', updateMobileShell)
+                window.addEventListener('elephantnote:vault-files-changed', refreshVisibleVaultFiles)
+                window.addEventListener""",
+              1
+          )
+          text = text.replace(
+              'onBeforeUnmount(() => {\n  window.removeEventListener',
+              """onBeforeUnmount(() => {
+                window.clearTimeout(drawerSettleTimer)
+                window.removeEventListener('resize', updateMobileShell)
+                window.screen?.orientation?.removeEventListener?.('change', updateMobileShell)
+                window.removeEventListener('elephantnote:vault-files-changed', refreshVisibleVaultFiles)
+                window.removeEventListener""",
+              1
+          )
+          text = text.replace('  height: 100vh;\n', '  height: 100vh;\n  height: 100dvh;\n', 1)
+          style_anchor = '</style>'
+          mobile_style = '''
+          .en-mobile-drawer-settling :deep(.en-sidebar),
+          .en-mobile-drawer-settling .en-mobile-scrim {
+            transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
+          }
+          '''
+          text = text.replace(style_anchor, mobile_style + style_anchor, 1)
+          shell.write_text(text)
+
+          picker = Path('Elephant/frontend/app/components/shell/EmptyVaultPicker.vue')
+          picker.write_text('''<template>
+            <main class="en-empty">
+              <section class="en-empty-card">
+                <img class="en-logo-image" src="../../../../assets/static/icon.png" alt="Elephant">
+                <h1>Choose your first vault</h1>
+                <p class="en-empty-copy">Keep notes in private app storage or authorize an Android folder.</p>
+                <div class="en-empty-actions">
+                  <button class="en-primary-button" type="button" @click="emit('create-local')">
+                    <strong>Stockage privé</strong>
+                    <span>Use Elephant private storage</span>
+                  </button>
+                  <button class="en-secondary-button" type="button" @click="emit('choose')">
+                    <strong>Dossier Android</strong>
+                    <span>Choisir un dossier et autoriser l’accès</span>
+                  </button>
+                </div>
+                <p class="en-empty-status" aria-live="polite">Opening Android storage…</p>
+              </section>
+            </main>
+          </template>
+
+          <script setup>
+          const emit = defineEmits(['create-local', 'choose'])
+          </script>
+
+          <style scoped>
+          .en-empty { min-height: 100dvh; display: grid; place-items: center; padding: 32px; background: var(--en-bg, #0f141d); color: var(--en-text, #eef3fb); }
+          .en-empty-card { width: min(440px, 100%); display: grid; gap: 18px; text-align: center; }
+          .en-logo-image { width: 96px; height: 96px; object-fit: contain; margin: 0 auto; }
+          .en-empty-card h1, .en-empty-card p { margin: 0; }
+          .en-empty-copy, .en-empty-status { color: var(--en-muted, #98a3b6); }
+          .en-empty-actions { display: grid; gap: 12px; }
+          .en-primary-button, .en-secondary-button { min-height: 64px; display: grid; gap: 4px; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--en-border, #283244); color: inherit; }
+          .en-primary-button { background: var(--en-primary, #2563eb); color: white; }
+          .en-secondary-button { background: var(--en-surface, #141a24); }
+          .en-primary-button span, .en-secondary-button span { font-size: 12px; opacity: .8; }
+          </style>
+          ''')
+
+          test = Path('tests/app/unit/specs/main/elephantnote/developNextMobileExperience.spec.js')
+          test.write_text('''import fs from 'node:fs'
+          import path from 'node:path'
+          import { describe, expect, it } from 'vitest'
+
+          const root = process.cwd()
+          const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+
+          describe('develop_next mobile experience', () => {
+            it('keeps addon views while adding a touch-first drawer', () => {
+              const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
+              expect(shell).toContain("'en-mobile-shell': isMobileShell")
+              expect(shell).toContain('v-if="sidebarVisible || isMobileShell"')
+              expect(shell).toContain(':class="{ visible: drawerProgress > 0 }"')
+              expect(shell).toContain('const drawerProgress = ref(1)')
+              expect(shell).toContain('handleDrawerPointerMove')
+              expect(shell).toContain('cubic-bezier(0.22, 1, 0.36, 1)')
+              expect(shell).toContain('active-addon-view-id="activeAddonViewId"')
+              expect(shell).toContain('shellRightZones')
+              expect(shell).toContain("'elephantnote:vault-files-changed'")
+            })
+
+            it('offers explicit private and Android vault onboarding', () => {
+              const picker = read('Elephant/frontend/app/components/shell/EmptyVaultPicker.vue')
+              expect(picker).toContain('Stockage privé')
+              expect(picker).toContain('Dossier Android')
+              expect(picker).toContain("emit('create-local')")
+              expect(picker).toContain("emit('choose')")
+            })
+
+            it('normalizes direct Tauri create responses', () => {
+              const clients = read('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
+              expect(clients).toContain('normalizeCreatedNote')
+              expect(clients).toContain('normalizeCreatedFolder')
+              expect(clients).toContain('call(API.DIRECTORY_LIST')
+            })
+          })
+          ''')
+          PY
+
+      - name: Validate mobile shell contracts
+        shell: bash
+        run: |
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/specs/main/elephantnote/developNextMobileExperience.spec.js \
+            tests/app/unit/elephantnote/domainClients.spec.js
+          pnpm tauri:web:build
+
+      - name: Commit mobile shell integration
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Elephant/frontend/app/components/shell/AppShell.vue \
+            Elephant/frontend/app/components/shell/EmptyVaultPicker.vue \
+            tests/app/unit/specs/main/elephantnote/developNextMobileExperience.spec.js
+          git commit -m "feat(mobile): integrate addon-aware touch shell"
+          git fetch origin develop_next
+          git merge --no-edit origin/develop_next
+          git push origin HEAD:develop_next

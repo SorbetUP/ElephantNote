@@ -10,9 +10,9 @@ use elephant_sync_service::{
   session::{run_all_sessions, serve_sync_session},
 };
 use iroh::{
-  endpoint::presets,
+  endpoint::{presets, Connection},
   protocol::{AcceptError, ProtocolHandler, Router},
-  Connection, Endpoint, EndpointAddr, SecretKey, Watcher as _,
+  Endpoint, EndpointAddr, SecretKey, Watcher as _,
 };
 use iroh_mdns_address_lookup::MdnsAddressLookup;
 use serde_json::{json, Value};

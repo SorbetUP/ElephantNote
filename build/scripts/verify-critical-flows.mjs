@@ -361,20 +361,35 @@ ordered(
 ordered(
   'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
   [
-    'const CHAT_REBUILD_COOLDOWN_MS',
-    'const searchVaultInitializedForChat',
-    'const shouldRebuildChatSearch',
+    'const normalizeRagChatPayload',
+    'const callRagChat =',
+    'call(API.RAG_CHAT, normalizeRagChatPayload(payload, limit))',
     'notes: {',
     'read: (relativePath) =>',
     'call(API.NOTES_READ',
-    'write: (payload = {}) => call(API.NOTES_WRITE, payload)'
+    'write: (payload = {}) => call(API.NOTES_WRITE, payload)',
+    'rag: {',
+    'chat: (payload, limit = 6) => callRagChat(call, payload, limit)'
   ],
-  'front client note methods and chat search throttling'
+  'front client note methods and direct Rust RAG delegation'
 )
-has(
+lacks(
+  'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
+  'SEARCH_REBUILD',
+  'implicit frontend chat search rebuild'
+)
+lacks(
+  'Elephant/frontend/app/services/elephantnoteClient/domainClients.js',
+  'shouldRebuildChatSearch',
+  'legacy frontend chat search rebuild heuristic'
+)
+ordered(
   'tests/app/unit/elephantnote/domainClients.spec.js',
-  'does not rebuild chat search when the model already produced an answer',
-  'chat search rebuild throttling test'
+  [
+    'delegates indexing and retrieval to the Rust RAG command',
+    'does not rebuild chat search when the model already produced an answer'
+  ],
+  'Rust RAG delegation regressions'
 )
 
 ordered(

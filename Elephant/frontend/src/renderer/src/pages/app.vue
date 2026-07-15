@@ -7,11 +7,11 @@
       />
       <app-shell
         v-if="init"
-        :class="{ 'muya-runtime-underlay': muyaRuntimeActive }"
+        :class="{ 'muya-runtime-underlay': muyaRuntimeDocumentActive }"
       />
       <MuyaRuntimeEditor
-        v-if="init && muyaRuntimeEnabled"
-        v-show="muyaRuntimeActive"
+        v-if="init && muyaRuntimeEnabled && hasOpenDocument"
+        v-show="muyaRuntimeDocumentActive"
         v-model="muyaRuntimeMarkdown"
         :mode="muyaRuntimeMode"
         class="muya-runtime-production-editor"
@@ -91,6 +91,8 @@ const scheduleMuyaRuntimeModeSync = () => {
 
 const muyaRuntimeEnabled = computed(() => isMuyaRuntimeEnabled(muyaRuntimeMode.value))
 const muyaRuntimeActive = computed(() => isMuyaRuntimeActive(muyaRuntimeMode.value))
+const hasOpenDocument = computed(() => Boolean(editorStore.currentFile?.id))
+const muyaRuntimeDocumentActive = computed(() => muyaRuntimeActive.value && hasOpenDocument.value)
 
 const muyaRuntimeMarkdown = computed({
   get: () => editorStore.currentFile?.markdown || '',
@@ -295,7 +297,7 @@ onBeforeUnmount(() => {
   opacity: 0;
   pointer-events: none;
 }
-.muya-runtime-production-editor {
+.m u y a-runtime-production-editor {
   position: absolute;
   inset: 0;
   z-index: 20;

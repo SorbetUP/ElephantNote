@@ -94,14 +94,14 @@ export class MuyaRustInputController {
       return
     }
 
-    const selection = this.readSelection()
-    if (!selection) return
     if (event.inputType === 'deleteContentForward') {
-      handleDeleteForward(this, event, selection)
+      const selection = this.readSelection()
+      if (selection) handleDeleteForward(this, event, selection)
       return
     }
     if (DELETE_UNIT_INPUTS.has(event.inputType)) {
-      handleDeleteUnit(this, event, selection)
+      const selection = this.readSelection()
+      if (selection) handleDeleteUnit(this, event, selection)
       return
     }
 
@@ -109,6 +109,11 @@ export class MuyaRustInputController {
     if (!command) return
     event.preventDefault()
     this.schedule(async () => {
+      // Browser beforeinput events can arrive faster than the asynchronous Rust
+      // dispatch and DOM patch cycle. Reading selection before queueing captures
+      // the same stale caret for every character and reverses/jumbles fast input.
+      const selection = this.readSelection()
+      if (!selection) return
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(command)
     })
@@ -127,13 +132,13 @@ export class MuyaRustInputController {
   }
 
   handlePaste(event) {
-    const selection = this.readSelection()
-    if (!selection) return
     const markdown = markdownFromClipboard(event, this.container.ownerDocument)
     if (markdown === null) return
     event.preventDefault()
     event.stopPropagation?.()
     this.schedule(async () => {
+      const selection = this.readSelection()
+      if (!selection) return
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
     })

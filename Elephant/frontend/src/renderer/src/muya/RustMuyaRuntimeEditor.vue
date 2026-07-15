@@ -70,7 +70,7 @@ const flushMarkdownSync = () => {
   const generation = mountGeneration
   syncInFlight = (async () => {
     try {
-      do {
+      while (true) {
         syncRequested = false
         const next = await readRuntimeMarkdown()
         if (generation !== mountGeneration) return
@@ -80,7 +80,8 @@ const flushMarkdownSync = () => {
           emit('update:modelValue', next)
           emit('change', next)
         }
-      } while (syncRequested && generation === mountGeneration)
+        if (!syncRequested) break
+      }
     } catch (error) {
       if (generation === mountGeneration) reportError(error)
     } finally {

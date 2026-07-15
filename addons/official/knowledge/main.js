@@ -27,6 +27,25 @@ export default class ElephantKnowledgeAddon {
       graph: (options = {}) => this.call('knowledge.graph', {
         includeSuggestions: options.includeSuggestions === true
       }),
+      pendingEmbeddings: (options = {}) => this.call('knowledge.embedding.pending', {
+        modelId: String(options.modelId || ''),
+        limit: Math.max(1, Number(options.limit || 100000))
+      }),
+      saveEmbeddings: (options = {}) => this.call('knowledge.embedding.save', {
+        modelId: String(options.modelId || ''),
+        threshold: Number.isFinite(Number(options.threshold)) ? Number(options.threshold) : 0.35,
+        rows: clone(Array.isArray(options.rows) ? options.rows : [])
+      }, { timeoutMs: 10 * 60 * 1000 }),
+      embeddingStatus: () => this.call('knowledge.embedding.status'),
+      semanticCommunities: (options = {}) => this.call('knowledge.wiki.semantic.communities', {
+        threshold: Number.isFinite(Number(options.threshold)) ? Number(options.threshold) : 0.72,
+        limit: Math.max(1, Number(options.limit || 12))
+      }),
+      semanticDiscover: (options = {}) => this.call('knowledge.wiki.semantic.discover', {
+        threshold: Number.isFinite(Number(options.threshold)) ? Number(options.threshold) : 0.72,
+        limit: Math.max(1, Number(options.limit || 12)),
+        labels: Array.isArray(options.labels) ? clone(options.labels) : undefined
+      }),
       wikiSources: (topic, options = {}) => this.call('knowledge.wiki.sources', {
         topic: String(topic || ''),
         limit: Math.max(1, Number(options.limit || 24))
@@ -61,8 +80,14 @@ export default class ElephantKnowledgeAddon {
     rebuild.type = 'button'
     rebuild.textContent = 'Rebuild knowledge index'
     const refresh = async () => {
-      const value = await this.call('knowledge.status')
-      status.textContent = `${value.documents || 0} notes · ${value.chunks || 0} chunks · ${value.explicit_links || value.explicitLinks || 0} links`
+      const [value, embeddings] = await Promise.all([
+        this.call('knowledge.status'),
+        this.call('knowledge.embedding.status').catch(() => null)
+      ])
+      const semantic = embeddings?.documents
+        ? ` · ${embeddings.documents} semantic vectors (${embeddings.modelId || 'unknown model'})`
+        : ''
+      status.textContent = `${value.documents || 0} notes · ${value.chunks || 0} chunks · ${value.explicit_links || value.explicitLinks || 0} links${semantic}`
     }
     rebuild.onclick = async () => {
       rebuild.disabled = true
@@ -90,7 +115,7 @@ export default class ElephantKnowledgeAddon {
       section: 'ai',
       chrome: false,
       title: 'Knowledge index',
-      description: 'Incremental package-owned index, graph, relations and generated Wiki drafts.',
+      description: 'Incremental package-owned index, embeddings, semantic organization, graph, relations and generated Wiki drafts.',
       order: 18,
       render: (container) => this.renderSettings(container)
     })

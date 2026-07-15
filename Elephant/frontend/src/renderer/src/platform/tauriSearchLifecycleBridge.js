@@ -7,16 +7,19 @@ const unavailable = (capability) => {
   throw new Error(`${capability} requires the optional Search addon.`)
 }
 
-export const installTauriSearchLifecycleBridge = (target = globalThis) => {
-  const search = target?.elephantnote?.search
-  if (!target?.__TAURI__ || !search) return false
+export const installTauriSearchLifecycleBridge = ({ target = globalThis, client = null } = {}) => {
+  const bridgeSearch = target?.elephantnote?.search
+  const clientSearch = client?.search
+  if (!target?.__TAURI__ || !bridgeSearch || !clientSearch) return false
 
-  const readStatus = typeof search.status === 'function'
-    ? search.status.bind(search)
-    : async() => ({ enabled: true, runtime: 'tauri-rust' })
+  const readStatus = typeof clientSearch.status === 'function'
+    ? clientSearch.status.bind(clientSearch)
+    : typeof bridgeSearch.status === 'function'
+      ? bridgeSearch.status.bind(bridgeSearch)
+      : async() => ({ enabled: true, runtime: 'tauri-rust' })
   let activeVaultPath = ''
 
-  search.initVault = async(payload = '') => {
+  const initVault = async(payload = '') => {
     activeVaultPath = normalizeVaultPath(payload) || activeVaultPath
     const status = await readStatus()
     return {
@@ -28,14 +31,20 @@ export const installTauriSearchLifecycleBridge = (target = globalThis) => {
     }
   }
 
-  // Keep the method surface stable so the renderer never crashes with
-  // "is not a function". Semantic inspection and index administration stay
-  // physically owned by the optional Search addon.
-  search.inspect = () => unavailable('Search inspection')
-  search.rebuild = () => search.initVault(activeVaultPath)
-  search.clear = () => unavailable('Clearing the semantic index')
-  search.disable = () => unavailable('Disabling semantic search')
-  search.enable = () => unavailable('Enabling semantic search')
+  const lifecycle = {
+    initVault,
+    inspect: () => unavailable('Search inspection'),
+    rebuild: () => initVault(activeVaultPath),
+    clear: () => unavailable('Clearing the semantic index'),
+    disable: () => unavailable('Disabling semantic search'),
+    enable: () => unavailable('Enabling semantic search')
+  }
+
+  // These methods are runtime compatibility only. The domain-client factory
+  // remains minimal, so Search/Knowledge implementation ownership stays with
+  // optional addons while the Tauri shell cannot crash on a missing method.
+  Object.assign(bridgeSearch, lifecycle)
+  Object.assign(clientSearch, lifecycle)
 
   return true
 }

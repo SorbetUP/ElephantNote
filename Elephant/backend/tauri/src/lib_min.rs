@@ -25,6 +25,7 @@ pub mod vault_layout;
 
 mod android_vault_commands;
 mod debug_commands;
+mod search_commands;
 mod vault_file_commands;
 #[path = "core_commands.rs"]
 mod tauri_extra_commands;
@@ -172,6 +173,12 @@ pub fn run() {
             vault::commands::tauri_sources_list,
             vault::commands::tauri_search_query,
             vault::commands::tauri_search_status,
+            search_commands::tauri_search_init_vault,
+            search_commands::tauri_search_inspect,
+            search_commands::tauri_search_rebuild,
+            search_commands::tauri_search_clear,
+            search_commands::tauri_search_disable,
+            search_commands::tauri_search_enable,
             markdown::commands::tauri_markdown_parse,
             markdown::commands::tauri_markdown_render_html,
             markdown::commands::tauri_markdown_to_text,

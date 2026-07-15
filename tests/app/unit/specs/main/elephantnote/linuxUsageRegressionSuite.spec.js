@@ -11,9 +11,11 @@ const electronMain = read('tests/app/e2e/electron-main.js')
 const preloadEntry = read('tests/app/e2e/tauri-preload-entry.js')
 const workflow = read('.github/workflows/e2e.yml')
 const config = read('tests/app/e2e/playwright.config.js')
+const appPage = read('Elephant/frontend/src/renderer/src/pages/app.vue')
 
 const expectedIds = [
   'startup-render',
+  'vault-chooser-first-run',
   'library-layout-roundtrip',
   'library-title-sort',
   'sidebar-hide-show',
@@ -22,17 +24,21 @@ const expectedIds = [
   'settings-roundtrip',
   'theme-mode-roundtrip',
   'open-existing-note',
+  'editor-write-autosave-preview',
   'note-close-roundtrip',
   'pin-unpin-note',
+  'addon-install-enable-action',
   'reload-preserves-vault',
   'navigation-stress'
 ]
 
 describe('progressive Linux application usage simulations', () => {
-  it('keeps a unique permanent scenario catalog', () => {
-    expect(catalog.schemaVersion).toBe(1)
+  it('keeps a unique permanent scenario catalog with non-duplicated evidence policy', () => {
+    expect(catalog.schemaVersion).toBe(2)
     expect(catalog.policy.requiredOnPullRequest).toBe(true)
-    expect(catalog.policy.captureScreenshotPerScenario).toBe(true)
+    expect(catalog.policy.captureDistinctVisualStates).toBe(true)
+    expect(catalog.policy.rejectPixelIdenticalScreenshots).toBe(true)
+    expect(catalog.policy.captureStateEvidence).toBe(true)
     expect(catalog.policy.failOnPageError).toBe(true)
     expect(catalog.policy.failOnConsoleError).toBe(true)
 
@@ -46,21 +52,35 @@ describe('progressive Linux application usage simulations', () => {
     }
   })
 
-  it('connects every catalog entry to a real Electron scenario', () => {
+  it('connects every catalog entry to a real Electron workflow', () => {
     for (const id of expectedIds) {
       expect(suite).toContain(`defineUsageTest('${id}'`)
       expect(suite).toContain(`[linux-usage:${'${id}'}]`)
     }
     expect(suite).toContain("require('playwright/test')")
+    expect(suite).toContain("require('node:crypto')")
     expect(suite).toContain('createSeededVaultFixture')
     expect(suite).toContain('launchElectron')
     expect(suite).toContain('page.screenshot')
+    expect(suite).toContain('pixel-identical')
+    expect(suite).toContain('checkpointState')
     expect(suite).toContain("page.on('pageerror'")
     expect(suite).toContain("message.type() === 'error'")
     expect(suite).toContain("getByTestId('muya-rust-runtime-editor')")
+    expect(suite).toContain("getByRole('textbox', { name: 'Note title' })")
+    expect(suite).toContain('Preview updated by Rust editor 9173.')
+    expect(suite).toContain('E2E Note Tools')
+    expect(suite).toContain('Append CI marker')
     expect(helpers).toContain('electron-main.js')
     expect(electronMain).toContain('tauri-preload-entry.js')
     expect(preloadEntry).toContain('tauri-preload.js')
+  })
+
+  it('does not bypass the real NoteEditorHost with a second full-window Rust editor', () => {
+    expect(appPage).toContain('<app-shell v-if="init" />')
+    expect(appPage).not.toContain('MuyaRuntimeEditor')
+    expect(appPage).not.toContain('muya-runtime-production-editor')
+    expect(appPage).not.toContain('muya-runtime-underlay')
   })
 
   it('runs against the production renderer under Xvfb and retains diagnostics', () => {

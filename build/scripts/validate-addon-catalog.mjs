@@ -36,6 +36,26 @@ const isTrustedManifest = (manifest = {}) => {
   return ['trusted', 'full', 'full-app', 'full-app-access'].includes(mode)
 }
 
+const validateMobileNativeSupport = (entry, runner, mobilePlatform, support) => {
+  if (support?.supported === true) {
+    const mobileRunner = String(support.runner || '')
+    if (!['embedded-rust', 'javascript-worker', 'web-worker'].includes(mobileRunner)) {
+      fail(`${entry.id} declares ${mobilePlatform} support without a recognized mobile runner`)
+    }
+    if (mobileRunner === 'embedded-rust') {
+      if (runner !== 'service') fail(`${entry.id} embedded Rust mobile host requires the service runner`)
+      if (typeof support.host !== 'string' || !support.host.trim()) {
+        fail(`${entry.id} embedded Rust ${mobilePlatform} support must declare a versioned host`)
+      }
+    }
+    return
+  }
+
+  if (support?.supported !== false || typeof support?.reason !== 'string' || !support.reason.trim()) {
+    fail(`${entry.id} must declare either supported mobile execution or an explicit ${mobilePlatform} incompatibility reason`)
+  }
+}
+
 const validateNativeContract = (entry, manifest) => {
   if (manifest.permissions?.native !== true) return
   if (!manifest.native?.protocol) fail(`${entry.id} requests native access without declaring a native protocol`)
@@ -62,10 +82,7 @@ const validateNativeContract = (entry, manifest) => {
   }
 
   for (const mobilePlatform of ['android', 'ios']) {
-    const support = manifest.native?.mobile?.[mobilePlatform]
-    if (support?.supported !== false || typeof support?.reason !== 'string' || !support.reason.trim()) {
-      fail(`${entry.id} must declare an explicit ${mobilePlatform} ${runner}-sidecar incompatibility reason`)
-    }
+    validateMobileNativeSupport(entry, runner, mobilePlatform, manifest.native?.mobile?.[mobilePlatform])
   }
 }
 

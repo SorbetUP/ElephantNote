@@ -1,0 +1,25 @@
+{
+  "id": "elephant.dashboard",
+  "name": "Dashboard",
+  "version": "1.0.0",
+  "description": "Provides the vault dashboard, workspace statistics and the managed Dashboard note outside the application core.",
+  "author": "Elephant",
+  "icon": "dashboard",
+  "apiVersion": 1,
+  "minAppVersion": "0.18.9",
+  "runtime": {
+    "type": "javascript-worker",
+    "entry": "main.js",
+    "mode": "trusted"
+  },
+  "permissions": {
+    "commands": true,
+    "views": true
+  },
+  "contributes": {
+    "runtimeMode": "trusted",
+    "views": true,
+    "commands": true
+  },
+  "activationEvents": ["onStartup"]
+}

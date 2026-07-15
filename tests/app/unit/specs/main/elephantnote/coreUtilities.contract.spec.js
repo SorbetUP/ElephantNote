@@ -106,6 +106,28 @@ describe('renderer path facade contracts', () => {
     expect(installed.normalize('anything')).toBe('host-normalized')
   })
 
+  it('does not replace any complete host path facade operation', () => {
+    const host = {
+      normalize: () => 'normalize',
+      join: () => 'join',
+      resolve: () => 'resolve',
+      basename: () => 'basename',
+      dirname: () => 'dirname',
+      isAbsolute: () => true,
+      relative: () => 'relative'
+    }
+    const target = { path: host }
+    const installed = ensureRendererPathFacade(target)
+    expect(installed).toBe(host)
+    expect(installed.normalize()).toBe('normalize')
+    expect(installed.join()).toBe('join')
+    expect(installed.resolve()).toBe('resolve')
+    expect(installed.basename()).toBe('basename')
+    expect(installed.dirname()).toBe('dirname')
+    expect(installed.isAbsolute()).toBe(true)
+    expect(installed.relative()).toBe('relative')
+  })
+
   it.each([
     ['folder\\note.md', 'folder/note.md'],
     ['/vault/note.md', '/vault/note.md'],

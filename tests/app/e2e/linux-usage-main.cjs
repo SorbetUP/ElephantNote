@@ -4,7 +4,6 @@ const path = require('node:path')
 const { app, BrowserWindow } = require('electron')
 
 app.commandLine.appendSwitch('disable-gpu')
-app.commandLine.appendSwitch('disable-software-rasterizer')
 app.commandLine.appendSwitch('no-sandbox')
 
 let mainWindow = null

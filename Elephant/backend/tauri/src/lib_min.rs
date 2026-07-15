@@ -23,6 +23,8 @@ pub mod search_logic;
 pub mod vault;
 pub mod vault_layout;
 
+#[cfg(mobile)]
+mod embedded_addon_services;
 mod android_vault_commands;
 mod debug_commands;
 mod official_addon_catalog;

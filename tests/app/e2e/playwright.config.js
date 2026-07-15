@@ -1,15 +1,20 @@
+const path = require('node:path')
+
+const resultsRoot = path.resolve(__dirname, '../../../test-results')
+const reportRoot = path.resolve(__dirname, '../../../playwright-report')
+
 const config = {
   workers: 1,
   timeout: 60000,
   expect: {
     timeout: 15000
   },
-  outputDir: 'test-results',
+  outputDir: resultsRoot,
   reporter: [
     ['list'],
-    ['junit', { outputFile: 'test-results/e2e-junit.xml' }],
-    ['json', { outputFile: 'test-results/e2e-results.json' }],
-    ['html', { outputFolder: 'playwright-report', open: 'never' }]
+    ['junit', { outputFile: path.join(resultsRoot, 'e2e-junit.xml') }],
+    ['json', { outputFile: path.join(resultsRoot, 'e2e-results.json') }],
+    ['html', { outputFolder: reportRoot, open: 'never' }]
   ],
   use: {
     headless: true,

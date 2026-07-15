@@ -1,15 +1,20 @@
+import { synchronizeKnowledgeEmbeddings } from './semanticEmbeddingSync'
+
 const ADDON_ID = 'elephant.ai-search'
-const CONFIG_KEY = 'search-config-v2'
+const CONFIG_KEY = 'search-config-v3'
 const INDEX_KEY = 'search-index-v2'
 const PROVIDER_RESOURCE = 'search.provider'
 const KNOWLEDGE_RESOURCE = 'knowledge.provider'
+const AI_INFERENCE_RESOURCE = 'ai.inference'
 const INDEX_VERSION = 2
 
 const DEFAULT_CONFIG = Object.freeze({
   enabled: true,
   limit: 12,
   autoRebuild: true,
-  excerptLength: 240
+  excerptLength: 240,
+  semanticIndexing: true,
+  semanticThreshold: 0.72
 })
 
 const node = (documentRef, tag, className = '', text = '') => {
@@ -62,7 +67,9 @@ const normalizeConfig = (value) => ({
   enabled: value?.enabled !== false,
   limit: Math.min(100, Math.max(1, Number(value?.limit) || DEFAULT_CONFIG.limit)),
   autoRebuild: value?.autoRebuild !== false,
-  excerptLength: Math.min(1000, Math.max(80, Number(value?.excerptLength) || DEFAULT_CONFIG.excerptLength))
+  excerptLength: Math.min(1000, Math.max(80, Number(value?.excerptLength) || DEFAULT_CONFIG.excerptLength)),
+  semanticIndexing: value?.semanticIndexing !== false,
+  semanticThreshold: Math.min(0.95, Math.max(0.45, Number(value?.semanticThreshold) || DEFAULT_CONFIG.semanticThreshold))
 })
 
 const emptyIndex = () => ({
@@ -79,7 +86,9 @@ const normalizeIndex = (value) => {
     version: INDEX_VERSION,
     builtAt: String(value.builtAt || ''),
     documents: value.documents,
-    documentFrequency: value.documentFrequency && typeof value.documentFrequency === 'object' ? value.documentFrequency : {},
+    documentFrequency: value.documentFrequency && typeof value.documentFrequency === 'object'
+      ? value.documentFrequency
+      : {},
     averageLength: Number(value.averageLength) || 0
   }
 }
@@ -92,11 +101,21 @@ export default class ElephantSearchAddon {
     this.index = emptyIndex()
     this.rebuildPromise = null
     this.disposed = false
+    this.semanticState = {
+      available: false,
+      generated: 0,
+      reason: 'not-run',
+      status: null
+    }
   }
 
   knowledgeProvider() {
-  return this.api.resources.get(KNOWLEDGE_RESOURCE)
-}
+    return this.api.resources.get(KNOWLEDGE_RESOURCE)
+  }
+
+  inferenceProvider() {
+    return this.api.resources.get(AI_INFERENCE_RESOURCE)
+  }
 
   invoke(command, payload = {}) {
     const invoke = this.window?.__TAURI__?.core?.invoke
@@ -137,17 +156,43 @@ export default class ElephantSearchAddon {
     return this.rebuildPromise
   }
 
-  async performRebuild() {
-  const knowledge = this.knowledgeProvider()
-  if (knowledge && typeof knowledge.rebuild === 'function') {
-    try {
-      const report = await knowledge.rebuild()
-      this.api.app.emit('elephantnote:search-index-updated', { engine: 'knowledge-provider', ...report })
-      return { engine: 'knowledge-provider', ...report }
-    } catch (error) {
-      console.warn('[ai-search] Knowledge provider rebuild failed; using local fallback', error)
+  async synchronizeSemanticIndex(knowledge) {
+    if (!this.config.semanticIndexing) {
+      this.semanticState = { available: false, generated: 0, reason: 'disabled', status: null }
+      return this.semanticState
     }
+    try {
+      this.semanticState = await synchronizeKnowledgeEmbeddings({
+        knowledge,
+        inference: this.inferenceProvider(),
+        threshold: this.config.semanticThreshold
+      })
+    } catch (error) {
+      this.semanticState = {
+        available: false,
+        generated: 0,
+        reason: 'embedding-sync-failed',
+        error: error?.message || String(error),
+        status: await knowledge?.embeddingStatus?.().catch(() => null)
+      }
+      console.warn('[ai-search] Semantic embedding synchronization failed; lexical and Knowledge search remain available', error)
+    }
+    return this.semanticState
   }
+
+  async performRebuild() {
+    const knowledge = this.knowledgeProvider()
+    if (knowledge && typeof knowledge.rebuild === 'function') {
+      try {
+        const report = await knowledge.rebuild()
+        const semantic = await this.synchronizeSemanticIndex(knowledge)
+        const result = { engine: 'knowledge-provider', semantic, ...report }
+        this.api.app.emit('elephantnote:search-index-updated', result)
+        return result
+      } catch (error) {
+        console.warn('[ai-search] Knowledge provider rebuild failed; using local fallback', error)
+      }
+    }
 
     const entries = await this.listNotes()
     const documents = []
@@ -164,7 +209,9 @@ export default class ElephantSearchAddon {
       const tokens = [...titleTokens, ...titleTokens, ...bodyTokens]
       const frequencies = termFrequency(tokens)
       totalLength += tokens.length
-      for (const token of new Set(tokens)) documentFrequency[token] = (documentFrequency[token] || 0) + 1
+      for (const token of new Set(tokens)) {
+        documentFrequency[token] = (documentFrequency[token] || 0) + 1
+      }
       documents.push({
         id: note.path,
         path: note.path,
@@ -183,6 +230,12 @@ export default class ElephantSearchAddon {
       documentFrequency,
       averageLength: documents.length ? totalLength / documents.length : 0
     }
+    this.semanticState = {
+      available: false,
+      generated: 0,
+      reason: 'knowledge-provider-unavailable',
+      status: null
+    }
     await this.api.storage.set(INDEX_KEY, this.index)
     this.api.app.emit('elephantnote:search-index-updated', this.status())
     return this.status()
@@ -197,7 +250,8 @@ export default class ElephantSearchAddon {
       if (!frequency) continue
       const containing = Number(this.index.documentFrequency?.[token] || 0)
       const inverseDocumentFrequency = Math.log(1 + ((totalDocuments - containing + 0.5) / (containing + 0.5)))
-      const normalizedFrequency = (frequency * 2.2) / (frequency + 1.2 * (0.25 + 0.75 * (document.length / averageLength)))
+      const normalizedFrequency = (frequency * 2.2) /
+        (frequency + 1.2 * (0.25 + 0.75 * (document.length / averageLength)))
       score += inverseDocumentFrequency * normalizedFrequency
     }
     const normalizedQuery = normalizeText(queryTokens.join(' '))
@@ -206,46 +260,50 @@ export default class ElephantSearchAddon {
   }
 
   async query(input, options = {}) {
-  if (!this.config.enabled) return []
-  const limit = Math.min(100, Math.max(1, Number(options.limit) || this.config.limit))
-  const knowledge = this.knowledgeProvider()
-  if (knowledge && typeof knowledge.search === 'function') {
-    try {
-      const hits = await knowledge.search(input, { limit })
-      return (Array.isArray(hits) ? hits : []).map((hit) => ({
-        ...hit,
-        id: hit.id || hit.chunk_id || hit.relative_path,
-        path: hit.path || hit.relative_path,
-        relativePath: hit.relativePath || hit.relative_path,
-        title: hit.title || hit.heading || hit.relative_path,
-        excerpt: hit.excerpt || '',
-        score: Number(hit.score) || 0,
-        engine: 'knowledge-provider'
-      }))
-    } catch (error) {
-      console.warn('[ai-search] Knowledge provider search failed; using local fallback', error)
+    if (!this.config.enabled) return []
+    const limit = Math.min(100, Math.max(1, Number(options.limit) || this.config.limit))
+    const knowledge = this.knowledgeProvider()
+    if (knowledge && typeof knowledge.search === 'function') {
+      try {
+        const hits = await knowledge.search(input, { limit })
+        return (Array.isArray(hits) ? hits : []).map((hit) => ({
+          ...hit,
+          id: hit.id || hit.chunk_id || hit.relative_path,
+          path: hit.path || hit.relative_path,
+          relativePath: hit.relativePath || hit.relative_path,
+          title: hit.title || hit.heading || hit.relative_path,
+          excerpt: hit.excerpt || '',
+          score: Number(hit.score) || 0,
+          engine: 'knowledge-provider'
+        }))
+      } catch (error) {
+        console.warn('[ai-search] Knowledge provider search failed; using local fallback', error)
+      }
     }
+
+    const queryTokens = [...new Set(tokenize(input))]
+    if (!queryTokens.length) return []
+    if (!this.index.documents.length && this.config.autoRebuild) await this.rebuild()
+    return this.index.documents
+      .map((document) => ({ ...document, score: this.scoreDocument(document, queryTokens) }))
+      .filter((document) => document.score > 0)
+      .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
+      .slice(0, limit)
+      .map(({ frequencies, length, ...result }) => result)
   }
 
-  const queryTokens = [...new Set(tokenize(input))]
-  if (!queryTokens.length) return []
-  if (!this.index.documents.length && this.config.autoRebuild) await this.rebuild()
-  return this.index.documents
-    .map((document) => ({ ...document, score: this.scoreDocument(document, queryTokens) }))
-    .filter((document) => document.score > 0)
-    .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
-    .slice(0, limit)
-    .map(({ frequencies, length, ...result }) => result)
-}
-
   status() {
+    const semanticDocuments = Number(this.semanticState?.status?.documents || 0)
     return {
       enabled: this.config.enabled,
       notesIndexed: this.index.documents.length,
       builtAt: this.index.builtAt,
       rebuilding: Boolean(this.rebuildPromise),
-      engine: 'package-owned-bm25',
-      semanticVectors: false
+      engine: this.knowledgeProvider() ? 'knowledge-provider' : 'package-owned-bm25',
+      semanticVectors: semanticDocuments,
+      semanticModel: String(this.semanticState?.status?.modelId || this.semanticState?.model || ''),
+      semanticAvailable: this.semanticState?.available === true,
+      semanticReason: String(this.semanticState?.reason || '')
     }
   }
 
@@ -271,14 +329,17 @@ export default class ElephantSearchAddon {
     const refreshStatus = () => {
       const state = this.status()
       const built = state.builtAt ? ` · ${new Date(state.builtAt).toLocaleString()}` : ''
-      status.textContent = `${state.enabled ? 'Enabled' : 'Disabled'} · ${state.notesIndexed} notes · package-owned lexical index${built}`
+      const semantic = state.semanticVectors
+        ? ` · ${state.semanticVectors} semantic vectors${state.semanticModel ? ` (${state.semanticModel})` : ''}`
+        : ` · semantic vectors unavailable${state.semanticReason ? ` (${state.semanticReason})` : ''}`
+      status.textContent = `${state.enabled ? 'Enabled' : 'Disabled'} · ${state.notesIndexed} local lexical notes${semantic}${built}`
     }
 
     const card = node(documentRef, 'div', 'elephant-search-card')
     const heading = node(documentRef, 'div', 'elephant-search-heading')
     heading.append(
       node(documentRef, 'h4', '', 'Search'),
-      node(documentRef, 'p', '', 'The index and ranking data live inside this addon package. No global Search backend is required.')
+      node(documentRef, 'p', '', 'Knowledge owns the derived index and vectors; AI only supplies configured embedding inference.')
     )
     card.append(heading, status)
 
@@ -306,20 +367,41 @@ export default class ElephantSearchAddon {
     const auto = node(documentRef, 'input')
     auto.type = 'checkbox'
     auto.checked = this.config.autoRebuild
-    auto.onchange = async () => { this.config.autoRebuild = auto.checked; await this.saveConfig() }
+    auto.onchange = async () => {
+      this.config.autoRebuild = auto.checked
+      await this.saveConfig()
+    }
+
+    const semanticIndexing = node(documentRef, 'input')
+    semanticIndexing.type = 'checkbox'
+    semanticIndexing.checked = this.config.semanticIndexing
+    semanticIndexing.onchange = async () => {
+      this.config.semanticIndexing = semanticIndexing.checked
+      await this.saveConfig()
+    }
 
     const grid = node(documentRef, 'div', 'elephant-search-grid')
-    grid.append(field('Enabled', enabled), field('Result limit', limit), field('Rebuild automatically', auto))
+    grid.append(
+      field('Enabled', enabled),
+      field('Result limit', limit),
+      field('Rebuild automatically', auto),
+      field('Generate semantic vectors', semanticIndexing)
+    )
     card.append(grid)
 
     const actions = node(documentRef, 'div', 'elephant-search-actions')
-    const rebuild = node(documentRef, 'button', '', 'Rebuild index')
+    const rebuild = node(documentRef, 'button', '', 'Rebuild index and vectors')
     rebuild.onclick = async () => {
       rebuild.disabled = true
-      status.textContent = 'Reading and indexing notes…'
-      try { await this.rebuild() } finally { rebuild.disabled = false; refreshStatus() }
+      status.textContent = 'Reading notes, rebuilding Knowledge and generating pending vectors…'
+      try {
+        await this.rebuild()
+      } finally {
+        rebuild.disabled = false
+        refreshStatus()
+      }
     }
-    const clear = node(documentRef, 'button', '', 'Clear index')
+    const clear = node(documentRef, 'button', '', 'Clear lexical fallback')
     clear.onclick = async () => { await this.clear(); refreshStatus() }
     actions.append(rebuild, clear)
     card.append(actions)
@@ -339,8 +421,9 @@ export default class ElephantSearchAddon {
       .elephant-search-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
       .elephant-search-field { display:grid; gap:5px; color:var(--en-muted); font-size:11px; }
       .elephant-search-field input[type=number] { min-height:34px; padding:0 9px; border:1px solid var(--en-border); border-radius:8px; background:var(--en-surface); color:var(--en-text); }
-      .elephant-search-actions { display:flex; gap:8px; }
+      .elephant-search-actions { display:flex; gap:8px; flex-wrap:wrap; }
       .elephant-search-actions button { min-height:34px; padding:0 11px; border:1px solid var(--en-border); border-radius:9px; background:var(--en-surface); color:var(--en-text); cursor:pointer; }
+      @media (max-width:760px) { .elephant-search-grid { grid-template-columns:1fr; } }
     `, 'semantic-search-package')
 
     api.resources.provide(PROVIDER_RESOURCE, Object.freeze({
@@ -348,7 +431,7 @@ export default class ElephantSearchAddon {
       rebuild: () => this.rebuild(),
       clear: () => this.clear(),
       status: () => this.status(),
-      setEnabled: (enabled) => this.setEnabled(enabled)
+      setEnabled: (enabledValue) => this.setEnabled(enabledValue)
     }))
 
     api.commands.register({ id: `${ADDON_ID}.rebuild`, title: 'Rebuild Search index', run: () => this.rebuild() })
@@ -359,7 +442,7 @@ export default class ElephantSearchAddon {
       slot: 'ai.search',
       chrome: false,
       title: 'Search',
-      description: 'Configure package-owned indexing and retrieval.',
+      description: 'Configure package-owned lexical and semantic indexing.',
       order: 30,
       render: (container) => this.render(container)
     })

@@ -21,6 +21,6 @@ describe('createBundledMuyaRustEngine', () => {
     expect(typeof engine.snapshot_json).toBe('function')
     const snapshot = JSON.parse(await engine.snapshot_json())
     expect(snapshot.type).toBe('snapshot')
-    expect(snapshot.payload.markdown).toBe('alpha')
+    expect(snapshot.payload.markdown).toBe('alpha\n')
   })
 })

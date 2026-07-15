@@ -1,5 +1,22 @@
 import { ELEPHANTNOTE_API_ACTIONS as API } from 'common/elephantnote/apiActions'
 
+const getBridge = () => globalThis.window?.elephantnote
+
+const callSearchBridge = (method, payload) => {
+  const fn = getBridge()?.search?.[method]
+  if (typeof fn !== 'function') {
+    throw new Error(`Elephant search.${method} is unavailable in this runtime.`)
+  }
+  return payload === undefined ? fn() : fn(payload)
+}
+
+const normalizeVaultPathPayload = (payload = '') => {
+  const vaultPath = typeof payload === 'string'
+    ? payload
+    : payload?.vaultPath || payload?.path || ''
+  return { vaultPath: String(vaultPath || '').trim() }
+}
+
 const directoryListPayload = (payload = '') =>
   typeof payload === 'string' ? { relativePath: payload } : payload
 
@@ -91,8 +108,15 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     delete: (relativePath) => call(API.ENTRIES_DELETE, { relativePath })
   },
   search: {
+    initVault: (payload = '') => callSearchBridge('initVault', normalizeVaultPathPayload(payload)),
     query: (params) => call(API.SEARCH_QUERY, params),
-    status: () => call(API.SEARCH_STATUS)
+    concepts: (params = {}) => callSearchBridge('concepts', params),
+    status: () => call(API.SEARCH_STATUS),
+    inspect: () => callSearchBridge('inspect'),
+    rebuild: () => callSearchBridge('rebuild'),
+    clear: () => callSearchBridge('clear'),
+    disable: () => callSearchBridge('disable'),
+    enable: () => callSearchBridge('enable')
   },
   features: {
     get: () => call(API.FEATURES_GET),

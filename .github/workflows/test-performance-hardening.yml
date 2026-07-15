@@ -1,0 +1,49 @@
+name: Test and performance hardening
+
+on:
+  push:
+    branches:
+      - develop_next-unified-candidate2
+      - develop_next-unified-recovery
+      - develop_next-mobile-recovery
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  critical-contracts:
+    name: Critical contracts and coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Reject fake or disabled test additions
+        run: node build/scripts/verify-test-integrity.mjs
+        env:
+          TEST_INTEGRITY_BASE: ${{ github.event.pull_request.base.sha || 'origin/develop_next' }}
+
+      - name: Run critical utility contracts with coverage
+        run: pnpm exec vitest run --config vitest.critical.config.js --coverage
+
+      - name: Build production renderer
+        run: pnpm tauri:web:build
+
+      - name: Upload focused coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: critical-coverage
+          path: build/coverage-critical/
+          if-no-files-found: error
+          retention-days: 14

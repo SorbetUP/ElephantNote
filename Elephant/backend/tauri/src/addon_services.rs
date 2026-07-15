@@ -7,6 +7,8 @@ use std::{
   process::Stdio,
   sync::atomic::{AtomicU64, Ordering},
 };
+#[cfg(mobile)]
+use std::collections::HashSet;
 use tauri::{AppHandle, State};
 use tokio::{
   io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
@@ -20,12 +22,14 @@ use crate::{
   vault::config as vault_config,
   vault_layout,
 };
+#[cfg(mobile)]
+use crate::embedded_addon_services;
 
-type R<T> = Result<T, String>;
+ type R<T> = Result<T, String>;
 
 const SERVICE_PROTOCOL: &str = "elephant-addon-service-v1";
 const DEFAULT_TIMEOUT_MS: u64 = 30_000;
-const MAX_TIMEOUT_MS: u64 = 120_000;
+const MAX_TIMEOUT_MS: u64 = 30 * 60 * 1_000;
 const START_TIMEOUT_MS: u64 = 20_000;
 const STOP_TIMEOUT_MS: u64 = 5_000;
 const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
@@ -46,6 +50,8 @@ impl ServiceProcess {
 
 pub struct AddonServiceState {
   services: Mutex<HashMap<String, ServiceProcess>>,
+  #[cfg(mobile)]
+  embedded: Mutex<HashSet<String>>,
   next_id: AtomicU64,
 }
 
@@ -53,6 +59,8 @@ impl AddonServiceState {
   pub fn new() -> Self {
     Self {
       services: Mutex::new(HashMap::new()),
+      #[cfg(mobile)]
+      embedded: Mutex::new(HashSet::new()),
       next_id: AtomicU64::new(1),
     }
   }
@@ -83,6 +91,15 @@ struct ResolvedService {
   executable: PathBuf,
   package_dir: PathBuf,
   data_dir: PathBuf,
+  vault_dir: PathBuf,
+  platform: String,
+  relative_path: String,
+}
+
+#[cfg(mobile)]
+#[derive(Debug, Clone)]
+struct ResolvedEmbeddedService {
+  host: String,
   vault_dir: PathBuf,
   platform: String,
   relative_path: String,
@@ -141,6 +158,61 @@ fn installed_manifest(package_dir: &Path, addon_id: &str) -> R<Value> {
     return Err(format!("Installed addon manifest id mismatch: {addon_id}"));
   }
   Ok(manifest)
+}
+
+fn embedded_mobile_descriptor(manifest: &Value, os: &str) -> R<(String, String)> {
+  let descriptor = manifest
+    .pointer(&format!("/native/mobile/{os}"))
+    .and_then(Value::as_object)
+    .ok_or_else(|| format!("Addon has no embedded service declaration for {os}"))?;
+  if descriptor.get("supported").and_then(Value::as_bool) != Some(true) {
+    return Err(format!("Addon embedded service is disabled for {os}"));
+  }
+  if descriptor.get("runner").and_then(Value::as_str) != Some("embedded-rust") {
+    return Err(format!("Addon does not declare the embedded Rust runner for {os}"));
+  }
+  let host = descriptor
+    .get("host")
+    .and_then(Value::as_str)
+    .map(str::trim)
+    .filter(|value| !value.is_empty())
+    .ok_or_else(|| format!("Addon embedded service host is missing for {os}"))?;
+  Ok((host.to_string(), format!("embedded://{host}")))
+}
+
+#[cfg(mobile)]
+fn resolve_embedded_service(app: &AppHandle, addon_id: &str) -> R<ResolvedEmbeddedService> {
+  let record = addon_runtime_access::read_enabled_addon(app, addon_id)?;
+  if record.source != "official" {
+    return Err(format!(
+      "Only an official addon may use a statically embedded service host: {addon_id}"
+    ));
+  }
+
+  let vault = vault_config::get_active_vault(app)?;
+  let vault_dir = fs::canonicalize(&vault.path)
+    .map_err(|error| format!("Active vault is unavailable: {error}"))?;
+  let package_dir = vault_layout::addons_dir(&vault.path)
+    .join("packages")
+    .join(addon_id);
+  let manifest = installed_manifest(&package_dir, addon_id)?;
+  if manifest.pointer("/permissions/native").and_then(Value::as_bool) != Some(true) {
+    return Err(format!("Addon native permission was not granted: {addon_id}"));
+  }
+  if manifest.pointer("/native/runner").and_then(Value::as_str) != Some("service") {
+    return Err(format!("Addon does not declare the service runner: {addon_id}"));
+  }
+
+  let (host, relative_path) = embedded_mobile_descriptor(&manifest, std::env::consts::OS)?;
+  if !embedded_addon_services::supports(&host) {
+    return Err(format!("This application build does not provide embedded host {host}"));
+  }
+  Ok(ResolvedEmbeddedService {
+    host,
+    vault_dir,
+    platform: platform_key(),
+    relative_path,
+  })
 }
 
 fn resolve_service(app: &AppHandle, addon_id: &str) -> R<ResolvedService> {
@@ -264,6 +336,25 @@ async fn exchange(
     .to_string())
 }
 
+#[cfg(mobile)]
+async fn exchange_embedded(
+  resolved: ResolvedEmbeddedService,
+  method: String,
+  params: Value,
+  timeout_ms: u64,
+) -> R<Value> {
+  let wait_ms = timeout_ms.clamp(1, MAX_TIMEOUT_MS);
+  let host = resolved.host;
+  let vault_dir = resolved.vault_dir;
+  let task = tokio::task::spawn_blocking(move || {
+    embedded_addon_services::call(&host, &vault_dir, &method, params)
+  });
+  timeout(Duration::from_millis(wait_ms), task)
+    .await
+    .map_err(|_| format!("Embedded addon service timed out after {wait_ms} ms"))?
+    .map_err(|error| format!("Embedded addon service task failed: {error}"))?
+}
+
 async fn spawn_service(app: &AppHandle, addon_id: &str, id: u64) -> R<ServiceProcess> {
   let resolved = resolve_service(app, addon_id)?;
   let mut child = Command::new(&resolved.executable)
@@ -298,39 +389,64 @@ pub async fn tauri_addons_service_status(
   state: State<'_, AddonServiceState>,
   addon_id: String,
 ) -> R<AddonServiceStatus> {
-  let mut services = state.services.lock().await;
-  if let Some(process) = services.get_mut(&addon_id) {
-    if process.running() {
-      return Ok(AddonServiceStatus {
-        running: true,
+  #[cfg(mobile)]
+  {
+    return Ok(match resolve_embedded_service(&app, &addon_id) {
+      Ok(resolved) => AddonServiceStatus {
+        running: state.embedded.lock().await.contains(&addon_id),
         addon_id,
-        platform: process.platform.clone(),
-        relative_path: process.relative_path.clone(),
+        platform: resolved.platform,
+        relative_path: resolved.relative_path,
         protocol: SERVICE_PROTOCOL,
         error: None,
-      });
-    }
-    services.remove(&addon_id);
+      },
+      Err(error) => AddonServiceStatus {
+        running: false,
+        addon_id,
+        platform: platform_key(),
+        relative_path: String::new(),
+        protocol: SERVICE_PROTOCOL,
+        error: Some(error),
+      },
+    });
   }
 
-  Ok(match resolve_service(&app, &addon_id) {
-    Ok(resolved) => AddonServiceStatus {
-      running: false,
-      addon_id,
-      platform: resolved.platform,
-      relative_path: resolved.relative_path,
-      protocol: SERVICE_PROTOCOL,
-      error: None,
-    },
-    Err(error) => AddonServiceStatus {
-      running: false,
-      addon_id,
-      platform: platform_key(),
-      relative_path: String::new(),
-      protocol: SERVICE_PROTOCOL,
-      error: Some(error),
-    },
-  })
+  #[cfg(not(mobile))]
+  {
+    let mut services = state.services.lock().await;
+    if let Some(process) = services.get_mut(&addon_id) {
+      if process.running() {
+        return Ok(AddonServiceStatus {
+          running: true,
+          addon_id,
+          platform: process.platform.clone(),
+          relative_path: process.relative_path.clone(),
+          protocol: SERVICE_PROTOCOL,
+          error: None,
+        });
+      }
+      services.remove(&addon_id);
+    }
+
+    Ok(match resolve_service(&app, &addon_id) {
+      Ok(resolved) => AddonServiceStatus {
+        running: false,
+        addon_id,
+        platform: resolved.platform,
+        relative_path: resolved.relative_path,
+        protocol: SERVICE_PROTOCOL,
+        error: None,
+      },
+      Err(error) => AddonServiceStatus {
+        running: false,
+        addon_id,
+        platform: platform_key(),
+        relative_path: String::new(),
+        protocol: SERVICE_PROTOCOL,
+        error: Some(error),
+      },
+    })
+  }
 }
 
 #[tauri::command]
@@ -339,28 +455,51 @@ pub async fn tauri_addons_service_start(
   state: State<'_, AddonServiceState>,
   addon_id: String,
 ) -> R<Value> {
-  let mut services = state.services.lock().await;
-  if let Some(process) = services.get_mut(&addon_id) {
-    if process.running() {
-      return Ok(json!({
-        "running": true,
-        "platform": process.platform.clone(),
-        "relativePath": process.relative_path.clone(),
-        "protocol": SERVICE_PROTOCOL,
-      }));
-    }
-    services.remove(&addon_id);
+  #[cfg(mobile)]
+  {
+    let resolved = resolve_embedded_service(&app, &addon_id)?;
+    exchange_embedded(
+      resolved.clone(),
+      "service.start".to_string(),
+      json!({}),
+      START_TIMEOUT_MS,
+    )
+    .await?;
+    state.embedded.lock().await.insert(addon_id);
+    return Ok(json!({
+      "running": true,
+      "platform": resolved.platform,
+      "relativePath": resolved.relative_path,
+      "protocol": SERVICE_PROTOCOL,
+      "mode": "embedded-rust",
+    }));
   }
 
-  let process = spawn_service(&app, &addon_id, state.request_id()).await?;
-  let result = json!({
-    "running": true,
-    "platform": process.platform.clone(),
-    "relativePath": process.relative_path.clone(),
-    "protocol": SERVICE_PROTOCOL,
-  });
-  services.insert(addon_id, process);
-  Ok(result)
+  #[cfg(not(mobile))]
+  {
+    let mut services = state.services.lock().await;
+    if let Some(process) = services.get_mut(&addon_id) {
+      if process.running() {
+        return Ok(json!({
+          "running": true,
+          "platform": process.platform.clone(),
+          "relativePath": process.relative_path.clone(),
+          "protocol": SERVICE_PROTOCOL,
+        }));
+      }
+      services.remove(&addon_id);
+    }
+
+    let process = spawn_service(&app, &addon_id, state.request_id()).await?;
+    let result = json!({
+      "running": true,
+      "platform": process.platform.clone(),
+      "relativePath": process.relative_path.clone(),
+      "protocol": SERVICE_PROTOCOL,
+    });
+    services.insert(addon_id, process);
+    Ok(result)
+  }
 }
 
 #[tauri::command]
@@ -377,39 +516,64 @@ pub async fn tauri_addons_service_call(
     return Err("A valid addon service method is required".to_string());
   }
 
-  let mut services = state.services.lock().await;
-  let restart = services
-    .get_mut(&addon_id)
-    .map(|process| !process.running())
-    .unwrap_or(true);
-  if restart {
-    services.remove(&addon_id);
-    let process = spawn_service(&app, &addon_id, state.request_id()).await?;
-    services.insert(addon_id.clone(), process);
-  }
-
-  let result = {
-    let process = services
-      .get_mut(&addon_id)
-      .ok_or_else(|| "Addon service failed to start".to_string())?;
-    exchange(
-      process,
-      &addon_id,
-      state.request_id(),
-      &method,
+  #[cfg(mobile)]
+  {
+    let resolved = resolve_embedded_service(&app, &addon_id)?;
+    if !state.embedded.lock().await.contains(&addon_id) {
+      exchange_embedded(
+        resolved.clone(),
+        "service.start".to_string(),
+        json!({}),
+        START_TIMEOUT_MS,
+      )
+      .await?;
+      state.embedded.lock().await.insert(addon_id.clone());
+    }
+    return exchange_embedded(
+      resolved,
+      method,
       params.unwrap_or_else(|| json!({})),
       timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS),
     )
-    .await
-  };
-  if services
-    .get_mut(&addon_id)
-    .map(|process| !process.running())
-    .unwrap_or(true)
-  {
-    services.remove(&addon_id);
+    .await;
   }
-  result
+
+  #[cfg(not(mobile))]
+  {
+    let mut services = state.services.lock().await;
+    let restart = services
+      .get_mut(&addon_id)
+      .map(|process| !process.running())
+      .unwrap_or(true);
+    if restart {
+      services.remove(&addon_id);
+      let process = spawn_service(&app, &addon_id, state.request_id()).await?;
+      services.insert(addon_id.clone(), process);
+    }
+
+    let result = {
+      let process = services
+        .get_mut(&addon_id)
+        .ok_or_else(|| "Addon service failed to start".to_string())?;
+      exchange(
+        process,
+        &addon_id,
+        state.request_id(),
+        &method,
+        params.unwrap_or_else(|| json!({})),
+        timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS),
+      )
+      .await
+    };
+    if services
+      .get_mut(&addon_id)
+      .map(|process| !process.running())
+      .unwrap_or(true)
+    {
+      services.remove(&addon_id);
+    }
+    result
+  }
 }
 
 #[tauri::command]
@@ -417,28 +581,37 @@ pub async fn tauri_addons_service_stop(
   state: State<'_, AddonServiceState>,
   addon_id: String,
 ) -> R<Value> {
-  let process = state.services.lock().await.remove(&addon_id);
-  let Some(mut process) = process else {
-    return Ok(json!({ "running": false, "stopped": false }));
-  };
-
-  let _ = exchange(
-    &mut process,
-    &addon_id,
-    state.request_id(),
-    "service.stop",
-    json!({}),
-    STOP_TIMEOUT_MS,
-  )
-  .await;
-  if !matches!(
-    timeout(Duration::from_millis(STOP_TIMEOUT_MS), process.child.wait()).await,
-    Ok(Ok(_))
-  ) {
-    let _ = process.child.kill().await;
-    let _ = process.child.wait().await;
+  #[cfg(mobile)]
+  {
+    let stopped = state.embedded.lock().await.remove(&addon_id);
+    return Ok(json!({ "running": false, "stopped": stopped, "mode": "embedded-rust" }));
   }
-  Ok(json!({ "running": false, "stopped": true }))
+
+  #[cfg(not(mobile))]
+  {
+    let process = state.services.lock().await.remove(&addon_id);
+    let Some(mut process) = process else {
+      return Ok(json!({ "running": false, "stopped": false }));
+    };
+
+    let _ = exchange(
+      &mut process,
+      &addon_id,
+      state.request_id(),
+      "service.stop",
+      json!({}),
+      STOP_TIMEOUT_MS,
+    )
+    .await;
+    if !matches!(
+      timeout(Duration::from_millis(STOP_TIMEOUT_MS), process.child.wait()).await,
+      Ok(Ok(_))
+    ) {
+      let _ = process.child.kill().await;
+      let _ = process.child.wait().await;
+    }
+    Ok(json!({ "running": false, "stopped": true }))
+  }
 }
 
 #[cfg(test)]
@@ -461,8 +634,32 @@ mod tests {
   }
 
   #[test]
+  fn embedded_mobile_service_declarations_are_explicit_and_versioned() {
+    let manifest = json!({
+      "native": {
+        "mobile": {
+          "android": {
+            "supported": true,
+            "runner": "embedded-rust",
+            "host": "elephant-knowledge-v1"
+          }
+        }
+      }
+    });
+    assert_eq!(
+      embedded_mobile_descriptor(&manifest, "android").unwrap(),
+      (
+        "elephant-knowledge-v1".to_string(),
+        "embedded://elephant-knowledge-v1".to_string()
+      )
+    );
+    assert!(embedded_mobile_descriptor(&manifest, "ios").is_err());
+  }
+
+  #[test]
   fn protocol_and_limits_are_versioned() {
     assert_eq!(SERVICE_PROTOCOL, "elephant-addon-service-v1");
     assert_eq!(MAX_RESPONSE_BYTES, 16 * 1024 * 1024);
+    assert_eq!(MAX_TIMEOUT_MS, 30 * 60 * 1_000);
   }
 }

@@ -2,8 +2,19 @@
   "version": 1,
   "branch": "integrated",
   "packageRoot": "official",
-  "updatedAt": "2026-07-15T13:32:00Z",
+  "updatedAt": "2026-07-15T20:30:00Z",
   "addons": [
+    {
+      "id": "elephant.dashboard",
+      "slug": "dashboard",
+      "name": "Dashboard",
+      "version": "1.0.0",
+      "description": "Provides vault statistics, recent notes and the managed Dashboard note outside the application core.",
+      "author": "Elephant",
+      "official": true,
+      "manifestPath": "official/dashboard/manifest.json",
+      "entryPath": "official/dashboard/main.js"
+    },
     {
       "id": "elephant.ai",
       "slug": "ai",

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 PACKAGE_ID="${ANDROID_PACKAGE_ID:-com.elephantnote.app}"
 ACTIVITY="${ANDROID_ACTIVITY:-com.elephantnote.app/.MainActivity}"
@@ -11,6 +11,7 @@ RESULTS_JUNIT="${ANDROID_USAGE_RESULTS_JUNIT:-android-usage-junit.xml}"
 LOG_FILE="${ANDROID_USAGE_LOG:-android-usage-logcat.txt}"
 CURRENT_SCENARIO=""
 CURRENT_STARTED_AT=0
+FAILURES=0
 
 : > "$RESULTS_TSV"
 adb logcat -c
@@ -26,6 +27,34 @@ capture_screen() {
   local destination="$1"
   adb exec-out screencap -p > "$destination"
   test -s "$destination"
+}
+
+assert_not_blank() {
+  local screenshot="$1"
+  local label="$2"
+  python3 - "$screenshot" "$label" <<'PY'
+import sys
+from PIL import Image, ImageStat
+
+path, label = sys.argv[1:]
+image = Image.open(path).convert('RGB')
+width, height = image.size
+region = image.crop((max(0, int(width * .03)), max(0, int(height * .04)), min(width, int(width * .97)), min(height, int(height * .94))))
+pixels = list(region.getdata())
+white = sum(1 for red, green, blue in pixels if red >= 245 and green >= 245 and blue >= 245)
+non_white_ratio = 1 - white / max(1, len(pixels))
+contrast = max(ImageStat.Stat(region).stddev)
+print(f'[android-usage] {label} non_white_ratio={non_white_ratio:.4f} contrast={contrast:.2f}')
+if non_white_ratio < 0.005 or contrast < 4.0:
+    raise SystemExit(f'{label}: screenshot is effectively a uniform blank surface')
+PY
+}
+
+capture_checkpoint() {
+  local prefix="$1"
+  capture_ui "${prefix}.xml"
+  capture_screen "${prefix}.png"
+  assert_not_blank "${prefix}.png" "$prefix"
 }
 
 tap_ui_node() {
@@ -60,6 +89,24 @@ PY
     cat "$dump_file" >&2
     return 1
   fi
+  read -r x y <<<"$coordinates"
+  adb shell input tap "$x" "$y"
+}
+
+tap_relative_to_screenshot() {
+  local screenshot="$1"
+  local x_ratio="$2"
+  local y_ratio="$3"
+  local coordinates
+  coordinates="$(python3 - "$screenshot" "$x_ratio" "$y_ratio" <<'PY'
+import sys
+from PIL import Image
+
+path, x_ratio, y_ratio = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
+width, height = Image.open(path).size
+print(round(width * x_ratio), round(height * y_ratio))
+PY
+)"
   read -r x y <<<"$coordinates"
   adb shell input tap "$x" "$y"
 }
@@ -110,9 +157,24 @@ assert_no_renderer_regression() {
   fi
 }
 
+wait_for_workspace() {
+  local destination="$1"
+  local deadline=$((SECONDS + 35))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    capture_ui "$destination" || true
+    if [ -s "$destination" ] && grep -Eq 'Search notes|Open navigation|Getting Started' "$destination"; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo 'Timed out waiting for the mobile workspace.' >&2
+  [ -s "$destination" ] && cat "$destination" >&2
+  return 1
+}
+
 return_to_workspace() {
   local attempt
-  for attempt in 1 2 3 4; do
+  for attempt in 1 2 3 4 5; do
     capture_ui android-usage-workspace.xml || true
     if [ -s android-usage-workspace.xml ] && grep -Eq 'Search notes|Open navigation' android-usage-workspace.xml; then
       return 0
@@ -123,15 +185,44 @@ return_to_workspace() {
 
   adb shell am force-stop "$PACKAGE_ID"
   adb shell am start -W -n "$ACTIVITY" >/dev/null
+  wait_for_workspace android-usage-workspace.xml
+}
+
+open_search() {
+  local prefix="$1"
+  return_to_workspace
+  capture_checkpoint "${prefix}-workspace"
+  tap_ui_node "${prefix}-workspace.xml" 'Search notes'
+  sleep 2
+  capture_checkpoint "${prefix}-open"
+  assert_screens_differ "${prefix}-workspace.png" "${prefix}-open.png" 1.0 "${prefix}_open"
+}
+
+close_search() {
+  local screenshot="$1"
+  adb shell input keyevent 4 >/dev/null 2>&1 || true
+  sleep 1
+  tap_relative_to_screenshot "$screenshot" 0.50 0.84
+  sleep 2
+}
+
+open_seeded_note() {
+  local prefix="$1"
+  return_to_workspace
+  capture_checkpoint "${prefix}-workspace"
+  tap_ui_node "${prefix}-workspace.xml" 'Open navigation'
+  sleep 2
+  capture_checkpoint "${prefix}-drawer"
+  grep -q 'Getting Started' "${prefix}-drawer.xml"
+  tap_ui_node "${prefix}-drawer.xml" 'Getting Started'
   sleep 4
-  capture_ui android-usage-workspace.xml
-  grep -Eq 'Search notes|Open navigation' android-usage-workspace.xml
+  capture_checkpoint "${prefix}-open"
+  assert_screens_differ "${prefix}-drawer.png" "${prefix}-open.png" 1.0 "${prefix}_open"
 }
 
 scenario_library_layout_toggle() {
   return_to_workspace
-  capture_ui android-layout-before.xml
-  capture_screen android-layout-before.png
+  capture_checkpoint android-layout-before
 
   local initial_label target_label
   if grep -q 'Show notes as list' android-layout-before.xml; then
@@ -148,60 +239,165 @@ scenario_library_layout_toggle() {
 
   tap_ui_node android-layout-before.xml "$initial_label"
   sleep 2
-  capture_ui android-layout-after.xml
-  capture_screen android-layout-after.png
+  capture_checkpoint android-layout-after
   assert_screens_differ android-layout-before.png android-layout-after.png 0.45 library_layout_toggle
   grep -q "$target_label" android-layout-after.xml
-  assert_process_alive
-  assert_no_renderer_regression
 
   tap_ui_node android-layout-after.xml "$target_label"
   sleep 2
-  capture_ui android-layout-restored.xml
-  capture_screen android-layout-restored.png
+  capture_checkpoint android-layout-restored
   grep -q "$initial_label" android-layout-restored.xml
 }
 
 scenario_library_sort_sheet() {
   return_to_workspace
-  capture_ui android-sort-before.xml
-  capture_screen android-sort-before.png
+  capture_checkpoint android-sort-before
   tap_ui_node android-sort-before.xml 'Sort notes'
   sleep 2
-  capture_ui android-sort-sheet.xml
-  capture_screen android-sort-sheet.png
+  capture_checkpoint android-sort-sheet
   grep -q 'Title A' android-sort-sheet.xml
   assert_screens_differ android-sort-before.png android-sort-sheet.png 1.0 library_sort_sheet_open
 
   tap_ui_node android-sort-sheet.xml 'Title A'
   sleep 2
-  capture_ui android-sort-after.xml
-  capture_screen android-sort-after.png
+  capture_checkpoint android-sort-after
   if grep -q 'Title A' android-sort-after.xml; then
     echo 'The mobile sort sheet did not close after selecting title ordering.' >&2
     cat android-sort-after.xml >&2
     return 1
   fi
-  assert_process_alive
-  assert_no_renderer_regression
 }
 
 scenario_open_existing_note() {
+  open_seeded_note android-note
+}
+
+scenario_drawer_back_close() {
   return_to_workspace
-  capture_ui android-note-workspace.xml
-  capture_screen android-note-workspace.png
-  tap_ui_node android-note-workspace.xml 'Open navigation'
+  capture_checkpoint android-drawer-back-before
+  tap_ui_node android-drawer-back-before.xml 'Open navigation'
   sleep 2
-  capture_ui android-note-drawer.xml
-  capture_screen android-note-drawer.png
-  grep -q 'Getting Started' android-note-drawer.xml
-  tap_ui_node android-note-drawer.xml 'Getting Started'
+  capture_checkpoint android-drawer-back-open
+  grep -q 'Getting Started' android-drawer-back-open.xml
+  adb shell input keyevent 4
+  sleep 2
+  capture_checkpoint android-drawer-back-closed
+  assert_screens_differ android-drawer-back-open.png android-drawer-back-closed.png 1.0 drawer_back_close
+  grep -Eq 'Search notes|Open navigation' android-drawer-back-closed.xml
+}
+
+scenario_note_back_roundtrip() {
+  open_seeded_note android-note-back
+  adb shell input keyevent 4
+  sleep 3
+  capture_checkpoint android-note-back-workspace
+  grep -Eq 'Search notes|Open navigation' android-note-back-workspace.xml
+  assert_screens_differ android-note-back-open.png android-note-back-workspace.png 1.0 note_back_roundtrip
+}
+
+scenario_app_background_resume() {
+  return_to_workspace
+  capture_checkpoint android-resume-before
+  adb shell input keyevent 3
+  sleep 3
+  adb shell am start -W -n "$ACTIVITY" >/dev/null
+  wait_for_workspace android-resume-after.xml
+  capture_screen android-resume-after.png
+  assert_not_blank android-resume-after.png app_background_resume
+}
+
+scenario_process_relaunch() {
+  return_to_workspace
+  adb shell am force-stop "$PACKAGE_ID"
+  sleep 2
+  adb shell am start -W -n "$ACTIVITY" >/dev/null
+  wait_for_workspace android-relaunch-after.xml
+  capture_screen android-relaunch-after.png
+  assert_not_blank android-relaunch-after.png process_relaunch
+}
+
+scenario_search_no_results() {
+  open_search android-search-empty
+  tap_relative_to_screenshot android-search-empty-open.png 0.50 0.17
+  adb shell input text 'zzzxxyy-no-match-9173'
   sleep 4
-  capture_ui android-note-open.xml || true
-  capture_screen android-note-open.png
-  assert_screens_differ android-note-drawer.png android-note-open.png 1.2 open_existing_note
-  assert_process_alive
-  assert_no_renderer_regression
+  capture_checkpoint android-search-empty-results
+  assert_screens_differ android-search-empty-open.png android-search-empty-results.png 0.25 search_no_results
+  close_search android-search-empty-results.png
+  wait_for_workspace android-search-empty-closed.xml
+}
+
+scenario_search_repeat_stability() {
+  local cycle
+  for cycle in 1 2 3; do
+    open_search "android-search-repeat-${cycle}"
+    close_search "android-search-repeat-${cycle}-open.png"
+    wait_for_workspace "android-search-repeat-${cycle}-closed.xml"
+    capture_screen "android-search-repeat-${cycle}-closed.png"
+    assert_not_blank "android-search-repeat-${cycle}-closed.png" "search_repeat_${cycle}"
+    assert_process_alive
+    assert_no_renderer_regression
+  done
+}
+
+scenario_settings_back_navigation() {
+  return_to_workspace
+  capture_checkpoint android-settings-back-before
+  tap_ui_node android-settings-back-before.xml 'Settings'
+  sleep 2
+  capture_checkpoint android-settings-back-open
+  grep -q 'Close settings' android-settings-back-open.xml
+  adb shell input keyevent 4
+  sleep 2
+  capture_checkpoint android-settings-back-closed
+  grep -Eq 'Search notes|Open navigation' android-settings-back-closed.xml
+  assert_screens_differ android-settings-back-open.png android-settings-back-closed.png 1.0 settings_back_navigation
+}
+
+scenario_keyboard_dismissal() {
+  open_search android-keyboard
+  tap_relative_to_screenshot android-keyboard-open.png 0.50 0.17
+  adb shell input text 'Getting'
+  sleep 2
+  capture_checkpoint android-keyboard-visible
+  adb shell input keyevent 4
+  sleep 2
+  capture_checkpoint android-keyboard-hidden
+  assert_screens_differ android-keyboard-visible.png android-keyboard-hidden.png 0.15 keyboard_dismissal
+  tap_relative_to_screenshot android-keyboard-hidden.png 0.50 0.84
+  sleep 2
+  wait_for_workspace android-keyboard-closed.xml
+}
+
+scenario_navigation_stress() {
+  local cycle
+  return_to_workspace
+  for cycle in 1 2 3; do
+    capture_ui "android-stress-${cycle}-workspace.xml"
+    tap_ui_node "android-stress-${cycle}-workspace.xml" 'Open navigation'
+    sleep 1
+    capture_checkpoint "android-stress-${cycle}-drawer"
+    adb shell input keyevent 4
+    sleep 1
+    wait_for_workspace "android-stress-${cycle}-after-drawer.xml"
+
+    tap_ui_node "android-stress-${cycle}-after-drawer.xml" 'Settings'
+    sleep 1
+    capture_checkpoint "android-stress-${cycle}-settings"
+    tap_ui_node "android-stress-${cycle}-settings.xml" 'Close settings'
+    sleep 1
+    wait_for_workspace "android-stress-${cycle}-after-settings.xml"
+
+    tap_ui_node "android-stress-${cycle}-after-settings.xml" 'Search notes'
+    sleep 1
+    capture_checkpoint "android-stress-${cycle}-search"
+    tap_relative_to_screenshot "android-stress-${cycle}-search.png" 0.50 0.84
+    sleep 1
+    wait_for_workspace "android-stress-${cycle}-after-search.xml"
+    assert_process_alive
+    assert_no_renderer_regression
+  done
+  capture_checkpoint android-stress-complete
 }
 
 record_result() {
@@ -209,6 +405,8 @@ record_result() {
   local status="$2"
   local duration="$3"
   local message="$4"
+  message="${message//$'\t'/ }"
+  message="${message//$'\n'/ }"
   printf '%s\t%s\t%s\t%s\n' "$id" "$status" "$duration" "$message" >> "$RESULTS_TSV"
 }
 
@@ -234,7 +432,8 @@ if tsv_path.exists():
             'durationSeconds': int(duration),
             'message': message,
             'description': metadata.get(scenario_id, {}).get('description', ''),
-            'regression': metadata.get(scenario_id, {}).get('regression', '')
+            'regression': metadata.get(scenario_id, {}).get('regression', ''),
+            'tags': metadata.get(scenario_id, {}).get('tags', [])
         })
 summary = {
     'schemaVersion': 1,
@@ -264,29 +463,37 @@ ET.ElementTree(testsuite).write(junit_path, encoding='utf-8', xml_declaration=Tr
 PY
 }
 
-on_exit() {
-  local status=$?
-  if [ "$status" -ne 0 ] && [ -n "$CURRENT_SCENARIO" ]; then
-    local duration=$((SECONDS - CURRENT_STARTED_AT))
-    record_result "$CURRENT_SCENARIO" failed "$duration" "scenario exited with status $status"
-    CURRENT_SCENARIO=""
-  fi
-  emit_reports || true
-  exit "$status"
-}
-trap on_exit EXIT
-
 run_scenario() {
   local id="$1"
   local function_name="$2"
+  local scenario_log="android-usage-${id}.log"
   CURRENT_SCENARIO="$id"
   CURRENT_STARTED_AT=$SECONDS
   printf '[android-usage] START %s\n' "$id"
-  "$function_name"
+
+  set +e
+  "$function_name" > >(tee "$scenario_log") 2>&1
+  local status=$?
+  set -e
+
   local duration=$((SECONDS - CURRENT_STARTED_AT))
-  record_result "$id" passed "$duration" ''
-  printf '[android-usage] PASS %s (%ss)\n' "$id" "$duration"
+  if [ "$status" -eq 0 ]; then
+    assert_process_alive && assert_no_renderer_regression
+    status=$?
+  fi
+  if [ "$status" -eq 0 ]; then
+    record_result "$id" passed "$duration" ''
+    printf '[android-usage] PASS %s (%ss)\n' "$id" "$duration"
+  else
+    local message
+    message="$(tail -n 8 "$scenario_log" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')"
+    record_result "$id" failed "$duration" "$message"
+    FAILURES=$((FAILURES + 1))
+    printf '[android-usage] FAIL %s (%ss)\n' "$id" >&2
+    return_to_workspace >/dev/null 2>&1 || true
+  fi
   CURRENT_SCENARIO=""
+  return 0
 }
 
 mapfile -t SCENARIOS < <(python3 - "$CATALOG" <<'PY'
@@ -298,23 +505,29 @@ for scenario in json.load(open(sys.argv[1]))['scenarios']:
 PY
 )
 
+set -e
 for scenario in "${SCENARIOS[@]}"; do
   case "$scenario" in
-    library-layout-toggle)
-      run_scenario "$scenario" scenario_library_layout_toggle
-      ;;
-    library-sort-sheet)
-      run_scenario "$scenario" scenario_library_sort_sheet
-      ;;
-    open-existing-note)
-      run_scenario "$scenario" scenario_open_existing_note
-      ;;
+    library-layout-toggle) run_scenario "$scenario" scenario_library_layout_toggle ;;
+    library-sort-sheet) run_scenario "$scenario" scenario_library_sort_sheet ;;
+    open-existing-note) run_scenario "$scenario" scenario_open_existing_note ;;
+    drawer-back-close) run_scenario "$scenario" scenario_drawer_back_close ;;
+    note-back-roundtrip) run_scenario "$scenario" scenario_note_back_roundtrip ;;
+    app-background-resume) run_scenario "$scenario" scenario_app_background_resume ;;
+    process-relaunch) run_scenario "$scenario" scenario_process_relaunch ;;
+    search-no-results) run_scenario "$scenario" scenario_search_no_results ;;
+    search-repeat-stability) run_scenario "$scenario" scenario_search_repeat_stability ;;
+    settings-back-navigation) run_scenario "$scenario" scenario_settings_back_navigation ;;
+    keyboard-dismissal) run_scenario "$scenario" scenario_keyboard_dismissal ;;
+    navigation-stress) run_scenario "$scenario" scenario_navigation_stress ;;
     *)
-      echo "No Android usage implementation exists for catalog scenario: $scenario" >&2
-      exit 1
+      record_result "$scenario" failed 0 "No Android usage implementation exists"
+      FAILURES=$((FAILURES + 1))
       ;;
   esac
 done
 
-assert_no_renderer_regression
-printf '[android-usage] success scenarios=%s\n' "${#SCENARIOS[@]}"
+emit_reports
+adb logcat -d -v threadtime > "$LOG_FILE" || true
+printf '[android-usage] complete scenarios=%s failures=%s\n' "${#SCENARIOS[@]}" "$FAILURES"
+[ "$FAILURES" -eq 0 ]

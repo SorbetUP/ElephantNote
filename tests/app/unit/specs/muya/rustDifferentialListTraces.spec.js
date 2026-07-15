@@ -10,16 +10,16 @@ import {
 
 const describeBundled = bundled ? describe : describe.skip
 
-const pressTab = async (muya, shiftKey = false) => {
-  muya.container.dispatchEvent(new KeyboardEvent('keydown', {
-    key: 'Tab',
-    code: 'Tab',
-    keyCode: 9,
-    which: 9,
-    shiftKey,
-    bubbles: true,
-    cancelable: true
-  }))
+const indentSelectedListItem = async (muya) => {
+  muya.contentState.indentListItem()
+  await settle()
+}
+
+const outdentSelectedListItem = async (muya) => {
+  const block = muya.contentState.getBlock(muya.contentState.cursor.start.key)
+  const type = muya.contentState.isUnindentableListItem(block)
+  if (!type) throw new Error('Selected Muya list item cannot be outdented.')
+  muya.contentState.unindentListItem(block, type)
   await settle()
 }
 
@@ -30,7 +30,7 @@ const traces = [
     expected: '- parent\n  - child\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'child', 0)
-      await pressTab(muya)
+      await indentSelectedListItem(muya)
     },
     runRust: (rust) => {
       rust.setSelectionByText('child', 0)
@@ -43,7 +43,7 @@ const traces = [
     expected: '- parent\n  - first\n  - second\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'second', 0)
-      await pressTab(muya)
+      await indentSelectedListItem(muya)
     },
     runRust: (rust) => {
       rust.setSelectionByText('second', 0)
@@ -56,7 +56,7 @@ const traces = [
     expected: '- parent\n- child\n- sibling\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'child', 0)
-      await pressTab(muya, true)
+      await outdentSelectedListItem(muya)
     },
     runRust: (rust) => {
       rust.setSelectionByText('child', 0)
@@ -69,7 +69,7 @@ const traces = [
     expected: '- parent\n  - first\n- second\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'second', 0)
-      await pressTab(muya, true)
+      await outdentSelectedListItem(muya)
     },
     runRust: (rust) => {
       rust.setSelectionByText('second', 0)
@@ -82,7 +82,7 @@ const traces = [
     expected: '- parent\n  - first\n- middle\n  - last\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'middle', 0)
-      await pressTab(muya, true)
+      await outdentSelectedListItem(muya)
     },
     runRust: (rust) => {
       rust.setSelectionByText('middle', 0)

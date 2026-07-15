@@ -15,7 +15,6 @@
       <library-toolbar />
       <library-grid />
     </section>
-    <dashboard-view v-else-if="!hasOpenNote && store.activeWorkspaceView === 'dashboard'" />
     <template v-if="!hasOpenNote && !activeAddonViewId && store.activeWorkspaceView === 'notes'">
       <template v-for="entry in workspacePanels" :key="entry.contribution.id">
         <component
@@ -38,7 +37,6 @@ import { useAddonsStore } from '@/store/addons'
 import LibraryToolbar from '../library/LibraryToolbar.vue'
 import LibraryGrid from '../library/LibraryGrid.vue'
 import NoteEditorHost from '../editor/NoteEditorHost.vue'
-import DashboardView from '../views/DashboardView.vue'
 import AddonWorkspaceRouter from '../views/AddonWorkspaceRouter.vue'
 
 const props = defineProps({

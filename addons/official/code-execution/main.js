@@ -92,6 +92,10 @@ export default class ElephantCodeExecutionAddon {
     this.activeExecutions = new Map()
   }
 
+  service(method, params = {}, options = {}) {
+    return this.api.native.service.call(method, params, options)
+  }
+
   async loadConfig() {
     this.config = normalizeConfig(await this.api.storage.get(CONFIG_KEY))
     return this.config
@@ -140,7 +144,7 @@ export default class ElephantCodeExecutionAddon {
     output.hidden = false
     output.textContent = 'Stopping the interpreter…'
     try {
-      await this.api.native.call('execution.cancel', { executionId: active.executionId })
+      await this.service('execution.cancel', { executionId: active.executionId })
       active.cancelRequested = true
       return true
     } catch (error) {
@@ -154,7 +158,7 @@ export default class ElephantCodeExecutionAddon {
 
   async waitForExecution(executionId, button, output) {
     while (true) {
-      const snapshot = await this.api.native.call('execution.status', { executionId })
+      const snapshot = await this.service('execution.status', { executionId })
       if (!snapshot?.running) return snapshot
       const elapsed = Math.max(0, Date.now() - Number(snapshot.startedAtMs || Date.now()))
       button.disabled = false
@@ -186,13 +190,13 @@ export default class ElephantCodeExecutionAddon {
     output.hidden = false
     output.textContent = `Checking ${interpreter.label || interpreter.id}…`
     try {
-      const status = await this.api.native.call('interpreter.status', {
+      const status = await this.service('interpreter.status', {
         executable: interpreter.executable,
         args: interpreter.args
       })
       if (!status?.available) throw new Error(status?.error || `${interpreter.executable} is unavailable`)
 
-      const started = await this.api.native.call('execute', {
+      const started = await this.service('execute', {
         executable: interpreter.executable,
         args: interpreter.args,
         code,
@@ -223,7 +227,7 @@ export default class ElephantCodeExecutionAddon {
           output.textContent = ''
         }, 2500)
       }
-      await this.api.native.call('execution.forget', { executionId }).catch(() => {})
+      await this.service('execution.forget', { executionId }).catch(() => {})
     } catch (error) {
       output.textContent = error instanceof Error ? error.message : String(error)
       output.dataset.exitCode = 'error'
@@ -356,7 +360,7 @@ export default class ElephantCodeExecutionAddon {
         status.onclick = async () => {
           status.disabled = true
           try {
-            const result = await this.api.native.call('interpreter.status', { executable: executable.value.trim() })
+            const result = await this.service('interpreter.status', { executable: executable.value.trim() })
             feedback.textContent = result?.available ? `${label.value || interpreter.id}: available` : result?.error || 'Unavailable'
           } catch (error) {
             feedback.textContent = error instanceof Error ? error.message : String(error)
@@ -407,6 +411,7 @@ export default class ElephantCodeExecutionAddon {
 
   async onload(api) {
     await this.loadConfig()
+    await api.native.service.start()
     api.ui.registerStyle(`
       .elephant-physical-code-block { position:relative; }
       .elephant-physical-code-toolbar { min-height:32px; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 8px; border-bottom:1px solid var(--en-border); background:var(--en-soft); color:var(--en-muted); font-size:11px; }
@@ -454,8 +459,9 @@ export default class ElephantCodeExecutionAddon {
     const active = [...this.activeExecutions.values()]
     this.activeExecutions.clear()
     await Promise.all(active.map(({ executionId }) =>
-      this.api.native.call('execution.cancel', { executionId }).catch(() => null)
+      this.service('execution.cancel', { executionId }).catch(() => null)
     ))
+    await this.api.native.service.stop().catch(() => {})
     for (const element of this.window.document.querySelectorAll(`.${RUN_BUTTON_CLASS}, .${COPY_BUTTON_CLASS}, .${OUTPUT_CLASS}, .elephant-physical-code-toolbar`)) {
       element.remove()
     }

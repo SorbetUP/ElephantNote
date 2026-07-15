@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "description": "Every reproduced product regression becomes a permanent CI usage scenario. Manual device testing is reserved for new behavior that is not represented here yet.",
+    "requiredOnPullRequest": true,
+    "captureScreenshotPerScenario": true,
+    "captureUiTreePerScenario": true,
+    "failOnRendererException": true
+  },
+  "scenarios": [
+    {
+      "id": "startup-render",
+      "runner": "startup-smoke",
+      "description": "Install the APK, launch Elephant and reject crashes, ANRs, permission interruptions and blank renderer surfaces.",
+      "regression": "Android white screen and startup camera permission",
+      "tags": ["startup", "renderer", "permissions"]
+    },
+    {
+      "id": "search-roundtrip",
+      "runner": "startup-smoke",
+      "description": "Open search, type a query and return to the workspace.",
+      "regression": "Broken mobile search lifecycle and missing search.initVault",
+      "tags": ["search", "navigation"]
+    },
+    {
+      "id": "settings-roundtrip",
+      "runner": "startup-smoke",
+      "description": "Open and close Settings through accessible controls.",
+      "regression": "Settings surface inaccessible or oversized on mobile",
+      "tags": ["settings", "navigation"]
+    },
+    {
+      "id": "drawer-open",
+      "runner": "startup-smoke",
+      "description": "Open the navigation drawer and verify that the vault tree is exposed.",
+      "regression": "Drawer compressed the note grid instead of overlaying it",
+      "tags": ["drawer", "vault"]
+    },
+    {
+      "id": "library-layout-toggle",
+      "runner": "android-regression",
+      "description": "Switch the note library between grid and list layouts, then restore the original layout.",
+      "regression": "Mobile layout controls were present but did not update the library",
+      "tags": ["library", "layout"]
+    },
+    {
+      "id": "library-sort-sheet",
+      "runner": "android-regression",
+      "description": "Open the mobile sort sheet and select title ordering.",
+      "regression": "Mobile sort control opened no usable sheet",
+      "tags": ["library", "sorting"]
+    },
+    {
+      "id": "open-existing-note",
+      "runner": "android-regression",
+      "description": "Open the navigation drawer and enter the seeded Getting Started note.",
+      "regression": "Notes appeared in the tree but could not be opened on Android",
+      "tags": ["vault", "editor", "navigation"]
+    }
+  ]
+}

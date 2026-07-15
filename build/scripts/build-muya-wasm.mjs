@@ -45,6 +45,21 @@ const verifyCli = (expected) => {
   )
 }
 
+const cleanReleasePackages = () => {
+  run('cargo', [
+    'clean',
+    '--manifest-path',
+    manifest,
+    '--target',
+    'wasm32-unknown-unknown',
+    '--release',
+    '--package',
+    'muya-core',
+    '--package',
+    'muya-wasm'
+  ])
+}
+
 const main = () => {
   const metadata = cargoMetadata()
   const version = dependencyVersion(metadata)
@@ -53,6 +68,7 @@ const main = () => {
     'wasm32-unknown-unknown/release/muya_wasm.wasm'
   )
   verifyCli(version)
+  cleanReleasePackages()
   run('cargo', [
     'build',
     '--manifest-path',

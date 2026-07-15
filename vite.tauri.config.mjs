@@ -59,6 +59,31 @@ const muyaWasmGenerated = resolve(
 if (!existsSync(muyaWasmGenerated)) {
   throw new Error('Muya Rust WASM bundle is missing. Run `pnpm muya:wasm:build`.')
 }
+
+const isAndroidBuild = process.env.ELEPHANTNOTE_ANDROID_BUILD === '1'
+const mobileNodeShim = resolve(
+  __dirname,
+  'Elephant/frontend/src/renderer/src/platform/mobileNodeBuiltinsShim.js'
+)
+const mobileNodeAliases = isAndroidBuild
+  ? Object.fromEntries(
+      [
+        'fs/promises',
+        'node:fs/promises',
+        'child_process',
+        'node:child_process',
+        'crypto',
+        'node:crypto',
+        'fs',
+        'node:fs',
+        'os',
+        'node:os',
+        'zlib',
+        'node:zlib'
+      ].map((name) => [name, mobileNodeShim])
+    )
+  : {}
+
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.gif': 'image/gif',
@@ -135,11 +160,13 @@ export default {
     'process.env.IS_PREACT': JSON.stringify('false'),
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
     __ELEPHANT_MUYA_WASM_BUNDLED__: JSON.stringify(true),
+    __ELEPHANTNOTE_ANDROID_BUILD__: JSON.stringify(isAndroidBuild),
     __MARKTEXT_VERSION_STRING__: JSON.stringify(`v${packageJson.version}`)
   },
   resolve: {
     alias: {
       ...npmPackageAliases,
+      ...mobileNodeAliases,
       'muya-rust-wasm-bundle': muyaWasmGenerated,
       path: resolve(__dirname, 'Elephant/frontend/src/renderer/src/platform/nodePathShim.js'),
       'node:path': resolve(

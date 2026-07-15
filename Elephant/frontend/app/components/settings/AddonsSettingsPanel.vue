@@ -95,7 +95,7 @@
             <button
               v-for="entry in browserEntries"
               :key="entry.id"
-              class="en-addon-browser-item"
+              class="en-addon-browser-item en-addon-overview-card"
               :class="{ active: selectedAddonId === entry.id, installed: entry.installed }"
               :data-addon-id="entry.id"
               type="button"

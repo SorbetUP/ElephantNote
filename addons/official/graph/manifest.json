@@ -2,15 +2,15 @@
   "id": "elephant.graph",
   "parentAddonId": "elephant.ai",
   "name": "Graph",
-  "version": "1.2.0",
-  "description": "Builds note and Wiki relationship graphs directly inside the physical package.",
+  "version": "1.3.0",
+  "description": "Builds complete note and Wiki relationship graphs without a silent note cap.",
   "author": "Elephant",
   "icon": "git-fork",
   "apiVersion": 1,
   "minAppVersion": "0.18.9",
   "runtime": {
     "type": "javascript-worker",
-    "entry": "main.js",
+    "entry": "main.v2.js",
     "mode": "trusted"
   },
   "permissions": {
@@ -21,7 +21,7 @@
     "views": true
   },
   "requires": {
-    "elephant.ai": ">=2.1.0"
+    "elephant.ai": ">=2.2.0"
   },
   "contributes": {
     "runtimeMode": "trusted",

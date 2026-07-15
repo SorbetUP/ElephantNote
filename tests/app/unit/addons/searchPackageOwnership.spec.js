@@ -11,16 +11,28 @@ describe('Search physical package ownership', () => {
     const manifest = JSON.parse(read('addons/official/ai-search/manifest.json'))
     const source = read('addons/official/ai-search/main.js')
 
-    expect(manifest.version).toBe('1.2.0')
+    expect(manifest.version).toBe('1.3.0')
     expect(manifest.permissions.notes.read).toEqual(['*'])
     expect(source).toContain('tauri_addons_notes_list')
     expect(source).toContain('tauri_addons_notes_read')
     expect(source).toContain('api.resources.provide(PROVIDER_RESOURCE')
-    expect(source).toContain("engine: 'package-owned-bm25'")
+    expect(source).toContain("'knowledge-provider' : 'package-owned-bm25'")
     expect(source).toContain('query: (text, options) => this.query(text, options)')
     expect(source).toContain('rebuild: () => this.rebuild()')
     expect(source).toContain('clear: () => this.clear()')
     expect(source).toContain('status: () => this.status()')
+  })
+
+  it('composes with package-owned Knowledge and AI inference without moving ownership to core', () => {
+    const source = read('addons/official/ai-search/main.js')
+    const semantic = read('addons/official/ai-search/semanticEmbeddingSync.js')
+    expect(source).toContain("const KNOWLEDGE_RESOURCE = 'knowledge.provider'")
+    expect(source).toContain("const AI_INFERENCE_RESOURCE = 'ai.inference'")
+    expect(source).toContain('synchronizeKnowledgeEmbeddings')
+    expect(source).toContain("engine: 'knowledge-provider'")
+    expect(source).toContain('using local fallback')
+    expect(semantic).toContain('pendingEmbeddings')
+    expect(semantic).toContain('saveEmbeddings')
   })
 
   it('does not call the legacy global Search actions', () => {

@@ -14,6 +14,7 @@ pub mod storage;
 pub mod taxonomy;
 pub mod taxonomy_storage;
 pub mod wiki_core;
+pub mod wiki_discovery;
 pub mod wiki_graph_projection;
 pub mod wiki_storage;
 
@@ -52,4 +53,9 @@ pub use wiki_core::{
     build_wiki_synthesis_request, collect_wiki_sources, parse_and_render_wiki, render_wiki,
     slugify, source_hash, wiki_draft_from_rendered, RenderedWiki, WikiCitation, WikiClaim,
     WikiDraft, WikiDraftStatus, WikiSection, WikiSourceChunk, WikiSynthesis, WikiValidation,
+};
+pub use wiki_discovery::{
+    discover_topic_communities, finalize_semantic_candidates, load_discovery_documents,
+    provisional_labels, SemanticWikiCandidate, WikiDiscoveryDocument, WikiTopicCommunity,
+    WikiTopicLabel,
 };

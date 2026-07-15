@@ -8,6 +8,8 @@
       <app-shell
         v-if="init"
         :class="{ 'muya-runtime-underlay': muyaRuntimeDocumentActive }"
+        :aria-hidden="muyaRuntimeDocumentActive ? 'true' : undefined"
+        :inert="muyaRuntimeDocumentActive || undefined"
       />
       <button
         v-if="muyaRuntimeDocumentActive"

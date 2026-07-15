@@ -174,7 +174,6 @@ const coreRailItems = computed(() => [
     active: false,
     run: toggleSidebar
   },
-  { id: 'dashboard', title: 'Dashboard', icon: LayoutDashboard, active: !props.activeAddonViewId && store.activeWorkspaceView === 'dashboard', run: () => closeAddonAndOpen('dashboard') },
   { id: 'search', title: 'Search', icon: Search, active: false, run: () => emit('search') }
 ])
 

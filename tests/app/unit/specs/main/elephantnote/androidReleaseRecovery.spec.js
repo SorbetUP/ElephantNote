@@ -145,7 +145,7 @@ describe('Android release recovery', () => {
     expect(build).toContain('ANDROID_BUILD_PROFILE="${ANDROID_BUILD_PROFILE:-release}"')
     expect(build).toContain('ANDROID_APK_MAX_MIB="${ANDROID_APK_MAX_MIB:-24}"')
     expect(build).toContain('ELEPHANTNOTE_ANDROID_BUILD=1')
-    expect(build).toContain('ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1')
+    expect(build).not.toContain('ELEPHANTNOTE_SKIP_LLAMA_BUNDLE')
     expect(build).toContain('android:icon')
     expect(build).toContain('useLegacyPackaging = true')
     expect(build).toContain('verify_single_target_abi')

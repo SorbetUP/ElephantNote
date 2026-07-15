@@ -1,0 +1,65 @@
+name: Finalize Dashboard extraction
+
+on:
+  push:
+    branches:
+      - develop_next-integration-repair
+    paths:
+      - .github/workflows/finalize-dashboard-extraction.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop_next-integration-repair
+          fetch-depth: 0
+      - name: Remove residual core Dashboard ownership and obsolete E2E selectors
+        shell: python
+        run: |
+          from pathlib import Path
+
+          vault = Path('Elephant/frontend/app/stores/vaultStore.js')
+          text = vault.read_text()
+          text = text.replace("import {\n  buildDashboardNoteCreatePayload,\n  DASHBOARD_NOTE_RELATIVE_PATH,\n  isDashboardNotePath\n} from '../components/views/dashboardNoteHelpers'\n", '')
+          text = text.replace("const WORKSPACE_VIEWS = ['notes', 'dashboard', 'wiki', 'chat', 'canvas', 'graph', 'calendar', 'models']", "const WORKSPACE_VIEWS = ['notes', 'wiki', 'chat', 'canvas', 'graph', 'calendar', 'models']")
+          vault.write_text(text)
+
+          shell = Path('Elephant/frontend/app/components/shell/AppShell.vue')
+          text = shell.read_text()
+          text = text.replace("const CORE_WORKSPACE_VIEWS = new Set(['notes', 'dashboard', 'wiki', 'chat', 'canvas', 'graph', 'calendar', 'models'])", "const CORE_WORKSPACE_VIEWS = new Set(['notes', 'wiki', 'chat', 'canvas', 'graph', 'calendar', 'models'])")
+          shell.write_text(text)
+
+          panel = Path('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
+          text = panel.read_text().replace('class="en-addon-browser-item en-addon-overview-card"', 'class="en-addon-browser-item"')
+          panel.write_text(text)
+
+          e2e = Path('tests/app/e2e/linux-usage-regressions.spec.js')
+          text = e2e.read_text().replace("page.locator('.en-addon-overview-card').filter({ hasText: 'E2E Note Tools' })", "page.locator('[data-addon-id=\"elephant.e2e-note-tools\"]')")
+          e2e.write_text(text)
+
+          contract = Path('tests/app/unit/specs/main/elephantnote/linuxUsageRegressionSuite.spec.js')
+          text = contract.read_text().replace("expect(suite).toContain('.en-addon-overview-card')", "expect(suite).toContain('[data-addon-id=\\\"elephant.e2e-note-tools\\\"]')")
+          contract.write_text(text)
+
+          helper = Path('Elephant/frontend/app/components/views/dashboardNoteHelpers.js')
+          if helper.exists():
+            helper.unlink()
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No cleanup was required.'
+            exit 0
+          fi
+          git commit -m 'Complete Dashboard extraction from core'
+          git push origin HEAD:develop_next-integration-repair

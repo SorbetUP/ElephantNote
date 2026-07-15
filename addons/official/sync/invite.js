@@ -59,15 +59,16 @@ export const validateSyncInvitePayload = (raw, nowSeconds = Math.floor(Date.now(
   return { kind: 'structured', payload, value }
 }
 
+const portableFileSegment = (value, fallback, maxLength) => String(value || fallback)
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-zA-Z0-9_-]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .slice(0, maxLength) || fallback
+
 export const buildSyncInviteFileName = (vaultName, inviteId) => {
-  const safeVault = String(vaultName || 'vault')
-    .normalize('NFKD')
-    .replace(/[^a-zA-Z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'vault'
-  const safeInviteId = String(inviteId || 'pairing')
-    .replace(/[^a-zA-Z0-9_-]+/g, '-')
-    .slice(0, 80) || 'pairing'
+  const safeVault = portableFileSegment(vaultName, 'vault', 48)
+  const safeInviteId = portableFileSegment(inviteId, 'pairing', 80)
   return `Elephant-${safeVault}-${safeInviteId}${INVITE_EXTENSION}`
 }
 

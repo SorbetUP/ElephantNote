@@ -247,27 +247,15 @@ jobs:
           name: Elephant-Android-app-usage-diagnostics
           path: |
             android-startup-build.log
+            android-release-build.log
             android-startup-logcat.txt
-            android-startup-screen.png
-            android-startup-window.xml
-            android-search-*.png
-            android-search-*.xml
-            android-settings-*.png
-            android-settings-*.xml
-            android-drawer-*.png
-            android-drawer-*.xml
-            android-workspace-*.png
-            android-workspace-*.xml
-            android-usage-*.json
-            android-usage-*.xml
-            android-usage-*.tsv
             android-usage-logcat.txt
-            android-layout-*.png
-            android-layout-*.xml
-            android-sort-*.png
-            android-sort-*.xml
-            android-note-*.png
-            android-note-*.xml
+            android-usage-summary.json
+            android-usage-junit.xml
+            android-usage-results.tsv
+            android-usage-*.log
+            android-*.png
+            android-*.xml
             Elephant/backend/tauri/gen/android/app/build/outputs/apk/**/*-debug.apk
           if-no-files-found: warn
           retention-days: 14

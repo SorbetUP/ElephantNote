@@ -8,12 +8,7 @@ pub fn supports(host: &str) -> bool {
     matches!(host, KNOWLEDGE_HOST)
 }
 
-pub fn call(
-    host: &str,
-    vault_dir: &Path,
-    method: &str,
-    params: Value,
-) -> Result<Value, String> {
+pub fn call(host: &str, vault_dir: &Path, method: &str, params: Value) -> Result<Value, String> {
     match host {
         KNOWLEDGE_HOST => KnowledgeService::open(vault_dir)?.call(method, params),
         _ => Err(format!("Unknown embedded addon service host: {host}")),

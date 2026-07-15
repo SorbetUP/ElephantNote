@@ -23,14 +23,14 @@ pub mod search_logic;
 pub mod vault;
 pub mod vault_layout;
 
-#[cfg(mobile)]
-mod embedded_addon_services;
 mod android_vault_commands;
 mod debug_commands;
+#[cfg(mobile)]
+mod embedded_addon_services;
 mod official_addon_catalog;
-mod vault_file_commands;
 #[path = "core_commands.rs"]
 mod tauri_extra_commands;
+mod vault_file_commands;
 
 pub mod atomic_features;
 pub mod buffer_store;

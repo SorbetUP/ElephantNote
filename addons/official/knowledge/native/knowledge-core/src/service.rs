@@ -47,11 +47,13 @@ impl KnowledgeService {
 
     pub fn call(&self, method: &str, params: Value) -> Result<Value, String> {
         match method {
-            "service.start" | "knowledge.status" => serde_json::to_value(self.store()?.status()?)
-                .map_err(|error| error.to_string()),
+            "service.start" | "knowledge.status" => {
+                serde_json::to_value(self.store()?.status()?).map_err(|error| error.to_string())
+            }
             "service.stop" => Ok(json!({ "stopped": true })),
-            "knowledge.rebuild" => serde_json::to_value(rebuild_vault(&self.vault)?)
-                .map_err(|error| error.to_string()),
+            "knowledge.rebuild" => {
+                serde_json::to_value(rebuild_vault(&self.vault)?).map_err(|error| error.to_string())
+            }
             "knowledge.search" => {
                 let query = required_string(&params, "query")?;
                 let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(20) as usize;
@@ -317,10 +319,7 @@ mod tests {
         let report = service.call("knowledge.rebuild", json!({})).unwrap();
         assert_eq!(report["scanned"], 2);
         let hits = service
-            .call(
-                "knowledge.search",
-                json!({ "query": "Alpha", "limit": 10 }),
-            )
+            .call("knowledge.search", json!({ "query": "Alpha", "limit": 10 }))
             .unwrap();
         assert!(hits.as_array().is_some_and(|values| !values.is_empty()));
         let graph = service.call("knowledge.graph", json!({})).unwrap();
@@ -377,10 +376,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(communities["documents"], 6);
-        assert_eq!(
-            communities["communities"].as_array().map(Vec::len),
-            Some(2)
-        );
+        assert_eq!(communities["communities"].as_array().map(Vec::len), Some(2));
         fs::remove_dir_all(vault).ok();
     }
 }

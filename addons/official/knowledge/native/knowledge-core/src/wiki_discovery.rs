@@ -201,14 +201,13 @@ fn label_propagation(adjacency: &[Vec<(usize, f32)>]) -> Vec<usize> {
             let current_score = scores.get(&current_label).copied().unwrap_or((0.0, 0));
             if let Some((best_label, best_score)) = scores.into_iter().max_by(|left, right| {
                 left.1
-                    .0
+                     .0
                     .total_cmp(&right.1 .0)
                     .then_with(|| left.1 .1.cmp(&right.1 .1))
                     .then_with(|| right.0.cmp(&left.0))
             }) {
                 let better = best_score.0 > current_score.0 + 1e-5
-                    || (best_score.0 >= current_score.0 - 1e-5
-                        && best_score.1 > current_score.1);
+                    || (best_score.0 >= current_score.0 - 1e-5 && best_score.1 > current_score.1);
                 if best_label != current_label && better {
                     labels[*node] = best_label;
                     changed = true;
@@ -301,8 +300,8 @@ fn communities(vectors: &[Vec<f32>], route_threshold: f32) -> Vec<Community> {
                     / denominator as f32
             };
             let strict = *similarity >= route_threshold + 0.06;
-            let supported = *similarity >= local_floors[left].max(local_floors[*right])
-                && shared >= 0.10;
+            let supported =
+                *similarity >= local_floors[left].max(local_floors[*right]) && shared >= 0.10;
             if !strict && !supported {
                 continue;
             }
@@ -366,7 +365,9 @@ fn communities(vectors: &[Vec<f32>], route_threshold: f32) -> Vec<Community> {
     output
 }
 
-pub fn load_discovery_documents(database_path: &Path) -> Result<Vec<WikiDiscoveryDocument>, String> {
+pub fn load_discovery_documents(
+    database_path: &Path,
+) -> Result<Vec<WikiDiscoveryDocument>, String> {
     let connection = Connection::open(database_path).map_err(|error| error.to_string())?;
     let mut statement = connection
         .prepare(
@@ -469,8 +470,7 @@ pub fn finalize_semantic_candidates(
                 return None;
             }
             let confidence = (0.62 * ((community.coherence - 0.45) / 0.45).clamp(0.0, 1.0)
-                + 0.38
-                    * ((community.distinctiveness + 0.02) / 0.22).clamp(0.0, 1.0))
+                + 0.38 * ((community.distinctiveness + 0.02) / 0.22).clamp(0.0, 1.0))
             .clamp(0.0, 1.0);
             Some(SemanticWikiCandidate {
                 topic: topic.to_string(),

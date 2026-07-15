@@ -16,8 +16,7 @@ const clickTask = async (muya, index, checked, autoCheck = false) => {
   muya.options.autoCheck = autoCheck
   const checkbox = taskBoxes(muya)[index]
   if (!checkbox) throw new Error(`Task checkbox ${index} is unavailable.`)
-  checkbox.checked = checked
-  await muya.contentState.listItemCheckBoxClick(checkbox)
+  if (checkbox.checked !== checked) checkbox.click()
   await settle()
 }
 
@@ -78,8 +77,10 @@ const traces = [
       await clickTask(muya, 0, true)
       const checked = muya.getMarkdown()
       muya.undo()
+      await settle()
       const undone = muya.getMarkdown()
       muya.redo()
+      await settle()
       return [checked, undone, muya.getMarkdown()]
     },
     runRust: (rust) => {
@@ -104,8 +105,10 @@ const traces = [
       await clickTask(muya, 0, true, true)
       const checked = muya.getMarkdown()
       muya.undo()
+      await settle()
       const undone = muya.getMarkdown()
       muya.redo()
+      await settle()
       return [checked, undone, muya.getMarkdown()]
     },
     runRust: (rust) => {

@@ -26,6 +26,21 @@ describe('Android release recovery', () => {
     expect(build).toContain('renderer contains no unresolved Vite Node builtin stubs')
   })
 
+  it('never leaves Android on a silent white renderer surface', () => {
+    const html = read('Elephant/frontend/src/renderer/index.html')
+    const main = read('Elephant/frontend/src/renderer/src/main.js')
+
+    expect(html).toContain('name="viewport"')
+    expect(html).toContain('id="elephant-startup"')
+    expect(html).toContain('Elephant')
+    expect(html).toContain('Démarrage…')
+    expect(main).toContain('const renderStartupFailure')
+    expect(main).toContain("surface.dataset.error = 'true'")
+    expect(main).toContain('Elephant n’a pas pu démarrer')
+    expect(main).toContain('renderStartupFailure(error)')
+    expect(main).not.toContain('setTimeout(() => { throw error }, 0)')
+  })
+
   it('builds one optimized signed ARM64 release APK under 24 MiB', () => {
     const build = read('build/scripts/build_dev_apk.sh')
     const activity = read('build/android/MainActivity.kt')

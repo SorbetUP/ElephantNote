@@ -239,6 +239,7 @@ jobs:
           script: |
             bash build/scripts/android_startup_smoke.sh
             bash build/scripts/android_usage_regression_suite.sh
+            bash build/scripts/android_editor_chrome_regression.sh
 
       - name: Upload Android app usage diagnostics
         if: always()
@@ -253,6 +254,7 @@ jobs:
             android-usage-summary.json
             android-usage-junit.xml
             android-usage-results.tsv
+            android-editor-chrome-validation.txt
             android-usage-*.log
             android-*.png
             android-*.xml

@@ -19,10 +19,11 @@ describe('develop_next mobile experience', () => {
     expect(shell).toContain("'elephantnote:vault-files-changed'")
   })
 
-  it('offers explicit private and Android vault onboarding', () => {
+  it('offers explicit private and Android vault onboarding without Android-only visible copy on desktop', () => {
     const picker = read('Elephant/frontend/app/components/shell/EmptyVaultPicker.vue')
-    expect(picker).toContain('Stockage privé')
-    expect(picker).toContain('Dossier Android')
+    expect(picker).toContain('Private storage')
+    expect(picker).toContain('Choose folder')
+    expect(picker).toContain('aria-label="Dossier Android — Choose a folder and authorize access"')
     expect(picker).toContain("emit('create-local')")
     expect(picker).toContain("emit('choose')")
   })

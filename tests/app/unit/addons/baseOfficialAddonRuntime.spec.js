@@ -34,6 +34,17 @@ const createRuntimeProbe = (addonId) => {
     styles: []
   }
   const storage = new Map()
+  let aiConfig = {}
+  if (addonId === 'elephant.open-models') {
+    registrations.resources.set('ai.config', Object.freeze({
+      get: vi.fn(async () => aiConfig),
+      set: vi.fn(async (value) => {
+        aiConfig = value || {}
+        return aiConfig
+      })
+    }))
+  }
+
   const vaultStore = {
     activeVaultId: 'base-addon-probe',
     activeVault: { id: 'base-addon-probe', name: 'Base addon probe', path: '/tmp/elephant-base-addon-probe' },
@@ -80,6 +91,15 @@ const createRuntimeProbe = (addonId) => {
     }
   }
 
+  const installedRecords = new Map(parityPack.addons.map((addon) => [addon.id, {
+    enabled: addon.enabled !== false,
+    manifest: catalogById.get(addon.id) || { id: addon.id, version: addon.version }
+  }]))
+  const addonManager = {
+    get: (id) => installedRecords.get(id) || null,
+    list: () => [...installedRecords.values()]
+  }
+
   const api = {
     manifest: { id: addonId },
     experimental: { window: fakeWindow },
@@ -88,7 +108,7 @@ const createRuntimeProbe = (addonId) => {
       router: createCallableFallback(),
       services: createCallableFallback(),
       runtime: 'test',
-      addons: createCallableFallback(),
+      addons: addonManager,
       host: createCallableFallback(),
       vueApp: createCallableFallback(),
       emit: vi.fn(),
@@ -119,7 +139,7 @@ const createRuntimeProbe = (addonId) => {
         return () => registrations.resources.delete(name)
       },
       watch: (_name, listener, options = {}) => {
-        if (options.immediate !== false) listener({ value: undefined, previous: undefined })
+        if (options.immediate !== false) listener({ value: registrations.resources.get(_name), previous: undefined })
         return () => {}
       }
     },
@@ -221,6 +241,20 @@ describe('first-party base addon installation and runtime probes', () => {
       expect(entry.official).toBe(true)
       expect(fs.existsSync(path.join(root, 'addons', entry.manifestPath))).toBe(true)
       expect(fs.existsSync(path.join(root, 'addons', entry.entryPath))).toBe(true)
+    }
+  })
+
+  it('orders every declared dependency before its consumer in protected packs', () => {
+    for (const pack of [basePack, parityPack]) {
+      const positions = new Map(pack.addons.map((addon, index) => [addon.id, index]))
+      for (const addon of pack.addons) {
+        const entry = catalogById.get(addon.id)
+        const manifest = readJson(path.join('addons', entry.manifestPath))
+        for (const dependencyId of Object.keys(manifest.requires || {})) {
+          expect(positions.has(dependencyId), `${pack.name}: ${addon.id} is missing ${dependencyId}`).toBe(true)
+          expect(positions.get(dependencyId), `${pack.name}: ${dependencyId} must precede ${addon.id}`).toBeLessThan(positions.get(addon.id))
+        }
+      }
     }
   })
 

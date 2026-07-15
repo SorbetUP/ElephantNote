@@ -10,6 +10,25 @@ const suite = read('build/scripts/android_usage_regression_suite.sh')
 const startup = read('build/scripts/android_startup_smoke.sh')
 const workflow = read('.github/workflows/android-apk.yml')
 
+const expectedScenarios = [
+  'startup-render',
+  'search-roundtrip',
+  'settings-roundtrip',
+  'drawer-open',
+  'library-layout-toggle',
+  'library-sort-sheet',
+  'open-existing-note',
+  'drawer-back-close',
+  'note-back-roundtrip',
+  'app-background-resume',
+  'process-relaunch',
+  'search-no-results',
+  'search-repeat-stability',
+  'settings-back-navigation',
+  'keyboard-dismissal',
+  'navigation-stress'
+]
+
 describe('progressive Android app usage regression suite', () => {
   it('maintains one unique permanent scenario per reproduced product regression', () => {
     expect(catalog.schemaVersion).toBe(1)
@@ -17,18 +36,11 @@ describe('progressive Android app usage regression suite', () => {
     expect(catalog.policy.captureScreenshotPerScenario).toBe(true)
     expect(catalog.policy.captureUiTreePerScenario).toBe(true)
     expect(catalog.policy.failOnRendererException).toBe(true)
+    expect(catalog.policy.continueAfterScenarioFailure).toBe(true)
 
     const ids = catalog.scenarios.map((scenario) => scenario.id)
     expect(new Set(ids).size).toBe(ids.length)
-    expect(ids).toEqual(expect.arrayContaining([
-      'startup-render',
-      'search-roundtrip',
-      'settings-roundtrip',
-      'drawer-open',
-      'library-layout-toggle',
-      'library-sort-sheet',
-      'open-existing-note'
-    ]))
+    expect(ids).toEqual(expectedScenarios)
 
     for (const scenario of catalog.scenarios) {
       expect(scenario.description.length).toBeGreaterThan(20)
@@ -61,7 +73,16 @@ describe('progressive Android app usage regression suite', () => {
       expect(suite).toContain(`run_scenario "$scenario"`)
     }
     expect(suite).toContain("scenario.get('runner') == 'android-regression'")
-    expect(suite).toContain('No Android usage implementation exists for catalog scenario')
+    expect(suite).toContain('No Android usage implementation exists')
+  })
+
+  it('continues after individual failures and emits aggregate diagnostics', () => {
+    expect(suite).toContain('FAILURES=$((FAILURES + 1))')
+    expect(suite).toContain('emit_reports')
+    expect(suite).toContain('[ "$FAILURES" -eq 0 ]')
+    expect(suite).toContain('capture_checkpoint')
+    expect(suite).toContain('assert_not_blank')
+    expect(suite).toContain('android-usage-${id}.log')
   })
 
   it('runs real emulator interactions and publishes machine-readable diagnostics', () => {
@@ -69,10 +90,10 @@ describe('progressive Android app usage regression suite', () => {
     expect(workflow).toContain('bash build/scripts/android_usage_regression_suite.sh')
     expect(workflow).toContain('android-usage-summary.json')
     expect(workflow).toContain('android-usage-junit.xml')
+    expect(workflow).toContain('android-usage-results.tsv')
     expect(workflow).toContain('android-usage-logcat.txt')
-    expect(workflow).toContain('android-layout-*.png')
-    expect(workflow).toContain('android-sort-*.png')
-    expect(workflow).toContain('android-note-*.png')
+    expect(workflow).toContain('android-*.png')
+    expect(workflow).toContain('android-*.xml')
 
     expect(suite).toContain('adb shell uiautomator dump')
     expect(suite).toContain('adb exec-out screencap -p')

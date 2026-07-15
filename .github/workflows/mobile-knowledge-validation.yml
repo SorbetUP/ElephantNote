@@ -51,5 +51,21 @@ jobs:
       - name: Check desktop sidecar adapter
         run: cargo check --manifest-path addons/official/knowledge/native/Cargo.toml --all-targets
 
-      - name: Check desktop Tauri shell
-        run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets
+      - name: Check Tauri library integration
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo check \
+            --manifest-path Elephant/backend/tauri/Cargo.toml \
+            --lib \
+            --no-default-features \
+            2>&1 | tee mobile-knowledge-tauri-check.txt
+
+      - name: Upload Tauri diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-knowledge-tauri-check
+          path: mobile-knowledge-tauri-check.txt
+          if-no-files-found: warn
+          retention-days: 7

@@ -3,6 +3,8 @@ const RUN_BUTTON_CLASS = 'elephant-physical-code-run'
 const COPY_BUTTON_CLASS = 'elephant-physical-code-copy'
 const OUTPUT_CLASS = 'elephant-physical-code-output'
 const CONFIG_KEY = 'config'
+const DEFAULT_TIMEOUT_MS = 15_000
+const POLL_INTERVAL_MS = 120
 
 const node = (documentRef, tag, className = '', text = '') => {
   const element = documentRef.createElement(tag)
@@ -36,6 +38,7 @@ const languageAliases = Object.freeze({
 })
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
 const defaultConfig = () => ({
   retainOutput: true,
@@ -67,6 +70,16 @@ const normalizeConfig = (value = {}) => {
   }
 }
 
+const executionText = (result = {}) => {
+  const stdout = String(result.stdout || '')
+  const stderr = String(result.stderr || '')
+  const body = [stdout, stderr].filter(Boolean).join(stdout && stderr ? '\n' : '')
+  if (body) return body
+  if (result.interrupted) return 'Execution stopped.'
+  if (result.timedOut) return `Execution timed out after ${DEFAULT_TIMEOUT_MS / 1000} seconds.`
+  return `Exited with code ${result.code ?? 0}`
+}
+
 export default class ElephantCodeExecutionAddon {
   constructor(api) {
     this.api = api
@@ -76,6 +89,7 @@ export default class ElephantCodeExecutionAddon {
     this.disposeRuntimeWatch = null
     this.activeRuntime = null
     this.config = defaultConfig()
+    this.activeExecutions = new Map()
   }
 
   async loadConfig() {
@@ -118,7 +132,44 @@ export default class ElephantCodeExecutionAddon {
     this.window.setTimeout(() => { button.textContent = previous }, 900)
   }
 
+  async cancelBlock(block, button, output) {
+    const active = this.activeExecutions.get(block)
+    if (!active) return false
+    button.disabled = true
+    button.textContent = 'Stopping…'
+    output.hidden = false
+    output.textContent = 'Stopping the interpreter…'
+    try {
+      await this.api.native.call('execution.cancel', { executionId: active.executionId })
+      active.cancelRequested = true
+      return true
+    } catch (error) {
+      output.textContent = error instanceof Error ? error.message : String(error)
+      output.dataset.exitCode = 'cancel-error'
+      button.disabled = false
+      button.textContent = 'Stop'
+      return false
+    }
+  }
+
+  async waitForExecution(executionId, button, output) {
+    while (true) {
+      const snapshot = await this.api.native.call('execution.status', { executionId })
+      if (!snapshot?.running) return snapshot
+      const elapsed = Math.max(0, Date.now() - Number(snapshot.startedAtMs || Date.now()))
+      button.disabled = false
+      button.textContent = 'Stop'
+      output.textContent = `Running… ${(elapsed / 1000).toFixed(1)} s`
+      await sleep(POLL_INTERVAL_MS)
+    }
+  }
+
   async runBlock(block, button, output) {
+    if (this.activeExecutions.has(block)) {
+      await this.cancelBlock(block, button, output)
+      return
+    }
+
     const language = this.getLanguage(block)
     const interpreter = this.resolveInterpreter(language)
     const code = this.getCode(block)
@@ -131,32 +182,53 @@ export default class ElephantCodeExecutionAddon {
     }
 
     button.disabled = true
-    button.textContent = 'Running…'
+    button.textContent = 'Starting…'
     output.hidden = false
-    output.textContent = `Running ${interpreter.label || interpreter.id}…`
+    output.textContent = `Checking ${interpreter.label || interpreter.id}…`
     try {
-      const result = await this.api.native.call('execute', {
+      const status = await this.api.native.call('interpreter.status', {
+        executable: interpreter.executable,
+        args: interpreter.args
+      })
+      if (!status?.available) throw new Error(status?.error || `${interpreter.executable} is unavailable`)
+
+      const started = await this.api.native.call('execute', {
         executable: interpreter.executable,
         args: interpreter.args,
         code,
         cwd: '',
-        outputLineLimit: this.config.outputLineLimit
+        outputLineLimit: this.config.outputLineLimit,
+        timeoutMs: DEFAULT_TIMEOUT_MS
       })
-      const stdout = String(result?.stdout || '')
-      const stderr = String(result?.stderr || '')
-      const text = [stdout, stderr].filter(Boolean).join(stdout && stderr ? '\n' : '') || `Exited with code ${result?.code ?? 0}`
-      output.textContent = text
-      output.dataset.exitCode = String(result?.code ?? 0)
-      if (!this.config.retainOutput) {
+      const executionId = String(started?.executionId || '')
+      if (!executionId) throw new Error('The Code execution service returned no execution id.')
+      this.activeExecutions.set(block, { executionId, cancelRequested: false })
+      button.disabled = false
+      button.textContent = 'Stop'
+      output.textContent = `Running ${interpreter.label || interpreter.id}…`
+
+      const snapshot = await this.waitForExecution(executionId, button, output)
+      if (snapshot?.error) throw new Error(snapshot.error)
+      const result = snapshot?.result || {}
+      output.textContent = executionText(result)
+      output.dataset.exitCode = result.interrupted
+        ? 'interrupted'
+        : result.timedOut
+          ? 'timeout'
+          : String(result.code ?? 0)
+      output.dataset.truncated = String(Boolean(result.truncated))
+      if (!this.config.retainOutput && result.success) {
         this.window.setTimeout(() => {
           output.hidden = true
           output.textContent = ''
         }, 2500)
       }
+      await this.api.native.call('execution.forget', { executionId }).catch(() => {})
     } catch (error) {
       output.textContent = error instanceof Error ? error.message : String(error)
       output.dataset.exitCode = 'error'
     } finally {
+      this.activeExecutions.delete(block)
       button.disabled = false
       button.textContent = 'Run'
     }
@@ -284,7 +356,7 @@ export default class ElephantCodeExecutionAddon {
         status.onclick = async () => {
           status.disabled = true
           try {
-            const result = await this.api.native.call('status', { executable: executable.value.trim() })
+            const result = await this.api.native.call('interpreter.status', { executable: executable.value.trim() })
             feedback.textContent = result?.available ? `${label.value || interpreter.id}: available` : result?.error || 'Unavailable'
           } catch (error) {
             feedback.textContent = error instanceof Error ? error.message : String(error)
@@ -341,7 +413,9 @@ export default class ElephantCodeExecutionAddon {
       .elephant-physical-code-actions { display:flex; align-items:center; gap:4px; }
       .elephant-physical-code-toolbar button { min-width:48px; min-height:26px; border:0; border-radius:6px; background:transparent; color:var(--en-text); cursor:pointer; }
       .elephant-physical-code-toolbar button:disabled { opacity:.6; cursor:default; }
-      .elephant-physical-code-output { margin:0; padding:10px; max-height:260px; overflow:auto; border-top:1px solid var(--en-border); background:var(--en-soft); color:var(--en-text); white-space:pre-wrap; }
+      .elephant-physical-code-output { margin:0; padding:10px; max-height:260px; overflow:auto; border-top:1px solid var(--en-border); background:var(--en-soft); color:var(--en-text); white-space:pre-wrap; overflow-wrap:anywhere; }
+      .elephant-physical-code-output[data-exit-code="interrupted"] { color:var(--en-muted); }
+      .elephant-physical-code-output[data-exit-code="timeout"],.elephant-physical-code-output[data-exit-code="error"] { color:var(--en-danger,#b42318); }
       .elephant-code-settings { display:grid; gap:8px; }
       .elephant-code-setting-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 0; border-bottom:1px solid var(--en-border); }
       .elephant-code-setting-row > div { display:grid; gap:4px; }
@@ -351,6 +425,7 @@ export default class ElephantCodeExecutionAddon {
       .elephant-code-interpreter-row { display:grid; grid-template-columns:110px 1fr 1.3fr 1.2fr auto auto; gap:7px; align-items:center; }
       .elephant-code-interpreter-row button,.elephant-code-add { min-height:34px; padding:0 10px; border:1px solid var(--en-border); border-radius:8px; background:var(--en-surface); color:var(--en-text); cursor:pointer; }
       .elephant-code-interpreter-row button.danger { color:var(--en-danger,#b42318); }
+      @media(max-width:720px){.elephant-code-interpreter-row{grid-template-columns:1fr}.elephant-code-setting-row{align-items:flex-start}.elephant-physical-code-toolbar button{min-height:40px;min-width:58px}}
     `, 'code-execution-package')
 
     api.settings.registerSection({
@@ -367,7 +442,7 @@ export default class ElephantCodeExecutionAddon {
     this.installEditorRuntime()
   }
 
-  onunload() {
+  async onunload() {
     this.disposeEditorWatch?.()
     this.disposeRuntimeWatch?.()
     this.disposeEditorWatch = null
@@ -376,6 +451,11 @@ export default class ElephantCodeExecutionAddon {
     this.observer?.disconnect()
     this.observer = null
     delete this.window.__ELEPHANT_CODE_EXECUTION_ENABLED__
+    const active = [...this.activeExecutions.values()]
+    this.activeExecutions.clear()
+    await Promise.all(active.map(({ executionId }) =>
+      this.api.native.call('execution.cancel', { executionId }).catch(() => null)
+    ))
     for (const element of this.window.document.querySelectorAll(`.${RUN_BUTTON_CLASS}, .${COPY_BUTTON_CLASS}, .${OUTPUT_CLASS}, .elephant-physical-code-toolbar`)) {
       element.remove()
     }

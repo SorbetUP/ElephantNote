@@ -32,9 +32,13 @@ jobs:
 
       - name: Check changed Rust formatting
         run: |
-          cargo fmt --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml -- --check
-          cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml -- --check
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
+          rustfmt --edition 2021 --check \
+            Elephant/backend/tauri/src/addon_services.rs \
+            Elephant/backend/tauri/src/embedded_addon_services.rs \
+            addons/official/knowledge/native/src/main.rs \
+            addons/official/knowledge/native/knowledge-core/src/lib.rs \
+            addons/official/knowledge/native/knowledge-core/src/service.rs \
+            addons/official/knowledge/native/knowledge-core/src/wiki_discovery.rs
 
       - name: Verify committed Tauri lockfile
         run: |

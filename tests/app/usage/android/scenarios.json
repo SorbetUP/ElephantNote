@@ -53,10 +53,10 @@
     },
     {
       "id": "open-existing-note",
-      "runner": "android-regression",
-      "description": "Open the navigation drawer and enter the seeded Getting Started note.",
-      "regression": "Notes appeared in the tree but could not be opened on Android",
-      "tags": ["vault", "editor", "navigation"]
+      "runner": "editor-chrome",
+      "description": "Expand the seeded Getting Started folder, open its Welcome note and validate the complete editor chrome.",
+      "regression": "The Android test tapped a folder instead of a note and the historical full-window editor hid normal note controls",
+      "tags": ["vault", "editor", "navigation", "accessibility"]
     },
     {
       "id": "drawer-back-close",

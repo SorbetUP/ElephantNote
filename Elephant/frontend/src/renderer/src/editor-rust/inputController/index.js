@@ -38,6 +38,7 @@ export class ElephantRustInputController {
     this.composition = null
     this.attached = false
     this._tail = Promise.resolve()
+    this._pendingInputCommands = 0
     this._beforeInput = (event) => this.handleBeforeInput(event)
     this._click = (event) => this.handleClick(event)
     this._copy = (event) => this.handleCopy(event)
@@ -107,12 +108,22 @@ export class ElephantRustInputController {
 
     const command = commandForBeforeInput(event)
     if (!command) return
+    const observedSelection = this.readSelection()
+    if (!observedSelection) return
     event.preventDefault()
+
+    const followsPendingInput = this._pendingInputCommands > 0
+    this._pendingInputCommands += 1
     this.schedule(async () => {
-      const selection = this.readSelection()
-      if (!selection) return
-      await this.bridge.setSelection(selection)
-      await this.bridge.dispatch(command)
+      try {
+        const selection = followsPendingInput
+          ? this.bridge.selection || observedSelection
+          : observedSelection
+        await this.bridge.setSelection(selection)
+        await this.bridge.dispatch(command)
+      } finally {
+        this._pendingInputCommands = Math.max(0, this._pendingInputCommands - 1)
+      }
     })
   }
 
@@ -129,13 +140,13 @@ export class ElephantRustInputController {
   }
 
   handlePaste(event) {
+    const selection = this.readSelection()
+    if (!selection) return
     const markdown = markdownFromClipboard(event, this.container.ownerDocument)
     if (markdown === null) return
     event.preventDefault()
     event.stopPropagation?.()
     this.schedule(async () => {
-      const selection = this.readSelection()
-      if (!selection) return
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
     })

@@ -32,7 +32,7 @@ belongs in the current addon-first architecture.
 | Wiki organisation and semantic community work, PR #75 and related branches | Whole-vault embedding, deterministic communities, evidence-backed Wiki proposals, Graph/Search/Chat integration | **Kept through the physical Knowledge/Wiki/Graph addons.** Accepted drafts are now materialized as visible `Wiki/<slug>.md` notes; hidden `.elephantnote` files remain internal metadata only. |
 | Chat→Knowledge action branches | Approval/execution actions and note/wiki modifications | **Already represented by the Knowledge provider and physical Chat addon.** Obsolete global Chat and RAG modules were not restored. |
 | Sync pairing redesign, PR #24, and mobile Sync polish, PR #40 | QR/manual/file pairing, encrypted invitations, progress UX and mobile-safe interactions | **Rewritten inside `elephant.sync`.** The addon now owns validation, links, clipboard, invitation files, pairing and responsive settings. The former global `SyncSettingsPanel` was rejected. |
-| Executable code blocks, PRs #27 and #54 | Real interpreters, integrated output, bounded logs, timeout/Stop and interpreter configuration | **Recovered through `elephant.code-execution`.** Interpreter management and retained output are addon-owned and the Rust editor exposes the neutral block runtime. The old Tauri-global command module and Muya-specific renderer patches remain rejected. Timeout/interrupt parity must be implemented through the addon native protocol rather than copied into core. |
+| Executable code blocks, PRs #27 and #54 | Real interpreters, integrated output, bounded logs, timeout/Stop and interpreter configuration | **Recovered through `elephant.code-execution` 2.2.0.** Interpreter management, retained output, execution IDs, status polling, timeout, cancellation and bounded output are owned by a persistent addon-native service. The Rust editor exposes only the neutral block runtime. The old Tauri-global process registry and Muya-specific renderer patches remain rejected. |
 | Subscription/model provider branch, PR #32 | Codex subscription authentication/usage and local model management | **Superseded by `elephant.codex-connection`, `elephant.open-models` and the AI provider registry.** The historical `lib_min.rs` additions were intentionally not merged. |
 | Excalidraw/i18n/themes branch, PR #23 | Live drawing theme updates, keyboard save/cancel, centralized translations, ISO languages, RTL, Beige/Pastel/Gamer Violet | **Selectively reapplied.** The current compact mobile-safe Excalidraw chrome and addon-capable Settings panel were retained while the missing theme and localization behavior was restored. |
 | Performance hardening, PR #41 | Linear frontmatter parsing, non-quadratic path resolution, focused coverage and anti-fake test guards | **Reapplied and repaired.** The original workflow used the wrong Vitest binary and could not produce coverage; the unified workflow uses the monorepo binary, provisions Rust WASM and keeps diagnostic artifacts. |
@@ -51,6 +51,8 @@ belongs in the current addon-first architecture.
 - visible accepted Wiki notes with normalized safe paths;
 - encrypted Sync invitation validation, link/file import, export and clipboard
   flows;
+- interruptible Code Execution service with package-owned interpreter checks,
+  execution IDs, status polling, cancellation, timeout and bounded output;
 - Android vault binary commands, runtime-only Search compatibility and official
   addon catalogue loading;
 - full-screen phone Settings, overlay navigation drawer, compact library cards,
@@ -61,15 +63,6 @@ belongs in the current addon-first architecture.
 - live Excalidraw theme updates plus Ctrl/Cmd-S and Escape handling;
 - linear large-note preview parsing and linear deep-path resolution;
 - anti-disabled/focused/fake-test checks and focused coverage thresholds.
-
-## Deliberately unresolved parity item
-
-The physical Code Execution addon currently owns interpreter execution and
-bounded output, but the historical global implementation also had true
-cross-request interruption and timeout management. That behavior must be
-implemented as a versioned package-native service capability. Restoring the
-old Tauri-global process registry would violate the physical-addon guarantee,
-so it is not considered a valid merge strategy.
 
 ## Merge gate
 

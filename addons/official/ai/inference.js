@@ -22,6 +22,15 @@ const resolveProvider = (config, routeName, options = {}) => {
   return { provider, model }
 }
 
+const optionalRoute = (config, routeName) => {
+  try {
+    const { provider, model } = resolveProvider(config, routeName)
+    return { providerId: provider.id, model }
+  } catch {
+    return routeConfig(config, routeName)
+  }
+}
+
 const requestBroker = async (api, params) => {
   const invoke = api.experimental.window?.__TAURI__?.core?.invoke
   if (typeof invoke !== 'function') throw new Error('Tauri addon broker is unavailable.')
@@ -130,12 +139,10 @@ export const createAiInferenceResource = (api, getConfig) => Object.freeze({
   async status() {
     const config = await getConfig()
     const providers = enabledProviders(config)
-    const embedding = routeConfig(config, 'embedding')
-    const chat = routeConfig(config, 'chat')
     return {
       configuredProviders: providers.map((provider) => ({ id: provider.id, label: provider.label, type: provider.type })),
-      embeddingRoute: embedding,
-      chatRoute: chat
+      embeddingRoute: optionalRoute(config, 'embedding'),
+      chatRoute: optionalRoute(config, 'chat')
     }
   }
 })

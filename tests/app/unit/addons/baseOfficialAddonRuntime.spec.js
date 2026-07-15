@@ -194,7 +194,7 @@ const activate = async (catalogEntry) => {
   const imported = await import(/* @vite-ignore */ `${pathToFileURL(modulePath).href}?probe=${catalogEntry.id}`)
   expect(imported.default, `${catalogEntry.id} must export a default addon class`).toBeTypeOf('function')
   const probe = createRuntimeProbe(catalogEntry.id)
-  const instance = new imported.default(probe.api)
+  const instance = Reflect.construct(imported.default, [probe.api])
   expect(instance.onload, `${catalogEntry.id} must implement onload(api)`).toBeTypeOf('function')
   await instance.onload(probe.api)
   return { ...probe, instance }

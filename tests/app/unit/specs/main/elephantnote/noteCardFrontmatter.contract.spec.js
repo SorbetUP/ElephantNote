@@ -16,7 +16,7 @@ describe('note card frontmatter delimiter compatibility', () => {
 
   it('does not consume a horizontal rule that is not a frontmatter block', () => {
     expect(getNoteCardExcerpt({ markdown: '---\nBody without a closing delimiter' })).toBe(
-      'Body without a closing delimiter'
+      '---\nBody without a closing delimiter'
     )
   })
 })

@@ -4,9 +4,11 @@ set -euo pipefail
 PACKAGE_ID="${ANDROID_PACKAGE_ID:-com.elephantnote.app}"
 ACTIVITY="${ANDROID_ACTIVITY:-com.elephantnote.app/.MainActivity}"
 APK_ROOT="${ANDROID_APK_ROOT:-Elephant/backend/tauri/gen/android/app/build/outputs/apk}"
-STARTUP_WAIT_SECONDS="${ANDROID_STARTUP_WAIT_SECONDS:-12}"
+STARTUP_WAIT_SECONDS="${ANDROID_STARTUP_WAIT_SECONDS:-45}"
 LOG_FILE="${ANDROID_STARTUP_LOG:-android-startup-logcat.txt}"
 SCREENSHOT_FILE="${ANDROID_STARTUP_SCREENSHOT:-android-startup-screen.png}"
+UI_DUMP_FILE="${ANDROID_STARTUP_UI_DUMP:-android-startup-window.xml}"
+DEVICE_UI_DUMP="/sdcard/elephant-startup-window.xml"
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -30,6 +32,7 @@ printf '[android-startup] apk=%s\n' "$APK"
 adb wait-for-device
 adb install -r "$APK"
 adb shell pm clear "$PACKAGE_ID" >/dev/null
+adb shell settings put secure immersive_mode_confirmations confirmed >/dev/null 2>&1 || true
 adb logcat -c
 adb shell am force-stop "$PACKAGE_ID"
 
@@ -40,7 +43,25 @@ if printf '%s\n' "$START_OUTPUT" | grep -Eqi 'Error|Exception|does not exist'; t
   exit 1
 fi
 
-sleep "$STARTUP_WAIT_SECONDS"
+READY=0
+DEADLINE=$((SECONDS + STARTUP_WAIT_SECONDS))
+while [ "$SECONDS" -lt "$DEADLINE" ]; do
+  adb shell uiautomator dump "$DEVICE_UI_DUMP" >/dev/null 2>&1 || true
+  adb pull "$DEVICE_UI_DUMP" "$UI_DUMP_FILE" >/dev/null 2>&1 || true
+  if [ -s "$UI_DUMP_FILE" ]; then
+    if grep -Eq 'Elephant application ready|Choose your first vault|Stockage privé|Dossier Android|Search notes' "$UI_DUMP_FILE"; then
+      READY=1
+      break
+    fi
+    if grep -Eq 'Elephant n[^<]*(pas pu démarrer|a pas pu démarrer)' "$UI_DUMP_FILE"; then
+      echo "Elephant rendered its startup failure surface." >&2
+      cat "$UI_DUMP_FILE" >&2
+      exit 1
+    fi
+  fi
+  sleep 3
+done
+
 adb logcat -d -v threadtime > "$LOG_FILE"
 adb exec-out screencap -p > "$SCREENSHOT_FILE"
 test -s "$SCREENSHOT_FILE"
@@ -67,6 +88,7 @@ PERMISSION_UI="$(printf '%s\n' "$ACTIVITY_DUMP" | grep -Ei -m 1 'permissioncontr
   printf 'focused=%s\n' "$FOCUSED"
   printf 'visible=%s\n' "$VISIBLE"
   printf 'permission_ui=%s\n' "$PERMISSION_UI"
+  printf 'vue_shell_ready=%s\n' "$READY"
 } >> "$LOG_FILE"
 
 if ! printf '%s\n' "$RESUMED" "$FOCUSED" "$VISIBLE" | grep -q "$PACKAGE_ID"; then
@@ -76,6 +98,12 @@ fi
 
 if [ -n "$PERMISSION_UI" ]; then
   echo "Android permission UI interrupted startup: $PERMISSION_UI" >&2
+  exit 1
+fi
+
+if [ "$READY" -ne 1 ]; then
+  echo "Elephant never exposed its mounted Vue shell within ${STARTUP_WAIT_SECONDS}s." >&2
+  if [ -s "$UI_DUMP_FILE" ]; then cat "$UI_DUMP_FILE" >&2; fi
   exit 1
 fi
 
@@ -100,7 +128,6 @@ from PIL import Image
 path = sys.argv[1]
 image = Image.open(path).convert('RGB')
 width, height = image.size
-# Ignore a small frame where emulator/system chrome can appear.
 left = max(0, int(width * 0.03))
 top = max(0, int(height * 0.04))
 right = min(width, int(width * 0.97))
@@ -115,7 +142,7 @@ print(f'[android-startup] screenshot={width}x{height} white_ratio={white_ratio:.
 if white_ratio >= 0.92:
     raise SystemExit('Android startup screenshot is still effectively a full white screen')
 if dark_ratio <= 0.02:
-    raise SystemExit('Android startup screenshot does not contain the expected Elephant startup/application surface')
+    raise SystemExit('Android startup screenshot does not contain the expected Elephant application surface')
 PY
 
-printf '[android-startup] success package=%s pid=%s camera_not_requested=true white_screen=false\n' "$PACKAGE_ID" "$PID"
+printf '[android-startup] success package=%s pid=%s vue_shell_ready=true camera_not_requested=true white_screen=false\n' "$PACKAGE_ID" "$PID"

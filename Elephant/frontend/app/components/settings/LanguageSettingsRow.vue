@@ -37,7 +37,7 @@ const preference = ref(getLanguagePreference())
 const localeRevision = ref(0)
 
 const languageOptions = computed(() => {
-  localeRevision.value
+  void localeRevision.value
   return getLanguageOptions()
 })
 

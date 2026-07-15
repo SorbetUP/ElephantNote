@@ -40,6 +40,9 @@ let runtime = null
 let runtimeMarkdown = ''
 let mountGeneration = 0
 let syncTimer = null
+let syncRequested = false
+let syncInFlight = null
+const internallyEmittedMarkdown = new Set()
 
 const reportError = (error) => {
   errorMessage.value = error?.message || String(error)
@@ -55,25 +58,46 @@ const readRuntimeMarkdown = async () => {
   return String(response.payload.markdown || '')
 }
 
-const syncMarkdown = async () => {
-  try {
-    const next = await readRuntimeMarkdown()
-    runtimeMarkdown = next
-    if (next !== props.modelValue) {
-      emit('update:modelValue', next)
-      emit('change', next)
+const rememberInternalEmission = (markdown) => {
+  internallyEmittedMarkdown.add(markdown)
+  if (internallyEmittedMarkdown.size <= 64) return
+  const oldest = internallyEmittedMarkdown.values().next().value
+  internallyEmittedMarkdown.delete(oldest)
+}
+
+const flushMarkdownSync = () => {
+  if (syncInFlight) return syncInFlight
+  const generation = mountGeneration
+  syncInFlight = (async () => {
+    try {
+      do {
+        syncRequested = false
+        const next = await readRuntimeMarkdown()
+        if (generation !== mountGeneration) return
+        runtimeMarkdown = next
+        if (next !== props.modelValue) {
+          rememberInternalEmission(next)
+          emit('update:modelValue', next)
+          emit('change', next)
+        }
+      } while (syncRequested && generation === mountGeneration)
+    } catch (error) {
+      if (generation === mountGeneration) reportError(error)
+    } finally {
+      syncInFlight = null
+      if (syncRequested && generation === mountGeneration) scheduleMarkdownSync([true])
     }
-  } catch (error) {
-    reportError(error)
-  }
+  })()
+  return syncInFlight
 }
 
 const scheduleMarkdownSync = (patches = []) => {
   if (!patches.length) return
-  if (syncTimer) window.clearTimeout(syncTimer)
+  syncRequested = true
+  if (syncTimer || syncInFlight) return
   syncTimer = window.setTimeout(() => {
     syncTimer = null
-    void syncMarkdown()
+    void flushMarkdownSync()
   }, 0)
 }
 
@@ -82,6 +106,7 @@ const destroyRuntime = () => {
     window.clearTimeout(syncTimer)
     syncTimer = null
   }
+  syncRequested = false
   runtime?.destroy()
   runtime = null
 }
@@ -89,6 +114,7 @@ const destroyRuntime = () => {
 const mountRuntime = async (markdown) => {
   const generation = ++mountGeneration
   destroyRuntime()
+  internallyEmittedMarkdown.clear()
   errorMessage.value = ''
   runtimeMarkdown = String(markdown || '')
   rootRef.value?.replaceChildren()
@@ -127,6 +153,7 @@ watch(
   () => props.modelValue,
   (next) => {
     const normalized = String(next || '')
+    if (internallyEmittedMarkdown.delete(normalized)) return
     if (normalized !== runtimeMarkdown) void mountRuntime(normalized)
   }
 )
@@ -155,6 +182,7 @@ watch(
 onBeforeUnmount(() => {
   mountGeneration += 1
   destroyRuntime()
+  internallyEmittedMarkdown.clear()
 })
 </script>
 

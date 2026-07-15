@@ -12,13 +12,8 @@ import {
 } from 'common/elephantnote/workspaceInsights'
 
 import { useNavigationStore } from './navigationStore'
-import {
-  buildDashboardNoteCreatePayload,
-  DASHBOARD_NOTE_RELATIVE_PATH,
-  isDashboardNotePath
-} from '../components/views/dashboardNoteHelpers'
 
-const WORKSPACE_VIEWS = ['notes', 'dashboard', 'wiki', 'chat', 'canvas', 'graph', 'calendar', 'models']
+const WORKSPACE_VIEWS = ['notes', 'wiki', 'chat', 'canvas', 'graph', 'calendar', 'models']
 
 const getPinnedNotesStorageKey = (vault) => {
   const scope = vault?.id || vault?.path || 'default'

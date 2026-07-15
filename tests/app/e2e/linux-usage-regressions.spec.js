@@ -337,10 +337,10 @@ test.describe('Linux production-renderer usage regressions', () => {
     await openSettings(page)
     await page.getByRole('button', { name: 'Addons', exact: true }).click()
     await expect(page.getByRole('searchbox', { name: 'Search addons' })).toBeVisible()
-    await expect(page.locator('.en-addon-overview-card').filter({ hasText: 'E2E Note Tools' })).toBeVisible()
+    await expect(page.locator('[data-addon-id="elephant.e2e-note-tools"]')).toBeVisible()
     await checkpoint('linux-addon-catalogue')
 
-    await page.locator('.en-addon-overview-card').filter({ hasText: 'E2E Note Tools' }).click()
+    await page.locator('[data-addon-id="elephant.e2e-note-tools"]').click()
     await page.getByRole('button', { name: 'Install', exact: true }).click()
     const enableSwitch = page.getByRole('switch', { name: 'Enable E2E Note Tools' })
     await expect(enableSwitch).toBeVisible()

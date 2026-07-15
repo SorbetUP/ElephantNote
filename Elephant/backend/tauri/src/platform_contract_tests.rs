@@ -84,7 +84,18 @@ fn android_scripts_always_use_the_android_config() {
 
   let build_script = read_text("build/scripts/build_dev_apk.sh");
   assert!(build_script.contains("cargo tauri android init --config \"$ANDROID_CONFIG\""), "APK script must initialize Android with the Android config");
-  assert!(build_script.contains("cargo tauri android build --debug --apk --config \"$ANDROID_CONFIG\""), "APK script must build Android with the Android config");
+  assert!(
+    build_script.contains("BUILD_ARGS=(android build --apk --target \"$ANDROID_TARGET\" --config \"$ANDROID_CONFIG\")"),
+    "APK script must always build Android with the Android config"
+  );
+  assert!(
+    build_script.contains("if [ \"$ANDROID_BUILD_PROFILE\" = debug ]; then BUILD_ARGS+=(--debug); fi"),
+    "APK script must add debug mode only for debug builds"
+  );
+  assert!(
+    build_script.contains("cargo tauri \"${BUILD_ARGS[@]}\""),
+    "APK script must execute the profile-aware Android build arguments"
+  );
   assert!(!build_script.contains("ELEPHANTNOTE_SKIP_LLAMA_BUNDLE"), "APK script must not carry obsolete core llama bundle switches");
 }
 

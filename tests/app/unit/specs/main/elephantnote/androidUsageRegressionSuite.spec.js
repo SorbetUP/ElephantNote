@@ -102,7 +102,8 @@ describe('progressive Android app usage regression suite', () => {
     expect(suite).toContain('android-usage-${id}.log')
     expect(suite).toContain('set -euo pipefail')
     expect(suite).toContain('if assert_process_alive && assert_no_renderer_regression; then')
-    expect(suite).toContain('awk -v pid="$app_pid"')
+    expect(suite).toContain('package_crash = package_id in line')
+    expect(suite).toContain("fields[2] == app_pid")
     expect(suite).not.toContain("grep -Eq 'FATAL EXCEPTION|Process: com\\.elephantnote\\.app")
   })
 

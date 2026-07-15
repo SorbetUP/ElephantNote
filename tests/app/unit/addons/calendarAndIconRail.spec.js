@@ -79,11 +79,12 @@ describe('optional first-party physical addons and configurable icon rail', () =
     expect(router).toContain(':is="view.contribution.component"')
   })
 
-  it('keeps AI capabilities independently installable under the physical AI parent', () => {
+  it('keeps AI capabilities independently downloadable under the physical AI parent', () => {
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
     const router = read('Elephant/frontend/app/components/views/AddonWorkspaceRouter.vue')
     const parent = read('addons/official/ai/main.js')
     const panel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
+    const catalog = read('addons/catalog.json')
     const chat = read('addons/official/ai-chat/main.js')
     const search = read('addons/official/ai-search/main.js')
     const ocrManifest = read('addons/official/ai-ocr/manifest.json')
@@ -94,7 +95,12 @@ describe('optional first-party physical addons and configurable icon rail', () =
     expect(shell).toContain("entry?.contribution?.zone === 'shell.right'")
     expect(router).toContain(':is="view.contribution.component"')
     expect(parent).toContain("setAttribute('data-elephant-addon-settings-slot', active.slot)")
-    expect(panel).toContain('const GROUPED_ADDON_IDS = new Set(AI_SUBMODULE_IDS)')
+    expect(panel).toContain('const AI_SUBMODULE_IDS = Object.freeze([')
+    expect(panel).toContain('const installAiModule = async (module) =>')
+    for (const addonId of ['elephant.ai-chat', 'elephant.ai-search', 'elephant.ai-ocr', 'elephant.wiki', 'elephant.graph']) {
+      expect(panel).toContain(`'${addonId}'`)
+      expect(catalog).toContain(`"id": "${addonId}"`)
+    }
     expect(chat).toContain("slot: 'ai.chat'")
     expect(search).toContain("slot: 'ai.search'")
     expect(ocrManifest).toContain('"elephant.ai": ">=2.0.0"')

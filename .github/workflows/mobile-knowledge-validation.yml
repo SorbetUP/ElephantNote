@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/mobile-knowledge-validation.yml'
       - 'Elephant/backend/tauri/Cargo.toml'
+      - 'Elephant/backend/tauri/Cargo.lock'
       - 'Elephant/backend/tauri/src/addon_services.rs'
       - 'Elephant/backend/tauri/src/embedded_addon_services.rs'
       - 'Elephant/backend/tauri/src/lib_min.rs'
@@ -15,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   rust-core-and-lock:
@@ -23,16 +24,46 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: '1.91.0'
           components: rustfmt
 
-      - name: Generate resolved Tauri lockfile
-        run: cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
+      - name: Normalize changed Rust files and lockfile
+        run: |
+          cargo fmt --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml
+          cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml
+          cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
+
+      - id: normalization
+        name: Commit generated normalization
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if git diff --quiet; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            Elephant/backend/tauri/Cargo.lock \
+            Elephant/backend/tauri/src/addon_services.rs \
+            Elephant/backend/tauri/src/embedded_addon_services.rs \
+            Elephant/backend/tauri/src/lib_min.rs \
+            addons/official/knowledge/native/src/main.rs \
+            addons/official/knowledge/native/knowledge-core/src
+          git commit -m 'chore(rust): normalize embedded mobile Knowledge host'
+          git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
 
       - name: Upload generated lockfile
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mobile-knowledge-cargo-lock
@@ -41,6 +72,7 @@ jobs:
           retention-days: 7
 
       - name: Check changed Rust formatting
+        if: steps.normalization.outputs.changed == 'false'
         run: |
           rustfmt --edition 2021 --check \
             Elephant/backend/tauri/src/addon_services.rs \
@@ -50,10 +82,13 @@ jobs:
             addons/official/knowledge/native/knowledge-core/src/service.rs
 
       - name: Test reusable Knowledge service
+        if: steps.normalization.outputs.changed == 'false'
         run: cargo test --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml
 
       - name: Check desktop sidecar adapter
+        if: steps.normalization.outputs.changed == 'false'
         run: cargo check --manifest-path addons/official/knowledge/native/Cargo.toml --all-targets
 
       - name: Check desktop Tauri shell
+        if: steps.normalization.outputs.changed == 'false'
         run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets

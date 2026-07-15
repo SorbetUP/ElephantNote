@@ -49,6 +49,31 @@ const clearBootstrapFileUtilsFallbackForTauri = () => {
   if (window.__TAURI__ && window.fileUtils?.__elephantnoteBootstrapFallback) delete window.fileUtils
 }
 
+const renderStartupFailure = (error) => {
+  const root = document.getElementById('app')
+  if (!root) return
+  const message = error?.stack || error?.message || String(error || 'Unknown renderer startup failure')
+  root.replaceChildren()
+  const surface = document.createElement('main')
+  surface.id = 'elephant-startup'
+  surface.dataset.error = 'true'
+  surface.setAttribute('role', 'alert')
+
+  const mark = document.createElement('div')
+  mark.className = 'elephant-startup-mark'
+  mark.setAttribute('aria-hidden', 'true')
+  mark.textContent = '🐘'
+
+  const title = document.createElement('strong')
+  title.textContent = 'Elephant n’a pas pu démarrer'
+
+  const details = document.createElement('span')
+  details.textContent = message
+
+  surface.append(mark, title, details)
+  root.append(surface)
+}
+
 installRendererDiagnostics()
 globalThis.marktext = {}
 clearBootstrapFileUtilsFallbackForTauri()
@@ -152,7 +177,8 @@ const startRendererApp = async() => {
 
 void startRendererApp().catch((error) => {
   pushDiagnosticLog('error', 'renderer startup failed', error)
-  setTimeout(() => { throw error }, 0)
+  renderStartupFailure(error)
+  console.error('[Elephant] renderer startup failed', error)
 })
 
 if (import.meta.hot) import.meta.hot.accept()

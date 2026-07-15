@@ -57,6 +57,9 @@ describe('progressive Android app usage regression suite', () => {
     const regressionScenarios = catalog.scenarios
       .filter((scenario) => scenario.runner === 'android-regression')
       .map((scenario) => scenario.id)
+    const editorScenarios = catalog.scenarios
+      .filter((scenario) => scenario.runner === 'editor-chrome')
+      .map((scenario) => scenario.id)
 
     expect(startupScenarios).toEqual([
       'startup-render',
@@ -64,6 +67,7 @@ describe('progressive Android app usage regression suite', () => {
       'settings-roundtrip',
       'drawer-open'
     ])
+    expect(editorScenarios).toEqual(['open-existing-note'])
     expect(startup).toContain('white_screen=false')
     expect(startup).toContain('search_ready=true')
     expect(startup).toContain('settings_ready=true')
@@ -77,6 +81,18 @@ describe('progressive Android app usage regression suite', () => {
     expect(suite).toContain('No Android usage implementation exists')
   })
 
+  it('expands the seeded folder and opens a real note before validating editor chrome', () => {
+    expect(editorChrome).toContain("tap_ui_node android-editor-drawer.xml 'Getting Started'")
+    expect(editorChrome).toContain("tap_ui_node android-editor-expanded.xml 'Welcome'")
+    expect(editorChrome).toContain('seeded Android note did not reach the real editor chrome')
+    expect(editorChrome).toContain('require_accessible_control "Close note"')
+    expect(editorChrome).toContain('require_accessible_control "Note title"')
+    expect(editorChrome).toContain('require_accessible_control "Add tag"')
+    expect(editorChrome).toContain('effectively blank')
+    expect(workflow).toContain('bash build/scripts/android_editor_chrome_regression.sh')
+    expect(workflow).toContain('android-editor-chrome-validation.txt')
+  })
+
   it('continues after individual failures and emits aggregate diagnostics', () => {
     expect(suite).toContain('FAILURES=$((FAILURES + 1))')
     expect(suite).toContain('emit_reports')
@@ -86,24 +102,15 @@ describe('progressive Android app usage regression suite', () => {
     expect(suite).toContain('android-usage-${id}.log')
   })
 
-  it('rejects the historical full-window editor overlay using emulator UI evidence', () => {
-    expect(editorChrome).toContain('android-note-open.xml')
-    expect(editorChrome).toContain('android-note-open.png')
-    expect(editorChrome).toContain('require_accessible_control "Close note"')
-    expect(editorChrome).toContain('require_accessible_control "Note title"')
-    expect(editorChrome).toContain('require_accessible_control "Add tag"')
-    expect(editorChrome).toContain('effectively blank')
-    expect(workflow).toContain('bash build/scripts/android_editor_chrome_regression.sh')
-    expect(workflow).toContain('android-editor-chrome-validation.txt')
-  })
-
   it('runs real emulator interactions and publishes machine-readable diagnostics', () => {
     expect(workflow).toContain('bash build/scripts/android_startup_smoke.sh')
     expect(workflow).toContain('bash build/scripts/android_usage_regression_suite.sh')
+    expect(workflow).toContain('bash build/scripts/android_editor_chrome_regression.sh')
     expect(workflow).toContain('android-usage-summary.json')
     expect(workflow).toContain('android-usage-junit.xml')
     expect(workflow).toContain('android-usage-results.tsv')
     expect(workflow).toContain('android-usage-logcat.txt')
+    expect(workflow).toContain('android-editor-chrome-validation.txt')
     expect(workflow).toContain('android-*.png')
     expect(workflow).toContain('android-*.xml')
 

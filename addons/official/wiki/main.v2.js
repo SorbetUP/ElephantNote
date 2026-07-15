@@ -3,8 +3,32 @@ import ElephantWikiAddonBase from './main.js'
 const ADDON_ID = 'elephant.wiki'
 const PROVIDER_RESOURCE = 'wiki.provider'
 const SEARCH_RESOURCE = 'search.provider'
+const KNOWLEDGE_RESOURCE = 'knowledge.provider'
 
 const normalizeQuery = (value = '') => String(value || '').trim().toLowerCase()
+const safeSlug = (value = '') => String(value || 'topic')
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '') || 'topic'
+
+const visibleRecordFromDraft = (draft, relativePath = '') => ({
+  id: String(draft?.id || ''),
+  title: String(draft?.title || draft?.topic || draft?.id || 'Untitled'),
+  topic: String(draft?.topic || draft?.title || draft?.id || 'Untitled'),
+  status: String(draft?.status || 'accepted') === 'rejected' ? 'dismissed' : String(draft?.status || 'accepted'),
+  summary: String(draft?.topic || ''),
+  path: relativePath || `Wiki/${safeSlug(draft?.slug || draft?.title || draft?.topic)}.md`,
+  sources: (Array.isArray(draft?.citations) ? draft.citations : []).map((citation) => ({
+    path: citation.document_path,
+    title: citation.document_title,
+    heading: citation.heading,
+    chunkId: citation.chunk_id
+  })),
+  sourceCount: Array.isArray(draft?.source_paths) ? draft.source_paths.length : 0,
+  providerOwned: true
+})
 
 export default class ElephantWikiAddon extends ElephantWikiAddonBase {
   invoke(command, payload = {}) {
@@ -19,6 +43,24 @@ export default class ElephantWikiAddon extends ElephantWikiAddonBase {
       path
     })
     return String(result?.markdown || '')
+  }
+
+  async acceptRecord(id) {
+    const knowledge = this.api.resources.get(KNOWLEDGE_RESOURCE)
+    if (knowledge && typeof knowledge.acceptWiki === 'function') {
+      try {
+        const accepted = await knowledge.acceptWiki(id)
+        const draft = accepted?.draft
+        if (draft?.markdown) {
+          const relativePath = `Wiki/${safeSlug(draft.slug || draft.title || draft.topic)}.md`
+          await this.writeNote(relativePath, String(draft.markdown))
+          return visibleRecordFromDraft(draft, relativePath)
+        }
+      } catch (error) {
+        console.warn('[wiki-addon] Knowledge acceptance could not be materialized; trying the local proposal', error)
+      }
+    }
+    return super.acceptRecord(id)
   }
 
   async search(query, options = {}) {
@@ -52,6 +94,7 @@ export default class ElephantWikiAddon extends ElephantWikiAddonBase {
       proposed: records.filter((record) => record.status === 'proposed').length,
       accepted: records.filter((record) => record.status === 'accepted').length,
       searchProvider: this.api.resources.has(SEARCH_RESOURCE),
+      knowledgeProvider: this.api.resources.has(KNOWLEDGE_RESOURCE),
       engine: 'package-owned-wiki'
     }
   }

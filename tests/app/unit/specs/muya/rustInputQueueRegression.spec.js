@@ -17,18 +17,22 @@ const selectionAt = (offset) => ({
 })
 
 describe('Rust editor queued input selection', () => {
-  it('reads the caret after each previous asynchronous character dispatch', async () => {
+  it('continues queued characters from each previous Rust selection update', async () => {
     const container = document.createElement('section')
     const renderer = { logical: {} }
-    let renderedOffset = 2
     const bridge = {
-      setSelection: vi.fn(async () => {}),
+      selection: selectionAt(0),
+      setSelection: vi.fn(async (selection) => {
+        bridge.selection = selection
+      }),
       dispatch: vi.fn(async () => {
-        renderedOffset += 1
+        bridge.selection = selectionAt(bridge.selection.focus.offset_utf16 + 1)
       })
     }
     const controller = new MuyaRustInputController(container, bridge, renderer).attach()
-    controller.readSelection = vi.fn(() => selectionAt(renderedOffset))
+    // All browser events observe the same stale DOM caret because they arrive
+    // before the asynchronous Rust update has patched the DOM.
+    controller.readSelection = vi.fn(() => selectionAt(2))
 
     container.dispatchEvent(beforeInput('A'))
     container.dispatchEvent(beforeInput('B'))

@@ -10,6 +10,7 @@ pub mod pipeline;
 pub mod relation_extraction;
 pub mod relation_storage;
 pub mod relations;
+pub mod service;
 pub mod storage;
 pub mod taxonomy;
 pub mod taxonomy_storage;
@@ -43,6 +44,7 @@ pub use relations::{
     stable_relation_id, KnowledgeNodeKind, KnowledgeNodeRef, KnowledgeRelation, RelationOrigin,
     RelationStatus, RelationType, RelationValidation,
 };
+pub use service::KnowledgeService;
 pub use storage::KnowledgeStore;
 pub use taxonomy::{
     canonical_tag_key, clean_display_name, normalize_alias, stable_tag_id, CanonicalTag,

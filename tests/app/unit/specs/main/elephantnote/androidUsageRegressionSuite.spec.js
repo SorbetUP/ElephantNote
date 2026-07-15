@@ -8,6 +8,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 const catalog = JSON.parse(read('tests/app/usage/android/scenarios.json'))
 const suite = read('build/scripts/android_usage_regression_suite.sh')
 const startup = read('build/scripts/android_startup_smoke.sh')
+const editorChrome = read('build/scripts/android_editor_chrome_regression.sh')
 const workflow = read('.github/workflows/android-apk.yml')
 
 const expectedScenarios = [
@@ -83,6 +84,17 @@ describe('progressive Android app usage regression suite', () => {
     expect(suite).toContain('capture_checkpoint')
     expect(suite).toContain('assert_not_blank')
     expect(suite).toContain('android-usage-${id}.log')
+  })
+
+  it('rejects the historical full-window editor overlay using emulator UI evidence', () => {
+    expect(editorChrome).toContain('android-note-open.xml')
+    expect(editorChrome).toContain('android-note-open.png')
+    expect(editorChrome).toContain('require_accessible_control "Close note"')
+    expect(editorChrome).toContain('require_accessible_control "Note title"')
+    expect(editorChrome).toContain('require_accessible_control "Add tag"')
+    expect(editorChrome).toContain('effectively blank')
+    expect(workflow).toContain('bash build/scripts/android_editor_chrome_regression.sh')
+    expect(workflow).toContain('android-editor-chrome-validation.txt')
   })
 
   it('runs real emulator interactions and publishes machine-readable diagnostics', () => {

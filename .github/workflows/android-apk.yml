@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build signed arm64 release APK
+    name: Build signed arm64 release APK under 24 MiB
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'push' ||
@@ -30,7 +30,7 @@ jobs:
       NDK_VERSION: 27.2.12479018
       ANDROID_TARGET: aarch64
       ANDROID_BUILD_PROFILE: release
-      ANDROID_APK_MAX_MIB: 64
+      ANDROID_APK_MAX_MIB: 24
     steps:
       - uses: actions/checkout@v4
 
@@ -61,6 +61,13 @@ jobs:
           targets: aarch64-linux-android,wasm32-unknown-unknown
 
       - uses: ./.github/actions/setup
+
+      - name: Verify Android release recovery contracts
+        shell: bash
+        run: |
+          set -euxo pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/specs/main/elephantnote/androidReleaseRecovery.spec.js
 
       - name: Cache Cargo and Gradle
         uses: actions/cache@v4
@@ -108,6 +115,7 @@ jobs:
           APK=$(find Elephant/backend/tauri/gen/android/app/build/outputs/apk \
             -type f -name '*-review-signed.apk' -print | head -n 1)
           test -s "$APK"
+          test "$(stat -c '%s' "$APK")" -le $((24 * 1024 * 1024))
           cp "$APK" build/android-review/Elephant-develop_next-arm64-release-review.apk
           sha256sum build/android-review/Elephant-develop_next-arm64-release-review.apk \
             | tee build/android-review/SHA256SUMS.txt

@@ -2,13 +2,27 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import {
   bundled,
-  fakeKeyEvent,
   initializeRustWasm,
   runDifferentialTrace,
-  setJsSelectionByText
+  setJsSelectionByText,
+  settle
 } from './rustDifferentialHarness'
 
 const describeBundled = bundled ? describe : describe.skip
+
+const pressTab = async (muya, shiftKey = false) => {
+  muya.container.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'Tab',
+    code: 'Tab',
+    keyCode: 9,
+    which: 9,
+    shiftKey,
+    bubbles: true,
+    cancelable: true
+  }))
+  await settle()
+}
+
 const traces = [
   {
     name: 'indent a flat unordered item under its previous sibling',
@@ -16,7 +30,7 @@ const traces = [
     expected: '- parent\n  - child\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'child', 0)
-      muya.contentState.tabHandler(fakeKeyEvent())
+      await pressTab(muya)
     },
     runRust: (rust) => {
       rust.setSelectionByText('child', 0)
@@ -29,7 +43,7 @@ const traces = [
     expected: '- parent\n  - first\n  - second\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'second', 0)
-      muya.contentState.tabHandler(fakeKeyEvent())
+      await pressTab(muya)
     },
     runRust: (rust) => {
       rust.setSelectionByText('second', 0)
@@ -42,7 +56,7 @@ const traces = [
     expected: '- parent\n- child\n- sibling\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'child', 0)
-      muya.contentState.tabHandler(fakeKeyEvent({ shiftKey: true }))
+      await pressTab(muya, true)
     },
     runRust: (rust) => {
       rust.setSelectionByText('child', 0)
@@ -55,7 +69,7 @@ const traces = [
     expected: '- parent\n  - first\n- second\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'second', 0)
-      muya.contentState.tabHandler(fakeKeyEvent({ shiftKey: true }))
+      await pressTab(muya, true)
     },
     runRust: (rust) => {
       rust.setSelectionByText('second', 0)
@@ -68,7 +82,7 @@ const traces = [
     expected: '- parent\n  - first\n- middle\n  - last\n',
     runJs: async (muya) => {
       setJsSelectionByText(muya, 'middle', 0)
-      muya.contentState.tabHandler(fakeKeyEvent({ shiftKey: true }))
+      await pressTab(muya, true)
     },
     runRust: (rust) => {
       rust.setSelectionByText('middle', 0)

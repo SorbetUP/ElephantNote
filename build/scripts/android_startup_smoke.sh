@@ -49,7 +49,9 @@ while [ "$SECONDS" -lt "$DEADLINE" ]; do
   adb shell uiautomator dump "$DEVICE_UI_DUMP" >/dev/null 2>&1 || true
   adb pull "$DEVICE_UI_DUMP" "$UI_DUMP_FILE" >/dev/null 2>&1 || true
   if [ -s "$UI_DUMP_FILE" ]; then
-    if grep -Eq 'Elephant application ready|Choose your first vault|Stockage privé|Dossier Android|Search notes' "$UI_DUMP_FILE"; then
+    # A root accessibility marker is insufficient: the previous regression
+    # mounted Vue but left only an empty white route. Require real shell copy.
+    if grep -Eq 'Choose your first vault|Stockage privé|Dossier Android|Search notes' "$UI_DUMP_FILE"; then
       READY=1
       break
     fi
@@ -88,7 +90,7 @@ PERMISSION_UI="$(printf '%s\n' "$ACTIVITY_DUMP" | grep -Ei -m 1 'permissioncontr
   printf 'focused=%s\n' "$FOCUSED"
   printf 'visible=%s\n' "$VISIBLE"
   printf 'permission_ui=%s\n' "$PERMISSION_UI"
-  printf 'vue_shell_ready=%s\n' "$READY"
+  printf 'mobile_shell_ready=%s\n' "$READY"
 } >> "$LOG_FILE"
 
 if ! printf '%s\n' "$RESUMED" "$FOCUSED" "$VISIBLE" | grep -q "$PACKAGE_ID"; then
@@ -102,7 +104,7 @@ if [ -n "$PERMISSION_UI" ]; then
 fi
 
 if [ "$READY" -ne 1 ]; then
-  echo "Elephant never exposed its mounted Vue shell within ${STARTUP_WAIT_SECONDS}s." >&2
+  echo "Elephant never rendered the mobile vault or workspace UI within ${STARTUP_WAIT_SECONDS}s." >&2
   if [ -s "$UI_DUMP_FILE" ]; then cat "$UI_DUMP_FILE" >&2; fi
   exit 1
 fi
@@ -118,6 +120,12 @@ fi
 if grep -Eq 'FATAL EXCEPTION|Process: com\.elephantnote\.app|Fatal signal.*com\.elephantnote\.app|SIGABRT|SIGSEGV' "$LOG_FILE"; then
   echo "A fatal Android crash was detected during startup." >&2
   grep -E 'FATAL EXCEPTION|AndroidRuntime|Process: com\.elephantnote\.app|Fatal signal|SIGABRT|SIGSEGV' "$LOG_FILE" >&2 || true
+  exit 1
+fi
+
+if grep -Eq 'Tauri/Console:.*(Uncaught|ReferenceError|TypeError|SyntaxError)' "$LOG_FILE"; then
+  echo "A fatal JavaScript renderer error was detected during Android startup." >&2
+  grep -E 'Tauri/Console:.*(Uncaught|ReferenceError|TypeError|SyntaxError)' "$LOG_FILE" >&2 || true
   exit 1
 fi
 
@@ -145,4 +153,4 @@ if dark_ratio <= 0.02:
     raise SystemExit('Android startup screenshot does not contain the expected Elephant application surface')
 PY
 
-printf '[android-startup] success package=%s pid=%s vue_shell_ready=true camera_not_requested=true white_screen=false\n' "$PACKAGE_ID" "$PID"
+printf '[android-startup] success package=%s pid=%s mobile_shell_ready=true camera_not_requested=true white_screen=false\n' "$PACKAGE_ID" "$PID"

@@ -38,6 +38,7 @@ export class MuyaRustInputController {
     this.composition = null
     this.attached = false
     this._tail = Promise.resolve()
+    this._pendingInputCommands = 0
     this._beforeInput = (event) => this.handleBeforeInput(event)
     this._click = (event) => this.handleClick(event)
     this._copy = (event) => this.handleCopy(event)
@@ -107,15 +108,26 @@ export class MuyaRustInputController {
 
     const command = commandForBeforeInput(event)
     if (!command) return
+    const observedSelection = this.readSelection()
+    if (!observedSelection) return
     event.preventDefault()
+
+    const followsPendingInput = this._pendingInputCommands > 0
+    this._pendingInputCommands += 1
     this.schedule(async () => {
-      // Browser beforeinput events can arrive faster than the asynchronous Rust
-      // dispatch and DOM patch cycle. Reading selection before queueing captures
-      // the same stale caret for every character and reverses/jumbles fast input.
-      const selection = this.readSelection()
-      if (!selection) return
-      await this.bridge.setSelection(selection)
-      await this.bridge.dispatch(command)
+      try {
+        // beforeinput can outpace the Rust/WASM + DOM patch cycle. The first
+        // command in a burst must use the browser caret (a click may have moved
+        // it); later queued commands must continue from the selection returned
+        // by the preceding Rust update instead of reusing the stale DOM caret.
+        const selection = followsPendingInput
+          ? this.bridge.selection || observedSelection
+          : observedSelection
+        await this.bridge.setSelection(selection)
+        await this.bridge.dispatch(command)
+      } finally {
+        this._pendingInputCommands = Math.max(0, this._pendingInputCommands - 1)
+      }
     })
   }
 
@@ -132,13 +144,13 @@ export class MuyaRustInputController {
   }
 
   handlePaste(event) {
+    const selection = this.readSelection()
+    if (!selection) return
     const markdown = markdownFromClipboard(event, this.container.ownerDocument)
     if (markdown === null) return
     event.preventDefault()
     event.stopPropagation?.()
     this.schedule(async () => {
-      const selection = this.readSelection()
-      if (!selection) return
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
     })

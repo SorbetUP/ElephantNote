@@ -38,6 +38,7 @@ import en from 'element-plus/es/locale/lang/en'
 import i18nPlugin from './i18n'
 
 import services from './services/index'
+import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
 import createRoutes from './router'
 import { resolveRendererRoutes } from './router/resolveRendererRoutes'
 import Main from './Main.vue'
@@ -82,7 +83,7 @@ installTauriRuntimeBridge()
 ensureRendererPathFacade()
 installTauriFileUtilsPathGuards()
 installTauriElephantNoteBridge()
-installTauriSearchLifecycleBridge()
+installTauriSearchLifecycleBridge({ target: globalThis, client: elephantnoteClient })
 installTauriSearchRuntimeGuards()
 installTauriSearchConceptFallback()
 installPiProviderBridge()

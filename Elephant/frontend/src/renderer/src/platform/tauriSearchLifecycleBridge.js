@@ -3,24 +3,39 @@ const normalizeVaultPath = (payload = '') => {
   return String(payload?.vaultPath || payload?.path || '').trim()
 }
 
-const invoke = (target, command, payload = {}) => {
-  const caller = target?.__TAURI__?.core?.invoke
-  if (typeof caller !== 'function') throw new Error(`Tauri command API is unavailable for ${command}`)
-  return caller(command, payload)
+const unavailable = (capability) => {
+  throw new Error(`${capability} requires the optional Search addon.`)
 }
 
 export const installTauriSearchLifecycleBridge = (target = globalThis) => {
   const search = target?.elephantnote?.search
   if (!target?.__TAURI__ || !search) return false
 
-  search.initVault = (payload = '') => invoke(target, 'tauri_search_init_vault', {
-    vaultPath: normalizeVaultPath(payload) || null
-  })
-  search.inspect = () => invoke(target, 'tauri_search_inspect')
-  search.rebuild = () => invoke(target, 'tauri_search_rebuild')
-  search.clear = () => invoke(target, 'tauri_search_clear')
-  search.disable = () => invoke(target, 'tauri_search_disable')
-  search.enable = () => invoke(target, 'tauri_search_enable')
+  const readStatus = typeof search.status === 'function'
+    ? search.status.bind(search)
+    : async() => ({ enabled: true, runtime: 'tauri-rust' })
+  let activeVaultPath = ''
+
+  search.initVault = async(payload = '') => {
+    activeVaultPath = normalizeVaultPath(payload) || activeVaultPath
+    const status = await readStatus()
+    return {
+      ...status,
+      status: status?.status || 'ready',
+      vaultPath: status?.vaultPath || status?.activeVault?.path || activeVaultPath,
+      indexedDocuments: Number(status?.indexedDocuments || 0),
+      totalDocuments: Number(status?.totalDocuments || status?.indexedDocuments || 0)
+    }
+  }
+
+  // Keep the method surface stable so the renderer never crashes with
+  // "is not a function". Semantic inspection and index administration stay
+  // physically owned by the optional Search addon.
+  search.inspect = () => unavailable('Search inspection')
+  search.rebuild = () => search.initVault(activeVaultPath)
+  search.clear = () => unavailable('Clearing the semantic index')
+  search.disable = () => unavailable('Disabling semantic search')
+  search.enable = () => unavailable('Enabling semantic search')
 
   return true
 }

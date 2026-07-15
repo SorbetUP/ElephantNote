@@ -62,6 +62,47 @@ PY
   adb shell input tap "$x" "$y"
 }
 
+tap_relative_to_screenshot() {
+  local screenshot="$1"
+  local x_ratio="$2"
+  local y_ratio="$3"
+  local coordinates
+  coordinates="$(python3 - "$screenshot" "$x_ratio" "$y_ratio" <<'PY'
+import sys
+from PIL import Image
+
+path, x_ratio, y_ratio = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
+width, height = Image.open(path).size
+print(round(width * x_ratio), round(height * y_ratio))
+PY
+)"
+  read -r x y <<<"$coordinates"
+  adb shell input tap "$x" "$y"
+}
+
+assert_screens_differ() {
+  local before="$1"
+  local after="$2"
+  local minimum="$3"
+  local label="$4"
+  python3 - "$before" "$after" "$minimum" "$label" <<'PY'
+import sys
+from PIL import Image, ImageChops, ImageStat
+
+before_path, after_path, minimum, label = sys.argv[1], sys.argv[2], float(sys.argv[3]), sys.argv[4]
+before = Image.open(before_path).convert('RGB')
+after = Image.open(after_path).convert('RGB')
+if before.size != after.size:
+    raise SystemExit(f'{label}: screenshot dimensions changed unexpectedly')
+difference = ImageChops.difference(before, after)
+mean_delta = sum(ImageStat.Stat(difference).mean) / 3
+bbox = difference.getbbox()
+print(f'[android-startup] {label}_mean_delta={mean_delta:.3f} bbox={bbox}')
+if not bbox or mean_delta < minimum:
+    raise SystemExit(f'{label}: expected UI transition was not rendered')
+PY
+}
+
 assert_no_renderer_regression() {
   adb logcat -d -v threadtime > "$LOG_FILE"
   if grep -Eq 'FATAL EXCEPTION|Process: com\.elephantnote\.app|Fatal signal.*com\.elephantnote\.app|SIGABRT|SIGSEGV' "$LOG_FILE"; then
@@ -199,22 +240,29 @@ PY
 # Exercise the exact interactions that regressed on the physical phone.
 capture_ui "$UI_DUMP_FILE"
 tap_ui_node "$UI_DUMP_FILE" 'Search notes'
-sleep 5
+sleep 3
 capture_ui android-search-window.xml
 adb exec-out screencap -p > android-search-screen.png
+assert_screens_differ "$SCREENSHOT_FILE" android-search-screen.png 3.0 search_open
+
+# Element Plus teleports the dialog outside the accessible WebView subtree on
+# Android, so uiautomator still reports the background. Focus the visibly
+# rendered search field from its screenshot-relative position instead.
+tap_relative_to_screenshot android-search-screen.png 0.50 0.17
 adb shell input text 'Untitled'
 sleep 4
-capture_ui android-search-results-window.xml
+capture_ui android-search-results-window.xml || true
+adb exec-out screencap -p > android-search-results-screen.png
+assert_screens_differ android-search-screen.png android-search-results-screen.png 0.35 search_query
 assert_no_renderer_regression
-if ! grep -Eq 'Search notes, paths, tags, or ideas|Searching locally|No matching notes found|Untitled' android-search-results-window.xml; then
-  echo "The Android search control opened but did not expose a functional search surface." >&2
-  cat android-search-results-window.xml >&2
-  exit 1
-fi
 
+# Back must close the teleported modal before testing the workspace controls.
 adb shell input keyevent 4
 sleep 2
 capture_ui android-workspace-after-search.xml
+adb exec-out screencap -p > android-workspace-after-search.png
+assert_screens_differ android-search-results-screen.png android-workspace-after-search.png 2.0 search_close
+
 tap_ui_node android-workspace-after-search.xml 'Settings'
 sleep 3
 capture_ui android-settings-window.xml

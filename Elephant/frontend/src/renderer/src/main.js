@@ -13,6 +13,7 @@ import { installTauriRuntimeBridge } from './platform/tauriRuntimeBridge'
 import { ensureRendererPathFacade } from './platform/rendererPathFacade'
 import { installTauriFileUtilsPathGuards } from './platform/tauriFileUtilsPathGuards'
 import { installTauriElephantNoteBridge } from './platform/tauriElephantNoteBridge'
+import { installTauriSearchLifecycleBridge } from './platform/tauriSearchLifecycleBridge'
 import { installTauriSearchRuntimeGuards } from './platform/tauriSearchRuntimeGuards'
 import { installTauriSearchConceptFallback } from './platform/tauriSearchConceptFallback'
 import { installPiProviderBridge } from './platform/piProviderInterface'
@@ -81,6 +82,7 @@ installTauriRuntimeBridge()
 ensureRendererPathFacade()
 installTauriFileUtilsPathGuards()
 installTauriElephantNoteBridge()
+installTauriSearchLifecycleBridge()
 installTauriSearchRuntimeGuards()
 installTauriSearchConceptFallback()
 installPiProviderBridge()
@@ -152,9 +154,6 @@ const mountRendererApp = async(runtime, windowType) => {
   app.config.globalProperties.$http = axios
   app.config.globalProperties.$services = services
 
-  // This renderer is Tauri-only. Initialize the visible shell before the first
-  // route render instead of waiting for legacy desktop IPC listeners that may
-  // never answer on Android.
   const mainStore = useMainStore(pinia)
   if (!mainStore.init) {
     mainStore.SET_INITIALIZED()

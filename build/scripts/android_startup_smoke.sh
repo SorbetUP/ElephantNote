@@ -272,9 +272,10 @@ adb exec-out screencap -p > android-search-results-screen.png
 assert_screens_differ android-search-screen.png android-search-results-screen.png 0.35 search_query
 assert_no_renderer_regression
 
-# Close the dialog by tapping its backdrop. A single Android Back press may
-# only hide the soft keyboard and would make the following settings tap close
-# Search instead of opening Settings.
+# Hide the software keyboard first, then close the dialog by tapping its
+# backdrop. Otherwise the backdrop tap can land on the keyboard itself.
+adb shell input keyevent 4
+sleep 1
 tap_relative_to_screenshot android-search-results-screen.png 0.50 0.82
 sleep 2
 capture_ui android-workspace-after-search.xml

@@ -121,6 +121,7 @@ jobs:
             tests/app/unit/addons/calendarPackageOwnership.spec.js \
             tests/app/unit/addons/packageResourceContracts.spec.js \
             tests/app/unit/addons/trustedOfficialActivation.spec.js \
+            tests/app/unit/addons/baseOfficialAddonRuntime.spec.js \
             tests/app/unit/specs/main/elephantnote/settingsRedesign.spec.js \
             2>&1 | tee addon-tests.txt
 
@@ -132,6 +133,7 @@ jobs:
           markers=(
             elephant-ai-settings
             elephant-ocr-addon-settings
+            ElephantDashboardAddon
             ElephantChatAddon
             ElephantSearchAddon
             ElephantWikiAddon
@@ -211,7 +213,8 @@ jobs:
             addon_runtime_access::tests \
             addon_assets::tests \
             addon_note_access::tests \
-            addon_http_access::tests
+            addon_http_access::tests \
+            official_addon_catalog::tests
           do
             cargo test \
               --manifest-path Elephant/backend/tauri/Cargo.toml \

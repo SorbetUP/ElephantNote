@@ -62,12 +62,12 @@ impl ExecutionSnapshot {
   fn as_json(&self, execution_id: &str) -> Value {
     json!({
       "executionId": execution_id,
-      "state": self.state,
+      "state": self.state.clone(),
       "running": self.state == "running",
       "startedAtMs": self.started_at_ms,
       "updatedAtMs": self.updated_at_ms,
-      "result": self.result,
-      "error": self.error,
+      "result": self.result.clone(),
+      "error": self.error.clone(),
     })
   }
 }
@@ -98,6 +98,7 @@ impl ExecutionService {
 
   fn start_execution(&mut self, params: Value) -> Result<Value, String> {
     let prepared = PreparedExecution::from_params(&params)?;
+    let timeout_ms = prepared.timeout_ms;
     let execution_id = self.next_execution_id();
     let cancel = Arc::new(AtomicBool::new(false));
     let snapshot = Arc::new(Mutex::new(ExecutionSnapshot::running()));
@@ -141,7 +142,7 @@ impl ExecutionService {
       "executionId": execution_id,
       "state": "running",
       "running": true,
-      "timeoutMs": prepared.timeout_ms,
+      "timeoutMs": timeout_ms,
     }))
   }
 
@@ -228,6 +229,7 @@ impl ExecutionService {
           .lock()
           .unwrap_or_else(|poisoned| poisoned.into_inner())
           .state
+          .as_str()
           == "running"
       });
       if !running || Instant::now() >= deadline {
@@ -403,25 +405,27 @@ fn run_execution(prepared: &PreparedExecution, cancel: Arc<AtomicBool>) -> Resul
     }
   };
 
-  let stdout = stdout_thread.join().unwrap_or_default();
-  let stderr = stderr_thread.join().unwrap_or_default();
-  let stdout = prepared_output(stdout, prepared.output_line_limit);
-  let stderr = prepared_output(stderr, prepared.output_line_limit);
+  let stdout_meta = prepared_output(stdout_thread.join().unwrap_or_default(), prepared.output_line_limit);
+  let stderr_meta = prepared_output(stderr_thread.join().unwrap_or_default(), prepared.output_line_limit);
+  let stdout_text = stdout_meta.get("text").cloned().unwrap_or(Value::String(String::new()));
+  let stderr_text = stderr_meta.get("text").cloned().unwrap_or(Value::String(String::new()));
+  let truncated = stdout_meta.get("truncated").and_then(Value::as_bool).unwrap_or(false)
+    || stderr_meta.get("truncated").and_then(Value::as_bool).unwrap_or(false);
   let success = status.as_ref().map(ExitStatus::success).unwrap_or(false) && !timed_out && !interrupted;
+  let exit_code = status.and_then(|value| value.code());
   Ok(json!({
     "success": success,
-    "code": status.and_then(|value| value.code()),
-    "stdout": stdout.get("text").cloned().unwrap_or(Value::String(String::new())),
-    "stderr": stderr.get("text").cloned().unwrap_or(Value::String(String::new())),
-    "stdoutMeta": stdout,
-    "stderrMeta": stderr,
-    "executable": prepared.executable,
+    "code": exit_code,
+    "stdout": stdout_text,
+    "stderr": stderr_text,
+    "stdoutMeta": stdout_meta,
+    "stderrMeta": stderr_meta,
+    "executable": prepared.executable.clone(),
     "cwd": prepared.cwd.to_string_lossy(),
     "durationMs": started.elapsed().as_millis(),
     "timedOut": timed_out,
     "interrupted": interrupted,
-    "truncated": stdout.get("truncated").and_then(Value::as_bool).unwrap_or(false)
-      || stderr.get("truncated").and_then(Value::as_bool).unwrap_or(false),
+    "truncated": truncated,
   }))
 }
 
@@ -586,6 +590,12 @@ fn main() {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::sync::{Mutex as TestMutex, OnceLock};
+
+  fn environment_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: OnceLock<TestMutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| TestMutex::new(())).lock().unwrap()
+  }
 
   #[test]
   fn rejects_empty_execution_request() {
@@ -594,6 +604,7 @@ mod tests {
 
   #[test]
   fn clamps_timeout_and_output_limit() {
+    let _guard = environment_lock();
     let temporary = env::temp_dir().join(format!("elephant-code-test-{}", timestamp_ms()));
     fs::create_dir_all(&temporary).unwrap();
     env::set_var("ELEPHANT_VAULT_DIR", &temporary);
@@ -611,6 +622,7 @@ mod tests {
 
   #[test]
   fn working_directory_cannot_escape_the_vault() {
+    let _guard = environment_lock();
     let root = env::temp_dir().join(format!("elephant-code-vault-{}", timestamp_ms()));
     let outside = env::temp_dir().join(format!("elephant-code-outside-{}", timestamp_ms()));
     fs::create_dir_all(&root).unwrap();

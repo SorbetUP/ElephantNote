@@ -40,12 +40,14 @@ const ordered = (relativePath, needles, description) => {
 }
 
 const physicalPackages = [
+  ['dashboard', 'elephant.dashboard', 'main.js'],
   ['ai', 'elephant.ai', 'main.js'],
   ['ai-chat', 'elephant.ai-chat', 'main.js'],
   ['ai-search', 'elephant.ai-search', 'main.js'],
   ['ai-ocr', 'elephant.ai-ocr', 'main.js'],
   ['wiki', 'elephant.wiki', 'main.v2.js'],
   ['graph', 'elephant.graph', 'main.js'],
+  ['knowledge', 'elephant.knowledge', 'main.js'],
   ['open-models', 'elephant.open-models', 'main.js'],
   ['codex-connection', 'elephant.codex-connection', 'main.js'],
   ['sync', 'elephant.sync', 'main.service.js'],
@@ -65,8 +67,10 @@ for (const file of [
   'Elephant/frontend/src/renderer/src/main.js',
   'Elephant/frontend/src/renderer/src/addons/builtin/index.js',
   'Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js',
+  'Elephant/frontend/src/renderer/src/addons/officialAddonCatalogBridge.js',
   'Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue',
   'Elephant/frontend/app/components/shell/MainContent.vue',
+  'Elephant/frontend/app/components/navigation/IconRail.vue',
   'Elephant/frontend/app/components/editor/NoteEditorHost.vue',
   'Elephant/frontend/app/components/editor/ExcalidrawDialog.vue',
   'Elephant/backend/tauri/Cargo.toml',
@@ -75,13 +79,16 @@ for (const file of [
   'Elephant/backend/tauri/src/addon_services.rs',
   'Elephant/backend/tauri/src/addon_runtime_access.rs',
   'Elephant/backend/tauri/src/addon_http_access.rs',
-  'tests/app/e2e/search-inspect.spec.js'
+  'Elephant/backend/tauri/src/official_addon_catalog.rs',
+  'tests/app/e2e/search-inspect.spec.js',
+  'tests/app/unit/addons/baseOfficialAddonRuntime.spec.js'
 ]) read(file)
 
 missing('Elephant/backend/tauri/src/tauri_extra_commands.rs', 'legacy optional command module')
 missing('Elephant/backend/tauri/src/sync_commands.rs', 'legacy core Sync commands')
 missing('Elephant/backend/tauri/src/sync', 'legacy core Iroh runtime directory')
 missing('Elephant/backend/tauri/src/vault/sync_iroh', 'legacy core Sync backend directory')
+missing('Elephant/frontend/app/components/views/DashboardView.vue', 'core Dashboard view')
 
 ordered(
   '.github/workflows/ci.yml',
@@ -110,12 +117,13 @@ has('package.json', '"security:guard": "node build/scripts/verify-security-guard
 ordered(
   'Elephant/frontend/src/renderer/src/main.js',
   [
+    "import './addons/officialAddonCatalogBridge'",
     'clearBootstrapFileUtilsFallbackForTauri()',
     'installTauriRuntimeBridge()',
     'ensureRendererPathFacade()',
     'installTauriElephantNoteBridge()'
   ],
-  'Tauri renderer bridge installation order'
+  'official catalogue and Tauri renderer bridge installation order'
 )
 has('Elephant/frontend/src/renderer/src/main.js', "const runtime = 'tauri'", 'Tauri-only runtime selection')
 lacks('Elephant/frontend/src/renderer/src/main.js', 'tauri-compatible', 'compatibility runtime fallback')
@@ -127,18 +135,30 @@ has('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js', 'const 
 has('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js', "if (!official && !await externalAddonApi.getCommunityEnabled())", 'community consent boundary')
 has('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js', "['fetch','WebSocket','EventSource','XMLHttpRequest'", 'isolated worker network surface removal')
 has('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js', "rpc('storage.get'", 'brokered addon storage')
+has('Elephant/frontend/src/renderer/src/addons/officialAddonCatalogBridge.js', 'tauri_official_addons_catalog_list', 'official catalogue bridge')
+has('Elephant/backend/tauri/src/lib_min.rs', 'addons::tauri_addons_list,', 'external addon registry compatibility command')
 
-has('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'v-else class="en-addon-catalogue"', 'tiles-first addon catalogue')
-has('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'class="en-addon-overview-card"', 'addon overview tiles')
-has('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'class="en-addon-browser en-addon-browser-detail-mode"', 'separate addon detail mode')
+lacks('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'en-addon-browser-overview', 'obsolete addon overview surface')
+lacks('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'All addons', 'obsolete catalogue headline')
+lacks('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'Back to catalogue', 'obsolete detail-only navigation')
+has('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'class="en-addons-toolbar"', 'shared addon and pack toolbar')
+has('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'placeholder="Search addons"', 'addon search control')
+has('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'placeholder="Search addon packs"', 'addon pack search control')
+has('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'class="en-addon-browser"', 'persistent split addon browser')
+has('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', ':data-addon-id="entry.id"', 'stable addon list identity')
 has('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'class="en-installed-only-control"', 'installed addon filter')
-has('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', 'Back to catalogue', 'catalogue navigation')
+for (const addonId of ['elephant.ai-chat', 'elephant.ai-search', 'elephant.ai-ocr', 'elephant.wiki', 'elephant.graph']) {
+  has('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue', `'${addonId}'`, `visible AI module ${addonId}`)
+}
 
 has('Elephant/frontend/app/components/shell/MainContent.vue', '<addon-workspace-router', 'physical addon workspace router')
 has('Elephant/frontend/app/components/shell/MainContent.vue', "entry?.contribution?.zone === 'workspace.notes'", 'package-owned workspace panels')
+lacks('Elephant/frontend/app/components/shell/MainContent.vue', 'DashboardView', 'core Dashboard implementation')
 lacks('Elephant/frontend/app/components/shell/MainContent.vue', 'SigmaCanvas', 'core Graph implementation')
 lacks('Elephant/frontend/app/components/shell/MainContent.vue', 'WikiView', 'core Wiki implementation')
 lacks('Elephant/frontend/app/components/shell/MainContent.vue', 'ModelsView', 'core model library implementation')
+lacks('Elephant/frontend/app/components/navigation/IconRail.vue', "id: 'dashboard', title: 'Dashboard'", 'core Dashboard rail item')
+has('Elephant/frontend/app/components/navigation/IconRail.vue', "dashboard: LayoutDashboard", 'addon Dashboard icon mapping')
 
 has('Elephant/backend/tauri/src/addon_services.rs', 'const SERVICE_PROTOCOL: &str = "elephant-addon-service-v1"', 'versioned addon service protocol')
 has('Elephant/backend/tauri/src/addon_services.rs', 'Addon native permission was not granted', 'native permission gate')
@@ -197,6 +217,12 @@ for (const [directory, addonId, entry] of physicalPackages) {
   read(main)
 }
 
+has('addons/official/dashboard/main.js', "const PROVIDER_RESOURCE = 'dashboard.provider'", 'package-owned Dashboard provider')
+has('addons/official/dashboard/main.js', 'api.workspace.registerView', 'package-owned Dashboard view')
+has('addons/official/dashboard/main.js', "id: `${ADDON_ID}.open`", 'package-owned Dashboard command')
+has('addons/catalog.json', '"id": "elephant.dashboard"', 'downloadable Dashboard package')
+has('packs/base.enaddonpack', '"id": "elephant.dashboard"', 'Dashboard in base pack')
+
 has('addons/official/ai/main.js', "const CONFIG_KEY = 'provider-config'", 'package-owned AI configuration')
 has('addons/official/ai/main.js', 'this.api.storage.get(CONFIG_KEY)', 'AI configuration storage read')
 has('addons/official/ai/main.js', 'this.api.storage.set(CONFIG_KEY, payload)', 'AI configuration storage write')
@@ -216,6 +242,12 @@ has('addons/official/sync/manifest.json', '"protocol": "elephant-addon-service-v
 has('addons/official/sync/main.service.js', "this.callNativeService('sync.run'", 'active package Sync path')
 has('addons/official/sync/native/src/main.rs', '"sync.run" => service.run_sync().await', 'package-owned Sync sessions')
 has('addons/official/sync/native/tests/two_endpoint_sync.rs', 'physical_package_pairs_and_synchronizes_two_real_iroh_endpoints', 'real package Iroh validation')
+
+has('Elephant/backend/tauri/src/official_addon_catalog.rs', 'collect_local_files', 'complete local official package installation')
+has('Elephant/backend/tauri/src/official_addon_catalog.rs', 'collect_remote_files', 'complete remote official package installation')
+has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'for (const packedAddon of parityPack.addons)', 'all first-party addon runtime probes')
+has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'view.component.__mount', 'addon view usage probes')
+has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'command.run({ probe: true })', 'addon command usage probes')
 
 has('tests/app/e2e/search-inspect.spec.js', 'does not expose semantic inspection without the Search addon', 'Search physical absence E2E contract')
 has('tests/app/e2e/search-inspect.spec.js', 'expect(result.ok).toBe(false)', 'unavailable core Search command')

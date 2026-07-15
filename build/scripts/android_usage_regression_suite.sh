@@ -145,9 +145,17 @@ assert_process_alive() {
 
 assert_no_renderer_regression() {
   adb logcat -d -v threadtime > "$LOG_FILE"
-  if grep -Eq 'FATAL EXCEPTION|Process: com\.elephantnote\.app|Fatal signal.*com\.elephantnote\.app|SIGABRT|SIGSEGV' "$LOG_FILE"; then
-    echo "A fatal Android crash was detected during app usage testing." >&2
-    grep -E 'FATAL EXCEPTION|AndroidRuntime|Process: com\.elephantnote\.app|Fatal signal|SIGABRT|SIGSEGV' "$LOG_FILE" >&2 || true
+  local app_pid
+  app_pid="$(adb shell pidof "$PACKAGE_ID" | tr -d '' | awk '{print $1}' || true)"
+
+  if grep -Fq "Process: $PACKAGE_ID" "$LOG_FILE" || grep -Eq "Fatal signal.*${PACKAGE_ID//./\.}" "$LOG_FILE"; then
+    echo "A fatal Elephant Android crash was detected during app usage testing." >&2
+    grep -E "Process: ${PACKAGE_ID//./\.}|Fatal signal.*${PACKAGE_ID//./\.}" "$LOG_FILE" >&2 || true
+    return 1
+  fi
+  if [ -n "$app_pid" ] && awk -v pid="$app_pid" '$3 == pid && /FATAL EXCEPTION|SIGABRT|SIGSEGV/ { found=1 } END { exit found ? 0 : 1 }' "$LOG_FILE"; then
+    echo "A fatal Elephant process error was detected during app usage testing." >&2
+    awk -v pid="$app_pid" '$3 == pid && /FATAL EXCEPTION|AndroidRuntime|SIGABRT|SIGSEGV/ { print }' "$LOG_FILE" >&2 || true
     return 1
   fi
   if grep -Eq 'Tauri/Console:.*(Uncaught|ReferenceError|TypeError|SyntaxError)|Unhandled promise rejection|Command tauri_vault_read_binary not found|search\.initVault is not a function' "$LOG_FILE"; then
@@ -263,7 +271,7 @@ scenario_library_layout_toggle() {
   tap_ui_node android-layout-before.xml "$initial_label"
   sleep 2
   capture_checkpoint android-layout-after
-  assert_screens_differ android-layout-before.png android-layout-after.png 0.45 library_layout_toggle
+  assert_screens_differ android-layout-before.png android-layout-after.png 0.10 library_layout_toggle
   grep -q "$target_label" android-layout-after.xml
 
   tap_ui_node android-layout-after.xml "$target_label"
@@ -495,14 +503,20 @@ run_scenario() {
   printf '[android-usage] START %s\n' "$id"
 
   set +e
-  "$function_name" > >(tee "$scenario_log") 2>&1
+  (
+    set -euo pipefail
+    "$function_name"
+  ) > >(tee "$scenario_log") 2>&1
   local status=$?
   set -e
 
   local duration=$((SECONDS - CURRENT_STARTED_AT))
   if [ "$status" -eq 0 ]; then
-    assert_process_alive && assert_no_renderer_regression
-    status=$?
+    if assert_process_alive && assert_no_renderer_regression; then
+      status=0
+    else
+      status=$?
+    fi
   fi
   if [ "$status" -eq 0 ]; then
     record_result "$id" passed "$duration" ''

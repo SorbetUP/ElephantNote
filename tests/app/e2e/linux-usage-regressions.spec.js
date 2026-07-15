@@ -1,90 +1,32 @@
 const fs = require('node:fs')
-const http = require('node:http')
-const os = require('node:os')
 const path = require('node:path')
-const { test, expect, _electron: electron } = require('playwright/test')
+const { test, expect } = require('playwright/test')
+const { createSeededVaultFixture, launchElectron } = require('./helpers')
 
 const root = process.cwd()
-const rendererRoot = path.join(root, 'build/out/renderer')
-const electronMain = path.join(root, 'tests/app/e2e/linux-usage-main.cjs')
 const catalog = JSON.parse(fs.readFileSync(path.join(root, 'tests/app/usage/linux/scenarios.json'), 'utf8'))
 const metadata = new Map(catalog.scenarios.map((scenario) => [scenario.id, scenario]))
 
-let server
-let rendererUrl
-
-const mimeType = (filename) => ({
-  '.css': 'text/css; charset=utf-8',
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.wasm': 'application/wasm',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2'
-}[path.extname(filename)] || 'application/octet-stream')
-
-const startStaticServer = async () => {
-  server = http.createServer((request, response) => {
-    const rawPath = decodeURIComponent(String(request.url || '/').split('?')[0])
-    const relative = rawPath === '/' ? 'index.html' : rawPath.replace(/^\/+/, '')
-    const candidate = path.resolve(rendererRoot, relative)
-    if (candidate !== rendererRoot && !candidate.startsWith(`${rendererRoot}${path.sep}`)) {
-      response.writeHead(403).end('Forbidden')
-      return
-    }
-    const filename = fs.existsSync(candidate) && fs.statSync(candidate).isFile()
-      ? candidate
-      : path.join(rendererRoot, 'index.html')
-    response.writeHead(200, {
-      'content-type': mimeType(filename),
-      'cache-control': 'no-store'
-    })
-    fs.createReadStream(filename).pipe(response)
-  })
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-  const address = server.address()
-  rendererUrl = `http://127.0.0.1:${address.port}/`
-}
-
-const createFixture = () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'elephant-linux-usage-'))
-  const vault = path.join(base, 'vault')
-  const config = path.join(base, 'config')
-  fs.mkdirSync(path.join(vault, 'Notes'), { recursive: true })
-  fs.mkdirSync(path.join(vault, '.elephantnote'), { recursive: true })
-  fs.mkdirSync(config, { recursive: true })
-
-  fs.writeFileSync(path.join(vault, 'Getting Started.md'), '# Getting Started\n\nElephant Linux usage fixture.\n\n- Search\n- Settings\n- Rust editor\n')
-  fs.writeFileSync(path.join(vault, 'Project Alpha.md'), '# Project Alpha\n\nAlpha planning and requirements.\n')
-  fs.writeFileSync(path.join(vault, 'Zeta Note.md'), '# Zeta Note\n\nA note used to verify title sorting.\n')
-  fs.writeFileSync(path.join(vault, 'Notes', 'Deep Work.md'), '# Deep Work\n\nNested note fixture.\n')
-  fs.writeFileSync(path.join(vault, '.elephantnote', 'workspace.json'), JSON.stringify({
-    version: 1,
-    vaultName: 'Linux Usage Vault',
-    sidebar: []
-  }, null, 2))
-  fs.writeFileSync(path.join(config, 'elephantnote.json'), JSON.stringify({
-    vaults: [{ id: 'linux-usage-vault', name: 'Linux Usage Vault', path: vault }],
-    activeVaultId: 'linux-usage-vault'
-  }, null, 2))
-
-  return { base, vault, config }
+const enrichFixture = (fixture) => {
+  fs.mkdirSync(path.join(fixture.vaultRoot, 'Notes'), { recursive: true })
+  fs.writeFileSync(path.join(fixture.vaultRoot, 'Getting Started.md'), '# Getting Started\n\nElephant Linux usage fixture.\n\n- Search\n- Settings\n- Rust editor\n')
+  fs.writeFileSync(path.join(fixture.vaultRoot, 'Project Alpha.md'), '# Project Alpha\n\nAlpha planning and requirements.\n')
+  fs.writeFileSync(path.join(fixture.vaultRoot, 'Zeta Note.md'), '# Zeta Note\n\nA note used to verify title sorting.\n')
+  fs.writeFileSync(path.join(fixture.vaultRoot, 'Notes', 'Deep Work.md'), '# Deep Work\n\nNested note fixture.\n')
 }
 
 const launchUsageApp = async (testInfo) => {
-  const fixture = createFixture()
-  const app = await electron.launch({
-    args: [electronMain],
+  const fixture = await createSeededVaultFixture()
+  enrichFixture(fixture)
+  const launch = await launchElectron([], {
+    userDataPath: fixture.userDataPath,
     env: {
-      ...process.env,
-      ELEPHANT_E2E_RENDERER_URL: rendererUrl,
-      ELEPHANTNOTE_CONFIG_DIR: fixture.config,
-      ELEPHANT_E2E_VAULT_ROOT: fixture.vault,
+      ELEPHANTNOTE_CONFIG_DIR: fixture.configRoot,
+      ELEPHANT_E2E_VAULT_ROOT: fixture.vaultRoot,
       ELEPHANTNOTE_MUYA_RUNTIME: 'rust'
     }
   })
-  const page = await app.firstWindow()
+  const { app, page } = launch
   const errors = []
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`))
   page.on('console', (message) => {
@@ -119,7 +61,7 @@ const launchUsageApp = async (testInfo) => {
     },
     async close() {
       await app.close().catch(() => {})
-      fs.rmSync(fixture.base, { recursive: true, force: true })
+      fs.rmSync(fixture.root, { recursive: true, force: true })
     }
   }
 }
@@ -148,7 +90,8 @@ const closeSettings = async (page) => {
 
 const defineUsageTest = (id, implementation) => {
   const scenario = metadata.get(id)
-  test(`[linux-usage:${id}] ${scenario.description}`, async ({}, testInfo) => {
+  test(`[linux-usage:${id}] ${scenario.description}`, async (fixtures, testInfo) => {
+    void fixtures
     const context = await launchUsageApp(testInfo)
     try {
       await implementation(context)
@@ -161,15 +104,6 @@ const defineUsageTest = (id, implementation) => {
 
 test.describe('Linux production-renderer usage regressions', () => {
   test.describe.configure({ mode: 'serial' })
-
-  test.beforeAll(async () => {
-    expect(fs.existsSync(path.join(rendererRoot, 'index.html'))).toBe(true)
-    await startStaticServer()
-  })
-
-  test.afterAll(async () => {
-    if (server) await new Promise((resolve) => server.close(resolve))
-  })
 
   defineUsageTest('startup-render', async ({ page, checkpoint }) => {
     await expect(page.getByText('Getting Started', { exact: true }).first()).toBeVisible()
@@ -235,15 +169,14 @@ test.describe('Linux production-renderer usage regressions', () => {
   })
 
   defineUsageTest('theme-mode-roundtrip', async ({ page, checkpoint }) => {
-    const original = await page.evaluate(() => document.documentElement.dataset.elephantnoteTheme || '')
+    const shell = page.locator('.en-shell')
+    const initiallyDark = await shell.evaluate((element) => element.classList.contains('en-theme-dark'))
     await openSettings(page)
-    const target = original.includes('dark') ? 'Light' : 'Dark'
-    await page.getByRole('button', { name: target, exact: true }).click()
-    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.elephantnoteTheme || '')).not.toBe(original)
+    await page.getByRole('button', { name: initiallyDark ? 'Light' : 'Dark', exact: true }).click()
+    await expect.poll(() => shell.evaluate((element) => element.classList.contains('en-theme-dark'))).toBe(!initiallyDark)
     await checkpoint('linux-theme-toggled')
-    const restore = original.includes('dark') ? 'Dark' : 'Light'
-    await page.getByRole('button', { name: restore, exact: true }).click()
-    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.elephantnoteTheme || '')).toBe(original)
+    await page.getByRole('button', { name: initiallyDark ? 'Dark' : 'Light', exact: true }).click()
+    await expect.poll(() => shell.evaluate((element) => element.classList.contains('en-theme-dark'))).toBe(initiallyDark)
     await closeSettings(page)
   })
 
@@ -290,10 +223,8 @@ test.describe('Linux production-renderer usage regressions', () => {
       await page.getByRole('button', { name: 'Search' }).click()
       await expect(searchInput(page)).toBeVisible()
       await closeSearch(page)
-
       await openSettings(page)
       await closeSettings(page)
-
       await page.getByRole('button', { name: 'Hide sidebar' }).click()
       await page.getByRole('button', { name: 'Show sidebar' }).click()
       await expect(page.locator('.en-sidebar')).toBeVisible()

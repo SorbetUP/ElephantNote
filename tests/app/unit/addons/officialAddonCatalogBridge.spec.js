@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { installOfficialAddonCatalogBridge } from '../../../../Elephant/frontend/src/renderer/src/addons/officialAddonCatalogBridge'
@@ -15,6 +15,10 @@ describe('official addon catalogue bridge', () => {
         })
       }
     }
+  })
+
+  afterEach(() => {
+    delete globalThis.__TAURI__
   })
 
   it('treats a null native catalogue as an empty collection instead of rendering an error banner', async () => {

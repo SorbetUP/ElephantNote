@@ -25,6 +25,7 @@ pub mod vault_layout;
 
 mod android_vault_commands;
 mod debug_commands;
+mod vault_file_commands;
 #[path = "core_commands.rs"]
 mod tauri_extra_commands;
 
@@ -94,6 +95,11 @@ pub fn run() {
             android_vault_commands::tauri_android_vault_sync,
             android_vault_commands::tauri_android_vault_clear,
             android_vault_commands::tauri_android_share_text,
+            vault_file_commands::tauri_vault_read_binary,
+            vault_file_commands::tauri_vault_write_binary,
+            vault_file_commands::tauri_vault_ensure_dir,
+            vault_file_commands::tauri_vault_remove_path,
+            vault_file_commands::tauri_vault_rename_path,
             addon_registry_view::tauri_addons_list_full,
             addons::tauri_addons_install,
             addon_catalog::tauri_addons_catalog_list,

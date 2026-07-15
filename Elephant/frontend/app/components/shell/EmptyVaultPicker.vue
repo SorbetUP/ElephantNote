@@ -9,8 +9,13 @@
           <strong>Private storage</strong>
           <span>Create a vault managed by Elephant</span>
         </button>
-        <button class="en-secondary-button" type="button" aria-label="Choose a folder — Dossier Android" @click="emit('choose')">
-          <strong>Choose a folder</strong>
+        <button
+          class="en-secondary-button"
+          type="button"
+          aria-label="Dossier Android — Choose a folder and authorize access"
+          @click="emit('choose')"
+        >
+          <strong>Choose folder</strong>
           <span>Open an existing notes folder</span>
         </button>
       </div>

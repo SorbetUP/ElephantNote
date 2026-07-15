@@ -14,20 +14,31 @@ import {
 } from './rustDifferentialBlockTypeCases'
 
 const describeBundled = bundled ? describe : describe.skip
+const clone = (value) => JSON.parse(JSON.stringify(value))
 
 const selectJs = (muya, target, anyText = false) => {
   const select = anyText ? setJsSelectionByAnyText : setJsSelectionByText
   select(muya, target, 1)
 }
 
-const resetJsHistory = (muya) => {
-  const { start, end } = muya.contentState.cursor
-  muya.clearHistory()
-  muya.contentState.cursor = {
-    start: { key: start.key, offset: start.offset },
-    end: { key: end.key, offset: end.offset },
-    isEdit: false
+const captureJsHistoryState = (muya, isEdit) => {
+  const { blocks, renderRange, cursor } = muya.contentState
+  return {
+    blocks: clone(blocks),
+    renderRange: clone(renderRange),
+    cursor: {
+      start: { key: cursor.start.key, offset: cursor.start.offset },
+      end: { key: cursor.end.key, offset: cursor.end.offset },
+      isEdit
+    }
   }
+}
+
+const seedJsHistory = (muya, initialState, changedState) => {
+  const { history } = muya.contentState
+  history.clearHistory()
+  history.push(initialState)
+  history.push(changedState)
 }
 
 const readJsMarkdown = (muya) => {
@@ -76,8 +87,10 @@ describeBundled('Muya block type differential traces', () => {
         initial: trace.initial,
         runJs: async (muya) => {
           selectJs(muya, trace.target)
-          resetJsHistory(muya)
+          const initialState = captureJsHistoryState(muya, false)
           await updateJsParagraph(muya, trace.paragraphType)
+          const changedState = captureJsHistoryState(muya, true)
+          seedJsHistory(muya, initialState, changedState)
           const changed = readJsMarkdown(muya)
           muya.undo()
           await settle()

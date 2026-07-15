@@ -1,4 +1,0 @@
-Critical ElephantNote flow guard failed:
-- addons/official/ai-search/main.js: missing package-owned lexical index
-
-exit_status=1

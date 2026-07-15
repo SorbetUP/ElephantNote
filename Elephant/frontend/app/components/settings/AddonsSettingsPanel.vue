@@ -112,7 +112,7 @@
         <div v-else-if="!browserEntries.length" class="en-addons-empty">{{ query ? 'No addon matches this search.' : 'No addon is available.' }}</div>
       </section>
 
-      <section v-else class="en-addon-browser en-addon-browser-detail-mode">
+      <section v-else class="en-addon-browser" :class="{ 'en-addon-browser-detail-mode': true }">
         <aside class="en-addon-browser-sidebar">
           <header class="en-addon-browser-sidebar-header">
             <button class="en-addon-browser-back" type="button" @click="closeAddonDetails">

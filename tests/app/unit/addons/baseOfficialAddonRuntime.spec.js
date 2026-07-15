@@ -6,8 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
 const root = process.cwd()
 const readJson = (relativePath) => JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'))
 const catalog = readJson('addons/catalog.json')
-const basePack = readJson('packs/base.enaddonpack')
-const parityPack = readJson('packs/develop-parity.enaddonpack')
+const basePack = readJson('addons/packs/base.enaddonpack')
+const parityPack = readJson('addons/packs/develop-parity.enaddonpack')
 const catalogById = new Map(catalog.addons.map((entry) => [entry.id, entry]))
 
 const createCallableFallback = () => {

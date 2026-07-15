@@ -34,16 +34,24 @@ jobs:
           TEST_INTEGRITY_BASE: ${{ github.event.pull_request.base.sha || 'origin/develop_next' }}
 
       - name: Run critical utility contracts with coverage
-        run: pnpm exec vitest run --config vitest.critical.config.js --coverage
+        shell: bash
+        run: |
+          set +e
+          pnpm exec vitest run --config vitest.critical.config.js --coverage > critical-coverage-output.txt 2>&1
+          status=$?
+          tail -n 240 critical-coverage-output.txt
+          exit "$status"
 
       - name: Build production renderer
         run: pnpm tauri:web:build
 
-      - name: Upload focused coverage
+      - name: Upload focused coverage and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: critical-coverage
-          path: build/coverage-critical/
-          if-no-files-found: error
+          path: |
+            build/coverage-critical/
+            critical-coverage-output.txt
+          if-no-files-found: warn
           retention-days: 14

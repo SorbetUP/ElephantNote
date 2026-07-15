@@ -69,6 +69,10 @@ const addonArg = process.argv[2]
 if (!addonArg) fail('usage: node build/scripts/build-physical-addon.mjs <addon-directory>')
 
 const addonDir = resolve(repoRoot, addonArg)
+const addonRelativeDir = relative(repoRoot, addonDir).replaceAll('\\', '/')
+if (!addonRelativeDir.startsWith('addons/official/') || addonRelativeDir.split('/').includes('..')) {
+  fail(`physical addon sources must live under addons/official: ${addonArg}`)
+}
 const manifestPath = join(addonDir, 'manifest.json')
 const buildConfigPath = join(addonDir, 'addon.build.json')
 if (!existsSync(manifestPath)) fail(`missing ${manifestPath}`)
@@ -175,7 +179,7 @@ writeFileSync(metadataPath, `${JSON.stringify({
   runner,
   modules: copiedModules.size,
   file: outputName,
-  catalogPath: `addons/${basename(addonDir)}/releases/${outputName}`
+  catalogPath: `${addonRelativeDir}/releases/${outputName}`
 }, null, 2)}\n`)
 
 console.log(`[physical-addon] package=${outputPath}`)

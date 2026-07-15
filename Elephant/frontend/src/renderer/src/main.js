@@ -165,6 +165,8 @@ const mountRendererApp = async(runtime, windowType) => {
   installAddonPermissionConsentGuard(addonManager)
   await installCoreFeatures(addonManager)
   app.mount('#app')
+  document.documentElement.dataset.elephantMounted = 'true'
+  document.getElementById('app')?.setAttribute('aria-label', 'Elephant application ready')
   installStoreDiagnostics()
 }
 

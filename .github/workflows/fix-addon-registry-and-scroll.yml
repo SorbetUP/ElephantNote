@@ -1,0 +1,208 @@
+name: Fix addon registry compatibility and settings scrolling
+
+on:
+  push:
+    branches: [develop_next-integration-repair]
+    paths:
+      - '.github/workflows/fix-addon-registry-and-scroll.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-addon-registry-and-scroll-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      - name: Apply registry compatibility and one-scroll settings layout
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          runtime_path = Path('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js')
+          runtime = runtime_path.read_text()
+          needle = """const asError = (value, fallback = 'External addon operation failed') => {
+            if (value instanceof Error) return value
+            if (value && typeof value === 'object' && typeof value.message === 'string') {
+              const error = new Error(value.message)
+              error.name = value.name || 'Error'
+              if (value.stack) error.stack = value.stack
+              return error
+            }
+            return new Error(typeof value === 'string' && value ? value : fallback)
+          }
+          """
+          replacement = needle + """
+          export const isUnavailableTauriCommandError = (error, command) => {
+            const message = String(error?.message || error || '')
+            const normalizedCommand = String(command || '').trim()
+            if (!normalizedCommand || !message.includes(normalizedCommand)) return false
+            return /(?:command\s+[^\s]+\s+not\s+found|unknown\s+command|command\s+not\s+found)/i.test(message)
+          }
+          """
+          if needle not in runtime:
+            raise SystemExit('Unable to find external addon error helper')
+          runtime = runtime.replace(needle, replacement, 1)
+          old_load = """  async load() {
+            const records = await externalAddonApi.list()
+            const communityEnabled = await externalAddonApi.getCommunityEnabled()
+          """
+          new_load = """  async load() {
+            let records
+            try {
+              records = await externalAddonApi.list()
+            } catch (error) {
+              if (!isUnavailableTauriCommandError(error, 'tauri_addons_list')) throw error
+              this.logger?.warn?.('external addon registry is unavailable in this Tauri binary; continuing without installed external addons', {
+                command: 'tauri_addons_list',
+                error: error?.message || String(error)
+              })
+              return []
+            }
+            const communityEnabled = await externalAddonApi.getCommunityEnabled()
+          """
+          if old_load not in runtime:
+            raise SystemExit('Unable to find ExternalAddonController.load')
+          runtime_path.write_text(runtime.replace(old_load, new_load, 1))
+
+          panel_path = Path('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
+          panel = panel_path.read_text()
+          old_header = """    <nav class=\"en-addons-tabs\" aria-label=\"Addon settings pages\">
+              <button type=\"button\" :class=\"{ active: activePage === 'addons' }\" @click=\"activePage = 'addons'\">
+                <Package aria-hidden=\"true\" />
+                <span>Addons</span>
+              </button>
+              <button type=\"button\" :class=\"{ active: activePage === 'packs' }\" @click=\"activePage = 'packs'\">
+                <Layers3 aria-hidden=\"true\" />
+                <span>Addon packs</span>
+              </button>
+            </nav>
+
+            <div class=\"en-addons-toolbar\">
+          """
+          new_header = """    <div class=\"en-addons-toolbar\">
+              <nav class=\"en-addons-tabs\" aria-label=\"Addon settings pages\">
+                <button type=\"button\" :class=\"{ active: activePage === 'addons' }\" @click=\"activePage = 'addons'\">
+                  <Package aria-hidden=\"true\" />
+                  <span>Addons</span>
+                </button>
+                <button type=\"button\" :class=\"{ active: activePage === 'packs' }\" @click=\"activePage = 'packs'\">
+                  <Layers3 aria-hidden=\"true\" />
+                  <span>Addon packs</span>
+                </button>
+              </nav>
+          """
+          if old_header not in panel:
+            raise SystemExit('Unable to find addon tabs and toolbar header')
+          panel_path.write_text(panel.replace(old_header, new_header, 1))
+
+          css_path = Path('Elephant/frontend/app/components/settings/addons-settings.css')
+          css = css_path.read_text()
+          replacements = {
+            '.en-addons-panel { position:relative; min-height:0; display:grid; grid-template-rows:auto auto auto minmax(0,1fr); gap:12px; }':
+              '.en-addons-panel { position:relative; min-height:0; display:flex; flex-direction:column; gap:12px; }',
+            '.en-addons-tabs { display:flex; align-items:center; gap:4px; width:max-content; padding:4px; border:1px solid var(--en-border,#c5cfdd); border-radius:11px; background:color-mix(in srgb,var(--en-soft,#e9eff7) 42%,var(--en-surface,#fff)); }':
+              '.en-addons-tabs { flex:0 0 auto; display:flex; align-items:center; gap:4px; width:max-content; padding:4px; border:1px solid var(--en-border,#c5cfdd); border-radius:11px; background:color-mix(in srgb,var(--en-soft,#e9eff7) 42%,var(--en-surface,#fff)); }',
+            '.en-addons-toolbar { position:sticky; top:0; z-index:4; display:grid; grid-template-columns:minmax(220px,1fr) auto 34px 34px; align-items:center; gap:8px; padding:6px; border:1px solid var(--en-border,#c5cfdd); border-radius:12px; background:color-mix(in srgb,var(--en-surface,#fff) 95%,transparent); backdrop-filter:blur(14px) saturate(130%); }':
+              '.en-addons-toolbar { position:sticky; top:0; z-index:4; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:6px; border:1px solid var(--en-border,#c5cfdd); border-radius:12px; background:color-mix(in srgb,var(--en-surface,#fff) 95%,transparent); backdrop-filter:blur(14px) saturate(130%); }',
+            '.en-addons-search { min-width:0; height:34px; display:flex; align-items:center; gap:8px; padding:0 11px; border:1px solid var(--en-border,#c5cfdd); border-radius:8px; background:var(--en-bg,#fff); color:var(--en-muted,#667085); }':
+              '.en-addons-search { min-width:220px; height:34px; flex:1 1 280px; display:flex; align-items:center; gap:8px; padding:0 11px; border:1px solid var(--en-border,#c5cfdd); border-radius:8px; background:var(--en-bg,#fff); color:var(--en-muted,#667085); }',
+            '.en-addon-catalogue { min-height:0; max-height:clamp(480px,calc(90vh - 240px),720px); display:grid; grid-template-columns:repeat(auto-fill,minmax(245px,1fr)); align-content:start; gap:12px; overflow-y:auto; overscroll-behavior:contain; padding:2px 2px 16px; scrollbar-gutter:stable; }':
+              '.en-addon-catalogue { min-height:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(245px,1fr)); align-content:start; gap:12px; padding:2px 2px 16px; }',
+            '.en-addon-browser { height:clamp(480px,calc(90vh - 240px),720px); min-height:0; display:grid; grid-template-columns:minmax(245px,32%) minmax(0,1fr); overflow:hidden; border:1px solid var(--en-border,#c5cfdd); border-radius:14px; background:var(--en-surface,#fff); }':
+              '.en-addon-browser { min-height:0; display:grid; grid-template-columns:minmax(245px,32%) minmax(0,1fr); align-items:start; border:1px solid var(--en-border,#c5cfdd); border-radius:14px; background:var(--en-surface,#fff); }',
+            '.en-addon-browser-sidebar { min-width:0; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr); overflow:hidden; border-right:1px solid var(--en-border,#c5cfdd); background:color-mix(in srgb,var(--en-soft,#e9eff7) 26%,var(--en-surface,#fff)); }':
+              '.en-addon-browser-sidebar { min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--en-border,#c5cfdd); background:color-mix(in srgb,var(--en-soft,#e9eff7) 26%,var(--en-surface,#fff)); }',
+            '.en-addon-browser-list { min-height:0; display:grid; align-content:start; gap:5px; overflow-y:auto; overscroll-behavior:contain; padding:9px; scrollbar-gutter:stable; }':
+              '.en-addon-browser-list { display:grid; align-content:start; gap:5px; padding:9px; }',
+            '.en-addon-browser-detail { min-width:0; min-height:0; display:grid; align-content:start; gap:20px; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding:28px 32px 36px; }':
+              '.en-addon-browser-detail { min-width:0; display:grid; align-content:start; gap:20px; padding:28px 32px 36px; }',
+            '  .en-addons-toolbar { grid-template-columns:minmax(0,1fr) 34px 34px; }':
+              '  .en-addons-toolbar { align-items:stretch; }',
+            '  .en-installed-only-control { grid-column:1 / -1; justify-self:start; }':
+              '  .en-installed-only-control { flex:0 0 auto; }',
+            '  .en-addon-catalogue { max-height:none; grid-template-columns:1fr; }':
+              '  .en-addon-catalogue { grid-template-columns:1fr; }',
+            '  .en-addon-browser { height:auto; min-height:560px; grid-template-columns:1fr; grid-template-rows:220px minmax(0,1fr); }':
+              '  .en-addon-browser { grid-template-columns:1fr; grid-template-rows:auto auto; }'
+          }
+          for old, new in replacements.items():
+            if old not in css:
+              raise SystemExit(f'Unable to find CSS contract: {old[:80]}')
+            css = css.replace(old, new, 1)
+          css_path.write_text(css)
+
+          test_path = Path('tests/app/unit/addons/externalAddonRegistryCompatibility.spec.js')
+          test_path.write_text("""import fs from 'node:fs'\nimport path from 'node:path'\nimport { describe, expect, it } from 'vitest'\nimport { isUnavailableTauriCommandError } from '../../../../Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js'\n\nconst root = process.cwd()\nconst read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')\n\ndescribe('external addon registry compatibility', () => {\n  it('recognizes only the requested missing Tauri command', () => {\n    expect(isUnavailableTauriCommandError(new Error('Command tauri_addons_list not found'), 'tauri_addons_list')).toBe(true)\n    expect(isUnavailableTauriCommandError(new Error('unknown command tauri_addons_list'), 'tauri_addons_list')).toBe(true)\n    expect(isUnavailableTauriCommandError(new Error('Command tauri_notes_read not found'), 'tauri_addons_list')).toBe(false)\n    expect(isUnavailableTauriCommandError(new Error('permission denied'), 'tauri_addons_list')).toBe(false)\n  })\n\n  it('keeps the backend command registered and degrades stale binaries without an error log', () => {\n    const runtime = read('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js')\n    const backend = read('Elephant/backend/tauri/src/lib_min.rs')\n    expect(backend).toContain('addons::tauri_addons_list,')\n    expect(runtime).toContain("if (!isUnavailableTauriCommandError(error, 'tauri_addons_list')) throw error")\n    expect(runtime).toContain("this.logger?.warn?.('external addon registry is unavailable in this Tauri binary")\n    expect(runtime).toContain('return []')\n  })\n})\n""")
+
+          ui_test_path = Path('tests/app/unit/addons/addonsCatalogueUi.spec.js')
+          ui_test = ui_test_path.read_text()
+          insertion = """
+
+            it('uses one settings-page scrollbar instead of nested catalogue and detail scrollbars', () => {
+              const panel = read('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
+              const css = read('Elephant/frontend/app/components/settings/addons-settings.css')
+
+              expect(panel.indexOf('class=\"en-addons-tabs\"')).toBeGreaterThan(panel.indexOf('class=\"en-addons-toolbar\"'))
+              for (const selector of ['.en-addon-catalogue', '.en-addon-browser', '.en-addon-browser-sidebar', '.en-addon-browser-list', '.en-addon-browser-detail']) {
+                const rule = css.match(new RegExp(`${selector.replaceAll('.', '\\\\.')}\\\\s*\\\\{[^}]*\\\\}`))?.[0] || ''
+                expect(rule, selector).not.toMatch(/overflow(?:-y)?:\\s*(?:auto|scroll|hidden)/)
+                expect(rule, selector).not.toMatch(/max-height:/)
+              }
+            })
+          """
+          marker = "\n  it('keeps every AI module visible and independently installable', () => {"
+          if marker not in ui_test:
+            raise SystemExit('Unable to find addon catalogue UI insertion marker')
+          ui_test_path.write_text(ui_test.replace(marker, insertion + marker, 1))
+          PY
+
+      - name: Validate focused addon compatibility and interface contracts
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/externalAddonRegistryCompatibility.spec.js \
+            tests/app/unit/addons/addonsCatalogueUi.spec.js \
+            2>&1 | tee addon-registry-ui-tests.txt
+          Elephant/node_modules/.bin/eslint \
+            Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js \
+            Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue \
+            tests/app/unit/addons/externalAddonRegistryCompatibility.spec.js \
+            tests/app/unit/addons/addonsCatalogueUi.spec.js \
+            2>&1 | tee addon-registry-ui-lint.txt
+
+      - name: Commit validated repair
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm .github/workflows/fix-addon-registry-and-scroll.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'fix(addons): tolerate stale registry commands and use one settings scrollbar'
+          git push origin HEAD:develop_next-integration-repair
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: addon-registry-ui-repair
+          path: |
+            addon-registry-ui-tests.txt
+            addon-registry-ui-lint.txt
+          if-no-files-found: warn
+          retention-days: 7

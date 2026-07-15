@@ -56,6 +56,17 @@ describe('Android release recovery', () => {
     expect(main).not.toContain('setTimeout(() => { throw error }, 0)')
   })
 
+  it('keeps the mobile vault shell visible until a real document is open', () => {
+    const page = read('Elephant/frontend/src/renderer/src/pages/app.vue')
+
+    expect(page).toContain('const hasOpenDocument = computed(() => Boolean(editorStore.currentFile?.id))')
+    expect(page).toContain('const muyaRuntimeDocumentActive = computed(() => muyaRuntimeActive.value && hasOpenDocument.value)')
+    expect(page).toContain(":class=\"{ 'muya-runtime-underlay': muyaRuntimeDocumentActive }\"")
+    expect(page).toContain('v-if="init && muyaRuntimeEnabled && hasOpenDocument"')
+    expect(page).toContain('v-show="muyaRuntimeDocumentActive"')
+    expect(page).not.toContain(":class=\"{ 'muya-runtime-underlay': muyaRuntimeActive }\"")
+  })
+
   it('builds one optimized signed ARM64 release APK under 24 MiB', () => {
     const build = read('build/scripts/build_dev_apk.sh')
     const activity = read('build/android/MainActivity.kt')

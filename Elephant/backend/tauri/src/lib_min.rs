@@ -55,15 +55,15 @@ fn healthcheck() -> &'static str {
 #[tauri::command]
 fn tauri_platform_info() -> serde_json::Value {
     json!({
-      "os": std::env::consts::OS,
-      "family": std::env::consts::FAMILY,
-      "arch": std::env::consts::ARCH,
-      "mobile": cfg!(mobile),
-      "desktop": !cfg!(mobile),
-      "linux": cfg!(target_os = "linux"),
-      "macos": cfg!(target_os = "macos"),
-      "android": cfg!(target_os = "android"),
-      "ios": cfg!(target_os = "ios")
+        "os": std::env::consts::OS,
+        "family": std::env::consts::FAMILY,
+        "arch": std::env::consts::ARCH,
+        "mobile": cfg!(mobile),
+        "desktop": !cfg!(mobile),
+        "linux": cfg!(target_os = "linux"),
+        "macos": cfg!(target_os = "macos"),
+        "android": cfg!(target_os = "android"),
+        "ios": cfg!(target_os = "ios")
     })
 }
 
@@ -103,6 +103,7 @@ pub fn run() {
             vault_file_commands::tauri_vault_ensure_dir,
             vault_file_commands::tauri_vault_remove_path,
             vault_file_commands::tauri_vault_rename_path,
+            addons::tauri_addons_list,
             addon_registry_view::tauri_addons_list_full,
             addons::tauri_addons_install,
             addon_catalog::tauri_addons_catalog_list,

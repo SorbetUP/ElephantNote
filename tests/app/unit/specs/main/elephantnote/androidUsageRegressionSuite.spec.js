@@ -93,6 +93,14 @@ describe('progressive Android app usage regression suite', () => {
     expect(workflow).toContain('android-editor-chrome-validation.txt')
   })
 
+  it('scopes Android crash checks to Elephant rather than foreign UiAutomation failures', () => {
+    for (const script of [startup, suite]) {
+      expect(script).toContain("package_crash = package_id in line and ('Process:' in line or 'Fatal signal' in line)")
+      expect(script).toContain('fields[2] == app_pid')
+      expect(script).not.toContain("grep -Eq 'FATAL EXCEPTION|Process: com\\.elephantnote\\.app")
+    }
+  })
+
   it('continues after individual failures and emits aggregate diagnostics', () => {
     expect(suite).toContain('FAILURES=$((FAILURES + 1))')
     expect(suite).toContain('emit_reports')
@@ -102,10 +110,7 @@ describe('progressive Android app usage regression suite', () => {
     expect(suite).toContain('android-usage-${id}.log')
     expect(suite).toContain('set -euo pipefail')
     expect(suite).toContain('if assert_process_alive && assert_no_renderer_regression; then')
-    expect(suite).toContain("package_crash = package_id in line and ('Process:' in line or 'Fatal signal' in line)")
-    expect(suite).toContain('fields[2] == app_pid')
     expect(suite).toContain('assert_screens_differ android-layout-before.png android-layout-after.png 0.10 library_layout_toggle')
-    expect(suite).not.toContain("grep -Eq 'FATAL EXCEPTION|Process: com\\.elephantnote\\.app")
   })
 
   it('runs real emulator interactions and publishes machine-readable diagnostics', () => {

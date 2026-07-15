@@ -64,8 +64,10 @@ describeBundled('Muya block type differential traces', () => {
           await updateJsParagraph(muya, trace.paragraphType)
           const changed = muya.getMarkdown()
           muya.undo()
+          await settle()
           const undone = muya.getMarkdown()
           muya.redo()
+          await settle()
           return [changed, undone, muya.getMarkdown()]
         },
         runRust: (rust) => {

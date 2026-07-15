@@ -56,15 +56,23 @@ describe('Android release recovery', () => {
     expect(main).not.toContain('setTimeout(() => { throw error }, 0)')
   })
 
-  it('keeps the mobile vault shell visible until a real document is open', () => {
+  it('uses one mobile vault shell and opens documents through the real NoteEditorHost', () => {
     const page = read('Elephant/frontend/src/renderer/src/pages/app.vue')
+    const mainContent = read('Elephant/frontend/app/components/shell/MainContent.vue')
+    const noteEditor = read('Elephant/frontend/app/components/editor/NoteEditorHost.vue')
+    const runtimeEditor = read(
+      'Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeEditor.vue'
+    )
 
-    expect(page).toContain('const hasOpenDocument = computed(() => Boolean(editorStore.currentFile?.id))')
-    expect(page).toContain('const muyaRuntimeDocumentActive = computed(() => muyaRuntimeActive.value && hasOpenDocument.value)')
-    expect(page).toContain(':class="{ \'muya-runtime-underlay\': muyaRuntimeDocumentActive }"')
-    expect(page).toContain('v-if="init && muyaRuntimeEnabled && hasOpenDocument"')
-    expect(page).toContain('v-show="muyaRuntimeDocumentActive"')
-    expect(page).not.toContain(':class="{ \'muya-runtime-underlay\': muyaRuntimeActive }"')
+    expect(page).toContain('<app-shell v-if="init" />')
+    expect(page).not.toContain('MuyaRuntimeEditor')
+    expect(page).not.toContain('muya-runtime-production-editor')
+    expect(mainContent).toContain('<note-editor-host')
+    expect(mainContent).toContain('v-if="hasOpenNote"')
+    expect(noteEditor).toContain('<note-editor-top-bar')
+    expect(noteEditor).toContain('<editor-with-tabs')
+    expect(runtimeEditor).toContain('<RustMuyaRuntimeEditor')
+    expect(runtimeEditor).toContain('mode="rust"')
   })
 
   it('registers every vault binary command used by the Android file facade', () => {

@@ -2,6 +2,9 @@ name: Android APK Review Build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - develop_next-mobile-recovery
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -14,13 +17,20 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build arm64 debug APK
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'develop_next'
+    name: Build signed arm64 release APK
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      github.event.pull_request.head.ref == 'develop_next' ||
+      github.event.pull_request.head.ref == 'develop_next-mobile-recovery'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       CARGO_TERM_COLOR: always
       NDK_VERSION: 27.2.12479018
+      ANDROID_TARGET: aarch64
+      ANDROID_BUILD_PROFILE: release
+      ANDROID_APK_MAX_MIB: 64
     steps:
       - uses: actions/checkout@v4
 
@@ -33,7 +43,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android platform and NDK
+      - name: Install Android platform, build tools and NDK
         shell: bash
         run: |
           set -euxo pipefail
@@ -63,8 +73,9 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
             Elephant/backend/tauri/target
-          key: ${{ runner.os }}-android-apk-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml', 'Elephant/crates/muya-wasm/Cargo.lock', 'pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-android-release-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml', 'Elephant/crates/muya-wasm/Cargo.lock', 'pnpm-lock.yaml') }}
           restore-keys: |
+            ${{ runner.os }}-android-release-
             ${{ runner.os }}-android-apk-
 
       - name: Install Tauri CLI
@@ -83,41 +94,29 @@ jobs:
             cargo install wasm-bindgen-cli --version "$VERSION" --locked
           fi
 
-      - name: Initialize Android project
+      - name: Build signed review APK with mobile guards
         shell: bash
         run: |
           set -euxo pipefail
-          cd Elephant/backend/tauri
-          if [ ! -d gen/android ]; then
-            cargo tauri android init --config tauri.android.conf.json
-          fi
+          pnpm tauri:android:build 2>&1 | tee android-release-build.log
 
-      - name: Build review APK
-        shell: bash
-        run: |
-          set -euxo pipefail
-          cd Elephant/backend/tauri
-          cargo tauri android build \
-            --debug \
-            --apk \
-            --target aarch64 \
-            --config tauri.android.conf.json
-
-      - name: Collect APK
+      - name: Collect signed APK
         shell: bash
         run: |
           set -euxo pipefail
           mkdir -p build/android-review
-          find Elephant/backend/tauri/gen/android/app/build/outputs/apk \
-            -type f -name '*.apk' -print -exec cp {} build/android-review/Elephant-develop_next-arm64-debug.apk \;
-          test -s build/android-review/Elephant-develop_next-arm64-debug.apk
-          sha256sum build/android-review/Elephant-develop_next-arm64-debug.apk \
+          APK=$(find Elephant/backend/tauri/gen/android/app/build/outputs/apk \
+            -type f -name '*-review-signed.apk' -print | head -n 1)
+          test -s "$APK"
+          cp "$APK" build/android-review/Elephant-develop_next-arm64-release-review.apk
+          sha256sum build/android-review/Elephant-develop_next-arm64-release-review.apk \
             | tee build/android-review/SHA256SUMS.txt
+          cp android-release-build.log build/android-review/android-release-build.log
 
       - name: Upload Android review APK
         uses: actions/upload-artifact@v4
         with:
-          name: Elephant-develop_next-Android-arm64-debug
+          name: Elephant-develop_next-Android-arm64-release-review
           path: build/android-review/
           if-no-files-found: error
           retention-days: 14

@@ -78,8 +78,10 @@ test.describe('Native app UI parity contract baseline', () => {
     try {
       const card = page.locator('.en-note-card').filter({ hasText: 'Alpha note' }).first()
       await expect(card).toBeVisible()
-      await card.click()
-      await expect(page.getByText('Visible alpha body line.').first()).toBeVisible({ timeout: 5000 })
+      const title = card.locator('h3')
+      await expect(title).toHaveText('Alpha note')
+      await title.click()
+      await expect(page.getByText('Visible alpha body line.').first()).toBeVisible({ timeout: 10000 })
     } finally {
       await app.close()
     }

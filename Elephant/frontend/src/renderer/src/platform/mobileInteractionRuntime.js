@@ -1,4 +1,5 @@
 import '../mobile-recovery.css'
+import '../mobile-density.css'
 import '../addons/officialAddonCatalogBridge'
 import { useNavigationStore } from 'elephant-front/stores/navigationStore'
 import { useSearchStore } from 'elephant-front/stores/searchStore'

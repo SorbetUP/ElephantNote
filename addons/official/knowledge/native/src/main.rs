@@ -1,6 +1,8 @@
 use elephantnote_knowledge_core::{
-    build_wiki_synthesis_request, collect_wiki_sources, parse_and_render_wiki, rebuild_vault,
-    wiki_draft_from_rendered, KnowledgeStore, WikiDraft, WikiDraftStatus, WikiSourceChunk,
+    build_wiki_synthesis_request, collect_wiki_sources, discover_topic_communities,
+    finalize_semantic_candidates, load_discovery_documents, parse_and_render_wiki,
+    provisional_labels, rebuild_vault, wiki_draft_from_rendered, EmbeddingInput, EmbeddingStore,
+    KnowledgeStore, WikiDraft, WikiDraftStatus, WikiSourceChunk, WikiTopicLabel,
 };
 use serde_json::{json, Value};
 use std::{
@@ -35,6 +37,11 @@ impl KnowledgeService {
         store.initialize_taxonomy()?;
         store.initialize_wikis()?;
         Ok(store)
+    }
+
+    fn embeddings(&self) -> Result<EmbeddingStore, String> {
+        let store = self.store()?;
+        EmbeddingStore::open(store.database_path())
     }
 }
 
@@ -91,6 +98,30 @@ fn sources_for_topic(
     Ok(collect_wiki_sources(&documents))
 }
 
+fn embedding_rows(params: &Value) -> Result<Vec<(EmbeddingInput, Vec<f32>)>, String> {
+    let rows = params
+        .get("rows")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "rows must be an array".to_string())?;
+    rows.iter()
+        .map(|row| {
+            let input: EmbeddingInput = serde_json::from_value(
+                row.get("input")
+                    .cloned()
+                    .ok_or_else(|| "embedding row input is required".to_string())?,
+            )
+            .map_err(|error| error.to_string())?;
+            let vector: Vec<f32> = serde_json::from_value(
+                row.get("vector")
+                    .cloned()
+                    .ok_or_else(|| "embedding row vector is required".to_string())?,
+            )
+            .map_err(|error| error.to_string())?;
+            Ok((input, vector))
+        })
+        .collect()
+}
+
 fn handle(service: &KnowledgeService, method: &str, params: Value) -> Result<Value, String> {
     match method {
         "service.start" | "knowledge.status" => {
@@ -117,6 +148,63 @@ fn handle(service: &KnowledgeService, method: &str, params: Value) -> Result<Val
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
             serde_json::to_value(service.store()?.graph_projection(include)?)
+                .map_err(|error| error.to_string())
+        }
+        "knowledge.embedding.pending" => {
+            let model_id = required_string(&params, "modelId")?;
+            let limit = params
+                .get("limit")
+                .and_then(Value::as_u64)
+                .unwrap_or(100_000) as usize;
+            serde_json::to_value(service.embeddings()?.pending_inputs(&model_id, None, limit)?)
+                .map_err(|error| error.to_string())
+        }
+        "knowledge.embedding.save" => {
+            let model_id = required_string(&params, "modelId")?;
+            let threshold = params
+                .get("threshold")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.35)
+                .clamp(-1.0, 1.0) as f32;
+            let rows = embedding_rows(&params)?;
+            let written = service.embeddings()?.save_batch(&model_id, threshold, &rows)?;
+            Ok(json!({ "written": written, "status": service.embeddings()?.status()? }))
+        }
+        "knowledge.embedding.status" => serde_json::to_value(service.embeddings()?.status()?)
+            .map_err(|error| error.to_string()),
+        "knowledge.wiki.semantic.communities" => {
+            let threshold = params
+                .get("threshold")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.72)
+                .clamp(0.45, 0.95) as f32;
+            let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(12) as usize;
+            let store = service.store()?;
+            let documents = load_discovery_documents(store.database_path())?;
+            let communities = discover_topic_communities(&documents, threshold, limit);
+            Ok(json!({
+                "documents": documents.len(),
+                "communities": communities,
+            }))
+        }
+        "knowledge.wiki.semantic.discover" => {
+            let threshold = params
+                .get("threshold")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.72)
+                .clamp(0.45, 0.95) as f32;
+            let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(12) as usize;
+            let store = service.store()?;
+            let documents = load_discovery_documents(store.database_path())?;
+            let communities = discover_topic_communities(&documents, threshold, limit);
+            let labels = match params.get("labels") {
+                Some(value) if value.is_array() => {
+                    serde_json::from_value::<Vec<WikiTopicLabel>>(value.clone())
+                        .map_err(|error| error.to_string())?
+                }
+                _ => provisional_labels(&communities),
+            };
+            serde_json::to_value(finalize_semantic_candidates(&communities, &labels))
                 .map_err(|error| error.to_string())
         }
         "knowledge.wiki.sources" => {
@@ -291,6 +379,61 @@ mod tests {
         assert!(hits.as_array().is_some_and(|values| !values.is_empty()));
         let graph = handle(&service, "knowledge.graph", json!({})).unwrap();
         assert_eq!(graph["nodes"].as_array().map(Vec::len), Some(2));
+        std::fs::remove_dir_all(vault).ok();
+    }
+
+    #[test]
+    fn embedding_protocol_feeds_package_owned_semantic_discovery() {
+        let vault = temp_vault();
+        std::fs::create_dir_all(&vault).unwrap();
+        for (name, body) in [
+            ("Rust A.md", "# Rust ownership\nBorrowing and lifetimes."),
+            ("Rust B.md", "# Rust borrowing\nOwnership rules."),
+            ("Rust C.md", "# Rust lifetimes\nBorrow checker."),
+            ("ML A.md", "# Machine learning\nModels and data."),
+            ("ML B.md", "# Neural networks\nTraining models."),
+            ("ML C.md", "# Model training\nDatasets."),
+        ] {
+            std::fs::write(vault.join(name), body).unwrap();
+        }
+        let service = KnowledgeService {
+            vault: std::fs::canonicalize(&vault).unwrap(),
+        };
+        handle(&service, "knowledge.rebuild", json!({})).unwrap();
+        let pending = handle(
+            &service,
+            "knowledge.embedding.pending",
+            json!({ "modelId": "test", "limit": 20 }),
+        )
+        .unwrap();
+        let inputs = pending.as_array().cloned().unwrap_or_default();
+        assert_eq!(inputs.len(), 6);
+        let rows = inputs
+            .into_iter()
+            .map(|input| {
+                let path = input["relativePath"].as_str().unwrap_or_default();
+                let vector = if path.starts_with("Rust") {
+                    vec![1.0, 0.03, 0.0]
+                } else {
+                    vec![0.0, 1.0, 0.03]
+                };
+                json!({ "input": input, "vector": vector })
+            })
+            .collect::<Vec<_>>();
+        handle(
+            &service,
+            "knowledge.embedding.save",
+            json!({ "modelId": "test", "threshold": 0.72, "rows": rows }),
+        )
+        .unwrap();
+        let communities = handle(
+            &service,
+            "knowledge.wiki.semantic.communities",
+            json!({ "threshold": 0.72, "limit": 12 }),
+        )
+        .unwrap();
+        assert_eq!(communities["documents"], 6);
+        assert_eq!(communities["communities"].as_array().map(Vec::len), Some(2));
         std::fs::remove_dir_all(vault).ok();
     }
 }

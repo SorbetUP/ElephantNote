@@ -63,6 +63,8 @@
                   </div>
                 </div>
 
+                <language-settings-row />
+
                 <div class="en-settings-row en-settings-row-stacked">
                   <header class="en-settings-collapsible-header">
                     <strong>Theme</strong>
@@ -129,6 +131,7 @@ import { useAddonsStore } from '@/store/addons'
 import { ELEPHANTNOTE_THEME_FAMILIES, getThemeFamily, getThemeLabel, getThemeMode, getThemeTokens, getThemeVariant } from 'common/elephantnote/appearance'
 import AddonsSettingsPanel from './AddonsSettingsPanel.vue'
 import IconRailLayoutSettings from './IconRailLayoutSettings.vue'
+import LanguageSettingsRow from './LanguageSettingsRow.vue'
 import { useVaultStore } from '../../stores/vaultStore'
 
 const props = defineProps({
@@ -157,7 +160,8 @@ const ICONS = Object.freeze({
 })
 const CORE_SETTINGS_INDEX = Object.freeze([
   { id: 'appearance-mode', section: 'appearance', label: 'Color mode', description: 'Light and dark appearance.' },
-  { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Apple, Graphite, Nord, Solar and Forest themes.' },
+  { id: 'appearance-language', section: 'appearance', label: 'Language', description: 'System, built-in and ISO language packs.' },
+  { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Apple, Graphite, Nord, Solar, Forest, Beige, Pastel and Gamer Violet themes.' },
   { id: 'appearance-icon-rail', section: 'appearance', label: 'Vertical icon bar', description: 'Reorder, hide and divide navigation icons.' },
   { id: 'editor-footer', section: 'editor', label: 'Editor footer', description: 'Word count and typography controls.' },
   { id: 'editor-tags', section: 'editor', label: 'Tag prefix', description: 'Show or hide the # before tags.' },

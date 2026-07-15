@@ -2,8 +2,14 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Elephant",
   "build": {
-    "beforeDevCommand": "cd ../.. && pnpm tauri:web:dev",
-    "beforeBuildCommand": "cd ../.. && pnpm tauri:web:build",
+    "beforeDevCommand": {
+      "script": "pnpm tauri:web:dev",
+      "cwd": "../../.."
+    },
+    "beforeBuildCommand": {
+      "script": "pnpm tauri:web:build",
+      "cwd": "../../.."
+    },
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../../../build/out/renderer"
   },

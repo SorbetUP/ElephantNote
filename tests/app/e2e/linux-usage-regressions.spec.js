@@ -90,8 +90,8 @@ const closeSettings = async (page) => {
 
 const defineUsageTest = (id, implementation) => {
   const scenario = metadata.get(id)
-  test(`[linux-usage:${id}] ${scenario.description}`, async (fixtures, testInfo) => {
-    void fixtures
+  test(`[linux-usage:${id}] ${scenario.description}`, async ({ browserName }, testInfo) => {
+    void browserName
     const context = await launchUsageApp(testInfo)
     try {
       await implementation(context)

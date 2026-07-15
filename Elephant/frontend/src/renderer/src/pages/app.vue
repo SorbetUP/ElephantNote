@@ -297,7 +297,7 @@ onBeforeUnmount(() => {
   opacity: 0;
   pointer-events: none;
 }
-.m u y a-runtime-production-editor {
+.muya-runtime-production-editor {
   position: absolute;
   inset: 0;
   z-index: 20;

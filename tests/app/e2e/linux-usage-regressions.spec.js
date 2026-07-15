@@ -186,6 +186,7 @@ test.describe('Linux production-renderer usage regressions', () => {
     await card(page, 'Getting Started').click()
     await expect(page.getByTestId('muya-rust-runtime-editor')).toBeVisible()
     await expect(page.locator('.muya-rust-runtime-error')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Close note', exact: true })).toBeVisible()
     await checkpoint('linux-note-open')
   })
 
@@ -193,7 +194,7 @@ test.describe('Linux production-renderer usage regressions', () => {
     await card(page, 'Getting Started').click()
     await expect(page.getByTestId('muya-rust-runtime-editor')).toBeVisible()
     await checkpoint('linux-note-first')
-    await page.getByRole('button', { name: 'All notes', exact: true }).click()
+    await page.getByRole('button', { name: 'Close note', exact: true }).click()
     await expect(page.locator('.en-library-grid')).toBeVisible()
     await card(page, 'Project Alpha').click()
     await expect(page.getByTestId('muya-rust-runtime-editor')).toBeVisible()

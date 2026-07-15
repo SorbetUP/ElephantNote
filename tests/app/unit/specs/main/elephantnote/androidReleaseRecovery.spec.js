@@ -87,17 +87,20 @@ describe('Android release recovery', () => {
     expect(commands).toContain('Refusing to write outside the active vault')
   })
 
-  it('exposes a stable mobile search lifecycle without moving semantic Search back into core', () => {
-    const client = read('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
+  it('installs a stable mobile search lifecycle only in the live Tauri runtime', () => {
+    const clientFactory = read('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
     const bridge = read('Elephant/frontend/src/renderer/src/platform/tauriSearchLifecycleBridge.js')
+    const main = read('Elephant/frontend/src/renderer/src/main.js')
     const runtime = read('Elephant/backend/tauri/src/lib_min.rs')
 
     for (const method of ['initVault', 'inspect', 'rebuild', 'clear', 'disable', 'enable']) {
-      expect(client).toContain(`${method}:`)
-      expect(bridge).toContain(`search.${method}`)
+      expect(clientFactory).not.toContain(`${method}:`)
     }
+    expect(bridge).toContain('Object.assign(clientSearch, lifecycle)')
+    expect(bridge).toContain('Object.assign(bridgeSearch, lifecycle)')
     expect(bridge).toContain('requires the optional Search addon')
     expect(bridge).toContain("status: status?.status || 'ready'")
+    expect(main).toContain('installTauriSearchLifecycleBridge({ target: globalThis, client: elephantnoteClient })')
     expect(runtime).toContain('vault::commands::tauri_search_query')
     expect(runtime).toContain('vault::commands::tauri_search_status')
     expect(runtime).not.toContain('tauri_search_inspect')

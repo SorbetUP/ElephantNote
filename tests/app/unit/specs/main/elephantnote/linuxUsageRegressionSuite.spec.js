@@ -7,6 +7,8 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 const catalog = JSON.parse(read('tests/app/usage/linux/scenarios.json'))
 const suite = read('tests/app/e2e/linux-usage-regressions.spec.js')
 const helpers = read('tests/app/e2e/helpers.js')
+const electronMain = read('tests/app/e2e/electron-main.js')
+const preloadEntry = read('tests/app/e2e/tauri-preload-entry.js')
 const workflow = read('.github/workflows/e2e.yml')
 const config = read('tests/app/e2e/playwright.config.js')
 
@@ -56,8 +58,9 @@ describe('progressive Linux application usage simulations', () => {
     expect(suite).toContain("page.on('pageerror'")
     expect(suite).toContain("message.type() === 'error'")
     expect(suite).toContain("getByTestId('muya-rust-runtime-editor')")
-    expect(helpers).toContain('tests/app/e2e/electron-main.js'.split('/').pop())
-    expect(helpers).toContain('tauri-preload.js')
+    expect(helpers).toContain('electron-main.js')
+    expect(electronMain).toContain('tauri-preload-entry.js')
+    expect(preloadEntry).toContain('tauri-preload.js')
   })
 
   it('runs against the production renderer under Xvfb and retains diagnostics', () => {

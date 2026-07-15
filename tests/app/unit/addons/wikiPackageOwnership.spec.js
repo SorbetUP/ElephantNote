@@ -11,21 +11,26 @@ describe('Wiki physical package ownership', () => {
     const manifest = JSON.parse(read('addons/official/wiki/manifest.json'))
     const source = read('addons/official/wiki/main.v2.js')
 
-    expect(manifest.version).toBe('1.3.0')
+    expect(manifest.version).toBe('1.4.0')
     expect(manifest.runtime.entry).toBe('main.v2.js')
     expect(manifest.permissions.notes.read).toEqual(['*'])
     expect(manifest.permissions.notes.write).toEqual(['Wiki/**'])
-    expect(source).toContain("tauri_addons_notes_read")
-    expect(source).toContain("addonId: ADDON_ID")
+    expect(source).toContain('tauri_addons_notes_read')
+    expect(source).toContain('addonId: ADDON_ID')
   })
 
-  it('publishes a Wiki provider and optionally composes with Search', () => {
+  it('publishes a Wiki provider and composes with Search, Knowledge and AI resources', () => {
     const source = read('addons/official/wiki/main.v2.js')
+    const semantic = read('addons/official/wiki/semanticWikiProposals.js')
     expect(source).toContain("const PROVIDER_RESOURCE = 'wiki.provider'")
     expect(source).toContain("const SEARCH_RESOURCE = 'search.provider'")
+    expect(source).toContain("const KNOWLEDGE_RESOURCE = 'knowledge.provider'")
+    expect(source).toContain("const AI_INFERENCE_RESOURCE = 'ai.inference'")
     expect(source).toContain('api.resources.provide(PROVIDER_RESOURCE')
     expect(source).toContain('this.api.resources.get(SEARCH_RESOURCE)')
     expect(source).toContain("engine: 'package-owned-wiki'")
+    expect(semantic).toContain('semanticCommunities')
+    expect(semantic).toContain('semanticDiscover')
   })
 
   it('does not call the legacy Wiki backend actions', () => {

@@ -10,9 +10,14 @@ import {
 
 const describeBundled = bundled ? describe : describe.skip
 
+const invalidateJsMarkdown = (muya) => {
+  muya._markdownBlockCache?.clear()
+}
+
 const indentSelectedListItem = async (muya) => {
   muya.contentState.indentListItem()
   await settle()
+  invalidateJsMarkdown(muya)
 }
 
 const outdentSelectedListItem = async (muya) => {
@@ -21,6 +26,7 @@ const outdentSelectedListItem = async (muya) => {
   if (!type) throw new Error('Selected Muya list item cannot be outdented.')
   muya.contentState.unindentListItem(block, type)
   await settle()
+  invalidateJsMarkdown(muya)
 }
 
 const traces = [

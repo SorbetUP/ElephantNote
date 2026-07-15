@@ -20,7 +20,7 @@ jobs:
           ref: develop_next-integration-repair
           fetch-depth: 0
       - name: Remove residual core Dashboard ownership and obsolete E2E selectors
-        shell: python
+        shell: python {0}
         run: |
           from pathlib import Path
 

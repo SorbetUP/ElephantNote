@@ -239,6 +239,16 @@ jobs:
             android-startup-build.log
             android-startup-logcat.txt
             android-startup-screen.png
+            android-startup-window.xml
+            android-search-screen.png
+            android-search-window.xml
+            android-search-results-window.xml
+            android-settings-screen.png
+            android-settings-window.xml
+            android-drawer-screen.png
+            android-drawer-window.xml
+            android-workspace-after-search.xml
+            android-workspace-after-settings.xml
             Elephant/backend/tauri/gen/android/app/build/outputs/apk/**/*-debug.apk
           if-no-files-found: warn
           retention-days: 7

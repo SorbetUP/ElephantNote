@@ -10,11 +10,11 @@ const callSearchBridge = (method, payload) => {
   return payload === undefined ? fn() : fn(payload)
 }
 
-const normalizeVaultPathPayload = (payload = '') => {
+const normalizeVaultPath = (payload = '') => {
   const vaultPath = typeof payload === 'string'
     ? payload
     : payload?.vaultPath || payload?.path || ''
-  return { vaultPath: String(vaultPath || '').trim() }
+  return String(vaultPath || '').trim()
 }
 
 const directoryListPayload = (payload = '') =>
@@ -108,7 +108,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
     delete: (relativePath) => call(API.ENTRIES_DELETE, { relativePath })
   },
   search: {
-    initVault: (payload = '') => callSearchBridge('initVault', normalizeVaultPathPayload(payload)),
+    initVault: (payload = '') => callSearchBridge('initVault', normalizeVaultPath(payload)),
     query: (params) => call(API.SEARCH_QUERY, params),
     concepts: (params = {}) => callSearchBridge('concepts', params),
     status: () => call(API.SEARCH_STATUS),

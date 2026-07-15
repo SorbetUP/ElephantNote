@@ -105,15 +105,36 @@ PY
 
 assert_no_renderer_regression() {
   adb logcat -d -v threadtime > "$LOG_FILE"
-  if grep -Eq 'FATAL EXCEPTION|Process: com\.elephantnote\.app|Fatal signal.*com\.elephantnote\.app|SIGABRT|SIGSEGV' "$LOG_FILE"; then
-    echo "A fatal Android crash was detected." >&2
-    grep -E 'FATAL EXCEPTION|AndroidRuntime|Process: com\.elephantnote\.app|Fatal signal|SIGABRT|SIGSEGV' "$LOG_FILE" >&2 || true
-    exit 1
+  local app_pid
+  app_pid="$(adb shell pidof "$PACKAGE_ID" | awk '{print $1}' || true)"
+
+  if ! python3 - "$LOG_FILE" "$PACKAGE_ID" "$app_pid" <<'PY'
+import sys
+from pathlib import Path
+
+log_path, package_id, app_pid = sys.argv[1], sys.argv[2], sys.argv[3].strip()
+failures = []
+for line in Path(log_path).read_text(errors='replace').splitlines():
+    fields = line.split()
+    package_crash = package_id in line and ('Process:' in line or 'Fatal signal' in line)
+    pid_crash = bool(app_pid) and len(fields) > 3 and fields[2] == app_pid and any(
+        marker in line for marker in ('FATAL EXCEPTION', 'SIGABRT', 'SIGSEGV')
+    )
+    if package_crash or pid_crash:
+        failures.append(line)
+if failures:
+    print('A fatal Elephant Android crash was detected.', file=sys.stderr)
+    for line in failures[-80:]:
+        print(line, file=sys.stderr)
+    raise SystemExit(1)
+PY
+  then
+    return 1
   fi
   if grep -Eq 'Tauri/Console:.*(Uncaught|ReferenceError|TypeError|SyntaxError)|Unhandled promise rejection|Command tauri_vault_read_binary not found|search\.initVault is not a function' "$LOG_FILE"; then
     echo "A renderer contract regression was detected during Android interaction testing." >&2
     grep -E 'Tauri/Console:.*(Uncaught|ReferenceError|TypeError|SyntaxError)|Unhandled promise rejection|Command tauri_vault_read_binary not found|search\.initVault is not a function' "$LOG_FILE" >&2 || true
-    exit 1
+    return 1
   fi
 }
 

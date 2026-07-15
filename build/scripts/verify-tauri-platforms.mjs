@@ -127,8 +127,16 @@ assert(
   'Android build script must initialize the generated project with the Android config'
 )
 assert(
-  buildAndroid.includes('cargo tauri android build --debug --apk --config "$ANDROID_CONFIG"'),
-  'Android build script must build with the Android config'
+  buildAndroid.includes('BUILD_ARGS=(android build --apk --target "$ANDROID_TARGET" --config "$ANDROID_CONFIG")'),
+  'Android build script must construct a profile-aware APK build using the Android config and requested target'
+)
+assert(
+  buildAndroid.includes('if [ "$ANDROID_BUILD_PROFILE" = debug ]; then BUILD_ARGS+=(--debug); fi'),
+  'Android debug builds must append the Tauri --debug flag without forcing release builds into debug mode'
+)
+assert(
+  buildAndroid.includes('ELEPHANTNOTE_ANDROID_BUILD=1 cargo tauri "${BUILD_ARGS[@]}"'),
+  'Android build script must execute the validated argument array under the Android renderer build flag'
 )
 assert(
   !buildAndroid.includes('ELEPHANTNOTE_SKIP_LLAMA_BUNDLE'),

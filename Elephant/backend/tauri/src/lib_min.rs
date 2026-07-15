@@ -25,6 +25,7 @@ pub mod vault_layout;
 
 mod android_vault_commands;
 mod debug_commands;
+mod official_addon_catalog;
 mod search_commands;
 mod vault_file_commands;
 #[path = "core_commands.rs"]
@@ -105,6 +106,8 @@ pub fn run() {
             addons::tauri_addons_install,
             addon_catalog::tauri_addons_catalog_list,
             addon_catalog::tauri_addons_catalog_install,
+            official_addon_catalog::tauri_official_addons_catalog_list,
+            official_addon_catalog::tauri_official_addons_catalog_install,
             addon_assets::tauri_addons_assets_allow_directory,
             addon_note_access::tauri_addons_notes_list,
             addon_note_access::tauri_addons_notes_read,

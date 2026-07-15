@@ -26,6 +26,20 @@ describe('Android release recovery', () => {
     expect(build).toContain('renderer contains no unresolved Vite Node builtin stubs')
   })
 
+  it('installs the browser process facade before any renderer module evaluates', () => {
+    const html = read('Elephant/frontend/src/renderer/index.html')
+    const processFacade = html.indexOf('globalThis.process ||=')
+    const addonEntry = html.indexOf('src="/src/addons/addonVueBridge.js"')
+    const mainEntry = html.indexOf('src="/src/main.js"')
+
+    expect(processFacade).toBeGreaterThan(0)
+    expect(processFacade).toBeLessThan(addonEntry)
+    expect(processFacade).toBeLessThan(mainEntry)
+    expect(html).toContain("platform: 'android'")
+    expect(html).toContain("NODE_ENV: 'production'")
+    expect(html).toContain('nextTick: (callback, ...args)')
+  })
+
   it('never leaves Android on a silent white renderer surface', () => {
     const html = read('Elephant/frontend/src/renderer/index.html')
     const main = read('Elephant/frontend/src/renderer/src/main.js')
@@ -38,6 +52,7 @@ describe('Android release recovery', () => {
     expect(main).toContain("surface.dataset.error = 'true'")
     expect(main).toContain('Elephant n’a pas pu démarrer')
     expect(main).toContain('renderStartupFailure(error)')
+    expect(main).toContain("dataset.elephantMounted = 'true'")
     expect(main).not.toContain('setTimeout(() => { throw error }, 0)')
   })
 

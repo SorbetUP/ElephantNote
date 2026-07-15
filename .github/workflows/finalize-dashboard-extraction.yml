@@ -47,6 +47,18 @@ jobs:
           text = contract.read_text().replace("expect(suite).toContain('.en-addon-overview-card')", "expect(suite).toContain('[data-addon-id=\\\"elephant.e2e-note-tools\\\"]')")
           contract.write_text(text)
 
+          platform = Path('.github/workflows/addon-platform-validation.yml')
+          text = platform.read_text()
+          focused_test = '            tests/app/unit/addons/baseOfficialAddonRuntime.spec.js \\\n'
+          anchor = '            tests/app/unit/addons/trustedOfficialActivation.spec.js \\\n'
+          if focused_test not in text:
+            text = text.replace(anchor, anchor + focused_test)
+          marker = '            ElephantDashboardAddon\n'
+          marker_anchor = '            ElephantChatAddon\n'
+          if marker not in text:
+            text = text.replace(marker_anchor, marker + marker_anchor)
+          platform.write_text(text)
+
           helper = Path('Elephant/frontend/app/components/views/dashboardNoteHelpers.js')
           if helper.exists():
             helper.unlink()

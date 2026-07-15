@@ -136,6 +136,7 @@ jobs:
             tests/app/unit/specs/muya/rustLogicalDocument.spec.js \
             tests/app/unit/specs/muya/rustDomRenderer.spec.js \
             tests/app/unit/specs/muya/rustInputController.spec.js \
+            tests/app/unit/specs/muya/rustInputQueueRegression.spec.js \
             tests/app/unit/specs/muya/rustRuntime.spec.js \
             tests/app/unit/specs/muya/rustWasmFactory.spec.js \
             tests/app/unit/specs/muya/rustVueRuntime.spec.js \

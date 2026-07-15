@@ -131,6 +131,12 @@ adb wait-for-device
 adb install -r "$APK"
 adb shell pm clear "$PACKAGE_ID" >/dev/null
 adb shell settings put secure immersive_mode_confirmations confirmed >/dev/null 2>&1 || true
+# The hosted Pixel image occasionally ANRs its launcher during boot. Stop only
+# the launcher packages before testing Elephant so a foreign system dialog
+# cannot cover the application or create a false product failure.
+adb shell am force-stop com.google.android.apps.nexuslauncher >/dev/null 2>&1 || true
+adb shell am force-stop com.android.launcher3 >/dev/null 2>&1 || true
+adb shell input keyevent 4 >/dev/null 2>&1 || true
 adb logcat -c
 adb shell am force-stop "$PACKAGE_ID"
 
@@ -146,6 +152,16 @@ DEADLINE=$((SECONDS + STARTUP_WAIT_SECONDS))
 while [ "$SECONDS" -lt "$DEADLINE" ]; do
   capture_ui "$UI_DUMP_FILE" || true
   if [ -s "$UI_DUMP_FILE" ]; then
+    if grep -Eq 'Elephant.*isn.t responding|com\.elephantnote\.app' "$UI_DUMP_FILE" && grep -Eq 'Close app|Wait' "$UI_DUMP_FILE"; then
+      echo "Elephant itself triggered an Android ANR dialog." >&2
+      cat "$UI_DUMP_FILE" >&2
+      exit 1
+    fi
+    if grep -Eq 'Pixel Launcher isn.t responding|System UI isn.t responding' "$UI_DUMP_FILE"; then
+      tap_ui_node "$UI_DUMP_FILE" 'Close app' || tap_ui_node "$UI_DUMP_FILE" 'Wait' || true
+      sleep 2
+      continue
+    fi
     if grep -Eq 'Choose your first vault|Stockage privé|Dossier Android|Search notes' "$UI_DUMP_FILE"; then
       READY=1
       break

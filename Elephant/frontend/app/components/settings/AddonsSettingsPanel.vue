@@ -85,11 +85,41 @@
       <p v-if="message" class="en-addons-feedback" :class="{ error: messageIsError }">{{ message }}</p>
       <p v-if="lastError" class="en-addons-feedback error">{{ lastError }}</p>
 
-      <section class="en-addon-browser">
+      <section v-if="!selectedEntry" class="en-addon-catalogue" aria-label="Addon catalogue">
+        <button
+          v-for="entry in browserEntries"
+          :key="entry.id"
+          class="en-addon-tile"
+          :class="{ installed: entry.installed }"
+          :data-addon-id="entry.id"
+          type="button"
+          @click="openAddon(entry)"
+        >
+          <span class="en-addon-tile-icon"><AddonIcon :name="entry.manifest.icon" /></span>
+          <span class="en-addon-tile-copy">
+            <span class="en-addon-tile-title-row">
+              <strong>{{ entry.manifest.name }}</strong>
+              <small>v{{ entry.manifest.version }}</small>
+            </span>
+            <span class="en-addon-tile-description">{{ entry.manifest.description || 'No description.' }}</span>
+            <span class="en-addon-tile-status">{{ entryStatusLabel(entry) }}</span>
+          </span>
+          <ChevronRight aria-hidden="true" />
+        </button>
+
+        <div v-if="communityAddonsEnabled && catalogLoading" class="en-addons-empty">Loading the addon catalogue…</div>
+        <div v-else-if="communityAddonsEnabled && catalogError" class="en-addons-empty error"><strong>Catalogue unavailable</strong><span>{{ catalogError }}</span></div>
+        <div v-else-if="!browserEntries.length" class="en-addons-empty">{{ query ? 'No addon matches this search.' : 'No addon is available.' }}</div>
+      </section>
+
+      <section v-else class="en-addon-browser en-addon-browser-detail-mode">
         <aside class="en-addon-browser-sidebar">
           <header class="en-addon-browser-sidebar-header">
-            <strong>{{ browserEntries.length }} addon{{ browserEntries.length === 1 ? '' : 's' }}</strong>
-            <span>Official and community packages</span>
+            <button class="en-addon-browser-back" type="button" @click="closeAddonDetails">
+              <ArrowLeft aria-hidden="true" />
+              <span>Catalogue</span>
+            </button>
+            <small>{{ browserEntries.length }} addon{{ browserEntries.length === 1 ? '' : 's' }}</small>
           </header>
           <div class="en-addon-browser-list" role="listbox" aria-label="Addon catalogue">
             <button
@@ -110,14 +140,10 @@
               </span>
               <ChevronRight aria-hidden="true" />
             </button>
-
-            <div v-if="communityAddonsEnabled && catalogLoading" class="en-addons-empty">Loading the addon catalogue…</div>
-            <div v-else-if="communityAddonsEnabled && catalogError" class="en-addons-empty error"><strong>Catalogue unavailable</strong><span>{{ catalogError }}</span></div>
-            <div v-else-if="!browserEntries.length" class="en-addons-empty">{{ query ? 'No addon matches this search.' : 'No addon is available.' }}</div>
           </div>
         </aside>
 
-        <main v-if="selectedEntry" class="en-addon-browser-detail" :data-selected-addon-id="selectedEntry.id">
+        <main class="en-addon-browser-detail" :data-selected-addon-id="selectedEntry.id">
           <header class="en-addon-detail-header">
             <span class="en-addon-detail-logo"><AddonIcon :name="selectedEntry.manifest.icon" /></span>
             <div class="en-addon-detail-heading">
@@ -149,7 +175,7 @@
 
           <section v-if="selectedEntry.id === AI_PARENT_ID && aiModules.length" class="en-addon-detail-section">
             <header>
-              <div><h3>AI modules</h3><p>Every module remains independently downloadable and is also visible in the catalogue list.</p></div>
+              <div><h3>AI modules</h3><p>Each module remains independently downloadable from the catalogue.</p></div>
               <span>{{ installedAiModuleCount }}/{{ aiModules.length }}</span>
             </header>
             <div class="en-ai-module-list">
@@ -198,12 +224,6 @@
             </div>
           </section>
         </main>
-
-        <main v-else class="en-addon-browser-placeholder">
-          <Package aria-hidden="true" />
-          <strong>Select an addon</strong>
-          <span>Review its description, permissions, commands and installation state.</span>
-        </main>
       </section>
     </template>
 
@@ -216,7 +236,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { open } from '@tauri-apps/plugin-dialog'
-import { Check, ChevronRight, Layers3, Package, Plus, RefreshCw, Search } from '@lucide/vue'
+import { ArrowLeft, Check, ChevronRight, Layers3, Package, Plus, RefreshCw, Search } from '@lucide/vue'
 import { useAddonsStore } from '@/store/addons'
 import AddonIcon from './AddonIcon.vue'
 import { useAddonsSettings } from './useAddonsSettings'
@@ -332,12 +352,16 @@ const entryStatusLabel = (entry) => {
 }
 
 watch(browserEntries, (entries) => {
-  if (selectedAddonId.value && entries.some((entry) => entry.id === selectedAddonId.value)) return
-  selectedAddonId.value = entries[0]?.id || ''
-}, { immediate: true })
+  if (!selectedAddonId.value) return
+  if (!entries.some((entry) => entry.id === selectedAddonId.value)) selectedAddonId.value = ''
+})
 
 const openAddon = (entry) => {
   selectedAddonId.value = entry?.id || ''
+}
+
+const closeAddonDetails = () => {
+  selectedAddonId.value = ''
 }
 
 const dispatchPackEvent = (name, detail = undefined) => {
@@ -346,6 +370,7 @@ const dispatchPackEvent = (name, detail = undefined) => {
 
 watch(packQuery, (value) => dispatchPackEvent(PACK_SEARCH_EVENT, { query: value }))
 watch(activePage, async (page) => {
+  if (page !== 'addons') selectedAddonId.value = ''
   await nextTick()
   if (page === 'packs') dispatchPackEvent(PACK_SEARCH_EVENT, { query: packQuery.value })
 })

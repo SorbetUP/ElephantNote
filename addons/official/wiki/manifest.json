@@ -2,8 +2,8 @@
   "id": "elephant.wiki",
   "parentAddonId": "elephant.ai",
   "name": "Wiki",
-  "version": "1.3.0",
-  "description": "Owns Wiki proposals and pages, and composes with the optional Search provider.",
+  "version": "1.4.0",
+  "description": "Owns Wiki proposals and pages, semantic topic qualification and explicit lexical fallback.",
   "author": "Elephant",
   "icon": "book-open-text",
   "apiVersion": 1,
@@ -23,7 +23,8 @@
     }
   },
   "requires": {
-    "elephant.ai": ">=2.1.0"
+    "elephant.ai": ">=2.2.0",
+    "elephant.knowledge": ">=1.1.0"
   },
   "contributes": {
     "runtimeMode": "trusted",

@@ -10,10 +10,12 @@ pub mod pipeline;
 pub mod relation_extraction;
 pub mod relation_storage;
 pub mod relations;
+pub mod service;
 pub mod storage;
 pub mod taxonomy;
 pub mod taxonomy_storage;
 pub mod wiki_core;
+pub mod wiki_discovery;
 pub mod wiki_graph_projection;
 pub mod wiki_storage;
 
@@ -42,6 +44,7 @@ pub use relations::{
     stable_relation_id, KnowledgeNodeKind, KnowledgeNodeRef, KnowledgeRelation, RelationOrigin,
     RelationStatus, RelationType, RelationValidation,
 };
+pub use service::KnowledgeService;
 pub use storage::KnowledgeStore;
 pub use taxonomy::{
     canonical_tag_key, clean_display_name, normalize_alias, stable_tag_id, CanonicalTag,
@@ -52,4 +55,9 @@ pub use wiki_core::{
     build_wiki_synthesis_request, collect_wiki_sources, parse_and_render_wiki, render_wiki,
     slugify, source_hash, wiki_draft_from_rendered, RenderedWiki, WikiCitation, WikiClaim,
     WikiDraft, WikiDraftStatus, WikiSection, WikiSourceChunk, WikiSynthesis, WikiValidation,
+};
+pub use wiki_discovery::{
+    discover_topic_communities, finalize_semantic_candidates, load_discovery_documents,
+    provisional_labels, SemanticWikiCandidate, WikiDiscoveryDocument, WikiTopicCommunity,
+    WikiTopicLabel,
 };

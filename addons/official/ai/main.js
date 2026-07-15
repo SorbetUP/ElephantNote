@@ -1,3 +1,5 @@
+import { createAiInferenceResource } from './inference'
+
 const ADDON_ID = 'elephant.ai'
 const CONFIG_KEY = 'provider-config'
 const PAGE_DEFINITIONS = Object.freeze([
@@ -8,9 +10,24 @@ const PAGE_DEFINITIONS = Object.freeze([
 ])
 
 const PROVIDER_DEFAULTS = Object.freeze({
-  'openai-compatible': { label: 'OpenAI-compatible API', endpoint: 'https://api.openai.com/v1' },
-  openrouter: { label: 'OpenRouter', endpoint: 'https://openrouter.ai/api/v1' },
-  mistral: { label: 'Mistral', endpoint: 'https://api.mistral.ai/v1' }
+  'openai-compatible': {
+    label: 'OpenAI-compatible API',
+    endpoint: 'https://api.openai.com/v1',
+    chatModel: '',
+    embeddingModel: ''
+  },
+  openrouter: {
+    label: 'OpenRouter',
+    endpoint: 'https://openrouter.ai/api/v1',
+    chatModel: '',
+    embeddingModel: ''
+  },
+  mistral: {
+    label: 'Mistral',
+    endpoint: 'https://api.mistral.ai/v1',
+    chatModel: '',
+    embeddingModel: ''
+  }
 })
 
 const EMPTY_CONFIG = Object.freeze({
@@ -59,11 +76,16 @@ export default class ElephantAiAddon {
       providers: {
         ...clone(EMPTY_CONFIG.providers),
         ...clone(config?.providers || {})
+      },
+      routes: {
+        ...clone(EMPTY_CONFIG.routes),
+        ...clone(config?.routes || {})
       }
     }
     this.providers = Array.isArray(this.config.providers.list)
       ? clone(this.config.providers.list)
       : []
+    return this.config
   }
 
   scheduleSave() {
@@ -78,7 +100,8 @@ export default class ElephantAiAddon {
       providers: {
         ...clone(this.config?.providers || {}),
         list: clone(this.providers)
-      }
+      },
+      routes: clone(this.config?.routes || {})
     }
     await this.api.storage.set(CONFIG_KEY, payload)
     this.config = payload
@@ -96,28 +119,29 @@ export default class ElephantAiAddon {
       endpoint: defaults.endpoint || '',
       apiKey: '',
       headers: {},
+      chatModel: defaults.chatModel || '',
+      embeddingModel: defaults.embeddingModel || '',
       enabled: true
     }
   }
 
   async onload(api) {
+    await this.loadConfig()
     api.resources.provide('ai.config', Object.freeze({
-      get: async() => {
-        await this.loadConfig()
-        return clone(this.config)
-      },
-      set: async(config) => {
+      get: async () => clone(await this.loadConfig()),
+      set: async (config) => {
         this.config = config && typeof config === 'object' ? clone(config) : clone(EMPTY_CONFIG)
         this.providers = Array.isArray(this.config?.providers?.list)
           ? clone(this.config.providers.list)
           : []
         return await this.saveConfig()
       },
-      listProviders: async() => {
+      listProviders: async () => {
         await this.loadConfig()
         return clone(this.providers.filter((provider) => provider?.enabled !== false))
       }
     }))
+    api.resources.provide('ai.inference', createAiInferenceResource(api, () => this.loadConfig()))
 
     api.ui.registerStyle(`
       .elephant-ai-settings { display: grid; gap: 14px; }
@@ -211,7 +235,7 @@ export default class ElephantAiAddon {
     const heading = node(documentRef, 'div')
     heading.append(
       node(documentRef, 'h4', '', 'External API providers'),
-      node(documentRef, 'p', '', 'Only configured API providers are exposed to installed AI modules.')
+      node(documentRef, 'p', '', 'Configured chat and embedding models are exposed through the versioned ai.inference resource.')
     )
     const addButton = node(documentRef, 'button', '', 'Add provider')
     addButton.type = 'button'
@@ -286,6 +310,14 @@ export default class ElephantAiAddon {
     apiKey.type = 'password'
     apiKey.autocomplete = 'off'
     apiKey.value = provider.apiKey || ''
+    const chatModel = node(documentRef, 'input')
+    chatModel.type = 'text'
+    chatModel.value = provider.chatModel || ''
+    chatModel.placeholder = 'Chat model id'
+    const embeddingModel = node(documentRef, 'input')
+    embeddingModel.type = 'text'
+    embeddingModel.value = provider.embeddingModel || ''
+    embeddingModel.placeholder = 'Embedding model id'
     const enabled = node(documentRef, 'input')
     enabled.type = 'checkbox'
     enabled.checked = provider.enabled !== false
@@ -295,7 +327,9 @@ export default class ElephantAiAddon {
       bind('Name', name, 'label'),
       bind('Base URL', endpoint, 'endpoint', (value) => value.trim(), true),
       bind('API key', apiKey, 'apiKey'),
-      bind('Enabled', enabled, 'enabled', Boolean)
+      bind('Enabled', enabled, 'enabled', Boolean),
+      bind('Chat model', chatModel, 'chatModel'),
+      bind('Embedding model', embeddingModel, 'embeddingModel')
     )
 
     const actions = node(documentRef, 'div', 'elephant-ai-provider-actions')

@@ -1,8 +1,8 @@
 {
   "id": "elephant.knowledge",
   "name": "Knowledge",
-  "version": "1.0.0",
-  "description": "Owns incremental vault indexing, semantic relations, graph projection and generated Wiki drafts.",
+  "version": "1.2.0",
+  "description": "Owns cross-platform vault indexing, embeddings, semantic topic communities, graph projection and generated Wiki drafts.",
   "author": "Elephant",
   "icon": "brain",
   "apiVersion": 1,
@@ -29,12 +29,14 @@
     },
     "mobile": {
       "android": {
-        "supported": false,
-        "reason": "Android uses the renderer-owned Search, Wiki and Graph fallbacks until a package-owned SQLite host is available."
+        "supported": true,
+        "runner": "embedded-rust",
+        "host": "elephant-knowledge-v1"
       },
       "ios": {
-        "supported": false,
-        "reason": "iOS uses the renderer-owned Search, Wiki and Graph fallbacks until a package-owned SQLite host is available."
+        "supported": true,
+        "runner": "embedded-rust",
+        "host": "elephant-knowledge-v1"
       }
     }
   },

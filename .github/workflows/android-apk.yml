@@ -6,6 +6,7 @@ on:
     branches:
       - develop_next-mobile-recovery
       - develop_next-unified-candidate2
+      - develop_next-integration-repair
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -24,7 +25,8 @@ jobs:
       github.event_name == 'push' ||
       github.event.pull_request.head.ref == 'develop_next' ||
       github.event.pull_request.head.ref == 'develop_next-mobile-recovery' ||
-      github.event.pull_request.head.ref == 'develop_next-unified-candidate2'
+      github.event.pull_request.head.ref == 'develop_next-unified-candidate2' ||
+      github.event.pull_request.head.ref == 'develop_next-integration-repair'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -69,7 +71,8 @@ jobs:
         run: |
           set -euxo pipefail
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/specs/main/elephantnote/androidReleaseRecovery.spec.js
+            tests/app/unit/specs/main/elephantnote/androidReleaseRecovery.spec.js \
+            tests/app/unit/specs/main/elephantnote/mobileIntegrationRepair.spec.js
 
       - name: Cache Cargo and Gradle
         uses: actions/cache@v4
@@ -138,7 +141,8 @@ jobs:
       github.event_name == 'push' ||
       github.event.pull_request.head.ref == 'develop_next' ||
       github.event.pull_request.head.ref == 'develop_next-mobile-recovery' ||
-      github.event.pull_request.head.ref == 'develop_next-unified-candidate2'
+      github.event.pull_request.head.ref == 'develop_next-unified-candidate2' ||
+      github.event.pull_request.head.ref == 'develop_next-integration-repair'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:

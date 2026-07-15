@@ -1,3 +1,4 @@
+import '../mobile-recovery.css'
 import { useNavigationStore } from 'elephant-front/stores/navigationStore'
 import { useSearchStore } from 'elephant-front/stores/searchStore'
 import { useVaultStore } from 'elephant-front/stores/vaultStore'
@@ -35,32 +36,32 @@ const installAndroidBackNavigation = (target = globalThis) => {
       if (!target.dispatchEvent(backEvent)) {
         handled = true
       } else {
-      const settingsClose = target.document.querySelector('.en-settings-close')
-      if (settingsClose) {
-        settingsClose.click()
-        handled = true
-      } else {
-        const searchStore = useSearchStore()
-        if (searchStore.isOpen) {
-          searchStore.close()
+        const settingsClose = target.document.querySelector('.en-settings-close')
+        if (settingsClose) {
+          settingsClose.click()
           handled = true
-        } else if (target.document.querySelector(CLOSE_DRAWER_SELECTOR)) {
-          handled = closeDrawer(target)
         } else {
-          const vaultStore = useVaultStore()
-          const navigationStore = useNavigationStore()
-          if (vaultStore.openedNotePath) {
-            vaultStore.closeNote()
+          const searchStore = useSearchStore()
+          if (searchStore.isOpen) {
+            searchStore.close()
             handled = true
+          } else if (target.document.querySelector(CLOSE_DRAWER_SELECTOR)) {
+            handled = closeDrawer(target)
           } else {
-            const previous = navigationStore.back()
-            if (previous) {
-              await vaultStore.navigateTo(previous)
+            const vaultStore = useVaultStore()
+            const navigationStore = useNavigationStore()
+            if (vaultStore.openedNotePath) {
+              vaultStore.closeNote()
               handled = true
+            } else {
+              const previous = navigationStore.back()
+              if (previous) {
+                await vaultStore.navigateTo(previous)
+                handled = true
+              }
             }
           }
         }
-      }
       }
     } catch (error) {
       console.error('[mobile-navigation] Android back handling failed', error)

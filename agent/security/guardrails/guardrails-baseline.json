@@ -1,11 +1,17 @@
 {
-  "description": "Temporary security debt accepted so the guardrail can block new regressions while existing Tauri filesystem permissions are narrowed incrementally. The native addon publisher is an explicit release workflow with a reviewed branch-write requirement.",
+  "description": "Temporary security debt accepted so the guardrail can block new regressions while existing Tauri filesystem permissions are narrowed incrementally. Tauri application-data aliases are identifier-scoped. The native addon publisher is an explicit release workflow with a reviewed branch-write requirement.",
   "acceptedFindings": [
     {
       "id": "TAURI_FS_DEFAULT_PERMISSION",
       "file": "Elephant/backend/tauri/capabilities/default.json",
       "value": "fs:default",
       "reason": "Legacy Tauri file bridge still relies on the broad fs plugin default. Replace with explicit fs permissions and backend-validated vault writes."
+    },
+    {
+      "id": "TAURI_FS_SCOPE_BROAD",
+      "file": "Elephant/backend/tauri/capabilities/default.json",
+      "value": "$APPDATA/**/*",
+      "reason": "Tauri resolves $APPDATA to Elephant's identifier-scoped application data directory. The renderer bootstrap and settings persistence require access to that application-owned directory."
     },
     {
       "id": "TAURI_FS_SCOPE_BROAD",

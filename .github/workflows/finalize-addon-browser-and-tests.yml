@@ -1,0 +1,51 @@
+name: Finalize addon browser and base addon probes
+
+on:
+  push:
+    branches:
+      - develop_next-integration-repair
+    paths:
+      - .github/workflows/finalize-addon-browser-and-tests.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop_next-integration-repair
+          fetch-depth: 0
+      - name: Apply final source corrections
+        shell: python {0}
+        run: |
+          from pathlib import Path
+
+          panel = Path('Elephant/frontend/app/components/settings/AddonsSettingsPanel.vue')
+          text = panel.read_text()
+          text = text.replace(
+              'class="en-addon-browser en-addon-browser-detail-mode"',
+              'class="en-addon-browser" :class="{ \'en-addon-browser-detail-mode\': true }"'
+          )
+          panel.write_text(text)
+
+          probe = Path('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js')
+          text = probe.read_text()
+          text = text.replace("readJson('packs/base.enaddonpack')", "readJson('addons/packs/base.enaddonpack')")
+          text = text.replace("readJson('packs/develop-parity.enaddonpack')", "readJson('addons/packs/develop-parity.enaddonpack')")
+          probe.write_text(text)
+
+          workflow = Path('.github/workflows/finalize-addon-browser-and-tests.yml')
+          workflow.unlink()
+      - name: Commit final corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Finalize addon catalogue and base addon probes'
+          git push origin HEAD:develop_next-integration-repair

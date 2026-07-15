@@ -215,9 +215,32 @@ open_seeded_note() {
   capture_checkpoint "${prefix}-drawer"
   grep -q 'Getting Started' "${prefix}-drawer.xml"
   tap_ui_node "${prefix}-drawer.xml" 'Getting Started'
-  sleep 4
-  capture_checkpoint "${prefix}-open"
-  assert_screens_differ "${prefix}-drawer.png" "${prefix}-open.png" 1.0 "${prefix}_open"
+  sleep 2
+  capture_checkpoint "${prefix}-expanded"
+
+  if grep -q 'Welcome' "${prefix}-expanded.xml"; then
+    tap_ui_node "${prefix}-expanded.xml" 'Welcome'
+  elif grep -q 'Getting Started.md' "${prefix}-expanded.xml"; then
+    tap_ui_node "${prefix}-expanded.xml" 'Getting Started.md'
+  else
+    echo 'The Getting Started folder exposed no seeded note.' >&2
+    cat "${prefix}-expanded.xml" >&2
+    return 1
+  fi
+
+  local deadline=$((SECONDS + 35))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    capture_ui "${prefix}-open.xml" || true
+    if [ -s "${prefix}-open.xml" ] && grep -Fq 'Close note' "${prefix}-open.xml"; then
+      adb exec-out screencap -p > "${prefix}-open.png"
+      assert_screens_differ "${prefix}-expanded.png" "${prefix}-open.png" 1.0 "${prefix}_open"
+      return 0
+    fi
+    sleep 2
+  done
+  echo 'The seeded note did not open in the Android editor.' >&2
+  [ -s "${prefix}-open.xml" ] && cat "${prefix}-open.xml" >&2
+  return 1
 }
 
 scenario_library_layout_toggle() {

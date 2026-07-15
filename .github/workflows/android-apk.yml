@@ -1,0 +1,123 @@
+name: Android APK Review Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: android-apk-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    name: Build arm64 debug APK
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'develop_next'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CARGO_TERM_COLOR: always
+      NDK_VERSION: 27.2.12479018
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and NDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sdkmanager --install \
+            'platform-tools' \
+            'platforms;android-35' \
+            'build-tools;35.0.0' \
+            "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Setup Rust Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,wasm32-unknown-unknown
+
+      - uses: ./.github/actions/setup
+
+      - name: Cache Cargo and Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-tauri
+            ~/.cargo/bin/wasm-bindgen
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            Elephant/backend/tauri/target
+          key: ${{ runner.os }}-android-apk-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml', 'Elephant/crates/muya-wasm/Cargo.lock', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-android-apk-
+
+      - name: Install Tauri CLI
+        shell: bash
+        run: |
+          if ! cargo tauri --version >/dev/null 2>&1; then
+            cargo install tauri-cli --version '^2.10.0' --locked
+          fi
+
+      - name: Install exact wasm-bindgen CLI
+        shell: bash
+        run: |
+          VERSION=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
+            | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
+          if ! wasm-bindgen --version 2>/dev/null | grep -q "${VERSION}$"; then
+            cargo install wasm-bindgen-cli --version "$VERSION" --locked
+          fi
+
+      - name: Initialize Android project
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd Elephant/backend/tauri
+          if [ ! -d gen/android ]; then
+            cargo tauri android init --config tauri.android.conf.json
+          fi
+
+      - name: Build review APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd Elephant/backend/tauri
+          cargo tauri android build \
+            --debug \
+            --apk \
+            --target aarch64 \
+            --config tauri.android.conf.json
+
+      - name: Collect APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p build/android-review
+          find Elephant/backend/tauri/gen/android/app/build/outputs/apk \
+            -type f -name '*.apk' -print -exec cp {} build/android-review/Elephant-develop_next-arm64-debug.apk \;
+          test -s build/android-review/Elephant-develop_next-arm64-debug.apk
+          sha256sum build/android-review/Elephant-develop_next-arm64-debug.apk \
+            | tee build/android-review/SHA256SUMS.txt
+
+      - name: Upload Android review APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Elephant-develop_next-Android-arm64-debug
+          path: build/android-review/
+          if-no-files-found: error
+          retention-days: 14

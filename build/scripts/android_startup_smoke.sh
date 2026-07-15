@@ -272,8 +272,10 @@ adb exec-out screencap -p > android-search-results-screen.png
 assert_screens_differ android-search-screen.png android-search-results-screen.png 0.35 search_query
 assert_no_renderer_regression
 
-# Back must close the teleported modal before testing the workspace controls.
-adb shell input keyevent 4
+# Close the dialog by tapping its backdrop. A single Android Back press may
+# only hide the soft keyboard and would make the following settings tap close
+# Search instead of opening Settings.
+tap_relative_to_screenshot android-search-results-screen.png 0.50 0.82
 sleep 2
 capture_ui android-workspace-after-search.xml
 adb exec-out screencap -p > android-workspace-after-search.png
@@ -283,20 +285,26 @@ tap_ui_node android-workspace-after-search.xml 'Settings'
 sleep 3
 capture_ui android-settings-window.xml
 adb exec-out screencap -p > android-settings-screen.png
+assert_screens_differ android-workspace-after-search.png android-settings-screen.png 3.0 settings_open
 assert_no_renderer_regression
-if ! grep -q 'Settings' android-settings-window.xml; then
-  echo "The Android Settings page did not open." >&2
+if ! grep -Eq 'ElephantNote settings|Close settings|Color mode|Settings sections' android-settings-window.xml; then
+  echo "The Android Settings page did not expose its dialog controls." >&2
   cat android-settings-window.xml >&2
   exit 1
 fi
 
-adb shell input keyevent 4
+# Close settings through its explicit accessible control before opening the drawer.
+tap_ui_node android-settings-window.xml 'Close settings'
 sleep 2
 capture_ui android-workspace-after-settings.xml
+adb exec-out screencap -p > android-workspace-after-settings.png
+assert_screens_differ android-settings-screen.png android-workspace-after-settings.png 3.0 settings_close
+
 tap_ui_node android-workspace-after-settings.xml 'Open navigation'
 sleep 2
 capture_ui android-drawer-window.xml
 adb exec-out screencap -p > android-drawer-screen.png
+assert_screens_differ android-workspace-after-settings.png android-drawer-screen.png 3.0 drawer_open
 assert_no_renderer_regression
 if ! grep -Eq 'All notes|Getting Started' android-drawer-window.xml; then
   echo "The Android navigation drawer did not expose the vault tree." >&2

@@ -1,8 +1,8 @@
 {
   "id": "elephant.code-execution",
   "name": "Code execution",
-  "version": "2.1.0",
-  "description": "Runs fenced code blocks with selectable package-owned interpreter sidecars.",
+  "version": "2.2.0",
+  "description": "Runs fenced code blocks with package-owned interpreters, bounded output, timeout and interruption.",
   "author": "Elephant",
   "apiVersion": 1,
   "minAppVersion": "0.18.9",
@@ -16,8 +16,8 @@
     "native": true
   },
   "native": {
-    "protocol": "elephant-addon-sidecar-v1",
-    "runner": "process",
+    "protocol": "elephant-addon-service-v1",
+    "runner": "service",
     "sidecars": {
       "macos-aarch64": "native/macos-aarch64/elephant-code-execution",
       "macos-x86_64": "native/macos-x86_64/elephant-code-execution",
@@ -27,11 +27,11 @@
     "mobile": {
       "android": {
         "supported": false,
-        "reason": "Process sidecars cannot run on Android; a package-owned Android host adapter is required."
+        "reason": "Downloaded process services cannot run on Android; the package-owned Web Worker variant is built separately."
       },
       "ios": {
         "supported": false,
-        "reason": "Downloaded process sidecars cannot run on iOS; a package-owned iOS host adapter is required."
+        "reason": "Downloaded process services cannot run on iOS; the package-owned Web Worker variant is built separately."
       }
     }
   },

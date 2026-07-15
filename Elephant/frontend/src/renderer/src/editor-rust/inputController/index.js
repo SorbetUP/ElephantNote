@@ -94,14 +94,14 @@ export class ElephantRustInputController {
       return
     }
 
-    const selection = this.readSelection()
-    if (!selection) return
     if (event.inputType === 'deleteContentForward') {
-      handleDeleteForward(this, event, selection)
+      const selection = this.readSelection()
+      if (selection) handleDeleteForward(this, event, selection)
       return
     }
     if (DELETE_UNIT_INPUTS.has(event.inputType)) {
-      handleDeleteUnit(this, event, selection)
+      const selection = this.readSelection()
+      if (selection) handleDeleteUnit(this, event, selection)
       return
     }
 
@@ -109,6 +109,8 @@ export class ElephantRustInputController {
     if (!command) return
     event.preventDefault()
     this.schedule(async () => {
+      const selection = this.readSelection()
+      if (!selection) return
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(command)
     })
@@ -127,13 +129,13 @@ export class ElephantRustInputController {
   }
 
   handlePaste(event) {
-    const selection = this.readSelection()
-    if (!selection) return
     const markdown = markdownFromClipboard(event, this.container.ownerDocument)
     if (markdown === null) return
     event.preventDefault()
     event.stopPropagation?.()
     this.schedule(async () => {
+      const selection = this.readSelection()
+      if (!selection) return
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
     })

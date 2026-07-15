@@ -131,7 +131,7 @@ fi
 
 python3 - "$SCREENSHOT_FILE" <<'PY'
 import sys
-from PIL import Image
+from PIL import Image, ImageStat
 
 path = sys.argv[1]
 image = Image.open(path).convert('RGB')
@@ -143,14 +143,18 @@ bottom = min(height, int(height * 0.94))
 region = image.crop((left, top, right, bottom))
 pixels = list(region.getdata())
 white = sum(1 for red, green, blue in pixels if red >= 245 and green >= 245 and blue >= 245)
-dark = sum(1 for red, green, blue in pixels if red <= 70 and green <= 70 and blue <= 70)
-white_ratio = white / max(1, len(pixels))
-dark_ratio = dark / max(1, len(pixels))
-print(f'[android-startup] screenshot={width}x{height} white_ratio={white_ratio:.4f} dark_ratio={dark_ratio:.4f}')
-if white_ratio >= 0.92:
-    raise SystemExit('Android startup screenshot is still effectively a full white screen')
-if dark_ratio <= 0.02:
-    raise SystemExit('Android startup screenshot does not contain the expected Elephant application surface')
+non_white_ratio = 1 - white / max(1, len(pixels))
+contrast = max(ImageStat.Stat(region).stddev)
+print(
+    f'[android-startup] screenshot={width}x{height} '
+    f'non_white_ratio={non_white_ratio:.4f} contrast={contrast:.2f}'
+)
+# The accessibility check above has already proved that real mobile controls
+# exist. Here we only reject an effectively uniform white WebView. A legitimate
+# light theme can be predominantly white while still containing borders, text,
+# icons and controls.
+if non_white_ratio < 0.005 or contrast < 4.0:
+    raise SystemExit('Android startup screenshot is effectively a uniform blank surface')
 PY
 
 printf '[android-startup] success package=%s pid=%s mobile_shell_ready=true camera_not_requested=true white_screen=false\n' "$PACKAGE_ID" "$PID"

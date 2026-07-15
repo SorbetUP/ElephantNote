@@ -9,6 +9,17 @@
         v-if="init"
         :class="{ 'muya-runtime-underlay': muyaRuntimeDocumentActive }"
       />
+      <button
+        v-if="muyaRuntimeDocumentActive"
+        class="muya-runtime-close-note"
+        type="button"
+        aria-label="Close note"
+        title="Close note"
+        @click="closeMuyaRuntimeDocument"
+      >
+        <span aria-hidden="true">←</span>
+        <span>All notes</span>
+      </button>
       <MuyaRuntimeEditor
         v-if="init && muyaRuntimeEnabled && hasOpenDocument"
         v-show="muyaRuntimeDocumentActive"
@@ -112,6 +123,12 @@ const muyaRuntimeMarkdown = computed({
 
 const handleMuyaRuntimeChange = (value) => {
   muyaRuntimeMarkdown.value = value
+}
+
+const closeMuyaRuntimeDocument = () => {
+  const file = editorStore.currentFile
+  if (!file?.id) return
+  editorStore.CLOSE_TAB(file)
 }
 
 watch(theme, (value, oldValue) => {
@@ -297,13 +314,50 @@ onBeforeUnmount(() => {
   opacity: 0;
   pointer-events: none;
 }
+.muya-runtime-close-note {
+  position: absolute;
+  z-index: 22;
+  top: 12px;
+  left: 16px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--editorColor, #222) 18%, transparent);
+  border-radius: 8px;
+  color: var(--editorColor, #222);
+  background: color-mix(in srgb, var(--editorBgColor, #fff) 92%, transparent);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 8%);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.muya-runtime-close-note:hover,
+.muya-runtime-close-note:focus-visible {
+  background: var(--editorBgColor, #fff);
+  outline: 2px solid color-mix(in srgb, var(--primaryColor, #6d5dfc) 42%, transparent);
+  outline-offset: 1px;
+}
 .muya-runtime-production-editor {
   position: absolute;
   inset: 0;
   z-index: 20;
   min-height: 100vh;
-  padding: 48px 72px;
+  padding: 52px 72px 48px;
   overflow: auto;
   background: var(--editorBgColor);
+}
+@media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  .muya-runtime-close-note {
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    left: 8px;
+    min-height: 40px;
+    padding-inline: 12px;
+  }
+  .muya-runtime-production-editor {
+    padding: calc(env(safe-area-inset-top, 0px) + 58px) 18px calc(env(safe-area-inset-bottom, 0px) + 28px);
+  }
 }
 </style>

@@ -7,6 +7,7 @@ const PROVIDER_RESOURCE = 'search.provider'
 const KNOWLEDGE_RESOURCE = 'knowledge.provider'
 const AI_INFERENCE_RESOURCE = 'ai.inference'
 const INDEX_VERSION = 2
+const LOCAL_ENGINE = Object.freeze({ engine: 'package-owned-bm25' })
 
 const DEFAULT_CONFIG = Object.freeze({
   enabled: true,
@@ -299,7 +300,7 @@ export default class ElephantSearchAddon {
       notesIndexed: this.index.documents.length,
       builtAt: this.index.builtAt,
       rebuilding: Boolean(this.rebuildPromise),
-      engine: this.knowledgeProvider() ? 'knowledge-provider' : 'package-owned-bm25',
+      engine: this.knowledgeProvider() ? 'knowledge-provider' : LOCAL_ENGINE.engine,
       semanticVectors: semanticDocuments,
       semanticModel: String(this.semanticState?.status?.modelId || this.semanticState?.model || ''),
       semanticAvailable: this.semanticState?.available === true,

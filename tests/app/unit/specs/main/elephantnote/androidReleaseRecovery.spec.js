@@ -26,13 +26,15 @@ describe('Android release recovery', () => {
     expect(build).toContain('renderer contains no unresolved Vite Node builtin stubs')
   })
 
-  it('builds one signed ARM64 release APK with deterministic Android resources', () => {
+  it('builds one optimized signed ARM64 release APK under 24 MiB', () => {
     const build = read('build/scripts/build_dev_apk.sh')
     const activity = read('build/android/MainActivity.kt')
     const workflow = read('.github/workflows/android-apk.yml')
+    const cargo = read('Elephant/backend/tauri/Cargo.toml')
 
     expect(build).toContain('ANDROID_TARGET="${ANDROID_TARGET:-aarch64}"')
     expect(build).toContain('ANDROID_BUILD_PROFILE="${ANDROID_BUILD_PROFILE:-release}"')
+    expect(build).toContain('ANDROID_APK_MAX_MIB="${ANDROID_APK_MAX_MIB:-24}"')
     expect(build).toContain('ELEPHANTNOTE_ANDROID_BUILD=1')
     expect(build).toContain('ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1')
     expect(build).toContain('android:icon')
@@ -40,9 +42,15 @@ describe('Android release recovery', () => {
     expect(build).toContain('verify_single_target_abi')
     expect(build).toContain('apksigner')
     expect(build).toContain('verify --verbose')
+    expect(cargo).toContain('[profile.release]')
+    expect(cargo).toContain('codegen-units = 1')
+    expect(cargo).toContain('lto = "thin"')
+    expect(cargo).toContain('opt-level = "z"')
+    expect(cargo).toContain('strip = "symbols"')
     expect(activity).not.toContain('requestPermissions(')
     expect(activity).toContain('decorView.post')
     expect(activity).toContain('WindowInsets.Type.systemBars()')
+    expect(workflow).toContain('ANDROID_APK_MAX_MIB: 24')
     expect(workflow).toContain('pnpm tauri:android:build')
     expect(workflow).toContain('Elephant-develop_next-arm64-release-review.apk')
   })

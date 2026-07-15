@@ -6,18 +6,21 @@ const root = process.cwd()
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
 
 describe('physical Wiki semantic organization', () => {
-  it('keeps topic discovery in the Knowledge package instead of Tauri core', () => {
-    const core = read('addons/official/knowledge/native/knowledge-core/src/wiki_discovery.rs')
-    const service = read('addons/official/knowledge/native/src/main.rs')
+  it('keeps topic discovery in the reusable Knowledge package instead of Tauri core', () => {
+    const discovery = read('addons/official/knowledge/native/knowledge-core/src/wiki_discovery.rs')
+    const service = read('addons/official/knowledge/native/knowledge-core/src/service.rs')
+    const sidecar = read('addons/official/knowledge/native/src/main.rs')
     const provider = read('addons/official/knowledge/main.js')
     const tauriFiles = fs.readdirSync(path.join(root, 'Elephant/backend/tauri/src'))
 
-    expect(core).toContain('discover_topic_communities')
-    expect(core).toContain('finalize_semantic_candidates')
-    expect(core).toContain('core_source_count')
-    expect(core).toContain('distinctiveness')
+    expect(discovery).toContain('discover_topic_communities')
+    expect(discovery).toContain('finalize_semantic_candidates')
+    expect(discovery).toContain('core_source_count')
+    expect(discovery).toContain('distinctiveness')
     expect(service).toContain('knowledge.wiki.semantic.communities')
     expect(service).toContain('knowledge.wiki.semantic.discover')
+    expect(service).toContain('KnowledgeService')
+    expect(sidecar).toContain('KnowledgeService')
     expect(provider).toContain('semanticCommunities:')
     expect(provider).toContain('semanticDiscover:')
     expect(tauriFiles).not.toContain('knowledge_wiki_discovery.rs')
@@ -39,7 +42,7 @@ describe('physical Wiki semantic organization', () => {
 
   it('publishes embedding ingestion through the package resource boundary', () => {
     const provider = read('addons/official/knowledge/main.js')
-    const service = read('addons/official/knowledge/native/src/main.rs')
+    const service = read('addons/official/knowledge/native/knowledge-core/src/service.rs')
 
     expect(provider).toContain('pendingEmbeddings:')
     expect(provider).toContain('saveEmbeddings:')

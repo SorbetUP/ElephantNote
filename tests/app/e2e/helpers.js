@@ -144,6 +144,28 @@ const attachPageDiagnostics = (page) => {
   })
 }
 
+const installVisibleErrorObserver = async (page) => {
+  await page.evaluate(() => {
+    if (window.__ELEPHANT_E2E_VISIBLE_ERROR_OBSERVER__) return
+    window.__ELEPHANT_E2E_VISIBLE_ERROR_OBSERVER__ = true
+    const reported = new Set()
+    const inspect = () => {
+      for (const element of document.querySelectorAll('.en-addons-feedback.error')) {
+        const style = window.getComputedStyle(element)
+        const rect = element.getBoundingClientRect()
+        if (style.display === 'none' || style.visibility === 'hidden' || rect.width <= 0 || rect.height <= 0) continue
+        const message = String(element.textContent || '').trim()
+        if (!message || reported.has(message)) continue
+        reported.add(message)
+        console.error(`[e2e-visible-addon-error] ${message}`)
+      }
+    }
+    const observer = new MutationObserver(inspect)
+    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true })
+    inspect()
+  })
+}
+
 const launchElectron = async (userArgs, options = {}) => {
   userArgs = userArgs || []
   const executablePath = getElectronPath()
@@ -172,6 +194,7 @@ const launchElectron = async (userArgs, options = {}) => {
   attachPageDiagnostics(page)
   await page.waitForLoadState('domcontentloaded')
   await page.waitForTimeout(750)
+  await installVisibleErrorObserver(page)
   const bootstrap = await page.evaluate(() => ({
     title: document.title,
     bodyLength: document.body?.innerText?.length || 0,

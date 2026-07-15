@@ -1,0 +1,80 @@
+name: Fix Android seeded note navigation
+
+on:
+  push:
+    branches:
+      - develop_next-integration-repair
+    paths:
+      - .github/workflows/fix-android-seeded-note.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop_next-integration-repair
+          fetch-depth: 0
+      - name: Open a seeded note rather than stopping at its folder
+        shell: python {0}
+        run: |
+          from pathlib import Path
+          import re
+
+          script = Path('build/scripts/android_usage_regression_suite.sh')
+          text = script.read_text()
+          replacement = '''open_seeded_note() {
+            local prefix="$1"
+            return_to_workspace
+            capture_checkpoint "${prefix}-workspace"
+            tap_ui_node "${prefix}-workspace.xml" 'Open navigation'
+            sleep 2
+            capture_checkpoint "${prefix}-drawer"
+            grep -q 'Getting Started' "${prefix}-drawer.xml"
+            tap_ui_node "${prefix}-drawer.xml" 'Getting Started'
+            sleep 2
+            capture_checkpoint "${prefix}-expanded"
+
+            if grep -q 'Welcome' "${prefix}-expanded.xml"; then
+              tap_ui_node "${prefix}-expanded.xml" 'Welcome'
+            elif grep -q 'Getting Started.md' "${prefix}-expanded.xml"; then
+              tap_ui_node "${prefix}-expanded.xml" 'Getting Started.md'
+            else
+              echo 'The Getting Started folder exposed no seeded note.' >&2
+              cat "${prefix}-expanded.xml" >&2
+              return 1
+            fi
+
+            local deadline=$((SECONDS + 35))
+            while [ "$SECONDS" -lt "$deadline" ]; do
+              capture_ui "${prefix}-open.xml" || true
+              if [ -s "${prefix}-open.xml" ] && grep -Fq 'Close note' "${prefix}-open.xml"; then
+                adb exec-out screencap -p > "${prefix}-open.png"
+                assert_screens_differ "${prefix}-expanded.png" "${prefix}-open.png" 1.0 "${prefix}_open"
+                return 0
+              fi
+              sleep 2
+            done
+            echo 'The seeded note did not open in the Android editor.' >&2
+            [ -s "${prefix}-open.xml" ] && cat "${prefix}-open.xml" >&2
+            return 1
+          }
+          '''.replace('          ', '')
+          updated, count = re.subn(r'open_seeded_note\(\) \{.*?\n\}\n\nscenario_library_layout_toggle\(\)', replacement + '\nscenario_library_layout_toggle()', text, count=1, flags=re.S)
+          if count != 1:
+            raise SystemExit(f'Expected one open_seeded_note function, replaced {count}')
+          script.write_text(updated)
+          Path('.github/workflows/fix-android-seeded-note.yml').unlink()
+      - name: Commit repair and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Open actual seeded notes in Android usage tests'
+          git push origin HEAD:develop_next-integration-repair

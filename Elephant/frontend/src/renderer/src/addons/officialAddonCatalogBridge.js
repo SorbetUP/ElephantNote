@@ -9,10 +9,12 @@ const invoke = (command, payload = {}) => {
   return caller(command, payload)
 }
 
+const asCatalogEntries = (value) => Array.isArray(value) ? value : []
+
 const mergeById = (...collections) => {
   const entries = new Map()
   for (const collection of collections) {
-    for (const entry of Array.isArray(collection) ? collection : []) {
+    for (const entry of asCatalogEntries(collection)) {
       if (entry?.id) entries.set(entry.id, entry)
     }
   }
@@ -32,9 +34,15 @@ export const installOfficialAddonCatalogBridge = () => {
       invoke('tauri_official_addons_catalog_list')
     ])
 
-    const community = communityResult.status === 'fulfilled' ? communityResult.value : []
+    const community = communityResult.status === 'fulfilled'
+      ? asCatalogEntries(communityResult.value)
+      : []
     const official = officialResult.status === 'fulfilled'
-      ? officialResult.value.map((entry) => ({ ...entry, official: true, source: 'official' }))
+      ? asCatalogEntries(officialResult.value).map((entry) => ({
+        ...entry,
+        official: true,
+        source: 'official'
+      }))
       : []
 
     store.catalog = mergeById(community, official)

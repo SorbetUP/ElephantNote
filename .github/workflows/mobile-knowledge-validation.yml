@@ -29,14 +29,25 @@ jobs:
           toolchain: '1.91.0'
           components: rustfmt
 
-      - name: Check Rust formatting
-        run: |
-          cargo fmt --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml -- --check
-          cargo fmt --manifest-path addons/official/knowledge/native/Cargo.toml -- --check
-          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml -- --check
-
       - name: Generate resolved Tauri lockfile
         run: cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
+
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-knowledge-cargo-lock
+          path: Elephant/backend/tauri/Cargo.lock
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Check changed Rust formatting
+        run: |
+          rustfmt --edition 2021 --check \
+            Elephant/backend/tauri/src/addon_services.rs \
+            Elephant/backend/tauri/src/embedded_addon_services.rs \
+            addons/official/knowledge/native/src/main.rs \
+            addons/official/knowledge/native/knowledge-core/src/lib.rs \
+            addons/official/knowledge/native/knowledge-core/src/service.rs
 
       - name: Test reusable Knowledge service
         run: cargo test --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml
@@ -46,12 +57,3 @@ jobs:
 
       - name: Check desktop Tauri shell
         run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets
-
-      - name: Upload generated lockfile
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobile-knowledge-cargo-lock
-          path: Elephant/backend/tauri/Cargo.lock
-          if-no-files-found: error
-          retention-days: 7

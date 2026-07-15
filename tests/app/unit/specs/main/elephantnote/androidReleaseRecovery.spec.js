@@ -61,10 +61,83 @@ describe('Android release recovery', () => {
 
     expect(page).toContain('const hasOpenDocument = computed(() => Boolean(editorStore.currentFile?.id))')
     expect(page).toContain('const muyaRuntimeDocumentActive = computed(() => muyaRuntimeActive.value && hasOpenDocument.value)')
-    expect(page).toContain(":class=\"{ 'muya-runtime-underlay': muyaRuntimeDocumentActive }\"")
+    expect(page).toContain(':class="{ \'muya-runtime-underlay\': muyaRuntimeDocumentActive }"')
     expect(page).toContain('v-if="init && muyaRuntimeEnabled && hasOpenDocument"')
     expect(page).toContain('v-show="muyaRuntimeDocumentActive"')
-    expect(page).not.toContain(":class=\"{ 'muya-runtime-underlay': muyaRuntimeActive }\"")
+    expect(page).not.toContain(':class="{ \'muya-runtime-underlay\': muyaRuntimeActive }"')
+  })
+
+  it('registers every vault binary command used by the Android file facade', () => {
+    const facade = read('Elephant/frontend/src/renderer/src/platform/tauriFileUtilsPathGuards.js')
+    const commands = read('Elephant/backend/tauri/src/vault_file_commands.rs')
+    const runtime = read('Elephant/backend/tauri/src/lib_min.rs')
+
+    for (const command of [
+      'tauri_vault_read_binary',
+      'tauri_vault_write_binary',
+      'tauri_vault_ensure_dir',
+      'tauri_vault_remove_path',
+      'tauri_vault_rename_path'
+    ]) {
+      expect(facade).toContain(command)
+      expect(commands).toContain(`pub fn ${command}`)
+      expect(runtime).toContain(`vault_file_commands::${command}`)
+    }
+    expect(commands).toContain('Refusing to access a path outside the active vault')
+    expect(commands).toContain('Refusing to write outside the active vault')
+  })
+
+  it('exposes the complete search lifecycle required by the mobile search store', () => {
+    const client = read('Elephant/frontend/app/services/elephantnoteClient/domainClients.js')
+    const bridge = read('Elephant/frontend/src/renderer/src/platform/tauriSearchLifecycleBridge.js')
+    const commands = read('Elephant/backend/tauri/src/search_commands.rs')
+    const runtime = read('Elephant/backend/tauri/src/lib_min.rs')
+
+    for (const method of ['initVault', 'inspect', 'rebuild', 'clear', 'disable', 'enable']) {
+      expect(client).toContain(`${method}:`)
+      expect(bridge).toContain(`search.${method}`)
+    }
+    for (const command of [
+      'tauri_search_init_vault',
+      'tauri_search_inspect',
+      'tauri_search_rebuild',
+      'tauri_search_clear',
+      'tauri_search_disable',
+      'tauri_search_enable'
+    ]) {
+      expect(commands).toContain(`pub fn ${command}`)
+      expect(runtime).toContain(`search_commands::${command}`)
+    }
+  })
+
+  it('keeps the mobile drawer over the workspace and settings in a phone layout', () => {
+    const mobileCss = read('Elephant/frontend/src/renderer/src/mobile-recovery.css')
+    const interactionRuntime = read('Elephant/frontend/src/renderer/src/platform/mobileInteractionRuntime.js')
+
+    expect(interactionRuntime).toContain("import '../mobile-recovery.css'")
+    expect(mobileCss).toContain('.en-mobile-shell .en-body.en-sidebar-hidden')
+    expect(mobileCss).toContain('grid-template-columns: minmax(0, 1fr) !important')
+    expect(mobileCss).toContain('.en-mobile-shell .en-sidebar')
+    expect(mobileCss).toContain('position: fixed !important')
+    expect(mobileCss).toContain('.en-settings-nav')
+    expect(mobileCss).toContain('grid-template-columns: repeat(4, minmax(0, 1fr)) !important')
+    expect(mobileCss).toContain('.en-settings-row:not(.en-settings-row-stacked)')
+  })
+
+  it('publishes the integrated official addon catalogue instead of an empty mobile list', () => {
+    const catalog = read('addons/catalog.json')
+    const backend = read('Elephant/backend/tauri/src/official_addon_catalog.rs')
+    const renderer = read('Elephant/frontend/src/renderer/src/addons/officialAddonCatalogBridge.js')
+    const runtime = read('Elephant/backend/tauri/src/lib_min.rs')
+
+    expect(catalog).toContain('elephant.code-execution')
+    expect(catalog).toContain('elephant.ai')
+    expect(backend).toContain('tauri_official_addons_catalog_list')
+    expect(backend).toContain('tauri_official_addons_catalog_install')
+    expect(renderer).toContain('tauri_official_addons_catalog_list')
+    expect(renderer).toContain('tauri_official_addons_catalog_install')
+    expect(runtime).toContain('official_addon_catalog::tauri_official_addons_catalog_list')
+    expect(runtime).toContain('official_addon_catalog::tauri_official_addons_catalog_install')
   })
 
   it('builds one optimized signed ARM64 release APK under 24 MiB', () => {

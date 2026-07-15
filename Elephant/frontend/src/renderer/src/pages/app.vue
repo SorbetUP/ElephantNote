@@ -65,10 +65,12 @@ import { useNotificationStore } from '@/store/notification'
 import { debouncedSendBufferedState } from '@/store/bufferedState'
 import { MuyaRuntimeEditor, isMuyaRuntimeActive, isMuyaRuntimeEnabled, readMuyaRuntimeMode } from '@/muya'
 import AppShell from 'elephant-front/components/shell/AppShell.vue'
+import { useVaultStore } from 'elephant-front/stores/vaultStore'
 
 const isTauriRuntime = Boolean(window.__TAURI__ || window.__MARKTEXT_RUNTIME__)
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
+const vaultStore = useVaultStore()
 const preferencesStore = usePreferencesStore()
 const layoutStore = useLayoutStore()
 const projectStore = useProjectStore()
@@ -131,6 +133,7 @@ const closeMuyaRuntimeDocument = () => {
   const file = editorStore.currentFile
   if (!file?.id) return
   editorStore.CLOSE_TAB(file)
+  vaultStore.closeNote()
 }
 
 watch(theme, (value, oldValue) => {

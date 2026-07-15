@@ -16,6 +16,16 @@ import { readDomSelection } from './selection'
 import { handleTaskClick } from './task'
 
 const noop = () => {}
+const NAVIGATION_KEYS = new Set([
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown'
+])
 
 export class ElephantRustInputController {
   constructor(container, bridge, renderer, options = {}) {
@@ -38,7 +48,7 @@ export class ElephantRustInputController {
     this.composition = null
     this.attached = false
     this._tail = Promise.resolve()
-    this._pendingInputCommands = 0
+    this._inputSelection = null
     this._beforeInput = (event) => this.handleBeforeInput(event)
     this._click = (event) => this.handleClick(event)
     this._copy = (event) => this.handleCopy(event)
@@ -80,6 +90,7 @@ export class ElephantRustInputController {
     this.container.removeEventListener('compositionstart', this._compositionStart)
     this.container.removeEventListener('compositionend', this._compositionEnd)
     this.container.removeEventListener('keydown', this._keyDown)
+    this._inputSelection = null
     return this
   }
 
@@ -112,22 +123,16 @@ export class ElephantRustInputController {
     if (!observedSelection) return
     event.preventDefault()
 
-    const followsPendingInput = this._pendingInputCommands > 0
-    this._pendingInputCommands += 1
     this.schedule(async () => {
-      try {
-        const selection = followsPendingInput
-          ? this.bridge.selection || observedSelection
-          : observedSelection
-        await this.bridge.setSelection(selection)
-        await this.bridge.dispatch(command)
-      } finally {
-        this._pendingInputCommands = Math.max(0, this._pendingInputCommands - 1)
-      }
+      const selection = this._inputSelection || observedSelection
+      await this.bridge.setSelection(selection)
+      await this.bridge.dispatch(command)
+      this._inputSelection = this.bridge.selection || selection
     })
   }
 
   handleClick(event) {
+    this._inputSelection = null
     return handleTaskClick(this, event) || handleImageClick(this, event)
   }
 
@@ -140,15 +145,17 @@ export class ElephantRustInputController {
   }
 
   handlePaste(event) {
-    const selection = this.readSelection()
-    if (!selection) return
+    const observedSelection = this.readSelection()
+    if (!observedSelection) return
     const markdown = markdownFromClipboard(event, this.container.ownerDocument)
     if (markdown === null) return
     event.preventDefault()
     event.stopPropagation?.()
     this.schedule(async () => {
+      const selection = this._inputSelection || observedSelection
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
+      this._inputSelection = this.bridge.selection || selection
     })
   }
 
@@ -157,18 +164,24 @@ export class ElephantRustInputController {
   }
 
   handleDrop(event) {
+    this._inputSelection = null
     return handleDrop(this, event)
   }
 
   handleCompositionStart() {
+    this._inputSelection = null
     startComposition(this)
   }
 
   handleCompositionEnd(event) {
     finishComposition(this, event)
+    this._inputSelection = this.bridge.selection || null
   }
 
   handleKeyDown(event) {
+    if (NAVIGATION_KEYS.has(event.key)) {
+      this._inputSelection = null
+    }
     if (event.key === 'Escape' && cancelComposition(this)) {
       event.preventDefault()
       return
@@ -183,6 +196,7 @@ export class ElephantRustInputController {
     this.schedule(async () => {
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(command)
+      this._inputSelection = this.bridge.selection || selection
     })
   }
 

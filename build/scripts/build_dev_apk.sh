@@ -125,7 +125,7 @@ BUILD_ARGS=(android build --apk --target "$ANDROID_TARGET" --config "$ANDROID_CO
 if [ "$ANDROID_BUILD_PROFILE" = debug ]; then BUILD_ARGS+=(--debug); fi
 
 printf '[android-apk] profile=%s target=%s\n' "$ANDROID_BUILD_PROFILE" "$ANDROID_TARGET"
-ELEPHANTNOTE_ANDROID_BUILD=1 ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1 cargo tauri "${BUILD_ARGS[@]}"
+ELEPHANTNOTE_ANDROID_BUILD=1 cargo tauri "${BUILD_ARGS[@]}"
 verify_android_renderer
 
 if [ "$ANDROID_BUILD_PROFILE" = release ]; then

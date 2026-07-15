@@ -68,6 +68,10 @@ const launchUsageApp = async (testInfo) => {
 
 const card = (page, title) => page.locator('.en-note-card').filter({ hasText: title }).first()
 const searchInput = (page) => page.getByPlaceholder('Search notes, paths, tags, or ideas…')
+const openSearch = async (page) => {
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  await expect(searchInput(page)).toBeVisible()
+}
 
 const closeSearch = async (page) => {
   const input = searchInput(page)
@@ -79,7 +83,7 @@ const closeSearch = async (page) => {
 }
 
 const openSettings = async (page) => {
-  await page.getByRole('button', { name: 'Settings' }).last().click()
+  await page.getByRole('button', { name: 'Settings', exact: true }).last().click()
   await expect(page.getByRole('dialog', { name: 'ElephantNote settings' })).toBeVisible()
 }
 
@@ -103,8 +107,6 @@ const defineUsageTest = (id, implementation) => {
 }
 
 test.describe('Linux production-renderer usage regressions', () => {
-  test.describe.configure({ mode: 'serial' })
-
   defineUsageTest('startup-render', async ({ page, checkpoint }) => {
     await expect(page.getByText('Getting Started', { exact: true }).first()).toBeVisible()
     await expect(page.getByText('Project Alpha', { exact: true }).first()).toBeVisible()
@@ -142,7 +144,7 @@ test.describe('Linux production-renderer usage regressions', () => {
   })
 
   defineUsageTest('search-roundtrip', async ({ page, checkpoint }) => {
-    await page.getByRole('button', { name: 'Search' }).click()
+    await openSearch(page)
     await searchInput(page).fill('Project Alpha')
     await expect(page.locator('.en-search-results')).toBeVisible()
     await expect(page.getByText('Project Alpha', { exact: true }).last()).toBeVisible()
@@ -152,7 +154,7 @@ test.describe('Linux production-renderer usage regressions', () => {
   })
 
   defineUsageTest('search-no-results', async ({ page, checkpoint }) => {
-    await page.getByRole('button', { name: 'Search' }).click()
+    await openSearch(page)
     await searchInput(page).fill('zzzxxyy-no-linux-match-9173')
     await expect(page.getByText('No matching notes found')).toBeVisible()
     await checkpoint('linux-search-empty')
@@ -191,8 +193,8 @@ test.describe('Linux production-renderer usage regressions', () => {
     await card(page, 'Getting Started').click()
     await expect(page.getByTestId('muya-rust-runtime-editor')).toBeVisible()
     await checkpoint('linux-note-first')
-    await page.reload()
-    await page.waitForSelector('.en-library-grid', { state: 'visible' })
+    await page.getByRole('button', { name: 'All notes', exact: true }).click()
+    await expect(page.locator('.en-library-grid')).toBeVisible()
     await card(page, 'Project Alpha').click()
     await expect(page.getByTestId('muya-rust-runtime-editor')).toBeVisible()
     await checkpoint('linux-note-second')
@@ -220,8 +222,7 @@ test.describe('Linux production-renderer usage regressions', () => {
 
   defineUsageTest('navigation-stress', async ({ page, checkpoint }) => {
     for (let cycle = 1; cycle <= 3; cycle += 1) {
-      await page.getByRole('button', { name: 'Search' }).click()
-      await expect(searchInput(page)).toBeVisible()
+      await openSearch(page)
       await closeSearch(page)
       await openSettings(page)
       await closeSettings(page)

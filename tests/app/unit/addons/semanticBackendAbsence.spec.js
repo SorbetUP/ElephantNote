@@ -39,10 +39,18 @@ describe('legacy semantic backend physical absence', () => {
     expect(COMPATIBILITY_CALLS['search.inspect']).toBeUndefined()
   })
 
-  it('keeps semantic indexing and inspection owned by the Search package', () => {
+  it('keeps semantic indexing in Knowledge and orchestration in the Search package', () => {
     const source = read('addons/official/ai-search/main.js')
-    expect(source).toContain("engine: 'package-owned-bm25'")
+    const semantic = read('addons/official/ai-search/semanticEmbeddingSync.js')
+    const knowledge = read('addons/official/knowledge/main.js')
+    expect(source).toContain("const KNOWLEDGE_RESOURCE = 'knowledge.provider'")
+    expect(source).toContain("const AI_INFERENCE_RESOURCE = 'ai.inference'")
+    expect(source).toContain("'knowledge-provider' : 'package-owned-bm25'")
     expect(source).toContain('api.storage.set(INDEX_KEY, this.index)')
     expect(source).toContain('api.resources.provide(PROVIDER_RESOURCE')
+    expect(semantic).toContain('pendingEmbeddings')
+    expect(semantic).toContain('saveEmbeddings')
+    expect(knowledge).toContain('semanticCommunities')
+    expect(knowledge).toContain('semanticDiscover')
   })
 })

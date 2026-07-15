@@ -3,11 +3,11 @@ import './mobile-native-ux.css'
 import './platform/mobileVaultBridge'
 import './platform/mobileEditorRuntime'
 import './platform/mobileInteractionRuntime'
-import { createApp } from 'vue'
+import { createApp, nextTick } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import bootstrapRenderer from './bootstrap'
 import axios from './axios'
-import pinia from './store'
+import pinia, { useMainStore } from './store'
 import './assets/symbolIcon'
 import { installTauriRuntimeBridge } from './platform/tauriRuntimeBridge'
 import { ensureRendererPathFacade } from './platform/rendererPathFacade'
@@ -151,6 +151,16 @@ const mountRendererApp = async(runtime, windowType) => {
   app.use(i18nPlugin)
   app.config.globalProperties.$http = axios
   app.config.globalProperties.$services = services
+
+  // This renderer is Tauri-only. Initialize the visible shell before the first
+  // route render instead of waiting for legacy desktop IPC listeners that may
+  // never answer on Android.
+  const mainStore = useMainStore(pinia)
+  if (!mainStore.init) {
+    mainStore.SET_INITIALIZED()
+    pushDiagnosticLog('info', 'renderer shell initialized', { runtime })
+  }
+
   const addonManager = installAddonSystem(app, {
     router,
     pinia,
@@ -164,9 +174,15 @@ const mountRendererApp = async(runtime, windowType) => {
   })
   installAddonPermissionConsentGuard(addonManager)
   await installCoreFeatures(addonManager)
+  await router.isReady()
   app.mount('#app')
+  await nextTick()
   document.documentElement.dataset.elephantMounted = 'true'
   document.getElementById('app')?.setAttribute('aria-label', 'Elephant application ready')
+  pushDiagnosticLog('info', 'renderer Vue shell mounted', {
+    route: router.currentRoute.value.fullPath,
+    hasVisibleShell: Boolean(document.querySelector('.en-empty-vault, .en-shell'))
+  })
   installStoreDiagnostics()
 }
 

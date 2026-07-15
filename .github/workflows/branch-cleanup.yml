@@ -1,0 +1,155 @@
+name: Clean stale and duplicate branches
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/branch-cleanup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: elephant-branch-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'develop_next-integration-repair' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop_next-integration-repair
+          fetch-depth: 0
+
+      - name: Verify addon migration is complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          gh api repos/SorbetUP/Elephant-Addons/contents/catalog.json?ref=main \
+            --jq '.name' | grep -Fx catalog.json
+          gh api repos/SorbetUP/Elephant-Addons/contents/official/dashboard/manifest.json?ref=main \
+            --jq '.name' | grep -Fx manifest.json
+          gh api repos/SorbetUP/Elephant-Addons/contents/packs/develop-parity.enaddonpack?ref=main \
+            --jq '.name' | grep -Fx develop-parity.enaddonpack
+
+      - name: Delete branches older than this week and obvious generated duplicates
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          : > deleted-branches.txt
+          : > preserved-branches.txt
+
+          preserve_branch() {
+            case "$1" in
+              main|develop|develop_next|develop_next-integration-repair|develop_next-unified-candidate2|develop_next-mobile-recovery|refactor/muya-rust-file-by-file|assistant/wiki-organization-continuation|feature/physical-addon-packages)
+                return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          delete_branch() {
+            local branch="$1"
+            if preserve_branch "$branch"; then
+              printf 'PRESERVE\t%s\n' "$branch" >> preserved-branches.txt
+              return 0
+            fi
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+              return 0
+            fi
+            echo "Deleting $branch"
+            git push origin --delete "$branch"
+            printf 'DELETE\t%s\n' "$branch" >> deleted-branches.txt
+            git update-ref -d "refs/remotes/origin/$branch" || true
+          }
+
+          # Monday 13 July 2026, 00:00 Europe/Paris = Sunday 12 July 22:00 UTC.
+          cutoff_epoch=1783893600
+          while IFS=$'\t' read -r ref epoch subject; do
+            branch="${ref#origin/}"
+            if preserve_branch "$branch"; then
+              printf 'PRESERVE\t%s\t%s\t%s\n' "$branch" "$epoch" "$subject" >> preserved-branches.txt
+              continue
+            fi
+            if (( epoch < cutoff_epoch )); then
+              delete_branch "$branch"
+            fi
+          done < <(git for-each-ref \
+            --format='%(refname:short)%09%(committerdate:unix)%09%(subject)' \
+            refs/remotes/origin | sort)
+
+          # These refs are exact staging/validation duplicates created during the current fusion.
+          for branch in \
+            develop_next-unified-candidate \
+            develop_next-unified-recovery \
+            develop_next-unified-stage \
+            develop_next-unified-stage2 \
+            develop_next-integration-repair-validation-base \
+            feature/physical-addon-catalog \
+            feature/physical-addon-packs
+          do
+            delete_branch "$branch"
+          done
+
+          # Delete recent generated validation branches only when all their commits are already
+          # reachable from the current integration branch.
+          for branch in \
+            automation/muya-lock-refresh \
+            assistant/validate-knowledge-graph-wiki \
+            assistant/wiki-links-graph-integration
+          do
+            if git show-ref --verify --quiet "refs/remotes/origin/$branch" && \
+               git merge-base --is-ancestor "origin/$branch" origin/develop_next-integration-repair
+            then
+              delete_branch "$branch"
+            else
+              printf 'PRESERVE-NOT-MERGED\t%s\n' "$branch" >> preserved-branches.txt
+            fi
+          done
+
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          git for-each-ref \
+            --sort=-committerdate \
+            --format='%(refname:short)%09%(objectname)%09%(committerdate:iso8601-strict)%09%(subject)' \
+            refs/remotes/origin > remaining-branches.tsv
+
+          echo "Deleted $(wc -l < deleted-branches.txt) branches"
+          echo "Remaining $(wc -l < remaining-branches.tsv) remote branches"
+          cat deleted-branches.txt
+          cat remaining-branches.tsv
+
+      - name: Remove the one-shot cleanup workflow
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git rm .github/workflows/branch-cleanup.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add deleted-branches.txt preserved-branches.txt remaining-branches.tsv
+          mkdir -p docs/repository
+          mv deleted-branches.txt docs/repository/deleted-branches-2026-07-16.txt
+          mv preserved-branches.txt docs/repository/preserved-branches-2026-07-16.txt
+          mv remaining-branches.tsv docs/repository/remaining-branches-2026-07-16.tsv
+          git add docs/repository
+          git commit -m 'chore(repo): remove stale and duplicate branches'
+          git push origin HEAD:develop_next-integration-repair
+
+      - name: Upload cleanup audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: branch-cleanup-audit
+          path: |
+            deleted-branches.txt
+            preserved-branches.txt
+            remaining-branches.tsv
+            docs/repository/deleted-branches-2026-07-16.txt
+            docs/repository/preserved-branches-2026-07-16.txt
+            docs/repository/remaining-branches-2026-07-16.tsv
+          if-no-files-found: warn
+          retention-days: 30

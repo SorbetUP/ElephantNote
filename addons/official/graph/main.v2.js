@@ -23,6 +23,10 @@ const extractTags = (content = '') => [...new Set(
 )]
 
 export default class ElephantGraphAddon extends ElephantGraphAddonBase {
+  async onload(api) {
+    return super.onload(api)
+  }
+
   async readNotes() {
     const entries = await this.invoke('tauri_addons_notes_list', {
       addonId: ADDON_ID,

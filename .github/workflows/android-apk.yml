@@ -72,7 +72,8 @@ jobs:
           set -euxo pipefail
           NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
             tests/app/unit/specs/main/elephantnote/androidReleaseRecovery.spec.js \
-            tests/app/unit/specs/main/elephantnote/mobileIntegrationRepair.spec.js
+            tests/app/unit/specs/main/elephantnote/mobileIntegrationRepair.spec.js \
+            tests/app/unit/specs/main/elephantnote/androidUsageRegressionSuite.spec.js
 
       - name: Cache Cargo and Gradle
         uses: actions/cache@v4
@@ -135,7 +136,7 @@ jobs:
           retention-days: 14
 
   startup-smoke:
-    name: Install, launch and reject a white Android screen
+    name: Install, launch and exercise Android regressions
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'push' ||
@@ -227,7 +228,7 @@ jobs:
         shell: bash
         run: sudo chmod 666 /dev/kvm || true
 
-      - name: Install and launch on Android emulator
+      - name: Install, launch and run app usage catalog on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -235,27 +236,38 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: bash build/scripts/android_startup_smoke.sh
+          script: |
+            bash build/scripts/android_startup_smoke.sh
+            bash build/scripts/android_usage_regression_suite.sh
 
-      - name: Upload startup diagnostics
+      - name: Upload Android app usage diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Elephant-Android-startup-diagnostics
+          name: Elephant-Android-app-usage-diagnostics
           path: |
             android-startup-build.log
             android-startup-logcat.txt
             android-startup-screen.png
             android-startup-window.xml
-            android-search-screen.png
-            android-search-window.xml
-            android-search-results-window.xml
-            android-settings-screen.png
-            android-settings-window.xml
-            android-drawer-screen.png
-            android-drawer-window.xml
-            android-workspace-after-search.xml
-            android-workspace-after-settings.xml
+            android-search-*.png
+            android-search-*.xml
+            android-settings-*.png
+            android-settings-*.xml
+            android-drawer-*.png
+            android-drawer-*.xml
+            android-workspace-*.png
+            android-workspace-*.xml
+            android-usage-*.json
+            android-usage-*.xml
+            android-usage-*.tsv
+            android-usage-logcat.txt
+            android-layout-*.png
+            android-layout-*.xml
+            android-sort-*.png
+            android-sort-*.xml
+            android-note-*.png
+            android-note-*.xml
             Elephant/backend/tauri/gen/android/app/build/outputs/apk/**/*-debug.apk
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 14

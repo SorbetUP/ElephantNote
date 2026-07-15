@@ -20,6 +20,21 @@ const selectJs = (muya, target, anyText = false) => {
   select(muya, target, 1)
 }
 
+const resetJsHistory = (muya) => {
+  const { start, end } = muya.contentState.cursor
+  muya.clearHistory()
+  muya.contentState.cursor = {
+    start: { key: start.key, offset: start.offset },
+    end: { key: end.key, offset: end.offset },
+    isEdit: false
+  }
+}
+
+const readJsMarkdown = (muya) => {
+  muya._markdownBlockCache?.clear()
+  return muya.getMarkdown()
+}
+
 const updateJsParagraph = async (muya, paragraphType) => {
   await muya.updateParagraph(paragraphType)
   await settle()
@@ -61,14 +76,15 @@ describeBundled('Muya block type differential traces', () => {
         initial: trace.initial,
         runJs: async (muya) => {
           selectJs(muya, trace.target)
+          resetJsHistory(muya)
           await updateJsParagraph(muya, trace.paragraphType)
-          const changed = muya.getMarkdown()
+          const changed = readJsMarkdown(muya)
           muya.undo()
           await settle()
-          const undone = muya.getMarkdown()
+          const undone = readJsMarkdown(muya)
           muya.redo()
           await settle()
-          return [changed, undone, muya.getMarkdown()]
+          return [changed, undone, readJsMarkdown(muya)]
         },
         runRust: (rust) => {
           rust.setSelectionByText(trace.target, 1)

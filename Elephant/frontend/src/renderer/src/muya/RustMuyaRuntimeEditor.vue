@@ -42,7 +42,8 @@ let mountGeneration = 0
 let syncTimer = null
 let syncRequested = false
 let syncInFlight = null
-const internallyEmittedMarkdown = new Set()
+let internalPropUpdatePending = false
+let internalPropResetTimer = null
 
 const reportError = (error) => {
   errorMessage.value = error?.message || String(error)
@@ -58,11 +59,13 @@ const readRuntimeMarkdown = async () => {
   return String(response.payload.markdown || '')
 }
 
-const rememberInternalEmission = (markdown) => {
-  internallyEmittedMarkdown.add(markdown)
-  if (internallyEmittedMarkdown.size <= 64) return
-  const oldest = internallyEmittedMarkdown.values().next().value
-  internallyEmittedMarkdown.delete(oldest)
+const markInternalPropUpdate = () => {
+  internalPropUpdatePending = true
+  if (internalPropResetTimer) window.clearTimeout(internalPropResetTimer)
+  internalPropResetTimer = window.setTimeout(() => {
+    internalPropResetTimer = null
+    internalPropUpdatePending = false
+  }, 0)
 }
 
 const flushMarkdownSync = () => {
@@ -76,7 +79,7 @@ const flushMarkdownSync = () => {
         if (generation !== mountGeneration) return
         runtimeMarkdown = next
         if (next !== props.modelValue) {
-          rememberInternalEmission(next)
+          markInternalPropUpdate()
           emit('update:modelValue', next)
           emit('change', next)
         }
@@ -107,6 +110,11 @@ const destroyRuntime = () => {
     window.clearTimeout(syncTimer)
     syncTimer = null
   }
+  if (internalPropResetTimer) {
+    window.clearTimeout(internalPropResetTimer)
+    internalPropResetTimer = null
+  }
+  internalPropUpdatePending = false
   syncRequested = false
   runtime?.destroy()
   runtime = null
@@ -115,7 +123,6 @@ const destroyRuntime = () => {
 const mountRuntime = async (markdown) => {
   const generation = ++mountGeneration
   destroyRuntime()
-  internallyEmittedMarkdown.clear()
   errorMessage.value = ''
   runtimeMarkdown = String(markdown || '')
   rootRef.value?.replaceChildren()
@@ -154,7 +161,14 @@ watch(
   () => props.modelValue,
   (next) => {
     const normalized = String(next || '')
-    if (internallyEmittedMarkdown.delete(normalized)) return
+    if (internalPropUpdatePending) {
+      internalPropUpdatePending = false
+      if (internalPropResetTimer) {
+        window.clearTimeout(internalPropResetTimer)
+        internalPropResetTimer = null
+      }
+      return
+    }
     if (normalized !== runtimeMarkdown) void mountRuntime(normalized)
   }
 )
@@ -183,7 +197,6 @@ watch(
 onBeforeUnmount(() => {
   mountGeneration += 1
   destroyRuntime()
-  internallyEmittedMarkdown.clear()
 })
 </script>
 

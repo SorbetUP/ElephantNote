@@ -2,7 +2,7 @@
   "id": "elephant.dashboard",
   "name": "Dashboard",
   "version": "1.0.0",
-  "description": "Provides the first-party vault dashboard, workspace statistics and managed Dashboard note as a removable physical addon.",
+  "description": "Provides the first-party vault dashboard, recent notes, workspace statistics and managed Dashboard note as a removable physical addon.",
   "author": "Elephant",
   "icon": "dashboard",
   "apiVersion": 1,

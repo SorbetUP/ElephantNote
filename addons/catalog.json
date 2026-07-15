@@ -2,7 +2,7 @@
   "version": 1,
   "branch": "integrated",
   "packageRoot": "official",
-  "updatedAt": "2026-07-15T13:20:00Z",
+  "updatedAt": "2026-07-15T13:32:00Z",
   "addons": [
     {
       "id": "elephant.ai",
@@ -140,8 +140,8 @@
       "id": "elephant.code-execution",
       "slug": "code-execution",
       "name": "Code execution",
-      "version": "2.1.0",
-      "description": "Runs local interpreters on desktop and isolated JavaScript Workers on Android and iOS.",
+      "version": "2.2.0",
+      "description": "Runs local interpreters through an interruptible package service and isolated JavaScript Workers on Android and iOS.",
       "author": "Elephant",
       "official": true,
       "manifestPath": "official/code-execution/manifest.json",

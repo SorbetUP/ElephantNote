@@ -16,6 +16,16 @@ import { readDomSelection } from './selection'
 import { handleTaskClick } from './task'
 
 const noop = () => {}
+const NAVIGATION_KEYS = new Set([
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown'
+])
 
 export class MuyaRustInputController {
   constructor(container, bridge, renderer, options = {}) {
@@ -38,7 +48,7 @@ export class MuyaRustInputController {
     this.composition = null
     this.attached = false
     this._tail = Promise.resolve()
-    this._pendingInputCommands = 0
+    this._inputSelection = null
     this._beforeInput = (event) => this.handleBeforeInput(event)
     this._click = (event) => this.handleClick(event)
     this._copy = (event) => this.handleCopy(event)
@@ -80,6 +90,7 @@ export class MuyaRustInputController {
     this.container.removeEventListener('compositionstart', this._compositionStart)
     this.container.removeEventListener('compositionend', this._compositionEnd)
     this.container.removeEventListener('keydown', this._keyDown)
+    this._inputSelection = null
     return this
   }
 
@@ -112,26 +123,20 @@ export class MuyaRustInputController {
     if (!observedSelection) return
     event.preventDefault()
 
-    const followsPendingInput = this._pendingInputCommands > 0
-    this._pendingInputCommands += 1
     this.schedule(async () => {
-      try {
-        // beforeinput can outpace the Rust/WASM + DOM patch cycle. The first
-        // command in a burst must use the browser caret (a click may have moved
-        // it); later queued commands must continue from the selection returned
-        // by the preceding Rust update instead of reusing the stale DOM caret.
-        const selection = followsPendingInput
-          ? this.bridge.selection || observedSelection
-          : observedSelection
-        await this.bridge.setSelection(selection)
-        await this.bridge.dispatch(command)
-      } finally {
-        this._pendingInputCommands = Math.max(0, this._pendingInputCommands - 1)
-      }
+      // A burst of beforeinput events can be delivered before the DOM selection
+      // has caught up with the asynchronous Rust/WASM patch cycle. The first
+      // command uses the browser caret; every following command continues from
+      // the logical selection returned by the previous Rust update.
+      const selection = this._inputSelection || observedSelection
+      await this.bridge.setSelection(selection)
+      await this.bridge.dispatch(command)
+      this._inputSelection = this.bridge.selection || selection
     })
   }
 
   handleClick(event) {
+    this._inputSelection = null
     return handleTaskClick(this, event) || handleImageClick(this, event)
   }
 
@@ -144,15 +149,17 @@ export class MuyaRustInputController {
   }
 
   handlePaste(event) {
-    const selection = this.readSelection()
-    if (!selection) return
+    const observedSelection = this.readSelection()
+    if (!observedSelection) return
     const markdown = markdownFromClipboard(event, this.container.ownerDocument)
     if (markdown === null) return
     event.preventDefault()
     event.stopPropagation?.()
     this.schedule(async () => {
+      const selection = this._inputSelection || observedSelection
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
+      this._inputSelection = this.bridge.selection || selection
     })
   }
 
@@ -161,18 +168,24 @@ export class MuyaRustInputController {
   }
 
   handleDrop(event) {
+    this._inputSelection = null
     return handleDrop(this, event)
   }
 
   handleCompositionStart() {
+    this._inputSelection = null
     startComposition(this)
   }
 
   handleCompositionEnd(event) {
     finishComposition(this, event)
+    this._inputSelection = this.bridge.selection || null
   }
 
   handleKeyDown(event) {
+    if (NAVIGATION_KEYS.has(event.key)) {
+      this._inputSelection = null
+    }
     if (event.key === 'Escape' && cancelComposition(this)) {
       event.preventDefault()
       return
@@ -187,6 +200,7 @@ export class MuyaRustInputController {
     this.schedule(async () => {
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(command)
+      this._inputSelection = this.bridge.selection || selection
     })
   }
 

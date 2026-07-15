@@ -1,3 +1,5 @@
+import { discoverSemanticWikiRecords } from './semanticWikiProposals'
+
 const ADDON_ID = 'elephant.wiki'
 const VIEW_ID = `${ADDON_ID}.workspace`
 const RECORDS_KEY = 'records'
@@ -37,11 +39,21 @@ const extractTags = (content = '') => {
   const frontmatter = String(content).match(/^---\s*\n([\s\S]*?)\n---/)
   if (frontmatter) {
     const inline = frontmatter[1].match(/^tags\s*:\s*\[([^\]]*)\]/mi)?.[1]
-    if (inline) inline.split(',').map((tag) => tag.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean).forEach((tag) => tags.add(tag.toLowerCase()))
+    if (inline) {
+      inline
+        .split(',')
+        .map((tag) => tag.trim().replace(/^['"]|['"]$/g, ''))
+        .filter(Boolean)
+        .forEach((tag) => tags.add(tag.toLowerCase()))
+    }
     const block = frontmatter[1].match(/^tags\s*:\s*\n((?:\s*-\s*.+\n?)*)/mi)?.[1] || ''
-    for (const match of block.matchAll(/^\s*-\s*(.+)$/gm)) tags.add(match[1].trim().replace(/^['"]|['"]$/g, '').toLowerCase())
+    for (const match of block.matchAll(/^\s*-\s*(.+)$/gm)) {
+      tags.add(match[1].trim().replace(/^['"]|['"]$/g, '').toLowerCase())
+    }
   }
-  for (const match of String(content).matchAll(/(^|\s)#([\p{L}\p{N}_-]{2,})/gu)) tags.add(match[2].toLowerCase())
+  for (const match of String(content).matchAll(/(^|\s)#([\p{L}\p{N}_-]{2,})/gu)) {
+    tags.add(match[2].toLowerCase())
+  }
   return [...tags].filter(Boolean)
 }
 
@@ -80,7 +92,9 @@ const knowledgeRecord = (draft) => ({
   id: String(draft?.id || ''),
   title: String(draft?.title || draft?.topic || draft?.id || 'Untitled'),
   topic: String(draft?.topic || draft?.title || draft?.id || 'Untitled'),
-  status: String(draft?.status || 'proposed') === 'rejected' ? 'dismissed' : String(draft?.status || 'proposed'),
+  status: String(draft?.status || 'proposed') === 'rejected'
+    ? 'dismissed'
+    : String(draft?.status || 'proposed'),
   summary: String(draft?.topic || ''),
   path: draft?.slug ? `.elephantnote/wiki/${draft.slug}.md` : '',
   sources: (Array.isArray(draft?.citations) ? draft.citations : []).map((citation) => ({
@@ -95,7 +109,9 @@ const knowledgeRecord = (draft) => ({
 
 const proposalMarkdown = (record) => {
   const sources = record.sources || []
-  const sourceList = sources.map((source, index) => `[^source-${index + 1}]: ${source.path}${source.excerpt ? ` — ${source.excerpt}` : ''}`).join('\n')
+  const sourceList = sources
+    .map((source, index) => `[^source-${index + 1}]: ${source.path}${source.excerpt ? ` — ${source.excerpt}` : ''}`)
+    .join('\n')
   const links = sources.map((source) => `- [[${source.path.replace(/\.md$/i, '')}]]`).join('\n')
   return `# ${record.title}\n\n${record.summary || `Knowledge page synthesized from ${sources.length} notes.`}\n\n## Related notes\n\n${links || '- No related note'}\n\n## Sources\n\n${sourceList || 'No source'}\n`
 }
@@ -107,8 +123,8 @@ export default class ElephantWikiAddon {
   }
 
   knowledgeProvider() {
-  return this.api.resources.get(KNOWLEDGE_RESOURCE)
-}
+    return this.api.resources.get(KNOWLEDGE_RESOURCE)
+  }
 
   invoke(command, payload = {}) {
     const invoke = this.window?.__TAURI__?.core?.invoke
@@ -134,21 +150,21 @@ export default class ElephantWikiAddon {
   }
 
   async loadRecords() {
-  const local = normalizeRecords(await this.api.storage.get(RECORDS_KEY))
-  const knowledge = this.knowledgeProvider()
-  if (!knowledge || typeof knowledge.listWikis !== 'function') return local
-  try {
-    const drafts = await knowledge.listWikis({ limit: 500 })
-    const remote = (Array.isArray(drafts) ? drafts : [])
-      .map(knowledgeRecord)
-      .filter((record) => record.id)
-    const ids = new Set(remote.map((record) => record.id))
-    return [...remote, ...local.filter((record) => !ids.has(record.id))]
-  } catch (error) {
-    console.warn('[wiki-addon] Knowledge drafts unavailable; using local records', error)
-    return local
+    const local = normalizeRecords(await this.api.storage.get(RECORDS_KEY))
+    const knowledge = this.knowledgeProvider()
+    if (!knowledge || typeof knowledge.listWikis !== 'function') return local
+    try {
+      const drafts = await knowledge.listWikis({ limit: 500 })
+      const remote = (Array.isArray(drafts) ? drafts : [])
+        .map(knowledgeRecord)
+        .filter((record) => record.id)
+      const ids = new Set(remote.map((record) => record.id))
+      return [...remote, ...local.filter((record) => !ids.has(record.id))]
+    } catch (error) {
+      console.warn('[wiki-addon] Knowledge drafts unavailable; using local records', error)
+      return local
+    }
   }
-}
 
   async saveRecords(records) {
     const normalized = normalizeRecords(records)
@@ -175,7 +191,10 @@ export default class ElephantWikiAddon {
           modifiedAt: entry.modifiedAt || null
         })
       } catch (error) {
-        console.warn('[wiki-addon] note skipped', { path: entry.path, error: error?.message || String(error) })
+        console.warn('[wiki-addon] note skipped', {
+          path: entry.path,
+          error: error?.message || String(error)
+        })
       }
     }
     return notes
@@ -188,8 +207,7 @@ export default class ElephantWikiAddon {
       if (!normalized || normalized.length < 2) return
       const key = normalized.toLowerCase()
       const cluster = clusters.get(key) || { topic: normalized, notes: new Map(), score: 0 }
-      const previous = cluster.notes.get(note.path)
-      cluster.notes.set(note.path, previous || note)
+      cluster.notes.set(note.path, cluster.notes.get(note.path) || note)
       cluster.score += weight
       clusters.set(key, cluster)
     }
@@ -199,7 +217,11 @@ export default class ElephantWikiAddon {
       if (note.folder) add(note.folder, note, 2)
       for (const link of note.links) add(link, note, 1)
       const titleWords = note.title.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) || []
-      for (const word of titleWords.filter((word) => !['this', 'that', 'with', 'from', 'dans', 'pour', 'avec', 'sans', 'note'].includes(word)).slice(0, 5)) add(word, note, 1)
+      for (const word of titleWords
+        .filter((value) => !['this', 'that', 'with', 'from', 'dans', 'pour', 'avec', 'sans', 'note'].includes(value))
+        .slice(0, 5)) {
+        add(word, note, 1)
+      }
     }
 
     const now = new Date().toISOString()
@@ -218,10 +240,11 @@ export default class ElephantWikiAddon {
           id: `wiki-${slugify(cluster.topic)}`,
           topic,
           title: topic,
-          summary: `This proposal connects ${cluster.notes.length} notes around ${topic}, using ${sources.length} directly cited sources.`,
+          summary: `This fallback proposal connects ${cluster.notes.length} notes around ${topic}, using ${sources.length} directly cited sources.`,
           sources,
           sourceCount: cluster.notes.length,
           status: 'proposed',
+          origin: 'lexical-fallback',
           createdAt: now,
           updatedAt: now
         }
@@ -229,54 +252,74 @@ export default class ElephantWikiAddon {
   }
 
   async generateProposals() {
-    const [existing, notes] = await Promise.all([this.loadRecords(), this.scanNotes()])
-    const preserved = existing.filter((record) => record.status !== 'proposed')
+    const existing = await this.loadRecords()
+    const preserved = existing.filter((record) => record.status !== 'proposed' || record.origin === 'manual')
+    const knowledge = this.knowledgeProvider()
+
+    try {
+      const semantic = await discoverSemanticWikiRecords(knowledge, existing, { limit: 12 })
+      if (semantic.available) {
+        const merged = [
+          ...preserved,
+          ...semantic.records.filter((proposal) => !preserved.some((record) => record.id === proposal.id))
+        ]
+        await this.saveRecords(merged.filter((record) => !record.providerOwned))
+        return { generated: semantic.records.length, records: merged, engine: 'knowledge-semantic-v2' }
+      }
+    } catch (error) {
+      console.warn('[wiki-addon] Semantic organization failed; using local records and lexical fallback', error)
+    }
+
+    const notes = await this.scanNotes()
     const proposals = this.buildProposals(notes)
-    const merged = [...preserved, ...proposals.filter((proposal) => !preserved.some((record) => record.id === proposal.id))]
-    await this.saveRecords(merged)
-    return { generated: proposals.length, records: merged }
+    const merged = [
+      ...preserved,
+      ...proposals.filter((proposal) => !preserved.some((record) => record.id === proposal.id))
+    ]
+    await this.saveRecords(merged.filter((record) => !record.providerOwned))
+    return { generated: proposals.length, records: merged, engine: 'lexical-fallback' }
   }
 
   async acceptRecord(id) {
-  const knowledge = this.knowledgeProvider()
-  if (knowledge && typeof knowledge.acceptWiki === 'function') {
-    try {
-      const accepted = await knowledge.acceptWiki(id)
-      if (accepted?.draft) return knowledgeRecord(accepted.draft)
-    } catch (error) {
-      console.warn('[wiki-addon] Knowledge accept failed; trying local proposal', error)
+    const knowledge = this.knowledgeProvider()
+    if (knowledge && typeof knowledge.acceptWiki === 'function') {
+      try {
+        const accepted = await knowledge.acceptWiki(id)
+        if (accepted?.draft) return knowledgeRecord(accepted.draft)
+      } catch (error) {
+        console.warn('[wiki-addon] Knowledge accept failed; trying local proposal', error)
+      }
     }
+    const records = await this.loadRecords()
+    const record = records.find((candidate) => candidate.id === id)
+    if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
+    const relativePath = `Wiki/${slugify(record.title)}.md`
+    await this.writeNote(relativePath, proposalMarkdown(record))
+    record.status = 'accepted'
+    record.path = relativePath
+    record.updatedAt = new Date().toISOString()
+    await this.saveRecords(records.filter((candidate) => !candidate.providerOwned))
+    return record
   }
-  const records = await this.loadRecords()
-  const record = records.find((candidate) => candidate.id === id)
-  if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
-  const relativePath = `Wiki/${slugify(record.title)}.md`
-  await this.writeNote(relativePath, proposalMarkdown(record))
-  record.status = 'accepted'
-  record.path = relativePath
-  record.updatedAt = new Date().toISOString()
-  await this.saveRecords(records.filter((candidate) => !candidate.providerOwned))
-  return record
-}
 
   async dismissRecord(id) {
-  const knowledge = this.knowledgeProvider()
-  if (knowledge && typeof knowledge.rejectWiki === 'function') {
-    try {
-      const rejected = await knowledge.rejectWiki(id)
-      if (rejected) return knowledgeRecord(rejected)
-    } catch (error) {
-      console.warn('[wiki-addon] Knowledge reject failed; trying local proposal', error)
+    const knowledge = this.knowledgeProvider()
+    if (knowledge && typeof knowledge.rejectWiki === 'function') {
+      try {
+        const rejected = await knowledge.rejectWiki(id)
+        if (rejected) return knowledgeRecord(rejected)
+      } catch (error) {
+        console.warn('[wiki-addon] Knowledge reject failed; trying local proposal', error)
+      }
     }
+    const records = await this.loadRecords()
+    const record = records.find((candidate) => candidate.id === id)
+    if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
+    record.status = 'dismissed'
+    record.updatedAt = new Date().toISOString()
+    await this.saveRecords(records.filter((candidate) => !candidate.providerOwned))
+    return record
   }
-  const records = await this.loadRecords()
-  const record = records.find((candidate) => candidate.id === id)
-  if (!record) throw new Error(`Unknown Wiki proposal: ${id}`)
-  record.status = 'dismissed'
-  record.updatedAt = new Date().toISOString()
-  await this.saveRecords(records.filter((candidate) => !candidate.providerOwned))
-  return record
-}
 
   render(container) {
     const documentRef = container.ownerDocument
@@ -292,10 +335,21 @@ export default class ElephantWikiAddon {
         root.replaceChildren()
         const header = node(documentRef, 'header', 'elephant-package-header')
         const heading = node(documentRef, 'div')
-        heading.append(node(documentRef, 'h2', '', 'Wiki'), node(documentRef, 'p', '', `${records.length} pages and proposals`))
+        heading.append(
+          node(documentRef, 'h2', '', 'Wiki'),
+          node(documentRef, 'p', '', `${records.length} pages and proposals`)
+        )
         const actions = node(documentRef, 'div', 'elephant-package-actions')
-        const propose = node(documentRef, 'button', '', 'Generate proposals')
-        propose.onclick = async () => { propose.disabled = true; try { await this.generateProposals(); await refresh() } finally { propose.disabled = false } }
+        const propose = node(documentRef, 'button', '', 'Propose with AI')
+        propose.onclick = async () => {
+          propose.disabled = true
+          try {
+            await this.generateProposals()
+            await refresh()
+          } finally {
+            propose.disabled = false
+          }
+        }
         const reload = node(documentRef, 'button', '', 'Refresh')
         reload.onclick = () => void refresh()
         actions.append(propose, reload)
@@ -303,13 +357,18 @@ export default class ElephantWikiAddon {
         root.append(header)
 
         const list = node(documentRef, 'div', 'elephant-wiki-list')
-        if (!records.length) list.append(node(documentRef, 'p', 'elephant-package-muted', 'No Wiki page or proposal yet.'))
+        if (!records.length) {
+          list.append(node(documentRef, 'p', 'elephant-package-muted', 'No Wiki page or proposal yet.'))
+        }
         for (const record of records) {
           const article = node(documentRef, 'article', 'elephant-wiki-record')
           article.dataset.status = record.status
           article.append(node(documentRef, 'h3', '', record.title))
           if (record.summary) article.append(node(documentRef, 'p', '', record.summary))
-          article.append(node(documentRef, 'small', '', `${record.status} · ${record.sourceCount || record.sources.length} sources`))
+          const evidence = record.origin === 'semantic'
+            ? `${record.qualityLabel || 'Semantic topic'} · ${record.coreSourceCount || record.sourceCount} core · ${record.sourceCount} total`
+            : `${record.status} · ${record.sourceCount || record.sources.length} sources`
+          article.append(node(documentRef, 'small', '', evidence))
           if (record.status === 'proposed') {
             const buttons = node(documentRef, 'div', 'elephant-package-actions')
             const accept = node(documentRef, 'button', '', 'Approve')
@@ -323,7 +382,14 @@ export default class ElephantWikiAddon {
         }
         root.append(list)
       } catch (error) {
-        if (!disposed) root.replaceChildren(node(documentRef, 'p', 'elephant-package-error', error instanceof Error ? error.message : String(error)))
+        if (!disposed) {
+          root.replaceChildren(node(
+            documentRef,
+            'p',
+            'elephant-package-error',
+            error instanceof Error ? error.message : String(error)
+          ))
+        }
       }
     }
 
@@ -345,16 +411,20 @@ export default class ElephantWikiAddon {
       .elephant-wiki-record h3,.elephant-wiki-record p { margin:0; }
       .elephant-wiki-record p,.elephant-wiki-record small { color:var(--en-muted); }
       .elephant-package-error { color:var(--en-danger,#b42318); }
+      @media (max-width:760px) { .elephant-wiki-package { padding:12px; } .elephant-wiki-list { grid-template-columns:1fr; } }
     `, 'wiki-package')
     const bridge = this.window?.__ELEPHANT_ADDON_VUE__
     if (!bridge?.createDomComponent) throw new Error('Physical addon Vue bridge is unavailable')
     api.workspace.registerView({
       id: VIEW_ID,
       title: 'Wiki',
-      description: 'Browse package-owned Wiki pages and proposals.',
+      description: 'Browse package-owned Wiki pages and semantic proposals.',
       icon: 'book-open-text',
       kind: 'ai-wiki-v3',
-      component: bridge.createDomComponent({ name: 'ElephantPhysicalWiki', mount: (container) => this.render(container) }),
+      component: bridge.createDomComponent({
+        name: 'ElephantPhysicalWiki',
+        mount: (container) => this.render(container)
+      }),
       order: 30
     })
     api.commands.register({

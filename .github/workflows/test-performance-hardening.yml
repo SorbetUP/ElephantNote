@@ -37,7 +37,9 @@ jobs:
         shell: bash
         run: |
           set +e
-          pnpm exec vitest run --config vitest.critical.config.js --coverage > critical-coverage-output.txt 2>&1
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            --config vitest.critical.config.js --coverage \
+            > critical-coverage-output.txt 2>&1
           status=$?
           tail -n 240 critical-coverage-output.txt
           exit "$status"

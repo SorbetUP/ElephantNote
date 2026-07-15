@@ -1,7 +1,7 @@
 {
   "nativeManifest": "native/Cargo.toml",
   "binaryName": "elephant-code-execution",
-  "runner": "process",
+  "runner": "service",
   "supportedPlatforms": [
     "macos-aarch64",
     "macos-x86_64",

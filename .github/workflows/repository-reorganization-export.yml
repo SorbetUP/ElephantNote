@@ -6,13 +6,17 @@ on:
       - develop_next-integration-repair
     paths:
       - '.github/workflows/repository-reorganization-export.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/repository-reorganization-export.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: repository-reorganization-export-${{ github.ref }}
+  group: repository-reorganization-export-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

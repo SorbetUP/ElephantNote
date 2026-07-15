@@ -5,7 +5,8 @@
     "requiredOnPullRequest": true,
     "captureScreenshotPerScenario": true,
     "captureUiTreePerScenario": true,
-    "failOnRendererException": true
+    "failOnRendererException": true,
+    "continueAfterScenarioFailure": true
   },
   "scenarios": [
     {
@@ -56,6 +57,69 @@
       "description": "Open the navigation drawer and enter the seeded Getting Started note.",
       "regression": "Notes appeared in the tree but could not be opened on Android",
       "tags": ["vault", "editor", "navigation"]
+    },
+    {
+      "id": "drawer-back-close",
+      "runner": "android-regression",
+      "description": "Open the navigation drawer and close it with the Android system back action.",
+      "regression": "The Android back action left the navigation overlay stuck above the workspace",
+      "tags": ["drawer", "back", "navigation"]
+    },
+    {
+      "id": "note-back-roundtrip",
+      "runner": "android-regression",
+      "description": "Open a seeded note and return to the note library with the Android back action.",
+      "regression": "Leaving the editor returned to a blank surface or terminated the application",
+      "tags": ["editor", "back", "navigation"]
+    },
+    {
+      "id": "app-background-resume",
+      "runner": "android-regression",
+      "description": "Send Elephant to the Android home screen and resume its existing process and workspace.",
+      "regression": "Resuming from the background recreated a white or unresponsive renderer",
+      "tags": ["lifecycle", "resume", "renderer"]
+    },
+    {
+      "id": "process-relaunch",
+      "runner": "android-regression",
+      "description": "Force-stop Elephant, launch it again and verify that the existing vault workspace is restored.",
+      "regression": "A cold relaunch lost the active vault or failed after the first successful launch",
+      "tags": ["lifecycle", "relaunch", "vault"]
+    },
+    {
+      "id": "search-no-results",
+      "runner": "android-regression",
+      "description": "Submit an impossible search query and verify that the search surface remains responsive and closable.",
+      "regression": "Zero-result searches froze the renderer or left the modal impossible to dismiss",
+      "tags": ["search", "empty-state", "keyboard"]
+    },
+    {
+      "id": "search-repeat-stability",
+      "runner": "android-regression",
+      "description": "Open and close mobile search repeatedly while checking process and renderer health after every cycle.",
+      "regression": "Repeated search activation accumulated broken overlays or rejected promises",
+      "tags": ["search", "stress", "navigation"]
+    },
+    {
+      "id": "settings-back-navigation",
+      "runner": "android-regression",
+      "description": "Open Settings and return to the workspace using the Android system back action.",
+      "regression": "The Android back action could not escape Settings or exposed an empty workspace",
+      "tags": ["settings", "back", "navigation"]
+    },
+    {
+      "id": "keyboard-dismissal",
+      "runner": "android-regression",
+      "description": "Open search, display the software keyboard, dismiss it and then close the search surface.",
+      "regression": "The keyboard hid controls or consumed the only action capable of closing search",
+      "tags": ["search", "keyboard", "navigation"]
+    },
+    {
+      "id": "navigation-stress",
+      "runner": "android-regression",
+      "description": "Cycle through drawer, Settings and search navigation several times without restarting Elephant.",
+      "regression": "Repeated cross-surface navigation eventually crashed or stranded the mobile shell",
+      "tags": ["stress", "drawer", "settings", "search"]
     }
   ]
 }

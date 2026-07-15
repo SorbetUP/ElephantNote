@@ -10,7 +10,12 @@ import {
 const describeBundled = bundled ? describe : describe.skip
 
 const taskBoxes = (muya) =>
-  Array.from(muya.container.querySelectorAll('input[type="checkbox"]'))
+  Array.from(muya.container.querySelectorAll('input.ag-task-list-item-checkbox'))
+
+const readJsMarkdown = (muya) => {
+  muya._markdownBlockCache?.clear()
+  return muya.getMarkdown()
+}
 
 const clickTask = async (muya, index, checked, autoCheck = false) => {
   muya.options.autoCheck = autoCheck
@@ -18,6 +23,7 @@ const clickTask = async (muya, index, checked, autoCheck = false) => {
   if (!checkbox) throw new Error(`Task checkbox ${index} is unavailable.`)
   if (checkbox.checked !== checked) checkbox.click()
   await settle()
+  muya._markdownBlockCache?.clear()
 }
 
 const rustTaskItems = (rust) =>
@@ -75,13 +81,13 @@ const traces = [
     checkpoints: ['- [x] alpha\n', '- [ ] alpha\n', '- [x] alpha\n'],
     runJs: async (muya) => {
       await clickTask(muya, 0, true)
-      const checked = muya.getMarkdown()
+      const checked = readJsMarkdown(muya)
       muya.undo()
       await settle()
-      const undone = muya.getMarkdown()
+      const undone = readJsMarkdown(muya)
       muya.redo()
       await settle()
-      return [checked, undone, muya.getMarkdown()]
+      return [checked, undone, readJsMarkdown(muya)]
     },
     runRust: (rust) => {
       setRustTask(rust, 0, true)
@@ -103,13 +109,13 @@ const traces = [
     ],
     runJs: async (muya) => {
       await clickTask(muya, 0, true, true)
-      const checked = muya.getMarkdown()
+      const checked = readJsMarkdown(muya)
       muya.undo()
       await settle()
-      const undone = muya.getMarkdown()
+      const undone = readJsMarkdown(muya)
       muya.redo()
       await settle()
-      return [checked, undone, muya.getMarkdown()]
+      return [checked, undone, readJsMarkdown(muya)]
     },
     runRust: (rust) => {
       setRustTask(rust, 0, true, true)

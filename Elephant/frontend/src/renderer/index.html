@@ -59,6 +59,25 @@
       #elephant-startup[data-error='true'] .elephant-startup-mark { background: #3b171b; }
       #elephant-startup[data-error='true'] span { max-width: 520px; color: #f4b7bd; white-space: pre-wrap; }
     </style>
+    <script>
+      // Some renderer dependencies inspect the Node-style `process` global while
+      // their ES modules are being evaluated. This must exist before either
+      // module entry point runs; installing it from main.js is already too late.
+      globalThis.process ||= {
+        browser: true,
+        platform: 'android',
+        version: '',
+        versions: {},
+        env: {
+          NODE_ENV: 'production',
+          IS_PREACT: 'false'
+        },
+        argv: [],
+        cwd: () => '/',
+        uptime: () => 0,
+        nextTick: (callback, ...args) => queueMicrotask(() => callback(...args))
+      }
+    </script>
   </head>
 
   <body>

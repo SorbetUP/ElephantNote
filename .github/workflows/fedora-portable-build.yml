@@ -32,7 +32,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential curl wget file git jq patchelf libfuse2 \
+            build-essential curl wget file git jq patchelf libfuse2 unzip \
             libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
             librsvg2-dev libssl-dev libxdo-dev
 
@@ -75,12 +75,17 @@ jobs:
 
       - name: Prepare bundled desktop runtimes when required
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
+          mkdir -p dist
+          : > dist/runtime-build.log
+          set -o pipefail
           if node -e "const p=require('./package.json'); process.exit(p.scripts?.['tauri:llama:install'] ? 0 : 1)"; then
-            pnpm tauri:llama:install
+            pnpm tauri:llama:install 2>&1 | tee -a dist/runtime-build.log
           fi
           if node -e "const p=require('./package.json'); process.exit(p.scripts?.['tauri:codex:install'] ? 0 : 1)"; then
-            pnpm tauri:codex:install
+            pnpm tauri:codex:install 2>&1 | tee -a dist/runtime-build.log
           fi
 
       - name: Build Linux AppImage
@@ -112,7 +117,7 @@ jobs:
               "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > BUILD-INFO.txt
           )
 
-      - name: Upload Fedora portable build and log
+      - name: Upload Fedora portable build and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:

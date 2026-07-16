@@ -84,12 +84,12 @@ vi.mock('../../../Elephant/frontend/app/services/elephantnoteClient.js', () => (
       }),
       delete: vi.fn(async(relativePath) => {
         entries = entries.filter((entry) => entry.path !== relativePath && !entry.path.startsWith(`${relativePath}/`))
-        return { workspace, entries }
+        return { deleted: true, path: relativePath }
       })
     },
     sidebar: {
-      attach: vi.fn(async(payload) => ({ workspace: { sidebar: [...workspace.sidebar, { id: payload.relativePath, path: payload.relativePath, title: payload.title, type: payload.type }] } })),
-      detach: vi.fn(async(pathname) => ({ workspace: { sidebar: workspace.sidebar.filter((item) => item.path !== pathname) } }))
+      attach: vi.fn(async(payload) => ({ sidebar: [...workspace.sidebar, { id: payload.relativePath, path: payload.relativePath, title: payload.title, type: payload.type }] })),
+      detach: vi.fn(async(pathname) => ({ sidebar: workspace.sidebar.filter((item) => item.path !== pathname) }))
     },
     wiki: {
       list: vi.fn(async() => ({ records: [] })),
@@ -128,6 +128,20 @@ describe('real vault store workflow build/coverage', () => {
     expect(store.hasVault).toBe(true)
     expect(store.activeVault.path).toBe('/vault')
     expect(store.activeNoteEntries.map((entry) => entry.path)).toContain('Alpha.md')
+  })
+
+  it('keeps entry getters safe when a legacy or partial response contains undefined arrays', async() => {
+    const { useVaultStore } = await import('../../../Elephant/frontend/app/stores/vaultStore.js')
+    const store = useVaultStore()
+    await store.load()
+    store.entries = undefined
+    store.rootEntries = undefined
+    store.openedNotes = undefined
+    store.pinnedNotePaths = undefined
+    expect(store.activeEntries).toEqual([])
+    expect(store.rootSidebarEntries).toEqual([])
+    expect(store.activeNoteEntries).toEqual([])
+    expect(store.recentNoteEntries).toEqual([])
   })
 
   it('opens a note through the real store and sends the open-file IPC message', async() => {
@@ -198,6 +212,17 @@ describe('real vault store workflow build/coverage', () => {
     await store.deleteEntry(entries.find((entry) => entry.path === 'Projects'))
     expect(store.entries.map((entry) => entry.path)).not.toContain('Projects')
     expect(store.entries.map((entry) => entry.path)).not.toContain('Projects/Beta.md')
+  })
+
+
+  it('accepts the direct workspace object returned by Rust sidebar commands', async() => {
+    const { useVaultStore } = await import('../../../Elephant/frontend/app/stores/vaultStore.js')
+    const store = useVaultStore()
+    await store.load()
+    await store.attachEntryToSidebar({ path: 'Gamma.md', title: 'Gamma', type: 'note' })
+    expect(store.workspace.sidebar.map((entry) => entry.path)).toContain('Gamma.md')
+    await store.detachEntryFromSidebar('Alpha.md')
+    expect(store.workspace.sidebar.map((entry) => entry.path)).not.toContain('Alpha.md')
   })
 
   it('switches real workspace views and falls back to notes for invalid views', async() => {

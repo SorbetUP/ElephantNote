@@ -258,6 +258,8 @@ const vaultAssetsDirectory = computed(() =>
   store.activeVault?.path ? window.path.join(store.activeVault.path, ELEPHANTNOTE_ASSETS_DIR) : ''
 )
 
+const entryArray = (value) => Array.isArray(value) ? value : []
+
 const applyNoteMetadata = (entry, pathname, metadata = {}) => {
   if (!entry || entry.path !== pathname) return entry
   return {
@@ -273,12 +275,12 @@ const syncVisibleNoteMetadata = (pathname, metadata = {}) => {
   if (typeof store.updateNoteMetadata === 'function') {
     store.updateNoteMetadata(pathname, metadata)
   } else {
-    store.entries = store.entries.map((entry) => applyNoteMetadata(entry, pathname, metadata))
-    store.openedNotes = store.openedNotes.map((entry) =>
+    store.entries = entryArray(store.entries).map((entry) => applyNoteMetadata(entry, pathname, metadata))
+    store.openedNotes = entryArray(store.openedNotes).map((entry) =>
       applyNoteMetadata(entry, pathname, metadata)
     )
   }
-  store.rootEntries = store.rootEntries.map((entry) => applyNoteMetadata(entry, pathname, metadata))
+  store.rootEntries = entryArray(store.rootEntries).map((entry) => applyNoteMetadata(entry, pathname, metadata))
 }
 
 const getNoteParentPath = (relativePath = '') => {
@@ -311,17 +313,17 @@ const refreshSavedEntries = async (notePath, result) => {
     }
   }
   try {
-    store.rootEntries = await elephantnoteClient.directory.list({
+    store.rootEntries = entryArray(await elephantnoteClient.directory.list({
       relativePath: '',
       limit: 121,
       includePreview: true
-    })
+    }))
     if (parentPath === store.currentPath) {
-      store.entries = await elephantnoteClient.directory.list({
+      store.entries = entryArray(await elephantnoteClient.directory.list({
         relativePath: store.currentPath,
         limit: 121,
         includePreview: true
-      })
+      }))
     }
   } catch (error) {
     pushEditorLog('warn', '[elephantnote:save] unable to refresh entries after save', {

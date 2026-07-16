@@ -387,7 +387,8 @@ const refreshVisibleVaultFiles = async () => {
     const currentPath = store.currentPath || ''
     const entries = await elephantnoteClient.directory.list(currentPath)
     store.entries = Array.isArray(entries) ? entries : []
-    store.rootEntries = currentPath ? await elephantnoteClient.directory.list('') : store.entries
+    const rootEntries = currentPath ? await elephantnoteClient.directory.list('') : store.entries
+    store.rootEntries = Array.isArray(rootEntries) ? rootEntries : []
   } catch (error) {
     console.warn('Unable to refresh the vault after synchronization:', error)
   }

@@ -1,6 +1,10 @@
 name: Mobile Knowledge validation
 
 on:
+  push:
+    branches:
+      - develop
+      - main
   pull_request:
     paths:
       - '.github/workflows/mobile-knowledge-validation.yml'
@@ -24,6 +28,13 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Materialize official addons
+        run: node build/scripts/sync-elephant-addons.mjs
 
       - uses: dtolnay/rust-toolchain@stable
         with:

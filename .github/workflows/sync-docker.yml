@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
       - nsb/tauri
       - 'assistant/**'
       - 'feature/**'
@@ -27,6 +28,13 @@ jobs:
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Materialize official addons
+        run: node build/scripts/sync-elephant-addons.mjs
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable

@@ -7,6 +7,7 @@ on:
       - develop_next-mobile-recovery
       - develop_next-unified-candidate2
       - develop_next-integration-repair
+      - develop
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -23,10 +24,8 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'push' ||
-      github.event.pull_request.head.ref == 'develop_next' ||
-      github.event.pull_request.head.ref == 'develop_next-mobile-recovery' ||
-      github.event.pull_request.head.ref == 'develop_next-unified-candidate2' ||
-      github.event.pull_request.head.ref == 'develop_next-integration-repair'
+      github.event.pull_request.base.ref == 'develop_next-integration-repair' ||
+      github.event.pull_request.base.ref == 'develop'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -140,10 +139,8 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'push' ||
-      github.event.pull_request.head.ref == 'develop_next' ||
-      github.event.pull_request.head.ref == 'develop_next-mobile-recovery' ||
-      github.event.pull_request.head.ref == 'develop_next-unified-candidate2' ||
-      github.event.pull_request.head.ref == 'develop_next-integration-repair'
+      github.event.pull_request.base.ref == 'develop_next-integration-repair' ||
+      github.event.pull_request.base.ref == 'develop'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:

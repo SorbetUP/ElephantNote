@@ -1,7 +1,31 @@
 <template>
   <div class="en-library-toolbar">
     <div class="en-library-toolbar-left">
-      <div class="en-library-title" />
+      <button
+        class="en-create-button en-create-button-primary"
+        type="button"
+        :disabled="isBusy || !store.hasVault"
+        @click="createNote"
+      >
+        <FilePlus2 class="en-create-icon" />
+        <span>{{ busyAction === 'note' ? 'Creating…' : 'New note' }}</span>
+      </button>
+      <button
+        class="en-create-button"
+        type="button"
+        :disabled="isBusy || !store.hasVault"
+        @click="createFolder"
+      >
+        <FolderPlus class="en-create-icon" />
+        <span>{{ busyAction === 'folder' ? 'Creating…' : 'New folder' }}</span>
+      </button>
+      <span
+        v-if="actionError"
+        class="en-library-action-error"
+        role="alert"
+      >
+        {{ actionError }}
+      </span>
     </div>
 
     <div class="en-library-actions">
@@ -24,6 +48,7 @@
           type="button"
           :class="{ active: store.viewMode === 'grid' }"
           title="Grid"
+          aria-label="Grid view"
           @click="store.viewMode = 'grid'"
         >
           <Grid3x3 class="en-icon" />
@@ -32,6 +57,7 @@
           type="button"
           :class="{ active: store.viewMode === 'list' }"
           title="List"
+          aria-label="List view"
           @click="store.viewMode = 'list'"
         >
           <List class="en-icon" />
@@ -42,10 +68,31 @@
 </template>
 
 <script setup>
-import { Grid3x3, List } from '@lucide/vue'
+import { computed, ref } from 'vue'
+import { FilePlus2, FolderPlus, Grid3x3, List } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
 
 const store = useVaultStore()
+const busyAction = ref('')
+const actionError = ref('')
+const isBusy = computed(() => !!busyAction.value)
+
+const runCreateAction = async (action, callback) => {
+  if (isBusy.value || !store.hasVault) return
+  busyAction.value = action
+  actionError.value = ''
+  try {
+    await callback()
+  } catch (error) {
+    actionError.value = error?.message || `Unable to create ${action}.`
+    console.error(`[library] create ${action} failed`, error)
+  } finally {
+    busyAction.value = ''
+  }
+}
+
+const createNote = () => runCreateAction('note', () => store.createNote())
+const createFolder = () => runCreateAction('folder', () => store.createFolder())
 </script>
 
 <style scoped>
@@ -53,19 +100,85 @@ const store = useVaultStore()
   min-height: 112px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 18px;
   padding: 0 34px;
 }
 
 .en-library-toolbar-left {
+  min-width: 0;
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.en-create-button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 16px;
+  border: 1px solid var(--en-border);
+  border-radius: 11px;
+  color: var(--en-text);
+  background: color-mix(in srgb, var(--en-surface) 68%, transparent);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.en-create-button:hover:not(:disabled) {
+  border-color: var(--en-border-strong);
+  background: var(--en-soft);
+}
+
+.en-create-button-primary {
+  border-color: color-mix(in srgb, var(--en-primary) 64%, var(--en-border));
+  color: #ffffff;
+  background: var(--en-primary);
+}
+
+.en-create-button-primary:hover:not(:disabled) {
+  border-color: var(--en-primary);
+  background: color-mix(in srgb, var(--en-primary) 88%, #000000);
+}
+
+.en-create-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.en-create-button:focus-visible,
+.en-view-toggle button:focus-visible,
+.en-select:focus-visible {
+  outline: 2px solid var(--en-primary);
+  outline-offset: 2px;
+}
+
+.en-create-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.en-library-action-error {
+  min-width: 0;
+  max-width: 320px;
+  overflow: hidden;
+  color: var(--en-danger, #dc2626);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .en-library-actions {
   display: flex;
   align-items: center;
   gap: 14px;
+  margin-left: auto;
 }
 
 .en-select,
@@ -94,6 +207,7 @@ const store = useVaultStore()
   border: 0;
   color: var(--en-muted);
   background: transparent;
+  cursor: pointer;
 }
 
 .en-view-toggle button.active {
@@ -104,5 +218,24 @@ const store = useVaultStore()
 .en-icon {
   width: 22px;
   height: 22px;
+}
+
+@media (max-width: 980px) {
+  .en-library-toolbar {
+    min-height: 132px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+
+  .en-library-toolbar-left,
+  .en-library-actions {
+    width: 100%;
+  }
+
+  .en-library-actions {
+    justify-content: flex-end;
+  }
 }
 </style>

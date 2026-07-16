@@ -1,6 +1,10 @@
 name: Addon Platform Validation
 
 on:
+  push:
+    branches:
+      - develop
+      - main
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -20,6 +24,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Materialize official addons
+        run: node build/scripts/sync-elephant-addons.mjs
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -198,6 +205,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Materialize official addons
+        run: node build/scripts/sync-elephant-addons.mjs
 
       - name: Compile and test Rust addon security modules
         shell: bash

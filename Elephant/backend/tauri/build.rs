@@ -15,7 +15,6 @@ fn generate_tauri_parity_tests() {
   let mut out = String::new();
 
   out.push_str("use crate::markdown_engine::{excerpt, heading_title, parse_markdown, parse_tags, render_note};\n");
-  out.push_str("use crate::model_domain::{model_cache_key, ModelSelection};\n");
   out.push_str("use crate::note_domain::{create_note_markdown, note_filename_from_title, rename_note_markdown};\n");
   out.push_str("use crate::path_utils::{clean_relative_path, join_path, with_markdown_extension};\n");
   out.push_str("use crate::search_logic::{normalize_query, score_text};\n");
@@ -47,10 +46,6 @@ fn generate_tauri_parity_tests() {
     push_test(&mut out, &format!("generated_search_case_{index:03}"), &format!("assert_eq!(normalize_query(\"  Alpha   {index}  \"), \"alpha {index}\"); assert!(score_text(\"alpha {index}\", \"Alpha {index} title\", \"body\") >= 10); assert!(score_text(\"alpha {index}\", \"title\", \"alpha {index} body\") >= 3); assert_eq!(score_text(\"missing {index}\", \"title\", \"body\"), 0);"));
   }
 
-  for index in 0..70 {
-    push_test(&mut out, &format!("generated_model_case_{index:03}"), &format!("let enabled = ModelSelection {{ provider: String::from(\"local\"), model_id: String::from(\"model-{index}\"), local: true }}; assert!(enabled.is_enabled()); let disabled = ModelSelection {{ provider: String::from(\"local\"), model_id: String::from(\"   \"), local: true }}; assert!(!disabled.is_enabled()); assert_eq!(model_cache_key(\" local \", \" model-{index} \"), \"local:model-{index}\");"));
-  }
-
   for index in 0..80 {
     push_test(&mut out, &format!("generated_markdown_roundtrip_case_{index:03}"), &format!("let markdown = render_note(\"Title {index}\", \"note\", &[String::from(\"tag-{index}\")], \"# Title {index}\\n\\nBody {index}\"); let parsed = parse_markdown(&markdown, \"fallback.md\"); assert_eq!(parsed.title, \"Title {index}\"); assert_eq!(parsed.note_type, \"note\"); assert_eq!(parsed.tags, vec![String::from(\"tag-{index}\")]); assert!(parsed.body.contains(\"Body {index}\")); assert!(excerpt(&parsed.body, 2).contains(\"Title {index}\"));"));
   }
@@ -79,7 +74,7 @@ fn generate_tauri_parity_tests() {
     push_test(&mut out, &format!("generated_case_whitespace_query_case_{index:03}"), &format!("assert_eq!(normalize_query(\"\\tMixed   CASE {index}\\n\"), \"mixed case {index}\"); assert!(score_text(\"mixed case {index}\", \"MIXED CASE {index}\", \"\") > 0);"));
   }
 
-  push_test(&mut out, "generated_required_hidden_dirs_contract", "let dirs = required_hidden_dirs(); assert!(dirs.len() >= 8); assert!(dirs.contains(&\"config\")); assert!(!dirs.contains(&\"wiki\")); assert!(dirs.contains(&\"models\")); assert!(dirs.contains(&\"sync\"));");
+  push_test(&mut out, "generated_required_hidden_dirs_contract", "let dirs = required_hidden_dirs(); assert!(dirs.len() >= 7); assert!(dirs.contains(&\"config\")); assert!(!dirs.contains(&\"wiki\")); assert!(dirs.contains(&\"sync\"));");
   push_test(&mut out, "generated_active_vault_contract", "let config = VaultConfig { vaults: vec![vault_descriptor(\"main\", \"Main\", \"/vault/main\")], active_vault_id: Some(String::from(\"main\")) }; let active = active_vault(&config).unwrap(); assert_eq!(active.name, \"Main\"); assert_eq!(active.path, \"/vault/main\");");
   push_test(&mut out, "generated_next_vault_id_contract", "let existing = vec![vault_descriptor(\"work\", \"Work\", \"/vault/work\"), vault_descriptor(\"work-2\", \"Work 2\", \"/vault/work2\"), vault_descriptor(\"work-3\", \"Work 3\", \"/vault/work3\")]; assert_eq!(next_vault_id(&existing, \"Work\"), \"work-4\");");
   push_test(&mut out, "generated_hidden_root_constant_contract", "assert_eq!(HIDDEN_ROOT, \".elephantnote\");");

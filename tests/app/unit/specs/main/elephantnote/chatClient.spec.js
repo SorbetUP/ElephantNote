@@ -1,55 +1,40 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createDomainClients } from 'elephant-front/services/elephantnoteClient/domainClients'
 import { ELEPHANTNOTE_API_ACTIONS as API } from 'common/elephantnote/apiActions'
 
-const makeClient = (handler) => {
-  const calls = []
-  const call = async (action, payload = {}) => {
-    calls.push({ action, payload })
-    return handler(action)
-  }
-  return { calls, clients: createDomainClients(call, () => ({})) }
-}
+const root = process.cwd()
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
 
-describe('RAG chat client', () => {
-  it('initializes search for the active vault before chat', async () => {
-    const { calls, clients } = makeClient((action) => {
-      if (action === API.VAULTS_GET) return { activeVault: { path: '/vault' } }
-      if (action === API.SEARCH_INIT_VAULT) return { status: 'ready' }
-      if (action === API.RAG_CHAT) return { answer: 'ok', citations: [{ path: 'A.md' }] }
-      return {}
-    })
+describe('package-owned chat boundary', () => {
+  it('does not expose RAG chat or semantic initialization through core clients', () => {
+    const clients = createDomainClients(async() => ({}), () => ({}))
 
-    await clients.rag.chat('question', 4)
-
-    expect(calls.slice(0, 3)).toEqual([
-      { action: API.VAULTS_GET, payload: {} },
-      { action: API.SEARCH_INIT_VAULT, payload: { vaultPath: '/vault' } },
-      { action: API.RAG_CHAT, payload: { message: 'question', limit: 4, messages: [] } }
-    ])
+    expect(clients.rag).toBeUndefined()
+    expect(clients.chat).toBeUndefined()
+    expect(API.RAG_CHAT).toBeUndefined()
+    expect(API.SEARCH_INIT_VAULT).toBeUndefined()
+    expect(API.SEARCH_REBUILD).toBeUndefined()
   })
 
-  it('returns the first answer when the model already answered', async () => {
-    let ragCalls = 0
-    const { calls, clients } = makeClient((action) => {
-      if (action === API.VAULTS_GET) return { activeVault: { path: '/vault-retry' } }
-      if (action === API.SEARCH_INIT_VAULT) return { status: 'ready' }
-      if (action === API.RAG_CHAT) {
-        ragCalls += 1
-        return ragCalls === 1
-          ? { answer: 'no citations', citations: [] }
-          : { answer: 'ok', citations: [{ path: 'B.md' }] }
-      }
-      return {}
-    })
+  it('orchestrates chat from the physical AI Chat package', () => {
+    const chat = read('addons/official/ai-chat/main.js')
 
-    const result = await clients.rag.chat('semantic question', 8)
+    expect(chat).toContain("getContributions?.('ai.providers')")
+    expect(chat).toContain("this.api.resources.get(SEARCH_RESOURCE)")
+    expect(chat).toContain("typeof option.provider.chat !== 'function'")
+    expect(chat).not.toContain("this.call('rag.chat'")
+    expect(chat).not.toContain('SEARCH_INIT_VAULT')
+  })
 
-    expect(result.answer).toBe('no citations')
-    expect(calls.map((entry) => entry.action)).toEqual([
-      API.VAULTS_GET,
-      API.SEARCH_INIT_VAULT,
-      API.RAG_CHAT
-    ])
+  it('keeps provider implementations in separate packages', () => {
+    const openModels = read('addons/official/open-models/main.js')
+    const codex = read('addons/official/codex-connection/main.js')
+
+    expect(openModels).toContain("registerContribution('ai.providers'")
+    expect(codex).toContain("registerContribution('ai.providers'")
+    expect(openModels).toContain('chat: (request) => this.chat(request)')
+    expect(codex).toContain('chat: (request) => this.chat(request)')
   })
 })

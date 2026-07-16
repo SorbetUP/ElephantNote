@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../..')
-const readText = (path) => readFileSync(resolve(root, path), 'utf8')
+const absolute = (path) => resolve(root, path)
+const readText = (path) => readFileSync(absolute(path), 'utf8')
 const readJson = (path) => JSON.parse(readText(path))
 
 const errors = []
@@ -16,10 +17,18 @@ const linuxConfig = readJson('Elephant/backend/tauri/tauri.linux.conf.json')
 const androidConfig = readJson('Elephant/backend/tauri/tauri.android.conf.json')
 const buildDev = readText('build/scripts/build_dev.sh')
 const buildAndroid = readText('build/scripts/build_dev_apk.sh')
-const chatRuntime = readText('Elephant/backend/tauri/src/chat_runtime.rs')
+const cargoToml = readText('Elephant/backend/tauri/Cargo.toml')
 const vaultConfig = readText('Elephant/backend/tauri/src/vault/config.rs')
-const tauriExtra = readText('Elephant/backend/tauri/src/tauri_extra_commands.rs')
+const coreCommands = readText('Elephant/backend/tauri/src/core_commands.rs')
 const libMin = readText('Elephant/backend/tauri/src/lib_min.rs')
+const addonServices = readText('Elephant/backend/tauri/src/addon_services.rs')
+
+const assertWorkspaceBuildHook = (config, label) => {
+  const command = config.build?.beforeBuildCommand
+  assert(command && typeof command === 'object', `${label} beforeBuildCommand must use the Tauri object form`)
+  assert(command?.script === 'pnpm tauri:web:build', `${label} must only build the core renderer`)
+  assert(command?.cwd === '../../..', `${label} frontend build must run from the repository workspace root`)
+}
 
 for (const script of [
   'tauri:check',
@@ -34,16 +43,25 @@ for (const script of [
 }
 
 assert(
-  existsSync(resolve(root, 'Elephant/assets/static/icon.png')),
+  existsSync(absolute('Elephant/assets/static/icon.png')),
   'Elephant/assets/static/icon.png must exist for Linux/Android bundles'
 )
 assert(
-  baseConfig.bundle?.icon?.includes('../../assets/static/icon.png'),
-  'base Tauri bundle must include a PNG icon for Linux'
+  baseConfig.productName === 'Elephant',
+  'The packaged desktop product name must be Elephant'
 )
 assert(
-  baseConfig.bundle?.resources?.includes('bin'),
-  'desktop Tauri config must keep bin resources for bundled llama-server'
+  baseConfig.app?.windows?.[0]?.title === 'Elephant',
+  'The desktop window title must be Elephant'
+)
+assert(
+  baseConfig.bundle?.icon?.includes('../../assets/static/icon.png'),
+  'Base Tauri bundle must include a PNG icon for Linux'
+)
+assertWorkspaceBuildHook(baseConfig, 'Core Tauri build')
+assert(
+  Array.isArray(baseConfig.bundle?.resources) && baseConfig.bundle.resources.length === 0,
+  'Core desktop bundle resources must exclude optional addon binaries'
 )
 
 assert(
@@ -60,17 +78,10 @@ assert(
   'Linux override must not reuse macOS titleBarStyle'
 )
 
+assertWorkspaceBuildHook(androidConfig, 'Android build')
 assert(
-  androidConfig.build?.beforeBuildCommand === 'pnpm tauri:web:build',
-  'Android build must not run the desktop llama-server installer'
-)
-assert(
-  Array.isArray(androidConfig.bundle?.resources),
-  'Android bundle resources must be an explicit array'
-)
-assert(
-  androidConfig.bundle.resources.length === 0,
-  'Android bundle must not include desktop bin resources'
+  Array.isArray(androidConfig.bundle?.resources) && androidConfig.bundle.resources.length === 0,
+  'Android bundle must not include desktop process resources'
 )
 assert(
   androidConfig.bundle?.icon?.includes('../../assets/static/icon.png'),
@@ -98,73 +109,99 @@ assert(
   'macOS smoke script must run the packaged window verifier'
 )
 assert(
-  existsSync(resolve(root, 'build/scripts/tauri-macos-window-smoke.mjs')),
+  existsSync(absolute('build/scripts/tauri-macos-window-smoke.mjs')),
   'macOS Tauri window smoke verifier must exist'
 )
-assert(
-  buildDev.includes('tauri.linux.conf.json'),
-  'Linux dev must use the Linux Tauri config override'
-)
-assert(
-  !buildDev.includes('TAURI_ARGS'),
-  'Tauri dev script must not use an empty Bash array under set -u'
-)
+assert(buildDev.includes('tauri.linux.conf.json'), 'Linux dev must use the Linux Tauri config override')
+assert(!buildDev.includes('TAURI_ARGS'), 'Tauri dev script must not use an empty Bash array under set -u')
 assert(
   buildDev.includes('cargo tauri dev "$@"'),
-  'macOS Tauri dev must run without config args while preserving CLI passthrough'
+  'macOS Tauri dev must preserve CLI passthrough'
 )
 assert(
-  buildAndroid.includes('tauri.android.conf.json'),
-  'Android build script must use the Android Tauri config override'
-)
-assert(
-  buildAndroid.includes('ELEPHANTNOTE_SKIP_LLAMA_BUNDLE=1'),
-  'Android build must skip bundled llama-server'
+  !buildDev.includes('ensure-tauri-llama-server') && !buildDev.includes('ensure-tauri-codex-runtime'),
+  'Core development startup must not download optional AI runtimes'
 )
 assert(
   buildAndroid.includes('cargo tauri android init --config "$ANDROID_CONFIG"'),
-  'Android build script must initialize the generated Android project with the Android config'
+  'Android build script must initialize the generated project with the Android config'
 )
 assert(
-  buildAndroid.includes('cargo tauri android build --debug --apk --config "$ANDROID_CONFIG"'),
-  'Android build script must build with the Android config'
+  buildAndroid.includes('BUILD_ARGS=(android build --apk --target "$ANDROID_TARGET" --config "$ANDROID_CONFIG")'),
+  'Android build script must construct a profile-aware APK build using the Android config and requested target'
+)
+assert(
+  buildAndroid.includes('if [ "$ANDROID_BUILD_PROFILE" = debug ]; then BUILD_ARGS+=(--debug); fi'),
+  'Android debug builds must append the Tauri --debug flag without forcing release builds into debug mode'
+)
+assert(
+  buildAndroid.includes('ELEPHANTNOTE_ANDROID_BUILD=1 cargo tauri "${BUILD_ARGS[@]}"'),
+  'Android build script must execute the validated argument array under the Android renderer build flag'
+)
+assert(
+  !buildAndroid.includes('ELEPHANTNOTE_SKIP_LLAMA_BUNDLE'),
+  'Android build must not carry obsolete bundled-llama switches'
 )
 
-assert(chatRuntime.includes('#[cfg(mobile)]'), 'Chat runtime must have a mobile guard')
+for (const addon of ['open-models', 'codex-connection', 'sync']) {
+  const manifest = readJson(`addons/official/${addon}/manifest.json`)
+  const sidecarPlatforms = Object.keys(manifest.native?.sidecars || {})
+  assert(manifest.native?.runner === 'service', `${manifest.id} must use the persistent service runner`)
+  assert(
+    manifest.native?.protocol === 'elephant-addon-service-v1',
+    `${manifest.id} must use the versioned addon service protocol`
+  )
+  assert(sidecarPlatforms.length > 0, `${manifest.id} must publish desktop sidecars`)
+  assert(
+    sidecarPlatforms.every((platform) => !/^(android|ios)-/.test(platform)),
+    `${manifest.id} must not publish process sidecars for Android or iOS`
+  )
+  assert(
+    manifest.native?.mobile?.android?.supported === false,
+    `${manifest.id} must explicitly reject Android until it has a native mobile adapter`
+  )
+  assert(
+    manifest.native?.mobile?.ios?.supported === false,
+    `${manifest.id} must explicitly reject iOS until it has a native mobile adapter`
+  )
+}
+
 assert(
-  chatRuntime.includes('desktop-only'),
-  'Mobile chat guard must explain that bundled llama.cpp is desktop-only'
+  addonServices.includes('Persistent process services require a desktop addon package'),
+  'Generic native service host must reject downloaded process services on mobile'
 )
 assert(
-  chatRuntime.includes('#[cfg(not(mobile))]\nuse crate::local_llama_runtime;'),
-  'Chat runtime must import bundled llama runtime only on desktop'
+  !libMin.includes('pub mod local_llama_runtime;') && !libMin.includes('pub mod chat_runtime;'),
+  'Extracted local model and chat runtimes must remain absent from core'
 )
 assert(
-  chatRuntime.includes('#[cfg(not(mobile))]\nfn with_system_prompt'),
-  'Desktop prompt assembly must not be required by mobile chat'
+  !baseConfig.build.beforeBuildCommand.script.includes('llama') &&
+    !baseConfig.build.beforeBuildCommand.script.includes('codex'),
+  'Tauri build command must not reference extracted Open Models or Codex installers'
+)
+
+assert(
+  !cargoToml.match(/^iroh\s*=/m) && !cargoToml.includes('iroh-mdns-address-lookup'),
+  'Iroh must remain physically absent from the desktop and mobile core Cargo graph'
 )
 assert(
-  libMin.includes('#[cfg(not(mobile))]\npub mod local_llama_runtime;'),
-  'Bundled local llama runtime module must be desktop-only'
+  cargoToml.includes("[target.'cfg(not(any(target_os = \"android\", target_os = \"ios\")))'.dependencies]"),
+  'Remaining desktop-only generic dependencies must stay target-scoped away from Android/iOS'
+)
+
+assert(vaultConfig.includes('MOBILE_DEFAULT_VAULT_ID'), 'Vault config must define a mobile fallback vault')
+assert(vaultConfig.includes('app_data_dir'), 'Mobile fallback vault must use the app data directory')
+assert(
+  coreCommands.includes('vault_config::get_active_vault'),
+  'Core commands must use the shared vault config path resolver'
 )
 assert(
-  vaultConfig.includes('MOBILE_DEFAULT_VAULT_ID'),
-  'Vault config must define a mobile fallback vault'
+  !existsSync(absolute('Elephant/backend/tauri/src/tauri_extra_commands.rs')),
+  'Legacy optional command module must stay physically absent'
 )
+assert(libMin.includes('mod platform_contract_tests;'), 'Rust platform contract tests must be registered')
 assert(
-  vaultConfig.includes('app_data_dir'),
-  'Mobile fallback vault must use the app data directory'
-)
-assert(
-  tauriExtra.includes('vault_config::get_active_vault'),
-  'Extra commands must use the shared vault config path resolver'
-)
-assert(
-  libMin.includes('mod platform_contract_tests;'),
-  'Rust platform contract tests must be registered'
-)
-assert(
-  existsSync(resolve(root, 'Elephant/backend/tauri/src/platform_contract_tests.rs')),
+  existsSync(absolute('Elephant/backend/tauri/src/platform_contract_tests.rs')),
   'Rust platform contract tests must exist'
 )
 
@@ -174,4 +211,4 @@ if (errors.length > 0) {
   process.exit(1)
 }
 
-console.log('[tauri-platforms] macOS/Linux/Android compatibility guard passed')
+console.log('[tauri-platforms] macOS/Linux/Android physical-addon compatibility guard passed')

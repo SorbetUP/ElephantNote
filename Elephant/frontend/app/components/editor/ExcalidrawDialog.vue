@@ -1,7 +1,12 @@
 <template>
   <Teleport to="body">
-    <div class="en-excalidraw-overlay">
-      <section class="en-excalidraw-shell">
+    <div class="en-excalidraw-overlay" :style="themeTokens">
+      <section
+        class="en-excalidraw-shell"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="t('excalidraw.title')"
+      >
         <header class="en-excalidraw-header">
           <div class="en-excalidraw-name-wrap">
             <input
@@ -9,8 +14,8 @@
               type="text"
               class="en-excalidraw-name-input"
               spellcheck="false"
-              placeholder="drawing"
-              aria-label="Drawing name"
+              :placeholder="t('excalidraw.drawingPlaceholder')"
+              :aria-label="t('excalidraw.drawingName')"
               @pointerdown.stop
               @pointerup.stop
               @mousedown.stop
@@ -24,8 +29,8 @@
             <button
               type="button"
               class="en-excalidraw-button secondary"
-              aria-label="Cancel"
-              title="Cancel"
+              :aria-label="t('excalidraw.cancel')"
+              :title="`${t('excalidraw.cancel')} · Esc`"
               @pointerdown.stop
               @pointerup.stop.prevent="handleClose"
               @mousedown.stop
@@ -38,8 +43,8 @@
               type="button"
               class="en-excalidraw-button primary"
               :disabled="isSaving || !apiRef || !!errorMessage"
-              aria-label="Save"
-              title="Save"
+              :aria-label="t('excalidraw.save')"
+              :title="`${t('excalidraw.save')} · ${isMacOS ? '⌘S' : 'Ctrl S'}`"
               @pointerdown.stop
               @pointerup.stop.prevent="handleSave"
               @mousedown.stop
@@ -54,8 +59,9 @@
         <div
           v-if="errorMessage"
           class="en-excalidraw-error"
+          role="alert"
         >
-          <strong>Excalidraw failed to open.</strong>
+          <strong>{{ t('excalidraw.failedTitle') }}</strong>
           <p>{{ errorMessage }}</p>
         </div>
 
@@ -70,9 +76,12 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
+import { getThemeMode, getThemeTokens } from 'common/elephantnote/appearance'
+import { getExcalidrawBackgroundColor } from 'elephant-shared/excalidrawAssets'
 import {
   loadExcalidrawModule,
   createInitialExcalidrawData,
@@ -109,13 +118,20 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'save'])
-
+const { t } = useI18n()
 const mountEl = ref(null)
 const apiRef = ref(null)
 const root = ref(null)
+const excalidrawModule = ref(null)
 const isSaving = ref(false)
 const initialData = ref(null)
 const errorMessage = ref('')
+const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
+
+// Elephant themes expose full palettes while Excalidraw accepts only its
+// canonical light/dark modes. Keep the surrounding shell on the full palette.
+const excalidrawTheme = computed(() => getThemeMode(props.theme))
+const themeTokens = computed(() => getThemeTokens(props.theme))
 
 const stripKnownExtensions = (value) => {
   return String(value || '')
@@ -137,19 +153,13 @@ const handleClose = () => {
   emit('close')
 }
 
-const renderCanvas = async () => {
-  const mod = await loadExcalidrawModule()
-  initialData.value = await createInitialExcalidrawData({
-    blob: props.initialBlob,
-    theme: props.theme
-  })
-
-  if (!mountEl.value) throw new Error('Excalidraw mount element is missing.')
-  root.value = createRoot(mountEl.value)
+const renderExcalidraw = () => {
+  if (!root.value || !excalidrawModule.value) return
   root.value.render(
-    React.createElement(mod.Excalidraw, {
+    React.createElement(excalidrawModule.value.Excalidraw, {
       initialData: initialData.value,
-      theme: props.theme,
+      theme: excalidrawTheme.value,
+      name: normalizedBaseName.value,
       excalidrawAPI: (api) => {
         apiRef.value = api
       },
@@ -166,6 +176,35 @@ const renderCanvas = async () => {
   )
 }
 
+const applyExcalidrawTheme = (theme) => {
+  renderExcalidraw()
+  const api = apiRef.value
+  if (!api?.updateScene) return
+  api.updateScene({
+    appState: {
+      ...api.getAppState?.(),
+      theme,
+      viewBackgroundColor: getExcalidrawBackgroundColor(theme)
+    }
+  })
+}
+
+const renderCanvas = async () => {
+  excalidrawModule.value = await loadExcalidrawModule()
+  initialData.value = await createInitialExcalidrawData({
+    blob: props.initialBlob,
+    theme: excalidrawTheme.value
+  })
+
+  if (!mountEl.value) throw new Error('Excalidraw mount element is missing.')
+  root.value = createRoot(mountEl.value)
+  renderExcalidraw()
+}
+
+watch(excalidrawTheme, (theme) => {
+  applyExcalidrawTheme(theme)
+}, { flush: 'post' })
+
 const handleSave = async () => {
   if (!apiRef.value || isSaving.value) return
   isSaving.value = true
@@ -173,11 +212,11 @@ const handleSave = async () => {
   try {
     const sceneBlob = await exportExcalidrawSceneBlob({
       api: apiRef.value,
-      theme: props.theme
+      theme: excalidrawTheme.value
     })
     const blob = await exportExcalidrawBlob({
       api: apiRef.value,
-      theme: props.theme
+      theme: excalidrawTheme.value
     })
     emit('save', {
       blob,
@@ -188,22 +227,36 @@ const handleSave = async () => {
     })
   } catch (error) {
     console.error('Failed to save Excalidraw:', error)
-    errorMessage.value = error?.message || 'The drawing could not be saved.'
+    errorMessage.value = error?.message || t('excalidraw.failedSave')
   } finally {
     isSaving.value = false
   }
 }
 
+const handleKeyboard = (event) => {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    handleClose()
+    return
+  }
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+    event.preventDefault()
+    void handleSave()
+  }
+}
+
 onMounted(() => {
   document.body.classList.add('en-excalidraw-open')
+  window.addEventListener('keydown', handleKeyboard, true)
   renderCanvas().catch((error) => {
     console.error('Failed to open Excalidraw:', error)
-    errorMessage.value = error?.message || 'The drawing canvas could not be initialized.'
+    errorMessage.value = error?.message || t('excalidraw.failedInitialize')
   })
 })
 
 onBeforeUnmount(() => {
   document.body.classList.remove('en-excalidraw-open')
+  window.removeEventListener('keydown', handleKeyboard, true)
   root.value?.unmount?.()
 })
 </script>
@@ -283,9 +336,9 @@ onBeforeUnmount(() => {
 }
 
 .en-excalidraw-button.primary {
-  background: #2563eb;
+  background: var(--en-primary, #2563eb);
   color: white;
-  border-color: #2563eb;
+  border-color: var(--en-primary, #2563eb);
 }
 
 .en-excalidraw-button:disabled {
@@ -298,8 +351,8 @@ onBeforeUnmount(() => {
   max-width: 520px;
   border-radius: 16px;
   padding: 24px;
-  background: rgba(239, 68, 68, 0.12);
-  color: #fecaca;
+  background: color-mix(in srgb, var(--en-danger, #ef4444) 12%, transparent);
+  color: var(--en-text, #fecaca);
 }
 
 .en-excalidraw-canvas {

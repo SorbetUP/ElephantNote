@@ -12,13 +12,8 @@ import {
 } from 'common/elephantnote/workspaceInsights'
 
 import { useNavigationStore } from './navigationStore'
-import {
-  buildDashboardNoteCreatePayload,
-  DASHBOARD_NOTE_RELATIVE_PATH,
-  isDashboardNotePath
-} from '../components/views/dashboardNoteHelpers'
 
-const WORKSPACE_VIEWS = ['notes', 'dashboard', 'wiki', 'chat', 'canvas', 'graph', 'calendar', 'models']
+const WORKSPACE_VIEWS = ['notes', 'wiki', 'chat', 'canvas', 'graph', 'calendar', 'models']
 
 const getPinnedNotesStorageKey = (vault) => {
   const scope = vault?.id || vault?.path || 'default'
@@ -82,7 +77,15 @@ const isMovingIntoSelf = (sourcePath, targetDirectoryPath) => {
   return targetDirectoryPath === sourcePath || targetDirectoryPath.startsWith(`${sourcePath}/`)
 }
 
-const getSidebarItems = (workspace) => workspace?.sidebar || []
+const entryArray = (value) => Array.isArray(value) ? value : []
+
+const getSidebarItems = (workspace) => entryArray(workspace?.sidebar)
+
+const getWorkspaceResult = (result, fallback = null) => {
+  if (result?.workspace && typeof result.workspace === 'object') return result.workspace
+  if (result && typeof result === 'object' && Array.isArray(result.sidebar)) return result
+  return fallback
+}
 
 const isAttachedSidebarEntry = (item) => item?.type === 'note' || item?.type === 'folder'
 
@@ -115,8 +118,8 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
   getters: {
     hasVault: (state) => !!state.activeVault,
     activeEntries(state) {
-      let entries = [...state.entries]
-      const pinned = new Set(state.pinnedNotePaths)
+      let entries = [...entryArray(state.entries)]
+      const pinned = new Set(entryArray(state.pinnedNotePaths))
       entries.sort((a, b) => {
         const aPinned = pinned.has(a.path)
         const bPinned = pinned.has(b.path)
@@ -135,8 +138,8 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       return this.activeEntries.filter(isNoteEntry)
     },
     rootSidebarEntries(state) {
-      const pinned = new Set(state.pinnedNotePaths)
-      return [...state.rootEntries].sort((a, b) => {
+      const pinned = new Set(entryArray(state.pinnedNotePaths))
+      return [...entryArray(state.rootEntries)].sort((a, b) => {
         const aPinned = pinned.has(a.path)
         const bPinned = pinned.has(b.path)
         if (aPinned !== bPinned) return aPinned ? -1 : 1
@@ -148,30 +151,30 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     },
     workspaceStats(state) {
       return createWorkspaceStats({
-        entries: state.rootEntries,
+        entries: entryArray(state.rootEntries),
         recentNoteEntries: this.recentNoteEntries
       })
     },
     tagTopics(state) {
-      return createTagTopics(state.rootEntries)
+      return createTagTopics(entryArray(state.rootEntries))
     },
     calendarBuckets(state) {
-      return createCalendarBuckets(state.rootEntries)
+      return createCalendarBuckets(entryArray(state.rootEntries))
     },
     graphModel(state) {
       const searchStore = useSearchStore()
       const semanticGraph = searchStore.indexInspection?.graph
       if (semanticGraph?.nodes?.length) return semanticGraph
       return createGraphModel({
-        entries: state.rootEntries,
+        entries: entryArray(state.rootEntries),
         tagTopics: this.tagTopics
       })
     },
     recentNoteEntries(state) {
       return createRecentNoteEntries({
-        entries: state.entries,
-        openedNotes: state.openedNotes,
-        pinnedNotePaths: state.pinnedNotePaths
+        entries: entryArray(state.entries),
+        openedNotes: entryArray(state.openedNotes),
+        pinnedNotePaths: entryArray(state.pinnedNotePaths)
       })
     },
     sidebarItems(state) {
@@ -181,7 +184,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       return this.sidebarItems.filter(isAttachedSidebarEntry)
     },
     wikiProposals(state) {
-      return state.wikiRecords.filter((record) => record.status !== 'dismissed')
+      return entryArray(state.wikiRecords).filter((record) => record.status !== 'dismissed')
     }
   },
 
@@ -195,7 +198,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     },
 
     isEntryPinned(pathname) {
-      return this.pinnedNotePaths.includes(pathname)
+      return entryArray(this.pinnedNotePaths).includes(pathname)
     },
 
     isNotePinned(pathname) {
@@ -204,13 +207,14 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
 
     togglePinnedEntry(pathname) {
       if (!pathname) return false
-      const index = this.pinnedNotePaths.indexOf(pathname)
+      const pinnedPaths = entryArray(this.pinnedNotePaths)
+      const index = pinnedPaths.indexOf(pathname)
       if (index === -1) {
-        this.pinnedNotePaths = [pathname, ...this.pinnedNotePaths]
+        this.pinnedNotePaths = [pathname, ...pinnedPaths]
       } else {
         this.pinnedNotePaths = [
-          ...this.pinnedNotePaths.slice(0, index),
-          ...this.pinnedNotePaths.slice(index + 1)
+          ...pinnedPaths.slice(0, index),
+          ...pinnedPaths.slice(index + 1)
         ]
       }
       this.persistPinnedNotes()
@@ -238,14 +242,14 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         type: entry.kind || entry.type
       }
       const result = await elephantnoteClient.sidebar.attach(payload)
-      this.workspace = result.workspace
+      this.workspace = getWorkspaceResult(result, this.workspace)
       return true
     },
 
     async detachEntryFromSidebar(pathname) {
       if (!pathname) return false
       const result = await elephantnoteClient.sidebar.detach(pathname)
-      this.workspace = result.workspace
+      this.workspace = getWorkspaceResult(result, this.workspace)
       return true
     },
 
@@ -266,12 +270,12 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         entryCount: Array.isArray(payload.entries) ? payload.entries.length : 0,
         activeVaultId: payload.activeVaultId || null
       })
-      this.vaults = payload.vaults || []
+      this.vaults = entryArray(payload.vaults)
       this.activeVaultId = payload.activeVaultId || null
       this.activeVault = payload.activeVault || null
       this.workspace = payload.workspace || null
-      this.entries = payload.entries || []
-      this.rootEntries = payload.entries || []
+      this.entries = entryArray(payload.entries)
+      this.rootEntries = entryArray(payload.entries)
       this.openedNotePath = ''
       this.openedNotes = []
       this.wikiRecords = []
@@ -392,7 +396,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.currentPath = relativePath
       this.openedNotePath = ''
       this.activeWorkspaceView = 'notes'
-      const entries = await elephantnoteClient.directory.list(relativePath)
+      const entries = entryArray(await elephantnoteClient.directory.list(relativePath))
       this.entries = entries
       if (!relativePath) {
         this.rootEntries = entries
@@ -447,7 +451,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
 
       const parentPath = window.path.dirname(relativePath)
       const directoryPath = parentPath === '.' ? '' : parentPath
-      const entries = await elephantnoteClient.directory.list(directoryPath)
+      const entries = entryArray(await elephantnoteClient.directory.list(directoryPath))
       const savedEntry = entries.find((entry) => entry.path === relativePath)
 
       if (directoryPath === this.currentPath) {
@@ -468,7 +472,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
           type: entry.type || 'note',
           updatedAt: entry.updatedAt || new Date().toISOString()
         },
-        ...this.openedNotes.filter((note) => note.path !== entry.path)
+        ...entryArray(this.openedNotes).filter((note) => note.path !== entry.path)
       ].slice(0, 8)
     },
 
@@ -483,8 +487,9 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
           updatedAt: metadata.updatedAt || entry.updatedAt
         }
       }
-      this.entries = this.entries.map(applyMetadata)
-      this.openedNotes = this.openedNotes.map(applyMetadata)
+      this.entries = entryArray(this.entries).map(applyMetadata)
+      this.rootEntries = entryArray(this.rootEntries).map(applyMetadata)
+      this.openedNotes = entryArray(this.openedNotes).map(applyMetadata)
     },
 
     openNote(entry, options = {}) {
@@ -554,7 +559,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       if (entry.type === 'note') {
         const path = entry.path || entry.id
         if (!path) return
-        const note = [...this.entries, ...this.rootEntries, ...this.openedNotes]
+        const note = [...entryArray(this.entries), ...entryArray(this.rootEntries), ...entryArray(this.openedNotes)]
           .find((item) => item?.path === path) || {
           path,
           title: entry.title || path.split('/').pop()?.replace(/\.md$/i, '') || 'Untitled',
@@ -575,9 +580,10 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
 
     async createNote() {
       const result = await elephantnoteClient.notes.create(this.currentPath)
-      this.entries = result.entries
+      const resultEntries = entryArray(result?.entries)
+      this.entries = resultEntries
       if (!this.currentPath) {
-        this.rootEntries = result.entries
+        this.rootEntries = resultEntries
       }
       this.openedNotePath = result.note.path
       this.rememberNote(result.note)
@@ -598,7 +604,7 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         }
       }
 
-      const existing = [...this.entries, ...this.rootEntries, ...this.openedNotes]
+      const existing = [...entryArray(this.entries), ...entryArray(this.rootEntries), ...entryArray(this.openedNotes)]
         .find((entry) => isDashboardNotePath(entry?.path))
       if (existing) {
         this.openNote(existing, { record: false })
@@ -606,9 +612,10 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       }
 
       const result = await elephantnoteClient.notes.create(buildDashboardNoteCreatePayload())
-      this.entries = result.entries
+      const resultEntries = entryArray(result?.entries)
+      this.entries = resultEntries
       if (!this.currentPath) {
-        this.rootEntries = result.entries
+        this.rootEntries = resultEntries
       }
       const dashboardNote = {
         path: result.note.path || DASHBOARD_NOTE_RELATIVE_PATH,
@@ -623,9 +630,10 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
 
     async createFolder() {
       const result = await elephantnoteClient.folders.create(this.currentPath)
-      this.entries = result.entries
+      const resultEntries = entryArray(result?.entries)
+      this.entries = resultEntries
       if (!this.currentPath) {
-        this.rootEntries = result.entries
+        this.rootEntries = resultEntries
       }
     },
 
@@ -635,14 +643,15 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         relativePath: entry.path,
         title
       })
-      this.workspace = result.workspace
-      this.entries = result.entries
+      this.workspace = getWorkspaceResult(result, this.workspace)
+      const resultEntries = entryArray(result?.entries)
+      this.entries = resultEntries
       if (!this.currentPath) {
-        this.rootEntries = result.entries
+        this.rootEntries = resultEntries
       }
       if (oldPath) {
         const nextPath = getRenamedRelativePath(oldPath, title)
-        this.pinnedNotePaths = this.pinnedNotePaths.map((pathname) => replacePathPrefix(pathname, oldPath, nextPath))
+        this.pinnedNotePaths = entryArray(this.pinnedNotePaths).map((pathname) => replacePathPrefix(pathname, oldPath, nextPath))
         this.currentPath = replacePathPrefix(this.currentPath, oldPath, nextPath)
         this.openedNotePath = replacePathPrefix(this.openedNotePath, oldPath, nextPath)
         this.persistPinnedNotes()
@@ -667,13 +676,13 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
         targetDirectoryPath: normalizedTargetDirectory
       })
 
-      this.workspace = result.workspace
-      this.pinnedNotePaths = this.pinnedNotePaths.map((pathname) =>
+      this.workspace = getWorkspaceResult(result, this.workspace)
+      this.pinnedNotePaths = entryArray(this.pinnedNotePaths).map((pathname) =>
         replacePathPrefix(pathname, oldPath, nextPath)
       )
       this.currentPath = replacePathPrefix(this.currentPath, oldPath, nextPath)
       this.openedNotePath = replacePathPrefix(this.openedNotePath, oldPath, nextPath)
-      this.openedNotes = this.openedNotes.map((note) => ({
+      this.openedNotes = entryArray(this.openedNotes).map((note) => ({
         ...note,
         path: replacePathPrefix(note.path, oldPath, nextPath),
         title: note.path === oldPath
@@ -682,8 +691,8 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       }))
       this.persistPinnedNotes()
 
-      this.entries = await elephantnoteClient.directory.list(this.currentPath)
-      this.rootEntries = await elephantnoteClient.directory.list('')
+      this.entries = entryArray(await elephantnoteClient.directory.list(this.currentPath))
+      this.rootEntries = entryArray(await elephantnoteClient.directory.list(''))
 
       if (oldOpenedNotePath && oldOpenedNotePath !== this.openedNotePath && this.openedNotePath) {
         window.tauri.ipcRenderer.send('mt::open-file', `${this.activeVault.path}/${this.openedNotePath}`, {})
@@ -695,10 +704,15 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     async deleteEntry(entry) {
       const oldPath = entry?.path
       const result = await elephantnoteClient.entries.delete(entry.path)
-      this.workspace = result.workspace
-      this.entries = result.entries
-      if (!this.currentPath) {
-        this.rootEntries = result.entries
+      this.workspace = getWorkspaceResult(result, this.workspace)
+      if (Array.isArray(result?.entries)) {
+        this.entries = result.entries
+        if (!this.currentPath) this.rootEntries = result.entries
+      } else {
+        this.entries = entryArray(await elephantnoteClient.directory.list(this.currentPath))
+        this.rootEntries = this.currentPath
+          ? entryArray(await elephantnoteClient.directory.list(''))
+          : this.entries
       }
       if (oldPath) {
         this.pinnedNotePaths = removePathsByPrefix(this.pinnedNotePaths, oldPath)

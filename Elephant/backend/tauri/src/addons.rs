@@ -655,6 +655,40 @@ pub fn tauri_addons_read_entry(app: AppHandle, state: State<'_, AddonState>, add
 }
 
 #[tauri::command]
+pub fn tauri_addons_read_module(
+  app: AppHandle,
+  state: State<'_, AddonState>,
+  addon_id: String,
+  path: String,
+) -> R<Value> {
+  let _guard = state.lock.lock().map_err(|_| "Addon registry lock is poisoned".to_string())?;
+  let registry = read_registry(&app)?;
+  let record = require_installed(&registry, &addon_id)?;
+  let relative = safe_relative_path(&path)?;
+  if relative.extension().and_then(|value| value.to_str()) != Some("js") {
+    return Err("Addon modules must use the .js extension".to_string());
+  }
+  let package = package_dir(&app, &addon_id)?;
+  let canonical_package = fs::canonicalize(&package)
+    .map_err(|error| format!("Addon package directory is unavailable: {error}"))?;
+  let module = fs::canonicalize(package.join(&relative))
+    .map_err(|error| format!("Addon module is unavailable: {path}: {error}"))?;
+  if !module.starts_with(&canonical_package) {
+    return Err(format!("Addon module escapes its package directory: {path}"));
+  }
+  let metadata = fs::metadata(&module).map_err(|error| error.to_string())?;
+  if !metadata.is_file() || metadata.len() > MAX_ENTRY_BYTES {
+    return Err("Addon module is not readable or exceeds 5 MiB".to_string());
+  }
+  let source = fs::read_to_string(module).map_err(|error| error.to_string())?;
+  Ok(json!({
+    "path": relative.to_string_lossy().replace('\\', "/"),
+    "source": source,
+    "packageHash": record.package_hash
+  }))
+}
+
+#[tauri::command]
 pub fn tauri_addons_call(
   app: AppHandle,
   state: State<'_, AddonState>,

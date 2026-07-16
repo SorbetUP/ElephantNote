@@ -13,6 +13,12 @@ const FRONTMATTER_KEYS = new Set([
   'id'
 ])
 
+const FRONTMATTER_BLOCK_PATTERN = /^---[ \t]*\r?\n[\s\S]*?\r?\n[ \t]*---[ \t]*(?:\r?\n|$)/
+const INLINE_FRONTMATTER_PAIR_PATTERN = new RegExp(
+  `(?:^|\\s)(?:${Array.from(FRONTMATTER_KEYS).join('|')}):\\s*(?:"[^"]*"|'[^']*'|\\[[^\\]]*\\]|[^\\s]+)`,
+  'gi'
+)
+
 const looksLikeInlineFrontmatter = (line = '') => {
   const value = String(line || '').trim()
   if (!value.startsWith('---')) return false
@@ -29,28 +35,24 @@ const stripInlineFrontmatterPrefix = (value = '') => {
   const closedInline = raw.match(/^---\s+.*?\s+---\s*(.*)$/)
   if (closedInline) return closedInline[1].trim()
 
-  const knownKeyPattern = Array.from(FRONTMATTER_KEYS).join('|')
-  const metadataPairPattern = new RegExp(
-    `(?:^|\\s)(?:${knownKeyPattern}):\\s*(?:"[^"]*"|'[^']*'|\\[[^\\]]*\\]|[^\\s]+)`,
-    'gi'
-  )
-  const matches = [...raw.matchAll(metadataPairPattern)]
-  if (!matches.length) return raw.replace(/^---\s*/, '').trim()
+  INLINE_FRONTMATTER_PAIR_PATTERN.lastIndex = 0
+  let lastMatch = null
+  let match = INLINE_FRONTMATTER_PAIR_PATTERN.exec(raw)
+  while (match) {
+    lastMatch = match
+    match = INLINE_FRONTMATTER_PAIR_PATTERN.exec(raw)
+  }
+  if (!lastMatch) return raw.replace(/^---\s*/, '').trim()
 
-  const last = matches[matches.length - 1]
-  const end = Number(last.index || 0) + last[0].length
+  const end = Number(lastMatch.index || 0) + lastMatch[0].length
   return raw.slice(end).replace(/^\s*---\s*/, '').trim()
 }
 
 const stripFrontmatter = (value = '') => {
   const raw = String(value || '').trim()
   if (!raw) return ''
-  const mark = ['-', '-', '-'].join('')
-  const lines = raw.split(/\r?\n/)
-  if (lines[0]?.trim() === mark) {
-    const closeIndex = lines.slice(1).findIndex((line) => line.trim() === mark)
-    if (closeIndex >= 0) return lines.slice(closeIndex + 2).join('\n').trim()
-  }
+  const block = raw.match(FRONTMATTER_BLOCK_PATTERN)
+  if (block) return raw.slice(block[0].length).trim()
   return stripInlineFrontmatterPrefix(raw)
 }
 
@@ -58,11 +60,9 @@ const stripLeadingDocumentTitle = (value = '') => {
   const raw = String(value || '').trim()
   if (!raw) return ''
 
-  const lines = raw.split(/\r?\n/)
-  if (/^#\s+\S/.test(lines[0] || '')) {
-    const rest = lines.slice(1).join('\n').trim()
-    return rest || ''
-  }
+  const firstLineEnd = raw.indexOf('\n')
+  const firstLine = (firstLineEnd < 0 ? raw : raw.slice(0, firstLineEnd)).replace(/\r$/, '')
+  if (/^#\s+\S/.test(firstLine)) return firstLineEnd < 0 ? '' : raw.slice(firstLineEnd + 1).trim()
 
   return raw.replace(/^#{1,6}\s+/, '').trim()
 }

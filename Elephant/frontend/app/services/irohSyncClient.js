@@ -3,8 +3,13 @@ import { invoke } from '@tauri-apps/api/core'
 export const IROH_SYNC_STATUS_EVENT = 'elephantnote:iroh-sync-status'
 
 let lastPublishedStatus = null
+let addonActive = false
 
 const normalizeObject = (value) => (value && typeof value === 'object' ? value : {})
+
+const requireActive = () => {
+  if (!addonActive) throw new Error('The Sync addon is disabled.')
+}
 
 const publishStatus = (status) => {
   if (status && typeof status === 'object') lastPublishedStatus = status
@@ -14,9 +19,13 @@ const publishStatus = (status) => {
   return status
 }
 
-const readStatus = async () => publishStatus(await invoke('tauri_sync_status'))
+const readStatus = async () => {
+  requireActive()
+  return publishStatus(await invoke('tauri_sync_status'))
+}
 
 const acceptInvite = async (manualCode) => {
+  requireActive()
   const result = await invoke('tauri_sync_accept_invite', {
     invite: { manualCode: String(manualCode || '').trim() }
   })
@@ -25,6 +34,7 @@ const acceptInvite = async (manualCode) => {
 }
 
 const run = async () => {
+  requireActive()
   if (lastPublishedStatus) {
     publishStatus({ ...lastPublishedStatus, running: true, lastError: '' })
   }
@@ -44,19 +54,43 @@ const run = async () => {
   }
 }
 
+const activate = () => {
+  addonActive = true
+}
+
+const shutdown = async () => {
+  addonActive = false
+  const result = await invoke('tauri_sync_shutdown')
+  lastPublishedStatus = null
+  return publishStatus({ ...(result || {}), running: false, started: false })
+}
+
 export const irohSyncClient = {
+  activate,
   status: readStatus,
-  createInvite: (payload = {}) =>
-    invoke('tauri_sync_create_invite', { payload: normalizeObject(payload) }),
+  shutdown,
+  createInvite: (payload = {}) => {
+    requireActive()
+    return invoke('tauri_sync_create_invite', { payload: normalizeObject(payload) })
+  },
   acceptInvite,
   run,
-  conflictSettings: () => invoke('tauri_sync_conflict_settings_get'),
-  setConflictRetentionDays: (days) =>
-    invoke('tauri_sync_conflict_settings_set', {
+  conflictSettings: () => {
+    requireActive()
+    return invoke('tauri_sync_conflict_settings_get')
+  },
+  setConflictRetentionDays: (days) => {
+    requireActive()
+    return invoke('tauri_sync_conflict_settings_set', {
       conflictRetentionDays: Number(days)
-    }),
-  restoreConflict: (relativePath) =>
-    invoke('tauri_sync_conflict_restore', { relativePath: String(relativePath || '') }),
-  deleteConflict: (relativePath) =>
-    invoke('tauri_sync_conflict_delete', { relativePath: String(relativePath || '') })
+    })
+  },
+  restoreConflict: (relativePath) => {
+    requireActive()
+    return invoke('tauri_sync_conflict_restore', { relativePath: String(relativePath || '') })
+  },
+  deleteConflict: (relativePath) => {
+    requireActive()
+    return invoke('tauri_sync_conflict_delete', { relativePath: String(relativePath || '') })
+  }
 }

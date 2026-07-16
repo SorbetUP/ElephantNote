@@ -2,93 +2,51 @@ import { describe, expect, it, vi } from 'vitest'
 import { ELEPHANTNOTE_API_ACTIONS as API } from 'common/elephantnote/apiActions'
 import { createDomainClients } from '../../../../Elephant/frontend/app/services/elephantnoteClient/domainClients.js'
 
-let vaultCounter = 0
+const createClients = (call = vi.fn()) => createDomainClients(call, () => ({
+  describeApi: vi.fn(async() => ({ runtime: 'tauri' })),
+  callApi: vi.fn(async() => ({ ok: true })),
+  providers: vi.fn(async() => [])
+}))
 
-const createCall = ({ chatResults = [] } = {}) => {
-  const vaultPath = `/tmp/elephantnote-test-vault-${++vaultCounter}`
-  let chatIndex = 0
-  const call = vi.fn(async (action) => {
-    if (action === API.VAULTS_GET) {
-      return { activeVault: { path: vaultPath } }
-    }
-    if (action === API.SEARCH_INIT_VAULT) {
-      return { ok: true }
-    }
-    if (action === API.SEARCH_REBUILD) {
-      return { ok: true }
-    }
-    if (action === API.RAG_CHAT) {
-      const next = chatResults[chatIndex] || { answer: 'empty', citations: [] }
-      chatIndex += 1
-      return next
-    }
-    return { ok: true }
-  })
-  return { call, vaultPath }
-}
+describe('minimal core domain clients', () => {
+  it('does not expose chat, RAG or semantic initialization globally', () => {
+    const clients = createClients()
 
-const countAction = (call, action) => call.mock.calls.filter(([name]) => name === action).length
-
-const createClients = (call) =>
-  createDomainClients(call, () => ({
-    describeApi: vi.fn(),
-    callApi: vi.fn()
-  }))
-
-describe('domain clients chat search behavior', () => {
-  it('initializes chat search once for the same vault', async () => {
-    const { call } = createCall({
-      chatResults: [
-        { answer: 'first answer', citations: [{ path: 'A.md' }] },
-        { answer: 'second answer', citations: [{ path: 'B.md' }] }
-      ]
-    })
-    const clients = createClients(call)
-
-    await clients.rag.chat('first')
-    await clients.rag.chat('second')
-
-    expect(countAction(call, API.SEARCH_INIT_VAULT)).toBe(1)
+    expect(clients.rag).toBeUndefined()
+    expect(clients.chat).toBeUndefined()
+    expect(clients.ai).toBeUndefined()
+    expect(clients.search.initVault).toBeUndefined()
+    expect(clients.search.rebuild).toBeUndefined()
+    expect(API.RAG_CHAT).toBeUndefined()
+    expect(API.SEARCH_INIT_VAULT).toBeUndefined()
+    expect(API.SEARCH_REBUILD).toBeUndefined()
   })
 
-  it('does not rebuild chat search when the model already produced an answer', async () => {
-    const { call } = createCall({
-      chatResults: [
-        { answer: 'first answer', citations: [] },
-        { answer: 'second answer', citations: [] }
-      ]
-    })
+  it('keeps generic text search available through the core action', async() => {
+    const call = vi.fn(async(_action, payload) => payload)
     const clients = createClients(call)
 
-    await clients.rag.chat('first')
-    await clients.rag.chat('second')
-
-    expect(countAction(call, API.SEARCH_REBUILD)).toBe(0)
+    await expect(clients.search.query({ query: 'semantic graph', mode: 'text', limit: 6 }))
+      .resolves.toEqual({ query: 'semantic graph', mode: 'text', limit: 6 })
+    expect(call).toHaveBeenCalledWith(API.SEARCH_QUERY, {
+      query: 'semantic graph',
+      mode: 'text',
+      limit: 6
+    })
   })
 
-  it('forwards conversation history to rag chat requests', async () => {
-    const { call } = createCall({
-      chatResults: [{ answer: 'context aware answer', citations: [] }]
-    })
-    const clients = createClients(call)
+  it('delegates generic atomic calls without embedding product behavior', async() => {
+    const atomic = {
+      describeApi: vi.fn(async() => ({ runtime: 'tauri' })),
+      callApi: vi.fn(async(request) => request),
+      providers: vi.fn(async() => [])
+    }
+    const clients = createDomainClients(vi.fn(), () => atomic)
 
-    await clients.rag.chat({
-      message: 'What about the follow-up?',
-      limit: 6,
-      messages: [
-        { role: 'user', content: 'What is the plan?' },
-        { role: 'assistant', content: 'Ship the semantic graph.' },
-        { role: 'user', content: 'What about the follow-up?' }
-      ]
+    await expect(clients.atomicFeatures.callApi('list', [])).resolves.toEqual({
+      action: 'list',
+      arguments: []
     })
-
-    expect(call).toHaveBeenCalledWith(
-      API.RAG_CHAT,
-      expect.objectContaining({
-        message: 'What about the follow-up?',
-        limit: 6,
-        messages: expect.any(Array)
-      })
-    )
+    expect(atomic.callApi).toHaveBeenCalledWith({ action: 'list', arguments: [] })
   })
 })

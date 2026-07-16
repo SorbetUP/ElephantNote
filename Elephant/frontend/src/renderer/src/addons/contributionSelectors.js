@@ -53,6 +53,7 @@ export const getAddonSidebarItems = (contributionMap = {}) => {
         id,
         title: normalizeText(entry.contribution.title, id),
         tooltip: normalizeText(entry.contribution.tooltip, normalizeText(entry.contribution.title, id)),
+        icon: normalizeText(entry.contribution.icon, 'star'),
         actionId: normalizeText(entry.contribution.actionId),
         view: normalizeText(entry.contribution.view),
         order: Number.isFinite(entry.contribution.order) ? entry.contribution.order : 1000

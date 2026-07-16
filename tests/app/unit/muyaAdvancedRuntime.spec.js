@@ -11,10 +11,10 @@ import {
 } from '../../../Elephant/frontend/src/renderer/src/muya/index.js'
 
 describe('advanced Muya runtime behavior', () => {
-  it('uses shadow mode by default in Tauri while the runtime is stabilizing', () => {
-    expect(defaultMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('shadow')
-    expect(defaultMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'electron' })).toBe('shadow')
-    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('shadow')
+  it('uses the Rust editor by default in production runtimes', () => {
+    expect(defaultMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('rust')
+    expect(defaultMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'electron' })).toBe('rust')
+    expect(readMuyaRuntimeMode({ __MARKTEXT_RUNTIME__: 'tauri' })).toBe('rust')
   })
 
   it('applies keyboard input rules for list continuation and indentation', () => {

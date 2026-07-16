@@ -3,8 +3,8 @@ import { JSDOM } from 'jsdom'
 
 import installBootstrapGlobals from '../../../Elephant/frontend/src/renderer/src/platform/bootstrapGlobals.js'
 
-describe('global Muya runtime bridge', () => {
-  it('installs the Muya runtime bridge during bootstrap globals', () => {
+describe('global Rust editor compatibility bridge', () => {
+  it('installs the Rust runtime bridge during bootstrap globals', () => {
     const dom = new JSDOM('<div id="editor"></div>')
     const target = {
       document: dom.window.document,
@@ -12,9 +12,10 @@ describe('global Muya runtime bridge', () => {
     }
     installBootstrapGlobals(target)
     expect(target.__ELEPHANT_MUYA_RUNTIME__).toBeTruthy()
-    expect(target.__ELEPHANT_MUYA_RUNTIME__.mode()).toBe('disabled')
-    expect(target.__ELEPHANT_MUYA_RUNTIME__.setMode('shadow')).toBe('shadow')
+    expect(target.__ELEPHANT_MUYA_RUNTIME__.mode()).toBe('rust')
+    expect(target.__ELEPHANT_MUYA_RUNTIME__.setMode('shadow')).toBe('rust')
     expect(target.__ELEPHANT_MUYA_RUNTIME__.enabled()).toBe(true)
+    expect(target.__ELEPHANT_MUYA_RUNTIME__.active()).toBe(true)
   })
 
   it('can create a runtime editor from the global bridge', () => {

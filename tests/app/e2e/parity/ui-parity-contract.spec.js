@@ -9,9 +9,7 @@ const getVisibleCardTexts = async(page) => {
   const texts = []
   for (let index = 0; index < count; index += 1) {
     const card = cards.nth(index)
-    if (await card.isVisible().catch(() => false)) {
-      texts.push(await card.innerText())
-    }
+    if (await card.isVisible().catch(() => false)) texts.push(await card.innerText())
   }
   return texts
 }
@@ -35,7 +33,8 @@ test.describe('Native app UI parity contract baseline', () => {
     try {
       const bodyText = await getBodyText(page)
       expect(bodyText).not.toMatch(/select.*vault|choose.*vault|premi[eè]re.*vault|s[eé]lection/i)
-      expect(bodyText).toContain('E2E Vault')
+      expect(bodyText).toContain('All notes')
+      expect(bodyText).toContain('Alpha note')
     } finally {
       await app.close()
     }
@@ -77,8 +76,13 @@ test.describe('Native app UI parity contract baseline', () => {
   test('Electron baseline can open the seeded note content', async() => {
     const { app, page } = await launchElectronWithSeededVault()
     try {
-      await page.getByText('Alpha note').first().click()
-      await expect(page.getByText('Visible alpha body line.').first()).toBeVisible({ timeout: 5000 })
+      const card = page.locator('.en-note-card').filter({ hasText: 'Alpha note' }).first()
+      await expect(card).toBeVisible()
+      const title = card.locator('h3')
+      await expect(title).toHaveText('Alpha note')
+      await title.dispatchEvent('click')
+      await expect(page.locator('.en-editor-layer')).toBeVisible({ timeout: 10000 })
+      await expect(page.getByText('Visible alpha body line.').first()).toBeVisible({ timeout: 10000 })
     } finally {
       await app.close()
     }

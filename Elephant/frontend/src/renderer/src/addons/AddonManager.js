@@ -35,6 +35,13 @@ const getContributionId = (entry) => {
   return typeof id === 'string' ? id.trim() : ''
 }
 
+const dependencyIds = (manifest = {}) => {
+  const ids = new Set(Object.keys(manifest.requires || {}))
+  if (manifest.parentAddonId) ids.add(manifest.parentAddonId)
+  ids.delete(manifest.id)
+  return [...ids]
+}
+
 export class ElephantAddonManager {
   constructor(context = {}) {
     this.context = Object.freeze({ ...context, addons: this })
@@ -70,6 +77,10 @@ export class ElephantAddonManager {
     if (record.enabled || record.status === ADDON_STATUS.activating) {
       throw new Error(`Cannot unregister an active addon: ${id}`)
     }
+    const dependents = this.getDependents(id)
+    if (dependents.length) {
+      throw new Error(`Cannot unregister ${id}; installed dependents: ${dependents.join(', ')}`)
+    }
     this.disposeRecord(record)
     this.clearContributionsFromAddon(id)
     this.records.delete(id)
@@ -88,9 +99,35 @@ export class ElephantAddonManager {
     return [...this.records.values()].map(createSnapshot)
   }
 
+  getDependents(id, { enabledOnly = false } = {}) {
+    return [...this.records.values()]
+      .filter((candidate) => candidate.manifest.id !== id)
+      .filter((candidate) => !enabledOnly || candidate.enabled)
+      .filter((candidate) => dependencyIds(candidate.manifest).includes(id))
+      .map((candidate) => candidate.manifest.id)
+      .sort()
+  }
+
+  assertDependenciesEnabled(record) {
+    const missing = []
+    const disabled = []
+    for (const dependencyId of dependencyIds(record.manifest)) {
+      const dependency = this.records.get(dependencyId)
+      if (!dependency) missing.push(dependencyId)
+      else if (!dependency.enabled) disabled.push(dependencyId)
+    }
+    if (missing.length) {
+      throw new Error(`${record.manifest.id} requires missing addon${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}`)
+    }
+    if (disabled.length) {
+      throw new Error(`${record.manifest.id} requires enabled addon${disabled.length === 1 ? '' : 's'}: ${disabled.join(', ')}`)
+    }
+  }
+
   async enable(id) {
     const record = this.requireRecord(id)
     if (record.enabled) return createSnapshot(record)
+    this.assertDependenciesEnabled(record)
 
     record.status = ADDON_STATUS.activating
     record.error = null
@@ -121,6 +158,10 @@ export class ElephantAddonManager {
   async disable(id) {
     const record = this.requireRecord(id)
     if (!record.enabled && record.status !== ADDON_STATUS.error) return createSnapshot(record)
+    const activeDependents = this.getDependents(id, { enabledOnly: true })
+    if (activeDependents.length) {
+      throw new Error(`Cannot disable ${id}; enabled dependents: ${activeDependents.join(', ')}`)
+    }
 
     try {
       await record.module.deactivate?.(this.createAddonContext(record))

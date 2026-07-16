@@ -1,6 +1,16 @@
 import { createI18n } from 'vue-i18n'
 import bus from '../bus'
 import { isPortableRuntime, readPortablePreference } from '../platform/preferenceStorage'
+import {
+  APP_DEFAULT_LOCALE,
+  APP_LANGUAGE_STORAGE_KEY,
+  getAppMessages,
+  getSupportedLanguageOptions,
+  isRtlLocale,
+  mergeMessages,
+  normalizeAppLocale,
+  resolveStoredLocale
+} from 'elephant-front/i18n/appMessages'
 
 const createFallbackEnglishTranslations = () => ({
   about: {
@@ -9,98 +19,32 @@ const createFallbackEnglishTranslations = () => ({
   },
   quickInsert: {
     basicBlock: 'Basic blocks',
-    paragraph: {
-      title: 'Paragraph',
-      subtitle: 'Plain text paragraph'
-    },
-    horizontalLine: {
-      title: 'Horizontal line',
-      subtitle: 'Add a visual divider'
-    },
-    frontMatter: {
-      title: 'Front matter',
-      subtitle: 'YAML metadata block'
-    },
+    paragraph: { title: 'Paragraph', subtitle: 'Plain text paragraph' },
+    horizontalLine: { title: 'Horizontal line', subtitle: 'Add a visual divider' },
+    frontMatter: { title: 'Front matter', subtitle: 'YAML metadata block' },
     header: 'Headings',
-    header1: {
-      title: 'Heading 1',
-      subtitle: '# Heading'
-    },
-    header2: {
-      title: 'Heading 2',
-      subtitle: '## Heading'
-    },
-    header3: {
-      title: 'Heading 3',
-      subtitle: '### Heading'
-    },
-    header4: {
-      title: 'Heading 4',
-      subtitle: '#### Heading'
-    },
-    header5: {
-      title: 'Heading 5',
-      subtitle: '##### Heading'
-    },
-    header6: {
-      title: 'Heading 6',
-      subtitle: '###### Heading'
-    },
+    header1: { title: 'Heading 1', subtitle: '# Heading' },
+    header2: { title: 'Heading 2', subtitle: '## Heading' },
+    header3: { title: 'Heading 3', subtitle: '### Heading' },
+    header4: { title: 'Heading 4', subtitle: '#### Heading' },
+    header5: { title: 'Heading 5', subtitle: '##### Heading' },
+    header6: { title: 'Heading 6', subtitle: '###### Heading' },
     advancedBlock: 'Advanced blocks',
-    tableBlock: {
-      title: 'Table',
-      subtitle: 'Insert a markdown table'
-    },
-    mathFormula: {
-      title: 'Math formula',
-      subtitle: 'Insert a LaTeX math block'
-    },
-    htmlBlock: {
-      title: 'HTML block',
-      subtitle: 'Insert raw HTML'
-    },
-    codeBlock: {
-      title: 'Code block',
-      subtitle: 'Insert fenced code'
-    },
-    quoteBlock: {
-      title: 'Quote block',
-      subtitle: 'Insert a block quote'
-    },
+    tableBlock: { title: 'Table', subtitle: 'Insert a markdown table' },
+    mathFormula: { title: 'Math formula', subtitle: 'Insert a LaTeX math block' },
+    htmlBlock: { title: 'HTML block', subtitle: 'Insert raw HTML' },
+    codeBlock: { title: 'Code block', subtitle: 'Insert fenced code' },
+    quoteBlock: { title: 'Quote block', subtitle: 'Insert a block quote' },
     listBlock: 'Lists',
-    orderedList: {
-      title: 'Numbered list',
-      subtitle: 'Create an ordered list'
-    },
-    bulletList: {
-      title: 'Bullet list',
-      subtitle: 'Create an unordered list'
-    },
-    todoList: {
-      title: 'Task list',
-      subtitle: 'Create a checklist'
-    },
+    orderedList: { title: 'Numbered list', subtitle: 'Create an ordered list' },
+    bulletList: { title: 'Bullet list', subtitle: 'Create an unordered list' },
+    todoList: { title: 'Task list', subtitle: 'Create a checklist' },
     diagram: 'Diagrams',
-    vegaChart: {
-      title: 'Vega-Lite chart',
-      subtitle: 'Insert a Vega-Lite chart block'
-    },
-    flowChart: {
-      title: 'Flowchart',
-      subtitle: 'Insert a flowchart block'
-    },
-    sequenceChart: {
-      title: 'Sequence diagram',
-      subtitle: 'Insert a sequence diagram block'
-    },
-    plantUMLChart: {
-      title: 'PlantUML diagram',
-      subtitle: 'Insert a PlantUML block'
-    },
-    mermaid: {
-      title: 'Mermaid diagram',
-      subtitle: 'Insert a Mermaid block'
-    }
+    vegaChart: { title: 'Vega-Lite chart', subtitle: 'Insert a Vega-Lite chart block' },
+    flowChart: { title: 'Flowchart', subtitle: 'Insert a flowchart block' },
+    sequenceChart: { title: 'Sequence diagram', subtitle: 'Insert a sequence diagram block' },
+    plantUMLChart: { title: 'PlantUML diagram', subtitle: 'Insert a PlantUML block' },
+    mermaid: { title: 'Mermaid diagram', subtitle: 'Insert a Mermaid block' }
   },
   editor: {
     image: {
@@ -113,19 +57,9 @@ const createFallbackEnglishTranslations = () => ({
         delete: 'Delete image'
       },
       selector: {
-        tab: {
-          select: 'Select image',
-          embedLink: 'Embed link'
-        },
-        select: {
-          chooseButton: 'Choose image',
-          tip: 'Choose an image from your device.'
-        },
-        inputs: {
-          alt: 'Alt text',
-          src: 'Image path or URL',
-          title: 'Title'
-        },
+        tab: { select: 'Select image', embedLink: 'Embed link' },
+        select: { chooseButton: 'Choose image', tip: 'Choose an image from your device.' },
+        inputs: { alt: 'Alt text', src: 'Image path or URL', title: 'Title' },
         embedButton: 'Embed image',
         hint: {
           prefix: 'Need alt text or title?',
@@ -174,9 +108,7 @@ const createFallbackEnglishTranslations = () => ({
       changeLineEnding: 'Change line ending',
       trailingNewline: 'Trailing newline'
     },
-    spellchecker: {
-      switchLanguage: 'Switch spellchecker language'
-    }
+    spellchecker: { switchLanguage: 'Switch spellchecker language' }
   },
   commandPalette: {
     placeholders: {
@@ -193,65 +125,57 @@ const createFallbackEnglishTranslations = () => ({
   }
 })
 
-const isPlainObject = (value) => Object.prototype.toString.call(value) === '[object Object]'
-
-const mergeLocaleMessages = (fallback = {}, override = {}) => {
-  const output = { ...fallback }
-  for (const [key, value] of Object.entries(override || {})) {
-    if (isPlainObject(value) && isPlainObject(output[key])) {
-      output[key] = mergeLocaleMessages(output[key], value)
-    } else {
-      output[key] = value
-    }
-  }
-  return output
-}
-
 const loadLocaleMessages = (locale) => {
+  const normalized = normalizeAppLocale(locale)
+  if (normalized === APP_DEFAULT_LOCALE) return {}
   try {
-    return globalThis.window?.i18nUtils?.loadTranslations?.(locale) || {}
+    return globalThis.window?.i18nUtils?.loadTranslations?.(normalized) || {}
   } catch (error) {
-    console.warn(`⚠️ Failed to load ${locale} translations, using fallback messages`, error)
+    console.warn(`⚠️ Failed to load ${normalized} translations, using fallback messages`, error)
     return {}
   }
 }
 
-const englishFallback = createFallbackEnglishTranslations()
-const loadedLocales = new Set(['en'])
+const englishFallback = mergeMessages(createFallbackEnglishTranslations(), getAppMessages('en'))
+const initialPreference = globalThis.localStorage?.getItem(APP_LANGUAGE_STORAGE_KEY) || 'system'
+const initialLocale = resolveStoredLocale(initialPreference)
+const initialMessages = initialLocale === APP_DEFAULT_LOCALE
+  ? englishFallback
+  : mergeMessages(
+      englishFallback,
+      mergeMessages(loadLocaleMessages(initialLocale), getAppMessages(initialLocale))
+    )
+const loadedLocales = new Set(['en', initialLocale])
 
 const i18n = createI18n({
   legacy: false,
-  locale: 'en',
-  fallbackLocale: 'en',
-  messages: { en: englishFallback },
-  modifiers: {
-    '@': () => '@'
+  locale: initialLocale,
+  fallbackLocale: APP_DEFAULT_LOCALE,
+  messages: {
+    en: englishFallback,
+    [initialLocale]: initialMessages
   },
+  modifiers: { '@': () => '@' },
   pluralRules: {},
   messageCompiler: {
     compile: (message) => {
-      if (typeof message === 'string' && message.includes('|')) {
-        return () => message
-      }
+      if (typeof message === 'string' && message.includes('|')) return () => message
       return null
     }
   }
 })
 
-export const t = (key, ...args) => {
-  if (!i18n) {
-    console.warn('⚠️ i18n unavailable, using English fallback')
-    return key
-  }
+const applyDocumentLocale = (locale) => {
+  if (typeof document === 'undefined') return
+  document.documentElement.lang = locale
+  document.documentElement.dir = isRtlLocale(locale) ? 'rtl' : 'ltr'
+  document.body?.classList.toggle('en-rtl', isRtlLocale(locale))
+}
 
+export const t = (key, ...args) => {
   try {
-    if (!i18n.global) {
-      console.warn('⚠️ i18n.global not ready yet, falling back to EN')
-      return key
-    }
-    if (typeof i18n.global.te === 'function' && !i18n.global.te(key)) {
-      return key
-    }
+    if (!i18n?.global) return key
+    if (typeof i18n.global.te === 'function' && !i18n.global.te(key)) return key
     return i18n.global.t(key, ...args)
   } catch (error) {
     console.error('❌ Translation function error:', error)
@@ -259,41 +183,53 @@ export const t = (key, ...args) => {
   }
 }
 
-export const setLanguage = (locale) => {
-  if (!locale) return
-  if (locale !== 'en' && !loadedLocales.has(locale)) {
-    const translation = loadLocaleMessages(locale)
-    const localeMessages = mergeLocaleMessages(englishFallback, translation)
-    if (!localeMessages) return
-
+export const setLanguage = (requestedLocale, { persist = true } = {}) => {
+  const preference = requestedLocale || 'system'
+  const locale = resolveStoredLocale(preference)
+  if (!loadedLocales.has(locale)) {
+    const localeMessages = mergeMessages(
+      englishFallback,
+      mergeMessages(loadLocaleMessages(locale), getAppMessages(locale))
+    )
     i18n.global.setLocaleMessage(locale, localeMessages)
     loadedLocales.add(locale)
-    console.log(`🌐 Loaded and set new locale: ${locale}`)
   }
   i18n.global.locale.value = locale
+  applyDocumentLocale(locale)
+  if (persist) globalThis.localStorage?.setItem(APP_LANGUAGE_STORAGE_KEY, preference)
+  globalThis.dispatchEvent?.(new CustomEvent('elephantnote:language-changed', {
+    detail: { locale, preference }
+  }))
+  return locale
 }
 
 export const getCurrentLanguage = () => i18n.global.locale.value
+export const getLanguagePreference = () => globalThis.localStorage?.getItem(APP_LANGUAGE_STORAGE_KEY) || 'system'
+export const getLanguageOptions = () => getSupportedLanguageOptions(getCurrentLanguage())
 
 export { i18n }
 export default i18n
+
+applyDocumentLocale(initialLocale)
 
 if (window.tauri && window.tauri.ipcRenderer) {
   if (isPortableRuntime()) {
     const language = readPortablePreference('language')
     if (language) {
       setLanguage(language)
-      bus.emit('language-changed', language)
+      bus.emit('language-changed', getCurrentLanguage())
     }
   }
-  window.tauri.ipcRenderer.on('language-changed', (event, newLocale) => {
+  window.tauri.ipcRenderer.on('language-changed', (_event, newLocale) => {
     setLanguage(newLocale)
-    bus.emit('language-changed', newLocale)
+    bus.emit('language-changed', getCurrentLanguage())
   })
 
   window.tauri.ipcRenderer.send('mt::get-current-language')
-  window.tauri.ipcRenderer.on('mt::current-language', (event, language) => {
-    setLanguage(language)
-    bus.emit('language-changed', language)
+  window.tauri.ipcRenderer.on('mt::current-language', (_event, language) => {
+    if (!getLanguagePreference() || getLanguagePreference() === 'system') {
+      setLanguage(language, { persist: false })
+      bus.emit('language-changed', getCurrentLanguage())
+    }
   })
 }

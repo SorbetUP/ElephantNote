@@ -26,6 +26,7 @@ const setImageComplete = (img, complete) => {
 }
 
 beforeEach(() => {
+  window.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__?.dispose?.()
   document.body.innerHTML = ''
   delete window.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__
   busMock.emit.mockClear()
@@ -55,7 +56,8 @@ describe('Excalidraw image runtime fixes', () => {
     container.appendChild(img)
     document.body.appendChild(container)
 
-    expect(installExcalidrawImageRuntimeFixes(window)).toBe(true)
+    const runtime = installExcalidrawImageRuntimeFixes(window)
+    expect(typeof runtime.dispose).toBe('function')
     expect(img.getAttribute('src')).toBe('blob:loading-object-url')
 
     setImageComplete(img, true)
@@ -80,7 +82,8 @@ describe('Excalidraw image runtime fixes', () => {
     container.appendChild(img)
     document.body.appendChild(container)
 
-    expect(installExcalidrawImageRuntimeFixes(window)).toBe(true)
+    const runtime = installExcalidrawImageRuntimeFixes(window)
+    expect(typeof runtime.dispose).toBe('function')
     expect(img.getAttribute('src')).toContain('data:image/png;base64,')
     expect(convertFileSrcMock).not.toHaveBeenCalled()
   })
@@ -97,7 +100,8 @@ describe('Excalidraw image runtime fixes', () => {
     container.appendChild(imageContainer)
     document.body.appendChild(container)
 
-    expect(installExcalidrawImageRuntimeFixes(window)).toBe(true)
+    const runtime = installExcalidrawImageRuntimeFixes(window)
+    expect(typeof runtime.dispose).toBe('function')
     await Promise.resolve()
     await Promise.resolve()
 
@@ -107,5 +111,24 @@ describe('Excalidraw image runtime fixes', () => {
     expect(img.dataset.resolvedSrc).toMatch(/^data:image\/png;base64,/)
     expect(container.classList.contains('ag-image-fail')).toBe(false)
     expect(container.classList.contains('ag-image-success')).toBe(true)
+  })
+
+  it('removes injected controls and listeners when the addon is disabled', () => {
+    const container = document.createElement('div')
+    container.className = 'ag-image-container'
+    const img = document.createElement('img')
+    img.setAttribute('data-src', 'file:///vault/.assets/excalidraw-demo.png')
+    setImageComplete(img, true)
+    container.appendChild(img)
+    document.body.appendChild(container)
+
+    const runtime = installExcalidrawImageRuntimeFixes(window)
+    expect(container.querySelector('.en-excalidraw-edit-button')).not.toBeNull()
+
+    runtime.dispose()
+
+    expect(container.querySelector('.en-excalidraw-edit-button')).toBeNull()
+    expect(busMock.off).toHaveBeenCalledWith('invalidate-image-cache', expect.any(Function))
+    expect(window.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__).toBeUndefined()
   })
 })

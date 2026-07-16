@@ -46,20 +46,13 @@
         @toggle-typography="isTypographyOpen = !isTypographyOpen"
         @set-text-scale="setTextScale"
         @toggle-theme="toggleTheme"
-        @open-graph="openGraphView"
       />
     </section>
 
-    <excalidraw-dialog
-      v-if="isExcalidrawOpen"
-      :title="excalidrawTitle"
-      :file-name="excalidrawFileName"
-      :theme="shellTheme"
-      :initial-blob="excalidrawInitialBlob"
-      :save-mode="excalidrawSaveMode"
-      :insert-on-save="excalidrawInsertOnSave"
-      @close="closeExcalidraw"
-      @save="saveExcalidraw"
+    <component
+      :is="entry.contribution.component"
+      v-for="entry in editorOverlayZones"
+      :key="entry.contribution.id"
     />
   </div>
 </template>
@@ -72,12 +65,10 @@ import EditorWithTabs from '@/components/editorWithTabs'
 import { useMainStore } from '@/store'
 import { usePreferencesStore } from '@/store/preferences'
 import { useEditorStore } from '@/store/editor'
-import bus from '@/bus'
+import { useAddonsStore } from '@/store/addons'
 import { useVaultStore } from '../../stores/vaultStore'
-import ExcalidrawDialog from './ExcalidrawDialog.vue'
 import NoteEditorFooter from './NoteEditorFooter.vue'
 import NoteEditorTopBar from './NoteEditorTopBar.vue'
-import { getExcalidrawPreviewPath, getExcalidrawScenePath } from '../../services/excalidraw'
 import { elephantnoteClient } from '../../services/elephantnoteClient'
 import { formatShortDate } from '../../services/markdownMetaService'
 import {
@@ -94,14 +85,14 @@ import { useSearchStore } from '../../stores/searchStore'
 import { resolveLocalImageSource, toMarkdownImageSource } from 'elephant-shared/imageSource'
 import {
   ELEPHANTNOTE_ASSETS_DIR,
-  getVaultAssetRelativePath,
   isHiddenAssetPath,
   sanitizeAssetName
-} from 'elephant-shared/excalidrawAssets'
+} from 'elephant-shared/hiddenAssets'
 
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
 const preferencesStore = usePreferencesStore()
+const addonsStore = useAddonsStore()
 const store = useVaultStore()
 const searchStore = useSearchStore()
 
@@ -115,7 +106,7 @@ const LARGE_EDIT_AUTOSAVE_DELAY_MS = 60
 const HUGE_EDIT_AUTOSAVE_DELAY_MS = 20
 const LARGE_EDIT_BYTES = 8 * 1024
 const HUGE_EDIT_BYTES = 64 * 1024
-const LOCAL_ASSET_EXTENSION_RE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico|excalidraw)(?:[?#].*)?$/i
+const LOCAL_ASSET_EXTENSION_RE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico)(?:[?#].*)?$/i
 const MARKDOWN_IMAGE_RE = /(!\[[^\]]*\]\()([^)]*)(\))/g
 const isAutosaveDebugEnabled = () =>
   window.localStorage.getItem('elephantnote:debugAutosave') === 'true'
@@ -154,14 +145,6 @@ const isEditingTag = ref(false)
 const editingTagIndex = ref(-1)
 const tagDraft = ref('')
 const isTypographyOpen = ref(false)
-const isExcalidrawOpen = ref(false)
-const excalidrawInitialBlob = ref(null)
-const excalidrawTargetPath = ref('')
-const excalidrawScenePath = ref('')
-const excalidrawInsertOnSave = ref(false)
-const excalidrawFileName = ref('excalidraw.png')
-const excalidrawTitle = ref('Excalidraw')
-const excalidrawSaveMode = ref('png')
 const textScale = ref(window.localStorage.getItem('elephantnote:editorTextScale') || 'normal')
 const shellTheme = inject(
   'elephantnoteTheme',
@@ -178,6 +161,13 @@ let lastSavedNotePath = ''
 let lastSavedMarkdown = ''
 let lastSeenNotePath = ''
 let lastSeenMarkdown = ''
+
+const editorExtensions = computed(() => addonsStore.getContributions('editor.extensions')
+  .map((entry) => entry?.contribution)
+  .filter(Boolean))
+const editorOverlayZones = computed(() => addonsStore.getContributions('layout.zones')
+  .filter((entry) => entry?.contribution?.zone === 'editor.overlay' && entry?.contribution?.component)
+  .sort((left, right) => Number(left.contribution.order || 0) - Number(right.contribution.order || 0)))
 
 const openedNoteAbsolutePath = computed(() => {
   if (!store.activeVault?.path || !store.openedNotePath) return ''
@@ -268,6 +258,8 @@ const vaultAssetsDirectory = computed(() =>
   store.activeVault?.path ? window.path.join(store.activeVault.path, ELEPHANTNOTE_ASSETS_DIR) : ''
 )
 
+const entryArray = (value) => Array.isArray(value) ? value : []
+
 const applyNoteMetadata = (entry, pathname, metadata = {}) => {
   if (!entry || entry.path !== pathname) return entry
   return {
@@ -283,12 +275,12 @@ const syncVisibleNoteMetadata = (pathname, metadata = {}) => {
   if (typeof store.updateNoteMetadata === 'function') {
     store.updateNoteMetadata(pathname, metadata)
   } else {
-    store.entries = store.entries.map((entry) => applyNoteMetadata(entry, pathname, metadata))
-    store.openedNotes = store.openedNotes.map((entry) =>
+    store.entries = entryArray(store.entries).map((entry) => applyNoteMetadata(entry, pathname, metadata))
+    store.openedNotes = entryArray(store.openedNotes).map((entry) =>
       applyNoteMetadata(entry, pathname, metadata)
     )
   }
-  store.rootEntries = store.rootEntries.map((entry) => applyNoteMetadata(entry, pathname, metadata))
+  store.rootEntries = entryArray(store.rootEntries).map((entry) => applyNoteMetadata(entry, pathname, metadata))
 }
 
 const getNoteParentPath = (relativePath = '') => {
@@ -321,17 +313,17 @@ const refreshSavedEntries = async (notePath, result) => {
     }
   }
   try {
-    store.rootEntries = await elephantnoteClient.directory.list({
+    store.rootEntries = entryArray(await elephantnoteClient.directory.list({
       relativePath: '',
       limit: 121,
       includePreview: true
-    })
+    }))
     if (parentPath === store.currentPath) {
-      store.entries = await elephantnoteClient.directory.list({
+      store.entries = entryArray(await elephantnoteClient.directory.list({
         relativePath: store.currentPath,
         limit: 121,
         includePreview: true
-      })
+      }))
     }
   } catch (error) {
     pushEditorLog('warn', '[elephantnote:save] unable to refresh entries after save', {
@@ -371,6 +363,11 @@ const uniqueVaultAssetPath = async (preferredName = 'asset') => {
 }
 const assetMarkdownSource = (targetPath) =>
   toMarkdownImageSource(targetPath, store.activeVault?.path || currentNoteDirectory.value)
+const readLocalBlob = async (pathname, type = '') => {
+  const content = await window.fileUtils.readFile(pathname)
+  if (content instanceof Blob) return content
+  return new Blob([content], type ? { type } : undefined)
+}
 const copyLocalFile = async (sourcePath, targetPath, type = '') => {
   await window.fileUtils.ensureDir(window.path.dirname(targetPath))
   if (normalizeSlashPath(sourcePath) === normalizeSlashPath(targetPath)) return targetPath
@@ -381,6 +378,28 @@ const copyLocalFile = async (sourcePath, targetPath, type = '') => {
   const blob = await readLocalBlob(sourcePath, type)
   await window.fileUtils.writeFile(targetPath, blob)
   return targetPath
+}
+const copyAddonAssetCompanions = async (sourcePath, targetPath) => {
+  for (const extension of editorExtensions.value) {
+    if (typeof extension.copyAssetCompanions !== 'function') continue
+    try {
+      await extension.copyAssetCompanions({
+        sourcePath,
+        targetPath,
+        pathExists,
+        copyFile: copyLocalFile,
+        activeVaultPath: store.activeVault?.path || '',
+        noteDirectory: currentNoteDirectory.value
+      })
+    } catch (error) {
+      pushEditorLog('warn', '[elephantnote:assets] addon companion copy failed', {
+        extensionId: extension.id || '',
+        sourcePath,
+        targetPath,
+        error: error?.message || String(error)
+      })
+    }
+  }
 }
 const copyLocalAssetIntoVault = async (sourcePath, preferredName = '') => {
   if (!sourcePath || isExternalAssetReference(sourcePath)) return ''
@@ -393,20 +412,11 @@ const copyLocalAssetIntoVault = async (sourcePath, preferredName = '') => {
   }
   const targetPath = await uniqueVaultAssetPath(preferredName || window.path.basename(sourcePath))
   await copyLocalFile(sourcePath, targetPath)
+  await copyAddonAssetCompanions(sourcePath, targetPath)
   pushEditorLog('info', '[elephantnote:assets] copied asset into hidden vault .assets', {
     sourcePath,
     targetPath
   })
-  const sourceScenePath = getExcalidrawScenePath(sourcePath)
-  if (sourceScenePath && sourceScenePath !== sourcePath && pathExists(sourceScenePath)) {
-    const targetScenePath = getExcalidrawScenePath(targetPath)
-    await copyLocalFile(sourceScenePath, targetScenePath, 'application/vnd.excalidraw+json')
-    pushEditorLog(
-      'info',
-      '[elephantnote:assets] copied excalidraw sidecar into hidden vault .assets',
-      { sourceScenePath, targetScenePath }
-    )
-  }
   return targetPath
 }
 const parseMarkdownDestination = (raw = '') => {
@@ -778,126 +788,12 @@ const toggleTheme = () => {
   shellTheme.value = next
   setShellTheme(next)
 }
-const openGraphView = () => bus.emit('ELEPHANT::set-main-view', 'graph')
-
-const readLocalBlob = async (pathname, type = '') => {
-  const content = await window.fileUtils.readFile(pathname)
-  if (content instanceof Blob) return content
-  return new Blob([content], type ? { type } : undefined)
-}
-
-const targetAssetName = (fileName = '') =>
-  sanitizeAssetName(fileName || `excalidraw-${Date.now()}.png`, `excalidraw-${Date.now()}.png`)
-const targetAssetPath = async (fileName = '') => {
-  await ensureVaultAssetsDirectory()
-  return window.path.join(
-    store.activeVault.path,
-    getVaultAssetRelativePath(targetAssetName(fileName))
-  )
-}
-const openExcalidraw = async ({ markdown, fileName, title, saveMode, insertOnSave }) => {
-  const targetName = targetAssetName(fileName || `excalidraw-${Date.now()}.png`)
-  const targetPath = await targetAssetPath(targetName)
-  const scenePath = getExcalidrawScenePath(targetPath)
-  pushEditorLog('info', '[elephantnote:excalidraw] open dialog with .assets target', {
-    targetPath,
-    scenePath,
-    insertOnSave
-  })
-  excalidrawTitle.value = title || 'Excalidraw'
-  excalidrawFileName.value = targetName
-  excalidrawSaveMode.value = saveMode || 'png'
-  excalidrawInsertOnSave.value = !!insertOnSave
-  excalidrawTargetPath.value = targetPath
-  excalidrawScenePath.value = scenePath
-  excalidrawInitialBlob.value = markdown instanceof Blob ? markdown : null
-  isExcalidrawOpen.value = true
-}
-
-const openExcalidrawFromImage = async (src) => {
-  try {
-    const baseDir = currentNoteDirectory.value
-    const imagePath = resolveLocalImageSource(src, baseDir)
-    if (!imagePath) return
-    const rawPreviewPath =
-      window.path.extname(imagePath).toLowerCase() === '.excalidraw'
-        ? getExcalidrawPreviewPath(imagePath)
-        : imagePath
-    const previewPath = isVaultAssetAbsolutePath(rawPreviewPath)
-      ? rawPreviewPath
-      : await copyLocalAssetIntoVault(rawPreviewPath, window.path.basename(rawPreviewPath))
-    if (!previewPath) return
-    const scenePath = getExcalidrawScenePath(previewPath)
-    const initialBlob = pathExists(scenePath)
-      ? await readLocalBlob(scenePath, 'application/vnd.excalidraw+json')
-      : pathExists(previewPath)
-        ? await readLocalBlob(previewPath)
-        : null
-
-    await openExcalidraw({
-      markdown: initialBlob,
-      fileName: window.path.basename(previewPath),
-      title: 'Excalidraw',
-      saveMode: 'png',
-      insertOnSave: false
-    })
-    excalidrawTargetPath.value = previewPath
-    excalidrawScenePath.value = scenePath
-    pushEditorLog('info', '[elephantnote:excalidraw] opened image-backed drawing from .assets', {
-      source: src,
-      previewPath,
-      scenePath
-    })
-  } catch (error) {
-    pushEditorLog('error', '[elephantnote:excalidraw] failed to open image-backed drawing', {
-      error: error?.message || String(error)
-    })
-  }
-}
-
-const closeExcalidraw = () => {
-  pushEditorLog('info', '[elephantnote:excalidraw] close dialog', {
-    targetPath: excalidrawTargetPath.value
-  })
-  isExcalidrawOpen.value = false
-  excalidrawInitialBlob.value = null
-}
-const saveExcalidraw = async ({ imageBlob, blob, sceneBlob, fileName } = {}) => {
-  const writableImage = imageBlob || blob
-  if (!writableImage) {
-    pushEditorLog('error', '[elephantnote:excalidraw] save failed: missing image payload')
-    return
-  }
-  const resolvedName = targetAssetName(fileName || excalidrawFileName.value)
-  const targetPath = await targetAssetPath(resolvedName)
-  const scenePath = getExcalidrawScenePath(targetPath)
-  await window.fileUtils.ensureDir(window.path.dirname(targetPath))
-  await window.fileUtils.writeFile(targetPath, writableImage)
-  if (sceneBlob) await window.fileUtils.writeFile(scenePath, sceneBlob)
-  excalidrawFileName.value = resolvedName
-  excalidrawTargetPath.value = targetPath
-  excalidrawScenePath.value = scenePath
-  pushEditorLog('info', '[elephantnote:excalidraw] saved drawing into hidden .assets', {
-    targetPath,
-    scenePath,
-    hasScene: !!sceneBlob
-  })
-  if (excalidrawInsertOnSave.value) {
-    const source = assetMarkdownSource(targetPath)
-    const imageMarkdown = `![${resolvedName}](${source})`
-    const nextMarkdown = [markdown.value.trimEnd(), imageMarkdown].filter(Boolean).join('\n\n')
-    updateCurrentFileMarkdown(nextMarkdown)
-  }
-  closeExcalidraw()
-}
 
 onMounted(() => {
   pushEditorLog('info', '[elephantnote:editor] mounted', {
     notePath: currentNoteRelativePath.value,
     vault: store.activeVault?.path
   })
-  bus.on('ELEPHANT::open-excalidraw', openExcalidraw)
-  bus.on('open-excalidraw-from-image', openExcalidrawFromImage)
   pollActiveMarkdownSave('mount')
   noteSaveInterval = window.setInterval(() => pollActiveMarkdownSave('interval'), AUTOSAVE_POLL_MS)
 })
@@ -905,8 +801,6 @@ onBeforeUnmount(() => {
   pushEditorLog('info', '[elephantnote:editor] before unmount', {
     notePath: currentNoteRelativePath.value
   })
-  bus.off('ELEPHANT::open-excalidraw', openExcalidraw)
-  bus.off('open-excalidraw-from-image', openExcalidrawFromImage)
   if (noteSaveInterval) {
     window.clearInterval(noteSaveInterval)
     noteSaveInterval = null

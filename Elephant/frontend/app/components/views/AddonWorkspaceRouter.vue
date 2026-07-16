@@ -1,11 +1,12 @@
 <template>
   <div v-if="!view" class="en-addon-router-empty">
     <h2>Addon view unavailable</h2>
-    <p>The addon may have been disabled or uninstalled.</p>
+    <p>The addon may have been disabled, removed or uninstalled.</p>
     <button type="button" @click="emit('close')">Back to notes</button>
   </div>
-  <calendar-addon-workspace
-    v-else-if="view.contribution.kind === 'calendar-v1'"
+  <component
+    :is="view.contribution.component"
+    v-else-if="view.contribution.component"
     :view="view"
     @close="emit('close')"
   />
@@ -16,7 +17,7 @@
   />
   <div v-else class="en-addon-router-empty">
     <h2>Unsupported addon view</h2>
-    <p>ElephantNote does not support <code>{{ view.contribution.kind }}</code>.</p>
+    <p>The enabled addon did not provide a workspace component for <code>{{ view.contribution.kind || view.contribution.id }}</code>.</p>
     <button type="button" @click="emit('close')">Back to notes</button>
   </div>
 </template>
@@ -25,7 +26,6 @@
 import { computed } from 'vue'
 import { useAddonsStore } from '@/store/addons'
 import AddonWorkspaceHost from './AddonWorkspaceHost.vue'
-import CalendarAddonWorkspace from './CalendarAddonWorkspace.vue'
 
 const props = defineProps({ viewId: { type: String, required: true } })
 const emit = defineEmits(['close'])

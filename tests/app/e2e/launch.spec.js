@@ -1,7 +1,7 @@
-const { expect, test } = require('@playwright/test')
+const { expect, test } = require('playwright/test')
 const { launchElectron } = require('./helpers')
 
-test.describe('Check Launch ElephantNote', () => {
+test.describe('Check Launch Elephant', () => {
   let app = null
   let page = null
 
@@ -12,11 +12,11 @@ test.describe('Check Launch ElephantNote', () => {
   })
 
   test.afterAll(async() => {
-    await app.close()
+    await app?.close()
   })
 
-  test('Empty ElephantNote', async() => {
+  test('Empty Elephant', async() => {
     const title = await page.title()
-    expect(/^ElephantNote|Untitled-1 - ElephantNote$/.test(title)).toBeTruthy()
+    expect(/^Elephant(?:$|\s|—|-)/.test(title)).toBeTruthy()
   })
 })

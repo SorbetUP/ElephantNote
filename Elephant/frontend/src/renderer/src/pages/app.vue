@@ -5,18 +5,7 @@
         v-if="!init"
         class="editor-placeholder"
       />
-      <app-shell
-        v-if="init"
-        :class="{ 'muya-runtime-underlay': muyaRuntimeActive }"
-      />
-      <MuyaRuntimeEditor
-        v-if="init && muyaRuntimeEnabled"
-        v-show="muyaRuntimeActive"
-        v-model="muyaRuntimeMarkdown"
-        :mode="muyaRuntimeMode"
-        class="muya-runtime-production-editor"
-        @change="handleMuyaRuntimeChange"
-      />
+      <app-shell v-if="init" />
       <command-palette />
       <about-dialog />
       <export-setting-dialog />
@@ -28,7 +17,7 @@
 </template>
 
 <script setup>
-import { watch, nextTick, onMounted, onBeforeUnmount, ref, computed } from 'vue'
+import { watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useMainStore } from '@/store'
 import { storeToRefs } from 'pinia'
 import { addStyles, addThemeStyle, addCustomStyle } from '@/util/theme'
@@ -49,8 +38,6 @@ import { useCommandCenterStore } from '@/store/commandCenter'
 import { useProjectStore } from '@/store/project'
 import { useAutoUpdatesStore } from '@/store/autoUpdates'
 import { useNotificationStore } from '@/store/notification'
-import { debouncedSendBufferedState } from '@/store/bufferedState'
-import { MuyaRuntimeEditor, isMuyaRuntimeActive, isMuyaRuntimeEnabled, readMuyaRuntimeMode } from '@/muya'
 import AppShell from 'elephant-front/components/shell/AppShell.vue'
 
 const isTauriRuntime = Boolean(window.__TAURI__ || window.__MARKTEXT_RUNTIME__)
@@ -67,63 +54,16 @@ const notificationStore = useNotificationStore()
 
 let importDialogHideTimer = null
 let dragOverHandler = null
-let muyaRuntimeModeTimer = null
-let pendingMuyaRuntimeFrame = null
-const muyaRuntimeMode = ref(window.__ELEPHANT_MUYA_RUNTIME__?.mode?.() || readMuyaRuntimeMode(window))
 
 const { init } = storeToRefs(mainStore)
 const { theme, customCss, zoom } = storeToRefs(preferencesStore)
 
-const syncMuyaRuntimeMode = () => {
-  const nextMode = window.__ELEPHANT_MUYA_RUNTIME__?.mode?.() || readMuyaRuntimeMode(window)
-  if (muyaRuntimeMode.value !== nextMode) {
-    muyaRuntimeMode.value = nextMode
-  }
-}
-
-const scheduleMuyaRuntimeModeSync = () => {
-  if (pendingMuyaRuntimeFrame) return
-  pendingMuyaRuntimeFrame = window.requestAnimationFrame(() => {
-    pendingMuyaRuntimeFrame = null
-    syncMuyaRuntimeMode()
-  })
-}
-
-const muyaRuntimeEnabled = computed(() => isMuyaRuntimeEnabled(muyaRuntimeMode.value))
-const muyaRuntimeActive = computed(() => isMuyaRuntimeActive(muyaRuntimeMode.value))
-
-const muyaRuntimeMarkdown = computed({
-  get: () => editorStore.currentFile?.markdown || '',
-  set: (value) => {
-    const file = editorStore.currentFile
-    if (!file?.id) return
-    file.markdown = value
-    file.isSaved = false
-    const index = editorStore.tabIdToIndex[file.id]
-    if (index !== undefined && editorStore.tabs[index]) {
-      editorStore.tabs[index].markdown = value
-      editorStore.tabs[index].isSaved = false
-    }
-    debouncedSendBufferedState()
-  }
-})
-
-const handleMuyaRuntimeChange = (value) => {
-  muyaRuntimeMarkdown.value = value
-}
-
 watch(theme, (value, oldValue) => {
-  if (value !== oldValue) {
-    addThemeStyle(value)
-  }
+  if (value !== oldValue) addThemeStyle(value)
 })
 
 watch(customCss, (value, oldValue) => {
-  if (value !== oldValue) {
-    addCustomStyle({
-      customCss: value
-    })
-  }
+  if (value !== oldValue) addCustomStyle({ customCss: value })
 })
 
 watch(zoom, (zoomValue) => {
@@ -131,33 +71,27 @@ watch(zoom, (zoomValue) => {
 })
 
 const hideImportDialogSoon = () => {
-  if (importDialogHideTimer) {
-    window.clearTimeout(importDialogHideTimer)
-  }
+  if (importDialogHideTimer) window.clearTimeout(importDialogHideTimer)
   importDialogHideTimer = window.setTimeout(() => {
     importDialogHideTimer = null
     bus.emit('importDialog', false)
   }, 300)
 }
 
-const handleDragOver = (e) => {
-  const dataTransfer = e.dataTransfer
+const handleDragOver = (event) => {
+  const dataTransfer = event.dataTransfer
   if (!dataTransfer?.types?.length) return
 
-  if (dataTransfer.types.indexOf('Files') >= 0) {
-    if (
-      dataTransfer.items.length === 1 &&
-      dataTransfer.items[0].type.indexOf('image') > -1
-    ) {
-      // Do nothing
-    } else {
-      e.preventDefault()
+  if (dataTransfer.types.includes('Files')) {
+    const isSingleImage = dataTransfer.items.length === 1 && dataTransfer.items[0].type.includes('image')
+    if (!isSingleImage) {
+      event.preventDefault()
       hideImportDialogSoon()
       bus.emit('importDialog', true)
     }
     dataTransfer.dropEffect = 'copy'
   } else {
-    e.stopPropagation()
+    event.stopPropagation()
     dataTransfer.dropEffect = 'none'
   }
 }
@@ -220,43 +154,22 @@ onMounted(async () => {
   editorStore.LISTEN_FOR_RELOAD_IMAGES()
   editorStore.LISTEN_FOR_CONTEXT_MENU()
   editorStore.LISTEN_FOR_STATE_REPLACE()
-
   notificationStore.listenForNotification()
 
   setupDragDropHandler()
-  window.addEventListener('focus', scheduleMuyaRuntimeModeSync)
-  window.addEventListener('visibilitychange', scheduleMuyaRuntimeModeSync)
-  window.addEventListener('elephantnote:muya-runtime-mode-changed', scheduleMuyaRuntimeModeSync)
-  muyaRuntimeModeTimer = window.setInterval(syncMuyaRuntimeMode, 2500)
 
   if (isTauriRuntime) {
-    setTimeout(() => {
-      if (!mainStore.init) {
-        mainStore.SET_INITIALIZED()
-      }
+    window.setTimeout(() => {
+      if (!mainStore.init) mainStore.SET_INITIALIZED()
     }, 250)
   }
 
   nextTick(() => {
-    const style = global.marktext.initialState || DEFAULT_STYLE
-    addStyles(style)
+    addStyles(global.marktext.initialState || DEFAULT_STYLE)
   })
 })
 
-onBeforeUnmount(() => {
-  cleanupDragDropHandler()
-  window.removeEventListener('focus', scheduleMuyaRuntimeModeSync)
-  window.removeEventListener('visibilitychange', scheduleMuyaRuntimeModeSync)
-  window.removeEventListener('elephantnote:muya-runtime-mode-changed', scheduleMuyaRuntimeModeSync)
-  if (muyaRuntimeModeTimer) {
-    window.clearInterval(muyaRuntimeModeTimer)
-    muyaRuntimeModeTimer = null
-  }
-  if (pendingMuyaRuntimeFrame) {
-    window.cancelAnimationFrame(pendingMuyaRuntimeFrame)
-    pendingMuyaRuntimeFrame = null
-  }
-})
+onBeforeUnmount(cleanupDragDropHandler)
 </script>
 
 <style scoped>
@@ -272,36 +185,27 @@ onBeforeUnmount(() => {
   right: 0;
   bottom: 0;
 }
+
 .editor-container .hide {
   z-index: -1;
   opacity: 0;
   position: absolute;
   left: -10000px;
 }
+
 .editor-placeholder {
   background: var(--editorBgColor);
 }
+
 .editor-middle {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 100vh;
   position: relative;
+
   & > .editor {
     flex: 1;
   }
-}
-.muya-runtime-underlay {
-  opacity: 0;
-  pointer-events: none;
-}
-.muya-runtime-production-editor {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  min-height: 100vh;
-  padding: 48px 72px;
-  overflow: auto;
-  background: var(--editorBgColor);
 }
 </style>

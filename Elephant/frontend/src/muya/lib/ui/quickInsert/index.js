@@ -21,7 +21,6 @@ class QuickInsert extends BaseScrollFloat {
     this.renderArray = null
     this.activeItem = null
     this.block = null
-    // Get the translation function from muya.options, or use the default config if absent
     const translateFn = muya.options && muya.options.t ? muya.options.t : null
     this.originalQuickInsertObj = createQuickInsertObj(translateFn)
     this.renderObj = this.originalQuickInsertObj
@@ -131,15 +130,15 @@ class QuickInsert extends BaseScrollFloat {
   search(text) {
     const { contentState } = this.muya
     const canInserFrontMatter = contentState.canInserFrontMatter(this.block)
+    const translateFn = this.muya.options && this.muya.options.t ? this.muya.options.t : null
+    this.originalQuickInsertObj = createQuickInsertObj(translateFn)
     const obj = deepCopy(this.originalQuickInsertObj)
     if (!canInserFrontMatter) {
-      // Find the basic block group containing front-matter
       const basicBlockKey = Object.keys(obj).find((key) => {
         const items = obj[key]
         return Array.isArray(items) && items.some((item) => item.label === 'front-matter')
       })
       if (basicBlockKey && obj[basicBlockKey]) {
-        // Find the index of the front-matter item and remove it
         const frontMatterIndex = obj[basicBlockKey].findIndex(
           (item) => item.label === 'front-matter'
         )
@@ -161,7 +160,6 @@ class QuickInsert extends BaseScrollFloat {
 
   selectItem(item) {
     const { contentState } = this.muya
-    // Check that block exists to avoid a null reference error
     if (!this.block) {
       console.warn('QuickInsert: block is null, cannot select item')
       this.hide()
@@ -197,7 +195,6 @@ class QuickInsert extends BaseScrollFloat {
         contentState.updateParagraph(item.label, true)
         break
     }
-    // delay hide to avoid dispatch enter hander
     setTimeout(this.hide.bind(this))
   }
 

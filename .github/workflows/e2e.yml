@@ -8,11 +8,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   e2e:
+    name: Linux production app usage simulations
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
 
       - name: Install System Dependencies
         run: |
@@ -24,7 +33,46 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      # Run the full postinstall and locale minification.
+      - name: Validate Linux usage scenario catalog
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/specs/main/elephantnote/linuxUsageRegressionSuite.spec.js \
+            2>&1 | tee linux-usage-contract.txt
+
+      - name: Install exact wasm-bindgen CLI
+        shell: bash
+        run: |
+          VERSION=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
+            | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
+          if ! wasm-bindgen --version 2>/dev/null | grep -q "${VERSION}$"; then
+            cargo install wasm-bindgen-cli --version "$VERSION" --locked
+          fi
+
+      - name: Install Electron test binary
+        shell: bash
+        run: |
+          set -o pipefail
+          electron_package="$(NODE_PATH=Elephant/node_modules node - <<'NODE'
+          const path = require('path')
+          const roots = [process.cwd(), path.join(process.cwd(), 'Elephant')]
+          let resolved = ''
+          for (const root of roots) {
+            try {
+              resolved = require.resolve('electron/package.json', { paths: [root] })
+              break
+            } catch {}
+          }
+          if (!resolved) process.exit(1)
+          process.stdout.write(resolved)
+          NODE
+          )"
+          electron_root="$(dirname "$electron_package")"
+          echo "Electron package: $electron_root" | tee electron-install.txt
+          node "$electron_root/install.js" 2>&1 | tee -a electron-install.txt
+          test -s "$electron_root/path.txt"
+
       - name: Run postinstall
         run: node build/scripts/postinstall.js
         env:
@@ -32,15 +80,31 @@ jobs:
           npm_config_user_agent: 'pnpm'
           USE_ELECTRON_CLANG: '0'
 
-      - name: Build app diagnostic
-        id: build-app
-        continue-on-error: true
-        run: pnpm build
+      - name: Build Rust renderer for Linux usage simulations
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee e2e-build.txt
+          test -f build/out/renderer/index.html
 
-      - name: Run E2E Tests
-        if: steps.build-app.outcome == 'success'
-        run: xvfb-run --auto-servernum pnpm test:e2e
+      - name: Run Linux application usage simulations
+        run: |
+          set -o pipefail
+          xvfb-run --auto-servernum pnpm test:e2e 2>&1 | tee e2e-tests.txt
 
-      - name: Skip E2E after build diagnostic failure
-        if: steps.build-app.outcome != 'success'
-        run: echo "Skipping E2E because the web build is currently diagnostic during the Tauri migration."
+      - name: Upload Linux usage diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-app-usage-diagnostics
+          path: |
+            linux-usage-contract.txt
+            electron-install.txt
+            e2e-build.txt
+            e2e-tests.txt
+            test-results/e2e-results.json
+            test-results/e2e-junit.xml
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14

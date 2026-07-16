@@ -2,11 +2,7 @@ import { pushDiagnosticLog } from '@/platform/rendererDiagnostics'
 import { useSearchStore } from '../stores/searchStore'
 import { useVaultStore } from '../stores/vaultStore'
 
-let installed = false
-let repairInFlight = false
-let lastRepairVaultPath = ''
-let repairTimer = null
-let lastRepairCheckAt = 0
+let activeRuntime = null
 
 const MIN_REPAIR_CHECK_INTERVAL_MS = 30000
 
@@ -37,29 +33,27 @@ export const hasSubstantialVault = (vaultStore) => {
   return entries.some((entry) => entry?.kind === 'folder' || entry?.type === 'folder')
 }
 
-export const shouldRepairSparseGraph = ({ vaultStore, searchStore, vaultPath, lastRepairPath = '', inFlight = false } = {}) => {
-  if (vaultStore?.activeWorkspaceView !== 'graph') return false
+export const shouldRepairSparseGraph = ({ vaultStore, searchStore, vaultPath, lastRepairPath = '', inFlight = false, force = false } = {}) => {
+  if (!force && vaultStore?.activeWorkspaceView !== 'graph') return false
   if (!vaultPath || inFlight) return false
-  if (lastRepairPath === vaultPath) return false
+  if (!force && lastRepairPath === vaultPath) return false
   return hasSparseGraph(searchStore) && hasSubstantialVault(vaultStore)
 }
 
-const scheduleRepairCheck = (repairGraphIfNeeded, delayMs = 0) => {
-  if (repairTimer) window.clearTimeout(repairTimer)
-  repairTimer = window.setTimeout(() => {
-    repairTimer = null
-    repairGraphIfNeeded().catch((error) => {
-      pushDiagnosticLog('error', 'graph repair check failed', error)
-    })
-  }, delayMs)
-}
+export const installGraphRuntimeFixes = (target = globalThis) => {
+  if (!target?.window || !target?.document) return { dispose() {} }
+  if (activeRuntime) return activeRuntime
 
-export const installGraphRuntimeFixes = () => {
-  if (installed) return
-  installed = true
+  let disposed = false
+  let repairInFlight = false
+  let lastRepairVaultPath = ''
+  let repairTimer = null
+  let lastRepairCheckAt = 0
+
   pushDiagnosticLog('info', 'graph runtime repair guard installed')
 
   const repairGraphIfNeeded = async ({ force = false } = {}) => {
+    if (disposed) return
     const now = Date.now()
     if (!force && now - lastRepairCheckAt < MIN_REPAIR_CHECK_INTERVAL_MS) return
     lastRepairCheckAt = now
@@ -74,7 +68,8 @@ export const installGraphRuntimeFixes = () => {
       searchStore,
       vaultPath,
       lastRepairPath: lastRepairVaultPath,
-      inFlight: repairInFlight
+      inFlight: repairInFlight,
+      force
     })) return
 
     repairInFlight = true
@@ -108,17 +103,48 @@ export const installGraphRuntimeFixes = () => {
     }
   }
 
+  const scheduleRepairCheck = (delayMs = 0) => {
+    if (disposed) return
+    if (repairTimer) target.window.clearTimeout(repairTimer)
+    repairTimer = target.window.setTimeout(() => {
+      repairTimer = null
+      repairGraphIfNeeded().catch((error) => {
+        pushDiagnosticLog('error', 'graph repair check failed', error)
+      })
+    }, delayMs)
+  }
+
   const runRepair = (options) => repairGraphIfNeeded(options).catch((error) => {
     pushDiagnosticLog('error', 'graph repair event failed', error)
   })
   const forceRepair = () => runRepair({ force: true })
-  const scheduleLazyRepair = () => scheduleRepairCheck(repairGraphIfNeeded, 250)
+  const scheduleLazyRepair = () => scheduleRepairCheck(250)
+  const handleVisibilityChange = () => {
+    if (!target.document.hidden) scheduleLazyRepair()
+  }
 
-  window.addEventListener('elephantnote:repair-graph', forceRepair)
-  window.addEventListener('focus', scheduleLazyRepair)
-  window.addEventListener('visibilitychange', () => {
-    if (!document.hidden) scheduleLazyRepair()
-  })
+  target.window.addEventListener('elephantnote:repair-graph', forceRepair)
+  target.window.addEventListener('focus', scheduleLazyRepair)
+  target.window.addEventListener('visibilitychange', handleVisibilityChange)
 
+  const runtime = {
+    repair: forceRepair,
+    dispose() {
+      if (disposed) return
+      disposed = true
+      if (repairTimer) {
+        target.window.clearTimeout(repairTimer)
+        repairTimer = null
+      }
+      target.window.removeEventListener('elephantnote:repair-graph', forceRepair)
+      target.window.removeEventListener('focus', scheduleLazyRepair)
+      target.window.removeEventListener('visibilitychange', handleVisibilityChange)
+      if (activeRuntime === runtime) activeRuntime = null
+      pushDiagnosticLog('info', 'graph runtime repair guard disposed')
+    }
+  }
+
+  activeRuntime = runtime
   scheduleLazyRepair()
+  return runtime
 }

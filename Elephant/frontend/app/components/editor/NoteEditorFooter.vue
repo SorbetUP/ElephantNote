@@ -5,13 +5,11 @@
       <span>{{ characterCount }} characters</span>
     </div>
     <div class="en-note-footer-actions">
-      <button
-        type="button"
-        title="Open graph"
-        @click="$emit('open-graph')"
-      >
-        Graph
-      </button>
+      <component
+        :is="entry.contribution.component"
+        v-for="entry in footerItems"
+        :key="entry.contribution.id"
+      />
       <note-typography-menu
         :is-open="isTypographyOpen"
         @toggle="$emit('toggle-typography')"
@@ -32,7 +30,14 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useAddonsStore } from '@/store/addons'
 import NoteTypographyMenu from './NoteTypographyMenu.vue'
+
+const addonsStore = useAddonsStore()
+const footerItems = computed(() => addonsStore.getContributions('editor.footer-items')
+  .filter((entry) => entry?.contribution?.id && entry?.contribution?.component)
+  .sort((left, right) => Number(left.contribution.order || 0) - Number(right.contribution.order || 0)))
 
 defineProps({
   wordCount: {
@@ -53,7 +58,7 @@ defineProps({
   }
 })
 
-defineEmits(['toggle-typography', 'set-text-scale', 'toggle-theme', 'open-graph'])
+defineEmits(['toggle-typography', 'set-text-scale', 'toggle-theme'])
 </script>
 
 <style scoped>
@@ -82,7 +87,7 @@ defineEmits(['toggle-typography', 'set-text-scale', 'toggle-theme', 'open-graph'
   gap: 12px;
 }
 
-.en-note-footer-actions > button {
+.en-note-footer-actions :deep(button) {
   min-width: 36px;
   height: 36px;
   display: inline-flex;
@@ -97,7 +102,7 @@ defineEmits(['toggle-typography', 'set-text-scale', 'toggle-theme', 'open-graph'
   font-size: 13px;
 }
 
-.en-note-footer-actions button:hover {
+.en-note-footer-actions :deep(button:hover) {
   background: var(--en-soft);
 }
 

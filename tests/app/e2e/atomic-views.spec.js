@@ -1,7 +1,7 @@
-const { expect, test } = require('@playwright/test')
+const { expect, test } = require('playwright/test')
 const { launchElectron } = require('./helpers')
 
-test.describe('Atomic workspace visual smoke', () => {
+test.describe('Core workspace visual smoke', () => {
   let app = null
   let page = null
 
@@ -15,23 +15,17 @@ test.describe('Atomic workspace visual smoke', () => {
     await app?.close()
   })
 
-  test('opens Chat and Canvas workspace views with non-empty layouts', async() => {
-    await page.getByRole('button', { name: 'Chat', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible()
-    await expect(page.getByPlaceholder('Ask across your notes')).toBeVisible()
+  test('does not expose optional Chat, Canvas or Graph surfaces without their packages', async() => {
+    await expect(page.locator('body')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Chat', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Canvas', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Graph', exact: true })).toHaveCount(0)
+    await expect(page.locator('.en-canvas-stage')).toHaveCount(0)
+    await expect(page.locator('.elephant-chat-package')).toHaveCount(0)
+    await expect(page.locator('.elephant-graph-package')).toHaveCount(0)
 
-    const chatShot = await page.screenshot()
-    expect(chatShot.length).toBeGreaterThan(10000)
-
-    await page.getByRole('button', { name: 'Canvas', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Canvas' })).toBeVisible()
-    await expect(page.locator('.en-canvas-stage')).toBeVisible()
-
-    const canvasStage = await page.locator('.en-canvas-stage').boundingBox()
-    expect(canvasStage.width).toBeGreaterThan(300)
-    expect(canvasStage.height).toBeGreaterThan(200)
-
-    const canvasShot = await page.screenshot()
-    expect(canvasShot.length).toBeGreaterThan(10000)
+    const bodyText = (await page.locator('body').innerText()).trim()
+    expect(bodyText.length).toBeGreaterThan(20)
+    expect(bodyText).toMatch(/Choose your first vault|All notes|Stockage privé/i)
   })
 })

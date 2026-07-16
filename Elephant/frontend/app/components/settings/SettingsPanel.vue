@@ -33,7 +33,7 @@
           <footer class="en-settings-nav-footer"><span>Local-first</span><span>v0.18.9</span></footer>
         </aside>
 
-        <main ref="settingsContent" class="en-settings-content">
+        <main ref="settingsContent" class="en-settings-content" :data-active-section="settingsQuery.trim() ? 'search' : activeSection">
           <template v-if="settingsQuery.trim()">
             <div class="en-settings-page-title"><h1>Search</h1><span>{{ searchResults.length }} result{{ searchResults.length === 1 ? '' : 's' }}</span></div>
             <section v-if="searchResults.length" class="en-settings-search-results">
@@ -48,7 +48,10 @@
           </template>
 
           <template v-else>
-            <div class="en-settings-page-title"><h1>{{ activeSectionMeta.label }}</h1></div>
+            <div class="en-settings-page-title">
+              <h1>{{ activeSectionMeta.label }}</h1>
+              <span v-if="activeSection === 'addons'" id="en-addons-title-actions" class="en-settings-title-actions" />
+            </div>
 
             <template v-if="activeSection === 'appearance'">
               <section class="en-settings-group">
@@ -60,9 +63,16 @@
                   </div>
                 </div>
 
+                <language-settings-row />
+
                 <div class="en-settings-row en-settings-row-stacked">
-                  <div class="en-settings-row-copy"><strong>Theme</strong><span>Choose the visual family used throughout ElephantNote.</span></div>
-                  <div class="en-theme-grid">
+                  <header class="en-settings-collapsible-header">
+                    <strong>Theme</strong>
+                    <button type="button" :aria-expanded="themeExpanded" :title="themeExpanded ? 'Collapse themes' : 'Expand themes'" @click="themeExpanded = !themeExpanded">
+                      <ChevronDown :class="{ collapsed: !themeExpanded }" aria-hidden="true" />
+                    </button>
+                  </header>
+                  <div v-if="themeExpanded" class="en-theme-grid">
                     <button v-for="family in themeFamilies" :key="family.id" type="button" class="en-theme-card" :class="{ active: activeThemeFamily.id === family.id }" @click="emit('update-theme', getThemeVariant(family.id, themeMode))">
                       <span class="en-theme-card-preview" :style="{ background: family.swatches[0] }"><i class="sidebar" :style="{ background: family.swatches[1] }" /><i class="canvas" :style="{ background: family.swatches[2] }"><b :style="{ background: family.swatches[3] || family.swatches[2] }" /><b :style="{ background: family.swatches[3] || family.swatches[2] }" /></i></span>
                       <span class="en-theme-card-copy"><strong>{{ family.name }}</strong><small>{{ family.description }}</small></span>
@@ -71,13 +81,7 @@
                   </div>
                 </div>
 
-                <div class="en-settings-row">
-                  <div class="en-settings-row-copy"><strong>Sidebar width</strong><span>Resize the main navigation rail.</span></div>
-                  <label class="en-range-control"><input type="range" min="184" max="320" :value="sidebarWidth" @input="emit('update-sidebar-width', Number($event.target.value))"><output>{{ sidebarWidth }} px</output></label>
-                </div>
-
-                <div class="en-settings-row en-settings-row-stacked">
-                  <div class="en-settings-row-copy"><strong>Vertical icon bar</strong><span>Reorder or hide native features and enabled addon workspaces.</span></div>
+                <div class="en-settings-row en-settings-row-stacked en-settings-row-compact">
                   <icon-rail-layout-settings />
                 </div>
               </section>
@@ -110,23 +114,7 @@
             </template>
 
             <template v-else-if="activeSection === 'addons'"><addons-settings-panel /></template>
-            <template v-else-if="activeSection === 'sync'"><sync-settings-panel :vaults="vaults" :active-vault-path="activeVaultPath" :initial-page="syncInitialPage" /></template>
-            <template v-else-if="activeSection === 'ai'"><ai-provider-settings-panel :initial-page="aiInitialPage" /></template>
-
-            <template v-else-if="activeSection === 'sites'">
-              <section class="en-settings-group">
-                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Site preview</strong><span>{{ siteStatusLabel }}</span></div><button class="en-switch" type="button" role="switch" aria-label="Enable site preview" :aria-checked="featureFlags.sitePreview" :class="{ active: featureFlags.sitePreview }" @click="toggleFeature('sitePreview')"><span /></button></div>
-                <div class="en-settings-inline-actions"><button type="button" :disabled="!sitePreviewStore.previewUrl" @click="sitePreviewStore.openPreviewExternal"><Globe2 aria-hidden="true" />Open preview</button><button type="button" :disabled="!sitePreviewStore.info" @click="stopSitePreview">Stop preview</button></div>
-              </section>
-            </template>
-
-            <template v-else-if="activeSection === 'import'">
-              <section class="en-settings-group">
-                <div class="en-settings-row"><div class="en-settings-row-copy"><strong>Google Keep archive</strong><span>Convert an exported archive into local Markdown notes.</span></div><button class="en-primary-button" type="button" :disabled="isImporting" @click="importGoogleKeep"><Download aria-hidden="true" />{{ isImporting ? 'Importing…' : 'Import Google Keep' }}</button></div>
-                <div class="en-form-grid"><label><span>Source URL</span><input v-model.trim="sourceUrl" type="url" placeholder="https://example.com/article"></label><label><span>Destination folder</span><input v-model.trim="sourceDestination" type="text" placeholder="Sources"></label></div>
-                <div class="en-settings-inline-actions"><button type="button" :disabled="isImportingSource || !sourceUrl" @click="ingestSourceUrl">Import page</button><button type="button" :disabled="isImportingSource || !sourceUrl" @click="importRssSource">Import RSS</button><span>{{ sourceImportMessage || importMessage }}</span></div>
-              </section>
-            </template>
+            <template v-else><div class="en-addon-settings-page-anchor" /></template>
           </template>
         </main>
       </div>
@@ -137,44 +125,44 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import log from '@/platform/runtimeLogShim'
-import { Check, ChevronRight, Cloud, Download, FolderOpen, Globe2, HardDrive, Moon, Package, Palette, PenLine, Search, Sparkles, SunMedium, X } from '@lucide/vue'
+import { CalendarDays, Check, ChevronDown, ChevronRight, Cloud, Database, Download, FolderOpen, Globe2, HardDrive, Moon, Package, Palette, PenLine, Search, Sparkles, SunMedium, X } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
+import { useAddonsStore } from '@/store/addons'
 import { ELEPHANTNOTE_THEME_FAMILIES, getThemeFamily, getThemeLabel, getThemeMode, getThemeTokens, getThemeVariant } from 'common/elephantnote/appearance'
 import AddonsSettingsPanel from './AddonsSettingsPanel.vue'
-import AiProviderSettingsPanel from './AiProviderSettingsPanel.vue'
 import IconRailLayoutSettings from './IconRailLayoutSettings.vue'
-import SyncSettingsPanel from './SyncSettingsPanel.vue'
-import { useSitePreviewStore } from '../../sitePreview/sitePreviewStore'
-import { elephantnoteClient } from '../../services/elephantnoteClient'
+import LanguageSettingsRow from './LanguageSettingsRow.vue'
 import { useVaultStore } from '../../stores/vaultStore'
 
 const props = defineProps({
   theme: { type: String, required: true },
-  sidebarWidth: { type: Number, required: true },
   vaults: { type: Array, default: () => [] },
   activeVaultName: { type: String, default: 'No vault' },
   activeVaultPath: { type: String, default: '' },
   initialSection: { type: String, default: 'appearance' }
 })
-const emit = defineEmits(['close', 'update-theme', 'update-sidebar-width'])
+const emit = defineEmits(['close', 'update-theme'])
 
-const sections = [
+const CORE_SECTIONS = Object.freeze([
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'editor', label: 'Editor', icon: PenLine },
   { id: 'vaults', label: 'Vaults', icon: FolderOpen },
-  { id: 'addons', label: 'Addons', icon: Package },
-  { id: 'sync', label: 'Sync', icon: Cloud },
-  { id: 'ai', label: 'AI', icon: Sparkles },
-  { id: 'sites', label: 'Sites', icon: Globe2 },
-  { id: 'import', label: 'Import', icon: Download }
-]
-const sectionById = Object.fromEntries(sections.map((section) => [section.id, section]))
-const normalizeSection = (section) => sectionById[section] ? section : 'appearance'
-const settingsIndex = [
+  { id: 'addons', label: 'Addons', icon: Package }
+])
+const ICONS = Object.freeze({
+  calendar: CalendarDays,
+  cloud: Cloud,
+  database: Database,
+  download: Download,
+  globe: Globe2,
+  package: Package,
+  sparkles: Sparkles
+})
+const CORE_SETTINGS_INDEX = Object.freeze([
   { id: 'appearance-mode', section: 'appearance', label: 'Color mode', description: 'Light and dark appearance.' },
-  { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Apple, Graphite, Nord, Solar and Forest themes.' },
-  { id: 'appearance-sidebar', section: 'appearance', label: 'Sidebar width', description: 'Resize the main navigation rail.' },
-  { id: 'appearance-icon-rail', section: 'appearance', label: 'Vertical icon bar', description: 'Reorder or hide navigation icons and addon workspaces.' },
+  { id: 'appearance-language', section: 'appearance', label: 'Language', description: 'System, built-in and ISO language packs.' },
+  { id: 'appearance-theme', section: 'appearance', label: 'Theme', description: 'Elephant, Apple, Graphite, Nord, Solar, Forest, Beige, Pastel and Gamer Violet themes.' },
+  { id: 'appearance-icon-rail', section: 'appearance', label: 'Vertical icon bar', description: 'Reorder, hide and divide navigation icons.' },
   { id: 'editor-footer', section: 'editor', label: 'Editor footer', description: 'Word count and typography controls.' },
   { id: 'editor-tags', section: 'editor', label: 'Tag prefix', description: 'Show or hide the # before tags.' },
   { id: 'editor-quick-insert', section: 'editor', label: 'Quick insert menu', description: 'Show block commands when typing the trigger.' },
@@ -189,34 +177,60 @@ const settingsIndex = [
   { id: 'editor-autosave-delay', section: 'editor', label: 'Autosave delay', description: 'Delay before writing the latest edit.' },
   { id: 'vault-active', section: 'vaults', label: 'Active vault', description: 'Current local workspace folder.' },
   { id: 'vault-open', section: 'vaults', label: 'Open vaults', description: 'Review or remove registered vaults.' },
-  { id: 'addons-installed', section: 'addons', label: 'Installed addons', description: 'Built-in and community addon packages.' },
-  { id: 'addons-community', section: 'addons', label: 'Community addons', description: 'Risk acknowledgement and third-party addon activation.' },
-  { id: 'addons-commands', section: 'addons', label: 'Addon commands', description: 'Run commands contributed by enabled addons.' },
-  { id: 'sync-overview', section: 'sync', subpage: 'overview', label: 'Synchronization status', description: 'Active vault, device identity and last transfer.' },
-  { id: 'sync-devices', section: 'sync', subpage: 'devices', label: 'Pair devices', description: 'Create or accept an encrypted Iroh invitation.' },
-  { id: 'sync-conflicts', section: 'sync', subpage: 'conflicts', label: 'Conflict retention', description: 'Keep, restore or delete temporary conflict copies.' },
-  { id: 'ai-providers', section: 'ai', subpage: 'provider', label: 'AI providers', description: 'Local runtime, external APIs and Codex.' },
-  { id: 'ai-chat', section: 'ai', subpage: 'chat', label: 'Chat model and RAG', description: 'Model, tools, streaming, prompt and generation settings.' },
-  { id: 'ai-search', section: 'ai', subpage: 'embedding', label: 'Semantic search and embeddings', description: 'Indexing, chunking and retrieval settings.' },
-  { id: 'ai-ocr', section: 'ai', subpage: 'ocr', label: 'OCR', description: 'Recognition model, languages and image processing.' },
-  { id: 'sites-preview', section: 'sites', label: 'Site preview', description: 'Enable, open or stop the generated static site.' },
-  { id: 'import-keep', section: 'import', label: 'Google Keep import', description: 'Convert a Keep archive into Markdown.' },
-  { id: 'import-web', section: 'import', label: 'Web page import', description: 'Save a URL into the active vault.' },
-  { id: 'import-rss', section: 'import', label: 'RSS import', description: 'Import feed items into local notes.' }
-].map((entry) => ({ ...entry, sectionLabel: sectionById[entry.section].label, icon: sectionById[entry.section].icon }))
+  { id: 'addons-installed', section: 'addons', label: 'Installed addons', description: 'Installed addon packages.' },
+  { id: 'addons-available', section: 'addons', label: 'Available addons', description: 'Install optional features and community packages.' },
+  { id: 'addons-community', section: 'addons', label: 'Community addons', description: 'Third-party addon activation.' },
+  { id: 'addons-packs', section: 'addons', label: 'Addon packs', description: 'Install or share complete addon configurations.' }
+])
+
+const addonsStore = useAddonsStore()
+const addonSettingsContributions = computed(() => addonsStore.getContributions('settings.sections'))
+const addonStandaloneSections = computed(() => {
+  const unique = new Map()
+  for (const entry of addonSettingsContributions.value) {
+    const contribution = entry?.contribution || {}
+    if (!contribution.standalone || !contribution.section || unique.has(contribution.section)) continue
+    unique.set(contribution.section, {
+      id: contribution.section,
+      label: contribution.navigationLabel || contribution.title || contribution.section,
+      icon: ICONS[contribution.navigationIcon] || Package,
+      order: Number.isFinite(contribution.order) ? contribution.order : 1000
+    })
+  }
+  return [...unique.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
+})
+const sections = computed(() => [...CORE_SECTIONS, ...addonStandaloneSections.value])
+const sectionById = computed(() => Object.fromEntries(sections.value.map((section) => [section.id, section])))
+const normalizeSection = (section) => sectionById.value[section] ? section : 'appearance'
+const settingsIndex = computed(() => [
+  ...CORE_SETTINGS_INDEX,
+  ...addonSettingsContributions.value.map((entry) => {
+    const contribution = entry.contribution || {}
+    const section = contribution.section || 'addons'
+    return {
+      id: contribution.id || `${entry.addonId}:${section}`,
+      section,
+      label: contribution.navigationLabel || contribution.title || entry.addonId,
+      description: contribution.description || 'Addon setting.'
+    }
+  })
+].map((entry) => ({
+  ...entry,
+  sectionLabel: sectionById.value[entry.section]?.label || entry.section,
+  icon: sectionById.value[entry.section]?.icon || Package
+})))
 
 const activeSection = ref(normalizeSection(props.initialSection))
 const settingsQuery = ref('')
-const syncInitialPage = ref('overview')
-const aiInitialPage = ref('provider')
 const searchInput = ref(null)
 const settingsContent = ref(null)
+const themeExpanded = ref(true)
 const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
-const activeSectionMeta = computed(() => sectionById[activeSection.value] || sections[0])
+const activeSectionMeta = computed(() => sectionById.value[activeSection.value] || sections.value[0])
 const searchResults = computed(() => {
   const terms = settingsQuery.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean)
   if (!terms.length) return []
-  return settingsIndex.filter((entry) => {
+  return settingsIndex.value.filter((entry) => {
     const haystack = `${entry.label} ${entry.description} ${entry.sectionLabel}`.toLocaleLowerCase()
     return terms.every((term) => haystack.includes(term))
   })
@@ -230,6 +244,9 @@ watch(() => props.initialSection, (section) => {
     log.info('[settings] initial-section:changed', { section: nextSection })
     scrollContentToTop()
   }
+})
+watch(sections, () => {
+  if (!sectionById.value[activeSection.value]) activeSection.value = 'addons'
 })
 
 const vaults = computed(() => props.vaults)
@@ -245,25 +262,14 @@ const settingsStyle = computed(() => {
 })
 
 const preferences = usePreferencesStore()
-const sitePreviewStore = useSitePreviewStore()
 const vaultStore = useVaultStore()
-const featureFlags = ref({ askAi: true, sitePreview: false, gitSync: false })
-const sourceUrl = ref('')
-const sourceDestination = ref('Sources')
-const sourceImportMessage = ref('')
-const importMessage = ref('')
 const vaultMessage = ref('')
 const removingVaultId = ref('')
-const isImporting = ref(false)
-const isImportingSource = ref(false)
-const siteStatusLabel = computed(() => sitePreviewStore.previewUrl ? 'Preview running' : sitePreviewStore.lastBuild?.outputDir ? 'Static build ready' : 'No generated site active')
 
 const scrollContentToTop = () => nextTick(() => settingsContent.value?.scrollTo({ top: 0, behavior: 'instant' }))
 const selectSection = (section) => { activeSection.value = section; settingsQuery.value = ''; log.info('[settings] section:selected', { section }); scrollContentToTop() }
 const openSearchResult = (result) => {
   activeSection.value = result.section
-  if (result.section === 'sync') syncInitialPage.value = result.subpage || 'overview'
-  if (result.section === 'ai') aiInitialPage.value = result.subpage || 'provider'
   settingsQuery.value = ''
   log.info('[settings] search-result:opened', { id: result.id, section: result.section })
   scrollContentToTop()
@@ -285,46 +291,14 @@ const removeVaultFromApp = async (vault) => {
   } finally { removingVaultId.value = '' }
 }
 
-const importGoogleKeep = async () => {
-  isImporting.value = true
-  importMessage.value = ''
-  try {
-    const result = await elephantnoteClient.imports.googleKeep()
-    importMessage.value = result?.canceled ? 'Import canceled.' : `Imported ${result.imported || 0} note${result.imported === 1 ? '' : 's'}.`
-  } catch (error) { importMessage.value = error instanceof Error ? error.message : 'Import failed.' } finally { isImporting.value = false }
-}
-
-const ingestSourceUrl = async () => {
-  isImportingSource.value = true
-  try {
-    const result = await elephantnoteClient.sources.ingestUrl(sourceUrl.value, sourceDestination.value || 'Sources')
-    sourceImportMessage.value = `Imported ${result.source?.title || 'source'}.`
-  } catch (error) { sourceImportMessage.value = error instanceof Error ? error.message : 'Source import failed.' } finally { isImportingSource.value = false }
-}
-
-const importRssSource = async () => {
-  isImportingSource.value = true
-  try {
-    const result = await elephantnoteClient.sources.importRss(sourceUrl.value, sourceDestination.value || 'Sources')
-    sourceImportMessage.value = `Imported ${result.imported || 0} feed item${result.imported === 1 ? '' : 's'}.`
-  } catch (error) { sourceImportMessage.value = error instanceof Error ? error.message : 'RSS import failed.' } finally { isImportingSource.value = false }
-}
-
-const stopSitePreview = async () => { await sitePreviewStore.stopPreview(); sitePreviewStore.clear() }
-const toggleFeature = async (key) => {
-  try { featureFlags.value = await elephantnoteClient.features.set(key, !featureFlags.value[key]) } catch (error) { log.warn('[settings] toggleFeature:failed', error) }
-}
 const handleKeyboard = (event) => {
   if (event.key === 'Escape') emit('close')
   if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'f') { event.preventDefault(); searchInput.value?.focus(); searchInput.value?.select() }
 }
 
-onMounted(async () => {
+onMounted(() => {
   window.addEventListener('keydown', handleKeyboard)
-  log.info('[settings] mounted:start', { sections: sections.map((section) => section.id), initialSection: activeSection.value })
-  try { featureFlags.value = await elephantnoteClient.features.get() } catch (error) { log.warn('[settings] featureFlags:failed', error) }
-  sitePreviewStore.refresh?.()
-  log.info('[settings] mounted:done', { theme: activeThemeLabel.value, addonsRegistered: Boolean(window.__ELEPHANT_ADDONS__) })
+  log.info('[settings] mounted', { sections: sections.value.map((section) => section.id), theme: activeThemeLabel.value })
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', handleKeyboard))
 </script>

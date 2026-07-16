@@ -33,8 +33,8 @@ const invokePrograms = async(target, action, payload = {}) => {
     throw new Error('The Tauri command API is unavailable for code execution.')
   }
 
-  if (action === 'list') return invoke('tauri_programs_list')
-  if (action === 'set') return invoke('tauri_programs_set', { environments: payload })
+  if (action === 'list') return invoke('tauri_programs_list_with_custom')
+  if (action === 'set') return invoke('tauri_programs_set_with_custom', { environments: payload })
 
   const request = action === 'stop'
     ? { id: '', command: '', cwd: null, executionId: payload.executionId, stop: true }
@@ -47,7 +47,7 @@ const invokePrograms = async(target, action, payload = {}) => {
       }
   const timeoutMs = action === 'run' ? RUN_TIMEOUT_MS : STOP_TIMEOUT_MS
   return withTimeout(
-    Promise.resolve(invoke('tauri_programs_run', request)),
+    Promise.resolve(invoke('tauri_programs_run_with_custom', request)),
     timeoutMs,
     `Code execution IPC did not answer within ${timeoutMs} ms.`
   )
@@ -301,183 +301,155 @@ export const installExecutableCodeNativeRuntime = (target = globalThis) => {
     if (!state) {
       state = {
         key,
-        blockKey: element.dataset.blockKey || element.closest('pre')?.id || '',
-        pre: null,
-        runButton: null,
+        element,
         output: null,
+        language: '',
         status: 'idle',
         result: null,
-        executionId: null,
-        language: '',
+        executionId: '',
         collapsed: false,
-        detachTimer: null
+        detachedAt: 0
       }
       states.set(key, state)
+    } else {
+      state.element = element
+      state.detachedAt = 0
     }
-    if (state.detachTimer) {
-      clearTimeout(state.detachTimer)
-      state.detachTimer = null
-    }
-    state.pre = element.closest('pre')
-    state.runButton = state.pre?.querySelector?.('.en-code-native-run') || null
-    state.output = element.matches?.(OUTPUT_TAG) ? element : state.pre?.querySelector?.(OUTPUT_TAG)
-    state.language = languageFromPre(state.pre) || state.language
-    state.pre?.classList?.add('en-code-native-shell')
     return state
   }
-  const updateRunButton = (state) => {
-    const button = state.runButton || state.pre?.querySelector?.('.en-code-native-run')
-    if (!button) return
-    state.runButton = button
-    const running = state.status === 'running' || state.status === 'stopping'
-    button.classList.toggle('is-running', running)
-    button.classList.toggle('is-stopping', state.status === 'stopping')
-    button.setAttribute('aria-label', running ? 'Stop code execution' : 'Run code block')
-    button.title = running ? (state.status === 'stopping' ? 'Stopping…' : 'Stop execution') : 'Run code block'
-  }
+
   const render = (state) => {
-    updateRunButton(state)
+    state.element?.setRuntimeState?.(state, runtime)
     state.output?.renderState?.(state, runtime)
+  }
+
+  const registerRunButton = (element) => {
+    const state = ensureState(element)
+    render(state)
+  }
+  const unregisterRunButton = (element) => {
+    const state = states.get(stateKey(element))
+    if (!state) return
+    if (state.element === element) {
+      state.element = null
+      state.detachedAt = Date.now()
+    }
+  }
+  const registerOutput = (element) => {
+    const state = ensureState(element)
+    state.output = element
+    render(state)
+  }
+  const unregisterOutput = (element) => {
+    const state = states.get(stateKey(element))
+    if (state?.output === element) state.output = null
+  }
+
+  const setCollapsed = (state, collapsed) => {
+    state.collapsed = collapsed === true
+    render(state)
   }
   const clear = (state) => {
     state.status = 'idle'
     state.result = null
+    state.executionId = ''
     state.collapsed = false
     render(state)
   }
-  const setCollapsed = (state, collapsed) => {
-    state.collapsed = collapsed
-    render(state)
-  }
-  const stop = async(state) => {
-    if (!state.executionId || state.status === 'stopping') return
-    const executionId = state.executionId
-    state.status = 'stopping'
-    render(state)
-    try {
-      const result = await invokePrograms(target, 'stop', { executionId })
-      if (!result?.stopped && state.executionId === executionId) state.status = 'running'
-    } catch (error) {
-      if (state.executionId === executionId) state.status = 'running'
-      state.result = { success: false, error: errorMessage(error), language: state.language }
-    }
-    render(state)
-  }
-  const run = async(state) => {
-    if (state.status === 'running' || state.status === 'stopping') return stop(state)
-    state.pre = state.output?.closest?.('pre') || state.runButton?.closest?.('pre') || state.pre
-    state.language = languageFromPre(state.pre)
-    const source = sourceFromPre(state.pre)
-    if (!state.language) {
-      state.status = 'done'
-      state.result = { success: false, error: 'Choose a language before running this block.' }
-      return render(state)
-    }
 
-    const executionId = `execution-${Date.now().toString(36)}-${++executionSequence}`
-    state.executionId = executionId
+  const run = async(element) => {
+    const state = ensureState(element)
+    const pre = element.closest('pre')
+    const language = languageFromPre(pre)
+    const source = sourceFromPre(pre)
+    const sourceBytes = byteLength(source)
+    if (!language) {
+      state.status = 'error'
+      state.result = { success: false, error: 'Choose a supported language before running this code block.' }
+      render(state)
+      return
+    }
+    state.language = language
+    state.executionId = `code-${Date.now()}-${++executionSequence}`
     state.status = 'running'
     state.result = null
     state.collapsed = false
     render(state)
-    console.info('[Code:UI] run:dispatch', {
-      blockKey: state.blockKey,
-      executionId,
-      language: state.language,
-      codeBytes: byteLength(source)
-    })
+    console.info(`[Code:UI] run:start execution_id=${state.executionId} language=${language} source_bytes=${sourceBytes}`)
     try {
       const result = await invokePrograms(target, 'run', {
-        id: state.language,
+        id: language,
         command: source,
-        executionId
+        cwd: pre?.dataset?.cwd || null,
+        executionId: state.executionId
       })
-      if (state.executionId !== executionId) return
-      state.result = result
-      state.status = 'done'
+      state.result = result || { success: false, error: 'Code execution returned no result.' }
+      state.status = state.result.interrupted ? 'stopped' : state.result.success ? 'done' : 'error'
+      console.info(`[Code:UI] run:complete execution_id=${state.executionId} success=${state.result.success === true} duration_ms=${state.result.durationMs ?? 0}`)
     } catch (error) {
-      if (state.executionId !== executionId) return
-      state.status = 'done'
-      state.result = { success: false, language: state.language, error: errorMessage(error) }
-    } finally {
-      if (state.executionId === executionId) state.executionId = null
-      render(state)
+      state.status = 'error'
+      state.result = { success: false, error: errorMessage(error) }
+      console.error(`[Code:UI] run:error execution_id=${state.executionId} error=${errorMessage(error)}`)
     }
-  }
-  const registerOutput = (element) => {
-    if (disposed) return
-    const state = ensureState(element)
     render(state)
   }
-  const unregisterOutput = (element) => {
-    const key = stateKey(element)
-    const state = states.get(key)
-    if (!state || state.output !== element) return
-    state.output = null
-    state.detachTimer = setTimeout(() => {
-      if (state.output?.isConnected) return
-      if (state.executionId) void invokePrograms(target, 'stop', { executionId: state.executionId })
-      states.delete(key)
-    }, DETACHED_TTL_MS)
-  }
-  const stateForControl = (control) => {
-    const output = control.closest('pre')?.querySelector?.(OUTPUT_TAG)
-    return output ? ensureState(output) : null
-  }
-  const onClick = (event) => {
-    const button = event.target?.closest?.('.en-code-native-run')
-    if (!button) return
-    event.preventDefault()
-    event.stopPropagation()
-    const state = stateForControl(button)
-    if (state) void run(state)
-  }
-  const onKeyDown = (event) => {
-    if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter') return
-    const pre = event.target?.closest?.('pre.ag-fence-code')
-    if (!pre) return
-    const output = pre.querySelector(OUTPUT_TAG)
-    if (!output) return
-    event.preventDefault()
-    event.stopPropagation()
-    const state = ensureState(output)
-    void run(state)
+
+  const stop = async(element) => {
+    const state = ensureState(element)
+    if (state.status !== 'running' || !state.executionId) return
+    state.status = 'stopping'
+    render(state)
+    console.info(`[Code:UI] stop:start execution_id=${state.executionId}`)
+    try {
+      const result = await invokePrograms(target, 'stop', { executionId: state.executionId })
+      state.status = 'stopped'
+      state.result = {
+        success: false,
+        interrupted: true,
+        stderr: result?.stderr || 'Execution interrupted by user.',
+        executionId: state.executionId
+      }
+      console.info(`[Code:UI] stop:complete execution_id=${state.executionId}`)
+    } catch (error) {
+      state.status = 'error'
+      state.result = { success: false, error: errorMessage(error), executionId: state.executionId }
+      console.error(`[Code:UI] stop:error execution_id=${state.executionId} error=${errorMessage(error)}`)
+    }
+    render(state)
   }
 
-  document.addEventListener('click', onClick, true)
-  document.addEventListener('keydown', onKeyDown, true)
+  const prune = () => {
+    const now = Date.now()
+    for (const [key, state] of states.entries()) {
+      if (!state.element && !state.output && state.detachedAt && now - state.detachedAt > DETACHED_TTL_MS) {
+        states.delete(key)
+      }
+    }
+  }
+  const timer = setInterval(prune, 500)
 
   const runtime = {
     version: 'native-v1',
-    states,
+    registerRunButton,
+    unregisterRunButton,
     registerOutput,
     unregisterOutput,
     run,
     stop,
     clear,
     setCollapsed,
+    states,
     dispose() {
+      if (disposed) return
       disposed = true
-      document.removeEventListener('click', onClick, true)
-      document.removeEventListener('keydown', onKeyDown, true)
-      for (const state of states.values()) {
-        if (state.detachTimer) clearTimeout(state.detachTimer)
-        if (state.executionId) void invokePrograms(target, 'stop', { executionId: state.executionId })
-      }
+      clearInterval(timer)
       states.clear()
-      if (target.__ELEPHANT_NATIVE_CODE_RUNTIME__ === runtime) {
-        delete target.__ELEPHANT_NATIVE_CODE_RUNTIME__
-      }
+      delete target.__ELEPHANT_NATIVE_CODE_RUNTIME__
+      console.info('[Code:UI] dispose:complete')
     }
   }
 
   target.__ELEPHANT_NATIVE_CODE_RUNTIME__ = runtime
-  document.querySelectorAll(OUTPUT_TAG).forEach(registerOutput)
   console.info('[Code:UI] install:complete', { runtime: runtime.version })
   return runtime
-}
-
-export const resetExecutableCodeNativeRuntimeForTests = (target = globalThis) => {
-  target.__ELEPHANT_NATIVE_CODE_RUNTIME__?.dispose?.()
-  executionSequence = 0
 }

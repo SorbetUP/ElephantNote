@@ -9,17 +9,17 @@ import {
 } from 'common/elephantnote/aiSetup'
 
 describe('AI setup workflow helpers', () => {
-  it('chooses runnable node-llama-cpp defaults for embeddings and chat', () => {
-    const recommended = getRecommendedSetupModels(ATOMIC_MODEL_CATALOG, 'node-llama-cpp')
+  it('chooses runnable Tauri Rust defaults for embeddings and chat', () => {
+    const recommended = getRecommendedSetupModels(ATOMIC_MODEL_CATALOG, 'tauri-rust')
 
     expect(recommended.embedding).toMatchObject({
       id: 'smollm2-node-llama-cpp',
-      provider: 'node-llama-cpp',
+      provider: 'tauri-rust',
       task: 'embedding'
     })
     expect(recommended.chat).toMatchObject({
       id: 'smollm2-node-llama-cpp-chat',
-      provider: 'node-llama-cpp',
+      provider: 'tauri-rust',
       task: 'chat-completion'
     })
     expect(recommended.ocr).toMatchObject({
@@ -41,7 +41,7 @@ describe('AI setup workflow helpers', () => {
     })
   })
 
-  it('recognizes installed node-llama-cpp models by runtime name', () => {
+  it('recognizes installed local models by runtime name and stable id', () => {
     const embedding = ATOMIC_MODEL_CATALOG.find((item) => item.id === 'smollm2-node-llama-cpp')
     const chat = ATOMIC_MODEL_CATALOG.find((item) => item.id === 'smollm2-node-llama-cpp-chat')
 
@@ -49,7 +49,7 @@ describe('AI setup workflow helpers', () => {
       { id: 'hf_bartowski_SmolLM2-135M-Instruct.Q4_K_M.gguf', model: 'hf:bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M' }
     ])).toBe(true)
     expect(isSetupModelInstalled(chat, [
-      { id: 'smollm2-node-llama-cpp-chat', provider: 'node-llama-cpp' }
+      { id: 'smollm2-node-llama-cpp-chat', provider: 'tauri-rust' }
     ])).toBe(true)
   })
 })

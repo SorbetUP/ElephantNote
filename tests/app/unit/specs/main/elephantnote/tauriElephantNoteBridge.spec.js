@@ -3,7 +3,6 @@ import { installTauriElephantNoteBridge } from '@/platform/tauriElephantNoteBrid
 
 const createTarget = () => {
   const calls = []
-  const store = new Map()
   const target = {
     __TAURI__: {
       core: {
@@ -12,39 +11,29 @@ const createTarget = () => {
           return { command, payload }
         }
       }
-    },
-    localStorage: {
-      getItem: (key) => store.get(key) ?? null,
-      setItem: (key, value) => store.set(key, value)
-    },
-    electron: {}
+    }
   }
   return { target, calls }
 }
 
-describe('tauriElephantNoteBridge', () => {
-  it('routes direct sync plan payloads to the Rust command', async() => {
-    const { target, calls } = createTarget()
-    const payload = { operations: ['init', 'pull'], pull: { remoteName: 'origin' } }
+describe('tauriElephantNoteBridge minimal core surface', () => {
+  it('does not expose direct Sync or optional product namespaces', () => {
+    const { target } = createTarget()
 
     expect(installTauriElephantNoteBridge(target)).toBe(true)
-    await target.elephantnote.sync.plan(payload)
-
-    expect(calls).toEqual([
-      { command: 'tauri_sync_plan', payload: { payloadByOperation: payload } }
-    ])
+    expect(target.elephantnote.sync).toBeUndefined()
+    expect(target.elephantnote.ai).toBeUndefined()
+    expect(target.elephantnote.wiki).toBeUndefined()
+    expect(target.elephantnote.models).toBeUndefined()
   })
 
-  it('routes public API sync.plan payloads to the Rust command', async() => {
+  it('rejects optional public API actions instead of routing to removed commands', async() => {
     const { target, calls } = createTarget()
-    const payload = { sync: { remoteName: 'origin' } }
 
     expect(installTauriElephantNoteBridge(target)).toBe(true)
-    await target.elephantnote.api.call('sync.plan', payload)
-
-    expect(calls).toEqual([
-      { command: 'tauri_sync_plan', payload: { payloadByOperation: payload } }
-    ])
+    await expect(target.elephantnote.api.call('sync.plan', {}))
+      .rejects.toThrow(/Unsupported Elephant core API action: sync\.plan/)
+    expect(calls).toEqual([])
   })
 
   it('keeps paged directory.list options when routing through the public API', async() => {
@@ -56,6 +45,18 @@ describe('tauriElephantNoteBridge', () => {
 
     expect(calls).toEqual([
       { command: 'tauri_directory_list', payload }
+    ])
+  })
+
+  it('routes generic text search to the Rust vault command', async() => {
+    const { target, calls } = createTarget()
+    const payload = { query: 'architecture', mode: 'text', limit: 20 }
+
+    installTauriElephantNoteBridge(target)
+    await target.elephantnote.api.call('search.query', payload)
+
+    expect(calls).toEqual([
+      { command: 'tauri_search_query', payload: { params: payload } }
     ])
   })
 })

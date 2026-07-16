@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
-import fileIcons from 'muya/lib/ui/fileIcons'
+import '@marktext/file-icons/build/index.css'
+import fileIcons from '@marktext/file-icons'
 
 const props = defineProps({
   name: {
@@ -9,12 +10,17 @@ const props = defineProps({
   }
 })
 
+const getClassByName = (name) => {
+  const icon = fileIcons.matchName(name)
+  return icon ? icon.getClass(0, false) : null
+}
+
 const className = computed(() => {
-  let classNames = fileIcons.getClassByName(props.name ? props.name : 'mock.md')
+  let classNames = getClassByName(props.name ? props.name : 'mock.md')
 
   if (!classNames) {
     // Use fallback icon when the icon is unknown.
-    classNames = fileIcons.getClassByName('mock.md')
+    classNames = getClassByName('mock.md')
   }
   return classNames.split(/\s/)
 })

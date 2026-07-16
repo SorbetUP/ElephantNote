@@ -1,4 +1,4 @@
-import { getImageInfo } from 'muya/lib/utils'
+import { getImageInfo } from '../util/editorCoreUtils'
 
 class MarkdownPrint {
   /**

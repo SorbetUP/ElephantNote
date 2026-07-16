@@ -7,31 +7,43 @@ afterEach(() => {
   globalThis.window.elephantnote = originalBridge
 })
 
-describe('ElephantNote API runtime', () => {
+describe('ElephantNote core API runtime', () => {
   it('validates payloads before dispatching to the public bridge API', async() => {
-    const bridgeCall = vi.fn(async() => ({ ok: true, data: 'planned' }))
+    const bridgeCall = vi.fn(async() => ({ ok: true, data: ['Plan.md'] }))
     globalThis.window.elephantnote = { api: { call: bridgeCall } }
     const call = createApiCaller({})
 
-    await expect(call('sync.plan', { operations: ['pull'] })).resolves.toBe('planned')
-    expect(bridgeCall).toHaveBeenCalledWith('sync.plan', { operations: ['pull'] })
+    await expect(call('search.query', { query: 'plan', mode: 'text', limit: 5 }))
+      .resolves.toEqual(['Plan.md'])
+    expect(bridgeCall).toHaveBeenCalledWith('search.query', {
+      query: 'plan',
+      mode: 'text',
+      limit: 5
+    })
   })
 
-  it('rejects invalid payloads before they can reach the public bridge API', () => {
+  it('rejects invalid core payloads before they reach the public bridge API', () => {
     const bridgeCall = vi.fn()
     globalThis.window.elephantnote = { api: { call: bridgeCall } }
     const call = createApiCaller({})
 
-    expect(() => call('sync.plan', { operations: ['unknown'] })).toThrow(/operations/)
+    expect(() => call('search.query', { query: '', mode: 'semantic' })).toThrow(/query|mode/)
     expect(bridgeCall).not.toHaveBeenCalled()
   })
 
-  it('rejects invalid payloads before they can reach local fallback calls', () => {
-    const fallbackPlan = vi.fn()
+  it('rejects invalid core payloads before local fallback calls', () => {
+    const fallbackDelete = vi.fn()
     globalThis.window.elephantnote = null
-    const call = createApiCaller({ 'sync.plan': fallbackPlan })
+    const call = createApiCaller({ 'entries.delete': fallbackDelete })
 
-    expect(() => call('sync.plan', { operations: 'pull' })).toThrow(/operations/)
-    expect(fallbackPlan).not.toHaveBeenCalled()
+    expect(() => call('entries.delete', {})).toThrow(/relativePath/)
+    expect(fallbackDelete).not.toHaveBeenCalled()
+  })
+
+  it('does not invent a local fallback for optional package actions', () => {
+    globalThis.window.elephantnote = null
+    const call = createApiCaller({})
+
+    expect(() => call('sync.plan', {})).toThrow(/not available for action: sync\.plan/)
   })
 })

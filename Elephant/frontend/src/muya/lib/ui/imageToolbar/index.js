@@ -2,6 +2,10 @@ import BaseFloat from '../baseFloat'
 import { patch, h } from '../../parser/render/snabbdom'
 import getIcons from './config'
 import { URL_REG } from '../../config'
+import {
+  getEditorImageToolbarItems,
+  runEditorImageToolbarItem
+} from '../../parser/render/renderBlock/editorExtensionRenderBridge'
 
 import './index.css'
 
@@ -52,32 +56,26 @@ class ImageToolbar extends BaseFloat {
 
   render() {
     const { muya, oldVnode, toolbarContainer, imageInfo } = this
-    const icons = getIcons(muya?.options?.t)
+    const isLocalImage = this.isLocalFile(imageInfo)
+    const icons = [
+      ...getIcons(muya?.options?.t),
+      ...getEditorImageToolbarItems({ imageInfo, muya, isLocalImage })
+    ]
     const { attrs } = imageInfo.token
     const dataAlign = attrs['data-align']
-    let isLocalImage = false
-    if (this.isLocalFile(imageInfo)) {
-      isLocalImage = true
-    }
-    const canEditWithExcalidraw = this.canEditWithExcalidraw(imageInfo)
     const children = icons
-      .filter((i) => {
-        if (i.type === 'edit-excalidraw') return canEditWithExcalidraw
-        return !i.localOnly || isLocalImage
-      })
-      .map((i) => {
+      .filter((item) => !item.localOnly || isLocalImage)
+      .map((item) => {
         let icon
-        let iconWrapperSelector
-        if (i.icon) {
-        // SVG icon Asset
-          iconWrapperSelector = 'div.icon-wrapper'
+        let iconWrapperSelector = 'div.icon-wrapper'
+        if (item.icon) {
           icon = h(
             'i.icon',
             h(
               'i.icon-inner',
               {
                 style: {
-                  background: `url(${i.icon}) no-repeat`,
+                  background: `url(${item.icon}) no-repeat`,
                   'background-size': '100%'
                 }
               },
@@ -86,31 +84,27 @@ class ImageToolbar extends BaseFloat {
           )
         }
         const iconWrapper = h(iconWrapperSelector, icon)
-        let itemSelector = `li.item.${i.type}`
+        let itemSelector = `li.item.${item.type}`
 
-        if (i.type === 'open' || i.type === 'edit-excalidraw') {
-          if (isLocalImage) {
-            itemSelector += '.enable'
-          } else {
-            itemSelector += '.disable'
-          }
+        if (item.type === 'open') {
+          itemSelector += isLocalImage ? '.enable' : '.disable'
         }
-        if (i.type === dataAlign || (!dataAlign && i.type === 'inline')) {
+        if (item.type === dataAlign || (!dataAlign && item.type === 'inline')) {
           itemSelector += '.active'
         }
         return h(
           itemSelector,
           {
             dataset: {
-              tip: i.tooltip
+              tip: item.tooltip
             },
             on: {
               click: (event) => {
-                this.selectItem(event, i)
+                this.selectItem(event, item)
               }
             }
           },
-          [h('div.tooltip', i.tooltip), iconWrapper]
+          [h('div.tooltip', item.tooltip), iconWrapper]
         )
       })
 
@@ -128,11 +122,20 @@ class ImageToolbar extends BaseFloat {
     event.preventDefault()
     event.stopPropagation()
 
-    const { imageInfo } = this
-    let isLocalImage = false
-    if (this.isLocalFile(imageInfo)) {
-      isLocalImage = true
+    const { imageInfo, muya } = this
+    const isLocalImage = this.isLocalFile(imageInfo)
+
+    if (item.addonToolbarItem) {
+      runEditorImageToolbarItem(item, {
+        imageInfo,
+        muya,
+        isLocalImage,
+        reference: this.reference,
+        hide: () => this.hide()
+      })
+      return this.hide()
     }
+
     switch (item.type) {
       // Delete image.
       case 'delete':
@@ -162,21 +165,6 @@ class ImageToolbar extends BaseFloat {
         })
         return this.hide()
       }
-      case 'edit-excalidraw': {
-        if (!this.canEditWithExcalidraw(imageInfo)) break
-        const src = imageInfo.token?.attrs?.src || imageInfo.token?.src || ''
-        if (typeof this.muya.options.elephantnoteCommandHandler === 'function') {
-          this.muya.options.elephantnoteCommandHandler('edit-excalidraw-image', { src, imageInfo })
-        } else {
-          window.dispatchEvent(new CustomEvent('elephantnote-writing-command', {
-            detail: {
-              command: 'edit-excalidraw-image',
-              payload: { src }
-            }
-          }))
-        }
-        return this.hide()
-      }
       case 'inline':
       case 'left':
       case 'center':
@@ -192,15 +180,6 @@ class ImageToolbar extends BaseFloat {
         break
       }
     }
-  }
-
-  canEditWithExcalidraw(imageInfo) {
-    if (!this.isLocalFile(imageInfo)) return false
-    const src = imageInfo.token?.attrs?.src || imageInfo.token?.src || ''
-    if (typeof this.muya.options.canEditExcalidrawImage === 'function') {
-      return this.muya.options.canEditExcalidrawImage(src, imageInfo) === true
-    }
-    return true
   }
 
   isLocalFile(imageInfo) {

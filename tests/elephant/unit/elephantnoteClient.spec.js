@@ -2,14 +2,17 @@ import { describe, expect, it, vi } from 'vitest'
 import { elephantnoteClient } from '@/elephantnote/services/elephantnoteClient'
 
 describe('renderer ElephantNote API client', () => {
-  it('unwraps successful API envelopes', async() => {
+  it('unwraps and normalizes successful API envelopes', async() => {
     window.elephantnote = {
       api: {
         call: vi.fn(async() => ({ ok: true, data: { path: 'Note.md' } }))
       }
     }
 
-    await expect(elephantnoteClient.notes.create('Inbox')).resolves.toEqual({ path: 'Note.md' })
+    await expect(elephantnoteClient.notes.create('Inbox')).resolves.toEqual({
+      note: { path: 'Note.md' },
+      entries: []
+    })
     expect(window.elephantnote.api.call).toHaveBeenCalledWith('notes.create', { relativePath: 'Inbox' })
   })
 

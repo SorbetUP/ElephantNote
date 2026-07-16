@@ -6,7 +6,7 @@ const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 describe('external addon runtime security contracts', () => {
-  it('routes note listing through a dedicated permission-scoped Tauri command', () => {
+  it('routes note access through dedicated permission-scoped Tauri commands', () => {
     const runtime = read('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js')
     const notes = read('Elephant/backend/tauri/src/addon_note_access.rs')
     const lib = read('Elephant/backend/tauri/src/lib_min.rs')
@@ -16,10 +16,17 @@ describe('external addon runtime security contracts', () => {
     expect(runtime).toContain("if (method === 'notes.list')")
     expect(notes).toContain('MAX_LISTED_NOTES: usize = 1_000')
     expect(notes).toContain('MAX_DIRECTORY_DEPTH: usize = 64')
+    expect(notes).toContain('MAX_NOTE_BYTES: u64 = 5 * 1024 * 1024')
     expect(notes).toContain('is_hidden_component(relative)')
     expect(notes).toContain('file_type.is_symlink()')
-    expect(notes).toContain('scope_matches(scope, &relative_path)')
+    expect(notes).toContain('scope_matches(scope, relative_path)')
+    expect(notes).toContain('Addon is not permitted to read')
+    expect(notes).toContain('Addons cannot access notes in hidden directories')
+    expect(notes).toContain('record.manifest.permissions.notes.write')
+    expect(notes).toContain('write_markdown_atomic')
     expect(lib).toContain('addon_note_access::tauri_addons_notes_list')
+    expect(lib).toContain('addon_note_access::tauri_addons_notes_read')
+    expect(lib).toContain('addon_note_access::tauri_addons_notes_write')
   })
 
   it('routes Worker network requests through the hardened broker', () => {

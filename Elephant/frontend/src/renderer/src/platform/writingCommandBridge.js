@@ -1,4 +1,5 @@
 import bus from '@/bus'
+import '@/i18n/editorUiFallbacks'
 
 const COMMAND_LOG_PREFIX = '[writing-command]'
 const DUPLICATE_COMMAND_WINDOW_MS = 350
@@ -69,25 +70,57 @@ const removeActiveQuickInsertQuery = () => {
   return removed
 }
 
-const openExcalidraw = () => {
-  bus.emit('ELEPHANT::open-excalidraw', {
-    fileName: `excalidraw-${Date.now()}.png`,
-    title: 'Excalidraw',
-    saveMode: 'png',
-    insertOnSave: true
-  })
+const addonWritingCommands = () => {
+  const manager = globalThis?.__ELEPHANT_ADDONS__
+  if (typeof manager?.getContributions !== 'function') return []
+  return manager.getContributions('editor.extensions')
+    .flatMap((entry) => Array.isArray(entry?.contribution?.writingCommands)
+      ? entry.contribution.writingCommands.map((command) => ({ addonId: entry.addonId, command }))
+      : [])
 }
 
-const runWritingCommand = (command) => {
-  const normalized = normalizeCommand(command)
-  if (!normalized) return false
-  if (shouldSkipDuplicateCommand(normalized)) {
-    console.info(`${COMMAND_LOG_PREFIX} duplicate ignored`, { command: normalized })
+const runAddonWritingCommand = (command, payload) => {
+  const entry = addonWritingCommands().find(({ command: candidate }) => normalizeCommand(candidate?.id) === command)
+  if (!entry || typeof entry.command.run !== 'function') return false
+  try {
+    entry.command.run(payload, {
+      addonId: entry.addonId,
+      commandId: command,
+      addons: globalThis.__ELEPHANT_ADDONS__
+    })
+    return true
+  } catch (error) {
+    console.error(`${COMMAND_LOG_PREFIX} addon command failed`, {
+      addonId: entry.addonId,
+      command,
+      error
+    })
+    return false
+  }
+}
+
+const normalizeRequest = (request, payload) => {
+  if (request && typeof request === 'object') {
+    return {
+      command: normalizeCommand(request.command),
+      payload: request.payload
+    }
+  }
+  return { command: normalizeCommand(request), payload }
+}
+
+const runWritingCommand = (request, payload) => {
+  const normalized = normalizeRequest(request, payload)
+  if (!normalized.command) return false
+  if (shouldSkipDuplicateCommand(normalized.command)) {
+    console.info(`${COMMAND_LOG_PREFIX} duplicate ignored`, { command: normalized.command })
     return true
   }
   removeActiveQuickInsertQuery()
-  console.info(`${COMMAND_LOG_PREFIX} run`, { command: normalized })
-  switch (normalized) {
+  console.info(`${COMMAND_LOG_PREFIX} run`, { command: normalized.command })
+  if (runAddonWritingCommand(normalized.command, normalized.payload)) return true
+
+  switch (normalized.command) {
     case 'heading-2':
       bus.emit('paragraph', 'heading 2')
       return true
@@ -121,14 +154,11 @@ const runWritingCommand = (command) => {
     case 'table':
       bus.emit('paragraph', 'table')
       return true
-    case 'excalidraw':
-      openExcalidraw()
-      return true
     case 'horizontal-rule':
       bus.emit('insert-horizontal-rule')
       return true
     default:
-      console.warn(`${COMMAND_LOG_PREFIX} unknown`, { command })
+      console.warn(`${COMMAND_LOG_PREFIX} unknown`, { command: normalized.command })
       return false
   }
 }

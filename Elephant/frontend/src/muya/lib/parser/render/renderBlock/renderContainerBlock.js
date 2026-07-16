@@ -4,10 +4,7 @@ import { footnoteJumpIcon } from './renderFootnoteJump'
 import { renderEditIcon } from './renderContainerEditIcon'
 // import renderLineNumberRows from './renderLineNumber'
 import renderCopyButton from './renderCopyButton'
-import {
-  renderExecutableOutput,
-  renderExecutableRunButton
-} from './renderExecutableCodeRuntime'
+import { applyEditorContainerExtensions } from './editorExtensionRenderBridge'
 import { renderLeftBar, renderBottomBar } from './renderTableDargBar'
 import { h } from '../snabbdom'
 
@@ -47,7 +44,7 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
     this.renderingRowContainer = block
   }
 
-  const children = block.children.map(child => this.renderBlock(block, child, activeBlocks, matches, useCache, t))
+  let children = block.children.map(child => this.renderBlock(block, child, activeBlocks, matches, useCache, t))
   const data = {
     attrs: {},
     dataset: {}
@@ -66,10 +63,7 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
     }
     if (type === 'pre') {
       children.unshift(renderCopyButton(t))
-      if (functionType === 'fencecode') {
-        children.unshift(renderExecutableRunButton(block))
-        children.push(renderExecutableOutput(block))
-      }
+      children = applyEditorContainerExtensions({ parent, block, children, h, t })
     }
     // FIXME: Disabled due to #1648 - be consistent.
     // if (this.muya.options.codeBlockLineNumbers) {
@@ -115,9 +109,7 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
         }
       }
     } else {
-      // Judge whether to render the table drag bar.
       const { renderingTable, renderingRowContainer } = this
-
       const findTable = renderingTable ? activeBlocks.find(b => b.key === renderingTable.key) : null
       if (findTable && renderingRowContainer) {
         const { row: tableRow, column: tableColumn } = findTable
@@ -131,7 +123,6 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
         if (block.parent === activeBlocks[1].parent && !block.preSibling && tableRow > 0) {
           children.unshift(renderLeftBar())
         }
-
         if (column === activeBlocks[1].column && isLastRow() && tableColumn > 0) {
           children.push(renderBottomBar())
         }
@@ -139,8 +130,6 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
     }
   } else if (/^h/.test(type)) {
     if (/^h\d$/.test(type)) {
-      // TODO: This should be the best place to create and update the TOC.
-      //       Cache `block.key` and title and update only if necessary.
       Object.assign(data.dataset, {
         head: type
       })
@@ -161,9 +150,7 @@ export default function renderContainerBlock(parent, block, activeBlocks, matche
       }
     }
 
-    if (
-      /html|multiplemath|flowchart|mermaid|sequence|plantuml|vega-lite/.test(functionType)
-    ) {
+    if (/html|multiplemath|flowchart|mermaid|sequence|plantuml|vega-lite/.test(functionType)) {
       selector += `.${CLASS_OR_ID.AG_CONTAINER_BLOCK}`
       Object.assign(data.attrs, { spellcheck: 'false' })
     }

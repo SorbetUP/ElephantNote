@@ -21,16 +21,11 @@ pkill -f 'vite --config vite.tauri.config.js' 2>/dev/null || true
 kill_port_1420
 rm -rf "$ROOT_DIR/Elephant/backend/tauri/target/debug/bundle/macos/Elephant.app" 2>/dev/null || true
 
-cd "$ROOT_DIR"
-node build/scripts/ensure-tauri-llama-server.mjs
-node build/scripts/ensure-tauri-codex-runtime.mjs
-
 cd "$ROOT_DIR/Elephant/backend/tauri"
 export TAURI_FRONTEND_PATH="$ROOT_DIR"
-# The bundled llama-server lives under Elephant/backend/tauri/bin. Running it during chat can
-# update filesystem metadata and Tauri's Rust watcher restarts the app mid-chat.
-# Vite still provides renderer hot reload; restart pnpm tauri:dev manually after
-# Rust-side edits.
+
+# Optional native runtimes are installed and launched from physical addon
+# packages. The core development shell must not download or bundle them.
 if [ "$(uname -s 2>/dev/null || echo unknown)" = "Linux" ]; then
   cargo tauri dev "$@" --no-watch --config tauri.linux.conf.json
 else

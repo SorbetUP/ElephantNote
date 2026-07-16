@@ -10,7 +10,7 @@ import {
 
 const operations = (plan) => plan.map((item) => item.operation)
 
-describe('createDefaultSyncPlan', () => {
+describe('createDefaultSyncPlan legacy helper', () => {
   it('keeps the compatibility local snapshot plan when no explicit operation is provided', () => {
     expect(operations(createDefaultSyncPlan({}))).toEqual([
       SYNC_OPERATIONS.INIT,
@@ -18,12 +18,12 @@ describe('createDefaultSyncPlan', () => {
     ])
   })
 
-  it('exposes and validates sync plan payloads through the public API contract', () => {
+  it('is no longer exposed through the core API contract', () => {
     const payload = { operations: ['init', 'pull'], pull: { remoteName: 'origin' } }
 
-    expect(API.SYNC_PLAN).toBe('sync.plan')
-    expect(validateApiPayload(API.SYNC_PLAN, payload)).toBe(payload)
-    expect(validateApiPayload(API.SYNC_RUN, payload)).toBe(payload)
+    expect(API.SYNC_PLAN).toBeUndefined()
+    expect(API.SYNC_RUN).toBeUndefined()
+    expect(validateApiPayload('sync.plan', payload)).toBe(payload)
   })
 
   it('ignores invalid explicit operation payload shapes instead of throwing', () => {
@@ -65,7 +65,7 @@ describe('createDefaultSyncPlan', () => {
     ])
   })
 
-  it('supports explicit operation lists for smoke tests and future UI flows', () => {
+  it('supports explicit operation lists for retained migration fixtures', () => {
     const plan = createDefaultSyncPlan({
       operations: ['init', 'pull', 'snapshot', 'push'],
       snapshot: { message: 'manual order' }

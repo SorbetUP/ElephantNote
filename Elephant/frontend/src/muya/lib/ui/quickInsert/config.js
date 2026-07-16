@@ -25,20 +25,33 @@ import { isOsx } from '../../config'
 const COMMAND_KEY = isOsx ? '⌘' : 'Ctrl'
 const OPTION_KEY = isOsx ? '⌥' : 'Alt'
 const SHIFT_KEY = isOsx ? '⇧' : 'Shift'
-const excalidrawIcon = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTgiIGZpbGw9IiM2QzYzRkYiLz48cGF0aCBkPSJNMjAgNDRjNy41LTE1LjUgMTUuNS0yMy41IDI0LTI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PHBhdGggZD0iTTE4IDQ2bDgtMi02LTYtMiA4eiIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik00MiAxOGw0IDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSI0IiBmaWxsPSIjZmZmIiBvcGFjaXR5PSIuODUiLz48cGF0aCBkPSJNNDIgNDJoNyIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgb3BhY2l0eT0iLjg1Ii8+PC9zdmc+'
 
-// Creates a function to generate the config object, accepting a translation function as a parameter
+const addonQuickInsertItems = (group = 'Writing tools') => {
+  const manager = globalThis?.__ELEPHANT_ADDONS__
+  if (typeof manager?.getContributions !== 'function') return []
+  return manager.getContributions('editor.extensions')
+    .flatMap((entry) => Array.isArray(entry?.contribution?.quickInsertItems)
+      ? entry.contribution.quickInsertItems
+      : [])
+    .filter((item) => (item?.group || 'Writing tools') === group)
+    .map((item) => ({
+      title: String(item.title || item.commandId || 'Addon command'),
+      subTitle: String(item.subTitle || ''),
+      label: String(item.label || `elephant-command ${item.commandId || ''}`).trim(),
+      shortCut: String(item.shortCut || ''),
+      icon: item.icon || paragraphIcon
+    }))
+    .filter((item) => item.label !== 'elephant-command')
+}
+
 export const createQuickInsertObj = (t) => {
   const translate = t || ((key) => key)
 
   return {
+    // Inline commands use ElephantNote's command bridge. Native Muya blocks stay
+    // in their original groups below so task lists, tables, headings and lists
+    // retain Muya's cursor, selection and block-conversion behavior.
     'Writing tools': [{
-      title: 'Heading 2',
-      subTitle: '## Heading',
-      label: 'elephant-command heading-2',
-      shortCut: '',
-      icon: header2Icon
-    }, {
       title: 'Bold',
       subTitle: '**bold**',
       label: 'elephant-command bold',
@@ -63,60 +76,12 @@ export const createQuickInsertObj = (t) => {
       shortCut: '',
       icon: paragraphIcon
     }, {
-      title: 'Bullet List',
-      subTitle: '- item',
-      label: 'elephant-command bullets',
-      shortCut: '',
-      icon: bulletListIcon
-    }, {
-      title: 'Numbered List',
-      subTitle: '1. item',
-      label: 'elephant-command numbers',
-      shortCut: '',
-      icon: orderListIcon
-    }, {
-      title: 'Task List',
-      subTitle: '- [ ] task',
-      label: 'elephant-command tasks',
-      shortCut: '',
-      icon: todoListIcon
-    }, {
       title: 'Inline Code',
       subTitle: '`code`',
       label: 'elephant-command code',
       shortCut: '',
       icon: codeIcon
-    }, {
-      title: 'Quote',
-      subTitle: '> quote',
-      label: 'elephant-command quote',
-      shortCut: '',
-      icon: quoteIcon
-    }, {
-      title: 'Table',
-      subTitle: '| column |',
-      label: 'elephant-command table',
-      shortCut: '',
-      icon: newTableIcon
-    }, {
-      title: 'Image',
-      subTitle: 'Insert image',
-      label: 'elephant-command image',
-      shortCut: '',
-      icon: paragraphIcon
-    }, {
-      title: 'Excalidraw',
-      subTitle: 'Insert drawing',
-      label: 'elephant-command excalidraw',
-      shortCut: '',
-      icon: excalidrawIcon
-    }, {
-      title: 'Horizontal Rule',
-      subTitle: '---',
-      label: 'elephant-command horizontal-rule',
-      shortCut: '',
-      icon: hrIcon
-    }],
+    }, ...addonQuickInsertItems('Writing tools')],
     [translate('quickInsert.basicBlock')]: [{
       title: translate('quickInsert.paragraph.title'),
       subTitle: translate('quickInsert.paragraph.subtitle'),
@@ -251,6 +216,3 @@ export const createQuickInsertObj = (t) => {
     }]
   }
 }
-
-// Maintained for backward compatibility; export the default configuration
-// Old exports removed — all call sites should use the createQuickInsertObj function

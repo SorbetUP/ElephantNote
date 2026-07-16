@@ -1,0 +1,33 @@
+name: Trigger physical addon source extraction
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/trigger-extract-addon-sources.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  dispatch:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'develop_next-integration-repair' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop_next-integration-repair
+          fetch-depth: 0
+      - name: Dispatch extraction workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run extract-addon-sources.yml --ref develop_next-integration-repair
+      - name: Remove one-shot trigger
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/trigger-extract-addon-sources.yml
+          git commit -m 'ci: remove addon extraction trigger'
+          git push origin HEAD:develop_next-integration-repair

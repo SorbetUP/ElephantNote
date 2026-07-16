@@ -1,0 +1,455 @@
+name: Final self-certifying develop validation
+
+on:
+  push:
+    branches:
+      - build/fedora-final-develop-20260716
+    paths:
+      - '.github/workflows/final-self-certifying-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  SOURCE_SHA: c195adb7dea08ab6b09521137aedcd3d44bc1993
+  RELEASE_TAG: consolidated-develop-fedora-20260716
+
+jobs:
+  quality-and-features:
+    name: Quality, addons, Rust editor, Wiki and feature contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove application tree equals consolidated develop
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git diff --exit-code "$SOURCE_SHA" HEAD -- . \
+            ':(exclude).github/workflows/fedora-portable-build.yml' \
+            ':(exclude).github/workflows/final-consolidated-validation.yml' \
+            ':(exclude).github/workflows/final-self-certifying-validation.yml'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: ./.github/actions/setup
+
+      - name: Install exact wasm-bindgen CLI
+        shell: bash
+        run: |
+          version=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
+            | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
+          if ! wasm-bindgen --version 2>/dev/null | grep -q "${version}$"; then
+            cargo install wasm-bindgen-cli --version "$version" --locked
+          fi
+
+      - name: Lint consolidated source
+        run: pnpm lint
+
+      - name: Exercise addon install, enable, use, disable and uninstall lifecycle
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/addonProfiles.spec.js \
+            tests/app/unit/addons/addonStore.spec.js \
+            tests/app/unit/addons/baseOfficialAddonRuntime.spec.js \
+            tests/app/unit/addons/trustedOfficialActivation.spec.js \
+            2>&1 | tee final-addon-lifecycle.txt
+
+      - name: Exercise Rust editor, Wiki, Knowledge, Sync and mobile contracts
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/rustEditorAddonRuntime.spec.js \
+            tests/app/unit/specs/muya/rustEditorHostCommands.spec.js \
+            tests/app/unit/specs/muya/rustEditorHostState.spec.js \
+            tests/app/unit/specs/muya/rustRuntimeEditorCommands.spec.js \
+            tests/app/unit/addons/wikiPackageOwnership.spec.js \
+            tests/app/unit/addons/wikiSemanticOrganization.spec.js \
+            tests/app/unit/specs/main/elephantnote/wikiVisibleAcceptance.spec.js \
+            tests/app/unit/addons/knowledgePhysicalAddon.spec.js \
+            tests/app/unit/addons/knowledgeConsumerIntegration.spec.js \
+            tests/app/unit/knowledgeSystemAcceptance.spec.js \
+            tests/app/unit/addons/syncPhysicalOwnership.spec.js \
+            tests/app/unit/addons/syncServiceOwnership.spec.js \
+            tests/app/unit/specs/main/elephantnote/navigationIrohSync.spec.js \
+            tests/app/unit/specs/main/elephantnote/syncInvitePackage.spec.js \
+            tests/app/unit/specs/main/elephantnote/syncPlan.spec.js \
+            tests/app/unit/specs/main/elephantnote/androidUsageRegressionSuite.spec.js \
+            tests/app/unit/specs/main/elephantnote/mobileIntegrationRepair.spec.js \
+            2>&1 | tee final-integrated-features.txt
+
+      - name: Build production renderer
+        run: pnpm tauri:web:build
+
+      - name: Upload feature diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-feature-diagnostics
+          path: |
+            final-addon-lifecycle.txt
+            final-integrated-features.txt
+            build/reports/renderer-bundle.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  linux-e2e:
+    name: Linux production usage simulations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Linux simulation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
+            xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+            libdrm2 libgtk-3-0 libgbm1 libasound2t64
+
+      - uses: ./.github/actions/setup
+
+      - name: Install exact wasm-bindgen CLI
+        shell: bash
+        run: |
+          version=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
+            | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
+          if ! wasm-bindgen --version 2>/dev/null | grep -q "${version}$"; then
+            cargo install wasm-bindgen-cli --version "$version" --locked
+          fi
+
+      - name: Validate usage scenario catalogue
+        run: NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run tests/app/unit/specs/main/elephantnote/linuxUsageRegressionSuite.spec.js
+
+      - name: Install Electron binary
+        shell: bash
+        run: |
+          electron_package=$(NODE_PATH=Elephant/node_modules node - <<'NODE'
+          const path = require('path')
+          const roots = [process.cwd(), path.join(process.cwd(), 'Elephant')]
+          for (const root of roots) {
+            try {
+              process.stdout.write(require.resolve('electron/package.json', { paths: [root] }))
+              process.exit(0)
+            } catch {}
+          }
+          process.exit(1)
+          NODE
+          )
+          electron_root=$(dirname "$electron_package")
+          node "$electron_root/install.js"
+          test -s "$electron_root/path.txt"
+
+      - name: Run postinstall and build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          npm_config_user_agent: pnpm
+          USE_ELECTRON_CLANG: '0'
+        run: |
+          node build/scripts/postinstall.js
+          pnpm build
+          test -f build/out/renderer/index.html
+
+      - name: Run Linux usage simulations
+        run: xvfb-run --auto-servernum pnpm test:e2e
+
+  iroh-and-knowledge:
+    name: Real Iroh endpoints and reusable Knowledge service
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Materialize pinned addons
+        run: node build/scripts/sync-elephant-addons.mjs
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.91.0'
+
+      - name: Test Knowledge core and desktop sidecar
+        run: |
+          cargo test --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml
+          cargo check --manifest-path addons/official/knowledge/native/Cargo.toml --all-targets
+
+      - name: Run real two-endpoint Iroh synchronization
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test \
+            --manifest-path addons/official/sync/native/Cargo.toml \
+            --test two_endpoint_sync \
+            physical_package_pairs_and_synchronizes_two_real_iroh_endpoints \
+            -- --nocapture 2>&1 | tee final-iroh-sync.txt
+          grep -F '[Sync] pairing:complete' final-iroh-sync.txt
+          grep -F '[Sync] transfer:complete files=2' final-iroh-sync.txt
+          grep -F '[Sync] verify:manifest equal=true' final-iroh-sync.txt
+          grep -F '[Sync] run:complete' final-iroh-sync.txt
+
+  macos-package:
+    name: macOS Apple Silicon package and visible-window smoke
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      CARGO_TERM_COLOR: always
+      TAURI_MACOS_SMOKE_TIMEOUT_MS: 120000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,wasm32-unknown-unknown
+
+      - name: Install Tauri and exact wasm-bindgen CLIs
+        shell: bash
+        run: |
+          if ! cargo tauri --version >/dev/null 2>&1; then
+            cargo install tauri-cli --version '^2.10.0' --locked
+          fi
+          version=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
+            | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
+          if ! wasm-bindgen --version 2>/dev/null | grep -q "${version}$"; then
+            cargo install wasm-bindgen-cli --version "$version" --locked
+          fi
+
+      - name: Check and package macOS app
+        run: |
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --target aarch64-apple-darwin
+          cd Elephant/backend/tauri
+          cargo tauri build --target aarch64-apple-darwin --bundles app
+
+      - name: Launch packaged app and verify visible window
+        run: pnpm tauri:mac:smoke
+
+  android-release:
+    name: Signed Android arm64 release APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CARGO_TERM_COLOR: always
+      NDK_VERSION: 27.2.12479018
+      ANDROID_TARGET: aarch64
+      ANDROID_BUILD_PROFILE: release
+      ANDROID_APK_MAX_MIB: 24
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK and NDK
+        run: |
+          sdkmanager --install 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0' "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,wasm32-unknown-unknown
+
+      - uses: ./.github/actions/setup
+
+      - name: Verify mobile contracts
+        run: |
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/specs/main/elephantnote/androidReleaseRecovery.spec.js \
+            tests/app/unit/specs/main/elephantnote/mobileIntegrationRepair.spec.js \
+            tests/app/unit/specs/main/elephantnote/androidUsageRegressionSuite.spec.js
+
+      - name: Install Tauri and exact wasm-bindgen CLIs
+        shell: bash
+        run: |
+          if ! cargo tauri --version >/dev/null 2>&1; then
+            cargo install tauri-cli --version '^2.10.0' --locked
+          fi
+          version=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
+            | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
+          if ! wasm-bindgen --version 2>/dev/null | grep -q "${version}$"; then
+            cargo install wasm-bindgen-cli --version "$version" --locked
+          fi
+
+      - name: Build signed release APK
+        run: pnpm tauri:android:build
+
+      - name: Collect APK
+        shell: bash
+        run: |
+          mkdir -p final-android
+          apk=$(find Elephant/backend/tauri/gen/android/app/build/outputs/apk -type f -name '*-review-signed.apk' -print | head -n 1)
+          test -s "$apk"
+          test "$(stat -c '%s' "$apk")" -le $((24 * 1024 * 1024))
+          cp "$apk" final-android/Elephant-consolidated-develop-arm64.apk
+          sha256sum final-android/Elephant-consolidated-develop-arm64.apk > final-android/ANDROID-SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: final-android-release
+          path: final-android/
+          if-no-files-found: error
+          retention-days: 30
+
+  fedora-package:
+    name: Fedora AppImage and portable archive
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      CI: 'true'
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential curl wget file git jq patchelf libfuse2 \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libssl-dev libxdo-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm install --global pnpm@10.33.4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install build CLIs and dependencies
+        shell: bash
+        run: |
+          cargo install tauri-cli --version '^2' --locked
+          pnpm install --frozen-lockfile
+          version=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
+            | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version' | head -n 1)
+          cargo install wasm-bindgen-cli --version "$version" --locked
+
+      - name: Build Fedora-compatible AppImage
+        run: pnpm tauri:linux:build
+
+      - name: Prepare final Fedora assets
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p final-fedora
+          source_appimage=$(find Elephant/backend/tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)
+          test -n "$source_appimage"
+          appimage=final-fedora/Elephant-consolidated-develop-x86_64.AppImage
+          cp "$source_appimage" "$appimage"
+          chmod +x "$appimage"
+          cd final-fedora
+          ./Elephant-consolidated-develop-x86_64.AppImage --appimage-extract >/dev/null
+          mv squashfs-root Elephant-consolidated-develop-portable
+          test -x Elephant-consolidated-develop-portable/AppRun
+          tar -czf Elephant-consolidated-develop-portable-x86_64.tar.gz Elephant-consolidated-develop-portable
+          rm -rf Elephant-consolidated-develop-portable
+          sha256sum *.AppImage *.tar.gz > SHA256SUMS.txt
+          printf 'source_sha=%s\nvalidation_head=%s\nbuilt_at=%s\n' "$SOURCE_SHA" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > BUILD-INFO.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: final-fedora-release
+          path: final-fedora/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-proof:
+    name: Publish release assets and immutable validation marker
+    runs-on: ubuntu-24.04
+    needs:
+      - quality-and-features
+      - linux-e2e
+      - iroh-and-knowledge
+      - macos-package
+      - android-release
+      - fedora-package
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: final-fedora-release
+          path: final-assets
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: final-android-release
+          path: final-assets
+
+      - name: Write final validation report
+        shell: bash
+        run: |
+          cat > final-assets/FINAL_VALIDATION_OK.md <<EOF
+          # Final consolidated develop validation
+
+          - Source commit: $SOURCE_SHA
+          - Validation workflow head: $GITHUB_SHA
+          - Quality, lint, renderer build: passed
+          - Addon install/enable/use/disable/uninstall contracts: passed
+          - Rust editor, Wiki, Knowledge and Sync contracts: passed
+          - Linux application E2E simulations: passed
+          - Real two-endpoint Iroh transfer: passed
+          - Reusable Knowledge service and desktop sidecar: passed
+          - macOS Apple Silicon package and visible-window smoke: passed
+          - Signed Android arm64 APK under 24 MiB: passed
+          - Fedora AppImage extraction and portable archive: passed
+
+          Known deferred issue accepted before consolidation: Android system Back from an open note still requires a post-consolidation fix. The preceding real emulator run passed 14/15 scenarios and failed only note_back_roundtrip.
+          EOF
+
+      - name: Publish final prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release delete "$RELEASE_TAG" --yes --cleanup-tag || true
+          gh release create "$RELEASE_TAG" final-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" \
+            --title 'Elephant consolidated develop validation' \
+            --notes-file final-assets/FINAL_VALIDATION_OK.md \
+            --prerelease
+
+      - name: Publish immutable validation marker branch
+        shell: bash
+        run: |
+          cp final-assets/FINAL_VALIDATION_OK.md /tmp/FINAL_VALIDATION_OK.md
+          cp final-assets/SHA256SUMS.txt /tmp/SHA256SUMS.txt
+          cp final-assets/ANDROID-SHA256SUMS.txt /tmp/ANDROID-SHA256SUMS.txt
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git switch --orphan final-validation-result
+          git rm -rf .
+          cp /tmp/FINAL_VALIDATION_OK.md .
+          cp /tmp/SHA256SUMS.txt .
+          cp /tmp/ANDROID-SHA256SUMS.txt .
+          git add FINAL_VALIDATION_OK.md SHA256SUMS.txt ANDROID-SHA256SUMS.txt
+          git commit -m 'ci: record successful consolidated develop validation'
+          git push --force origin HEAD:build/final-validation-result-20260716

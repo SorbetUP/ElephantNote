@@ -17,10 +17,9 @@ use crate::{
 };
 
 type R<T> = Result<T, String>;
-const INTEGRATED_CATALOG: &str = include_str!("../../../../addons/catalog.json");
-// The repair branch is intentionally used while PR #84 validates installation on
-// Android and desktop. Change this to develop_next when the branch is merged.
-const OFFICIAL_ROOT: &str = "https://raw.githubusercontent.com/SorbetUP/ElephantNote/develop_next-integration-repair/addons/";
+const OFFICIAL_ROOT: &str = "https://raw.githubusercontent.com/SorbetUP/Elephant-Addons/main/";
+const OFFICIAL_CATALOG_PATH: &str = "catalog.json";
+const MAX_CATALOG_BYTES: u64 = 1024 * 1024;
 const MAX_MANIFEST_BYTES: u64 = 256 * 1024;
 const MAX_ENTRY_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_PACKAGE_FILE_BYTES: u64 = 128 * 1024 * 1024;
@@ -30,17 +29,60 @@ struct IntegratedCatalog {
   addons: Vec<CatalogAddon>,
 }
 
-fn catalog() -> R<Vec<CatalogAddon>> {
-  let parsed: IntegratedCatalog = serde_json::from_str(INTEGRATED_CATALOG)
-    .map_err(|error| format!("Invalid integrated official addon catalogue: {error}"))?;
+fn parse_catalog(bytes: &[u8]) -> R<Vec<CatalogAddon>> {
+  let parsed: IntegratedCatalog = serde_json::from_slice(bytes)
+    .map_err(|error| format!("Invalid official addon catalogue: {error}"))?;
   for item in &parsed.addons {
     if !item.official || !item.id.starts_with("elephant.") {
-      return Err(format!("Integrated catalogue contains a non-official addon: {}", item.id));
+      return Err(format!("Official catalogue contains a non-official addon: {}", item.id));
     }
     safe_official_path(&item.manifest_path)?;
     safe_official_path(&item.entry_path)?;
   }
   Ok(parsed.addons)
+}
+
+fn fetch_catalog_bytes() -> R<Vec<u8>> {
+  let root = Url::parse(OFFICIAL_ROOT).map_err(|error| error.to_string())?;
+  let url = root.join(OFFICIAL_CATALOG_PATH).map_err(|error| error.to_string())?;
+  if url.scheme() != "https"
+    || url.host_str() != Some("raw.githubusercontent.com")
+    || url.path() != "/SorbetUP/Elephant-Addons/main/catalog.json"
+  {
+    return Err("Official addon catalogue URL escaped the dedicated repository.".to_string());
+  }
+  let client = reqwest::blocking::Client::builder()
+    .timeout(Duration::from_secs(90))
+    .redirect(reqwest::redirect::Policy::none())
+    .build()
+    .map_err(|error| error.to_string())?;
+  let mut response = client
+    .get(url)
+    .send()
+    .map_err(|error| format!("Failed to reach the official addon catalogue: {error}"))?;
+  if !response.status().is_success() {
+    return Err(format!("Official addon catalogue returned HTTP {}", response.status()));
+  }
+  let mut bytes = Vec::new();
+  response
+    .by_ref()
+    .take(MAX_CATALOG_BYTES + 1)
+    .read_to_end(&mut bytes)
+    .map_err(|error| error.to_string())?;
+  if bytes.len() as u64 > MAX_CATALOG_BYTES {
+    return Err("Official addon catalogue exceeds the allowed size.".to_string());
+  }
+  Ok(bytes)
+}
+
+fn catalog() -> R<Vec<CatalogAddon>> {
+  let local = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../addons/catalog.json");
+  let bytes = if local.is_file() {
+    fs::read(local).map_err(|error| error.to_string())?
+  } else {
+    fetch_catalog_bytes()?
+  };
+  parse_catalog(&bytes)
 }
 
 fn safe_official_path(value: &str) -> R<String> {
@@ -71,9 +113,9 @@ fn fetch_official_bytes(relative_path: &str, max_bytes: u64) -> R<Vec<u8>> {
   let url = root.join(&relative_path).map_err(|error| error.to_string())?;
   if url.scheme() != "https"
     || url.host_str() != Some("raw.githubusercontent.com")
-    || !url.path().starts_with("/SorbetUP/ElephantNote/develop_next-integration-repair/addons/official/")
+    || !url.path().starts_with("/SorbetUP/Elephant-Addons/main/official/")
   {
-    return Err("Official addon URL escaped the trusted repository branch.".to_string());
+    return Err("Official addon URL escaped the dedicated addon repository.".to_string());
   }
   let client = reqwest::blocking::Client::builder()
     .timeout(Duration::from_secs(90))

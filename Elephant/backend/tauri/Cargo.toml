@@ -51,7 +51,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 keyring = "3"
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
-elephantnote-knowledge-core = { path = "../../../addons/official/knowledge/native/knowledge-core" }
+elephantnote-knowledge-core = { git = "https://github.com/SorbetUP/Elephant-Addons", rev = "8458c1cc9ed074148697e6edc5ffc0f05bbf05ab", package = "elephantnote-knowledge-core" }
 
 [profile.release]
 codegen-units = 1

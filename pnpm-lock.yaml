@@ -93,8 +93,8 @@ importers:
         specifier: ^11.3.5
         version: 11.3.5
       fuzzaldrin:
-        specifier: ^2.1.0
-        version: 2.1.0
+        specifier: ^1.0.0
+        version: 1.2.0
       github-markdown-css:
         specifier: ^5.9.0
         version: 5.9.0
@@ -2629,8 +2629,8 @@ packages:
   functions-have-names@1.2.3:
     resolution: {integrity: sha512-xckBUXyTIqT97tq2x2AMb+g163b5JFysYk0x4qxNFwbfQkmNZoiRHb6sPzI9/QV33WeuvVYBUIiD4NzNIyqaRQ==}
 
-  fuzzaldrin@2.1.0:
-    resolution: {integrity: sha512-zgllBYwfHR5P3CncJiGbGVPpa3iFYW1yuPaIv8DiTVRrcg5/6uETNL5zvIoKflG1aifXVUZTlIroDehw4WygGA==}
+  fuzzaldrin@1.2.0:
+    resolution: {integrity: sha512-E0oZgm8eSI7yifQoFa3stURqZrYkZJh4VhKpQHnD/woRbFHkWicFQ+THg9vBwzVmlohont0mI3ojwUvI5VaxiQ==}
 
   generator-function@2.0.1:
     resolution: {integrity: sha512-SFdFmIJi+ybC0vjlHN0ZGVGHc3lgE0DxPAT0djjVg+kjOnSqclqmj0KQ7ykTOLP6YxoqOvuAODGdcHJn+43q3g==}
@@ -7102,7 +7102,7 @@ snapshots:
 
   functions-have-names@1.2.3: {}
 
-  fuzzaldrin@2.1.0: {}
+  fuzzaldrin@1.2.0: {}
 
   generator-function@2.0.1: {}
 

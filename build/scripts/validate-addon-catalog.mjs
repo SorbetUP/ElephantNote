@@ -205,7 +205,7 @@ const validateIsolatedEntry = async (entry, manifest, source) => {
 
 const catalog = await readJson('catalog.json')
 if (catalog.version !== 1) fail(`unsupported catalogue version ${catalog.version}`)
-if (!['addon-catalog', 'integrated'].includes(catalog.branch)) fail('branch marker must be addon-catalog or integrated')
+if (!['addon-catalog', 'integrated', 'main'].includes(catalog.branch)) fail('branch marker must be addon-catalog, integrated or main')
 if (!Array.isArray(catalog.addons) || catalog.addons.length === 0) fail('catalogue must contain at least one addon')
 const packageRoot = safePath(catalog.packageRoot || 'addons', 'packageRoot')
 

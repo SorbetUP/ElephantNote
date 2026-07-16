@@ -49,3 +49,8 @@ Elephant/frontend/src/muya/lib/rust/generated/
 Elephant/crates/**/target/
 addons/official/*/native/target/
 addons/official/*/native/*/target/
+
+# Materialized from SorbetUP/Elephant-Addons; never commit these paths here.
+/.cache/elephant-addons/
+/addons
+/packs

@@ -1,0 +1,13 @@
+name: Extract addon sources to Elephant-Addons
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  registered:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Run this workflow on develop_next-integration-repair.'

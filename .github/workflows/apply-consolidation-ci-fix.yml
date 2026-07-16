@@ -1,12 +1,9 @@
-name: Apply consolidation CI fixes
+name: Commit generated Tauri lockfile
 
 on:
   push:
     branches:
       - build/consolidation-ci-fix-20260716
-    paths:
-      - '.github/workflows/apply-consolidation-ci-fix.yml'
-  pull_request:
     paths:
       - '.github/workflows/apply-consolidation-ci-fix.yml'
   workflow_dispatch:
@@ -15,7 +12,7 @@ permissions:
   contents: write
 
 jobs:
-  patch-target:
+  update-lockfile:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -24,160 +21,32 @@ jobs:
           ref: fix/fedora-sidebar-entry-invariants-20260716
           fetch-depth: 0
 
-      - name: Repair validation contracts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Materialize official addons
+        run: node build/scripts/sync-elephant-addons.mjs
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.91.0'
+
+      - name: Generate exact lockfile
         shell: bash
         run: |
           set -euxo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-
-          def replace_once(text, old, new, label):
-              if old not in text:
-                  raise SystemExit(f'missing patch anchor: {label}')
-              return text.replace(old, new, 1)
-
-          def update(path, transform):
-              target = Path(path)
-              target.write_text(transform(target.read_text()))
-
-          materialize = (
-              "      - name: Materialize official addons\n"
-              "        run: node build/scripts/sync-elephant-addons.mjs\n\n"
-          )
-          node_block = (
-              "      - uses: actions/setup-node@v4\n"
-              "        with:\n"
-              "          node-version: '22'\n\n"
-          )
-
-          def patch_addon(text):
-              text = replace_once(
-                  text,
-                  "on:\n  pull_request:\n",
-                  "on:\n  push:\n    branches:\n      - develop\n      - main\n  pull_request:\n",
-                  'addon push trigger',
-              )
-              if text.count(node_block) != 2:
-                  raise SystemExit(f'expected two addon node setup blocks, found {text.count(node_block)}')
-              return text.replace(node_block, node_block + materialize)
-
-          update('.github/workflows/addon-platform-validation.yml', patch_addon)
-
-          def patch_mobile(text):
-              text = replace_once(
-                  text,
-                  "on:\n  pull_request:\n",
-                  "on:\n  push:\n    branches:\n      - develop\n      - main\n  pull_request:\n",
-                  'mobile push trigger',
-              )
-              return replace_once(
-                  text,
-                  "      - uses: actions/checkout@v4\n\n      - uses: dtolnay/rust-toolchain@stable\n",
-                  "      - uses: actions/checkout@v4\n\n" + node_block + materialize + "      - uses: dtolnay/rust-toolchain@stable\n",
-                  'mobile materialization',
-              )
-
-          update('.github/workflows/mobile-knowledge-validation.yml', patch_mobile)
-
-          def patch_sync(text):
-              text = replace_once(text, "      - main\n", "      - main\n      - develop\n", 'sync develop trigger')
-              return replace_once(
-                  text,
-                  "      - uses: actions/checkout@v4\n\n      - name: Setup Rust\n",
-                  "      - uses: actions/checkout@v4\n\n" + node_block + materialize + "      - name: Setup Rust\n",
-                  'sync materialization',
-              )
-
-          update('.github/workflows/sync-docker.yml', patch_sync)
-
-          ci_old = (
-              "  tauri-rust:\n"
-              "    name: Tauri Rust check\n"
-              "    runs-on: ubuntu-latest\n"
-              "    timeout-minutes: 45\n"
-              "    env:\n"
-              "      CARGO_TERM_COLOR: always\n"
-              "    steps:\n"
-              "      - uses: actions/checkout@v4\n\n"
-              "      - name: Install Tauri Linux dependencies\n"
-          )
-          ci_new = (
-              "  tauri-rust:\n"
-              "    name: Tauri Rust check\n"
-              "    runs-on: ubuntu-latest\n"
-              "    timeout-minutes: 45\n"
-              "    env:\n"
-              "      CARGO_TERM_COLOR: always\n"
-              "    steps:\n"
-              "      - uses: actions/checkout@v4\n\n"
-              + node_block
-              + materialize
-              + "      - name: Install Tauri Linux dependencies\n"
-          )
-
-          def patch_ci(text):
-              text = replace_once(text, "      - main\n", "      - main\n      - develop\n", 'ci develop trigger')
-              return replace_once(text, ci_old, ci_new, 'ci Rust materialization')
-
-          update('.github/workflows/ci.yml', patch_ci)
-
-          old_if = (
-              "    if: >-\n"
-              "      github.event_name == 'workflow_dispatch' ||\n"
-              "      github.event_name == 'push' ||\n"
-              "      github.event.pull_request.head.ref == 'develop_next' ||\n"
-              "      github.event.pull_request.head.ref == 'develop_next-mobile-recovery' ||\n"
-              "      github.event.pull_request.head.ref == 'develop_next-unified-candidate2' ||\n"
-              "      github.event.pull_request.head.ref == 'develop_next-integration-repair'\n"
-          )
-          new_if = (
-              "    if: >-\n"
-              "      github.event_name == 'workflow_dispatch' ||\n"
-              "      github.event_name == 'push' ||\n"
-              "      github.event.pull_request.base.ref == 'develop_next-integration-repair' ||\n"
-              "      github.event.pull_request.base.ref == 'develop'\n"
-          )
-
-          def patch_android(text):
-              text = replace_once(
-                  text,
-                  "      - develop_next-integration-repair\n",
-                  "      - develop_next-integration-repair\n      - develop\n",
-                  'android develop trigger',
-              )
-              if text.count(old_if) != 2:
-                  raise SystemExit(f'expected two Android job conditions, found {text.count(old_if)}')
-              return text.replace(old_if, new_if)
-
-          update('.github/workflows/android-apk.yml', patch_android)
-
-          temporary = Path('.github/workflows/fix-addon-registry-and-scroll.yml')
-          if not temporary.exists():
-              raise SystemExit('temporary addon repair workflow is already absent')
-          temporary.unlink()
-          PY
-
+          cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
           git diff --check
-          expected=$'.github/workflows/addon-platform-validation.yml\n.github/workflows/android-apk.yml\n.github/workflows/ci.yml\n.github/workflows/fix-addon-registry-and-scroll.yml\n.github/workflows/mobile-knowledge-validation.yml\n.github/workflows/sync-docker.yml'
-          actual="$(git diff --name-only | sort)"
-          test "$actual" = "$expected"
+          git diff -- Elephant/backend/tauri/Cargo.lock
+          test "$(git diff --name-only)" = 'Elephant/backend/tauri/Cargo.lock'
 
-      - name: Verify addon materialization contract
-        shell: bash
-        run: |
-          set -euxo pipefail
-          node build/scripts/sync-elephant-addons.mjs
-          test -f addons/catalog.json
-          test -f addons/official/dashboard/manifest.json
-          test -f addons/official/knowledge/native/knowledge-core/Cargo.toml
-          test -f addons/official/sync/native/Cargo.toml
-
-      - name: Commit fixes to review branch
+      - name: Commit generated lockfile
         shell: bash
         run: |
           set -euxo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git commit -m 'ci: materialize external addons in validation jobs'
-          git push origin HEAD:build/consolidation-ci-result-20260716
+          git add Elephant/backend/tauri/Cargo.lock
+          git commit -m 'build: refresh Tauri lockfile with Rust 1.91'
+          git push origin HEAD:fix/fedora-sidebar-entry-invariants-20260716

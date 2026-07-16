@@ -1,13 +1,49 @@
 name: Extract addon sources to Elephant-Addons
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/extract-addon-sources.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: extract-elephant-addon-sources
+  cancel-in-progress: false
+
 jobs:
-  registered:
+  extract:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
-      - run: echo 'Run this workflow on develop_next-integration-repair.'
+      - uses: actions/checkout@v4
+        with:
+          ref: develop_next-integration-repair
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.91.0'
+
+      - name: Extract and validate physical addon sources
+        shell: bash
+        run: bash build/scripts/extract-addon-sources.sh
+
+      - name: Upload extraction diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: addon-source-extraction-diagnostics
+          path: |
+            addon-catalog-validation.txt
+            addon-extraction-tests.txt
+            addon-catalog-rust-tests.txt
+          if-no-files-found: warn
+          retention-days: 14

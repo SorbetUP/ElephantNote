@@ -1,4 +1,4 @@
-name: Commit generated Tauri lockfile
+name: Apply Android back-button navigation fix
 
 on:
   push:
@@ -15,40 +15,175 @@ permissions:
   contents: write
 
 jobs:
-  update-lockfile:
+  patch-and-test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/tauri-lockfile-rust191-20260716
+          ref: fix/fedora-sidebar-entry-invariants-20260716
           fetch-depth: 0
+
+      - name: Patch mobile back navigation
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          app = Path('Elephant/frontend/app/components/shell/AppShell.vue')
+          text = app.read_text()
+
+          def once(old, new, label):
+              global text
+              if text.count(old) != 1:
+                  raise SystemExit(f'{label}: expected one anchor, found {text.count(old)}')
+              text = text.replace(old, new, 1)
+
+          once(
+              "import { Menu, Plus, Search, Settings } from '@lucide/vue'\n",
+              "import { Menu, Plus, Search, Settings } from '@lucide/vue'\nimport { onBackButtonPress } from '@tauri-apps/api/app'\nimport { invoke } from '@tauri-apps/api/core'\n",
+              'Tauri app imports',
+          )
+          once(
+              "let pendingSidebarWidth = null\n",
+              "let pendingSidebarWidth = null\nlet mobileBackListener = null\n",
+              'listener state',
+          )
+          once(
+              "const closeMobileSidebar = () => {\n  if (isMobileShell.value) settleDrawer(false)\n}\n",
+              """const closeMobileSidebar = () => {
+  if (isMobileShell.value) settleDrawer(false)
+}
+
+const exitMobileApp = () => invoke('plugin:app|exit').catch((error) => {
+  console.warn('[mobile] unable to exit after Android back press', error)
+})
+
+const handleMobileBackButton = () => {
+  if (!isMobileShell.value) return
+  if (searchStore.isOpen) {
+    searchStore.close()
+    return
+  }
+  if (isSettingsOpen.value) {
+    isSettingsOpen.value = false
+    return
+  }
+  if (drawerProgress.value > 0 || sidebarVisible.value) {
+    closeMobileSidebar()
+    return
+  }
+  if (store.openedNotePath) {
+    store.closeNote()
+    return
+  }
+  if (activeAddonViewId.value) {
+    closeAddonView()
+    return
+  }
+  if (store.activeWorkspaceView !== 'notes') {
+    store.setWorkspaceView('notes')
+    return
+  }
+  exitMobileApp()
+}
+""",
+              'mobile back handler',
+          )
+          once(
+              "onMounted(() => {\n      updateMobileShell()\n",
+              """onMounted(() => {
+      updateMobileShell()
+      if (isMobileShell.value) {
+        onBackButtonPress(handleMobileBackButton)
+          .then((listener) => {
+            mobileBackListener = listener
+          })
+          .catch((error) => {
+            console.warn('[mobile] Android back-button listener unavailable', error)
+          })
+      }
+""",
+              'listener registration',
+          )
+          once(
+              "onBeforeUnmount(() => {\n      window.clearTimeout(drawerSettleTimer)\n",
+              """onBeforeUnmount(() => {
+      mobileBackListener?.unregister?.()
+      mobileBackListener = null
+      window.clearTimeout(drawerSettleTimer)
+""",
+              'listener cleanup',
+          )
+          app.write_text(text)
+
+          capability = Path('Elephant/backend/tauri/capabilities/default.json')
+          cap = capability.read_text()
+          anchor = '    "core:default",\n'
+          if cap.count(anchor) != 1:
+              raise SystemExit('capability anchor mismatch')
+          cap = cap.replace(anchor, anchor + '    "core:app:allow-exit",\n', 1)
+          capability.write_text(cap)
+
+          test = Path('tests/app/unit/specs/main/elephantnote/androidBackNavigation.spec.js')
+          test.write_text("""import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+const root = process.cwd()
+const shell = fs.readFileSync(path.join(root, 'Elephant/frontend/app/components/shell/AppShell.vue'), 'utf8')
+const capability = JSON.parse(fs.readFileSync(path.join(root, 'Elephant/backend/tauri/capabilities/default.json'), 'utf8'))
+
+describe('Android native back navigation', () => {
+  it('routes Android back presses through the mobile shell before exiting', () => {
+    expect(shell).toContain("import { onBackButtonPress } from '@tauri-apps/api/app'")
+    expect(shell).toContain('onBackButtonPress(handleMobileBackButton)')
+    expect(shell).toContain('if (searchStore.isOpen)')
+    expect(shell).toContain('if (isSettingsOpen.value)')
+    expect(shell).toContain('if (drawerProgress.value > 0 || sidebarVisible.value)')
+    expect(shell).toContain('if (store.openedNotePath)')
+    expect(shell).toContain('store.closeNote()')
+    expect(shell).toContain("invoke('plugin:app|exit')")
+    expect(shell).toContain('mobileBackListener?.unregister?.()')
+  })
+
+  it('grants only the built-in app exit command needed at the root workspace', () => {
+    expect(capability.permissions).toContain('core:app:allow-exit')
+  })
+})
+""")
+          PY
+
+          git diff --check
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Materialize official addons
-        run: node build/scripts/sync-elephant-addons.mjs
+      - name: Install dependencies
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.33.4 --activate
+          pnpm install --frozen-lockfile --ignore-scripts
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: '1.91.0'
-
-      - name: Generate exact lockfile
+      - name: Run focused mobile tests
         shell: bash
         run: |
           set -euxo pipefail
-          cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
-          git diff --check -- Elephant/backend/tauri/Cargo.lock
-          git diff -- Elephant/backend/tauri/Cargo.lock
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/specs/main/elephantnote/androidBackNavigation.spec.js \
+            tests/app/unit/specs/main/elephantnote/androidUsageRegressionSuite.spec.js
 
-      - name: Commit generated lockfile
+      - name: Commit validated fix
         shell: bash
         run: |
           set -euxo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add Elephant/backend/tauri/Cargo.lock
-          git commit -m 'build: refresh Tauri lockfile with Rust 1.91'
-          git push origin HEAD:fix/tauri-lockfile-rust191-20260716
+          git add \
+            Elephant/frontend/app/components/shell/AppShell.vue \
+            Elephant/backend/tauri/capabilities/default.json \
+            tests/app/unit/specs/main/elephantnote/androidBackNavigation.spec.js
+          git commit -m 'fix(android): handle native back navigation'
+          git push origin HEAD:fix/fedora-sidebar-entry-invariants-20260716

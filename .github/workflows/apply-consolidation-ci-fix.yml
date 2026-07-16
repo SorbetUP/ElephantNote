@@ -1,0 +1,197 @@
+name: Apply consolidation CI fixes
+
+on:
+  push:
+    branches:
+      - build/consolidation-ci-fix-20260716
+    paths:
+      - '.github/workflows/apply-consolidation-ci-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-target:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/fedora-sidebar-entry-invariants-20260716
+          fetch-depth: 0
+
+      - name: Repair validation contracts
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def read(path):
+              return Path(path).read_text()
+
+          def write(path, text):
+              Path(path).write_text(text)
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'missing patch anchor: {label}')
+              return text.replace(old, new, 1)
+
+          materialize = """      - name: Materialize official addons
+                run: node build/scripts/sync-elephant-addons.mjs
+
+          """
+
+          addon_path = '.github/workflows/addon-platform-validation.yml'
+          addon = read(addon_path)
+          addon = replace_once(
+              addon,
+              "on:\n  pull_request:\n",
+              "on:\n  push:\n    branches:\n      - develop\n      - main\n  pull_request:\n",
+              'addon push trigger',
+          )
+          node_block = """      - uses: actions/setup-node@v4
+                with:
+                  node-version: '22'
+
+          """
+          if addon.count(node_block) != 2:
+              raise SystemExit(f'expected two addon node setup blocks, found {addon.count(node_block)}')
+          addon = addon.replace(node_block, node_block + materialize)
+          write(addon_path, addon)
+
+          mobile_path = '.github/workflows/mobile-knowledge-validation.yml'
+          mobile = read(mobile_path)
+          mobile = replace_once(
+              mobile,
+              "on:\n  pull_request:\n",
+              "on:\n  push:\n    branches:\n      - develop\n      - main\n  pull_request:\n",
+              'mobile push trigger',
+          )
+          mobile = replace_once(
+              mobile,
+              "      - uses: actions/checkout@v4\n\n      - uses: dtolnay/rust-toolchain@stable\n",
+              "      - uses: actions/checkout@v4\n\n      - uses: actions/setup-node@v4\n        with:\n          node-version: '22'\n\n      - name: Materialize official addons\n        run: node build/scripts/sync-elephant-addons.mjs\n\n      - uses: dtolnay/rust-toolchain@stable\n",
+              'mobile materialization',
+          )
+          write(mobile_path, mobile)
+
+          sync_path = '.github/workflows/sync-docker.yml'
+          sync = read(sync_path)
+          sync = replace_once(
+              sync,
+              "      - main\n",
+              "      - main\n      - develop\n",
+              'sync develop trigger',
+          )
+          sync = replace_once(
+              sync,
+              "      - uses: actions/checkout@v4\n\n      - name: Setup Rust\n",
+              "      - uses: actions/checkout@v4\n\n      - uses: actions/setup-node@v4\n        with:\n          node-version: '22'\n\n      - name: Materialize official addons\n        run: node build/scripts/sync-elephant-addons.mjs\n\n      - name: Setup Rust\n",
+              'sync materialization',
+          )
+          write(sync_path, sync)
+
+          ci_path = '.github/workflows/ci.yml'
+          ci = read(ci_path)
+          ci = replace_once(
+              ci,
+              "      - main\n",
+              "      - main\n      - develop\n",
+              'ci develop trigger',
+          )
+          ci = replace_once(
+              ci,
+              """  tauri-rust:
+              name: Tauri Rust check
+              runs-on: ubuntu-latest
+              timeout-minutes: 45
+              env:
+                CARGO_TERM_COLOR: always
+              steps:
+                - uses: actions/checkout@v4
+
+                - name: Install Tauri Linux dependencies
+          """,
+              """  tauri-rust:
+              name: Tauri Rust check
+              runs-on: ubuntu-latest
+              timeout-minutes: 45
+              env:
+                CARGO_TERM_COLOR: always
+              steps:
+                - uses: actions/checkout@v4
+
+                - uses: actions/setup-node@v4
+                  with:
+                    node-version: '22'
+
+                - name: Materialize official addons
+                  run: node build/scripts/sync-elephant-addons.mjs
+
+                - name: Install Tauri Linux dependencies
+          """,
+              'ci Rust materialization',
+          )
+          write(ci_path, ci)
+
+          android_path = '.github/workflows/android-apk.yml'
+          android = read(android_path)
+          android = replace_once(
+              android,
+              "      - develop_next-integration-repair\n",
+              "      - develop_next-integration-repair\n      - develop\n",
+              'android develop trigger',
+          )
+          old_if = """    if: >-
+                github.event_name == 'workflow_dispatch' ||
+                github.event_name == 'push' ||
+                github.event.pull_request.head.ref == 'develop_next' ||
+                github.event.pull_request.head.ref == 'develop_next-mobile-recovery' ||
+                github.event.pull_request.head.ref == 'develop_next-unified-candidate2' ||
+                github.event.pull_request.head.ref == 'develop_next-integration-repair'
+          """
+          new_if = """    if: >-
+                github.event_name == 'workflow_dispatch' ||
+                github.event_name == 'push' ||
+                github.event.pull_request.base.ref == 'develop_next-integration-repair' ||
+                github.event.pull_request.base.ref == 'develop'
+          """
+          if android.count(old_if) != 2:
+              raise SystemExit(f'expected two Android job conditions, found {android.count(old_if)}')
+          android = android.replace(old_if, new_if)
+          write(android_path, android)
+
+          temporary = Path('.github/workflows/fix-addon-registry-and-scroll.yml')
+          if not temporary.exists():
+              raise SystemExit('temporary addon repair workflow is already absent')
+          temporary.unlink()
+          PY
+
+          git diff --check
+          test -L addons || test ! -e addons
+          expected=$'.github/workflows/addon-platform-validation.yml\n.github/workflows/android-apk.yml\n.github/workflows/ci.yml\n.github/workflows/fix-addon-registry-and-scroll.yml\n.github/workflows/mobile-knowledge-validation.yml\n.github/workflows/sync-docker.yml'
+          actual="$(git diff --name-only | sort)"
+          test "$actual" = "$expected"
+
+      - name: Verify addon materialization contract
+        shell: bash
+        run: |
+          set -euxo pipefail
+          node build/scripts/sync-elephant-addons.mjs
+          test -f addons/catalog.json
+          test -f addons/official/dashboard/manifest.json
+          test -f addons/official/knowledge/native/knowledge-core/Cargo.toml
+          test -f addons/official/sync/native/Cargo.toml
+
+      - name: Commit fixes to runtime PR
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'ci: materialize external addons in validation jobs'
+          git push origin HEAD:fix/fedora-sidebar-entry-invariants-20260716

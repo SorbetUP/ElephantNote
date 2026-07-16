@@ -1,0 +1,122 @@
+name: Fedora portable build
+
+on:
+  push:
+    branches:
+      - 'build/fedora-*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fedora-portable-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  appimage:
+    name: Build Fedora-compatible AppImage
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      CI: 'true'
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential curl wget file git jq patchelf libfuse2 \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libssl-dev libxdo-dev
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        run: npm install --global pnpm@10.33.4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            Elephant/backend/tauri -> target
+            Elephant/crates/muya-wasm -> target
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version '^2' --locked
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install matching wasm-bindgen CLI when required
+        shell: bash
+        run: |
+          if [[ ! -f Elephant/crates/muya-wasm/Cargo.toml ]]; then
+            echo 'This branch does not use the Rust/WASM editor; skipping wasm-bindgen CLI.'
+            exit 0
+          fi
+          version="$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version' | head -n 1)"
+          test -n "$version"
+          cargo install wasm-bindgen-cli --version "$version" --locked
+
+      - name: Prepare bundled desktop runtimes when required
+        shell: bash
+        run: |
+          if node -e "const p=require('./package.json'); process.exit(p.scripts?.['tauri:llama:install'] ? 0 : 1)"; then
+            pnpm tauri:llama:install
+          fi
+          if node -e "const p=require('./package.json'); process.exit(p.scripts?.['tauri:codex:install'] ? 0 : 1)"; then
+            pnpm tauri:codex:install
+          fi
+
+      - name: Build Linux AppImage
+        shell: bash
+        run: |
+          mkdir -p dist
+          set -o pipefail
+          pnpm tauri:linux:build 2>&1 | tee dist/fedora-build.log
+
+      - name: Prepare portable downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_appimage="$(find Elephant/backend/tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          test -n "$source_appimage"
+          channel="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          channel="${channel//\//-}"
+          appimage="dist/Elephant-${channel}-x86_64.AppImage"
+          cp "$source_appimage" "$appimage"
+          chmod +x "$appimage"
+          (
+            cd dist
+            "./$(basename "$appimage")" --appimage-extract >/dev/null
+            mv squashfs-root "Elephant-${channel}-portable"
+            tar -czf "Elephant-${channel}-portable-x86_64.tar.gz" "Elephant-${channel}-portable"
+            rm -rf "Elephant-${channel}-portable"
+            sha256sum *.AppImage *.tar.gz > SHA256SUMS
+            printf 'source_ref=%s\nsource_sha=%s\nbuilt_at=%s\n' \
+              "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > BUILD-INFO.txt
+          )
+
+      - name: Upload Fedora portable build and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Elephant-Fedora-PR-${{ github.event.pull_request.number || github.run_number }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30

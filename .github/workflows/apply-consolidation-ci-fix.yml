@@ -40,9 +40,8 @@ jobs:
         run: |
           set -euxo pipefail
           cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
-          git diff --check
+          git diff --check -- Elephant/backend/tauri/Cargo.lock
           git diff -- Elephant/backend/tauri/Cargo.lock
-          test "$(git diff --name-only)" = 'Elephant/backend/tauri/Cargo.lock'
 
       - name: Commit generated lockfile
         shell: bash

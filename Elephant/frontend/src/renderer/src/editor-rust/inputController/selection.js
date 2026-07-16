@@ -1,5 +1,18 @@
 import { NODE_ATTRIBUTE } from '../domRenderer'
 
+const SELECTION_BOUNDARY_CODES = new Set([
+  'ELEPHANT_RUST_SELECTION_OUTSIDE_DOCUMENT',
+  'ELEPHANT_RUST_SELECTION_UNAVAILABLE'
+])
+
+const selectionBoundaryError = (message, code) => {
+  const error = new TypeError(message)
+  error.code = code
+  return error
+}
+
+export const isSelectionBoundaryError = (error) => SELECTION_BOUNDARY_CODES.has(error?.code)
+
 const rustElement = (node) => {
   const element = node?.nodeType === 1 ? node : node?.parentElement
   return element?.closest?.(`[${NODE_ATTRIBUTE}]`) || null
@@ -7,7 +20,12 @@ const rustElement = (node) => {
 
 const pointFromDom = (renderer, node, offset) => {
   const element = rustElement(node)
-  if (!element) throw new TypeError('Browser selection is outside the Elephant Rust document.')
+  if (!element) {
+    throw selectionBoundaryError(
+      'Browser selection is outside the Elephant Rust document.',
+      'ELEPHANT_RUST_SELECTION_OUTSIDE_DOCUMENT'
+    )
+  }
 
   const id = Number(element.getAttribute(NODE_ATTRIBUTE))
   const logical = renderer.logical.node(id)
@@ -41,7 +59,10 @@ const pointFromDom = (renderer, node, offset) => {
 export const readDomSelection = (renderer) => {
   const selection = renderer.ownerDocument.defaultView?.getSelection?.()
   if (!selection || !selection.anchorNode || !selection.focusNode) {
-    throw new TypeError('Browser selection is unavailable.')
+    throw selectionBoundaryError(
+      'Browser selection is unavailable.',
+      'ELEPHANT_RUST_SELECTION_UNAVAILABLE'
+    )
   }
 
   return {

@@ -107,8 +107,7 @@ pub(crate) fn dependents(app: &AppHandle, registry: &Value, addon_id: &str, enab
   Ok(result)
 }
 
-#[tauri::command]
-pub fn tauri_addons_set_enabled_checked(
+fn set_enabled_with_dependencies(
   app: AppHandle,
   state: State<'_, AddonState>,
   addon_id: String,
@@ -130,7 +129,26 @@ pub fn tauri_addons_set_enabled_checked(
 }
 
 #[tauri::command]
-pub fn tauri_addons_uninstall_checked(
+pub fn tauri_addons_set_enabled(
+  app: AppHandle,
+  state: State<'_, AddonState>,
+  addon_id: String,
+  enabled: bool,
+) -> R<InstalledAddon> {
+  set_enabled_with_dependencies(app, state, addon_id, enabled)
+}
+
+#[tauri::command]
+pub fn tauri_addons_set_enabled_checked(
+  app: AppHandle,
+  state: State<'_, AddonState>,
+  addon_id: String,
+  enabled: bool,
+) -> R<InstalledAddon> {
+  set_enabled_with_dependencies(app, state, addon_id, enabled)
+}
+
+fn uninstall_with_dependencies(
   app: AppHandle,
   state: State<'_, AddonState>,
   addon_id: String,
@@ -144,6 +162,24 @@ pub fn tauri_addons_uninstall_checked(
     ));
   }
   addons::tauri_addons_uninstall(app, state, addon_id)
+}
+
+#[tauri::command]
+pub fn tauri_addons_uninstall(
+  app: AppHandle,
+  state: State<'_, AddonState>,
+  addon_id: String,
+) -> R<Value> {
+  uninstall_with_dependencies(app, state, addon_id)
+}
+
+#[tauri::command]
+pub fn tauri_addons_uninstall_checked(
+  app: AppHandle,
+  state: State<'_, AddonState>,
+  addon_id: String,
+) -> R<Value> {
+  uninstall_with_dependencies(app, state, addon_id)
 }
 
 #[cfg(test)]

@@ -12,7 +12,7 @@ import { handleDeleteForward } from './deleteForward'
 import { DELETE_UNIT_INPUTS, handleDeleteUnit } from './deleteUnits'
 import { handleDragOver, handleDrop } from './drop'
 import { handleImageClick } from './image'
-import { readDomSelection } from './selection'
+import { isSelectionBoundaryError, readDomSelection } from './selection'
 import { handleTaskClick } from './task'
 
 const noop = () => {}
@@ -204,7 +204,7 @@ export class ElephantRustInputController {
     try {
       return readDomSelection(this.renderer)
     } catch (error) {
-      this.onError(error)
+      if (!isSelectionBoundaryError(error)) this.onError(error)
       return null
     }
   }

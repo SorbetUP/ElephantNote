@@ -172,7 +172,7 @@ jobs:
           test -f addons/official/knowledge/native/knowledge-core/Cargo.toml
           test -f addons/official/sync/native/Cargo.toml
 
-      - name: Commit fixes to runtime PR
+      - name: Commit fixes to review branch
         shell: bash
         run: |
           set -euxo pipefail
@@ -180,4 +180,4 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
           git commit -m 'ci: materialize external addons in validation jobs'
-          git push origin HEAD:fix/fedora-sidebar-entry-invariants-20260716
+          git push origin HEAD:build/consolidation-ci-result-20260716

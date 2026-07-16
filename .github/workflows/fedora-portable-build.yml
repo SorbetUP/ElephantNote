@@ -56,6 +56,9 @@ jobs:
             Elephant/backend/tauri -> target
             Elephant/crates/muya-wasm -> target
 
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version '^2' --locked
+
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
@@ -73,20 +76,24 @@ jobs:
       - name: Prepare bundled desktop runtimes when required
         shell: bash
         run: |
-          node -e "const p=require('./package.json'); process.exit(p.scripts?.['tauri:llama:install'] ? 0 : 1)" && pnpm tauri:llama:install || true
-          node -e "const p=require('./package.json'); process.exit(p.scripts?.['tauri:codex:install'] ? 0 : 1)" && pnpm tauri:codex:install || true
+          if node -e "const p=require('./package.json'); process.exit(p.scripts?.['tauri:llama:install'] ? 0 : 1)"; then
+            pnpm tauri:llama:install
+          fi
+          if node -e "const p=require('./package.json'); process.exit(p.scripts?.['tauri:codex:install'] ? 0 : 1)"; then
+            pnpm tauri:codex:install
+          fi
 
       - name: Build Linux AppImage
         shell: bash
         run: |
-          cd Elephant/backend/tauri
-          pnpm dlx @tauri-apps/cli@2 build --config tauri.linux.conf.json
+          mkdir -p dist
+          set -o pipefail
+          pnpm tauri:linux:build 2>&1 | tee dist/fedora-build.log
 
       - name: Prepare portable downloads
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist
           source_appimage="$(find Elephant/backend/tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
           test -n "$source_appimage"
           channel="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
@@ -105,7 +112,8 @@ jobs:
               "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > BUILD-INFO.txt
           )
 
-      - name: Upload Fedora portable build
+      - name: Upload Fedora portable build and log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Elephant-Fedora-${{ github.event.pull_request.head.ref || github.ref_name }}

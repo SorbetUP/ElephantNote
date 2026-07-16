@@ -40,13 +40,22 @@ jobs:
           sed -i 's/pnpm install --frozen-lockfile --ignore-scripts/pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts/' build/scripts/extract-addon-sources.sh
           python <<'PY'
           from pathlib import Path
-          path = Path('build/scripts/extract-addon-sources.sh')
-          source = path.read_text()
+
+          extraction = Path('build/scripts/extract-addon-sources.sh')
+          source = extraction.read_text()
           source = source.replace(
               'node build/scripts/validate-addon-catalog.mjs 2>&1 | tee addon-catalog-validation.txt',
               'node build/scripts/validate-addon-catalog.mjs addons 2>&1 | tee addon-catalog-validation.txt'
           )
-          path.write_text(source)
+          extraction.write_text(source)
+
+          validator = Path('build/scripts/validate-addon-catalog.mjs')
+          source = validator.read_text()
+          source = source.replace(
+              "if (!['addon-catalog', 'integrated'].includes(catalog.branch)) fail('branch marker must be addon-catalog or integrated')",
+              "if (!['addon-catalog', 'integrated', 'main'].includes(catalog.branch)) fail('branch marker must be addon-catalog, integrated or main')"
+          )
+          validator.write_text(source)
           PY
           bash build/scripts/extract-addon-sources.sh 2>&1 | tee addon-extraction-full.log
 

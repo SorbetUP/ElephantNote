@@ -51,30 +51,16 @@ jobs:
             addons/official/knowledge/native/knowledge-core/src/service.rs \
             addons/official/knowledge/native/knowledge-core/src/wiki_discovery.rs
 
-      - name: Generate and record Tauri lockfile
+      - name: Verify committed Tauri lockfile
         run: |
           cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
-          git diff -- Elephant/backend/tauri/Cargo.lock | tee tauri-lockfile-diff.patch
+          git diff --exit-code -- Elephant/backend/tauri/Cargo.lock
 
       - name: Test reusable Knowledge service
         run: cargo test --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml
 
       - name: Check desktop sidecar adapter
         run: cargo check --manifest-path addons/official/knowledge/native/Cargo.toml --all-targets
-
-      - name: Upload generated lockfile diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobile-knowledge-lockfile-diagnostics
-          path: |
-            Elephant/backend/tauri/Cargo.lock
-            tauri-lockfile-diff.patch
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Verify committed Tauri lockfile
-        run: git diff --exit-code -- Elephant/backend/tauri/Cargo.lock
 
       # Full Tauri integration is validated by the cross-platform PR Build.
       # The Android target, bundled SQLite and APK are validated by android-apk.yml.

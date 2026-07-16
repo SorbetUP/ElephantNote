@@ -1,0 +1,78 @@
+name: Final consolidated feature validation
+
+on:
+  push:
+    branches:
+      - build/fedora-final-develop-20260716
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  addon-lifecycle-and-integrated-features:
+    name: Addon lifecycle, Rust editor, Wiki, Knowledge and Sync
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.33.4 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Materialize pinned physical addons
+        run: node build/scripts/sync-elephant-addons.mjs
+
+      - name: Exercise install, enable, use, disable and uninstall contracts
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/addonProfiles.spec.js \
+            tests/app/unit/addons/addonStore.spec.js \
+            tests/app/unit/addons/baseOfficialAddonRuntime.spec.js \
+            tests/app/unit/addons/trustedOfficialActivation.spec.js \
+            2>&1 | tee final-addon-lifecycle.txt
+
+      - name: Exercise Rust editor, Wiki, Knowledge and Iroh UI contracts
+        shell: bash
+        run: |
+          set -o pipefail
+          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
+            tests/app/unit/addons/rustEditorAddonRuntime.spec.js \
+            tests/app/unit/specs/muya/rustEditorHostCommands.spec.js \
+            tests/app/unit/specs/muya/rustEditorHostState.spec.js \
+            tests/app/unit/specs/muya/rustRuntimeEditorCommands.spec.js \
+            tests/app/unit/addons/wikiPackageOwnership.spec.js \
+            tests/app/unit/addons/wikiSemanticOrganization.spec.js \
+            tests/app/unit/specs/main/elephantnote/wikiVisibleAcceptance.spec.js \
+            tests/app/unit/addons/knowledgePhysicalAddon.spec.js \
+            tests/app/unit/addons/knowledgeConsumerIntegration.spec.js \
+            tests/app/unit/knowledgeSystemAcceptance.spec.js \
+            tests/app/unit/addons/syncPhysicalOwnership.spec.js \
+            tests/app/unit/addons/syncServiceOwnership.spec.js \
+            tests/app/unit/specs/main/elephantnote/navigationIrohSync.spec.js \
+            tests/app/unit/specs/main/elephantnote/syncInvitePackage.spec.js \
+            tests/app/unit/specs/main/elephantnote/syncPlan.spec.js \
+            2>&1 | tee final-integrated-features.txt
+
+      - name: Upload final contract diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-consolidated-feature-validation
+          path: |
+            final-addon-lifecycle.txt
+            final-integrated-features.txt
+          if-no-files-found: error
+          retention-days: 30

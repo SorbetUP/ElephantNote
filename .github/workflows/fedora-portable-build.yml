@@ -56,15 +56,15 @@ jobs:
             Elephant/backend/tauri -> target
             Elephant/crates/muya-wasm -> target
 
+      - name: Install JavaScript dependencies and materialize addons
+        run: pnpm install --frozen-lockfile
+
       - name: Install matching wasm-bindgen CLI
         shell: bash
         run: |
           version="$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version' | head -n 1)"
           test -n "$version"
           cargo install wasm-bindgen-cli --version "$version" --locked
-
-      - name: Install JavaScript dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Build Linux AppImage
         run: pnpm tauri:linux:build

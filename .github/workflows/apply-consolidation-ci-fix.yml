@@ -6,6 +6,9 @@ on:
       - build/consolidation-ci-fix-20260716
     paths:
       - '.github/workflows/apply-consolidation-ci-fix.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/apply-consolidation-ci-fix.yml'
   workflow_dispatch:
 
 permissions:

@@ -35,7 +35,9 @@ jobs:
 
       - name: Extract and validate physical addon sources
         shell: bash
-        run: bash build/scripts/extract-addon-sources.sh
+        run: |
+          set -o pipefail
+          bash build/scripts/extract-addon-sources.sh 2>&1 | tee addon-extraction-full.log
 
       - name: Upload extraction diagnostics
         if: always()
@@ -43,6 +45,7 @@ jobs:
         with:
           name: addon-source-extraction-diagnostics
           path: |
+            addon-extraction-full.log
             addon-catalog-validation.txt
             addon-extraction-tests.txt
             addon-catalog-rust-tests.txt

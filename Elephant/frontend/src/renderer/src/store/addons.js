@@ -33,6 +33,8 @@ const isOfficialManifest = (manifest = {}) => manifest.official === true || mani
 const isOfficialCatalogEntry = (entry = {}) => entry.official === true || entry.source === 'official'
 const isCommunityExternal = (addon = {}) => addon?.manifest?.source === 'external' && !isOfficialManifest(addon.manifest)
 
+const entryArray = (value) => Array.isArray(value) ? value : []
+
 const parentDirectory = (relativePath = '') => {
   const parts = String(relativePath || '').split('/').filter(Boolean)
   return parts.length > 1 ? parts.slice(0, -1).join('/') : ''
@@ -49,15 +51,15 @@ const refreshVaultAfterAddonAction = async (result, logger) => {
   if (!vaultStore.activeVault?.path) return
   const targetDirectory = parentDirectory(relativePath)
   logger?.info?.('[addons] vault-refresh:start', { path: relativePath, targetDirectory })
-  const rootEntries = await elephantnoteClient.directory.list('')
+  const rootEntries = entryArray(await elephantnoteClient.directory.list(''))
   vaultStore.rootEntries = rootEntries
   vaultStore.entries = vaultStore.currentPath
-    ? await elephantnoteClient.directory.list(vaultStore.currentPath)
+    ? entryArray(await elephantnoteClient.directory.list(vaultStore.currentPath))
     : rootEntries
   const targetEntries = targetDirectory === vaultStore.currentPath
     ? vaultStore.entries
     : targetDirectory
-      ? await elephantnoteClient.directory.list(targetDirectory)
+      ? entryArray(await elephantnoteClient.directory.list(targetDirectory))
       : rootEntries
   const createdEntry = targetEntries.find((entry) => entry?.path === relativePath)
   if (createdEntry) vaultStore.openNote(createdEntry)

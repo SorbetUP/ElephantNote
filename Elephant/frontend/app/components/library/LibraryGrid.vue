@@ -76,18 +76,19 @@ const directoryGeneration = ref(0)
 
 const normalizeSlashPath = (value = '') => String(value || '').split(String.fromCharCode(92)).join('/')
 const isMarkdownNotePath = (path = '') => /[.]md$/i.test(String(path || ''))
+const entryArray = (value) => Array.isArray(value) ? value : []
 
 const isCompatibilityRootWikiEntry = (entry) => {
   const pathname = normalizeSlashPath(entry?.path).replace(/\/+$/g, '')
   return store.activeWorkspaceView === 'notes' && store.currentPath === '' && /^wiki$/i.test(pathname)
 }
 
-const filteredEntries = computed(() => store.activeEntries.filter((entry) => !isCompatibilityRootWikiEntry(entry)))
+const filteredEntries = computed(() => entryArray(store.activeEntries).filter((entry) => !isCompatibilityRootWikiEntry(entry)))
 const visibleEntries = computed(() => filteredEntries.value.slice(0, visibleEntryLimit.value))
 
 const resetVisibleWindow = () => {
   visibleEntryLimit.value = RENDER_CHUNK_SIZE
-  directoryMayHaveMore.value = store.entries.length >= DIRECTORY_PAGE_SIZE
+  directoryMayHaveMore.value = entryArray(store.entries).length >= DIRECTORY_PAGE_SIZE
   directoryGeneration.value += 1
 }
 
@@ -97,7 +98,7 @@ watch(
 )
 
 watch(
-  () => store.entries.length,
+  () => entryArray(store.entries).length,
   (length, previousLength) => {
     if (length < previousLength) resetVisibleWindow()
   }
@@ -145,7 +146,7 @@ const openPagedFolder = async(relativePath, view) => {
     }
     log.info(`[${view}] opened paged folder in library grid`, {
       path: relativePath,
-      entries: store.entries.length,
+      entries: entryArray(store.entries).length,
       mayHaveMore: directoryMayHaveMore.value
     })
   } catch (error) {
@@ -173,12 +174,12 @@ const loadMoreVisibleEntries = async() => {
   const generation = directoryGeneration.value
   loadingMoreEntries.value = true
   try {
-    const page = await fetchDirectoryPage(store.currentPath, store.entries.length, generation)
+    const page = await fetchDirectoryPage(store.currentPath, entryArray(store.entries).length, generation)
     if (!page || generation !== directoryGeneration.value) return
     if (page.length) {
-      const seen = new Set(store.entries.map((entry) => entry.path))
+      const seen = new Set(entryArray(store.entries).map((entry) => entry.path))
       const appended = page.filter((entry) => !seen.has(entry.path))
-      store.entries = [...store.entries, ...appended]
+      store.entries = [...entryArray(store.entries), ...appended]
       if (!store.currentPath) store.rootEntries = store.entries
       visibleEntryLimit.value = Math.min(filteredEntries.value.length + appended.length, visibleEntryLimit.value + RENDER_CHUNK_SIZE)
     }

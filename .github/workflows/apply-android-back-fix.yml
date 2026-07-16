@@ -1,6 +1,11 @@
 name: Apply Android back-button navigation fix
 
 on:
+  push:
+    branches:
+      - build/android-back-fix-20260716
+    paths:
+      - '.github/workflows/apply-android-back-fix.yml'
   pull_request:
     paths:
       - '.github/workflows/apply-android-back-fix.yml'
@@ -37,7 +42,7 @@ jobs:
 
           once(
               "import { Menu, Plus, Search, Settings } from '@lucide/vue'\n",
-              "import { Menu, Plus, Search, Settings } from '@lucide/vue'\nimport { onBackButtonPress } from '@tauri-apps/api/app'\nimport { invoke } from '@tauri-apps/api/core'\n",
+              "import { Menu, Plus, Search, Settings } from '@lucide/vue'\nimport { onBackButtonPress } from '@tauri-apps/api/app'\nimport { getCurrentWindow } from '@tauri-apps/api/window'\n",
               'Tauri app imports',
           )
           once(
@@ -51,8 +56,8 @@ jobs:
   if (isMobileShell.value) settleDrawer(false)
 }
 
-const exitMobileApp = () => invoke('plugin:app|exit').catch((error) => {
-  console.warn('[mobile] unable to exit after Android back press', error)
+const closeMobileWindow = () => getCurrentWindow().close().catch((error) => {
+  console.warn('[mobile] unable to close after Android back press', error)
 })
 
 const handleMobileBackButton = () => {
@@ -81,7 +86,7 @@ const handleMobileBackButton = () => {
     store.setWorkspaceView('notes')
     return
   }
-  exitMobileApp()
+  closeMobileWindow()
 }
 """,
               'mobile back handler',
@@ -113,13 +118,6 @@ const handleMobileBackButton = () => {
           )
           app.write_text(text)
 
-          capability = Path('Elephant/backend/tauri/capabilities/default.json')
-          cap = capability.read_text()
-          anchor = '    "core:default",\n'
-          if cap.count(anchor) != 1:
-              raise SystemExit('capability anchor mismatch')
-          capability.write_text(cap.replace(anchor, anchor + '    "core:app:allow-exit",\n', 1))
-
           test = Path('tests/app/unit/specs/main/elephantnote/androidBackNavigation.spec.js')
           test.write_text("""import fs from 'node:fs'
 import path from 'node:path'
@@ -127,23 +125,19 @@ import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 const shell = fs.readFileSync(path.join(root, 'Elephant/frontend/app/components/shell/AppShell.vue'), 'utf8')
-const capability = JSON.parse(fs.readFileSync(path.join(root, 'Elephant/backend/tauri/capabilities/default.json'), 'utf8'))
 
 describe('Android native back navigation', () => {
-  it('routes Android back presses through the mobile shell before exiting', () => {
+  it('routes Android back presses through the mobile shell before closing the window', () => {
     expect(shell).toContain("import { onBackButtonPress } from '@tauri-apps/api/app'")
+    expect(shell).toContain("import { getCurrentWindow } from '@tauri-apps/api/window'")
     expect(shell).toContain('onBackButtonPress(handleMobileBackButton)')
     expect(shell).toContain('if (searchStore.isOpen)')
     expect(shell).toContain('if (isSettingsOpen.value)')
     expect(shell).toContain('if (drawerProgress.value > 0 || sidebarVisible.value)')
     expect(shell).toContain('if (store.openedNotePath)')
     expect(shell).toContain('store.closeNote()')
-    expect(shell).toContain("invoke('plugin:app|exit')")
+    expect(shell).toContain('getCurrentWindow().close()')
     expect(shell).toContain('mobileBackListener?.unregister?.()')
-  })
-
-  it('grants only the built-in app exit command needed at the root workspace', () => {
-    expect(capability.permissions).toContain('core:app:allow-exit')
   })
 })
 """)
@@ -175,7 +169,6 @@ describe('Android native back navigation', () => {
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add \
             Elephant/frontend/app/components/shell/AppShell.vue \
-            Elephant/backend/tauri/capabilities/default.json \
             tests/app/unit/specs/main/elephantnote/androidBackNavigation.spec.js
           git commit -m 'fix(android): handle native back navigation'
           git push origin HEAD:fix/fedora-sidebar-entry-invariants-20260716

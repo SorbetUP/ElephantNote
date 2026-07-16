@@ -70,8 +70,17 @@ jobs:
           test -n "$version"
           cargo install wasm-bindgen-cli --version "$version" --locked
 
+      - name: Prepare bundled desktop runtimes when required
+        shell: bash
+        run: |
+          node -e "const p=require('./package.json'); process.exit(p.scripts?.['tauri:llama:install'] ? 0 : 1)" && pnpm tauri:llama:install || true
+          node -e "const p=require('./package.json'); process.exit(p.scripts?.['tauri:codex:install'] ? 0 : 1)" && pnpm tauri:codex:install || true
+
       - name: Build Linux AppImage
-        run: pnpm tauri:linux:build
+        shell: bash
+        run: |
+          cd Elephant/backend/tauri
+          pnpm dlx @tauri-apps/cli@2 build --config tauri.linux.conf.json
 
       - name: Prepare portable downloads
         shell: bash

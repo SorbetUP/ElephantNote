@@ -38,7 +38,16 @@ jobs:
         run: |
           set -o pipefail
           sed -i 's/pnpm install --frozen-lockfile --ignore-scripts/pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts/' build/scripts/extract-addon-sources.sh
-          sed -i 's#node build/scripts/validate-addon-catalog.mjs 2>&1#node build/scripts/validate-addon-catalog.mjs addons 2>&1#' build/scripts/extract-addon-sources.sh
+          python <<'PY'
+          from pathlib import Path
+          path = Path('build/scripts/extract-addon-sources.sh')
+          source = path.read_text()
+          source = source.replace(
+              'node build/scripts/validate-addon-catalog.mjs 2>&1 | tee addon-catalog-validation.txt',
+              'node build/scripts/validate-addon-catalog.mjs addons 2>&1 | tee addon-catalog-validation.txt'
+          )
+          path.write_text(source)
+          PY
           bash build/scripts/extract-addon-sources.sh 2>&1 | tee addon-extraction-full.log
 
       - name: Upload extraction diagnostics

@@ -38,6 +38,7 @@ jobs:
         run: |
           set -o pipefail
           sed -i 's/pnpm install --frozen-lockfile --ignore-scripts/pnpm install --frozen-lockfile --ignore-scripts || pnpm install --no-frozen-lockfile --ignore-scripts/' build/scripts/extract-addon-sources.sh
+          sed -i 's#node build/scripts/validate-addon-catalog.mjs 2>&1#node build/scripts/validate-addon-catalog.mjs addons 2>&1#' build/scripts/extract-addon-sources.sh
           bash build/scripts/extract-addon-sources.sh 2>&1 | tee addon-extraction-full.log
 
       - name: Upload extraction diagnostics

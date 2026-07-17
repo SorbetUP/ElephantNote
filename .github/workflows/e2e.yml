@@ -1,6 +1,10 @@
 name: E2E Test
 
 on:
+  push:
+    branches:
+      - develop
+      - 'agent/**'
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -13,9 +17,14 @@ permissions:
 
 jobs:
   e2e:
-    name: Linux production app usage simulations
+    name: Linux production app and official addon usage simulations
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
+    env:
+      CARGO_TERM_COLOR: always
+      FORCE_COLOR: '1'
+      ELEPHANT_E2E_EXHAUSTIVE_EVIDENCE: '1'
+      ELEPHANT_E2E_REQUIRE_NATIVE_PACKAGES: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -24,36 +33,39 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Install System Dependencies
+        shell: bash
         run: |
+          set -euxo pipefail
           sudo apt-get update
           sudo apt-get install -y \
             libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
             xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
-            libdrm2 libgtk-3-0 libgbm1 libasound2t64
+            libdrm2 libgtk-3-0 libgbm1 libasound2t64 unzip
 
       - uses: ./.github/actions/setup
 
-      - name: Validate Linux usage scenario catalog
+      - name: Validate complete feature and addon scenario matrix
         shell: bash
         run: |
-          set -o pipefail
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/specs/main/elephantnote/linuxUsageRegressionSuite.spec.js \
-            2>&1 | tee linux-usage-contract.txt
+          set -euxo pipefail
+          node build/scripts/run-observable.mjs --label feature-matrix -- \
+            pnpm test:feature-matrix:raw
 
       - name: Install exact wasm-bindgen CLI
         shell: bash
         run: |
+          set -euxo pipefail
           VERSION=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
             | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
           if ! wasm-bindgen --version 2>/dev/null | grep -q "${VERSION}$"; then
             cargo install wasm-bindgen-cli --version "$VERSION" --locked
           fi
+          wasm-bindgen --version
 
       - name: Install Electron test binary
         shell: bash
         run: |
-          set -o pipefail
+          set -euxo pipefail
           electron_package="$(NODE_PATH=Elephant/node_modules node - <<'NODE'
           const path = require('path')
           const roots = [process.cwd(), path.join(process.cwd(), 'Elephant')]
@@ -72,39 +84,84 @@ jobs:
           echo "Electron package: $electron_root" | tee electron-install.txt
           node "$electron_root/install.js" 2>&1 | tee -a electron-install.txt
           test -s "$electron_root/path.txt"
+          cat "$electron_root/path.txt"
 
-      - name: Run postinstall
-        run: node build/scripts/postinstall.js
+      - name: Run postinstall with complete output
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          npm_config_user_agent: 'pnpm'
+          npm_config_user_agent: pnpm
           USE_ELECTRON_CLANG: '0'
+        run: |
+          set -euxo pipefail
+          node build/scripts/run-observable.mjs --label postinstall -- \
+            node build/scripts/postinstall.js
+
+      - name: Build every Linux native official addon package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          : > official-addon-native-build.txt
+          built=0
+          for source in addons/official/*
+          do
+            [ -f "$source/addon.build.json" ] || continue
+            supported="$(node -e 'const fs=require("fs"); const file=process.argv[1]; const data=JSON.parse(fs.readFileSync(file,"utf8")); process.stdout.write(String((data.supportedPlatforms||[]).includes("linux-x86_64")))' "$source/addon.build.json")"
+            [ "$supported" = true ] || continue
+            slug="$(basename "$source")"
+            node build/scripts/run-observable.mjs --label "official-addon-native-$slug" -- \
+              node build/scripts/build-physical-addon.mjs "$source" \
+              2>&1 | tee -a official-addon-native-build.txt
+            built=$((built + 1))
+          done
+          echo "Built $built Linux native official addon package(s)." | tee -a official-addon-native-build.txt
+          test "$built" -gt 0
+          find build/out/addons/releases -type f -maxdepth 3 -print -exec ls -lh {} \; | tee -a official-addon-native-build.txt
 
       - name: Build Rust renderer for Linux usage simulations
         shell: bash
         run: |
-          set -o pipefail
-          pnpm build 2>&1 | tee e2e-build.txt
+          set -euxo pipefail
+          node build/scripts/run-observable.mjs --label e2e-renderer-build -- \
+            pnpm build \
+            2>&1 | tee e2e-build.txt
           test -f build/out/renderer/index.html
+          ls -lh build/out/renderer/index.html
 
-      - name: Run Linux application usage simulations
+      - name: Run every core and official addon application scenario
+        shell: bash
         run: |
-          set -o pipefail
+          set -euxo pipefail
           xvfb-run --auto-servernum pnpm test:e2e 2>&1 | tee e2e-tests.txt
 
-      - name: Upload Linux usage diagnostics
+      - name: Collect explicit official addon evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p official-addon-evidence
+          while IFS= read -r evidence
+          do
+            cp "$evidence" "official-addon-evidence/$(basename "$evidence")"
+          done < <(find test-results -type f -name '*native-package-evidence.json' -print 2>/dev/null || true)
+          find official-addon-evidence -type f -maxdepth 1 -print -exec cat {} \; || true
+
+      - name: Upload complete Linux usage diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: linux-app-usage-diagnostics
+          name: linux-app-and-official-addon-usage-diagnostics
           path: |
-            linux-usage-contract.txt
             electron-install.txt
+            official-addon-native-build.txt
             e2e-build.txt
             e2e-tests.txt
+            test-results/observability/**
             test-results/e2e-results.json
             test-results/e2e-junit.xml
             test-results/**
             playwright-report/**
+            official-addon-evidence/**
+            build/out/addons/releases/**
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 30

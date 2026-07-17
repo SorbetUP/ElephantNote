@@ -224,7 +224,8 @@ const probeAddonFunctionality = (page, addonId, resourcesBefore = []) => page.ev
 }, { id: addonId, resourcesBefore })
 
 for (const addon of catalog.addons) {
-  test(`[official-addon:${addon.id}] install, enable, probe, reload and clean up`, async ({}, testInfo) => {
+  test(`[official-addon:${addon.id}] install, enable, probe, reload and clean up`, async ({ page: _page }, testInfo) => {
+    void _page
     if (serviceAddonIds.has(addon.id)) await assertNativePackageEvidence(addon, testInfo)
     const context = await launchOfficialAddonApp(testInfo)
     try {
@@ -287,7 +288,8 @@ for (const addon of catalog.addons) {
   })
 }
 
-test(`[official-addon-platform] ${scenarioMarkers.visibleFailure}`, async ({}, testInfo) => {
+test(`[official-addon-platform] ${scenarioMarkers.visibleFailure}`, async ({ page: _page }, testInfo) => {
+  void _page
   const context = await launchOfficialAddonApp(testInfo)
   try {
     const result = await context.page.evaluate(async () => {

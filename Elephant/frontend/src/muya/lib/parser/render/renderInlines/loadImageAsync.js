@@ -1,10 +1,10 @@
 import { getUniqueId } from '../../../utils'
 import { insertAfter, operateClassName } from '../../../utils/domManipulate'
 import { CLASS_OR_ID } from '../../../config'
+import { isStandardMarkdownImagePath } from 'common/elephantnote/imageAssetContract'
 
 const isFileUrl = (value = '') => /^file:\/\//i.test(String(value || '').trim())
 const isAbsoluteLocalPath = (value = '') => /^\//.test(value) || /^[a-zA-Z]:[\\/]/.test(value)
-const EXCALIDRAW_ASSET_RE = /(?:^|\/)\.assets\/excalidraw-[^/?#]+\.png(?:[?#].*)?$/i
 const MAX_DIAGNOSTIC_LOGS = 1000
 
 const removeQueryAndHash = (value = '') => String(value || '').split(/[?#]/)[0]
@@ -28,7 +28,7 @@ const resolveLocalFilePath = (value = '') => {
 }
 
 const normalizeSlashes = (value = '') => String(value || '').replace(/\\/g, '/')
-const isExcalidrawPath = (value = '') => EXCALIDRAW_ASSET_RE.test(normalizeSlashes(value))
+const isManagedImagePath = (value = '') => isStandardMarkdownImagePath(normalizeSlashes(value))
 const errorDetails = (error) => ({
   name: error?.name || 'Error',
   message: error?.message || String(error || ''),
@@ -37,7 +37,7 @@ const errorDetails = (error) => ({
 
 const pushImageLog = (level, message, details = {}, force = false) => {
   const pathname = details?.localPath || details?.pathname || details?.src || ''
-  if (!force && !isExcalidrawPath(pathname)) return null
+  if (!force && !isManagedImagePath(pathname)) return null
   const target = globalThis.window || globalThis
   const entry = {
     time: new Date().toISOString(),

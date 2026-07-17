@@ -186,15 +186,59 @@ const uninstallWithDependents = (page, addonId) => page.evaluate(async (id) => {
   return removed
 }, addonId)
 
+const installOfficialAddon = (page, addonId) => page.evaluate(async (id) => {
+  const manager = window.__ELEPHANT_ADDONS__
+  const record = await manager.external.installFromPath(`official:${id}`)
+  return { record, snapshot: manager.get(id) }
+}, addonId)
+
+const probeAddonFunctionality = (page, addonId, resourcesBefore = []) => page.evaluate(async ({ id, resourcesBefore }) => {
+  const manager = window.__ELEPHANT_ADDONS__
+  const contributionMap = manager.getContributionMap?.() || {}
+  const probes = []
+  for (const [area, entries] of Object.entries(contributionMap)) {
+    for (const entry of entries || []) {
+      if (entry?.addonId !== id) continue
+      const contribution = entry.contribution || {}
+      const probe = {
+        area,
+        id: contribution.id || '',
+        title: contribution.title || contribution.label || '',
+        executable: typeof contribution.run === 'function',
+        stateful: typeof contribution.getState === 'function'
+      }
+      if (probe.stateful) {
+        try {
+          const value = await contribution.getState({ e2e: true, probe: true })
+          probe.state = value === undefined ? null : value
+        } catch (error) {
+          probe.stateError = error?.message || String(error)
+        }
+      }
+      probes.push(probe)
+    }
+  }
+  const resourcesAfter = manager.host?.list?.() || []
+  const newResources = resourcesAfter.filter((name) => !resourcesBefore.includes(name))
+  return { probes, resourcesBefore, resourcesAfter, newResources }
+}, { id: addonId, resourcesBefore })
+
 for (const addon of catalog.addons) {
-  test(`[official-addon:${addon.id}] install, enable, reload and clean up`, async ({}, testInfo) => {
+  test(`[official-addon:${addon.id}] install, enable, probe, reload and clean up`, async ({}, testInfo) => {
     if (serviceAddonIds.has(addon.id)) await assertNativePackageEvidence(addon, testInfo)
     const context = await launchOfficialAddonApp(testInfo)
     try {
-      const initial = await stateFor(context.page, addon.id)
-      expect(initial.snapshot, `${addon.id} was not registered from the physical catalogue`).not.toBeNull()
-      expect(initial.official, `${addon.id} lost its official trust marker`).toBe(true)
-      expect(initial.trust?.approved, `${addon.id} incorrectly requires community full-access approval`).toBe(true)
+      const preinstalled = await stateFor(context.page, addon.id)
+      expect(preinstalled.snapshot, `${addon.id} was not materialized from the physical catalogue`).not.toBeNull()
+      const removedForInstall = await uninstallWithDependents(context.page, addon.id)
+      expect((await stateFor(context.page, addon.id)).snapshot).toBeNull()
+
+      const installation = await installOfficialAddon(context.page, addon.id)
+      expect(installation.record?.manifest?.id, `${scenarioMarkers.install}: wrong installed package`).toBe(addon.id)
+      expect(installation.snapshot?.enabled).toBe(false)
+      const installed = await stateFor(context.page, addon.id)
+      expect(installed.official, `${addon.id} lost its official trust marker`).toBe(true)
+      expect(installed.trust?.approved, `${addon.id} incorrectly requires community full-access approval`).toBe(true)
 
       const enableOrder = await enableWithDependencies(context.page, addon.id)
       const enabled = await stateFor(context.page, addon.id)
@@ -204,7 +248,21 @@ for (const addon of catalog.addons) {
       if (enabled.service) {
         expect(enabled.service.error, `${addon.id} service status failed: ${enabled.service.error || ''}`).toBeUndefined()
       }
-      await context.checkpointState(`${addon.id}-enabled`, { initial, enableOrder, enabled })
+
+      const functionalProbe = await probeAddonFunctionality(context.page, addon.id, installed.resources)
+      expect(functionalProbe.probes.length + functionalProbe.newResources.length,
+        `${addon.id} enabled without any observable contribution or resource`).toBeGreaterThan(0)
+      expect(functionalProbe.probes.filter((probe) => probe.stateError),
+        `${addon.id} view/state probes failed`).toEqual([])
+      await context.checkpointState(`${addon.id}-installed-enabled-probed`, {
+        preinstalled,
+        removedForInstall,
+        installation,
+        installed,
+        enableOrder,
+        enabled,
+        functionalProbe
+      })
 
       await context.page.reload()
       await context.page.waitForSelector('.en-library-grid', { state: 'visible', timeout: 30000 })

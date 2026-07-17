@@ -228,7 +228,7 @@ const runRailItem = async (item) => {
   const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
   const previous = lastRailAction.value
   const ageMs = now - previous.at
-  if (id && previous.id === id && ageMs >= 0 && ageMs < DUPLICATE_ACTION_WINDOW_MS) {
+  if (id && id !== 'sidebar-toggle' && previous.id === id && ageMs >= 0 && ageMs < DUPLICATE_ACTION_WINDOW_MS) {
     pushIconRailLog('action:ignored-duplicate', {
       id,
       ageMs: Math.round(ageMs),

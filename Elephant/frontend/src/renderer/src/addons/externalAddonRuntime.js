@@ -19,6 +19,7 @@ const invoke = (command, payload = {}, target = globalThis) => {
 
 export const externalAddonApi = Object.freeze({
   list: () => invoke('tauri_addons_list'),
+  officialList: () => invoke('tauri_official_addons_catalog_list'),
   install: (packagePath) => invoke('tauri_addons_install', { packagePath }),
   uninstall: (addonId) => invoke('tauri_addons_uninstall', { addonId }),
   setEnabled: (addonId, enabled) => invoke('tauri_addons_set_enabled', { addonId, enabled }),
@@ -47,6 +48,28 @@ const isOfficialRecord = (record = {}) => (
   record.manifest?.source === 'official' ||
   record.manifest?.official === true
 )
+
+export const reconcileOfficialAddonRecords = (records = [], catalogue = []) => {
+  const officialIds = new Set(
+    catalogue
+      .filter((item) => item?.official === true && safeString(item?.id))
+      .map((item) => safeString(item.id))
+  )
+  return records.map((record) => {
+    const id = safeString(record?.manifest?.id)
+    if (!officialIds.has(id)) return record
+    return {
+      ...record,
+      source: 'official',
+      official: true,
+      manifest: {
+        ...record.manifest,
+        source: 'official',
+        official: true
+      }
+    }
+  })
+}
 
 const runtimeManifest = (record = {}) => ({
   ...record.manifest,
@@ -344,7 +367,15 @@ export class ExternalAddonController {
   }
 
   async load() {
-    const records = await externalAddonApi.list()
+    const installedRecords = await externalAddonApi.list()
+    let records = installedRecords
+    try {
+      records = reconcileOfficialAddonRecords(installedRecords, await externalAddonApi.officialList())
+    } catch (error) {
+      this.logger?.warn?.('official addon provenance reconciliation failed', {
+        error: error?.message || String(error)
+      })
+    }
     const communityEnabled = await externalAddonApi.getCommunityEnabled()
     const safeMode = await getTrustedSafeMode()
     for (const record of records) this.register(record)

@@ -118,6 +118,10 @@ jobs:
             Elephant/node_modules/.bin/vitest run \
             tests/app/unit/addons/addonProfiles.spec.js \
             tests/app/unit/addons/coreFeatures.spec.js \
+            tests/app/unit/addons/hostAddonCommandScope.spec.js \
+            tests/app/unit/addons/isolatedAddonWorkerSource.spec.js \
+            tests/app/unit/addons/isolatedAddonReplacement.spec.js \
+            tests/app/unit/addons/runtimeSecurityContracts.spec.js \
             tests/app/unit/addons/builtinAddons.spec.js \
             tests/app/unit/addons/aiTabsAndRailBorder.spec.js \
             tests/app/unit/addons/physicalAddonIsolation.spec.js \

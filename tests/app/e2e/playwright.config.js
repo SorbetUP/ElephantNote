@@ -2,6 +2,7 @@ const path = require('node:path')
 
 const resultsRoot = path.resolve(__dirname, '../../../test-results')
 const reportRoot = path.resolve(__dirname, '../../../playwright-report')
+const exhaustiveEvidence = process.env.ELEPHANT_E2E_EXHAUSTIVE_EVIDENCE !== '0'
 
 const config = {
   workers: 1,
@@ -21,9 +22,9 @@ const config = {
     viewport: { width: 1280, height: 720 },
     actionTimeout: 15000,
     navigationTimeout: 30000,
-    screenshot: 'only-on-failure',
-    trace: 'retain-on-failure',
-    video: 'retain-on-failure'
+    screenshot: exhaustiveEvidence ? 'on' : 'only-on-failure',
+    trace: exhaustiveEvidence ? 'on' : 'retain-on-failure',
+    video: exhaustiveEvidence ? 'on' : 'retain-on-failure'
   }
 }
 module.exports = config

@@ -64,6 +64,13 @@ const isOfficialRecord = (record = {}) => (
   record.manifest?.official === true
 )
 
+const dependencyIds = (manifest = {}) => {
+  const ids = new Set(Object.keys(manifest.requires || {}))
+  if (manifest.parentAddonId) ids.add(manifest.parentAddonId)
+  ids.delete(manifest.id)
+  return [...ids]
+}
+
 export const reconcileOfficialAddonRecords = (records = [], catalogue = []) => {
   const officialIds = new Set(
     catalogue

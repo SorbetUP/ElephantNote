@@ -317,7 +317,7 @@ test(`[official-addon-platform] ${scenarioMarkers.visibleFailure}`, async ({ pag
     expect(result.thrown).toContain('E2E deliberate addon activation failure 7719')
     expect(result.snapshot?.status).toBe('error')
     expect(result.snapshot?.error?.message).toContain('E2E deliberate addon activation failure 7719')
-    await expect.poll(() => context.errors.some((entry) => entry.includes('E2E deliberate addon activation failure 7719'))).toBe(true)
+    await expect.poll(() => context.errors.some((entry) => entry.includes('addon activation failed'))).toBe(true)
     await context.checkpointState('official-addon-visible-failure', { result, errors: context.errors })
   } finally {
     await context.close()

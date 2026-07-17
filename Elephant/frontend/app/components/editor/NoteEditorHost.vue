@@ -333,6 +333,10 @@ const refreshSavedEntries = async (notePath, result) => {
 }
 
 const pathExists = (pathname) => !!pathname && !!window.fileUtils?.pathExistsSync?.(pathname)
+const isUntitledPlaceholder = (notePath = '', markdown = '') => {
+  const title = String(notePath).split('/').pop()?.replace(/\.md$/i, '') || ''
+  return /^Untitled(?: \d+)?$/i.test(title) && String(markdown).trim() === `# ${title}`
+}
 const normalizeSlashPath = (pathname = '') => String(pathname || '').replace(/\\/g, '/')
 const isExternalAssetReference = (value = '') =>
   /^(?:https?:|data:|blob:|#)/i.test(String(value || '').trim())
@@ -486,6 +490,14 @@ const persistNoteMarkdown = async (
   reason = 'unknown'
 ) => {
   if (!store.activeVault?.path || !notePath || typeof nextMarkdown !== 'string') return false
+  if (isUntitledPlaceholder(notePath, nextMarkdown)) {
+    pushEditorLog('info', '[elephantnote:save] skipped empty untitled placeholder', {
+      notePath,
+      reason
+    })
+    markFileSavedIfCurrent(file, notePath, nextMarkdown)
+    return true
+  }
   if (noteSaveInFlight) {
     pendingSaveAfterFlight = { notePath, nextMarkdown, file, reason }
     pushEditorLog('info', '[elephantnote:save] write queued while another save is in flight', {

@@ -186,6 +186,20 @@ export class ElephantRustInputController {
       event.preventDefault()
       return
     }
+    // WebKit can omit beforeinput for Enter in a contenteditable host. Own the
+    // mutation here so Return always reaches the Rust document engine.
+    if (event.key === 'Enter' && !event.isComposing) {
+      const selection = this.readSelection()
+      if (!selection) return
+      event.preventDefault()
+      this.schedule(async () => {
+        const nextSelection = this._inputSelection || selection
+        await this.bridge.setSelection(nextSelection)
+        await this.bridge.dispatch(editorCommands.insertParagraph())
+        this._inputSelection = this.bridge.selection || nextSelection
+      })
+      return
+    }
     if (event.key !== 'Tab') return
 
     const selection = this.readSelection()

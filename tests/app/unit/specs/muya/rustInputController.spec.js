@@ -91,6 +91,15 @@ describe('MuyaRustInputController', () => {
     )
   })
 
+  it('routes Return through Rust when WebKit does not emit beforeinput', async () => {
+    const event = browserEvent('keydown', { key: 'Enter', isComposing: false })
+    container.dispatchEvent(event)
+    await controller.idle()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(bridge.dispatch).toHaveBeenCalledWith({ type: 'insert_paragraph' })
+  })
+
   it('routes plain clipboard Markdown through one paste command', async () => {
     const event = browserEvent('paste', {
       clipboardData: clipboardData('one\n\ntwo')

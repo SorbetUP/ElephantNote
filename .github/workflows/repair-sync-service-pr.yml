@@ -1,0 +1,60 @@
+name: Repair Sync service on PR
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'build/scripts/patch-sync-service-install.py'
+      - '.github/workflows/apply-sync-service-repair.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'agent/fix-sync-service-install'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.91.0'
+          components: rustfmt
+
+      - name: Detect pending repair
+        id: pending
+        shell: bash
+        run: |
+          if [[ -f build/scripts/patch-sync-service-install.py ]]; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply, format and test the repair
+        if: steps.pending.outputs.present == 'true'
+        run: |
+          python3 build/scripts/patch-sync-service-install.py
+          cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
+          git diff --check
+          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml official_addon_catalog --lib
+
+      - name: Commit repaired runtime to the PR branch
+        if: steps.pending.outputs.present == 'true'
+        run: |
+          rm build/scripts/patch-sync-service-install.py
+          rm -f .github/workflows/apply-sync-service-repair.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add Elephant/backend/tauri/src/official_addon_catalog.rs
+          git add Elephant/backend/tauri/src/addon_services.rs
+          git add -u build/scripts/patch-sync-service-install.py .github/workflows/apply-sync-service-repair.yml
+          git commit -m 'fix(sync): require verified service packages'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}

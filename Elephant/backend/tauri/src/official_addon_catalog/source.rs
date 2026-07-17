@@ -113,12 +113,31 @@ fn current_sidecar_path(manifest: &Value) -> Option<String> {
     .map(str::to_string)
 }
 
+fn requires_desktop_service(manifest: &Value) -> bool {
+  !matches!(std::env::consts::OS, "android" | "ios")
+    && manifest.pointer("/permissions/native").and_then(Value::as_bool) == Some(true)
+    && manifest.pointer("/native/runner").and_then(Value::as_str) == Some("service")
+}
+
+fn required_sidecar_path(item: &CatalogAddon, manifest: &Value) -> R<Option<String>> {
+  if !requires_desktop_service(manifest) {
+    return Ok(None);
+  }
+  current_sidecar_path(manifest).map(Some).ok_or_else(|| {
+    format!(
+      "Official addon {} has no native service executable for {}",
+      item.id,
+      platform_key()
+    )
+  })
+}
+
 fn require_declared_sidecar(
   item: &CatalogAddon,
   manifest: &Value,
   files: &BTreeMap<String, Vec<u8>>,
 ) -> R<()> {
-  let Some(sidecar) = current_sidecar_path(manifest) else {
+  let Some(sidecar) = required_sidecar_path(item, manifest)? else {
     return Ok(());
   };
   if !files.contains_key(&sidecar) {
@@ -130,4 +149,3 @@ fn require_declared_sidecar(
   }
   Ok(())
 }
-

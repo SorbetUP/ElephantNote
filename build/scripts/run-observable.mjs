@@ -37,10 +37,19 @@ let sequence = 0
 let closed = false
 
 const secretNamePattern = /(token|secret|password|passwd|passphrase|private.?key|api.?key|cookie|authorization|credential|session|dsn)/i
+const secretValues = Object.entries(process.env)
+  .filter(([name, value]) => secretNamePattern.test(name) && String(value || '').length >= 4)
+  .map(([, value]) => String(value))
+  .sort((left, right) => right.length - left.length)
+const redactText = (value) => {
+  let output = String(value ?? '')
+  for (const secret of secretValues) output = output.replaceAll(secret, '[REDACTED_SECRET_VALUE]')
+  return output
+}
 const visibleEnvironment = Object.fromEntries(
   Object.entries(process.env)
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, value]) => [name, secretNamePattern.test(name) ? '[REDACTED_SECRET_VALUE]' : String(value ?? '')])
+    .map(([name, value]) => [name, secretNamePattern.test(name) ? '[REDACTED_SECRET_VALUE]' : redactText(value)])
 )
 
 const writeEvent = (type, detail = {}) => {
@@ -56,13 +65,16 @@ const writeEvent = (type, detail = {}) => {
   return event
 }
 
-const writeRaw = (stream, chunk) => {
-  const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
+const writeOutput = (stream, chunk) => {
+  const text = redactText(Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk)
+  const buffer = Buffer.from(text)
+  if (stream === 'stdout') process.stdout.write(buffer)
+  else process.stderr.write(buffer)
   rawLog.write(buffer)
   writeEvent('output', {
     stream,
     bytes: buffer.byteLength,
-    text: buffer.toString('utf8')
+    text
   })
 }
 
@@ -78,6 +90,7 @@ const startMetadata = {
   architecture: process.arch,
   node: process.version,
   environment: visibleEnvironment,
+  redactedCredentialValueCount: secretValues.length,
   rawLogPath,
   eventLogPath
 }
@@ -102,14 +115,8 @@ const child = spawn(command, args, {
 })
 
 writeEvent('child-spawned', { childPid: child.pid })
-child.stdout.on('data', (chunk) => {
-  process.stdout.write(chunk)
-  writeRaw('stdout', chunk)
-})
-child.stderr.on('data', (chunk) => {
-  process.stderr.write(chunk)
-  writeRaw('stderr', chunk)
-})
+child.stdout.on('data', (chunk) => writeOutput('stdout', chunk))
+child.stderr.on('data', (chunk) => writeOutput('stderr', chunk))
 
 const forwardedSignals = ['SIGINT', 'SIGTERM', 'SIGHUP']
 for (const signal of forwardedSignals) {
@@ -130,8 +137,8 @@ const closeLogs = (finalEvent) => {
 child.on('error', (error) => {
   const detail = {
     name: error?.name || 'Error',
-    message: error?.message || String(error),
-    stack: error?.stack || ''
+    message: redactText(error?.message || String(error)),
+    stack: redactText(error?.stack || '')
   }
   console.error(`[elephant-observe] SPAWN ERROR ${JSON.stringify(detail)}`)
   closeLogs({ type: 'run-spawn-error', detail })

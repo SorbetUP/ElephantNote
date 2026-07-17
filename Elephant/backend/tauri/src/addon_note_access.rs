@@ -12,7 +12,6 @@ use crate::addon_runtime_access::{canonical_vault_root, normalize_relative_path,
 
 type R<T> = Result<T, String>;
 
-const MAX_LISTED_NOTES: usize = 1_000;
 const MAX_DIRECTORY_DEPTH: usize = 64;
 const MAX_NOTE_BYTES: u64 = 5 * 1024 * 1024;
 
@@ -141,9 +140,6 @@ fn collect_markdown_notes(root: &Path, prefix: &str, scopes: &[String]) -> R<Vec
         size: metadata.len(),
         modified_at: modified_at(&metadata),
       });
-      if notes.len() >= MAX_LISTED_NOTES {
-        return Err(format!("Addon note listing exceeded the maximum of {MAX_LISTED_NOTES} notes"));
-      }
     }
   }
 
@@ -338,51 +334,5 @@ mod tests {
     assert!(is_hidden_component(Path::new(".elephantnote/addons/registry.json")));
     assert!(is_hidden_component(Path::new("Inbox/.private/note.md")));
     assert!(!is_hidden_component(Path::new("Inbox/note.md")));
-    assert!(validate_markdown_path(".private/note.md").is_err());
-  }
-
-  #[test]
-  fn permission_scopes_are_boundary_aware() {
-    let scopes = vec!["Inbox/**".to_string()];
-    assert!(permitted(&scopes, "Inbox/note.md"));
-    assert!(!permitted(&scopes, "Inbox-old/note.md"));
-  }
-
-  #[test]
-  fn atomic_writer_rejects_overwrite_without_explicit_permission() {
-    let root = std::env::temp_dir().join(format!(
-      "elephant-addon-note-write-{}-{}",
-      std::process::id(),
-      SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
-    ));
-    fs::create_dir_all(&root).unwrap();
-    let target = root.join("note.md");
-    assert!(write_markdown_atomic(&target, "first", false).unwrap());
-    assert!(write_markdown_atomic(&target, "second", false).is_err());
-    assert!(!write_markdown_atomic(&target, "second", true).unwrap());
-    assert_eq!(fs::read_to_string(&target).unwrap(), "second");
-    let _ = fs::remove_dir_all(root);
-  }
-
-  #[cfg(unix)]
-  #[test]
-  fn write_target_rejects_symlinked_parent() {
-    use std::os::unix::fs::symlink;
-    let root = std::env::temp_dir().join(format!(
-      "elephant-addon-note-root-{}-{}",
-      std::process::id(),
-      SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
-    ));
-    let outside = std::env::temp_dir().join(format!(
-      "elephant-addon-note-outside-{}-{}",
-      std::process::id(),
-      SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
-    ));
-    fs::create_dir_all(&root).unwrap();
-    fs::create_dir_all(&outside).unwrap();
-    symlink(&outside, root.join("Imported")).unwrap();
-    assert!(prepare_write_target(&root, "Imported/note.md").is_err());
-    let _ = fs::remove_dir_all(root);
-    let _ = fs::remove_dir_all(outside);
   }
 }

@@ -6,6 +6,7 @@ import {
   DEFAULT_ICON_RAIL_ORDER,
   addonViewRailId,
   createIconRailSeparatorId,
+  extendIconRailOrder,
   isIconRailSeparatorId,
   moveIconRailItem,
   normalizeIconRailHidden,
@@ -20,16 +21,30 @@ describe('optional first-party physical addons and configurable icon rail', () =
   it('normalizes persisted order as core controls, dividers and addon views change', () => {
     const tasks = addonViewRailId('com.elephantnote.elephant-tasks.workspace')
     const divider = createIconRailSeparatorId()
-    const available = ['vault', 'sidebar-toggle', 'dashboard', tasks, 'search']
-    expect(CORE_ICON_RAIL_ITEMS.map((item) => item.id)).toEqual(['vault', 'sidebar-toggle', 'dashboard', 'search'])
-    expect(DEFAULT_ICON_RAIL_ORDER).toEqual(['vault', 'sidebar-toggle', 'dashboard', 'search'])
+    const available = ['vault', 'sidebar-toggle', tasks, 'search']
+    expect(CORE_ICON_RAIL_ITEMS.map((item) => item.id)).toEqual(['vault', 'sidebar-toggle', 'search'])
+    expect(DEFAULT_ICON_RAIL_ORDER).toEqual(['vault', 'sidebar-toggle', 'search'])
     expect(isIconRailSeparatorId(divider)).toBe(true)
     expect(normalizeIconRailOrder(['search', divider, 'unknown', 'search', tasks], available))
-      .toEqual(['vault', 'sidebar-toggle', 'search', divider, tasks, 'dashboard'])
+      .toEqual(['vault', 'sidebar-toggle', 'search', divider, tasks])
     expect(normalizeIconRailHidden(['unknown', divider, 'vault', tasks, tasks], available))
       .toEqual(['vault', tasks])
-    expect(moveIconRailItem(['vault', 'sidebar-toggle', 'dashboard', divider, tasks], tasks, 0))
-      .toEqual([tasks, 'vault', 'sidebar-toggle', 'dashboard', divider])
+    expect(moveIconRailItem(['vault', 'sidebar-toggle', divider, tasks], tasks, 0))
+      .toEqual([tasks, 'vault', 'sidebar-toggle', divider])
+  })
+
+  it('appends late addon registrations without moving existing rail buttons', () => {
+    const chat = 'addon-item:elephant.ai-chat:elephant.ai-chat.sidebar-item'
+    const wiki = addonViewRailId('elephant.wiki.workspace')
+    const graph = addonViewRailId('elephant.graph.workspace')
+    const initial = ['vault', 'sidebar-toggle', 'search', chat]
+    const withWiki = extendIconRailOrder(initial, ['vault', 'sidebar-toggle', 'search', wiki, chat])
+    const withGraph = extendIconRailOrder(withWiki, ['vault', 'sidebar-toggle', 'search', wiki, graph, chat])
+
+    expect(withWiki).toEqual(['vault', 'sidebar-toggle', 'search', chat, wiki])
+    expect(withGraph).toEqual(['vault', 'sidebar-toggle', 'search', chat, wiki, graph])
+    expect(normalizeIconRailOrder(withGraph, ['vault', 'sidebar-toggle', 'search', wiki, graph, chat]))
+      .toEqual(['vault', 'sidebar-toggle', 'search', chat, wiki, graph])
   })
 
   it('renders vault and sidebar through the same customizable icon layout', () => {
@@ -39,10 +54,13 @@ describe('optional first-party physical addons and configurable icon rail', () =
     const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
     expect(layout).toContain("{ id: 'vault', label: 'Vault'")
     expect(layout).toContain("{ id: 'sidebar-toggle', label: 'Sidebar'")
+    expect(layout).not.toContain("{ id: 'dashboard', label: 'Dashboard'")
     expect(rail).toContain("id: 'vault'")
     expect(rail).toContain("id: 'sidebar-toggle'")
     expect(rail).toContain('icon: PanelLeft')
     expect(rail).toContain('activeVaultIconComponent || Vault')
+    expect(rail).toContain('extendIconRailOrder')
+    expect(rail).toContain("action:ignored-duplicate")
     expect(shell).toContain(':sidebar-visible="sidebarVisible"')
     expect(rail).toContain('v-if="item.separator"')
     expect(organizer).toContain('vault: Vault')

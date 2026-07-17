@@ -152,7 +152,7 @@ width, height = image.size
 if width < 300 or height < 500:
     raise SystemExit(f'Android editor screenshot is unexpectedly small: {width}x{height}')
 stat = ImageStat.Stat(image)
-spread = sum(channel[1] ** 0.5 for channel in stat.var)
+spread = sum(variance ** 0.5 for variance in stat.var)
 if spread < 6:
     raise SystemExit(f'Android editor screenshot is effectively blank (spread={spread:.2f})')
 PY

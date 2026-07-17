@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const repository = 'https://github.com/SorbetUP/Elephant-Addons.git'
-const pinnedRef = process.env.ELEPHANT_ADDONS_REF || '2a5a7a0015b5a4e560d0ce2413a8a6dcb72e1fa9'
+const pinnedRef = process.env.ELEPHANT_ADDONS_REF || '710daffd1587ac31c6dd2e45ebc88c07deca3366'
 const cacheRoot = path.join(root, '.cache', 'elephant-addons')
 
 const runGit = (args, cwd = root) => execFileSync('git', args, { cwd, stdio: 'inherit' })

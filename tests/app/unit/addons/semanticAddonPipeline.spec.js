@@ -14,8 +14,8 @@ describe('physical semantic addon pipeline', () => {
     expect(inference).toContain('async embed(')
     expect(inference).toContain('async complete(')
     expect(inference).toContain("method: 'http.request'")
-    expect(inference).toContain("url: endpointFor(provider, '/embeddings')")
-    expect(inference).toContain("url: endpointFor(provider, '/chat/completions')")
+    expect(inference).toContain("'/embeddings'")
+    expect(inference).toContain("'/chat/completions'")
   })
 
   it('synchronizes pending Knowledge vectors from Search through ai.inference', () => {

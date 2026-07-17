@@ -1,10 +1,20 @@
 #!/usr/bin/env node
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 
 const root = resolve(import.meta.dirname, '../..')
+if (process.env.ELEPHANT_ACCEPTANCE_SKIP_BUILD === '1') {
+  console.log('[acceptance-runner] using existing renderer build by explicit request')
+} else {
+  console.log('[acceptance-runner] building renderer with the current source')
+  execFileSync('pnpm', ['tauri:web:build'], {
+    cwd: root,
+    stdio: 'inherit',
+    env: { ...process.env, ELEPHANT_ACCEPTANCE_BUILD: '1' }
+  })
+}
 const electronRoots = [join(root, 'node_modules', 'electron'), join(root, 'Elephant', 'node_modules', 'electron')]
 const packageRoot = electronRoots.find((candidate) => existsSync(join(candidate, 'path.txt')))
 if (!packageRoot) throw new Error(`Electron binary is not installed. Checked: ${electronRoots.join(', ')}`)
@@ -58,7 +68,12 @@ const evaluate = (expression) => new Promise((resolvePromise, reject) => {
     if (message.id !== id) return
     socket.removeEventListener('message', listener)
     if (message.error) reject(new Error(message.error.message))
-    else resolvePromise(message.result?.result?.value)
+    else if (message.result?.exceptionDetails) {
+      const exception = message.result.exceptionDetails
+      reject(new Error(
+        exception.exception?.description || exception.text || 'Renderer evaluation failed'
+      ))
+    } else resolvePromise(message.result?.result?.value)
   }
   socket.addEventListener('message', listener)
   socket.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true } }))
@@ -67,7 +82,13 @@ const evaluate = (expression) => new Promise((resolvePromise, reject) => {
 const waitForBridge = async() => {
   const deadline = Date.now() + 30000
   while (Date.now() < deadline) {
-    if (await evaluate('Boolean(window.__ELEPHANT_ACCEPTANCE_TEST__)')) return
+    try {
+      if (await evaluate('Boolean(window.__ELEPHANT_ACCEPTANCE_TEST__)')) return
+    } catch (error) {
+      const message = error?.message || String(error)
+      if (!/default execution context|context was destroyed|target closed/i.test(message)) throw error
+      console.log(`[acceptance-runner] renderer context not ready; retrying ${JSON.stringify({ message })}`)
+    }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 250))
   }
   throw new Error('Timed out waiting for the renderer acceptance bridge')
@@ -80,9 +101,17 @@ const result = await evaluate(`(async () => {
   await bridge.openNote('Acceptance.md')
   bridge.setMarkdown('# Acceptance\\n\\nEdited by desktop command runner.')
   const saved = await bridge.save()
-  return { saved, displayed: bridge.readDisplayed(), logs: bridge.logs() }
+  const created = await bridge.createNote('Acceptance', 'Created.md')
+  await bridge.openNote('Acceptance/Created.md')
+  bridge.setMarkdown('# Created\\n\\nSecond acceptance scenario.')
+  const createdSaved = await bridge.save()
+  const disk = await bridge.readNote('Acceptance/Created.md')
+  const notes = await bridge.listNotes('Acceptance')
+  return { saved, created, createdSaved, disk, notes, displayed: bridge.readDisplayed(), logs: bridge.logs() }
 })()`)
-if (!result?.saved?.isSaved || !result?.saved?.markdown?.includes('Edited by desktop command runner.')) {
+if (!result?.saved?.isSaved || !result?.saved?.markdown?.includes('Edited by desktop command runner.') ||
+    !result?.createdSaved?.isSaved || !result?.disk?.content?.includes('Second acceptance scenario.') ||
+    !result?.notes?.some((entry) => entry.path === 'Acceptance/Created.md')) {
   throw new Error(`Desktop acceptance scenario failed: ${JSON.stringify(result)}`)
 }
 console.log(`[acceptance-runner] scenario passed ${JSON.stringify({ notePath: result.saved.notePath, logCount: result.logs.length })}`)

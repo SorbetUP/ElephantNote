@@ -86,6 +86,10 @@ jobs:
           test -s "$electron_root/path.txt"
           cat "$electron_root/path.txt"
 
+      - name: Install Playwright Chromium
+        shell: bash
+        run: NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/playwright install chromium
+
       - name: Run postinstall with complete output
         shell: bash
         env:

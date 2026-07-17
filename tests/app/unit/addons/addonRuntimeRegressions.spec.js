@@ -59,6 +59,15 @@ describe('addon runtime regression repairs', () => {
     expect(builder).toContain('materialized=${sourceSidecar}')
   })
 
+  it('keeps native service stderr observable for startup failures', () => {
+    const services = read('Elephant/backend/tauri/src/addon_services.rs')
+
+    expect(services).toContain('.stderr(Stdio::piped())')
+    expect(services).toContain('spawn_service_log_reader(addon_id, stderr)')
+    expect(services).toContain('[addon-service:{addon_id}]')
+    expect(services).not.toContain('.stderr(Stdio::null())')
+  })
+
   it('bounds large vault listings with an explicit safety limit', () => {
     const source = read('Elephant/backend/tauri/src/addon_note_access.rs')
 

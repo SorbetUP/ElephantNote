@@ -175,6 +175,9 @@ const searchQuery = (params = {}) => {
 
 const readMarkdown = (pathname) => {
   const fullPath = path.isAbsolute(pathname || '') ? pathname : resolveVaultPath(pathname)
+  if (!fs.existsSync(fullPath) && normalizeSlashes(pathname) === '.elephantnote/Dashboard.md') {
+    writeMarkdown(pathname, '# Dashboard\n')
+  }
   return fs.readFileSync(fullPath, 'utf8')
 }
 
@@ -191,16 +194,34 @@ const invoke = async (command, payload = {}) => {
   const params = payload || {}
   switch (command) {
     case 'healthcheck': return 'ok'
+    // Renderer diagnostics are best-effort in the Electron/Tauri compatibility
+    // harness. Rejecting them turns harmless startup logging into unhandled
+    // promise errors and can prevent addon scenarios from reaching the test.
+    case 'tauri_debug_log': return { ok: true }
+    // These plugin calls are non-functional in the Electron compatibility
+    // harness, but the renderer issues them during desktop startup.
+    case 'plugin:event|listen': return 1
+    case 'plugin:window-state|restore_state': return true
+    case 'plugin:window-state|save_window_state': return true
     case 'tauri_platform_info': return { os: process.platform, family: process.platform === 'win32' ? 'windows' : 'unix', arch: process.arch, mobile: false, desktop: true }
     case 'tauri_vaults_get': return vaultPayload()
     case 'tauri_directory_list': return listDirectory(params.relativePath || params.relative_path || '')
+    case 'tauri_notes_create': {
+      const directory = params.relativePath || params.relative_path || ''
+      const filename = params.filename || 'Untitled.md'
+      const relativePath = normalizeSlashes(path.join(directory, filename))
+      const fullPath = resolveVaultPath(relativePath)
+      if (!fs.existsSync(fullPath)) writeMarkdown(relativePath, '')
+      return { path: relativePath, fullPath, title: params.title || path.basename(filename, '.md') }
+    }
     case 'tauri_calendar_list': return []
     case 'tauri_sources_list': return []
     case 'tauri_wiki_list': return []
     case 'tauri_wiki_proposals': return []
     case 'tauri_addons_list':
     case 'tauri_addons_list_full':
-    case 'tauri_addons_catalog_list': return []
+    case 'tauri_addons_catalog_list':
+    case 'tauri_official_addons_catalog_list': return []
     case 'tauri_atomic_features_list': return []
     case 'tauri_atomic_features_get': return null
     case 'tauri_features_get': return {}

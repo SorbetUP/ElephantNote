@@ -8,11 +8,12 @@ const read = (relativePath) => fs.readFileSync(absolute(relativePath), 'utf8')
 
 describe('AI provider execution ownership', () => {
   it('keeps the chat addon as an orchestrator over installed provider contributions', () => {
-    const chat = read('addons/official/ai-chat/main.js')
+    const chat = read('addons/official/ai-chat/main.v2.js')
+    const base = read('addons/official/ai-chat/main.js')
 
-    expect(chat).toContain("getContributions?.('ai.providers')")
-    expect(chat).toContain("this.api.resources.get(SEARCH_RESOURCE)")
-    expect(chat).toContain('await option.provider.chat({')
+    expect(base).toContain("getContributions?.('ai.providers')")
+    expect(chat).toContain('async runProvider(')
+    expect(base).toContain('await option.provider.chat({')
     expect(chat).not.toContain("this.call('rag.chat'")
   })
 
@@ -31,9 +32,9 @@ describe('AI provider execution ownership', () => {
   it('offers only actual installed or configured providers in chat settings', () => {
     const chat = read('addons/official/ai-chat/main.js')
 
-    expect(chat).toContain("const disabled = node(documentRef, 'option', '', 'Disabled')")
+    expect(chat).toContain("node(documentRef, 'option', '', 'Désactivé')")
     expect(chat).toContain('for (const option of options)')
-    expect(chat).toContain('Install a provider addon or configure an external API first.')
+    expect(chat).toContain('providerOptions(config)')
     expect(chat).not.toContain('Unavailable addon provider')
     expect(chat).not.toContain('SmolLM2')
   })

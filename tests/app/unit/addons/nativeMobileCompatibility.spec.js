@@ -31,7 +31,7 @@ describe('native addon mobile compatibility', () => {
   it('keeps Sites renderer-owned and installable on desktop, Android and iOS', () => {
     const manifest = manifestFor('sites')
     const source = read('addons/official/sites/main.js')
-    expect(manifest.version).toBe('1.3.0')
+    expect(manifest.version).toBe('1.4.0')
     expect(manifest.permissions.native).toBeUndefined()
     expect(manifest.native).toBeUndefined()
     expect(source).toContain('tauri_addons_assets_allow_directory')

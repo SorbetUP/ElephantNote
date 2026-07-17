@@ -11,7 +11,7 @@ describe('Wiki physical package ownership', () => {
     const manifest = JSON.parse(read('addons/official/wiki/manifest.json'))
     const source = read('addons/official/wiki/main.v2.js')
 
-    expect(manifest.version).toBe('1.4.0')
+    expect(manifest.version).toBe('1.5.0')
     expect(manifest.runtime.entry).toBe('main.v2.js')
     expect(manifest.permissions.notes.read).toEqual(['*'])
     expect(manifest.permissions.notes.write).toEqual(['Wiki/**'])

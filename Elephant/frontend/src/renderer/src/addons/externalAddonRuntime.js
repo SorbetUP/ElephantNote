@@ -64,6 +64,13 @@ const isOfficialRecord = (record = {}) => (
   record.manifest?.official === true
 )
 
+const dependencyIds = (manifest = {}) => {
+  const ids = new Set(Object.keys(manifest.requires || {}))
+  if (manifest.parentAddonId) ids.add(manifest.parentAddonId)
+  ids.delete(manifest.id)
+  return [...ids]
+}
+
 export const reconcileOfficialAddonRecords = (records = [], catalogue = []) => {
   const officialIds = new Set(
     catalogue
@@ -324,6 +331,18 @@ export class ExternalAddonController {
     const communityEnabled = await externalAddonApi.getCommunityEnabled()
     const safeMode = await getTrustedSafeMode()
     for (const record of records) this.register(record)
+    const enabledRecords = new Map(records.filter((record) => record.enabled).map((record) => [record.manifest.id, record]))
+    const enabling = new Set()
+    const enableWithDependencies = async (record) => {
+      if (!record?.enabled || this.manager.get(record.manifest.id)?.enabled) return
+      if (enabling.has(record.manifest.id)) throw new Error(`Circular addon dependency: ${record.manifest.id}`)
+      enabling.add(record.manifest.id)
+      for (const dependencyId of dependencyIds(record.manifest)) {
+        await enableWithDependencies(enabledRecords.get(dependencyId))
+      }
+      enabling.delete(record.manifest.id)
+      await this.manager.enable(record.manifest.id)
+    }
     for (const record of records) {
       if (!record.enabled) continue
       const official = isOfficialRecord(record)
@@ -334,7 +353,7 @@ export class ExternalAddonController {
         continue
       }
       try {
-        await this.manager.enable(record.manifest.id)
+        await enableWithDependencies(record)
       } catch (error) {
         if (official && isMissingNativeServiceError(error)) {
           try {

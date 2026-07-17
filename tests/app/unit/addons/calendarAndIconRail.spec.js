@@ -91,7 +91,7 @@ describe('optional first-party physical addons and configurable icon rail', () =
     expect(calendar).toContain('api.workspace.registerView')
     expect(calendar).toContain("const PROVIDER_RESOURCE = 'calendar.provider'")
     expect(sync).toContain("registerContribution('top-bar.items'")
-    expect(sites).toContain('api.workspace.registerView')
+    expect(sites).toContain('api.settings.registerSection')
     expect(sites).toContain("const PROVIDER_RESOURCE = 'sites.provider'")
     expect(navigation).toContain(':is="entry.contribution.component"')
     expect(router).toContain(':is="view.contribution.component"')

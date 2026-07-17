@@ -3,7 +3,8 @@
 const INSERT_AFTER_HELPERS = "const primitivePreference = (store, key, fallback = null) => Object.prototype.hasOwnProperty.call(store, key) ? store[key] : fallback\n"
 const EMPTY_ADDON_CASES = `    case 'tauri_addons_list':
     case 'tauri_addons_list_full':
-    case 'tauri_addons_catalog_list': return []`
+    case 'tauri_addons_catalog_list':
+    case 'tauri_official_addons_catalog_list': return []`
 const ENABLED_CASES = `    case 'tauri_addons_set_enabled':
     case 'tauri_addons_set_enabled_checked': memory.enabledAddons.set(params.addonId, params.enabled === true); return { ok: true }`
 const READ_ENTRY_CASE = `    case 'tauri_addons_read_entry': throw new Error(\`No physical addon is installed in the E2E fixture: \${params.addonId || ''}\`)`
@@ -175,6 +176,7 @@ const officialAddonFixture = (() => {
 const addonCases = `    case 'tauri_addons_list':
     case 'tauri_addons_list_full': return officialAddonFixture.listInstalled()
     case 'tauri_addons_catalog_list': return officialAddonFixture.listCatalog()
+    case 'tauri_official_addons_catalog_list': return officialAddonFixture.listCatalog()
     case 'tauri_addons_install': return officialAddonFixture.install(params.packagePath)
     case 'tauri_addons_catalog_install':
     case 'tauri_addons_install_catalog':

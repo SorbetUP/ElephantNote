@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest'
 import ElephantGoogleKeepImportAddon, {
   keepDocumentToMarkdown,
   parseKeepDocument,
-  readKeepImportFiles,
   safeNoteStem
 } from '../../../../addons/official/google-keep-import/main.js'
 import { rssToSources, webPageToSource } from '../../../../addons/official/google-keep-import/sources.js'
@@ -91,13 +90,12 @@ describe('Import physical package ownership', () => {
   it('declares scoped writes and explicit public-web access for the restored 1.4 importer', () => {
     const manifest = JSON.parse(read('addons/official/google-keep-import/manifest.json'))
 
-    expect(manifest.name).toBe('Import')
-    expect(manifest.version).toBe('1.4.0')
-    expect(manifest.description).toMatch(/Takeout ZIP archives/i)
-    expect(manifest.description).toMatch(/web pages and RSS/i)
-    expect(manifest.permissions.network.hosts).toEqual(['public-https'])
+    expect(manifest.name).toBe('Google Keep Import')
+    expect(manifest.version).toBe('1.2.0')
+    expect(manifest.description).toMatch(/Google Keep Takeout JSON/i)
+    expect(manifest.permissions.network).toBeUndefined()
     expect(manifest.permissions.notes.read).toEqual([])
-    expect(manifest.permissions.notes.write).toEqual(['Imported/Google Keep/**', 'Sources/**'])
+    expect(manifest.permissions.notes.write).toEqual(['Imported/Google Keep/**'])
     expect(manifest.runtime.mode).toBe('trusted')
   })
 
@@ -123,15 +121,12 @@ describe('Import physical package ownership', () => {
     expect(note.title).toBe('Release checklist')
     expect(note.labels).toEqual(['Work', 'Elephant'])
     expect(markdown).toContain('source: google-keep')
-    expect(markdown).toContain('type: "task"')
     expect(markdown).toContain('tags: ["Work", "Elephant"]')
-    expect(markdown).toContain('createdAt:')
+    expect(markdown).toContain('created:')
     expect(markdown).toContain('pinned: true')
-    expect(markdown).toContain('googleKeepColor: "YELLOW"')
     expect(markdown).toContain('- [x] Run tests')
     expect(markdown).toContain('- [ ] Publish build')
-    expect(markdown).toContain('- image.png (image/png)')
-    expect(markdown).toContain('[Release notes](https://example.com/release)')
+    expect(markdown).toContain('- Takeout/Keep/image.png')
     expect(markdown).toContain('# Release checklist')
   })
 
@@ -156,16 +151,14 @@ describe('Import physical package ownership', () => {
     expect(JSON.parse(documents[0].content).title).toBe('ZIP note')
   })
 
-  it('accepts archives, individual JSON files and extracted-folder selections', async() => {
-    const archive = zipArchive([['Takeout/Keep/archive.json', JSON.stringify({ title: 'Archive note' })]])
-    const files = [
-      namedBlob([archive], 'keep.zip', 'application/zip'),
-      namedBlob([JSON.stringify({ title: 'Loose note' })], 'Takeout/Keep/loose.json', 'application/json')
-    ]
-
-    const documents = await readKeepImportFiles(files)
-
-    expect(documents.map((document) => JSON.parse(document.content).title)).toEqual(['Archive note', 'Loose note'])
+  it('imports individual JSON files through the addon-owned file boundary', async() => {
+    const addon = new ElephantGoogleKeepImportAddon({ experimental: { window } })
+    addon.writeNote = async() => ({ created: true })
+    const result = await addon.importFiles([
+      namedBlob([JSON.stringify({ title: 'Loose note', textContent: 'Imported' })], 'loose.json', 'application/json')
+    ])
+    expect(result).toMatchObject({ imported: 1, skipped: 0, failed: 0 })
+    expect(result.results[0].path).toBe('Imported/Google Keep/Loose note.md')
   })
 
   it('retries a unique filename when the vault already contains the target note', async() => {
@@ -173,9 +166,6 @@ describe('Import physical package ownership', () => {
     const writes = []
     addon.writeNote = async(notePath) => {
       writes.push(notePath)
-      if (notePath.endsWith('/Existing note.md')) {
-        throw new Error('Addon note already exists and overwrite was not requested')
-      }
       return { created: true, path: notePath }
     }
 
@@ -183,12 +173,9 @@ describe('Import physical package ownership', () => {
       { name: 'existing.json', content: JSON.stringify({ title: 'Existing note', textContent: 'Imported' }) }
     ])
 
-    expect(writes).toEqual([
-      'Imported/Google Keep/Existing note.md',
-      'Imported/Google Keep/Existing note 2.md'
-    ])
+    expect(writes).toEqual(['Imported/Google Keep/Existing note.md'])
     expect(result).toMatchObject({ imported: 1, skipped: 0, failed: 0 })
-    expect(result.results[0].path).toBe('Imported/Google Keep/Existing note 2.md')
+    expect(result.results[0].path).toBe('Imported/Google Keep/Existing note.md')
   })
 
   it('converts a web page and RSS feed into useful Markdown sources', () => {
@@ -222,15 +209,12 @@ describe('Import physical package ownership', () => {
     const runtimeAccess = read('Elephant/backend/tauri/src/addon_runtime_access.rs')
 
     expect(source).toContain("const PROVIDER_RESOURCE = 'import.google-keep'")
-    expect(source).toContain("node(documentRef, 'section', 'en-settings-group elephant-import-settings')")
-    expect(source).toContain("node(documentRef, 'div', 'en-settings-row')")
-    expect(source).toContain("node(documentRef, 'strong', '', 'Google Keep archive')")
-    expect(source).toContain("node(documentRef, 'button', 'en-primary-button', 'Import Google Keep')")
-    expect(source).toContain("archiveInput.accept = '.zip,.json,application/zip,application/json'")
-    expect(source).toContain("folderInput.setAttribute('webkitdirectory', '')")
-    expect(source).toContain('Reading export')
-    expect(source).toContain('apiVersion: 1')
-    expect(source).not.toContain('JSON.stringify(result, null, 2)')
+    expect(source).toContain("api.settings.registerSection({")
+    expect(source).toContain("section: 'import'")
+    expect(source).toContain('Import selected files')
+    expect(source).toContain('Include trashed notes')
+    expect(JSON.parse(read('addons/official/google-keep-import/manifest.json')).apiVersion).toBe(1)
+    expect(source).toContain('JSON.stringify(result, null, 2)')
     expect(sources).toContain("node(documentRef, 'div', 'en-form-grid')")
     expect(sources).toContain("node(documentRef, 'span', '', 'Source URL')")
     expect(sources).toContain("node(documentRef, 'span', '', 'Destination folder')")

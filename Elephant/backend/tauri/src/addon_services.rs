@@ -12,7 +12,7 @@ use std::{
 use tauri::{AppHandle, State};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
-    process::{Child, ChildStdin, ChildStdout, Command},
+    process::{Child, ChildStderr, ChildStdin, ChildStdout, Command},
     sync::Mutex,
     time::{timeout, Duration},
 };
@@ -274,8 +274,12 @@ fn resolve_service(app: &AppHandle, addon_id: &str) -> R<ResolvedService> {
     let canonical_package = fs::canonicalize(&package_dir).map_err(|error| {
         format!("Addon package directory is unavailable for {addon_id}: {error}")
     })?;
-    let executable = fs::canonicalize(package_dir.join(&relative_path)).map_err(|error| {
-        format!("Addon service executable is unavailable for {addon_id}: {error}")
+    let executable_path = package_dir.join(&relative_path);
+    let executable = fs::canonicalize(&executable_path).map_err(|error| {
+        format!(
+            "Addon service executable is unavailable for {addon_id}: {} ({error})",
+            executable_path.display()
+        )
     })?;
     if !executable.starts_with(&canonical_package) {
         return Err(format!(
@@ -400,7 +404,7 @@ async fn spawn_service(app: &AppHandle, addon_id: &str, id: u64) -> R<ServicePro
         .env("ELEPHANT_ADDON_SERVICE_PROTOCOL", SERVICE_PROTOCOL)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
         .map_err(|error| format!("Failed to start addon service: {error}"))?;
@@ -412,6 +416,11 @@ async fn spawn_service(app: &AppHandle, addon_id: &str, id: u64) -> R<ServicePro
         .stdout
         .take()
         .ok_or_else(|| "Addon service stdout is unavailable".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Addon service stderr is unavailable".to_string())?;
+    spawn_service_log_reader(addon_id, stderr);
     let mut process = ServiceProcess {
         child,
         stdin: BufWriter::new(stdin),
@@ -429,6 +438,23 @@ async fn spawn_service(app: &AppHandle, addon_id: &str, id: u64) -> R<ServicePro
     )
     .await?;
     Ok(process)
+}
+
+fn spawn_service_log_reader(addon_id: &str, stderr: ChildStderr) {
+    let addon_id = addon_id.to_string();
+    tokio::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        loop {
+            match lines.next_line().await {
+                Ok(Some(line)) => eprintln!("[addon-service:{addon_id}] {line}"),
+                Ok(None) => break,
+                Err(error) => {
+                    eprintln!("[addon-service:{addon_id}] stderr read failed: {error}");
+                    break;
+                }
+            }
+        }
+    });
 }
 
 #[tauri::command]

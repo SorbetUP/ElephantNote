@@ -47,14 +47,15 @@ const installAndroidBackNavigation = (target = globalThis) => {
           if (searchStore.isOpen) {
             searchStore.close()
             handled = true
-          } else if (target.document.querySelector(CLOSE_DRAWER_SELECTOR)) {
-            handled = closeDrawer(target)
           } else {
             const vaultStore = useVaultStore()
             const navigationStore = useNavigationStore()
             if (vaultStore.openedNotePath) {
               vaultStore.closeNote()
+              if (target.document.querySelector(CLOSE_DRAWER_SELECTOR)) closeDrawer(target)
               handled = true
+            } else if (target.document.querySelector(CLOSE_DRAWER_SELECTOR)) {
+              handled = closeDrawer(target)
             } else {
               const previous = navigationStore.back()
               if (previous) {

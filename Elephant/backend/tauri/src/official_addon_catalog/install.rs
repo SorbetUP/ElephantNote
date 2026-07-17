@@ -124,7 +124,7 @@ fn fetch_legacy_sync_bytes(relative_path: &str) -> R<Vec<u8>> {
 
 fn prebuilt_package(item: &CatalogAddon) -> R<Option<PathBuf>> {
   let platform = platform_key();
-  if item.id == "elephant.sync" && item.packages.is_empty() {
+  if uses_legacy_sync_package(item) {
     let (package_path, package_hash) = legacy_sync_package(&platform)
       .ok_or_else(|| format!("Official addon {} is not available for platform {platform}", item.id))?;
     let bytes = fetch_legacy_sync_bytes(package_path)?;
@@ -133,7 +133,7 @@ fn prebuilt_package(item: &CatalogAddon) -> R<Option<PathBuf>> {
   if let Some(package) = item.packages.get(&platform) {
     return download_prebuilt_package(item, &package.path, &package.hash).map(Some);
   }
-  if item.requires_platform_package || !item.packages.is_empty() {
+  if item.requires_platform_package || !item.packages.is_empty() || item.id == "elephant.sync" {
     return Err(format!("Official addon {} is not available for platform {platform}", item.id));
   }
   Ok(None)
@@ -182,4 +182,3 @@ pub fn tauri_official_addons_catalog_install(
   record.source = "official".to_string();
   Ok(record)
 }
-

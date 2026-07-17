@@ -7,6 +7,7 @@ import {
   normalizeCitationText,
   resolveInternalNoteLink
 } from '@/platform/noteCitationRuntime'
+import { installNoteCitationSelectionGuard } from '@/platform/noteCitationSelectionGuard'
 
 const createVaultStore = (openedNotePath = 'Projects/Destination.md') => ({
   openedNotePath,
@@ -22,14 +23,17 @@ const flushPromises = async() => {
 
 beforeEach(() => {
   window.__ELEPHANT_NOTE_CITATION_RUNTIME__?.dispose?.()
+  window.__ELEPHANT_NOTE_CITATION_SELECTION_GUARD__?.dispose?.()
   document.body.innerHTML = ''
   delete window.__ELEPHANT_NOTE_CITATION_RUNTIME__
+  delete window.__ELEPHANT_NOTE_CITATION_SELECTION_GUARD__
   delete window.__ELEPHANT_DEBUG_LOGS__
   vi.restoreAllMocks()
 })
 
 afterEach(() => {
   window.__ELEPHANT_NOTE_CITATION_RUNTIME__?.dispose?.()
+  window.__ELEPHANT_NOTE_CITATION_SELECTION_GUARD__?.dispose?.()
   vi.useRealTimers()
   document.body.innerHTML = ''
 })
@@ -88,7 +92,7 @@ describe('note text citations', () => {
     })).toBeNull()
   })
 
-  it('adds the citation action and copies the selected editor text', async() => {
+  it('adds the citation action, preserves selection on press and copies the selected text', async() => {
     document.body.innerHTML = `
       <header class="en-note-topbar">
         <input class="en-note-title-input" value="Source note">
@@ -103,6 +107,7 @@ describe('note text citations', () => {
     })
     const vaultStore = createVaultStore('Sources/Source note.md')
     installNoteCitationRuntime({ vaultStore, target: window })
+    installNoteCitationSelectionGuard(window)
 
     const paragraph = document.getElementById('source')
     const range = document.createRange()
@@ -113,6 +118,10 @@ describe('note text citations', () => {
 
     const button = document.querySelector('[data-elephant-note-citation]')
     expect(button).not.toBeNull()
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 })
+    button.dispatchEvent(press)
+    expect(press.defaultPrevented).toBe(true)
+
     button.click()
     await flushPromises()
 

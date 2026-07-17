@@ -54,13 +54,6 @@
       </button>
       <button
         type="button"
-        @click="viewAsWebsite"
-      >
-        <Globe class="en-icon" />
-        View as website
-      </button>
-      <button
-        type="button"
         class="danger"
         @click="deleteFolder"
       >
@@ -82,9 +75,8 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Eye, EyeOff, Globe, MoreHorizontal, Pin, PencilLine } from '@lucide/vue'
+import { Eye, EyeOff, MoreHorizontal, Pin, PencilLine } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
-import { useSitePreviewStore } from '../../sitePreview/sitePreviewStore'
 import { formatShortDate } from '../../services/markdownMetaService'
 
 const props = defineProps({
@@ -97,7 +89,6 @@ const emit = defineEmits(['open', 'rename', 'delete'])
 const isMenuOpen = ref(false)
 const isHovering = ref(false)
 const store = useVaultStore()
-const sitePreviewStore = useSitePreviewStore()
 const updated = computed(() => formatShortDate(props.entry.updatedAt))
 const isPinned = computed(() => !!props.entry?.path && store.isEntryPinned(props.entry.path))
 const isSidebarVisible = computed(() => !!props.entry?.path && store.isFolderVisibleInSidebar(props.entry.path))
@@ -132,11 +123,6 @@ const handleDragStart = (event) => {
     path: props.entry.path,
     title: props.entry.title
   }))
-}
-
-const viewAsWebsite = async () => {
-  isMenuOpen.value = false
-  await sitePreviewStore.previewFolder(props.entry)
 }
 
 const deleteFolder = () => {

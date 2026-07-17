@@ -194,6 +194,14 @@ const invoke = async (command, payload = {}) => {
     case 'tauri_platform_info': return { os: process.platform, family: process.platform === 'win32' ? 'windows' : 'unix', arch: process.arch, mobile: false, desktop: true }
     case 'tauri_vaults_get': return vaultPayload()
     case 'tauri_directory_list': return listDirectory(params.relativePath || params.relative_path || '')
+    case 'tauri_notes_create': {
+      const directory = params.relativePath || params.relative_path || ''
+      const filename = params.filename || 'Untitled.md'
+      const relativePath = normalizeSlashes(path.join(directory, filename))
+      const fullPath = resolveVaultPath(relativePath)
+      if (!fs.existsSync(fullPath)) writeMarkdown(relativePath, '')
+      return { path: relativePath, fullPath, title: params.title || path.basename(filename, '.md') }
+    }
     case 'tauri_calendar_list': return []
     case 'tauri_sources_list': return []
     case 'tauri_wiki_list': return []

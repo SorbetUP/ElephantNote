@@ -51,6 +51,40 @@ export const installAcceptanceTestBridge = ({
   if (target.__ELEPHANT_ACCEPTANCE_TEST__) return target.__ELEPHANT_ACCEPTANCE_TEST__
 
   const api = {
+    async listNotes(path = '') {
+      const invoke = target.__TAURI__?.core?.invoke
+      if (typeof invoke !== 'function') throw new Error('listNotes requires the Tauri command bridge')
+      const entries = await invoke('tauri_directory_list', {
+        relativePath: path,
+        offset: 0,
+        limit: 1000,
+        includePreview: false
+      })
+      const files = Array.isArray(entries)
+        ? entries.filter((entry) => entry?.type === 'note' || entry?.kind === 'note')
+        : []
+      log(target, 'notes:list', { path, count: files.length })
+      return files
+    },
+
+    async readNote(path) {
+      if (!path || typeof path !== 'string') throw new TypeError('readNote requires a relative Markdown path')
+      const invoke = target.__TAURI__?.core?.invoke
+      if (typeof invoke !== 'function') throw new Error('readNote requires the Tauri command bridge')
+      const result = await invoke('tauri_notes_read', { relativePath: path })
+      const content = typeof result?.content === 'string' ? result.content : ''
+      log(target, 'note:read', { path, markdownLength: content.length })
+      return { ...result, content }
+    },
+
+    async createNote(path, filename = 'Acceptance-created.md') {
+      const invoke = target.__TAURI__?.core?.invoke
+      if (typeof invoke !== 'function') throw new Error('createNote requires the Tauri command bridge')
+      const result = await invoke('tauri_notes_create', { relativePath: path || null, filename, title: null })
+      log(target, 'note:create', { path, filename })
+      return result
+    },
+
     async openNote(path) {
       if (!path || typeof path !== 'string') throw new TypeError('openNote requires a relative Markdown path')
       if (!vaultStore.activeVault?.path) throw new Error('openNote requires an active vault')
@@ -95,7 +129,18 @@ export const installAcceptanceTestBridge = ({
       log(target, 'save:start', { notePath: editorStore.currentFile.pathname || '' })
       editorStore.FILE_SAVE()
       for (let attempt = 0; attempt < 100; attempt += 1) {
-        if (editorStore.currentFile?.isSaved === true) {
+        const expectedMarkdown = editorStore.currentFile?.markdown || ''
+        let persisted = true
+        const invoke = target.__TAURI__?.core?.invoke
+        if (typeof invoke === 'function' && editorStore.currentFile?.pathname) {
+          try {
+            const result = await invoke('tauri_notes_read', { relativePath: editorStore.currentFile.pathname })
+            persisted = result?.content === expectedMarkdown || result?.markdown === expectedMarkdown
+          } catch {
+            persisted = false
+          }
+        }
+        if (editorStore.currentFile?.isSaved === true && persisted) {
           const state = snapshot(target, editorStore, vaultStore)
           log(target, 'save:done', { notePath: state.notePath, markdownLength: state.markdown.length })
           return state
@@ -126,4 +171,3 @@ export const installAcceptanceTestBridge = ({
   log(target, 'installed', { commands: Object.keys(api).filter((key) => key !== 'logs') })
   return api
 }
-

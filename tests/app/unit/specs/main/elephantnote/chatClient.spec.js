@@ -28,6 +28,16 @@ describe('package-owned chat boundary', () => {
     expect(chat).not.toContain('SEARCH_INIT_VAULT')
   })
 
+  it('renders citations as accessible actions that open their source note', () => {
+    const chat = read('addons/official/ai-chat/main.js')
+
+    expect(chat).toContain('openCitation(citation)')
+    expect(chat).toContain("store.openNote({")
+    expect(chat).toContain("node(documentRef, 'button', 'elephant-chat-citation')")
+    expect(chat).toContain("button.setAttribute('aria-label'")
+    expect(chat).toContain("'[ai-chat] citation opened'")
+  })
+
   it('keeps provider implementations in separate packages', () => {
     const openModels = read('addons/official/open-models/main.js')
     const codex = read('addons/official/codex-connection/main.js')

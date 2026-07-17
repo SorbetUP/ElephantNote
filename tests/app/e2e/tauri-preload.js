@@ -191,6 +191,10 @@ const invoke = async (command, payload = {}) => {
   const params = payload || {}
   switch (command) {
     case 'healthcheck': return 'ok'
+    // Renderer diagnostics are best-effort in the Electron/Tauri compatibility
+    // harness. Rejecting them turns harmless startup logging into unhandled
+    // promise errors and can prevent addon scenarios from reaching the test.
+    case 'tauri_debug_log': return { ok: true }
     case 'tauri_platform_info': return { os: process.platform, family: process.platform === 'win32' ? 'windows' : 'unix', arch: process.arch, mobile: false, desktop: true }
     case 'tauri_vaults_get': return vaultPayload()
     case 'tauri_directory_list': return listDirectory(params.relativePath || params.relative_path || '')

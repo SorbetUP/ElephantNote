@@ -26,6 +26,7 @@ let fixtureSource = fs.readFileSync(fixturePath, 'utf8').replace(
   "contextBridge.exposeInMainWorld('__MARKTEXT_RUNTIME__', 'tauri')\n",
   ''
 )
+fixtureSource = require('./observable-preload-patch')(fixtureSource)
 if (process.env.ELEPHANT_E2E_OFFICIAL_ADDONS) {
   fixtureSource = require('./official-addon-preload-patch')(fixtureSource)
 }

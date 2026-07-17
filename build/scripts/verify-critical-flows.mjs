@@ -133,8 +133,8 @@ lacks('Elephant/frontend/src/renderer/src/addons/builtin/index.js', 'import(', '
 
 has('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js', 'const isOfficialRecord', 'official package classification')
 has('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js', "if (!official && !await externalAddonApi.getCommunityEnabled())", 'community consent boundary')
-has('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js', "['fetch','WebSocket','EventSource','XMLHttpRequest'", 'isolated worker network surface removal')
-has('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js', "rpc('storage.get'", 'brokered addon storage')
+has('Elephant/frontend/src/renderer/src/addons/isolatedAddonWorkerSource.js', "['fetch','WebSocket','EventSource','XMLHttpRequest'", 'isolated worker network surface removal')
+has('Elephant/frontend/src/renderer/src/addons/isolatedAddonWorkerSource.js', "rpc('storage.get'", 'brokered addon storage')
 has('Elephant/frontend/src/renderer/src/addons/officialAddonCatalogBridge.js', 'tauri_official_addons_catalog_list', 'official catalogue bridge')
 has('Elephant/backend/tauri/src/lib_min.rs', 'addons::tauri_addons_list,', 'external addon registry compatibility command')
 
@@ -248,8 +248,8 @@ has('addons/official/sync/main.service.js', "this.callNativeService('sync.run'",
 has('addons/official/sync/native/src/main.rs', '"sync.run" => service.run_sync().await', 'package-owned Sync sessions')
 has('addons/official/sync/native/tests/two_endpoint_sync.rs', 'physical_package_pairs_and_synchronizes_two_real_iroh_endpoints', 'real package Iroh validation')
 
-has('Elephant/backend/tauri/src/official_addon_catalog.rs', 'collect_local_files', 'complete local official package installation')
-has('Elephant/backend/tauri/src/official_addon_catalog.rs', 'collect_remote_files', 'complete remote official package installation')
+has('Elephant/backend/tauri/src/official_addon_catalog/source.rs', 'collect_local_files', 'complete local official package installation')
+has('Elephant/backend/tauri/src/official_addon_catalog/install.rs', 'collect_remote_files', 'complete remote official package installation')
 has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'for (const packedAddon of parityPack.addons)', 'all first-party addon runtime probes')
 has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'view.component.__mount', 'addon view usage probes')
 has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'command.run({ probe: true })', 'addon command usage probes')

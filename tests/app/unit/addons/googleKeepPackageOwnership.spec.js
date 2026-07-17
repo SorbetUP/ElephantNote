@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { Blob } from 'node:buffer'
-import { deflateRawSync } from 'node:zlib'
+import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import ElephantGoogleKeepImportAddon, {
   keepDocumentToMarkdown,
@@ -14,6 +14,24 @@ import { extractZipJsonDocuments } from '../../../../addons/official/google-keep
 
 const root = process.cwd()
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+
+globalThis.DecompressionStream = class TestDecompressionStream {
+    constructor(format) {
+      if (format !== 'deflate-raw') throw new Error(`Unsupported test format: ${format}`)
+      const chunks = []
+      const transform = new TransformStream({
+        transform(chunk) {
+          chunks.push(Buffer.from(chunk))
+        },
+        flush(controller) {
+          controller.enqueue(new Uint8Array(inflateRawSync(Buffer.concat(chunks))))
+        }
+      })
+      this.readable = transform.readable
+      this.writable = transform.writable
+    }
+}
+globalThis.Blob = Blob
 
 const namedBlob = (parts, name, type) => {
   const blob = new Blob(parts, { type })

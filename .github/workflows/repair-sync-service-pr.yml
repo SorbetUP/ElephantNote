@@ -38,13 +38,19 @@ jobs:
             echo 'present=false' >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Apply, format and test the repair
+      - name: Apply source transformation
+        if: steps.pending.outputs.present == 'true'
+        run: python3 build/scripts/patch-sync-service-install.py
+
+      - name: Format repaired Rust sources
         if: steps.pending.outputs.present == 'true'
         run: |
-          python3 build/scripts/patch-sync-service-install.py
           cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all
           git diff --check
-          cargo test --manifest-path Elephant/backend/tauri/Cargo.toml official_addon_catalog --lib
+
+      - name: Compile and run focused regression tests
+        if: steps.pending.outputs.present == 'true'
+        run: cargo test --manifest-path Elephant/backend/tauri/Cargo.toml official_addon_catalog --lib
 
       - name: Commit repaired runtime to the PR branch
         if: steps.pending.outputs.present == 'true'

@@ -195,6 +195,11 @@ const invoke = async (command, payload = {}) => {
     // harness. Rejecting them turns harmless startup logging into unhandled
     // promise errors and can prevent addon scenarios from reaching the test.
     case 'tauri_debug_log': return { ok: true }
+    // These plugin calls are non-functional in the Electron compatibility
+    // harness, but the renderer issues them during desktop startup.
+    case 'plugin:event|listen': return 1
+    case 'plugin:window-state|restore_state': return true
+    case 'plugin:window-state|save_window_state': return true
     case 'tauri_platform_info': return { os: process.platform, family: process.platform === 'win32' ? 'windows' : 'unix', arch: process.arch, mobile: false, desktop: true }
     case 'tauri_vaults_get': return vaultPayload()
     case 'tauri_directory_list': return listDirectory(params.relativePath || params.relative_path || '')

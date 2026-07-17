@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getDocumentTitle,
   mergeEditorMarkdown,
   renameDocumentTitle,
   toEditorMarkdown,
@@ -43,6 +44,22 @@ describe('ElephantNote markdown document helpers', () => {
     expect(result).toContain('# Daily')
     expect(result).toContain('New body')
     expect(result).not.toContain('Old body')
+  })
+
+  it('keeps a generated untitled note titleless until the user enters a title', () => {
+    expect(getDocumentTitle('', 'Untitled')).toBe('')
+    expect(getDocumentTitle('', 'Untitled 2')).toBe('')
+    expect(mergeEditorMarkdown('', 'First body line', 'Untitled')).toBe('First body line')
+    expect(mergeEditorMarkdown('First body line', 'Updated body', 'Untitled')).toBe('Updated body')
+  })
+
+  it('can add tags to a titleless note without synthesizing an Untitled heading', () => {
+    const result = updateMarkdownTags('Body', ['draft'], '')
+
+    expect(result).toContain('tags: ["draft"]')
+    expect(result).toContain('Body')
+    expect(result).not.toContain('Untitled')
+    expect(result).not.toContain('# ')
   })
 
   it('renames frontmatter and heading together to avoid list/editor title drift', () => {

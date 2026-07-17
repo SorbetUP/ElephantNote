@@ -190,6 +190,28 @@ export class MuyaRustInputController {
       event.preventDefault()
       return
     }
+    if (
+      event.key === 'Enter' &&
+      !event.isComposing &&
+      !this.composition &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      const observedSelection = this.readSelection()
+      if (!observedSelection) return
+      event.preventDefault()
+      this.schedule(async () => {
+        // WebKit does not consistently emit beforeinput for Return in an
+        // application-owned contenteditable. Own plain Enter on keydown so the
+        // Rust editor always receives exactly one paragraph command.
+        const selection = this._inputSelection || observedSelection
+        await this.bridge.setSelection(selection)
+        await this.bridge.dispatch(editorCommands.insertParagraph())
+        this._inputSelection = this.bridge.selection || selection
+      })
+      return
+    }
     if (event.key !== 'Tab') return
 
     const selection = this.readSelection()

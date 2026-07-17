@@ -15,3 +15,4 @@ test.logs()          // Complete structured command log
 
 The bridge is intended for functional automation, not visual assertions. It operates through the same Pinia stores, editor bus and save IPC used by the application.
 
+Desktop acceptance runs use `pnpm test:desktop:acceptance`. The runner launches the desktop shell and talks to the renderer through the local Chrome DevTools Protocol command channel; it does not use Playwright.

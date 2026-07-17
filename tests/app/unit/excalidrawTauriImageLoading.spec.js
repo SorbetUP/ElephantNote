@@ -21,6 +21,7 @@ import { installExcalidrawImageRuntimeFixes } from '@/platform/excalidrawImageRu
 import loadImageAsync from 'muya/lib/parser/render/renderInlines/loadImageAsync.js'
 
 const pngBytes = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13])
+const updatedPngBytes = () => new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4])
 const flushPromises = async (rounds = 8) => {
   for (let index = 0; index < rounds; index += 1) await Promise.resolve()
 }
@@ -91,6 +92,19 @@ describe('Excalidraw Tauri image loading', () => {
     expect(window.__ELEPHANT_DEBUG_LOGS__).toEqual(expect.arrayContaining([
       expect.objectContaining({ message: '[excalidraw-image] failed image repair:success' }),
       expect.objectContaining({ message: '[excalidraw-image] local image read:success' })
+    ]))
+
+    const firstDataUrl = img.getAttribute('src')
+    const invalidateHandler = busMock.on.mock.calls.find(([eventName]) => eventName === 'invalidate-image-cache')?.[1]
+    expect(invalidateHandler).toBeTypeOf('function')
+    window.fileUtils.readFile.mockResolvedValueOnce(updatedPngBytes())
+    invalidateHandler()
+    await flushPromises()
+
+    expect(window.fileUtils.readFile).toHaveBeenCalledTimes(2)
+    expect(img.getAttribute('src')).not.toBe(firstDataUrl)
+    expect(window.__ELEPHANT_DEBUG_LOGS__).toEqual(expect.arrayContaining([
+      expect.objectContaining({ message: '[excalidraw-image] cache refresh:success' })
     ]))
   })
 

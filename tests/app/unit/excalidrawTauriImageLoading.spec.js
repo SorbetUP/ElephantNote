@@ -28,6 +28,16 @@ const flushPromises = async (rounds = 8) => {
 
 let runtime = null
 
+it('keeps ordinary Markdown image loading independent from Excalidraw', () => {
+  const loader = readFileSync(
+    'Elephant/frontend/src/muya/lib/parser/render/renderInlines/loadImageAsync.js',
+    'utf8'
+  )
+  expect(loader).toContain("from 'common/elephantnote/imageAssetContract'")
+  expect(loader).not.toContain('EXCALIDRAW_ASSET_RE')
+  expect(loader).toContain('isStandardMarkdownImagePath')
+})
+
 beforeEach(() => {
   document.body.innerHTML = ''
   window.__ELEPHANT_DEBUG_LOGS__ = []

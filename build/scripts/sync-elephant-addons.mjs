@@ -51,8 +51,10 @@ const ensureLink = (linkName, target) => {
 }
 
 const materializeNativeServices = () => {
-  if (process.env.ELEPHANT_SKIP_NATIVE_ADDON_BUILD === '1') {
-    console.log('[addons] native service materialization skipped by ELEPHANT_SKIP_NATIVE_ADDON_BUILD')
+  const skippedExplicitly = process.env.ELEPHANT_SKIP_NATIVE_ADDON_BUILD === '1'
+  const genericCiSetup = process.env.CI === 'true' && process.env.ELEPHANT_BUILD_NATIVE_ADDONS !== '1'
+  if (skippedExplicitly || genericCiSetup) {
+    console.log('[addons] native service materialization skipped')
     return
   }
 
